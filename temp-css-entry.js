@@ -1,0 +1,1 @@
+import '/Users/dscherd/Development/Misc/obsidian-flashcards-plugin/src/styles/flashcards-document.css';

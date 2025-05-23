@@ -1,0 +1,615 @@
+/* Flashcards Document View Styles */
+
+.flashcards-document-view {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  padding: 10px;
+  box-sizing: border-box;
+  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+  --notion-font: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+  --notion-bg: var(--background-primary);
+  --notion-text: var(--text-normal);
+  --notion-border: var(--background-modifier-border);
+  --notion-hover: var(--background-modifier-hover);
+  --notion-accent: var(--interactive-accent);
+}
+
+/* Toolbar */
+.flashcards-toolbar {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 10px;
+  margin-bottom: 15px;
+  border-bottom: 1px solid var(--notion-border);
+  flex-wrap: wrap;
+  gap: 10px;
+}
+
+.notion-like-toolbar {
+  padding: 16px 0;
+  background-color: transparent;
+}
+
+.flashcards-view-switcher {
+  display: flex;
+  gap: 5px;
+}
+
+.flashcards-view-switcher button {
+  background: none;
+  border: 1px solid var(--notion-border);
+  border-radius: 3px;
+  padding: 4px 8px;
+  cursor: pointer;
+  color: var(--text-muted);
+  transition: all 0.2s ease;
+}
+
+.flashcards-view-switcher button:hover {
+  background-color: var(--notion-hover);
+}
+
+.flashcards-view-switcher button.active {
+  background-color: var(--notion-accent);
+  color: var(--text-on-accent);
+  border-color: var(--notion-accent);
+}
+
+.notion-like-btn {
+  font-size: 13px;
+  height: 28px;
+  border-radius: 3px !important;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  font-weight: 500;
+  border: 1px solid rgba(55, 53, 47, 0.16) !important;
+}
+
+.notion-like-btn-active {
+  background-color: rgba(55, 53, 47, 0.08) !important;
+  color: var(--notion-text) !important;
+  border-color: transparent !important;
+}
+
+.flashcards-search {
+  flex-grow: 1;
+  max-width: 300px;
+}
+
+.flashcards-search input {
+  width: 100%;
+  padding: 6px 10px;
+  border-radius: 3px;
+  border: 1px solid var(--notion-border);
+  font-family: var(--notion-font);
+  font-size: 14px;
+  background-color: transparent;
+  transition: background-color 0.1s ease-in;
+}
+
+.flashcards-search input:focus {
+  background-color: var(--background-primary);
+  box-shadow: rgba(15, 15, 15, 0.1) 0px 0px 0px 1px inset;
+}
+
+.flashcards-tag-filter {
+  min-width: 150px;
+}
+
+.flashcards-tag-filter select {
+  width: 100%;
+  padding: 6px 10px;
+  border-radius: 4px;
+  border: 1px solid var(--background-modifier-border);
+}
+
+.flashcards-add-btn,
+.flashcards-review-btn {
+  padding: 6px 12px;
+  border-radius: 3px;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  font-size: 14px;
+  font-weight: 500;
+  font-family: var(--notion-font);
+}
+
+.flashcards-add-btn {
+  background-color: var(--notion-accent);
+  color: var(--text-on-accent);
+  border: none;
+  box-shadow: rgba(15, 15, 15, 0.1) 0px 1px 2px;
+  font-weight: 500;
+  padding: 5px 12px;
+  font-size: 14px;
+  height: 36px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 3px;
+  cursor: pointer;
+  transition: background-color 0.2s ease, transform 0.2s ease;
+}
+
+.flashcards-review-btn {
+  background-color: transparent;
+  color: var(--text-normal);
+  border: 1px solid var(--notion-border);
+}
+
+.flashcards-add-btn:hover,
+.flashcards-review-btn:hover {
+  opacity: 0.9;
+  transform: translateY(-1px);
+}
+
+/* Table View - Notion-like */
+.flashcards-table-container {
+  overflow-x: auto;
+  margin-top: 10px;
+  flex-grow: 1;
+  border-radius: 3px;
+}
+
+.notion-like-table {
+  border: 1px solid var(--notion-border);
+  border-radius: 4px;
+  overflow: hidden;
+  background-color: var(--background-primary);
+  box-shadow: rgba(15, 15, 15, 0.05) 0px 0px 0px 1px, 
+              rgba(15, 15, 15, 0.1) 0px 3px 6px, 
+              rgba(15, 15, 15, 0.2) 0px 9px 24px;
+}
+
+.flashcards-table {
+  width: 100%;
+  border-collapse: collapse;
+  margin: 0;
+  padding: 0;
+  font-size: 14px;
+  font-family: var(--notion-font);
+  background-color: var(--background-primary);
+}
+
+.flashcards-table th,
+.flashcards-table td {
+  padding: 8px 12px;
+  text-align: left;
+  border-bottom: 1px solid rgba(55, 53, 47, 0.08);
+  height: 38px;
+  vertical-align: middle;
+}
+
+.flashcards-table th {
+  font-weight: 500;
+  color: var(--text-muted);
+  background-color: var(--background-primary);
+  position: sticky;
+  top: 0;
+  z-index: 1;
+  height: 38px;
+  font-size: 12px;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  padding: 0 12px;
+  border-bottom: 1px solid rgba(55, 53, 47, 0.09);
+  white-space: nowrap;
+}
+
+.flashcards-sortable-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  cursor: pointer;
+  height: 100%;
+  color: var(--text-muted);
+  font-weight: 500;
+  user-select: none;
+  padding: 0 5px;
+}
+
+.flashcards-sortable-header:hover {
+  color: var(--text-normal);
+}
+
+.flashcards-sort-icon {
+  display: inline-flex;
+  align-items: center;
+  margin-left: 5px;
+  opacity: 0.6;
+  font-size: 12px;
+}
+
+.flashcards-table tr:hover {
+  background-color: rgba(55, 53, 47, 0.03);
+  cursor: pointer;
+}
+
+.flashcards-table tr:not(:first-child):hover {
+  background-color: rgba(55, 53, 47, 0.05);
+}
+
+.flashcards-card-title {
+  font-weight: 500;
+}
+
+.notion-like-cell {
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  max-width: 300px;
+  padding: 5px 0;
+  line-height: 1.5;
+}
+
+/* Tags - Notion-like */
+.flashcards-tags {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 5px;
+}
+
+.notion-like-tags {
+  padding: 3px 0;
+}
+
+.flashcards-tag {
+  background-color: rgba(55, 53, 47, 0.08);
+  color: var(--text-normal);
+  padding: 2px 6px;
+  border-radius: 3px;
+  font-size: 0.85em;
+  cursor: pointer;
+  transition: background-color 0.2s ease;
+  line-height: 1.2;
+}
+
+.flashcards-tag:hover {
+  background-color: rgba(55, 53, 47, 0.16);
+}
+
+.flashcards-no-tags {
+  color: var(--text-faint);
+  font-style: italic;
+  font-size: 0.8em;
+}
+
+/* Card statuses - Notion-like */
+.flashcards-not-reviewed {
+  color: var(--text-faint);
+  font-style: italic;
+  padding: 2px 6px;
+  border-radius: 3px;
+  background-color: rgba(55, 53, 47, 0.08);
+  font-size: 0.85em;
+  display: inline-block;
+}
+
+.flashcards-due-now {
+  color: #eb5757;
+  font-weight: 500;
+  padding: 2px 6px;
+  border-radius: 3px;
+  background-color: rgba(235, 87, 87, 0.1);
+  font-size: 0.85em;
+  display: inline-block;
+}
+
+.flashcards-upcoming {
+  color: var(--text-normal);
+  padding: 2px 6px;
+  border-radius: 3px;
+  background-color: rgba(55, 53, 47, 0.08);
+  font-size: 0.85em;
+  display: inline-block;
+}
+
+/* Actions */
+.flashcards-actions {
+  display: flex;
+  gap: 5px;
+  justify-content: flex-end;
+}
+
+.notion-like-actions {
+  opacity: 0;
+  transition: opacity 0.2s ease;
+}
+
+tr:hover .notion-like-actions {
+  opacity: 1;
+}
+
+.flashcards-action-btn {
+  background: none;
+  border: none;
+  cursor: pointer;
+  padding: 4px;
+  color: var(--text-muted);
+  transition: all 0.2s ease;
+  border-radius: 3px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 24px;
+  height: 24px;
+}
+
+.flashcards-action-btn:hover {
+  color: var(--text-normal);
+  background-color: rgba(55, 53, 47, 0.08);
+}
+
+.notion-like-btn {
+  font-size: 14px;
+  height: 36px;
+  border-radius: 3px;
+  padding: 0 12px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  font-weight: 500;
+  background-color: var(--background-primary);
+  border: 1px solid rgba(55, 53, 47, 0.16);
+  color: var(--text-normal);
+  transition: background-color 0.2s ease, transform 0.2s ease;
+  cursor: pointer;
+}
+
+.notion-like-btn:hover {
+  background-color: rgba(55, 53, 47, 0.08);
+  transform: translateY(-1px);
+}
+
+/* Card View */
+.flashcards-cards-container {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(250px, 1fr));
+  gap: 15px;
+  padding: 10px;
+  overflow-y: auto;
+  flex-grow: 1;
+}
+
+.flashcards-card {
+  background-color: var(--background-secondary);
+  border-radius: 5px;
+  box-shadow: 0 2px 5px rgba(0, 0, 0, 0.1);
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+  transition: transform 0.2s ease, box-shadow 0.2s ease;
+}
+
+.flashcards-card:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 4px 8px rgba(0, 0, 0, 0.15);
+}
+
+.flashcards-card-header {
+  padding: 12px;
+  border-bottom: 1px solid var(--background-modifier-border);
+}
+
+.flashcards-card-content {
+  padding: 12px;
+  flex-grow: 1;
+  overflow: hidden;
+  max-height: 150px;
+  position: relative;
+}
+
+.flashcards-card-content::after {
+  content: '';
+  position: absolute;
+  bottom: 0;
+  left: 0;
+  right: 0;
+  height: 40px;
+  background: linear-gradient(transparent, var(--background-secondary));
+}
+
+.flashcards-card-footer {
+  padding: 12px;
+  border-top: 1px solid var(--background-modifier-border);
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+/* Empty and Error States - Notion-like */
+.flashcards-empty-state,
+.flashcards-error {
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  align-items: center;
+  height: 100%;
+  padding: 40px 20px;
+  text-align: center;
+  font-family: var(--notion-font);
+  color: rgba(55, 53, 47, 0.5);
+  background-color: rgba(55, 53, 47, 0.02);
+  border-radius: 4px;
+  margin: 20px 0;
+}
+
+.flashcards-empty-message {
+  color: rgba(55, 53, 47, 0.5);
+  padding: 20px 20px;
+  text-align: center;
+  font-size: 15px;
+  line-height: 1.5;
+  max-width: 500px;
+  margin: 0 auto;
+}
+
+.flashcards-empty-add-button-container {
+  margin: 15px 0;
+  text-align: center;
+}
+
+.notion-like-empty-cell {
+  text-align: center;
+  height: 120px;
+  background-color: rgba(55, 53, 47, 0.03);
+  border-radius: 3px;
+  vertical-align: middle;
+}
+
+.notion-like-empty-row {
+  height: 38px;
+}
+
+.notion-like-empty-td {
+  border-bottom: 1px solid var(--background-modifier-border);
+  border-bottom-color: rgba(55, 53, 47, 0.08);
+}
+
+.flashcards-empty-cta {
+  margin-top: 15px;
+  margin-bottom: 15px;
+  text-align: center;
+}
+
+.notion-like-view {
+  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+}
+
+/* Modal Styles */
+.flashcard-editor-modal,
+.flashcard-view-modal,
+.flashcard-review-modal {
+  max-width: 600px;
+  width: 100%;
+}
+
+.flashcard-editor-modal form {
+  display: flex;
+  flex-direction: column;
+  gap: 15px;
+}
+
+.flashcard-editor-modal label {
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+}
+
+.flashcard-editor-modal input[type="text"],
+.flashcard-editor-modal textarea {
+  padding: 8px;
+  border-radius: 4px;
+  border: 1px solid var(--background-modifier-border);
+}
+
+.flashcard-editor-modal textarea {
+  min-height: 150px;
+  resize: vertical;
+}
+
+.flashcard-editor-buttons {
+  display: flex;
+  justify-content: flex-end;
+  gap: 10px;
+  margin-top: 20px;
+}
+
+.checkbox-label {
+  display: flex !important;
+  flex-direction: row !important;
+  align-items: center;
+  gap: 8px !important;
+}
+
+.flashcard-content {
+  margin: 20px 0;
+  padding: 15px;
+  background-color: var(--background-primary);
+  border-radius: 5px;
+  border: 1px solid var(--background-modifier-border);
+}
+
+.flashcard-review-info {
+  margin-top: 15px;
+  padding: 10px;
+  background-color: var(--background-primary);
+  border-radius: 5px;
+  border: 1px solid var(--background-modifier-border);
+}
+
+.flashcard-view-buttons {
+  display: flex;
+  justify-content: flex-end;
+  gap: 10px;
+  margin-top: 20px;
+}
+
+/* Progress indicator */
+.flashcard-progress {
+  padding: 10px 20px;
+  font-size: 14px;
+  color: var(--text-muted);
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.progress-bar-container {
+  height: 6px;
+  background-color: var(--background-modifier-border);
+  border-radius: 3px;
+  overflow: hidden;
+}
+
+.progress-bar-value {
+  height: 100%;
+  background-color: var(--text-accent);
+  transition: width 0.3s ease;
+}
+
+/* Flashcard review */
+.flashcard-container {
+  padding: 20px;
+  cursor: pointer;
+}
+
+.flashcard-answer {
+  margin-top: 20px;
+  padding: 20px;
+  border-radius: 4px;
+  background: var(--background-secondary);
+}
+
+.blurred {
+  filter: blur(5px);
+  user-select: none;
+  min-height: 100px;
+}
+
+.difficulty-buttons {
+  display: flex;
+  justify-content: space-around;
+  margin-top: 20px;
+  margin-bottom: 10px;
+}
+
+.difficulty-btn {
+  padding: 8px 16px;
+  border: none;
+  border-radius: 4px;
+  cursor: pointer;
+  transition: background-color 0.2s;
+}
+
+.difficulty-again { background-color: #ff6b6b; }
+.difficulty-hard { background-color: #f9c74f; }
+.difficulty-good { background-color: #90be6d; }
+.difficulty-easy { background-color: #43aa8b; }
+
+.difficulty-btn:hover {
+  opacity: 0.8;
+}

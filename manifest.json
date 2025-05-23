@@ -1,0 +1,16 @@
+{
+  "id": "obsidian-flashcards-plugin",
+  "name": "Flashcards Plugin",
+  "version": "1.0.0",
+  "minAppVersion": "1.0.0",
+  "description": "Create and review flashcards directly from your canvas files using spaced repetition",
+  "author": "Your Name",
+  "authorUrl": "https://github.com/yourusername",
+  "isDesktopOnly": false,
+  "js": "main.js",
+  "css": "styles.css",
+  "dependencies": {
+    "@types/node": "^16.11.6",
+    "obsidian": "^1.0.0"
+  }
+}
