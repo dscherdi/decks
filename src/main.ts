@@ -30,11 +30,11 @@ class FlashcardsPlugin extends Plugin {
   async onload() {
     console.log("Loading Flashcards plugin");
 
-    // Register the plugin view
-    this.registerView(
-      "flashcards-view",
-      (leaf) => new FlashcardsView(leaf, this),
-    );
+    // // Register the plugin view
+    // this.registerView(
+    //   "flashcards-view",
+    //   (leaf) => new FlashcardsView(leaf, this),
+    // );
 
     // Register flashcards document view
     this.registerView(
@@ -409,11 +409,13 @@ class FlashcardsDocumentView extends ItemView {
         this.initializeData();
         await this.saveData();
       }
-
       // Make sure we have a valid data structure
       if (!this.data || typeof this.data !== "object") {
         console.log("Data is not a valid object, initializing");
         this.initializeData();
+      }
+      if (!this.data) {
+        throw new Error("Data is null after parsing");
       }
 
       // Ensure metadata exists
