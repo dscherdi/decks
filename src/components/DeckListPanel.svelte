@@ -23,9 +23,8 @@
     }
 
     function formatDeckName(deck: Deck): string {
-        // Remove #flashcards/ prefix and extract meaningful name
-        const tagParts = deck.tag.replace("#flashcards/", "").split("/");
-        return tagParts.join(" / ");
+        // Use the actual deck name from the database
+        return deck.name;
     }
 
     async function handleRefresh() {

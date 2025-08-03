@@ -88,7 +88,7 @@ export class DeckManager {
     // Add new decks
     for (const [tag, files] of decksMap) {
       if (!existingTags.has(tag)) {
-        const deckName = this.extractDeckName(tag);
+        const deckName = this.extractDeckNameFromFiles(files);
         const deck: Omit<Deck, "created" | "modified"> = {
           id: this.generateDeckId(),
           name: deckName,
@@ -296,7 +296,20 @@ export class DeckManager {
   }
 
   /**
-   * Extract deck name from tag
+   * Extract deck name from files (use the first file's name)
+   */
+  private extractDeckNameFromFiles(files: TFile[]): string {
+    if (files.length === 0) {
+      return "General";
+    }
+
+    // Use the first file's basename (without extension) as deck name
+    const firstFile = files[0];
+    return firstFile.basename;
+  }
+
+  /**
+   * Extract deck name from tag (legacy method for compatibility)
    */
   private extractDeckName(tag: string): string {
     // Remove #flashcards prefix

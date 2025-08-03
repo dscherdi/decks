@@ -13,7 +13,7 @@ It has the following features:
   - Table
     - A markdown table which consists of two columns
     - Each row of the table except for the first row which contains the table header is a flashcard where the first column forms the front side and the second column forms the back side.
-- Decks are markdown files which contain tags which start with #flashcards tag. For example: #flashcards/math would create a math deck, or #flashcards/math/calculus would create the math-calculus deck.
+- Decks are markdown files which contain tags which start with #flashcards tag. The name of the file is name of the deck.
 - When the panel shows in the right side panel, it will look for all possible decks in the #flashcards/xxx tag and show a list of them.
 - The plugin offers the option to sync the decks and all flashcards found in them in its database which is a sqllite database, and it does so automatically when the panel is opened.
 - The sqllite database stores the following data:
@@ -53,6 +53,12 @@ It has the following features:
   	  - Color: Blue (#4aa3df) if > 0, Gray otherwise
   	-	Learn and Due
   	  -	Font: Normal
+
+- State Logic
+  - Card Counts
+	-	New: Number of unseen cards
+	-	Learn: Cards currently in the learning phase (scheduled for short-term review)
+	-	Due: Cards scheduled for spaced repetition
 
 - The review modal
   - When the user starts reviewing the deck, he has 4 options after reviewing a flashcard:

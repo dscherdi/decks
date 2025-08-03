@@ -30,9 +30,7 @@
 
     $: currentCard = flashcards[currentIndex] || null;
     $: progress =
-        flashcards.length > 0
-            ? ((currentIndex + 1) / flashcards.length) * 100
-            : 0;
+        flashcards.length > 0 ? (currentIndex / flashcards.length) * 100 : 0;
     $: remainingCards = flashcards.length - currentIndex - 1;
     $: sessionLimitReached =
         settings?.review?.enableSessionLimit &&
@@ -167,7 +165,7 @@
     </div>
 
     {#if settings?.review?.showProgress !== false}
-        <div class="progress-bar">
+        <div class="review-progress-bar">
             <div class="progress-fill" style="width: {progress}%"></div>
         </div>
     {/if}
@@ -302,7 +300,7 @@
         color: var(--text-normal);
     }
 
-    .progress-bar {
+    .review-progress-bar {
         height: 4px;
         background: var(--background-modifier-border);
         position: relative;

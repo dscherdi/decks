@@ -464,3 +464,58 @@ sveltePlugin({
 
 ### Result
 The DeckListPanel now displays correctly with proper component-scoped CSS injection, maintaining clean architecture while ensuring reliable styling!
+
+## File-Based Deck Naming Fix
+
+### Problem Identified
+Deck names were being derived from tags (e.g., #flashcards/math → "Math") instead of using the actual markdown file names, making it difficult to identify which file a deck represents.
+
+### Root Cause
+The `extractDeckName()` method was parsing tag strings to generate deck names, but users expect deck names to match their file names for easier identification.
+
+### Solution Implemented
+Changed deck naming logic to use markdown file names instead of tag-derived names.
+
+### Changes Made
+- **Updated `DeckManager.syncDecks()`**: Now calls `extractDeckNameFromFiles()` instead of `extractDeckName()`
+- **New method `extractDeckNameFromFiles()`**: Uses the first file's basename as the deck name
+- **Updated `DeckListPanel.formatDeckName()`**: Now returns `deck.name` directly instead of formatting from tag
+- **Updated tests**: Modified expectations to match file-based naming
+
+### Technical Implementation
+```typescript
+// Before: Tag-based naming
+private extractDeckName(tag: string): string {
+  let name = tag.replace("#flashcards", "");
+  // ... tag parsing logic
+}
+
+// After: File-based naming  
+private extractDeckNameFromFiles(files: TFile[]): string {
+  if (files.length === 0) return "General";
+  return files[0].basename;
+}
+```
+
+### Behavior Changes
+- **Before**: #flashcards/math/algebra → "Math - Algebra"
+- **After**: algebra-formulas.md → "algebra-formulas"
+
+### Edge Cases Handled
+- **Multiple files per tag**: Uses the first file's name
+- **Empty files array**: Falls back to "General"
+- **File extensions**: Automatically removed (uses `basename`)
+
+### Benefits
+- ✅ **Clear Identification**: Deck names match file names exactly
+- ✅ **User Intuitive**: No need to guess which file contains which deck
+- ✅ **Consistent Naming**: What you see in file explorer matches deck list
+- ✅ **Simpler Logic**: No complex tag parsing required
+
+### Files Modified
+- ✅ `src/services/DeckManager.ts` - Added extractDeckNameFromFiles() method
+- ✅ `src/components/DeckListPanel.svelte` - Simplified formatDeckName() function
+- ✅ `src/__tests__/DeckManager.test.ts` - Updated tests for file-based naming
+
+### Result
+Deck names now clearly show which markdown file they represent, making it much easier for users to identify and manage their flashcard decks!

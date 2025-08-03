@@ -2901,7 +2901,7 @@ var DeckManager = class {
     const existingTags = new Set(existingDecks.map((d) => d.tag));
     for (const [tag, files] of decksMap) {
       if (!existingTags.has(tag)) {
-        const deckName = this.extractDeckName(tag);
+        const deckName = this.extractDeckNameFromFiles(files);
         const deck = {
           id: this.generateDeckId(),
           name: deckName,
@@ -3062,7 +3062,17 @@ var DeckManager = class {
     }
   }
   /**
-   * Extract deck name from tag
+   * Extract deck name from files (use the first file's name)
+   */
+  extractDeckNameFromFiles(files) {
+    if (files.length === 0) {
+      return "General";
+    }
+    const firstFile = files[0];
+    return firstFile.basename;
+  }
+  /**
+   * Extract deck name from tag (legacy method for compatibility)
    */
   extractDeckName(tag) {
     let name = tag.replace("#flashcards", "");
@@ -4349,8 +4359,7 @@ function create_fragment(ctx) {
   };
 }
 function formatDeckName(deck) {
-  const tagParts = deck.tag.replace("#flashcards/", "").split("/");
-  return tagParts.join(" / ");
+  return deck.name;
 }
 function instance($$self, $$props, $$invalidate) {
   let { decks = [] } = $$props;
@@ -4448,7 +4457,7 @@ var DeckListPanel_default = DeckListPanel;
 
 // src/components/FlashcardReviewModal.svelte
 function add_css2(target) {
-  append_styles(target, "svelte-1omg548", ".review-modal.svelte-1omg548.svelte-1omg548{display:flex;flex-direction:column;height:100%;background:var(--background-primary);color:var(--text-normal);overflow:hidden;width:100%}.modal-header.svelte-1omg548.svelte-1omg548{display:flex;align-items:center;justify-content:space-between;padding:16px 20px;border-bottom:1px solid var(--background-modifier-border)}.modal-header.svelte-1omg548 h3.svelte-1omg548{margin:0;font-size:18px;font-weight:600}.progress-info.svelte-1omg548.svelte-1omg548{display:flex;gap:8px;font-size:14px}.remaining.svelte-1omg548.svelte-1omg548{color:var(--text-muted)}.close-button.svelte-1omg548.svelte-1omg548{background:none;border:none;font-size:24px;line-height:1;cursor:pointer;padding:4px 8px;color:var(--text-muted);border-radius:4px}.close-button.svelte-1omg548.svelte-1omg548:hover{background:var(--background-modifier-hover);color:var(--text-normal)}.progress-bar.svelte-1omg548.svelte-1omg548{height:4px;background:var(--background-modifier-border);position:relative}.progress-fill.svelte-1omg548.svelte-1omg548{height:100%;background:var(--interactive-accent);transition:width 0.3s ease}.card-content.svelte-1omg548.svelte-1omg548{flex:1;overflow-y:auto;overflow-x:hidden;padding:32px 16px;display:flex;flex-direction:column;align-items:center;justify-content:flex-start;gap:24px;width:100%;box-sizing:border-box;min-height:0}.question-section.svelte-1omg548.svelte-1omg548,.answer-section.svelte-1omg548.svelte-1omg548{width:100%;display:flex;justify-content:center}.card-side.svelte-1omg548.svelte-1omg548{background:var(--background-secondary);border:1px solid var(--background-modifier-border);border-radius:8px;padding:24px;min-height:100px;width:100%;max-width:600px;box-sizing:border-box;word-wrap:break-word;overflow-wrap:break-word}.card-side.front.svelte-1omg548.svelte-1omg548{text-align:center;font-size:20px;font-weight:500}.card-side.back.svelte-1omg548.svelte-1omg548{font-size:16px;line-height:1.6}.answer-section.svelte-1omg548.svelte-1omg548{width:100%;display:flex;flex-direction:column;justify-content:center;align-items:center}.answer-section.hidden.svelte-1omg548.svelte-1omg548{display:none}.separator.svelte-1omg548.svelte-1omg548{height:1px;background:var(--background-modifier-border);margin:16px auto;width:100%;max-width:600px}.action-buttons.svelte-1omg548.svelte-1omg548{padding:20px;border-top:1px solid var(--background-modifier-border);flex-shrink:0;width:100%;box-sizing:border-box}.show-answer-button.svelte-1omg548.svelte-1omg548{width:100%;max-width:400px;margin:0 auto;padding:12px 24px;font-size:16px;font-weight:500;background:var(--interactive-accent);color:var(--text-on-accent);border:none;border-radius:6px;cursor:pointer;display:flex;align-items:center;justify-content:center;gap:8px;box-sizing:border-box}.show-answer-button.svelte-1omg548.svelte-1omg548:hover{background:var(--interactive-accent-hover)}.shortcut.svelte-1omg548.svelte-1omg548{font-size:12px;opacity:0.8;padding:2px 6px;background:rgba(0, 0, 0, 0.2);border-radius:3px;margin-left:8px;display:inline-block}.difficulty-buttons.svelte-1omg548.svelte-1omg548{display:flex;gap:8px;justify-content:center;flex-wrap:nowrap;padding:0 10px;box-sizing:border-box;width:100%;max-width:600px;margin:0 auto}.difficulty-button.svelte-1omg548.svelte-1omg548{flex:1;min-width:0;padding:10px 6px;border:1px solid var(--background-modifier-border);background:var(--background-secondary);border-radius:6px;cursor:pointer;display:flex;flex-direction:column;align-items:center;gap:2px;transition:all 0.2s ease;position:relative;box-sizing:border-box;white-space:nowrap}.difficulty-button.svelte-1omg548.svelte-1omg548:hover{transform:translateY(-2px);box-shadow:0 4px 12px rgba(0, 0, 0, 0.1)}.difficulty-button.svelte-1omg548.svelte-1omg548:disabled{opacity:0.5;cursor:not-allowed;transform:none}.difficulty-button.again.svelte-1omg548.svelte-1omg548{border-color:#e74c3c}.difficulty-button.again.svelte-1omg548.svelte-1omg548:hover:not(:disabled){background:#e74c3c;color:white}.difficulty-button.hard.svelte-1omg548.svelte-1omg548{border-color:#f39c12}.difficulty-button.hard.svelte-1omg548.svelte-1omg548:hover:not(:disabled){background:#f39c12;color:white}.difficulty-button.good.svelte-1omg548.svelte-1omg548{border-color:#27ae60}.difficulty-button.good.svelte-1omg548.svelte-1omg548:hover:not(:disabled){background:#27ae60;color:white}.difficulty-button.easy.svelte-1omg548.svelte-1omg548{border-color:#3498db}.difficulty-button.easy.svelte-1omg548.svelte-1omg548:hover:not(:disabled){background:#3498db;color:white}.button-label.svelte-1omg548.svelte-1omg548{font-weight:600;font-size:13px}.interval.svelte-1omg548.svelte-1omg548{font-size:11px;color:var(--text-muted)}.difficulty-button.svelte-1omg548:hover .interval.svelte-1omg548{color:inherit}.difficulty-button.svelte-1omg548 .shortcut.svelte-1omg548{position:absolute;top:2px;right:2px;font-size:9px;padding:1px 3px;background:var(--background-modifier-border);border-radius:2px;opacity:0.7}.empty-state.svelte-1omg548.svelte-1omg548{flex:1;display:flex;align-items:center;justify-content:center;padding:32px;color:var(--text-muted)}.card-side h1,.card-side h2,.card-side h3,.card-side h4,.card-side h5,.card-side h6{margin-top:0;margin-bottom:16px}.card-side p{margin-bottom:16px}.card-side p:last-child{margin-bottom:0}.card-side > *:first-child{margin-top:0}.card-side ul,.card-side ol{margin-bottom:16px;padding-left:24px}.card-side code{background:var(--code-background);padding:2px 4px;border-radius:3px;font-size:0.9em}.card-side pre{background:var(--code-background);padding:16px;border-radius:6px;overflow-x:auto;margin-bottom:16px;max-width:100%}.card-side blockquote{border-left:3px solid var(--blockquote-border);padding-left:16px;margin-left:0;margin-right:0;color:var(--text-muted)}@media(max-width: 500px){.difficulty-buttons.svelte-1omg548.svelte-1omg548{gap:4px;padding:0 5px}.difficulty-button.svelte-1omg548.svelte-1omg548{padding:8px 4px}.button-label.svelte-1omg548.svelte-1omg548{font-size:12px}.interval.svelte-1omg548.svelte-1omg548{font-size:10px}.difficulty-button.svelte-1omg548 .shortcut.svelte-1omg548{font-size:8px;padding:1px 2px}.card-content.svelte-1omg548.svelte-1omg548{padding:16px 8px}}");
+  append_styles(target, "svelte-jzksap", ".review-modal.svelte-jzksap.svelte-jzksap{display:flex;flex-direction:column;height:100%;background:var(--background-primary);color:var(--text-normal);overflow:hidden;width:100%}.modal-header.svelte-jzksap.svelte-jzksap{display:flex;align-items:center;justify-content:space-between;padding:16px 20px;border-bottom:1px solid var(--background-modifier-border)}.modal-header.svelte-jzksap h3.svelte-jzksap{margin:0;font-size:18px;font-weight:600}.progress-info.svelte-jzksap.svelte-jzksap{display:flex;gap:8px;font-size:14px}.remaining.svelte-jzksap.svelte-jzksap{color:var(--text-muted)}.close-button.svelte-jzksap.svelte-jzksap{background:none;border:none;font-size:24px;line-height:1;cursor:pointer;padding:4px 8px;color:var(--text-muted);border-radius:4px}.close-button.svelte-jzksap.svelte-jzksap:hover{background:var(--background-modifier-hover);color:var(--text-normal)}.review-progress-bar.svelte-jzksap.svelte-jzksap{height:4px;background:var(--background-modifier-border);position:relative}.progress-fill.svelte-jzksap.svelte-jzksap{height:100%;background:var(--interactive-accent);transition:width 0.3s ease}.card-content.svelte-jzksap.svelte-jzksap{flex:1;overflow-y:auto;overflow-x:hidden;padding:32px 16px;display:flex;flex-direction:column;align-items:center;justify-content:flex-start;gap:24px;width:100%;box-sizing:border-box;min-height:0}.question-section.svelte-jzksap.svelte-jzksap,.answer-section.svelte-jzksap.svelte-jzksap{width:100%;display:flex;justify-content:center}.card-side.svelte-jzksap.svelte-jzksap{background:var(--background-secondary);border:1px solid var(--background-modifier-border);border-radius:8px;padding:24px;min-height:100px;width:100%;max-width:600px;box-sizing:border-box;word-wrap:break-word;overflow-wrap:break-word}.card-side.front.svelte-jzksap.svelte-jzksap{text-align:center;font-size:20px;font-weight:500}.card-side.back.svelte-jzksap.svelte-jzksap{font-size:16px;line-height:1.6}.answer-section.svelte-jzksap.svelte-jzksap{width:100%;display:flex;flex-direction:column;justify-content:center;align-items:center}.answer-section.hidden.svelte-jzksap.svelte-jzksap{display:none}.separator.svelte-jzksap.svelte-jzksap{height:1px;background:var(--background-modifier-border);margin:16px auto;width:100%;max-width:600px}.action-buttons.svelte-jzksap.svelte-jzksap{padding:20px;border-top:1px solid var(--background-modifier-border);flex-shrink:0;width:100%;box-sizing:border-box}.show-answer-button.svelte-jzksap.svelte-jzksap{width:100%;max-width:400px;margin:0 auto;padding:12px 24px;font-size:16px;font-weight:500;background:var(--interactive-accent);color:var(--text-on-accent);border:none;border-radius:6px;cursor:pointer;display:flex;align-items:center;justify-content:center;gap:8px;box-sizing:border-box}.show-answer-button.svelte-jzksap.svelte-jzksap:hover{background:var(--interactive-accent-hover)}.shortcut.svelte-jzksap.svelte-jzksap{font-size:12px;opacity:0.8;padding:2px 6px;background:rgba(0, 0, 0, 0.2);border-radius:3px;margin-left:8px;display:inline-block}.difficulty-buttons.svelte-jzksap.svelte-jzksap{display:flex;gap:8px;justify-content:center;flex-wrap:nowrap;padding:0 10px;box-sizing:border-box;width:100%;max-width:600px;margin:0 auto}.difficulty-button.svelte-jzksap.svelte-jzksap{flex:1;min-width:0;padding:10px 6px;border:1px solid var(--background-modifier-border);background:var(--background-secondary);border-radius:6px;cursor:pointer;display:flex;flex-direction:column;align-items:center;gap:2px;transition:all 0.2s ease;position:relative;box-sizing:border-box;white-space:nowrap}.difficulty-button.svelte-jzksap.svelte-jzksap:hover{transform:translateY(-2px);box-shadow:0 4px 12px rgba(0, 0, 0, 0.1)}.difficulty-button.svelte-jzksap.svelte-jzksap:disabled{opacity:0.5;cursor:not-allowed;transform:none}.difficulty-button.again.svelte-jzksap.svelte-jzksap{border-color:#e74c3c}.difficulty-button.again.svelte-jzksap.svelte-jzksap:hover:not(:disabled){background:#e74c3c;color:white}.difficulty-button.hard.svelte-jzksap.svelte-jzksap{border-color:#f39c12}.difficulty-button.hard.svelte-jzksap.svelte-jzksap:hover:not(:disabled){background:#f39c12;color:white}.difficulty-button.good.svelte-jzksap.svelte-jzksap{border-color:#27ae60}.difficulty-button.good.svelte-jzksap.svelte-jzksap:hover:not(:disabled){background:#27ae60;color:white}.difficulty-button.easy.svelte-jzksap.svelte-jzksap{border-color:#3498db}.difficulty-button.easy.svelte-jzksap.svelte-jzksap:hover:not(:disabled){background:#3498db;color:white}.button-label.svelte-jzksap.svelte-jzksap{font-weight:600;font-size:13px}.interval.svelte-jzksap.svelte-jzksap{font-size:11px;color:var(--text-muted)}.difficulty-button.svelte-jzksap:hover .interval.svelte-jzksap{color:inherit}.difficulty-button.svelte-jzksap .shortcut.svelte-jzksap{position:absolute;top:2px;right:2px;font-size:9px;padding:1px 3px;background:var(--background-modifier-border);border-radius:2px;opacity:0.7}.empty-state.svelte-jzksap.svelte-jzksap{flex:1;display:flex;align-items:center;justify-content:center;padding:32px;color:var(--text-muted)}.card-side h1,.card-side h2,.card-side h3,.card-side h4,.card-side h5,.card-side h6{margin-top:0;margin-bottom:16px}.card-side p{margin-bottom:16px}.card-side p:last-child{margin-bottom:0}.card-side > *:first-child{margin-top:0}.card-side ul,.card-side ol{margin-bottom:16px;padding-left:24px}.card-side code{background:var(--code-background);padding:2px 4px;border-radius:3px;font-size:0.9em}.card-side pre{background:var(--code-background);padding:16px;border-radius:6px;overflow-x:auto;margin-bottom:16px;max-width:100%}.card-side blockquote{border-left:3px solid var(--blockquote-border);padding-left:16px;margin-left:0;margin-right:0;color:var(--text-muted)}@media(max-width: 500px){.difficulty-buttons.svelte-jzksap.svelte-jzksap{gap:4px;padding:0 5px}.difficulty-button.svelte-jzksap.svelte-jzksap{padding:8px 4px}.button-label.svelte-jzksap.svelte-jzksap{font-size:12px}.interval.svelte-jzksap.svelte-jzksap{font-size:10px}.difficulty-button.svelte-jzksap .shortcut.svelte-jzksap{font-size:8px;padding:1px 2px}.card-content.svelte-jzksap.svelte-jzksap{padding:16px 8px}}");
 }
 function create_if_block_3(ctx) {
   let div1;
@@ -4457,14 +4466,14 @@ function create_if_block_3(ctx) {
     c() {
       div1 = element("div");
       div0 = element("div");
-      attr(div0, "class", "progress-fill svelte-1omg548");
+      attr(div0, "class", "progress-fill svelte-jzksap");
       set_style(
         div0,
         "width",
         /*progress*/
         ctx[11] + "%"
       );
-      attr(div1, "class", "progress-bar svelte-1omg548");
+      attr(div1, "class", "review-progress-bar svelte-jzksap");
     },
     m(target, anchor) {
       insert(target, div1, anchor);
@@ -4493,7 +4502,7 @@ function create_else_block2(ctx) {
     c() {
       div = element("div");
       div.innerHTML = `<p>No cards to review</p>`;
-      attr(div, "class", "empty-state svelte-1omg548");
+      attr(div, "class", "empty-state svelte-jzksap");
     },
     m(target, anchor) {
       insert(target, div, anchor);
@@ -4541,15 +4550,15 @@ function create_if_block2(ctx) {
       t3 = space();
       if (if_block1)
         if_block1.c();
-      attr(div0, "class", "card-side front svelte-1omg548");
-      attr(div1, "class", "question-section svelte-1omg548");
-      attr(div2, "class", "separator svelte-1omg548");
-      attr(div3, "class", "card-side back svelte-1omg548");
-      attr(div4, "class", "answer-section svelte-1omg548");
+      attr(div0, "class", "card-side front svelte-jzksap");
+      attr(div1, "class", "question-section svelte-jzksap");
+      attr(div2, "class", "separator svelte-jzksap");
+      attr(div3, "class", "card-side back svelte-jzksap");
+      attr(div4, "class", "answer-section svelte-jzksap");
       toggle_class(div4, "hidden", !/*showAnswer*/
       ctx[5]);
-      attr(div5, "class", "card-content svelte-1omg548");
-      attr(div6, "class", "action-buttons svelte-1omg548");
+      attr(div5, "class", "card-content svelte-jzksap");
+      attr(div6, "class", "action-buttons svelte-jzksap");
     },
     m(target, anchor) {
       insert(target, div5, anchor);
@@ -4630,8 +4639,8 @@ function create_if_block_2(ctx) {
     c() {
       button = element("button");
       button.innerHTML = `<span>Show Answer</span> 
-                    <span class="shortcut svelte-1omg548">Space</span>`;
-      attr(button, "class", "show-answer-button svelte-1omg548");
+                    <span class="shortcut svelte-jzksap">Space</span>`;
+      attr(button, "class", "show-answer-button svelte-jzksap");
     },
     m(target, anchor) {
       insert(target, button, anchor);
@@ -4759,31 +4768,31 @@ function create_if_block_1(ctx) {
       t21 = space();
       div11 = element("div");
       div11.textContent = "4";
-      attr(div0, "class", "button-label svelte-1omg548");
-      attr(div1, "class", "interval svelte-1omg548");
-      attr(div2, "class", "shortcut svelte-1omg548");
-      attr(button0, "class", "difficulty-button again svelte-1omg548");
+      attr(div0, "class", "button-label svelte-jzksap");
+      attr(div1, "class", "interval svelte-jzksap");
+      attr(div2, "class", "shortcut svelte-jzksap");
+      attr(button0, "class", "difficulty-button again svelte-jzksap");
       button0.disabled = /*isLoading*/
       ctx[6];
-      attr(div3, "class", "button-label svelte-1omg548");
-      attr(div4, "class", "interval svelte-1omg548");
-      attr(div5, "class", "shortcut svelte-1omg548");
-      attr(button1, "class", "difficulty-button hard svelte-1omg548");
+      attr(div3, "class", "button-label svelte-jzksap");
+      attr(div4, "class", "interval svelte-jzksap");
+      attr(div5, "class", "shortcut svelte-jzksap");
+      attr(button1, "class", "difficulty-button hard svelte-jzksap");
       button1.disabled = /*isLoading*/
       ctx[6];
-      attr(div6, "class", "button-label svelte-1omg548");
-      attr(div7, "class", "interval svelte-1omg548");
-      attr(div8, "class", "shortcut svelte-1omg548");
-      attr(button2, "class", "difficulty-button good svelte-1omg548");
+      attr(div6, "class", "button-label svelte-jzksap");
+      attr(div7, "class", "interval svelte-jzksap");
+      attr(div8, "class", "shortcut svelte-jzksap");
+      attr(button2, "class", "difficulty-button good svelte-jzksap");
       button2.disabled = /*isLoading*/
       ctx[6];
-      attr(div9, "class", "button-label svelte-1omg548");
-      attr(div10, "class", "interval svelte-1omg548");
-      attr(div11, "class", "shortcut svelte-1omg548");
-      attr(button3, "class", "difficulty-button easy svelte-1omg548");
+      attr(div9, "class", "button-label svelte-jzksap");
+      attr(div10, "class", "interval svelte-jzksap");
+      attr(div11, "class", "shortcut svelte-jzksap");
+      attr(button3, "class", "difficulty-button easy svelte-jzksap");
       button3.disabled = /*isLoading*/
       ctx[6];
-      attr(div12, "class", "difficulty-buttons svelte-1omg548");
+      attr(div12, "class", "difficulty-buttons svelte-jzksap");
     },
     m(target, anchor) {
       insert(target, div12, anchor);
@@ -4978,12 +4987,12 @@ function create_fragment2(ctx) {
         if_block0.c();
       t12 = space();
       if_block1.c();
-      attr(h3, "class", "svelte-1omg548");
-      attr(span1, "class", "remaining svelte-1omg548");
-      attr(div0, "class", "progress-info svelte-1omg548");
-      attr(button, "class", "close-button svelte-1omg548");
-      attr(div1, "class", "modal-header svelte-1omg548");
-      attr(div2, "class", "review-modal svelte-1omg548");
+      attr(h3, "class", "svelte-jzksap");
+      attr(span1, "class", "remaining svelte-jzksap");
+      attr(div0, "class", "progress-info svelte-jzksap");
+      attr(button, "class", "close-button svelte-jzksap");
+      attr(div1, "class", "modal-header svelte-jzksap");
+      attr(div2, "class", "review-modal svelte-jzksap");
     },
     m(target, anchor) {
       insert(target, div2, anchor);
@@ -5232,7 +5241,7 @@ function instance2($$self, $$props, $$invalidate) {
     if ($$self.$$.dirty[0] & /*flashcards, currentIndex*/
     3) {
       $:
-        $$invalidate(11, progress = flashcards.length > 0 ? (currentIndex + 1) / flashcards.length * 100 : 0);
+        $$invalidate(11, progress = flashcards.length > 0 ? currentIndex / flashcards.length * 100 : 0);
     }
     if ($$self.$$.dirty[0] & /*flashcards, currentIndex*/
     3) {

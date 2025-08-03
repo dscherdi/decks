@@ -121,7 +121,7 @@ describe("DeckManager", () => {
       expect(mockDb.createDeck).toHaveBeenCalledTimes(1);
       expect(mockDb.createDeck).toHaveBeenCalledWith(
         expect.objectContaining({
-          name: "History",
+          name: "new-deck",
           tag: "#flashcards/history",
         }),
       );
@@ -326,20 +326,26 @@ Answer 1`;
   });
 
   describe("deck name extraction", () => {
-    it("should extract simple deck names", () => {
-      const name = (deckManager as any).extractDeckName("#flashcards/math");
-      expect(name).toBe("Math");
+    it("should use file name for deck name", () => {
+      const files = [
+        { basename: "Math Formulas", path: "math.md" } as TFile,
+        { basename: "Algebra", path: "algebra.md" } as TFile,
+      ];
+      const name = (deckManager as any).extractDeckNameFromFiles(files);
+      expect(name).toBe("Math Formulas");
     });
 
-    it("should handle nested deck names", () => {
-      const name = (deckManager as any).extractDeckName(
-        "#flashcards/spanish/vocabulary",
-      );
-      expect(name).toBe("Spanish - Vocabulary");
+    it("should handle single file", () => {
+      const files = [
+        { basename: "Spanish Vocabulary", path: "spanish.md" } as TFile,
+      ];
+      const name = (deckManager as any).extractDeckNameFromFiles(files);
+      expect(name).toBe("Spanish Vocabulary");
     });
 
-    it("should handle base flashcards tag", () => {
-      const name = (deckManager as any).extractDeckName("#flashcards");
+    it("should handle empty files array", () => {
+      const files: TFile[] = [];
+      const name = (deckManager as any).extractDeckNameFromFiles(files);
       expect(name).toBe("General");
     });
   });
