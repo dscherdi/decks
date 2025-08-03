@@ -73,7 +73,7 @@ export default class FlashcardsPlugin extends Plugin {
       );
 
       // Add ribbon icon
-      this.addRibbonIcon("cards", "Flashcards", () => {
+      this.addRibbonIcon("brain", "Flashcards", () => {
         this.activateView();
       });
 
@@ -255,13 +255,17 @@ export default class FlashcardsPlugin extends Plugin {
   }
 
   async getDeckStats(): Promise<Map<string, DeckStats>> {
+    console.log("Main plugin: Getting deck stats...");
     const stats = await this.db.getAllDeckStats();
+    console.log("Main plugin: Raw stats from database:", stats);
     const statsMap = new Map<string, DeckStats>();
 
     for (const stat of stats) {
+      console.log(`Main plugin: Adding stat for deck ${stat.deckId}:`, stat);
       statsMap.set(stat.deckId, stat);
     }
 
+    console.log("Main plugin: Final stats map:", statsMap);
     return statsMap;
   }
 
@@ -331,7 +335,7 @@ class FlashcardsView extends ItemView {
   }
 
   getIcon(): string {
-    return "cards";
+    return "brain";
   }
 
   async onOpen() {
@@ -387,8 +391,17 @@ class FlashcardsView extends ItemView {
 
       // Get fresh stats after syncing
       const deckStats = await this.plugin.getDeckStats();
-      console.log("Found decks:", decks);
-      console.log("Deck stats:", deckStats);
+      console.log("FlashcardsView: Found decks:", decks);
+      console.log("FlashcardsView: Deck stats map:", deckStats);
+
+      // Debug: Check if stats match decks
+      for (const deck of decks) {
+        const stat = deckStats.get(deck.id);
+        console.log(
+          `FlashcardsView: Deck "${deck.name}" (${deck.id}) has stats:`,
+          stat,
+        );
+      }
 
       // Update component
       if (this.component) {

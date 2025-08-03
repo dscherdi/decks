@@ -29,6 +29,9 @@ It has the following features:
     - Back side
     - Deck Id
     - Due date: calculated from FSRS algorithm.
+    - LastReview: Date and Time
+    - Status: {New, Learning, Due}
+
 
 
 - The side panel should look like this:
@@ -56,9 +59,12 @@ It has the following features:
 
 - State Logic
   - Card Counts
-	-	New: Number of unseen cards
-	-	Learn: Cards currently in the learning phase (scheduled for short-term review)
-	-	Due: Cards scheduled for spaced repetition
+	- New: Never seen before.
+  - Learning:
+    - If the card is in short term review, which means when the card is shown again within minutes or hours not days
+    - This uses fixed short intervals, eg. 1 minute -> 10 minutes -> 1 day
+    - The purpose is to reinforce new information while its still fresh
+  - Due: if due <= today: Part of spaced repetition; ready to be reviewed now
 
 - The review modal
   - When the user starts reviewing the deck, he has 4 options after reviewing a flashcard:

@@ -7,18 +7,24 @@ export interface Deck {
   modified: string;
 }
 
+export type FlashcardState = "new" | "learning" | "review";
+
 export interface Flashcard {
   id: string;
   deckId: string;
   front: string;
   back: string;
-  type: 'header-paragraph' | 'table';
+  type: "header-paragraph" | "table";
   sourceFile: string;
   lineNumber: number;
+  state: FlashcardState;
   dueDate: string;
-  interval: number;
+  interval: number; // in minutes
   repetitions: number;
-  easeFactor: number;
+  easeFactor: number; // Used to store FSRS difficulty
+  stability: number; // FSRS stability value
+  lapses: number; // Number of times card was forgotten
+  lastReviewed: string | null; // Last review date
   created: string;
   modified: string;
 }
@@ -27,7 +33,7 @@ export interface ReviewLog {
   id: string;
   flashcardId: string;
   reviewedAt: string;
-  difficulty: 'again' | 'hard' | 'good' | 'easy';
+  difficulty: "again" | "hard" | "good" | "easy";
   oldInterval: number;
   newInterval: number;
   oldEaseFactor: number;

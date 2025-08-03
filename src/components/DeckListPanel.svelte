@@ -11,15 +11,17 @@
     let isUpdatingStats = false;
 
     function getDeckStats(deckId: string): DeckStats {
-        return (
-            deckStats.get(deckId) || {
-                deckId,
-                newCount: 0,
-                learningCount: 0,
-                dueCount: 0,
-                totalCount: 0,
-            }
-        );
+        console.log(`DeckListPanel: Getting stats for deck ${deckId}`);
+        console.log(`DeckListPanel: Available stats map:`, deckStats);
+        const stats = deckStats.get(deckId) || {
+            deckId,
+            newCount: 0,
+            learningCount: 0,
+            dueCount: 0,
+            totalCount: 0,
+        };
+        console.log(`DeckListPanel: Using stats for deck ${deckId}:`, stats);
+        return stats;
     }
 
     function formatDeckName(deck: Deck): string {
@@ -52,9 +54,14 @@
     }
 
     onMount(() => {
+        console.log("DeckListPanel: Component mounted");
         // Initial load
         handleRefresh();
     });
+
+    // Debug reactive statements
+    $: console.log("DeckListPanel: Decks prop changed:", decks);
+    $: console.log("DeckListPanel: DeckStats prop changed:", deckStats);
 </script>
 
 <div class="deck-list-panel">

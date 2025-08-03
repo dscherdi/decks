@@ -227,10 +227,14 @@ describe("DatabaseService", () => {
           type: "header-paragraph" as const,
           sourceFile: "math.md",
           lineNumber: 5,
+          state: "new" as const,
           dueDate: new Date().toISOString(),
           interval: 0,
           repetitions: 0,
-          easeFactor: 2.5,
+          easeFactor: 5.0,
+          stability: 2.5,
+          lapses: 0,
+          lastReviewed: null,
         };
 
         const result = await dbService.createFlashcard(flashcard);
@@ -246,10 +250,14 @@ describe("DatabaseService", () => {
           flashcard.type,
           flashcard.sourceFile,
           flashcard.lineNumber,
+          flashcard.state,
           flashcard.dueDate,
           flashcard.interval,
           flashcard.repetitions,
           flashcard.easeFactor,
+          flashcard.stability,
+          flashcard.lapses,
+          flashcard.lastReviewed,
           expect.any(String), // created
           expect.any(String), // modified
         ]);
@@ -332,12 +340,12 @@ describe("DatabaseService", () => {
 
       // Verify correct queries were made
       const prepareCalls = mockDb.prepare.mock.calls;
-      expect(prepareCalls[0][0]).toContain("repetitions = 0 AND due_date <= ?"); // new cards
+      expect(prepareCalls[0][0]).toContain("state = 'new' AND due_date <= ?"); // new cards
       expect(prepareCalls[1][0]).toContain(
-        "repetitions > 0 AND interval < 1440 AND due_date <= ?",
+        "state = 'learning' AND due_date <= ?",
       ); // learning
       expect(prepareCalls[2][0]).toContain(
-        "interval >= 1440 AND due_date <= ?",
+        "state = 'review' AND due_date <= ?",
       ); // due
       expect(prepareCalls[3][0]).toContain(
         "COUNT(*) FROM flashcards WHERE deck_id = ?",
@@ -367,7 +375,7 @@ describe("DatabaseService", () => {
         );
 
         expect(mockDb.prepare).toHaveBeenCalledWith(
-          expect.stringContaining("repetitions = 0 THEN 1"),
+          expect.stringContaining("state = 'new' THEN 1"),
         );
 
         // Verify bind was called with deck ID and current timestamp

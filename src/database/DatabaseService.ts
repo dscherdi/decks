@@ -89,10 +89,14 @@ export class DatabaseService {
         type TEXT NOT NULL CHECK (type IN ('header-paragraph', 'table')),
         source_file TEXT NOT NULL,
         line_number INTEGER NOT NULL,
+        state TEXT NOT NULL DEFAULT 'new' CHECK (state IN ('new', 'learning', 'review')),
         due_date TEXT NOT NULL,
         interval INTEGER NOT NULL DEFAULT 0,
         repetitions INTEGER NOT NULL DEFAULT 0,
         ease_factor REAL NOT NULL DEFAULT 2.5,
+        stability REAL NOT NULL DEFAULT 2.5,
+        lapses INTEGER NOT NULL DEFAULT 0,
+        last_reviewed TEXT,
         created TEXT NOT NULL,
         modified TEXT NOT NULL,
         FOREIGN KEY (deck_id) REFERENCES decks(id) ON DELETE CASCADE
@@ -125,6 +129,22 @@ export class DatabaseService {
   async createDeck(deck: Omit<Deck, "created" | "modified">): Promise<Deck> {
     if (!this.db) throw new Error("Database not initialized");
 
+    // First check if deck already exists
+    const existingDeck = await this.getDeckByTag(deck.tag);
+    if (existingDeck) {
+      // Update name if it's different (file name might have changed)
+      if (existingDeck.name !== deck.name) {
+        const updateStmt = this.db.prepare(`
+          UPDATE decks SET name = ?, modified = ? WHERE tag = ?
+        `);
+        updateStmt.run([deck.name, new Date().toISOString(), deck.tag]);
+        updateStmt.free();
+        await this.save();
+        return { ...existingDeck, name: deck.name };
+      }
+      return existingDeck;
+    }
+
     const now = new Date().toISOString();
     const fullDeck: Deck = {
       ...deck,
@@ -145,6 +165,7 @@ export class DatabaseService {
       fullDeck.created,
       fullDeck.modified,
     ]);
+    stmt.free();
 
     await this.save();
     return fullDeck;
@@ -206,6 +227,7 @@ export class DatabaseService {
     `);
 
     stmt.run([new Date().toISOString(), new Date().toISOString(), deckId]);
+    stmt.free();
     await this.save();
   }
 
@@ -225,8 +247,8 @@ export class DatabaseService {
     const stmt = this.db.prepare(`
       INSERT OR REPLACE INTO flashcards (
         id, deck_id, front, back, type, source_file, line_number,
-        due_date, interval, repetitions, ease_factor, created, modified
-      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        state, due_date, interval, repetitions, ease_factor, stability, lapses, last_reviewed, created, modified
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
     `);
 
     stmt.run([
@@ -237,13 +259,18 @@ export class DatabaseService {
       fullFlashcard.type,
       fullFlashcard.sourceFile,
       fullFlashcard.lineNumber,
+      fullFlashcard.state,
       fullFlashcard.dueDate,
       fullFlashcard.interval,
       fullFlashcard.repetitions,
       fullFlashcard.easeFactor,
+      fullFlashcard.stability,
+      fullFlashcard.lapses,
+      fullFlashcard.lastReviewed,
       fullFlashcard.created,
       fullFlashcard.modified,
     ]);
+    stmt.free();
 
     await this.save();
     return fullFlashcard;
@@ -292,18 +319,18 @@ export class DatabaseService {
 
     const now = new Date().toISOString();
 
-    // Get all cards that are due for review:
-    // 1. New cards (repetitions = 0) that are due
-    // 2. Learning cards (interval < 1440) that are due
-    // 3. Review cards (interval >= 1440) that are due
+    // Get all cards that are due for review based on state:
+    // 1. New cards that are due
+    // 2. Learning cards that are due
+    // 3. Review cards that are due
     const stmt = this.db.prepare(`
       SELECT * FROM flashcards
       WHERE deck_id = ? AND due_date <= ?
       ORDER BY
         CASE
-          WHEN repetitions = 0 THEN 1  -- New cards first
-          WHEN interval < 1440 THEN 2  -- Learning cards second
-          ELSE 3                       -- Review cards last
+          WHEN state = 'new' THEN 1     -- New cards first
+          WHEN state = 'learning' THEN 2 -- Learning cards second
+          WHEN state = 'review' THEN 3   -- Review cards last
         END,
         due_date
     `);
@@ -325,21 +352,26 @@ export class DatabaseService {
 
     const stmt = this.db.prepare(`
       UPDATE flashcards SET
-        front = ?, back = ?, due_date = ?, interval = ?,
-        repetitions = ?, ease_factor = ?, modified = ?
+        front = ?, back = ?, state = ?, due_date = ?, interval = ?,
+        repetitions = ?, ease_factor = ?, stability = ?, lapses = ?, last_reviewed = ?, modified = ?
       WHERE id = ?
     `);
 
     stmt.run([
       flashcard.front,
       flashcard.back,
+      flashcard.state,
       flashcard.dueDate,
       flashcard.interval,
       flashcard.repetitions,
       flashcard.easeFactor,
+      flashcard.stability,
+      flashcard.lapses,
+      flashcard.lastReviewed,
       new Date().toISOString(),
       flashcard.id,
     ]);
+    stmt.free();
 
     await this.save();
   }
@@ -351,6 +383,7 @@ export class DatabaseService {
       "DELETE FROM flashcards WHERE source_file = ?",
     );
     stmt.run([sourceFile]);
+    stmt.free();
     await this.save();
   }
 
@@ -377,6 +410,7 @@ export class DatabaseService {
       log.oldEaseFactor,
       log.newEaseFactor,
     ]);
+    stmt.free();
 
     await this.save();
   }
@@ -387,35 +421,93 @@ export class DatabaseService {
 
     const now = new Date().toISOString();
 
-    // Count new cards (never reviewed and due for first review)
+    // Debug: Check all flashcards for this deck with more details
+    const debugStmt = this.db.prepare(`
+      SELECT id, state, due_date, created, interval, repetitions FROM flashcards WHERE deck_id = ?
+    `);
+    debugStmt.bind([deckId]);
+    console.log(`Debug: All flashcards for deck ${deckId}:`);
+    while (debugStmt.step()) {
+      const row = debugStmt.get();
+      const dueDate = row[2] as string;
+      const isDue = dueDate <= now;
+      console.log(
+        `  ID: ${row[0]}, State: '${row[1]}', Due: ${dueDate}, Created: ${row[3]}, Interval: ${row[4]}, Reps: ${row[5]}, IsDue: ${isDue}`,
+      );
+    }
+    debugStmt.free();
+    console.log(`Debug: Current time for comparison: ${now}`);
+
+    // Debug: Test each query individually
+    console.log(`Debug: Testing new cards query...`);
+    const testNewStmt = this.db.prepare(`
+      SELECT COUNT(*), state, due_date FROM flashcards WHERE deck_id = ? AND state = 'new'
+    `);
+    testNewStmt.bind([deckId]);
+    if (testNewStmt.step()) {
+      const result = testNewStmt.get();
+      console.log(
+        `  New cards with state='new': ${result[0]}, example state: '${result[1]}', example due: ${result[2]}`,
+      );
+    }
+    testNewStmt.free();
+
+    // Debug: Test due date filtering separately
+    console.log(`Debug: Testing due date filtering...`);
+    const testDueStmt = this.db.prepare(`
+      SELECT COUNT(*) FROM flashcards WHERE deck_id = ? AND due_date <= ?
+    `);
+    testDueStmt.bind([deckId, now]);
+    if (testDueStmt.step()) {
+      const dueCount = testDueStmt.get()[0];
+      console.log(`  Cards with due_date <= now: ${dueCount}`);
+    }
+    testDueStmt.free();
+
+    // Debug: Check all possible states
+    const stateStmt = this.db.prepare(`
+      SELECT state, COUNT(*) FROM flashcards WHERE deck_id = ? GROUP BY state
+    `);
+    stateStmt.bind([deckId]);
+    console.log(`Debug: All states in deck ${deckId}:`);
+    while (stateStmt.step()) {
+      const row = stateStmt.get();
+      console.log(`  State '${row[0]}': ${row[1]} cards`);
+    }
+    stateStmt.free();
+
+    // Count new cards (state = 'new' and due for first review)
     const newStmt = this.db.prepare(`
       SELECT COUNT(*) FROM flashcards
-      WHERE deck_id = ? AND repetitions = 0 AND due_date <= ?
+      WHERE deck_id = ? AND state = 'new' AND due_date <= ?
     `);
     newStmt.bind([deckId, now]);
     newStmt.step();
     const newCount = (newStmt.get()[0] as number) || 0;
     newStmt.free();
+    console.log(`Debug: New count for deck ${deckId}: ${newCount}`);
 
-    // Count learning cards (reviewed but still in learning phase - interval < 1 day and due)
+    // Count learning cards (state = 'learning' and due)
     const learningStmt = this.db.prepare(`
       SELECT COUNT(*) FROM flashcards
-      WHERE deck_id = ? AND repetitions > 0 AND interval < 1440 AND due_date <= ?
+      WHERE deck_id = ? AND state = 'learning' AND due_date <= ?
     `);
     learningStmt.bind([deckId, now]);
     learningStmt.step();
     const learningCount = (learningStmt.get()[0] as number) || 0;
     learningStmt.free();
+    console.log(`Debug: Learning count for deck ${deckId}: ${learningCount}`);
 
-    // Count review cards (mature cards that are due - interval >= 1 day and due)
+    // Count review cards (state = 'review' and due)
     const dueStmt = this.db.prepare(`
       SELECT COUNT(*) FROM flashcards
-      WHERE deck_id = ? AND interval >= 1440 AND due_date <= ?
+      WHERE deck_id = ? AND state = 'review' AND due_date <= ?
     `);
     dueStmt.bind([deckId, now]);
     dueStmt.step();
     const dueCount = (dueStmt.get()[0] as number) || 0;
     dueStmt.free();
+    console.log(`Debug: Due count for deck ${deckId}: ${dueCount}`);
 
     // Total count
     const totalStmt = this.db.prepare(`
@@ -425,6 +517,7 @@ export class DatabaseService {
     totalStmt.step();
     const totalCount = (totalStmt.get()[0] as number) || 0;
     totalStmt.free();
+    console.log(`Debug: Total count for deck ${deckId}: ${totalCount}`);
 
     return {
       deckId,
@@ -459,12 +552,16 @@ export class DatabaseService {
       type: row[4] as "header-paragraph" | "table",
       sourceFile: row[5] as string,
       lineNumber: row[6] as number,
-      dueDate: row[7] as string,
-      interval: row[8] as number,
-      repetitions: row[9] as number,
-      easeFactor: row[10] as number,
-      created: row[11] as string,
-      modified: row[12] as string,
+      state: row[7] as "new" | "learning" | "review",
+      dueDate: row[8] as string,
+      interval: row[9] as number,
+      repetitions: row[10] as number,
+      easeFactor: row[11] as number,
+      stability: row[12] as number,
+      lapses: row[13] as number,
+      lastReviewed: row[14] as string | null,
+      created: row[15] as string,
+      modified: row[16] as string,
     };
   }
 

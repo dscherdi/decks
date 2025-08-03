@@ -2516,10 +2516,14 @@ var DatabaseService = class {
         type TEXT NOT NULL CHECK (type IN ('header-paragraph', 'table')),
         source_file TEXT NOT NULL,
         line_number INTEGER NOT NULL,
+        state TEXT NOT NULL DEFAULT 'new' CHECK (state IN ('new', 'learning', 'review')),
         due_date TEXT NOT NULL,
         interval INTEGER NOT NULL DEFAULT 0,
         repetitions INTEGER NOT NULL DEFAULT 0,
         ease_factor REAL NOT NULL DEFAULT 2.5,
+        stability REAL NOT NULL DEFAULT 2.5,
+        lapses INTEGER NOT NULL DEFAULT 0,
+        last_reviewed TEXT,
         created TEXT NOT NULL,
         modified TEXT NOT NULL,
         FOREIGN KEY (deck_id) REFERENCES decks(id) ON DELETE CASCADE
@@ -2550,6 +2554,19 @@ var DatabaseService = class {
   async createDeck(deck) {
     if (!this.db)
       throw new Error("Database not initialized");
+    const existingDeck = await this.getDeckByTag(deck.tag);
+    if (existingDeck) {
+      if (existingDeck.name !== deck.name) {
+        const updateStmt = this.db.prepare(`
+          UPDATE decks SET name = ?, modified = ? WHERE tag = ?
+        `);
+        updateStmt.run([deck.name, (/* @__PURE__ */ new Date()).toISOString(), deck.tag]);
+        updateStmt.free();
+        await this.save();
+        return { ...existingDeck, name: deck.name };
+      }
+      return existingDeck;
+    }
     const now = (/* @__PURE__ */ new Date()).toISOString();
     const fullDeck = {
       ...deck,
@@ -2568,6 +2585,7 @@ var DatabaseService = class {
       fullDeck.created,
       fullDeck.modified
     ]);
+    stmt.free();
     await this.save();
     return fullDeck;
   }
@@ -2619,6 +2637,7 @@ var DatabaseService = class {
       WHERE id = ?
     `);
     stmt.run([(/* @__PURE__ */ new Date()).toISOString(), (/* @__PURE__ */ new Date()).toISOString(), deckId]);
+    stmt.free();
     await this.save();
   }
   // Flashcard operations
@@ -2634,8 +2653,8 @@ var DatabaseService = class {
     const stmt = this.db.prepare(`
       INSERT OR REPLACE INTO flashcards (
         id, deck_id, front, back, type, source_file, line_number,
-        due_date, interval, repetitions, ease_factor, created, modified
-      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        state, due_date, interval, repetitions, ease_factor, stability, lapses, last_reviewed, created, modified
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
     `);
     stmt.run([
       fullFlashcard.id,
@@ -2645,13 +2664,18 @@ var DatabaseService = class {
       fullFlashcard.type,
       fullFlashcard.sourceFile,
       fullFlashcard.lineNumber,
+      fullFlashcard.state,
       fullFlashcard.dueDate,
       fullFlashcard.interval,
       fullFlashcard.repetitions,
       fullFlashcard.easeFactor,
+      fullFlashcard.stability,
+      fullFlashcard.lapses,
+      fullFlashcard.lastReviewed,
       fullFlashcard.created,
       fullFlashcard.modified
     ]);
+    stmt.free();
     await this.save();
     return fullFlashcard;
   }
@@ -2695,9 +2719,9 @@ var DatabaseService = class {
       WHERE deck_id = ? AND due_date <= ?
       ORDER BY
         CASE
-          WHEN repetitions = 0 THEN 1  -- New cards first
-          WHEN interval < 1440 THEN 2  -- Learning cards second
-          ELSE 3                       -- Review cards last
+          WHEN state = 'new' THEN 1     -- New cards first
+          WHEN state = 'learning' THEN 2 -- Learning cards second
+          WHEN state = 'review' THEN 3   -- Review cards last
         END,
         due_date
     `);
@@ -2715,20 +2739,25 @@ var DatabaseService = class {
       throw new Error("Database not initialized");
     const stmt = this.db.prepare(`
       UPDATE flashcards SET
-        front = ?, back = ?, due_date = ?, interval = ?,
-        repetitions = ?, ease_factor = ?, modified = ?
+        front = ?, back = ?, state = ?, due_date = ?, interval = ?,
+        repetitions = ?, ease_factor = ?, stability = ?, lapses = ?, last_reviewed = ?, modified = ?
       WHERE id = ?
     `);
     stmt.run([
       flashcard.front,
       flashcard.back,
+      flashcard.state,
       flashcard.dueDate,
       flashcard.interval,
       flashcard.repetitions,
       flashcard.easeFactor,
+      flashcard.stability,
+      flashcard.lapses,
+      flashcard.lastReviewed,
       (/* @__PURE__ */ new Date()).toISOString(),
       flashcard.id
     ]);
+    stmt.free();
     await this.save();
   }
   async deleteFlashcardsByFile(sourceFile) {
@@ -2738,6 +2767,7 @@ var DatabaseService = class {
       "DELETE FROM flashcards WHERE source_file = ?"
     );
     stmt.run([sourceFile]);
+    stmt.free();
     await this.save();
   }
   // Review log operations
@@ -2761,6 +2791,7 @@ var DatabaseService = class {
       log.oldEaseFactor,
       log.newEaseFactor
     ]);
+    stmt.free();
     await this.save();
   }
   // Statistics operations
@@ -2768,30 +2799,80 @@ var DatabaseService = class {
     if (!this.db)
       throw new Error("Database not initialized");
     const now = (/* @__PURE__ */ new Date()).toISOString();
+    const debugStmt = this.db.prepare(`
+      SELECT id, state, due_date, created, interval, repetitions FROM flashcards WHERE deck_id = ?
+    `);
+    debugStmt.bind([deckId]);
+    console.log(`Debug: All flashcards for deck ${deckId}:`);
+    while (debugStmt.step()) {
+      const row = debugStmt.get();
+      const dueDate = row[2];
+      const isDue = dueDate <= now;
+      console.log(
+        `  ID: ${row[0]}, State: '${row[1]}', Due: ${dueDate}, Created: ${row[3]}, Interval: ${row[4]}, Reps: ${row[5]}, IsDue: ${isDue}`
+      );
+    }
+    debugStmt.free();
+    console.log(`Debug: Current time for comparison: ${now}`);
+    console.log(`Debug: Testing new cards query...`);
+    const testNewStmt = this.db.prepare(`
+      SELECT COUNT(*), state, due_date FROM flashcards WHERE deck_id = ? AND state = 'new'
+    `);
+    testNewStmt.bind([deckId]);
+    if (testNewStmt.step()) {
+      const result = testNewStmt.get();
+      console.log(
+        `  New cards with state='new': ${result[0]}, example state: '${result[1]}', example due: ${result[2]}`
+      );
+    }
+    testNewStmt.free();
+    console.log(`Debug: Testing due date filtering...`);
+    const testDueStmt = this.db.prepare(`
+      SELECT COUNT(*) FROM flashcards WHERE deck_id = ? AND due_date <= ?
+    `);
+    testDueStmt.bind([deckId, now]);
+    if (testDueStmt.step()) {
+      const dueCount2 = testDueStmt.get()[0];
+      console.log(`  Cards with due_date <= now: ${dueCount2}`);
+    }
+    testDueStmt.free();
+    const stateStmt = this.db.prepare(`
+      SELECT state, COUNT(*) FROM flashcards WHERE deck_id = ? GROUP BY state
+    `);
+    stateStmt.bind([deckId]);
+    console.log(`Debug: All states in deck ${deckId}:`);
+    while (stateStmt.step()) {
+      const row = stateStmt.get();
+      console.log(`  State '${row[0]}': ${row[1]} cards`);
+    }
+    stateStmt.free();
     const newStmt = this.db.prepare(`
       SELECT COUNT(*) FROM flashcards
-      WHERE deck_id = ? AND repetitions = 0 AND due_date <= ?
+      WHERE deck_id = ? AND state = 'new' AND due_date <= ?
     `);
     newStmt.bind([deckId, now]);
     newStmt.step();
     const newCount = newStmt.get()[0] || 0;
     newStmt.free();
+    console.log(`Debug: New count for deck ${deckId}: ${newCount}`);
     const learningStmt = this.db.prepare(`
       SELECT COUNT(*) FROM flashcards
-      WHERE deck_id = ? AND repetitions > 0 AND interval < 1440 AND due_date <= ?
+      WHERE deck_id = ? AND state = 'learning' AND due_date <= ?
     `);
     learningStmt.bind([deckId, now]);
     learningStmt.step();
     const learningCount = learningStmt.get()[0] || 0;
     learningStmt.free();
+    console.log(`Debug: Learning count for deck ${deckId}: ${learningCount}`);
     const dueStmt = this.db.prepare(`
       SELECT COUNT(*) FROM flashcards
-      WHERE deck_id = ? AND interval >= 1440 AND due_date <= ?
+      WHERE deck_id = ? AND state = 'review' AND due_date <= ?
     `);
     dueStmt.bind([deckId, now]);
     dueStmt.step();
     const dueCount = dueStmt.get()[0] || 0;
     dueStmt.free();
+    console.log(`Debug: Due count for deck ${deckId}: ${dueCount}`);
     const totalStmt = this.db.prepare(`
       SELECT COUNT(*) FROM flashcards WHERE deck_id = ?
     `);
@@ -2799,6 +2880,7 @@ var DatabaseService = class {
     totalStmt.step();
     const totalCount = totalStmt.get()[0] || 0;
     totalStmt.free();
+    console.log(`Debug: Total count for deck ${deckId}: ${totalCount}`);
     return {
       deckId,
       newCount,
@@ -2828,12 +2910,16 @@ var DatabaseService = class {
       type: row[4],
       sourceFile: row[5],
       lineNumber: row[6],
-      dueDate: row[7],
-      interval: row[8],
-      repetitions: row[9],
-      easeFactor: row[10],
-      created: row[11],
-      modified: row[12]
+      state: row[7],
+      dueDate: row[8],
+      interval: row[9],
+      repetitions: row[10],
+      easeFactor: row[11],
+      stability: row[12],
+      lapses: row[13],
+      lastReviewed: row[14],
+      created: row[15],
+      modified: row[16]
     };
   }
   async close() {
@@ -2896,20 +2982,37 @@ var DeckManager = class {
    * Sync decks with database
    */
   async syncDecks() {
-    const decksMap = await this.scanVaultForDecks();
-    const existingDecks = await this.db.getAllDecks();
-    const existingTags = new Set(existingDecks.map((d) => d.tag));
-    for (const [tag, files] of decksMap) {
-      if (!existingTags.has(tag)) {
-        const deckName = this.extractDeckNameFromFiles(files);
-        const deck = {
-          id: this.generateDeckId(),
-          name: deckName,
-          tag,
-          lastReviewed: null
-        };
-        await this.db.createDeck(deck);
+    try {
+      console.log("Starting deck sync...");
+      const decksMap = await this.scanVaultForDecks();
+      const existingDecks = await this.db.getAllDecks();
+      const existingTags = new Set(existingDecks.map((d) => d.tag));
+      console.log(
+        `Found ${decksMap.size} deck tags in vault, ${existingDecks.length} existing decks in database`
+      );
+      let newDecksCreated = 0;
+      for (const [tag, files] of decksMap) {
+        if (!existingTags.has(tag)) {
+          try {
+            const deckName = this.extractDeckNameFromFiles(files);
+            const deck = {
+              id: this.generateDeckId(),
+              name: deckName,
+              tag,
+              lastReviewed: null
+            };
+            console.log(`Creating new deck: "${deckName}" with tag: ${tag}`);
+            await this.db.createDeck(deck);
+            newDecksCreated++;
+          } catch (error) {
+            console.error(`Failed to create deck for tag ${tag}:`, error);
+          }
+        }
       }
+      console.log(`Deck sync completed. Created ${newDecksCreated} new decks.`);
+    } catch (error) {
+      console.error("Error during deck sync:", error);
+      throw error;
     }
   }
   /**
@@ -3052,10 +3155,16 @@ var DeckManager = class {
           type: parsed.type,
           sourceFile: file.path,
           lineNumber: parsed.lineNumber,
+          state: "new",
           dueDate: (/* @__PURE__ */ new Date()).toISOString(),
           interval: 0,
           repetitions: 0,
-          easeFactor: 2.5
+          easeFactor: 5,
+          // FSRS initial difficulty
+          stability: 2.5,
+          // FSRS initial stability
+          lapses: 0,
+          lastReviewed: null
         };
         await this.db.createFlashcard(flashcard);
       }
@@ -3134,23 +3243,23 @@ var FSRS = class {
   constructor(params) {
     this.params = {
       w: [
-        0.4,
-        0.6,
-        2.4,
-        5.8,
-        4.93,
-        0.94,
-        0.86,
-        0.01,
-        1.49,
-        0.14,
-        0.94,
-        2.18,
-        0.05,
-        0.34,
-        1.26,
-        0.29,
-        2.61
+        0.4072,
+        1.1829,
+        3.1262,
+        15.4722,
+        7.2102,
+        0.5316,
+        1.0651,
+        0.0234,
+        1.616,
+        0.1544,
+        1.0824,
+        1.9813,
+        0.0953,
+        0.2975,
+        2.2042,
+        0.2407,
+        2.9466
       ],
       requestRetention: 0.9,
       maximumInterval: 36500,
@@ -3170,150 +3279,193 @@ var FSRS = class {
    * Calculate the next scheduling info for a flashcard based on review difficulty
    */
   getSchedulingInfo(card) {
+    const fsrsCard = this.flashcardToFSRS(card);
     const now = /* @__PURE__ */ new Date();
     return {
-      again: this.calculateSchedule(card, "again", now),
-      hard: this.calculateSchedule(card, "hard", now),
-      good: this.calculateSchedule(card, "good", now),
-      easy: this.calculateSchedule(card, "easy", now)
+      again: this.calculateScheduleForRating(fsrsCard, 1, now),
+      hard: this.calculateScheduleForRating(fsrsCard, 2, now),
+      good: this.calculateScheduleForRating(fsrsCard, 3, now),
+      easy: this.calculateScheduleForRating(fsrsCard, 4, now)
     };
   }
   /**
    * Update a flashcard based on the selected difficulty
    */
   updateCard(card, difficulty) {
+    const rating = this.difficultyToRating(difficulty);
+    const fsrsCard = this.flashcardToFSRS(card);
     const now = /* @__PURE__ */ new Date();
-    const schedule = this.calculateSchedule(card, difficulty, now);
+    const schedule = this.calculateScheduleForRating(fsrsCard, rating, now);
     return {
       ...card,
+      state: schedule.state,
       dueDate: schedule.dueDate,
       interval: schedule.interval,
-      easeFactor: schedule.easeFactor,
+      easeFactor: schedule.difficulty,
+      // Store FSRS difficulty in easeFactor field
       repetitions: schedule.repetitions,
       modified: now.toISOString()
     };
   }
-  calculateSchedule(card, difficulty, now) {
-    let interval;
-    let easeFactor = card.easeFactor;
-    let repetitions = card.repetitions;
-    if (card.repetitions === 0) {
-      switch (difficulty) {
-        case "again":
-          interval = 1;
-          repetitions = 0;
-          break;
-        case "hard":
-          interval = 5;
-          repetitions = 1;
-          break;
-        case "good":
-          interval = 10;
-          repetitions = 1;
-          break;
-        case "easy":
-          interval = 4 * 1440;
-          repetitions = 1;
-          easeFactor = this.initialStability(4);
-          break;
-      }
-    } else if (card.interval < 1440) {
-      switch (difficulty) {
-        case "again":
-          interval = 1;
-          repetitions = 0;
-          easeFactor = Math.max(1.3, easeFactor - 0.2);
-          break;
-        case "hard":
-          interval = Math.max(1, card.interval * 1.2);
-          repetitions += 1;
-          easeFactor = Math.max(1.3, easeFactor - 0.15);
-          break;
-        case "good":
-          interval = card.interval * 2.5;
-          repetitions += 1;
-          break;
-        case "easy":
-          interval = card.interval * 3.5;
-          repetitions += 1;
-          easeFactor = Math.min(2.5, easeFactor + 0.15);
-          break;
-      }
+  calculateScheduleForRating(card, rating, now) {
+    let newCard;
+    if (card.state === "New") {
+      newCard = this.initDS(card);
+      newCard.stability = this.initStability(rating);
+      newCard.difficulty = this.initDifficulty(rating);
+      newCard.elapsedDays = 0;
+      newCard.scheduledDays = 0;
+      newCard.reps = 1;
+      newCard.lapses = rating === 1 ? 1 : 0;
+      newCard.state = rating === 1 ? "Learning" : "Review";
     } else {
-      const daysSinceLastReview = this.getDaysSince(card.dueDate);
-      const retrievability = this.calculateRetrievability(
-        card.interval / 1440,
-        daysSinceLastReview
+      newCard = { ...card };
+      newCard.elapsedDays = this.getElapsedDays(card.lastReview, now);
+      newCard.reps += 1;
+      if (rating === 1) {
+        newCard.lapses += 1;
+      }
+      const retrievability = this.forgettingCurve(
+        newCard.elapsedDays,
+        newCard.stability
       );
-      switch (difficulty) {
-        case "again":
-          interval = 1440;
-          repetitions = 1;
-          easeFactor = Math.max(1.3, easeFactor - 0.2);
-          break;
-        case "hard":
-          interval = this.nextInterval(
-            card.interval / 1440,
-            easeFactor,
-            retrievability,
-            2
-          ) * 1440;
-          repetitions += 1;
-          easeFactor = Math.max(1.3, easeFactor - 0.15);
-          break;
-        case "good":
-          interval = this.nextInterval(
-            card.interval / 1440,
-            easeFactor,
-            retrievability,
-            3
-          ) * 1440;
-          repetitions += 1;
-          break;
-        case "easy":
-          interval = this.nextInterval(
-            card.interval / 1440,
-            easeFactor,
-            retrievability,
-            4
-          ) * 1440 * this.params.easyBonus;
-          repetitions += 1;
-          easeFactor = Math.min(2.5, easeFactor + 0.15);
-          break;
+      newCard.difficulty = this.nextDifficulty(newCard.difficulty, rating);
+      newCard.stability = this.nextStability(
+        newCard.difficulty,
+        newCard.stability,
+        retrievability,
+        rating
+      );
+      if (rating === 1) {
+        newCard.state = "Relearning";
+      } else {
+        newCard.state = "Review";
       }
     }
-    interval = Math.min(interval, this.params.maximumInterval * 1440);
-    const dueDate = new Date(now.getTime() + interval * 60 * 1e3);
+    const interval = this.nextInterval(newCard.stability);
+    newCard.scheduledDays = interval;
+    newCard.lastReview = now;
+    const dueDate = new Date(now.getTime() + interval * 24 * 60 * 60 * 1e3);
     return {
       dueDate: dueDate.toISOString(),
-      interval: Math.round(interval),
-      easeFactor: Number(easeFactor.toFixed(2)),
-      repetitions
+      interval: Math.round(interval * 1440),
+      // Convert days to minutes
+      easeFactor: Number(newCard.difficulty.toFixed(2)),
+      repetitions: newCard.reps,
+      stability: Number(newCard.stability.toFixed(2)),
+      difficulty: Number(newCard.difficulty.toFixed(2)),
+      state: this.fsrsStateToFlashcardState(newCard.state)
     };
   }
-  initialStability(rating) {
-    return Math.max(0.1, this.params.w[rating - 1]);
+  initDS(card) {
+    return {
+      ...card,
+      stability: 0,
+      difficulty: 0,
+      elapsedDays: 0,
+      scheduledDays: 0,
+      reps: 0,
+      lapses: 0,
+      state: "New",
+      lastReview: /* @__PURE__ */ new Date()
+    };
   }
-  calculateRetrievability(interval, elapsed) {
-    return Math.pow(1 + elapsed / (9 * interval), -1);
+  initStability(rating) {
+    return Math.max(this.params.w[rating - 1], 0.1);
   }
-  nextInterval(currentInterval, easeFactor, retrievability, rating) {
-    const desiredRetention = this.params.requestRetention;
-    const stabilityIncrease = Math.exp(this.params.w[8] * (rating - 3));
-    const difficultyDecay = this.params.w[9] * (rating - 3);
-    const newStability = currentInterval * retrievability * stabilityIncrease;
-    const newDifficulty = Math.max(
-      0,
-      Math.min(10, easeFactor + difficultyDecay)
+  initDifficulty(rating) {
+    return Math.min(
+      Math.max(this.params.w[4] - this.params.w[5] * (rating - 3), 1),
+      10
     );
-    const interval = newStability * Math.log(desiredRetention) / Math.log(0.9);
-    return Math.max(1, Math.round(interval));
   }
-  getDaysSince(dateString) {
-    const date = new Date(dateString);
-    const now = /* @__PURE__ */ new Date();
-    const diffMs = now.getTime() - date.getTime();
-    return diffMs / (1e3 * 60 * 60 * 24);
+  forgettingCurve(elapsedDays, stability) {
+    return Math.pow(1 + elapsedDays / (9 * stability), -1);
+  }
+  nextDifficulty(difficulty, rating) {
+    const nextD = difficulty - this.params.w[6] * (rating - 3);
+    return Math.min(
+      Math.max(this.meanReversion(this.params.w[4], nextD), 1),
+      10
+    );
+  }
+  meanReversion(init2, current) {
+    return this.params.w[7] * init2 + (1 - this.params.w[7]) * current;
+  }
+  nextStability(difficulty, stability, retrievability, rating) {
+    const hardPenalty = rating === 2 ? this.params.w[15] : 1;
+    const easyBonus = rating === 4 ? this.params.w[16] : 1;
+    return stability * (1 + Math.exp(this.params.w[8]) * (11 - difficulty) * Math.pow(stability, -this.params.w[9]) * (Math.exp((1 - retrievability) * this.params.w[10]) - 1) * hardPenalty * easyBonus);
+  }
+  nextInterval(stability) {
+    const interval = stability * (Math.log(this.params.requestRetention) / Math.log(0.9));
+    return Math.min(
+      Math.max(Math.round(interval), 1),
+      this.params.maximumInterval
+    );
+  }
+  getElapsedDays(lastReview, now) {
+    return Math.max(
+      0,
+      (now.getTime() - lastReview.getTime()) / (1e3 * 60 * 60 * 24)
+    );
+  }
+  flashcardToFSRS(card) {
+    const lastReview = card.modified ? new Date(card.modified) : /* @__PURE__ */ new Date();
+    const elapsedDays = this.getElapsedDays(lastReview, /* @__PURE__ */ new Date());
+    return {
+      stability: card.easeFactor || 2.5,
+      // Use easeFactor as stability storage
+      difficulty: card.easeFactor || 5,
+      // Default difficulty
+      elapsedDays,
+      scheduledDays: card.interval / 1440,
+      // Convert minutes to days
+      reps: card.repetitions,
+      lapses: 0,
+      // We don't track lapses in current model
+      state: this.flashcardStateToFSRSState(card.state),
+      lastReview
+    };
+  }
+  flashcardStateToFSRSState(state) {
+    switch (state) {
+      case "new":
+        return "New";
+      case "learning":
+        return "Learning";
+      case "review":
+        return "Review";
+      default:
+        return "New";
+    }
+  }
+  fsrsStateToFlashcardState(state) {
+    switch (state) {
+      case "New":
+        return "new";
+      case "Learning":
+      case "Relearning":
+        return "learning";
+      case "Review":
+        return "review";
+      default:
+        return "new";
+    }
+  }
+  difficultyToRating(difficulty) {
+    switch (difficulty) {
+      case "again":
+        return 1;
+      case "hard":
+        return 2;
+      case "good":
+        return 3;
+      case "easy":
+        return 4;
+      default:
+        return 3;
+    }
   }
   /**
    * Get display text for intervals
@@ -4369,13 +4521,17 @@ function instance($$self, $$props, $$invalidate) {
   let isRefreshing = false;
   let isUpdatingStats = false;
   function getDeckStats(deckId) {
-    return deckStats.get(deckId) || {
+    console.log(`DeckListPanel: Getting stats for deck ${deckId}`);
+    console.log(`DeckListPanel: Available stats map:`, deckStats);
+    const stats = deckStats.get(deckId) || {
       deckId,
       newCount: 0,
       learningCount: 0,
       dueCount: 0,
       totalCount: 0
     };
+    console.log(`DeckListPanel: Using stats for deck ${deckId}:`, stats);
+    return stats;
   }
   function handleRefresh() {
     return __awaiter(this, void 0, void 0, function* () {
@@ -4403,6 +4559,7 @@ function instance($$self, $$props, $$invalidate) {
     onDeckClick(deck);
   }
   onMount(() => {
+    console.log("DeckListPanel: Component mounted");
     handleRefresh();
   });
   const click_handler = (deck) => handleDeckClick(deck);
@@ -4415,6 +4572,18 @@ function instance($$self, $$props, $$invalidate) {
       $$invalidate(7, onDeckClick = $$props2.onDeckClick);
     if ("onRefresh" in $$props2)
       $$invalidate(8, onRefresh = $$props2.onRefresh);
+  };
+  $$self.$$.update = () => {
+    if ($$self.$$.dirty & /*decks*/
+    1) {
+      $:
+        console.log("DeckListPanel: Decks prop changed:", decks);
+    }
+    if ($$self.$$.dirty & /*deckStats*/
+    64) {
+      $:
+        console.log("DeckListPanel: DeckStats prop changed:", deckStats);
+    }
   };
   return [
     decks,
@@ -4457,7 +4626,7 @@ var DeckListPanel_default = DeckListPanel;
 
 // src/components/FlashcardReviewModal.svelte
 function add_css2(target) {
-  append_styles(target, "svelte-jzksap", ".review-modal.svelte-jzksap.svelte-jzksap{display:flex;flex-direction:column;height:100%;background:var(--background-primary);color:var(--text-normal);overflow:hidden;width:100%}.modal-header.svelte-jzksap.svelte-jzksap{display:flex;align-items:center;justify-content:space-between;padding:16px 20px;border-bottom:1px solid var(--background-modifier-border)}.modal-header.svelte-jzksap h3.svelte-jzksap{margin:0;font-size:18px;font-weight:600}.progress-info.svelte-jzksap.svelte-jzksap{display:flex;gap:8px;font-size:14px}.remaining.svelte-jzksap.svelte-jzksap{color:var(--text-muted)}.close-button.svelte-jzksap.svelte-jzksap{background:none;border:none;font-size:24px;line-height:1;cursor:pointer;padding:4px 8px;color:var(--text-muted);border-radius:4px}.close-button.svelte-jzksap.svelte-jzksap:hover{background:var(--background-modifier-hover);color:var(--text-normal)}.review-progress-bar.svelte-jzksap.svelte-jzksap{height:4px;background:var(--background-modifier-border);position:relative}.progress-fill.svelte-jzksap.svelte-jzksap{height:100%;background:var(--interactive-accent);transition:width 0.3s ease}.card-content.svelte-jzksap.svelte-jzksap{flex:1;overflow-y:auto;overflow-x:hidden;padding:32px 16px;display:flex;flex-direction:column;align-items:center;justify-content:flex-start;gap:24px;width:100%;box-sizing:border-box;min-height:0}.question-section.svelte-jzksap.svelte-jzksap,.answer-section.svelte-jzksap.svelte-jzksap{width:100%;display:flex;justify-content:center}.card-side.svelte-jzksap.svelte-jzksap{background:var(--background-secondary);border:1px solid var(--background-modifier-border);border-radius:8px;padding:24px;min-height:100px;width:100%;max-width:600px;box-sizing:border-box;word-wrap:break-word;overflow-wrap:break-word}.card-side.front.svelte-jzksap.svelte-jzksap{text-align:center;font-size:20px;font-weight:500}.card-side.back.svelte-jzksap.svelte-jzksap{font-size:16px;line-height:1.6}.answer-section.svelte-jzksap.svelte-jzksap{width:100%;display:flex;flex-direction:column;justify-content:center;align-items:center}.answer-section.hidden.svelte-jzksap.svelte-jzksap{display:none}.separator.svelte-jzksap.svelte-jzksap{height:1px;background:var(--background-modifier-border);margin:16px auto;width:100%;max-width:600px}.action-buttons.svelte-jzksap.svelte-jzksap{padding:20px;border-top:1px solid var(--background-modifier-border);flex-shrink:0;width:100%;box-sizing:border-box}.show-answer-button.svelte-jzksap.svelte-jzksap{width:100%;max-width:400px;margin:0 auto;padding:12px 24px;font-size:16px;font-weight:500;background:var(--interactive-accent);color:var(--text-on-accent);border:none;border-radius:6px;cursor:pointer;display:flex;align-items:center;justify-content:center;gap:8px;box-sizing:border-box}.show-answer-button.svelte-jzksap.svelte-jzksap:hover{background:var(--interactive-accent-hover)}.shortcut.svelte-jzksap.svelte-jzksap{font-size:12px;opacity:0.8;padding:2px 6px;background:rgba(0, 0, 0, 0.2);border-radius:3px;margin-left:8px;display:inline-block}.difficulty-buttons.svelte-jzksap.svelte-jzksap{display:flex;gap:8px;justify-content:center;flex-wrap:nowrap;padding:0 10px;box-sizing:border-box;width:100%;max-width:600px;margin:0 auto}.difficulty-button.svelte-jzksap.svelte-jzksap{flex:1;min-width:0;padding:10px 6px;border:1px solid var(--background-modifier-border);background:var(--background-secondary);border-radius:6px;cursor:pointer;display:flex;flex-direction:column;align-items:center;gap:2px;transition:all 0.2s ease;position:relative;box-sizing:border-box;white-space:nowrap}.difficulty-button.svelte-jzksap.svelte-jzksap:hover{transform:translateY(-2px);box-shadow:0 4px 12px rgba(0, 0, 0, 0.1)}.difficulty-button.svelte-jzksap.svelte-jzksap:disabled{opacity:0.5;cursor:not-allowed;transform:none}.difficulty-button.again.svelte-jzksap.svelte-jzksap{border-color:#e74c3c}.difficulty-button.again.svelte-jzksap.svelte-jzksap:hover:not(:disabled){background:#e74c3c;color:white}.difficulty-button.hard.svelte-jzksap.svelte-jzksap{border-color:#f39c12}.difficulty-button.hard.svelte-jzksap.svelte-jzksap:hover:not(:disabled){background:#f39c12;color:white}.difficulty-button.good.svelte-jzksap.svelte-jzksap{border-color:#27ae60}.difficulty-button.good.svelte-jzksap.svelte-jzksap:hover:not(:disabled){background:#27ae60;color:white}.difficulty-button.easy.svelte-jzksap.svelte-jzksap{border-color:#3498db}.difficulty-button.easy.svelte-jzksap.svelte-jzksap:hover:not(:disabled){background:#3498db;color:white}.button-label.svelte-jzksap.svelte-jzksap{font-weight:600;font-size:13px}.interval.svelte-jzksap.svelte-jzksap{font-size:11px;color:var(--text-muted)}.difficulty-button.svelte-jzksap:hover .interval.svelte-jzksap{color:inherit}.difficulty-button.svelte-jzksap .shortcut.svelte-jzksap{position:absolute;top:2px;right:2px;font-size:9px;padding:1px 3px;background:var(--background-modifier-border);border-radius:2px;opacity:0.7}.empty-state.svelte-jzksap.svelte-jzksap{flex:1;display:flex;align-items:center;justify-content:center;padding:32px;color:var(--text-muted)}.card-side h1,.card-side h2,.card-side h3,.card-side h4,.card-side h5,.card-side h6{margin-top:0;margin-bottom:16px}.card-side p{margin-bottom:16px}.card-side p:last-child{margin-bottom:0}.card-side > *:first-child{margin-top:0}.card-side ul,.card-side ol{margin-bottom:16px;padding-left:24px}.card-side code{background:var(--code-background);padding:2px 4px;border-radius:3px;font-size:0.9em}.card-side pre{background:var(--code-background);padding:16px;border-radius:6px;overflow-x:auto;margin-bottom:16px;max-width:100%}.card-side blockquote{border-left:3px solid var(--blockquote-border);padding-left:16px;margin-left:0;margin-right:0;color:var(--text-muted)}@media(max-width: 500px){.difficulty-buttons.svelte-jzksap.svelte-jzksap{gap:4px;padding:0 5px}.difficulty-button.svelte-jzksap.svelte-jzksap{padding:8px 4px}.button-label.svelte-jzksap.svelte-jzksap{font-size:12px}.interval.svelte-jzksap.svelte-jzksap{font-size:10px}.difficulty-button.svelte-jzksap .shortcut.svelte-jzksap{font-size:8px;padding:1px 2px}.card-content.svelte-jzksap.svelte-jzksap{padding:16px 8px}}");
+  append_styles(target, "svelte-1opyfa1", ".review-modal.svelte-1opyfa1.svelte-1opyfa1{display:flex;flex-direction:column;height:100%;background:var(--background-primary);color:var(--text-normal);overflow:hidden;width:100%}.modal-header.svelte-1opyfa1.svelte-1opyfa1{display:flex;align-items:center;justify-content:space-between;padding:16px 20px;border-bottom:1px solid var(--background-modifier-border)}.modal-header.svelte-1opyfa1 h3.svelte-1opyfa1{margin:0;font-size:18px;font-weight:600}.progress-info.svelte-1opyfa1.svelte-1opyfa1{display:flex;gap:8px;font-size:14px}.remaining.svelte-1opyfa1.svelte-1opyfa1{color:var(--text-muted)}.review-progress-bar.svelte-1opyfa1.svelte-1opyfa1{height:4px;background:var(--background-modifier-border);position:relative}.progress-fill.svelte-1opyfa1.svelte-1opyfa1{height:100%;background:var(--interactive-accent);transition:width 0.3s ease}.card-content.svelte-1opyfa1.svelte-1opyfa1{flex:1;overflow-y:auto;overflow-x:hidden;padding:32px 16px;display:flex;flex-direction:column;align-items:center;justify-content:flex-start;gap:24px;width:100%;box-sizing:border-box;min-height:0}.question-section.svelte-1opyfa1.svelte-1opyfa1,.answer-section.svelte-1opyfa1.svelte-1opyfa1{width:100%;display:flex;justify-content:center}.card-side.svelte-1opyfa1.svelte-1opyfa1{background:var(--background-secondary);border:1px solid var(--background-modifier-border);border-radius:8px;padding:24px;min-height:100px;width:100%;max-width:600px;box-sizing:border-box;word-wrap:break-word;overflow-wrap:break-word}.card-side.front.svelte-1opyfa1.svelte-1opyfa1{text-align:center;font-size:20px;font-weight:500}.card-side.back.svelte-1opyfa1.svelte-1opyfa1{font-size:16px;line-height:1.6}.answer-section.svelte-1opyfa1.svelte-1opyfa1{width:100%;display:flex;flex-direction:column;justify-content:center;align-items:center}.answer-section.hidden.svelte-1opyfa1.svelte-1opyfa1{display:none}.separator.svelte-1opyfa1.svelte-1opyfa1{height:1px;background:var(--background-modifier-border);margin:16px auto;width:100%;max-width:600px}.action-buttons.svelte-1opyfa1.svelte-1opyfa1{padding:20px;border-top:1px solid var(--background-modifier-border);flex-shrink:0;width:100%;box-sizing:border-box}.show-answer-button.svelte-1opyfa1.svelte-1opyfa1{width:100%;max-width:400px;margin:0 auto;padding:12px 24px;font-size:16px;font-weight:500;background:var(--interactive-accent);color:var(--text-on-accent);border:none;border-radius:6px;cursor:pointer;display:flex;align-items:center;justify-content:center;gap:8px;box-sizing:border-box}.show-answer-button.svelte-1opyfa1.svelte-1opyfa1:hover{background:var(--interactive-accent-hover)}.shortcut.svelte-1opyfa1.svelte-1opyfa1{font-size:12px;opacity:0.8;padding:2px 6px;background:rgba(0, 0, 0, 0.2);border-radius:3px;margin-left:8px;display:inline-block}.difficulty-buttons.svelte-1opyfa1.svelte-1opyfa1{display:flex;gap:8px;justify-content:center;flex-wrap:nowrap;padding:0 10px;box-sizing:border-box;width:100%;max-width:600px;margin:0 auto}.difficulty-button.svelte-1opyfa1.svelte-1opyfa1{flex:1;min-width:0;padding:10px 6px;border:1px solid var(--background-modifier-border);background:var(--background-secondary);border-radius:6px;cursor:pointer;display:flex;flex-direction:column;align-items:center;gap:2px;transition:all 0.2s ease;position:relative;box-sizing:border-box;white-space:nowrap}.difficulty-button.svelte-1opyfa1.svelte-1opyfa1:hover{transform:translateY(-2px);box-shadow:0 4px 12px rgba(0, 0, 0, 0.1)}.difficulty-button.svelte-1opyfa1.svelte-1opyfa1:disabled{opacity:0.5;cursor:not-allowed;transform:none}.difficulty-button.again.svelte-1opyfa1.svelte-1opyfa1{border-color:#e74c3c}.difficulty-button.again.svelte-1opyfa1.svelte-1opyfa1:hover:not(:disabled){background:#e74c3c;color:white}.difficulty-button.hard.svelte-1opyfa1.svelte-1opyfa1{border-color:#f39c12}.difficulty-button.hard.svelte-1opyfa1.svelte-1opyfa1:hover:not(:disabled){background:#f39c12;color:white}.difficulty-button.good.svelte-1opyfa1.svelte-1opyfa1{border-color:#27ae60}.difficulty-button.good.svelte-1opyfa1.svelte-1opyfa1:hover:not(:disabled){background:#27ae60;color:white}.difficulty-button.easy.svelte-1opyfa1.svelte-1opyfa1{border-color:#3498db}.difficulty-button.easy.svelte-1opyfa1.svelte-1opyfa1:hover:not(:disabled){background:#3498db;color:white}.button-label.svelte-1opyfa1.svelte-1opyfa1{font-weight:600;font-size:13px}.interval.svelte-1opyfa1.svelte-1opyfa1{font-size:11px;color:var(--text-muted)}.difficulty-button.svelte-1opyfa1:hover .interval.svelte-1opyfa1{color:inherit}.difficulty-button.svelte-1opyfa1 .shortcut.svelte-1opyfa1{position:absolute;top:2px;right:2px;font-size:9px;padding:1px 3px;background:var(--background-modifier-border);border-radius:2px;opacity:0.7}.empty-state.svelte-1opyfa1.svelte-1opyfa1{flex:1;display:flex;align-items:center;justify-content:center;padding:32px;color:var(--text-muted)}.card-side h1,.card-side h2,.card-side h3,.card-side h4,.card-side h5,.card-side h6{margin-top:0;margin-bottom:16px}.card-side p{margin-bottom:16px}.card-side p:last-child{margin-bottom:0}.card-side > *:first-child{margin-top:0}.card-side ul,.card-side ol{margin-bottom:16px;padding-left:24px}.card-side code{background:var(--code-background);padding:2px 4px;border-radius:3px;font-size:0.9em}.card-side pre{background:var(--code-background);padding:16px;border-radius:6px;overflow-x:auto;margin-bottom:16px;max-width:100%}.card-side blockquote{border-left:3px solid var(--blockquote-border);padding-left:16px;margin-left:0;margin-right:0;color:var(--text-muted)}@media(max-width: 500px){.difficulty-buttons.svelte-1opyfa1.svelte-1opyfa1{gap:4px;padding:0 5px}.difficulty-button.svelte-1opyfa1.svelte-1opyfa1{padding:8px 4px}.button-label.svelte-1opyfa1.svelte-1opyfa1{font-size:12px}.interval.svelte-1opyfa1.svelte-1opyfa1{font-size:10px}.difficulty-button.svelte-1opyfa1 .shortcut.svelte-1opyfa1{font-size:8px;padding:1px 2px}.card-content.svelte-1opyfa1.svelte-1opyfa1{padding:16px 8px}}");
 }
 function create_if_block_3(ctx) {
   let div1;
@@ -4466,14 +4635,14 @@ function create_if_block_3(ctx) {
     c() {
       div1 = element("div");
       div0 = element("div");
-      attr(div0, "class", "progress-fill svelte-jzksap");
+      attr(div0, "class", "progress-fill svelte-1opyfa1");
       set_style(
         div0,
         "width",
         /*progress*/
-        ctx[11] + "%"
+        ctx[10] + "%"
       );
-      attr(div1, "class", "review-progress-bar svelte-jzksap");
+      attr(div1, "class", "review-progress-bar svelte-1opyfa1");
     },
     m(target, anchor) {
       insert(target, div1, anchor);
@@ -4481,12 +4650,12 @@ function create_if_block_3(ctx) {
     },
     p(ctx2, dirty) {
       if (dirty[0] & /*progress*/
-      2048) {
+      1024) {
         set_style(
           div0,
           "width",
           /*progress*/
-          ctx2[11] + "%"
+          ctx2[10] + "%"
         );
       }
     },
@@ -4502,7 +4671,7 @@ function create_else_block2(ctx) {
     c() {
       div = element("div");
       div.innerHTML = `<p>No cards to review</p>`;
-      attr(div, "class", "empty-state svelte-jzksap");
+      attr(div, "class", "empty-state svelte-1opyfa1");
     },
     m(target, anchor) {
       insert(target, div, anchor);
@@ -4527,11 +4696,11 @@ function create_if_block2(ctx) {
   let div6;
   let t3;
   let if_block0 = !/*showAnswer*/
-  ctx[5] && create_if_block_2(ctx);
+  ctx[4] && create_if_block_2(ctx);
   let if_block1 = (
     /*showAnswer*/
-    ctx[5] && /*schedulingInfo*/
-    ctx[9] && create_if_block_1(ctx)
+    ctx[4] && /*schedulingInfo*/
+    ctx[8] && create_if_block_1(ctx)
   );
   return {
     c() {
@@ -4550,15 +4719,15 @@ function create_if_block2(ctx) {
       t3 = space();
       if (if_block1)
         if_block1.c();
-      attr(div0, "class", "card-side front svelte-jzksap");
-      attr(div1, "class", "question-section svelte-jzksap");
-      attr(div2, "class", "separator svelte-jzksap");
-      attr(div3, "class", "card-side back svelte-jzksap");
-      attr(div4, "class", "answer-section svelte-jzksap");
+      attr(div0, "class", "card-side front svelte-1opyfa1");
+      attr(div1, "class", "question-section svelte-1opyfa1");
+      attr(div2, "class", "separator svelte-1opyfa1");
+      attr(div3, "class", "card-side back svelte-1opyfa1");
+      attr(div4, "class", "answer-section svelte-1opyfa1");
       toggle_class(div4, "hidden", !/*showAnswer*/
-      ctx[5]);
-      attr(div5, "class", "card-content svelte-jzksap");
-      attr(div6, "class", "action-buttons svelte-jzksap");
+      ctx[4]);
+      attr(div5, "class", "card-content svelte-1opyfa1");
+      attr(div6, "class", "action-buttons svelte-1opyfa1");
     },
     m(target, anchor) {
       insert(target, div5, anchor);
@@ -4581,12 +4750,12 @@ function create_if_block2(ctx) {
     },
     p(ctx2, dirty) {
       if (dirty[0] & /*showAnswer*/
-      32) {
+      16) {
         toggle_class(div4, "hidden", !/*showAnswer*/
-        ctx2[5]);
+        ctx2[4]);
       }
       if (!/*showAnswer*/
-      ctx2[5]) {
+      ctx2[4]) {
         if (if_block0) {
           if_block0.p(ctx2, dirty);
         } else {
@@ -4600,8 +4769,8 @@ function create_if_block2(ctx) {
       }
       if (
         /*showAnswer*/
-        ctx2[5] && /*schedulingInfo*/
-        ctx2[9]
+        ctx2[4] && /*schedulingInfo*/
+        ctx2[8]
       ) {
         if (if_block1) {
           if_block1.p(ctx2, dirty);
@@ -4639,8 +4808,8 @@ function create_if_block_2(ctx) {
     c() {
       button = element("button");
       button.innerHTML = `<span>Show Answer</span> 
-                    <span class="shortcut svelte-jzksap">Space</span>`;
-      attr(button, "class", "show-answer-button svelte-jzksap");
+                    <span class="shortcut svelte-1opyfa1">Space</span>`;
+      attr(button, "class", "show-answer-button svelte-1opyfa1");
     },
     m(target, anchor) {
       insert(target, button, anchor);
@@ -4649,7 +4818,7 @@ function create_if_block_2(ctx) {
           button,
           "click",
           /*revealAnswer*/
-          ctx[12]
+          ctx[11]
         );
         mounted = true;
       }
@@ -4671,9 +4840,9 @@ function create_if_block_1(ctx) {
   let div1;
   let t2_value = (
     /*getIntervalDisplay*/
-    ctx[14](
+    ctx[13](
       /*schedulingInfo*/
-      ctx[9].again.interval
+      ctx[8].again.interval
     ) + ""
   );
   let t2;
@@ -4686,9 +4855,9 @@ function create_if_block_1(ctx) {
   let div4;
   let t8_value = (
     /*getIntervalDisplay*/
-    ctx[14](
+    ctx[13](
       /*schedulingInfo*/
-      ctx[9].hard.interval
+      ctx[8].hard.interval
     ) + ""
   );
   let t8;
@@ -4701,9 +4870,9 @@ function create_if_block_1(ctx) {
   let div7;
   let t14_value = (
     /*getIntervalDisplay*/
-    ctx[14](
+    ctx[13](
       /*schedulingInfo*/
-      ctx[9].good.interval
+      ctx[8].good.interval
     ) + ""
   );
   let t14;
@@ -4716,9 +4885,9 @@ function create_if_block_1(ctx) {
   let div10;
   let t20_value = (
     /*getIntervalDisplay*/
-    ctx[14](
+    ctx[13](
       /*schedulingInfo*/
-      ctx[9].easy.interval
+      ctx[8].easy.interval
     ) + ""
   );
   let t20;
@@ -4768,31 +4937,31 @@ function create_if_block_1(ctx) {
       t21 = space();
       div11 = element("div");
       div11.textContent = "4";
-      attr(div0, "class", "button-label svelte-jzksap");
-      attr(div1, "class", "interval svelte-jzksap");
-      attr(div2, "class", "shortcut svelte-jzksap");
-      attr(button0, "class", "difficulty-button again svelte-jzksap");
+      attr(div0, "class", "button-label svelte-1opyfa1");
+      attr(div1, "class", "interval svelte-1opyfa1");
+      attr(div2, "class", "shortcut svelte-1opyfa1");
+      attr(button0, "class", "difficulty-button again svelte-1opyfa1");
       button0.disabled = /*isLoading*/
-      ctx[6];
-      attr(div3, "class", "button-label svelte-jzksap");
-      attr(div4, "class", "interval svelte-jzksap");
-      attr(div5, "class", "shortcut svelte-jzksap");
-      attr(button1, "class", "difficulty-button hard svelte-jzksap");
+      ctx[5];
+      attr(div3, "class", "button-label svelte-1opyfa1");
+      attr(div4, "class", "interval svelte-1opyfa1");
+      attr(div5, "class", "shortcut svelte-1opyfa1");
+      attr(button1, "class", "difficulty-button hard svelte-1opyfa1");
       button1.disabled = /*isLoading*/
-      ctx[6];
-      attr(div6, "class", "button-label svelte-jzksap");
-      attr(div7, "class", "interval svelte-jzksap");
-      attr(div8, "class", "shortcut svelte-jzksap");
-      attr(button2, "class", "difficulty-button good svelte-jzksap");
+      ctx[5];
+      attr(div6, "class", "button-label svelte-1opyfa1");
+      attr(div7, "class", "interval svelte-1opyfa1");
+      attr(div8, "class", "shortcut svelte-1opyfa1");
+      attr(button2, "class", "difficulty-button good svelte-1opyfa1");
       button2.disabled = /*isLoading*/
-      ctx[6];
-      attr(div9, "class", "button-label svelte-jzksap");
-      attr(div10, "class", "interval svelte-jzksap");
-      attr(div11, "class", "shortcut svelte-jzksap");
-      attr(button3, "class", "difficulty-button easy svelte-jzksap");
+      ctx[5];
+      attr(div9, "class", "button-label svelte-1opyfa1");
+      attr(div10, "class", "interval svelte-1opyfa1");
+      attr(div11, "class", "shortcut svelte-1opyfa1");
+      attr(button3, "class", "difficulty-button easy svelte-1opyfa1");
       button3.disabled = /*isLoading*/
-      ctx[6];
-      attr(div12, "class", "difficulty-buttons svelte-jzksap");
+      ctx[5];
+      attr(div12, "class", "difficulty-buttons svelte-1opyfa1");
     },
     m(target, anchor) {
       insert(target, div12, anchor);
@@ -4859,52 +5028,52 @@ function create_if_block_1(ctx) {
     },
     p(ctx2, dirty) {
       if (dirty[0] & /*schedulingInfo*/
-      512 && t2_value !== (t2_value = /*getIntervalDisplay*/
-      ctx2[14](
+      256 && t2_value !== (t2_value = /*getIntervalDisplay*/
+      ctx2[13](
         /*schedulingInfo*/
-        ctx2[9].again.interval
+        ctx2[8].again.interval
       ) + ""))
         set_data(t2, t2_value);
       if (dirty[0] & /*isLoading*/
-      64) {
+      32) {
         button0.disabled = /*isLoading*/
-        ctx2[6];
+        ctx2[5];
       }
       if (dirty[0] & /*schedulingInfo*/
-      512 && t8_value !== (t8_value = /*getIntervalDisplay*/
-      ctx2[14](
+      256 && t8_value !== (t8_value = /*getIntervalDisplay*/
+      ctx2[13](
         /*schedulingInfo*/
-        ctx2[9].hard.interval
+        ctx2[8].hard.interval
       ) + ""))
         set_data(t8, t8_value);
       if (dirty[0] & /*isLoading*/
-      64) {
+      32) {
         button1.disabled = /*isLoading*/
-        ctx2[6];
+        ctx2[5];
       }
       if (dirty[0] & /*schedulingInfo*/
-      512 && t14_value !== (t14_value = /*getIntervalDisplay*/
-      ctx2[14](
+      256 && t14_value !== (t14_value = /*getIntervalDisplay*/
+      ctx2[13](
         /*schedulingInfo*/
-        ctx2[9].good.interval
+        ctx2[8].good.interval
       ) + ""))
         set_data(t14, t14_value);
       if (dirty[0] & /*isLoading*/
-      64) {
+      32) {
         button2.disabled = /*isLoading*/
-        ctx2[6];
+        ctx2[5];
       }
       if (dirty[0] & /*schedulingInfo*/
-      512 && t20_value !== (t20_value = /*getIntervalDisplay*/
-      ctx2[14](
+      256 && t20_value !== (t20_value = /*getIntervalDisplay*/
+      ctx2[13](
         /*schedulingInfo*/
-        ctx2[9].easy.interval
+        ctx2[8].easy.interval
       ) + ""))
         set_data(t20, t20_value);
       if (dirty[0] & /*isLoading*/
-      64) {
+      32) {
         button3.disabled = /*isLoading*/
-        ctx2[6];
+        ctx2[5];
       }
     },
     d(detaching) {
@@ -4940,19 +5109,15 @@ function create_fragment2(ctx) {
   let t7;
   let t8;
   let t9;
-  let button;
-  let t11;
-  let t12;
-  let mounted;
-  let dispose;
+  let t10;
   let if_block0 = (
     /*settings*/
-    ((_b = (_a = ctx[3]) == null ? void 0 : _a.review) == null ? void 0 : _b.showProgress) !== false && create_if_block_3(ctx)
+    ((_b = (_a = ctx[2]) == null ? void 0 : _a.review) == null ? void 0 : _b.showProgress) !== false && create_if_block_3(ctx)
   );
   function select_block_type(ctx2, dirty) {
     if (
       /*currentCard*/
-      ctx2[4]
+      ctx2[3]
     )
       return create_if_block2;
     return create_else_block2;
@@ -4976,23 +5141,19 @@ function create_fragment2(ctx) {
       t6 = text("(");
       t7 = text(
         /*remainingCards*/
-        ctx[10]
+        ctx[9]
       );
       t8 = text(" remaining)");
       t9 = space();
-      button = element("button");
-      button.textContent = "\xD7";
-      t11 = space();
       if (if_block0)
         if_block0.c();
-      t12 = space();
+      t10 = space();
       if_block1.c();
-      attr(h3, "class", "svelte-jzksap");
-      attr(span1, "class", "remaining svelte-jzksap");
-      attr(div0, "class", "progress-info svelte-jzksap");
-      attr(button, "class", "close-button svelte-jzksap");
-      attr(div1, "class", "modal-header svelte-jzksap");
-      attr(div2, "class", "review-modal svelte-jzksap");
+      attr(h3, "class", "svelte-1opyfa1");
+      attr(span1, "class", "remaining svelte-1opyfa1");
+      attr(div0, "class", "progress-info svelte-1opyfa1");
+      attr(div1, "class", "modal-header svelte-1opyfa1");
+      attr(div2, "class", "review-modal svelte-1opyfa1");
     },
     m(target, anchor) {
       insert(target, div2, anchor);
@@ -5009,62 +5170,49 @@ function create_fragment2(ctx) {
       append(span1, t6);
       append(span1, t7);
       append(span1, t8);
-      append(div1, t9);
-      append(div1, button);
-      append(div2, t11);
+      append(div2, t9);
       if (if_block0)
         if_block0.m(div2, null);
-      append(div2, t12);
+      append(div2, t10);
       if_block1.m(div2, null);
-      if (!mounted) {
-        dispose = listen(button, "click", function() {
-          if (is_function(
-            /*onClose*/
-            ctx[2]
-          ))
-            ctx[2].apply(this, arguments);
-        });
-        mounted = true;
-      }
     },
-    p(new_ctx, dirty) {
+    p(ctx2, dirty) {
       var _a2, _b2;
-      ctx = new_ctx;
       if (dirty[0] & /*currentIndex*/
       1 && t2_value !== (t2_value = /*currentIndex*/
-      ctx[0] + 1 + ""))
+      ctx2[0] + 1 + ""))
         set_data(t2, t2_value);
       if (dirty[0] & /*flashcards*/
       2 && t4_value !== (t4_value = /*flashcards*/
-      ctx[1].length + ""))
+      ctx2[1].length + ""))
         set_data(t4, t4_value);
       if (dirty[0] & /*remainingCards*/
-      1024)
+      512)
         set_data(
           t7,
           /*remainingCards*/
-          ctx[10]
+          ctx2[9]
         );
       if (
         /*settings*/
-        ((_b2 = (_a2 = ctx[3]) == null ? void 0 : _a2.review) == null ? void 0 : _b2.showProgress) !== false
+        ((_b2 = (_a2 = ctx2[2]) == null ? void 0 : _a2.review) == null ? void 0 : _b2.showProgress) !== false
       ) {
         if (if_block0) {
-          if_block0.p(ctx, dirty);
+          if_block0.p(ctx2, dirty);
         } else {
-          if_block0 = create_if_block_3(ctx);
+          if_block0 = create_if_block_3(ctx2);
           if_block0.c();
-          if_block0.m(div2, t12);
+          if_block0.m(div2, t10);
         }
       } else if (if_block0) {
         if_block0.d(1);
         if_block0 = null;
       }
-      if (current_block_type === (current_block_type = select_block_type(ctx, dirty)) && if_block1) {
-        if_block1.p(ctx, dirty);
+      if (current_block_type === (current_block_type = select_block_type(ctx2, dirty)) && if_block1) {
+        if_block1.p(ctx2, dirty);
       } else {
         if_block1.d(1);
-        if_block1 = current_block_type(ctx);
+        if_block1 = current_block_type(ctx2);
         if (if_block1) {
           if_block1.c();
           if_block1.m(div2, null);
@@ -5079,8 +5227,6 @@ function create_fragment2(ctx) {
       if (if_block0)
         if_block0.d();
       if_block1.d();
-      mounted = false;
-      dispose();
     }
   };
 }
@@ -5108,24 +5254,24 @@ function instance2($$self, $$props, $$invalidate) {
   function loadCard() {
     if (!currentCard)
       return;
-    $$invalidate(5, showAnswer = false);
-    $$invalidate(9, schedulingInfo = fsrs.getSchedulingInfo(currentCard));
+    $$invalidate(4, showAnswer = false);
+    $$invalidate(8, schedulingInfo = fsrs.getSchedulingInfo(currentCard));
     if (frontEl) {
-      $$invalidate(7, frontEl.innerHTML = "", frontEl);
+      $$invalidate(6, frontEl.innerHTML = "", frontEl);
       renderMarkdown(currentCard.front, frontEl);
     }
     tick().then(() => {
       if (backEl) {
-        $$invalidate(8, backEl.innerHTML = "", backEl);
+        $$invalidate(7, backEl.innerHTML = "", backEl);
         renderMarkdown(currentCard.back, backEl);
       }
     });
   }
   function revealAnswer() {
-    $$invalidate(5, showAnswer = true);
+    $$invalidate(4, showAnswer = true);
     tick().then(() => {
       if (backEl && currentCard) {
-        $$invalidate(8, backEl.innerHTML = "", backEl);
+        $$invalidate(7, backEl.innerHTML = "", backEl);
         renderMarkdown(currentCard.back, backEl);
       }
     });
@@ -5134,7 +5280,7 @@ function instance2($$self, $$props, $$invalidate) {
     return __awaiter(this, void 0, void 0, function* () {
       if (!currentCard || isLoading)
         return;
-      $$invalidate(6, isLoading = true);
+      $$invalidate(5, isLoading = true);
       try {
         yield onReview(currentCard, difficulty);
         $$invalidate(20, reviewedCount++, reviewedCount);
@@ -5162,7 +5308,7 @@ function instance2($$self, $$props, $$invalidate) {
       } catch (error) {
         console.error("Error reviewing card:", error);
       } finally {
-        $$invalidate(6, isLoading = false);
+        $$invalidate(5, isLoading = false);
       }
     });
   }
@@ -5203,13 +5349,13 @@ function instance2($$self, $$props, $$invalidate) {
   function div0_binding($$value) {
     binding_callbacks[$$value ? "unshift" : "push"](() => {
       frontEl = $$value;
-      $$invalidate(7, frontEl);
+      $$invalidate(6, frontEl);
     });
   }
   function div3_binding($$value) {
     binding_callbacks[$$value ? "unshift" : "push"](() => {
       backEl = $$value;
-      $$invalidate(8, backEl);
+      $$invalidate(7, backEl);
     });
   }
   const click_handler = () => handleDifficulty("again");
@@ -5222,13 +5368,13 @@ function instance2($$self, $$props, $$invalidate) {
     if ("currentIndex" in $$props2)
       $$invalidate(0, currentIndex = $$props2.currentIndex);
     if ("onClose" in $$props2)
-      $$invalidate(2, onClose = $$props2.onClose);
+      $$invalidate(14, onClose = $$props2.onClose);
     if ("onReview" in $$props2)
       $$invalidate(15, onReview = $$props2.onReview);
     if ("renderMarkdown" in $$props2)
       $$invalidate(16, renderMarkdown = $$props2.renderMarkdown);
     if ("settings" in $$props2)
-      $$invalidate(3, settings = $$props2.settings);
+      $$invalidate(2, settings = $$props2.settings);
     if ("onCardReviewed" in $$props2)
       $$invalidate(17, onCardReviewed = $$props2.onCardReviewed);
   };
@@ -5236,25 +5382,25 @@ function instance2($$self, $$props, $$invalidate) {
     if ($$self.$$.dirty[0] & /*flashcards, currentIndex*/
     3) {
       $:
-        $$invalidate(4, currentCard = flashcards[currentIndex] || null);
+        $$invalidate(3, currentCard = flashcards[currentIndex] || null);
     }
     if ($$self.$$.dirty[0] & /*flashcards, currentIndex*/
     3) {
       $:
-        $$invalidate(11, progress = flashcards.length > 0 ? currentIndex / flashcards.length * 100 : 0);
+        $$invalidate(10, progress = flashcards.length > 0 ? currentIndex / flashcards.length * 100 : 0);
     }
     if ($$self.$$.dirty[0] & /*flashcards, currentIndex*/
     3) {
       $:
-        $$invalidate(10, remainingCards = flashcards.length - currentIndex - 1);
+        $$invalidate(9, remainingCards = flashcards.length - currentIndex - 1);
     }
     if ($$self.$$.dirty[0] & /*settings, _a, reviewedCount, _b*/
-    1835016) {
+    1835012) {
       $:
         sessionLimitReached = ($$invalidate(18, _a = settings === null || settings === void 0 ? void 0 : settings.review) === null || _a === void 0 ? void 0 : _a.enableSessionLimit) && reviewedCount >= ($$invalidate(19, _b = settings === null || settings === void 0 ? void 0 : settings.review) === null || _b === void 0 ? void 0 : _b.sessionGoal);
     }
     if ($$self.$$.dirty[0] & /*currentCard*/
-    16) {
+    8) {
       $:
         if (currentCard) {
           loadCard();
@@ -5264,7 +5410,6 @@ function instance2($$self, $$props, $$invalidate) {
   return [
     currentIndex,
     flashcards,
-    onClose,
     settings,
     currentCard,
     showAnswer,
@@ -5277,6 +5422,7 @@ function instance2($$self, $$props, $$invalidate) {
     revealAnswer,
     handleDifficulty,
     getIntervalDisplay,
+    onClose,
     onReview,
     renderMarkdown,
     onCardReviewed,
@@ -5303,10 +5449,10 @@ var FlashcardReviewModal = class extends SvelteComponent {
       {
         flashcards: 1,
         currentIndex: 0,
-        onClose: 2,
+        onClose: 14,
         onReview: 15,
         renderMarkdown: 16,
-        settings: 3,
+        settings: 2,
         onCardReviewed: 17
       },
       add_css2,
@@ -5353,7 +5499,7 @@ var FlashcardsPlugin = class extends import_obsidian2.Plugin {
         VIEW_TYPE_FLASHCARDS,
         (leaf) => new FlashcardsView(leaf, this)
       );
-      this.addRibbonIcon("cards", "Flashcards", () => {
+      this.addRibbonIcon("brain", "Flashcards", () => {
         this.activateView();
       });
       this.addCommand({
@@ -5496,11 +5642,15 @@ var FlashcardsPlugin = class extends import_obsidian2.Plugin {
     return await this.db.getAllDecks();
   }
   async getDeckStats() {
+    console.log("Main plugin: Getting deck stats...");
     const stats = await this.db.getAllDeckStats();
+    console.log("Main plugin: Raw stats from database:", stats);
     const statsMap = /* @__PURE__ */ new Map();
     for (const stat of stats) {
+      console.log(`Main plugin: Adding stat for deck ${stat.deckId}:`, stat);
       statsMap.set(stat.deckId, stat);
     }
+    console.log("Main plugin: Final stats map:", statsMap);
     return statsMap;
   }
   async getDueFlashcards(deckId) {
@@ -5548,7 +5698,7 @@ var FlashcardsView = class extends import_obsidian2.ItemView {
     return "Flashcards";
   }
   getIcon() {
-    return "cards";
+    return "brain";
   }
   async onOpen() {
     const container = this.containerEl.children[1];
@@ -5588,8 +5738,15 @@ var FlashcardsView = class extends import_obsidian2.ItemView {
       console.log("Getting decks and stats...");
       const decks = await this.plugin.getDecks();
       const deckStats = await this.plugin.getDeckStats();
-      console.log("Found decks:", decks);
-      console.log("Deck stats:", deckStats);
+      console.log("FlashcardsView: Found decks:", decks);
+      console.log("FlashcardsView: Deck stats map:", deckStats);
+      for (const deck of decks) {
+        const stat = deckStats.get(deck.id);
+        console.log(
+          `FlashcardsView: Deck "${deck.name}" (${deck.id}) has stats:`,
+          stat
+        );
+      }
       if (this.component) {
         console.log("Updating component with new data");
         this.component.$set({

@@ -161,7 +161,6 @@
             <span>{currentIndex + 1} / {flashcards.length}</span>
             <span class="remaining">({remainingCards} remaining)</span>
         </div>
-        <button class="close-button" on:click={onClose}>&times;</button>
     </div>
 
     {#if settings?.review?.showProgress !== false}
@@ -282,22 +281,6 @@
 
     .remaining {
         color: var(--text-muted);
-    }
-
-    .close-button {
-        background: none;
-        border: none;
-        font-size: 24px;
-        line-height: 1;
-        cursor: pointer;
-        padding: 4px 8px;
-        color: var(--text-muted);
-        border-radius: 4px;
-    }
-
-    .close-button:hover {
-        background: var(--background-modifier-hover);
-        color: var(--text-normal);
     }
 
     .review-progress-bar {

@@ -81,25 +81,43 @@ export class DeckManager {
    * Sync decks with database
    */
   async syncDecks(): Promise<void> {
-    const decksMap = await this.scanVaultForDecks();
-    const existingDecks = await this.db.getAllDecks();
-    const existingTags = new Set(existingDecks.map((d) => d.tag));
+    try {
+      console.log("Starting deck sync...");
+      const decksMap = await this.scanVaultForDecks();
+      const existingDecks = await this.db.getAllDecks();
+      const existingTags = new Set(existingDecks.map((d) => d.tag));
 
-    // Add new decks
-    for (const [tag, files] of decksMap) {
-      if (!existingTags.has(tag)) {
-        const deckName = this.extractDeckNameFromFiles(files);
-        const deck: Omit<Deck, "created" | "modified"> = {
-          id: this.generateDeckId(),
-          name: deckName,
-          tag: tag,
-          lastReviewed: null,
-        };
-        await this.db.createDeck(deck);
+      console.log(
+        `Found ${decksMap.size} deck tags in vault, ${existingDecks.length} existing decks in database`,
+      );
+
+      // Add new decks
+      let newDecksCreated = 0;
+      for (const [tag, files] of decksMap) {
+        if (!existingTags.has(tag)) {
+          try {
+            const deckName = this.extractDeckNameFromFiles(files);
+            const deck: Omit<Deck, "created" | "modified"> = {
+              id: this.generateDeckId(),
+              name: deckName,
+              tag: tag,
+              lastReviewed: null,
+            };
+            console.log(`Creating new deck: "${deckName}" with tag: ${tag}`);
+            await this.db.createDeck(deck);
+            newDecksCreated++;
+          } catch (error) {
+            console.error(`Failed to create deck for tag ${tag}:`, error);
+            // Continue with other decks instead of failing completely
+          }
+        }
       }
-    }
 
-    // TODO: Handle deleted decks if needed
+      console.log(`Deck sync completed. Created ${newDecksCreated} new decks.`);
+    } catch (error) {
+      console.error("Error during deck sync:", error);
+      throw error; // Re-throw to let caller handle
+    }
   }
 
   /**
@@ -284,10 +302,14 @@ export class DeckManager {
           type: parsed.type,
           sourceFile: file.path,
           lineNumber: parsed.lineNumber,
+          state: "new",
           dueDate: new Date().toISOString(),
           interval: 0,
           repetitions: 0,
-          easeFactor: 2.5,
+          easeFactor: 5.0, // FSRS initial difficulty
+          stability: 2.5, // FSRS initial stability
+          lapses: 0,
+          lastReviewed: null,
         };
 
         await this.db.createFlashcard(flashcard);

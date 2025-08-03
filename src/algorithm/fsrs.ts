@@ -1,13 +1,36 @@
-import { Flashcard } from "../database/types";
+import { Flashcard, FlashcardState } from "../database/types";
 
 export type Difficulty = "again" | "hard" | "good" | "easy";
 
 export interface FSRSParameters {
-  w: number[]; // weights for the algorithm
+  w: number[]; // 17 weights for the algorithm
   requestRetention: number; // target retention rate
   maximumInterval: number; // maximum interval in days
   easyBonus: number; // bonus for easy cards
   hardInterval: number; // interval modifier for hard cards
+}
+
+export interface FSRSCard {
+  stability: number;
+  difficulty: number;
+  elapsedDays: number;
+  scheduledDays: number;
+  reps: number;
+  lapses: number;
+  state: FSRSState;
+  lastReview: Date;
+}
+
+export type FSRSState = "New" | "Learning" | "Review" | "Relearning";
+
+export interface SchedulingCard {
+  dueDate: string;
+  interval: number; // in minutes
+  easeFactor: number;
+  repetitions: number;
+  stability: number;
+  difficulty: number;
+  state: FlashcardState;
 }
 
 export interface SchedulingInfo {
@@ -17,22 +40,15 @@ export interface SchedulingInfo {
   easy: SchedulingCard;
 }
 
-export interface SchedulingCard {
-  dueDate: string;
-  interval: number; // in minutes
-  easeFactor: number;
-  repetitions: number;
-}
-
 export class FSRS {
   private params: FSRSParameters;
 
   constructor(params?: Partial<FSRSParameters>) {
-    // Default FSRS-4.5 parameters
+    // Default FSRS-4.5 parameters optimized for general use
     this.params = {
       w: [
-        0.4, 0.6, 2.4, 5.8, 4.93, 0.94, 0.86, 0.01, 1.49, 0.14, 0.94, 2.18,
-        0.05, 0.34, 1.26, 0.29, 2.61,
+        0.4072, 1.1829, 3.1262, 15.4722, 7.2102, 0.5316, 1.0651, 0.0234, 1.616,
+        0.1544, 1.0824, 1.9813, 0.0953, 0.2975, 2.2042, 0.2407, 2.9466,
       ],
       requestRetention: 0.9,
       maximumInterval: 36500, // 100 years
@@ -53,14 +69,14 @@ export class FSRS {
    * Calculate the next scheduling info for a flashcard based on review difficulty
    */
   getSchedulingInfo(card: Flashcard): SchedulingInfo {
+    const fsrsCard = this.flashcardToFSRS(card);
     const now = new Date();
 
-    // Calculate scheduling for each difficulty option
     return {
-      again: this.calculateSchedule(card, "again", now),
-      hard: this.calculateSchedule(card, "hard", now),
-      good: this.calculateSchedule(card, "good", now),
-      easy: this.calculateSchedule(card, "easy", now),
+      again: this.calculateScheduleForRating(fsrsCard, 1, now),
+      hard: this.calculateScheduleForRating(fsrsCard, 2, now),
+      good: this.calculateScheduleForRating(fsrsCard, 3, now),
+      easy: this.calculateScheduleForRating(fsrsCard, 4, now),
     };
   }
 
@@ -68,172 +84,218 @@ export class FSRS {
    * Update a flashcard based on the selected difficulty
    */
   updateCard(card: Flashcard, difficulty: Difficulty): Flashcard {
+    const rating = this.difficultyToRating(difficulty);
+    const fsrsCard = this.flashcardToFSRS(card);
     const now = new Date();
-    const schedule = this.calculateSchedule(card, difficulty, now);
+    const schedule = this.calculateScheduleForRating(fsrsCard, rating, now);
 
     return {
       ...card,
+      state: schedule.state,
       dueDate: schedule.dueDate,
       interval: schedule.interval,
-      easeFactor: schedule.easeFactor,
+      easeFactor: schedule.difficulty, // Store FSRS difficulty in easeFactor field
       repetitions: schedule.repetitions,
       modified: now.toISOString(),
     };
   }
 
-  private calculateSchedule(
-    card: Flashcard,
-    difficulty: Difficulty,
+  private calculateScheduleForRating(
+    card: FSRSCard,
+    rating: number,
     now: Date,
   ): SchedulingCard {
-    let interval: number;
-    let easeFactor = card.easeFactor;
-    let repetitions = card.repetitions;
+    let newCard: FSRSCard;
 
-    // First review (new card)
-    if (card.repetitions === 0) {
-      switch (difficulty) {
-        case "again":
-          interval = 1; // 1 minute
-          repetitions = 0;
-          break;
-        case "hard":
-          interval = 5; // 5 minutes
-          repetitions = 1;
-          break;
-        case "good":
-          interval = 10; // 10 minutes
-          repetitions = 1;
-          break;
-        case "easy":
-          interval = 4 * 1440; // 4 days
-          repetitions = 1;
-          easeFactor = this.initialStability(4);
-          break;
-      }
-    } else if (card.interval < 1440) {
-      // Learning phase (interval less than 1 day)
-      switch (difficulty) {
-        case "again":
-          interval = 1; // 1 minute
-          repetitions = 0;
-          easeFactor = Math.max(1.3, easeFactor - 0.2);
-          break;
-        case "hard":
-          interval = Math.max(1, card.interval * 1.2);
-          repetitions += 1;
-          easeFactor = Math.max(1.3, easeFactor - 0.15);
-          break;
-        case "good":
-          interval = card.interval * 2.5;
-          repetitions += 1;
-          break;
-        case "easy":
-          interval = card.interval * 3.5;
-          repetitions += 1;
-          easeFactor = Math.min(2.5, easeFactor + 0.15);
-          break;
-      }
+    if (card.state === "New") {
+      newCard = this.initDS(card);
+      newCard.stability = this.initStability(rating);
+      newCard.difficulty = this.initDifficulty(rating);
+      newCard.elapsedDays = 0;
+      newCard.scheduledDays = 0;
+      newCard.reps = 1;
+      newCard.lapses = rating === 1 ? 1 : 0;
+      newCard.state = rating === 1 ? "Learning" : "Review";
     } else {
-      // Review phase (interval >= 1 day)
-      const daysSinceLastReview = this.getDaysSince(card.dueDate);
-      const retrievability = this.calculateRetrievability(
-        card.interval / 1440,
-        daysSinceLastReview,
+      newCard = { ...card };
+      newCard.elapsedDays = this.getElapsedDays(card.lastReview, now);
+      newCard.reps += 1;
+
+      if (rating === 1) {
+        newCard.lapses += 1;
+      }
+
+      const retrievability = this.forgettingCurve(
+        newCard.elapsedDays,
+        newCard.stability,
       );
 
-      switch (difficulty) {
-        case "again":
-          interval = 1440; // 1 day
-          repetitions = 1;
-          easeFactor = Math.max(1.3, easeFactor - 0.2);
-          break;
-        case "hard":
-          interval =
-            this.nextInterval(
-              card.interval / 1440,
-              easeFactor,
-              retrievability,
-              2,
-            ) * 1440;
-          repetitions += 1;
-          easeFactor = Math.max(1.3, easeFactor - 0.15);
-          break;
-        case "good":
-          interval =
-            this.nextInterval(
-              card.interval / 1440,
-              easeFactor,
-              retrievability,
-              3,
-            ) * 1440;
-          repetitions += 1;
-          break;
-        case "easy":
-          interval =
-            this.nextInterval(
-              card.interval / 1440,
-              easeFactor,
-              retrievability,
-              4,
-            ) *
-            1440 *
-            this.params.easyBonus;
-          repetitions += 1;
-          easeFactor = Math.min(2.5, easeFactor + 0.15);
-          break;
+      newCard.difficulty = this.nextDifficulty(newCard.difficulty, rating);
+      newCard.stability = this.nextStability(
+        newCard.difficulty,
+        newCard.stability,
+        retrievability,
+        rating,
+      );
+
+      if (rating === 1) {
+        newCard.state = "Relearning";
+      } else {
+        newCard.state = "Review";
       }
     }
 
-    // Cap interval at maximum
-    interval = Math.min(interval, this.params.maximumInterval * 1440);
+    const interval = this.nextInterval(newCard.stability);
+    newCard.scheduledDays = interval;
+    newCard.lastReview = now;
 
-    // Calculate due date
-    const dueDate = new Date(now.getTime() + interval * 60 * 1000);
+    const dueDate = new Date(now.getTime() + interval * 24 * 60 * 60 * 1000);
 
     return {
       dueDate: dueDate.toISOString(),
-      interval: Math.round(interval),
-      easeFactor: Number(easeFactor.toFixed(2)),
-      repetitions,
+      interval: Math.round(interval * 1440), // Convert days to minutes
+      easeFactor: Number(newCard.difficulty.toFixed(2)),
+      repetitions: newCard.reps,
+      stability: Number(newCard.stability.toFixed(2)),
+      difficulty: Number(newCard.difficulty.toFixed(2)),
+      state: this.fsrsStateToFlashcardState(newCard.state),
     };
   }
 
-  private initialStability(rating: number): number {
-    return Math.max(0.1, this.params.w[rating - 1]);
+  private initDS(card: FSRSCard): FSRSCard {
+    return {
+      ...card,
+      stability: 0,
+      difficulty: 0,
+      elapsedDays: 0,
+      scheduledDays: 0,
+      reps: 0,
+      lapses: 0,
+      state: "New",
+      lastReview: new Date(),
+    };
   }
 
-  private calculateRetrievability(interval: number, elapsed: number): number {
-    return Math.pow(1 + elapsed / (9 * interval), -1);
+  private initStability(rating: number): number {
+    return Math.max(this.params.w[rating - 1], 0.1);
   }
 
-  private nextInterval(
-    currentInterval: number,
-    easeFactor: number,
+  private initDifficulty(rating: number): number {
+    return Math.min(
+      Math.max(this.params.w[4] - this.params.w[5] * (rating - 3), 1),
+      10,
+    );
+  }
+
+  private forgettingCurve(elapsedDays: number, stability: number): number {
+    return Math.pow(1 + elapsedDays / (9 * stability), -1);
+  }
+
+  private nextDifficulty(difficulty: number, rating: number): number {
+    const nextD = difficulty - this.params.w[6] * (rating - 3);
+    return Math.min(
+      Math.max(this.meanReversion(this.params.w[4], nextD), 1),
+      10,
+    );
+  }
+
+  private meanReversion(init: number, current: number): number {
+    return this.params.w[7] * init + (1 - this.params.w[7]) * current;
+  }
+
+  private nextStability(
+    difficulty: number,
+    stability: number,
     retrievability: number,
     rating: number,
   ): number {
-    const desiredRetention = this.params.requestRetention;
-    const stabilityIncrease = Math.exp(this.params.w[8] * (rating - 3));
-    const difficultyDecay = this.params.w[9] * (rating - 3);
+    const hardPenalty = rating === 2 ? this.params.w[15] : 1;
+    const easyBonus = rating === 4 ? this.params.w[16] : 1;
 
-    const newStability = currentInterval * retrievability * stabilityIncrease;
-    const newDifficulty = Math.max(
-      0,
-      Math.min(10, easeFactor + difficultyDecay),
+    return (
+      stability *
+      (1 +
+        Math.exp(this.params.w[8]) *
+          (11 - difficulty) *
+          Math.pow(stability, -this.params.w[9]) *
+          (Math.exp((1 - retrievability) * this.params.w[10]) - 1) *
+          hardPenalty *
+          easyBonus)
     );
-
-    const interval =
-      (newStability * Math.log(desiredRetention)) / Math.log(0.9);
-
-    return Math.max(1, Math.round(interval));
   }
 
-  private getDaysSince(dateString: string): number {
-    const date = new Date(dateString);
-    const now = new Date();
-    const diffMs = now.getTime() - date.getTime();
-    return diffMs / (1000 * 60 * 60 * 24);
+  private nextInterval(stability: number): number {
+    const interval =
+      stability * (Math.log(this.params.requestRetention) / Math.log(0.9));
+    return Math.min(
+      Math.max(Math.round(interval), 1),
+      this.params.maximumInterval,
+    );
+  }
+
+  private getElapsedDays(lastReview: Date, now: Date): number {
+    return Math.max(
+      0,
+      (now.getTime() - lastReview.getTime()) / (1000 * 60 * 60 * 24),
+    );
+  }
+
+  private flashcardToFSRS(card: Flashcard): FSRSCard {
+    const lastReview = card.modified ? new Date(card.modified) : new Date();
+    const elapsedDays = this.getElapsedDays(lastReview, new Date());
+
+    return {
+      stability: card.easeFactor || 2.5, // Use easeFactor as stability storage
+      difficulty: card.easeFactor || 5.0, // Default difficulty
+      elapsedDays,
+      scheduledDays: card.interval / 1440, // Convert minutes to days
+      reps: card.repetitions,
+      lapses: 0, // We don't track lapses in current model
+      state: this.flashcardStateToFSRSState(card.state),
+      lastReview,
+    };
+  }
+
+  private flashcardStateToFSRSState(state: FlashcardState): FSRSState {
+    switch (state) {
+      case "new":
+        return "New";
+      case "learning":
+        return "Learning";
+      case "review":
+        return "Review";
+      default:
+        return "New";
+    }
+  }
+
+  private fsrsStateToFlashcardState(state: FSRSState): FlashcardState {
+    switch (state) {
+      case "New":
+        return "new";
+      case "Learning":
+      case "Relearning":
+        return "learning";
+      case "Review":
+        return "review";
+      default:
+        return "new";
+    }
+  }
+
+  private difficultyToRating(difficulty: Difficulty): number {
+    switch (difficulty) {
+      case "again":
+        return 1;
+      case "hard":
+        return 2;
+      case "good":
+        return 3;
+      case "easy":
+        return 4;
+      default:
+        return 3;
+    }
   }
 
   /**
