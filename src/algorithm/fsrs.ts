@@ -109,20 +109,93 @@ export class FSRS {
 
     if (card.state === "New") {
       newCard = this.initDS(card);
-      newCard.stability = this.initStability(rating);
-      newCard.difficulty = this.initDifficulty(rating);
       newCard.elapsedDays = 0;
       newCard.scheduledDays = 0;
       newCard.reps = 1;
       newCard.lapses = rating === 1 ? 1 : 0;
-      newCard.state = rating === 1 ? "Learning" : "Review";
+      newCard.state = "Learning"; // Always start in learning phase
+
+      // Use minute-based intervals for new cards
+      const minuteInterval = this.getNewCardInterval(rating);
+      return this.createSchedulingCard(
+        now,
+        minuteInterval,
+        newCard,
+        "learning",
+      );
+    } else if (card.state === "Learning" || card.state === "Relearning") {
+      // Handle learning/relearning phase with minute-based intervals
+      newCard = { ...card };
+      newCard.reps += 1;
+
+      if (rating === 1) {
+        // Failed - restart learning
+        newCard.lapses += 1;
+        newCard.state = "Learning";
+        const minuteInterval = 1; // Back to 1 minute
+        return this.createSchedulingCard(
+          now,
+          minuteInterval,
+          newCard,
+          "learning",
+        );
+      } else if (rating === 2) {
+        // Hard - repeat current step
+        newCard.state = "Learning";
+        const minuteInterval = Math.max(
+          6,
+          Math.round(card.scheduledDays * 1440 * 1.2),
+        );
+        return this.createSchedulingCard(
+          now,
+          minuteInterval,
+          newCard,
+          "learning",
+        );
+      } else if (rating === 3) {
+        // Good - advance to next step or graduate
+        if (card.scheduledDays * 1440 < 1440) {
+          // Still in learning (< 1 day)
+          newCard.state = "Learning";
+          const minuteInterval = Math.min(
+            1440,
+            Math.round(card.scheduledDays * 1440 * 2.5),
+          );
+          const finalState = minuteInterval >= 1440 ? "review" : "learning";
+          return this.createSchedulingCard(
+            now,
+            minuteInterval,
+            newCard,
+            finalState,
+          );
+        } else {
+          // Graduate to review
+          newCard.state = "Review";
+          newCard.stability = this.initStability(3);
+          newCard.difficulty = this.initDifficulty(3);
+        }
+      } else {
+        // Easy - graduate immediately to review
+        newCard.state = "Review";
+        newCard.stability = this.initStability(4);
+        newCard.difficulty = this.initDifficulty(4);
+      }
     } else {
+      // Handle review phase with FSRS algorithm
       newCard = { ...card };
       newCard.elapsedDays = this.getElapsedDays(card.lastReview, now);
       newCard.reps += 1;
 
       if (rating === 1) {
         newCard.lapses += 1;
+        newCard.state = "Learning"; // Back to learning
+        const minuteInterval = 1; // Start learning over
+        return this.createSchedulingCard(
+          now,
+          minuteInterval,
+          newCard,
+          "learning",
+        );
       }
 
       const retrievability = this.forgettingCurve(
@@ -137,28 +210,55 @@ export class FSRS {
         retrievability,
         rating,
       );
-
-      if (rating === 1) {
-        newCard.state = "Relearning";
-      } else {
-        newCard.state = "Review";
-      }
+      newCard.state = "Review";
     }
 
-    const interval = this.nextInterval(newCard.stability);
-    newCard.scheduledDays = interval;
+    const intervalDays = this.nextInterval(newCard.stability);
+    newCard.scheduledDays = intervalDays;
     newCard.lastReview = now;
 
-    const dueDate = new Date(now.getTime() + interval * 24 * 60 * 60 * 1000);
+    // Convert days to minutes for mature cards
+    const intervalMinutes = Math.round(intervalDays * 1440);
+    return this.createSchedulingCard(
+      now,
+      intervalMinutes,
+      newCard,
+      this.fsrsStateToFlashcardState(newCard.state),
+    );
+  }
+
+  private getNewCardInterval(rating: number): number {
+    // Return minute-based intervals for new cards
+    switch (rating) {
+      case 1: // Again
+        return 1; // 1 minute
+      case 2: // Hard
+        return 6; // 6 minutes
+      case 3: // Good
+        return 10; // 10 minutes
+      case 4: // Easy
+        return 4 * 1440; // 4 days (graduate to review immediately)
+      default:
+        return 10;
+    }
+  }
+
+  private createSchedulingCard(
+    now: Date,
+    intervalMinutes: number,
+    card: FSRSCard,
+    state: FlashcardState,
+  ): SchedulingCard {
+    const dueDate = new Date(now.getTime() + intervalMinutes * 60 * 1000);
 
     return {
       dueDate: dueDate.toISOString(),
-      interval: Math.round(interval * 1440), // Convert days to minutes
-      easeFactor: Number(newCard.difficulty.toFixed(2)),
-      repetitions: newCard.reps,
-      stability: Number(newCard.stability.toFixed(2)),
-      difficulty: Number(newCard.difficulty.toFixed(2)),
-      state: this.fsrsStateToFlashcardState(newCard.state),
+      interval: intervalMinutes,
+      easeFactor: Number(card.difficulty.toFixed(2)),
+      repetitions: card.reps,
+      stability: Number(card.stability.toFixed(2)),
+      difficulty: Number(card.difficulty.toFixed(2)),
+      state: state,
     };
   }
 

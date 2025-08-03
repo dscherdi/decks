@@ -2799,53 +2799,6 @@ var DatabaseService = class {
     if (!this.db)
       throw new Error("Database not initialized");
     const now = (/* @__PURE__ */ new Date()).toISOString();
-    const debugStmt = this.db.prepare(`
-      SELECT id, state, due_date, created, interval, repetitions FROM flashcards WHERE deck_id = ?
-    `);
-    debugStmt.bind([deckId]);
-    console.log(`Debug: All flashcards for deck ${deckId}:`);
-    while (debugStmt.step()) {
-      const row = debugStmt.get();
-      const dueDate = row[2];
-      const isDue = dueDate <= now;
-      console.log(
-        `  ID: ${row[0]}, State: '${row[1]}', Due: ${dueDate}, Created: ${row[3]}, Interval: ${row[4]}, Reps: ${row[5]}, IsDue: ${isDue}`
-      );
-    }
-    debugStmt.free();
-    console.log(`Debug: Current time for comparison: ${now}`);
-    console.log(`Debug: Testing new cards query...`);
-    const testNewStmt = this.db.prepare(`
-      SELECT COUNT(*), state, due_date FROM flashcards WHERE deck_id = ? AND state = 'new'
-    `);
-    testNewStmt.bind([deckId]);
-    if (testNewStmt.step()) {
-      const result = testNewStmt.get();
-      console.log(
-        `  New cards with state='new': ${result[0]}, example state: '${result[1]}', example due: ${result[2]}`
-      );
-    }
-    testNewStmt.free();
-    console.log(`Debug: Testing due date filtering...`);
-    const testDueStmt = this.db.prepare(`
-      SELECT COUNT(*) FROM flashcards WHERE deck_id = ? AND due_date <= ?
-    `);
-    testDueStmt.bind([deckId, now]);
-    if (testDueStmt.step()) {
-      const dueCount2 = testDueStmt.get()[0];
-      console.log(`  Cards with due_date <= now: ${dueCount2}`);
-    }
-    testDueStmt.free();
-    const stateStmt = this.db.prepare(`
-      SELECT state, COUNT(*) FROM flashcards WHERE deck_id = ? GROUP BY state
-    `);
-    stateStmt.bind([deckId]);
-    console.log(`Debug: All states in deck ${deckId}:`);
-    while (stateStmt.step()) {
-      const row = stateStmt.get();
-      console.log(`  State '${row[0]}': ${row[1]} cards`);
-    }
-    stateStmt.free();
     const newStmt = this.db.prepare(`
       SELECT COUNT(*) FROM flashcards
       WHERE deck_id = ? AND state = 'new' AND due_date <= ?
@@ -2854,7 +2807,6 @@ var DatabaseService = class {
     newStmt.step();
     const newCount = newStmt.get()[0] || 0;
     newStmt.free();
-    console.log(`Debug: New count for deck ${deckId}: ${newCount}`);
     const learningStmt = this.db.prepare(`
       SELECT COUNT(*) FROM flashcards
       WHERE deck_id = ? AND state = 'learning' AND due_date <= ?
@@ -2863,7 +2815,6 @@ var DatabaseService = class {
     learningStmt.step();
     const learningCount = learningStmt.get()[0] || 0;
     learningStmt.free();
-    console.log(`Debug: Learning count for deck ${deckId}: ${learningCount}`);
     const dueStmt = this.db.prepare(`
       SELECT COUNT(*) FROM flashcards
       WHERE deck_id = ? AND state = 'review' AND due_date <= ?
@@ -2872,7 +2823,6 @@ var DatabaseService = class {
     dueStmt.step();
     const dueCount = dueStmt.get()[0] || 0;
     dueStmt.free();
-    console.log(`Debug: Due count for deck ${deckId}: ${dueCount}`);
     const totalStmt = this.db.prepare(`
       SELECT COUNT(*) FROM flashcards WHERE deck_id = ?
     `);
@@ -2880,7 +2830,6 @@ var DatabaseService = class {
     totalStmt.step();
     const totalCount = totalStmt.get()[0] || 0;
     totalStmt.free();
-    console.log(`Debug: Total count for deck ${deckId}: ${totalCount}`);
     return {
       deckId,
       newCount,
@@ -3311,19 +3260,81 @@ var FSRS = class {
     let newCard;
     if (card.state === "New") {
       newCard = this.initDS(card);
-      newCard.stability = this.initStability(rating);
-      newCard.difficulty = this.initDifficulty(rating);
       newCard.elapsedDays = 0;
       newCard.scheduledDays = 0;
       newCard.reps = 1;
       newCard.lapses = rating === 1 ? 1 : 0;
-      newCard.state = rating === 1 ? "Learning" : "Review";
+      newCard.state = "Learning";
+      const minuteInterval = this.getNewCardInterval(rating);
+      return this.createSchedulingCard(
+        now,
+        minuteInterval,
+        newCard,
+        "learning"
+      );
+    } else if (card.state === "Learning" || card.state === "Relearning") {
+      newCard = { ...card };
+      newCard.reps += 1;
+      if (rating === 1) {
+        newCard.lapses += 1;
+        newCard.state = "Learning";
+        const minuteInterval = 1;
+        return this.createSchedulingCard(
+          now,
+          minuteInterval,
+          newCard,
+          "learning"
+        );
+      } else if (rating === 2) {
+        newCard.state = "Learning";
+        const minuteInterval = Math.max(
+          6,
+          Math.round(card.scheduledDays * 1440 * 1.2)
+        );
+        return this.createSchedulingCard(
+          now,
+          minuteInterval,
+          newCard,
+          "learning"
+        );
+      } else if (rating === 3) {
+        if (card.scheduledDays * 1440 < 1440) {
+          newCard.state = "Learning";
+          const minuteInterval = Math.min(
+            1440,
+            Math.round(card.scheduledDays * 1440 * 2.5)
+          );
+          const finalState = minuteInterval >= 1440 ? "review" : "learning";
+          return this.createSchedulingCard(
+            now,
+            minuteInterval,
+            newCard,
+            finalState
+          );
+        } else {
+          newCard.state = "Review";
+          newCard.stability = this.initStability(3);
+          newCard.difficulty = this.initDifficulty(3);
+        }
+      } else {
+        newCard.state = "Review";
+        newCard.stability = this.initStability(4);
+        newCard.difficulty = this.initDifficulty(4);
+      }
     } else {
       newCard = { ...card };
       newCard.elapsedDays = this.getElapsedDays(card.lastReview, now);
       newCard.reps += 1;
       if (rating === 1) {
         newCard.lapses += 1;
+        newCard.state = "Learning";
+        const minuteInterval = 1;
+        return this.createSchedulingCard(
+          now,
+          minuteInterval,
+          newCard,
+          "learning"
+        );
       }
       const retrievability = this.forgettingCurve(
         newCard.elapsedDays,
@@ -3336,25 +3347,43 @@ var FSRS = class {
         retrievability,
         rating
       );
-      if (rating === 1) {
-        newCard.state = "Relearning";
-      } else {
-        newCard.state = "Review";
-      }
+      newCard.state = "Review";
     }
-    const interval = this.nextInterval(newCard.stability);
-    newCard.scheduledDays = interval;
+    const intervalDays = this.nextInterval(newCard.stability);
+    newCard.scheduledDays = intervalDays;
     newCard.lastReview = now;
-    const dueDate = new Date(now.getTime() + interval * 24 * 60 * 60 * 1e3);
+    const intervalMinutes = Math.round(intervalDays * 1440);
+    return this.createSchedulingCard(
+      now,
+      intervalMinutes,
+      newCard,
+      this.fsrsStateToFlashcardState(newCard.state)
+    );
+  }
+  getNewCardInterval(rating) {
+    switch (rating) {
+      case 1:
+        return 1;
+      case 2:
+        return 6;
+      case 3:
+        return 10;
+      case 4:
+        return 4 * 1440;
+      default:
+        return 10;
+    }
+  }
+  createSchedulingCard(now, intervalMinutes, card, state) {
+    const dueDate = new Date(now.getTime() + intervalMinutes * 60 * 1e3);
     return {
       dueDate: dueDate.toISOString(),
-      interval: Math.round(interval * 1440),
-      // Convert days to minutes
-      easeFactor: Number(newCard.difficulty.toFixed(2)),
-      repetitions: newCard.reps,
-      stability: Number(newCard.stability.toFixed(2)),
-      difficulty: Number(newCard.difficulty.toFixed(2)),
-      state: this.fsrsStateToFlashcardState(newCard.state)
+      interval: intervalMinutes,
+      easeFactor: Number(card.difficulty.toFixed(2)),
+      repetitions: card.reps,
+      stability: Number(card.stability.toFixed(2)),
+      difficulty: Number(card.difficulty.toFixed(2)),
+      state
     };
   }
   initDS(card) {
@@ -4521,17 +4550,13 @@ function instance($$self, $$props, $$invalidate) {
   let isRefreshing = false;
   let isUpdatingStats = false;
   function getDeckStats(deckId) {
-    console.log(`DeckListPanel: Getting stats for deck ${deckId}`);
-    console.log(`DeckListPanel: Available stats map:`, deckStats);
-    const stats = deckStats.get(deckId) || {
+    return deckStats.get(deckId) || {
       deckId,
       newCount: 0,
       learningCount: 0,
       dueCount: 0,
       totalCount: 0
     };
-    console.log(`DeckListPanel: Using stats for deck ${deckId}:`, stats);
-    return stats;
   }
   function handleRefresh() {
     return __awaiter(this, void 0, void 0, function* () {
@@ -4559,7 +4584,6 @@ function instance($$self, $$props, $$invalidate) {
     onDeckClick(deck);
   }
   onMount(() => {
-    console.log("DeckListPanel: Component mounted");
     handleRefresh();
   });
   const click_handler = (deck) => handleDeckClick(deck);
@@ -4572,18 +4596,6 @@ function instance($$self, $$props, $$invalidate) {
       $$invalidate(7, onDeckClick = $$props2.onDeckClick);
     if ("onRefresh" in $$props2)
       $$invalidate(8, onRefresh = $$props2.onRefresh);
-  };
-  $$self.$$.update = () => {
-    if ($$self.$$.dirty & /*decks*/
-    1) {
-      $:
-        console.log("DeckListPanel: Decks prop changed:", decks);
-    }
-    if ($$self.$$.dirty & /*deckStats*/
-    64) {
-      $:
-        console.log("DeckListPanel: DeckStats prop changed:", deckStats);
-    }
   };
   return [
     decks,
@@ -5642,15 +5654,11 @@ var FlashcardsPlugin = class extends import_obsidian2.Plugin {
     return await this.db.getAllDecks();
   }
   async getDeckStats() {
-    console.log("Main plugin: Getting deck stats...");
     const stats = await this.db.getAllDeckStats();
-    console.log("Main plugin: Raw stats from database:", stats);
     const statsMap = /* @__PURE__ */ new Map();
     for (const stat of stats) {
-      console.log(`Main plugin: Adding stat for deck ${stat.deckId}:`, stat);
       statsMap.set(stat.deckId, stat);
     }
-    console.log("Main plugin: Final stats map:", statsMap);
     return statsMap;
   }
   async getDueFlashcards(deckId) {
@@ -5738,15 +5746,6 @@ var FlashcardsView = class extends import_obsidian2.ItemView {
       console.log("Getting decks and stats...");
       const decks = await this.plugin.getDecks();
       const deckStats = await this.plugin.getDeckStats();
-      console.log("FlashcardsView: Found decks:", decks);
-      console.log("FlashcardsView: Deck stats map:", deckStats);
-      for (const deck of decks) {
-        const stat = deckStats.get(deck.id);
-        console.log(
-          `FlashcardsView: Deck "${deck.name}" (${deck.id}) has stats:`,
-          stat
-        );
-      }
       if (this.component) {
         console.log("Updating component with new data");
         this.component.$set({

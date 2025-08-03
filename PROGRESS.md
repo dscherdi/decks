@@ -840,6 +840,88 @@ Confirmed all 17 columns are properly aligned:
 ### Result
 Flashcard creation and review functionality now works correctly with the full FSRS implementation, allowing users to study their flashcards without database errors!
 
+## New Card Interval Fix
+
+### Problem Identified
+New flashcards were being assigned intervals that were too large (days instead of minutes), causing them to not appear in the "New" count and making them unavailable for immediate review.
+
+### Root Cause Analysis
+The FSRS implementation was using day-based intervals for all cards, including new ones:
+- **New cards**: Getting intervals like 4+ days from `initStability()` 
+- **Learning progression**: Jumping directly to review phase instead of minute-based learning steps
+- **Statistics counting**: Cards with large intervals weren't showing as "due" for review
+
+### Solution Implemented
+Fixed the FSRS algorithm to use proper minute-based intervals for new and learning cards, following traditional spaced repetition principles.
+
+#### New Card Intervals (Minutes)
+```typescript
+private getNewCardInterval(rating: number): number {
+  switch (rating) {
+    case 1: return 1;           // Again: 1 minute
+    case 2: return 6;           // Hard: 6 minutes  
+    case 3: return 10;          // Good: 10 minutes
+    case 4: return 4 * 1440;    // Easy: 4 days (graduate immediately)
+  }
+}
+```
+
+#### Learning Phase Progression
+- **Again (1)**: Reset to 1 minute, restart learning
+- **Hard (2)**: Repeat current step with 1.2x multiplier
+- **Good (3)**: Advance to next step with 2.5x multiplier
+- **Easy (4)**: Graduate immediately to review phase
+
+#### State Transitions
+- **New → Learning**: Always start in learning phase with minute intervals
+- **Learning → Learning**: Progress through minute-based steps
+- **Learning → Review**: Graduate when interval reaches 1 day (1440 minutes)
+- **Review → Learning**: Failed reviews restart learning from 1 minute
+
+### Implementation Details
+
+#### Proper Learning Steps
+```typescript
+// Learning phase with minute intervals
+if (card.state === "Learning") {
+  if (rating === 3) { // Good
+    const minuteInterval = Math.min(1440, card.scheduledDays * 1440 * 2.5);
+    const finalState = minuteInterval >= 1440 ? "review" : "learning";
+  }
+}
+```
+
+#### State-Based Scheduling
+```typescript
+// Create scheduling card with minute precision
+private createSchedulingCard(now: Date, intervalMinutes: number, card: FSRSCard, state: FlashcardState) {
+  const dueDate = new Date(now.getTime() + intervalMinutes * 60 * 1000);
+  return { interval: intervalMinutes, state, dueDate: dueDate.toISOString() };
+}
+```
+
+### Benefits Achieved
+- ✅ **Immediate Review**: New cards now appear in "New" count and are available for study
+- ✅ **Proper Learning**: Cards progress through minute-based learning steps before graduating
+- ✅ **Accurate Statistics**: State counts now reflect cards actually due for review
+- ✅ **Traditional SRS**: Follows proven spaced repetition learning patterns
+- ✅ **FSRS Benefits**: Still uses FSRS algorithm for mature review cards
+
+### Learning Flow Example
+```
+New Card → 10min → 25min → 60min → 1 day → 2.5 days → 6 days...
+   ↑         ↑       ↑       ↑       ↑         ↑         ↑
+  New    Learning Learning Learning Review   Review   Review
+```
+
+### Files Modified
+- ✅ `src/algorithm/fsrs.ts` - Implemented minute-based intervals for new/learning cards
+- ✅ `src/algorithm/fsrs.ts` - Added proper learning phase progression logic
+- ✅ `src/algorithm/fsrs.ts` - Created separate scheduling for different card states
+
+### Result
+New cards now properly start with minute-based intervals, appear in the correct counts, and follow a logical learning progression from minutes to hours to days, providing an optimal learning experience!
+
 ## Flashcard State Model Improvements
 
 ### Problem Identified

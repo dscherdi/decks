@@ -255,17 +255,13 @@ export default class FlashcardsPlugin extends Plugin {
   }
 
   async getDeckStats(): Promise<Map<string, DeckStats>> {
-    console.log("Main plugin: Getting deck stats...");
     const stats = await this.db.getAllDeckStats();
-    console.log("Main plugin: Raw stats from database:", stats);
     const statsMap = new Map<string, DeckStats>();
 
     for (const stat of stats) {
-      console.log(`Main plugin: Adding stat for deck ${stat.deckId}:`, stat);
       statsMap.set(stat.deckId, stat);
     }
 
-    console.log("Main plugin: Final stats map:", statsMap);
     return statsMap;
   }
 
@@ -391,17 +387,6 @@ class FlashcardsView extends ItemView {
 
       // Get fresh stats after syncing
       const deckStats = await this.plugin.getDeckStats();
-      console.log("FlashcardsView: Found decks:", decks);
-      console.log("FlashcardsView: Deck stats map:", deckStats);
-
-      // Debug: Check if stats match decks
-      for (const deck of decks) {
-        const stat = deckStats.get(deck.id);
-        console.log(
-          `FlashcardsView: Deck "${deck.name}" (${deck.id}) has stats:`,
-          stat,
-        );
-      }
 
       // Update component
       if (this.component) {

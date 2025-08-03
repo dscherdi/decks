@@ -421,61 +421,6 @@ export class DatabaseService {
 
     const now = new Date().toISOString();
 
-    // Debug: Check all flashcards for this deck with more details
-    const debugStmt = this.db.prepare(`
-      SELECT id, state, due_date, created, interval, repetitions FROM flashcards WHERE deck_id = ?
-    `);
-    debugStmt.bind([deckId]);
-    console.log(`Debug: All flashcards for deck ${deckId}:`);
-    while (debugStmt.step()) {
-      const row = debugStmt.get();
-      const dueDate = row[2] as string;
-      const isDue = dueDate <= now;
-      console.log(
-        `  ID: ${row[0]}, State: '${row[1]}', Due: ${dueDate}, Created: ${row[3]}, Interval: ${row[4]}, Reps: ${row[5]}, IsDue: ${isDue}`,
-      );
-    }
-    debugStmt.free();
-    console.log(`Debug: Current time for comparison: ${now}`);
-
-    // Debug: Test each query individually
-    console.log(`Debug: Testing new cards query...`);
-    const testNewStmt = this.db.prepare(`
-      SELECT COUNT(*), state, due_date FROM flashcards WHERE deck_id = ? AND state = 'new'
-    `);
-    testNewStmt.bind([deckId]);
-    if (testNewStmt.step()) {
-      const result = testNewStmt.get();
-      console.log(
-        `  New cards with state='new': ${result[0]}, example state: '${result[1]}', example due: ${result[2]}`,
-      );
-    }
-    testNewStmt.free();
-
-    // Debug: Test due date filtering separately
-    console.log(`Debug: Testing due date filtering...`);
-    const testDueStmt = this.db.prepare(`
-      SELECT COUNT(*) FROM flashcards WHERE deck_id = ? AND due_date <= ?
-    `);
-    testDueStmt.bind([deckId, now]);
-    if (testDueStmt.step()) {
-      const dueCount = testDueStmt.get()[0];
-      console.log(`  Cards with due_date <= now: ${dueCount}`);
-    }
-    testDueStmt.free();
-
-    // Debug: Check all possible states
-    const stateStmt = this.db.prepare(`
-      SELECT state, COUNT(*) FROM flashcards WHERE deck_id = ? GROUP BY state
-    `);
-    stateStmt.bind([deckId]);
-    console.log(`Debug: All states in deck ${deckId}:`);
-    while (stateStmt.step()) {
-      const row = stateStmt.get();
-      console.log(`  State '${row[0]}': ${row[1]} cards`);
-    }
-    stateStmt.free();
-
     // Count new cards (state = 'new' and due for first review)
     const newStmt = this.db.prepare(`
       SELECT COUNT(*) FROM flashcards
@@ -485,7 +430,6 @@ export class DatabaseService {
     newStmt.step();
     const newCount = (newStmt.get()[0] as number) || 0;
     newStmt.free();
-    console.log(`Debug: New count for deck ${deckId}: ${newCount}`);
 
     // Count learning cards (state = 'learning' and due)
     const learningStmt = this.db.prepare(`
@@ -496,7 +440,6 @@ export class DatabaseService {
     learningStmt.step();
     const learningCount = (learningStmt.get()[0] as number) || 0;
     learningStmt.free();
-    console.log(`Debug: Learning count for deck ${deckId}: ${learningCount}`);
 
     // Count review cards (state = 'review' and due)
     const dueStmt = this.db.prepare(`
@@ -507,7 +450,6 @@ export class DatabaseService {
     dueStmt.step();
     const dueCount = (dueStmt.get()[0] as number) || 0;
     dueStmt.free();
-    console.log(`Debug: Due count for deck ${deckId}: ${dueCount}`);
 
     // Total count
     const totalStmt = this.db.prepare(`
@@ -517,7 +459,6 @@ export class DatabaseService {
     totalStmt.step();
     const totalCount = (totalStmt.get()[0] as number) || 0;
     totalStmt.free();
-    console.log(`Debug: Total count for deck ${deckId}: ${totalCount}`);
 
     return {
       deckId,
