@@ -15,6 +15,8 @@ The formula is: a² + b² = c²
 
 This theorem is fundamental in geometry and has many practical applications.
 
+$a^2+b^2=c^2$
+
 ## What is the quadratic formula?
 
 The quadratic formula is used to solve quadratic equations of the form ax² + bx + c = 0.
