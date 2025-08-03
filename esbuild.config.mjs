@@ -65,6 +65,7 @@ const buildOptions = {
       }),
       compilerOptions: {
         dev: !prod,
+        css: "injected",
       },
     }),
     copy({

@@ -287,6 +287,39 @@ export class DatabaseService {
     return flashcards;
   }
 
+  async getReviewableFlashcards(deckId: string): Promise<Flashcard[]> {
+    if (!this.db) throw new Error("Database not initialized");
+
+    const now = new Date().toISOString();
+
+    // Get all cards that are due for review:
+    // 1. New cards (repetitions = 0) that are due
+    // 2. Learning cards (interval < 1440) that are due
+    // 3. Review cards (interval >= 1440) that are due
+    const stmt = this.db.prepare(`
+      SELECT * FROM flashcards
+      WHERE deck_id = ? AND due_date <= ?
+      ORDER BY
+        CASE
+          WHEN repetitions = 0 THEN 1  -- New cards first
+          WHEN interval < 1440 THEN 2  -- Learning cards second
+          ELSE 3                       -- Review cards last
+        END,
+        due_date
+    `);
+
+    stmt.bind([deckId, now]);
+    const flashcards: Flashcard[] = [];
+
+    while (stmt.step()) {
+      const row = stmt.get();
+      flashcards.push(this.rowToFlashcard(row));
+    }
+
+    stmt.free();
+    return flashcards;
+  }
+
   async updateFlashcard(flashcard: Flashcard): Promise<void> {
     if (!this.db) throw new Error("Database not initialized");
 
@@ -354,30 +387,30 @@ export class DatabaseService {
 
     const now = new Date().toISOString();
 
-    // Count new cards (never reviewed)
+    // Count new cards (never reviewed and due for first review)
     const newStmt = this.db.prepare(`
       SELECT COUNT(*) FROM flashcards
-      WHERE deck_id = ? AND repetitions = 0
+      WHERE deck_id = ? AND repetitions = 0 AND due_date <= ?
     `);
-    newStmt.bind([deckId]);
+    newStmt.bind([deckId, now]);
     newStmt.step();
     const newCount = (newStmt.get()[0] as number) || 0;
     newStmt.free();
 
-    // Count learning cards (repetitions > 0 but interval < 1 day)
+    // Count learning cards (reviewed but still in learning phase - interval < 1 day and due)
     const learningStmt = this.db.prepare(`
       SELECT COUNT(*) FROM flashcards
-      WHERE deck_id = ? AND repetitions > 0 AND interval < 1440
+      WHERE deck_id = ? AND repetitions > 0 AND interval < 1440 AND due_date <= ?
     `);
-    learningStmt.bind([deckId]);
+    learningStmt.bind([deckId, now]);
     learningStmt.step();
     const learningCount = (learningStmt.get()[0] as number) || 0;
     learningStmt.free();
 
-    // Count due cards
+    // Count review cards (mature cards that are due - interval >= 1 day and due)
     const dueStmt = this.db.prepare(`
       SELECT COUNT(*) FROM flashcards
-      WHERE deck_id = ? AND due_date <= ? AND interval >= 1440
+      WHERE deck_id = ? AND interval >= 1440 AND due_date <= ?
     `);
     dueStmt.bind([deckId, now]);
     dueStmt.step();

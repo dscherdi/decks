@@ -16,6 +16,8 @@ import { DatabaseService } from "./database/DatabaseService";
 import { DeckManager } from "./services/DeckManager";
 import { FSRS, type Difficulty } from "./algorithm/fsrs";
 import { Deck, Flashcard, DeckStats } from "./database/types";
+import { FlashcardsSettings, DEFAULT_SETTINGS } from "./settings";
+import { FlashcardsSettingTab } from "./components/SettingsTab";
 import DeckListPanel from "./components/DeckListPanel.svelte";
 import FlashcardReviewModal from "./components/FlashcardReviewModal.svelte";
 
@@ -28,9 +30,14 @@ export default class FlashcardsPlugin extends Plugin {
   private deckManager: DeckManager;
   private fsrs: FSRS;
   public view: FlashcardsView | null = null;
+  public settings: FlashcardsSettings;
+  private statsRefreshTimeout: NodeJS.Timeout | null = null;
 
   async onload() {
     console.log("Loading Flashcards plugin");
+
+    // Load settings
+    await this.loadSettings();
 
     try {
       // Ensure plugin directory exists
@@ -41,7 +48,8 @@ export default class FlashcardsPlugin extends Plugin {
       }
 
       // Initialize database
-      this.db = new DatabaseService(DATABASE_PATH);
+      const dbPath = this.settings.database.customPath || DATABASE_PATH;
+      this.db = new DatabaseService(dbPath);
       await this.db.initialize();
 
       // Initialize managers
@@ -50,7 +58,13 @@ export default class FlashcardsPlugin extends Plugin {
         this.app.metadataCache,
         this.db,
       );
-      this.fsrs = new FSRS();
+      this.fsrs = new FSRS({
+        requestRetention: this.settings.fsrs.requestRetention,
+        maximumInterval: this.settings.fsrs.maximumInterval,
+        easyBonus: this.settings.fsrs.easyBonus,
+        hardInterval: this.settings.fsrs.hardInterval,
+        w: this.settings.fsrs.weights,
+      });
 
       // Register the side panel view
       this.registerView(
@@ -92,6 +106,9 @@ export default class FlashcardsPlugin extends Plugin {
       // Load styles
       this.loadStyles();
 
+      // Add settings tab
+      this.addSettingTab(new FlashcardsSettingTab(this.app, this));
+
       console.log("Flashcards plugin loaded successfully");
     } catch (error) {
       console.error("Error loading Flashcards plugin:", error);
@@ -111,6 +128,23 @@ export default class FlashcardsPlugin extends Plugin {
 
     // Remove view
     this.app.workspace.detachLeavesOfType(VIEW_TYPE_FLASHCARDS);
+  }
+
+  async loadSettings() {
+    this.settings = Object.assign({}, DEFAULT_SETTINGS, await this.loadData());
+  }
+
+  async saveSettings() {
+    await this.saveData(this.settings);
+
+    // Update FSRS instance with new settings
+    this.fsrs = new FSRS({
+      requestRetention: this.settings.fsrs.requestRetention,
+      maximumInterval: this.settings.fsrs.maximumInterval,
+      easyBonus: this.settings.fsrs.easyBonus,
+      hardInterval: this.settings.fsrs.hardInterval,
+      w: this.settings.fsrs.weights,
+    });
   }
 
   private loadStyles() {
@@ -239,6 +273,10 @@ export default class FlashcardsPlugin extends Plugin {
     return await this.db.getFlashcardsByDeck(deckId);
   }
 
+  async getReviewableFlashcards(deckId: string): Promise<Flashcard[]> {
+    return await this.db.getReviewableFlashcards(deckId);
+  }
+
   async reviewFlashcard(
     flashcard: Flashcard,
     difficulty: Difficulty,
@@ -277,6 +315,7 @@ class FlashcardsView extends ItemView {
   private plugin: FlashcardsPlugin;
   private component: DeckListPanel | null = null;
   private markdownComponents: Component[] = [];
+  private statsRefreshTimeout: NodeJS.Timeout | null = null;
 
   constructor(leaf: WorkspaceLeaf, plugin: FlashcardsPlugin) {
     super(leaf);
@@ -324,6 +363,12 @@ class FlashcardsView extends ItemView {
       this.component = null;
     }
 
+    // Clean up timeouts
+    if (this.statsRefreshTimeout) {
+      clearTimeout(this.statsRefreshTimeout);
+      this.statsRefreshTimeout = null;
+    }
+
     // Clean up markdown components
     this.markdownComponents.forEach((comp) => comp.unload());
     this.markdownComponents = [];
@@ -362,14 +407,47 @@ class FlashcardsView extends ItemView {
     }
   }
 
+  async refreshStats() {
+    // Clear any existing timeout
+    if (this.statsRefreshTimeout) {
+      clearTimeout(this.statsRefreshTimeout);
+    }
+
+    // Trigger visual feedback immediately
+    if (this.component) {
+      this.component.updateStats();
+    }
+
+    // Throttle the actual stats refresh
+    this.statsRefreshTimeout = setTimeout(async () => {
+      console.log("FlashcardsView.refreshStats() executing");
+      try {
+        // Get updated stats only (faster than full refresh)
+        const deckStats = await this.plugin.getDeckStats();
+        console.log("Updated deck stats:", deckStats);
+
+        // Update component with new stats
+        if (this.component) {
+          this.component.$set({
+            deckStats,
+          });
+        }
+      } catch (error) {
+        console.error("Error refreshing deck stats:", error);
+      } finally {
+        this.statsRefreshTimeout = null;
+      }
+    }, 300); // 300ms throttle
+  }
+
   async startReview(deck: Deck) {
     try {
       // First sync flashcards for this specific deck
       console.log(`Syncing flashcards for deck before review: ${deck.name}`);
       await this.plugin.syncFlashcardsForDeck(deck.tag);
 
-      // Get all flashcards for the deck (not just due ones for now)
-      const flashcards = await this.plugin.getFlashcardsByDeck(deck.id);
+      // Get all flashcards that are due for review (new + due cards)
+      const flashcards = await this.plugin.getReviewableFlashcards(deck.id);
 
       if (flashcards.length === 0) {
         new Notice(`No cards due for review in ${deck.name}`);
@@ -432,11 +510,27 @@ class FlashcardReviewModalWrapper extends Modal {
             this.markdownComponents.push(component);
           }
         },
+        settings: this.plugin.settings,
+        onCardReviewed: async () => {
+          // Refresh deck list stats after each card review
+          if (this.plugin.view) {
+            await this.plugin.view.refreshStats();
+          }
+        },
       },
     });
 
-    this.component.$on("complete", () => {
-      new Notice(`Review session complete for ${this.deck.name}!`);
+    this.component.$on("complete", (event) => {
+      const { reason, reviewed } = event.detail;
+      let message = `Review session complete for ${this.deck.name}!`;
+
+      if (reason === "session-limit") {
+        message = `Session goal reached! Reviewed ${reviewed} cards from ${this.deck.name}.`;
+      } else if (reason === "no-more-cards") {
+        message = `All cards reviewed! Completed ${reviewed} cards from ${this.deck.name}.`;
+      }
+
+      new Notice(message);
 
       // Refresh the view to update stats
       if (this.plugin.view) {

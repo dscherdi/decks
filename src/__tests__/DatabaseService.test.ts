@@ -332,16 +332,50 @@ describe("DatabaseService", () => {
 
       // Verify correct queries were made
       const prepareCalls = mockDb.prepare.mock.calls;
-      expect(prepareCalls[0][0]).toContain("repetitions = 0"); // new cards
+      expect(prepareCalls[0][0]).toContain("repetitions = 0 AND due_date <= ?"); // new cards
       expect(prepareCalls[1][0]).toContain(
-        "repetitions > 0 AND interval < 1440",
+        "repetitions > 0 AND interval < 1440 AND due_date <= ?",
       ); // learning
       expect(prepareCalls[2][0]).toContain(
-        "due_date <= ? AND interval >= 1440",
+        "interval >= 1440 AND due_date <= ?",
       ); // due
       expect(prepareCalls[3][0]).toContain(
         "COUNT(*) FROM flashcards WHERE deck_id = ?",
       ); // total
+    });
+
+    describe("getReviewableFlashcards", () => {
+      it("should query for reviewable cards with correct order", async () => {
+        const deckId = "deck_123";
+
+        // Mock the statement to return some test data
+        mockStatement.step.mockReturnValue(false); // No results
+
+        await dbService.getReviewableFlashcards(deckId);
+
+        // Verify the correct SQL query was prepared
+        expect(mockDb.prepare).toHaveBeenCalledWith(
+          expect.stringContaining("WHERE deck_id = ? AND due_date <= ?"),
+        );
+
+        expect(mockDb.prepare).toHaveBeenCalledWith(
+          expect.stringContaining("ORDER BY"),
+        );
+
+        expect(mockDb.prepare).toHaveBeenCalledWith(
+          expect.stringContaining("CASE"),
+        );
+
+        expect(mockDb.prepare).toHaveBeenCalledWith(
+          expect.stringContaining("repetitions = 0 THEN 1"),
+        );
+
+        // Verify bind was called with deck ID and current timestamp
+        expect(mockStatement.bind).toHaveBeenCalledWith([
+          deckId,
+          expect.any(String), // Current timestamp
+        ]);
+      });
     });
   });
 

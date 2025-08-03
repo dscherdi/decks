@@ -8,6 +8,7 @@
     export let onRefresh: () => void;
 
     let isRefreshing = false;
+    let isUpdatingStats = false;
 
     function getDeckStats(deckId: string): DeckStats {
         return (
@@ -22,8 +23,9 @@
     }
 
     function formatDeckName(deck: Deck): string {
-        // Remove #flashcards/ prefix for display
-        return deck.name;
+        // Remove #flashcards/ prefix and extract meaningful name
+        const tagParts = deck.tag.replace("#flashcards/", "").split("/");
+        return tagParts.join(" / ");
     }
 
     async function handleRefresh() {
@@ -38,12 +40,19 @@
         }
     }
 
+    // Function to handle stats updates without full refresh
+    export function updateStats() {
+        isUpdatingStats = true;
+        setTimeout(() => {
+            isUpdatingStats = false;
+        }, 500); // Brief visual feedback
+    }
+
     function handleDeckClick(deck: Deck) {
         onDeckClick(deck);
     }
 
     onMount(() => {
-        console.log("DeckListPanel mounted");
         // Initial load
         handleRefresh();
     });
@@ -106,18 +115,21 @@
                         <div
                             class="col-stat"
                             class:has-cards={stats.newCount > 0}
+                            class:updating={isUpdatingStats}
                         >
                             {stats.newCount}
                         </div>
                         <div
                             class="col-stat"
                             class:has-cards={stats.learningCount > 0}
+                            class:updating={isUpdatingStats}
                         >
                             {stats.learningCount}
                         </div>
                         <div
                             class="col-stat"
                             class:has-cards={stats.dueCount > 0}
+                            class:updating={isUpdatingStats}
                         >
                             {stats.dueCount}
                         </div>
@@ -213,12 +225,15 @@
     }
 
     .table-header {
-        display: flex;
+        display: grid;
+        grid-template-columns: 1fr 60px 60px 60px;
+        gap: 8px;
         padding: 8px 16px;
         font-weight: 600;
         font-size: 14px;
         border-bottom: 1px solid var(--background-modifier-border);
         background: var(--background-secondary);
+        align-items: center;
     }
 
     .table-body {
@@ -227,7 +242,9 @@
     }
 
     .deck-row {
-        display: flex;
+        display: grid;
+        grid-template-columns: 1fr 60px 60px 60px;
+        gap: 8px;
         padding: 12px 16px;
         border: none;
         background: none;
@@ -236,6 +253,7 @@
         cursor: pointer;
         transition: background-color 0.1s ease;
         border-bottom: 1px solid var(--background-modifier-border);
+        align-items: center;
     }
 
     .deck-row:hover {
@@ -247,19 +265,32 @@
     }
 
     .col-deck {
-        flex: 1;
         font-size: 14px;
         color: var(--text-normal);
         overflow: hidden;
         text-overflow: ellipsis;
         white-space: nowrap;
+        justify-self: start;
     }
 
     .col-stat {
-        width: 50px;
         text-align: center;
         font-size: 14px;
         color: var(--text-muted);
+        justify-self: center;
+    }
+
+    .table-header .col-deck {
+        font-size: 14px;
+        color: var(--text-normal);
+        justify-self: start;
+    }
+
+    .table-header .col-stat {
+        text-align: center;
+        font-size: 14px;
+        color: var(--text-normal);
+        justify-self: center;
     }
 
     .col-stat.has-cards {
@@ -267,7 +298,11 @@
         font-weight: 500;
     }
 
-    /* Scrollbar styling */
+    .col-stat.updating {
+        opacity: 0.6;
+        transition: opacity 0.3s ease;
+    }
+
     .table-body::-webkit-scrollbar {
         width: 8px;
     }

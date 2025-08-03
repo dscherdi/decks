@@ -10,6 +10,9 @@ var __getOwnPropNames = Object.getOwnPropertyNames;
 var __getProtoOf = Object.getPrototypeOf;
 var __hasOwnProp = Object.prototype.hasOwnProperty;
 var __defNormalProp = (obj, key, value) => key in obj ? __defProp(obj, key, { enumerable: true, configurable: true, writable: true, value }) : obj[key] = value;
+var __esm = (fn, res) => function __init() {
+  return fn && (res = (0, fn[__getOwnPropNames(fn)[0]])(fn = 0)), res;
+};
 var __commonJS = (cb, mod) => function __require() {
   return mod || (0, cb[__getOwnPropNames(cb)[0]])((mod = { exports: {} }).exports, mod), mod.exports;
 };
@@ -2379,13 +2382,62 @@ var require_sql_wasm = __commonJS({
   }
 });
 
+// src/settings.ts
+var settings_exports = {};
+__export(settings_exports, {
+  DEFAULT_SETTINGS: () => DEFAULT_SETTINGS
+});
+var DEFAULT_SETTINGS;
+var init_settings = __esm({
+  "src/settings.ts"() {
+    DEFAULT_SETTINGS = {
+      fsrs: {
+        requestRetention: 0.9,
+        maximumInterval: 36500,
+        // 100 years
+        easyBonus: 1.3,
+        hardInterval: 1.2,
+        weights: [
+          0.4,
+          0.6,
+          2.4,
+          5.8,
+          4.93,
+          0.94,
+          0.86,
+          0.01,
+          1.49,
+          0.14,
+          0.94,
+          2.18,
+          0.05,
+          0.34,
+          1.26,
+          0.29,
+          2.61
+        ]
+      },
+      database: {
+        autoBackup: true,
+        backupInterval: 7
+      },
+      review: {
+        showProgress: true,
+        enableKeyboardShortcuts: true,
+        sessionGoal: 20,
+        enableSessionLimit: false
+      }
+    };
+  }
+});
+
 // src/main.ts
 var main_exports = {};
 __export(main_exports, {
   default: () => FlashcardsPlugin
 });
 module.exports = __toCommonJS(main_exports);
-var import_obsidian = require("obsidian");
+var import_obsidian2 = require("obsidian");
 
 // src/database/DatabaseService.ts
 var import_sql = __toESM(require_sql_wasm());
@@ -2634,6 +2686,30 @@ var DatabaseService = class {
     stmt.free();
     return flashcards;
   }
+  async getReviewableFlashcards(deckId) {
+    if (!this.db)
+      throw new Error("Database not initialized");
+    const now = (/* @__PURE__ */ new Date()).toISOString();
+    const stmt = this.db.prepare(`
+      SELECT * FROM flashcards
+      WHERE deck_id = ? AND due_date <= ?
+      ORDER BY
+        CASE
+          WHEN repetitions = 0 THEN 1  -- New cards first
+          WHEN interval < 1440 THEN 2  -- Learning cards second
+          ELSE 3                       -- Review cards last
+        END,
+        due_date
+    `);
+    stmt.bind([deckId, now]);
+    const flashcards = [];
+    while (stmt.step()) {
+      const row = stmt.get();
+      flashcards.push(this.rowToFlashcard(row));
+    }
+    stmt.free();
+    return flashcards;
+  }
   async updateFlashcard(flashcard) {
     if (!this.db)
       throw new Error("Database not initialized");
@@ -2694,23 +2770,23 @@ var DatabaseService = class {
     const now = (/* @__PURE__ */ new Date()).toISOString();
     const newStmt = this.db.prepare(`
       SELECT COUNT(*) FROM flashcards
-      WHERE deck_id = ? AND repetitions = 0
+      WHERE deck_id = ? AND repetitions = 0 AND due_date <= ?
     `);
-    newStmt.bind([deckId]);
+    newStmt.bind([deckId, now]);
     newStmt.step();
     const newCount = newStmt.get()[0] || 0;
     newStmt.free();
     const learningStmt = this.db.prepare(`
       SELECT COUNT(*) FROM flashcards
-      WHERE deck_id = ? AND repetitions > 0 AND interval < 1440
+      WHERE deck_id = ? AND repetitions > 0 AND interval < 1440 AND due_date <= ?
     `);
-    learningStmt.bind([deckId]);
+    learningStmt.bind([deckId, now]);
     learningStmt.step();
     const learningCount = learningStmt.get()[0] || 0;
     learningStmt.free();
     const dueStmt = this.db.prepare(`
       SELECT COUNT(*) FROM flashcards
-      WHERE deck_id = ? AND due_date <= ? AND interval >= 1440
+      WHERE deck_id = ? AND interval >= 1440 AND due_date <= ?
     `);
     dueStmt.bind([deckId, now]);
     dueStmt.step();
@@ -3047,7 +3123,25 @@ ${content}`;
 var FSRS = class {
   constructor(params) {
     this.params = {
-      w: [0.4, 0.6, 2.4, 5.8, 4.93, 0.94, 0.86, 0.01, 1.49, 0.14, 0.94, 2.18, 0.05, 0.34, 1.26, 0.29, 2.61],
+      w: [
+        0.4,
+        0.6,
+        2.4,
+        5.8,
+        4.93,
+        0.94,
+        0.86,
+        0.01,
+        1.49,
+        0.14,
+        0.94,
+        2.18,
+        0.05,
+        0.34,
+        1.26,
+        0.29,
+        2.61
+      ],
       requestRetention: 0.9,
       maximumInterval: 36500,
       // 100 years
@@ -3055,6 +3149,12 @@ var FSRS = class {
       hardInterval: 1.2,
       ...params
     };
+  }
+  /**
+   * Update FSRS parameters
+   */
+  updateParameters(params) {
+    this.params = { ...this.params, ...params };
   }
   /**
    * Calculate the next scheduling info for a flashcard based on review difficulty
@@ -3131,7 +3231,10 @@ var FSRS = class {
       }
     } else {
       const daysSinceLastReview = this.getDaysSince(card.dueDate);
-      const retrievability = this.calculateRetrievability(card.interval / 1440, daysSinceLastReview);
+      const retrievability = this.calculateRetrievability(
+        card.interval / 1440,
+        daysSinceLastReview
+      );
       switch (difficulty) {
         case "again":
           interval = 1440;
@@ -3139,16 +3242,31 @@ var FSRS = class {
           easeFactor = Math.max(1.3, easeFactor - 0.2);
           break;
         case "hard":
-          interval = this.nextInterval(card.interval / 1440, easeFactor, retrievability, 2) * 1440;
+          interval = this.nextInterval(
+            card.interval / 1440,
+            easeFactor,
+            retrievability,
+            2
+          ) * 1440;
           repetitions += 1;
           easeFactor = Math.max(1.3, easeFactor - 0.15);
           break;
         case "good":
-          interval = this.nextInterval(card.interval / 1440, easeFactor, retrievability, 3) * 1440;
+          interval = this.nextInterval(
+            card.interval / 1440,
+            easeFactor,
+            retrievability,
+            3
+          ) * 1440;
           repetitions += 1;
           break;
         case "easy":
-          interval = this.nextInterval(card.interval / 1440, easeFactor, retrievability, 4) * 1440 * this.params.easyBonus;
+          interval = this.nextInterval(
+            card.interval / 1440,
+            easeFactor,
+            retrievability,
+            4
+          ) * 1440 * this.params.easyBonus;
           repetitions += 1;
           easeFactor = Math.min(2.5, easeFactor + 0.15);
           break;
@@ -3174,7 +3292,10 @@ var FSRS = class {
     const stabilityIncrease = Math.exp(this.params.w[8] * (rating - 3));
     const difficultyDecay = this.params.w[9] * (rating - 3);
     const newStability = currentInterval * retrievability * stabilityIncrease;
-    const newDifficulty = Math.max(0, Math.min(10, easeFactor + difficultyDecay));
+    const newDifficulty = Math.max(
+      0,
+      Math.min(10, easeFactor + difficultyDecay)
+    );
     const interval = newStability * Math.log(desiredRetention) / Math.log(0.9);
     return Math.max(1, Math.round(interval));
   }
@@ -3202,6 +3323,124 @@ var FSRS = class {
         return `${(days / 365).toFixed(1)}y`;
       }
     }
+  }
+};
+
+// src/main.ts
+init_settings();
+
+// src/components/SettingsTab.ts
+var import_obsidian = require("obsidian");
+var FlashcardsSettingTab = class extends import_obsidian.PluginSettingTab {
+  constructor(app, plugin) {
+    super(app, plugin);
+    this.plugin = plugin;
+  }
+  display() {
+    const { containerEl } = this;
+    containerEl.empty();
+    containerEl.createEl("h2", { text: "Flashcards Plugin Settings" });
+    this.addFSRSSettings(containerEl);
+    this.addDatabaseSettings(containerEl);
+    this.addReviewSettings(containerEl);
+  }
+  addFSRSSettings(containerEl) {
+    containerEl.createEl("h3", { text: "FSRS Algorithm" });
+    containerEl.createEl("p", {
+      text: "Configure the Free Spaced Repetition Scheduler algorithm parameters.",
+      cls: "setting-item-description"
+    });
+    new import_obsidian.Setting(containerEl).setName("Target Retention").setDesc("Desired retention rate for flashcards (0.8 = 80%)").addSlider(
+      (slider) => slider.setLimits(0.7, 0.98, 0.01).setValue(this.plugin.settings.fsrs.requestRetention).setDynamicTooltip().onChange(async (value) => {
+        this.plugin.settings.fsrs.requestRetention = value;
+        await this.plugin.saveSettings();
+      })
+    );
+    new import_obsidian.Setting(containerEl).setName("Maximum Interval").setDesc("Maximum number of days between reviews").addText(
+      (text2) => text2.setPlaceholder("36500").setValue(this.plugin.settings.fsrs.maximumInterval.toString()).onChange(async (value) => {
+        const num = parseInt(value);
+        if (!isNaN(num) && num > 0) {
+          this.plugin.settings.fsrs.maximumInterval = num;
+          await this.plugin.saveSettings();
+        }
+      })
+    );
+    new import_obsidian.Setting(containerEl).setName("Easy Bonus").setDesc("Multiplier for easy cards (higher = longer intervals)").addSlider(
+      (slider) => slider.setLimits(1.1, 2, 0.1).setValue(this.plugin.settings.fsrs.easyBonus).setDynamicTooltip().onChange(async (value) => {
+        this.plugin.settings.fsrs.easyBonus = value;
+        await this.plugin.saveSettings();
+      })
+    );
+    new import_obsidian.Setting(containerEl).setName("Hard Interval").setDesc("Multiplier for hard cards in learning phase").addSlider(
+      (slider) => slider.setLimits(1, 2, 0.1).setValue(this.plugin.settings.fsrs.hardInterval).setDynamicTooltip().onChange(async (value) => {
+        this.plugin.settings.fsrs.hardInterval = value;
+        await this.plugin.saveSettings();
+      })
+    );
+    new import_obsidian.Setting(containerEl).setName("Reset to Defaults").setDesc("Reset FSRS parameters to default values").addButton(
+      (button) => button.setButtonText("Reset").setWarning().onClick(async () => {
+        const defaultSettings = (await Promise.resolve().then(() => (init_settings(), settings_exports))).DEFAULT_SETTINGS;
+        this.plugin.settings.fsrs = { ...defaultSettings.fsrs };
+        await this.plugin.saveSettings();
+        this.display();
+      })
+    );
+  }
+  addDatabaseSettings(containerEl) {
+    containerEl.createEl("h3", { text: "Database" });
+    new import_obsidian.Setting(containerEl).setName("Database Path").setDesc("Custom path for the database file (leave empty for default)").addText(
+      (text2) => text2.setPlaceholder(
+        ".obsidian/plugins/obsidian-flashcards-plugin/flashcards.db"
+      ).setValue(this.plugin.settings.database.customPath || "").onChange(async (value) => {
+        this.plugin.settings.database.customPath = value.trim() || void 0;
+        await this.plugin.saveSettings();
+      })
+    );
+    new import_obsidian.Setting(containerEl).setName("Auto Backup").setDesc("Automatically backup the database").addToggle(
+      (toggle) => toggle.setValue(this.plugin.settings.database.autoBackup).onChange(async (value) => {
+        this.plugin.settings.database.autoBackup = value;
+        await this.plugin.saveSettings();
+      })
+    );
+    new import_obsidian.Setting(containerEl).setName("Backup Interval").setDesc("Number of days between automatic backups").addText(
+      (text2) => text2.setPlaceholder("7").setValue(this.plugin.settings.database.backupInterval.toString()).onChange(async (value) => {
+        const num = parseInt(value);
+        if (!isNaN(num) && num > 0) {
+          this.plugin.settings.database.backupInterval = num;
+          await this.plugin.saveSettings();
+        }
+      })
+    );
+  }
+  addReviewSettings(containerEl) {
+    containerEl.createEl("h3", { text: "Review Sessions" });
+    new import_obsidian.Setting(containerEl).setName("Show Progress").setDesc("Display progress bar during review sessions").addToggle(
+      (toggle) => toggle.setValue(this.plugin.settings.review.showProgress).onChange(async (value) => {
+        this.plugin.settings.review.showProgress = value;
+        await this.plugin.saveSettings();
+      })
+    );
+    new import_obsidian.Setting(containerEl).setName("Keyboard Shortcuts").setDesc("Enable keyboard shortcuts in review modal (1-4 for difficulty)").addToggle(
+      (toggle) => toggle.setValue(this.plugin.settings.review.enableKeyboardShortcuts).onChange(async (value) => {
+        this.plugin.settings.review.enableKeyboardShortcuts = value;
+        await this.plugin.saveSettings();
+      })
+    );
+    new import_obsidian.Setting(containerEl).setName("Session Limit").setDesc("Limit the number of cards per review session").addToggle(
+      (toggle) => toggle.setValue(this.plugin.settings.review.enableSessionLimit).onChange(async (value) => {
+        this.plugin.settings.review.enableSessionLimit = value;
+        await this.plugin.saveSettings();
+      })
+    );
+    new import_obsidian.Setting(containerEl).setName("Session Goal").setDesc("Target number of cards per review session").addText(
+      (text2) => text2.setPlaceholder("20").setValue(this.plugin.settings.review.sessionGoal.toString()).onChange(async (value) => {
+        const num = parseInt(value);
+        if (!isNaN(num) && num > 0) {
+          this.plugin.settings.review.sessionGoal = num;
+          await this.plugin.saveSettings();
+        }
+      })
+    );
   }
 };
 
@@ -3261,6 +3500,28 @@ function end_hydrating() {
 }
 function append(target, node) {
   target.appendChild(node);
+}
+function append_styles(target, style_sheet_id, styles) {
+  const append_styles_to = get_root_for_style(target);
+  if (!append_styles_to.getElementById(style_sheet_id)) {
+    const style = element("style");
+    style.id = style_sheet_id;
+    style.textContent = styles;
+    append_stylesheet(append_styles_to, style);
+  }
+}
+function get_root_for_style(node) {
+  if (!node)
+    return document;
+  const root = node.getRootNode ? node.getRootNode() : node.ownerDocument;
+  if (root && root.host) {
+    return root;
+  }
+  return node.ownerDocument;
+}
+function append_stylesheet(node, style) {
+  append(node.head || node, style);
+  return style.sheet;
 }
 function insert(target, node, anchor) {
   target.insertBefore(node, anchor || null);
@@ -3494,7 +3755,7 @@ function make_dirty(component, i) {
   }
   component.$$.dirty[i / 31 | 0] |= 1 << i % 31;
 }
-function init(component, options, instance3, create_fragment3, not_equal, props, append_styles, dirty = [-1]) {
+function init(component, options, instance3, create_fragment3, not_equal, props, append_styles2, dirty = [-1]) {
   const parent_component = current_component;
   set_current_component(component);
   const $$ = component.$$ = {
@@ -3518,7 +3779,7 @@ function init(component, options, instance3, create_fragment3, not_equal, props,
     skip_bound: false,
     root: options.target || parent_component.$$.root
   };
-  append_styles && append_styles($$.root);
+  append_styles2 && append_styles2($$.root);
   let ready = false;
   $$.ctx = instance3 ? instance3(component, options.props || {}, (i, ret, ...rest) => {
     const value = rest.length ? rest[0] : ret;
@@ -3652,17 +3913,20 @@ function __awaiter(thisArg, _arguments, P, generator) {
 }
 
 // src/components/DeckListPanel.svelte
+function add_css(target) {
+  append_styles(target, "svelte-b7m3wr", ".deck-list-panel.svelte-b7m3wr.svelte-b7m3wr{height:100%;display:flex;flex-direction:column;background:var(--background-primary);color:var(--text-normal)}.panel-header.svelte-b7m3wr.svelte-b7m3wr{display:flex;justify-content:space-between;align-items:center;padding:12px 16px;border-bottom:1px solid var(--background-modifier-border)}.panel-title.svelte-b7m3wr.svelte-b7m3wr{margin:0;font-size:16px;font-weight:600}.refresh-button.svelte-b7m3wr.svelte-b7m3wr{background:none;border:none;cursor:pointer;padding:4px;border-radius:4px;color:var(--text-muted);transition:all 0.2s ease;position:relative;z-index:1}.refresh-button.svelte-b7m3wr.svelte-b7m3wr:hover{background:var(--background-modifier-hover);color:var(--text-normal)}.refresh-button.svelte-b7m3wr.svelte-b7m3wr:disabled{opacity:0.5;cursor:not-allowed}.refresh-button.refreshing.svelte-b7m3wr svg.svelte-b7m3wr{animation:svelte-b7m3wr-spin 1s linear infinite}@keyframes svelte-b7m3wr-spin{from{transform:rotate(0deg)}to{transform:rotate(360deg)}}.empty-state.svelte-b7m3wr.svelte-b7m3wr{flex:1;display:flex;flex-direction:column;justify-content:center;align-items:center;padding:32px;text-align:center}.empty-state.svelte-b7m3wr p.svelte-b7m3wr{margin:8px 0}.help-text.svelte-b7m3wr.svelte-b7m3wr{font-size:14px;color:var(--text-muted)}.deck-table.svelte-b7m3wr.svelte-b7m3wr{flex:1;display:flex;flex-direction:column;overflow:hidden}.table-header.svelte-b7m3wr.svelte-b7m3wr{display:grid;grid-template-columns:1fr 60px 60px 60px;gap:8px;padding:8px 16px;font-weight:600;font-size:14px;border-bottom:1px solid var(--background-modifier-border);background:var(--background-secondary);align-items:center}.table-body.svelte-b7m3wr.svelte-b7m3wr{flex:1;overflow-y:auto}.deck-row.svelte-b7m3wr.svelte-b7m3wr{display:grid;grid-template-columns:1fr 60px 60px 60px;gap:8px;padding:12px 16px;border:none;background:none;width:100%;text-align:left;cursor:pointer;transition:background-color 0.1s ease;border-bottom:1px solid var(--background-modifier-border);align-items:center}.deck-row.svelte-b7m3wr.svelte-b7m3wr:hover{background:var(--background-modifier-hover)}.deck-row.svelte-b7m3wr.svelte-b7m3wr:active{background:var(--background-modifier-active)}.col-deck.svelte-b7m3wr.svelte-b7m3wr{font-size:14px;color:var(--text-normal);overflow:hidden;text-overflow:ellipsis;white-space:nowrap;justify-self:start}.col-stat.svelte-b7m3wr.svelte-b7m3wr{text-align:center;font-size:14px;color:var(--text-muted);justify-self:center}.table-header.svelte-b7m3wr .col-deck.svelte-b7m3wr{font-size:14px;color:var(--text-normal);justify-self:start}.table-header.svelte-b7m3wr .col-stat.svelte-b7m3wr{text-align:center;font-size:14px;color:var(--text-normal);justify-self:center}.col-stat.has-cards.svelte-b7m3wr.svelte-b7m3wr{color:#4aa3df;font-weight:500}.col-stat.updating.svelte-b7m3wr.svelte-b7m3wr{opacity:0.6;transition:opacity 0.3s ease}.table-body.svelte-b7m3wr.svelte-b7m3wr::-webkit-scrollbar{width:8px}.table-body.svelte-b7m3wr.svelte-b7m3wr::-webkit-scrollbar-track{background:transparent}.table-body.svelte-b7m3wr.svelte-b7m3wr::-webkit-scrollbar-thumb{background:var(--background-modifier-border);border-radius:4px}.table-body.svelte-b7m3wr.svelte-b7m3wr::-webkit-scrollbar-thumb:hover{background:var(--background-modifier-border-hover)}");
+}
 function get_each_context(ctx, list, i) {
   const child_ctx = ctx.slice();
-  child_ctx[9] = list[i];
+  child_ctx[11] = list[i];
   const constants_0 = (
     /*getDeckStats*/
-    child_ctx[2](
+    child_ctx[3](
       /*deck*/
-      child_ctx[9].id
+      child_ctx[11].id
     )
   );
-  child_ctx[10] = constants_0;
+  child_ctx[12] = constants_0;
   return child_ctx;
 }
 function create_else_block(ctx) {
@@ -3682,18 +3946,18 @@ function create_else_block(ctx) {
     c() {
       div6 = element("div");
       div4 = element("div");
-      div4.innerHTML = `<div class="col-deck svelte-jrabv8">Deck</div> 
-                <div class="col-stat svelte-jrabv8">New</div> 
-                <div class="col-stat svelte-jrabv8">Learn</div> 
-                <div class="col-stat svelte-jrabv8">Due</div>`;
+      div4.innerHTML = `<div class="col-deck svelte-b7m3wr">Deck</div> 
+                <div class="col-stat svelte-b7m3wr">New</div> 
+                <div class="col-stat svelte-b7m3wr">Learn</div> 
+                <div class="col-stat svelte-b7m3wr">Due</div>`;
       t7 = space();
       div5 = element("div");
       for (let i = 0; i < each_blocks.length; i += 1) {
         each_blocks[i].c();
       }
-      attr(div4, "class", "table-header svelte-jrabv8");
-      attr(div5, "class", "table-body svelte-jrabv8");
-      attr(div6, "class", "deck-table svelte-jrabv8");
+      attr(div4, "class", "table-header svelte-b7m3wr");
+      attr(div5, "class", "table-body svelte-b7m3wr");
+      attr(div6, "class", "deck-table svelte-b7m3wr");
     },
     m(target, anchor) {
       insert(target, div6, anchor);
@@ -3707,8 +3971,8 @@ function create_else_block(ctx) {
       }
     },
     p(ctx2, dirty) {
-      if (dirty & /*decks, handleDeckClick, getDeckStats, formatDeckName*/
-      21) {
+      if (dirty & /*decks, handleDeckClick, getDeckStats, isUpdatingStats, formatDeckName*/
+      45) {
         each_value = /*decks*/
         ctx2[0];
         let i;
@@ -3740,9 +4004,9 @@ function create_if_block(ctx) {
   return {
     c() {
       div = element("div");
-      div.innerHTML = `<p class="svelte-jrabv8">No flashcard decks found.</p> 
-            <p class="help-text svelte-jrabv8">Tag your notes with #flashcards to create decks.</p>`;
-      attr(div, "class", "empty-state svelte-jrabv8");
+      div.innerHTML = `<p class="svelte-b7m3wr">No flashcard decks found.</p> 
+            <p class="help-text svelte-b7m3wr">Tag your notes with #flashcards to create decks.</p>`;
+      attr(div, "class", "empty-state svelte-b7m3wr");
     },
     m(target, anchor) {
       insert(target, div, anchor);
@@ -3759,28 +4023,28 @@ function create_each_block(ctx) {
   let div0;
   let t0_value = formatDeckName(
     /*deck*/
-    ctx[9]
+    ctx[11]
   ) + "";
   let t0;
   let t1;
   let div1;
   let t2_value = (
     /*stats*/
-    ctx[10].newCount + ""
+    ctx[12].newCount + ""
   );
   let t2;
   let t3;
   let div2;
   let t4_value = (
     /*stats*/
-    ctx[10].learningCount + ""
+    ctx[12].learningCount + ""
   );
   let t4;
   let t5;
   let div3;
   let t6_value = (
     /*stats*/
-    ctx[10].dueCount + ""
+    ctx[12].dueCount + ""
   );
   let t6;
   let t7;
@@ -3790,9 +4054,9 @@ function create_each_block(ctx) {
   function click_handler() {
     return (
       /*click_handler*/
-      ctx[8](
+      ctx[10](
         /*deck*/
-        ctx[9]
+        ctx[11]
       )
     );
   }
@@ -3811,31 +4075,49 @@ function create_each_block(ctx) {
       div3 = element("div");
       t6 = text(t6_value);
       t7 = space();
-      attr(div0, "class", "col-deck svelte-jrabv8");
-      attr(div1, "class", "col-stat svelte-jrabv8");
+      attr(div0, "class", "col-deck svelte-b7m3wr");
+      attr(div1, "class", "col-stat svelte-b7m3wr");
       toggle_class(
         div1,
         "has-cards",
         /*stats*/
-        ctx[10].newCount > 0
+        ctx[12].newCount > 0
       );
-      attr(div2, "class", "col-stat svelte-jrabv8");
+      toggle_class(
+        div1,
+        "updating",
+        /*isUpdatingStats*/
+        ctx[2]
+      );
+      attr(div2, "class", "col-stat svelte-b7m3wr");
       toggle_class(
         div2,
         "has-cards",
         /*stats*/
-        ctx[10].learningCount > 0
+        ctx[12].learningCount > 0
       );
-      attr(div3, "class", "col-stat svelte-jrabv8");
+      toggle_class(
+        div2,
+        "updating",
+        /*isUpdatingStats*/
+        ctx[2]
+      );
+      attr(div3, "class", "col-stat svelte-b7m3wr");
       toggle_class(
         div3,
         "has-cards",
         /*stats*/
-        ctx[10].dueCount > 0
+        ctx[12].dueCount > 0
       );
-      attr(button, "class", "deck-row svelte-jrabv8");
+      toggle_class(
+        div3,
+        "updating",
+        /*isUpdatingStats*/
+        ctx[2]
+      );
+      attr(button, "class", "deck-row svelte-b7m3wr");
       attr(button, "title", button_title_value = "Click to review " + /*deck*/
-      ctx[9].name);
+      ctx[11].name);
     },
     m(target, anchor) {
       insert(target, button, anchor);
@@ -3861,51 +4143,78 @@ function create_each_block(ctx) {
       if (dirty & /*decks*/
       1 && t0_value !== (t0_value = formatDeckName(
         /*deck*/
-        ctx[9]
+        ctx[11]
       ) + ""))
         set_data(t0, t0_value);
       if (dirty & /*decks*/
       1 && t2_value !== (t2_value = /*stats*/
-      ctx[10].newCount + ""))
+      ctx[12].newCount + ""))
         set_data(t2, t2_value);
       if (dirty & /*getDeckStats, decks*/
-      5) {
+      9) {
         toggle_class(
           div1,
           "has-cards",
           /*stats*/
-          ctx[10].newCount > 0
+          ctx[12].newCount > 0
+        );
+      }
+      if (dirty & /*isUpdatingStats*/
+      4) {
+        toggle_class(
+          div1,
+          "updating",
+          /*isUpdatingStats*/
+          ctx[2]
         );
       }
       if (dirty & /*decks*/
       1 && t4_value !== (t4_value = /*stats*/
-      ctx[10].learningCount + ""))
+      ctx[12].learningCount + ""))
         set_data(t4, t4_value);
       if (dirty & /*getDeckStats, decks*/
-      5) {
+      9) {
         toggle_class(
           div2,
           "has-cards",
           /*stats*/
-          ctx[10].learningCount > 0
+          ctx[12].learningCount > 0
+        );
+      }
+      if (dirty & /*isUpdatingStats*/
+      4) {
+        toggle_class(
+          div2,
+          "updating",
+          /*isUpdatingStats*/
+          ctx[2]
         );
       }
       if (dirty & /*decks*/
       1 && t6_value !== (t6_value = /*stats*/
-      ctx[10].dueCount + ""))
+      ctx[12].dueCount + ""))
         set_data(t6, t6_value);
       if (dirty & /*getDeckStats, decks*/
-      5) {
+      9) {
         toggle_class(
           div3,
           "has-cards",
           /*stats*/
-          ctx[10].dueCount > 0
+          ctx[12].dueCount > 0
+        );
+      }
+      if (dirty & /*isUpdatingStats*/
+      4) {
+        toggle_class(
+          div3,
+          "updating",
+          /*isUpdatingStats*/
+          ctx[2]
         );
       }
       if (dirty & /*decks*/
       1 && button_title_value !== (button_title_value = "Click to review " + /*deck*/
-      ctx[9].name)) {
+      ctx[11].name)) {
         attr(button, "title", button_title_value);
       }
     },
@@ -3954,7 +4263,7 @@ function create_fragment(ctx) {
       path2 = svg_element("path");
       t2 = space();
       if_block.c();
-      attr(h3, "class", "panel-title svelte-jrabv8");
+      attr(h3, "class", "panel-title svelte-b7m3wr");
       attr(path0, "d", "M23 4v6h-6");
       attr(path1, "d", "M1 20v-6h6");
       attr(path2, "d", "M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15");
@@ -3967,8 +4276,8 @@ function create_fragment(ctx) {
       attr(svg, "stroke-width", "2");
       attr(svg, "stroke-linecap", "round");
       attr(svg, "stroke-linejoin", "round");
-      attr(svg, "class", "svelte-jrabv8");
-      attr(button, "class", "refresh-button svelte-jrabv8");
+      attr(svg, "class", "svelte-b7m3wr");
+      attr(button, "class", "refresh-button svelte-b7m3wr");
       button.disabled = /*isRefreshing*/
       ctx[1];
       toggle_class(
@@ -3977,8 +4286,8 @@ function create_fragment(ctx) {
         /*isRefreshing*/
         ctx[1]
       );
-      attr(div0, "class", "panel-header svelte-jrabv8");
-      attr(div1, "class", "deck-list-panel svelte-jrabv8");
+      attr(div0, "class", "panel-header svelte-b7m3wr");
+      attr(div1, "class", "deck-list-panel svelte-b7m3wr");
     },
     m(target, anchor) {
       insert(target, div1, anchor);
@@ -3997,7 +4306,7 @@ function create_fragment(ctx) {
           button,
           "click",
           /*handleRefresh*/
-          ctx[3]
+          ctx[4]
         );
         mounted = true;
       }
@@ -4040,7 +4349,8 @@ function create_fragment(ctx) {
   };
 }
 function formatDeckName(deck) {
-  return deck.name;
+  const tagParts = deck.tag.replace("#flashcards/", "").split("/");
+  return tagParts.join(" / ");
 }
 function instance($$self, $$props, $$invalidate) {
   let { decks = [] } = $$props;
@@ -4048,6 +4358,7 @@ function instance($$self, $$props, $$invalidate) {
   let { onDeckClick } = $$props;
   let { onRefresh } = $$props;
   let isRefreshing = false;
+  let isUpdatingStats = false;
   function getDeckStats(deckId) {
     return deckStats.get(deckId) || {
       deckId,
@@ -4070,11 +4381,19 @@ function instance($$self, $$props, $$invalidate) {
       }
     });
   }
+  function updateStats() {
+    $$invalidate(2, isUpdatingStats = true);
+    setTimeout(
+      () => {
+        $$invalidate(2, isUpdatingStats = false);
+      },
+      500
+    );
+  }
   function handleDeckClick(deck) {
     onDeckClick(deck);
   }
   onMount(() => {
-    console.log("DeckListPanel mounted");
     handleRefresh();
   });
   const click_handler = (deck) => handleDeckClick(deck);
@@ -4082,38 +4401,92 @@ function instance($$self, $$props, $$invalidate) {
     if ("decks" in $$props2)
       $$invalidate(0, decks = $$props2.decks);
     if ("deckStats" in $$props2)
-      $$invalidate(5, deckStats = $$props2.deckStats);
+      $$invalidate(6, deckStats = $$props2.deckStats);
     if ("onDeckClick" in $$props2)
-      $$invalidate(6, onDeckClick = $$props2.onDeckClick);
+      $$invalidate(7, onDeckClick = $$props2.onDeckClick);
     if ("onRefresh" in $$props2)
-      $$invalidate(7, onRefresh = $$props2.onRefresh);
+      $$invalidate(8, onRefresh = $$props2.onRefresh);
   };
   return [
     decks,
     isRefreshing,
+    isUpdatingStats,
     getDeckStats,
     handleRefresh,
     handleDeckClick,
     deckStats,
     onDeckClick,
     onRefresh,
+    updateStats,
     click_handler
   ];
 }
 var DeckListPanel = class extends SvelteComponent {
   constructor(options) {
     super();
-    init(this, options, instance, create_fragment, safe_not_equal, {
-      decks: 0,
-      deckStats: 5,
-      onDeckClick: 6,
-      onRefresh: 7
-    });
+    init(
+      this,
+      options,
+      instance,
+      create_fragment,
+      safe_not_equal,
+      {
+        decks: 0,
+        deckStats: 6,
+        onDeckClick: 7,
+        onRefresh: 8,
+        updateStats: 9
+      },
+      add_css
+    );
+  }
+  get updateStats() {
+    return this.$$.ctx[9];
   }
 };
 var DeckListPanel_default = DeckListPanel;
 
 // src/components/FlashcardReviewModal.svelte
+function add_css2(target) {
+  append_styles(target, "svelte-1omg548", ".review-modal.svelte-1omg548.svelte-1omg548{display:flex;flex-direction:column;height:100%;background:var(--background-primary);color:var(--text-normal);overflow:hidden;width:100%}.modal-header.svelte-1omg548.svelte-1omg548{display:flex;align-items:center;justify-content:space-between;padding:16px 20px;border-bottom:1px solid var(--background-modifier-border)}.modal-header.svelte-1omg548 h3.svelte-1omg548{margin:0;font-size:18px;font-weight:600}.progress-info.svelte-1omg548.svelte-1omg548{display:flex;gap:8px;font-size:14px}.remaining.svelte-1omg548.svelte-1omg548{color:var(--text-muted)}.close-button.svelte-1omg548.svelte-1omg548{background:none;border:none;font-size:24px;line-height:1;cursor:pointer;padding:4px 8px;color:var(--text-muted);border-radius:4px}.close-button.svelte-1omg548.svelte-1omg548:hover{background:var(--background-modifier-hover);color:var(--text-normal)}.progress-bar.svelte-1omg548.svelte-1omg548{height:4px;background:var(--background-modifier-border);position:relative}.progress-fill.svelte-1omg548.svelte-1omg548{height:100%;background:var(--interactive-accent);transition:width 0.3s ease}.card-content.svelte-1omg548.svelte-1omg548{flex:1;overflow-y:auto;overflow-x:hidden;padding:32px 16px;display:flex;flex-direction:column;align-items:center;justify-content:flex-start;gap:24px;width:100%;box-sizing:border-box;min-height:0}.question-section.svelte-1omg548.svelte-1omg548,.answer-section.svelte-1omg548.svelte-1omg548{width:100%;display:flex;justify-content:center}.card-side.svelte-1omg548.svelte-1omg548{background:var(--background-secondary);border:1px solid var(--background-modifier-border);border-radius:8px;padding:24px;min-height:100px;width:100%;max-width:600px;box-sizing:border-box;word-wrap:break-word;overflow-wrap:break-word}.card-side.front.svelte-1omg548.svelte-1omg548{text-align:center;font-size:20px;font-weight:500}.card-side.back.svelte-1omg548.svelte-1omg548{font-size:16px;line-height:1.6}.answer-section.svelte-1omg548.svelte-1omg548{width:100%;display:flex;flex-direction:column;justify-content:center;align-items:center}.answer-section.hidden.svelte-1omg548.svelte-1omg548{display:none}.separator.svelte-1omg548.svelte-1omg548{height:1px;background:var(--background-modifier-border);margin:16px auto;width:100%;max-width:600px}.action-buttons.svelte-1omg548.svelte-1omg548{padding:20px;border-top:1px solid var(--background-modifier-border);flex-shrink:0;width:100%;box-sizing:border-box}.show-answer-button.svelte-1omg548.svelte-1omg548{width:100%;max-width:400px;margin:0 auto;padding:12px 24px;font-size:16px;font-weight:500;background:var(--interactive-accent);color:var(--text-on-accent);border:none;border-radius:6px;cursor:pointer;display:flex;align-items:center;justify-content:center;gap:8px;box-sizing:border-box}.show-answer-button.svelte-1omg548.svelte-1omg548:hover{background:var(--interactive-accent-hover)}.shortcut.svelte-1omg548.svelte-1omg548{font-size:12px;opacity:0.8;padding:2px 6px;background:rgba(0, 0, 0, 0.2);border-radius:3px;margin-left:8px;display:inline-block}.difficulty-buttons.svelte-1omg548.svelte-1omg548{display:flex;gap:8px;justify-content:center;flex-wrap:nowrap;padding:0 10px;box-sizing:border-box;width:100%;max-width:600px;margin:0 auto}.difficulty-button.svelte-1omg548.svelte-1omg548{flex:1;min-width:0;padding:10px 6px;border:1px solid var(--background-modifier-border);background:var(--background-secondary);border-radius:6px;cursor:pointer;display:flex;flex-direction:column;align-items:center;gap:2px;transition:all 0.2s ease;position:relative;box-sizing:border-box;white-space:nowrap}.difficulty-button.svelte-1omg548.svelte-1omg548:hover{transform:translateY(-2px);box-shadow:0 4px 12px rgba(0, 0, 0, 0.1)}.difficulty-button.svelte-1omg548.svelte-1omg548:disabled{opacity:0.5;cursor:not-allowed;transform:none}.difficulty-button.again.svelte-1omg548.svelte-1omg548{border-color:#e74c3c}.difficulty-button.again.svelte-1omg548.svelte-1omg548:hover:not(:disabled){background:#e74c3c;color:white}.difficulty-button.hard.svelte-1omg548.svelte-1omg548{border-color:#f39c12}.difficulty-button.hard.svelte-1omg548.svelte-1omg548:hover:not(:disabled){background:#f39c12;color:white}.difficulty-button.good.svelte-1omg548.svelte-1omg548{border-color:#27ae60}.difficulty-button.good.svelte-1omg548.svelte-1omg548:hover:not(:disabled){background:#27ae60;color:white}.difficulty-button.easy.svelte-1omg548.svelte-1omg548{border-color:#3498db}.difficulty-button.easy.svelte-1omg548.svelte-1omg548:hover:not(:disabled){background:#3498db;color:white}.button-label.svelte-1omg548.svelte-1omg548{font-weight:600;font-size:13px}.interval.svelte-1omg548.svelte-1omg548{font-size:11px;color:var(--text-muted)}.difficulty-button.svelte-1omg548:hover .interval.svelte-1omg548{color:inherit}.difficulty-button.svelte-1omg548 .shortcut.svelte-1omg548{position:absolute;top:2px;right:2px;font-size:9px;padding:1px 3px;background:var(--background-modifier-border);border-radius:2px;opacity:0.7}.empty-state.svelte-1omg548.svelte-1omg548{flex:1;display:flex;align-items:center;justify-content:center;padding:32px;color:var(--text-muted)}.card-side h1,.card-side h2,.card-side h3,.card-side h4,.card-side h5,.card-side h6{margin-top:0;margin-bottom:16px}.card-side p{margin-bottom:16px}.card-side p:last-child{margin-bottom:0}.card-side > *:first-child{margin-top:0}.card-side ul,.card-side ol{margin-bottom:16px;padding-left:24px}.card-side code{background:var(--code-background);padding:2px 4px;border-radius:3px;font-size:0.9em}.card-side pre{background:var(--code-background);padding:16px;border-radius:6px;overflow-x:auto;margin-bottom:16px;max-width:100%}.card-side blockquote{border-left:3px solid var(--blockquote-border);padding-left:16px;margin-left:0;margin-right:0;color:var(--text-muted)}@media(max-width: 500px){.difficulty-buttons.svelte-1omg548.svelte-1omg548{gap:4px;padding:0 5px}.difficulty-button.svelte-1omg548.svelte-1omg548{padding:8px 4px}.button-label.svelte-1omg548.svelte-1omg548{font-size:12px}.interval.svelte-1omg548.svelte-1omg548{font-size:10px}.difficulty-button.svelte-1omg548 .shortcut.svelte-1omg548{font-size:8px;padding:1px 2px}.card-content.svelte-1omg548.svelte-1omg548{padding:16px 8px}}");
+}
+function create_if_block_3(ctx) {
+  let div1;
+  let div0;
+  return {
+    c() {
+      div1 = element("div");
+      div0 = element("div");
+      attr(div0, "class", "progress-fill svelte-1omg548");
+      set_style(
+        div0,
+        "width",
+        /*progress*/
+        ctx[11] + "%"
+      );
+      attr(div1, "class", "progress-bar svelte-1omg548");
+    },
+    m(target, anchor) {
+      insert(target, div1, anchor);
+      append(div1, div0);
+    },
+    p(ctx2, dirty) {
+      if (dirty[0] & /*progress*/
+      2048) {
+        set_style(
+          div0,
+          "width",
+          /*progress*/
+          ctx2[11] + "%"
+        );
+      }
+    },
+    d(detaching) {
+      if (detaching)
+        detach(div1);
+    }
+  };
+}
 function create_else_block2(ctx) {
   let div;
   return {
@@ -4145,11 +4518,11 @@ function create_if_block2(ctx) {
   let div6;
   let t3;
   let if_block0 = !/*showAnswer*/
-  ctx[4] && create_if_block_2(ctx);
+  ctx[5] && create_if_block_2(ctx);
   let if_block1 = (
     /*showAnswer*/
-    ctx[4] && /*schedulingInfo*/
-    ctx[8] && create_if_block_1(ctx)
+    ctx[5] && /*schedulingInfo*/
+    ctx[9] && create_if_block_1(ctx)
   );
   return {
     c() {
@@ -4174,7 +4547,7 @@ function create_if_block2(ctx) {
       attr(div3, "class", "card-side back svelte-1omg548");
       attr(div4, "class", "answer-section svelte-1omg548");
       toggle_class(div4, "hidden", !/*showAnswer*/
-      ctx[4]);
+      ctx[5]);
       attr(div5, "class", "card-content svelte-1omg548");
       attr(div6, "class", "action-buttons svelte-1omg548");
     },
@@ -4182,13 +4555,13 @@ function create_if_block2(ctx) {
       insert(target, div5, anchor);
       append(div5, div1);
       append(div1, div0);
-      ctx[16](div0);
+      ctx[21](div0);
       append(div5, t0);
       append(div5, div4);
       append(div4, div2);
       append(div4, t1);
       append(div4, div3);
-      ctx[17](div3);
+      ctx[22](div3);
       insert(target, t2, anchor);
       insert(target, div6, anchor);
       if (if_block0)
@@ -4198,13 +4571,13 @@ function create_if_block2(ctx) {
         if_block1.m(div6, null);
     },
     p(ctx2, dirty) {
-      if (dirty & /*showAnswer*/
-      16) {
+      if (dirty[0] & /*showAnswer*/
+      32) {
         toggle_class(div4, "hidden", !/*showAnswer*/
-        ctx2[4]);
+        ctx2[5]);
       }
       if (!/*showAnswer*/
-      ctx2[4]) {
+      ctx2[5]) {
         if (if_block0) {
           if_block0.p(ctx2, dirty);
         } else {
@@ -4218,8 +4591,8 @@ function create_if_block2(ctx) {
       }
       if (
         /*showAnswer*/
-        ctx2[4] && /*schedulingInfo*/
-        ctx2[8]
+        ctx2[5] && /*schedulingInfo*/
+        ctx2[9]
       ) {
         if (if_block1) {
           if_block1.p(ctx2, dirty);
@@ -4236,8 +4609,8 @@ function create_if_block2(ctx) {
     d(detaching) {
       if (detaching)
         detach(div5);
-      ctx[16](null);
-      ctx[17](null);
+      ctx[21](null);
+      ctx[22](null);
       if (detaching)
         detach(t2);
       if (detaching)
@@ -4267,7 +4640,7 @@ function create_if_block_2(ctx) {
           button,
           "click",
           /*revealAnswer*/
-          ctx[11]
+          ctx[12]
         );
         mounted = true;
       }
@@ -4289,9 +4662,9 @@ function create_if_block_1(ctx) {
   let div1;
   let t2_value = (
     /*getIntervalDisplay*/
-    ctx[13](
+    ctx[14](
       /*schedulingInfo*/
-      ctx[8].again.interval
+      ctx[9].again.interval
     ) + ""
   );
   let t2;
@@ -4304,9 +4677,9 @@ function create_if_block_1(ctx) {
   let div4;
   let t8_value = (
     /*getIntervalDisplay*/
-    ctx[13](
+    ctx[14](
       /*schedulingInfo*/
-      ctx[8].hard.interval
+      ctx[9].hard.interval
     ) + ""
   );
   let t8;
@@ -4319,9 +4692,9 @@ function create_if_block_1(ctx) {
   let div7;
   let t14_value = (
     /*getIntervalDisplay*/
-    ctx[13](
+    ctx[14](
       /*schedulingInfo*/
-      ctx[8].good.interval
+      ctx[9].good.interval
     ) + ""
   );
   let t14;
@@ -4334,9 +4707,9 @@ function create_if_block_1(ctx) {
   let div10;
   let t20_value = (
     /*getIntervalDisplay*/
-    ctx[13](
+    ctx[14](
       /*schedulingInfo*/
-      ctx[8].easy.interval
+      ctx[9].easy.interval
     ) + ""
   );
   let t20;
@@ -4391,25 +4764,25 @@ function create_if_block_1(ctx) {
       attr(div2, "class", "shortcut svelte-1omg548");
       attr(button0, "class", "difficulty-button again svelte-1omg548");
       button0.disabled = /*isLoading*/
-      ctx[5];
+      ctx[6];
       attr(div3, "class", "button-label svelte-1omg548");
       attr(div4, "class", "interval svelte-1omg548");
       attr(div5, "class", "shortcut svelte-1omg548");
       attr(button1, "class", "difficulty-button hard svelte-1omg548");
       button1.disabled = /*isLoading*/
-      ctx[5];
+      ctx[6];
       attr(div6, "class", "button-label svelte-1omg548");
       attr(div7, "class", "interval svelte-1omg548");
       attr(div8, "class", "shortcut svelte-1omg548");
       attr(button2, "class", "difficulty-button good svelte-1omg548");
       button2.disabled = /*isLoading*/
-      ctx[5];
+      ctx[6];
       attr(div9, "class", "button-label svelte-1omg548");
       attr(div10, "class", "interval svelte-1omg548");
       attr(div11, "class", "shortcut svelte-1omg548");
       attr(button3, "class", "difficulty-button easy svelte-1omg548");
       button3.disabled = /*isLoading*/
-      ctx[5];
+      ctx[6];
       attr(div12, "class", "difficulty-buttons svelte-1omg548");
     },
     m(target, anchor) {
@@ -4451,78 +4824,78 @@ function create_if_block_1(ctx) {
             button0,
             "click",
             /*click_handler*/
-            ctx[18]
+            ctx[23]
           ),
           listen(
             button1,
             "click",
             /*click_handler_1*/
-            ctx[19]
+            ctx[24]
           ),
           listen(
             button2,
             "click",
             /*click_handler_2*/
-            ctx[20]
+            ctx[25]
           ),
           listen(
             button3,
             "click",
             /*click_handler_3*/
-            ctx[21]
+            ctx[26]
           )
         ];
         mounted = true;
       }
     },
     p(ctx2, dirty) {
-      if (dirty & /*schedulingInfo*/
-      256 && t2_value !== (t2_value = /*getIntervalDisplay*/
-      ctx2[13](
+      if (dirty[0] & /*schedulingInfo*/
+      512 && t2_value !== (t2_value = /*getIntervalDisplay*/
+      ctx2[14](
         /*schedulingInfo*/
-        ctx2[8].again.interval
+        ctx2[9].again.interval
       ) + ""))
         set_data(t2, t2_value);
-      if (dirty & /*isLoading*/
-      32) {
+      if (dirty[0] & /*isLoading*/
+      64) {
         button0.disabled = /*isLoading*/
-        ctx2[5];
+        ctx2[6];
       }
-      if (dirty & /*schedulingInfo*/
-      256 && t8_value !== (t8_value = /*getIntervalDisplay*/
-      ctx2[13](
+      if (dirty[0] & /*schedulingInfo*/
+      512 && t8_value !== (t8_value = /*getIntervalDisplay*/
+      ctx2[14](
         /*schedulingInfo*/
-        ctx2[8].hard.interval
+        ctx2[9].hard.interval
       ) + ""))
         set_data(t8, t8_value);
-      if (dirty & /*isLoading*/
-      32) {
+      if (dirty[0] & /*isLoading*/
+      64) {
         button1.disabled = /*isLoading*/
-        ctx2[5];
+        ctx2[6];
       }
-      if (dirty & /*schedulingInfo*/
-      256 && t14_value !== (t14_value = /*getIntervalDisplay*/
-      ctx2[13](
+      if (dirty[0] & /*schedulingInfo*/
+      512 && t14_value !== (t14_value = /*getIntervalDisplay*/
+      ctx2[14](
         /*schedulingInfo*/
-        ctx2[8].good.interval
+        ctx2[9].good.interval
       ) + ""))
         set_data(t14, t14_value);
-      if (dirty & /*isLoading*/
-      32) {
+      if (dirty[0] & /*isLoading*/
+      64) {
         button2.disabled = /*isLoading*/
-        ctx2[5];
+        ctx2[6];
       }
-      if (dirty & /*schedulingInfo*/
-      256 && t20_value !== (t20_value = /*getIntervalDisplay*/
-      ctx2[13](
+      if (dirty[0] & /*schedulingInfo*/
+      512 && t20_value !== (t20_value = /*getIntervalDisplay*/
+      ctx2[14](
         /*schedulingInfo*/
-        ctx2[8].easy.interval
+        ctx2[9].easy.interval
       ) + ""))
         set_data(t20, t20_value);
-      if (dirty & /*isLoading*/
-      32) {
+      if (dirty[0] & /*isLoading*/
+      64) {
         button3.disabled = /*isLoading*/
-        ctx2[5];
+        ctx2[6];
       }
     },
     d(detaching) {
@@ -4534,7 +4907,8 @@ function create_if_block_1(ctx) {
   };
 }
 function create_fragment2(ctx) {
-  let div4;
+  var _a, _b;
+  let div2;
   let div1;
   let h3;
   let t1;
@@ -4559,24 +4933,26 @@ function create_fragment2(ctx) {
   let t9;
   let button;
   let t11;
-  let div3;
-  let div2;
   let t12;
   let mounted;
   let dispose;
+  let if_block0 = (
+    /*settings*/
+    ((_b = (_a = ctx[3]) == null ? void 0 : _a.review) == null ? void 0 : _b.showProgress) !== false && create_if_block_3(ctx)
+  );
   function select_block_type(ctx2, dirty) {
     if (
       /*currentCard*/
-      ctx2[3]
+      ctx2[4]
     )
       return create_if_block2;
     return create_else_block2;
   }
-  let current_block_type = select_block_type(ctx, -1);
-  let if_block = current_block_type(ctx);
+  let current_block_type = select_block_type(ctx, [-1, -1]);
+  let if_block1 = current_block_type(ctx);
   return {
     c() {
-      div4 = element("div");
+      div2 = element("div");
       div1 = element("div");
       h3 = element("h3");
       h3.textContent = "Review Session";
@@ -4591,35 +4967,27 @@ function create_fragment2(ctx) {
       t6 = text("(");
       t7 = text(
         /*remainingCards*/
-        ctx[9]
+        ctx[10]
       );
       t8 = text(" remaining)");
       t9 = space();
       button = element("button");
       button.textContent = "\xD7";
       t11 = space();
-      div3 = element("div");
-      div2 = element("div");
+      if (if_block0)
+        if_block0.c();
       t12 = space();
-      if_block.c();
+      if_block1.c();
       attr(h3, "class", "svelte-1omg548");
       attr(span1, "class", "remaining svelte-1omg548");
       attr(div0, "class", "progress-info svelte-1omg548");
       attr(button, "class", "close-button svelte-1omg548");
       attr(div1, "class", "modal-header svelte-1omg548");
-      attr(div2, "class", "progress-fill svelte-1omg548");
-      set_style(
-        div2,
-        "width",
-        /*progress*/
-        ctx[10] + "%"
-      );
-      attr(div3, "class", "progress-bar svelte-1omg548");
-      attr(div4, "class", "review-modal svelte-1omg548");
+      attr(div2, "class", "review-modal svelte-1omg548");
     },
     m(target, anchor) {
-      insert(target, div4, anchor);
-      append(div4, div1);
+      insert(target, div2, anchor);
+      append(div2, div1);
       append(div1, h3);
       append(div1, t1);
       append(div1, div0);
@@ -4634,11 +5002,11 @@ function create_fragment2(ctx) {
       append(span1, t8);
       append(div1, t9);
       append(div1, button);
-      append(div4, t11);
-      append(div4, div3);
-      append(div3, div2);
-      append(div4, t12);
-      if_block.m(div4, null);
+      append(div2, t11);
+      if (if_block0)
+        if_block0.m(div2, null);
+      append(div2, t12);
+      if_block1.m(div2, null);
       if (!mounted) {
         dispose = listen(button, "click", function() {
           if (is_function(
@@ -4650,40 +5018,47 @@ function create_fragment2(ctx) {
         mounted = true;
       }
     },
-    p(new_ctx, [dirty]) {
+    p(new_ctx, dirty) {
+      var _a2, _b2;
       ctx = new_ctx;
-      if (dirty & /*currentIndex*/
+      if (dirty[0] & /*currentIndex*/
       1 && t2_value !== (t2_value = /*currentIndex*/
       ctx[0] + 1 + ""))
         set_data(t2, t2_value);
-      if (dirty & /*flashcards*/
+      if (dirty[0] & /*flashcards*/
       2 && t4_value !== (t4_value = /*flashcards*/
       ctx[1].length + ""))
         set_data(t4, t4_value);
-      if (dirty & /*remainingCards*/
-      512)
+      if (dirty[0] & /*remainingCards*/
+      1024)
         set_data(
           t7,
           /*remainingCards*/
-          ctx[9]
+          ctx[10]
         );
-      if (dirty & /*progress*/
-      1024) {
-        set_style(
-          div2,
-          "width",
-          /*progress*/
-          ctx[10] + "%"
-        );
+      if (
+        /*settings*/
+        ((_b2 = (_a2 = ctx[3]) == null ? void 0 : _a2.review) == null ? void 0 : _b2.showProgress) !== false
+      ) {
+        if (if_block0) {
+          if_block0.p(ctx, dirty);
+        } else {
+          if_block0 = create_if_block_3(ctx);
+          if_block0.c();
+          if_block0.m(div2, t12);
+        }
+      } else if (if_block0) {
+        if_block0.d(1);
+        if_block0 = null;
       }
-      if (current_block_type === (current_block_type = select_block_type(ctx, dirty)) && if_block) {
-        if_block.p(ctx, dirty);
+      if (current_block_type === (current_block_type = select_block_type(ctx, dirty)) && if_block1) {
+        if_block1.p(ctx, dirty);
       } else {
-        if_block.d(1);
-        if_block = current_block_type(ctx);
-        if (if_block) {
-          if_block.c();
-          if_block.m(div4, null);
+        if_block1.d(1);
+        if_block1 = current_block_type(ctx);
+        if (if_block1) {
+          if_block1.c();
+          if_block1.m(div2, null);
         }
       }
     },
@@ -4691,8 +5066,10 @@ function create_fragment2(ctx) {
     o: noop,
     d(detaching) {
       if (detaching)
-        detach(div4);
-      if_block.d();
+        detach(div2);
+      if (if_block0)
+        if_block0.d();
+      if_block1.d();
       mounted = false;
       dispose();
     }
@@ -4702,11 +5079,15 @@ function instance2($$self, $$props, $$invalidate) {
   let currentCard;
   let progress;
   let remainingCards;
+  let sessionLimitReached;
+  var _a, _b;
   let { flashcards = [] } = $$props;
   let { currentIndex = 0 } = $$props;
   let { onClose } = $$props;
   let { onReview } = $$props;
   let { renderMarkdown } = $$props;
+  let { settings } = $$props;
+  let { onCardReviewed = void 0 } = $$props;
   const dispatch = createEventDispatcher();
   const fsrs = new FSRS();
   let showAnswer = false;
@@ -4714,27 +5095,28 @@ function instance2($$self, $$props, $$invalidate) {
   let frontEl;
   let backEl;
   let schedulingInfo = null;
+  let reviewedCount = 0;
   function loadCard() {
     if (!currentCard)
       return;
-    $$invalidate(4, showAnswer = false);
-    $$invalidate(8, schedulingInfo = fsrs.getSchedulingInfo(currentCard));
+    $$invalidate(5, showAnswer = false);
+    $$invalidate(9, schedulingInfo = fsrs.getSchedulingInfo(currentCard));
     if (frontEl) {
-      $$invalidate(6, frontEl.innerHTML = "", frontEl);
+      $$invalidate(7, frontEl.innerHTML = "", frontEl);
       renderMarkdown(currentCard.front, frontEl);
     }
     tick().then(() => {
       if (backEl) {
-        $$invalidate(7, backEl.innerHTML = "", backEl);
+        $$invalidate(8, backEl.innerHTML = "", backEl);
         renderMarkdown(currentCard.back, backEl);
       }
     });
   }
   function revealAnswer() {
-    $$invalidate(4, showAnswer = true);
+    $$invalidate(5, showAnswer = true);
     tick().then(() => {
       if (backEl && currentCard) {
-        $$invalidate(7, backEl.innerHTML = "", backEl);
+        $$invalidate(8, backEl.innerHTML = "", backEl);
         renderMarkdown(currentCard.back, backEl);
       }
     });
@@ -4743,20 +5125,35 @@ function instance2($$self, $$props, $$invalidate) {
     return __awaiter(this, void 0, void 0, function* () {
       if (!currentCard || isLoading)
         return;
-      $$invalidate(5, isLoading = true);
+      $$invalidate(6, isLoading = true);
       try {
         yield onReview(currentCard, difficulty);
+        $$invalidate(20, reviewedCount++, reviewedCount);
+        if (onCardReviewed) {
+          yield onCardReviewed();
+        }
+        if (sessionLimitReached) {
+          dispatch("complete", {
+            reason: "session-limit",
+            reviewed: reviewedCount
+          });
+          onClose();
+          return;
+        }
         if (currentIndex < flashcards.length - 1) {
           $$invalidate(0, currentIndex++, currentIndex);
           loadCard();
         } else {
-          dispatch("complete");
+          dispatch("complete", {
+            reason: "no-more-cards",
+            reviewed: reviewedCount
+          });
           onClose();
         }
       } catch (error) {
         console.error("Error reviewing card:", error);
       } finally {
-        $$invalidate(5, isLoading = false);
+        $$invalidate(6, isLoading = false);
       }
     });
   }
@@ -4797,13 +5194,13 @@ function instance2($$self, $$props, $$invalidate) {
   function div0_binding($$value) {
     binding_callbacks[$$value ? "unshift" : "push"](() => {
       frontEl = $$value;
-      $$invalidate(6, frontEl);
+      $$invalidate(7, frontEl);
     });
   }
   function div3_binding($$value) {
     binding_callbacks[$$value ? "unshift" : "push"](() => {
       backEl = $$value;
-      $$invalidate(7, backEl);
+      $$invalidate(8, backEl);
     });
   }
   const click_handler = () => handleDifficulty("again");
@@ -4818,28 +5215,37 @@ function instance2($$self, $$props, $$invalidate) {
     if ("onClose" in $$props2)
       $$invalidate(2, onClose = $$props2.onClose);
     if ("onReview" in $$props2)
-      $$invalidate(14, onReview = $$props2.onReview);
+      $$invalidate(15, onReview = $$props2.onReview);
     if ("renderMarkdown" in $$props2)
-      $$invalidate(15, renderMarkdown = $$props2.renderMarkdown);
+      $$invalidate(16, renderMarkdown = $$props2.renderMarkdown);
+    if ("settings" in $$props2)
+      $$invalidate(3, settings = $$props2.settings);
+    if ("onCardReviewed" in $$props2)
+      $$invalidate(17, onCardReviewed = $$props2.onCardReviewed);
   };
   $$self.$$.update = () => {
-    if ($$self.$$.dirty & /*flashcards, currentIndex*/
+    if ($$self.$$.dirty[0] & /*flashcards, currentIndex*/
     3) {
       $:
-        $$invalidate(3, currentCard = flashcards[currentIndex] || null);
+        $$invalidate(4, currentCard = flashcards[currentIndex] || null);
     }
-    if ($$self.$$.dirty & /*flashcards, currentIndex*/
+    if ($$self.$$.dirty[0] & /*flashcards, currentIndex*/
     3) {
       $:
-        $$invalidate(10, progress = flashcards.length > 0 ? (currentIndex + 1) / flashcards.length * 100 : 0);
+        $$invalidate(11, progress = flashcards.length > 0 ? (currentIndex + 1) / flashcards.length * 100 : 0);
     }
-    if ($$self.$$.dirty & /*flashcards, currentIndex*/
+    if ($$self.$$.dirty[0] & /*flashcards, currentIndex*/
     3) {
       $:
-        $$invalidate(9, remainingCards = flashcards.length - currentIndex - 1);
+        $$invalidate(10, remainingCards = flashcards.length - currentIndex - 1);
     }
-    if ($$self.$$.dirty & /*currentCard*/
-    8) {
+    if ($$self.$$.dirty[0] & /*settings, _a, reviewedCount, _b*/
+    1835016) {
+      $:
+        sessionLimitReached = ($$invalidate(18, _a = settings === null || settings === void 0 ? void 0 : settings.review) === null || _a === void 0 ? void 0 : _a.enableSessionLimit) && reviewedCount >= ($$invalidate(19, _b = settings === null || settings === void 0 ? void 0 : settings.review) === null || _b === void 0 ? void 0 : _b.sessionGoal);
+    }
+    if ($$self.$$.dirty[0] & /*currentCard*/
+    16) {
       $:
         if (currentCard) {
           loadCard();
@@ -4850,6 +5256,7 @@ function instance2($$self, $$props, $$invalidate) {
     currentIndex,
     flashcards,
     onClose,
+    settings,
     currentCard,
     showAnswer,
     isLoading,
@@ -4863,6 +5270,10 @@ function instance2($$self, $$props, $$invalidate) {
     getIntervalDisplay,
     onReview,
     renderMarkdown,
+    onCardReviewed,
+    _a,
+    _b,
+    reviewedCount,
     div0_binding,
     div3_binding,
     click_handler,
@@ -4874,13 +5285,24 @@ function instance2($$self, $$props, $$invalidate) {
 var FlashcardReviewModal = class extends SvelteComponent {
   constructor(options) {
     super();
-    init(this, options, instance2, create_fragment2, safe_not_equal, {
-      flashcards: 1,
-      currentIndex: 0,
-      onClose: 2,
-      onReview: 14,
-      renderMarkdown: 15
-    });
+    init(
+      this,
+      options,
+      instance2,
+      create_fragment2,
+      safe_not_equal,
+      {
+        flashcards: 1,
+        currentIndex: 0,
+        onClose: 2,
+        onReview: 15,
+        renderMarkdown: 16,
+        settings: 3,
+        onCardReviewed: 17
+      },
+      add_css2,
+      [-1, -1]
+    );
   }
 };
 var FlashcardReviewModal_default = FlashcardReviewModal;
@@ -4888,27 +5310,36 @@ var FlashcardReviewModal_default = FlashcardReviewModal;
 // src/main.ts
 var VIEW_TYPE_FLASHCARDS = "flashcards-view";
 var DATABASE_PATH = ".obsidian/plugins/obsidian-flashcards-plugin/flashcards.db";
-var FlashcardsPlugin = class extends import_obsidian.Plugin {
+var FlashcardsPlugin = class extends import_obsidian2.Plugin {
   constructor() {
     super(...arguments);
     this.view = null;
+    this.statsRefreshTimeout = null;
   }
   async onload() {
     console.log("Loading Flashcards plugin");
+    await this.loadSettings();
     try {
       const adapter = this.app.vault.adapter;
       const pluginDir = ".obsidian/plugins/obsidian-flashcards-plugin";
       if (!await adapter.exists(pluginDir)) {
         await adapter.mkdir(pluginDir);
       }
-      this.db = new DatabaseService(DATABASE_PATH);
+      const dbPath = this.settings.database.customPath || DATABASE_PATH;
+      this.db = new DatabaseService(dbPath);
       await this.db.initialize();
       this.deckManager = new DeckManager(
         this.app.vault,
         this.app.metadataCache,
         this.db
       );
-      this.fsrs = new FSRS();
+      this.fsrs = new FSRS({
+        requestRetention: this.settings.fsrs.requestRetention,
+        maximumInterval: this.settings.fsrs.maximumInterval,
+        easyBonus: this.settings.fsrs.easyBonus,
+        hardInterval: this.settings.fsrs.hardInterval,
+        w: this.settings.fsrs.weights
+      });
       this.registerView(
         VIEW_TYPE_FLASHCARDS,
         (leaf) => new FlashcardsView(leaf, this)
@@ -4925,23 +5356,24 @@ var FlashcardsPlugin = class extends import_obsidian.Plugin {
       });
       this.registerEvent(
         this.app.vault.on("modify", async (file) => {
-          if (file instanceof import_obsidian.TFile && file.extension === "md") {
+          if (file instanceof import_obsidian2.TFile && file.extension === "md") {
             await this.handleFileChange(file);
           }
         })
       );
       this.registerEvent(
         this.app.vault.on("delete", async (file) => {
-          if (file instanceof import_obsidian.TFile && file.extension === "md") {
+          if (file instanceof import_obsidian2.TFile && file.extension === "md") {
             await this.handleFileDelete(file);
           }
         })
       );
       this.loadStyles();
+      this.addSettingTab(new FlashcardsSettingTab(this.app, this));
       console.log("Flashcards plugin loaded successfully");
     } catch (error) {
       console.error("Error loading Flashcards plugin:", error);
-      new import_obsidian.Notice(
+      new import_obsidian2.Notice(
         "Failed to load Flashcards plugin. Check console for details."
       );
     }
@@ -4952,6 +5384,19 @@ var FlashcardsPlugin = class extends import_obsidian.Plugin {
       await this.db.close();
     }
     this.app.workspace.detachLeavesOfType(VIEW_TYPE_FLASHCARDS);
+  }
+  async loadSettings() {
+    this.settings = Object.assign({}, DEFAULT_SETTINGS, await this.loadData());
+  }
+  async saveSettings() {
+    await this.saveData(this.settings);
+    this.fsrs = new FSRS({
+      requestRetention: this.settings.fsrs.requestRetention,
+      maximumInterval: this.settings.fsrs.maximumInterval,
+      easyBonus: this.settings.fsrs.easyBonus,
+      hardInterval: this.settings.fsrs.hardInterval,
+      w: this.settings.fsrs.weights
+    });
   }
   loadStyles() {
     const styleEl = document.createElement("style");
@@ -5055,6 +5500,9 @@ var FlashcardsPlugin = class extends import_obsidian.Plugin {
   async getFlashcardsByDeck(deckId) {
     return await this.db.getFlashcardsByDeck(deckId);
   }
+  async getReviewableFlashcards(deckId) {
+    return await this.db.getReviewableFlashcards(deckId);
+  }
   async reviewFlashcard(flashcard, difficulty) {
     const updatedCard = this.fsrs.updateCard(flashcard, difficulty);
     await this.db.updateFlashcard(updatedCard);
@@ -5070,17 +5518,18 @@ var FlashcardsPlugin = class extends import_obsidian.Plugin {
     await this.db.updateDeckLastReviewed(flashcard.deckId);
   }
   renderMarkdown(content, el) {
-    const component = new import_obsidian.Component();
+    const component = new import_obsidian2.Component();
     component.load();
-    import_obsidian.MarkdownRenderer.renderMarkdown(content, el, "", component);
+    import_obsidian2.MarkdownRenderer.renderMarkdown(content, el, "", component);
     return component;
   }
 };
-var FlashcardsView = class extends import_obsidian.ItemView {
+var FlashcardsView = class extends import_obsidian2.ItemView {
   constructor(leaf, plugin) {
     super(leaf);
     this.component = null;
     this.markdownComponents = [];
+    this.statsRefreshTimeout = null;
     this.plugin = plugin;
   }
   getViewType() {
@@ -5115,6 +5564,10 @@ var FlashcardsView = class extends import_obsidian.ItemView {
       this.component.$destroy();
       this.component = null;
     }
+    if (this.statsRefreshTimeout) {
+      clearTimeout(this.statsRefreshTimeout);
+      this.statsRefreshTimeout = null;
+    }
     this.markdownComponents.forEach((comp) => comp.unload());
     this.markdownComponents = [];
   }
@@ -5140,16 +5593,40 @@ var FlashcardsView = class extends import_obsidian.ItemView {
       console.log("Refresh complete");
     } catch (error) {
       console.error("Error refreshing flashcards:", error);
-      new import_obsidian.Notice("Error refreshing flashcards. Check console for details.");
+      new import_obsidian2.Notice("Error refreshing flashcards. Check console for details.");
     }
+  }
+  async refreshStats() {
+    if (this.statsRefreshTimeout) {
+      clearTimeout(this.statsRefreshTimeout);
+    }
+    if (this.component) {
+      this.component.updateStats();
+    }
+    this.statsRefreshTimeout = setTimeout(async () => {
+      console.log("FlashcardsView.refreshStats() executing");
+      try {
+        const deckStats = await this.plugin.getDeckStats();
+        console.log("Updated deck stats:", deckStats);
+        if (this.component) {
+          this.component.$set({
+            deckStats
+          });
+        }
+      } catch (error) {
+        console.error("Error refreshing deck stats:", error);
+      } finally {
+        this.statsRefreshTimeout = null;
+      }
+    }, 300);
   }
   async startReview(deck) {
     try {
       console.log(`Syncing flashcards for deck before review: ${deck.name}`);
       await this.plugin.syncFlashcardsForDeck(deck.tag);
-      const flashcards = await this.plugin.getFlashcardsByDeck(deck.id);
+      const flashcards = await this.plugin.getReviewableFlashcards(deck.id);
       if (flashcards.length === 0) {
-        new import_obsidian.Notice(`No cards due for review in ${deck.name}`);
+        new import_obsidian2.Notice(`No cards due for review in ${deck.name}`);
         return;
       }
       new FlashcardReviewModalWrapper(
@@ -5160,11 +5637,11 @@ var FlashcardsView = class extends import_obsidian.ItemView {
       ).open();
     } catch (error) {
       console.error("Error starting review:", error);
-      new import_obsidian.Notice("Error starting review. Check console for details.");
+      new import_obsidian2.Notice("Error starting review. Check console for details.");
     }
   }
 };
-var FlashcardReviewModalWrapper = class extends import_obsidian.Modal {
+var FlashcardReviewModalWrapper = class extends import_obsidian2.Modal {
   constructor(app, plugin, deck, flashcards) {
     super(app);
     this.component = null;
@@ -5192,11 +5669,24 @@ var FlashcardReviewModalWrapper = class extends import_obsidian.Modal {
           if (component) {
             this.markdownComponents.push(component);
           }
+        },
+        settings: this.plugin.settings,
+        onCardReviewed: async () => {
+          if (this.plugin.view) {
+            await this.plugin.view.refreshStats();
+          }
         }
       }
     });
-    this.component.$on("complete", () => {
-      new import_obsidian.Notice(`Review session complete for ${this.deck.name}!`);
+    this.component.$on("complete", (event) => {
+      const { reason, reviewed } = event.detail;
+      let message = `Review session complete for ${this.deck.name}!`;
+      if (reason === "session-limit") {
+        message = `Session goal reached! Reviewed ${reviewed} cards from ${this.deck.name}.`;
+      } else if (reason === "no-more-cards") {
+        message = `All cards reviewed! Completed ${reviewed} cards from ${this.deck.name}.`;
+      }
+      new import_obsidian2.Notice(message);
       if (this.plugin.view) {
         this.plugin.view.refresh();
       }

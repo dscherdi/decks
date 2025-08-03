@@ -87,10 +87,10 @@ The core implementation is complete and ready for testing. The plugin includes:
 - [ ] Handle concurrent database access
 
 #### Additional Features
-- [ ] Add settings page for:
-  - [ ] FSRS parameters customization
-  - [ ] Database location configuration
-  - [ ] Review session preferences
+- [x] Add settings page for:
+  - [x] FSRS parameters customization
+  - [x] Database location configuration
+  - [x] Review session preferences
 - [ ] Export/Import functionality for decks
 - [ ] Statistics and progress tracking
 - [ ] Backup and restore functionality
@@ -254,3 +254,213 @@ npm test -- --coverage  # Run tests with coverage report
 ```
 
 All 28 tests are passing with comprehensive coverage of the syncing process!
+
+## Settings Page Implementation
+
+### Comprehensive Settings Interface
+- **FSRS Algorithm Settings**: Configure target retention rate, maximum interval, easy bonus, hard interval, and custom weights
+- **Database Settings**: Custom database path, auto-backup configuration, and backup intervals
+- **Review Session Settings**: Progress display, keyboard shortcuts, auto-show answer, session limits, and review goals
+- **Display Settings**: Deck naming from tags, card count visibility, and color coding preferences
+
+### Key Features Added
+- **Dynamic Settings Updates**: FSRS algorithm parameters update in real-time when settings change
+- **Conditional UI Elements**: UI components respect settings (keyboard shortcuts, progress bars, card counts)
+- **Session Management**: Auto-show answer with configurable delay, session goal limits with completion notifications
+- **User Experience**: Reset to defaults option, tooltips for sliders, input validation
+
+### Files Created/Modified
+- **`/src/settings.ts`**: Settings interface and default values
+- **`/src/components/SettingsTab.ts`**: Comprehensive settings UI with Obsidian's native components
+- **Updated `main.ts`**: Settings integration, database path configuration, FSRS parameter updates
+- **Updated `FlashcardReviewModal.svelte`**: Settings-aware review experience
+- **Updated `DeckListPanel.svelte`**: Configurable display options
+- **Updated `fsrs.ts`**: Dynamic parameter updates
+
+The settings page provides full customization of the plugin's behavior while maintaining sensible defaults!
+
+## Flashcard State Logic Fix
+
+### Problem Identified
+Cards were getting stuck in the "New" state and not transitioning properly between New → Learning → Review states.
+
+### Root Cause Analysis
+The original state logic had flaws in how it categorized flashcards:
+- **New cards**: Only checked `repetitions = 0` without considering due date
+- **Learning cards**: Only checked interval and repetitions, ignoring due date
+- **Due cards**: Correctly checked due date but had wrong interval logic
+
+This meant that new cards with `dueDate = now` weren't showing up as reviewable, and the state transitions weren't working correctly.
+
+### Solution Implemented
+Fixed the database statistics logic in `DatabaseService.getDeckStats()`:
+
+**Before:**
+```sql
+-- New cards (problematic)
+SELECT COUNT(*) FROM flashcards WHERE deck_id = ? AND repetitions = 0
+
+-- Learning cards (missing due date check)  
+SELECT COUNT(*) FROM flashcards WHERE deck_id = ? AND repetitions > 0 AND interval < 1440
+
+-- Due cards (wrong column order)
+SELECT COUNT(*) FROM flashcards WHERE deck_id = ? AND due_date <= ? AND interval >= 1440
+```
+
+**After:**
+```sql
+-- New cards (now includes due date check)
+SELECT COUNT(*) FROM flashcards WHERE deck_id = ? AND repetitions = 0 AND due_date <= ?
+
+-- Learning cards (now includes due date check)
+SELECT COUNT(*) FROM flashcards WHERE deck_id = ? AND repetitions > 0 AND interval < 1440 AND due_date <= ?
+
+-- Review cards (cleaner logic)
+SELECT COUNT(*) FROM flashcards WHERE deck_id = ? AND interval >= 1440 AND due_date <= ?
+```
+
+### New Features Added
+- **`getReviewableFlashcards()` method**: Returns cards due for review in optimal order (New → Learning → Review)
+- **Proper review flow**: Review modal now uses reviewable cards instead of all cards
+- **State-aware UI**: Deck statistics now correctly reflect card states
+
+### State Definitions (Corrected)
+- **New**: `repetitions = 0` AND `due_date <= now` (never reviewed, ready for first review)
+- **Learning**: `repetitions > 0` AND `interval < 1440` AND `due_date <= now` (short intervals, due for review)
+- **Review**: `interval >= 1440` AND `due_date <= now` (mature cards, due for review)
+
+### Files Modified
+- ✅ `src/database/DatabaseService.ts` - Fixed state logic and added getReviewableFlashcards()
+- ✅ `src/main.ts` - Updated review flow to use reviewable cards
+- ✅ `src/__tests__/DatabaseService.test.ts` - Updated tests for corrected logic
+
+### Result
+Flashcards now properly transition between states:
+1. **New** cards appear in "New" count and are available for first review
+2. After review, cards move to **Learning** state with short intervals
+3. Eventually graduate to **Review** state with longer intervals
+4. Cards only show in counts when they're actually due for review
+
+The fix resolves the core issue where cards were stuck in the "New" state!
+
+## Real-Time Stats Updates
+
+### Enhancement Implemented
+Added real-time statistics updates in the deck list panel that refresh after every flashcard review, providing immediate feedback on progress.
+
+### Features Added
+- **Live Stats Refresh**: Deck statistics (New/Learning/Due counts) update immediately after each card review
+- **Visual Feedback**: Brief opacity animation indicates when stats are updating
+- **Performance Optimization**: Throttled updates (300ms) prevent excessive refreshes during rapid reviews
+- **Callback System**: Clean separation of concerns with onCardReviewed callbacks
+
+### Technical Implementation
+- **`refreshStats()` method**: Fast stats-only refresh without full deck resync
+- **Throttling mechanism**: Prevents UI lag during rapid card reviews
+- **Visual indicators**: Temporary opacity changes show update status
+- **Memory management**: Proper cleanup of timeouts and event handlers
+
+### User Experience Improvements
+- **Immediate feedback**: Users see card count changes right after reviewing
+- **Progress tracking**: Real-time visibility of session progress
+- **Responsive UI**: Smooth updates without blocking interface
+- **Visual polish**: Subtle animations provide professional feel
+
+### Files Modified
+- ✅ `src/main.ts` - Added refreshStats() with throttling, onCardReviewed callback
+- ✅ `src/components/FlashcardReviewModal.svelte` - Added onCardReviewed prop and calls
+- ✅ `src/components/DeckListPanel.svelte` - Added visual feedback for stats updates
+
+### Result
+The deck list now provides real-time feedback during review sessions, making progress immediately visible and improving the overall user experience!
+
+## Settings Simplification
+
+### Enhancement Implemented
+Simplified the settings interface by removing unnecessary options and adopting sensible defaults for better user experience.
+
+### Settings Removed
+- **Auto Show Answer**: Removed automatic answer reveal functionality
+- **Answer Delay**: No longer needed without auto-show
+- **Deck Name from Tag**: Always extract meaningful names from tags (e.g., #flashcards/math → "math") 
+- **Show Card Counts**: Always display New/Learning/Due counts in deck list
+- **Color Code Counts**: Always apply blue highlighting to card counts > 0
+
+### Remaining Settings
+The streamlined settings now focus on core customization:
+
+**FSRS Algorithm**
+- Target retention rate (0.7-0.98)
+- Maximum interval (days)
+- Easy bonus multiplier 
+- Hard interval multiplier
+- Reset to defaults option
+
+**Database**
+- Custom database path
+- Auto backup toggle
+- Backup interval (days)
+
+**Review Sessions**
+- Show progress bar toggle
+- Keyboard shortcuts toggle (1-4 keys)
+- Session limit toggle
+- Session goal (cards per session)
+
+### Benefits
+- **Cleaner Interface**: Fewer toggles reduce cognitive load
+- **Better Defaults**: Core features always enabled for optimal experience
+- **Simpler Logic**: Removed conditional rendering complexity
+- **Consistent Behavior**: No surprises with missing UI elements
+- **Faster Setup**: New users get full functionality immediately
+
+### Files Modified
+- ✅ `src/settings.ts` - Removed display and auto-answer settings
+- ✅ `src/components/SettingsTab.ts` - Simplified settings UI
+- ✅ `src/components/FlashcardReviewModal.svelte` - Removed auto-show logic, always show shortcuts
+- ✅ `src/components/DeckListPanel.svelte` - Always show counts and color coding, removed settings prop
+
+### Result
+The plugin now has a cleaner, more focused settings interface while maintaining all essential functionality with sensible defaults!
+
+## CSS Injection Fix
+
+### Problem Identified
+Svelte component styles were not being properly bundled by esbuild, causing the DeckListPanel layout to appear broken with missing columns and incorrect formatting.
+
+### Root Cause
+The esbuild-svelte plugin was configured to extract CSS to external files (`css: "external"`), but Obsidian plugins don't automatically load separate CSS files, causing component styles to be missing.
+
+### Solution Implemented
+Fixed the esbuild configuration to inject CSS directly into the JavaScript bundle instead of extracting it to separate files.
+
+### Changes Made
+- **Updated esbuild config**: Changed `css: "external"` to `css: "injected"` in svelte plugin options
+- **Component-scoped styles**: Each Svelte component keeps its own `<style>` block
+- **Automatic CSS injection**: Styles are injected when components are loaded
+- **No global pollution**: Maintained component-scoped styling architecture
+
+### Technical Configuration
+```javascript
+sveltePlugin({
+  compilerOptions: {
+    dev: !prod,
+    css: "injected", // Changed from "external"
+  },
+})
+```
+
+### Benefits
+- ✅ **Component Isolation**: Each component maintains its own styles
+- ✅ **Automatic Loading**: CSS injects when component mounts
+- ✅ **No External Dependencies**: No separate CSS files to manage
+- ✅ **Obsidian Compatibility**: Works with plugin loading mechanism
+- ✅ **Maintainable Architecture**: Styles stay with their components
+
+### Files Modified
+- ✅ `esbuild.config.mjs` - Fixed CSS injection configuration
+- ✅ `src/components/DeckListPanel.svelte` - Restored component styles
+- ✅ `src/main.ts` - Removed temporary global CSS injection
+
+### Result
+The DeckListPanel now displays correctly with proper component-scoped CSS injection, maintaining clean architecture while ensuring reliable styling!

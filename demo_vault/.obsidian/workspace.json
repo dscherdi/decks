@@ -141,16 +141,17 @@
             "state": {
               "type": "outline",
               "state": {
+                "file": "Flashcards/Math-Basics.md",
                 "followCursor": false,
                 "showSearch": false,
                 "searchQuery": ""
               },
               "icon": "lucide-list",
-              "title": "Outline"
+              "title": "Outline of Math-Basics"
             }
           },
           {
-            "id": "b928f6a1012dce58",
+            "id": "c22c74090ed42546",
             "type": "leaf",
             "state": {
               "type": "flashcards-view",
@@ -164,7 +165,7 @@
       }
     ],
     "direction": "horizontal",
-    "width": 300
+    "width": 471.5
   },
   "left-ribbon": {
     "hiddenItems": {
@@ -177,7 +178,7 @@
       "obsidian-flashcards-plugin:Flashcards": false
     }
   },
-  "active": "296674abb626cb1b",
+  "active": "c22c74090ed42546",
   "lastOpenFiles": [
     "Flashcards/Spanish-Vocabulary.md",
     "Flashcards/Programming-Concepts.md",

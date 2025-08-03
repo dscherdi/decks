@@ -15,6 +15,8 @@
         difficulty: Difficulty,
     ) => Promise<void>;
     export let renderMarkdown: (content: string, el: HTMLElement) => void;
+    export let settings: any;
+    export let onCardReviewed: (() => Promise<void>) | undefined = undefined;
 
     const dispatch = createEventDispatcher();
     const fsrs = new FSRS();
@@ -24,6 +26,7 @@
     let frontEl: HTMLElement;
     let backEl: HTMLElement;
     let schedulingInfo: SchedulingInfo | null = null;
+    let reviewedCount = 0;
 
     $: currentCard = flashcards[currentIndex] || null;
     $: progress =
@@ -31,6 +34,9 @@
             ? ((currentIndex + 1) / flashcards.length) * 100
             : 0;
     $: remainingCards = flashcards.length - currentIndex - 1;
+    $: sessionLimitReached =
+        settings?.review?.enableSessionLimit &&
+        reviewedCount >= settings?.review?.sessionGoal;
 
     function loadCard() {
         if (!currentCard) return;
@@ -71,6 +77,22 @@
         isLoading = true;
         try {
             await onReview(currentCard, difficulty);
+            reviewedCount++;
+
+            // Trigger stats refresh after each card review
+            if (onCardReviewed) {
+                await onCardReviewed();
+            }
+
+            // Check if session limit is reached
+            if (sessionLimitReached) {
+                dispatch("complete", {
+                    reason: "session-limit",
+                    reviewed: reviewedCount,
+                });
+                onClose();
+                return;
+            }
 
             // Move to next card
             if (currentIndex < flashcards.length - 1) {
@@ -78,7 +100,10 @@
                 loadCard();
             } else {
                 // Review session complete
-                dispatch("complete");
+                dispatch("complete", {
+                    reason: "no-more-cards",
+                    reviewed: reviewedCount,
+                });
                 onClose();
             }
         } catch (error) {
@@ -141,9 +166,11 @@
         <button class="close-button" on:click={onClose}>&times;</button>
     </div>
 
-    <div class="progress-bar">
-        <div class="progress-fill" style="width: {progress}%"></div>
-    </div>
+    {#if settings?.review?.showProgress !== false}
+        <div class="progress-bar">
+            <div class="progress-fill" style="width: {progress}%"></div>
+        </div>
+    {/if}
 
     {#if currentCard}
         <div class="card-content">
