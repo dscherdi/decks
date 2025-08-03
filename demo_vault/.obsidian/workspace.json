@@ -1,0 +1,192 @@
+{
+  "main": {
+    "id": "d71314c46ac54eb1",
+    "type": "split",
+    "children": [
+      {
+        "id": "ad40e220108adb2f",
+        "type": "tabs",
+        "children": [
+          {
+            "id": "296674abb626cb1b",
+            "type": "leaf",
+            "state": {
+              "type": "markdown",
+              "state": {
+                "file": "Flashcards/Spanish-Vocabulary.md",
+                "mode": "source",
+                "source": false
+              },
+              "icon": "lucide-file",
+              "title": "Spanish-Vocabulary"
+            }
+          }
+        ]
+      }
+    ],
+    "direction": "vertical"
+  },
+  "left": {
+    "id": "a187fa9fe15f5365",
+    "type": "split",
+    "children": [
+      {
+        "id": "b6947df9a6fadb71",
+        "type": "tabs",
+        "children": [
+          {
+            "id": "43e0c06474e1a885",
+            "type": "leaf",
+            "state": {
+              "type": "file-explorer",
+              "state": {
+                "sortOrder": "alphabetical",
+                "autoReveal": false
+              },
+              "icon": "lucide-folder-closed",
+              "title": "Files"
+            }
+          },
+          {
+            "id": "191b9b4e6185fd99",
+            "type": "leaf",
+            "state": {
+              "type": "search",
+              "state": {
+                "query": "",
+                "matchingCase": false,
+                "explainSearch": false,
+                "collapseAll": false,
+                "extraContext": false,
+                "sortOrder": "alphabetical"
+              },
+              "icon": "lucide-search",
+              "title": "Search"
+            }
+          },
+          {
+            "id": "03b028d71cde42b5",
+            "type": "leaf",
+            "state": {
+              "type": "bookmarks",
+              "state": {},
+              "icon": "lucide-bookmark",
+              "title": "Bookmarks"
+            }
+          }
+        ]
+      }
+    ],
+    "direction": "horizontal",
+    "width": 300
+  },
+  "right": {
+    "id": "2e1e063bc04f303d",
+    "type": "split",
+    "children": [
+      {
+        "id": "5a444e3f448425a5",
+        "type": "tabs",
+        "children": [
+          {
+            "id": "720c28959e381121",
+            "type": "leaf",
+            "state": {
+              "type": "backlink",
+              "state": {
+                "file": "Flashcards/Math-Basics.md",
+                "collapseAll": false,
+                "extraContext": false,
+                "sortOrder": "alphabetical",
+                "showSearch": false,
+                "searchQuery": "",
+                "backlinkCollapsed": false,
+                "unlinkedCollapsed": true
+              },
+              "icon": "links-coming-in",
+              "title": "Backlinks for Math-Basics"
+            }
+          },
+          {
+            "id": "6ef7e3dd1c892c46",
+            "type": "leaf",
+            "state": {
+              "type": "outgoing-link",
+              "state": {
+                "linksCollapsed": false,
+                "unlinkedCollapsed": true
+              },
+              "icon": "links-going-out",
+              "title": "Outgoing links"
+            }
+          },
+          {
+            "id": "6b95293598decbf8",
+            "type": "leaf",
+            "state": {
+              "type": "tag",
+              "state": {
+                "sortOrder": "frequency",
+                "useHierarchy": true,
+                "showSearch": false,
+                "searchQuery": ""
+              },
+              "icon": "lucide-tags",
+              "title": "Tags"
+            }
+          },
+          {
+            "id": "7d1ed3fa3fed0a8c",
+            "type": "leaf",
+            "state": {
+              "type": "outline",
+              "state": {
+                "followCursor": false,
+                "showSearch": false,
+                "searchQuery": ""
+              },
+              "icon": "lucide-list",
+              "title": "Outline"
+            }
+          },
+          {
+            "id": "b928f6a1012dce58",
+            "type": "leaf",
+            "state": {
+              "type": "flashcards-view",
+              "state": {},
+              "icon": "cards",
+              "title": "Flashcards"
+            }
+          }
+        ],
+        "currentTab": 4
+      }
+    ],
+    "direction": "horizontal",
+    "width": 300
+  },
+  "left-ribbon": {
+    "hiddenItems": {
+      "switcher:Open quick switcher": false,
+      "graph:Open graph view": false,
+      "canvas:Create new canvas": false,
+      "daily-notes:Open today's daily note": false,
+      "templates:Insert template": false,
+      "command-palette:Open command palette": false,
+      "obsidian-flashcards-plugin:Flashcards": false
+    }
+  },
+  "active": "b928f6a1012dce58",
+  "lastOpenFiles": [
+    "Flashcards/Programming-Concepts.md",
+    "Flashcards/Math-Basics.md",
+    "Flashcards/Spanish-Vocabulary.md",
+    "Flashcards-2025-07-17.flashcards",
+    "plugins",
+    "plugins/obsidian-flashcards-plugin/manifest.json",
+    "plugins/obsidian-flashcards-plugin/main.css",
+    "plugins/obsidian-flashcards-plugin/main.js",
+    "plugins/obsidian-flashcards-plugin"
+  ]
+}

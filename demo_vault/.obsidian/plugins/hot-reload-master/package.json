@@ -1,0 +1,15 @@
+{
+  "name": "hot-reload",
+  "scripts": {
+    "dev": "node ophidian.config.mjs dev",
+    "build": "node ophidian.config.mjs production"
+  },
+  "license": "ISC",
+  "packageManager": "pnpm@7.33.6",
+  "devDependencies": {
+    "@ophidian/build": "ophidian-lib/build",
+    "@types/node": "^16",
+    "monkey-around": "^3",
+    "obsidian": "1.3.5"
+  }
+}

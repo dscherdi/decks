@@ -11,25 +11,22 @@
     "importHelpers": true,
     "isolatedModules": true,
     "strictNullChecks": true,
-    "lib": [
-      "DOM",
-      "ES5",
-      "ES6",
-      "ES7"
-    ],
+    "lib": ["DOM", "ES5", "ES6", "ES7"],
+
     "allowSyntheticDefaultImports": true,
     "paths": {
       "@/*": ["src/*"]
     },
-    "types": ["svelte", "node"],
+    "types": ["node"],
     "esModuleInterop": true,
     "resolveJsonModule": true
   },
-  "include": [
-    "src/**/*.ts",
-    "src/**/*.svelte"
-  ],
+  "include": ["src/**/*.ts", "src/**/*.svelte"],
   "exclude": [
-    "node_modules"
+    "node_modules",
+    "src/**/*.test.ts",
+    "src/**/*.spec.ts",
+    "src/**/__tests__/**",
+    "src/__mocks__/**"
   ]
 }
