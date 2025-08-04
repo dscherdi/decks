@@ -17,6 +17,7 @@ export interface Flashcard {
   type: "header-paragraph" | "table";
   sourceFile: string;
   lineNumber: number;
+  contentHash: string; // Hash of back content only (front is used for ID)
   state: FlashcardState;
   dueDate: string;
   interval: number; // in minutes

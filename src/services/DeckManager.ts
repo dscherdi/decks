@@ -284,24 +284,136 @@ export class DeckManager {
     const decksMap = await this.scanVaultForDecks();
     const files = decksMap.get(deckTag) || [];
 
-    // Delete existing flashcards for files that will be re-parsed
-    for (const file of files) {
-      await this.db.deleteFlashcardsByFile(file.path);
-    }
+    // Get existing flashcards for this deck
+    const existingFlashcards = await this.db.getFlashcardsByDeck(deck.id);
+    const existingById = new Map<string, Flashcard>();
+    existingFlashcards.forEach((card) => {
+      existingById.set(card.id, card);
+    });
 
-    // Parse and add flashcards from each file
+    const processedIds = new Set<string>();
+
+    // Parse and sync flashcards from each file
     for (const file of files) {
       const parsedCards = await this.parseFlashcardsFromFile(file);
 
       for (const parsed of parsedCards) {
+        const flashcardId = this.generateFlashcardId(parsed.front);
+        const contentHash = this.generateContentHash(parsed.back);
+        const existingCard = existingById.get(flashcardId);
+
+        processedIds.add(flashcardId);
+
+        if (existingCard) {
+          // Update if content has changed
+          if (existingCard.contentHash !== contentHash) {
+            await this.db.updateFlashcard(existingCard.id, {
+              front: parsed.front,
+              back: parsed.back,
+              type: parsed.type,
+              contentHash: contentHash,
+            });
+          }
+        } else {
+          // Create new flashcard
+          const flashcard: Omit<Flashcard, "created" | "modified"> = {
+            id: flashcardId,
+            deckId: deck.id,
+            front: parsed.front,
+            back: parsed.back,
+            type: parsed.type,
+            sourceFile: file.path,
+            lineNumber: parsed.lineNumber,
+            contentHash: contentHash,
+            state: "new",
+            dueDate: new Date().toISOString(),
+            interval: 0,
+            repetitions: 0,
+            easeFactor: 5.0, // FSRS initial difficulty
+            stability: 2.5, // FSRS initial stability
+            lapses: 0,
+            lastReviewed: null,
+          };
+
+          await this.db.createFlashcard(flashcard);
+        }
+      }
+    }
+
+    // Delete flashcards that are no longer in any file
+    for (const [flashcardId, existingCard] of existingById) {
+      if (!processedIds.has(flashcardId)) {
+        await this.db.deleteFlashcard(existingCard.id);
+      }
+    }
+  }
+
+  /**
+   * Generate content hash for flashcard back content (front is used for ID)
+   */
+  private generateContentHash(back: string): string {
+    let hash = 0;
+    for (let i = 0; i < back.length; i++) {
+      const char = back.charCodeAt(i);
+      hash = (hash << 5) - hash + char;
+      hash = hash & hash; // Convert to 32-bit integer
+    }
+    return Math.abs(hash).toString(16);
+  }
+
+  /**
+   * Sync flashcards for a specific deck by name
+   */
+  async syncFlashcardsForDeckByName(deckName: string): Promise<void> {
+    const deck = await this.db.getDeckByName(deckName);
+    if (!deck) return;
+
+    // Find the file with matching basename
+    const files = this.vault.getMarkdownFiles();
+    const targetFile = files.find((file) => file.basename === deckName);
+    if (!targetFile) return;
+
+    // Get existing flashcards for this deck
+    const existingFlashcards = await this.db.getFlashcardsByDeck(deck.id);
+    const existingById = new Map<string, Flashcard>();
+    existingFlashcards
+      .filter((card) => card.sourceFile === targetFile.path)
+      .forEach((card) => {
+        existingById.set(card.id, card);
+      });
+
+    // Parse flashcards from the file
+    const parsedCards = await this.parseFlashcardsFromFile(targetFile);
+    const processedIds = new Set<string>();
+
+    for (const parsed of parsedCards) {
+      const flashcardId = this.generateFlashcardId(parsed.front);
+      const contentHash = this.generateContentHash(parsed.back);
+      const existingCard = existingById.get(flashcardId);
+
+      processedIds.add(flashcardId);
+
+      if (existingCard) {
+        // Update if content has changed
+        if (existingCard.contentHash !== contentHash) {
+          await this.db.updateFlashcard(existingCard.id, {
+            front: parsed.front,
+            back: parsed.back,
+            type: parsed.type,
+            contentHash: contentHash,
+          });
+        }
+      } else {
+        // Create new flashcard
         const flashcard: Omit<Flashcard, "created" | "modified"> = {
-          id: this.generateFlashcardId(parsed.front),
+          id: flashcardId,
           deckId: deck.id,
           front: parsed.front,
           back: parsed.back,
           type: parsed.type,
-          sourceFile: file.path,
+          sourceFile: targetFile.path,
           lineNumber: parsed.lineNumber,
+          contentHash: contentHash,
           state: "new",
           dueDate: new Date().toISOString(),
           interval: 0,
@@ -313,6 +425,13 @@ export class DeckManager {
         };
 
         await this.db.createFlashcard(flashcard);
+      }
+    }
+
+    // Delete flashcards that are no longer in the file
+    for (const [flashcardId, existingCard] of existingById) {
+      if (!processedIds.has(flashcardId)) {
+        await this.db.deleteFlashcard(existingCard.id);
       }
     }
   }

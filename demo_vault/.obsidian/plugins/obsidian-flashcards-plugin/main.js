@@ -2398,23 +2398,23 @@ var init_settings = __esm({
         easyBonus: 1.3,
         hardInterval: 1.2,
         weights: [
-          0.4,
-          0.6,
-          2.4,
-          5.8,
-          4.93,
-          0.94,
-          0.86,
-          0.01,
-          1.49,
-          0.14,
-          0.94,
-          2.18,
-          0.05,
-          0.34,
-          1.26,
-          0.29,
-          2.61
+          0.4072,
+          1.1829,
+          3.1262,
+          15.4722,
+          7.2102,
+          0.5316,
+          1.0651,
+          0.0234,
+          1.616,
+          0.1544,
+          1.0824,
+          1.9813,
+          0.0953,
+          0.2975,
+          2.2042,
+          0.2407,
+          2.9466
         ]
       },
       database: {
@@ -2594,6 +2594,26 @@ var DatabaseService = class {
       throw new Error("Database not initialized");
     const stmt = this.db.prepare("SELECT * FROM decks WHERE tag = ?");
     stmt.bind([tag]);
+    if (stmt.step()) {
+      const result = stmt.get();
+      stmt.free();
+      return {
+        id: result[0],
+        name: result[1],
+        tag: result[2],
+        lastReviewed: result[3],
+        created: result[4],
+        modified: result[5]
+      };
+    }
+    stmt.free();
+    return null;
+  }
+  async getDeckByName(name) {
+    if (!this.db)
+      throw new Error("Database not initialized");
+    const stmt = this.db.prepare("SELECT * FROM decks WHERE name = ?");
+    stmt.bind([name]);
     if (stmt.step()) {
       const result = stmt.get();
       stmt.free();
@@ -3120,6 +3140,15 @@ var DeckManager = class {
     }
   }
   /**
+   * Sync flashcards for a specific deck by name
+   */
+  async syncFlashcardsForDeckByName(deckName) {
+    const deck = await this.db.getDeckByName(deckName);
+    if (!deck)
+      return;
+    await this.syncFlashcardsForDeck(deck.tag);
+  }
+  /**
    * Extract deck name from files (use the first file's name)
    */
   extractDeckNameFromFiles(files) {
@@ -3211,7 +3240,7 @@ var FSRS = class {
         2.9466
       ],
       requestRetention: 0.9,
-      maximumInterval: 36500,
+      maximumInterval: 60,
       // 100 years
       easyBonus: 1.3,
       hardInterval: 1.2,
@@ -5647,8 +5676,8 @@ var FlashcardsPlugin = class extends import_obsidian2.Plugin {
   async syncDecks() {
     await this.deckManager.syncDecks();
   }
-  async syncFlashcardsForDeck(deckTag) {
-    await this.deckManager.syncFlashcardsForDeck(deckTag);
+  async syncFlashcardsForDeck(deckName) {
+    await this.deckManager.syncFlashcardsForDeckByName(deckName);
   }
   async getDecks() {
     return await this.db.getAllDecks();
@@ -5788,7 +5817,7 @@ var FlashcardsView = class extends import_obsidian2.ItemView {
   async startReview(deck) {
     try {
       console.log(`Syncing flashcards for deck before review: ${deck.name}`);
-      await this.plugin.syncFlashcardsForDeck(deck.tag);
+      await this.plugin.syncFlashcardsForDeck(deck.name);
       const flashcards = await this.plugin.getReviewableFlashcards(deck.id);
       if (flashcards.length === 0) {
         new import_obsidian2.Notice(`No cards due for review in ${deck.name}`);

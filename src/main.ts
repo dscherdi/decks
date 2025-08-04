@@ -246,8 +246,8 @@ export default class FlashcardsPlugin extends Plugin {
     await this.deckManager.syncDecks();
   }
 
-  async syncFlashcardsForDeck(deckTag: string) {
-    await this.deckManager.syncFlashcardsForDeck(deckTag);
+  async syncFlashcardsForDeck(deckName: string) {
+    await this.deckManager.syncFlashcardsForDeckByName(deckName);
   }
 
   async getDecks(): Promise<Deck[]> {
@@ -285,7 +285,16 @@ export default class FlashcardsPlugin extends Plugin {
     const updatedCard = this.fsrs.updateCard(flashcard, difficulty);
 
     // Save to database
-    await this.db.updateFlashcard(updatedCard);
+    await this.db.updateFlashcard(updatedCard.id, {
+      state: updatedCard.state,
+      dueDate: updatedCard.dueDate,
+      interval: updatedCard.interval,
+      repetitions: updatedCard.repetitions,
+      easeFactor: updatedCard.easeFactor,
+      stability: updatedCard.stability,
+      lapses: updatedCard.lapses,
+      lastReviewed: updatedCard.lastReviewed,
+    });
 
     // Log the review
     await this.db.createReviewLog({
@@ -442,7 +451,7 @@ class FlashcardsView extends ItemView {
     try {
       // First sync flashcards for this specific deck
       console.log(`Syncing flashcards for deck before review: ${deck.name}`);
-      await this.plugin.syncFlashcardsForDeck(deck.tag);
+      await this.plugin.syncFlashcardsForDeck(deck.name);
 
       // Get all flashcards that are due for review (new + due cards)
       const flashcards = await this.plugin.getReviewableFlashcards(deck.id);

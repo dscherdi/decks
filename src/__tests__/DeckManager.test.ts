@@ -264,7 +264,7 @@ Answer 1`;
   });
 
   describe("syncFlashcardsForDeck", () => {
-    it("should clear existing flashcards before syncing", async () => {
+    it("should sync flashcards with smart update logic", async () => {
       const deck: Deck = {
         id: "deck_123",
         name: "Test",
@@ -275,7 +275,9 @@ Answer 1`;
       };
 
       mockDb.getDeckByTag.mockResolvedValue(deck);
-      mockDb.deleteFlashcardsByFile.mockResolvedValue();
+      mockDb.getFlashcardsByDeck.mockResolvedValue([]);
+      mockDb.updateFlashcard.mockResolvedValue();
+      mockDb.deleteFlashcard.mockResolvedValue();
       mockDb.createFlashcard.mockImplementation(
         async (card) =>
           ({
@@ -293,16 +295,17 @@ Answer 1`;
 
       await deckManager.syncFlashcardsForDeck("#flashcards/test");
 
-      // Verify old flashcards were deleted
-      expect(mockDb.deleteFlashcardsByFile).toHaveBeenCalledWith("test.md");
+      // Verify existing flashcards were checked
+      expect(mockDb.getFlashcardsByDeck).toHaveBeenCalledWith("deck_123");
 
-      // Verify new flashcard was created
+      // Verify new flashcard was created with contentHash
       expect(mockDb.createFlashcard).toHaveBeenCalledTimes(1);
       expect(mockDb.createFlashcard).toHaveBeenCalledWith(
         expect.objectContaining({
           deckId: "deck_123",
           front: "Question",
           back: "Answer",
+          contentHash: expect.any(String),
         }),
       );
     });
@@ -322,6 +325,52 @@ Answer 1`;
       const id2 = (deckManager as any).generateFlashcardId("Question 2");
 
       expect(id1).not.toBe(id2);
+    });
+
+    it("should sync flashcards by deck name", async () => {
+      const deck: Deck = {
+        id: "deck_123",
+        name: "Test",
+        tag: "#flashcards/test",
+        lastReviewed: null,
+        created: "2024-01-01",
+        modified: "2024-01-01",
+      };
+
+      mockDb.getDeckByName.mockResolvedValue(deck);
+      mockDb.getFlashcardsByDeck.mockResolvedValue([]);
+      mockDb.updateFlashcard.mockResolvedValue();
+      mockDb.deleteFlashcard.mockResolvedValue();
+      mockDb.createFlashcard.mockImplementation(
+        async (card) =>
+          ({
+            ...card,
+            created: new Date().toISOString(),
+            modified: new Date().toISOString(),
+          }) as Flashcard,
+      );
+
+      // Add file with basename "Test" to match deck name
+      (mockVault as any)._addFile("Test.md", "## Question\n\nAnswer");
+      (mockMetadataCache as any)._setCache("Test.md", {
+        tags: [{ tag: "#flashcards/test" }],
+      });
+
+      await deckManager.syncFlashcardsForDeckByName("Test");
+
+      // Verify deck was found by name
+      expect(mockDb.getDeckByName).toHaveBeenCalledWith("Test");
+      // Verify existing flashcards were checked
+      expect(mockDb.getFlashcardsByDeck).toHaveBeenCalledWith("deck_123");
+      // Verify new flashcard was created with contentHash
+      expect(mockDb.createFlashcard).toHaveBeenCalledWith(
+        expect.objectContaining({
+          deckId: "deck_123",
+          front: "Question",
+          back: "Answer",
+          contentHash: expect.any(String),
+        }),
+      );
     });
   });
 

@@ -51,7 +51,7 @@ export class FSRS {
         0.1544, 1.0824, 1.9813, 0.0953, 0.2975, 2.2042, 0.2407, 2.9466,
       ],
       requestRetention: 0.9,
-      maximumInterval: 36500, // 100 years
+      maximumInterval: 60, // 100 years
       easyBonus: 1.3,
       hardInterval: 1.2,
       ...params,

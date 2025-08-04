@@ -166,6 +166,43 @@ describe("DatabaseService", () => {
       });
     });
 
+    describe("getDeckByName", () => {
+      it("should retrieve deck by name", async () => {
+        mockStatement.step.mockReturnValue(true);
+        mockStatement.get.mockReturnValue([
+          "deck_123",
+          "Test Deck",
+          "#flashcards/test",
+          null,
+          "2024-01-01",
+          "2024-01-01",
+        ]);
+
+        const result = await dbService.getDeckByName("Test Deck");
+
+        expect(mockDb.prepare).toHaveBeenCalledWith(
+          "SELECT * FROM decks WHERE name = ?",
+        );
+        expect(mockStatement.bind).toHaveBeenCalledWith(["Test Deck"]);
+        expect(result).toEqual({
+          id: "deck_123",
+          name: "Test Deck",
+          tag: "#flashcards/test",
+          lastReviewed: null,
+          created: "2024-01-01",
+          modified: "2024-01-01",
+        });
+      });
+
+      it("should return null if deck not found", async () => {
+        mockStatement.step.mockReturnValue(false);
+
+        const result = await dbService.getDeckByName("Nonexistent Deck");
+
+        expect(result).toBeNull();
+      });
+    });
+
     describe("getAllDecks", () => {
       it("should retrieve all decks", async () => {
         mockStatement.step
@@ -219,7 +256,7 @@ describe("DatabaseService", () => {
 
     describe("createFlashcard", () => {
       it("should create a new flashcard with INSERT OR REPLACE", async () => {
-        const flashcard = {
+        const flashcard: Omit<Flashcard, "created" | "modified"> = {
           id: "card_abc123",
           deckId: "deck_123",
           front: "What is 2+2?",
@@ -227,6 +264,7 @@ describe("DatabaseService", () => {
           type: "header-paragraph" as const,
           sourceFile: "math.md",
           lineNumber: 5,
+          contentHash: "abc123",
           state: "new" as const,
           dueDate: new Date().toISOString(),
           interval: 0,
@@ -250,6 +288,7 @@ describe("DatabaseService", () => {
           flashcard.type,
           flashcard.sourceFile,
           flashcard.lineNumber,
+          flashcard.contentHash,
           flashcard.state,
           flashcard.dueDate,
           flashcard.interval,

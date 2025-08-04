@@ -89,6 +89,7 @@ export class DatabaseService {
         type TEXT NOT NULL CHECK (type IN ('header-paragraph', 'table')),
         source_file TEXT NOT NULL,
         line_number INTEGER NOT NULL,
+        content_hash TEXT NOT NULL,
         state TEXT NOT NULL DEFAULT 'new' CHECK (state IN ('new', 'learning', 'review')),
         due_date TEXT NOT NULL,
         interval INTEGER NOT NULL DEFAULT 0,
@@ -195,6 +196,30 @@ export class DatabaseService {
     return null;
   }
 
+  async getDeckByName(name: string): Promise<Deck | null> {
+    if (!this.db) throw new Error("Database not initialized");
+
+    const stmt = this.db.prepare("SELECT * FROM decks WHERE name = ?");
+    stmt.bind([name]);
+
+    if (stmt.step()) {
+      const result = stmt.get();
+      stmt.free();
+
+      return {
+        id: result[0] as string,
+        name: result[1] as string,
+        tag: result[2] as string,
+        lastReviewed: result[3] as string | null,
+        created: result[4] as string,
+        modified: result[5] as string,
+      };
+    }
+
+    stmt.free();
+    return null;
+  }
+
   async getAllDecks(): Promise<Deck[]> {
     if (!this.db) throw new Error("Database not initialized");
 
@@ -246,9 +271,9 @@ export class DatabaseService {
 
     const stmt = this.db.prepare(`
       INSERT OR REPLACE INTO flashcards (
-        id, deck_id, front, back, type, source_file, line_number,
+        id, deck_id, front, back, type, source_file, line_number, content_hash,
         state, due_date, interval, repetitions, ease_factor, stability, lapses, last_reviewed, created, modified
-      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
     `);
 
     stmt.run([
@@ -259,6 +284,7 @@ export class DatabaseService {
       fullFlashcard.type,
       fullFlashcard.sourceFile,
       fullFlashcard.lineNumber,
+      fullFlashcard.contentHash,
       fullFlashcard.state,
       fullFlashcard.dueDate,
       fullFlashcard.interval,
@@ -274,6 +300,71 @@ export class DatabaseService {
 
     await this.save();
     return fullFlashcard;
+  }
+
+  async updateFlashcard(
+    flashcardId: string,
+    updates: Partial<
+      Pick<
+        Flashcard,
+        | "front"
+        | "back"
+        | "type"
+        | "contentHash"
+        | "state"
+        | "dueDate"
+        | "interval"
+        | "repetitions"
+        | "easeFactor"
+        | "stability"
+        | "lapses"
+        | "lastReviewed"
+      >
+    >,
+  ): Promise<void> {
+    if (!this.db) throw new Error("Database not initialized");
+
+    const now = new Date().toISOString();
+    const updateFields = Object.keys(updates)
+      .map((key) => {
+        const dbField =
+          key === "contentHash"
+            ? "content_hash"
+            : key === "sourceFile"
+              ? "source_file"
+              : key === "lineNumber"
+                ? "line_number"
+                : key === "dueDate"
+                  ? "due_date"
+                  : key === "easeFactor"
+                    ? "ease_factor"
+                    : key === "lastReviewed"
+                      ? "last_reviewed"
+                      : key.replace(/([A-Z])/g, "_$1").toLowerCase();
+        return `${dbField} = ?`;
+      })
+      .join(", ");
+
+    const stmt = this.db.prepare(`
+      UPDATE flashcards
+      SET ${updateFields}, modified = ?
+      WHERE id = ?
+    `);
+
+    const values = Object.values(updates);
+    values.push(now, flashcardId);
+    stmt.run(values);
+    stmt.free();
+    await this.save();
+  }
+
+  async deleteFlashcard(flashcardId: string): Promise<void> {
+    if (!this.db) throw new Error("Database not initialized");
+
+    const stmt = this.db.prepare("DELETE FROM flashcards WHERE id = ?");
+    stmt.run([flashcardId]);
+    stmt.free();
+    await this.save();
   }
 
   async getFlashcardsByDeck(deckId: string): Promise<Flashcard[]> {
@@ -345,35 +436,6 @@ export class DatabaseService {
 
     stmt.free();
     return flashcards;
-  }
-
-  async updateFlashcard(flashcard: Flashcard): Promise<void> {
-    if (!this.db) throw new Error("Database not initialized");
-
-    const stmt = this.db.prepare(`
-      UPDATE flashcards SET
-        front = ?, back = ?, state = ?, due_date = ?, interval = ?,
-        repetitions = ?, ease_factor = ?, stability = ?, lapses = ?, last_reviewed = ?, modified = ?
-      WHERE id = ?
-    `);
-
-    stmt.run([
-      flashcard.front,
-      flashcard.back,
-      flashcard.state,
-      flashcard.dueDate,
-      flashcard.interval,
-      flashcard.repetitions,
-      flashcard.easeFactor,
-      flashcard.stability,
-      flashcard.lapses,
-      flashcard.lastReviewed,
-      new Date().toISOString(),
-      flashcard.id,
-    ]);
-    stmt.free();
-
-    await this.save();
   }
 
   async deleteFlashcardsByFile(sourceFile: string): Promise<void> {
@@ -493,16 +555,17 @@ export class DatabaseService {
       type: row[4] as "header-paragraph" | "table",
       sourceFile: row[5] as string,
       lineNumber: row[6] as number,
-      state: row[7] as "new" | "learning" | "review",
-      dueDate: row[8] as string,
-      interval: row[9] as number,
-      repetitions: row[10] as number,
-      easeFactor: row[11] as number,
-      stability: row[12] as number,
-      lapses: row[13] as number,
-      lastReviewed: row[14] as string | null,
-      created: row[15] as string,
-      modified: row[16] as string,
+      contentHash: row[7] as string,
+      state: row[8] as "new" | "learning" | "review",
+      dueDate: row[9] as string,
+      interval: row[10] as number,
+      repetitions: row[11] as number,
+      easeFactor: row[12] as number,
+      stability: row[13] as number,
+      lapses: row[14] as number,
+      lastReviewed: row[15] as string | null,
+      created: row[16] as string,
+      modified: row[17] as string,
     };
   }
 
