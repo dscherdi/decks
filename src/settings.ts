@@ -22,6 +22,11 @@ export interface FlashcardsSettings {
     sessionGoal: number; // cards per session
     enableSessionLimit: boolean;
   };
+
+  // UI Settings
+  ui: {
+    backgroundRefreshInterval: number; // seconds
+  };
 }
 
 export const DEFAULT_SETTINGS: FlashcardsSettings = {
@@ -46,5 +51,9 @@ export const DEFAULT_SETTINGS: FlashcardsSettings = {
     enableKeyboardShortcuts: true,
     sessionGoal: 20,
     enableSessionLimit: false,
+  },
+
+  ui: {
+    backgroundRefreshInterval: 5,
   },
 };

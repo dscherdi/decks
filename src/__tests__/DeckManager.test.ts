@@ -372,6 +372,41 @@ Answer 1`;
         }),
       );
     });
+
+    it("should handle deck ID in frontmatter", async () => {
+      const deck: Deck = {
+        id: "deck_456",
+        name: "Existing Deck",
+        tag: "#flashcards/existing",
+        lastReviewed: null,
+        created: "2024-01-01",
+        modified: "2024-01-01",
+      };
+
+      mockDb.getDeckById.mockResolvedValue(deck);
+      mockDb.updateDeck.mockResolvedValue();
+      mockDb.getAllDecks.mockResolvedValue([]);
+
+      // Add file with deck ID in frontmatter
+      (mockVault as any)._addFile(
+        "existing.md",
+        "---\nflashcards-deck-id: deck_456\n---\n\n## Question\n\nAnswer",
+      );
+      (mockMetadataCache as any)._setCache("existing.md", {
+        tags: [{ tag: "#flashcards/new-tag" }],
+        frontmatter: { "flashcards-deck-id": "deck_456" },
+      });
+
+      await deckManager.syncDecks();
+
+      // Verify existing deck was found by ID
+      expect(mockDb.getDeckById).toHaveBeenCalledWith("deck_456");
+      // Verify deck was updated with new tag
+      expect(mockDb.updateDeck).toHaveBeenCalledWith("deck_456", {
+        tag: "#flashcards/new-tag",
+        name: "existing",
+      });
+    });
   });
 
   describe("deck name extraction", () => {

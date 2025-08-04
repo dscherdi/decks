@@ -203,6 +203,62 @@ describe("DatabaseService", () => {
       });
     });
 
+    describe("getDeckById", () => {
+      it("should retrieve deck by id", async () => {
+        mockStatement.step.mockReturnValue(true);
+        mockStatement.get.mockReturnValue([
+          "deck_123",
+          "Test Deck",
+          "#flashcards/test",
+          null,
+          "2024-01-01",
+          "2024-01-01",
+        ]);
+
+        const result = await dbService.getDeckById("deck_123");
+
+        expect(mockDb.prepare).toHaveBeenCalledWith(
+          "SELECT * FROM decks WHERE id = ?",
+        );
+        expect(mockStatement.bind).toHaveBeenCalledWith(["deck_123"]);
+        expect(result).toEqual({
+          id: "deck_123",
+          name: "Test Deck",
+          tag: "#flashcards/test",
+          lastReviewed: null,
+          created: "2024-01-01",
+          modified: "2024-01-01",
+        });
+      });
+
+      it("should return null if deck not found", async () => {
+        mockStatement.step.mockReturnValue(false);
+
+        const result = await dbService.getDeckById("nonexistent");
+
+        expect(result).toBeNull();
+      });
+    });
+
+    describe("updateDeck", () => {
+      it("should update deck fields", async () => {
+        await dbService.updateDeck("deck_123", {
+          name: "Updated Name",
+          tag: "#flashcards/updated",
+        });
+
+        expect(mockDb.prepare).toHaveBeenCalledWith(
+          expect.stringContaining("UPDATE decks"),
+        );
+        expect(mockStatement.run).toHaveBeenCalledWith([
+          "Updated Name",
+          "#flashcards/updated",
+          expect.any(String), // modified timestamp
+          "deck_123",
+        ]);
+      });
+    });
+
     describe("getAllDecks", () => {
       it("should retrieve all decks", async () => {
         mockStatement.step

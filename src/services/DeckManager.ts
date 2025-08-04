@@ -97,18 +97,67 @@ export class DeckManager {
         if (!existingTags.has(tag)) {
           try {
             const deckName = this.extractDeckNameFromFiles(files);
-            const deck: Omit<Deck, "created" | "modified"> = {
-              id: this.generateDeckId(),
-              name: deckName,
-              tag: tag,
-              lastReviewed: null,
-            };
-            console.log(`Creating new deck: "${deckName}" with tag: ${tag}`);
-            await this.db.createDeck(deck);
-            newDecksCreated++;
+
+            // Check if any file already has a deck ID in frontmatter
+            let existingDeck = null;
+            for (const file of files) {
+              const deckId = this.getDeckIdFromFile(file);
+              if (deckId) {
+                existingDeck = await this.db.getDeckById(deckId);
+                if (existingDeck) {
+                  console.log(
+                    `Found existing deck "${existingDeck.name}" with ID ${deckId} for tag ${tag}`,
+                  );
+                  break;
+                }
+              }
+            }
+
+            if (existingDeck) {
+              // Update existing deck with new tag if needed
+              if (existingDeck.tag !== tag) {
+                console.log(
+                  `Updating deck "${existingDeck.name}" tag from ${existingDeck.tag} to ${tag}`,
+                );
+                await this.db.updateDeck(existingDeck.id, {
+                  tag: tag,
+                  name: deckName,
+                });
+              }
+
+              // Ensure all files have the deck ID in frontmatter
+              for (const file of files) {
+                await this.storeDeckIdInFile(file, existingDeck.id);
+              }
+            } else {
+              // Create new deck
+              const deck: Omit<Deck, "created" | "modified"> = {
+                id: this.generateDeckId(),
+                name: deckName,
+                tag: tag,
+                lastReviewed: null,
+              };
+              console.log(`Creating new deck: "${deckName}" with tag: ${tag}`);
+              await this.db.createDeck(deck);
+
+              // Add deck ID to frontmatter of all files
+              for (const file of files) {
+                await this.storeDeckIdInFile(file, deck.id);
+              }
+
+              newDecksCreated++;
+            }
           } catch (error) {
             console.error(`Failed to create deck for tag ${tag}:`, error);
             // Continue with other decks instead of failing completely
+          }
+        } else {
+          // Existing deck - ensure frontmatter is up to date
+          const existingDeck = existingDecks.find((d) => d.tag === tag);
+          if (existingDeck) {
+            for (const file of files) {
+              await this.storeDeckIdInFile(file, existingDeck.id);
+            }
           }
         }
       }
@@ -501,11 +550,47 @@ export class DeckManager {
     const content = await this.vault.read(file);
     const frontmatter = this.metadataCache.getFileCache(file)?.frontmatter;
 
-    if (!frontmatter || !frontmatter["flashcards-deck-id"]) {
-      // Add deck ID to frontmatter
-      const newContent = `---\nflashcards-deck-id: ${deckId}\n---\n\n${content}`;
-      await this.vault.modify(file, newContent);
+    // Skip if deck ID already exists and matches
+    if (frontmatter?.["flashcards-deck-id"] === deckId) {
+      return;
     }
+
+    let newContent: string;
+
+    if (content.startsWith("---\n")) {
+      // File already has frontmatter, update it
+      const endOfFrontmatter = content.indexOf("\n---\n", 4);
+      if (endOfFrontmatter !== -1) {
+        const frontmatterContent = content.slice(4, endOfFrontmatter);
+        const bodyContent = content.slice(endOfFrontmatter + 5);
+
+        // Add or update deck ID in existing frontmatter
+        const lines = frontmatterContent.split("\n");
+        let deckIdExists = false;
+
+        for (let i = 0; i < lines.length; i++) {
+          if (lines[i].startsWith("flashcards-deck-id:")) {
+            lines[i] = `flashcards-deck-id: ${deckId}`;
+            deckIdExists = true;
+            break;
+          }
+        }
+
+        if (!deckIdExists) {
+          lines.push(`flashcards-deck-id: ${deckId}`);
+        }
+
+        newContent = `---\n${lines.join("\n")}\n---\n${bodyContent}`;
+      } else {
+        // Malformed frontmatter, add new frontmatter
+        newContent = `---\nflashcards-deck-id: ${deckId}\n---\n\n${content}`;
+      }
+    } else {
+      // No frontmatter exists, add new frontmatter
+      newContent = `---\nflashcards-deck-id: ${deckId}\n---\n\n${content}`;
+    }
+
+    await this.vault.modify(file, newContent);
   }
 
   /**

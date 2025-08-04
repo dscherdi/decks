@@ -1,6 +1,7 @@
 ---
 tags:
   - flashcards/spanish
+flashcards-deck-id: deck_1754337047639_dhl7tmv6j
 ---
 
 # Spanish Vocabulary Flashcards

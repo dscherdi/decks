@@ -1,9 +1,11 @@
 <script lang="ts">
     import { onMount, onDestroy } from "svelte";
+    import { writable } from "svelte/store";
     import type { Deck, DeckStats } from "../database/types";
 
-    export let decks: Deck[] = [];
-    export let deckStats: Map<string, DeckStats> = new Map();
+    let decks: Deck[] = [];
+    let stats = new Map<string, DeckStats>();
+
     export let onDeckClick: (deck: Deck) => void;
     export let onRefresh: () => void;
 
@@ -12,7 +14,7 @@
 
     function getDeckStats(deckId: string): DeckStats {
         return (
-            deckStats.get(deckId) || {
+            stats.get(deckId) ?? {
                 deckId,
                 newCount: 0,
                 learningCount: 0,
@@ -31,7 +33,7 @@
         console.log("Refresh button clicked");
         isRefreshing = true;
         try {
-            await onRefresh();
+            onRefresh();
         } catch (error) {
             console.error("Error during refresh:", error);
         } finally {
@@ -39,12 +41,24 @@
         }
     }
 
-    // Function to handle stats updates without full refresh
-    export function updateStats() {
+    export function updateStatsById(deckId: string, newStats: DeckStats) {
+        console.log("updateStats called - triggering UI refresh");
         isUpdatingStats = true;
-        setTimeout(() => {
-            isUpdatingStats = false;
-        }, 500); // Brief visual feedback
+        stats.set(deckId, newStats);
+        decks = decks;
+        isUpdatingStats = false;
+    }
+    // Function to force UI update when stats change
+    export function updateStats(newStats: Map<string, DeckStats>) {
+        console.log("updateStats called - triggering UI refresh");
+        isUpdatingStats = true;
+        stats = newStats;
+        decks = decks;
+        isUpdatingStats = false;
+    }
+    export function updateDecks(newDecks: Deck[]) {
+        console.log("updateDecks called - triggering UI refresh");
+        decks = newDecks;
     }
 
     function handleDeckClick(deck: Deck) {

@@ -220,6 +220,57 @@ export class DatabaseService {
     return null;
   }
 
+  async getDeckById(id: string): Promise<Deck | null> {
+    if (!this.db) throw new Error("Database not initialized");
+
+    const stmt = this.db.prepare("SELECT * FROM decks WHERE id = ?");
+    stmt.bind([id]);
+
+    if (stmt.step()) {
+      const result = stmt.get();
+      stmt.free();
+
+      return {
+        id: result[0] as string,
+        name: result[1] as string,
+        tag: result[2] as string,
+        lastReviewed: result[3] as string | null,
+        created: result[4] as string,
+        modified: result[5] as string,
+      };
+    }
+
+    stmt.free();
+    return null;
+  }
+
+  async updateDeck(
+    deckId: string,
+    updates: Partial<Pick<Deck, "name" | "tag" | "lastReviewed">>,
+  ): Promise<void> {
+    if (!this.db) throw new Error("Database not initialized");
+
+    const now = new Date().toISOString();
+    const updateFields = Object.keys(updates)
+      .map((key) => {
+        const dbField = key === "lastReviewed" ? "last_reviewed" : key;
+        return `${dbField} = ?`;
+      })
+      .join(", ");
+
+    const stmt = this.db.prepare(`
+      UPDATE decks
+      SET ${updateFields}, modified = ?
+      WHERE id = ?
+    `);
+
+    const values = Object.values(updates);
+    values.push(now, deckId);
+    stmt.run(values);
+    stmt.free();
+    await this.save();
+  }
+
   async getAllDecks(): Promise<Deck[]> {
     if (!this.db) throw new Error("Database not initialized");
 

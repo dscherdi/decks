@@ -1,6 +1,7 @@
 ---
 tags:
   - flashcards/programming/concepts
+flashcards-deck-id: deck_1754337047640_a508psayp
 ---
 
 # Programming Concepts

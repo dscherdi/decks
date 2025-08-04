@@ -31,7 +31,6 @@ export default class FlashcardsPlugin extends Plugin {
   private fsrs: FSRS;
   public view: FlashcardsView | null = null;
   public settings: FlashcardsSettings;
-  private statsRefreshTimeout: NodeJS.Timeout | null = null;
 
   async onload() {
     console.log("Loading Flashcards plugin");
@@ -277,6 +276,10 @@ export default class FlashcardsPlugin extends Plugin {
     return await this.db.getReviewableFlashcards(deckId);
   }
 
+  async getDeckStatsById(deckId: string): Promise<DeckStats> {
+    return await this.db.getDeckStats(deckId);
+  }
+
   async reviewFlashcard(
     flashcard: Flashcard,
     difficulty: Difficulty,
@@ -309,6 +312,11 @@ export default class FlashcardsPlugin extends Plugin {
 
     // Update deck last reviewed
     await this.db.updateDeckLastReviewed(flashcard.deckId);
+
+    // Refresh stats for this specific deck if view exists
+    if (this.view) {
+      await this.view.refreshStatsById(flashcard.deckId);
+    }
   }
 
   renderMarkdown(content: string, el: HTMLElement) {
@@ -325,10 +333,13 @@ class FlashcardsView extends ItemView {
   private component: DeckListPanel | null = null;
   private markdownComponents: Component[] = [];
   private statsRefreshTimeout: NodeJS.Timeout | null = null;
+  private backgroundRefreshInterval: NodeJS.Timeout | null = null;
 
   constructor(leaf: WorkspaceLeaf, plugin: FlashcardsPlugin) {
     super(leaf);
     this.plugin = plugin;
+    // Set reference in plugin so we can access this view instance
+    this.plugin.view = this;
   }
 
   getViewType(): string {
@@ -352,8 +363,6 @@ class FlashcardsView extends ItemView {
     this.component = new DeckListPanel({
       target: container,
       props: {
-        decks: [],
-        deckStats: new Map(),
         onDeckClick: (deck: Deck) => this.startReview(deck),
         onRefresh: async () => {
           console.log("onRefresh callback invoked");
@@ -364,6 +373,9 @@ class FlashcardsView extends ItemView {
 
     // Initial refresh
     await this.refresh();
+
+    // Start background refresh job (every 5 seconds)
+    this.startBackgroundRefresh();
   }
 
   async onClose() {
@@ -378,9 +390,17 @@ class FlashcardsView extends ItemView {
       this.statsRefreshTimeout = null;
     }
 
+    // Clean up background refresh
+    this.stopBackgroundRefresh();
+
     // Clean up markdown components
     this.markdownComponents.forEach((comp) => comp.unload());
     this.markdownComponents = [];
+
+    // Clear reference in plugin
+    if (this.plugin.view === this) {
+      this.plugin.view = null;
+    }
   }
 
   async refresh() {
@@ -400,10 +420,8 @@ class FlashcardsView extends ItemView {
       // Update component
       if (this.component) {
         console.log("Updating component with new data");
-        this.component.$set({
-          decks,
-          deckStats,
-        });
+        this.component.updateDecks(decks);
+        this.component.updateStats(deckStats);
       } else {
         console.error("Component not found!");
       }
@@ -415,36 +433,75 @@ class FlashcardsView extends ItemView {
   }
 
   async refreshStats() {
-    // Clear any existing timeout
-    if (this.statsRefreshTimeout) {
-      clearTimeout(this.statsRefreshTimeout);
-    }
+    console.log("FlashcardsView.refreshStats() executing");
+    try {
+      // Get updated stats only (faster than full refresh)
+      const deckStats = await this.plugin.getDeckStats();
+      console.log("Updated deck stats:", deckStats);
 
-    // Trigger visual feedback immediately
-    if (this.component) {
-      this.component.updateStats();
-    }
-
-    // Throttle the actual stats refresh
-    this.statsRefreshTimeout = setTimeout(async () => {
-      console.log("FlashcardsView.refreshStats() executing");
-      try {
-        // Get updated stats only (faster than full refresh)
-        const deckStats = await this.plugin.getDeckStats();
-        console.log("Updated deck stats:", deckStats);
-
-        // Update component with new stats
-        if (this.component) {
-          this.component.$set({
-            deckStats,
-          });
-        }
-      } catch (error) {
-        console.error("Error refreshing deck stats:", error);
-      } finally {
-        this.statsRefreshTimeout = null;
+      // Update component with new stats - same pattern as refresh()
+      if (this.component) {
+        this.component.updateStats(deckStats);
       }
-    }, 300); // 300ms throttle
+    } catch (error) {
+      console.error("Error refreshing deck stats:", error);
+    }
+  }
+
+  async refreshStatsById(deckId: string) {
+    console.log(
+      `FlashcardsView.refreshStatsById() executing for deck: ${deckId}`,
+    );
+    try {
+      // Get all stats (same as refresh() method for consistency)
+      const deckStats = await this.plugin.getDeckStatsById(deckId);
+      console.log("Updated all deck stats");
+
+      // Update component using same pattern as refresh()
+      if (this.component && deckStats) {
+        this.component.updateStatsById(deckId, deckStats);
+      }
+    } catch (error) {
+      console.error(`Error refreshing stats for deck ${deckId}:`, error);
+    }
+  }
+
+  startBackgroundRefresh() {
+    // Clear any existing interval
+    this.stopBackgroundRefresh();
+
+    console.log(
+      `Starting background refresh job (every ${this.plugin.settings.ui.backgroundRefreshInterval} seconds)`,
+    );
+    this.backgroundRefreshInterval = setInterval(async () => {
+      console.log("Background refresh tick");
+      // Only refresh if component exists
+      this.refreshStats();
+    }, this.plugin.settings.ui.backgroundRefreshInterval * 1000);
+  }
+
+  stopBackgroundRefresh() {
+    if (this.backgroundRefreshInterval) {
+      console.log("Stopping background refresh job");
+      clearInterval(this.backgroundRefreshInterval);
+      this.backgroundRefreshInterval = null;
+    }
+  }
+
+  restartBackgroundRefresh() {
+    this.stopBackgroundRefresh();
+    this.startBackgroundRefresh();
+  }
+
+  // Test method to check if background job is running
+  checkBackgroundJobStatus() {
+    console.log("Background job status:", {
+      isRunning: !!this.backgroundRefreshInterval,
+      intervalId: this.backgroundRefreshInterval,
+      componentExists: !!this.component,
+      refreshInterval: this.plugin.settings.ui.backgroundRefreshInterval,
+    });
+    return !!this.backgroundRefreshInterval;
   }
 
   async startReview(deck: Deck) {
@@ -518,10 +575,10 @@ class FlashcardReviewModalWrapper extends Modal {
           }
         },
         settings: this.plugin.settings,
-        onCardReviewed: async () => {
-          // Refresh deck list stats after each card review
-          if (this.plugin.view) {
-            await this.plugin.view.refreshStats();
+        onCardReviewed: async (reviewedCard: Flashcard) => {
+          // Refresh stats for the specific deck being reviewed (more efficient)
+          if (this.plugin.view && reviewedCard) {
+            await this.plugin.view.refreshStatsById(reviewedCard.deckId);
           }
         },
       },

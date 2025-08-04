@@ -2426,6 +2426,9 @@ var init_settings = __esm({
         enableKeyboardShortcuts: true,
         sessionGoal: 20,
         enableSessionLimit: false
+      },
+      ui: {
+        backgroundRefreshInterval: 5
       }
     };
   }
@@ -2516,6 +2519,7 @@ var DatabaseService = class {
         type TEXT NOT NULL CHECK (type IN ('header-paragraph', 'table')),
         source_file TEXT NOT NULL,
         line_number INTEGER NOT NULL,
+        content_hash TEXT NOT NULL,
         state TEXT NOT NULL DEFAULT 'new' CHECK (state IN ('new', 'learning', 'review')),
         due_date TEXT NOT NULL,
         interval INTEGER NOT NULL DEFAULT 0,
@@ -2629,6 +2633,45 @@ var DatabaseService = class {
     stmt.free();
     return null;
   }
+  async getDeckById(id) {
+    if (!this.db)
+      throw new Error("Database not initialized");
+    const stmt = this.db.prepare("SELECT * FROM decks WHERE id = ?");
+    stmt.bind([id]);
+    if (stmt.step()) {
+      const result = stmt.get();
+      stmt.free();
+      return {
+        id: result[0],
+        name: result[1],
+        tag: result[2],
+        lastReviewed: result[3],
+        created: result[4],
+        modified: result[5]
+      };
+    }
+    stmt.free();
+    return null;
+  }
+  async updateDeck(deckId, updates) {
+    if (!this.db)
+      throw new Error("Database not initialized");
+    const now = (/* @__PURE__ */ new Date()).toISOString();
+    const updateFields = Object.keys(updates).map((key) => {
+      const dbField = key === "lastReviewed" ? "last_reviewed" : key;
+      return `${dbField} = ?`;
+    }).join(", ");
+    const stmt = this.db.prepare(`
+      UPDATE decks
+      SET ${updateFields}, modified = ?
+      WHERE id = ?
+    `);
+    const values = Object.values(updates);
+    values.push(now, deckId);
+    stmt.run(values);
+    stmt.free();
+    await this.save();
+  }
   async getAllDecks() {
     if (!this.db)
       throw new Error("Database not initialized");
@@ -2672,9 +2715,9 @@ var DatabaseService = class {
     };
     const stmt = this.db.prepare(`
       INSERT OR REPLACE INTO flashcards (
-        id, deck_id, front, back, type, source_file, line_number,
+        id, deck_id, front, back, type, source_file, line_number, content_hash,
         state, due_date, interval, repetitions, ease_factor, stability, lapses, last_reviewed, created, modified
-      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
     `);
     stmt.run([
       fullFlashcard.id,
@@ -2684,6 +2727,7 @@ var DatabaseService = class {
       fullFlashcard.type,
       fullFlashcard.sourceFile,
       fullFlashcard.lineNumber,
+      fullFlashcard.contentHash,
       fullFlashcard.state,
       fullFlashcard.dueDate,
       fullFlashcard.interval,
@@ -2698,6 +2742,33 @@ var DatabaseService = class {
     stmt.free();
     await this.save();
     return fullFlashcard;
+  }
+  async updateFlashcard(flashcardId, updates) {
+    if (!this.db)
+      throw new Error("Database not initialized");
+    const now = (/* @__PURE__ */ new Date()).toISOString();
+    const updateFields = Object.keys(updates).map((key) => {
+      const dbField = key === "contentHash" ? "content_hash" : key === "sourceFile" ? "source_file" : key === "lineNumber" ? "line_number" : key === "dueDate" ? "due_date" : key === "easeFactor" ? "ease_factor" : key === "lastReviewed" ? "last_reviewed" : key.replace(/([A-Z])/g, "_$1").toLowerCase();
+      return `${dbField} = ?`;
+    }).join(", ");
+    const stmt = this.db.prepare(`
+      UPDATE flashcards
+      SET ${updateFields}, modified = ?
+      WHERE id = ?
+    `);
+    const values = Object.values(updates);
+    values.push(now, flashcardId);
+    stmt.run(values);
+    stmt.free();
+    await this.save();
+  }
+  async deleteFlashcard(flashcardId) {
+    if (!this.db)
+      throw new Error("Database not initialized");
+    const stmt = this.db.prepare("DELETE FROM flashcards WHERE id = ?");
+    stmt.run([flashcardId]);
+    stmt.free();
+    await this.save();
   }
   async getFlashcardsByDeck(deckId) {
     if (!this.db)
@@ -2753,32 +2824,6 @@ var DatabaseService = class {
     }
     stmt.free();
     return flashcards;
-  }
-  async updateFlashcard(flashcard) {
-    if (!this.db)
-      throw new Error("Database not initialized");
-    const stmt = this.db.prepare(`
-      UPDATE flashcards SET
-        front = ?, back = ?, state = ?, due_date = ?, interval = ?,
-        repetitions = ?, ease_factor = ?, stability = ?, lapses = ?, last_reviewed = ?, modified = ?
-      WHERE id = ?
-    `);
-    stmt.run([
-      flashcard.front,
-      flashcard.back,
-      flashcard.state,
-      flashcard.dueDate,
-      flashcard.interval,
-      flashcard.repetitions,
-      flashcard.easeFactor,
-      flashcard.stability,
-      flashcard.lapses,
-      flashcard.lastReviewed,
-      (/* @__PURE__ */ new Date()).toISOString(),
-      flashcard.id
-    ]);
-    stmt.free();
-    await this.save();
   }
   async deleteFlashcardsByFile(sourceFile) {
     if (!this.db)
@@ -2879,16 +2924,17 @@ var DatabaseService = class {
       type: row[4],
       sourceFile: row[5],
       lineNumber: row[6],
-      state: row[7],
-      dueDate: row[8],
-      interval: row[9],
-      repetitions: row[10],
-      easeFactor: row[11],
-      stability: row[12],
-      lapses: row[13],
-      lastReviewed: row[14],
-      created: row[15],
-      modified: row[16]
+      contentHash: row[7],
+      state: row[8],
+      dueDate: row[9],
+      interval: row[10],
+      repetitions: row[11],
+      easeFactor: row[12],
+      stability: row[13],
+      lapses: row[14],
+      lastReviewed: row[15],
+      created: row[16],
+      modified: row[17]
     };
   }
   async close() {
@@ -2964,17 +3010,55 @@ var DeckManager = class {
         if (!existingTags.has(tag)) {
           try {
             const deckName = this.extractDeckNameFromFiles(files);
-            const deck = {
-              id: this.generateDeckId(),
-              name: deckName,
-              tag,
-              lastReviewed: null
-            };
-            console.log(`Creating new deck: "${deckName}" with tag: ${tag}`);
-            await this.db.createDeck(deck);
-            newDecksCreated++;
+            let existingDeck = null;
+            for (const file of files) {
+              const deckId = this.getDeckIdFromFile(file);
+              if (deckId) {
+                existingDeck = await this.db.getDeckById(deckId);
+                if (existingDeck) {
+                  console.log(
+                    `Found existing deck "${existingDeck.name}" with ID ${deckId} for tag ${tag}`
+                  );
+                  break;
+                }
+              }
+            }
+            if (existingDeck) {
+              if (existingDeck.tag !== tag) {
+                console.log(
+                  `Updating deck "${existingDeck.name}" tag from ${existingDeck.tag} to ${tag}`
+                );
+                await this.db.updateDeck(existingDeck.id, {
+                  tag,
+                  name: deckName
+                });
+              }
+              for (const file of files) {
+                await this.storeDeckIdInFile(file, existingDeck.id);
+              }
+            } else {
+              const deck = {
+                id: this.generateDeckId(),
+                name: deckName,
+                tag,
+                lastReviewed: null
+              };
+              console.log(`Creating new deck: "${deckName}" with tag: ${tag}`);
+              await this.db.createDeck(deck);
+              for (const file of files) {
+                await this.storeDeckIdInFile(file, deck.id);
+              }
+              newDecksCreated++;
+            }
           } catch (error) {
             console.error(`Failed to create deck for tag ${tag}:`, error);
+          }
+        } else {
+          const existingDeck = existingDecks.find((d) => d.tag === tag);
+          if (existingDeck) {
+            for (const file of files) {
+              await this.storeDeckIdInFile(file, existingDeck.id);
+            }
           }
         }
       }
@@ -3110,20 +3194,113 @@ var DeckManager = class {
       return;
     const decksMap = await this.scanVaultForDecks();
     const files = decksMap.get(deckTag) || [];
-    for (const file of files) {
-      await this.db.deleteFlashcardsByFile(file.path);
-    }
+    const existingFlashcards = await this.db.getFlashcardsByDeck(deck.id);
+    const existingById = /* @__PURE__ */ new Map();
+    existingFlashcards.forEach((card) => {
+      existingById.set(card.id, card);
+    });
+    const processedIds = /* @__PURE__ */ new Set();
     for (const file of files) {
       const parsedCards = await this.parseFlashcardsFromFile(file);
       for (const parsed of parsedCards) {
+        const flashcardId = this.generateFlashcardId(parsed.front);
+        const contentHash = this.generateContentHash(parsed.back);
+        const existingCard = existingById.get(flashcardId);
+        processedIds.add(flashcardId);
+        if (existingCard) {
+          if (existingCard.contentHash !== contentHash) {
+            await this.db.updateFlashcard(existingCard.id, {
+              front: parsed.front,
+              back: parsed.back,
+              type: parsed.type,
+              contentHash
+            });
+          }
+        } else {
+          const flashcard = {
+            id: flashcardId,
+            deckId: deck.id,
+            front: parsed.front,
+            back: parsed.back,
+            type: parsed.type,
+            sourceFile: file.path,
+            lineNumber: parsed.lineNumber,
+            contentHash,
+            state: "new",
+            dueDate: (/* @__PURE__ */ new Date()).toISOString(),
+            interval: 0,
+            repetitions: 0,
+            easeFactor: 5,
+            // FSRS initial difficulty
+            stability: 2.5,
+            // FSRS initial stability
+            lapses: 0,
+            lastReviewed: null
+          };
+          await this.db.createFlashcard(flashcard);
+        }
+      }
+    }
+    for (const [flashcardId, existingCard] of existingById) {
+      if (!processedIds.has(flashcardId)) {
+        await this.db.deleteFlashcard(existingCard.id);
+      }
+    }
+  }
+  /**
+   * Generate content hash for flashcard back content (front is used for ID)
+   */
+  generateContentHash(back) {
+    let hash = 0;
+    for (let i = 0; i < back.length; i++) {
+      const char = back.charCodeAt(i);
+      hash = (hash << 5) - hash + char;
+      hash = hash & hash;
+    }
+    return Math.abs(hash).toString(16);
+  }
+  /**
+   * Sync flashcards for a specific deck by name
+   */
+  async syncFlashcardsForDeckByName(deckName) {
+    const deck = await this.db.getDeckByName(deckName);
+    if (!deck)
+      return;
+    const files = this.vault.getMarkdownFiles();
+    const targetFile = files.find((file) => file.basename === deckName);
+    if (!targetFile)
+      return;
+    const existingFlashcards = await this.db.getFlashcardsByDeck(deck.id);
+    const existingById = /* @__PURE__ */ new Map();
+    existingFlashcards.filter((card) => card.sourceFile === targetFile.path).forEach((card) => {
+      existingById.set(card.id, card);
+    });
+    const parsedCards = await this.parseFlashcardsFromFile(targetFile);
+    const processedIds = /* @__PURE__ */ new Set();
+    for (const parsed of parsedCards) {
+      const flashcardId = this.generateFlashcardId(parsed.front);
+      const contentHash = this.generateContentHash(parsed.back);
+      const existingCard = existingById.get(flashcardId);
+      processedIds.add(flashcardId);
+      if (existingCard) {
+        if (existingCard.contentHash !== contentHash) {
+          await this.db.updateFlashcard(existingCard.id, {
+            front: parsed.front,
+            back: parsed.back,
+            type: parsed.type,
+            contentHash
+          });
+        }
+      } else {
         const flashcard = {
-          id: this.generateFlashcardId(parsed.front),
+          id: flashcardId,
           deckId: deck.id,
           front: parsed.front,
           back: parsed.back,
           type: parsed.type,
-          sourceFile: file.path,
+          sourceFile: targetFile.path,
           lineNumber: parsed.lineNumber,
+          contentHash,
           state: "new",
           dueDate: (/* @__PURE__ */ new Date()).toISOString(),
           interval: 0,
@@ -3138,15 +3315,11 @@ var DeckManager = class {
         await this.db.createFlashcard(flashcard);
       }
     }
-  }
-  /**
-   * Sync flashcards for a specific deck by name
-   */
-  async syncFlashcardsForDeckByName(deckName) {
-    const deck = await this.db.getDeckByName(deckName);
-    if (!deck)
-      return;
-    await this.syncFlashcardsForDeck(deck.tag);
+    for (const [flashcardId, existingCard] of existingById) {
+      if (!processedIds.has(flashcardId)) {
+        await this.db.deleteFlashcard(existingCard.id);
+      }
+    }
   }
   /**
    * Extract deck name from files (use the first file's name)
@@ -3197,14 +3370,46 @@ var DeckManager = class {
     var _a;
     const content = await this.vault.read(file);
     const frontmatter = (_a = this.metadataCache.getFileCache(file)) == null ? void 0 : _a.frontmatter;
-    if (!frontmatter || !frontmatter["flashcards-deck-id"]) {
-      const newContent = `---
+    if ((frontmatter == null ? void 0 : frontmatter["flashcards-deck-id"]) === deckId) {
+      return;
+    }
+    let newContent;
+    if (content.startsWith("---\n")) {
+      const endOfFrontmatter = content.indexOf("\n---\n", 4);
+      if (endOfFrontmatter !== -1) {
+        const frontmatterContent = content.slice(4, endOfFrontmatter);
+        const bodyContent = content.slice(endOfFrontmatter + 5);
+        const lines = frontmatterContent.split("\n");
+        let deckIdExists = false;
+        for (let i = 0; i < lines.length; i++) {
+          if (lines[i].startsWith("flashcards-deck-id:")) {
+            lines[i] = `flashcards-deck-id: ${deckId}`;
+            deckIdExists = true;
+            break;
+          }
+        }
+        if (!deckIdExists) {
+          lines.push(`flashcards-deck-id: ${deckId}`);
+        }
+        newContent = `---
+${lines.join("\n")}
+---
+${bodyContent}`;
+      } else {
+        newContent = `---
 flashcards-deck-id: ${deckId}
 ---
 
 ${content}`;
-      await this.vault.modify(file, newContent);
+      }
+    } else {
+      newContent = `---
+flashcards-deck-id: ${deckId}
+---
+
+${content}`;
     }
+    await this.vault.modify(file, newContent);
   }
   /**
    * Get deck ID from file
@@ -3563,6 +3768,7 @@ var FlashcardsSettingTab = class extends import_obsidian.PluginSettingTab {
     this.addFSRSSettings(containerEl);
     this.addDatabaseSettings(containerEl);
     this.addReviewSettings(containerEl);
+    this.addUISettings(containerEl);
   }
   addFSRSSettings(containerEl) {
     containerEl.createEl("h3", { text: "FSRS Algorithm" });
@@ -3658,6 +3864,23 @@ var FlashcardsSettingTab = class extends import_obsidian.PluginSettingTab {
         if (!isNaN(num) && num > 0) {
           this.plugin.settings.review.sessionGoal = num;
           await this.plugin.saveSettings();
+        }
+      })
+    );
+  }
+  addUISettings(containerEl) {
+    containerEl.createEl("h3", { text: "User Interface" });
+    new import_obsidian.Setting(containerEl).setName("Background Refresh Interval").setDesc("How often to refresh deck stats in the side panel (in seconds)").addText(
+      (text2) => text2.setPlaceholder("5").setValue(
+        this.plugin.settings.ui.backgroundRefreshInterval.toString()
+      ).onChange(async (value) => {
+        const num = parseInt(value);
+        if (!isNaN(num) && num >= 1 && num <= 60) {
+          this.plugin.settings.ui.backgroundRefreshInterval = num;
+          await this.plugin.saveSettings();
+          if (this.plugin.view) {
+            this.plugin.view.restartBackgroundRefresh();
+          }
         }
       })
     );
@@ -4138,15 +4361,15 @@ function add_css(target) {
 }
 function get_each_context(ctx, list, i) {
   const child_ctx = ctx.slice();
-  child_ctx[11] = list[i];
+  child_ctx[13] = list[i];
   const constants_0 = (
     /*getDeckStats*/
-    child_ctx[3](
+    child_ctx[4](
       /*deck*/
-      child_ctx[11].id
+      child_ctx[13].id
     )
   );
-  child_ctx[12] = constants_0;
+  child_ctx[3] = constants_0;
   return child_ctx;
 }
 function create_else_block(ctx) {
@@ -4192,7 +4415,7 @@ function create_else_block(ctx) {
     },
     p(ctx2, dirty) {
       if (dirty & /*decks, handleDeckClick, getDeckStats, isUpdatingStats, formatDeckName*/
-      45) {
+      85) {
         each_value = /*decks*/
         ctx2[0];
         let i;
@@ -4243,28 +4466,28 @@ function create_each_block(ctx) {
   let div0;
   let t0_value = formatDeckName(
     /*deck*/
-    ctx[11]
+    ctx[13]
   ) + "";
   let t0;
   let t1;
   let div1;
   let t2_value = (
     /*stats*/
-    ctx[12].newCount + ""
+    ctx[3].newCount + ""
   );
   let t2;
   let t3;
   let div2;
   let t4_value = (
     /*stats*/
-    ctx[12].learningCount + ""
+    ctx[3].learningCount + ""
   );
   let t4;
   let t5;
   let div3;
   let t6_value = (
     /*stats*/
-    ctx[12].dueCount + ""
+    ctx[3].dueCount + ""
   );
   let t6;
   let t7;
@@ -4274,9 +4497,9 @@ function create_each_block(ctx) {
   function click_handler() {
     return (
       /*click_handler*/
-      ctx[10](
+      ctx[12](
         /*deck*/
-        ctx[11]
+        ctx[13]
       )
     );
   }
@@ -4301,7 +4524,7 @@ function create_each_block(ctx) {
         div1,
         "has-cards",
         /*stats*/
-        ctx[12].newCount > 0
+        ctx[3].newCount > 0
       );
       toggle_class(
         div1,
@@ -4314,7 +4537,7 @@ function create_each_block(ctx) {
         div2,
         "has-cards",
         /*stats*/
-        ctx[12].learningCount > 0
+        ctx[3].learningCount > 0
       );
       toggle_class(
         div2,
@@ -4327,7 +4550,7 @@ function create_each_block(ctx) {
         div3,
         "has-cards",
         /*stats*/
-        ctx[12].dueCount > 0
+        ctx[3].dueCount > 0
       );
       toggle_class(
         div3,
@@ -4337,7 +4560,7 @@ function create_each_block(ctx) {
       );
       attr(button, "class", "deck-row svelte-b7m3wr");
       attr(button, "title", button_title_value = "Click to review " + /*deck*/
-      ctx[11].name);
+      ctx[13].name);
     },
     m(target, anchor) {
       insert(target, button, anchor);
@@ -4363,20 +4586,20 @@ function create_each_block(ctx) {
       if (dirty & /*decks*/
       1 && t0_value !== (t0_value = formatDeckName(
         /*deck*/
-        ctx[11]
+        ctx[13]
       ) + ""))
         set_data(t0, t0_value);
       if (dirty & /*decks*/
       1 && t2_value !== (t2_value = /*stats*/
-      ctx[12].newCount + ""))
+      ctx[3].newCount + ""))
         set_data(t2, t2_value);
       if (dirty & /*getDeckStats, decks*/
-      9) {
+      17) {
         toggle_class(
           div1,
           "has-cards",
           /*stats*/
-          ctx[12].newCount > 0
+          ctx[3].newCount > 0
         );
       }
       if (dirty & /*isUpdatingStats*/
@@ -4390,15 +4613,15 @@ function create_each_block(ctx) {
       }
       if (dirty & /*decks*/
       1 && t4_value !== (t4_value = /*stats*/
-      ctx[12].learningCount + ""))
+      ctx[3].learningCount + ""))
         set_data(t4, t4_value);
       if (dirty & /*getDeckStats, decks*/
-      9) {
+      17) {
         toggle_class(
           div2,
           "has-cards",
           /*stats*/
-          ctx[12].learningCount > 0
+          ctx[3].learningCount > 0
         );
       }
       if (dirty & /*isUpdatingStats*/
@@ -4412,15 +4635,15 @@ function create_each_block(ctx) {
       }
       if (dirty & /*decks*/
       1 && t6_value !== (t6_value = /*stats*/
-      ctx[12].dueCount + ""))
+      ctx[3].dueCount + ""))
         set_data(t6, t6_value);
       if (dirty & /*getDeckStats, decks*/
-      9) {
+      17) {
         toggle_class(
           div3,
           "has-cards",
           /*stats*/
-          ctx[12].dueCount > 0
+          ctx[3].dueCount > 0
         );
       }
       if (dirty & /*isUpdatingStats*/
@@ -4434,7 +4657,7 @@ function create_each_block(ctx) {
       }
       if (dirty & /*decks*/
       1 && button_title_value !== (button_title_value = "Click to review " + /*deck*/
-      ctx[11].name)) {
+      ctx[13].name)) {
         attr(button, "title", button_title_value);
       }
     },
@@ -4526,7 +4749,7 @@ function create_fragment(ctx) {
           button,
           "click",
           /*handleRefresh*/
-          ctx[4]
+          ctx[5]
         );
         mounted = true;
       }
@@ -4572,14 +4795,15 @@ function formatDeckName(deck) {
   return deck.name;
 }
 function instance($$self, $$props, $$invalidate) {
-  let { decks = [] } = $$props;
-  let { deckStats = /* @__PURE__ */ new Map() } = $$props;
+  let decks = [];
+  let stats = /* @__PURE__ */ new Map();
   let { onDeckClick } = $$props;
   let { onRefresh } = $$props;
   let isRefreshing = false;
   let isUpdatingStats = false;
   function getDeckStats(deckId) {
-    return deckStats.get(deckId) || {
+    var _a;
+    return (_a = stats.get(deckId)) !== null && _a !== void 0 ? _a : {
       deckId,
       newCount: 0,
       learningCount: 0,
@@ -4592,7 +4816,7 @@ function instance($$self, $$props, $$invalidate) {
       console.log("Refresh button clicked");
       $$invalidate(1, isRefreshing = true);
       try {
-        yield onRefresh();
+        onRefresh();
       } catch (error) {
         console.error("Error during refresh:", error);
       } finally {
@@ -4600,14 +4824,23 @@ function instance($$self, $$props, $$invalidate) {
       }
     });
   }
-  function updateStats() {
+  function updateStatsById(deckId, newStats) {
+    console.log("updateStats called - triggering UI refresh");
     $$invalidate(2, isUpdatingStats = true);
-    setTimeout(
-      () => {
-        $$invalidate(2, isUpdatingStats = false);
-      },
-      500
-    );
+    stats.set(deckId, newStats);
+    $$invalidate(0, decks);
+    $$invalidate(2, isUpdatingStats = false);
+  }
+  function updateStats(newStats) {
+    console.log("updateStats called - triggering UI refresh");
+    $$invalidate(2, isUpdatingStats = true);
+    $$invalidate(3, stats = newStats);
+    $$invalidate(0, decks);
+    $$invalidate(2, isUpdatingStats = false);
+  }
+  function updateDecks(newDecks) {
+    console.log("updateDecks called - triggering UI refresh");
+    $$invalidate(0, decks = newDecks);
   }
   function handleDeckClick(deck) {
     onDeckClick(deck);
@@ -4617,10 +4850,6 @@ function instance($$self, $$props, $$invalidate) {
   });
   const click_handler = (deck) => handleDeckClick(deck);
   $$self.$$set = ($$props2) => {
-    if ("decks" in $$props2)
-      $$invalidate(0, decks = $$props2.decks);
-    if ("deckStats" in $$props2)
-      $$invalidate(6, deckStats = $$props2.deckStats);
     if ("onDeckClick" in $$props2)
       $$invalidate(7, onDeckClick = $$props2.onDeckClick);
     if ("onRefresh" in $$props2)
@@ -4630,13 +4859,15 @@ function instance($$self, $$props, $$invalidate) {
     decks,
     isRefreshing,
     isUpdatingStats,
+    stats,
     getDeckStats,
     handleRefresh,
     handleDeckClick,
-    deckStats,
     onDeckClick,
     onRefresh,
+    updateStatsById,
     updateStats,
+    updateDecks,
     click_handler
   ];
 }
@@ -4650,17 +4881,23 @@ var DeckListPanel = class extends SvelteComponent {
       create_fragment,
       safe_not_equal,
       {
-        decks: 0,
-        deckStats: 6,
         onDeckClick: 7,
         onRefresh: 8,
-        updateStats: 9
+        updateStatsById: 9,
+        updateStats: 10,
+        updateDecks: 11
       },
       add_css
     );
   }
-  get updateStats() {
+  get updateStatsById() {
     return this.$$.ctx[9];
+  }
+  get updateStats() {
+    return this.$$.ctx[10];
+  }
+  get updateDecks() {
+    return this.$$.ctx[11];
   }
 };
 var DeckListPanel_default = DeckListPanel;
@@ -5326,7 +5563,7 @@ function instance2($$self, $$props, $$invalidate) {
         yield onReview(currentCard, difficulty);
         $$invalidate(20, reviewedCount++, reviewedCount);
         if (onCardReviewed) {
-          yield onCardReviewed();
+          yield onCardReviewed(currentCard);
         }
         if (sessionLimitReached) {
           dispatch("complete", {
@@ -5433,7 +5670,7 @@ function instance2($$self, $$props, $$invalidate) {
     if ($$self.$$.dirty[0] & /*flashcards, currentIndex*/
     3) {
       $:
-        $$invalidate(9, remainingCards = flashcards.length - currentIndex - 1);
+        $$invalidate(9, remainingCards = flashcards.length - currentIndex);
     }
     if ($$self.$$.dirty[0] & /*settings, _a, reviewedCount, _b*/
     1835012) {
@@ -5510,7 +5747,6 @@ var FlashcardsPlugin = class extends import_obsidian2.Plugin {
   constructor() {
     super(...arguments);
     this.view = null;
-    this.statsRefreshTimeout = null;
   }
   async onload() {
     console.log("Loading Flashcards plugin");
@@ -5699,9 +5935,21 @@ var FlashcardsPlugin = class extends import_obsidian2.Plugin {
   async getReviewableFlashcards(deckId) {
     return await this.db.getReviewableFlashcards(deckId);
   }
+  async getDeckStatsById(deckId) {
+    return await this.db.getDeckStats(deckId);
+  }
   async reviewFlashcard(flashcard, difficulty) {
     const updatedCard = this.fsrs.updateCard(flashcard, difficulty);
-    await this.db.updateFlashcard(updatedCard);
+    await this.db.updateFlashcard(updatedCard.id, {
+      state: updatedCard.state,
+      dueDate: updatedCard.dueDate,
+      interval: updatedCard.interval,
+      repetitions: updatedCard.repetitions,
+      easeFactor: updatedCard.easeFactor,
+      stability: updatedCard.stability,
+      lapses: updatedCard.lapses,
+      lastReviewed: updatedCard.lastReviewed
+    });
     await this.db.createReviewLog({
       flashcardId: flashcard.id,
       reviewedAt: (/* @__PURE__ */ new Date()).toISOString(),
@@ -5712,6 +5960,9 @@ var FlashcardsPlugin = class extends import_obsidian2.Plugin {
       newEaseFactor: updatedCard.easeFactor
     });
     await this.db.updateDeckLastReviewed(flashcard.deckId);
+    if (this.view) {
+      await this.view.refreshStatsById(flashcard.deckId);
+    }
   }
   renderMarkdown(content, el) {
     const component = new import_obsidian2.Component();
@@ -5726,7 +5977,9 @@ var FlashcardsView = class extends import_obsidian2.ItemView {
     this.component = null;
     this.markdownComponents = [];
     this.statsRefreshTimeout = null;
+    this.backgroundRefreshInterval = null;
     this.plugin = plugin;
+    this.plugin.view = this;
   }
   getViewType() {
     return VIEW_TYPE_FLASHCARDS;
@@ -5744,8 +5997,6 @@ var FlashcardsView = class extends import_obsidian2.ItemView {
     this.component = new DeckListPanel_default({
       target: container,
       props: {
-        decks: [],
-        deckStats: /* @__PURE__ */ new Map(),
         onDeckClick: (deck) => this.startReview(deck),
         onRefresh: async () => {
           console.log("onRefresh callback invoked");
@@ -5754,6 +6005,7 @@ var FlashcardsView = class extends import_obsidian2.ItemView {
       }
     });
     await this.refresh();
+    this.startBackgroundRefresh();
   }
   async onClose() {
     if (this.component) {
@@ -5764,8 +6016,12 @@ var FlashcardsView = class extends import_obsidian2.ItemView {
       clearTimeout(this.statsRefreshTimeout);
       this.statsRefreshTimeout = null;
     }
+    this.stopBackgroundRefresh();
     this.markdownComponents.forEach((comp) => comp.unload());
     this.markdownComponents = [];
+    if (this.plugin.view === this) {
+      this.plugin.view = null;
+    }
   }
   async refresh() {
     console.log("FlashcardsView.refresh() called");
@@ -5777,10 +6033,8 @@ var FlashcardsView = class extends import_obsidian2.ItemView {
       const deckStats = await this.plugin.getDeckStats();
       if (this.component) {
         console.log("Updating component with new data");
-        this.component.$set({
-          decks,
-          deckStats
-        });
+        this.component.updateDecks(decks);
+        this.component.updateStats(deckStats);
       } else {
         console.error("Component not found!");
       }
@@ -5791,28 +6045,61 @@ var FlashcardsView = class extends import_obsidian2.ItemView {
     }
   }
   async refreshStats() {
-    if (this.statsRefreshTimeout) {
-      clearTimeout(this.statsRefreshTimeout);
-    }
-    if (this.component) {
-      this.component.updateStats();
-    }
-    this.statsRefreshTimeout = setTimeout(async () => {
-      console.log("FlashcardsView.refreshStats() executing");
-      try {
-        const deckStats = await this.plugin.getDeckStats();
-        console.log("Updated deck stats:", deckStats);
-        if (this.component) {
-          this.component.$set({
-            deckStats
-          });
-        }
-      } catch (error) {
-        console.error("Error refreshing deck stats:", error);
-      } finally {
-        this.statsRefreshTimeout = null;
+    console.log("FlashcardsView.refreshStats() executing");
+    try {
+      const deckStats = await this.plugin.getDeckStats();
+      console.log("Updated deck stats:", deckStats);
+      if (this.component) {
+        this.component.updateStats(deckStats);
       }
-    }, 300);
+    } catch (error) {
+      console.error("Error refreshing deck stats:", error);
+    }
+  }
+  async refreshStatsById(deckId) {
+    console.log(
+      `FlashcardsView.refreshStatsById() executing for deck: ${deckId}`
+    );
+    try {
+      const deckStats = await this.plugin.getDeckStatsById(deckId);
+      console.log("Updated all deck stats");
+      if (this.component && deckStats) {
+        this.component.updateStatsById(deckId, deckStats);
+      }
+    } catch (error) {
+      console.error(`Error refreshing stats for deck ${deckId}:`, error);
+    }
+  }
+  startBackgroundRefresh() {
+    this.stopBackgroundRefresh();
+    console.log(
+      `Starting background refresh job (every ${this.plugin.settings.ui.backgroundRefreshInterval} seconds)`
+    );
+    this.backgroundRefreshInterval = setInterval(async () => {
+      console.log("Background refresh tick");
+      this.refreshStats();
+    }, this.plugin.settings.ui.backgroundRefreshInterval * 1e3);
+  }
+  stopBackgroundRefresh() {
+    if (this.backgroundRefreshInterval) {
+      console.log("Stopping background refresh job");
+      clearInterval(this.backgroundRefreshInterval);
+      this.backgroundRefreshInterval = null;
+    }
+  }
+  restartBackgroundRefresh() {
+    this.stopBackgroundRefresh();
+    this.startBackgroundRefresh();
+  }
+  // Test method to check if background job is running
+  checkBackgroundJobStatus() {
+    console.log("Background job status:", {
+      isRunning: !!this.backgroundRefreshInterval,
+      intervalId: this.backgroundRefreshInterval,
+      componentExists: !!this.component,
+      refreshInterval: this.plugin.settings.ui.backgroundRefreshInterval
+    });
+    return !!this.backgroundRefreshInterval;
   }
   async startReview(deck) {
     try {
@@ -5865,9 +6152,9 @@ var FlashcardReviewModalWrapper = class extends import_obsidian2.Modal {
           }
         },
         settings: this.plugin.settings,
-        onCardReviewed: async () => {
-          if (this.plugin.view) {
-            await this.plugin.view.refreshStats();
+        onCardReviewed: async (reviewedCard) => {
+          if (this.plugin.view && reviewedCard) {
+            await this.plugin.view.refreshStatsById(reviewedCard.deckId);
           }
         }
       }

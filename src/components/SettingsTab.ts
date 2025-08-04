@@ -24,6 +24,9 @@ export class FlashcardsSettingTab extends PluginSettingTab {
 
     // Review Session Settings
     this.addReviewSettings(containerEl);
+
+    // UI Settings
+    this.addUISettings(containerEl);
   }
 
   private addFSRSSettings(containerEl: HTMLElement): void {
@@ -207,6 +210,32 @@ export class FlashcardsSettingTab extends PluginSettingTab {
             if (!isNaN(num) && num > 0) {
               this.plugin.settings.review.sessionGoal = num;
               await this.plugin.saveSettings();
+            }
+          }),
+      );
+  }
+
+  private addUISettings(containerEl: HTMLElement): void {
+    containerEl.createEl("h3", { text: "User Interface" });
+
+    new Setting(containerEl)
+      .setName("Background Refresh Interval")
+      .setDesc("How often to refresh deck stats in the side panel (in seconds)")
+      .addText((text) =>
+        text
+          .setPlaceholder("5")
+          .setValue(
+            this.plugin.settings.ui.backgroundRefreshInterval.toString(),
+          )
+          .onChange(async (value) => {
+            const num = parseInt(value);
+            if (!isNaN(num) && num >= 1 && num <= 60) {
+              this.plugin.settings.ui.backgroundRefreshInterval = num;
+              await this.plugin.saveSettings();
+              // Restart background refresh with new interval
+              if (this.plugin.view) {
+                this.plugin.view.restartBackgroundRefresh();
+              }
             }
           }),
       );

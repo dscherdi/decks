@@ -16,7 +16,9 @@
     ) => Promise<void>;
     export let renderMarkdown: (content: string, el: HTMLElement) => void;
     export let settings: any;
-    export let onCardReviewed: (() => Promise<void>) | undefined = undefined;
+    export let onCardReviewed:
+        | ((card: Flashcard) => Promise<void>)
+        | undefined = undefined;
 
     const dispatch = createEventDispatcher();
     const fsrs = new FSRS();
@@ -31,7 +33,7 @@
     $: currentCard = flashcards[currentIndex] || null;
     $: progress =
         flashcards.length > 0 ? (currentIndex / flashcards.length) * 100 : 0;
-    $: remainingCards = flashcards.length - currentIndex - 1;
+    $: remainingCards = flashcards.length - currentIndex;
     $: sessionLimitReached =
         settings?.review?.enableSessionLimit &&
         reviewedCount >= settings?.review?.sessionGoal;
@@ -79,7 +81,7 @@
 
             // Trigger stats refresh after each card review
             if (onCardReviewed) {
-                await onCardReviewed();
+                await onCardReviewed(currentCard);
             }
 
             // Check if session limit is reached

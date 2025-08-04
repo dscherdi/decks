@@ -50,6 +50,13 @@
 - Simplified settings with sensible defaults
 - Consistent behavior across all sync methods
 
+## ✅ Frontmatter Deck ID Integration
+- Deck IDs automatically stored in markdown file frontmatter
+- `flashcards-deck-id` field links files to database decks
+- Preserves deck relationships when files are moved/renamed
+- Existing frontmatter content preserved during updates
+- Smart sync prioritizes frontmatter IDs over tag-based lookup
+
 ## 🔧 Technical Architecture
 - **Database**: SQLite via sql.js with automatic persistence
 - **Algorithm**: FSRS-4.5 with scientific parameter optimization
@@ -71,11 +78,32 @@
 - **Learning progress preserved** across all operations
 - **Optimized performance** with efficient algorithms
 - **User-friendly** with intuitive interface and behavior
+- **Persistent deck relationships** via frontmatter integration
 
 
 ## TODO
 
-- Update Stats of the deck whenever the user reviews a flashcard
-- Create statistics page for each deck which shows retention percentage as graph, 
-- Add a github style heatmap
-- 
+1. ✅ Update and Refresh Stats of the deck whenever the user reviews a flashcard
+2. Create statistics page for each deck which shows retention percentage as graph,
+3. Add a github style heatmap at the bottom left panel based on the reviews done per day
+4. Filter button on the decks table, to filter decks by name or tag.
+5. ✅ Background job that refreshes the side panel stats and data every 5 seconds
+
+## ✅ Recent Enhancements
+
+### Real-time Stats Updates
+- Added efficient deck-specific stats refresh after each flashcard review
+- Created `refreshDeckStats(deckId)` method for targeted updates
+- Modified review flow to trigger stats refresh automatically
+- Optimized performance by updating only the reviewed deck instead of all decks
+- Maintained existing general refresh functionality for other operations
+
+### Background Stats Refresh
+- Implemented configurable background job to refresh deck stats automatically
+- Default 5-second interval with user-configurable setting (1-60 seconds)
+- **Invisible updates** - only changes stats numbers, no UI rebuilding
+- **Change detection** - only updates stats that actually changed
+- Added UI settings section with background refresh interval control
+- Automatic restart of background job when settings change
+- Proper cleanup on view close to prevent memory leaks
+- Optimized performance with stats caching and minimal DOM updates
