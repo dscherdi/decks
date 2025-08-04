@@ -249,6 +249,10 @@ export default class FlashcardsPlugin extends Plugin {
     await this.deckManager.syncFlashcardsForDeckByName(deckName);
   }
 
+  async getReviewCounts(days: number = 365): Promise<Map<string, number>> {
+    return await this.db.getReviewCountsByDate(days);
+  }
+
   async getDecks(): Promise<Deck[]> {
     return await this.db.getAllDecks();
   }
@@ -316,6 +320,8 @@ export default class FlashcardsPlugin extends Plugin {
     // Refresh stats for this specific deck if view exists
     if (this.view) {
       await this.view.refreshStatsById(flashcard.deckId);
+      // Also refresh heatmap since a new review was completed
+      await this.view.refreshHeatmap();
     }
   }
 
@@ -367,6 +373,9 @@ class FlashcardsView extends ItemView {
         onRefresh: async () => {
           console.log("onRefresh callback invoked");
           await this.refresh();
+        },
+        getReviewCounts: async () => {
+          return await this.plugin.getReviewCounts();
         },
       },
     });
@@ -491,6 +500,12 @@ class FlashcardsView extends ItemView {
   restartBackgroundRefresh() {
     this.stopBackgroundRefresh();
     this.startBackgroundRefresh();
+  }
+
+  async refreshHeatmap() {
+    if (this.component) {
+      await this.component.refreshHeatmap();
+    }
   }
 
   // Test method to check if background job is running

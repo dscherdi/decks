@@ -2914,6 +2914,30 @@ var DatabaseService = class {
     }
     return stats;
   }
+  async getReviewCountsByDate(days = 365) {
+    if (!this.db)
+      throw new Error("Database not initialized");
+    const endDate = /* @__PURE__ */ new Date();
+    const startDate = /* @__PURE__ */ new Date();
+    startDate.setDate(endDate.getDate() - days);
+    const stmt = this.db.prepare(`
+      SELECT DATE(reviewed_at) as review_date, COUNT(*) as count
+      FROM review_logs
+      WHERE reviewed_at >= ? AND reviewed_at <= ?
+      GROUP BY DATE(reviewed_at)
+      ORDER BY review_date
+    `);
+    stmt.bind([startDate.toISOString(), endDate.toISOString()]);
+    const reviewCounts = /* @__PURE__ */ new Map();
+    while (stmt.step()) {
+      const row = stmt.get();
+      const date = row[0];
+      const count = row[1];
+      reviewCounts.set(date, count);
+    }
+    stmt.free();
+    return reviewCounts;
+  }
   // Helper methods
   rowToFlashcard(row) {
     return {
@@ -4133,10 +4157,29 @@ function flush_render_callbacks(fns) {
   render_callbacks = filtered;
 }
 var outroing = /* @__PURE__ */ new Set();
+var outros;
 function transition_in(block, local) {
   if (block && block.i) {
     outroing.delete(block);
     block.i(local);
+  }
+}
+function transition_out(block, local, detach2, callback) {
+  if (block && block.o) {
+    if (outroing.has(block))
+      return;
+    outroing.add(block);
+    outros.c.push(() => {
+      outroing.delete(block);
+      if (callback) {
+        if (detach2)
+          block.d(1);
+        callback();
+      }
+    });
+    block.o(local);
+  } else if (callback) {
+    callback();
   }
 }
 var _boolean_attributes = [
@@ -4167,6 +4210,9 @@ var _boolean_attributes = [
   "selected"
 ];
 var boolean_attributes = /* @__PURE__ */ new Set([..._boolean_attributes]);
+function create_component(block) {
+  block && block.c();
+}
 function mount_component(component, target, anchor, customElement) {
   const { fragment, after_update } = component.$$;
   fragment && fragment.m(target, anchor);
@@ -4201,7 +4247,7 @@ function make_dirty(component, i) {
   }
   component.$$.dirty[i / 31 | 0] |= 1 << i % 31;
 }
-function init(component, options, instance3, create_fragment3, not_equal, props, append_styles2, dirty = [-1]) {
+function init(component, options, instance4, create_fragment4, not_equal, props, append_styles2, dirty = [-1]) {
   const parent_component = current_component;
   set_current_component(component);
   const $$ = component.$$ = {
@@ -4227,7 +4273,7 @@ function init(component, options, instance3, create_fragment3, not_equal, props,
   };
   append_styles2 && append_styles2($$.root);
   let ready = false;
-  $$.ctx = instance3 ? instance3(component, options.props || {}, (i, ret, ...rest) => {
+  $$.ctx = instance4 ? instance4(component, options.props || {}, (i, ret, ...rest) => {
     const value = rest.length ? rest[0] : ret;
     if ($$.ctx && not_equal($$.ctx[i], $$.ctx[i] = value)) {
       if (!$$.skip_bound && $$.bound[i])
@@ -4240,7 +4286,7 @@ function init(component, options, instance3, create_fragment3, not_equal, props,
   $$.update();
   ready = true;
   run_all($$.before_update);
-  $$.fragment = create_fragment3 ? create_fragment3($$.ctx) : false;
+  $$.fragment = create_fragment4 ? create_fragment4($$.ctx) : false;
   if (options.target) {
     if (options.hydrate) {
       start_hydrating();
@@ -4358,35 +4404,631 @@ function __awaiter(thisArg, _arguments, P, generator) {
   });
 }
 
-// src/components/DeckListPanel.svelte
+// src/components/ReviewHeatmap.svelte
 function add_css(target) {
-  append_styles(target, "svelte-bhki54", ".deck-list-panel.svelte-bhki54.svelte-bhki54{height:100%;display:flex;flex-direction:column;background:var(--background-primary);color:var(--text-normal)}.panel-header.svelte-bhki54.svelte-bhki54{display:flex;justify-content:space-between;align-items:center;padding:12px 16px;border-bottom:1px solid var(--background-modifier-border)}.filter-section.svelte-bhki54.svelte-bhki54{padding:8px 16px;border-bottom:1px solid var(--background-modifier-border)}.filter-input.svelte-bhki54.svelte-bhki54{width:100%;padding:6px 8px;border:1px solid var(--background-modifier-border);border-radius:4px;background:var(--background-primary);color:var(--text-normal);font-size:14px;transition:border-color 0.2s ease}.filter-input.svelte-bhki54.svelte-bhki54:focus{outline:none;border-color:var(--interactive-accent)}.filter-input.svelte-bhki54.svelte-bhki54::placeholder{color:var(--text-muted)}.panel-title.svelte-bhki54.svelte-bhki54{margin:0;font-size:16px;font-weight:600}.refresh-button.svelte-bhki54.svelte-bhki54{background:none;border:none;cursor:pointer;padding:4px;border-radius:4px;color:var(--text-muted);transition:all 0.2s ease;position:relative;z-index:1}.refresh-button.svelte-bhki54.svelte-bhki54:hover{background:var(--background-modifier-hover);color:var(--text-normal)}.refresh-button.svelte-bhki54.svelte-bhki54:disabled{opacity:0.5;cursor:not-allowed}.refresh-button.refreshing.svelte-bhki54 svg.svelte-bhki54{animation:svelte-bhki54-spin 1s linear infinite}@keyframes svelte-bhki54-spin{from{transform:rotate(0deg)}to{transform:rotate(360deg)}}.empty-state.svelte-bhki54.svelte-bhki54{flex:1;display:flex;flex-direction:column;justify-content:center;align-items:center;padding:32px;text-align:center}.empty-state.svelte-bhki54 p.svelte-bhki54{margin:8px 0}.help-text.svelte-bhki54.svelte-bhki54{font-size:14px;color:var(--text-muted)}.deck-table.svelte-bhki54.svelte-bhki54{flex:1;display:flex;flex-direction:column;overflow:hidden}.table-header.svelte-bhki54.svelte-bhki54{display:grid;grid-template-columns:1fr 60px 60px 60px;gap:8px;padding:8px 16px;font-weight:600;font-size:14px;border-bottom:1px solid var(--background-modifier-border);background:var(--background-secondary);align-items:center}.table-body.svelte-bhki54.svelte-bhki54{flex:1;overflow-y:auto}.deck-row.svelte-bhki54.svelte-bhki54{display:grid;grid-template-columns:1fr 60px 60px 60px;gap:8px;padding:12px 16px;border:none;background:none;width:100%;text-align:left;cursor:pointer;transition:background-color 0.1s ease;border-bottom:1px solid var(--background-modifier-border);align-items:center}.deck-row.svelte-bhki54.svelte-bhki54:hover{background:var(--background-modifier-hover)}.deck-row.svelte-bhki54.svelte-bhki54:active{background:var(--background-modifier-active)}.col-deck.svelte-bhki54.svelte-bhki54{font-size:14px;color:var(--text-normal);overflow:hidden;text-overflow:ellipsis;white-space:nowrap;justify-self:start}.col-stat.svelte-bhki54.svelte-bhki54{text-align:center;font-size:14px;color:var(--text-muted);justify-self:center}.table-header.svelte-bhki54 .col-deck.svelte-bhki54{font-size:14px;color:var(--text-normal);justify-self:start}.table-header.svelte-bhki54 .col-stat.svelte-bhki54{text-align:center;font-size:14px;color:var(--text-normal);justify-self:center}.col-stat.has-cards.svelte-bhki54.svelte-bhki54{color:#4aa3df;font-weight:500}.col-stat.updating.svelte-bhki54.svelte-bhki54{opacity:0.6;transition:opacity 0.3s ease}.table-body.svelte-bhki54.svelte-bhki54::-webkit-scrollbar{width:8px}.table-body.svelte-bhki54.svelte-bhki54::-webkit-scrollbar-track{background:transparent}.table-body.svelte-bhki54.svelte-bhki54::-webkit-scrollbar-thumb{background:var(--background-modifier-border);border-radius:4px}.table-body.svelte-bhki54.svelte-bhki54::-webkit-scrollbar-thumb:hover{background:var(--background-modifier-border-hover)}");
+  append_styles(target, "svelte-cxt4fr", ".heatmap-container.svelte-cxt4fr.svelte-cxt4fr{padding:16px;border-top:1px solid var(--background-modifier-border);background:var(--background-primary);display:flex;flex-direction:column;align-items:center}.heatmap-header.svelte-cxt4fr.svelte-cxt4fr{display:flex;justify-content:space-between;align-items:center;margin-bottom:12px;width:100%}.heatmap-header.svelte-cxt4fr h4.svelte-cxt4fr{margin:0;font-size:14px;font-weight:600;color:var(--text-normal)}.total-reviews.svelte-cxt4fr.svelte-cxt4fr{font-size:12px;color:var(--text-muted)}.loading.svelte-cxt4fr.svelte-cxt4fr{text-align:center;padding:20px;color:var(--text-muted);font-size:12px}.heatmap.svelte-cxt4fr.svelte-cxt4fr{position:relative;margin-top:12px;overflow-x:auto;overflow-y:hidden;max-width:100%}.month-labels.svelte-cxt4fr.svelte-cxt4fr{position:relative;height:12px;margin-bottom:2px;margin-left:18px}.month-label.svelte-cxt4fr.svelte-cxt4fr{position:absolute;font-size:9px;color:var(--text-muted)}.day-labels.svelte-cxt4fr.svelte-cxt4fr{position:absolute;left:-18px;top:16px}.day-label.svelte-cxt4fr.svelte-cxt4fr{position:absolute;font-size:9px;color:var(--text-muted);width:16px;text-align:right}.heatmap-grid.svelte-cxt4fr.svelte-cxt4fr{display:flex;gap:2px;min-width:fit-content}.week.svelte-cxt4fr.svelte-cxt4fr{display:flex;flex-direction:column;gap:2px}.day.svelte-cxt4fr.svelte-cxt4fr{width:10px;height:10px;border-radius:2px;cursor:pointer;transition:all 0.1s ease;flex-shrink:0}.day.svelte-cxt4fr.svelte-cxt4fr:hover{transform:scale(1.3);outline:1px solid var(--text-muted);z-index:10;position:relative}.day.today.svelte-cxt4fr.svelte-cxt4fr{outline:2px solid var(--interactive-accent);outline-offset:1px}.day.today.svelte-cxt4fr.svelte-cxt4fr:hover{outline:2px solid var(--interactive-accent);outline-offset:1px}.intensity-0.svelte-cxt4fr.svelte-cxt4fr{background-color:var(--background-modifier-border)}.intensity-1.svelte-cxt4fr.svelte-cxt4fr{background-color:#0e4429}.intensity-2.svelte-cxt4fr.svelte-cxt4fr{background-color:#006d32}.intensity-3.svelte-cxt4fr.svelte-cxt4fr{background-color:#26a641}.intensity-4.svelte-cxt4fr.svelte-cxt4fr{background-color:#39d353}.legend.svelte-cxt4fr.svelte-cxt4fr{display:flex;align-items:center;justify-content:center;gap:3px;margin-top:6px}.legend-label.svelte-cxt4fr.svelte-cxt4fr{font-size:8px;color:var(--text-muted)}.legend-colors.svelte-cxt4fr.svelte-cxt4fr{display:flex;gap:2px}.legend-square.svelte-cxt4fr.svelte-cxt4fr{width:10px;height:10px;border-radius:2px}");
 }
 function get_each_context(ctx, list, i) {
   const child_ctx = ctx.slice();
-  child_ctx[18] = list[i];
-  const constants_0 = (
-    /*getDeckStats*/
-    child_ctx[6](
-      /*deck*/
-      child_ctx[18].id
-    )
-  );
-  child_ctx[5] = constants_0;
+  child_ctx[16] = list[i];
   return child_ctx;
 }
+function get_each_context_1(ctx, list, i) {
+  const child_ctx = ctx.slice();
+  child_ctx[19] = list[i];
+  return child_ctx;
+}
+function get_each_context_2(ctx, list, i) {
+  const child_ctx = ctx.slice();
+  child_ctx[22] = list[i].month;
+  child_ctx[23] = list[i].offset;
+  return child_ctx;
+}
+function create_if_block_1(ctx) {
+  let span;
+  let t0_value = Array.from(
+    /*reviewCounts*/
+    ctx[0].values()
+  ).reduce(func, 0) + "";
+  let t0;
+  let t1;
+  return {
+    c() {
+      span = element("span");
+      t0 = text(t0_value);
+      t1 = text(" reviews");
+      attr(span, "class", "total-reviews svelte-cxt4fr");
+    },
+    m(target, anchor) {
+      insert(target, span, anchor);
+      append(span, t0);
+      append(span, t1);
+    },
+    p(ctx2, dirty) {
+      if (dirty & /*reviewCounts*/
+      1 && t0_value !== (t0_value = Array.from(
+        /*reviewCounts*/
+        ctx2[0].values()
+      ).reduce(func, 0) + ""))
+        set_data(t0, t0_value);
+    },
+    d(detaching) {
+      if (detaching)
+        detach(span);
+    }
+  };
+}
 function create_else_block(ctx) {
+  let div3;
+  let div0;
+  let t0;
+  let div1;
+  let t8;
+  let div2;
+  let t9;
+  let div10;
+  let each_value_2 = (
+    /*getMonthLabels*/
+    ctx[5]()
+  );
+  let each_blocks_1 = [];
+  for (let i = 0; i < each_value_2.length; i += 1) {
+    each_blocks_1[i] = create_each_block_2(get_each_context_2(ctx, each_value_2, i));
+  }
+  let each_value = (
+    /*weeks*/
+    ctx[1]
+  );
+  let each_blocks = [];
+  for (let i = 0; i < each_value.length; i += 1) {
+    each_blocks[i] = create_each_block(get_each_context(ctx, each_value, i));
+  }
+  return {
+    c() {
+      div3 = element("div");
+      div0 = element("div");
+      for (let i = 0; i < each_blocks_1.length; i += 1) {
+        each_blocks_1[i].c();
+      }
+      t0 = space();
+      div1 = element("div");
+      div1.innerHTML = `<span class="day-label svelte-cxt4fr" style="top: 0px">S</span> 
+                <span class="day-label svelte-cxt4fr" style="top: 18px">T</span> 
+                <span class="day-label svelte-cxt4fr" style="top: 36px">T</span> 
+                <span class="day-label svelte-cxt4fr" style="top: 54px">S</span>`;
+      t8 = space();
+      div2 = element("div");
+      for (let i = 0; i < each_blocks.length; i += 1) {
+        each_blocks[i].c();
+      }
+      t9 = space();
+      div10 = element("div");
+      div10.innerHTML = `<span class="legend-label svelte-cxt4fr">Less</span> 
+            <div class="legend-colors svelte-cxt4fr"><div class="legend-square intensity-0 svelte-cxt4fr"></div> 
+                <div class="legend-square intensity-1 svelte-cxt4fr"></div> 
+                <div class="legend-square intensity-2 svelte-cxt4fr"></div> 
+                <div class="legend-square intensity-3 svelte-cxt4fr"></div> 
+                <div class="legend-square intensity-4 svelte-cxt4fr"></div></div> 
+            <span class="legend-label svelte-cxt4fr">More</span>`;
+      attr(div0, "class", "month-labels svelte-cxt4fr");
+      attr(div1, "class", "day-labels svelte-cxt4fr");
+      attr(div2, "class", "heatmap-grid svelte-cxt4fr");
+      attr(div3, "class", "heatmap svelte-cxt4fr");
+      attr(div10, "class", "legend svelte-cxt4fr");
+    },
+    m(target, anchor) {
+      insert(target, div3, anchor);
+      append(div3, div0);
+      for (let i = 0; i < each_blocks_1.length; i += 1) {
+        if (each_blocks_1[i]) {
+          each_blocks_1[i].m(div0, null);
+        }
+      }
+      append(div3, t0);
+      append(div3, div1);
+      append(div3, t8);
+      append(div3, div2);
+      for (let i = 0; i < each_blocks.length; i += 1) {
+        if (each_blocks[i]) {
+          each_blocks[i].m(div2, null);
+        }
+      }
+      insert(target, t9, anchor);
+      insert(target, div10, anchor);
+    },
+    p(ctx2, dirty) {
+      if (dirty & /*getMonthLabels*/
+      32) {
+        each_value_2 = /*getMonthLabels*/
+        ctx2[5]();
+        let i;
+        for (i = 0; i < each_value_2.length; i += 1) {
+          const child_ctx = get_each_context_2(ctx2, each_value_2, i);
+          if (each_blocks_1[i]) {
+            each_blocks_1[i].p(child_ctx, dirty);
+          } else {
+            each_blocks_1[i] = create_each_block_2(child_ctx);
+            each_blocks_1[i].c();
+            each_blocks_1[i].m(div0, null);
+          }
+        }
+        for (; i < each_blocks_1.length; i += 1) {
+          each_blocks_1[i].d(1);
+        }
+        each_blocks_1.length = each_value_2.length;
+      }
+      if (dirty & /*weeks, getIntensityClass, formatDate, isToday*/
+      18) {
+        each_value = /*weeks*/
+        ctx2[1];
+        let i;
+        for (i = 0; i < each_value.length; i += 1) {
+          const child_ctx = get_each_context(ctx2, each_value, i);
+          if (each_blocks[i]) {
+            each_blocks[i].p(child_ctx, dirty);
+          } else {
+            each_blocks[i] = create_each_block(child_ctx);
+            each_blocks[i].c();
+            each_blocks[i].m(div2, null);
+          }
+        }
+        for (; i < each_blocks.length; i += 1) {
+          each_blocks[i].d(1);
+        }
+        each_blocks.length = each_value.length;
+      }
+    },
+    d(detaching) {
+      if (detaching)
+        detach(div3);
+      destroy_each(each_blocks_1, detaching);
+      destroy_each(each_blocks, detaching);
+      if (detaching)
+        detach(t9);
+      if (detaching)
+        detach(div10);
+    }
+  };
+}
+function create_if_block(ctx) {
+  let div;
+  return {
+    c() {
+      div = element("div");
+      div.textContent = "Loading...";
+      attr(div, "class", "loading svelte-cxt4fr");
+    },
+    m(target, anchor) {
+      insert(target, div, anchor);
+    },
+    p: noop,
+    d(detaching) {
+      if (detaching)
+        detach(div);
+    }
+  };
+}
+function create_each_block_2(ctx) {
+  let span;
+  let t_value = (
+    /*month*/
+    ctx[22] + ""
+  );
+  let t;
+  return {
+    c() {
+      span = element("span");
+      t = text(t_value);
+      attr(span, "class", "month-label svelte-cxt4fr");
+      set_style(
+        span,
+        "left",
+        /*offset*/
+        ctx[23] + "px"
+      );
+    },
+    m(target, anchor) {
+      insert(target, span, anchor);
+      append(span, t);
+    },
+    p: noop,
+    d(detaching) {
+      if (detaching)
+        detach(span);
+    }
+  };
+}
+function create_each_block_1(ctx) {
+  let div;
+  let div_class_value;
+  let div_title_value;
+  return {
+    c() {
+      div = element("div");
+      attr(div, "class", div_class_value = "day " + /*getIntensityClass*/
+      ctx[4](
+        /*day*/
+        ctx[19].count
+      ) + " svelte-cxt4fr");
+      attr(div, "title", div_title_value = /*day*/
+      ctx[19].count + " reviews on " + formatDate(
+        /*day*/
+        ctx[19].date
+      ));
+      toggle_class(div, "today", isToday(
+        /*day*/
+        ctx[19].date
+      ));
+    },
+    m(target, anchor) {
+      insert(target, div, anchor);
+    },
+    p(ctx2, dirty) {
+      if (dirty & /*weeks*/
+      2 && div_class_value !== (div_class_value = "day " + /*getIntensityClass*/
+      ctx2[4](
+        /*day*/
+        ctx2[19].count
+      ) + " svelte-cxt4fr")) {
+        attr(div, "class", div_class_value);
+      }
+      if (dirty & /*weeks*/
+      2 && div_title_value !== (div_title_value = /*day*/
+      ctx2[19].count + " reviews on " + formatDate(
+        /*day*/
+        ctx2[19].date
+      ))) {
+        attr(div, "title", div_title_value);
+      }
+      if (dirty & /*weeks, isToday, weeks*/
+      2) {
+        toggle_class(div, "today", isToday(
+          /*day*/
+          ctx2[19].date
+        ));
+      }
+    },
+    d(detaching) {
+      if (detaching)
+        detach(div);
+    }
+  };
+}
+function create_each_block(ctx) {
+  let div;
+  let t;
+  let each_value_1 = (
+    /*week*/
+    ctx[16]
+  );
+  let each_blocks = [];
+  for (let i = 0; i < each_value_1.length; i += 1) {
+    each_blocks[i] = create_each_block_1(get_each_context_1(ctx, each_value_1, i));
+  }
+  return {
+    c() {
+      div = element("div");
+      for (let i = 0; i < each_blocks.length; i += 1) {
+        each_blocks[i].c();
+      }
+      t = space();
+      attr(div, "class", "week svelte-cxt4fr");
+    },
+    m(target, anchor) {
+      insert(target, div, anchor);
+      for (let i = 0; i < each_blocks.length; i += 1) {
+        if (each_blocks[i]) {
+          each_blocks[i].m(div, null);
+        }
+      }
+      append(div, t);
+    },
+    p(ctx2, dirty) {
+      if (dirty & /*getIntensityClass, weeks, formatDate, isToday*/
+      18) {
+        each_value_1 = /*week*/
+        ctx2[16];
+        let i;
+        for (i = 0; i < each_value_1.length; i += 1) {
+          const child_ctx = get_each_context_1(ctx2, each_value_1, i);
+          if (each_blocks[i]) {
+            each_blocks[i].p(child_ctx, dirty);
+          } else {
+            each_blocks[i] = create_each_block_1(child_ctx);
+            each_blocks[i].c();
+            each_blocks[i].m(div, t);
+          }
+        }
+        for (; i < each_blocks.length; i += 1) {
+          each_blocks[i].d(1);
+        }
+        each_blocks.length = each_value_1.length;
+      }
+    },
+    d(detaching) {
+      if (detaching)
+        detach(div);
+      destroy_each(each_blocks, detaching);
+    }
+  };
+}
+function create_fragment(ctx) {
+  let div1;
+  let div0;
+  let h4;
+  let t1;
+  let t2;
+  let if_block0 = !/*isLoading*/
+  ctx[2] && create_if_block_1(ctx);
+  function select_block_type(ctx2, dirty) {
+    if (
+      /*isLoading*/
+      ctx2[2]
+    )
+      return create_if_block;
+    return create_else_block;
+  }
+  let current_block_type = select_block_type(ctx, -1);
+  let if_block1 = current_block_type(ctx);
+  return {
+    c() {
+      div1 = element("div");
+      div0 = element("div");
+      h4 = element("h4");
+      h4.textContent = "Review Activity";
+      t1 = space();
+      if (if_block0)
+        if_block0.c();
+      t2 = space();
+      if_block1.c();
+      attr(h4, "class", "svelte-cxt4fr");
+      attr(div0, "class", "heatmap-header svelte-cxt4fr");
+      attr(div1, "class", "heatmap-container svelte-cxt4fr");
+    },
+    m(target, anchor) {
+      insert(target, div1, anchor);
+      append(div1, div0);
+      append(div0, h4);
+      append(div0, t1);
+      if (if_block0)
+        if_block0.m(div0, null);
+      append(div1, t2);
+      if_block1.m(div1, null);
+      ctx[8](div1);
+    },
+    p(ctx2, [dirty]) {
+      if (!/*isLoading*/
+      ctx2[2]) {
+        if (if_block0) {
+          if_block0.p(ctx2, dirty);
+        } else {
+          if_block0 = create_if_block_1(ctx2);
+          if_block0.c();
+          if_block0.m(div0, null);
+        }
+      } else if (if_block0) {
+        if_block0.d(1);
+        if_block0 = null;
+      }
+      if (current_block_type === (current_block_type = select_block_type(ctx2, dirty)) && if_block1) {
+        if_block1.p(ctx2, dirty);
+      } else {
+        if_block1.d(1);
+        if_block1 = current_block_type(ctx2);
+        if (if_block1) {
+          if_block1.c();
+          if_block1.m(div1, null);
+        }
+      }
+    },
+    i: noop,
+    o: noop,
+    d(detaching) {
+      if (detaching)
+        detach(div1);
+      if (if_block0)
+        if_block0.d();
+      if_block1.d();
+      ctx[8](null);
+    }
+  };
+}
+function formatDate(dateStr) {
+  const date = new Date(dateStr);
+  return date.toLocaleDateString("en-US", {
+    weekday: "long",
+    year: "numeric",
+    month: "long",
+    day: "numeric"
+  });
+}
+function isToday(dateStr) {
+  const today = (/* @__PURE__ */ new Date()).toISOString().split("T")[0];
+  return dateStr === today;
+}
+var func = (sum, count) => sum + count;
+function instance($$self, $$props, $$invalidate) {
+  let { getReviewCounts } = $$props;
+  let reviewCounts = /* @__PURE__ */ new Map();
+  let days = [];
+  let weeks = [];
+  let maxCount = 0;
+  let isLoading = true;
+  let containerElement;
+  let maxWeeks = 52;
+  const months = [
+    "Jan",
+    "Feb",
+    "Mar",
+    "Apr",
+    "May",
+    "Jun",
+    "Jul",
+    "Aug",
+    "Sep",
+    "Oct",
+    "Nov",
+    "Dec"
+  ];
+  function generateDays() {
+    const today = /* @__PURE__ */ new Date();
+    const currentWeekStart = new Date(today);
+    const currentDayOfWeek = today.getDay();
+    currentWeekStart.setDate(today.getDate() - currentDayOfWeek);
+    const startDate = new Date(currentWeekStart);
+    startDate.setDate(currentWeekStart.getDate() - (maxWeeks - 1) * 7);
+    const daysArray = [];
+    const current = new Date(startDate);
+    const endDate = new Date(currentWeekStart);
+    endDate.setDate(currentWeekStart.getDate() + 6);
+    while (current <= endDate) {
+      const dateStr = current.toISOString().split("T")[0];
+      const count = reviewCounts.get(dateStr) || 0;
+      daysArray.push({
+        date: dateStr,
+        count,
+        dayOfWeek: current.getDay()
+      });
+      if (count > maxCount) {
+        maxCount = count;
+      }
+      current.setDate(current.getDate() + 1);
+    }
+    days = daysArray;
+    $$invalidate(1, weeks = []);
+    for (let i = 0; i < days.length; i += 7) {
+      weeks.push(days.slice(i, i + 7));
+    }
+  }
+  function getIntensityClass(count) {
+    if (count === 0)
+      return "intensity-0";
+    const intensity = Math.min(Math.ceil(count / maxCount * 4), 4);
+    return `intensity-${intensity}`;
+  }
+  function getMonthLabels() {
+    if (weeks.length === 0)
+      return [];
+    const labels = [];
+    let currentMonth = -1;
+    weeks.forEach((week, weekIndex) => {
+      const firstDay = week[0];
+      if (firstDay) {
+        const date = new Date(firstDay.date);
+        const month = date.getMonth();
+        if (month !== currentMonth) {
+          currentMonth = month;
+          labels.push({
+            month: months[month],
+            offset: weekIndex * 12
+            // 12px per week (10px square + 2px gap)
+          });
+        }
+      }
+    });
+    return labels;
+  }
+  function calculateMaxWeeks() {
+    if (!containerElement)
+      return 52;
+    const containerWidth = containerElement.clientWidth;
+    const availableWidth = containerWidth - 40;
+    const weekWidth = 12;
+    const calculatedWeeks = Math.floor(availableWidth / weekWidth);
+    return Math.min(Math.max(calculatedWeeks, 12), 52);
+  }
+  function handleResize() {
+    const newMaxWeeks = calculateMaxWeeks();
+    if (newMaxWeeks !== maxWeeks) {
+      maxWeeks = newMaxWeeks;
+      generateDays();
+    }
+  }
+  function refresh() {
+    return __awaiter(this, void 0, void 0, function* () {
+      $$invalidate(2, isLoading = true);
+      try {
+        const daysToFetch = maxWeeks * 7;
+        $$invalidate(0, reviewCounts = yield getReviewCounts(daysToFetch));
+        maxCount = 0;
+        generateDays();
+      } catch (error) {
+        console.error("Failed to load review counts:", error);
+      } finally {
+        $$invalidate(2, isLoading = false);
+      }
+    });
+  }
+  onMount(() => {
+    maxWeeks = calculateMaxWeeks();
+    refresh();
+    window.addEventListener("resize", handleResize);
+    return () => {
+      window.removeEventListener("resize", handleResize);
+    };
+  });
+  function div1_binding($$value) {
+    binding_callbacks[$$value ? "unshift" : "push"](() => {
+      containerElement = $$value;
+      $$invalidate(3, containerElement);
+    });
+  }
+  $$self.$$set = ($$props2) => {
+    if ("getReviewCounts" in $$props2)
+      $$invalidate(6, getReviewCounts = $$props2.getReviewCounts);
+  };
+  return [
+    reviewCounts,
+    weeks,
+    isLoading,
+    containerElement,
+    getIntensityClass,
+    getMonthLabels,
+    getReviewCounts,
+    refresh,
+    div1_binding
+  ];
+}
+var ReviewHeatmap = class extends SvelteComponent {
+  constructor(options) {
+    super();
+    init(this, options, instance, create_fragment, safe_not_equal, { getReviewCounts: 6, refresh: 7 }, add_css);
+  }
+  get refresh() {
+    return this.$$.ctx[7];
+  }
+};
+var ReviewHeatmap_default = ReviewHeatmap;
+
+// src/components/DeckListPanel.svelte
+function add_css2(target) {
+  append_styles(target, "svelte-bhki54", ".deck-list-panel.svelte-bhki54.svelte-bhki54{height:100%;display:flex;flex-direction:column;background:var(--background-primary);color:var(--text-normal)}.panel-header.svelte-bhki54.svelte-bhki54{display:flex;justify-content:space-between;align-items:center;padding:12px 16px;border-bottom:1px solid var(--background-modifier-border)}.filter-section.svelte-bhki54.svelte-bhki54{padding:8px 16px;border-bottom:1px solid var(--background-modifier-border)}.filter-input.svelte-bhki54.svelte-bhki54{width:100%;padding:6px 8px;border:1px solid var(--background-modifier-border);border-radius:4px;background:var(--background-primary);color:var(--text-normal);font-size:14px;transition:border-color 0.2s ease}.filter-input.svelte-bhki54.svelte-bhki54:focus{outline:none;border-color:var(--interactive-accent)}.filter-input.svelte-bhki54.svelte-bhki54::placeholder{color:var(--text-muted)}.panel-title.svelte-bhki54.svelte-bhki54{margin:0;font-size:16px;font-weight:600}.refresh-button.svelte-bhki54.svelte-bhki54{background:none;border:none;cursor:pointer;padding:4px;border-radius:4px;color:var(--text-muted);transition:all 0.2s ease;position:relative;z-index:1}.refresh-button.svelte-bhki54.svelte-bhki54:hover{background:var(--background-modifier-hover);color:var(--text-normal)}.refresh-button.svelte-bhki54.svelte-bhki54:disabled{opacity:0.5;cursor:not-allowed}.refresh-button.refreshing.svelte-bhki54 svg.svelte-bhki54{animation:svelte-bhki54-spin 1s linear infinite}@keyframes svelte-bhki54-spin{from{transform:rotate(0deg)}to{transform:rotate(360deg)}}.empty-state.svelte-bhki54.svelte-bhki54{flex:1;display:flex;flex-direction:column;justify-content:center;align-items:center;padding:32px;text-align:center}.empty-state.svelte-bhki54 p.svelte-bhki54{margin:8px 0}.help-text.svelte-bhki54.svelte-bhki54{font-size:14px;color:var(--text-muted)}.deck-table.svelte-bhki54.svelte-bhki54{flex:1;display:flex;flex-direction:column;overflow:hidden}.table-header.svelte-bhki54.svelte-bhki54{display:grid;grid-template-columns:1fr 60px 60px 60px;gap:8px;padding:8px 16px;font-weight:600;font-size:14px;border-bottom:1px solid var(--background-modifier-border);background:var(--background-secondary);align-items:center}.table-body.svelte-bhki54.svelte-bhki54{flex:1;overflow-y:auto}.deck-row.svelte-bhki54.svelte-bhki54{display:grid;grid-template-columns:1fr 60px 60px 60px;gap:8px;padding:12px 16px;border:none;background:none;width:100%;text-align:left;cursor:pointer;transition:background-color 0.1s ease;border-bottom:1px solid var(--background-modifier-border);align-items:center}.deck-row.svelte-bhki54.svelte-bhki54:hover{background:var(--background-modifier-hover)}.deck-row.svelte-bhki54.svelte-bhki54:active{background:var(--background-modifier-active)}.col-deck.svelte-bhki54.svelte-bhki54{font-size:14px;color:var(--text-normal);overflow:hidden;text-overflow:ellipsis;white-space:nowrap;justify-self:start}.col-stat.svelte-bhki54.svelte-bhki54{text-align:center;font-size:14px;color:var(--text-muted);justify-self:center}.table-header.svelte-bhki54 .col-deck.svelte-bhki54{font-size:14px;color:var(--text-normal);justify-self:start}.table-header.svelte-bhki54 .col-stat.svelte-bhki54{text-align:center;font-size:14px;color:var(--text-normal);justify-self:center}.col-stat.has-cards.svelte-bhki54.svelte-bhki54{color:#4aa3df;font-weight:500}.col-stat.updating.svelte-bhki54.svelte-bhki54{opacity:0.6;transition:opacity 0.3s ease}.table-body.svelte-bhki54.svelte-bhki54::-webkit-scrollbar{width:8px}.table-body.svelte-bhki54.svelte-bhki54::-webkit-scrollbar-track{background:transparent}.table-body.svelte-bhki54.svelte-bhki54::-webkit-scrollbar-thumb{background:var(--background-modifier-border);border-radius:4px}.table-body.svelte-bhki54.svelte-bhki54::-webkit-scrollbar-thumb:hover{background:var(--background-modifier-border-hover)}");
+}
+function get_each_context2(ctx, list, i) {
+  const child_ctx = ctx.slice();
+  child_ctx[22] = list[i];
+  const constants_0 = (
+    /*getDeckStats*/
+    child_ctx[8](
+      /*deck*/
+      child_ctx[22].id
+    )
+  );
+  child_ctx[7] = constants_0;
+  return child_ctx;
+}
+function create_else_block2(ctx) {
   let div6;
   let div4;
   let t7;
   let div5;
   let each_value = (
     /*decks*/
-    ctx[0]
+    ctx[1]
   );
   let each_blocks = [];
   for (let i = 0; i < each_value.length; i += 1) {
-    each_blocks[i] = create_each_block(get_each_context(ctx, each_value, i));
+    each_blocks[i] = create_each_block2(get_each_context2(ctx, each_value, i));
   }
   return {
     c() {
@@ -4418,16 +5060,16 @@ function create_else_block(ctx) {
     },
     p(ctx2, dirty) {
       if (dirty & /*decks, handleDeckClick, getDeckStats, isUpdatingStats, formatDeckName*/
-      593) {
+      2370) {
         each_value = /*decks*/
-        ctx2[0];
+        ctx2[1];
         let i;
         for (i = 0; i < each_value.length; i += 1) {
-          const child_ctx = get_each_context(ctx2, each_value, i);
+          const child_ctx = get_each_context2(ctx2, each_value, i);
           if (each_blocks[i]) {
             each_blocks[i].p(child_ctx, dirty);
           } else {
-            each_blocks[i] = create_each_block(child_ctx);
+            each_blocks[i] = create_each_block2(child_ctx);
             each_blocks[i].c();
             each_blocks[i].m(div5, null);
           }
@@ -4445,7 +5087,7 @@ function create_else_block(ctx) {
     }
   };
 }
-function create_if_block_1(ctx) {
+function create_if_block_12(ctx) {
   let div;
   return {
     c() {
@@ -4464,7 +5106,7 @@ function create_if_block_1(ctx) {
     }
   };
 }
-function create_if_block(ctx) {
+function create_if_block2(ctx) {
   let div;
   return {
     c() {
@@ -4483,33 +5125,33 @@ function create_if_block(ctx) {
     }
   };
 }
-function create_each_block(ctx) {
+function create_each_block2(ctx) {
   let button;
   let div0;
   let t0_value = formatDeckName(
     /*deck*/
-    ctx[18]
+    ctx[22]
   ) + "";
   let t0;
   let t1;
   let div1;
   let t2_value = (
     /*stats*/
-    ctx[5].newCount + ""
+    ctx[7].newCount + ""
   );
   let t2;
   let t3;
   let div2;
   let t4_value = (
     /*stats*/
-    ctx[5].learningCount + ""
+    ctx[7].learningCount + ""
   );
   let t4;
   let t5;
   let div3;
   let t6_value = (
     /*stats*/
-    ctx[5].dueCount + ""
+    ctx[7].dueCount + ""
   );
   let t6;
   let t7;
@@ -4519,9 +5161,9 @@ function create_each_block(ctx) {
   function click_handler() {
     return (
       /*click_handler*/
-      ctx[16](
+      ctx[19](
         /*deck*/
-        ctx[18]
+        ctx[22]
       )
     );
   }
@@ -4546,43 +5188,43 @@ function create_each_block(ctx) {
         div1,
         "has-cards",
         /*stats*/
-        ctx[5].newCount > 0
+        ctx[7].newCount > 0
       );
       toggle_class(
         div1,
         "updating",
         /*isUpdatingStats*/
-        ctx[4]
+        ctx[6]
       );
       attr(div2, "class", "col-stat svelte-bhki54");
       toggle_class(
         div2,
         "has-cards",
         /*stats*/
-        ctx[5].learningCount > 0
+        ctx[7].learningCount > 0
       );
       toggle_class(
         div2,
         "updating",
         /*isUpdatingStats*/
-        ctx[4]
+        ctx[6]
       );
       attr(div3, "class", "col-stat svelte-bhki54");
       toggle_class(
         div3,
         "has-cards",
         /*stats*/
-        ctx[5].dueCount > 0
+        ctx[7].dueCount > 0
       );
       toggle_class(
         div3,
         "updating",
         /*isUpdatingStats*/
-        ctx[4]
+        ctx[6]
       );
       attr(button, "class", "deck-row svelte-bhki54");
       attr(button, "title", button_title_value = "Click to review " + /*deck*/
-      ctx[18].name);
+      ctx[22].name);
     },
     m(target, anchor) {
       insert(target, button, anchor);
@@ -4606,80 +5248,80 @@ function create_each_block(ctx) {
     p(new_ctx, dirty) {
       ctx = new_ctx;
       if (dirty & /*decks*/
-      1 && t0_value !== (t0_value = formatDeckName(
+      2 && t0_value !== (t0_value = formatDeckName(
         /*deck*/
-        ctx[18]
+        ctx[22]
       ) + ""))
         set_data(t0, t0_value);
       if (dirty & /*decks*/
-      1 && t2_value !== (t2_value = /*stats*/
-      ctx[5].newCount + ""))
+      2 && t2_value !== (t2_value = /*stats*/
+      ctx[7].newCount + ""))
         set_data(t2, t2_value);
       if (dirty & /*getDeckStats, decks*/
-      65) {
+      258) {
         toggle_class(
           div1,
           "has-cards",
           /*stats*/
-          ctx[5].newCount > 0
+          ctx[7].newCount > 0
         );
       }
       if (dirty & /*isUpdatingStats*/
-      16) {
+      64) {
         toggle_class(
           div1,
           "updating",
           /*isUpdatingStats*/
-          ctx[4]
+          ctx[6]
         );
       }
       if (dirty & /*decks*/
-      1 && t4_value !== (t4_value = /*stats*/
-      ctx[5].learningCount + ""))
+      2 && t4_value !== (t4_value = /*stats*/
+      ctx[7].learningCount + ""))
         set_data(t4, t4_value);
       if (dirty & /*getDeckStats, decks*/
-      65) {
+      258) {
         toggle_class(
           div2,
           "has-cards",
           /*stats*/
-          ctx[5].learningCount > 0
+          ctx[7].learningCount > 0
         );
       }
       if (dirty & /*isUpdatingStats*/
-      16) {
+      64) {
         toggle_class(
           div2,
           "updating",
           /*isUpdatingStats*/
-          ctx[4]
+          ctx[6]
         );
       }
       if (dirty & /*decks*/
-      1 && t6_value !== (t6_value = /*stats*/
-      ctx[5].dueCount + ""))
+      2 && t6_value !== (t6_value = /*stats*/
+      ctx[7].dueCount + ""))
         set_data(t6, t6_value);
       if (dirty & /*getDeckStats, decks*/
-      65) {
+      258) {
         toggle_class(
           div3,
           "has-cards",
           /*stats*/
-          ctx[5].dueCount > 0
+          ctx[7].dueCount > 0
         );
       }
       if (dirty & /*isUpdatingStats*/
-      16) {
+      64) {
         toggle_class(
           div3,
           "updating",
           /*isUpdatingStats*/
-          ctx[4]
+          ctx[6]
         );
       }
       if (dirty & /*decks*/
-      1 && button_title_value !== (button_title_value = "Click to review " + /*deck*/
-      ctx[18].name)) {
+      2 && button_title_value !== (button_title_value = "Click to review " + /*deck*/
+      ctx[22].name)) {
         attr(button, "title", button_title_value);
       }
     },
@@ -4691,7 +5333,7 @@ function create_each_block(ctx) {
     }
   };
 }
-function create_fragment(ctx) {
+function create_fragment2(ctx) {
   let div2;
   let div0;
   let h3;
@@ -4705,23 +5347,34 @@ function create_fragment(ctx) {
   let div1;
   let input;
   let t3;
+  let t4;
+  let reviewheatmap;
+  let current;
   let mounted;
   let dispose;
   function select_block_type(ctx2, dirty) {
     if (
       /*allDecks*/
-      ctx2[1].length === 0
+      ctx2[2].length === 0
     )
-      return create_if_block;
+      return create_if_block2;
     if (
       /*decks*/
-      ctx2[0].length === 0
+      ctx2[1].length === 0
     )
-      return create_if_block_1;
-    return create_else_block;
+      return create_if_block_12;
+    return create_else_block2;
   }
   let current_block_type = select_block_type(ctx, -1);
   let if_block = current_block_type(ctx);
+  let reviewheatmap_props = {
+    getReviewCounts: (
+      /*getReviewCounts*/
+      ctx[0]
+    )
+  };
+  reviewheatmap = new ReviewHeatmap_default({ props: reviewheatmap_props });
+  ctx[20](reviewheatmap);
   return {
     c() {
       div2 = element("div");
@@ -4739,6 +5392,8 @@ function create_fragment(ctx) {
       input = element("input");
       t3 = space();
       if_block.c();
+      t4 = space();
+      create_component(reviewheatmap.$$.fragment);
       attr(h3, "class", "panel-title svelte-bhki54");
       attr(path0, "d", "M23 4v6h-6");
       attr(path1, "d", "M1 20v-6h6");
@@ -4755,12 +5410,12 @@ function create_fragment(ctx) {
       attr(svg, "class", "svelte-bhki54");
       attr(button, "class", "refresh-button svelte-bhki54");
       button.disabled = /*isRefreshing*/
-      ctx[3];
+      ctx[5];
       toggle_class(
         button,
         "refreshing",
         /*isRefreshing*/
-        ctx[3]
+        ctx[5]
       );
       attr(div0, "class", "panel-header svelte-bhki54");
       attr(input, "type", "text");
@@ -4785,56 +5440,59 @@ function create_fragment(ctx) {
       set_input_value(
         input,
         /*filterText*/
-        ctx[2]
+        ctx[3]
       );
       append(div2, t3);
       if_block.m(div2, null);
+      append(div2, t4);
+      mount_component(reviewheatmap, div2, null);
+      current = true;
       if (!mounted) {
         dispose = [
           listen(
             button,
             "click",
             /*handleRefresh*/
-            ctx[7]
+            ctx[9]
           ),
           listen(
             input,
             "input",
             /*input_input_handler*/
-            ctx[15]
+            ctx[18]
           ),
           listen(
             input,
             "input",
             /*handleFilterInput*/
-            ctx[8]
+            ctx[10]
           )
         ];
         mounted = true;
       }
     },
     p(ctx2, [dirty]) {
-      if (dirty & /*isRefreshing*/
-      8) {
+      if (!current || dirty & /*isRefreshing*/
+      32) {
         button.disabled = /*isRefreshing*/
-        ctx2[3];
+        ctx2[5];
       }
-      if (dirty & /*isRefreshing*/
-      8) {
+      if (!current || dirty & /*isRefreshing*/
+      32) {
         toggle_class(
           button,
           "refreshing",
           /*isRefreshing*/
-          ctx2[3]
+          ctx2[5]
         );
       }
       if (dirty & /*filterText*/
-      4 && input.value !== /*filterText*/
-      ctx2[2]) {
+      8 && input.value !== /*filterText*/
+      ctx2[3]) {
         set_input_value(
           input,
           /*filterText*/
-          ctx2[2]
+          ctx2[3]
         );
       }
       if (current_block_type === (current_block_type = select_block_type(ctx2, dirty)) && if_block) {
@@ -4844,16 +5502,32 @@ function create_fragment(ctx) {
         if_block = current_block_type(ctx2);
         if (if_block) {
           if_block.c();
-          if_block.m(div2, null);
+          if_block.m(div2, t4);
         }
       }
+      const reviewheatmap_changes = {};
+      if (dirty & /*getReviewCounts*/
+      1)
+        reviewheatmap_changes.getReviewCounts = /*getReviewCounts*/
+        ctx2[0];
+      reviewheatmap.$set(reviewheatmap_changes);
     },
-    i: noop,
-    o: noop,
+    i(local) {
+      if (current)
+        return;
+      transition_in(reviewheatmap.$$.fragment, local);
+      current = true;
+    },
+    o(local) {
+      transition_out(reviewheatmap.$$.fragment, local);
+      current = false;
+    },
     d(detaching) {
       if (detaching)
         detach(div2);
       if_block.d();
+      ctx[20](null);
+      destroy_component(reviewheatmap);
       mounted = false;
       run_all(dispose);
     }
@@ -4862,13 +5536,15 @@ function create_fragment(ctx) {
 function formatDeckName(deck) {
   return deck.name;
 }
-function instance($$self, $$props, $$invalidate) {
+function instance2($$self, $$props, $$invalidate) {
   let decks = [];
   let allDecks = [];
   let stats = /* @__PURE__ */ new Map();
   let filterText = "";
+  let heatmapComponent;
   let { onDeckClick } = $$props;
   let { onRefresh } = $$props;
+  let { getReviewCounts } = $$props;
   let isRefreshing = false;
   let isUpdatingStats = false;
   function getDeckStats(deckId) {
@@ -4884,69 +5560,89 @@ function instance($$self, $$props, $$invalidate) {
   function handleRefresh() {
     return __awaiter(this, void 0, void 0, function* () {
       console.log("Refresh button clicked");
-      $$invalidate(3, isRefreshing = true);
+      $$invalidate(5, isRefreshing = true);
       try {
         onRefresh();
+        if (heatmapComponent) {
+          yield heatmapComponent.refresh();
+        }
       } catch (error) {
         console.error("Error during refresh:", error);
       } finally {
-        $$invalidate(3, isRefreshing = false);
+        $$invalidate(5, isRefreshing = false);
       }
     });
   }
   function updateStatsById(deckId, newStats) {
     console.log("updateStats called - triggering UI refresh");
-    $$invalidate(4, isUpdatingStats = true);
+    $$invalidate(6, isUpdatingStats = true);
     stats.set(deckId, newStats);
-    $$invalidate(0, decks);
-    $$invalidate(4, isUpdatingStats = false);
+    $$invalidate(1, decks);
+    $$invalidate(6, isUpdatingStats = false);
   }
   function updateStats(newStats) {
     console.log("updateStats called - triggering UI refresh");
-    $$invalidate(4, isUpdatingStats = true);
-    $$invalidate(5, stats = newStats);
-    $$invalidate(0, decks);
-    $$invalidate(4, isUpdatingStats = false);
+    $$invalidate(6, isUpdatingStats = true);
+    $$invalidate(7, stats = newStats);
+    $$invalidate(1, decks);
+    $$invalidate(6, isUpdatingStats = false);
   }
   function updateDecks(newDecks) {
     console.log("updateDecks called - triggering UI refresh");
-    $$invalidate(1, allDecks = newDecks);
+    $$invalidate(2, allDecks = newDecks);
     applyFilter();
   }
   function applyFilter() {
     if (!filterText.trim()) {
-      $$invalidate(0, decks = allDecks);
+      $$invalidate(1, decks = allDecks);
     } else {
       const filter = filterText.toLowerCase();
-      $$invalidate(0, decks = allDecks.filter((deck) => deck.name.toLowerCase().includes(filter) || deck.tag.toLowerCase().includes(filter)));
+      $$invalidate(1, decks = allDecks.filter((deck) => deck.name.toLowerCase().includes(filter) || deck.tag.toLowerCase().includes(filter)));
     }
   }
   function handleFilterInput(event) {
     const target = event.target;
-    $$invalidate(2, filterText = target.value);
+    $$invalidate(3, filterText = target.value);
     applyFilter();
   }
   function handleDeckClick(deck) {
     onDeckClick(deck);
+  }
+  function refreshHeatmap() {
+    return __awaiter(this, void 0, void 0, function* () {
+      if (heatmapComponent) {
+        yield heatmapComponent.refresh();
+      }
+    });
   }
   onMount(() => {
     handleRefresh();
   });
   function input_input_handler() {
     filterText = this.value;
-    $$invalidate(2, filterText);
+    $$invalidate(3, filterText);
   }
   const click_handler = (deck) => handleDeckClick(deck);
+  function reviewheatmap_binding($$value) {
+    binding_callbacks[$$value ? "unshift" : "push"](() => {
+      heatmapComponent = $$value;
+      $$invalidate(4, heatmapComponent);
+    });
+  }
   $$self.$$set = ($$props2) => {
     if ("onDeckClick" in $$props2)
-      $$invalidate(10, onDeckClick = $$props2.onDeckClick);
+      $$invalidate(12, onDeckClick = $$props2.onDeckClick);
     if ("onRefresh" in $$props2)
-      $$invalidate(11, onRefresh = $$props2.onRefresh);
+      $$invalidate(13, onRefresh = $$props2.onRefresh);
+    if ("getReviewCounts" in $$props2)
+      $$invalidate(0, getReviewCounts = $$props2.getReviewCounts);
   };
   return [
+    getReviewCounts,
     decks,
     allDecks,
     filterText,
+    heatmapComponent,
     isRefreshing,
     isUpdatingStats,
     stats,
@@ -4959,8 +5655,10 @@ function instance($$self, $$props, $$invalidate) {
     updateStatsById,
     updateStats,
     updateDecks,
+    refreshHeatmap,
     input_input_handler,
-    click_handler
+    click_handler,
+    reviewheatmap_binding
   ];
 }
 var DeckListPanel = class extends SvelteComponent {
@@ -4969,33 +5667,38 @@ var DeckListPanel = class extends SvelteComponent {
     init(
       this,
       options,
-      instance,
-      create_fragment,
+      instance2,
+      create_fragment2,
       safe_not_equal,
       {
-        onDeckClick: 10,
-        onRefresh: 11,
-        updateStatsById: 12,
-        updateStats: 13,
-        updateDecks: 14
+        onDeckClick: 12,
+        onRefresh: 13,
+        getReviewCounts: 0,
+        updateStatsById: 14,
+        updateStats: 15,
+        updateDecks: 16,
+        refreshHeatmap: 17
       },
-      add_css
+      add_css2
     );
   }
   get updateStatsById() {
-    return this.$$.ctx[12];
+    return this.$$.ctx[14];
   }
   get updateStats() {
-    return this.$$.ctx[13];
+    return this.$$.ctx[15];
   }
   get updateDecks() {
-    return this.$$.ctx[14];
+    return this.$$.ctx[16];
+  }
+  get refreshHeatmap() {
+    return this.$$.ctx[17];
   }
 };
 var DeckListPanel_default = DeckListPanel;
 
 // src/components/FlashcardReviewModal.svelte
-function add_css2(target) {
+function add_css3(target) {
   append_styles(target, "svelte-1opyfa1", ".review-modal.svelte-1opyfa1.svelte-1opyfa1{display:flex;flex-direction:column;height:100%;background:var(--background-primary);color:var(--text-normal);overflow:hidden;width:100%}.modal-header.svelte-1opyfa1.svelte-1opyfa1{display:flex;align-items:center;justify-content:space-between;padding:16px 20px;border-bottom:1px solid var(--background-modifier-border)}.modal-header.svelte-1opyfa1 h3.svelte-1opyfa1{margin:0;font-size:18px;font-weight:600}.progress-info.svelte-1opyfa1.svelte-1opyfa1{display:flex;gap:8px;font-size:14px}.remaining.svelte-1opyfa1.svelte-1opyfa1{color:var(--text-muted)}.review-progress-bar.svelte-1opyfa1.svelte-1opyfa1{height:4px;background:var(--background-modifier-border);position:relative}.progress-fill.svelte-1opyfa1.svelte-1opyfa1{height:100%;background:var(--interactive-accent);transition:width 0.3s ease}.card-content.svelte-1opyfa1.svelte-1opyfa1{flex:1;overflow-y:auto;overflow-x:hidden;padding:32px 16px;display:flex;flex-direction:column;align-items:center;justify-content:flex-start;gap:24px;width:100%;box-sizing:border-box;min-height:0}.question-section.svelte-1opyfa1.svelte-1opyfa1,.answer-section.svelte-1opyfa1.svelte-1opyfa1{width:100%;display:flex;justify-content:center}.card-side.svelte-1opyfa1.svelte-1opyfa1{background:var(--background-secondary);border:1px solid var(--background-modifier-border);border-radius:8px;padding:24px;min-height:100px;width:100%;max-width:600px;box-sizing:border-box;word-wrap:break-word;overflow-wrap:break-word}.card-side.front.svelte-1opyfa1.svelte-1opyfa1{text-align:center;font-size:20px;font-weight:500}.card-side.back.svelte-1opyfa1.svelte-1opyfa1{font-size:16px;line-height:1.6}.answer-section.svelte-1opyfa1.svelte-1opyfa1{width:100%;display:flex;flex-direction:column;justify-content:center;align-items:center}.answer-section.hidden.svelte-1opyfa1.svelte-1opyfa1{display:none}.separator.svelte-1opyfa1.svelte-1opyfa1{height:1px;background:var(--background-modifier-border);margin:16px auto;width:100%;max-width:600px}.action-buttons.svelte-1opyfa1.svelte-1opyfa1{padding:20px;border-top:1px solid var(--background-modifier-border);flex-shrink:0;width:100%;box-sizing:border-box}.show-answer-button.svelte-1opyfa1.svelte-1opyfa1{width:100%;max-width:400px;margin:0 auto;padding:12px 24px;font-size:16px;font-weight:500;background:var(--interactive-accent);color:var(--text-on-accent);border:none;border-radius:6px;cursor:pointer;display:flex;align-items:center;justify-content:center;gap:8px;box-sizing:border-box}.show-answer-button.svelte-1opyfa1.svelte-1opyfa1:hover{background:var(--interactive-accent-hover)}.shortcut.svelte-1opyfa1.svelte-1opyfa1{font-size:12px;opacity:0.8;padding:2px 6px;background:rgba(0, 0, 0, 0.2);border-radius:3px;margin-left:8px;display:inline-block}.difficulty-buttons.svelte-1opyfa1.svelte-1opyfa1{display:flex;gap:8px;justify-content:center;flex-wrap:nowrap;padding:0 10px;box-sizing:border-box;width:100%;max-width:600px;margin:0 auto}.difficulty-button.svelte-1opyfa1.svelte-1opyfa1{flex:1;min-width:0;padding:10px 6px;border:1px solid var(--background-modifier-border);background:var(--background-secondary);border-radius:6px;cursor:pointer;display:flex;flex-direction:column;align-items:center;gap:2px;transition:all 0.2s ease;position:relative;box-sizing:border-box;white-space:nowrap}.difficulty-button.svelte-1opyfa1.svelte-1opyfa1:hover{transform:translateY(-2px);box-shadow:0 4px 12px rgba(0, 0, 0, 0.1)}.difficulty-button.svelte-1opyfa1.svelte-1opyfa1:disabled{opacity:0.5;cursor:not-allowed;transform:none}.difficulty-button.again.svelte-1opyfa1.svelte-1opyfa1{border-color:#e74c3c}.difficulty-button.again.svelte-1opyfa1.svelte-1opyfa1:hover:not(:disabled){background:#e74c3c;color:white}.difficulty-button.hard.svelte-1opyfa1.svelte-1opyfa1{border-color:#f39c12}.difficulty-button.hard.svelte-1opyfa1.svelte-1opyfa1:hover:not(:disabled){background:#f39c12;color:white}.difficulty-button.good.svelte-1opyfa1.svelte-1opyfa1{border-color:#27ae60}.difficulty-button.good.svelte-1opyfa1.svelte-1opyfa1:hover:not(:disabled){background:#27ae60;color:white}.difficulty-button.easy.svelte-1opyfa1.svelte-1opyfa1{border-color:#3498db}.difficulty-button.easy.svelte-1opyfa1.svelte-1opyfa1:hover:not(:disabled){background:#3498db;color:white}.button-label.svelte-1opyfa1.svelte-1opyfa1{font-weight:600;font-size:13px}.interval.svelte-1opyfa1.svelte-1opyfa1{font-size:11px;color:var(--text-muted)}.difficulty-button.svelte-1opyfa1:hover .interval.svelte-1opyfa1{color:inherit}.difficulty-button.svelte-1opyfa1 .shortcut.svelte-1opyfa1{position:absolute;top:2px;right:2px;font-size:9px;padding:1px 3px;background:var(--background-modifier-border);border-radius:2px;opacity:0.7}.empty-state.svelte-1opyfa1.svelte-1opyfa1{flex:1;display:flex;align-items:center;justify-content:center;padding:32px;color:var(--text-muted)}.card-side h1,.card-side h2,.card-side h3,.card-side h4,.card-side h5,.card-side h6{margin-top:0;margin-bottom:16px}.card-side p{margin-bottom:16px}.card-side p:last-child{margin-bottom:0}.card-side > *:first-child{margin-top:0}.card-side ul,.card-side ol{margin-bottom:16px;padding-left:24px}.card-side code{background:var(--code-background);padding:2px 4px;border-radius:3px;font-size:0.9em}.card-side pre{background:var(--code-background);padding:16px;border-radius:6px;overflow-x:auto;margin-bottom:16px;max-width:100%}.card-side blockquote{border-left:3px solid var(--blockquote-border);padding-left:16px;margin-left:0;margin-right:0;color:var(--text-muted)}@media(max-width: 500px){.difficulty-buttons.svelte-1opyfa1.svelte-1opyfa1{gap:4px;padding:0 5px}.difficulty-button.svelte-1opyfa1.svelte-1opyfa1{padding:8px 4px}.button-label.svelte-1opyfa1.svelte-1opyfa1{font-size:12px}.interval.svelte-1opyfa1.svelte-1opyfa1{font-size:10px}.difficulty-button.svelte-1opyfa1 .shortcut.svelte-1opyfa1{font-size:8px;padding:1px 2px}.card-content.svelte-1opyfa1.svelte-1opyfa1{padding:16px 8px}}");
 }
 function create_if_block_3(ctx) {
@@ -5035,7 +5738,7 @@ function create_if_block_3(ctx) {
     }
   };
 }
-function create_else_block2(ctx) {
+function create_else_block3(ctx) {
   let div;
   return {
     c() {
@@ -5053,7 +5756,7 @@ function create_else_block2(ctx) {
     }
   };
 }
-function create_if_block2(ctx) {
+function create_if_block3(ctx) {
   let div5;
   let div1;
   let div0;
@@ -5070,7 +5773,7 @@ function create_if_block2(ctx) {
   let if_block1 = (
     /*showAnswer*/
     ctx[4] && /*schedulingInfo*/
-    ctx[8] && create_if_block_12(ctx)
+    ctx[8] && create_if_block_13(ctx)
   );
   return {
     c() {
@@ -5145,7 +5848,7 @@ function create_if_block2(ctx) {
         if (if_block1) {
           if_block1.p(ctx2, dirty);
         } else {
-          if_block1 = create_if_block_12(ctx2);
+          if_block1 = create_if_block_13(ctx2);
           if_block1.c();
           if_block1.m(div6, null);
         }
@@ -5202,7 +5905,7 @@ function create_if_block_2(ctx) {
     }
   };
 }
-function create_if_block_12(ctx) {
+function create_if_block_13(ctx) {
   let div12;
   let button0;
   let div0;
@@ -5454,7 +6157,7 @@ function create_if_block_12(ctx) {
     }
   };
 }
-function create_fragment2(ctx) {
+function create_fragment3(ctx) {
   var _a, _b;
   let div2;
   let div1;
@@ -5489,8 +6192,8 @@ function create_fragment2(ctx) {
       /*currentCard*/
       ctx2[3]
     )
-      return create_if_block2;
-    return create_else_block2;
+      return create_if_block3;
+    return create_else_block3;
   }
   let current_block_type = select_block_type(ctx, [-1, -1]);
   let if_block1 = current_block_type(ctx);
@@ -5600,7 +6303,7 @@ function create_fragment2(ctx) {
     }
   };
 }
-function instance2($$self, $$props, $$invalidate) {
+function instance3($$self, $$props, $$invalidate) {
   let currentCard;
   let progress;
   let remainingCards;
@@ -5813,8 +6516,8 @@ var FlashcardReviewModal = class extends SvelteComponent {
     init(
       this,
       options,
-      instance2,
-      create_fragment2,
+      instance3,
+      create_fragment3,
       safe_not_equal,
       {
         flashcards: 1,
@@ -5825,7 +6528,7 @@ var FlashcardReviewModal = class extends SvelteComponent {
         settings: 2,
         onCardReviewed: 17
       },
-      add_css2,
+      add_css3,
       [-1, -1]
     );
   }
@@ -6007,6 +6710,9 @@ var FlashcardsPlugin = class extends import_obsidian2.Plugin {
   async syncFlashcardsForDeck(deckName) {
     await this.deckManager.syncFlashcardsForDeckByName(deckName);
   }
+  async getReviewCounts(days = 365) {
+    return await this.db.getReviewCountsByDate(days);
+  }
   async getDecks() {
     return await this.db.getAllDecks();
   }
@@ -6054,6 +6760,7 @@ var FlashcardsPlugin = class extends import_obsidian2.Plugin {
     await this.db.updateDeckLastReviewed(flashcard.deckId);
     if (this.view) {
       await this.view.refreshStatsById(flashcard.deckId);
+      await this.view.refreshHeatmap();
     }
   }
   renderMarkdown(content, el) {
@@ -6093,6 +6800,9 @@ var FlashcardsView = class extends import_obsidian2.ItemView {
         onRefresh: async () => {
           console.log("onRefresh callback invoked");
           await this.refresh();
+        },
+        getReviewCounts: async () => {
+          return await this.plugin.getReviewCounts();
         }
       }
     });
@@ -6182,6 +6892,11 @@ var FlashcardsView = class extends import_obsidian2.ItemView {
   restartBackgroundRefresh() {
     this.stopBackgroundRefresh();
     this.startBackgroundRefresh();
+  }
+  async refreshHeatmap() {
+    if (this.component) {
+      await this.component.refreshHeatmap();
+    }
   }
   // Test method to check if background job is running
   checkBackgroundJobStatus() {

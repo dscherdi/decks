@@ -596,6 +596,37 @@ export class DatabaseService {
     return stats;
   }
 
+  async getReviewCountsByDate(
+    days: number = 365,
+  ): Promise<Map<string, number>> {
+    if (!this.db) throw new Error("Database not initialized");
+
+    const endDate = new Date();
+    const startDate = new Date();
+    startDate.setDate(endDate.getDate() - days);
+
+    const stmt = this.db.prepare(`
+      SELECT DATE(reviewed_at) as review_date, COUNT(*) as count
+      FROM review_logs
+      WHERE reviewed_at >= ? AND reviewed_at <= ?
+      GROUP BY DATE(reviewed_at)
+      ORDER BY review_date
+    `);
+
+    stmt.bind([startDate.toISOString(), endDate.toISOString()]);
+    const reviewCounts = new Map<string, number>();
+
+    while (stmt.step()) {
+      const row = stmt.get();
+      const date = row[0] as string;
+      const count = row[1] as number;
+      reviewCounts.set(date, count);
+    }
+
+    stmt.free();
+    return reviewCounts;
+  }
+
   // Helper methods
   private rowToFlashcard(row: any[]): Flashcard {
     return {

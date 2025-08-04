@@ -2,14 +2,17 @@
     import { onMount, onDestroy } from "svelte";
     import { writable } from "svelte/store";
     import type { Deck, DeckStats } from "../database/types";
+    import ReviewHeatmap from "./ReviewHeatmap.svelte";
 
     let decks: Deck[] = [];
     let allDecks: Deck[] = [];
     let stats = new Map<string, DeckStats>();
     let filterText = "";
+    let heatmapComponent: ReviewHeatmap;
 
     export let onDeckClick: (deck: Deck) => void;
     export let onRefresh: () => void;
+    export let getReviewCounts: () => Promise<Map<string, number>>;
 
     let isRefreshing = false;
     let isUpdatingStats = false;
@@ -36,6 +39,9 @@
         isRefreshing = true;
         try {
             onRefresh();
+            if (heatmapComponent) {
+                await heatmapComponent.refresh();
+            }
         } catch (error) {
             console.error("Error during refresh:", error);
         } finally {
@@ -85,6 +91,12 @@
 
     function handleDeckClick(deck: Deck) {
         onDeckClick(deck);
+    }
+
+    export async function refreshHeatmap() {
+        if (heatmapComponent) {
+            await heatmapComponent.refresh();
+        }
     }
 
     onMount(() => {
@@ -188,6 +200,8 @@
             </div>
         </div>
     {/if}
+
+    <ReviewHeatmap bind:this={heatmapComponent} {getReviewCounts} />
 </div>
 
 <style>

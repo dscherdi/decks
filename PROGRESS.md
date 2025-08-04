@@ -85,7 +85,7 @@
 
 1. ✅ Update and Refresh Stats of the deck whenever the user reviews a flashcard
 2. Create statistics page for each deck which shows retention percentage as graph,
-3. Add a github style heatmap at the bottom left panel based on the reviews done per day
+3. ✅ Add a github style heatmap at the bottom left panel based on the reviews done per day
 4. ✅ Filter button on the decks table, to filter decks by name or tag.
 5. ✅ Background job that refreshes the side panel stats and data every 5 seconds
 
@@ -116,3 +116,14 @@
 - Smart empty state handling for both no decks and no filtered results
 - Integrated with existing deck refresh and stats update systems
 - Clean UI following Obsidian design patterns
+
+### GitHub-Style Review Heatmap
+- Added interactive heatmap component showing review activity over past year
+- GitHub-style design with 5 intensity levels based on daily review counts
+- Positioned at bottom of deck list panel for easy visibility
+- Real-time updates when reviews are completed
+- Tooltips showing exact review counts and dates
+- Responsive month and day labels for easy navigation
+- Optimized performance with efficient date range queries
+- Theme-aware styling for both light and dark modes
+- Background refresh integration for automatic data updates
