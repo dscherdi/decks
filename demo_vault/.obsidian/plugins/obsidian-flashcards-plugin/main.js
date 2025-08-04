@@ -4011,6 +4011,9 @@ function set_data(text2, data) {
     return;
   text2.data = data;
 }
+function set_input_value(input, value) {
+  input.value = value == null ? "" : value;
+}
 function set_style(node, key, value, important) {
   if (value == null) {
     node.style.removeProperty(key);
@@ -4357,19 +4360,19 @@ function __awaiter(thisArg, _arguments, P, generator) {
 
 // src/components/DeckListPanel.svelte
 function add_css(target) {
-  append_styles(target, "svelte-b7m3wr", ".deck-list-panel.svelte-b7m3wr.svelte-b7m3wr{height:100%;display:flex;flex-direction:column;background:var(--background-primary);color:var(--text-normal)}.panel-header.svelte-b7m3wr.svelte-b7m3wr{display:flex;justify-content:space-between;align-items:center;padding:12px 16px;border-bottom:1px solid var(--background-modifier-border)}.panel-title.svelte-b7m3wr.svelte-b7m3wr{margin:0;font-size:16px;font-weight:600}.refresh-button.svelte-b7m3wr.svelte-b7m3wr{background:none;border:none;cursor:pointer;padding:4px;border-radius:4px;color:var(--text-muted);transition:all 0.2s ease;position:relative;z-index:1}.refresh-button.svelte-b7m3wr.svelte-b7m3wr:hover{background:var(--background-modifier-hover);color:var(--text-normal)}.refresh-button.svelte-b7m3wr.svelte-b7m3wr:disabled{opacity:0.5;cursor:not-allowed}.refresh-button.refreshing.svelte-b7m3wr svg.svelte-b7m3wr{animation:svelte-b7m3wr-spin 1s linear infinite}@keyframes svelte-b7m3wr-spin{from{transform:rotate(0deg)}to{transform:rotate(360deg)}}.empty-state.svelte-b7m3wr.svelte-b7m3wr{flex:1;display:flex;flex-direction:column;justify-content:center;align-items:center;padding:32px;text-align:center}.empty-state.svelte-b7m3wr p.svelte-b7m3wr{margin:8px 0}.help-text.svelte-b7m3wr.svelte-b7m3wr{font-size:14px;color:var(--text-muted)}.deck-table.svelte-b7m3wr.svelte-b7m3wr{flex:1;display:flex;flex-direction:column;overflow:hidden}.table-header.svelte-b7m3wr.svelte-b7m3wr{display:grid;grid-template-columns:1fr 60px 60px 60px;gap:8px;padding:8px 16px;font-weight:600;font-size:14px;border-bottom:1px solid var(--background-modifier-border);background:var(--background-secondary);align-items:center}.table-body.svelte-b7m3wr.svelte-b7m3wr{flex:1;overflow-y:auto}.deck-row.svelte-b7m3wr.svelte-b7m3wr{display:grid;grid-template-columns:1fr 60px 60px 60px;gap:8px;padding:12px 16px;border:none;background:none;width:100%;text-align:left;cursor:pointer;transition:background-color 0.1s ease;border-bottom:1px solid var(--background-modifier-border);align-items:center}.deck-row.svelte-b7m3wr.svelte-b7m3wr:hover{background:var(--background-modifier-hover)}.deck-row.svelte-b7m3wr.svelte-b7m3wr:active{background:var(--background-modifier-active)}.col-deck.svelte-b7m3wr.svelte-b7m3wr{font-size:14px;color:var(--text-normal);overflow:hidden;text-overflow:ellipsis;white-space:nowrap;justify-self:start}.col-stat.svelte-b7m3wr.svelte-b7m3wr{text-align:center;font-size:14px;color:var(--text-muted);justify-self:center}.table-header.svelte-b7m3wr .col-deck.svelte-b7m3wr{font-size:14px;color:var(--text-normal);justify-self:start}.table-header.svelte-b7m3wr .col-stat.svelte-b7m3wr{text-align:center;font-size:14px;color:var(--text-normal);justify-self:center}.col-stat.has-cards.svelte-b7m3wr.svelte-b7m3wr{color:#4aa3df;font-weight:500}.col-stat.updating.svelte-b7m3wr.svelte-b7m3wr{opacity:0.6;transition:opacity 0.3s ease}.table-body.svelte-b7m3wr.svelte-b7m3wr::-webkit-scrollbar{width:8px}.table-body.svelte-b7m3wr.svelte-b7m3wr::-webkit-scrollbar-track{background:transparent}.table-body.svelte-b7m3wr.svelte-b7m3wr::-webkit-scrollbar-thumb{background:var(--background-modifier-border);border-radius:4px}.table-body.svelte-b7m3wr.svelte-b7m3wr::-webkit-scrollbar-thumb:hover{background:var(--background-modifier-border-hover)}");
+  append_styles(target, "svelte-bhki54", ".deck-list-panel.svelte-bhki54.svelte-bhki54{height:100%;display:flex;flex-direction:column;background:var(--background-primary);color:var(--text-normal)}.panel-header.svelte-bhki54.svelte-bhki54{display:flex;justify-content:space-between;align-items:center;padding:12px 16px;border-bottom:1px solid var(--background-modifier-border)}.filter-section.svelte-bhki54.svelte-bhki54{padding:8px 16px;border-bottom:1px solid var(--background-modifier-border)}.filter-input.svelte-bhki54.svelte-bhki54{width:100%;padding:6px 8px;border:1px solid var(--background-modifier-border);border-radius:4px;background:var(--background-primary);color:var(--text-normal);font-size:14px;transition:border-color 0.2s ease}.filter-input.svelte-bhki54.svelte-bhki54:focus{outline:none;border-color:var(--interactive-accent)}.filter-input.svelte-bhki54.svelte-bhki54::placeholder{color:var(--text-muted)}.panel-title.svelte-bhki54.svelte-bhki54{margin:0;font-size:16px;font-weight:600}.refresh-button.svelte-bhki54.svelte-bhki54{background:none;border:none;cursor:pointer;padding:4px;border-radius:4px;color:var(--text-muted);transition:all 0.2s ease;position:relative;z-index:1}.refresh-button.svelte-bhki54.svelte-bhki54:hover{background:var(--background-modifier-hover);color:var(--text-normal)}.refresh-button.svelte-bhki54.svelte-bhki54:disabled{opacity:0.5;cursor:not-allowed}.refresh-button.refreshing.svelte-bhki54 svg.svelte-bhki54{animation:svelte-bhki54-spin 1s linear infinite}@keyframes svelte-bhki54-spin{from{transform:rotate(0deg)}to{transform:rotate(360deg)}}.empty-state.svelte-bhki54.svelte-bhki54{flex:1;display:flex;flex-direction:column;justify-content:center;align-items:center;padding:32px;text-align:center}.empty-state.svelte-bhki54 p.svelte-bhki54{margin:8px 0}.help-text.svelte-bhki54.svelte-bhki54{font-size:14px;color:var(--text-muted)}.deck-table.svelte-bhki54.svelte-bhki54{flex:1;display:flex;flex-direction:column;overflow:hidden}.table-header.svelte-bhki54.svelte-bhki54{display:grid;grid-template-columns:1fr 60px 60px 60px;gap:8px;padding:8px 16px;font-weight:600;font-size:14px;border-bottom:1px solid var(--background-modifier-border);background:var(--background-secondary);align-items:center}.table-body.svelte-bhki54.svelte-bhki54{flex:1;overflow-y:auto}.deck-row.svelte-bhki54.svelte-bhki54{display:grid;grid-template-columns:1fr 60px 60px 60px;gap:8px;padding:12px 16px;border:none;background:none;width:100%;text-align:left;cursor:pointer;transition:background-color 0.1s ease;border-bottom:1px solid var(--background-modifier-border);align-items:center}.deck-row.svelte-bhki54.svelte-bhki54:hover{background:var(--background-modifier-hover)}.deck-row.svelte-bhki54.svelte-bhki54:active{background:var(--background-modifier-active)}.col-deck.svelte-bhki54.svelte-bhki54{font-size:14px;color:var(--text-normal);overflow:hidden;text-overflow:ellipsis;white-space:nowrap;justify-self:start}.col-stat.svelte-bhki54.svelte-bhki54{text-align:center;font-size:14px;color:var(--text-muted);justify-self:center}.table-header.svelte-bhki54 .col-deck.svelte-bhki54{font-size:14px;color:var(--text-normal);justify-self:start}.table-header.svelte-bhki54 .col-stat.svelte-bhki54{text-align:center;font-size:14px;color:var(--text-normal);justify-self:center}.col-stat.has-cards.svelte-bhki54.svelte-bhki54{color:#4aa3df;font-weight:500}.col-stat.updating.svelte-bhki54.svelte-bhki54{opacity:0.6;transition:opacity 0.3s ease}.table-body.svelte-bhki54.svelte-bhki54::-webkit-scrollbar{width:8px}.table-body.svelte-bhki54.svelte-bhki54::-webkit-scrollbar-track{background:transparent}.table-body.svelte-bhki54.svelte-bhki54::-webkit-scrollbar-thumb{background:var(--background-modifier-border);border-radius:4px}.table-body.svelte-bhki54.svelte-bhki54::-webkit-scrollbar-thumb:hover{background:var(--background-modifier-border-hover)}");
 }
 function get_each_context(ctx, list, i) {
   const child_ctx = ctx.slice();
-  child_ctx[13] = list[i];
+  child_ctx[18] = list[i];
   const constants_0 = (
     /*getDeckStats*/
-    child_ctx[4](
+    child_ctx[6](
       /*deck*/
-      child_ctx[13].id
+      child_ctx[18].id
     )
   );
-  child_ctx[3] = constants_0;
+  child_ctx[5] = constants_0;
   return child_ctx;
 }
 function create_else_block(ctx) {
@@ -4389,18 +4392,18 @@ function create_else_block(ctx) {
     c() {
       div6 = element("div");
       div4 = element("div");
-      div4.innerHTML = `<div class="col-deck svelte-b7m3wr">Deck</div> 
-                <div class="col-stat svelte-b7m3wr">New</div> 
-                <div class="col-stat svelte-b7m3wr">Learn</div> 
-                <div class="col-stat svelte-b7m3wr">Due</div>`;
+      div4.innerHTML = `<div class="col-deck svelte-bhki54">Deck</div> 
+                <div class="col-stat svelte-bhki54">New</div> 
+                <div class="col-stat svelte-bhki54">Learn</div> 
+                <div class="col-stat svelte-bhki54">Due</div>`;
       t7 = space();
       div5 = element("div");
       for (let i = 0; i < each_blocks.length; i += 1) {
         each_blocks[i].c();
       }
-      attr(div4, "class", "table-header svelte-b7m3wr");
-      attr(div5, "class", "table-body svelte-b7m3wr");
-      attr(div6, "class", "deck-table svelte-b7m3wr");
+      attr(div4, "class", "table-header svelte-bhki54");
+      attr(div5, "class", "table-body svelte-bhki54");
+      attr(div6, "class", "deck-table svelte-bhki54");
     },
     m(target, anchor) {
       insert(target, div6, anchor);
@@ -4415,7 +4418,7 @@ function create_else_block(ctx) {
     },
     p(ctx2, dirty) {
       if (dirty & /*decks, handleDeckClick, getDeckStats, isUpdatingStats, formatDeckName*/
-      85) {
+      593) {
         each_value = /*decks*/
         ctx2[0];
         let i;
@@ -4442,14 +4445,33 @@ function create_else_block(ctx) {
     }
   };
 }
+function create_if_block_1(ctx) {
+  let div;
+  return {
+    c() {
+      div = element("div");
+      div.innerHTML = `<p class="svelte-bhki54">No decks match your filter.</p> 
+            <p class="help-text svelte-bhki54">Try adjusting your search terms.</p>`;
+      attr(div, "class", "empty-state svelte-bhki54");
+    },
+    m(target, anchor) {
+      insert(target, div, anchor);
+    },
+    p: noop,
+    d(detaching) {
+      if (detaching)
+        detach(div);
+    }
+  };
+}
 function create_if_block(ctx) {
   let div;
   return {
     c() {
       div = element("div");
-      div.innerHTML = `<p class="svelte-b7m3wr">No flashcard decks found.</p> 
-            <p class="help-text svelte-b7m3wr">Tag your notes with #flashcards to create decks.</p>`;
-      attr(div, "class", "empty-state svelte-b7m3wr");
+      div.innerHTML = `<p class="svelte-bhki54">No flashcard decks found.</p> 
+            <p class="help-text svelte-bhki54">Tag your notes with #flashcards to create decks.</p>`;
+      attr(div, "class", "empty-state svelte-bhki54");
     },
     m(target, anchor) {
       insert(target, div, anchor);
@@ -4466,28 +4488,28 @@ function create_each_block(ctx) {
   let div0;
   let t0_value = formatDeckName(
     /*deck*/
-    ctx[13]
+    ctx[18]
   ) + "";
   let t0;
   let t1;
   let div1;
   let t2_value = (
     /*stats*/
-    ctx[3].newCount + ""
+    ctx[5].newCount + ""
   );
   let t2;
   let t3;
   let div2;
   let t4_value = (
     /*stats*/
-    ctx[3].learningCount + ""
+    ctx[5].learningCount + ""
   );
   let t4;
   let t5;
   let div3;
   let t6_value = (
     /*stats*/
-    ctx[3].dueCount + ""
+    ctx[5].dueCount + ""
   );
   let t6;
   let t7;
@@ -4497,9 +4519,9 @@ function create_each_block(ctx) {
   function click_handler() {
     return (
       /*click_handler*/
-      ctx[12](
+      ctx[16](
         /*deck*/
-        ctx[13]
+        ctx[18]
       )
     );
   }
@@ -4518,49 +4540,49 @@ function create_each_block(ctx) {
       div3 = element("div");
       t6 = text(t6_value);
       t7 = space();
-      attr(div0, "class", "col-deck svelte-b7m3wr");
-      attr(div1, "class", "col-stat svelte-b7m3wr");
+      attr(div0, "class", "col-deck svelte-bhki54");
+      attr(div1, "class", "col-stat svelte-bhki54");
       toggle_class(
         div1,
         "has-cards",
         /*stats*/
-        ctx[3].newCount > 0
+        ctx[5].newCount > 0
       );
       toggle_class(
         div1,
         "updating",
         /*isUpdatingStats*/
-        ctx[2]
+        ctx[4]
       );
-      attr(div2, "class", "col-stat svelte-b7m3wr");
+      attr(div2, "class", "col-stat svelte-bhki54");
       toggle_class(
         div2,
         "has-cards",
         /*stats*/
-        ctx[3].learningCount > 0
+        ctx[5].learningCount > 0
       );
       toggle_class(
         div2,
         "updating",
         /*isUpdatingStats*/
-        ctx[2]
+        ctx[4]
       );
-      attr(div3, "class", "col-stat svelte-b7m3wr");
+      attr(div3, "class", "col-stat svelte-bhki54");
       toggle_class(
         div3,
         "has-cards",
         /*stats*/
-        ctx[3].dueCount > 0
+        ctx[5].dueCount > 0
       );
       toggle_class(
         div3,
         "updating",
         /*isUpdatingStats*/
-        ctx[2]
+        ctx[4]
       );
-      attr(button, "class", "deck-row svelte-b7m3wr");
+      attr(button, "class", "deck-row svelte-bhki54");
       attr(button, "title", button_title_value = "Click to review " + /*deck*/
-      ctx[13].name);
+      ctx[18].name);
     },
     m(target, anchor) {
       insert(target, button, anchor);
@@ -4586,78 +4608,78 @@ function create_each_block(ctx) {
       if (dirty & /*decks*/
       1 && t0_value !== (t0_value = formatDeckName(
         /*deck*/
-        ctx[13]
+        ctx[18]
       ) + ""))
         set_data(t0, t0_value);
       if (dirty & /*decks*/
       1 && t2_value !== (t2_value = /*stats*/
-      ctx[3].newCount + ""))
+      ctx[5].newCount + ""))
         set_data(t2, t2_value);
       if (dirty & /*getDeckStats, decks*/
-      17) {
+      65) {
         toggle_class(
           div1,
           "has-cards",
           /*stats*/
-          ctx[3].newCount > 0
+          ctx[5].newCount > 0
         );
       }
       if (dirty & /*isUpdatingStats*/
-      4) {
+      16) {
         toggle_class(
           div1,
           "updating",
           /*isUpdatingStats*/
-          ctx[2]
+          ctx[4]
         );
       }
       if (dirty & /*decks*/
       1 && t4_value !== (t4_value = /*stats*/
-      ctx[3].learningCount + ""))
+      ctx[5].learningCount + ""))
         set_data(t4, t4_value);
       if (dirty & /*getDeckStats, decks*/
-      17) {
+      65) {
         toggle_class(
           div2,
           "has-cards",
           /*stats*/
-          ctx[3].learningCount > 0
+          ctx[5].learningCount > 0
         );
       }
       if (dirty & /*isUpdatingStats*/
-      4) {
+      16) {
         toggle_class(
           div2,
           "updating",
           /*isUpdatingStats*/
-          ctx[2]
+          ctx[4]
         );
       }
       if (dirty & /*decks*/
       1 && t6_value !== (t6_value = /*stats*/
-      ctx[3].dueCount + ""))
+      ctx[5].dueCount + ""))
         set_data(t6, t6_value);
       if (dirty & /*getDeckStats, decks*/
-      17) {
+      65) {
         toggle_class(
           div3,
           "has-cards",
           /*stats*/
-          ctx[3].dueCount > 0
+          ctx[5].dueCount > 0
         );
       }
       if (dirty & /*isUpdatingStats*/
-      4) {
+      16) {
         toggle_class(
           div3,
           "updating",
           /*isUpdatingStats*/
-          ctx[2]
+          ctx[4]
         );
       }
       if (dirty & /*decks*/
       1 && button_title_value !== (button_title_value = "Click to review " + /*deck*/
-      ctx[13].name)) {
+      ctx[18].name)) {
         attr(button, "title", button_title_value);
       }
     },
@@ -4670,7 +4692,7 @@ function create_each_block(ctx) {
   };
 }
 function create_fragment(ctx) {
-  let div1;
+  let div2;
   let div0;
   let h3;
   let t1;
@@ -4680,21 +4702,29 @@ function create_fragment(ctx) {
   let path1;
   let path2;
   let t2;
+  let div1;
+  let input;
+  let t3;
   let mounted;
   let dispose;
   function select_block_type(ctx2, dirty) {
     if (
+      /*allDecks*/
+      ctx2[1].length === 0
+    )
+      return create_if_block;
+    if (
       /*decks*/
       ctx2[0].length === 0
     )
-      return create_if_block;
+      return create_if_block_1;
     return create_else_block;
   }
   let current_block_type = select_block_type(ctx, -1);
   let if_block = current_block_type(ctx);
   return {
     c() {
-      div1 = element("div");
+      div2 = element("div");
       div0 = element("div");
       h3 = element("h3");
       h3.textContent = "Flashcard Decks";
@@ -4705,8 +4735,11 @@ function create_fragment(ctx) {
       path1 = svg_element("path");
       path2 = svg_element("path");
       t2 = space();
+      div1 = element("div");
+      input = element("input");
+      t3 = space();
       if_block.c();
-      attr(h3, "class", "panel-title svelte-b7m3wr");
+      attr(h3, "class", "panel-title svelte-bhki54");
       attr(path0, "d", "M23 4v6h-6");
       attr(path1, "d", "M1 20v-6h6");
       attr(path2, "d", "M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15");
@@ -4719,22 +4752,26 @@ function create_fragment(ctx) {
       attr(svg, "stroke-width", "2");
       attr(svg, "stroke-linecap", "round");
       attr(svg, "stroke-linejoin", "round");
-      attr(svg, "class", "svelte-b7m3wr");
-      attr(button, "class", "refresh-button svelte-b7m3wr");
+      attr(svg, "class", "svelte-bhki54");
+      attr(button, "class", "refresh-button svelte-bhki54");
       button.disabled = /*isRefreshing*/
-      ctx[1];
+      ctx[3];
       toggle_class(
         button,
         "refreshing",
         /*isRefreshing*/
-        ctx[1]
+        ctx[3]
       );
-      attr(div0, "class", "panel-header svelte-b7m3wr");
-      attr(div1, "class", "deck-list-panel svelte-b7m3wr");
+      attr(div0, "class", "panel-header svelte-bhki54");
+      attr(input, "type", "text");
+      attr(input, "class", "filter-input svelte-bhki54");
+      attr(input, "placeholder", "Filter by name or tag...");
+      attr(div1, "class", "filter-section svelte-bhki54");
+      attr(div2, "class", "deck-list-panel svelte-bhki54");
     },
     m(target, anchor) {
-      insert(target, div1, anchor);
-      append(div1, div0);
+      insert(target, div2, anchor);
+      append(div2, div0);
       append(div0, h3);
       append(div0, t1);
       append(div0, button);
@@ -4742,31 +4779,62 @@ function create_fragment(ctx) {
       append(svg, path0);
       append(svg, path1);
       append(svg, path2);
-      append(div1, t2);
-      if_block.m(div1, null);
+      append(div2, t2);
+      append(div2, div1);
+      append(div1, input);
+      set_input_value(
+        input,
+        /*filterText*/
+        ctx[2]
+      );
+      append(div2, t3);
+      if_block.m(div2, null);
       if (!mounted) {
-        dispose = listen(
-          button,
-          "click",
-          /*handleRefresh*/
-          ctx[5]
-        );
+        dispose = [
+          listen(
+            button,
+            "click",
+            /*handleRefresh*/
+            ctx[7]
+          ),
+          listen(
+            input,
+            "input",
+            /*input_input_handler*/
+            ctx[15]
+          ),
+          listen(
+            input,
+            "input",
+            /*handleFilterInput*/
+            ctx[8]
+          )
+        ];
         mounted = true;
       }
     },
     p(ctx2, [dirty]) {
       if (dirty & /*isRefreshing*/
-      2) {
+      8) {
         button.disabled = /*isRefreshing*/
-        ctx2[1];
+        ctx2[3];
       }
       if (dirty & /*isRefreshing*/
-      2) {
+      8) {
         toggle_class(
           button,
           "refreshing",
           /*isRefreshing*/
-          ctx2[1]
+          ctx2[3]
+        );
+      }
+      if (dirty & /*filterText*/
+      4 && input.value !== /*filterText*/
+      ctx2[2]) {
+        set_input_value(
+          input,
+          /*filterText*/
+          ctx2[2]
         );
       }
       if (current_block_type === (current_block_type = select_block_type(ctx2, dirty)) && if_block) {
@@ -4776,7 +4844,7 @@ function create_fragment(ctx) {
         if_block = current_block_type(ctx2);
         if (if_block) {
           if_block.c();
-          if_block.m(div1, null);
+          if_block.m(div2, null);
         }
       }
     },
@@ -4784,10 +4852,10 @@ function create_fragment(ctx) {
     o: noop,
     d(detaching) {
       if (detaching)
-        detach(div1);
+        detach(div2);
       if_block.d();
       mounted = false;
-      dispose();
+      run_all(dispose);
     }
   };
 }
@@ -4796,7 +4864,9 @@ function formatDeckName(deck) {
 }
 function instance($$self, $$props, $$invalidate) {
   let decks = [];
+  let allDecks = [];
   let stats = /* @__PURE__ */ new Map();
+  let filterText = "";
   let { onDeckClick } = $$props;
   let { onRefresh } = $$props;
   let isRefreshing = false;
@@ -4814,33 +4884,47 @@ function instance($$self, $$props, $$invalidate) {
   function handleRefresh() {
     return __awaiter(this, void 0, void 0, function* () {
       console.log("Refresh button clicked");
-      $$invalidate(1, isRefreshing = true);
+      $$invalidate(3, isRefreshing = true);
       try {
         onRefresh();
       } catch (error) {
         console.error("Error during refresh:", error);
       } finally {
-        $$invalidate(1, isRefreshing = false);
+        $$invalidate(3, isRefreshing = false);
       }
     });
   }
   function updateStatsById(deckId, newStats) {
     console.log("updateStats called - triggering UI refresh");
-    $$invalidate(2, isUpdatingStats = true);
+    $$invalidate(4, isUpdatingStats = true);
     stats.set(deckId, newStats);
     $$invalidate(0, decks);
-    $$invalidate(2, isUpdatingStats = false);
+    $$invalidate(4, isUpdatingStats = false);
   }
   function updateStats(newStats) {
     console.log("updateStats called - triggering UI refresh");
-    $$invalidate(2, isUpdatingStats = true);
-    $$invalidate(3, stats = newStats);
+    $$invalidate(4, isUpdatingStats = true);
+    $$invalidate(5, stats = newStats);
     $$invalidate(0, decks);
-    $$invalidate(2, isUpdatingStats = false);
+    $$invalidate(4, isUpdatingStats = false);
   }
   function updateDecks(newDecks) {
     console.log("updateDecks called - triggering UI refresh");
-    $$invalidate(0, decks = newDecks);
+    $$invalidate(1, allDecks = newDecks);
+    applyFilter();
+  }
+  function applyFilter() {
+    if (!filterText.trim()) {
+      $$invalidate(0, decks = allDecks);
+    } else {
+      const filter = filterText.toLowerCase();
+      $$invalidate(0, decks = allDecks.filter((deck) => deck.name.toLowerCase().includes(filter) || deck.tag.toLowerCase().includes(filter)));
+    }
+  }
+  function handleFilterInput(event) {
+    const target = event.target;
+    $$invalidate(2, filterText = target.value);
+    applyFilter();
   }
   function handleDeckClick(deck) {
     onDeckClick(deck);
@@ -4848,26 +4932,34 @@ function instance($$self, $$props, $$invalidate) {
   onMount(() => {
     handleRefresh();
   });
+  function input_input_handler() {
+    filterText = this.value;
+    $$invalidate(2, filterText);
+  }
   const click_handler = (deck) => handleDeckClick(deck);
   $$self.$$set = ($$props2) => {
     if ("onDeckClick" in $$props2)
-      $$invalidate(7, onDeckClick = $$props2.onDeckClick);
+      $$invalidate(10, onDeckClick = $$props2.onDeckClick);
     if ("onRefresh" in $$props2)
-      $$invalidate(8, onRefresh = $$props2.onRefresh);
+      $$invalidate(11, onRefresh = $$props2.onRefresh);
   };
   return [
     decks,
+    allDecks,
+    filterText,
     isRefreshing,
     isUpdatingStats,
     stats,
     getDeckStats,
     handleRefresh,
+    handleFilterInput,
     handleDeckClick,
     onDeckClick,
     onRefresh,
     updateStatsById,
     updateStats,
     updateDecks,
+    input_input_handler,
     click_handler
   ];
 }
@@ -4881,23 +4973,23 @@ var DeckListPanel = class extends SvelteComponent {
       create_fragment,
       safe_not_equal,
       {
-        onDeckClick: 7,
-        onRefresh: 8,
-        updateStatsById: 9,
-        updateStats: 10,
-        updateDecks: 11
+        onDeckClick: 10,
+        onRefresh: 11,
+        updateStatsById: 12,
+        updateStats: 13,
+        updateDecks: 14
       },
       add_css
     );
   }
   get updateStatsById() {
-    return this.$$.ctx[9];
+    return this.$$.ctx[12];
   }
   get updateStats() {
-    return this.$$.ctx[10];
+    return this.$$.ctx[13];
   }
   get updateDecks() {
-    return this.$$.ctx[11];
+    return this.$$.ctx[14];
   }
 };
 var DeckListPanel_default = DeckListPanel;
@@ -4978,7 +5070,7 @@ function create_if_block2(ctx) {
   let if_block1 = (
     /*showAnswer*/
     ctx[4] && /*schedulingInfo*/
-    ctx[8] && create_if_block_1(ctx)
+    ctx[8] && create_if_block_12(ctx)
   );
   return {
     c() {
@@ -5053,7 +5145,7 @@ function create_if_block2(ctx) {
         if (if_block1) {
           if_block1.p(ctx2, dirty);
         } else {
-          if_block1 = create_if_block_1(ctx2);
+          if_block1 = create_if_block_12(ctx2);
           if_block1.c();
           if_block1.m(div6, null);
         }
@@ -5110,7 +5202,7 @@ function create_if_block_2(ctx) {
     }
   };
 }
-function create_if_block_1(ctx) {
+function create_if_block_12(ctx) {
   let div12;
   let button0;
   let div0;

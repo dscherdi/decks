@@ -86,7 +86,7 @@
 1. ✅ Update and Refresh Stats of the deck whenever the user reviews a flashcard
 2. Create statistics page for each deck which shows retention percentage as graph,
 3. Add a github style heatmap at the bottom left panel based on the reviews done per day
-4. Filter button on the decks table, to filter decks by name or tag.
+4. ✅ Filter button on the decks table, to filter decks by name or tag.
 5. ✅ Background job that refreshes the side panel stats and data every 5 seconds
 
 ## ✅ Recent Enhancements
@@ -107,3 +107,12 @@
 - Automatic restart of background job when settings change
 - Proper cleanup on view close to prevent memory leaks
 - Optimized performance with stats caching and minimal DOM updates
+
+### Deck Filter Functionality
+- Added real-time filter input field in deck list panel
+- Case-insensitive search across both deck name and tag fields
+- Reactive filtering that updates as user types
+- Dual state management: preserves original deck list while showing filtered results
+- Smart empty state handling for both no decks and no filtered results
+- Integrated with existing deck refresh and stats update systems
+- Clean UI following Obsidian design patterns

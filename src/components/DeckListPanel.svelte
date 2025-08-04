@@ -4,7 +4,9 @@
     import type { Deck, DeckStats } from "../database/types";
 
     let decks: Deck[] = [];
+    let allDecks: Deck[] = [];
     let stats = new Map<string, DeckStats>();
+    let filterText = "";
 
     export let onDeckClick: (deck: Deck) => void;
     export let onRefresh: () => void;
@@ -58,7 +60,27 @@
     }
     export function updateDecks(newDecks: Deck[]) {
         console.log("updateDecks called - triggering UI refresh");
-        decks = newDecks;
+        allDecks = newDecks;
+        applyFilter();
+    }
+
+    function applyFilter() {
+        if (!filterText.trim()) {
+            decks = allDecks;
+        } else {
+            const filter = filterText.toLowerCase();
+            decks = allDecks.filter(
+                (deck) =>
+                    deck.name.toLowerCase().includes(filter) ||
+                    deck.tag.toLowerCase().includes(filter),
+            );
+        }
+    }
+
+    function handleFilterInput(event: Event) {
+        const target = event.target as HTMLInputElement;
+        filterText = target.value;
+        applyFilter();
     }
 
     function handleDeckClick(deck: Deck) {
@@ -100,12 +122,27 @@
         </button>
     </div>
 
-    {#if decks.length === 0}
+    <div class="filter-section">
+        <input
+            type="text"
+            class="filter-input"
+            placeholder="Filter by name or tag..."
+            bind:value={filterText}
+            on:input={handleFilterInput}
+        />
+    </div>
+
+    {#if allDecks.length === 0}
         <div class="empty-state">
             <p>No flashcard decks found.</p>
             <p class="help-text">
                 Tag your notes with #flashcards to create decks.
             </p>
+        </div>
+    {:else if decks.length === 0}
+        <div class="empty-state">
+            <p>No decks match your filter.</p>
+            <p class="help-text">Try adjusting your search terms.</p>
         </div>
     {:else}
         <div class="deck-table">
@@ -168,6 +205,31 @@
         align-items: center;
         padding: 12px 16px;
         border-bottom: 1px solid var(--background-modifier-border);
+    }
+
+    .filter-section {
+        padding: 8px 16px;
+        border-bottom: 1px solid var(--background-modifier-border);
+    }
+
+    .filter-input {
+        width: 100%;
+        padding: 6px 8px;
+        border: 1px solid var(--background-modifier-border);
+        border-radius: 4px;
+        background: var(--background-primary);
+        color: var(--text-normal);
+        font-size: 14px;
+        transition: border-color 0.2s ease;
+    }
+
+    .filter-input:focus {
+        outline: none;
+        border-color: var(--interactive-accent);
+    }
+
+    .filter-input::placeholder {
+        color: var(--text-muted);
     }
 
     .panel-title {
