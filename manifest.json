@@ -3,10 +3,9 @@
   "name": "Decks",
   "version": "1.0.2",
   "minAppVersion": "1.8.10",
-  "description": "Decks - Spaced repetition flashcards for Obsidian with FSRS algorithm",
+  "description": "Decks - Spaced repetition flashcards plugin with FSRS algorithm",
   "author": "Xherdi Lika",
   "authorUrl": "https://github.com/dscherdi",
   "isDesktopOnly": true,
-  "js": "main.js",
   "fundingUrl": "https://buymeacoffee.com/dscherdil0"
 }
