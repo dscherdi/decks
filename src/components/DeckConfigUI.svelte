@@ -250,7 +250,6 @@
         justify-content: space-between;
         margin-bottom: 20px;
         padding: 12px 0;
-        border-bottom: 1px solid var(--background-modifier-border);
     }
 
     .setting-item:last-child {
@@ -315,6 +314,10 @@
         top: 3px;
         left: 3px;
         transition: transform 0.2s ease;
+    }
+
+    .checkbox-container::after {
+        display: none !important;
     }
 
     .checkbox-input:checked + .checkbox-slider {

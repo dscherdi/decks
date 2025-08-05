@@ -186,8 +186,6 @@ export default class DecksPlugin extends Plugin {
       .deck-review-modal {
         height: 90vh;
         max-height: 700px;
-        width: 90vw;
-        max-width: 900px;
       }
 
       .deck-review-modal .modal-content {
