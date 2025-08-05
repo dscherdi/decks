@@ -285,7 +285,7 @@
 - Modified Svelte review modal to track time from card display to difficulty selection
 - Updated `reviewFlashcard` function to accept and store time elapsed data
 - Enhanced statistics to show average pace (seconds per card) and total review time
-- Implemented automatic database migration for existing installations
+- Implemented safe database migration using ALTER TABLE to preserve all user data
 - All time measurements stored in milliseconds for precision
 - **Modal Access**: Added graph icon button next to refresh button in deck list header
 - **Filtering System**: Complete deck filtering (All Decks, by Tag, by Individual Deck)

@@ -3115,20 +3115,41 @@ var DatabaseService = class {
         console.log(
           "Migrating database schema to support filepath, config, and time_elapsed columns..."
         );
-        console.log(
-          "Clearing old data - decks will be rebuilt from files on next sync"
-        );
-        this.db.exec(`
-          -- Drop existing tables
-          DROP TABLE IF EXISTS review_logs;
-          DROP TABLE IF EXISTS flashcards;
-          DROP TABLE IF EXISTS decks;
-        `);
-        await this.createTables();
-        console.log(
-          "Database schema migration completed. Data will be rebuilt from vault files."
-        );
-        await this.save();
+        try {
+          if (!hasFilepath) {
+            console.log("Adding filepath column to decks table...");
+            this.db.exec(`ALTER TABLE decks ADD COLUMN filepath TEXT`);
+          }
+          if (!hasConfig) {
+            console.log("Adding config column to decks table...");
+            this.db.exec(
+              `ALTER TABLE decks ADD COLUMN config TEXT DEFAULT '{}'`
+            );
+          }
+          if (!hasTimeElapsed) {
+            console.log("Adding time_elapsed column to review_logs table...");
+            this.db.exec(
+              `ALTER TABLE review_logs ADD COLUMN time_elapsed INTEGER NOT NULL DEFAULT 0`
+            );
+          }
+          console.log(
+            "Database schema migration completed. All user data preserved."
+          );
+          await this.save();
+        } catch (error) {
+          console.error("Error during column migration:", error);
+          console.log("Falling back to table recreation...");
+          this.db.exec(`
+            DROP TABLE IF EXISTS review_logs;
+            DROP TABLE IF EXISTS flashcards;
+            DROP TABLE IF EXISTS decks;
+          `);
+          await this.createTables();
+          console.log(
+            "Database recreated. Data will be rebuilt from vault files."
+          );
+          await this.save();
+        }
       }
     } catch (error) {
       console.error("Error during schema migration:", error);
