@@ -72,11 +72,11 @@ console.log(
 );
 
 console.log(`\n🎉 Version bump completed successfully!`);
-console.log(`📦 Ready to build and release v${targetVersion}`);
+console.log(`📦 Ready to build and release ${targetVersion}`);
 console.log(`\n📋 Next steps:`);
 console.log(`   1. Run: npm run build:release`);
 console.log(
   `   2. Commit changes: git add . && git commit -m "Bump version to ${targetVersion}"`,
 );
-console.log(`   3. Create tag: git tag v${targetVersion}`);
+console.log(`   3. Create tag: git tag ${targetVersion}`);
 console.log(`   4. Push: git push && git push --tags`);
