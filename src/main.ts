@@ -20,6 +20,7 @@ import { FlashcardsSettings, DEFAULT_SETTINGS } from "./settings";
 import { FlashcardsSettingTab } from "./components/SettingsTab";
 import DeckListPanel from "./components/DeckListPanel.svelte";
 import { DeckConfigModal } from "./components/DeckConfigModal";
+import { StatisticsModal } from "./components/StatisticsModal";
 import DeckConfigUI from "./components/DeckConfigUI.svelte";
 import { FlashcardReviewModalWrapper } from "./components/FlashcardReviewModalWrapper";
 
@@ -461,6 +462,18 @@ export default class FlashcardsPlugin extends Plugin {
     }
   }
 
+  async getOverallStatistics(
+    deckFilter: string = "all",
+    timeframe: string = "12months",
+  ) {
+    return await this.db.getOverallStatistics(deckFilter, timeframe);
+  }
+
+  openStatisticsModal() {
+    const modal = new StatisticsModal(this);
+    modal.open();
+  }
+
   renderMarkdown(content: string, el: HTMLElement) {
     const component = new Component();
     component.load();
@@ -515,6 +528,9 @@ class FlashcardsView extends ItemView {
         },
         onUpdateDeckConfig: async (deckId: string, config: DeckConfig) => {
           await this.plugin.updateDeckConfig(deckId, config);
+        },
+        onOpenStatistics: () => {
+          this.plugin.openStatisticsModal();
         },
         plugin: this.plugin,
       },

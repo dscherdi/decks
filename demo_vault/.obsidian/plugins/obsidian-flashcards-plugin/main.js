@@ -2448,7 +2448,7 @@ __export(main_exports, {
   default: () => FlashcardsPlugin
 });
 module.exports = __toCommonJS(main_exports);
-var import_obsidian5 = require("obsidian");
+var import_obsidian6 = require("obsidian");
 
 // src/database/DatabaseService.ts
 var import_sql = __toESM(require_sql_wasm());
@@ -3138,6 +3138,200 @@ var DatabaseService = class {
       created: row[16],
       modified: row[17]
     };
+  }
+  async getOverallStatistics(deckFilter = "all", timeframe = "12months") {
+    if (!this.db)
+      throw new Error("Database not initialized");
+    try {
+      const cutoffDate = /* @__PURE__ */ new Date();
+      if (timeframe === "12months") {
+        cutoffDate.setFullYear(cutoffDate.getFullYear() - 1);
+      } else {
+        cutoffDate.setFullYear(cutoffDate.getFullYear() - 10);
+      }
+      let deckFilterCondition = "";
+      let deckFilterParams = [];
+      if (deckFilter.startsWith("deck:")) {
+        const deckId = deckFilter.substring(5);
+        deckFilterCondition = "AND f.deck_id = ?";
+        deckFilterParams.push(deckId);
+      } else if (deckFilter.startsWith("tag:")) {
+        const tag = deckFilter.substring(4);
+        deckFilterCondition = "AND d.tag = ?";
+        deckFilterParams.push(tag);
+      }
+      const dailyStatsStmt = this.db.prepare(`
+      SELECT
+        DATE(reviewed_at) as date,
+        COUNT(*) as reviews,
+        COUNT(CASE WHEN difficulty != 'again' THEN 1 END) as correct,
+        COUNT(CASE WHEN f.state = 'new' THEN 1 END) as new_cards,
+        COUNT(CASE WHEN f.state = 'learning' THEN 1 END) as learning_cards,
+        COUNT(CASE WHEN f.state = 'review' THEN 1 END) as review_cards
+      FROM review_logs rl
+      JOIN flashcards f ON rl.flashcard_id = f.id
+      ${deckFilterCondition ? "JOIN decks d ON f.deck_id = d.id" : ""}
+      WHERE DATE(reviewed_at) >= DATE(?)
+      ${deckFilterCondition}
+      GROUP BY DATE(reviewed_at)
+      ORDER BY date DESC
+    `);
+      dailyStatsStmt.bind([
+        cutoffDate.toISOString().split("T")[0],
+        ...deckFilterParams
+      ]);
+      const dailyStats = [];
+      while (dailyStatsStmt.step()) {
+        const row = dailyStatsStmt.get();
+        const reviews = row[1];
+        const correct = row[2];
+        dailyStats.push({
+          date: row[0],
+          reviews,
+          timeSpent: reviews * 30,
+          // Estimate 30 seconds per review
+          newCards: row[3],
+          learningCards: row[4],
+          reviewCards: row[5],
+          correctRate: reviews > 0 ? correct / reviews * 100 : 0
+        });
+      }
+      dailyStatsStmt.free();
+      const cardStatsStmt = this.db.prepare(`
+      SELECT
+        f.state,
+        COUNT(*) as count
+      FROM flashcards f
+      ${deckFilterCondition ? "JOIN decks d ON f.deck_id = d.id" : ""}
+      WHERE 1=1
+      ${deckFilterCondition}
+      GROUP BY f.state
+    `);
+      const cardStats = {
+        new: 0,
+        learning: 0,
+        mature: 0
+      };
+      if (deckFilterCondition) {
+        cardStatsStmt.bind(deckFilterParams);
+      }
+      while (cardStatsStmt.step()) {
+        const row = cardStatsStmt.get();
+        const state = row[0];
+        const count = row[1];
+        if (state === "new")
+          cardStats.new = count;
+        else if (state === "learning")
+          cardStats.learning = count;
+        else if (state === "review")
+          cardStats.mature = count;
+      }
+      cardStatsStmt.free();
+      const answerButtonsStmt = this.db.prepare(`
+      SELECT
+        rl.difficulty,
+        COUNT(*) as count
+      FROM review_logs rl
+      JOIN flashcards f ON rl.flashcard_id = f.id
+      ${deckFilterCondition ? "JOIN decks d ON f.deck_id = d.id" : ""}
+      WHERE DATE(rl.reviewed_at) >= DATE(?)
+      ${deckFilterCondition}
+      GROUP BY rl.difficulty
+    `);
+      const answerButtons = {
+        again: 0,
+        hard: 0,
+        good: 0,
+        easy: 0
+      };
+      answerButtonsStmt.bind([
+        cutoffDate.toISOString().split("T")[0],
+        ...deckFilterParams
+      ]);
+      while (answerButtonsStmt.step()) {
+        const row = answerButtonsStmt.get();
+        const difficulty = row[0];
+        const count = row[1];
+        answerButtons[difficulty] = count;
+      }
+      answerButtonsStmt.free();
+      const totalReviews = Object.values(answerButtons).reduce(
+        (sum, count) => sum + count,
+        0
+      );
+      const correctReviews = totalReviews - answerButtons.again;
+      const retentionRate = totalReviews > 0 ? correctReviews / totalReviews * 100 : 0;
+      const intervalsStmt = this.db.prepare(`
+      SELECT
+        CASE
+          WHEN f.interval < 1440 THEN CAST(f.interval / 60 AS INTEGER) || 'h'
+          WHEN f.interval < 43200 THEN CAST(f.interval / 1440 AS INTEGER) || 'd'
+          ELSE CAST(f.interval / 43200 AS INTEGER) || 'm'
+        END as interval_group,
+        COUNT(*) as count
+      FROM flashcards f
+      ${deckFilterCondition ? "JOIN decks d ON f.deck_id = d.id" : ""}
+      WHERE f.state != 'new'
+      ${deckFilterCondition}
+      GROUP BY interval_group
+      ORDER BY f.interval
+    `);
+      if (deckFilterCondition) {
+        intervalsStmt.bind(deckFilterParams);
+      }
+      const intervals = [];
+      while (intervalsStmt.step()) {
+        const row = intervalsStmt.get();
+        intervals.push({
+          interval: row[0],
+          count: row[1]
+        });
+      }
+      intervalsStmt.free();
+      const forecast = [];
+      const today = /* @__PURE__ */ new Date();
+      for (let i = 0; i < 90; i++) {
+        const forecastDate = new Date(today);
+        forecastDate.setDate(today.getDate() + i);
+        const dateStr = forecastDate.toISOString().split("T")[0];
+        const forecastStmt = this.db.prepare(`
+        SELECT COUNT(*) as due_count
+        FROM flashcards f
+        ${deckFilterCondition ? "JOIN decks d ON f.deck_id = d.id" : ""}
+        WHERE DATE(f.due_date) = DATE(?)
+        ${deckFilterCondition}
+      `);
+        forecastStmt.bind([dateStr, ...deckFilterParams]);
+        let dueCount = 0;
+        if (forecastStmt.step()) {
+          const row = forecastStmt.get();
+          dueCount = row[0];
+        }
+        forecastStmt.free();
+        forecast.push({
+          date: dateStr,
+          dueCount
+        });
+      }
+      return {
+        dailyStats,
+        cardStats,
+        answerButtons,
+        retentionRate,
+        intervals,
+        forecast
+      };
+    } catch (error) {
+      console.error("Error in getOverallStatistics:", error);
+      return {
+        dailyStats: [],
+        cardStats: { new: 0, learning: 0, mature: 0 },
+        answerButtons: { again: 0, hard: 0, good: 0, easy: 0 },
+        retentionRate: 0,
+        intervals: [],
+        forecast: []
+      };
+    }
   }
   async close() {
     if (this.db) {
@@ -4256,6 +4450,9 @@ function text(data) {
 function space() {
   return text(" ");
 }
+function empty() {
+  return text("");
+}
 function listen(node, event, handler, options) {
   node.addEventListener(event, handler, options);
   return () => node.removeEventListener(event, handler, options);
@@ -4417,6 +4614,20 @@ function flush_render_callbacks(fns) {
 }
 var outroing = /* @__PURE__ */ new Set();
 var outros;
+function group_outros() {
+  outros = {
+    r: 0,
+    c: [],
+    p: outros
+    // parent group
+  };
+}
+function check_outros() {
+  if (!outros.r) {
+    run_all(outros.c);
+  }
+  outros = outros.p;
+}
 function transition_in(block, local) {
   if (block && block.i) {
     outroing.delete(block);
@@ -4506,7 +4717,7 @@ function make_dirty(component, i) {
   }
   component.$$.dirty[i / 31 | 0] |= 1 << i % 31;
 }
-function init(component, options, instance5, create_fragment5, not_equal, props, append_styles2, dirty = [-1]) {
+function init(component, options, instance6, create_fragment6, not_equal, props, append_styles2, dirty = [-1]) {
   const parent_component = current_component;
   set_current_component(component);
   const $$ = component.$$ = {
@@ -4532,7 +4743,7 @@ function init(component, options, instance5, create_fragment5, not_equal, props,
   };
   append_styles2 && append_styles2($$.root);
   let ready = false;
-  $$.ctx = instance5 ? instance5(component, options.props || {}, (i, ret, ...rest) => {
+  $$.ctx = instance6 ? instance6(component, options.props || {}, (i, ret, ...rest) => {
     const value = rest.length ? rest[0] : ret;
     if ($$.ctx && not_equal($$.ctx[i], $$.ctx[i] = value)) {
       if (!$$.skip_bound && $$.bound[i])
@@ -4545,7 +4756,7 @@ function init(component, options, instance5, create_fragment5, not_equal, props,
   $$.update();
   ready = true;
   run_all($$.before_update);
-  $$.fragment = create_fragment5 ? create_fragment5($$.ctx) : false;
+  $$.fragment = create_fragment6 ? create_fragment6($$.ctx) : false;
   if (options.target) {
     if (options.hydrate) {
       start_hydrating();
@@ -6040,19 +6251,19 @@ var DeckConfigModal = class extends import_obsidian3.Modal {
 
 // src/components/DeckListPanel.svelte
 function add_css3(target) {
-  append_styles(target, "svelte-yiz34z", ".deck-list-panel.svelte-yiz34z.svelte-yiz34z{min-width:400px;height:100%;display:flex;flex-direction:column;background:var(--background-primary);color:var(--text-normal)}.panel-header.svelte-yiz34z.svelte-yiz34z{display:flex;justify-content:space-between;align-items:center;padding:12px 16px;border-bottom:1px solid var(--background-modifier-border)}.filter-section.svelte-yiz34z.svelte-yiz34z{padding:8px 16px;border-bottom:1px solid var(--background-modifier-border)}.filter-input.svelte-yiz34z.svelte-yiz34z{width:100%;padding:6px 8px;border:1px solid var(--background-modifier-border);border-radius:4px;background:var(--background-primary);color:var(--text-normal);font-size:14px;transition:border-color 0.2s ease}.filter-input.svelte-yiz34z.svelte-yiz34z:focus{outline:none;border-color:var(--interactive-accent)}.filter-input.svelte-yiz34z.svelte-yiz34z::placeholder{color:var(--text-muted)}.panel-title.svelte-yiz34z.svelte-yiz34z{margin:0;font-size:16px;font-weight:600}.refresh-button.svelte-yiz34z.svelte-yiz34z{background:none;border:none;cursor:pointer;padding:4px;border-radius:4px;color:var(--text-muted);transition:all 0.2s ease;position:relative;z-index:1}.refresh-button.svelte-yiz34z.svelte-yiz34z:hover{background:var(--background-modifier-hover);color:var(--text-normal)}.refresh-button.svelte-yiz34z.svelte-yiz34z:disabled{opacity:0.5;cursor:not-allowed}.refresh-button.refreshing.svelte-yiz34z svg.svelte-yiz34z{animation:svelte-yiz34z-spin 1s linear infinite}@keyframes svelte-yiz34z-spin{from{transform:rotate(0deg)}to{transform:rotate(360deg)}}.empty-state.svelte-yiz34z.svelte-yiz34z{flex:1;display:flex;flex-direction:column;justify-content:center;align-items:center;padding:32px;text-align:center}.empty-state.svelte-yiz34z p.svelte-yiz34z{margin:8px 0}.help-text.svelte-yiz34z.svelte-yiz34z{font-size:14px;color:var(--text-muted)}.deck-table.svelte-yiz34z.svelte-yiz34z{flex:1;display:flex;flex-direction:column;overflow:hidden}.table-header.svelte-yiz34z.svelte-yiz34z{display:grid;grid-template-columns:1fr 60px 60px 60px 40px;gap:8px;padding:8px 16px;font-weight:600;font-size:14px;border-bottom:1px solid var(--background-modifier-border);background:var(--background-secondary);align-items:center}.table-body.svelte-yiz34z.svelte-yiz34z{flex:1;overflow-y:auto}.deck-row.svelte-yiz34z.svelte-yiz34z{display:grid;grid-template-columns:1fr 60px 60px 60px 40px;gap:8px;padding:12px 16px;border-bottom:1px solid var(--background-modifier-border);align-items:center}.deck-name-link.svelte-yiz34z.svelte-yiz34z{cursor:pointer;color:var(--text-normal);text-decoration:underline;text-decoration-color:transparent;transition:text-decoration-color 0.2s ease;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;display:inline-block;max-width:100%}.deck-name-link.svelte-yiz34z.svelte-yiz34z:hover{text-decoration-color:var(--text-accent);color:var(--text-accent)}.deck-name-link.svelte-yiz34z.svelte-yiz34z:focus{outline:2px solid var(--interactive-accent);outline-offset:2px;border-radius:3px}.col-config.svelte-yiz34z.svelte-yiz34z{display:flex;align-items:center;justify-content:center}.deck-config-button.svelte-yiz34z.svelte-yiz34z{background:transparent;border:none;color:var(--text-muted);cursor:pointer;padding:6px;border-radius:3px;display:flex;align-items:center;justify-content:center;transition:all 0.2s ease}.deck-config-button.svelte-yiz34z.svelte-yiz34z:hover{background:var(--background-modifier-hover);color:var(--text-normal)}.deck-config-button.svelte-yiz34z.svelte-yiz34z:focus{outline:2px solid var(--interactive-accent);outline-offset:2px}.col-deck.svelte-yiz34z.svelte-yiz34z{font-size:14px;color:var(--text-normal);justify-self:start;min-width:0}.col-stat.svelte-yiz34z.svelte-yiz34z{text-align:center;font-size:14px;color:var(--text-muted);justify-self:center}.table-header.svelte-yiz34z .col-deck.svelte-yiz34z{font-size:14px;color:var(--text-normal);justify-self:start}.table-header.svelte-yiz34z .col-stat.svelte-yiz34z{text-align:center;font-size:14px;color:var(--text-normal);justify-self:center}.col-stat.has-cards.svelte-yiz34z.svelte-yiz34z{color:#4aa3df;font-weight:500}.col-stat.updating.svelte-yiz34z.svelte-yiz34z{opacity:0.6;transition:opacity 0.3s ease}.col-stat.has-limit.svelte-yiz34z.svelte-yiz34z{position:relative;border-left:2px solid var(--interactive-accent);padding-left:6px}.limit-indicator.svelte-yiz34z.svelte-yiz34z{font-size:10px;margin-left:4px;opacity:0.7}.table-body.svelte-yiz34z.svelte-yiz34z::-webkit-scrollbar{width:8px}.table-body.svelte-yiz34z.svelte-yiz34z::-webkit-scrollbar-track{background:transparent}.table-body.svelte-yiz34z.svelte-yiz34z::-webkit-scrollbar-thumb{background:var(--background-modifier-border);border-radius:4px}.table-body.svelte-yiz34z.svelte-yiz34z::-webkit-scrollbar-thumb:hover{background:var(--background-modifier-border-hover)}");
+  append_styles(target, "svelte-1ufhkzf", ".deck-list-panel.svelte-1ufhkzf.svelte-1ufhkzf{min-width:400px;height:100%;display:flex;flex-direction:column;background:var(--background-primary);color:var(--text-normal)}.panel-header.svelte-1ufhkzf.svelte-1ufhkzf{display:flex;justify-content:space-between;align-items:center;padding:12px 16px;border-bottom:1px solid var(--background-modifier-border)}.header-buttons.svelte-1ufhkzf.svelte-1ufhkzf{display:flex;gap:8px;align-items:center}.filter-section.svelte-1ufhkzf.svelte-1ufhkzf{padding:8px 16px;border-bottom:1px solid var(--background-modifier-border)}.filter-input.svelte-1ufhkzf.svelte-1ufhkzf{width:100%;padding:6px 8px;border:1px solid var(--background-modifier-border);border-radius:4px;background:var(--background-primary);color:var(--text-normal);font-size:14px;transition:border-color 0.2s ease}.filter-input.svelte-1ufhkzf.svelte-1ufhkzf:focus{outline:none;border-color:var(--interactive-accent)}.filter-input.svelte-1ufhkzf.svelte-1ufhkzf::placeholder{color:var(--text-muted)}.panel-title.svelte-1ufhkzf.svelte-1ufhkzf{margin:0;font-size:16px;font-weight:600}.stats-button.svelte-1ufhkzf.svelte-1ufhkzf{padding:6px;background:var(--interactive-normal);border:none;border-radius:4px;cursor:pointer;color:var(--text-muted);transition:all 0.2s ease}.stats-button.svelte-1ufhkzf.svelte-1ufhkzf:hover{background:var(--interactive-hover);color:var(--text-normal)}.refresh-button.svelte-1ufhkzf.svelte-1ufhkzf{background:none;border:none;cursor:pointer;padding:4px;border-radius:4px;color:var(--text-muted);transition:all 0.2s ease;position:relative;z-index:1}.refresh-button.svelte-1ufhkzf.svelte-1ufhkzf:hover{background:var(--background-modifier-hover);color:var(--text-normal)}.refresh-button.svelte-1ufhkzf.svelte-1ufhkzf:disabled{opacity:0.5;cursor:not-allowed}.refresh-button.refreshing.svelte-1ufhkzf svg.svelte-1ufhkzf{animation:svelte-1ufhkzf-spin 1s linear infinite}@keyframes svelte-1ufhkzf-spin{from{transform:rotate(0deg)}to{transform:rotate(360deg)}}.empty-state.svelte-1ufhkzf.svelte-1ufhkzf{flex:1;display:flex;flex-direction:column;justify-content:center;align-items:center;padding:32px;text-align:center}.empty-state.svelte-1ufhkzf p.svelte-1ufhkzf{margin:8px 0}.help-text.svelte-1ufhkzf.svelte-1ufhkzf{font-size:14px;color:var(--text-muted)}.deck-table.svelte-1ufhkzf.svelte-1ufhkzf{flex:1;display:flex;flex-direction:column;overflow:hidden}.table-header.svelte-1ufhkzf.svelte-1ufhkzf{display:grid;grid-template-columns:1fr 60px 60px 60px 40px;gap:8px;padding:8px 16px;font-weight:600;font-size:14px;border-bottom:1px solid var(--background-modifier-border);background:var(--background-secondary);align-items:center}.table-body.svelte-1ufhkzf.svelte-1ufhkzf{flex:1;overflow-y:auto}.deck-row.svelte-1ufhkzf.svelte-1ufhkzf{display:grid;grid-template-columns:1fr 60px 60px 60px 40px;gap:8px;padding:12px 16px;border-bottom:1px solid var(--background-modifier-border);align-items:center}.deck-name-link.svelte-1ufhkzf.svelte-1ufhkzf{cursor:pointer;color:var(--text-normal);text-decoration:underline;text-decoration-color:transparent;transition:text-decoration-color 0.2s ease;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;display:inline-block;max-width:100%}.deck-name-link.svelte-1ufhkzf.svelte-1ufhkzf:hover{text-decoration-color:var(--text-accent);color:var(--text-accent)}.deck-name-link.svelte-1ufhkzf.svelte-1ufhkzf:focus{outline:2px solid var(--interactive-accent);outline-offset:2px;border-radius:3px}.col-config.svelte-1ufhkzf.svelte-1ufhkzf{display:flex;align-items:center;justify-content:center}.deck-config-button.svelte-1ufhkzf.svelte-1ufhkzf{background:transparent;border:none;color:var(--text-muted);cursor:pointer;padding:6px;border-radius:3px;display:flex;align-items:center;justify-content:center;transition:all 0.2s ease}.deck-config-button.svelte-1ufhkzf.svelte-1ufhkzf:hover{background:var(--background-modifier-hover);color:var(--text-normal)}.deck-config-button.svelte-1ufhkzf.svelte-1ufhkzf:focus{outline:2px solid var(--interactive-accent);outline-offset:2px}.col-deck.svelte-1ufhkzf.svelte-1ufhkzf{font-size:14px;color:var(--text-normal);justify-self:start;min-width:0}.col-stat.svelte-1ufhkzf.svelte-1ufhkzf{text-align:center;font-size:14px;color:var(--text-muted);justify-self:center}.table-header.svelte-1ufhkzf .col-deck.svelte-1ufhkzf{font-size:14px;color:var(--text-normal);justify-self:start}.table-header.svelte-1ufhkzf .col-stat.svelte-1ufhkzf{text-align:center;font-size:14px;color:var(--text-normal);justify-self:center}.col-stat.has-cards.svelte-1ufhkzf.svelte-1ufhkzf{color:#4aa3df;font-weight:500}.col-stat.updating.svelte-1ufhkzf.svelte-1ufhkzf{opacity:0.6;transition:opacity 0.3s ease}.col-stat.has-limit.svelte-1ufhkzf.svelte-1ufhkzf{position:relative;border-left:2px solid var(--interactive-accent);padding-left:6px}.limit-indicator.svelte-1ufhkzf.svelte-1ufhkzf{font-size:10px;margin-left:4px;opacity:0.7}.table-body.svelte-1ufhkzf.svelte-1ufhkzf::-webkit-scrollbar{width:8px}.table-body.svelte-1ufhkzf.svelte-1ufhkzf::-webkit-scrollbar-track{background:transparent}.table-body.svelte-1ufhkzf.svelte-1ufhkzf::-webkit-scrollbar-thumb{background:var(--background-modifier-border);border-radius:4px}.table-body.svelte-1ufhkzf.svelte-1ufhkzf::-webkit-scrollbar-thumb:hover{background:var(--background-modifier-border-hover)}");
 }
 function get_each_context2(ctx, list, i) {
   const child_ctx = ctx.slice();
-  child_ctx[27] = list[i];
+  child_ctx[28] = list[i];
   const constants_0 = (
     /*getDeckStats*/
-    child_ctx[8](
+    child_ctx[9](
       /*deck*/
-      child_ctx[27].id
+      child_ctx[28].id
     )
   );
-  child_ctx[7] = constants_0;
+  child_ctx[8] = constants_0;
   return child_ctx;
 }
 function create_else_block2(ctx) {
@@ -6062,7 +6273,7 @@ function create_else_block2(ctx) {
   let div6;
   let each_value = (
     /*decks*/
-    ctx[1]
+    ctx[2]
   );
   let each_blocks = [];
   for (let i = 0; i < each_value.length; i += 1) {
@@ -6072,19 +6283,19 @@ function create_else_block2(ctx) {
     c() {
       div7 = element("div");
       div5 = element("div");
-      div5.innerHTML = `<div class="col-deck svelte-yiz34z">Deck</div> 
-                <div class="col-stat svelte-yiz34z">New</div> 
-                <div class="col-stat svelte-yiz34z">Learn</div> 
-                <div class="col-stat svelte-yiz34z">Due</div> 
-                <div class="col-config svelte-yiz34z"></div>`;
+      div5.innerHTML = `<div class="col-deck svelte-1ufhkzf">Deck</div> 
+                <div class="col-stat svelte-1ufhkzf">New</div> 
+                <div class="col-stat svelte-1ufhkzf">Learn</div> 
+                <div class="col-stat svelte-1ufhkzf">Due</div> 
+                <div class="col-config svelte-1ufhkzf"></div>`;
       t8 = space();
       div6 = element("div");
       for (let i = 0; i < each_blocks.length; i += 1) {
         each_blocks[i].c();
       }
-      attr(div5, "class", "table-header svelte-yiz34z");
-      attr(div6, "class", "table-body svelte-yiz34z");
-      attr(div7, "class", "deck-table svelte-yiz34z");
+      attr(div5, "class", "table-header svelte-1ufhkzf");
+      attr(div6, "class", "table-body svelte-1ufhkzf");
+      attr(div7, "class", "deck-table svelte-1ufhkzf");
     },
     m(target, anchor) {
       insert(target, div7, anchor);
@@ -6099,9 +6310,9 @@ function create_else_block2(ctx) {
     },
     p(ctx2, dirty) {
       if (dirty & /*decks, handleConfigClick, getDeckStats, isUpdatingStats, handleDeckClick, formatDeckName*/
-      6466) {
+      12932) {
         each_value = /*decks*/
-        ctx2[1];
+        ctx2[2];
         let i;
         for (i = 0; i < each_value.length; i += 1) {
           const child_ctx = get_each_context2(ctx2, each_value, i);
@@ -6131,9 +6342,9 @@ function create_if_block_12(ctx) {
   return {
     c() {
       div = element("div");
-      div.innerHTML = `<p class="svelte-yiz34z">No decks match your filter.</p> 
-            <p class="help-text svelte-yiz34z">Try adjusting your search terms.</p>`;
-      attr(div, "class", "empty-state svelte-yiz34z");
+      div.innerHTML = `<p class="svelte-1ufhkzf">No decks match your filter.</p> 
+            <p class="help-text svelte-1ufhkzf">Try adjusting your search terms.</p>`;
+      attr(div, "class", "empty-state svelte-1ufhkzf");
     },
     m(target, anchor) {
       insert(target, div, anchor);
@@ -6150,9 +6361,9 @@ function create_if_block2(ctx) {
   return {
     c() {
       div = element("div");
-      div.innerHTML = `<p class="svelte-yiz34z">No flashcard decks found.</p> 
-            <p class="help-text svelte-yiz34z">Tag your notes with #flashcards to create decks.</p>`;
-      attr(div, "class", "empty-state svelte-yiz34z");
+      div.innerHTML = `<p class="svelte-1ufhkzf">No flashcard decks found.</p> 
+            <p class="help-text svelte-1ufhkzf">Tag your notes with #flashcards to create decks.</p>`;
+      attr(div, "class", "empty-state svelte-1ufhkzf");
     },
     m(target, anchor) {
       insert(target, div, anchor);
@@ -6170,7 +6381,7 @@ function create_if_block_3(ctx) {
     c() {
       span = element("span");
       span.textContent = "\u{1F4C5}";
-      attr(span, "class", "limit-indicator svelte-yiz34z");
+      attr(span, "class", "limit-indicator svelte-1ufhkzf");
     },
     m(target, anchor) {
       insert(target, span, anchor);
@@ -6187,7 +6398,7 @@ function create_if_block_2(ctx) {
     c() {
       span = element("span");
       span.textContent = "\u{1F4C5}";
-      attr(span, "class", "limit-indicator svelte-yiz34z");
+      attr(span, "class", "limit-indicator svelte-1ufhkzf");
     },
     m(target, anchor) {
       insert(target, span, anchor);
@@ -6204,7 +6415,7 @@ function create_each_block2(ctx) {
   let span;
   let t0_value = formatDeckName(
     /*deck*/
-    ctx[27]
+    ctx[28]
   ) + "";
   let t0;
   let span_title_value;
@@ -6212,7 +6423,7 @@ function create_each_block2(ctx) {
   let div1;
   let t2_value = (
     /*stats*/
-    ctx[7].newCount + ""
+    ctx[8].newCount + ""
   );
   let t2;
   let t3;
@@ -6221,14 +6432,14 @@ function create_each_block2(ctx) {
   let div2;
   let t5_value = (
     /*stats*/
-    ctx[7].learningCount + ""
+    ctx[8].learningCount + ""
   );
   let t5;
   let t6;
   let div3;
   let t7_value = (
     /*stats*/
-    ctx[7].dueCount + ""
+    ctx[8].dueCount + ""
   );
   let t7;
   let t8;
@@ -6246,36 +6457,36 @@ function create_each_block2(ctx) {
   function click_handler() {
     return (
       /*click_handler*/
-      ctx[22](
+      ctx[23](
         /*deck*/
-        ctx[27]
+        ctx[28]
       )
     );
   }
   function keydown_handler(...args) {
     return (
       /*keydown_handler*/
-      ctx[23](
+      ctx[24](
         /*deck*/
-        ctx[27],
+        ctx[28],
         ...args
       )
     );
   }
   let if_block0 = (
     /*deck*/
-    ctx[27].config.enableNewCardsLimit && create_if_block_3(ctx)
+    ctx[28].config.enableNewCardsLimit && create_if_block_3(ctx)
   );
   let if_block1 = (
     /*deck*/
-    ctx[27].config.enableReviewCardsLimit && create_if_block_2(ctx)
+    ctx[28].config.enableReviewCardsLimit && create_if_block_2(ctx)
   );
   function click_handler_1(...args) {
     return (
       /*click_handler_1*/
-      ctx[24](
+      ctx[25](
         /*deck*/
-        ctx[27],
+        ctx[28],
         ...args
       )
     );
@@ -6308,72 +6519,72 @@ function create_each_block2(ctx) {
       circle = svg_element("circle");
       path = svg_element("path");
       t10 = space();
-      attr(span, "class", "deck-name-link svelte-yiz34z");
+      attr(span, "class", "deck-name-link svelte-1ufhkzf");
       attr(span, "role", "button");
       attr(span, "tabindex", "0");
       attr(span, "title", span_title_value = "Click to review " + /*deck*/
-      ctx[27].name);
-      attr(div0, "class", "col-deck svelte-yiz34z");
-      attr(div1, "class", "col-stat svelte-yiz34z");
+      ctx[28].name);
+      attr(div0, "class", "col-deck svelte-1ufhkzf");
+      attr(div1, "class", "col-stat svelte-1ufhkzf");
       attr(div1, "title", div1_title_value = /*deck*/
-      ctx[27].config.enableNewCardsLimit ? `${/*stats*/
-      ctx[7].newCount} new cards available today (limit: ${/*deck*/
-      ctx[27].config.newCardsLimit})` : `${/*stats*/
-      ctx[7].newCount} new cards due`);
+      ctx[28].config.enableNewCardsLimit ? `${/*stats*/
+      ctx[8].newCount} new cards available today (limit: ${/*deck*/
+      ctx[28].config.newCardsLimit})` : `${/*stats*/
+      ctx[8].newCount} new cards due`);
       toggle_class(
         div1,
         "has-cards",
         /*stats*/
-        ctx[7].newCount > 0
+        ctx[8].newCount > 0
       );
       toggle_class(
         div1,
         "updating",
         /*isUpdatingStats*/
-        ctx[6]
+        ctx[7]
       );
       toggle_class(
         div1,
         "has-limit",
         /*deck*/
-        ctx[27].config.enableNewCardsLimit
+        ctx[28].config.enableNewCardsLimit
       );
-      attr(div2, "class", "col-stat svelte-yiz34z");
+      attr(div2, "class", "col-stat svelte-1ufhkzf");
       toggle_class(
         div2,
         "has-cards",
         /*stats*/
-        ctx[7].learningCount > 0
+        ctx[8].learningCount > 0
       );
       toggle_class(
         div2,
         "updating",
         /*isUpdatingStats*/
-        ctx[6]
+        ctx[7]
       );
-      attr(div3, "class", "col-stat svelte-yiz34z");
+      attr(div3, "class", "col-stat svelte-1ufhkzf");
       attr(div3, "title", div3_title_value = /*deck*/
-      ctx[27].config.enableReviewCardsLimit ? `${/*stats*/
-      ctx[7].dueCount} review cards available today (limit: ${/*deck*/
-      ctx[27].config.reviewCardsLimit})` : `${/*stats*/
-      ctx[7].dueCount} review cards due`);
+      ctx[28].config.enableReviewCardsLimit ? `${/*stats*/
+      ctx[8].dueCount} review cards available today (limit: ${/*deck*/
+      ctx[28].config.reviewCardsLimit})` : `${/*stats*/
+      ctx[8].dueCount} review cards due`);
       toggle_class(
         div3,
         "has-cards",
         /*stats*/
-        ctx[7].dueCount > 0
+        ctx[8].dueCount > 0
       );
       toggle_class(
         div3,
         "updating",
         /*isUpdatingStats*/
-        ctx[6]
+        ctx[7]
       );
       toggle_class(
         div3,
         "has-limit",
         /*deck*/
-        ctx[27].config.enableReviewCardsLimit
+        ctx[28].config.enableReviewCardsLimit
       );
       attr(circle, "cx", "12");
       attr(circle, "cy", "12");
@@ -6388,12 +6599,12 @@ function create_each_block2(ctx) {
       attr(svg, "stroke-width", "2");
       attr(svg, "stroke-linecap", "round");
       attr(svg, "stroke-linejoin", "round");
-      attr(button, "class", "deck-config-button svelte-yiz34z");
+      attr(button, "class", "deck-config-button svelte-1ufhkzf");
       attr(button, "title", "Configure deck settings");
       attr(button, "aria-label", button_aria_label_value = "Configure " + /*deck*/
-      ctx[27].name);
-      attr(div4, "class", "col-config svelte-yiz34z");
-      attr(div5, "class", "deck-row svelte-yiz34z");
+      ctx[28].name);
+      attr(div4, "class", "col-config svelte-1ufhkzf");
+      attr(div5, "class", "deck-row svelte-1ufhkzf");
     },
     m(target, anchor) {
       insert(target, div5, anchor);
@@ -6434,23 +6645,23 @@ function create_each_block2(ctx) {
     p(new_ctx, dirty) {
       ctx = new_ctx;
       if (dirty & /*decks*/
-      2 && t0_value !== (t0_value = formatDeckName(
+      4 && t0_value !== (t0_value = formatDeckName(
         /*deck*/
-        ctx[27]
+        ctx[28]
       ) + ""))
         set_data(t0, t0_value);
       if (dirty & /*decks*/
-      2 && span_title_value !== (span_title_value = "Click to review " + /*deck*/
-      ctx[27].name)) {
+      4 && span_title_value !== (span_title_value = "Click to review " + /*deck*/
+      ctx[28].name)) {
         attr(span, "title", span_title_value);
       }
       if (dirty & /*decks*/
-      2 && t2_value !== (t2_value = /*stats*/
-      ctx[7].newCount + ""))
+      4 && t2_value !== (t2_value = /*stats*/
+      ctx[8].newCount + ""))
         set_data(t2, t2_value);
       if (
         /*deck*/
-        ctx[27].config.enableNewCardsLimit
+        ctx[28].config.enableNewCardsLimit
       ) {
         if (if_block0) {
         } else {
@@ -6463,69 +6674,69 @@ function create_each_block2(ctx) {
         if_block0 = null;
       }
       if (dirty & /*decks*/
-      2 && div1_title_value !== (div1_title_value = /*deck*/
-      ctx[27].config.enableNewCardsLimit ? `${/*stats*/
-      ctx[7].newCount} new cards available today (limit: ${/*deck*/
-      ctx[27].config.newCardsLimit})` : `${/*stats*/
-      ctx[7].newCount} new cards due`)) {
+      4 && div1_title_value !== (div1_title_value = /*deck*/
+      ctx[28].config.enableNewCardsLimit ? `${/*stats*/
+      ctx[8].newCount} new cards available today (limit: ${/*deck*/
+      ctx[28].config.newCardsLimit})` : `${/*stats*/
+      ctx[8].newCount} new cards due`)) {
         attr(div1, "title", div1_title_value);
       }
       if (dirty & /*getDeckStats, decks*/
-      258) {
+      516) {
         toggle_class(
           div1,
           "has-cards",
           /*stats*/
-          ctx[7].newCount > 0
+          ctx[8].newCount > 0
         );
       }
       if (dirty & /*isUpdatingStats*/
-      64) {
+      128) {
         toggle_class(
           div1,
           "updating",
           /*isUpdatingStats*/
-          ctx[6]
+          ctx[7]
         );
       }
       if (dirty & /*decks*/
-      2) {
+      4) {
         toggle_class(
           div1,
           "has-limit",
           /*deck*/
-          ctx[27].config.enableNewCardsLimit
+          ctx[28].config.enableNewCardsLimit
         );
       }
       if (dirty & /*decks*/
-      2 && t5_value !== (t5_value = /*stats*/
-      ctx[7].learningCount + ""))
+      4 && t5_value !== (t5_value = /*stats*/
+      ctx[8].learningCount + ""))
         set_data(t5, t5_value);
       if (dirty & /*getDeckStats, decks*/
-      258) {
+      516) {
         toggle_class(
           div2,
           "has-cards",
           /*stats*/
-          ctx[7].learningCount > 0
+          ctx[8].learningCount > 0
         );
       }
       if (dirty & /*isUpdatingStats*/
-      64) {
+      128) {
         toggle_class(
           div2,
           "updating",
           /*isUpdatingStats*/
-          ctx[6]
+          ctx[7]
         );
       }
       if (dirty & /*decks*/
-      2 && t7_value !== (t7_value = /*stats*/
-      ctx[7].dueCount + ""))
+      4 && t7_value !== (t7_value = /*stats*/
+      ctx[8].dueCount + ""))
         set_data(t7, t7_value);
       if (
         /*deck*/
-        ctx[27].config.enableReviewCardsLimit
+        ctx[28].config.enableReviewCardsLimit
       ) {
         if (if_block1) {
         } else {
@@ -6538,43 +6749,43 @@ function create_each_block2(ctx) {
         if_block1 = null;
       }
       if (dirty & /*decks*/
-      2 && div3_title_value !== (div3_title_value = /*deck*/
-      ctx[27].config.enableReviewCardsLimit ? `${/*stats*/
-      ctx[7].dueCount} review cards available today (limit: ${/*deck*/
-      ctx[27].config.reviewCardsLimit})` : `${/*stats*/
-      ctx[7].dueCount} review cards due`)) {
+      4 && div3_title_value !== (div3_title_value = /*deck*/
+      ctx[28].config.enableReviewCardsLimit ? `${/*stats*/
+      ctx[8].dueCount} review cards available today (limit: ${/*deck*/
+      ctx[28].config.reviewCardsLimit})` : `${/*stats*/
+      ctx[8].dueCount} review cards due`)) {
         attr(div3, "title", div3_title_value);
       }
       if (dirty & /*getDeckStats, decks*/
-      258) {
+      516) {
         toggle_class(
           div3,
           "has-cards",
           /*stats*/
-          ctx[7].dueCount > 0
+          ctx[8].dueCount > 0
         );
       }
       if (dirty & /*isUpdatingStats*/
-      64) {
+      128) {
         toggle_class(
           div3,
           "updating",
           /*isUpdatingStats*/
-          ctx[6]
+          ctx[7]
         );
       }
       if (dirty & /*decks*/
-      2) {
+      4) {
         toggle_class(
           div3,
           "has-limit",
           /*deck*/
-          ctx[27].config.enableReviewCardsLimit
+          ctx[28].config.enableReviewCardsLimit
         );
       }
       if (dirty & /*decks*/
-      2 && button_aria_label_value !== (button_aria_label_value = "Configure " + /*deck*/
-      ctx[27].name)) {
+      4 && button_aria_label_value !== (button_aria_label_value = "Configure " + /*deck*/
+      ctx[28].name)) {
         attr(button, "aria-label", button_aria_label_value);
       }
     },
@@ -6591,20 +6802,23 @@ function create_each_block2(ctx) {
   };
 }
 function create_fragment3(ctx) {
-  let div2;
-  let div0;
+  let div3;
+  let div1;
   let h3;
   let t1;
-  let button;
-  let svg;
-  let path0;
-  let path1;
-  let path2;
+  let div0;
+  let button0;
   let t2;
-  let div1;
-  let input;
+  let button1;
+  let svg1;
+  let path4;
+  let path5;
+  let path6;
   let t3;
+  let div2;
+  let input;
   let t4;
+  let t5;
   let reviewheatmap;
   let current;
   let mounted;
@@ -6612,12 +6826,12 @@ function create_fragment3(ctx) {
   function select_block_type(ctx2, dirty) {
     if (
       /*allDecks*/
-      ctx2[2].length === 0
+      ctx2[3].length === 0
     )
       return create_if_block2;
     if (
       /*decks*/
-      ctx2[1].length === 0
+      ctx2[2].length === 0
     )
       return create_if_block_12;
     return create_else_block2;
@@ -6631,142 +6845,160 @@ function create_fragment3(ctx) {
     )
   };
   reviewheatmap = new ReviewHeatmap_default({ props: reviewheatmap_props });
-  ctx[25](reviewheatmap);
+  ctx[26](reviewheatmap);
   return {
     c() {
-      div2 = element("div");
-      div0 = element("div");
+      div3 = element("div");
+      div1 = element("div");
       h3 = element("h3");
       h3.textContent = "Flashcard Decks";
       t1 = space();
-      button = element("button");
-      svg = svg_element("svg");
-      path0 = svg_element("path");
-      path1 = svg_element("path");
-      path2 = svg_element("path");
+      div0 = element("div");
+      button0 = element("button");
+      button0.innerHTML = `<svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 3v18h18"></path><path d="M18 17V9"></path><path d="M13 17V5"></path><path d="M8 17v-3"></path></svg>`;
       t2 = space();
-      div1 = element("div");
-      input = element("input");
+      button1 = element("button");
+      svg1 = svg_element("svg");
+      path4 = svg_element("path");
+      path5 = svg_element("path");
+      path6 = svg_element("path");
       t3 = space();
-      if_block.c();
+      div2 = element("div");
+      input = element("input");
       t4 = space();
+      if_block.c();
+      t5 = space();
       create_component(reviewheatmap.$$.fragment);
-      attr(h3, "class", "panel-title svelte-yiz34z");
-      attr(path0, "d", "M23 4v6h-6");
-      attr(path1, "d", "M1 20v-6h6");
-      attr(path2, "d", "M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15");
-      attr(svg, "xmlns", "http://www.w3.org/2000/svg");
-      attr(svg, "width", "14");
-      attr(svg, "height", "14");
-      attr(svg, "viewBox", "0 0 24 24");
-      attr(svg, "fill", "none");
-      attr(svg, "stroke", "currentColor");
-      attr(svg, "stroke-width", "2");
-      attr(svg, "stroke-linecap", "round");
-      attr(svg, "stroke-linejoin", "round");
-      attr(svg, "class", "svelte-yiz34z");
-      attr(button, "class", "refresh-button svelte-yiz34z");
-      button.disabled = /*isRefreshing*/
-      ctx[5];
+      attr(h3, "class", "panel-title svelte-1ufhkzf");
+      attr(button0, "class", "stats-button svelte-1ufhkzf");
+      attr(button0, "title", "View Overall Statistics");
+      attr(path4, "d", "M23 4v6h-6");
+      attr(path5, "d", "M1 20v-6h6");
+      attr(path6, "d", "M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15");
+      attr(svg1, "xmlns", "http://www.w3.org/2000/svg");
+      attr(svg1, "width", "14");
+      attr(svg1, "height", "14");
+      attr(svg1, "viewBox", "0 0 24 24");
+      attr(svg1, "fill", "none");
+      attr(svg1, "stroke", "currentColor");
+      attr(svg1, "stroke-width", "2");
+      attr(svg1, "stroke-linecap", "round");
+      attr(svg1, "stroke-linejoin", "round");
+      attr(svg1, "class", "svelte-1ufhkzf");
+      attr(button1, "class", "refresh-button svelte-1ufhkzf");
+      button1.disabled = /*isRefreshing*/
+      ctx[6];
       toggle_class(
-        button,
+        button1,
         "refreshing",
         /*isRefreshing*/
-        ctx[5]
+        ctx[6]
       );
-      attr(div0, "class", "panel-header svelte-yiz34z");
+      attr(div0, "class", "header-buttons svelte-1ufhkzf");
+      attr(div1, "class", "panel-header svelte-1ufhkzf");
       attr(input, "type", "text");
-      attr(input, "class", "filter-input svelte-yiz34z");
+      attr(input, "class", "filter-input svelte-1ufhkzf");
       attr(input, "placeholder", "Filter by name or tag...");
-      attr(div1, "class", "filter-section svelte-yiz34z");
-      attr(div2, "class", "deck-list-panel svelte-yiz34z");
+      attr(div2, "class", "filter-section svelte-1ufhkzf");
+      attr(div3, "class", "deck-list-panel svelte-1ufhkzf");
     },
     m(target, anchor) {
-      insert(target, div2, anchor);
-      append(div2, div0);
-      append(div0, h3);
-      append(div0, t1);
-      append(div0, button);
-      append(button, svg);
-      append(svg, path0);
-      append(svg, path1);
-      append(svg, path2);
-      append(div2, t2);
-      append(div2, div1);
-      append(div1, input);
+      insert(target, div3, anchor);
+      append(div3, div1);
+      append(div1, h3);
+      append(div1, t1);
+      append(div1, div0);
+      append(div0, button0);
+      append(div0, t2);
+      append(div0, button1);
+      append(button1, svg1);
+      append(svg1, path4);
+      append(svg1, path5);
+      append(svg1, path6);
+      append(div3, t3);
+      append(div3, div2);
+      append(div2, input);
       set_input_value(
         input,
         /*filterText*/
-        ctx[3]
+        ctx[4]
       );
-      append(div2, t3);
-      if_block.m(div2, null);
-      append(div2, t4);
-      mount_component(reviewheatmap, div2, null);
+      append(div3, t4);
+      if_block.m(div3, null);
+      append(div3, t5);
+      mount_component(reviewheatmap, div3, null);
       current = true;
       if (!mounted) {
         dispose = [
+          listen(button0, "click", function() {
+            if (is_function(
+              /*onOpenStatistics*/
+              ctx[1]
+            ))
+              ctx[1].apply(this, arguments);
+          }),
           listen(
-            button,
+            button1,
             "click",
             /*handleRefresh*/
-            ctx[9]
+            ctx[10]
           ),
           listen(
             input,
             "input",
             /*input_input_handler*/
-            ctx[21]
+            ctx[22]
           ),
           listen(
             input,
             "input",
             /*handleFilterInput*/
-            ctx[10]
+            ctx[11]
           )
         ];
         mounted = true;
       }
     },
-    p(ctx2, [dirty]) {
+    p(new_ctx, [dirty]) {
+      ctx = new_ctx;
       if (!current || dirty & /*isRefreshing*/
-      32) {
-        button.disabled = /*isRefreshing*/
-        ctx2[5];
+      64) {
+        button1.disabled = /*isRefreshing*/
+        ctx[6];
       }
       if (!current || dirty & /*isRefreshing*/
-      32) {
+      64) {
         toggle_class(
-          button,
+          button1,
           "refreshing",
           /*isRefreshing*/
-          ctx2[5]
+          ctx[6]
         );
       }
       if (dirty & /*filterText*/
-      8 && input.value !== /*filterText*/
-      ctx2[3]) {
+      16 && input.value !== /*filterText*/
+      ctx[4]) {
         set_input_value(
           input,
           /*filterText*/
-          ctx2[3]
+          ctx[4]
         );
       }
-      if (current_block_type === (current_block_type = select_block_type(ctx2, dirty)) && if_block) {
-        if_block.p(ctx2, dirty);
+      if (current_block_type === (current_block_type = select_block_type(ctx, dirty)) && if_block) {
+        if_block.p(ctx, dirty);
       } else {
         if_block.d(1);
-        if_block = current_block_type(ctx2);
+        if_block = current_block_type(ctx);
         if (if_block) {
           if_block.c();
-          if_block.m(div2, t4);
+          if_block.m(div3, t5);
         }
       }
       const reviewheatmap_changes = {};
       if (dirty & /*getReviewCounts*/
       1)
         reviewheatmap_changes.getReviewCounts = /*getReviewCounts*/
-        ctx2[0];
+        ctx[0];
       reviewheatmap.$set(reviewheatmap_changes);
     },
     i(local) {
@@ -6781,9 +7013,9 @@ function create_fragment3(ctx) {
     },
     d(detaching) {
       if (detaching)
-        detach(div2);
+        detach(div3);
       if_block.d();
-      ctx[25](null);
+      ctx[26](null);
       destroy_component(reviewheatmap);
       mounted = false;
       run_all(dispose);
@@ -6803,6 +7035,7 @@ function instance3($$self, $$props, $$invalidate) {
   let { onRefresh } = $$props;
   let { getReviewCounts } = $$props;
   let { onUpdateDeckConfig } = $$props;
+  let { onOpenStatistics } = $$props;
   let { plugin } = $$props;
   let isRefreshing = false;
   let isUpdatingStats = false;
@@ -6818,44 +7051,44 @@ function instance3($$self, $$props, $$invalidate) {
   }
   function handleRefresh() {
     return __awaiter(this, void 0, void 0, function* () {
-      $$invalidate(5, isRefreshing = true);
+      $$invalidate(6, isRefreshing = true);
       try {
         onRefresh();
         refreshHeatmap();
       } catch (error) {
         console.error("Error during refresh:", error);
       } finally {
-        $$invalidate(5, isRefreshing = false);
+        $$invalidate(6, isRefreshing = false);
       }
     });
   }
   function updateStatsById(deckId, newStats) {
-    $$invalidate(6, isUpdatingStats = true);
+    $$invalidate(7, isUpdatingStats = true);
     stats.set(deckId, newStats);
-    $$invalidate(1, decks);
-    $$invalidate(6, isUpdatingStats = false);
+    $$invalidate(2, decks);
+    $$invalidate(7, isUpdatingStats = false);
   }
   function updateStats(newStats) {
-    $$invalidate(6, isUpdatingStats = true);
-    $$invalidate(7, stats = newStats);
-    $$invalidate(1, decks);
-    $$invalidate(6, isUpdatingStats = false);
+    $$invalidate(7, isUpdatingStats = true);
+    $$invalidate(8, stats = newStats);
+    $$invalidate(2, decks);
+    $$invalidate(7, isUpdatingStats = false);
   }
   function updateDecks(newDecks) {
-    $$invalidate(2, allDecks = newDecks);
+    $$invalidate(3, allDecks = newDecks);
     applyFilter();
   }
   function applyFilter() {
     if (!filterText.trim()) {
-      $$invalidate(1, decks = allDecks);
+      $$invalidate(2, decks = allDecks);
     } else {
       const filter = filterText.toLowerCase();
-      $$invalidate(1, decks = allDecks.filter((deck) => deck.name.toLowerCase().includes(filter) || deck.tag.toLowerCase().includes(filter)));
+      $$invalidate(2, decks = allDecks.filter((deck) => deck.name.toLowerCase().includes(filter) || deck.tag.toLowerCase().includes(filter)));
     }
   }
   function handleFilterInput(event) {
     const target = event.target;
-    $$invalidate(3, filterText = target.value);
+    $$invalidate(4, filterText = target.value);
     applyFilter();
   }
   function handleDeckClick(deck) {
@@ -6876,8 +7109,8 @@ function instance3($$self, $$props, $$invalidate) {
           yield onUpdateDeckConfig(deck.id, config);
           const deckIndex = allDecks.findIndex((d) => d.id === deck.id);
           if (deckIndex !== -1) {
-            $$invalidate(2, allDecks[deckIndex].config = config, allDecks);
-            $$invalidate(2, allDecks = [...allDecks]);
+            $$invalidate(3, allDecks[deckIndex].config = config, allDecks);
+            $$invalidate(3, allDecks = [...allDecks]);
             applyFilter();
           }
         }
@@ -6890,7 +7123,7 @@ function instance3($$self, $$props, $$invalidate) {
   });
   function input_input_handler() {
     filterText = this.value;
-    $$invalidate(3, filterText);
+    $$invalidate(4, filterText);
   }
   const click_handler = (deck) => handleDeckClick(deck);
   const keydown_handler = (deck, e) => e.key === "Enter" && handleDeckClick(deck);
@@ -6898,23 +7131,26 @@ function instance3($$self, $$props, $$invalidate) {
   function reviewheatmap_binding($$value) {
     binding_callbacks[$$value ? "unshift" : "push"](() => {
       heatmapComponent = $$value;
-      $$invalidate(4, heatmapComponent);
+      $$invalidate(5, heatmapComponent);
     });
   }
   $$self.$$set = ($$props2) => {
     if ("onDeckClick" in $$props2)
-      $$invalidate(13, onDeckClick = $$props2.onDeckClick);
+      $$invalidate(14, onDeckClick = $$props2.onDeckClick);
     if ("onRefresh" in $$props2)
-      $$invalidate(14, onRefresh = $$props2.onRefresh);
+      $$invalidate(15, onRefresh = $$props2.onRefresh);
     if ("getReviewCounts" in $$props2)
       $$invalidate(0, getReviewCounts = $$props2.getReviewCounts);
     if ("onUpdateDeckConfig" in $$props2)
-      $$invalidate(15, onUpdateDeckConfig = $$props2.onUpdateDeckConfig);
+      $$invalidate(16, onUpdateDeckConfig = $$props2.onUpdateDeckConfig);
+    if ("onOpenStatistics" in $$props2)
+      $$invalidate(1, onOpenStatistics = $$props2.onOpenStatistics);
     if ("plugin" in $$props2)
-      $$invalidate(16, plugin = $$props2.plugin);
+      $$invalidate(17, plugin = $$props2.plugin);
   };
   return [
     getReviewCounts,
+    onOpenStatistics,
     decks,
     allDecks,
     filterText,
@@ -6952,42 +7188,2976 @@ var DeckListPanel = class extends SvelteComponent {
       create_fragment3,
       safe_not_equal,
       {
-        onDeckClick: 13,
-        onRefresh: 14,
+        onDeckClick: 14,
+        onRefresh: 15,
         getReviewCounts: 0,
-        onUpdateDeckConfig: 15,
-        plugin: 16,
-        updateStatsById: 17,
-        updateStats: 18,
-        updateDecks: 19,
-        refreshHeatmap: 20
+        onUpdateDeckConfig: 16,
+        onOpenStatistics: 1,
+        plugin: 17,
+        updateStatsById: 18,
+        updateStats: 19,
+        updateDecks: 20,
+        refreshHeatmap: 21
       },
       add_css3
     );
   }
   get updateStatsById() {
-    return this.$$.ctx[17];
-  }
-  get updateStats() {
     return this.$$.ctx[18];
   }
-  get updateDecks() {
+  get updateStats() {
     return this.$$.ctx[19];
   }
-  get refreshHeatmap() {
+  get updateDecks() {
     return this.$$.ctx[20];
+  }
+  get refreshHeatmap() {
+    return this.$$.ctx[21];
   }
 };
 var DeckListPanel_default = DeckListPanel;
 
-// src/components/FlashcardReviewModalWrapper.ts
+// src/components/StatisticsModal.ts
 var import_obsidian4 = require("obsidian");
 
-// src/components/FlashcardReviewModal.svelte
+// src/components/StatisticsUI.svelte
 function add_css4(target) {
-  append_styles(target, "svelte-1opyfa1", ".review-modal.svelte-1opyfa1.svelte-1opyfa1{display:flex;flex-direction:column;height:100%;background:var(--background-primary);color:var(--text-normal);overflow:hidden;width:100%}.modal-header.svelte-1opyfa1.svelte-1opyfa1{display:flex;align-items:center;justify-content:space-between;padding:16px 20px;border-bottom:1px solid var(--background-modifier-border)}.modal-header.svelte-1opyfa1 h3.svelte-1opyfa1{margin:0;font-size:18px;font-weight:600}.progress-info.svelte-1opyfa1.svelte-1opyfa1{display:flex;gap:8px;font-size:14px}.remaining.svelte-1opyfa1.svelte-1opyfa1{color:var(--text-muted)}.review-progress-bar.svelte-1opyfa1.svelte-1opyfa1{height:4px;background:var(--background-modifier-border);position:relative}.progress-fill.svelte-1opyfa1.svelte-1opyfa1{height:100%;background:var(--interactive-accent);transition:width 0.3s ease}.card-content.svelte-1opyfa1.svelte-1opyfa1{flex:1;overflow-y:auto;overflow-x:hidden;padding:32px 16px;display:flex;flex-direction:column;align-items:center;justify-content:flex-start;gap:24px;width:100%;box-sizing:border-box;min-height:0}.question-section.svelte-1opyfa1.svelte-1opyfa1,.answer-section.svelte-1opyfa1.svelte-1opyfa1{width:100%;display:flex;justify-content:center}.card-side.svelte-1opyfa1.svelte-1opyfa1{background:var(--background-secondary);border:1px solid var(--background-modifier-border);border-radius:8px;padding:24px;min-height:100px;width:100%;max-width:600px;box-sizing:border-box;word-wrap:break-word;overflow-wrap:break-word}.card-side.front.svelte-1opyfa1.svelte-1opyfa1{text-align:center;font-size:20px;font-weight:500}.card-side.back.svelte-1opyfa1.svelte-1opyfa1{font-size:16px;line-height:1.6}.answer-section.svelte-1opyfa1.svelte-1opyfa1{width:100%;display:flex;flex-direction:column;justify-content:center;align-items:center}.answer-section.hidden.svelte-1opyfa1.svelte-1opyfa1{display:none}.separator.svelte-1opyfa1.svelte-1opyfa1{height:1px;background:var(--background-modifier-border);margin:16px auto;width:100%;max-width:600px}.action-buttons.svelte-1opyfa1.svelte-1opyfa1{padding:20px;border-top:1px solid var(--background-modifier-border);flex-shrink:0;width:100%;box-sizing:border-box}.show-answer-button.svelte-1opyfa1.svelte-1opyfa1{width:100%;max-width:400px;margin:0 auto;padding:12px 24px;font-size:16px;font-weight:500;background:var(--interactive-accent);color:var(--text-on-accent);border:none;border-radius:6px;cursor:pointer;display:flex;align-items:center;justify-content:center;gap:8px;box-sizing:border-box}.show-answer-button.svelte-1opyfa1.svelte-1opyfa1:hover{background:var(--interactive-accent-hover)}.shortcut.svelte-1opyfa1.svelte-1opyfa1{font-size:12px;opacity:0.8;padding:2px 6px;background:rgba(0, 0, 0, 0.2);border-radius:3px;margin-left:8px;display:inline-block}.difficulty-buttons.svelte-1opyfa1.svelte-1opyfa1{display:flex;gap:8px;justify-content:center;flex-wrap:nowrap;padding:0 10px;box-sizing:border-box;width:100%;max-width:600px;margin:0 auto}.difficulty-button.svelte-1opyfa1.svelte-1opyfa1{flex:1;min-width:0;padding:10px 6px;border:1px solid var(--background-modifier-border);background:var(--background-secondary);border-radius:6px;cursor:pointer;display:flex;flex-direction:column;align-items:center;gap:2px;transition:all 0.2s ease;position:relative;box-sizing:border-box;white-space:nowrap}.difficulty-button.svelte-1opyfa1.svelte-1opyfa1:hover{transform:translateY(-2px);box-shadow:0 4px 12px rgba(0, 0, 0, 0.1)}.difficulty-button.svelte-1opyfa1.svelte-1opyfa1:disabled{opacity:0.5;cursor:not-allowed;transform:none}.difficulty-button.again.svelte-1opyfa1.svelte-1opyfa1{border-color:#e74c3c}.difficulty-button.again.svelte-1opyfa1.svelte-1opyfa1:hover:not(:disabled){background:#e74c3c;color:white}.difficulty-button.hard.svelte-1opyfa1.svelte-1opyfa1{border-color:#f39c12}.difficulty-button.hard.svelte-1opyfa1.svelte-1opyfa1:hover:not(:disabled){background:#f39c12;color:white}.difficulty-button.good.svelte-1opyfa1.svelte-1opyfa1{border-color:#27ae60}.difficulty-button.good.svelte-1opyfa1.svelte-1opyfa1:hover:not(:disabled){background:#27ae60;color:white}.difficulty-button.easy.svelte-1opyfa1.svelte-1opyfa1{border-color:#3498db}.difficulty-button.easy.svelte-1opyfa1.svelte-1opyfa1:hover:not(:disabled){background:#3498db;color:white}.button-label.svelte-1opyfa1.svelte-1opyfa1{font-weight:600;font-size:13px}.interval.svelte-1opyfa1.svelte-1opyfa1{font-size:11px;color:var(--text-muted)}.difficulty-button.svelte-1opyfa1:hover .interval.svelte-1opyfa1{color:inherit}.difficulty-button.svelte-1opyfa1 .shortcut.svelte-1opyfa1{position:absolute;top:2px;right:2px;font-size:9px;padding:1px 3px;background:var(--background-modifier-border);border-radius:2px;opacity:0.7}.empty-state.svelte-1opyfa1.svelte-1opyfa1{flex:1;display:flex;align-items:center;justify-content:center;padding:32px;color:var(--text-muted)}.card-side h1,.card-side h2,.card-side h3,.card-side h4,.card-side h5,.card-side h6{margin-top:0;margin-bottom:16px}.card-side p{margin-bottom:16px}.card-side p:last-child{margin-bottom:0}.card-side > *:first-child{margin-top:0}.card-side ul,.card-side ol{margin-bottom:16px;padding-left:24px}.card-side code{background:var(--code-background);padding:2px 4px;border-radius:3px;font-size:0.9em}.card-side pre{background:var(--code-background);padding:16px;border-radius:6px;overflow-x:auto;margin-bottom:16px;max-width:100%}.card-side blockquote{border-left:3px solid var(--blockquote-border);padding-left:16px;margin-left:0;margin-right:0;color:var(--text-muted)}@media(max-width: 500px){.difficulty-buttons.svelte-1opyfa1.svelte-1opyfa1{gap:4px;padding:0 5px}.difficulty-button.svelte-1opyfa1.svelte-1opyfa1{padding:8px 4px}.button-label.svelte-1opyfa1.svelte-1opyfa1{font-size:12px}.interval.svelte-1opyfa1.svelte-1opyfa1{font-size:10px}.difficulty-button.svelte-1opyfa1 .shortcut.svelte-1opyfa1{font-size:8px;padding:1px 2px}.card-content.svelte-1opyfa1.svelte-1opyfa1{padding:16px 8px}}");
+  append_styles(target, "svelte-lbb1rg", `.statistics-container.svelte-lbb1rg.svelte-lbb1rg{padding:20px;font-family:var(--font-interface);width:100%;overflow-x:hidden}.loading.svelte-lbb1rg.svelte-lbb1rg,.error.svelte-lbb1rg.svelte-lbb1rg{text-align:center;padding:40px;color:var(--text-muted)}.filters.svelte-lbb1rg.svelte-lbb1rg{display:flex;gap:24px;margin-bottom:24px;padding:20px;background:var(--background-secondary);border-radius:10px;flex-wrap:wrap;justify-content:center}.filter-group.svelte-lbb1rg.svelte-lbb1rg{display:flex;flex-direction:column;gap:8px;min-width:200px}.filter-group.svelte-lbb1rg label.svelte-lbb1rg{font-size:14px;color:var(--text-muted);font-weight:600}.filter-group.svelte-lbb1rg select.svelte-lbb1rg{padding:10px 12px;border:2px solid var(--background-modifier-border);border-radius:6px;background:var(--background-primary);color:var(--text-normal);font-size:14px;font-weight:500;appearance:none;-webkit-appearance:none;-moz-appearance:none;cursor:pointer;min-width:180px;background-image:url("data:image/svg+xml;charset=US-ASCII,<svg xmlns='http://www.w3.org/2000/svg' width='4' height='5'><path fill='%23666' d='m0 0 2 2 2-2z'/></svg>");background-repeat:no-repeat;background-position:right 12px center;background-size:12px}.filter-group.svelte-lbb1rg select.svelte-lbb1rg:focus{outline:none;border-color:var(--interactive-accent);box-shadow:0 0 0 2px var(--interactive-accent-hover)}.filter-group.svelte-lbb1rg select option.svelte-lbb1rg{background:var(--background-primary);color:var(--text-normal);font-weight:500;padding:8px}.stats-section.svelte-lbb1rg.svelte-lbb1rg{margin-bottom:32px;padding-bottom:24px;border-bottom:1px solid var(--background-modifier-border)}.stats-section.svelte-lbb1rg.svelte-lbb1rg:last-of-type{border-bottom:none}.stats-section.svelte-lbb1rg h3.svelte-lbb1rg{margin:0 0 20px 0;color:var(--text-normal);font-size:18px;font-weight:600}.stats-section.svelte-lbb1rg h4.svelte-lbb1rg{margin:24px 0 12px 0;color:var(--text-normal);font-size:16px;font-weight:500}.stats-grid.svelte-lbb1rg.svelte-lbb1rg{display:grid;grid-template-columns:repeat(auto-fit, minmax(150px, 1fr));gap:16px;margin-bottom:20px}.stat-card.svelte-lbb1rg.svelte-lbb1rg{background:var(--background-secondary);padding:16px;border-radius:8px;text-align:center;border:1px solid var(--background-modifier-border);min-height:80px;display:flex;flex-direction:column;justify-content:center}.stat-value.svelte-lbb1rg.svelte-lbb1rg{font-size:24px;font-weight:600;color:var(--text-normal);margin-bottom:4px}.stat-label.svelte-lbb1rg.svelte-lbb1rg{font-size:12px;color:var(--text-muted);text-transform:uppercase;letter-spacing:0.5px}.metrics-grid.svelte-lbb1rg.svelte-lbb1rg{display:grid;grid-template-columns:repeat(auto-fit, minmax(200px, 1fr));gap:16px;margin-bottom:24px}.metric-card.svelte-lbb1rg.svelte-lbb1rg{background:var(--background-secondary);padding:20px;border-radius:8px;border:1px solid var(--background-modifier-border);min-height:100px}.metric-value.svelte-lbb1rg.svelte-lbb1rg{font-size:28px;font-weight:700;color:var(--text-accent);margin-bottom:8px}.metric-label.svelte-lbb1rg.svelte-lbb1rg{font-size:14px;font-weight:600;color:var(--text-normal);margin-bottom:4px}.metric-description.svelte-lbb1rg.svelte-lbb1rg{font-size:11px;color:var(--text-muted);line-height:1.3}.forecast-chart.svelte-lbb1rg.svelte-lbb1rg{display:flex;gap:4px;align-items:flex-end;padding:16px;background:var(--background-secondary);border-radius:8px;min-height:150px;overflow-x:auto;overflow-y:hidden;max-width:100%}.forecast-bar.svelte-lbb1rg.svelte-lbb1rg{display:flex;flex-direction:column;align-items:center;gap:4px;min-width:20px;flex-shrink:0}.bar.svelte-lbb1rg.svelte-lbb1rg{background:var(--text-accent);width:12px;border-radius:2px 2px 0 0;transition:background 0.2s}.bar-label.svelte-lbb1rg.svelte-lbb1rg{font-size:8px;color:var(--text-muted);writing-mode:vertical-rl;text-orientation:mixed}.bar-value.svelte-lbb1rg.svelte-lbb1rg{font-size:10px;color:var(--text-normal)}.forecast-note.svelte-lbb1rg.svelte-lbb1rg{margin-top:8px;font-size:12px;color:var(--text-muted);text-align:center}.button-stats.svelte-lbb1rg.svelte-lbb1rg{display:flex;flex-direction:column;gap:12px}.button-bar.svelte-lbb1rg.svelte-lbb1rg{display:flex;justify-content:space-between;align-items:center;padding:12px 16px;border-radius:6px;background:var(--background-secondary);border:1px solid var(--background-modifier-border)}.button-bar.again.svelte-lbb1rg.svelte-lbb1rg{border-left:4px solid #ef4444}.button-bar.hard.svelte-lbb1rg.svelte-lbb1rg{border-left:4px solid #f97316}.button-bar.good.svelte-lbb1rg.svelte-lbb1rg{border-left:4px solid #22c55e}.button-bar.easy.svelte-lbb1rg.svelte-lbb1rg{border-left:4px solid #3b82f6}.button-label.svelte-lbb1rg.svelte-lbb1rg{font-weight:500;color:var(--text-normal)}.button-count.svelte-lbb1rg.svelte-lbb1rg{font-weight:600;color:var(--text-normal);font-size:18px}.button-percentage.svelte-lbb1rg.svelte-lbb1rg{font-size:12px;color:var(--text-muted)}.intervals-chart.svelte-lbb1rg.svelte-lbb1rg{display:flex;flex-wrap:wrap;gap:12px;padding:16px;background:var(--background-secondary);border-radius:8px;max-width:100%;overflow-x:hidden}.interval-bar.svelte-lbb1rg.svelte-lbb1rg{display:flex;flex-direction:column;align-items:center;padding:12px 8px;background:var(--background-primary);border-radius:6px;min-width:60px;border:1px solid var(--background-modifier-border)}.interval-label.svelte-lbb1rg.svelte-lbb1rg{font-size:12px;color:var(--text-muted);margin-bottom:4px}.interval-value.svelte-lbb1rg.svelte-lbb1rg{font-size:16px;font-weight:600;color:var(--text-normal)}.modal-actions.svelte-lbb1rg.svelte-lbb1rg{display:flex;justify-content:flex-end;gap:8px;margin-top:24px;padding:16px 20px;border-top:1px solid var(--background-modifier-border);background:var(--background-primary);position:sticky;bottom:0;margin-left:-20px;margin-right:-20px}.close-button.svelte-lbb1rg.svelte-lbb1rg{padding:8px 16px;background:var(--interactive-accent);color:var(--text-on-accent);border:none;border-radius:4px;cursor:pointer;font-weight:500}.close-button.svelte-lbb1rg.svelte-lbb1rg:hover{background:var(--interactive-accent-hover)}.forecast-bar.svelte-lbb1rg.svelte-lbb1rg{cursor:pointer;position:relative}.forecast-bar.svelte-lbb1rg:hover .bar.svelte-lbb1rg{opacity:0.8;transition:opacity 0.2s ease}.no-data-message.svelte-lbb1rg.svelte-lbb1rg{text-align:center;padding:24px;background:var(--background-secondary);border-radius:8px;border:1px solid var(--background-modifier-border)}.no-data-message.svelte-lbb1rg p.svelte-lbb1rg{margin:0 0 8px 0;color:var(--text-muted)}.help-text.svelte-lbb1rg.svelte-lbb1rg{font-size:12px !important;color:var(--text-faint) !important;margin:0 !important}.retry-button.svelte-lbb1rg.svelte-lbb1rg{margin-top:12px;padding:8px 16px;background:var(--interactive-accent);color:var(--text-on-accent);border:none;border-radius:4px;cursor:pointer;font-size:14px}.retry-button.svelte-lbb1rg.svelte-lbb1rg:hover{background:var(--interactive-accent-hover)}`);
+}
+function get_each_context3(ctx, list, i) {
+  const child_ctx = ctx.slice();
+  child_ctx[28] = list[i];
+  return child_ctx;
+}
+function get_each_context_12(ctx, list, i) {
+  const child_ctx = ctx.slice();
+  child_ctx[31] = list[i];
+  child_ctx[34] = i;
+  const constants_0 = (
+    /*statistics*/
+    child_ctx[2].forecast.indexOf(
+      /*day*/
+      child_ctx[31]
+    )
+  );
+  child_ctx[32] = constants_0;
+  return child_ctx;
+}
+function get_each_context_22(ctx, list, i) {
+  const child_ctx = ctx.slice();
+  child_ctx[35] = list[i];
+  return child_ctx;
+}
+function get_each_context_3(ctx, list, i) {
+  const child_ctx = ctx.slice();
+  child_ctx[38] = list[i];
+  return child_ctx;
+}
+function create_else_block3(ctx) {
+  var _a, _b, _c, _d, _e, _f, _g, _h, _i, _j, _k, _l, _m, _n, _o, _p, _q, _r, _s, _t, _u;
+  let div2;
+  let div0;
+  let label0;
+  let t1;
+  let select0;
+  let option0;
+  let each0_anchor;
+  let t3;
+  let div1;
+  let label1;
+  let t5;
+  let select1;
+  let option1;
+  let option2;
+  let t8;
+  let div16;
+  let h30;
+  let t10;
+  let div15;
+  let div5;
+  let div3;
+  let t11_value = (
+    /*statistics*/
+    (((_b = (_a = ctx[2]) == null ? void 0 : _a.cardStats) == null ? void 0 : _b.new) || 0) + ""
+  );
+  let t11;
+  let t12;
+  let div4;
+  let t14;
+  let div8;
+  let div6;
+  let t15_value = (
+    /*statistics*/
+    (((_d = (_c = ctx[2]) == null ? void 0 : _c.cardStats) == null ? void 0 : _d.learning) || 0) + ""
+  );
+  let t15;
+  let t16;
+  let div7;
+  let t18;
+  let div11;
+  let div9;
+  let t19_value = (
+    /*statistics*/
+    (((_f = (_e = ctx[2]) == null ? void 0 : _e.cardStats) == null ? void 0 : _f.mature) || 0) + ""
+  );
+  let t19;
+  let t20;
+  let div10;
+  let t22;
+  let div14;
+  let div12;
+  let t24;
+  let div13;
+  let t26;
+  let div17;
+  let h31;
+  let t28;
+  let t29;
+  let div18;
+  let h32;
+  let t31;
+  let t32;
+  let h33;
+  let t34;
+  let t35;
+  let h34;
+  let t37;
+  let t38;
+  let div62;
+  let h35;
+  let t40;
+  let div51;
+  let div22;
+  let div19;
+  let t41_value = (
+    /*statistics*/
+    (((_g = ctx[2]) == null ? void 0 : _g.retentionRate) || 0).toFixed(1) + ""
+  );
+  let t41;
+  let t42;
+  let t43;
+  let div20;
+  let t45;
+  let div21;
+  let t47;
+  let div26;
+  let div23;
+  let t49;
+  let div24;
+  let t51;
+  let div25;
+  let t53;
+  let div30;
+  let div27;
+  let t56;
+  let div28;
+  let t58;
+  let div29;
+  let t60;
+  let div34;
+  let div31;
+  let t62;
+  let div32;
+  let t64;
+  let div33;
+  let t66;
+  let div38;
+  let div35;
+  let t68;
+  let div36;
+  let t70;
+  let div37;
+  let t72;
+  let div42;
+  let div39;
+  let t73_value = (
+    /*statistics*/
+    (((_i = (_h = ctx[2]) == null ? void 0 : _h.cardStats) == null ? void 0 : _i.learning) || 0) + ""
+  );
+  let t73;
+  let t74;
+  let div40;
+  let t76;
+  let div41;
+  let t78;
+  let div46;
+  let div43;
+  let t81;
+  let div44;
+  let t83;
+  let div45;
+  let t85;
+  let div50;
+  let div47;
+  let t86_value = (
+    /*statistics*/
+    (((_k = (_j = ctx[2]) == null ? void 0 : _j.cardStats) == null ? void 0 : _k.new) || 0) + /*statistics*/
+    (((_m = (_l = ctx[2]) == null ? void 0 : _l.cardStats) == null ? void 0 : _m.learning) || 0) + /*statistics*/
+    (((_o = (_n = ctx[2]) == null ? void 0 : _n.cardStats) == null ? void 0 : _o.mature) || 0) + ""
+  );
+  let t86;
+  let t87;
+  let div48;
+  let t89;
+  let div49;
+  let t91;
+  let h4;
+  let t93;
+  let div61;
+  let div54;
+  let div52;
+  let t94_value = (
+    /*statistics*/
+    (((_q = (_p = ctx[2]) == null ? void 0 : _p.cardStats) == null ? void 0 : _q.new) || 0) + ""
+  );
+  let t94;
+  let t95;
+  let div53;
+  let t97;
+  let div57;
+  let div55;
+  let t98_value = (
+    /*statistics*/
+    (((_s = (_r = ctx[2]) == null ? void 0 : _r.cardStats) == null ? void 0 : _s.learning) || 0) + ""
+  );
+  let t98;
+  let t99;
+  let div56;
+  let t101;
+  let div60;
+  let div58;
+  let t102_value = (
+    /*statistics*/
+    (((_u = (_t = ctx[2]) == null ? void 0 : _t.cardStats) == null ? void 0 : _u.mature) || 0) + ""
+  );
+  let t102;
+  let t103;
+  let div59;
+  let t105;
+  let div63;
+  let h36;
+  let t107;
+  let t108;
+  let div64;
+  let h37;
+  let t110;
+  let show_if;
+  let t111;
+  let div65;
+  let h38;
+  let t113;
+  let t114;
+  let div66;
+  let h39;
+  let t116;
+  let p;
+  let t118;
+  let reviewheatmap;
+  let t119;
+  let div67;
+  let button;
+  let current;
+  let mounted;
+  let dispose;
+  let each_value_3 = (
+    /*availableTags*/
+    ctx[6]
+  );
+  let each_blocks_1 = [];
+  for (let i = 0; i < each_value_3.length; i += 1) {
+    each_blocks_1[i] = create_each_block_3(get_each_context_3(ctx, each_value_3, i));
+  }
+  let each_value_2 = (
+    /*availableDecks*/
+    ctx[5]
+  );
+  let each_blocks = [];
+  for (let i = 0; i < each_value_2.length; i += 1) {
+    each_blocks[i] = create_each_block_22(get_each_context_22(ctx, each_value_2, i));
+  }
+  function select_block_type_1(ctx2, dirty) {
+    if (
+      /*todayStats*/
+      ctx2[11]
+    )
+      return create_if_block_10;
+    return create_else_block_8;
+  }
+  let current_block_type = select_block_type_1(ctx, [-1, -1]);
+  let if_block0 = current_block_type(ctx);
+  function select_block_type_2(ctx2, dirty) {
+    if (
+      /*weekStats*/
+      ctx2[10] && /*weekStats*/
+      ctx2[10].reviews > 0
+    )
+      return create_if_block_9;
+    return create_else_block_7;
+  }
+  let current_block_type_1 = select_block_type_2(ctx, [-1, -1]);
+  let if_block1 = current_block_type_1(ctx);
+  function select_block_type_3(ctx2, dirty) {
+    if (
+      /*monthStats*/
+      ctx2[9] && /*monthStats*/
+      ctx2[9].reviews > 0
+    )
+      return create_if_block_8;
+    return create_else_block_6;
+  }
+  let current_block_type_2 = select_block_type_3(ctx, [-1, -1]);
+  let if_block2 = current_block_type_2(ctx);
+  function select_block_type_4(ctx2, dirty) {
+    if (
+      /*yearStats*/
+      ctx2[8] && /*yearStats*/
+      ctx2[8].reviews > 0
+    )
+      return create_if_block_7;
+    return create_else_block_5;
+  }
+  let current_block_type_3 = select_block_type_4(ctx, [-1, -1]);
+  let if_block3 = current_block_type_3(ctx);
+  function select_block_type_5(ctx2, dirty) {
+    var _a2;
+    if (
+      /*statistics*/
+      ((_a2 = ctx2[2]) == null ? void 0 : _a2.answerButtons) && /*statistics*/
+      (ctx2[2].answerButtons.again > 0 || /*statistics*/
+      ctx2[2].answerButtons.hard > 0 || /*statistics*/
+      ctx2[2].answerButtons.good > 0 || /*statistics*/
+      ctx2[2].answerButtons.easy > 0)
+    )
+      return create_if_block_6;
+    return create_else_block_4;
+  }
+  let current_block_type_4 = select_block_type_5(ctx, [-1, -1]);
+  let if_block4 = current_block_type_4(ctx);
+  function select_block_type_6(ctx2, dirty) {
+    var _a2;
+    if (dirty[0] & /*statistics*/
+    4)
+      show_if = null;
+    if (show_if == null)
+      show_if = !!/*statistics*/
+      (((_a2 = ctx2[2]) == null ? void 0 : _a2.forecast) && /*statistics*/
+      ctx2[2].forecast.length > 0 && /*statistics*/
+      ctx2[2].forecast.some(func2));
+    if (show_if)
+      return create_if_block_32;
+    return create_else_block_3;
+  }
+  let current_block_type_5 = select_block_type_6(ctx, [-1, -1]);
+  let if_block5 = current_block_type_5(ctx);
+  function select_block_type_8(ctx2, dirty) {
+    var _a2;
+    if (
+      /*statistics*/
+      ((_a2 = ctx2[2]) == null ? void 0 : _a2.intervals) && /*statistics*/
+      ctx2[2].intervals.length > 0
+    )
+      return create_if_block_22;
+    return create_else_block_1;
+  }
+  let current_block_type_6 = select_block_type_8(ctx, [-1, -1]);
+  let if_block6 = current_block_type_6(ctx);
+  let reviewheatmap_props = { getReviewCounts: (
+    /*func_2*/
+    ctx[22]
+  ) };
+  reviewheatmap = new ReviewHeatmap_default({ props: reviewheatmap_props });
+  ctx[23](reviewheatmap);
+  return {
+    c() {
+      div2 = element("div");
+      div0 = element("div");
+      label0 = element("label");
+      label0.textContent = "Show data for:";
+      t1 = space();
+      select0 = element("select");
+      option0 = element("option");
+      option0.textContent = "All Decks";
+      for (let i = 0; i < each_blocks_1.length; i += 1) {
+        each_blocks_1[i].c();
+      }
+      each0_anchor = empty();
+      for (let i = 0; i < each_blocks.length; i += 1) {
+        each_blocks[i].c();
+      }
+      t3 = space();
+      div1 = element("div");
+      label1 = element("label");
+      label1.textContent = "Timeframe:";
+      t5 = space();
+      select1 = element("select");
+      option1 = element("option");
+      option1.textContent = "Last 12 Months";
+      option2 = element("option");
+      option2.textContent = "All History";
+      t8 = space();
+      div16 = element("div");
+      h30 = element("h3");
+      h30.textContent = "Current Status";
+      t10 = space();
+      div15 = element("div");
+      div5 = element("div");
+      div3 = element("div");
+      t11 = text(t11_value);
+      t12 = space();
+      div4 = element("div");
+      div4.textContent = "New Cards";
+      t14 = space();
+      div8 = element("div");
+      div6 = element("div");
+      t15 = text(t15_value);
+      t16 = space();
+      div7 = element("div");
+      div7.textContent = "Learning";
+      t18 = space();
+      div11 = element("div");
+      div9 = element("div");
+      t19 = text(t19_value);
+      t20 = space();
+      div10 = element("div");
+      div10.textContent = "Mature";
+      t22 = space();
+      div14 = element("div");
+      div12 = element("div");
+      div12.textContent = `${/*getDueToday*/
+      ctx[17]()}`;
+      t24 = space();
+      div13 = element("div");
+      div13.textContent = "Due Today";
+      t26 = space();
+      div17 = element("div");
+      h31 = element("h3");
+      h31.textContent = "Today's Statistics";
+      t28 = space();
+      if_block0.c();
+      t29 = space();
+      div18 = element("div");
+      h32 = element("h3");
+      h32.textContent = "This Week";
+      t31 = space();
+      if_block1.c();
+      t32 = space();
+      h33 = element("h3");
+      h33.textContent = "This Month";
+      t34 = space();
+      if_block2.c();
+      t35 = space();
+      h34 = element("h3");
+      h34.textContent = "This Year";
+      t37 = space();
+      if_block3.c();
+      t38 = space();
+      div62 = element("div");
+      h35 = element("h3");
+      h35.textContent = "Deck Statistics & Metrics";
+      t40 = space();
+      div51 = element("div");
+      div22 = element("div");
+      div19 = element("div");
+      t41 = text(t41_value);
+      t42 = text("%");
+      t43 = space();
+      div20 = element("div");
+      div20.textContent = "Retention Rate";
+      t45 = space();
+      div21 = element("div");
+      div21.textContent = '% of reviews answered correctly (excluding "Again")';
+      t47 = space();
+      div26 = element("div");
+      div23 = element("div");
+      div23.textContent = `${/*calculateAverageEase*/
+      ctx[15]()}`;
+      t49 = space();
+      div24 = element("div");
+      div24.textContent = "Average Ease";
+      t51 = space();
+      div25 = element("div");
+      div25.textContent = "Mean of ease button values";
+      t53 = space();
+      div30 = element("div");
+      div27 = element("div");
+      div27.textContent = `${/*calculateAverageInterval*/
+      ctx[16]()}d`;
+      t56 = space();
+      div28 = element("div");
+      div28.textContent = "Avg Interval";
+      t58 = space();
+      div29 = element("div");
+      div29.textContent = "Mean interval of all review cards";
+      t60 = space();
+      div34 = element("div");
+      div31 = element("div");
+      div31.textContent = `${/*getDueToday*/
+      ctx[17]()}`;
+      t62 = space();
+      div32 = element("div");
+      div32.textContent = "Due Today";
+      t64 = space();
+      div33 = element("div");
+      div33.textContent = "Number of cards due today";
+      t66 = space();
+      div38 = element("div");
+      div35 = element("div");
+      div35.textContent = `${/*getDueTomorrow*/
+      ctx[18]()}`;
+      t68 = space();
+      div36 = element("div");
+      div36.textContent = "Due Tomorrow";
+      t70 = space();
+      div37 = element("div");
+      div37.textContent = "Number of cards due tomorrow";
+      t72 = space();
+      div42 = element("div");
+      div39 = element("div");
+      t73 = text(t73_value);
+      t74 = space();
+      div40 = element("div");
+      div40.textContent = "Learning Cards";
+      t76 = space();
+      div41 = element("div");
+      div41.textContent = "Number of cards in the learning queue";
+      t78 = space();
+      div46 = element("div");
+      div43 = element("div");
+      div43.textContent = `${/*getMaturityRatio*/
+      ctx[19]()}%`;
+      t81 = space();
+      div44 = element("div");
+      div44.textContent = "Maturity Ratio";
+      t83 = space();
+      div45 = element("div");
+      div45.textContent = "Mature cards \xF7 total cards";
+      t85 = space();
+      div50 = element("div");
+      div47 = element("div");
+      t86 = text(t86_value);
+      t87 = space();
+      div48 = element("div");
+      div48.textContent = "Total Cards";
+      t89 = space();
+      div49 = element("div");
+      div49.textContent = "All cards in collection";
+      t91 = space();
+      h4 = element("h4");
+      h4.textContent = "Card Status Breakdown";
+      t93 = space();
+      div61 = element("div");
+      div54 = element("div");
+      div52 = element("div");
+      t94 = text(t94_value);
+      t95 = space();
+      div53 = element("div");
+      div53.textContent = "New Cards";
+      t97 = space();
+      div57 = element("div");
+      div55 = element("div");
+      t98 = text(t98_value);
+      t99 = space();
+      div56 = element("div");
+      div56.textContent = "Learning";
+      t101 = space();
+      div60 = element("div");
+      div58 = element("div");
+      t102 = text(t102_value);
+      t103 = space();
+      div59 = element("div");
+      div59.textContent = "Mature";
+      t105 = space();
+      div63 = element("div");
+      h36 = element("h3");
+      h36.textContent = "Answer Button Usage";
+      t107 = space();
+      if_block4.c();
+      t108 = space();
+      div64 = element("div");
+      h37 = element("h3");
+      h37.textContent = "Review Load Forecast";
+      t110 = space();
+      if_block5.c();
+      t111 = space();
+      div65 = element("div");
+      h38 = element("h3");
+      h38.textContent = "Card Interval Distribution";
+      t113 = space();
+      if_block6.c();
+      t114 = space();
+      div66 = element("div");
+      h39 = element("h3");
+      h39.textContent = "Review Heatmap";
+      t116 = space();
+      p = element("p");
+      p.textContent = "Daily review activity over time";
+      t118 = space();
+      create_component(reviewheatmap.$$.fragment);
+      t119 = space();
+      div67 = element("div");
+      button = element("button");
+      button.textContent = "Close";
+      attr(label0, "for", "deck-filter");
+      attr(label0, "class", "svelte-lbb1rg");
+      option0.__value = "all";
+      option0.value = option0.__value;
+      attr(option0, "class", "svelte-lbb1rg");
+      attr(select0, "id", "deck-filter");
+      attr(select0, "class", "svelte-lbb1rg");
+      if (
+        /*selectedDeckFilter*/
+        ctx[3] === void 0
+      )
+        add_render_callback(() => (
+          /*select0_change_handler*/
+          ctx[20].call(select0)
+        ));
+      attr(div0, "class", "filter-group svelte-lbb1rg");
+      attr(label1, "for", "timeframe-filter");
+      attr(label1, "class", "svelte-lbb1rg");
+      option1.__value = "12months";
+      option1.value = option1.__value;
+      attr(option1, "class", "svelte-lbb1rg");
+      option2.__value = "all";
+      option2.value = option2.__value;
+      attr(option2, "class", "svelte-lbb1rg");
+      attr(select1, "id", "timeframe-filter");
+      attr(select1, "class", "svelte-lbb1rg");
+      if (
+        /*selectedTimeframe*/
+        ctx[4] === void 0
+      )
+        add_render_callback(() => (
+          /*select1_change_handler*/
+          ctx[21].call(select1)
+        ));
+      attr(div1, "class", "filter-group svelte-lbb1rg");
+      attr(div2, "class", "filters svelte-lbb1rg");
+      attr(h30, "class", "svelte-lbb1rg");
+      attr(div3, "class", "stat-value svelte-lbb1rg");
+      attr(div4, "class", "stat-label svelte-lbb1rg");
+      attr(div5, "class", "stat-card svelte-lbb1rg");
+      attr(div6, "class", "stat-value svelte-lbb1rg");
+      attr(div7, "class", "stat-label svelte-lbb1rg");
+      attr(div8, "class", "stat-card svelte-lbb1rg");
+      attr(div9, "class", "stat-value svelte-lbb1rg");
+      attr(div10, "class", "stat-label svelte-lbb1rg");
+      attr(div11, "class", "stat-card svelte-lbb1rg");
+      attr(div12, "class", "stat-value svelte-lbb1rg");
+      attr(div13, "class", "stat-label svelte-lbb1rg");
+      attr(div14, "class", "stat-card svelte-lbb1rg");
+      attr(div15, "class", "stats-grid svelte-lbb1rg");
+      attr(div16, "class", "stats-section svelte-lbb1rg");
+      attr(h31, "class", "svelte-lbb1rg");
+      attr(div17, "class", "stats-section svelte-lbb1rg");
+      attr(h32, "class", "svelte-lbb1rg");
+      attr(h33, "class", "svelte-lbb1rg");
+      attr(h34, "class", "svelte-lbb1rg");
+      attr(div18, "class", "stats-section svelte-lbb1rg");
+      attr(h35, "class", "svelte-lbb1rg");
+      attr(div19, "class", "metric-value svelte-lbb1rg");
+      attr(div20, "class", "metric-label svelte-lbb1rg");
+      attr(div21, "class", "metric-description svelte-lbb1rg");
+      attr(div22, "class", "metric-card svelte-lbb1rg");
+      attr(div23, "class", "metric-value svelte-lbb1rg");
+      attr(div24, "class", "metric-label svelte-lbb1rg");
+      attr(div25, "class", "metric-description svelte-lbb1rg");
+      attr(div26, "class", "metric-card svelte-lbb1rg");
+      attr(div27, "class", "metric-value svelte-lbb1rg");
+      attr(div28, "class", "metric-label svelte-lbb1rg");
+      attr(div29, "class", "metric-description svelte-lbb1rg");
+      attr(div30, "class", "metric-card svelte-lbb1rg");
+      attr(div31, "class", "metric-value svelte-lbb1rg");
+      attr(div32, "class", "metric-label svelte-lbb1rg");
+      attr(div33, "class", "metric-description svelte-lbb1rg");
+      attr(div34, "class", "metric-card svelte-lbb1rg");
+      attr(div35, "class", "metric-value svelte-lbb1rg");
+      attr(div36, "class", "metric-label svelte-lbb1rg");
+      attr(div37, "class", "metric-description svelte-lbb1rg");
+      attr(div38, "class", "metric-card svelte-lbb1rg");
+      attr(div39, "class", "metric-value svelte-lbb1rg");
+      attr(div40, "class", "metric-label svelte-lbb1rg");
+      attr(div41, "class", "metric-description svelte-lbb1rg");
+      attr(div42, "class", "metric-card svelte-lbb1rg");
+      attr(div43, "class", "metric-value svelte-lbb1rg");
+      attr(div44, "class", "metric-label svelte-lbb1rg");
+      attr(div45, "class", "metric-description svelte-lbb1rg");
+      attr(div46, "class", "metric-card svelte-lbb1rg");
+      attr(div47, "class", "metric-value svelte-lbb1rg");
+      attr(div48, "class", "metric-label svelte-lbb1rg");
+      attr(div49, "class", "metric-description svelte-lbb1rg");
+      attr(div50, "class", "metric-card svelte-lbb1rg");
+      attr(div51, "class", "metrics-grid svelte-lbb1rg");
+      attr(h4, "class", "svelte-lbb1rg");
+      attr(div52, "class", "stat-value svelte-lbb1rg");
+      attr(div53, "class", "stat-label svelte-lbb1rg");
+      attr(div54, "class", "stat-card svelte-lbb1rg");
+      attr(div55, "class", "stat-value svelte-lbb1rg");
+      attr(div56, "class", "stat-label svelte-lbb1rg");
+      attr(div57, "class", "stat-card svelte-lbb1rg");
+      attr(div58, "class", "stat-value svelte-lbb1rg");
+      attr(div59, "class", "stat-label svelte-lbb1rg");
+      attr(div60, "class", "stat-card svelte-lbb1rg");
+      attr(div61, "class", "stats-grid svelte-lbb1rg");
+      attr(div62, "class", "stats-section svelte-lbb1rg");
+      attr(h36, "class", "svelte-lbb1rg");
+      attr(div63, "class", "stats-section svelte-lbb1rg");
+      attr(h37, "class", "svelte-lbb1rg");
+      attr(div64, "class", "stats-section svelte-lbb1rg");
+      attr(h38, "class", "svelte-lbb1rg");
+      attr(div65, "class", "stats-section svelte-lbb1rg");
+      attr(h39, "class", "svelte-lbb1rg");
+      attr(div66, "class", "stats-section svelte-lbb1rg");
+      attr(button, "class", "close-button svelte-lbb1rg");
+      attr(div67, "class", "modal-actions svelte-lbb1rg");
+    },
+    m(target, anchor) {
+      insert(target, div2, anchor);
+      append(div2, div0);
+      append(div0, label0);
+      append(div0, t1);
+      append(div0, select0);
+      append(select0, option0);
+      for (let i = 0; i < each_blocks_1.length; i += 1) {
+        if (each_blocks_1[i]) {
+          each_blocks_1[i].m(select0, null);
+        }
+      }
+      append(select0, each0_anchor);
+      for (let i = 0; i < each_blocks.length; i += 1) {
+        if (each_blocks[i]) {
+          each_blocks[i].m(select0, null);
+        }
+      }
+      select_option(
+        select0,
+        /*selectedDeckFilter*/
+        ctx[3],
+        true
+      );
+      append(div2, t3);
+      append(div2, div1);
+      append(div1, label1);
+      append(div1, t5);
+      append(div1, select1);
+      append(select1, option1);
+      append(select1, option2);
+      select_option(
+        select1,
+        /*selectedTimeframe*/
+        ctx[4],
+        true
+      );
+      insert(target, t8, anchor);
+      insert(target, div16, anchor);
+      append(div16, h30);
+      append(div16, t10);
+      append(div16, div15);
+      append(div15, div5);
+      append(div5, div3);
+      append(div3, t11);
+      append(div5, t12);
+      append(div5, div4);
+      append(div15, t14);
+      append(div15, div8);
+      append(div8, div6);
+      append(div6, t15);
+      append(div8, t16);
+      append(div8, div7);
+      append(div15, t18);
+      append(div15, div11);
+      append(div11, div9);
+      append(div9, t19);
+      append(div11, t20);
+      append(div11, div10);
+      append(div15, t22);
+      append(div15, div14);
+      append(div14, div12);
+      append(div14, t24);
+      append(div14, div13);
+      insert(target, t26, anchor);
+      insert(target, div17, anchor);
+      append(div17, h31);
+      append(div17, t28);
+      if_block0.m(div17, null);
+      insert(target, t29, anchor);
+      insert(target, div18, anchor);
+      append(div18, h32);
+      append(div18, t31);
+      if_block1.m(div18, null);
+      append(div18, t32);
+      append(div18, h33);
+      append(div18, t34);
+      if_block2.m(div18, null);
+      append(div18, t35);
+      append(div18, h34);
+      append(div18, t37);
+      if_block3.m(div18, null);
+      insert(target, t38, anchor);
+      insert(target, div62, anchor);
+      append(div62, h35);
+      append(div62, t40);
+      append(div62, div51);
+      append(div51, div22);
+      append(div22, div19);
+      append(div19, t41);
+      append(div19, t42);
+      append(div22, t43);
+      append(div22, div20);
+      append(div22, t45);
+      append(div22, div21);
+      append(div51, t47);
+      append(div51, div26);
+      append(div26, div23);
+      append(div26, t49);
+      append(div26, div24);
+      append(div26, t51);
+      append(div26, div25);
+      append(div51, t53);
+      append(div51, div30);
+      append(div30, div27);
+      append(div30, t56);
+      append(div30, div28);
+      append(div30, t58);
+      append(div30, div29);
+      append(div51, t60);
+      append(div51, div34);
+      append(div34, div31);
+      append(div34, t62);
+      append(div34, div32);
+      append(div34, t64);
+      append(div34, div33);
+      append(div51, t66);
+      append(div51, div38);
+      append(div38, div35);
+      append(div38, t68);
+      append(div38, div36);
+      append(div38, t70);
+      append(div38, div37);
+      append(div51, t72);
+      append(div51, div42);
+      append(div42, div39);
+      append(div39, t73);
+      append(div42, t74);
+      append(div42, div40);
+      append(div42, t76);
+      append(div42, div41);
+      append(div51, t78);
+      append(div51, div46);
+      append(div46, div43);
+      append(div46, t81);
+      append(div46, div44);
+      append(div46, t83);
+      append(div46, div45);
+      append(div51, t85);
+      append(div51, div50);
+      append(div50, div47);
+      append(div47, t86);
+      append(div50, t87);
+      append(div50, div48);
+      append(div50, t89);
+      append(div50, div49);
+      append(div62, t91);
+      append(div62, h4);
+      append(div62, t93);
+      append(div62, div61);
+      append(div61, div54);
+      append(div54, div52);
+      append(div52, t94);
+      append(div54, t95);
+      append(div54, div53);
+      append(div61, t97);
+      append(div61, div57);
+      append(div57, div55);
+      append(div55, t98);
+      append(div57, t99);
+      append(div57, div56);
+      append(div61, t101);
+      append(div61, div60);
+      append(div60, div58);
+      append(div58, t102);
+      append(div60, t103);
+      append(div60, div59);
+      insert(target, t105, anchor);
+      insert(target, div63, anchor);
+      append(div63, h36);
+      append(div63, t107);
+      if_block4.m(div63, null);
+      insert(target, t108, anchor);
+      insert(target, div64, anchor);
+      append(div64, h37);
+      append(div64, t110);
+      if_block5.m(div64, null);
+      insert(target, t111, anchor);
+      insert(target, div65, anchor);
+      append(div65, h38);
+      append(div65, t113);
+      if_block6.m(div65, null);
+      insert(target, t114, anchor);
+      insert(target, div66, anchor);
+      append(div66, h39);
+      append(div66, t116);
+      append(div66, p);
+      append(div66, t118);
+      mount_component(reviewheatmap, div66, null);
+      insert(target, t119, anchor);
+      insert(target, div67, anchor);
+      append(div67, button);
+      current = true;
+      if (!mounted) {
+        dispose = [
+          listen(
+            select0,
+            "change",
+            /*select0_change_handler*/
+            ctx[20]
+          ),
+          listen(
+            select0,
+            "change",
+            /*handleFilterChange*/
+            ctx[14]
+          ),
+          listen(
+            select1,
+            "change",
+            /*select1_change_handler*/
+            ctx[21]
+          ),
+          listen(
+            select1,
+            "change",
+            /*handleFilterChange*/
+            ctx[14]
+          ),
+          listen(
+            button,
+            "click",
+            /*click_handler*/
+            ctx[24]
+          )
+        ];
+        mounted = true;
+      }
+    },
+    p(ctx2, dirty) {
+      var _a2, _b2, _c2, _d2, _e2, _f2, _g2, _h2, _i2, _j2, _k2, _l2, _m2, _n2, _o2, _p2, _q2, _r2, _s2, _t2, _u2;
+      if (dirty[0] & /*availableTags*/
+      64) {
+        each_value_3 = /*availableTags*/
+        ctx2[6];
+        let i;
+        for (i = 0; i < each_value_3.length; i += 1) {
+          const child_ctx = get_each_context_3(ctx2, each_value_3, i);
+          if (each_blocks_1[i]) {
+            each_blocks_1[i].p(child_ctx, dirty);
+          } else {
+            each_blocks_1[i] = create_each_block_3(child_ctx);
+            each_blocks_1[i].c();
+            each_blocks_1[i].m(select0, each0_anchor);
+          }
+        }
+        for (; i < each_blocks_1.length; i += 1) {
+          each_blocks_1[i].d(1);
+        }
+        each_blocks_1.length = each_value_3.length;
+      }
+      if (dirty[0] & /*availableDecks*/
+      32) {
+        each_value_2 = /*availableDecks*/
+        ctx2[5];
+        let i;
+        for (i = 0; i < each_value_2.length; i += 1) {
+          const child_ctx = get_each_context_22(ctx2, each_value_2, i);
+          if (each_blocks[i]) {
+            each_blocks[i].p(child_ctx, dirty);
+          } else {
+            each_blocks[i] = create_each_block_22(child_ctx);
+            each_blocks[i].c();
+            each_blocks[i].m(select0, null);
+          }
+        }
+        for (; i < each_blocks.length; i += 1) {
+          each_blocks[i].d(1);
+        }
+        each_blocks.length = each_value_2.length;
+      }
+      if (dirty[0] & /*selectedDeckFilter, availableDecks, availableTags*/
+      104) {
+        select_option(
+          select0,
+          /*selectedDeckFilter*/
+          ctx2[3]
+        );
+      }
+      if (dirty[0] & /*selectedTimeframe*/
+      16) {
+        select_option(
+          select1,
+          /*selectedTimeframe*/
+          ctx2[4]
+        );
+      }
+      if ((!current || dirty[0] & /*statistics*/
+      4) && t11_value !== (t11_value = /*statistics*/
+      (((_b2 = (_a2 = ctx2[2]) == null ? void 0 : _a2.cardStats) == null ? void 0 : _b2.new) || 0) + ""))
+        set_data(t11, t11_value);
+      if ((!current || dirty[0] & /*statistics*/
+      4) && t15_value !== (t15_value = /*statistics*/
+      (((_d2 = (_c2 = ctx2[2]) == null ? void 0 : _c2.cardStats) == null ? void 0 : _d2.learning) || 0) + ""))
+        set_data(t15, t15_value);
+      if ((!current || dirty[0] & /*statistics*/
+      4) && t19_value !== (t19_value = /*statistics*/
+      (((_f2 = (_e2 = ctx2[2]) == null ? void 0 : _e2.cardStats) == null ? void 0 : _f2.mature) || 0) + ""))
+        set_data(t19, t19_value);
+      if (current_block_type === (current_block_type = select_block_type_1(ctx2, dirty)) && if_block0) {
+        if_block0.p(ctx2, dirty);
+      } else {
+        if_block0.d(1);
+        if_block0 = current_block_type(ctx2);
+        if (if_block0) {
+          if_block0.c();
+          if_block0.m(div17, null);
+        }
+      }
+      if (current_block_type_1 === (current_block_type_1 = select_block_type_2(ctx2, dirty)) && if_block1) {
+        if_block1.p(ctx2, dirty);
+      } else {
+        if_block1.d(1);
+        if_block1 = current_block_type_1(ctx2);
+        if (if_block1) {
+          if_block1.c();
+          if_block1.m(div18, t32);
+        }
+      }
+      if (current_block_type_2 === (current_block_type_2 = select_block_type_3(ctx2, dirty)) && if_block2) {
+        if_block2.p(ctx2, dirty);
+      } else {
+        if_block2.d(1);
+        if_block2 = current_block_type_2(ctx2);
+        if (if_block2) {
+          if_block2.c();
+          if_block2.m(div18, t35);
+        }
+      }
+      if (current_block_type_3 === (current_block_type_3 = select_block_type_4(ctx2, dirty)) && if_block3) {
+        if_block3.p(ctx2, dirty);
+      } else {
+        if_block3.d(1);
+        if_block3 = current_block_type_3(ctx2);
+        if (if_block3) {
+          if_block3.c();
+          if_block3.m(div18, null);
+        }
+      }
+      if ((!current || dirty[0] & /*statistics*/
+      4) && t41_value !== (t41_value = /*statistics*/
+      (((_g2 = ctx2[2]) == null ? void 0 : _g2.retentionRate) || 0).toFixed(1) + ""))
+        set_data(t41, t41_value);
+      if ((!current || dirty[0] & /*statistics*/
+      4) && t73_value !== (t73_value = /*statistics*/
+      (((_i2 = (_h2 = ctx2[2]) == null ? void 0 : _h2.cardStats) == null ? void 0 : _i2.learning) || 0) + ""))
+        set_data(t73, t73_value);
+      if ((!current || dirty[0] & /*statistics*/
+      4) && t86_value !== (t86_value = /*statistics*/
+      (((_k2 = (_j2 = ctx2[2]) == null ? void 0 : _j2.cardStats) == null ? void 0 : _k2.new) || 0) + /*statistics*/
+      (((_m2 = (_l2 = ctx2[2]) == null ? void 0 : _l2.cardStats) == null ? void 0 : _m2.learning) || 0) + /*statistics*/
+      (((_o2 = (_n2 = ctx2[2]) == null ? void 0 : _n2.cardStats) == null ? void 0 : _o2.mature) || 0) + ""))
+        set_data(t86, t86_value);
+      if ((!current || dirty[0] & /*statistics*/
+      4) && t94_value !== (t94_value = /*statistics*/
+      (((_q2 = (_p2 = ctx2[2]) == null ? void 0 : _p2.cardStats) == null ? void 0 : _q2.new) || 0) + ""))
+        set_data(t94, t94_value);
+      if ((!current || dirty[0] & /*statistics*/
+      4) && t98_value !== (t98_value = /*statistics*/
+      (((_s2 = (_r2 = ctx2[2]) == null ? void 0 : _r2.cardStats) == null ? void 0 : _s2.learning) || 0) + ""))
+        set_data(t98, t98_value);
+      if ((!current || dirty[0] & /*statistics*/
+      4) && t102_value !== (t102_value = /*statistics*/
+      (((_u2 = (_t2 = ctx2[2]) == null ? void 0 : _t2.cardStats) == null ? void 0 : _u2.mature) || 0) + ""))
+        set_data(t102, t102_value);
+      if (current_block_type_4 === (current_block_type_4 = select_block_type_5(ctx2, dirty)) && if_block4) {
+        if_block4.p(ctx2, dirty);
+      } else {
+        if_block4.d(1);
+        if_block4 = current_block_type_4(ctx2);
+        if (if_block4) {
+          if_block4.c();
+          if_block4.m(div63, null);
+        }
+      }
+      if (current_block_type_5 === (current_block_type_5 = select_block_type_6(ctx2, dirty)) && if_block5) {
+        if_block5.p(ctx2, dirty);
+      } else {
+        if_block5.d(1);
+        if_block5 = current_block_type_5(ctx2);
+        if (if_block5) {
+          if_block5.c();
+          if_block5.m(div64, null);
+        }
+      }
+      if (current_block_type_6 === (current_block_type_6 = select_block_type_8(ctx2, dirty)) && if_block6) {
+        if_block6.p(ctx2, dirty);
+      } else {
+        if_block6.d(1);
+        if_block6 = current_block_type_6(ctx2);
+        if (if_block6) {
+          if_block6.c();
+          if_block6.m(div65, null);
+        }
+      }
+      const reviewheatmap_changes = {};
+      if (dirty[0] & /*plugin*/
+      1)
+        reviewheatmap_changes.getReviewCounts = /*func_2*/
+        ctx2[22];
+      reviewheatmap.$set(reviewheatmap_changes);
+    },
+    i(local) {
+      if (current)
+        return;
+      transition_in(reviewheatmap.$$.fragment, local);
+      current = true;
+    },
+    o(local) {
+      transition_out(reviewheatmap.$$.fragment, local);
+      current = false;
+    },
+    d(detaching) {
+      if (detaching)
+        detach(div2);
+      destroy_each(each_blocks_1, detaching);
+      destroy_each(each_blocks, detaching);
+      if (detaching)
+        detach(t8);
+      if (detaching)
+        detach(div16);
+      if (detaching)
+        detach(t26);
+      if (detaching)
+        detach(div17);
+      if_block0.d();
+      if (detaching)
+        detach(t29);
+      if (detaching)
+        detach(div18);
+      if_block1.d();
+      if_block2.d();
+      if_block3.d();
+      if (detaching)
+        detach(t38);
+      if (detaching)
+        detach(div62);
+      if (detaching)
+        detach(t105);
+      if (detaching)
+        detach(div63);
+      if_block4.d();
+      if (detaching)
+        detach(t108);
+      if (detaching)
+        detach(div64);
+      if_block5.d();
+      if (detaching)
+        detach(t111);
+      if (detaching)
+        detach(div65);
+      if_block6.d();
+      if (detaching)
+        detach(t114);
+      if (detaching)
+        detach(div66);
+      ctx[23](null);
+      destroy_component(reviewheatmap);
+      if (detaching)
+        detach(t119);
+      if (detaching)
+        detach(div67);
+      mounted = false;
+      run_all(dispose);
+    }
+  };
+}
+function create_if_block_13(ctx) {
+  let div;
+  let p;
+  let t1;
+  let button;
+  let mounted;
+  let dispose;
+  return {
+    c() {
+      div = element("div");
+      p = element("p");
+      p.textContent = "Failed to load statistics";
+      t1 = space();
+      button = element("button");
+      button.textContent = "Retry";
+      attr(button, "class", "retry-button svelte-lbb1rg");
+      attr(div, "class", "error svelte-lbb1rg");
+    },
+    m(target, anchor) {
+      insert(target, div, anchor);
+      append(div, p);
+      append(div, t1);
+      append(div, button);
+      if (!mounted) {
+        dispose = listen(
+          button,
+          "click",
+          /*loadStatistics*/
+          ctx[13]
+        );
+        mounted = true;
+      }
+    },
+    p: noop,
+    i: noop,
+    o: noop,
+    d(detaching) {
+      if (detaching)
+        detach(div);
+      mounted = false;
+      dispose();
+    }
+  };
+}
+function create_if_block3(ctx) {
+  let div;
+  return {
+    c() {
+      div = element("div");
+      div.textContent = "Loading statistics...";
+      attr(div, "class", "loading svelte-lbb1rg");
+    },
+    m(target, anchor) {
+      insert(target, div, anchor);
+    },
+    p: noop,
+    i: noop,
+    o: noop,
+    d(detaching) {
+      if (detaching)
+        detach(div);
+    }
+  };
+}
+function create_each_block_3(ctx) {
+  let option;
+  let t0;
+  let t1_value = (
+    /*tag*/
+    ctx[38] + ""
+  );
+  let t1;
+  let option_value_value;
+  return {
+    c() {
+      option = element("option");
+      t0 = text("Tag: ");
+      t1 = text(t1_value);
+      option.__value = option_value_value = "tag:" + /*tag*/
+      ctx[38];
+      option.value = option.__value;
+      attr(option, "class", "svelte-lbb1rg");
+    },
+    m(target, anchor) {
+      insert(target, option, anchor);
+      append(option, t0);
+      append(option, t1);
+    },
+    p(ctx2, dirty) {
+      if (dirty[0] & /*availableTags*/
+      64 && t1_value !== (t1_value = /*tag*/
+      ctx2[38] + ""))
+        set_data(t1, t1_value);
+      if (dirty[0] & /*availableTags*/
+      64 && option_value_value !== (option_value_value = "tag:" + /*tag*/
+      ctx2[38])) {
+        option.__value = option_value_value;
+        option.value = option.__value;
+      }
+    },
+    d(detaching) {
+      if (detaching)
+        detach(option);
+    }
+  };
+}
+function create_each_block_22(ctx) {
+  let option;
+  let t_value = (
+    /*deck*/
+    ctx[35].name + ""
+  );
+  let t;
+  let option_value_value;
+  return {
+    c() {
+      option = element("option");
+      t = text(t_value);
+      option.__value = option_value_value = "deck:" + /*deck*/
+      ctx[35].id;
+      option.value = option.__value;
+      attr(option, "class", "svelte-lbb1rg");
+    },
+    m(target, anchor) {
+      insert(target, option, anchor);
+      append(option, t);
+    },
+    p(ctx2, dirty) {
+      if (dirty[0] & /*availableDecks*/
+      32 && t_value !== (t_value = /*deck*/
+      ctx2[35].name + ""))
+        set_data(t, t_value);
+      if (dirty[0] & /*availableDecks*/
+      32 && option_value_value !== (option_value_value = "deck:" + /*deck*/
+      ctx2[35].id)) {
+        option.__value = option_value_value;
+        option.value = option.__value;
+      }
+    },
+    d(detaching) {
+      if (detaching)
+        detach(option);
+    }
+  };
+}
+function create_else_block_8(ctx) {
+  let div;
+  return {
+    c() {
+      div = element("div");
+      div.innerHTML = `<p class="svelte-lbb1rg">No reviews today yet.</p> 
+                    <p class="help-text svelte-lbb1rg">Start reviewing flashcards to see your daily statistics
+                        here!</p>`;
+      attr(div, "class", "no-data-message svelte-lbb1rg");
+    },
+    m(target, anchor) {
+      insert(target, div, anchor);
+    },
+    p: noop,
+    d(detaching) {
+      if (detaching)
+        detach(div);
+    }
+  };
+}
+function create_if_block_10(ctx) {
+  let div6;
+  let div2;
+  let div0;
+  let t0_value = (
+    /*todayStats*/
+    ctx[11].reviews + ""
+  );
+  let t0;
+  let t1;
+  let div1;
+  let t3;
+  let div5;
+  let div3;
+  let t4_value = formatTime(
+    /*todayStats*/
+    ctx[11].timeSpent
+  ) + "";
+  let t4;
+  let t5;
+  let div4;
+  let t7;
+  let h4;
+  let t9;
+  let div16;
+  let div9;
+  let div7;
+  let t10_value = (
+    /*todayStats*/
+    ctx[11].newCards + ""
+  );
+  let t10;
+  let t11;
+  let div8;
+  let t13;
+  let div12;
+  let div10;
+  let t14_value = (
+    /*todayStats*/
+    ctx[11].learningCards + ""
+  );
+  let t14;
+  let t15;
+  let div11;
+  let t17;
+  let div15;
+  let div13;
+  let t18_value = (
+    /*todayStats*/
+    ctx[11].reviewCards + ""
+  );
+  let t18;
+  let t19;
+  let div14;
+  return {
+    c() {
+      div6 = element("div");
+      div2 = element("div");
+      div0 = element("div");
+      t0 = text(t0_value);
+      t1 = space();
+      div1 = element("div");
+      div1.textContent = "Cards Studied";
+      t3 = space();
+      div5 = element("div");
+      div3 = element("div");
+      t4 = text(t4_value);
+      t5 = space();
+      div4 = element("div");
+      div4.textContent = "Time Spent";
+      t7 = space();
+      h4 = element("h4");
+      h4.textContent = "Breakdown by Card Type";
+      t9 = space();
+      div16 = element("div");
+      div9 = element("div");
+      div7 = element("div");
+      t10 = text(t10_value);
+      t11 = space();
+      div8 = element("div");
+      div8.textContent = "New Cards";
+      t13 = space();
+      div12 = element("div");
+      div10 = element("div");
+      t14 = text(t14_value);
+      t15 = space();
+      div11 = element("div");
+      div11.textContent = "Learning";
+      t17 = space();
+      div15 = element("div");
+      div13 = element("div");
+      t18 = text(t18_value);
+      t19 = space();
+      div14 = element("div");
+      div14.textContent = "Review";
+      attr(div0, "class", "stat-value svelte-lbb1rg");
+      attr(div1, "class", "stat-label svelte-lbb1rg");
+      attr(div2, "class", "stat-card svelte-lbb1rg");
+      attr(div3, "class", "stat-value svelte-lbb1rg");
+      attr(div4, "class", "stat-label svelte-lbb1rg");
+      attr(div5, "class", "stat-card svelte-lbb1rg");
+      attr(div6, "class", "stats-grid svelte-lbb1rg");
+      attr(h4, "class", "svelte-lbb1rg");
+      attr(div7, "class", "stat-value svelte-lbb1rg");
+      attr(div8, "class", "stat-label svelte-lbb1rg");
+      attr(div9, "class", "stat-card svelte-lbb1rg");
+      attr(div10, "class", "stat-value svelte-lbb1rg");
+      attr(div11, "class", "stat-label svelte-lbb1rg");
+      attr(div12, "class", "stat-card svelte-lbb1rg");
+      attr(div13, "class", "stat-value svelte-lbb1rg");
+      attr(div14, "class", "stat-label svelte-lbb1rg");
+      attr(div15, "class", "stat-card svelte-lbb1rg");
+      attr(div16, "class", "stats-grid svelte-lbb1rg");
+    },
+    m(target, anchor) {
+      insert(target, div6, anchor);
+      append(div6, div2);
+      append(div2, div0);
+      append(div0, t0);
+      append(div2, t1);
+      append(div2, div1);
+      append(div6, t3);
+      append(div6, div5);
+      append(div5, div3);
+      append(div3, t4);
+      append(div5, t5);
+      append(div5, div4);
+      insert(target, t7, anchor);
+      insert(target, h4, anchor);
+      insert(target, t9, anchor);
+      insert(target, div16, anchor);
+      append(div16, div9);
+      append(div9, div7);
+      append(div7, t10);
+      append(div9, t11);
+      append(div9, div8);
+      append(div16, t13);
+      append(div16, div12);
+      append(div12, div10);
+      append(div10, t14);
+      append(div12, t15);
+      append(div12, div11);
+      append(div16, t17);
+      append(div16, div15);
+      append(div15, div13);
+      append(div13, t18);
+      append(div15, t19);
+      append(div15, div14);
+    },
+    p(ctx2, dirty) {
+      if (dirty[0] & /*todayStats*/
+      2048 && t0_value !== (t0_value = /*todayStats*/
+      ctx2[11].reviews + ""))
+        set_data(t0, t0_value);
+      if (dirty[0] & /*todayStats*/
+      2048 && t4_value !== (t4_value = formatTime(
+        /*todayStats*/
+        ctx2[11].timeSpent
+      ) + ""))
+        set_data(t4, t4_value);
+      if (dirty[0] & /*todayStats*/
+      2048 && t10_value !== (t10_value = /*todayStats*/
+      ctx2[11].newCards + ""))
+        set_data(t10, t10_value);
+      if (dirty[0] & /*todayStats*/
+      2048 && t14_value !== (t14_value = /*todayStats*/
+      ctx2[11].learningCards + ""))
+        set_data(t14, t14_value);
+      if (dirty[0] & /*todayStats*/
+      2048 && t18_value !== (t18_value = /*todayStats*/
+      ctx2[11].reviewCards + ""))
+        set_data(t18, t18_value);
+    },
+    d(detaching) {
+      if (detaching)
+        detach(div6);
+      if (detaching)
+        detach(t7);
+      if (detaching)
+        detach(h4);
+      if (detaching)
+        detach(t9);
+      if (detaching)
+        detach(div16);
+    }
+  };
+}
+function create_else_block_7(ctx) {
+  let div;
+  return {
+    c() {
+      div = element("div");
+      div.innerHTML = `<p class="svelte-lbb1rg">No reviews this week yet.</p>`;
+      attr(div, "class", "no-data-message svelte-lbb1rg");
+    },
+    m(target, anchor) {
+      insert(target, div, anchor);
+    },
+    p: noop,
+    d(detaching) {
+      if (detaching)
+        detach(div);
+    }
+  };
+}
+function create_if_block_9(ctx) {
+  let div9;
+  let div2;
+  let div0;
+  let t0_value = (
+    /*weekStats*/
+    ctx[10].reviews + ""
+  );
+  let t0;
+  let t1;
+  let div1;
+  let t3;
+  let div5;
+  let div3;
+  let t4_value = formatTime(
+    /*weekStats*/
+    ctx[10].timeSpent
+  ) + "";
+  let t4;
+  let t5;
+  let div4;
+  let t7;
+  let div8;
+  let div6;
+  let t8_value = (
+    /*weekStats*/
+    ctx[10].correctRate.toFixed(1) + ""
+  );
+  let t8;
+  let t9;
+  let t10;
+  let div7;
+  return {
+    c() {
+      div9 = element("div");
+      div2 = element("div");
+      div0 = element("div");
+      t0 = text(t0_value);
+      t1 = space();
+      div1 = element("div");
+      div1.textContent = "Cards Studied";
+      t3 = space();
+      div5 = element("div");
+      div3 = element("div");
+      t4 = text(t4_value);
+      t5 = space();
+      div4 = element("div");
+      div4.textContent = "Time Spent";
+      t7 = space();
+      div8 = element("div");
+      div6 = element("div");
+      t8 = text(t8_value);
+      t9 = text("%");
+      t10 = space();
+      div7 = element("div");
+      div7.textContent = "Success Rate";
+      attr(div0, "class", "stat-value svelte-lbb1rg");
+      attr(div1, "class", "stat-label svelte-lbb1rg");
+      attr(div2, "class", "stat-card svelte-lbb1rg");
+      attr(div3, "class", "stat-value svelte-lbb1rg");
+      attr(div4, "class", "stat-label svelte-lbb1rg");
+      attr(div5, "class", "stat-card svelte-lbb1rg");
+      attr(div6, "class", "stat-value svelte-lbb1rg");
+      attr(div7, "class", "stat-label svelte-lbb1rg");
+      attr(div8, "class", "stat-card svelte-lbb1rg");
+      attr(div9, "class", "stats-grid svelte-lbb1rg");
+    },
+    m(target, anchor) {
+      insert(target, div9, anchor);
+      append(div9, div2);
+      append(div2, div0);
+      append(div0, t0);
+      append(div2, t1);
+      append(div2, div1);
+      append(div9, t3);
+      append(div9, div5);
+      append(div5, div3);
+      append(div3, t4);
+      append(div5, t5);
+      append(div5, div4);
+      append(div9, t7);
+      append(div9, div8);
+      append(div8, div6);
+      append(div6, t8);
+      append(div6, t9);
+      append(div8, t10);
+      append(div8, div7);
+    },
+    p(ctx2, dirty) {
+      if (dirty[0] & /*weekStats*/
+      1024 && t0_value !== (t0_value = /*weekStats*/
+      ctx2[10].reviews + ""))
+        set_data(t0, t0_value);
+      if (dirty[0] & /*weekStats*/
+      1024 && t4_value !== (t4_value = formatTime(
+        /*weekStats*/
+        ctx2[10].timeSpent
+      ) + ""))
+        set_data(t4, t4_value);
+      if (dirty[0] & /*weekStats*/
+      1024 && t8_value !== (t8_value = /*weekStats*/
+      ctx2[10].correctRate.toFixed(1) + ""))
+        set_data(t8, t8_value);
+    },
+    d(detaching) {
+      if (detaching)
+        detach(div9);
+    }
+  };
+}
+function create_else_block_6(ctx) {
+  let div;
+  return {
+    c() {
+      div = element("div");
+      div.innerHTML = `<p class="svelte-lbb1rg">No reviews this month yet.</p>`;
+      attr(div, "class", "no-data-message svelte-lbb1rg");
+    },
+    m(target, anchor) {
+      insert(target, div, anchor);
+    },
+    p: noop,
+    d(detaching) {
+      if (detaching)
+        detach(div);
+    }
+  };
+}
+function create_if_block_8(ctx) {
+  let div9;
+  let div2;
+  let div0;
+  let t0_value = (
+    /*monthStats*/
+    ctx[9].reviews + ""
+  );
+  let t0;
+  let t1;
+  let div1;
+  let t3;
+  let div5;
+  let div3;
+  let t4_value = formatTime(
+    /*monthStats*/
+    ctx[9].timeSpent
+  ) + "";
+  let t4;
+  let t5;
+  let div4;
+  let t7;
+  let div8;
+  let div6;
+  let t8_value = (
+    /*monthStats*/
+    ctx[9].correctRate.toFixed(1) + ""
+  );
+  let t8;
+  let t9;
+  let t10;
+  let div7;
+  return {
+    c() {
+      div9 = element("div");
+      div2 = element("div");
+      div0 = element("div");
+      t0 = text(t0_value);
+      t1 = space();
+      div1 = element("div");
+      div1.textContent = "Cards Studied";
+      t3 = space();
+      div5 = element("div");
+      div3 = element("div");
+      t4 = text(t4_value);
+      t5 = space();
+      div4 = element("div");
+      div4.textContent = "Time Spent";
+      t7 = space();
+      div8 = element("div");
+      div6 = element("div");
+      t8 = text(t8_value);
+      t9 = text("%");
+      t10 = space();
+      div7 = element("div");
+      div7.textContent = "Success Rate";
+      attr(div0, "class", "stat-value svelte-lbb1rg");
+      attr(div1, "class", "stat-label svelte-lbb1rg");
+      attr(div2, "class", "stat-card svelte-lbb1rg");
+      attr(div3, "class", "stat-value svelte-lbb1rg");
+      attr(div4, "class", "stat-label svelte-lbb1rg");
+      attr(div5, "class", "stat-card svelte-lbb1rg");
+      attr(div6, "class", "stat-value svelte-lbb1rg");
+      attr(div7, "class", "stat-label svelte-lbb1rg");
+      attr(div8, "class", "stat-card svelte-lbb1rg");
+      attr(div9, "class", "stats-grid svelte-lbb1rg");
+    },
+    m(target, anchor) {
+      insert(target, div9, anchor);
+      append(div9, div2);
+      append(div2, div0);
+      append(div0, t0);
+      append(div2, t1);
+      append(div2, div1);
+      append(div9, t3);
+      append(div9, div5);
+      append(div5, div3);
+      append(div3, t4);
+      append(div5, t5);
+      append(div5, div4);
+      append(div9, t7);
+      append(div9, div8);
+      append(div8, div6);
+      append(div6, t8);
+      append(div6, t9);
+      append(div8, t10);
+      append(div8, div7);
+    },
+    p(ctx2, dirty) {
+      if (dirty[0] & /*monthStats*/
+      512 && t0_value !== (t0_value = /*monthStats*/
+      ctx2[9].reviews + ""))
+        set_data(t0, t0_value);
+      if (dirty[0] & /*monthStats*/
+      512 && t4_value !== (t4_value = formatTime(
+        /*monthStats*/
+        ctx2[9].timeSpent
+      ) + ""))
+        set_data(t4, t4_value);
+      if (dirty[0] & /*monthStats*/
+      512 && t8_value !== (t8_value = /*monthStats*/
+      ctx2[9].correctRate.toFixed(1) + ""))
+        set_data(t8, t8_value);
+    },
+    d(detaching) {
+      if (detaching)
+        detach(div9);
+    }
+  };
+}
+function create_else_block_5(ctx) {
+  let div;
+  return {
+    c() {
+      div = element("div");
+      div.innerHTML = `<p class="svelte-lbb1rg">No reviews this year yet.</p>`;
+      attr(div, "class", "no-data-message svelte-lbb1rg");
+    },
+    m(target, anchor) {
+      insert(target, div, anchor);
+    },
+    p: noop,
+    d(detaching) {
+      if (detaching)
+        detach(div);
+    }
+  };
+}
+function create_if_block_7(ctx) {
+  let div9;
+  let div2;
+  let div0;
+  let t0_value = (
+    /*yearStats*/
+    ctx[8].reviews + ""
+  );
+  let t0;
+  let t1;
+  let div1;
+  let t3;
+  let div5;
+  let div3;
+  let t4_value = formatTime(
+    /*yearStats*/
+    ctx[8].timeSpent
+  ) + "";
+  let t4;
+  let t5;
+  let div4;
+  let t7;
+  let div8;
+  let div6;
+  let t8_value = (
+    /*yearStats*/
+    ctx[8].correctRate.toFixed(1) + ""
+  );
+  let t8;
+  let t9;
+  let t10;
+  let div7;
+  return {
+    c() {
+      div9 = element("div");
+      div2 = element("div");
+      div0 = element("div");
+      t0 = text(t0_value);
+      t1 = space();
+      div1 = element("div");
+      div1.textContent = "Cards Studied";
+      t3 = space();
+      div5 = element("div");
+      div3 = element("div");
+      t4 = text(t4_value);
+      t5 = space();
+      div4 = element("div");
+      div4.textContent = "Time Spent";
+      t7 = space();
+      div8 = element("div");
+      div6 = element("div");
+      t8 = text(t8_value);
+      t9 = text("%");
+      t10 = space();
+      div7 = element("div");
+      div7.textContent = "Success Rate";
+      attr(div0, "class", "stat-value svelte-lbb1rg");
+      attr(div1, "class", "stat-label svelte-lbb1rg");
+      attr(div2, "class", "stat-card svelte-lbb1rg");
+      attr(div3, "class", "stat-value svelte-lbb1rg");
+      attr(div4, "class", "stat-label svelte-lbb1rg");
+      attr(div5, "class", "stat-card svelte-lbb1rg");
+      attr(div6, "class", "stat-value svelte-lbb1rg");
+      attr(div7, "class", "stat-label svelte-lbb1rg");
+      attr(div8, "class", "stat-card svelte-lbb1rg");
+      attr(div9, "class", "stats-grid svelte-lbb1rg");
+    },
+    m(target, anchor) {
+      insert(target, div9, anchor);
+      append(div9, div2);
+      append(div2, div0);
+      append(div0, t0);
+      append(div2, t1);
+      append(div2, div1);
+      append(div9, t3);
+      append(div9, div5);
+      append(div5, div3);
+      append(div3, t4);
+      append(div5, t5);
+      append(div5, div4);
+      append(div9, t7);
+      append(div9, div8);
+      append(div8, div6);
+      append(div6, t8);
+      append(div6, t9);
+      append(div8, t10);
+      append(div8, div7);
+    },
+    p(ctx2, dirty) {
+      if (dirty[0] & /*yearStats*/
+      256 && t0_value !== (t0_value = /*yearStats*/
+      ctx2[8].reviews + ""))
+        set_data(t0, t0_value);
+      if (dirty[0] & /*yearStats*/
+      256 && t4_value !== (t4_value = formatTime(
+        /*yearStats*/
+        ctx2[8].timeSpent
+      ) + ""))
+        set_data(t4, t4_value);
+      if (dirty[0] & /*yearStats*/
+      256 && t8_value !== (t8_value = /*yearStats*/
+      ctx2[8].correctRate.toFixed(1) + ""))
+        set_data(t8, t8_value);
+    },
+    d(detaching) {
+      if (detaching)
+        detach(div9);
+    }
+  };
+}
+function create_else_block_4(ctx) {
+  let div;
+  return {
+    c() {
+      div = element("div");
+      div.innerHTML = `<p class="svelte-lbb1rg">No answer button data available yet.</p> 
+                    <p class="help-text svelte-lbb1rg">Complete some reviews to see answer button statistics.</p>`;
+      attr(div, "class", "no-data-message svelte-lbb1rg");
+    },
+    m(target, anchor) {
+      insert(target, div, anchor);
+    },
+    p: noop,
+    d(detaching) {
+      if (detaching)
+        detach(div);
+    }
+  };
+}
+function create_if_block_6(ctx) {
+  let div16;
+  let div3;
+  let div0;
+  let t1;
+  let div1;
+  let t2_value = (
+    /*statistics*/
+    ctx[2].answerButtons.again + ""
+  );
+  let t2;
+  let t3;
+  let div2;
+  let t4_value = (
+    /*statistics*/
+    (ctx[2].answerButtons.again / /*statistics*/
+    (ctx[2].answerButtons.again + /*statistics*/
+    ctx[2].answerButtons.hard + /*statistics*/
+    ctx[2].answerButtons.good + /*statistics*/
+    ctx[2].answerButtons.easy) * 100).toFixed(1) + ""
+  );
+  let t4;
+  let t5;
+  let t6;
+  let div7;
+  let div4;
+  let t8;
+  let div5;
+  let t9_value = (
+    /*statistics*/
+    ctx[2].answerButtons.hard + ""
+  );
+  let t9;
+  let t10;
+  let div6;
+  let t11_value = (
+    /*statistics*/
+    (ctx[2].answerButtons.hard / /*statistics*/
+    (ctx[2].answerButtons.again + /*statistics*/
+    ctx[2].answerButtons.hard + /*statistics*/
+    ctx[2].answerButtons.good + /*statistics*/
+    ctx[2].answerButtons.easy) * 100).toFixed(1) + ""
+  );
+  let t11;
+  let t12;
+  let t13;
+  let div11;
+  let div8;
+  let t15;
+  let div9;
+  let t16_value = (
+    /*statistics*/
+    ctx[2].answerButtons.good + ""
+  );
+  let t16;
+  let t17;
+  let div10;
+  let t18_value = (
+    /*statistics*/
+    (ctx[2].answerButtons.good / /*statistics*/
+    (ctx[2].answerButtons.again + /*statistics*/
+    ctx[2].answerButtons.hard + /*statistics*/
+    ctx[2].answerButtons.good + /*statistics*/
+    ctx[2].answerButtons.easy) * 100).toFixed(1) + ""
+  );
+  let t18;
+  let t19;
+  let t20;
+  let div15;
+  let div12;
+  let t22;
+  let div13;
+  let t23_value = (
+    /*statistics*/
+    ctx[2].answerButtons.easy + ""
+  );
+  let t23;
+  let t24;
+  let div14;
+  let t25_value = (
+    /*statistics*/
+    (ctx[2].answerButtons.easy / /*statistics*/
+    (ctx[2].answerButtons.again + /*statistics*/
+    ctx[2].answerButtons.hard + /*statistics*/
+    ctx[2].answerButtons.good + /*statistics*/
+    ctx[2].answerButtons.easy) * 100).toFixed(1) + ""
+  );
+  let t25;
+  let t26;
+  return {
+    c() {
+      div16 = element("div");
+      div3 = element("div");
+      div0 = element("div");
+      div0.textContent = "Again";
+      t1 = space();
+      div1 = element("div");
+      t2 = text(t2_value);
+      t3 = space();
+      div2 = element("div");
+      t4 = text(t4_value);
+      t5 = text("%");
+      t6 = space();
+      div7 = element("div");
+      div4 = element("div");
+      div4.textContent = "Hard";
+      t8 = space();
+      div5 = element("div");
+      t9 = text(t9_value);
+      t10 = space();
+      div6 = element("div");
+      t11 = text(t11_value);
+      t12 = text("%");
+      t13 = space();
+      div11 = element("div");
+      div8 = element("div");
+      div8.textContent = "Good";
+      t15 = space();
+      div9 = element("div");
+      t16 = text(t16_value);
+      t17 = space();
+      div10 = element("div");
+      t18 = text(t18_value);
+      t19 = text("%");
+      t20 = space();
+      div15 = element("div");
+      div12 = element("div");
+      div12.textContent = "Easy";
+      t22 = space();
+      div13 = element("div");
+      t23 = text(t23_value);
+      t24 = space();
+      div14 = element("div");
+      t25 = text(t25_value);
+      t26 = text("%");
+      attr(div0, "class", "button-label svelte-lbb1rg");
+      attr(div1, "class", "button-count svelte-lbb1rg");
+      attr(div2, "class", "button-percentage svelte-lbb1rg");
+      attr(div3, "class", "button-bar again svelte-lbb1rg");
+      attr(div4, "class", "button-label svelte-lbb1rg");
+      attr(div5, "class", "button-count svelte-lbb1rg");
+      attr(div6, "class", "button-percentage svelte-lbb1rg");
+      attr(div7, "class", "button-bar hard svelte-lbb1rg");
+      attr(div8, "class", "button-label svelte-lbb1rg");
+      attr(div9, "class", "button-count svelte-lbb1rg");
+      attr(div10, "class", "button-percentage svelte-lbb1rg");
+      attr(div11, "class", "button-bar good svelte-lbb1rg");
+      attr(div12, "class", "button-label svelte-lbb1rg");
+      attr(div13, "class", "button-count svelte-lbb1rg");
+      attr(div14, "class", "button-percentage svelte-lbb1rg");
+      attr(div15, "class", "button-bar easy svelte-lbb1rg");
+      attr(div16, "class", "button-stats svelte-lbb1rg");
+    },
+    m(target, anchor) {
+      insert(target, div16, anchor);
+      append(div16, div3);
+      append(div3, div0);
+      append(div3, t1);
+      append(div3, div1);
+      append(div1, t2);
+      append(div3, t3);
+      append(div3, div2);
+      append(div2, t4);
+      append(div2, t5);
+      append(div16, t6);
+      append(div16, div7);
+      append(div7, div4);
+      append(div7, t8);
+      append(div7, div5);
+      append(div5, t9);
+      append(div7, t10);
+      append(div7, div6);
+      append(div6, t11);
+      append(div6, t12);
+      append(div16, t13);
+      append(div16, div11);
+      append(div11, div8);
+      append(div11, t15);
+      append(div11, div9);
+      append(div9, t16);
+      append(div11, t17);
+      append(div11, div10);
+      append(div10, t18);
+      append(div10, t19);
+      append(div16, t20);
+      append(div16, div15);
+      append(div15, div12);
+      append(div15, t22);
+      append(div15, div13);
+      append(div13, t23);
+      append(div15, t24);
+      append(div15, div14);
+      append(div14, t25);
+      append(div14, t26);
+    },
+    p(ctx2, dirty) {
+      if (dirty[0] & /*statistics*/
+      4 && t2_value !== (t2_value = /*statistics*/
+      ctx2[2].answerButtons.again + ""))
+        set_data(t2, t2_value);
+      if (dirty[0] & /*statistics*/
+      4 && t4_value !== (t4_value = /*statistics*/
+      (ctx2[2].answerButtons.again / /*statistics*/
+      (ctx2[2].answerButtons.again + /*statistics*/
+      ctx2[2].answerButtons.hard + /*statistics*/
+      ctx2[2].answerButtons.good + /*statistics*/
+      ctx2[2].answerButtons.easy) * 100).toFixed(1) + ""))
+        set_data(t4, t4_value);
+      if (dirty[0] & /*statistics*/
+      4 && t9_value !== (t9_value = /*statistics*/
+      ctx2[2].answerButtons.hard + ""))
+        set_data(t9, t9_value);
+      if (dirty[0] & /*statistics*/
+      4 && t11_value !== (t11_value = /*statistics*/
+      (ctx2[2].answerButtons.hard / /*statistics*/
+      (ctx2[2].answerButtons.again + /*statistics*/
+      ctx2[2].answerButtons.hard + /*statistics*/
+      ctx2[2].answerButtons.good + /*statistics*/
+      ctx2[2].answerButtons.easy) * 100).toFixed(1) + ""))
+        set_data(t11, t11_value);
+      if (dirty[0] & /*statistics*/
+      4 && t16_value !== (t16_value = /*statistics*/
+      ctx2[2].answerButtons.good + ""))
+        set_data(t16, t16_value);
+      if (dirty[0] & /*statistics*/
+      4 && t18_value !== (t18_value = /*statistics*/
+      (ctx2[2].answerButtons.good / /*statistics*/
+      (ctx2[2].answerButtons.again + /*statistics*/
+      ctx2[2].answerButtons.hard + /*statistics*/
+      ctx2[2].answerButtons.good + /*statistics*/
+      ctx2[2].answerButtons.easy) * 100).toFixed(1) + ""))
+        set_data(t18, t18_value);
+      if (dirty[0] & /*statistics*/
+      4 && t23_value !== (t23_value = /*statistics*/
+      ctx2[2].answerButtons.easy + ""))
+        set_data(t23, t23_value);
+      if (dirty[0] & /*statistics*/
+      4 && t25_value !== (t25_value = /*statistics*/
+      (ctx2[2].answerButtons.easy / /*statistics*/
+      (ctx2[2].answerButtons.again + /*statistics*/
+      ctx2[2].answerButtons.hard + /*statistics*/
+      ctx2[2].answerButtons.good + /*statistics*/
+      ctx2[2].answerButtons.easy) * 100).toFixed(1) + ""))
+        set_data(t25, t25_value);
+    },
+    d(detaching) {
+      if (detaching)
+        detach(div16);
+    }
+  };
+}
+function create_else_block_3(ctx) {
+  let div;
+  return {
+    c() {
+      div = element("div");
+      div.innerHTML = `<p class="svelte-lbb1rg">No upcoming reviews scheduled.</p> 
+                    <p class="help-text svelte-lbb1rg">Add flashcards to your decks to see future review
+                        forecasts.</p>`;
+      attr(div, "class", "no-data-message svelte-lbb1rg");
+    },
+    m(target, anchor) {
+      insert(target, div, anchor);
+    },
+    p: noop,
+    d(detaching) {
+      if (detaching)
+        detach(div);
+    }
+  };
 }
 function create_if_block_32(ctx) {
+  let div;
+  let t0;
+  let p;
+  let each_value_1 = (
+    /*statistics*/
+    ctx[2].forecast.filter(func_1).slice(0, 20)
+  );
+  let each_blocks = [];
+  for (let i = 0; i < each_value_1.length; i += 1) {
+    each_blocks[i] = create_each_block_12(get_each_context_12(ctx, each_value_1, i));
+  }
+  return {
+    c() {
+      div = element("div");
+      for (let i = 0; i < each_blocks.length; i += 1) {
+        each_blocks[i].c();
+      }
+      t0 = space();
+      p = element("p");
+      p.textContent = "Showing days with scheduled reviews based on FSRS intervals.";
+      attr(div, "class", "forecast-chart svelte-lbb1rg");
+      attr(p, "class", "forecast-note svelte-lbb1rg");
+    },
+    m(target, anchor) {
+      insert(target, div, anchor);
+      for (let i = 0; i < each_blocks.length; i += 1) {
+        if (each_blocks[i]) {
+          each_blocks[i].m(div, null);
+        }
+      }
+      insert(target, t0, anchor);
+      insert(target, p, anchor);
+    },
+    p(ctx2, dirty) {
+      if (dirty[0] & /*statistics*/
+      4) {
+        each_value_1 = /*statistics*/
+        ctx2[2].forecast.filter(func_1).slice(0, 20);
+        let i;
+        for (i = 0; i < each_value_1.length; i += 1) {
+          const child_ctx = get_each_context_12(ctx2, each_value_1, i);
+          if (each_blocks[i]) {
+            each_blocks[i].p(child_ctx, dirty);
+          } else {
+            each_blocks[i] = create_each_block_12(child_ctx);
+            each_blocks[i].c();
+            each_blocks[i].m(div, null);
+          }
+        }
+        for (; i < each_blocks.length; i += 1) {
+          each_blocks[i].d(1);
+        }
+        each_blocks.length = each_value_1.length;
+      }
+    },
+    d(detaching) {
+      if (detaching)
+        detach(div);
+      destroy_each(each_blocks, detaching);
+      if (detaching)
+        detach(t0);
+      if (detaching)
+        detach(p);
+    }
+  };
+}
+function create_else_block_2(ctx) {
+  let t0;
+  let t1_value = (
+    /*originalIndex*/
+    ctx[32] + ""
+  );
+  let t1;
+  let t2;
+  return {
+    c() {
+      t0 = text("in ");
+      t1 = text(t1_value);
+      t2 = text("d");
+    },
+    m(target, anchor) {
+      insert(target, t0, anchor);
+      insert(target, t1, anchor);
+      insert(target, t2, anchor);
+    },
+    p(ctx2, dirty) {
+      if (dirty[0] & /*statistics*/
+      4 && t1_value !== (t1_value = /*originalIndex*/
+      ctx2[32] + ""))
+        set_data(t1, t1_value);
+    },
+    d(detaching) {
+      if (detaching)
+        detach(t0);
+      if (detaching)
+        detach(t1);
+      if (detaching)
+        detach(t2);
+    }
+  };
+}
+function create_if_block_5(ctx) {
+  let t;
+  return {
+    c() {
+      t = text("Tomorrow");
+    },
+    m(target, anchor) {
+      insert(target, t, anchor);
+    },
+    p: noop,
+    d(detaching) {
+      if (detaching)
+        detach(t);
+    }
+  };
+}
+function create_if_block_4(ctx) {
+  let t;
+  return {
+    c() {
+      t = text("Today");
+    },
+    m(target, anchor) {
+      insert(target, t, anchor);
+    },
+    p: noop,
+    d(detaching) {
+      if (detaching)
+        detach(t);
+    }
+  };
+}
+function create_each_block_12(ctx) {
+  let div3;
+  let div0;
+  let t0;
+  let div1;
+  let t1;
+  let div2;
+  let t2_value = (
+    /*day*/
+    ctx[31].dueCount + ""
+  );
+  let t2;
+  let t3;
+  let div3_title_value;
+  function select_block_type_7(ctx2, dirty) {
+    if (
+      /*originalIndex*/
+      ctx2[32] === 0
+    )
+      return create_if_block_4;
+    if (
+      /*originalIndex*/
+      ctx2[32] === 1
+    )
+      return create_if_block_5;
+    return create_else_block_2;
+  }
+  let current_block_type = select_block_type_7(ctx, [-1, -1]);
+  let if_block = current_block_type(ctx);
+  return {
+    c() {
+      div3 = element("div");
+      div0 = element("div");
+      t0 = space();
+      div1 = element("div");
+      if_block.c();
+      t1 = space();
+      div2 = element("div");
+      t2 = text(t2_value);
+      t3 = space();
+      attr(div0, "class", "bar svelte-lbb1rg");
+      set_style(div0, "height", Math.max(
+        /*day*/
+        ctx[31].dueCount * 2,
+        2
+      ) + "px");
+      attr(div1, "class", "bar-label svelte-lbb1rg");
+      attr(div2, "class", "bar-value svelte-lbb1rg");
+      attr(div3, "class", "forecast-bar svelte-lbb1rg");
+      attr(div3, "title", div3_title_value = /*originalIndex*/
+      (ctx[32] === 0 ? "Today" : (
+        /*originalIndex*/
+        ctx[32] === 1 ? "Tomorrow" : `In ${/*originalIndex*/
+        ctx[32]} days`
+      )) + ": " + /*day*/
+      ctx[31].dueCount + " card" + /*day*/
+      (ctx[31].dueCount !== 1 ? "s" : ""));
+    },
+    m(target, anchor) {
+      insert(target, div3, anchor);
+      append(div3, div0);
+      append(div3, t0);
+      append(div3, div1);
+      if_block.m(div1, null);
+      append(div3, t1);
+      append(div3, div2);
+      append(div2, t2);
+      append(div3, t3);
+    },
+    p(ctx2, dirty) {
+      if (dirty[0] & /*statistics*/
+      4) {
+        set_style(div0, "height", Math.max(
+          /*day*/
+          ctx2[31].dueCount * 2,
+          2
+        ) + "px");
+      }
+      if (current_block_type === (current_block_type = select_block_type_7(ctx2, dirty)) && if_block) {
+        if_block.p(ctx2, dirty);
+      } else {
+        if_block.d(1);
+        if_block = current_block_type(ctx2);
+        if (if_block) {
+          if_block.c();
+          if_block.m(div1, null);
+        }
+      }
+      if (dirty[0] & /*statistics*/
+      4 && t2_value !== (t2_value = /*day*/
+      ctx2[31].dueCount + ""))
+        set_data(t2, t2_value);
+      if (dirty[0] & /*statistics*/
+      4 && div3_title_value !== (div3_title_value = /*originalIndex*/
+      (ctx2[32] === 0 ? "Today" : (
+        /*originalIndex*/
+        ctx2[32] === 1 ? "Tomorrow" : `In ${/*originalIndex*/
+        ctx2[32]} days`
+      )) + ": " + /*day*/
+      ctx2[31].dueCount + " card" + /*day*/
+      (ctx2[31].dueCount !== 1 ? "s" : ""))) {
+        attr(div3, "title", div3_title_value);
+      }
+    },
+    d(detaching) {
+      if (detaching)
+        detach(div3);
+      if_block.d();
+    }
+  };
+}
+function create_else_block_1(ctx) {
+  let div;
+  return {
+    c() {
+      div = element("div");
+      div.innerHTML = `<p class="svelte-lbb1rg">No interval data available.</p> 
+                    <p class="help-text svelte-lbb1rg">Review some cards to see interval distribution.</p>`;
+      attr(div, "class", "no-data-message svelte-lbb1rg");
+    },
+    m(target, anchor) {
+      insert(target, div, anchor);
+    },
+    p: noop,
+    d(detaching) {
+      if (detaching)
+        detach(div);
+    }
+  };
+}
+function create_if_block_22(ctx) {
+  let div;
+  let each_value = (
+    /*statistics*/
+    ctx[2].intervals
+  );
+  let each_blocks = [];
+  for (let i = 0; i < each_value.length; i += 1) {
+    each_blocks[i] = create_each_block3(get_each_context3(ctx, each_value, i));
+  }
+  return {
+    c() {
+      div = element("div");
+      for (let i = 0; i < each_blocks.length; i += 1) {
+        each_blocks[i].c();
+      }
+      attr(div, "class", "intervals-chart svelte-lbb1rg");
+    },
+    m(target, anchor) {
+      insert(target, div, anchor);
+      for (let i = 0; i < each_blocks.length; i += 1) {
+        if (each_blocks[i]) {
+          each_blocks[i].m(div, null);
+        }
+      }
+    },
+    p(ctx2, dirty) {
+      if (dirty[0] & /*statistics*/
+      4) {
+        each_value = /*statistics*/
+        ctx2[2].intervals;
+        let i;
+        for (i = 0; i < each_value.length; i += 1) {
+          const child_ctx = get_each_context3(ctx2, each_value, i);
+          if (each_blocks[i]) {
+            each_blocks[i].p(child_ctx, dirty);
+          } else {
+            each_blocks[i] = create_each_block3(child_ctx);
+            each_blocks[i].c();
+            each_blocks[i].m(div, null);
+          }
+        }
+        for (; i < each_blocks.length; i += 1) {
+          each_blocks[i].d(1);
+        }
+        each_blocks.length = each_value.length;
+      }
+    },
+    d(detaching) {
+      if (detaching)
+        detach(div);
+      destroy_each(each_blocks, detaching);
+    }
+  };
+}
+function create_each_block3(ctx) {
+  let div2;
+  let div0;
+  let t0_value = (
+    /*interval*/
+    ctx[28].interval + ""
+  );
+  let t0;
+  let t1;
+  let div1;
+  let t2_value = (
+    /*interval*/
+    ctx[28].count + ""
+  );
+  let t2;
+  let t3;
+  return {
+    c() {
+      div2 = element("div");
+      div0 = element("div");
+      t0 = text(t0_value);
+      t1 = space();
+      div1 = element("div");
+      t2 = text(t2_value);
+      t3 = space();
+      attr(div0, "class", "interval-label svelte-lbb1rg");
+      attr(div1, "class", "interval-value svelte-lbb1rg");
+      attr(div2, "class", "interval-bar svelte-lbb1rg");
+    },
+    m(target, anchor) {
+      insert(target, div2, anchor);
+      append(div2, div0);
+      append(div0, t0);
+      append(div2, t1);
+      append(div2, div1);
+      append(div1, t2);
+      append(div2, t3);
+    },
+    p(ctx2, dirty) {
+      if (dirty[0] & /*statistics*/
+      4 && t0_value !== (t0_value = /*interval*/
+      ctx2[28].interval + ""))
+        set_data(t0, t0_value);
+      if (dirty[0] & /*statistics*/
+      4 && t2_value !== (t2_value = /*interval*/
+      ctx2[28].count + ""))
+        set_data(t2, t2_value);
+    },
+    d(detaching) {
+      if (detaching)
+        detach(div2);
+    }
+  };
+}
+function create_fragment4(ctx) {
+  let div;
+  let current_block_type_index;
+  let if_block;
+  let current;
+  const if_block_creators = [create_if_block3, create_if_block_13, create_else_block3];
+  const if_blocks = [];
+  function select_block_type(ctx2, dirty) {
+    if (
+      /*loading*/
+      ctx2[1]
+    )
+      return 0;
+    if (!/*statistics*/
+    ctx2[2])
+      return 1;
+    return 2;
+  }
+  current_block_type_index = select_block_type(ctx, [-1, -1]);
+  if_block = if_blocks[current_block_type_index] = if_block_creators[current_block_type_index](ctx);
+  return {
+    c() {
+      div = element("div");
+      if_block.c();
+      attr(div, "class", "statistics-container svelte-lbb1rg");
+    },
+    m(target, anchor) {
+      insert(target, div, anchor);
+      if_blocks[current_block_type_index].m(div, null);
+      current = true;
+    },
+    p(ctx2, dirty) {
+      let previous_block_index = current_block_type_index;
+      current_block_type_index = select_block_type(ctx2, dirty);
+      if (current_block_type_index === previous_block_index) {
+        if_blocks[current_block_type_index].p(ctx2, dirty);
+      } else {
+        group_outros();
+        transition_out(if_blocks[previous_block_index], 1, 1, () => {
+          if_blocks[previous_block_index] = null;
+        });
+        check_outros();
+        if_block = if_blocks[current_block_type_index];
+        if (!if_block) {
+          if_block = if_blocks[current_block_type_index] = if_block_creators[current_block_type_index](ctx2);
+          if_block.c();
+        } else {
+          if_block.p(ctx2, dirty);
+        }
+        transition_in(if_block, 1);
+        if_block.m(div, null);
+      }
+    },
+    i(local) {
+      if (current)
+        return;
+      transition_in(if_block);
+      current = true;
+    },
+    o(local) {
+      transition_out(if_block);
+      current = false;
+    },
+    d(detaching) {
+      if (detaching)
+        detach(div);
+      if_blocks[current_block_type_index].d();
+    }
+  };
+}
+function formatTime(seconds) {
+  const minutes = Math.floor(seconds / 60);
+  const hours = Math.floor(minutes / 60);
+  if (hours > 0) {
+    return `${hours}h ${minutes % 60}m`;
+  }
+  return `${minutes}m`;
+}
+var func2 = (day) => day.dueCount > 0;
+var func_1 = (day) => day.dueCount > 0;
+function instance4($$self, $$props, $$invalidate) {
+  let todayStats;
+  let weekStats;
+  let monthStats;
+  let yearStats;
+  let { plugin } = $$props;
+  const dispatch = createEventDispatcher();
+  let loading = true;
+  let statistics = null;
+  let selectedDeckFilter = "all";
+  let selectedTimeframe = "12months";
+  let availableDecks = [];
+  let availableTags = [];
+  let heatmapComponent;
+  onMount(() => __awaiter(void 0, void 0, void 0, function* () {
+    yield loadDecksAndTags();
+    yield loadStatistics();
+  }));
+  function loadDecksAndTags() {
+    return __awaiter(this, void 0, void 0, function* () {
+      try {
+        $$invalidate(5, availableDecks = yield plugin.getDecks());
+        $$invalidate(6, availableTags = [...new Set(availableDecks.map((deck) => deck.tag))]);
+      } catch (error) {
+        console.error("Error loading decks and tags:", error);
+      }
+    });
+  }
+  function loadStatistics() {
+    return __awaiter(this, void 0, void 0, function* () {
+      try {
+        $$invalidate(1, loading = true);
+        $$invalidate(2, statistics = yield plugin.getOverallStatistics(selectedDeckFilter, selectedTimeframe));
+        console.log("Loaded statistics:", statistics);
+      } catch (error) {
+        console.error("Error loading statistics:", error);
+        $$invalidate(2, statistics = {
+          dailyStats: [],
+          cardStats: { new: 0, learning: 0, mature: 0 },
+          answerButtons: { again: 0, hard: 0, good: 0, easy: 0 },
+          retentionRate: 0,
+          intervals: [],
+          forecast: []
+        });
+      } finally {
+        $$invalidate(1, loading = false);
+      }
+    });
+  }
+  function handleFilterChange() {
+    return __awaiter(this, void 0, void 0, function* () {
+      yield loadStatistics();
+    });
+  }
+  function getTodayStats() {
+    if (!(statistics === null || statistics === void 0 ? void 0 : statistics.dailyStats) || statistics.dailyStats.length === 0)
+      return null;
+    const today = (/* @__PURE__ */ new Date()).toISOString().split("T")[0];
+    return statistics.dailyStats.find((day) => day.date === today) || statistics.dailyStats[0] || null;
+  }
+  function getTimeframeStats(days) {
+    if (!(statistics === null || statistics === void 0 ? void 0 : statistics.dailyStats)) {
+      return {
+        reviews: 0,
+        timeSpent: 0,
+        newCards: 0,
+        learningCards: 0,
+        reviewCards: 0,
+        correctRate: 0
+      };
+    }
+    const cutoffDate = /* @__PURE__ */ new Date();
+    cutoffDate.setDate(cutoffDate.getDate() - days);
+    const cutoffStr = cutoffDate.toISOString().split("T")[0];
+    const filteredStats = statistics.dailyStats.filter((day) => day.date >= cutoffStr);
+    if (filteredStats.length === 0) {
+      return {
+        reviews: 0,
+        timeSpent: 0,
+        newCards: 0,
+        learningCards: 0,
+        reviewCards: 0,
+        correctRate: 0
+      };
+    }
+    return filteredStats.reduce(
+      (acc, day) => ({
+        reviews: acc.reviews + day.reviews,
+        timeSpent: acc.timeSpent + day.timeSpent,
+        newCards: acc.newCards + day.newCards,
+        learningCards: acc.learningCards + day.learningCards,
+        reviewCards: acc.reviewCards + day.reviewCards,
+        correctRate: acc.reviews + day.reviews > 0 ? (acc.correctRate * acc.reviews + day.correctRate * day.reviews) / (acc.reviews + day.reviews) : 0
+      }),
+      {
+        reviews: 0,
+        timeSpent: 0,
+        newCards: 0,
+        learningCards: 0,
+        reviewCards: 0,
+        correctRate: 0
+      }
+    );
+  }
+  function calculateAverageEase() {
+    if (!(statistics === null || statistics === void 0 ? void 0 : statistics.answerButtons))
+      return 0;
+    const { again, hard, good, easy } = statistics.answerButtons;
+    const total = again + hard + good + easy;
+    if (total === 0)
+      return 0;
+    const weightedSum = again * 1 + hard * 2 + good * 3 + easy * 4;
+    return (weightedSum / total).toFixed(2);
+  }
+  function calculateAverageInterval() {
+    if (!(statistics === null || statistics === void 0 ? void 0 : statistics.intervals))
+      return 0;
+    let totalInterval = 0;
+    let totalCards = 0;
+    statistics.intervals.forEach((interval) => {
+      const intervalStr = interval.interval;
+      let minutes = 0;
+      if (intervalStr.endsWith("h")) {
+        minutes = parseInt(intervalStr) * 60;
+      } else if (intervalStr.endsWith("d")) {
+        minutes = parseInt(intervalStr) * 1440;
+      } else if (intervalStr.endsWith("m")) {
+        minutes = parseInt(intervalStr) * 43200;
+      }
+      totalInterval += minutes * interval.count;
+      totalCards += interval.count;
+    });
+    if (totalCards === 0)
+      return 0;
+    const avgMinutes = totalInterval / totalCards;
+    return Math.round(avgMinutes / 1440);
+  }
+  function getDueToday() {
+    if (!(statistics === null || statistics === void 0 ? void 0 : statistics.forecast))
+      return 0;
+    const today = (/* @__PURE__ */ new Date()).toISOString().split("T")[0];
+    const todayForecast = statistics.forecast.find((day) => day.date === today);
+    return todayForecast ? todayForecast.dueCount : 0;
+  }
+  function getDueTomorrow() {
+    if (!(statistics === null || statistics === void 0 ? void 0 : statistics.forecast))
+      return 0;
+    const tomorrow = /* @__PURE__ */ new Date();
+    tomorrow.setDate(tomorrow.getDate() + 1);
+    const tomorrowStr = tomorrow.toISOString().split("T")[0];
+    const tomorrowForecast = statistics.forecast.find((day) => day.date === tomorrowStr);
+    return tomorrowForecast ? tomorrowForecast.dueCount : 0;
+  }
+  function getMaturityRatio() {
+    if (!(statistics === null || statistics === void 0 ? void 0 : statistics.cardStats))
+      return 0;
+    const { new: newCards, learning, mature } = statistics.cardStats;
+    const total = newCards + learning + mature;
+    if (total === 0)
+      return 0;
+    return (mature / total * 100).toFixed(1);
+  }
+  function select0_change_handler() {
+    selectedDeckFilter = select_value(this);
+    $$invalidate(3, selectedDeckFilter);
+    $$invalidate(5, availableDecks);
+    $$invalidate(6, availableTags);
+  }
+  function select1_change_handler() {
+    selectedTimeframe = select_value(this);
+    $$invalidate(4, selectedTimeframe);
+  }
+  const func_2 = async (days) => {
+    return await plugin.getReviewCounts(days);
+  };
+  function reviewheatmap_binding($$value) {
+    binding_callbacks[$$value ? "unshift" : "push"](() => {
+      heatmapComponent = $$value;
+      $$invalidate(7, heatmapComponent);
+    });
+  }
+  const click_handler = () => dispatch("close");
+  $$self.$$set = ($$props2) => {
+    if ("plugin" in $$props2)
+      $$invalidate(0, plugin = $$props2.plugin);
+  };
+  $:
+    $$invalidate(11, todayStats = getTodayStats());
+  $:
+    $$invalidate(10, weekStats = getTimeframeStats(7));
+  $:
+    $$invalidate(9, monthStats = getTimeframeStats(30));
+  $:
+    $$invalidate(8, yearStats = getTimeframeStats(365));
+  return [
+    plugin,
+    loading,
+    statistics,
+    selectedDeckFilter,
+    selectedTimeframe,
+    availableDecks,
+    availableTags,
+    heatmapComponent,
+    yearStats,
+    monthStats,
+    weekStats,
+    todayStats,
+    dispatch,
+    loadStatistics,
+    handleFilterChange,
+    calculateAverageEase,
+    calculateAverageInterval,
+    getDueToday,
+    getDueTomorrow,
+    getMaturityRatio,
+    select0_change_handler,
+    select1_change_handler,
+    func_2,
+    reviewheatmap_binding,
+    click_handler
+  ];
+}
+var StatisticsUI = class extends SvelteComponent {
+  constructor(options) {
+    super();
+    init(this, options, instance4, create_fragment4, safe_not_equal, { plugin: 0 }, add_css4, [-1, -1]);
+  }
+};
+var StatisticsUI_default = StatisticsUI;
+
+// src/components/StatisticsModal.ts
+var StatisticsModal = class extends import_obsidian4.Modal {
+  constructor(plugin) {
+    super(plugin.app);
+    this.component = null;
+    this.plugin = plugin;
+  }
+  onOpen() {
+    const { contentEl } = this;
+    contentEl.empty();
+    const modalEl = this.containerEl.querySelector(".modal");
+    if (modalEl) {
+      modalEl.style.width = "600px";
+      modalEl.style.maxWidth = "90vw";
+      modalEl.style.height = "80vh";
+      modalEl.style.maxHeight = "80vh";
+      modalEl.style.margin = "auto";
+      modalEl.style.position = "fixed";
+      modalEl.style.top = "50%";
+      modalEl.style.left = "50%";
+      modalEl.style.transform = "translate(-50%, -50%)";
+    }
+    this.containerEl.style.display = "flex";
+    this.containerEl.style.alignItems = "center";
+    this.containerEl.style.justifyContent = "center";
+    this.containerEl.style.position = "fixed";
+    this.containerEl.style.top = "0";
+    this.containerEl.style.left = "0";
+    this.containerEl.style.width = "100vw";
+    this.containerEl.style.height = "100vh";
+    this.containerEl.style.zIndex = "1000";
+    contentEl.style.overflow = "hidden";
+    contentEl.style.height = "100%";
+    const titleEl = contentEl.createEl("h2", { text: "Overall Statistics" });
+    titleEl.style.margin = "0 0 16px 0";
+    titleEl.style.padding = "0 20px";
+    const componentContainer = contentEl.createDiv("statistics-container");
+    componentContainer.style.padding = "0";
+    componentContainer.style.margin = "0";
+    componentContainer.style.height = "calc(80vh - 60px)";
+    componentContainer.style.width = "100%";
+    componentContainer.style.overflowY = "auto";
+    componentContainer.style.overflowX = "hidden";
+    this.component = new StatisticsUI_default({
+      target: componentContainer,
+      props: {
+        plugin: this.plugin
+      }
+    });
+    this.component.$on("close", () => {
+      this.close();
+    });
+  }
+  onClose() {
+    const { contentEl } = this;
+    if (this.component) {
+      this.component.$destroy();
+      this.component = null;
+    }
+    contentEl.empty();
+  }
+};
+
+// src/components/FlashcardReviewModalWrapper.ts
+var import_obsidian5 = require("obsidian");
+
+// src/components/FlashcardReviewModal.svelte
+function add_css5(target) {
+  append_styles(target, "svelte-1opyfa1", ".review-modal.svelte-1opyfa1.svelte-1opyfa1{display:flex;flex-direction:column;height:100%;background:var(--background-primary);color:var(--text-normal);overflow:hidden;width:100%}.modal-header.svelte-1opyfa1.svelte-1opyfa1{display:flex;align-items:center;justify-content:space-between;padding:16px 20px;border-bottom:1px solid var(--background-modifier-border)}.modal-header.svelte-1opyfa1 h3.svelte-1opyfa1{margin:0;font-size:18px;font-weight:600}.progress-info.svelte-1opyfa1.svelte-1opyfa1{display:flex;gap:8px;font-size:14px}.remaining.svelte-1opyfa1.svelte-1opyfa1{color:var(--text-muted)}.review-progress-bar.svelte-1opyfa1.svelte-1opyfa1{height:4px;background:var(--background-modifier-border);position:relative}.progress-fill.svelte-1opyfa1.svelte-1opyfa1{height:100%;background:var(--interactive-accent);transition:width 0.3s ease}.card-content.svelte-1opyfa1.svelte-1opyfa1{flex:1;overflow-y:auto;overflow-x:hidden;padding:32px 16px;display:flex;flex-direction:column;align-items:center;justify-content:flex-start;gap:24px;width:100%;box-sizing:border-box;min-height:0}.question-section.svelte-1opyfa1.svelte-1opyfa1,.answer-section.svelte-1opyfa1.svelte-1opyfa1{width:100%;display:flex;justify-content:center}.card-side.svelte-1opyfa1.svelte-1opyfa1{background:var(--background-secondary);border:1px solid var(--background-modifier-border);border-radius:8px;padding:24px;min-height:100px;width:100%;max-width:600px;box-sizing:border-box;word-wrap:break-word;overflow-wrap:break-word}.card-side.front.svelte-1opyfa1.svelte-1opyfa1{text-align:center;font-size:20px;font-weight:500}.card-side.back.svelte-1opyfa1.svelte-1opyfa1{font-size:16px;line-height:1.6}.answer-section.svelte-1opyfa1.svelte-1opyfa1{width:100%;display:flex;flex-direction:column;justify-content:center;align-items:center}.answer-section.hidden.svelte-1opyfa1.svelte-1opyfa1{display:none}.separator.svelte-1opyfa1.svelte-1opyfa1{height:1px;background:var(--background-modifier-border);margin:16px auto;width:100%;max-width:600px}.action-buttons.svelte-1opyfa1.svelte-1opyfa1{padding:20px;border-top:1px solid var(--background-modifier-border);flex-shrink:0;width:100%;box-sizing:border-box}.show-answer-button.svelte-1opyfa1.svelte-1opyfa1{width:100%;max-width:400px;margin:0 auto;padding:12px 24px;font-size:16px;font-weight:500;background:var(--interactive-accent);color:var(--text-on-accent);border:none;border-radius:6px;cursor:pointer;display:flex;align-items:center;justify-content:center;gap:8px;box-sizing:border-box}.show-answer-button.svelte-1opyfa1.svelte-1opyfa1:hover{background:var(--interactive-accent-hover)}.shortcut.svelte-1opyfa1.svelte-1opyfa1{font-size:12px;opacity:0.8;padding:2px 6px;background:rgba(0, 0, 0, 0.2);border-radius:3px;margin-left:8px;display:inline-block}.difficulty-buttons.svelte-1opyfa1.svelte-1opyfa1{display:flex;gap:8px;justify-content:center;flex-wrap:nowrap;padding:0 10px;box-sizing:border-box;width:100%;max-width:600px;margin:0 auto}.difficulty-button.svelte-1opyfa1.svelte-1opyfa1{flex:1;min-width:0;padding:10px 6px;border:1px solid var(--background-modifier-border);background:var(--background-secondary);border-radius:6px;cursor:pointer;display:flex;flex-direction:column;align-items:center;gap:2px;transition:all 0.2s ease;position:relative;box-sizing:border-box;white-space:nowrap}.difficulty-button.svelte-1opyfa1.svelte-1opyfa1:hover{transform:translateY(-2px);box-shadow:0 4px 12px rgba(0, 0, 0, 0.1)}.difficulty-button.svelte-1opyfa1.svelte-1opyfa1:disabled{opacity:0.5;cursor:not-allowed;transform:none}.difficulty-button.again.svelte-1opyfa1.svelte-1opyfa1{border-color:#e74c3c}.difficulty-button.again.svelte-1opyfa1.svelte-1opyfa1:hover:not(:disabled){background:#e74c3c;color:white}.difficulty-button.hard.svelte-1opyfa1.svelte-1opyfa1{border-color:#f39c12}.difficulty-button.hard.svelte-1opyfa1.svelte-1opyfa1:hover:not(:disabled){background:#f39c12;color:white}.difficulty-button.good.svelte-1opyfa1.svelte-1opyfa1{border-color:#27ae60}.difficulty-button.good.svelte-1opyfa1.svelte-1opyfa1:hover:not(:disabled){background:#27ae60;color:white}.difficulty-button.easy.svelte-1opyfa1.svelte-1opyfa1{border-color:#3498db}.difficulty-button.easy.svelte-1opyfa1.svelte-1opyfa1:hover:not(:disabled){background:#3498db;color:white}.button-label.svelte-1opyfa1.svelte-1opyfa1{font-weight:600;font-size:13px}.interval.svelte-1opyfa1.svelte-1opyfa1{font-size:11px;color:var(--text-muted)}.difficulty-button.svelte-1opyfa1:hover .interval.svelte-1opyfa1{color:inherit}.difficulty-button.svelte-1opyfa1 .shortcut.svelte-1opyfa1{position:absolute;top:2px;right:2px;font-size:9px;padding:1px 3px;background:var(--background-modifier-border);border-radius:2px;opacity:0.7}.empty-state.svelte-1opyfa1.svelte-1opyfa1{flex:1;display:flex;align-items:center;justify-content:center;padding:32px;color:var(--text-muted)}.card-side h1,.card-side h2,.card-side h3,.card-side h4,.card-side h5,.card-side h6{margin-top:0;margin-bottom:16px}.card-side p{margin-bottom:16px}.card-side p:last-child{margin-bottom:0}.card-side > *:first-child{margin-top:0}.card-side ul,.card-side ol{margin-bottom:16px;padding-left:24px}.card-side code{background:var(--code-background);padding:2px 4px;border-radius:3px;font-size:0.9em}.card-side pre{background:var(--code-background);padding:16px;border-radius:6px;overflow-x:auto;margin-bottom:16px;max-width:100%}.card-side blockquote{border-left:3px solid var(--blockquote-border);padding-left:16px;margin-left:0;margin-right:0;color:var(--text-muted)}@media(max-width: 500px){.difficulty-buttons.svelte-1opyfa1.svelte-1opyfa1{gap:4px;padding:0 5px}.difficulty-button.svelte-1opyfa1.svelte-1opyfa1{padding:8px 4px}.button-label.svelte-1opyfa1.svelte-1opyfa1{font-size:12px}.interval.svelte-1opyfa1.svelte-1opyfa1{font-size:10px}.difficulty-button.svelte-1opyfa1 .shortcut.svelte-1opyfa1{font-size:8px;padding:1px 2px}.card-content.svelte-1opyfa1.svelte-1opyfa1{padding:16px 8px}}");
+}
+function create_if_block_33(ctx) {
   let div1;
   let div0;
   return {
@@ -7024,7 +10194,7 @@ function create_if_block_32(ctx) {
     }
   };
 }
-function create_else_block3(ctx) {
+function create_else_block4(ctx) {
   let div;
   return {
     c() {
@@ -7042,7 +10212,7 @@ function create_else_block3(ctx) {
     }
   };
 }
-function create_if_block3(ctx) {
+function create_if_block4(ctx) {
   let div5;
   let div1;
   let div0;
@@ -7055,11 +10225,11 @@ function create_if_block3(ctx) {
   let div6;
   let t3;
   let if_block0 = !/*showAnswer*/
-  ctx[5] && create_if_block_22(ctx);
+  ctx[5] && create_if_block_23(ctx);
   let if_block1 = (
     /*showAnswer*/
     ctx[5] && /*schedulingInfo*/
-    ctx[9] && create_if_block_13(ctx)
+    ctx[9] && create_if_block_14(ctx)
   );
   return {
     c() {
@@ -7118,7 +10288,7 @@ function create_if_block3(ctx) {
         if (if_block0) {
           if_block0.p(ctx2, dirty);
         } else {
-          if_block0 = create_if_block_22(ctx2);
+          if_block0 = create_if_block_23(ctx2);
           if_block0.c();
           if_block0.m(div6, t3);
         }
@@ -7134,7 +10304,7 @@ function create_if_block3(ctx) {
         if (if_block1) {
           if_block1.p(ctx2, dirty);
         } else {
-          if_block1 = create_if_block_13(ctx2);
+          if_block1 = create_if_block_14(ctx2);
           if_block1.c();
           if_block1.m(div6, null);
         }
@@ -7159,7 +10329,7 @@ function create_if_block3(ctx) {
     }
   };
 }
-function create_if_block_22(ctx) {
+function create_if_block_23(ctx) {
   let button;
   let mounted;
   let dispose;
@@ -7191,7 +10361,7 @@ function create_if_block_22(ctx) {
     }
   };
 }
-function create_if_block_13(ctx) {
+function create_if_block_14(ctx) {
   let div12;
   let button0;
   let div0;
@@ -7443,7 +10613,7 @@ function create_if_block_13(ctx) {
     }
   };
 }
-function create_fragment4(ctx) {
+function create_fragment5(ctx) {
   var _a, _b;
   let div2;
   let div1;
@@ -7477,15 +10647,15 @@ function create_fragment4(ctx) {
   let t11;
   let if_block0 = (
     /*settings*/
-    ((_b = (_a = ctx[3]) == null ? void 0 : _a.review) == null ? void 0 : _b.showProgress) !== false && create_if_block_32(ctx)
+    ((_b = (_a = ctx[3]) == null ? void 0 : _a.review) == null ? void 0 : _b.showProgress) !== false && create_if_block_33(ctx)
   );
   function select_block_type(ctx2, dirty) {
     if (
       /*currentCard*/
       ctx2[4]
     )
-      return create_if_block3;
-    return create_else_block3;
+      return create_if_block4;
+    return create_else_block4;
   }
   let current_block_type = select_block_type(ctx, -1);
   let if_block1 = current_block_type(ctx);
@@ -7572,7 +10742,7 @@ function create_fragment4(ctx) {
         if (if_block0) {
           if_block0.p(ctx2, dirty);
         } else {
-          if_block0 = create_if_block_32(ctx2);
+          if_block0 = create_if_block_33(ctx2);
           if_block0.c();
           if_block0.m(div2, t11);
         }
@@ -7602,7 +10772,7 @@ function create_fragment4(ctx) {
     }
   };
 }
-function instance4($$self, $$props, $$invalidate) {
+function instance5($$self, $$props, $$invalidate) {
   let currentCard;
   let progress;
   let remainingCards;
@@ -7801,8 +10971,8 @@ var FlashcardReviewModal = class extends SvelteComponent {
     init(
       this,
       options,
-      instance4,
-      create_fragment4,
+      instance5,
+      create_fragment5,
       safe_not_equal,
       {
         flashcards: 1,
@@ -7814,14 +10984,14 @@ var FlashcardReviewModal = class extends SvelteComponent {
         settings: 3,
         onCardReviewed: 18
       },
-      add_css4
+      add_css5
     );
   }
 };
 var FlashcardReviewModal_default = FlashcardReviewModal;
 
 // src/components/FlashcardReviewModalWrapper.ts
-var FlashcardReviewModalWrapper = class extends import_obsidian4.Modal {
+var FlashcardReviewModalWrapper = class extends import_obsidian5.Modal {
   constructor(app, plugin, deck, flashcards) {
     super(app);
     this.component = null;
@@ -7865,7 +11035,7 @@ var FlashcardReviewModalWrapper = class extends import_obsidian4.Modal {
       if (reason === "no-more-cards") {
         message = `All available cards reviewed! Completed ${reviewed} cards from ${this.deck.name}.`;
       }
-      new import_obsidian4.Notice(message);
+      new import_obsidian5.Notice(message);
       if (this.plugin.view) {
         this.plugin.view.refresh();
       }
@@ -7887,7 +11057,7 @@ var FlashcardReviewModalWrapper = class extends import_obsidian4.Modal {
 // src/main.ts
 var VIEW_TYPE_FLASHCARDS = "flashcards-view";
 var DATABASE_PATH = ".obsidian/plugins/obsidian-flashcards-plugin/flashcards.db";
-var FlashcardsPlugin = class extends import_obsidian5.Plugin {
+var FlashcardsPlugin = class extends import_obsidian6.Plugin {
   constructor() {
     super(...arguments);
     this.view = null;
@@ -7945,14 +11115,14 @@ var FlashcardsPlugin = class extends import_obsidian5.Plugin {
       });
       this.registerEvent(
         this.app.vault.on("modify", async (file) => {
-          if (file instanceof import_obsidian5.TFile && file.extension === "md") {
+          if (file instanceof import_obsidian6.TFile && file.extension === "md") {
             await this.handleFileChange(file);
           }
         })
       );
       this.registerEvent(
         this.app.vault.on("delete", async (file) => {
-          if (file instanceof import_obsidian5.TFile && file.extension === "md") {
+          if (file instanceof import_obsidian6.TFile && file.extension === "md") {
             await this.handleFileDelete(file);
           }
         })
@@ -7962,7 +11132,7 @@ var FlashcardsPlugin = class extends import_obsidian5.Plugin {
       console.log("Flashcards plugin loaded successfully");
     } catch (error) {
       console.error("Error loading Flashcards plugin:", error);
-      new import_obsidian5.Notice(
+      new import_obsidian6.Notice(
         "Failed to load Flashcards plugin. Check console for details."
       );
     }
@@ -8205,14 +11375,21 @@ var FlashcardsPlugin = class extends import_obsidian5.Plugin {
       await this.view.refreshHeatmap();
     }
   }
+  async getOverallStatistics(deckFilter = "all", timeframe = "12months") {
+    return await this.db.getOverallStatistics(deckFilter, timeframe);
+  }
+  openStatisticsModal() {
+    const modal = new StatisticsModal(this);
+    modal.open();
+  }
   renderMarkdown(content, el) {
-    const component = new import_obsidian5.Component();
+    const component = new import_obsidian6.Component();
     component.load();
-    import_obsidian5.MarkdownRenderer.renderMarkdown(content, el, "", component);
+    import_obsidian6.MarkdownRenderer.renderMarkdown(content, el, "", component);
     return component;
   }
 };
-var FlashcardsView = class extends import_obsidian5.ItemView {
+var FlashcardsView = class extends import_obsidian6.ItemView {
   constructor(leaf, plugin) {
     super(leaf);
     this.component = null;
@@ -8248,6 +11425,9 @@ var FlashcardsView = class extends import_obsidian5.ItemView {
         },
         onUpdateDeckConfig: async (deckId, config) => {
           await this.plugin.updateDeckConfig(deckId, config);
+        },
+        onOpenStatistics: () => {
+          this.plugin.openStatisticsModal();
         },
         plugin: this.plugin
       }
@@ -8285,7 +11465,7 @@ var FlashcardsView = class extends import_obsidian5.ItemView {
       this.plugin.debugLog("Refresh complete");
     } catch (error) {
       console.error("Error refreshing flashcards:", error);
-      new import_obsidian5.Notice("Error refreshing flashcards. Check console for details.");
+      new import_obsidian6.Notice("Error refreshing flashcards. Check console for details.");
     }
   }
   async refreshStats() {
@@ -8385,7 +11565,7 @@ Daily new cards limit reached: ${config.newCardsLimit}/${config.newCardsLimit}`;
 
 Daily review cards limit reached: ${config.reviewCardsLimit}/${config.reviewCardsLimit}`;
         }
-        new import_obsidian5.Notice(message);
+        new import_obsidian6.Notice(message);
         return;
       }
       if (config.enableNewCardsLimit || config.enableReviewCardsLimit) {
@@ -8414,7 +11594,7 @@ Daily review cards limit reached: ${config.reviewCardsLimit}/${config.reviewCard
 
 Note: Only learning cards will be shown (limits exceeded)`;
         }
-        new import_obsidian5.Notice(limitInfo, 5e3);
+        new import_obsidian6.Notice(limitInfo, 5e3);
       }
       new FlashcardReviewModalWrapper(
         this.app,
@@ -8424,7 +11604,7 @@ Note: Only learning cards will be shown (limits exceeded)`;
       ).open();
     } catch (error) {
       console.error("Error starting review:", error);
-      new import_obsidian5.Notice("Error starting review. Check console for details.");
+      new import_obsidian6.Notice("Error starting review. Check console for details.");
     }
   }
 };

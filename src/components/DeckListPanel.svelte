@@ -18,6 +18,7 @@
         deckId: string,
         config: DeckConfig,
     ) => Promise<void>;
+    export let onOpenStatistics: () => void;
     export let plugin: any; // FlashcardsPlugin reference
 
     let isRefreshing = false;
@@ -133,30 +134,54 @@
 <div class="deck-list-panel">
     <div class="panel-header">
         <h3 class="panel-title">Flashcard Decks</h3>
-        <button
-            class="refresh-button"
-            class:refreshing={isRefreshing}
-            on:click={handleRefresh}
-            disabled={isRefreshing}
-        >
-            <svg
-                xmlns="http://www.w3.org/2000/svg"
-                width="14"
-                height="14"
-                viewBox="0 0 24 24"
-                fill="none"
-                stroke="currentColor"
-                stroke-width="2"
-                stroke-linecap="round"
-                stroke-linejoin="round"
+        <div class="header-buttons">
+            <button
+                class="stats-button"
+                on:click={onOpenStatistics}
+                title="View Overall Statistics"
             >
-                <path d="M23 4v6h-6"></path>
-                <path d="M1 20v-6h6"></path>
-                <path
-                    d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15"
-                ></path>
-            </svg>
-        </button>
+                <svg
+                    xmlns="http://www.w3.org/2000/svg"
+                    width="14"
+                    height="14"
+                    viewBox="0 0 24 24"
+                    fill="none"
+                    stroke="currentColor"
+                    stroke-width="2"
+                    stroke-linecap="round"
+                    stroke-linejoin="round"
+                >
+                    <path d="M3 3v18h18"></path>
+                    <path d="M18 17V9"></path>
+                    <path d="M13 17V5"></path>
+                    <path d="M8 17v-3"></path>
+                </svg>
+            </button>
+            <button
+                class="refresh-button"
+                class:refreshing={isRefreshing}
+                on:click={handleRefresh}
+                disabled={isRefreshing}
+            >
+                <svg
+                    xmlns="http://www.w3.org/2000/svg"
+                    width="14"
+                    height="14"
+                    viewBox="0 0 24 24"
+                    fill="none"
+                    stroke="currentColor"
+                    stroke-width="2"
+                    stroke-linecap="round"
+                    stroke-linejoin="round"
+                >
+                    <path d="M23 4v6h-6"></path>
+                    <path d="M1 20v-6h6"></path>
+                    <path
+                        d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15"
+                    ></path>
+                </svg>
+            </button>
+        </div>
     </div>
 
     <div class="filter-section">
@@ -295,6 +320,12 @@
         border-bottom: 1px solid var(--background-modifier-border);
     }
 
+    .header-buttons {
+        display: flex;
+        gap: 8px;
+        align-items: center;
+    }
+
     .filter-section {
         padding: 8px 16px;
         border-bottom: 1px solid var(--background-modifier-border);
@@ -324,6 +355,21 @@
         margin: 0;
         font-size: 16px;
         font-weight: 600;
+    }
+
+    .stats-button {
+        padding: 6px;
+        background: var(--interactive-normal);
+        border: none;
+        border-radius: 4px;
+        cursor: pointer;
+        color: var(--text-muted);
+        transition: all 0.2s ease;
+    }
+
+    .stats-button:hover {
+        background: var(--interactive-hover);
+        color: var(--text-normal);
     }
 
     .refresh-button {

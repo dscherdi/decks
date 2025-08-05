@@ -880,6 +880,249 @@ export class DatabaseService {
     };
   }
 
+  async getOverallStatistics(
+    deckFilter: string = "all",
+    timeframe: string = "12months",
+  ): Promise<{
+    dailyStats: {
+      date: string;
+      reviews: number;
+      timeSpent: number;
+      newCards: number;
+      learningCards: number;
+      reviewCards: number;
+      correctRate: number;
+    }[];
+    cardStats: { new: number; learning: number; mature: number };
+    answerButtons: { again: number; hard: number; good: number; easy: number };
+    retentionRate: number;
+    intervals: { interval: string; count: number }[];
+    forecast: { date: string; dueCount: number }[];
+  }> {
+    if (!this.db) throw new Error("Database not initialized");
+
+    try {
+      // Determine date range based on timeframe
+      const cutoffDate = new Date();
+      if (timeframe === "12months") {
+        cutoffDate.setFullYear(cutoffDate.getFullYear() - 1);
+      } else {
+        // For "all", go back 10 years (effectively all data)
+        cutoffDate.setFullYear(cutoffDate.getFullYear() - 10);
+      }
+
+      // Build deck filter conditions
+      let deckFilterCondition = "";
+      let deckFilterParams: string[] = [];
+
+      if (deckFilter.startsWith("deck:")) {
+        const deckId = deckFilter.substring(5);
+        deckFilterCondition = "AND f.deck_id = ?";
+        deckFilterParams.push(deckId);
+      } else if (deckFilter.startsWith("tag:")) {
+        const tag = deckFilter.substring(4);
+        deckFilterCondition = "AND d.tag = ?";
+        deckFilterParams.push(tag);
+      }
+      // For "all", no additional filter needed
+
+      const dailyStatsStmt = this.db.prepare(`
+      SELECT
+        DATE(reviewed_at) as date,
+        COUNT(*) as reviews,
+        COUNT(CASE WHEN difficulty != 'again' THEN 1 END) as correct,
+        COUNT(CASE WHEN f.state = 'new' THEN 1 END) as new_cards,
+        COUNT(CASE WHEN f.state = 'learning' THEN 1 END) as learning_cards,
+        COUNT(CASE WHEN f.state = 'review' THEN 1 END) as review_cards
+      FROM review_logs rl
+      JOIN flashcards f ON rl.flashcard_id = f.id
+      ${deckFilterCondition ? "JOIN decks d ON f.deck_id = d.id" : ""}
+      WHERE DATE(reviewed_at) >= DATE(?)
+      ${deckFilterCondition}
+      GROUP BY DATE(reviewed_at)
+      ORDER BY date DESC
+    `);
+
+      dailyStatsStmt.bind([
+        cutoffDate.toISOString().split("T")[0],
+        ...deckFilterParams,
+      ]);
+      const dailyStats = [];
+
+      while (dailyStatsStmt.step()) {
+        const row = dailyStatsStmt.get();
+        const reviews = row[1] as number;
+        const correct = row[2] as number;
+        dailyStats.push({
+          date: row[0] as string,
+          reviews: reviews,
+          timeSpent: reviews * 30, // Estimate 30 seconds per review
+          newCards: row[3] as number,
+          learningCards: row[4] as number,
+          reviewCards: row[5] as number,
+          correctRate: reviews > 0 ? (correct / reviews) * 100 : 0,
+        });
+      }
+      dailyStatsStmt.free();
+
+      // Get card stats by status
+      const cardStatsStmt = this.db.prepare(`
+      SELECT
+        f.state,
+        COUNT(*) as count
+      FROM flashcards f
+      ${deckFilterCondition ? "JOIN decks d ON f.deck_id = d.id" : ""}
+      WHERE 1=1
+      ${deckFilterCondition}
+      GROUP BY f.state
+    `);
+
+      const cardStats = {
+        new: 0,
+        learning: 0,
+        mature: 0,
+      };
+
+      if (deckFilterCondition) {
+        cardStatsStmt.bind(deckFilterParams);
+      }
+
+      while (cardStatsStmt.step()) {
+        const row = cardStatsStmt.get();
+        const state = row[0] as string;
+        const count = row[1] as number;
+        if (state === "new") cardStats.new = count;
+        else if (state === "learning") cardStats.learning = count;
+        else if (state === "review") cardStats.mature = count;
+      }
+      cardStatsStmt.free();
+
+      // Get answer button stats
+      const answerButtonsStmt = this.db.prepare(`
+      SELECT
+        rl.difficulty,
+        COUNT(*) as count
+      FROM review_logs rl
+      JOIN flashcards f ON rl.flashcard_id = f.id
+      ${deckFilterCondition ? "JOIN decks d ON f.deck_id = d.id" : ""}
+      WHERE DATE(rl.reviewed_at) >= DATE(?)
+      ${deckFilterCondition}
+      GROUP BY rl.difficulty
+    `);
+
+      const answerButtons = {
+        again: 0,
+        hard: 0,
+        good: 0,
+        easy: 0,
+      };
+
+      answerButtonsStmt.bind([
+        cutoffDate.toISOString().split("T")[0],
+        ...deckFilterParams,
+      ]);
+
+      while (answerButtonsStmt.step()) {
+        const row = answerButtonsStmt.get();
+        const difficulty = row[0] as string;
+        const count = row[1] as number;
+        answerButtons[difficulty as keyof typeof answerButtons] = count;
+      }
+      answerButtonsStmt.free();
+
+      // Calculate retention rate
+      const totalReviews = Object.values(answerButtons).reduce(
+        (sum, count) => sum + count,
+        0,
+      );
+      const correctReviews = totalReviews - answerButtons.again;
+      const retentionRate =
+        totalReviews > 0 ? (correctReviews / totalReviews) * 100 : 0;
+
+      // Get interval distribution
+      const intervalsStmt = this.db.prepare(`
+      SELECT
+        CASE
+          WHEN f.interval < 1440 THEN CAST(f.interval / 60 AS INTEGER) || 'h'
+          WHEN f.interval < 43200 THEN CAST(f.interval / 1440 AS INTEGER) || 'd'
+          ELSE CAST(f.interval / 43200 AS INTEGER) || 'm'
+        END as interval_group,
+        COUNT(*) as count
+      FROM flashcards f
+      ${deckFilterCondition ? "JOIN decks d ON f.deck_id = d.id" : ""}
+      WHERE f.state != 'new'
+      ${deckFilterCondition}
+      GROUP BY interval_group
+      ORDER BY f.interval
+    `);
+
+      if (deckFilterCondition) {
+        intervalsStmt.bind(deckFilterParams);
+      }
+
+      const intervals = [];
+      while (intervalsStmt.step()) {
+        const row = intervalsStmt.get();
+        intervals.push({
+          interval: row[0] as string,
+          count: row[1] as number,
+        });
+      }
+      intervalsStmt.free();
+
+      // Generate forecast for next 90 days
+      const forecast = [];
+      const today = new Date();
+
+      for (let i = 0; i < 90; i++) {
+        const forecastDate = new Date(today);
+        forecastDate.setDate(today.getDate() + i);
+        const dateStr = forecastDate.toISOString().split("T")[0];
+
+        const forecastStmt = this.db.prepare(`
+        SELECT COUNT(*) as due_count
+        FROM flashcards f
+        ${deckFilterCondition ? "JOIN decks d ON f.deck_id = d.id" : ""}
+        WHERE DATE(f.due_date) = DATE(?)
+        ${deckFilterCondition}
+      `);
+
+        forecastStmt.bind([dateStr, ...deckFilterParams]);
+        let dueCount = 0;
+        if (forecastStmt.step()) {
+          const row = forecastStmt.get();
+          dueCount = row[0] as number;
+        }
+        forecastStmt.free();
+
+        forecast.push({
+          date: dateStr,
+          dueCount: dueCount,
+        });
+      }
+
+      return {
+        dailyStats,
+        cardStats,
+        answerButtons,
+        retentionRate,
+        intervals,
+        forecast,
+      };
+    } catch (error) {
+      console.error("Error in getOverallStatistics:", error);
+      // Return empty data structure instead of throwing
+      return {
+        dailyStats: [],
+        cardStats: { new: 0, learning: 0, mature: 0 },
+        answerButtons: { again: 0, hard: 0, good: 0, easy: 0 },
+        retentionRate: 0,
+        intervals: [],
+        forecast: [],
+      };
+    }
+  }
+
   async close(): Promise<void> {
     if (this.db) {
       this.db.close();

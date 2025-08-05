@@ -91,7 +91,7 @@
 ## TODO
 
 1. ✅ Update and Refresh Stats of the deck whenever the user reviews a flashcard
-2. Create statistics page for each deck which shows retention percentage as graph,
+2. ✅ Statistics modal
 3. ✅ Add a github style heatmap at the bottom left panel based on the reviews done per day
 4. ✅ Filter button on the decks table, to filter decks by name or tag.
 5. ✅ Background job that refreshes the side panel stats and data every 5 seconds
@@ -276,3 +276,48 @@
 - **Efficient Updates**: Only sync flashcards for specific deck when file content changes
 - **Backward Compatibility**: No impact on existing deck creation or initial sync processes
 - **Test Coverage**: Added test for single file deck creation to prevent regression
+
+### ✅ Comprehensive Statistics Modal Implementation
+- **Modal Access**: Added graph icon button next to refresh button in deck list header
+- **Filtering System**: Complete deck filtering (All Decks, by Tag, by Individual Deck)
+- **Timeframe Selection**: Last 12 months or All History options
+- **Seven Main Sections**:
+  1. **Today**: Cards studied, time spent, breakdown by ease and card type
+  2. **Week/Month/Year**: Similar breakdown over broader time windows
+  3. **Forecast**: 30-day review load prediction chart
+  4. **Answer Buttons**: Bar chart with percentages of ease button usage
+  5. **Intervals**: Histogram showing card interval distribution
+  6. **Deck Stats**: Comprehensive metrics dashboard
+  7. **Review Heatmap**: Reuses existing ReviewHeatmap component
+- **Key Metrics Implemented**:
+  - Retention Rate: % of reviews answered correctly (excluding "Again")
+  - Average Ease: Mean of ease button values (1-4 scale)
+  - Average Interval: Mean interval of all review cards
+  - Due Today/Tomorrow: Number of cards due
+  - Learning Cards: Cards in learning queue
+  - Maturity Ratio: Mature cards ÷ total cards
+  - Total Cards: Complete collection count
+- **Database Enhancement**: Added `getOverallStatistics()` with filtering support
+- **Visual Components**: Cards, charts, grids with responsive design
+- **Performance**: Efficient SQL queries with proper joins and date filtering
+- **UI/UX**: Streamlined single-scroll layout (600px width, 80vh height) for focused viewing
+- **Simplified Navigation**: Removed tabs in favor of continuous top-to-bottom layout
+- **Compact Design**: Optimized spacing and sizing for 600px width constraint
+- **Enhanced Readability**: Section dividers and proper visual hierarchy for easy scanning
+- **Mobile-Friendly**: Responsive design that works well on smaller screens (90vw minimum)
+- **Fixed Modal Issues**: Proper centering, eliminated multiple scrollbars, sticky close button
+- **Overflow Handling**: Prevented horizontal scroll issues in charts and content areas
+- **Select Dropdown Fixes**: Enhanced visibility with proper styling, borders, and focus states
+- **Forecast Chart Labels**: Changed from dates to "Today", "Tomorrow", "in Xd" format for clarity
+- **FSRS-Based Forecast**: Chart now shows only days with scheduled reviews (filtered by FSRS algorithm)
+- **Intelligent Display**: Extended forecast to 90 days, displaying first 20 days with actual due cards
+- **Native Tooltips**: Hover over forecast bars to see detailed information using reliable browser tooltips
+- **Enhanced UX**: Simple, consistent tooltip experience showing "Today/Tomorrow/In X days: Y cards"
+- **Empty State Handling**: Graceful display when no reviews exist yet, with helpful guidance messages
+- **Current Status Section**: Always shows current card counts (New, Learning, Mature, Due Today) even without reviews
+- **Robust Error Handling**: Statistics queries wrapped in try-catch with fallback empty data structures
+- **Null Safety**: All statistics fields protected with null checks and safe defaults
+- **Error Recovery**: Retry button and console logging for debugging failed statistics loads
+- **Display Logic Fixes**: Corrected conditional rendering to show statistics when data exists
+- **Date Handling**: Fixed today's stats to show most recent data when current day has no reviews
+- **Timeframe Calculations**: Improved week/month/year stats aggregation with proper empty state handling
