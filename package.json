@@ -1,6 +1,6 @@
 {
   "name": "decks",
-  "version": "1.0.1",
+  "version": "1.0.3",
   "description": "Decks - Spaced repetition flashcards for Obsidian with FSRS algorithm",
   "main": "dist/main.js",
   "source": "src/main.ts",
