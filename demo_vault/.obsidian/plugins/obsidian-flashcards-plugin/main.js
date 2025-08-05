@@ -2443,10 +2443,21 @@ __export(main_exports, {
   default: () => FlashcardsPlugin
 });
 module.exports = __toCommonJS(main_exports);
-var import_obsidian3 = require("obsidian");
+var import_obsidian5 = require("obsidian");
 
 // src/database/DatabaseService.ts
 var import_sql = __toESM(require_sql_wasm());
+
+// src/database/types.ts
+var DEFAULT_DECK_CONFIG = {
+  newCardsLimit: 20,
+  reviewCardsLimit: 100,
+  enableNewCardsLimit: false,
+  enableReviewCardsLimit: false,
+  reviewOrder: "due-date"
+};
+
+// src/database/DatabaseService.ts
 var DatabaseService = class {
   constructor(dbPath) {
     this.db = null;
@@ -2511,6 +2522,7 @@ var DatabaseService = class {
         filepath TEXT NOT NULL UNIQUE,
         tag TEXT NOT NULL,
         last_reviewed TEXT,
+        config TEXT NOT NULL DEFAULT '{"newCardsLimit":20,"reviewCardsLimit":100,"enableNewCardsLimit":false,"enableReviewCardsLimit":false,"reviewOrder":"due-date"}',
         created TEXT NOT NULL,
         modified TEXT NOT NULL
       );
@@ -2559,6 +2571,19 @@ var DatabaseService = class {
     `;
     this.db.run(sql);
   }
+  // Helper method to parse deck rows
+  parseDeckRow(row) {
+    return {
+      id: row[0],
+      name: row[1],
+      filepath: row[2],
+      tag: row[3],
+      lastReviewed: row[4],
+      config: row[5] ? JSON.parse(row[5]) : DEFAULT_DECK_CONFIG,
+      created: row[6],
+      modified: row[7]
+    };
+  }
   // Deck operations
   async createDeck(deck) {
     if (!this.db)
@@ -2571,8 +2596,8 @@ var DatabaseService = class {
     };
     try {
       const stmt = this.db.prepare(`
-        INSERT INTO decks (id, name, filepath, tag, last_reviewed, created, modified)
-        VALUES (?, ?, ?, ?, ?, ?, ?)
+        INSERT INTO decks (id, name, filepath, tag, last_reviewed, config, created, modified)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?)
       `);
       stmt.run([
         fullDeck.id,
@@ -2580,6 +2605,7 @@ var DatabaseService = class {
         fullDeck.filepath,
         fullDeck.tag,
         fullDeck.lastReviewed,
+        JSON.stringify(fullDeck.config),
         fullDeck.created,
         fullDeck.modified
       ]);
@@ -2598,15 +2624,7 @@ var DatabaseService = class {
     if (stmt.step()) {
       const result = stmt.get();
       stmt.free();
-      return {
-        id: result[0],
-        name: result[1],
-        filepath: result[2],
-        tag: result[3],
-        lastReviewed: result[4],
-        created: result[5],
-        modified: result[6]
-      };
+      return this.parseDeckRow(result);
     }
     stmt.free();
     return null;
@@ -2619,15 +2637,7 @@ var DatabaseService = class {
     if (stmt.step()) {
       const result = stmt.get();
       stmt.free();
-      return {
-        id: result[0],
-        name: result[1],
-        filepath: result[2],
-        tag: result[3],
-        lastReviewed: result[4],
-        created: result[5],
-        modified: result[6]
-      };
+      return this.parseDeckRow(result);
     }
     stmt.free();
     return null;
@@ -2640,15 +2650,7 @@ var DatabaseService = class {
     if (stmt.step()) {
       const result = stmt.get();
       stmt.free();
-      return {
-        id: result[0],
-        name: result[1],
-        filepath: result[2],
-        tag: result[3],
-        lastReviewed: result[4],
-        created: result[5],
-        modified: result[6]
-      };
+      return this.parseDeckRow(result);
     }
     stmt.free();
     return null;
@@ -2666,7 +2668,10 @@ var DatabaseService = class {
       SET ${updateFields}, modified = ?
       WHERE id = ?
     `);
-    const values = Object.values(updates);
+    const values = Object.values(updates).map((value, index) => {
+      const key = Object.keys(updates)[index];
+      return key === "config" ? JSON.stringify(value) : value;
+    });
     values.push(now, deckId);
     stmt.run(values);
     stmt.free();
@@ -2679,15 +2684,7 @@ var DatabaseService = class {
     const decks = [];
     while (stmt.step()) {
       const row = stmt.get();
-      decks.push({
-        id: row[0],
-        name: row[1],
-        filepath: row[2],
-        tag: row[3],
-        lastReviewed: row[4],
-        created: row[5],
-        modified: row[6]
-      });
+      decks.push(this.parseDeckRow(row));
     }
     stmt.free();
     return decks;
@@ -2831,28 +2828,113 @@ var DatabaseService = class {
     stmt.free();
     return flashcards;
   }
+  async getDailyReviewCounts(deckId) {
+    if (!this.db)
+      throw new Error("Database not initialized");
+    const today = (/* @__PURE__ */ new Date()).toISOString().split("T")[0];
+    const todayStart = `${today}T00:00:00.000Z`;
+    const todayEnd = `${today}T23:59:59.999Z`;
+    const newCardsStmt = this.db.prepare(`
+      SELECT COUNT(*) as count FROM review_logs rl
+      JOIN flashcards f ON rl.flashcard_id = f.id
+      WHERE f.deck_id = ?
+        AND rl.reviewed_at >= ?
+        AND rl.reviewed_at <= ?
+        AND (rl.old_interval = 0 OR f.repetitions = 1)
+    `);
+    newCardsStmt.bind([deckId, todayStart, todayEnd]);
+    const newResult = newCardsStmt.step() ? newCardsStmt.get() : [0];
+    const newCount = Number(newResult[0]) || 0;
+    newCardsStmt.free();
+    const reviewCardsStmt = this.db.prepare(`
+      SELECT COUNT(*) as count FROM review_logs rl
+      JOIN flashcards f ON rl.flashcard_id = f.id
+      WHERE f.deck_id = ?
+        AND rl.reviewed_at >= ?
+        AND rl.reviewed_at <= ?
+        AND rl.old_interval > 0
+    `);
+    reviewCardsStmt.bind([deckId, todayStart, todayEnd]);
+    const reviewResult = reviewCardsStmt.step() ? reviewCardsStmt.get() : [0];
+    const reviewCount = Number(reviewResult[0]) || 0;
+    reviewCardsStmt.free();
+    return { newCount, reviewCount };
+  }
   async getReviewableFlashcards(deckId) {
     if (!this.db)
       throw new Error("Database not initialized");
     const now = (/* @__PURE__ */ new Date()).toISOString();
-    const stmt = this.db.prepare(`
-      SELECT * FROM flashcards
-      WHERE deck_id = ? AND due_date <= ?
-      ORDER BY
-        CASE
-          WHEN state = 'new' THEN 1     -- New cards first
-          WHEN state = 'learning' THEN 2 -- Learning cards second
-          WHEN state = 'review' THEN 3   -- Review cards last
-        END,
-        due_date
-    `);
-    stmt.bind([deckId, now]);
+    const deck = await this.getDeckById(deckId);
+    if (!deck) {
+      throw new Error(`Deck not found: ${deckId}`);
+    }
+    const config = deck.config;
     const flashcards = [];
-    while (stmt.step()) {
-      const row = stmt.get();
+    const dailyCounts = await this.getDailyReviewCounts(deckId);
+    const learningStmt = this.db.prepare(`
+      SELECT * FROM flashcards
+      WHERE deck_id = ? AND due_date <= ? AND state = 'learning'
+      ORDER BY due_date
+    `);
+    learningStmt.bind([deckId, now]);
+    while (learningStmt.step()) {
+      const row = learningStmt.get();
       flashcards.push(this.rowToFlashcard(row));
     }
-    stmt.free();
+    learningStmt.free();
+    const newCardsLimit = Number(config.newCardsLimit) || 0;
+    const newCountToday = Number(dailyCounts.newCount) || 0;
+    const remainingNewCards = config.enableNewCardsLimit && newCardsLimit > 0 ? Math.max(0, newCardsLimit - newCountToday) : config.enableNewCardsLimit && newCardsLimit === 0 ? 0 : Number.MAX_SAFE_INTEGER;
+    if (remainingNewCards > 0) {
+      const newCardsStmt = this.db.prepare(`
+        SELECT * FROM flashcards
+        WHERE deck_id = ? AND due_date <= ? AND state = 'new'
+        ORDER BY due_date
+        ${config.enableNewCardsLimit ? `LIMIT ${remainingNewCards}` : ""}
+      `);
+      newCardsStmt.bind([deckId, now]);
+      while (newCardsStmt.step()) {
+        const row = newCardsStmt.get();
+        flashcards.push(this.rowToFlashcard(row));
+      }
+      newCardsStmt.free();
+    }
+    const reviewCardsLimit = Number(config.reviewCardsLimit) || 0;
+    const reviewCountToday = Number(dailyCounts.reviewCount) || 0;
+    const remainingReviewCards = config.enableReviewCardsLimit && reviewCardsLimit > 0 ? Math.max(0, reviewCardsLimit - reviewCountToday) : config.enableReviewCardsLimit && reviewCardsLimit === 0 ? 0 : Number.MAX_SAFE_INTEGER;
+    if (remainingReviewCards > 0) {
+      const reviewCardsStmt = this.db.prepare(`
+        SELECT * FROM flashcards
+        WHERE deck_id = ? AND due_date <= ? AND state = 'review'
+        ORDER BY due_date
+        ${config.enableReviewCardsLimit ? `LIMIT ${remainingReviewCards}` : ""}
+      `);
+      reviewCardsStmt.bind([deckId, now]);
+      while (reviewCardsStmt.step()) {
+        const row = reviewCardsStmt.get();
+        flashcards.push(this.rowToFlashcard(row));
+      }
+      reviewCardsStmt.free();
+    }
+    flashcards.sort((a, b) => {
+      const stateOrder = { learning: 1, review: 2, new: 3 };
+      const aOrder = stateOrder[a.state];
+      const bOrder = stateOrder[b.state];
+      if (aOrder !== bOrder) {
+        return aOrder - bOrder;
+      }
+      if (a.state === "learning") {
+        return new Date(a.dueDate).getTime() - new Date(b.dueDate).getTime();
+      } else if (a.state === "review") {
+        if (config.reviewOrder === "random") {
+          return Math.random() - 0.5;
+        } else {
+          return new Date(a.dueDate).getTime() - new Date(b.dueDate).getTime();
+        }
+      } else {
+        return new Date(a.dueDate).getTime() - new Date(b.dueDate).getTime();
+      }
+    });
     return flashcards;
   }
   async deleteFlashcardsByFile(sourceFile) {
@@ -2894,14 +2976,29 @@ var DatabaseService = class {
     if (!this.db)
       throw new Error("Database not initialized");
     const now = (/* @__PURE__ */ new Date()).toISOString();
+    const deck = await this.getDeckById(deckId);
+    if (!deck) {
+      throw new Error(`Deck not found: ${deckId}`);
+    }
+    const config = deck.config;
+    const dailyCounts = await this.getDailyReviewCounts(deckId);
     const newStmt = this.db.prepare(`
       SELECT COUNT(*) FROM flashcards
       WHERE deck_id = ? AND state = 'new' AND due_date <= ?
     `);
     newStmt.bind([deckId, now]);
     newStmt.step();
-    const newCount = newStmt.get()[0] || 0;
+    const totalNewCards = newStmt.get()[0] || 0;
     newStmt.free();
+    let newCount = totalNewCards;
+    const newCardsLimit = Number(config.newCardsLimit) || 0;
+    const newCountToday = Number(dailyCounts.newCount) || 0;
+    if (config.enableNewCardsLimit && newCardsLimit > 0) {
+      const remainingNew = Math.max(0, newCardsLimit - newCountToday);
+      newCount = Math.min(totalNewCards, remainingNew);
+    } else if (config.enableNewCardsLimit && newCardsLimit === 0) {
+      newCount = 0;
+    }
     const learningStmt = this.db.prepare(`
       SELECT COUNT(*) FROM flashcards
       WHERE deck_id = ? AND state = 'learning' AND due_date <= ?
@@ -2916,8 +3013,17 @@ var DatabaseService = class {
     `);
     dueStmt.bind([deckId, now]);
     dueStmt.step();
-    const dueCount = dueStmt.get()[0] || 0;
+    const totalDueCards = dueStmt.get()[0] || 0;
     dueStmt.free();
+    let dueCount = totalDueCards;
+    const reviewCardsLimit = Number(config.reviewCardsLimit) || 0;
+    const reviewCountToday = Number(dailyCounts.reviewCount) || 0;
+    if (config.enableReviewCardsLimit && reviewCardsLimit > 0) {
+      const remainingReview = Math.max(0, reviewCardsLimit - reviewCountToday);
+      dueCount = Math.min(totalDueCards, remainingReview);
+    } else if (config.enableReviewCardsLimit && reviewCardsLimit === 0) {
+      dueCount = 0;
+    }
     const totalStmt = this.db.prepare(`
       SELECT COUNT(*) FROM flashcards WHERE deck_id = ?
     `);
@@ -2979,8 +3085,11 @@ var DatabaseService = class {
       }
       stmt.free();
       const hasFilepath = columns.some((col) => col[1] === "filepath");
-      if (!hasFilepath) {
-        console.log("Migrating database schema to support filepath column...");
+      const hasConfig = columns.some((col) => col[1] === "config");
+      if (!hasFilepath || !hasConfig) {
+        console.log(
+          "Migrating database schema to support filepath and config columns..."
+        );
         console.log(
           "Clearing old data - decks will be rebuilt from files on next sync"
         );
@@ -3144,7 +3253,8 @@ var DeckManager = class {
               filepath: filePath,
               // Store full file path separately
               tag,
-              lastReviewed: null
+              lastReviewed: null,
+              config: DEFAULT_DECK_CONFIG
             };
             this.debugLog(
               `Creating new deck: "${deckName}" with ID: ${deck.id}, tag: ${tag}, filepath: ${filePath}`
@@ -4065,6 +4175,9 @@ function attr(node, attribute, value) {
   else if (node.getAttribute(attribute) !== value)
     node.setAttribute(attribute, value);
 }
+function to_number(value) {
+  return value === "" ? null : +value;
+}
 function children(element2) {
   return Array.from(element2.childNodes);
 }
@@ -4083,6 +4196,22 @@ function set_style(node, key, value, important) {
   } else {
     node.style.setProperty(key, value, important ? "important" : "");
   }
+}
+function select_option(select, value, mounting) {
+  for (let i = 0; i < select.options.length; i += 1) {
+    const option = select.options[i];
+    if (option.__value === value) {
+      option.selected = true;
+      return;
+    }
+  }
+  if (!mounting || value !== void 0) {
+    select.selectedIndex = -1;
+  }
+}
+function select_value(select) {
+  const selected_option = select.querySelector(":checked");
+  return selected_option && selected_option.__value;
 }
 function toggle_class(element2, name, toggle) {
   element2.classList[toggle ? "add" : "remove"](name);
@@ -4286,7 +4415,7 @@ function make_dirty(component, i) {
   }
   component.$$.dirty[i / 31 | 0] |= 1 << i % 31;
 }
-function init(component, options, instance4, create_fragment4, not_equal, props, append_styles2, dirty = [-1]) {
+function init(component, options, instance5, create_fragment5, not_equal, props, append_styles2, dirty = [-1]) {
   const parent_component = current_component;
   set_current_component(component);
   const $$ = component.$$ = {
@@ -4312,7 +4441,7 @@ function init(component, options, instance4, create_fragment4, not_equal, props,
   };
   append_styles2 && append_styles2($$.root);
   let ready = false;
-  $$.ctx = instance4 ? instance4(component, options.props || {}, (i, ret, ...rest) => {
+  $$.ctx = instance5 ? instance5(component, options.props || {}, (i, ret, ...rest) => {
     const value = rest.length ? rest[0] : ret;
     if ($$.ctx && not_equal($$.ctx[i], $$.ctx[i] = value)) {
       if (!$$.skip_bound && $$.bound[i])
@@ -4325,7 +4454,7 @@ function init(component, options, instance4, create_fragment4, not_equal, props,
   $$.update();
   ready = true;
   run_all($$.before_update);
-  $$.fragment = create_fragment4 ? create_fragment4($$.ctx) : false;
+  $$.fragment = create_fragment5 ? create_fragment5($$.ctx) : false;
   if (options.target) {
     if (options.hydrate) {
       start_hydrating();
@@ -5168,28 +5297,678 @@ var ReviewHeatmap = class extends SvelteComponent {
 };
 var ReviewHeatmap_default = ReviewHeatmap;
 
-// src/components/DeckListPanel.svelte
+// src/components/DeckConfigModal.ts
+var import_obsidian3 = require("obsidian");
+
+// src/components/DeckConfigUI.svelte
 function add_css2(target) {
-  append_styles(target, "svelte-19vy1cl", ".deck-list-panel.svelte-19vy1cl.svelte-19vy1cl{min-width:400px;height:100%;display:flex;flex-direction:column;background:var(--background-primary);color:var(--text-normal)}.panel-header.svelte-19vy1cl.svelte-19vy1cl{display:flex;justify-content:space-between;align-items:center;padding:12px 16px;border-bottom:1px solid var(--background-modifier-border)}.filter-section.svelte-19vy1cl.svelte-19vy1cl{padding:8px 16px;border-bottom:1px solid var(--background-modifier-border)}.filter-input.svelte-19vy1cl.svelte-19vy1cl{width:100%;padding:6px 8px;border:1px solid var(--background-modifier-border);border-radius:4px;background:var(--background-primary);color:var(--text-normal);font-size:14px;transition:border-color 0.2s ease}.filter-input.svelte-19vy1cl.svelte-19vy1cl:focus{outline:none;border-color:var(--interactive-accent)}.filter-input.svelte-19vy1cl.svelte-19vy1cl::placeholder{color:var(--text-muted)}.panel-title.svelte-19vy1cl.svelte-19vy1cl{margin:0;font-size:16px;font-weight:600}.refresh-button.svelte-19vy1cl.svelte-19vy1cl{background:none;border:none;cursor:pointer;padding:4px;border-radius:4px;color:var(--text-muted);transition:all 0.2s ease;position:relative;z-index:1}.refresh-button.svelte-19vy1cl.svelte-19vy1cl:hover{background:var(--background-modifier-hover);color:var(--text-normal)}.refresh-button.svelte-19vy1cl.svelte-19vy1cl:disabled{opacity:0.5;cursor:not-allowed}.refresh-button.refreshing.svelte-19vy1cl svg.svelte-19vy1cl{animation:svelte-19vy1cl-spin 1s linear infinite}@keyframes svelte-19vy1cl-spin{from{transform:rotate(0deg)}to{transform:rotate(360deg)}}.empty-state.svelte-19vy1cl.svelte-19vy1cl{flex:1;display:flex;flex-direction:column;justify-content:center;align-items:center;padding:32px;text-align:center}.empty-state.svelte-19vy1cl p.svelte-19vy1cl{margin:8px 0}.help-text.svelte-19vy1cl.svelte-19vy1cl{font-size:14px;color:var(--text-muted)}.deck-table.svelte-19vy1cl.svelte-19vy1cl{flex:1;display:flex;flex-direction:column;overflow:hidden}.table-header.svelte-19vy1cl.svelte-19vy1cl{display:grid;grid-template-columns:1fr 60px 60px 60px;gap:8px;padding:8px 16px;font-weight:600;font-size:14px;border-bottom:1px solid var(--background-modifier-border);background:var(--background-secondary);align-items:center}.table-body.svelte-19vy1cl.svelte-19vy1cl{flex:1;overflow-y:auto}.deck-row.svelte-19vy1cl.svelte-19vy1cl{display:grid;grid-template-columns:1fr 60px 60px 60px;gap:8px;padding:12px 16px;border-bottom:1px solid var(--background-modifier-border);align-items:center}.deck-name-link.svelte-19vy1cl.svelte-19vy1cl{cursor:pointer;color:var(--text-normal);text-decoration:underline;text-decoration-color:transparent;transition:text-decoration-color 0.2s ease;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;display:inline-block;max-width:100%}.deck-name-link.svelte-19vy1cl.svelte-19vy1cl:hover{text-decoration-color:var(--text-accent);color:var(--text-accent)}.deck-name-link.svelte-19vy1cl.svelte-19vy1cl:focus{outline:2px solid var(--interactive-accent);outline-offset:2px;border-radius:2px}.col-deck.svelte-19vy1cl.svelte-19vy1cl{font-size:14px;color:var(--text-normal);justify-self:start;min-width:0}.col-stat.svelte-19vy1cl.svelte-19vy1cl{text-align:center;font-size:14px;color:var(--text-muted);justify-self:center}.table-header.svelte-19vy1cl .col-deck.svelte-19vy1cl{font-size:14px;color:var(--text-normal);justify-self:start}.table-header.svelte-19vy1cl .col-stat.svelte-19vy1cl{text-align:center;font-size:14px;color:var(--text-normal);justify-self:center}.col-stat.has-cards.svelte-19vy1cl.svelte-19vy1cl{color:#4aa3df;font-weight:500}.col-stat.updating.svelte-19vy1cl.svelte-19vy1cl{opacity:0.6;transition:opacity 0.3s ease}.table-body.svelte-19vy1cl.svelte-19vy1cl::-webkit-scrollbar{width:8px}.table-body.svelte-19vy1cl.svelte-19vy1cl::-webkit-scrollbar-track{background:transparent}.table-body.svelte-19vy1cl.svelte-19vy1cl::-webkit-scrollbar-thumb{background:var(--background-modifier-border);border-radius:4px}.table-body.svelte-19vy1cl.svelte-19vy1cl::-webkit-scrollbar-thumb:hover{background:var(--background-modifier-border-hover)}");
+  append_styles(target, "svelte-xukw2q", '.deck-config-ui.svelte-xukw2q.svelte-xukw2q{padding:0}.deck-info-section.svelte-xukw2q.svelte-xukw2q{margin-bottom:24px;padding:16px;background:var(--background-secondary);border-radius:6px;border:1px solid var(--background-modifier-border)}.deck-info-section.svelte-xukw2q h3.svelte-xukw2q{margin:0 0 12px 0;font-size:1.1em;color:var(--text-normal);font-weight:600}.deck-info-list.svelte-xukw2q.svelte-xukw2q{margin:0;padding:0;list-style:none}.deck-info-list.svelte-xukw2q li.svelte-xukw2q{margin:0 0 8px 0;font-size:0.9em;color:var(--text-muted)}.deck-info-list.svelte-xukw2q li.svelte-xukw2q:last-child{margin-bottom:0}.deck-info-list.svelte-xukw2q strong.svelte-xukw2q{color:var(--text-normal)}.deck-settings-section.svelte-xukw2q.svelte-xukw2q{margin-bottom:24px}.deck-settings-section.svelte-xukw2q h3.svelte-xukw2q{margin:0 0 16px 0;font-size:1.1em;color:var(--text-normal);font-weight:600}.setting-item-description-global.svelte-xukw2q.svelte-xukw2q{font-size:0.8em;color:var(--text-muted);line-height:1.4;margin-bottom:20px;padding:12px;background:var(--background-secondary);border-radius:4px;border-left:3px solid var(--interactive-accent)}.setting-item.svelte-xukw2q.svelte-xukw2q{display:flex;align-items:flex-start;justify-content:space-between;margin-bottom:20px;padding:12px 0;border-bottom:1px solid var(--background-modifier-border)}.setting-item.svelte-xukw2q.svelte-xukw2q:last-child{border-bottom:none;margin-bottom:0}.setting-item.disabled.svelte-xukw2q.svelte-xukw2q{opacity:0.5}.setting-item-info.svelte-xukw2q.svelte-xukw2q{flex:1;margin-right:16px}.setting-item-name.svelte-xukw2q.svelte-xukw2q{font-weight:500;color:var(--text-normal);margin-bottom:4px;font-size:0.9em}.setting-item-description.svelte-xukw2q.svelte-xukw2q{font-size:0.8em;color:var(--text-muted);line-height:1.4}.setting-item-control.svelte-xukw2q.svelte-xukw2q{flex-shrink:0}.checkbox-container.svelte-xukw2q.svelte-xukw2q{position:relative;display:inline-block;cursor:pointer}.checkbox-input.svelte-xukw2q.svelte-xukw2q{position:absolute;opacity:0;cursor:pointer}.checkbox-slider.svelte-xukw2q.svelte-xukw2q{width:42px;height:24px;background:var(--background-modifier-border);border-radius:12px;position:relative;transition:background-color 0.2s ease}.checkbox-slider.svelte-xukw2q.svelte-xukw2q::before{content:"";position:absolute;width:18px;height:18px;border-radius:50%;background:white;top:3px;left:3px;transition:transform 0.2s ease}.checkbox-input.svelte-xukw2q:checked+.checkbox-slider.svelte-xukw2q{background:var(--interactive-accent)}.checkbox-input.svelte-xukw2q:checked+.checkbox-slider.svelte-xukw2q::before{transform:translateX(18px)}.session-limit-input.svelte-xukw2q.svelte-xukw2q{width:80px;padding:6px 8px;border:1px solid var(--background-modifier-border);border-radius:4px;background:var(--background-primary);color:var(--text-normal);font-size:0.9em}.session-limit-input.svelte-xukw2q.svelte-xukw2q:focus{outline:none;border-color:var(--interactive-accent);box-shadow:0 0 0 2px var(--interactive-accent-hover)}.session-limit-input.svelte-xukw2q.svelte-xukw2q:disabled{opacity:0.5;cursor:not-allowed;background:var(--background-modifier-border-hover)}.review-order-select.svelte-xukw2q.svelte-xukw2q{padding:6px 8px;border:1px solid var(--background-modifier-border);border-radius:4px;background:var(--background-primary);color:var(--text-normal);font-size:0.9em;min-width:140px}.review-order-select.svelte-xukw2q.svelte-xukw2q:focus{outline:none;border-color:var(--interactive-accent);box-shadow:0 0 0 2px var(--interactive-accent-hover)}.modal-footer.svelte-xukw2q.svelte-xukw2q{display:flex;align-items:center;justify-content:flex-end;gap:12px;margin-top:24px;padding-top:16px;border-top:1px solid var(--background-modifier-border)}.modal-footer.svelte-xukw2q button.svelte-xukw2q{padding:8px 16px;border-radius:4px;border:1px solid var(--background-modifier-border);background:var(--background-primary);color:var(--text-normal);cursor:pointer;font-size:0.9em;transition:all 0.2s ease}.modal-footer.svelte-xukw2q button.svelte-xukw2q:hover:not(:disabled){background:var(--background-modifier-hover)}.modal-footer.svelte-xukw2q button.svelte-xukw2q:disabled{opacity:0.5;cursor:not-allowed}.modal-footer.svelte-xukw2q button.mod-cta.svelte-xukw2q{background:var(--interactive-accent);color:var(--text-on-accent);border-color:var(--interactive-accent)}.modal-footer.svelte-xukw2q button.mod-cta.svelte-xukw2q:hover:not(:disabled){background:var(--interactive-accent-hover);border-color:var(--interactive-accent-hover)}.modal-footer.svelte-xukw2q button.svelte-xukw2q:focus{outline:2px solid var(--interactive-accent);outline-offset:2px}');
+}
+function create_fragment2(ctx) {
+  let div31;
+  let div0;
+  let h30;
+  let t1;
+  let ul;
+  let li0;
+  let strong0;
+  let t3;
+  let t4_value = (
+    /*deck*/
+    ctx[0].name + ""
+  );
+  let t4;
+  let t5;
+  let li1;
+  let strong1;
+  let t7;
+  let t8_value = (
+    /*deck*/
+    ctx[0].tag + ""
+  );
+  let t8;
+  let t9;
+  let li2;
+  let strong2;
+  let t11;
+  let t12_value = (
+    /*deck*/
+    ctx[0].filepath + ""
+  );
+  let t12;
+  let t13;
+  let div29;
+  let h31;
+  let t15;
+  let div1;
+  let t17;
+  let div7;
+  let div4;
+  let t21;
+  let div6;
+  let label0;
+  let input0;
+  let t22;
+  let div5;
+  let t23;
+  let div12;
+  let div10;
+  let t27;
+  let div11;
+  let input1;
+  let input1_disabled_value;
+  let t28;
+  let div18;
+  let div15;
+  let t32;
+  let div17;
+  let label1;
+  let input2;
+  let t33;
+  let div16;
+  let t34;
+  let div23;
+  let div21;
+  let t38;
+  let div22;
+  let input3;
+  let input3_disabled_value;
+  let t39;
+  let div28;
+  let div26;
+  let t43;
+  let div27;
+  let select;
+  let option0;
+  let option1;
+  let t46;
+  let div30;
+  let button0;
+  let t47_value = (
+    /*saving*/
+    ctx[6] ? "Saving..." : "Save"
+  );
+  let t47;
+  let t48;
+  let button1;
+  let t49;
+  let mounted;
+  let dispose;
+  return {
+    c() {
+      div31 = element("div");
+      div0 = element("div");
+      h30 = element("h3");
+      h30.textContent = "Deck Information";
+      t1 = space();
+      ul = element("ul");
+      li0 = element("li");
+      strong0 = element("strong");
+      strong0.textContent = "Name:";
+      t3 = space();
+      t4 = text(t4_value);
+      t5 = space();
+      li1 = element("li");
+      strong1 = element("strong");
+      strong1.textContent = "Tag:";
+      t7 = space();
+      t8 = text(t8_value);
+      t9 = space();
+      li2 = element("li");
+      strong2 = element("strong");
+      strong2.textContent = "File:";
+      t11 = space();
+      t12 = text(t12_value);
+      t13 = space();
+      div29 = element("div");
+      h31 = element("h3");
+      h31.textContent = "Daily Card Limits";
+      t15 = space();
+      div1 = element("div");
+      div1.textContent = "Learning/relearning cards are always shown and not subject to these\n            limits.";
+      t17 = space();
+      div7 = element("div");
+      div4 = element("div");
+      div4.innerHTML = `<div class="setting-item-name svelte-xukw2q">Enable New Cards Limit</div> 
+                <div class="setting-item-description svelte-xukw2q">Limit how many new cards (never seen before) can be shown
+                    per day</div>`;
+      t21 = space();
+      div6 = element("div");
+      label0 = element("label");
+      input0 = element("input");
+      t22 = space();
+      div5 = element("div");
+      t23 = space();
+      div12 = element("div");
+      div10 = element("div");
+      div10.innerHTML = `<div class="setting-item-name svelte-xukw2q">New Cards per Day</div> 
+                <div class="setting-item-description svelte-xukw2q">Maximum number of new cards to introduce per day</div>`;
+      t27 = space();
+      div11 = element("div");
+      input1 = element("input");
+      t28 = space();
+      div18 = element("div");
+      div15 = element("div");
+      div15.innerHTML = `<div class="setting-item-name svelte-xukw2q">Enable Review Cards Limit</div> 
+                <div class="setting-item-description svelte-xukw2q">Limit how many review cards (due for repetition) can be
+                    shown per day</div>`;
+      t32 = space();
+      div17 = element("div");
+      label1 = element("label");
+      input2 = element("input");
+      t33 = space();
+      div16 = element("div");
+      t34 = space();
+      div23 = element("div");
+      div21 = element("div");
+      div21.innerHTML = `<div class="setting-item-name svelte-xukw2q">Review Cards per Day</div> 
+                <div class="setting-item-description svelte-xukw2q">Maximum number of review cards to show per day</div>`;
+      t38 = space();
+      div22 = element("div");
+      input3 = element("input");
+      t39 = space();
+      div28 = element("div");
+      div26 = element("div");
+      div26.innerHTML = `<div class="setting-item-name svelte-xukw2q">Review Order</div> 
+                <div class="setting-item-description svelte-xukw2q">Order in which review cards are presented during study</div>`;
+      t43 = space();
+      div27 = element("div");
+      select = element("select");
+      option0 = element("option");
+      option0.textContent = "Oldest due first";
+      option1 = element("option");
+      option1.textContent = "Random order";
+      t46 = space();
+      div30 = element("div");
+      button0 = element("button");
+      t47 = text(t47_value);
+      t48 = space();
+      button1 = element("button");
+      t49 = text("Cancel");
+      attr(h30, "class", "svelte-xukw2q");
+      attr(strong0, "class", "svelte-xukw2q");
+      attr(li0, "class", "svelte-xukw2q");
+      attr(strong1, "class", "svelte-xukw2q");
+      attr(li1, "class", "svelte-xukw2q");
+      attr(strong2, "class", "svelte-xukw2q");
+      attr(li2, "class", "svelte-xukw2q");
+      attr(ul, "class", "deck-info-list svelte-xukw2q");
+      attr(div0, "class", "deck-info-section svelte-xukw2q");
+      attr(h31, "class", "svelte-xukw2q");
+      attr(div1, "class", "setting-item-description-global svelte-xukw2q");
+      attr(div4, "class", "setting-item-info svelte-xukw2q");
+      attr(input0, "type", "checkbox");
+      attr(input0, "class", "checkbox-input svelte-xukw2q");
+      attr(div5, "class", "checkbox-slider svelte-xukw2q");
+      attr(label0, "class", "checkbox-container svelte-xukw2q");
+      attr(div6, "class", "setting-item-control svelte-xukw2q");
+      attr(div7, "class", "setting-item svelte-xukw2q");
+      attr(div10, "class", "setting-item-info svelte-xukw2q");
+      attr(input1, "type", "number");
+      attr(input1, "min", "0");
+      attr(input1, "max", "999");
+      input1.disabled = input1_disabled_value = !/*enableNewCardsLimit*/
+      ctx[3];
+      attr(input1, "class", "session-limit-input svelte-xukw2q");
+      attr(input1, "placeholder", "20");
+      attr(div11, "class", "setting-item-control svelte-xukw2q");
+      attr(div12, "class", "setting-item svelte-xukw2q");
+      toggle_class(div12, "disabled", !/*enableNewCardsLimit*/
+      ctx[3]);
+      attr(div15, "class", "setting-item-info svelte-xukw2q");
+      attr(input2, "type", "checkbox");
+      attr(input2, "class", "checkbox-input svelte-xukw2q");
+      attr(div16, "class", "checkbox-slider svelte-xukw2q");
+      attr(label1, "class", "checkbox-container svelte-xukw2q");
+      attr(div17, "class", "setting-item-control svelte-xukw2q");
+      attr(div18, "class", "setting-item svelte-xukw2q");
+      attr(div21, "class", "setting-item-info svelte-xukw2q");
+      attr(input3, "type", "number");
+      attr(input3, "min", "0");
+      attr(input3, "max", "9999");
+      input3.disabled = input3_disabled_value = !/*enableReviewCardsLimit*/
+      ctx[4];
+      attr(input3, "class", "session-limit-input svelte-xukw2q");
+      attr(input3, "placeholder", "100");
+      attr(div22, "class", "setting-item-control svelte-xukw2q");
+      attr(div23, "class", "setting-item svelte-xukw2q");
+      toggle_class(div23, "disabled", !/*enableReviewCardsLimit*/
+      ctx[4]);
+      attr(div26, "class", "setting-item-info svelte-xukw2q");
+      option0.__value = "due-date";
+      option0.value = option0.__value;
+      option1.__value = "random";
+      option1.value = option1.__value;
+      attr(select, "class", "review-order-select svelte-xukw2q");
+      if (
+        /*reviewOrder*/
+        ctx[5] === void 0
+      )
+        add_render_callback(() => (
+          /*select_change_handler*/
+          ctx[15].call(select)
+        ));
+      attr(div27, "class", "setting-item-control svelte-xukw2q");
+      attr(div28, "class", "setting-item svelte-xukw2q");
+      attr(div29, "class", "deck-settings-section svelte-xukw2q");
+      attr(button0, "class", "mod-cta svelte-xukw2q");
+      button0.disabled = /*saving*/
+      ctx[6];
+      button1.disabled = /*saving*/
+      ctx[6];
+      attr(button1, "class", "svelte-xukw2q");
+      attr(div30, "class", "modal-footer svelte-xukw2q");
+      attr(div31, "class", "deck-config-ui svelte-xukw2q");
+    },
+    m(target, anchor) {
+      insert(target, div31, anchor);
+      append(div31, div0);
+      append(div0, h30);
+      append(div0, t1);
+      append(div0, ul);
+      append(ul, li0);
+      append(li0, strong0);
+      append(li0, t3);
+      append(li0, t4);
+      append(ul, t5);
+      append(ul, li1);
+      append(li1, strong1);
+      append(li1, t7);
+      append(li1, t8);
+      append(ul, t9);
+      append(ul, li2);
+      append(li2, strong2);
+      append(li2, t11);
+      append(li2, t12);
+      append(div31, t13);
+      append(div31, div29);
+      append(div29, h31);
+      append(div29, t15);
+      append(div29, div1);
+      append(div29, t17);
+      append(div29, div7);
+      append(div7, div4);
+      append(div7, t21);
+      append(div7, div6);
+      append(div6, label0);
+      append(label0, input0);
+      input0.checked = /*enableNewCardsLimit*/
+      ctx[3];
+      append(label0, t22);
+      append(label0, div5);
+      append(div29, t23);
+      append(div29, div12);
+      append(div12, div10);
+      append(div12, t27);
+      append(div12, div11);
+      append(div11, input1);
+      set_input_value(
+        input1,
+        /*newCardsLimit*/
+        ctx[1]
+      );
+      append(div29, t28);
+      append(div29, div18);
+      append(div18, div15);
+      append(div18, t32);
+      append(div18, div17);
+      append(div17, label1);
+      append(label1, input2);
+      input2.checked = /*enableReviewCardsLimit*/
+      ctx[4];
+      append(label1, t33);
+      append(label1, div16);
+      append(div29, t34);
+      append(div29, div23);
+      append(div23, div21);
+      append(div23, t38);
+      append(div23, div22);
+      append(div22, input3);
+      set_input_value(
+        input3,
+        /*reviewCardsLimit*/
+        ctx[2]
+      );
+      append(div29, t39);
+      append(div29, div28);
+      append(div28, div26);
+      append(div28, t43);
+      append(div28, div27);
+      append(div27, select);
+      append(select, option0);
+      append(select, option1);
+      select_option(
+        select,
+        /*reviewOrder*/
+        ctx[5],
+        true
+      );
+      append(div31, t46);
+      append(div31, div30);
+      append(div30, button0);
+      append(button0, t47);
+      append(div30, t48);
+      append(div30, button1);
+      append(button1, t49);
+      if (!mounted) {
+        dispose = [
+          listen(
+            window,
+            "keydown",
+            /*handleKeydown*/
+            ctx[9]
+          ),
+          listen(
+            input0,
+            "change",
+            /*input0_change_handler*/
+            ctx[11]
+          ),
+          listen(
+            input1,
+            "input",
+            /*input1_input_handler*/
+            ctx[12]
+          ),
+          listen(
+            input2,
+            "change",
+            /*input2_change_handler*/
+            ctx[13]
+          ),
+          listen(
+            input3,
+            "input",
+            /*input3_input_handler*/
+            ctx[14]
+          ),
+          listen(
+            select,
+            "change",
+            /*select_change_handler*/
+            ctx[15]
+          ),
+          listen(
+            button0,
+            "click",
+            /*handleSave*/
+            ctx[7]
+          ),
+          listen(
+            button1,
+            "click",
+            /*handleCancel*/
+            ctx[8]
+          )
+        ];
+        mounted = true;
+      }
+    },
+    p(ctx2, [dirty]) {
+      if (dirty & /*deck*/
+      1 && t4_value !== (t4_value = /*deck*/
+      ctx2[0].name + ""))
+        set_data(t4, t4_value);
+      if (dirty & /*deck*/
+      1 && t8_value !== (t8_value = /*deck*/
+      ctx2[0].tag + ""))
+        set_data(t8, t8_value);
+      if (dirty & /*deck*/
+      1 && t12_value !== (t12_value = /*deck*/
+      ctx2[0].filepath + ""))
+        set_data(t12, t12_value);
+      if (dirty & /*enableNewCardsLimit*/
+      8) {
+        input0.checked = /*enableNewCardsLimit*/
+        ctx2[3];
+      }
+      if (dirty & /*enableNewCardsLimit*/
+      8 && input1_disabled_value !== (input1_disabled_value = !/*enableNewCardsLimit*/
+      ctx2[3])) {
+        input1.disabled = input1_disabled_value;
+      }
+      if (dirty & /*newCardsLimit*/
+      2 && to_number(input1.value) !== /*newCardsLimit*/
+      ctx2[1]) {
+        set_input_value(
+          input1,
+          /*newCardsLimit*/
+          ctx2[1]
+        );
+      }
+      if (dirty & /*enableNewCardsLimit*/
+      8) {
+        toggle_class(div12, "disabled", !/*enableNewCardsLimit*/
+        ctx2[3]);
+      }
+      if (dirty & /*enableReviewCardsLimit*/
+      16) {
+        input2.checked = /*enableReviewCardsLimit*/
+        ctx2[4];
+      }
+      if (dirty & /*enableReviewCardsLimit*/
+      16 && input3_disabled_value !== (input3_disabled_value = !/*enableReviewCardsLimit*/
+      ctx2[4])) {
+        input3.disabled = input3_disabled_value;
+      }
+      if (dirty & /*reviewCardsLimit*/
+      4 && to_number(input3.value) !== /*reviewCardsLimit*/
+      ctx2[2]) {
+        set_input_value(
+          input3,
+          /*reviewCardsLimit*/
+          ctx2[2]
+        );
+      }
+      if (dirty & /*enableReviewCardsLimit*/
+      16) {
+        toggle_class(div23, "disabled", !/*enableReviewCardsLimit*/
+        ctx2[4]);
+      }
+      if (dirty & /*reviewOrder*/
+      32) {
+        select_option(
+          select,
+          /*reviewOrder*/
+          ctx2[5]
+        );
+      }
+      if (dirty & /*saving*/
+      64 && t47_value !== (t47_value = /*saving*/
+      ctx2[6] ? "Saving..." : "Save"))
+        set_data(t47, t47_value);
+      if (dirty & /*saving*/
+      64) {
+        button0.disabled = /*saving*/
+        ctx2[6];
+      }
+      if (dirty & /*saving*/
+      64) {
+        button1.disabled = /*saving*/
+        ctx2[6];
+      }
+    },
+    i: noop,
+    o: noop,
+    d(detaching) {
+      if (detaching)
+        detach(div31);
+      mounted = false;
+      run_all(dispose);
+    }
+  };
+}
+function instance2($$self, $$props, $$invalidate) {
+  let { deck } = $$props;
+  let { config } = $$props;
+  const dispatch = createEventDispatcher();
+  let newCardsLimit = config.newCardsLimit;
+  let reviewCardsLimit = config.reviewCardsLimit;
+  let enableNewCardsLimit = config.enableNewCardsLimit;
+  let enableReviewCardsLimit = config.enableReviewCardsLimit;
+  let reviewOrder = config.reviewOrder;
+  let saving = false;
+  function handleSave() {
+    $$invalidate(6, saving = true);
+    const finalConfig = {
+      newCardsLimit: Number(newCardsLimit) || 0,
+      reviewCardsLimit: Number(reviewCardsLimit) || 0,
+      enableNewCardsLimit,
+      enableReviewCardsLimit,
+      reviewOrder
+    };
+    dispatch("save", finalConfig);
+  }
+  function handleCancel() {
+    dispatch("cancel");
+  }
+  function handleKeydown(event) {
+    if (event.key === "Enter" && (event.ctrlKey || event.metaKey)) {
+      handleSave();
+    }
+  }
+  function input0_change_handler() {
+    enableNewCardsLimit = this.checked;
+    $$invalidate(3, enableNewCardsLimit);
+  }
+  function input1_input_handler() {
+    newCardsLimit = to_number(this.value);
+    $$invalidate(1, newCardsLimit);
+  }
+  function input2_change_handler() {
+    enableReviewCardsLimit = this.checked;
+    $$invalidate(4, enableReviewCardsLimit);
+  }
+  function input3_input_handler() {
+    reviewCardsLimit = to_number(this.value);
+    $$invalidate(2, reviewCardsLimit);
+  }
+  function select_change_handler() {
+    reviewOrder = select_value(this);
+    $$invalidate(5, reviewOrder);
+  }
+  $$self.$$set = ($$props2) => {
+    if ("deck" in $$props2)
+      $$invalidate(0, deck = $$props2.deck);
+    if ("config" in $$props2)
+      $$invalidate(10, config = $$props2.config);
+  };
+  $$self.$$.update = () => {
+    if ($$self.$$.dirty & /*newCardsLimit, reviewCardsLimit, enableNewCardsLimit, enableReviewCardsLimit, reviewOrder*/
+    62) {
+      $: {
+        const newConfig = {
+          newCardsLimit: Number(newCardsLimit) || 0,
+          reviewCardsLimit: Number(reviewCardsLimit) || 0,
+          enableNewCardsLimit,
+          enableReviewCardsLimit,
+          reviewOrder
+        };
+        dispatch("configChange", newConfig);
+      }
+    }
+  };
+  return [
+    deck,
+    newCardsLimit,
+    reviewCardsLimit,
+    enableNewCardsLimit,
+    enableReviewCardsLimit,
+    reviewOrder,
+    saving,
+    handleSave,
+    handleCancel,
+    handleKeydown,
+    config,
+    input0_change_handler,
+    input1_input_handler,
+    input2_change_handler,
+    input3_input_handler,
+    select_change_handler
+  ];
+}
+var DeckConfigUI = class extends SvelteComponent {
+  constructor(options) {
+    super();
+    init(this, options, instance2, create_fragment2, safe_not_equal, { deck: 0, config: 10 }, add_css2);
+  }
+};
+var DeckConfigUI_default = DeckConfigUI;
+
+// src/components/DeckConfigModal.ts
+var DeckConfigModal = class extends import_obsidian3.Modal {
+  constructor(plugin, deck, onSave) {
+    super(plugin.app);
+    this.component = null;
+    this.plugin = plugin;
+    this.deck = deck;
+    this.onSave = onSave;
+    this.config = { ...deck.config };
+  }
+  onOpen() {
+    const { contentEl } = this;
+    contentEl.empty();
+    contentEl.createEl("h2", { text: `Configure Deck: ${this.deck.name}` });
+    const componentContainer = contentEl.createDiv("deck-config-container");
+    componentContainer.style.padding = "0";
+    componentContainer.style.margin = "0";
+    this.component = new DeckConfigUI_default({
+      target: componentContainer,
+      props: {
+        deck: this.deck,
+        config: this.config
+      }
+    });
+    this.component.$on("save", (event) => {
+      this.handleSave(event.detail);
+    });
+    this.component.$on("cancel", () => {
+      this.close();
+    });
+    this.component.$on("configChange", (event) => {
+      this.config = event.detail;
+    });
+  }
+  async handleSave(config) {
+    try {
+      await this.onSave(config);
+      this.close();
+    } catch (error) {
+      console.error("Error saving deck configuration:", error);
+    }
+  }
+  onClose() {
+    const { contentEl } = this;
+    if (this.component) {
+      this.component.$destroy();
+      this.component = null;
+    }
+    contentEl.empty();
+  }
+};
+
+// src/components/DeckListPanel.svelte
+function add_css3(target) {
+  append_styles(target, "svelte-yiz34z", ".deck-list-panel.svelte-yiz34z.svelte-yiz34z{min-width:400px;height:100%;display:flex;flex-direction:column;background:var(--background-primary);color:var(--text-normal)}.panel-header.svelte-yiz34z.svelte-yiz34z{display:flex;justify-content:space-between;align-items:center;padding:12px 16px;border-bottom:1px solid var(--background-modifier-border)}.filter-section.svelte-yiz34z.svelte-yiz34z{padding:8px 16px;border-bottom:1px solid var(--background-modifier-border)}.filter-input.svelte-yiz34z.svelte-yiz34z{width:100%;padding:6px 8px;border:1px solid var(--background-modifier-border);border-radius:4px;background:var(--background-primary);color:var(--text-normal);font-size:14px;transition:border-color 0.2s ease}.filter-input.svelte-yiz34z.svelte-yiz34z:focus{outline:none;border-color:var(--interactive-accent)}.filter-input.svelte-yiz34z.svelte-yiz34z::placeholder{color:var(--text-muted)}.panel-title.svelte-yiz34z.svelte-yiz34z{margin:0;font-size:16px;font-weight:600}.refresh-button.svelte-yiz34z.svelte-yiz34z{background:none;border:none;cursor:pointer;padding:4px;border-radius:4px;color:var(--text-muted);transition:all 0.2s ease;position:relative;z-index:1}.refresh-button.svelte-yiz34z.svelte-yiz34z:hover{background:var(--background-modifier-hover);color:var(--text-normal)}.refresh-button.svelte-yiz34z.svelte-yiz34z:disabled{opacity:0.5;cursor:not-allowed}.refresh-button.refreshing.svelte-yiz34z svg.svelte-yiz34z{animation:svelte-yiz34z-spin 1s linear infinite}@keyframes svelte-yiz34z-spin{from{transform:rotate(0deg)}to{transform:rotate(360deg)}}.empty-state.svelte-yiz34z.svelte-yiz34z{flex:1;display:flex;flex-direction:column;justify-content:center;align-items:center;padding:32px;text-align:center}.empty-state.svelte-yiz34z p.svelte-yiz34z{margin:8px 0}.help-text.svelte-yiz34z.svelte-yiz34z{font-size:14px;color:var(--text-muted)}.deck-table.svelte-yiz34z.svelte-yiz34z{flex:1;display:flex;flex-direction:column;overflow:hidden}.table-header.svelte-yiz34z.svelte-yiz34z{display:grid;grid-template-columns:1fr 60px 60px 60px 40px;gap:8px;padding:8px 16px;font-weight:600;font-size:14px;border-bottom:1px solid var(--background-modifier-border);background:var(--background-secondary);align-items:center}.table-body.svelte-yiz34z.svelte-yiz34z{flex:1;overflow-y:auto}.deck-row.svelte-yiz34z.svelte-yiz34z{display:grid;grid-template-columns:1fr 60px 60px 60px 40px;gap:8px;padding:12px 16px;border-bottom:1px solid var(--background-modifier-border);align-items:center}.deck-name-link.svelte-yiz34z.svelte-yiz34z{cursor:pointer;color:var(--text-normal);text-decoration:underline;text-decoration-color:transparent;transition:text-decoration-color 0.2s ease;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;display:inline-block;max-width:100%}.deck-name-link.svelte-yiz34z.svelte-yiz34z:hover{text-decoration-color:var(--text-accent);color:var(--text-accent)}.deck-name-link.svelte-yiz34z.svelte-yiz34z:focus{outline:2px solid var(--interactive-accent);outline-offset:2px;border-radius:3px}.col-config.svelte-yiz34z.svelte-yiz34z{display:flex;align-items:center;justify-content:center}.deck-config-button.svelte-yiz34z.svelte-yiz34z{background:transparent;border:none;color:var(--text-muted);cursor:pointer;padding:6px;border-radius:3px;display:flex;align-items:center;justify-content:center;transition:all 0.2s ease}.deck-config-button.svelte-yiz34z.svelte-yiz34z:hover{background:var(--background-modifier-hover);color:var(--text-normal)}.deck-config-button.svelte-yiz34z.svelte-yiz34z:focus{outline:2px solid var(--interactive-accent);outline-offset:2px}.col-deck.svelte-yiz34z.svelte-yiz34z{font-size:14px;color:var(--text-normal);justify-self:start;min-width:0}.col-stat.svelte-yiz34z.svelte-yiz34z{text-align:center;font-size:14px;color:var(--text-muted);justify-self:center}.table-header.svelte-yiz34z .col-deck.svelte-yiz34z{font-size:14px;color:var(--text-normal);justify-self:start}.table-header.svelte-yiz34z .col-stat.svelte-yiz34z{text-align:center;font-size:14px;color:var(--text-normal);justify-self:center}.col-stat.has-cards.svelte-yiz34z.svelte-yiz34z{color:#4aa3df;font-weight:500}.col-stat.updating.svelte-yiz34z.svelte-yiz34z{opacity:0.6;transition:opacity 0.3s ease}.col-stat.has-limit.svelte-yiz34z.svelte-yiz34z{position:relative;border-left:2px solid var(--interactive-accent);padding-left:6px}.limit-indicator.svelte-yiz34z.svelte-yiz34z{font-size:10px;margin-left:4px;opacity:0.7}.table-body.svelte-yiz34z.svelte-yiz34z::-webkit-scrollbar{width:8px}.table-body.svelte-yiz34z.svelte-yiz34z::-webkit-scrollbar-track{background:transparent}.table-body.svelte-yiz34z.svelte-yiz34z::-webkit-scrollbar-thumb{background:var(--background-modifier-border);border-radius:4px}.table-body.svelte-yiz34z.svelte-yiz34z::-webkit-scrollbar-thumb:hover{background:var(--background-modifier-border-hover)}");
 }
 function get_each_context2(ctx, list, i) {
   const child_ctx = ctx.slice();
-  child_ctx[23] = list[i];
+  child_ctx[27] = list[i];
   const constants_0 = (
     /*getDeckStats*/
     child_ctx[8](
       /*deck*/
-      child_ctx[23].id
+      child_ctx[27].id
     )
   );
   child_ctx[7] = constants_0;
   return child_ctx;
 }
 function create_else_block2(ctx) {
-  let div6;
-  let div4;
-  let t7;
+  let div7;
   let div5;
+  let t8;
+  let div6;
   let each_value = (
     /*decks*/
     ctx[1]
@@ -5200,35 +5979,36 @@ function create_else_block2(ctx) {
   }
   return {
     c() {
-      div6 = element("div");
-      div4 = element("div");
-      div4.innerHTML = `<div class="col-deck svelte-19vy1cl">Deck</div> 
-                <div class="col-stat svelte-19vy1cl">New</div> 
-                <div class="col-stat svelte-19vy1cl">Learn</div> 
-                <div class="col-stat svelte-19vy1cl">Due</div>`;
-      t7 = space();
+      div7 = element("div");
       div5 = element("div");
+      div5.innerHTML = `<div class="col-deck svelte-yiz34z">Deck</div> 
+                <div class="col-stat svelte-yiz34z">New</div> 
+                <div class="col-stat svelte-yiz34z">Learn</div> 
+                <div class="col-stat svelte-yiz34z">Due</div> 
+                <div class="col-config svelte-yiz34z"></div>`;
+      t8 = space();
+      div6 = element("div");
       for (let i = 0; i < each_blocks.length; i += 1) {
         each_blocks[i].c();
       }
-      attr(div4, "class", "table-header svelte-19vy1cl");
-      attr(div5, "class", "table-body svelte-19vy1cl");
-      attr(div6, "class", "deck-table svelte-19vy1cl");
+      attr(div5, "class", "table-header svelte-yiz34z");
+      attr(div6, "class", "table-body svelte-yiz34z");
+      attr(div7, "class", "deck-table svelte-yiz34z");
     },
     m(target, anchor) {
-      insert(target, div6, anchor);
-      append(div6, div4);
-      append(div6, t7);
-      append(div6, div5);
+      insert(target, div7, anchor);
+      append(div7, div5);
+      append(div7, t8);
+      append(div7, div6);
       for (let i = 0; i < each_blocks.length; i += 1) {
         if (each_blocks[i]) {
-          each_blocks[i].m(div5, null);
+          each_blocks[i].m(div6, null);
         }
       }
     },
     p(ctx2, dirty) {
-      if (dirty & /*getDeckStats, decks, isUpdatingStats, handleDeckClick, formatDeckName*/
-      2370) {
+      if (dirty & /*decks, handleConfigClick, getDeckStats, isUpdatingStats, handleDeckClick, formatDeckName*/
+      6466) {
         each_value = /*decks*/
         ctx2[1];
         let i;
@@ -5239,7 +6019,7 @@ function create_else_block2(ctx) {
           } else {
             each_blocks[i] = create_each_block2(child_ctx);
             each_blocks[i].c();
-            each_blocks[i].m(div5, null);
+            each_blocks[i].m(div6, null);
           }
         }
         for (; i < each_blocks.length; i += 1) {
@@ -5250,7 +6030,7 @@ function create_else_block2(ctx) {
     },
     d(detaching) {
       if (detaching)
-        detach(div6);
+        detach(div7);
       destroy_each(each_blocks, detaching);
     }
   };
@@ -5260,9 +6040,9 @@ function create_if_block_12(ctx) {
   return {
     c() {
       div = element("div");
-      div.innerHTML = `<p class="svelte-19vy1cl">No decks match your filter.</p> 
-            <p class="help-text svelte-19vy1cl">Try adjusting your search terms.</p>`;
-      attr(div, "class", "empty-state svelte-19vy1cl");
+      div.innerHTML = `<p class="svelte-yiz34z">No decks match your filter.</p> 
+            <p class="help-text svelte-yiz34z">Try adjusting your search terms.</p>`;
+      attr(div, "class", "empty-state svelte-yiz34z");
     },
     m(target, anchor) {
       insert(target, div, anchor);
@@ -5279,9 +6059,9 @@ function create_if_block2(ctx) {
   return {
     c() {
       div = element("div");
-      div.innerHTML = `<p class="svelte-19vy1cl">No flashcard decks found.</p> 
-            <p class="help-text svelte-19vy1cl">Tag your notes with #flashcards to create decks.</p>`;
-      attr(div, "class", "empty-state svelte-19vy1cl");
+      div.innerHTML = `<p class="svelte-yiz34z">No flashcard decks found.</p> 
+            <p class="help-text svelte-yiz34z">Tag your notes with #flashcards to create decks.</p>`;
+      attr(div, "class", "empty-state svelte-yiz34z");
     },
     m(target, anchor) {
       insert(target, div, anchor);
@@ -5293,13 +6073,47 @@ function create_if_block2(ctx) {
     }
   };
 }
+function create_if_block_3(ctx) {
+  let span;
+  return {
+    c() {
+      span = element("span");
+      span.textContent = "\u{1F4C5}";
+      attr(span, "class", "limit-indicator svelte-yiz34z");
+    },
+    m(target, anchor) {
+      insert(target, span, anchor);
+    },
+    d(detaching) {
+      if (detaching)
+        detach(span);
+    }
+  };
+}
+function create_if_block_2(ctx) {
+  let span;
+  return {
+    c() {
+      span = element("span");
+      span.textContent = "\u{1F4C5}";
+      attr(span, "class", "limit-indicator svelte-yiz34z");
+    },
+    m(target, anchor) {
+      insert(target, span, anchor);
+    },
+    d(detaching) {
+      if (detaching)
+        detach(span);
+    }
+  };
+}
 function create_each_block2(ctx) {
-  let div4;
+  let div5;
   let div0;
   let span;
   let t0_value = formatDeckName(
     /*deck*/
-    ctx[23]
+    ctx[27]
   ) + "";
   let t0;
   let span_title_value;
@@ -5311,44 +6125,73 @@ function create_each_block2(ctx) {
   );
   let t2;
   let t3;
+  let div1_title_value;
+  let t4;
   let div2;
-  let t4_value = (
+  let t5_value = (
     /*stats*/
     ctx[7].learningCount + ""
   );
-  let t4;
   let t5;
+  let t6;
   let div3;
-  let t6_value = (
+  let t7_value = (
     /*stats*/
     ctx[7].dueCount + ""
   );
-  let t6;
   let t7;
+  let t8;
+  let div3_title_value;
+  let t9;
+  let div4;
+  let button;
+  let svg;
+  let circle;
+  let path;
+  let button_aria_label_value;
+  let t10;
   let mounted;
   let dispose;
   function click_handler() {
     return (
       /*click_handler*/
-      ctx[19](
+      ctx[22](
         /*deck*/
-        ctx[23]
+        ctx[27]
       )
     );
   }
   function keydown_handler(...args) {
     return (
       /*keydown_handler*/
-      ctx[20](
+      ctx[23](
         /*deck*/
-        ctx[23],
+        ctx[27],
+        ...args
+      )
+    );
+  }
+  let if_block0 = (
+    /*deck*/
+    ctx[27].config.enableNewCardsLimit && create_if_block_3(ctx)
+  );
+  let if_block1 = (
+    /*deck*/
+    ctx[27].config.enableReviewCardsLimit && create_if_block_2(ctx)
+  );
+  function click_handler_1(...args) {
+    return (
+      /*click_handler_1*/
+      ctx[24](
+        /*deck*/
+        ctx[27],
         ...args
       )
     );
   }
   return {
     c() {
-      div4 = element("div");
+      div5 = element("div");
       div0 = element("div");
       span = element("span");
       t0 = text(t0_value);
@@ -5356,19 +6199,36 @@ function create_each_block2(ctx) {
       div1 = element("div");
       t2 = text(t2_value);
       t3 = space();
+      if (if_block0)
+        if_block0.c();
+      t4 = space();
       div2 = element("div");
-      t4 = text(t4_value);
-      t5 = space();
+      t5 = text(t5_value);
+      t6 = space();
       div3 = element("div");
-      t6 = text(t6_value);
-      t7 = space();
-      attr(span, "class", "deck-name-link svelte-19vy1cl");
+      t7 = text(t7_value);
+      t8 = space();
+      if (if_block1)
+        if_block1.c();
+      t9 = space();
+      div4 = element("div");
+      button = element("button");
+      svg = svg_element("svg");
+      circle = svg_element("circle");
+      path = svg_element("path");
+      t10 = space();
+      attr(span, "class", "deck-name-link svelte-yiz34z");
       attr(span, "role", "button");
       attr(span, "tabindex", "0");
       attr(span, "title", span_title_value = "Click to review " + /*deck*/
-      ctx[23].name);
-      attr(div0, "class", "col-deck svelte-19vy1cl");
-      attr(div1, "class", "col-stat svelte-19vy1cl");
+      ctx[27].name);
+      attr(div0, "class", "col-deck svelte-yiz34z");
+      attr(div1, "class", "col-stat svelte-yiz34z");
+      attr(div1, "title", div1_title_value = /*deck*/
+      ctx[27].config.enableNewCardsLimit ? `${/*stats*/
+      ctx[7].newCount} new cards available today (limit: ${/*deck*/
+      ctx[27].config.newCardsLimit})` : `${/*stats*/
+      ctx[7].newCount} new cards due`);
       toggle_class(
         div1,
         "has-cards",
@@ -5381,7 +6241,13 @@ function create_each_block2(ctx) {
         /*isUpdatingStats*/
         ctx[6]
       );
-      attr(div2, "class", "col-stat svelte-19vy1cl");
+      toggle_class(
+        div1,
+        "has-limit",
+        /*deck*/
+        ctx[27].config.enableNewCardsLimit
+      );
+      attr(div2, "class", "col-stat svelte-yiz34z");
       toggle_class(
         div2,
         "has-cards",
@@ -5394,7 +6260,12 @@ function create_each_block2(ctx) {
         /*isUpdatingStats*/
         ctx[6]
       );
-      attr(div3, "class", "col-stat svelte-19vy1cl");
+      attr(div3, "class", "col-stat svelte-yiz34z");
+      attr(div3, "title", div3_title_value = /*deck*/
+      ctx[27].config.enableReviewCardsLimit ? `${/*stats*/
+      ctx[7].dueCount} review cards available today (limit: ${/*deck*/
+      ctx[27].config.reviewCardsLimit})` : `${/*stats*/
+      ctx[7].dueCount} review cards due`);
       toggle_class(
         div3,
         "has-cards",
@@ -5407,27 +6278,64 @@ function create_each_block2(ctx) {
         /*isUpdatingStats*/
         ctx[6]
       );
-      attr(div4, "class", "deck-row svelte-19vy1cl");
+      toggle_class(
+        div3,
+        "has-limit",
+        /*deck*/
+        ctx[27].config.enableReviewCardsLimit
+      );
+      attr(circle, "cx", "12");
+      attr(circle, "cy", "12");
+      attr(circle, "r", "3");
+      attr(path, "d", "M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1 1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z");
+      attr(svg, "xmlns", "http://www.w3.org/2000/svg");
+      attr(svg, "width", "16");
+      attr(svg, "height", "16");
+      attr(svg, "viewBox", "0 0 24 24");
+      attr(svg, "fill", "none");
+      attr(svg, "stroke", "currentColor");
+      attr(svg, "stroke-width", "2");
+      attr(svg, "stroke-linecap", "round");
+      attr(svg, "stroke-linejoin", "round");
+      attr(button, "class", "deck-config-button svelte-yiz34z");
+      attr(button, "title", "Configure deck settings");
+      attr(button, "aria-label", button_aria_label_value = "Configure " + /*deck*/
+      ctx[27].name);
+      attr(div4, "class", "col-config svelte-yiz34z");
+      attr(div5, "class", "deck-row svelte-yiz34z");
     },
     m(target, anchor) {
-      insert(target, div4, anchor);
-      append(div4, div0);
+      insert(target, div5, anchor);
+      append(div5, div0);
       append(div0, span);
       append(span, t0);
-      append(div4, t1);
-      append(div4, div1);
+      append(div5, t1);
+      append(div5, div1);
       append(div1, t2);
-      append(div4, t3);
-      append(div4, div2);
-      append(div2, t4);
-      append(div4, t5);
-      append(div4, div3);
-      append(div3, t6);
-      append(div4, t7);
+      append(div1, t3);
+      if (if_block0)
+        if_block0.m(div1, null);
+      append(div5, t4);
+      append(div5, div2);
+      append(div2, t5);
+      append(div5, t6);
+      append(div5, div3);
+      append(div3, t7);
+      append(div3, t8);
+      if (if_block1)
+        if_block1.m(div3, null);
+      append(div5, t9);
+      append(div5, div4);
+      append(div4, button);
+      append(button, svg);
+      append(svg, circle);
+      append(svg, path);
+      append(div5, t10);
       if (!mounted) {
         dispose = [
           listen(span, "click", click_handler),
-          listen(span, "keydown", keydown_handler)
+          listen(span, "keydown", keydown_handler),
+          listen(button, "click", click_handler_1)
         ];
         mounted = true;
       }
@@ -5437,18 +6345,40 @@ function create_each_block2(ctx) {
       if (dirty & /*decks*/
       2 && t0_value !== (t0_value = formatDeckName(
         /*deck*/
-        ctx[23]
+        ctx[27]
       ) + ""))
         set_data(t0, t0_value);
       if (dirty & /*decks*/
       2 && span_title_value !== (span_title_value = "Click to review " + /*deck*/
-      ctx[23].name)) {
+      ctx[27].name)) {
         attr(span, "title", span_title_value);
       }
       if (dirty & /*decks*/
       2 && t2_value !== (t2_value = /*stats*/
       ctx[7].newCount + ""))
         set_data(t2, t2_value);
+      if (
+        /*deck*/
+        ctx[27].config.enableNewCardsLimit
+      ) {
+        if (if_block0) {
+        } else {
+          if_block0 = create_if_block_3(ctx);
+          if_block0.c();
+          if_block0.m(div1, null);
+        }
+      } else if (if_block0) {
+        if_block0.d(1);
+        if_block0 = null;
+      }
+      if (dirty & /*decks*/
+      2 && div1_title_value !== (div1_title_value = /*deck*/
+      ctx[27].config.enableNewCardsLimit ? `${/*stats*/
+      ctx[7].newCount} new cards available today (limit: ${/*deck*/
+      ctx[27].config.newCardsLimit})` : `${/*stats*/
+      ctx[7].newCount} new cards due`)) {
+        attr(div1, "title", div1_title_value);
+      }
       if (dirty & /*getDeckStats, decks*/
       258) {
         toggle_class(
@@ -5468,9 +6398,18 @@ function create_each_block2(ctx) {
         );
       }
       if (dirty & /*decks*/
-      2 && t4_value !== (t4_value = /*stats*/
+      2) {
+        toggle_class(
+          div1,
+          "has-limit",
+          /*deck*/
+          ctx[27].config.enableNewCardsLimit
+        );
+      }
+      if (dirty & /*decks*/
+      2 && t5_value !== (t5_value = /*stats*/
       ctx[7].learningCount + ""))
-        set_data(t4, t4_value);
+        set_data(t5, t5_value);
       if (dirty & /*getDeckStats, decks*/
       258) {
         toggle_class(
@@ -5490,9 +6429,31 @@ function create_each_block2(ctx) {
         );
       }
       if (dirty & /*decks*/
-      2 && t6_value !== (t6_value = /*stats*/
+      2 && t7_value !== (t7_value = /*stats*/
       ctx[7].dueCount + ""))
-        set_data(t6, t6_value);
+        set_data(t7, t7_value);
+      if (
+        /*deck*/
+        ctx[27].config.enableReviewCardsLimit
+      ) {
+        if (if_block1) {
+        } else {
+          if_block1 = create_if_block_2(ctx);
+          if_block1.c();
+          if_block1.m(div3, null);
+        }
+      } else if (if_block1) {
+        if_block1.d(1);
+        if_block1 = null;
+      }
+      if (dirty & /*decks*/
+      2 && div3_title_value !== (div3_title_value = /*deck*/
+      ctx[27].config.enableReviewCardsLimit ? `${/*stats*/
+      ctx[7].dueCount} review cards available today (limit: ${/*deck*/
+      ctx[27].config.reviewCardsLimit})` : `${/*stats*/
+      ctx[7].dueCount} review cards due`)) {
+        attr(div3, "title", div3_title_value);
+      }
       if (dirty & /*getDeckStats, decks*/
       258) {
         toggle_class(
@@ -5511,16 +6472,34 @@ function create_each_block2(ctx) {
           ctx[6]
         );
       }
+      if (dirty & /*decks*/
+      2) {
+        toggle_class(
+          div3,
+          "has-limit",
+          /*deck*/
+          ctx[27].config.enableReviewCardsLimit
+        );
+      }
+      if (dirty & /*decks*/
+      2 && button_aria_label_value !== (button_aria_label_value = "Configure " + /*deck*/
+      ctx[27].name)) {
+        attr(button, "aria-label", button_aria_label_value);
+      }
     },
     d(detaching) {
       if (detaching)
-        detach(div4);
+        detach(div5);
+      if (if_block0)
+        if_block0.d();
+      if (if_block1)
+        if_block1.d();
       mounted = false;
       run_all(dispose);
     }
   };
 }
-function create_fragment2(ctx) {
+function create_fragment3(ctx) {
   let div2;
   let div0;
   let h3;
@@ -5561,7 +6540,7 @@ function create_fragment2(ctx) {
     )
   };
   reviewheatmap = new ReviewHeatmap_default({ props: reviewheatmap_props });
-  ctx[21](reviewheatmap);
+  ctx[25](reviewheatmap);
   return {
     c() {
       div2 = element("div");
@@ -5581,7 +6560,7 @@ function create_fragment2(ctx) {
       if_block.c();
       t4 = space();
       create_component(reviewheatmap.$$.fragment);
-      attr(h3, "class", "panel-title svelte-19vy1cl");
+      attr(h3, "class", "panel-title svelte-yiz34z");
       attr(path0, "d", "M23 4v6h-6");
       attr(path1, "d", "M1 20v-6h6");
       attr(path2, "d", "M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15");
@@ -5594,8 +6573,8 @@ function create_fragment2(ctx) {
       attr(svg, "stroke-width", "2");
       attr(svg, "stroke-linecap", "round");
       attr(svg, "stroke-linejoin", "round");
-      attr(svg, "class", "svelte-19vy1cl");
-      attr(button, "class", "refresh-button svelte-19vy1cl");
+      attr(svg, "class", "svelte-yiz34z");
+      attr(button, "class", "refresh-button svelte-yiz34z");
       button.disabled = /*isRefreshing*/
       ctx[5];
       toggle_class(
@@ -5604,12 +6583,12 @@ function create_fragment2(ctx) {
         /*isRefreshing*/
         ctx[5]
       );
-      attr(div0, "class", "panel-header svelte-19vy1cl");
+      attr(div0, "class", "panel-header svelte-yiz34z");
       attr(input, "type", "text");
-      attr(input, "class", "filter-input svelte-19vy1cl");
+      attr(input, "class", "filter-input svelte-yiz34z");
       attr(input, "placeholder", "Filter by name or tag...");
-      attr(div1, "class", "filter-section svelte-19vy1cl");
-      attr(div2, "class", "deck-list-panel svelte-19vy1cl");
+      attr(div1, "class", "filter-section svelte-yiz34z");
+      attr(div2, "class", "deck-list-panel svelte-yiz34z");
     },
     m(target, anchor) {
       insert(target, div2, anchor);
@@ -5646,7 +6625,7 @@ function create_fragment2(ctx) {
             input,
             "input",
             /*input_input_handler*/
-            ctx[18]
+            ctx[21]
           ),
           listen(
             input,
@@ -5713,7 +6692,7 @@ function create_fragment2(ctx) {
       if (detaching)
         detach(div2);
       if_block.d();
-      ctx[21](null);
+      ctx[25](null);
       destroy_component(reviewheatmap);
       mounted = false;
       run_all(dispose);
@@ -5723,7 +6702,7 @@ function create_fragment2(ctx) {
 function formatDeckName(deck) {
   return deck.name;
 }
-function instance2($$self, $$props, $$invalidate) {
+function instance3($$self, $$props, $$invalidate) {
   let decks = [];
   let allDecks = [];
   let stats = /* @__PURE__ */ new Map();
@@ -5732,6 +6711,8 @@ function instance2($$self, $$props, $$invalidate) {
   let { onDeckClick } = $$props;
   let { onRefresh } = $$props;
   let { getReviewCounts } = $$props;
+  let { onUpdateDeckConfig } = $$props;
+  let { plugin } = $$props;
   let isRefreshing = false;
   let isUpdatingStats = false;
   function getDeckStats(deckId) {
@@ -5746,7 +6727,6 @@ function instance2($$self, $$props, $$invalidate) {
   }
   function handleRefresh() {
     return __awaiter(this, void 0, void 0, function* () {
-      console.log("Refresh button clicked");
       $$invalidate(5, isRefreshing = true);
       try {
         onRefresh();
@@ -5759,21 +6739,18 @@ function instance2($$self, $$props, $$invalidate) {
     });
   }
   function updateStatsById(deckId, newStats) {
-    console.log("updateStats called - triggering UI refresh");
     $$invalidate(6, isUpdatingStats = true);
     stats.set(deckId, newStats);
     $$invalidate(1, decks);
     $$invalidate(6, isUpdatingStats = false);
   }
   function updateStats(newStats) {
-    console.log("updateStats called - triggering UI refresh");
     $$invalidate(6, isUpdatingStats = true);
     $$invalidate(7, stats = newStats);
     $$invalidate(1, decks);
     $$invalidate(6, isUpdatingStats = false);
   }
   function updateDecks(newDecks) {
-    console.log("updateDecks called - triggering UI refresh");
     $$invalidate(2, allDecks = newDecks);
     applyFilter();
   }
@@ -5794,11 +6771,28 @@ function instance2($$self, $$props, $$invalidate) {
     onDeckClick(deck);
   }
   function refreshHeatmap() {
-    return __awaiter(this, void 0, void 0, function* () {
-      if (heatmapComponent) {
-        yield heatmapComponent.refresh();
-      }
-    });
+    if (heatmapComponent) {
+      heatmapComponent.refresh();
+    }
+  }
+  function handleConfigClick(deck, event) {
+    event.stopPropagation();
+    const modal = new DeckConfigModal(
+      plugin,
+      deck,
+      (config) => __awaiter(this, void 0, void 0, function* () {
+        if (onUpdateDeckConfig) {
+          yield onUpdateDeckConfig(deck.id, config);
+          const deckIndex = allDecks.findIndex((d) => d.id === deck.id);
+          if (deckIndex !== -1) {
+            $$invalidate(2, allDecks[deckIndex].config = config, allDecks);
+            $$invalidate(2, allDecks = [...allDecks]);
+            applyFilter();
+          }
+        }
+      })
+    );
+    modal.open();
   }
   onMount(() => {
     handleRefresh();
@@ -5809,6 +6803,7 @@ function instance2($$self, $$props, $$invalidate) {
   }
   const click_handler = (deck) => handleDeckClick(deck);
   const keydown_handler = (deck, e) => e.key === "Enter" && handleDeckClick(deck);
+  const click_handler_1 = (deck, e) => handleConfigClick(deck, e);
   function reviewheatmap_binding($$value) {
     binding_callbacks[$$value ? "unshift" : "push"](() => {
       heatmapComponent = $$value;
@@ -5817,11 +6812,15 @@ function instance2($$self, $$props, $$invalidate) {
   }
   $$self.$$set = ($$props2) => {
     if ("onDeckClick" in $$props2)
-      $$invalidate(12, onDeckClick = $$props2.onDeckClick);
+      $$invalidate(13, onDeckClick = $$props2.onDeckClick);
     if ("onRefresh" in $$props2)
-      $$invalidate(13, onRefresh = $$props2.onRefresh);
+      $$invalidate(14, onRefresh = $$props2.onRefresh);
     if ("getReviewCounts" in $$props2)
       $$invalidate(0, getReviewCounts = $$props2.getReviewCounts);
+    if ("onUpdateDeckConfig" in $$props2)
+      $$invalidate(15, onUpdateDeckConfig = $$props2.onUpdateDeckConfig);
+    if ("plugin" in $$props2)
+      $$invalidate(16, plugin = $$props2.plugin);
   };
   return [
     getReviewCounts,
@@ -5836,8 +6835,11 @@ function instance2($$self, $$props, $$invalidate) {
     handleRefresh,
     handleFilterInput,
     handleDeckClick,
+    handleConfigClick,
     onDeckClick,
     onRefresh,
+    onUpdateDeckConfig,
+    plugin,
     updateStatsById,
     updateStats,
     updateDecks,
@@ -5845,6 +6847,7 @@ function instance2($$self, $$props, $$invalidate) {
     input_input_handler,
     click_handler,
     keydown_handler,
+    click_handler_1,
     reviewheatmap_binding
   ];
 }
@@ -5854,41 +6857,46 @@ var DeckListPanel = class extends SvelteComponent {
     init(
       this,
       options,
-      instance2,
-      create_fragment2,
+      instance3,
+      create_fragment3,
       safe_not_equal,
       {
-        onDeckClick: 12,
-        onRefresh: 13,
+        onDeckClick: 13,
+        onRefresh: 14,
         getReviewCounts: 0,
-        updateStatsById: 14,
-        updateStats: 15,
-        updateDecks: 16,
-        refreshHeatmap: 17
+        onUpdateDeckConfig: 15,
+        plugin: 16,
+        updateStatsById: 17,
+        updateStats: 18,
+        updateDecks: 19,
+        refreshHeatmap: 20
       },
-      add_css2
+      add_css3
     );
   }
   get updateStatsById() {
-    return this.$$.ctx[14];
+    return this.$$.ctx[17];
   }
   get updateStats() {
-    return this.$$.ctx[15];
+    return this.$$.ctx[18];
   }
   get updateDecks() {
-    return this.$$.ctx[16];
+    return this.$$.ctx[19];
   }
   get refreshHeatmap() {
-    return this.$$.ctx[17];
+    return this.$$.ctx[20];
   }
 };
 var DeckListPanel_default = DeckListPanel;
 
+// src/components/FlashcardReviewModalWrapper.ts
+var import_obsidian4 = require("obsidian");
+
 // src/components/FlashcardReviewModal.svelte
-function add_css3(target) {
+function add_css4(target) {
   append_styles(target, "svelte-1opyfa1", ".review-modal.svelte-1opyfa1.svelte-1opyfa1{display:flex;flex-direction:column;height:100%;background:var(--background-primary);color:var(--text-normal);overflow:hidden;width:100%}.modal-header.svelte-1opyfa1.svelte-1opyfa1{display:flex;align-items:center;justify-content:space-between;padding:16px 20px;border-bottom:1px solid var(--background-modifier-border)}.modal-header.svelte-1opyfa1 h3.svelte-1opyfa1{margin:0;font-size:18px;font-weight:600}.progress-info.svelte-1opyfa1.svelte-1opyfa1{display:flex;gap:8px;font-size:14px}.remaining.svelte-1opyfa1.svelte-1opyfa1{color:var(--text-muted)}.review-progress-bar.svelte-1opyfa1.svelte-1opyfa1{height:4px;background:var(--background-modifier-border);position:relative}.progress-fill.svelte-1opyfa1.svelte-1opyfa1{height:100%;background:var(--interactive-accent);transition:width 0.3s ease}.card-content.svelte-1opyfa1.svelte-1opyfa1{flex:1;overflow-y:auto;overflow-x:hidden;padding:32px 16px;display:flex;flex-direction:column;align-items:center;justify-content:flex-start;gap:24px;width:100%;box-sizing:border-box;min-height:0}.question-section.svelte-1opyfa1.svelte-1opyfa1,.answer-section.svelte-1opyfa1.svelte-1opyfa1{width:100%;display:flex;justify-content:center}.card-side.svelte-1opyfa1.svelte-1opyfa1{background:var(--background-secondary);border:1px solid var(--background-modifier-border);border-radius:8px;padding:24px;min-height:100px;width:100%;max-width:600px;box-sizing:border-box;word-wrap:break-word;overflow-wrap:break-word}.card-side.front.svelte-1opyfa1.svelte-1opyfa1{text-align:center;font-size:20px;font-weight:500}.card-side.back.svelte-1opyfa1.svelte-1opyfa1{font-size:16px;line-height:1.6}.answer-section.svelte-1opyfa1.svelte-1opyfa1{width:100%;display:flex;flex-direction:column;justify-content:center;align-items:center}.answer-section.hidden.svelte-1opyfa1.svelte-1opyfa1{display:none}.separator.svelte-1opyfa1.svelte-1opyfa1{height:1px;background:var(--background-modifier-border);margin:16px auto;width:100%;max-width:600px}.action-buttons.svelte-1opyfa1.svelte-1opyfa1{padding:20px;border-top:1px solid var(--background-modifier-border);flex-shrink:0;width:100%;box-sizing:border-box}.show-answer-button.svelte-1opyfa1.svelte-1opyfa1{width:100%;max-width:400px;margin:0 auto;padding:12px 24px;font-size:16px;font-weight:500;background:var(--interactive-accent);color:var(--text-on-accent);border:none;border-radius:6px;cursor:pointer;display:flex;align-items:center;justify-content:center;gap:8px;box-sizing:border-box}.show-answer-button.svelte-1opyfa1.svelte-1opyfa1:hover{background:var(--interactive-accent-hover)}.shortcut.svelte-1opyfa1.svelte-1opyfa1{font-size:12px;opacity:0.8;padding:2px 6px;background:rgba(0, 0, 0, 0.2);border-radius:3px;margin-left:8px;display:inline-block}.difficulty-buttons.svelte-1opyfa1.svelte-1opyfa1{display:flex;gap:8px;justify-content:center;flex-wrap:nowrap;padding:0 10px;box-sizing:border-box;width:100%;max-width:600px;margin:0 auto}.difficulty-button.svelte-1opyfa1.svelte-1opyfa1{flex:1;min-width:0;padding:10px 6px;border:1px solid var(--background-modifier-border);background:var(--background-secondary);border-radius:6px;cursor:pointer;display:flex;flex-direction:column;align-items:center;gap:2px;transition:all 0.2s ease;position:relative;box-sizing:border-box;white-space:nowrap}.difficulty-button.svelte-1opyfa1.svelte-1opyfa1:hover{transform:translateY(-2px);box-shadow:0 4px 12px rgba(0, 0, 0, 0.1)}.difficulty-button.svelte-1opyfa1.svelte-1opyfa1:disabled{opacity:0.5;cursor:not-allowed;transform:none}.difficulty-button.again.svelte-1opyfa1.svelte-1opyfa1{border-color:#e74c3c}.difficulty-button.again.svelte-1opyfa1.svelte-1opyfa1:hover:not(:disabled){background:#e74c3c;color:white}.difficulty-button.hard.svelte-1opyfa1.svelte-1opyfa1{border-color:#f39c12}.difficulty-button.hard.svelte-1opyfa1.svelte-1opyfa1:hover:not(:disabled){background:#f39c12;color:white}.difficulty-button.good.svelte-1opyfa1.svelte-1opyfa1{border-color:#27ae60}.difficulty-button.good.svelte-1opyfa1.svelte-1opyfa1:hover:not(:disabled){background:#27ae60;color:white}.difficulty-button.easy.svelte-1opyfa1.svelte-1opyfa1{border-color:#3498db}.difficulty-button.easy.svelte-1opyfa1.svelte-1opyfa1:hover:not(:disabled){background:#3498db;color:white}.button-label.svelte-1opyfa1.svelte-1opyfa1{font-weight:600;font-size:13px}.interval.svelte-1opyfa1.svelte-1opyfa1{font-size:11px;color:var(--text-muted)}.difficulty-button.svelte-1opyfa1:hover .interval.svelte-1opyfa1{color:inherit}.difficulty-button.svelte-1opyfa1 .shortcut.svelte-1opyfa1{position:absolute;top:2px;right:2px;font-size:9px;padding:1px 3px;background:var(--background-modifier-border);border-radius:2px;opacity:0.7}.empty-state.svelte-1opyfa1.svelte-1opyfa1{flex:1;display:flex;align-items:center;justify-content:center;padding:32px;color:var(--text-muted)}.card-side h1,.card-side h2,.card-side h3,.card-side h4,.card-side h5,.card-side h6{margin-top:0;margin-bottom:16px}.card-side p{margin-bottom:16px}.card-side p:last-child{margin-bottom:0}.card-side > *:first-child{margin-top:0}.card-side ul,.card-side ol{margin-bottom:16px;padding-left:24px}.card-side code{background:var(--code-background);padding:2px 4px;border-radius:3px;font-size:0.9em}.card-side pre{background:var(--code-background);padding:16px;border-radius:6px;overflow-x:auto;margin-bottom:16px;max-width:100%}.card-side blockquote{border-left:3px solid var(--blockquote-border);padding-left:16px;margin-left:0;margin-right:0;color:var(--text-muted)}@media(max-width: 500px){.difficulty-buttons.svelte-1opyfa1.svelte-1opyfa1{gap:4px;padding:0 5px}.difficulty-button.svelte-1opyfa1.svelte-1opyfa1{padding:8px 4px}.button-label.svelte-1opyfa1.svelte-1opyfa1{font-size:12px}.interval.svelte-1opyfa1.svelte-1opyfa1{font-size:10px}.difficulty-button.svelte-1opyfa1 .shortcut.svelte-1opyfa1{font-size:8px;padding:1px 2px}.card-content.svelte-1opyfa1.svelte-1opyfa1{padding:16px 8px}}");
 }
-function create_if_block_3(ctx) {
+function create_if_block_32(ctx) {
   let div1;
   let div0;
   return {
@@ -5900,7 +6908,7 @@ function create_if_block_3(ctx) {
         div0,
         "width",
         /*progress*/
-        ctx[10] + "%"
+        ctx[11] + "%"
       );
       attr(div1, "class", "review-progress-bar svelte-1opyfa1");
     },
@@ -5909,13 +6917,13 @@ function create_if_block_3(ctx) {
       append(div1, div0);
     },
     p(ctx2, dirty) {
-      if (dirty[0] & /*progress*/
-      1024) {
+      if (dirty & /*progress*/
+      2048) {
         set_style(
           div0,
           "width",
           /*progress*/
-          ctx2[10] + "%"
+          ctx2[11] + "%"
         );
       }
     },
@@ -5956,11 +6964,11 @@ function create_if_block3(ctx) {
   let div6;
   let t3;
   let if_block0 = !/*showAnswer*/
-  ctx[4] && create_if_block_2(ctx);
+  ctx[5] && create_if_block_22(ctx);
   let if_block1 = (
     /*showAnswer*/
-    ctx[4] && /*schedulingInfo*/
-    ctx[8] && create_if_block_13(ctx)
+    ctx[5] && /*schedulingInfo*/
+    ctx[9] && create_if_block_13(ctx)
   );
   return {
     c() {
@@ -5985,7 +6993,7 @@ function create_if_block3(ctx) {
       attr(div3, "class", "card-side back svelte-1opyfa1");
       attr(div4, "class", "answer-section svelte-1opyfa1");
       toggle_class(div4, "hidden", !/*showAnswer*/
-      ctx[4]);
+      ctx[5]);
       attr(div5, "class", "card-content svelte-1opyfa1");
       attr(div6, "class", "action-buttons svelte-1opyfa1");
     },
@@ -5993,13 +7001,13 @@ function create_if_block3(ctx) {
       insert(target, div5, anchor);
       append(div5, div1);
       append(div1, div0);
-      ctx[21](div0);
+      ctx[19](div0);
       append(div5, t0);
       append(div5, div4);
       append(div4, div2);
       append(div4, t1);
       append(div4, div3);
-      ctx[22](div3);
+      ctx[20](div3);
       insert(target, t2, anchor);
       insert(target, div6, anchor);
       if (if_block0)
@@ -6009,17 +7017,17 @@ function create_if_block3(ctx) {
         if_block1.m(div6, null);
     },
     p(ctx2, dirty) {
-      if (dirty[0] & /*showAnswer*/
-      16) {
+      if (dirty & /*showAnswer*/
+      32) {
         toggle_class(div4, "hidden", !/*showAnswer*/
-        ctx2[4]);
+        ctx2[5]);
       }
       if (!/*showAnswer*/
-      ctx2[4]) {
+      ctx2[5]) {
         if (if_block0) {
           if_block0.p(ctx2, dirty);
         } else {
-          if_block0 = create_if_block_2(ctx2);
+          if_block0 = create_if_block_22(ctx2);
           if_block0.c();
           if_block0.m(div6, t3);
         }
@@ -6029,8 +7037,8 @@ function create_if_block3(ctx) {
       }
       if (
         /*showAnswer*/
-        ctx2[4] && /*schedulingInfo*/
-        ctx2[8]
+        ctx2[5] && /*schedulingInfo*/
+        ctx2[9]
       ) {
         if (if_block1) {
           if_block1.p(ctx2, dirty);
@@ -6047,8 +7055,8 @@ function create_if_block3(ctx) {
     d(detaching) {
       if (detaching)
         detach(div5);
-      ctx[21](null);
-      ctx[22](null);
+      ctx[19](null);
+      ctx[20](null);
       if (detaching)
         detach(t2);
       if (detaching)
@@ -6060,7 +7068,7 @@ function create_if_block3(ctx) {
     }
   };
 }
-function create_if_block_2(ctx) {
+function create_if_block_22(ctx) {
   let button;
   let mounted;
   let dispose;
@@ -6078,7 +7086,7 @@ function create_if_block_2(ctx) {
           button,
           "click",
           /*revealAnswer*/
-          ctx[11]
+          ctx[12]
         );
         mounted = true;
       }
@@ -6100,9 +7108,9 @@ function create_if_block_13(ctx) {
   let div1;
   let t2_value = (
     /*getIntervalDisplay*/
-    ctx[13](
+    ctx[14](
       /*schedulingInfo*/
-      ctx[8].again.interval
+      ctx[9].again.interval
     ) + ""
   );
   let t2;
@@ -6115,9 +7123,9 @@ function create_if_block_13(ctx) {
   let div4;
   let t8_value = (
     /*getIntervalDisplay*/
-    ctx[13](
+    ctx[14](
       /*schedulingInfo*/
-      ctx[8].hard.interval
+      ctx[9].hard.interval
     ) + ""
   );
   let t8;
@@ -6130,9 +7138,9 @@ function create_if_block_13(ctx) {
   let div7;
   let t14_value = (
     /*getIntervalDisplay*/
-    ctx[13](
+    ctx[14](
       /*schedulingInfo*/
-      ctx[8].good.interval
+      ctx[9].good.interval
     ) + ""
   );
   let t14;
@@ -6145,9 +7153,9 @@ function create_if_block_13(ctx) {
   let div10;
   let t20_value = (
     /*getIntervalDisplay*/
-    ctx[13](
+    ctx[14](
       /*schedulingInfo*/
-      ctx[8].easy.interval
+      ctx[9].easy.interval
     ) + ""
   );
   let t20;
@@ -6202,25 +7210,25 @@ function create_if_block_13(ctx) {
       attr(div2, "class", "shortcut svelte-1opyfa1");
       attr(button0, "class", "difficulty-button again svelte-1opyfa1");
       button0.disabled = /*isLoading*/
-      ctx[5];
+      ctx[6];
       attr(div3, "class", "button-label svelte-1opyfa1");
       attr(div4, "class", "interval svelte-1opyfa1");
       attr(div5, "class", "shortcut svelte-1opyfa1");
       attr(button1, "class", "difficulty-button hard svelte-1opyfa1");
       button1.disabled = /*isLoading*/
-      ctx[5];
+      ctx[6];
       attr(div6, "class", "button-label svelte-1opyfa1");
       attr(div7, "class", "interval svelte-1opyfa1");
       attr(div8, "class", "shortcut svelte-1opyfa1");
       attr(button2, "class", "difficulty-button good svelte-1opyfa1");
       button2.disabled = /*isLoading*/
-      ctx[5];
+      ctx[6];
       attr(div9, "class", "button-label svelte-1opyfa1");
       attr(div10, "class", "interval svelte-1opyfa1");
       attr(div11, "class", "shortcut svelte-1opyfa1");
       attr(button3, "class", "difficulty-button easy svelte-1opyfa1");
       button3.disabled = /*isLoading*/
-      ctx[5];
+      ctx[6];
       attr(div12, "class", "difficulty-buttons svelte-1opyfa1");
     },
     m(target, anchor) {
@@ -6262,78 +7270,78 @@ function create_if_block_13(ctx) {
             button0,
             "click",
             /*click_handler*/
-            ctx[23]
+            ctx[21]
           ),
           listen(
             button1,
             "click",
             /*click_handler_1*/
-            ctx[24]
+            ctx[22]
           ),
           listen(
             button2,
             "click",
             /*click_handler_2*/
-            ctx[25]
+            ctx[23]
           ),
           listen(
             button3,
             "click",
             /*click_handler_3*/
-            ctx[26]
+            ctx[24]
           )
         ];
         mounted = true;
       }
     },
     p(ctx2, dirty) {
-      if (dirty[0] & /*schedulingInfo*/
-      256 && t2_value !== (t2_value = /*getIntervalDisplay*/
-      ctx2[13](
+      if (dirty & /*schedulingInfo*/
+      512 && t2_value !== (t2_value = /*getIntervalDisplay*/
+      ctx2[14](
         /*schedulingInfo*/
-        ctx2[8].again.interval
+        ctx2[9].again.interval
       ) + ""))
         set_data(t2, t2_value);
-      if (dirty[0] & /*isLoading*/
-      32) {
+      if (dirty & /*isLoading*/
+      64) {
         button0.disabled = /*isLoading*/
-        ctx2[5];
+        ctx2[6];
       }
-      if (dirty[0] & /*schedulingInfo*/
-      256 && t8_value !== (t8_value = /*getIntervalDisplay*/
-      ctx2[13](
+      if (dirty & /*schedulingInfo*/
+      512 && t8_value !== (t8_value = /*getIntervalDisplay*/
+      ctx2[14](
         /*schedulingInfo*/
-        ctx2[8].hard.interval
+        ctx2[9].hard.interval
       ) + ""))
         set_data(t8, t8_value);
-      if (dirty[0] & /*isLoading*/
-      32) {
+      if (dirty & /*isLoading*/
+      64) {
         button1.disabled = /*isLoading*/
-        ctx2[5];
+        ctx2[6];
       }
-      if (dirty[0] & /*schedulingInfo*/
-      256 && t14_value !== (t14_value = /*getIntervalDisplay*/
-      ctx2[13](
+      if (dirty & /*schedulingInfo*/
+      512 && t14_value !== (t14_value = /*getIntervalDisplay*/
+      ctx2[14](
         /*schedulingInfo*/
-        ctx2[8].good.interval
+        ctx2[9].good.interval
       ) + ""))
         set_data(t14, t14_value);
-      if (dirty[0] & /*isLoading*/
-      32) {
+      if (dirty & /*isLoading*/
+      64) {
         button2.disabled = /*isLoading*/
-        ctx2[5];
+        ctx2[6];
       }
-      if (dirty[0] & /*schedulingInfo*/
-      256 && t20_value !== (t20_value = /*getIntervalDisplay*/
-      ctx2[13](
+      if (dirty & /*schedulingInfo*/
+      512 && t20_value !== (t20_value = /*getIntervalDisplay*/
+      ctx2[14](
         /*schedulingInfo*/
-        ctx2[8].easy.interval
+        ctx2[9].easy.interval
       ) + ""))
         set_data(t20, t20_value);
-      if (dirty[0] & /*isLoading*/
-      32) {
+      if (dirty & /*isLoading*/
+      64) {
         button3.disabled = /*isLoading*/
-        ctx2[5];
+        ctx2[6];
       }
     },
     d(detaching) {
@@ -6344,70 +7352,77 @@ function create_if_block_13(ctx) {
     }
   };
 }
-function create_fragment3(ctx) {
+function create_fragment4(ctx) {
   var _a, _b;
   let div2;
   let div1;
   let h3;
+  let t0;
+  let t1_value = (
+    /*deck*/
+    ctx[2].name + ""
+  );
   let t1;
+  let t2;
   let div0;
   let span0;
-  let t2_value = (
+  let t3_value = (
     /*currentIndex*/
     ctx[0] + 1 + ""
   );
-  let t2;
   let t3;
-  let t4_value = (
+  let t4;
+  let t5_value = (
     /*flashcards*/
     ctx[1].length + ""
   );
-  let t4;
   let t5;
-  let span1;
   let t6;
+  let span1;
   let t7;
   let t8;
   let t9;
   let t10;
+  let t11;
   let if_block0 = (
     /*settings*/
-    ((_b = (_a = ctx[2]) == null ? void 0 : _a.review) == null ? void 0 : _b.showProgress) !== false && create_if_block_3(ctx)
+    ((_b = (_a = ctx[3]) == null ? void 0 : _a.review) == null ? void 0 : _b.showProgress) !== false && create_if_block_32(ctx)
   );
   function select_block_type(ctx2, dirty) {
     if (
       /*currentCard*/
-      ctx2[3]
+      ctx2[4]
     )
       return create_if_block3;
     return create_else_block3;
   }
-  let current_block_type = select_block_type(ctx, [-1, -1]);
+  let current_block_type = select_block_type(ctx, -1);
   let if_block1 = current_block_type(ctx);
   return {
     c() {
       div2 = element("div");
       div1 = element("div");
       h3 = element("h3");
-      h3.textContent = "Review Session";
-      t1 = space();
+      t0 = text("Review Session - ");
+      t1 = text(t1_value);
+      t2 = space();
       div0 = element("div");
       span0 = element("span");
-      t2 = text(t2_value);
-      t3 = text(" / ");
-      t4 = text(t4_value);
-      t5 = space();
+      t3 = text(t3_value);
+      t4 = text(" / ");
+      t5 = text(t5_value);
+      t6 = space();
       span1 = element("span");
-      t6 = text("(");
-      t7 = text(
+      t7 = text("(");
+      t8 = text(
         /*remainingCards*/
-        ctx[9]
+        ctx[10]
       );
-      t8 = text(" remaining)");
-      t9 = space();
+      t9 = text(" remaining)");
+      t10 = space();
       if (if_block0)
         if_block0.c();
-      t10 = space();
+      t11 = space();
       if_block1.c();
       attr(h3, "class", "svelte-1opyfa1");
       attr(span1, "class", "remaining svelte-1opyfa1");
@@ -6419,50 +7434,56 @@ function create_fragment3(ctx) {
       insert(target, div2, anchor);
       append(div2, div1);
       append(div1, h3);
-      append(div1, t1);
+      append(h3, t0);
+      append(h3, t1);
+      append(div1, t2);
       append(div1, div0);
       append(div0, span0);
-      append(span0, t2);
       append(span0, t3);
       append(span0, t4);
-      append(div0, t5);
+      append(span0, t5);
+      append(div0, t6);
       append(div0, span1);
-      append(span1, t6);
       append(span1, t7);
       append(span1, t8);
-      append(div2, t9);
+      append(span1, t9);
+      append(div2, t10);
       if (if_block0)
         if_block0.m(div2, null);
-      append(div2, t10);
+      append(div2, t11);
       if_block1.m(div2, null);
     },
-    p(ctx2, dirty) {
+    p(ctx2, [dirty]) {
       var _a2, _b2;
-      if (dirty[0] & /*currentIndex*/
-      1 && t2_value !== (t2_value = /*currentIndex*/
+      if (dirty & /*deck*/
+      4 && t1_value !== (t1_value = /*deck*/
+      ctx2[2].name + ""))
+        set_data(t1, t1_value);
+      if (dirty & /*currentIndex*/
+      1 && t3_value !== (t3_value = /*currentIndex*/
       ctx2[0] + 1 + ""))
-        set_data(t2, t2_value);
-      if (dirty[0] & /*flashcards*/
-      2 && t4_value !== (t4_value = /*flashcards*/
+        set_data(t3, t3_value);
+      if (dirty & /*flashcards*/
+      2 && t5_value !== (t5_value = /*flashcards*/
       ctx2[1].length + ""))
-        set_data(t4, t4_value);
-      if (dirty[0] & /*remainingCards*/
-      512)
+        set_data(t5, t5_value);
+      if (dirty & /*remainingCards*/
+      1024)
         set_data(
-          t7,
+          t8,
           /*remainingCards*/
-          ctx2[9]
+          ctx2[10]
         );
       if (
         /*settings*/
-        ((_b2 = (_a2 = ctx2[2]) == null ? void 0 : _a2.review) == null ? void 0 : _b2.showProgress) !== false
+        ((_b2 = (_a2 = ctx2[3]) == null ? void 0 : _a2.review) == null ? void 0 : _b2.showProgress) !== false
       ) {
         if (if_block0) {
           if_block0.p(ctx2, dirty);
         } else {
-          if_block0 = create_if_block_3(ctx2);
+          if_block0 = create_if_block_32(ctx2);
           if_block0.c();
-          if_block0.m(div2, t10);
+          if_block0.m(div2, t11);
         }
       } else if (if_block0) {
         if_block0.d(1);
@@ -6490,13 +7511,12 @@ function create_fragment3(ctx) {
     }
   };
 }
-function instance3($$self, $$props, $$invalidate) {
+function instance4($$self, $$props, $$invalidate) {
   let currentCard;
   let progress;
   let remainingCards;
-  let sessionLimitReached;
-  var _a, _b;
   let { flashcards = [] } = $$props;
+  let { deck } = $$props;
   let { currentIndex = 0 } = $$props;
   let { onClose } = $$props;
   let { onReview } = $$props;
@@ -6514,24 +7534,24 @@ function instance3($$self, $$props, $$invalidate) {
   function loadCard() {
     if (!currentCard)
       return;
-    $$invalidate(4, showAnswer = false);
-    $$invalidate(8, schedulingInfo = fsrs.getSchedulingInfo(currentCard));
+    $$invalidate(5, showAnswer = false);
+    $$invalidate(9, schedulingInfo = fsrs.getSchedulingInfo(currentCard));
     if (frontEl) {
-      $$invalidate(6, frontEl.innerHTML = "", frontEl);
+      $$invalidate(7, frontEl.innerHTML = "", frontEl);
       renderMarkdown(currentCard.front, frontEl);
     }
     tick().then(() => {
       if (backEl) {
-        $$invalidate(7, backEl.innerHTML = "", backEl);
+        $$invalidate(8, backEl.innerHTML = "", backEl);
         renderMarkdown(currentCard.back, backEl);
       }
     });
   }
   function revealAnswer() {
-    $$invalidate(4, showAnswer = true);
+    $$invalidate(5, showAnswer = true);
     tick().then(() => {
       if (backEl && currentCard) {
-        $$invalidate(7, backEl.innerHTML = "", backEl);
+        $$invalidate(8, backEl.innerHTML = "", backEl);
         renderMarkdown(currentCard.back, backEl);
       }
     });
@@ -6540,20 +7560,12 @@ function instance3($$self, $$props, $$invalidate) {
     return __awaiter(this, void 0, void 0, function* () {
       if (!currentCard || isLoading)
         return;
-      $$invalidate(5, isLoading = true);
+      $$invalidate(6, isLoading = true);
       try {
         yield onReview(currentCard, difficulty);
-        $$invalidate(20, reviewedCount++, reviewedCount);
+        reviewedCount++;
         if (onCardReviewed) {
           yield onCardReviewed(currentCard);
-        }
-        if (sessionLimitReached) {
-          dispatch("complete", {
-            reason: "session-limit",
-            reviewed: reviewedCount
-          });
-          onClose();
-          return;
         }
         if (currentIndex < flashcards.length - 1) {
           $$invalidate(0, currentIndex++, currentIndex);
@@ -6568,7 +7580,7 @@ function instance3($$self, $$props, $$invalidate) {
       } catch (error) {
         console.error("Error reviewing card:", error);
       } finally {
-        $$invalidate(5, isLoading = false);
+        $$invalidate(6, isLoading = false);
       }
     });
   }
@@ -6609,13 +7621,13 @@ function instance3($$self, $$props, $$invalidate) {
   function div0_binding($$value) {
     binding_callbacks[$$value ? "unshift" : "push"](() => {
       frontEl = $$value;
-      $$invalidate(6, frontEl);
+      $$invalidate(7, frontEl);
     });
   }
   function div3_binding($$value) {
     binding_callbacks[$$value ? "unshift" : "push"](() => {
       backEl = $$value;
-      $$invalidate(7, backEl);
+      $$invalidate(8, backEl);
     });
   }
   const click_handler = () => handleDifficulty("again");
@@ -6625,42 +7637,39 @@ function instance3($$self, $$props, $$invalidate) {
   $$self.$$set = ($$props2) => {
     if ("flashcards" in $$props2)
       $$invalidate(1, flashcards = $$props2.flashcards);
+    if ("deck" in $$props2)
+      $$invalidate(2, deck = $$props2.deck);
     if ("currentIndex" in $$props2)
       $$invalidate(0, currentIndex = $$props2.currentIndex);
     if ("onClose" in $$props2)
-      $$invalidate(14, onClose = $$props2.onClose);
+      $$invalidate(15, onClose = $$props2.onClose);
     if ("onReview" in $$props2)
-      $$invalidate(15, onReview = $$props2.onReview);
+      $$invalidate(16, onReview = $$props2.onReview);
     if ("renderMarkdown" in $$props2)
-      $$invalidate(16, renderMarkdown = $$props2.renderMarkdown);
+      $$invalidate(17, renderMarkdown = $$props2.renderMarkdown);
     if ("settings" in $$props2)
-      $$invalidate(2, settings = $$props2.settings);
+      $$invalidate(3, settings = $$props2.settings);
     if ("onCardReviewed" in $$props2)
-      $$invalidate(17, onCardReviewed = $$props2.onCardReviewed);
+      $$invalidate(18, onCardReviewed = $$props2.onCardReviewed);
   };
   $$self.$$.update = () => {
-    if ($$self.$$.dirty[0] & /*flashcards, currentIndex*/
+    if ($$self.$$.dirty & /*flashcards, currentIndex*/
     3) {
       $:
-        $$invalidate(3, currentCard = flashcards[currentIndex] || null);
+        $$invalidate(4, currentCard = flashcards[currentIndex] || null);
     }
-    if ($$self.$$.dirty[0] & /*flashcards, currentIndex*/
+    if ($$self.$$.dirty & /*flashcards, currentIndex*/
     3) {
       $:
-        $$invalidate(10, progress = flashcards.length > 0 ? currentIndex / flashcards.length * 100 : 0);
+        $$invalidate(11, progress = flashcards.length > 0 ? currentIndex / flashcards.length * 100 : 0);
     }
-    if ($$self.$$.dirty[0] & /*flashcards, currentIndex*/
+    if ($$self.$$.dirty & /*flashcards, currentIndex*/
     3) {
       $:
-        $$invalidate(9, remainingCards = flashcards.length - currentIndex);
+        $$invalidate(10, remainingCards = flashcards.length - currentIndex);
     }
-    if ($$self.$$.dirty[0] & /*settings, _a, reviewedCount, _b*/
-    1835012) {
-      $:
-        sessionLimitReached = ($$invalidate(18, _a = settings === null || settings === void 0 ? void 0 : settings.review) === null || _a === void 0 ? void 0 : _a.enableSessionLimit) && reviewedCount >= ($$invalidate(19, _b = settings === null || settings === void 0 ? void 0 : settings.review) === null || _b === void 0 ? void 0 : _b.sessionGoal);
-    }
-    if ($$self.$$.dirty[0] & /*currentCard*/
-    8) {
+    if ($$self.$$.dirty & /*currentCard*/
+    16) {
       $:
         if (currentCard) {
           loadCard();
@@ -6670,6 +7679,7 @@ function instance3($$self, $$props, $$invalidate) {
   return [
     currentIndex,
     flashcards,
+    deck,
     settings,
     currentCard,
     showAnswer,
@@ -6686,9 +7696,6 @@ function instance3($$self, $$props, $$invalidate) {
     onReview,
     renderMarkdown,
     onCardReviewed,
-    _a,
-    _b,
-    reviewedCount,
     div0_binding,
     div3_binding,
     click_handler,
@@ -6703,29 +7710,93 @@ var FlashcardReviewModal = class extends SvelteComponent {
     init(
       this,
       options,
-      instance3,
-      create_fragment3,
+      instance4,
+      create_fragment4,
       safe_not_equal,
       {
         flashcards: 1,
+        deck: 2,
         currentIndex: 0,
-        onClose: 14,
-        onReview: 15,
-        renderMarkdown: 16,
-        settings: 2,
-        onCardReviewed: 17
+        onClose: 15,
+        onReview: 16,
+        renderMarkdown: 17,
+        settings: 3,
+        onCardReviewed: 18
       },
-      add_css3,
-      [-1, -1]
+      add_css4
     );
   }
 };
 var FlashcardReviewModal_default = FlashcardReviewModal;
 
+// src/components/FlashcardReviewModalWrapper.ts
+var FlashcardReviewModalWrapper = class extends import_obsidian4.Modal {
+  constructor(app, plugin, deck, flashcards) {
+    super(app);
+    this.component = null;
+    this.markdownComponents = [];
+    this.plugin = plugin;
+    this.deck = deck;
+    this.flashcards = flashcards;
+  }
+  async onOpen() {
+    const { contentEl } = this;
+    contentEl.empty();
+    contentEl.addClass("flashcard-review-modal");
+    const container = contentEl.createDiv();
+    this.component = new FlashcardReviewModal_default({
+      target: container,
+      props: {
+        flashcards: this.flashcards,
+        deck: this.deck,
+        currentIndex: 0,
+        onClose: () => this.close(),
+        onReview: async (card, difficulty) => {
+          await this.plugin.reviewFlashcard(card, difficulty);
+        },
+        renderMarkdown: (content, el) => {
+          const component = this.plugin.renderMarkdown(content, el);
+          if (component) {
+            this.markdownComponents.push(component);
+          }
+        },
+        settings: this.plugin.settings,
+        onCardReviewed: async (reviewedCard) => {
+          if (this.plugin.view && reviewedCard) {
+            await this.plugin.view.refreshStatsById(reviewedCard.deckId);
+          }
+        }
+      }
+    });
+    this.component.$on("complete", (event) => {
+      const { reason, reviewed } = event.detail;
+      let message = `Review session complete for ${this.deck.name}!`;
+      if (reason === "no-more-cards") {
+        message = `All available cards reviewed! Completed ${reviewed} cards from ${this.deck.name}.`;
+      }
+      new import_obsidian4.Notice(message);
+      if (this.plugin.view) {
+        this.plugin.view.refresh();
+      }
+    });
+  }
+  onClose() {
+    if (this.component) {
+      this.component.$destroy();
+      this.component = null;
+    }
+    this.markdownComponents.forEach((comp) => comp.unload());
+    this.markdownComponents = [];
+    if (this.plugin.view) {
+      this.plugin.view.refresh();
+    }
+  }
+};
+
 // src/main.ts
 var VIEW_TYPE_FLASHCARDS = "flashcards-view";
 var DATABASE_PATH = ".obsidian/plugins/obsidian-flashcards-plugin/flashcards.db";
-var FlashcardsPlugin = class extends import_obsidian3.Plugin {
+var FlashcardsPlugin = class extends import_obsidian5.Plugin {
   constructor() {
     super(...arguments);
     this.view = null;
@@ -6783,14 +7854,14 @@ var FlashcardsPlugin = class extends import_obsidian3.Plugin {
       });
       this.registerEvent(
         this.app.vault.on("modify", async (file) => {
-          if (file instanceof import_obsidian3.TFile && file.extension === "md") {
+          if (file instanceof import_obsidian5.TFile && file.extension === "md") {
             await this.handleFileChange(file);
           }
         })
       );
       this.registerEvent(
         this.app.vault.on("delete", async (file) => {
-          if (file instanceof import_obsidian3.TFile && file.extension === "md") {
+          if (file instanceof import_obsidian5.TFile && file.extension === "md") {
             await this.handleFileDelete(file);
           }
         })
@@ -6800,7 +7871,7 @@ var FlashcardsPlugin = class extends import_obsidian3.Plugin {
       console.log("Flashcards plugin loaded successfully");
     } catch (error) {
       console.error("Error loading Flashcards plugin:", error);
-      new import_obsidian3.Notice(
+      new import_obsidian5.Notice(
         "Failed to load Flashcards plugin. Check console for details."
       );
     }
@@ -6988,8 +8059,14 @@ var FlashcardsPlugin = class extends import_obsidian3.Plugin {
   async getReviewableFlashcards(deckId) {
     return await this.db.getReviewableFlashcards(deckId);
   }
+  async getDailyReviewCounts(deckId) {
+    return await this.db.getDailyReviewCounts(deckId);
+  }
   async getDeckStatsById(deckId) {
     return await this.db.getDeckStats(deckId);
+  }
+  async updateDeckConfig(deckId, config) {
+    await this.db.updateDeck(deckId, { config });
   }
   async reviewFlashcard(flashcard, difficulty) {
     const updatedCard = this.fsrs.updateCard(flashcard, difficulty);
@@ -7019,13 +8096,13 @@ var FlashcardsPlugin = class extends import_obsidian3.Plugin {
     }
   }
   renderMarkdown(content, el) {
-    const component = new import_obsidian3.Component();
+    const component = new import_obsidian5.Component();
     component.load();
-    import_obsidian3.MarkdownRenderer.renderMarkdown(content, el, "", component);
+    import_obsidian5.MarkdownRenderer.renderMarkdown(content, el, "", component);
     return component;
   }
 };
-var FlashcardsView = class extends import_obsidian3.ItemView {
+var FlashcardsView = class extends import_obsidian5.ItemView {
   constructor(leaf, plugin) {
     super(leaf);
     this.component = null;
@@ -7058,7 +8135,11 @@ var FlashcardsView = class extends import_obsidian3.ItemView {
         },
         getReviewCounts: async (days) => {
           return await this.plugin.getReviewCounts(days);
-        }
+        },
+        onUpdateDeckConfig: async (deckId, config) => {
+          await this.plugin.updateDeckConfig(deckId, config);
+        },
+        plugin: this.plugin
       }
     });
     await this.refresh();
@@ -7092,7 +8173,7 @@ var FlashcardsView = class extends import_obsidian3.ItemView {
       this.plugin.debugLog("Refresh complete");
     } catch (error) {
       console.error("Error refreshing flashcards:", error);
-      new import_obsidian3.Notice("Error refreshing flashcards. Check console for details.");
+      new import_obsidian5.Notice("Error refreshing flashcards. Check console for details.");
     }
   }
   async refreshStats() {
@@ -7161,10 +8242,46 @@ var FlashcardsView = class extends import_obsidian3.ItemView {
     try {
       console.log(`Syncing flashcards for deck before review: ${deck.name}`);
       await this.plugin.syncFlashcardsForDeck(deck.name);
+      const dailyCounts = await this.plugin.getDailyReviewCounts(deck.id);
+      const config = deck.config;
+      const remainingNew = config.enableNewCardsLimit ? Math.max(0, config.newCardsLimit - dailyCounts.newCount) : "unlimited";
+      const remainingReview = config.enableReviewCardsLimit ? Math.max(0, config.reviewCardsLimit - dailyCounts.reviewCount) : "unlimited";
       const flashcards = await this.plugin.getReviewableFlashcards(deck.id);
       if (flashcards.length === 0) {
-        new import_obsidian3.Notice(`No cards due for review in ${deck.name}`);
+        let message = `No cards due for review in ${deck.name}`;
+        const newLimitReached = config.enableNewCardsLimit && remainingNew === 0;
+        const reviewLimitReached = config.enableReviewCardsLimit && remainingReview === 0;
+        if (newLimitReached && reviewLimitReached) {
+          message += `
+
+Daily limits reached:`;
+          message += `
+New cards: ${config.newCardsLimit}/${config.newCardsLimit}`;
+          message += `
+Review cards: ${config.reviewCardsLimit}/${config.reviewCardsLimit}`;
+        } else if (newLimitReached) {
+          message += `
+
+Daily new cards limit reached: ${config.newCardsLimit}/${config.newCardsLimit}`;
+        } else if (reviewLimitReached) {
+          message += `
+
+Daily review cards limit reached: ${config.reviewCardsLimit}/${config.reviewCardsLimit}`;
+        }
+        new import_obsidian5.Notice(message);
         return;
+      }
+      if (config.enableNewCardsLimit || config.enableReviewCardsLimit) {
+        let limitInfo = `Daily progress for ${deck.name}:
+`;
+        if (config.enableNewCardsLimit) {
+          limitInfo += `New cards: ${dailyCounts.newCount}/${config.newCardsLimit} (${remainingNew} remaining)
+`;
+        }
+        if (config.enableReviewCardsLimit) {
+          limitInfo += `Review cards: ${dailyCounts.reviewCount}/${config.reviewCardsLimit} (${remainingReview} remaining)`;
+        }
+        new import_obsidian5.Notice(limitInfo, 4e3);
       }
       new FlashcardReviewModalWrapper(
         this.app,
@@ -7174,70 +8291,7 @@ var FlashcardsView = class extends import_obsidian3.ItemView {
       ).open();
     } catch (error) {
       console.error("Error starting review:", error);
-      new import_obsidian3.Notice("Error starting review. Check console for details.");
-    }
-  }
-};
-var FlashcardReviewModalWrapper = class extends import_obsidian3.Modal {
-  constructor(app, plugin, deck, flashcards) {
-    super(app);
-    this.component = null;
-    this.markdownComponents = [];
-    this.plugin = plugin;
-    this.deck = deck;
-    this.flashcards = flashcards;
-  }
-  async onOpen() {
-    const { contentEl } = this;
-    contentEl.empty();
-    contentEl.addClass("flashcard-review-modal");
-    const container = contentEl.createDiv();
-    this.component = new FlashcardReviewModal_default({
-      target: container,
-      props: {
-        flashcards: this.flashcards,
-        currentIndex: 0,
-        onClose: () => this.close(),
-        onReview: async (card, difficulty) => {
-          await this.plugin.reviewFlashcard(card, difficulty);
-        },
-        renderMarkdown: (content, el) => {
-          const component = this.plugin.renderMarkdown(content, el);
-          if (component) {
-            this.markdownComponents.push(component);
-          }
-        },
-        settings: this.plugin.settings,
-        onCardReviewed: async (reviewedCard) => {
-          if (this.plugin.view && reviewedCard) {
-            await this.plugin.view.refreshStatsById(reviewedCard.deckId);
-          }
-        }
-      }
-    });
-    this.component.$on("complete", (event) => {
-      const { reason, reviewed } = event.detail;
-      let message = `Review session complete for ${this.deck.name}!`;
-      if (reason === "session-limit") {
-        message = `Session goal reached! Reviewed ${reviewed} cards from ${this.deck.name}.`;
-      } else if (reason === "no-more-cards") {
-        message = `All cards reviewed! Completed ${reviewed} cards from ${this.deck.name}.`;
-      }
-      new import_obsidian3.Notice(message);
-      if (this.plugin.view) {
-        this.plugin.view.refresh();
-      }
-    });
-  }
-  onClose() {
-    if (this.component) {
-      this.component.$destroy();
-      this.component = null;
-    }
-    this.markdownComponents.forEach((comp) => comp.unload());
-    this.markdownComponents = [];
-    if (this.plugin.view) {
-      this.plugin.view.refresh();
+      new import_obsidian5.Notice("Error starting review. Check console for details.");
     }
   }
 };

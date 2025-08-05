@@ -1,6 +1,6 @@
 <script lang="ts">
     import { onMount, createEventDispatcher, tick } from "svelte";
-    import type { Flashcard } from "../database/types";
+    import type { Flashcard, Deck } from "../database/types";
     import {
         FSRS,
         type SchedulingInfo,
@@ -8,6 +8,7 @@
     } from "../algorithm/fsrs";
 
     export let flashcards: Flashcard[] = [];
+    export let deck: Deck;
     export let currentIndex: number = 0;
     export let onClose: () => void;
     export let onReview: (
@@ -34,9 +35,6 @@
     $: progress =
         flashcards.length > 0 ? (currentIndex / flashcards.length) * 100 : 0;
     $: remainingCards = flashcards.length - currentIndex;
-    $: sessionLimitReached =
-        settings?.review?.enableSessionLimit &&
-        reviewedCount >= settings?.review?.sessionGoal;
 
     function loadCard() {
         if (!currentCard) return;
@@ -84,17 +82,7 @@
                 await onCardReviewed(currentCard);
             }
 
-            // Check if session limit is reached
-            if (sessionLimitReached) {
-                dispatch("complete", {
-                    reason: "session-limit",
-                    reviewed: reviewedCount,
-                });
-                onClose();
-                return;
-            }
-
-            // Move to next card
+            // Move to next card or complete session
             if (currentIndex < flashcards.length - 1) {
                 currentIndex++;
                 loadCard();
@@ -158,7 +146,7 @@
 
 <div class="review-modal">
     <div class="modal-header">
-        <h3>Review Session</h3>
+        <h3>Review Session - {deck.name}</h3>
         <div class="progress-info">
             <span>{currentIndex + 1} / {flashcards.length}</span>
             <span class="remaining">({remainingCards} remaining)</span>

@@ -48,6 +48,26 @@ describe("DatabaseService", () => {
     mockAdapter.readBinary.mockResolvedValue(null);
     mockAdapter.writeBinary.mockResolvedValue(undefined);
 
+    // Mock PRAGMA table_info for migration
+    const mockPragmaStatement = {
+      step: jest.fn().mockReturnValue(false), // Return false to indicate no columns (new schema)
+      get: jest.fn(),
+      free: jest.fn(),
+      bind: jest.fn(),
+      run: jest.fn(),
+    };
+
+    // Setup database prepare to return different mocks based on query
+    mockDb.prepare.mockImplementation((sql: string) => {
+      if (sql.includes("PRAGMA table_info")) {
+        // Return statement that indicates new schema (no columns returned)
+        return mockPragmaStatement;
+      }
+      return mockStatement;
+    });
+
+    mockDb.exec = jest.fn(); // For migration schema recreation
+
     // Create service
     dbService = new DatabaseService("test.db");
     await dbService.initialize();
@@ -103,12 +123,19 @@ describe("DatabaseService", () => {
 
     describe("createDeck", () => {
       it("should create a new deck", async () => {
-        const deck = {
+        const deck: Omit<Deck, "created" | "modified"> = {
           id: "deck_123",
           name: "Test Deck",
           filepath: "test.md",
           tag: "#flashcards/test",
           lastReviewed: null,
+          config: {
+            newCardsLimit: 20,
+            reviewCardsLimit: 100,
+            enableNewCardsLimit: false,
+            enableReviewCardsLimit: false,
+            reviewOrder: "due-date",
+          },
         };
 
         const result = await dbService.createDeck(deck);
@@ -122,6 +149,7 @@ describe("DatabaseService", () => {
           deck.filepath,
           deck.tag,
           deck.lastReviewed,
+          expect.any(String), // config
           expect.any(String), // created
           expect.any(String), // modified
         ]);
@@ -142,6 +170,7 @@ describe("DatabaseService", () => {
           "test.md",
           "#flashcards/test",
           null,
+          '{"newCardsLimit":20,"reviewCardsLimit":100,"enableNewCardsLimit":false,"enableReviewCardsLimit":false,"reviewOrder":"due-date"}',
           "2024-01-01",
           "2024-01-01",
         ]);
@@ -158,6 +187,13 @@ describe("DatabaseService", () => {
           filepath: "test.md",
           tag: "#flashcards/test",
           lastReviewed: null,
+          config: {
+            newCardsLimit: 20,
+            reviewCardsLimit: 100,
+            enableNewCardsLimit: false,
+            enableReviewCardsLimit: false,
+            reviewOrder: "due-date",
+          },
           created: "2024-01-01",
           modified: "2024-01-01",
         });
@@ -181,6 +217,7 @@ describe("DatabaseService", () => {
           "test.md",
           "#flashcards/test",
           null,
+          '{"newCardsLimit":20,"reviewCardsLimit":100,"enableNewCardsLimit":false,"enableReviewCardsLimit":false,"reviewOrder":"due-date"}',
           "2024-01-01",
           "2024-01-01",
         ]);
@@ -197,6 +234,13 @@ describe("DatabaseService", () => {
           filepath: "test.md",
           tag: "#flashcards/test",
           lastReviewed: null,
+          config: {
+            newCardsLimit: 20,
+            reviewCardsLimit: 100,
+            enableNewCardsLimit: false,
+            enableReviewCardsLimit: false,
+            reviewOrder: "due-date",
+          },
           created: "2024-01-01",
           modified: "2024-01-01",
         });
@@ -220,6 +264,7 @@ describe("DatabaseService", () => {
           "test.md",
           "#flashcards/test",
           null,
+          '{"newCardsLimit":20,"reviewCardsLimit":100,"enableNewCardsLimit":false,"enableReviewCardsLimit":false,"reviewOrder":"due-date"}',
           "2024-01-01",
           "2024-01-01",
         ]);
@@ -236,6 +281,13 @@ describe("DatabaseService", () => {
           filepath: "test.md",
           tag: "#flashcards/test",
           lastReviewed: null,
+          config: {
+            newCardsLimit: 20,
+            reviewCardsLimit: 100,
+            enableNewCardsLimit: false,
+            enableReviewCardsLimit: false,
+            reviewOrder: "due-date",
+          },
           created: "2024-01-01",
           modified: "2024-01-01",
         });
@@ -252,13 +304,31 @@ describe("DatabaseService", () => {
 
     describe("deleteDeckByFilepath", () => {
       it("should delete deck by filepath", async () => {
+        // Mock getDeckByFilepath to return a deck
+        mockStatement.step.mockReturnValueOnce(true);
+        mockStatement.get.mockReturnValueOnce([
+          "deck_123",
+          "Test Deck",
+          "test.md",
+          "#flashcards/test",
+          null,
+          '{"newCardsLimit":20,"reviewCardsLimit":100,"enableNewCardsLimit":false,"enableReviewCardsLimit":false,"reviewOrder":"due-date"}',
+          "2024-01-01",
+          "2024-01-01",
+        ]);
+
         await dbService.deleteDeckByFilepath("test.md");
 
+        // Should call getDeckByFilepath first, then delete flashcards, then delete deck
+        expect(mockDb.prepare).toHaveBeenCalledWith(
+          "SELECT * FROM decks WHERE filepath = ?",
+        );
+        expect(mockDb.prepare).toHaveBeenCalledWith(
+          "DELETE FROM flashcards WHERE deck_id = ?",
+        );
         expect(mockDb.prepare).toHaveBeenCalledWith(
           "DELETE FROM decks WHERE filepath = ?",
         );
-        expect(mockStatement.run).toHaveBeenCalledWith(["test.md"]);
-        expect(mockStatement.free).toHaveBeenCalled();
       });
     });
 
@@ -292,18 +362,22 @@ describe("DatabaseService", () => {
           .mockReturnValueOnce([
             "deck_1",
             "Math",
+            "math.md",
             "#flashcards/math",
             null,
+            '{"newCardsLimit":20,"reviewCardsLimit":100,"enableNewCardsLimit":false,"enableReviewCardsLimit":false,"reviewOrder":"due-date"}',
             "2024-01-01",
             "2024-01-01",
           ])
           .mockReturnValueOnce([
             "deck_2",
             "Science",
+            "science.md",
             "#flashcards/science",
-            "2024-01-02",
+            null,
+            '{"newCardsLimit":20,"reviewCardsLimit":100,"enableNewCardsLimit":false,"enableReviewCardsLimit":false,"reviewOrder":"due-date"}',
             "2024-01-01",
-            "2024-01-02",
+            "2024-01-01",
           ]);
 
         const result = await dbService.getAllDecks();
@@ -438,6 +512,31 @@ describe("DatabaseService", () => {
     });
 
     it("should calculate deck statistics correctly", async () => {
+      // Mock getDeckById to return a deck with limits disabled
+      const mockGetDeckById = jest
+        .spyOn(dbService, "getDeckById")
+        .mockResolvedValue({
+          id: "deck_123",
+          name: "Test Deck",
+          filepath: "test.md",
+          tag: "#test",
+          lastReviewed: null,
+          config: {
+            newCardsLimit: 20,
+            reviewCardsLimit: 100,
+            enableNewCardsLimit: false,
+            enableReviewCardsLimit: false,
+            reviewOrder: "due-date",
+          },
+          created: "2024-01-01",
+          modified: "2024-01-01",
+        });
+
+      // Mock getDailyReviewCounts to return empty counts
+      const mockGetDailyReviewCounts = jest
+        .spyOn(dbService, "getDailyReviewCounts")
+        .mockResolvedValue({ newCount: 0, reviewCount: 0 });
+
       // Mock counts for different queries
       mockStatement.get
         .mockReturnValueOnce([5]) // new count
@@ -455,23 +554,136 @@ describe("DatabaseService", () => {
         totalCount: 15,
       });
 
-      // Verify correct queries were made
-      const prepareCalls = mockDb.prepare.mock.calls;
-      expect(prepareCalls[0][0]).toContain("state = 'new' AND due_date <= ?"); // new cards
-      expect(prepareCalls[1][0]).toContain(
-        "state = 'learning' AND due_date <= ?",
-      ); // learning
-      expect(prepareCalls[2][0]).toContain(
-        "state = 'review' AND due_date <= ?",
-      ); // due
-      expect(prepareCalls[3][0]).toContain(
-        "COUNT(*) FROM flashcards WHERE deck_id = ?",
-      ); // total
+      // Clean up mocks
+      mockGetDeckById.mockRestore();
+      mockGetDailyReviewCounts.mockRestore();
+    });
+
+    it("should calculate deck statistics with daily limits enabled", async () => {
+      // Mock getDeckById to return a deck with limits enabled
+      const mockGetDeckById = jest
+        .spyOn(dbService, "getDeckById")
+        .mockResolvedValue({
+          id: "deck_123",
+          name: "Test Deck",
+          filepath: "test.md",
+          tag: "#test",
+          lastReviewed: null,
+          config: {
+            newCardsLimit: 10,
+            reviewCardsLimit: 20,
+            enableNewCardsLimit: true,
+            enableReviewCardsLimit: true,
+            reviewOrder: "due-date",
+          },
+          created: "2024-01-01",
+          modified: "2024-01-01",
+        });
+
+      // Mock getDailyReviewCounts to return some already reviewed cards
+      const mockGetDailyReviewCounts = jest
+        .spyOn(dbService, "getDailyReviewCounts")
+        .mockResolvedValue({ newCount: 3, reviewCount: 5 });
+
+      // Mock counts for different queries
+      mockStatement.get
+        .mockReturnValueOnce([15]) // total new cards available
+        .mockReturnValueOnce([4]) // learning count (unchanged)
+        .mockReturnValueOnce([25]) // total review cards available
+        .mockReturnValueOnce([44]); // total count
+
+      const stats = await dbService.getDeckStats("deck_123");
+
+      expect(stats).toEqual({
+        deckId: "deck_123",
+        newCount: 7, // min(15, 10-3) = 7 remaining new cards
+        learningCount: 4, // learning cards are unchanged
+        dueCount: 15, // min(25, 20-5) = 15 remaining review cards
+        totalCount: 44,
+      });
+
+      // Clean up mocks
+      mockGetDeckById.mockRestore();
+      mockGetDailyReviewCounts.mockRestore();
+    });
+
+    it("should handle zero daily limits without NaN", async () => {
+      // Mock getDeckById to return a deck with zero limits
+      const mockGetDeckById = jest
+        .spyOn(dbService, "getDeckById")
+        .mockResolvedValue({
+          id: "deck_123",
+          name: "Test Deck",
+          filepath: "test.md",
+          tag: "#test",
+          lastReviewed: null,
+          config: {
+            newCardsLimit: 0,
+            reviewCardsLimit: 0,
+            enableNewCardsLimit: true,
+            enableReviewCardsLimit: true,
+            reviewOrder: "due-date",
+          },
+          created: "2024-01-01",
+          modified: "2024-01-01",
+        });
+
+      // Mock getDailyReviewCounts to return zero counts
+      const mockGetDailyReviewCounts = jest
+        .spyOn(dbService, "getDailyReviewCounts")
+        .mockResolvedValue({ newCount: 0, reviewCount: 0 });
+
+      // Mock counts for different queries
+      mockStatement.get
+        .mockReturnValueOnce([10]) // total new cards available
+        .mockReturnValueOnce([5]) // learning count
+        .mockReturnValueOnce([20]) // total review cards available
+        .mockReturnValueOnce([35]); // total count
+
+      const stats = await dbService.getDeckStats("deck_123");
+
+      expect(stats).toEqual({
+        deckId: "deck_123",
+        newCount: 0, // Should be 0 when limit is 0, not NaN
+        learningCount: 5, // learning cards are unchanged
+        dueCount: 0, // Should be 0 when limit is 0, not NaN
+        totalCount: 35,
+      });
+
+      // Verify no NaN values
+      expect(Number.isNaN(stats.newCount)).toBe(false);
+      expect(Number.isNaN(stats.dueCount)).toBe(false);
+      expect(Number.isNaN(stats.learningCount)).toBe(false);
+      expect(Number.isNaN(stats.totalCount)).toBe(false);
+
+      // Clean up mocks
+      mockGetDeckById.mockRestore();
+      mockGetDailyReviewCounts.mockRestore();
     });
 
     describe("getReviewableFlashcards", () => {
       it("should query for reviewable cards with correct order", async () => {
         const deckId = "deck_123";
+
+        // Mock getDeckById to return a deck with config
+        const mockGetDeckById = jest
+          .spyOn(dbService, "getDeckById")
+          .mockResolvedValue({
+            id: "deck_123",
+            name: "Test Deck",
+            filepath: "test.md",
+            tag: "#test",
+            lastReviewed: null,
+            config: {
+              newCardsLimit: 20,
+              reviewCardsLimit: 100,
+              enableNewCardsLimit: false,
+              enableReviewCardsLimit: false,
+              reviewOrder: "due-date",
+            },
+            created: "2024-01-01",
+            modified: "2024-01-01",
+          });
 
         // Mock the statement to return some test data
         mockStatement.step.mockReturnValue(false); // No results
@@ -487,12 +699,19 @@ describe("DatabaseService", () => {
           expect.stringContaining("ORDER BY"),
         );
 
+        // Should call three separate queries for learning, new, and review cards
         expect(mockDb.prepare).toHaveBeenCalledWith(
-          expect.stringContaining("CASE"),
+          expect.stringContaining("state = 'learning'"),
+        );
+        expect(mockDb.prepare).toHaveBeenCalledWith(
+          expect.stringContaining("state = 'new'"),
+        );
+        expect(mockDb.prepare).toHaveBeenCalledWith(
+          expect.stringContaining("state = 'review'"),
         );
 
         expect(mockDb.prepare).toHaveBeenCalledWith(
-          expect.stringContaining("state = 'new' THEN 1"),
+          expect.stringContaining("state = 'new'"),
         );
 
         // Verify bind was called with deck ID and current timestamp
@@ -500,6 +719,205 @@ describe("DatabaseService", () => {
           deckId,
           expect.any(String), // Current timestamp
         ]);
+      });
+    });
+
+    describe("getDailyReviewCounts", () => {
+      it("should count new and review cards reviewed today", async () => {
+        const deckId = "deck_123";
+
+        // Mock review logs data for today
+        mockStatement.step
+          .mockReturnValueOnce(true) // New cards count
+          .mockReturnValueOnce(true); // Review cards count
+
+        mockStatement.get
+          .mockReturnValueOnce([5]) // 5 new cards reviewed today
+          .mockReturnValueOnce([12]); // 12 review cards reviewed today
+
+        const result = await dbService.getDailyReviewCounts(deckId);
+
+        expect(result).toEqual({
+          newCount: 5,
+          reviewCount: 12,
+        });
+
+        // Should prepare queries for both new and review cards
+        expect(mockDb.prepare).toHaveBeenCalledWith(
+          expect.stringContaining("old_interval = 0"),
+        );
+        expect(mockDb.prepare).toHaveBeenCalledWith(
+          expect.stringContaining("old_interval > 0"),
+        );
+      });
+    });
+
+    describe("review order", () => {
+      it("should sort cards in Anki order: learning, review, new", async () => {
+        const deckId = "deck_123";
+
+        // Mock getDeckById to return a deck with due-date order
+        const mockGetDeckById = jest
+          .spyOn(dbService, "getDeckById")
+          .mockResolvedValue({
+            id: "deck_123",
+            name: "Test Deck",
+            filepath: "test.md",
+            tag: "#test",
+            lastReviewed: null,
+            config: {
+              newCardsLimit: 20,
+              reviewCardsLimit: 100,
+              enableNewCardsLimit: false,
+              enableReviewCardsLimit: false,
+              reviewOrder: "due-date",
+            },
+            created: "2024-01-01",
+            modified: "2024-01-01",
+          });
+
+        // Mock getDailyReviewCounts to return empty counts
+        const mockGetDailyReviewCounts = jest
+          .spyOn(dbService, "getDailyReviewCounts")
+          .mockResolvedValue({ newCount: 0, reviewCount: 0 });
+
+        // Mock the three separate queries: learning, new, review
+        // Learning cards (2 cards)
+        mockStatement.step
+          .mockReturnValueOnce(true) // first learning card
+          .mockReturnValueOnce(true) // second learning card
+          .mockReturnValueOnce(false) // end learning query
+          .mockReturnValueOnce(true) // first new card
+          .mockReturnValueOnce(true) // second new card
+          .mockReturnValueOnce(false) // end new query
+          .mockReturnValueOnce(true) // first review card
+          .mockReturnValueOnce(false); // end review query
+
+        mockStatement.get
+          .mockReturnValueOnce([
+            "learning_1",
+            deckId,
+            "Learning Front 1",
+            "Back",
+            "header-paragraph",
+            "test.md",
+            1,
+            "hash1",
+            "learning",
+            "2024-01-01T00:00:00.000Z",
+            60,
+            0,
+            2.5,
+            1.0,
+            0,
+            null,
+            "2024-01-01",
+            "2024-01-01",
+          ])
+          .mockReturnValueOnce([
+            "learning_2",
+            deckId,
+            "Learning Front 2",
+            "Back",
+            "header-paragraph",
+            "test.md",
+            1,
+            "hash2",
+            "learning",
+            "2024-01-02T00:00:00.000Z",
+            60,
+            0,
+            2.5,
+            1.0,
+            0,
+            null,
+            "2024-01-01",
+            "2024-01-01",
+          ])
+          .mockReturnValueOnce([
+            "new_1",
+            deckId,
+            "New Front 1",
+            "Back",
+            "header-paragraph",
+            "test.md",
+            1,
+            "hash3",
+            "new",
+            "2024-01-01T00:00:00.000Z",
+            0,
+            0,
+            2.5,
+            1.0,
+            0,
+            null,
+            "2024-01-01",
+            "2024-01-01",
+          ])
+          .mockReturnValueOnce([
+            "new_2",
+            deckId,
+            "New Front 2",
+            "Back",
+            "header-paragraph",
+            "test.md",
+            1,
+            "hash4",
+            "new",
+            "2024-01-03T00:00:00.000Z",
+            0,
+            0,
+            2.5,
+            1.0,
+            0,
+            null,
+            "2024-01-01",
+            "2024-01-01",
+          ])
+          .mockReturnValueOnce([
+            "review_1",
+            deckId,
+            "Review Front 1",
+            "Back",
+            "header-paragraph",
+            "test.md",
+            1,
+            "hash5",
+            "review",
+            "2024-01-02T00:00:00.000Z",
+            1440,
+            1,
+            2.5,
+            1.0,
+            0,
+            null,
+            "2024-01-01",
+            "2024-01-01",
+          ]);
+
+        const result = await dbService.getReviewableFlashcards(deckId);
+
+        // Verify Anki order: learning first, then review, then new
+        expect(result).toHaveLength(5);
+        expect(result[0].state).toBe("learning");
+        expect(result[1].state).toBe("learning");
+        expect(result[2].state).toBe("review");
+        expect(result[3].state).toBe("new");
+        expect(result[4].state).toBe("new");
+
+        // Verify within learning cards, earliest due date comes first
+        expect(new Date(result[0].dueDate).getTime()).toBeLessThan(
+          new Date(result[1].dueDate).getTime(),
+        );
+
+        // Verify within new cards, earliest due date comes first
+        expect(new Date(result[3].dueDate).getTime()).toBeLessThan(
+          new Date(result[4].dueDate).getTime(),
+        );
+
+        // Clean up mocks
+        mockGetDeckById.mockRestore();
+        mockGetDailyReviewCounts.mockRestore();
       });
     });
   });

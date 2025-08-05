@@ -1,8 +1,9 @@
 <script lang="ts">
     import { onMount, onDestroy } from "svelte";
     import { writable } from "svelte/store";
-    import type { Deck, DeckStats } from "../database/types";
+    import type { Deck, DeckStats, DeckConfig } from "../database/types";
     import ReviewHeatmap from "./ReviewHeatmap.svelte";
+    import { DeckConfigModal } from "./DeckConfigModal";
 
     let decks: Deck[] = [];
     let allDecks: Deck[] = [];
@@ -13,6 +14,11 @@
     export let onDeckClick: (deck: Deck) => void;
     export let onRefresh: () => void;
     export let getReviewCounts: (days: number) => Promise<Map<string, number>>;
+    export let onUpdateDeckConfig: (
+        deckId: string,
+        config: DeckConfig,
+    ) => Promise<void>;
+    export let plugin: any; // FlashcardsPlugin reference
 
     let isRefreshing = false;
     let isUpdatingStats = false;
@@ -87,10 +93,35 @@
         onDeckClick(deck);
     }
 
-    export async function refreshHeatmap() {
+    export function refreshHeatmap() {
         if (heatmapComponent) {
-            await heatmapComponent.refresh();
+            heatmapComponent.refresh();
         }
+    }
+
+    function handleConfigClick(deck: Deck, event: Event) {
+        event.stopPropagation();
+
+        const modal = new DeckConfigModal(
+            plugin,
+            deck,
+            async (config: DeckConfig) => {
+                if (onUpdateDeckConfig) {
+                    await onUpdateDeckConfig(deck.id, config);
+                    // Update the local deck config
+                    const deckIndex = allDecks.findIndex(
+                        (d) => d.id === deck.id,
+                    );
+                    if (deckIndex !== -1) {
+                        allDecks[deckIndex].config = config;
+                        allDecks = [...allDecks];
+                        applyFilter();
+                    }
+                }
+            },
+        );
+
+        modal.open();
     }
 
     onMount(() => {
@@ -157,6 +188,7 @@
                 <div class="col-stat">New</div>
                 <div class="col-stat">Learn</div>
                 <div class="col-stat">Due</div>
+                <div class="col-config"></div>
             </div>
 
             <div class="table-body">
@@ -180,8 +212,15 @@
                             class="col-stat"
                             class:has-cards={stats.newCount > 0}
                             class:updating={isUpdatingStats}
+                            class:has-limit={deck.config.enableNewCardsLimit}
+                            title={deck.config.enableNewCardsLimit
+                                ? `${stats.newCount} new cards available today (limit: ${deck.config.newCardsLimit})`
+                                : `${stats.newCount} new cards due`}
                         >
                             {stats.newCount}
+                            {#if deck.config.enableNewCardsLimit}
+                                <span class="limit-indicator">📅</span>
+                            {/if}
                         </div>
                         <div
                             class="col-stat"
@@ -194,8 +233,40 @@
                             class="col-stat"
                             class:has-cards={stats.dueCount > 0}
                             class:updating={isUpdatingStats}
+                            class:has-limit={deck.config.enableReviewCardsLimit}
+                            title={deck.config.enableReviewCardsLimit
+                                ? `${stats.dueCount} review cards available today (limit: ${deck.config.reviewCardsLimit})`
+                                : `${stats.dueCount} review cards due`}
                         >
                             {stats.dueCount}
+                            {#if deck.config.enableReviewCardsLimit}
+                                <span class="limit-indicator">📅</span>
+                            {/if}
+                        </div>
+                        <div class="col-config">
+                            <button
+                                class="deck-config-button"
+                                on:click={(e) => handleConfigClick(deck, e)}
+                                title="Configure deck settings"
+                                aria-label="Configure {deck.name}"
+                            >
+                                <svg
+                                    xmlns="http://www.w3.org/2000/svg"
+                                    width="16"
+                                    height="16"
+                                    viewBox="0 0 24 24"
+                                    fill="none"
+                                    stroke="currentColor"
+                                    stroke-width="2"
+                                    stroke-linecap="round"
+                                    stroke-linejoin="round"
+                                >
+                                    <circle cx="12" cy="12" r="3"></circle>
+                                    <path
+                                        d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1 1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z"
+                                    ></path>
+                                </svg>
+                            </button>
                         </div>
                     </div>
                 {/each}
@@ -318,7 +389,7 @@
 
     .table-header {
         display: grid;
-        grid-template-columns: 1fr 60px 60px 60px;
+        grid-template-columns: 1fr 60px 60px 60px 40px;
         gap: 8px;
         padding: 8px 16px;
         font-weight: 600;
@@ -335,7 +406,7 @@
 
     .deck-row {
         display: grid;
-        grid-template-columns: 1fr 60px 60px 60px;
+        grid-template-columns: 1fr 60px 60px 60px 40px;
         gap: 8px;
         padding: 12px 16px;
         border-bottom: 1px solid var(--background-modifier-border);
@@ -363,7 +434,36 @@
     .deck-name-link:focus {
         outline: 2px solid var(--interactive-accent);
         outline-offset: 2px;
-        border-radius: 2px;
+        border-radius: 3px;
+    }
+
+    .col-config {
+        display: flex;
+        align-items: center;
+        justify-content: center;
+    }
+
+    .deck-config-button {
+        background: transparent;
+        border: none;
+        color: var(--text-muted);
+        cursor: pointer;
+        padding: 6px;
+        border-radius: 3px;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        transition: all 0.2s ease;
+    }
+
+    .deck-config-button:hover {
+        background: var(--background-modifier-hover);
+        color: var(--text-normal);
+    }
+
+    .deck-config-button:focus {
+        outline: 2px solid var(--interactive-accent);
+        outline-offset: 2px;
     }
 
     .col-deck {
@@ -401,6 +501,18 @@
     .col-stat.updating {
         opacity: 0.6;
         transition: opacity 0.3s ease;
+    }
+
+    .col-stat.has-limit {
+        position: relative;
+        border-left: 2px solid var(--interactive-accent);
+        padding-left: 6px;
+    }
+
+    .limit-indicator {
+        font-size: 10px;
+        margin-left: 4px;
+        opacity: 0.7;
     }
 
     .table-body::-webkit-scrollbar {

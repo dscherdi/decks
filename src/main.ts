@@ -15,11 +15,13 @@ import {
 import { DatabaseService } from "./database/DatabaseService";
 import { DeckManager } from "./services/DeckManager";
 import { FSRS, type Difficulty } from "./algorithm/fsrs";
-import { Deck, Flashcard, DeckStats } from "./database/types";
+import { Deck, Flashcard, DeckStats, DeckConfig } from "./database/types";
 import { FlashcardsSettings, DEFAULT_SETTINGS } from "./settings";
 import { FlashcardsSettingTab } from "./components/SettingsTab";
 import DeckListPanel from "./components/DeckListPanel.svelte";
-import FlashcardReviewModal from "./components/FlashcardReviewModal.svelte";
+import { DeckConfigModal } from "./components/DeckConfigModal";
+import DeckConfigUI from "./components/DeckConfigUI.svelte";
+import { FlashcardReviewModalWrapper } from "./components/FlashcardReviewModalWrapper";
 
 const VIEW_TYPE_FLASHCARDS = "flashcards-view";
 const DATABASE_PATH =
@@ -374,8 +376,18 @@ export default class FlashcardsPlugin extends Plugin {
     return await this.db.getReviewableFlashcards(deckId);
   }
 
+  async getDailyReviewCounts(
+    deckId: string,
+  ): Promise<{ newCount: number; reviewCount: number }> {
+    return await this.db.getDailyReviewCounts(deckId);
+  }
+
   async getDeckStatsById(deckId: string): Promise<DeckStats> {
     return await this.db.getDeckStats(deckId);
+  }
+
+  async updateDeckConfig(deckId: string, config: DeckConfig): Promise<void> {
+    await this.db.updateDeck(deckId, { config });
   }
 
   async reviewFlashcard(
@@ -471,6 +483,10 @@ class FlashcardsView extends ItemView {
         getReviewCounts: async (days: number) => {
           return await this.plugin.getReviewCounts(days);
         },
+        onUpdateDeckConfig: async (deckId: string, config: DeckConfig) => {
+          await this.plugin.updateDeckConfig(deckId, config);
+        },
+        plugin: this.plugin,
       },
     });
 
@@ -607,12 +623,54 @@ class FlashcardsView extends ItemView {
       console.log(`Syncing flashcards for deck before review: ${deck.name}`);
       await this.plugin.syncFlashcardsForDeck(deck.name);
 
-      // Get all flashcards that are due for review (new + due cards)
+      // Get daily review counts to show remaining allowance
+      const dailyCounts = await this.plugin.getDailyReviewCounts(deck.id);
+
+      // Calculate remaining daily allowance
+      const config = deck.config;
+      const remainingNew = config.enableNewCardsLimit
+        ? Math.max(0, config.newCardsLimit - dailyCounts.newCount)
+        : "unlimited";
+      const remainingReview = config.enableReviewCardsLimit
+        ? Math.max(0, config.reviewCardsLimit - dailyCounts.reviewCount)
+        : "unlimited";
+
+      // Get all flashcards that are due for review (respecting daily limits)
       const flashcards = await this.plugin.getReviewableFlashcards(deck.id);
 
       if (flashcards.length === 0) {
-        new Notice(`No cards due for review in ${deck.name}`);
+        let message = `No cards due for review in ${deck.name}`;
+
+        // Check if limits are the reason no cards are available
+        const newLimitReached =
+          config.enableNewCardsLimit && remainingNew === 0;
+        const reviewLimitReached =
+          config.enableReviewCardsLimit && remainingReview === 0;
+
+        if (newLimitReached && reviewLimitReached) {
+          message += `\n\nDaily limits reached:`;
+          message += `\nNew cards: ${config.newCardsLimit}/${config.newCardsLimit}`;
+          message += `\nReview cards: ${config.reviewCardsLimit}/${config.reviewCardsLimit}`;
+        } else if (newLimitReached) {
+          message += `\n\nDaily new cards limit reached: ${config.newCardsLimit}/${config.newCardsLimit}`;
+        } else if (reviewLimitReached) {
+          message += `\n\nDaily review cards limit reached: ${config.reviewCardsLimit}/${config.reviewCardsLimit}`;
+        }
+
+        new Notice(message);
         return;
+      }
+
+      // Show daily limit info before starting review if limits are active
+      if (config.enableNewCardsLimit || config.enableReviewCardsLimit) {
+        let limitInfo = `Daily progress for ${deck.name}:\n`;
+        if (config.enableNewCardsLimit) {
+          limitInfo += `New cards: ${dailyCounts.newCount}/${config.newCardsLimit} (${remainingNew} remaining)\n`;
+        }
+        if (config.enableReviewCardsLimit) {
+          limitInfo += `Review cards: ${dailyCounts.reviewCount}/${config.reviewCardsLimit} (${remainingReview} remaining)`;
+        }
+        new Notice(limitInfo, 4000);
       }
 
       // Open review modal
@@ -625,94 +683,6 @@ class FlashcardsView extends ItemView {
     } catch (error) {
       console.error("Error starting review:", error);
       new Notice("Error starting review. Check console for details.");
-    }
-  }
-}
-
-class FlashcardReviewModalWrapper extends Modal {
-  private plugin: FlashcardsPlugin;
-  private deck: Deck;
-  private flashcards: Flashcard[];
-  private component: FlashcardReviewModal | null = null;
-  private markdownComponents: Component[] = [];
-
-  constructor(
-    app: any,
-    plugin: FlashcardsPlugin,
-    deck: Deck,
-    flashcards: Flashcard[],
-  ) {
-    super(app);
-    this.plugin = plugin;
-    this.deck = deck;
-    this.flashcards = flashcards;
-  }
-
-  async onOpen() {
-    const { contentEl } = this;
-    contentEl.empty();
-    contentEl.addClass("flashcard-review-modal");
-
-    // Create container for Svelte component
-    const container = contentEl.createDiv();
-
-    this.component = new FlashcardReviewModal({
-      target: container,
-      props: {
-        flashcards: this.flashcards,
-        currentIndex: 0,
-        onClose: () => this.close(),
-        onReview: async (card: Flashcard, difficulty: Difficulty) => {
-          await this.plugin.reviewFlashcard(card, difficulty);
-        },
-        renderMarkdown: (content: string, el: HTMLElement) => {
-          const component = this.plugin.renderMarkdown(content, el);
-          if (component) {
-            this.markdownComponents.push(component);
-          }
-        },
-        settings: this.plugin.settings,
-        onCardReviewed: async (reviewedCard: Flashcard) => {
-          // Refresh stats for the specific deck being reviewed (more efficient)
-          if (this.plugin.view && reviewedCard) {
-            await this.plugin.view.refreshStatsById(reviewedCard.deckId);
-          }
-        },
-      },
-    });
-
-    this.component.$on("complete", (event) => {
-      const { reason, reviewed } = event.detail;
-      let message = `Review session complete for ${this.deck.name}!`;
-
-      if (reason === "session-limit") {
-        message = `Session goal reached! Reviewed ${reviewed} cards from ${this.deck.name}.`;
-      } else if (reason === "no-more-cards") {
-        message = `All cards reviewed! Completed ${reviewed} cards from ${this.deck.name}.`;
-      }
-
-      new Notice(message);
-
-      // Refresh the view to update stats
-      if (this.plugin.view) {
-        this.plugin.view.refresh();
-      }
-    });
-  }
-
-  onClose() {
-    if (this.component) {
-      this.component.$destroy();
-      this.component = null;
-    }
-
-    // Clean up markdown components
-    this.markdownComponents.forEach((comp) => comp.unload());
-    this.markdownComponents = [];
-
-    // Refresh view when closing
-    if (this.plugin.view) {
-      this.plugin.view.refresh();
     }
   }
 }

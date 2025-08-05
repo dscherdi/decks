@@ -1,9 +1,20 @@
+export type ReviewOrder = "due-date" | "random";
+
+export interface DeckConfig {
+  newCardsLimit: number; // Max new cards per day
+  reviewCardsLimit: number; // Max review cards per day
+  enableNewCardsLimit: boolean; // Whether to enforce new cards limit
+  enableReviewCardsLimit: boolean; // Whether to enforce review cards limit
+  reviewOrder: ReviewOrder; // Order for review cards: oldest due first or random
+}
+
 export interface Deck {
   id: string;
   name: string;
   filepath: string;
   tag: string;
   lastReviewed: string | null;
+  config: DeckConfig;
   created: string;
   modified: string;
 }
@@ -55,3 +66,11 @@ export interface DatabaseSchema {
   flashcards: Flashcard;
   review_logs: ReviewLog;
 }
+
+export const DEFAULT_DECK_CONFIG: DeckConfig = {
+  newCardsLimit: 20,
+  reviewCardsLimit: 100,
+  enableNewCardsLimit: false,
+  enableReviewCardsLimit: false,
+  reviewOrder: "due-date",
+};

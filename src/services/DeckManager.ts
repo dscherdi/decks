@@ -1,5 +1,5 @@
 import { TFile, Vault, MetadataCache, CachedMetadata } from "obsidian";
-import { Deck, Flashcard } from "../database/types";
+import { Deck, Flashcard, DEFAULT_DECK_CONFIG } from "../database/types";
 import { DatabaseService } from "../database/DatabaseService";
 
 export interface ParsedFlashcard {
@@ -155,6 +155,7 @@ export class DeckManager {
               filepath: filePath, // Store full file path separately
               tag: tag,
               lastReviewed: null,
+              config: DEFAULT_DECK_CONFIG,
             };
             this.debugLog(
               `Creating new deck: "${deckName}" with ID: ${deck.id}, tag: ${tag}, filepath: ${filePath}`,

@@ -1,5 +1,11 @@
 import initSqlJs, { Database, SqlJsStatic } from "sql.js";
-import { Deck, Flashcard, ReviewLog, DeckStats } from "./types";
+import {
+  Deck,
+  Flashcard,
+  ReviewLog,
+  DeckStats,
+  DEFAULT_DECK_CONFIG,
+} from "./types";
 
 export class DatabaseService {
   private db: Database | null = null;
@@ -79,6 +85,7 @@ export class DatabaseService {
         filepath TEXT NOT NULL UNIQUE,
         tag TEXT NOT NULL,
         last_reviewed TEXT,
+        config TEXT NOT NULL DEFAULT '{"newCardsLimit":20,"reviewCardsLimit":100,"enableNewCardsLimit":false,"enableReviewCardsLimit":false,"reviewOrder":"due-date"}',
         created TEXT NOT NULL,
         modified TEXT NOT NULL
       );
@@ -129,6 +136,20 @@ export class DatabaseService {
     this.db.run(sql);
   }
 
+  // Helper method to parse deck rows
+  private parseDeckRow(row: any[]): Deck {
+    return {
+      id: row[0] as string,
+      name: row[1] as string,
+      filepath: row[2] as string,
+      tag: row[3] as string,
+      lastReviewed: row[4] as string | null,
+      config: row[5] ? JSON.parse(row[5] as string) : DEFAULT_DECK_CONFIG,
+      created: row[6] as string,
+      modified: row[7] as string,
+    };
+  }
+
   // Deck operations
   async createDeck(deck: Omit<Deck, "created" | "modified">): Promise<Deck> {
     if (!this.db) throw new Error("Database not initialized");
@@ -142,8 +163,8 @@ export class DatabaseService {
 
     try {
       const stmt = this.db.prepare(`
-        INSERT INTO decks (id, name, filepath, tag, last_reviewed, created, modified)
-        VALUES (?, ?, ?, ?, ?, ?, ?)
+        INSERT INTO decks (id, name, filepath, tag, last_reviewed, config, created, modified)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?)
       `);
 
       stmt.run([
@@ -152,6 +173,7 @@ export class DatabaseService {
         fullDeck.filepath,
         fullDeck.tag,
         fullDeck.lastReviewed,
+        JSON.stringify(fullDeck.config),
         fullDeck.created,
         fullDeck.modified,
       ]);
@@ -173,16 +195,7 @@ export class DatabaseService {
     if (stmt.step()) {
       const result = stmt.get();
       stmt.free();
-
-      return {
-        id: result[0] as string,
-        name: result[1] as string,
-        filepath: result[2] as string,
-        tag: result[3] as string,
-        lastReviewed: result[4] as string | null,
-        created: result[5] as string,
-        modified: result[6] as string,
-      };
+      return this.parseDeckRow(result);
     }
 
     stmt.free();
@@ -198,16 +211,7 @@ export class DatabaseService {
     if (stmt.step()) {
       const result = stmt.get();
       stmt.free();
-
-      return {
-        id: result[0] as string,
-        name: result[1] as string,
-        filepath: result[2] as string,
-        tag: result[3] as string,
-        lastReviewed: result[4] as string | null,
-        created: result[5] as string,
-        modified: result[6] as string,
-      };
+      return this.parseDeckRow(result);
     }
 
     stmt.free();
@@ -223,16 +227,7 @@ export class DatabaseService {
     if (stmt.step()) {
       const result = stmt.get();
       stmt.free();
-
-      return {
-        id: result[0] as string,
-        name: result[1] as string,
-        filepath: result[2] as string,
-        tag: result[3] as string,
-        lastReviewed: result[4] as string | null,
-        created: result[5] as string,
-        modified: result[6] as string,
-      };
+      return this.parseDeckRow(result);
     }
 
     stmt.free();
@@ -241,7 +236,7 @@ export class DatabaseService {
 
   async updateDeck(
     deckId: string,
-    updates: Partial<Pick<Deck, "name" | "tag" | "lastReviewed">>,
+    updates: Partial<Pick<Deck, "name" | "tag" | "lastReviewed" | "config">>,
   ): Promise<void> {
     if (!this.db) throw new Error("Database not initialized");
 
@@ -259,7 +254,10 @@ export class DatabaseService {
       WHERE id = ?
     `);
 
-    const values = Object.values(updates);
+    const values = Object.values(updates).map((value, index) => {
+      const key = Object.keys(updates)[index];
+      return key === "config" ? JSON.stringify(value) : value;
+    });
     values.push(now, deckId);
     stmt.run(values);
     stmt.free();
@@ -274,15 +272,7 @@ export class DatabaseService {
 
     while (stmt.step()) {
       const row = stmt.get();
-      decks.push({
-        id: row[0] as string,
-        name: row[1] as string,
-        filepath: row[2] as string,
-        tag: row[3] as string,
-        lastReviewed: row[4] as string | null,
-        created: row[5] as string,
-        modified: row[6] as string,
-      });
+      decks.push(this.parseDeckRow(row));
     }
 
     stmt.free();
@@ -492,36 +482,154 @@ export class DatabaseService {
     return flashcards;
   }
 
+  async getDailyReviewCounts(
+    deckId: string,
+  ): Promise<{ newCount: number; reviewCount: number }> {
+    if (!this.db) throw new Error("Database not initialized");
+
+    const today = new Date().toISOString().split("T")[0]; // YYYY-MM-DD format
+    const todayStart = `${today}T00:00:00.000Z`;
+    const todayEnd = `${today}T23:59:59.999Z`;
+
+    // Count new cards reviewed today (reviews where old_repetitions was 0)
+    const newCardsStmt = this.db.prepare(`
+      SELECT COUNT(*) as count FROM review_logs rl
+      JOIN flashcards f ON rl.flashcard_id = f.id
+      WHERE f.deck_id = ?
+        AND rl.reviewed_at >= ?
+        AND rl.reviewed_at <= ?
+        AND (rl.old_interval = 0 OR f.repetitions = 1)
+    `);
+    newCardsStmt.bind([deckId, todayStart, todayEnd]);
+    const newResult = newCardsStmt.step() ? newCardsStmt.get() : [0];
+    const newCount = Number(newResult[0]) || 0;
+    newCardsStmt.free();
+
+    // Count review cards reviewed today (reviews where old_interval > 0)
+    const reviewCardsStmt = this.db.prepare(`
+      SELECT COUNT(*) as count FROM review_logs rl
+      JOIN flashcards f ON rl.flashcard_id = f.id
+      WHERE f.deck_id = ?
+        AND rl.reviewed_at >= ?
+        AND rl.reviewed_at <= ?
+        AND rl.old_interval > 0
+    `);
+    reviewCardsStmt.bind([deckId, todayStart, todayEnd]);
+    const reviewResult = reviewCardsStmt.step() ? reviewCardsStmt.get() : [0];
+    const reviewCount = Number(reviewResult[0]) || 0;
+    reviewCardsStmt.free();
+
+    return { newCount, reviewCount };
+  }
+
   async getReviewableFlashcards(deckId: string): Promise<Flashcard[]> {
     if (!this.db) throw new Error("Database not initialized");
 
     const now = new Date().toISOString();
 
-    // Get all cards that are due for review based on state:
-    // 1. New cards that are due
-    // 2. Learning cards that are due
-    // 3. Review cards that are due
-    const stmt = this.db.prepare(`
-      SELECT * FROM flashcards
-      WHERE deck_id = ? AND due_date <= ?
-      ORDER BY
-        CASE
-          WHEN state = 'new' THEN 1     -- New cards first
-          WHEN state = 'learning' THEN 2 -- Learning cards second
-          WHEN state = 'review' THEN 3   -- Review cards last
-        END,
-        due_date
-    `);
-
-    stmt.bind([deckId, now]);
-    const flashcards: Flashcard[] = [];
-
-    while (stmt.step()) {
-      const row = stmt.get();
-      flashcards.push(this.rowToFlashcard(row));
+    // Get deck config to check limits
+    const deck = await this.getDeckById(deckId);
+    if (!deck) {
+      throw new Error(`Deck not found: ${deckId}`);
     }
 
-    stmt.free();
+    const config = deck.config;
+    const flashcards: Flashcard[] = [];
+
+    // Get today's review counts to calculate remaining daily allowance
+    const dailyCounts = await this.getDailyReviewCounts(deckId);
+
+    // 1. Always get ALL learning cards (not subject to limits per Anki behavior)
+    const learningStmt = this.db.prepare(`
+      SELECT * FROM flashcards
+      WHERE deck_id = ? AND due_date <= ? AND state = 'learning'
+      ORDER BY due_date
+    `);
+    learningStmt.bind([deckId, now]);
+    while (learningStmt.step()) {
+      const row = learningStmt.get();
+      flashcards.push(this.rowToFlashcard(row));
+    }
+    learningStmt.free();
+
+    // 2. Get new cards with remaining daily limit
+    const newCardsLimit = Number(config.newCardsLimit) || 0;
+    const newCountToday = Number(dailyCounts.newCount) || 0;
+    const remainingNewCards =
+      config.enableNewCardsLimit && newCardsLimit > 0
+        ? Math.max(0, newCardsLimit - newCountToday)
+        : config.enableNewCardsLimit && newCardsLimit === 0
+          ? 0
+          : Number.MAX_SAFE_INTEGER;
+
+    if (remainingNewCards > 0) {
+      const newCardsStmt = this.db.prepare(`
+        SELECT * FROM flashcards
+        WHERE deck_id = ? AND due_date <= ? AND state = 'new'
+        ORDER BY due_date
+        ${config.enableNewCardsLimit ? `LIMIT ${remainingNewCards}` : ""}
+      `);
+      newCardsStmt.bind([deckId, now]);
+      while (newCardsStmt.step()) {
+        const row = newCardsStmt.get();
+        flashcards.push(this.rowToFlashcard(row));
+      }
+      newCardsStmt.free();
+    }
+
+    // 3. Get review cards with remaining daily limit
+    const reviewCardsLimit = Number(config.reviewCardsLimit) || 0;
+    const reviewCountToday = Number(dailyCounts.reviewCount) || 0;
+    const remainingReviewCards =
+      config.enableReviewCardsLimit && reviewCardsLimit > 0
+        ? Math.max(0, reviewCardsLimit - reviewCountToday)
+        : config.enableReviewCardsLimit && reviewCardsLimit === 0
+          ? 0
+          : Number.MAX_SAFE_INTEGER;
+
+    if (remainingReviewCards > 0) {
+      const reviewCardsStmt = this.db.prepare(`
+        SELECT * FROM flashcards
+        WHERE deck_id = ? AND due_date <= ? AND state = 'review'
+        ORDER BY due_date
+        ${config.enableReviewCardsLimit ? `LIMIT ${remainingReviewCards}` : ""}
+      `);
+      reviewCardsStmt.bind([deckId, now]);
+      while (reviewCardsStmt.step()) {
+        const row = reviewCardsStmt.get();
+        flashcards.push(this.rowToFlashcard(row));
+      }
+      reviewCardsStmt.free();
+    }
+
+    // Sort final result: Anki order - learning first, then review, then new
+    flashcards.sort((a, b) => {
+      const stateOrder = { learning: 1, review: 2, new: 3 };
+      const aOrder = stateOrder[a.state];
+      const bOrder = stateOrder[b.state];
+
+      if (aOrder !== bOrder) {
+        return aOrder - bOrder;
+      }
+
+      // Within same state, apply specific ordering rules
+      if (a.state === "learning") {
+        // Learning cards: always by due date (earliest first)
+        return new Date(a.dueDate).getTime() - new Date(b.dueDate).getTime();
+      } else if (a.state === "review") {
+        // Review cards: follow deck config preference
+        if (config.reviewOrder === "random") {
+          return Math.random() - 0.5;
+        } else {
+          // Default: oldest due first
+          return new Date(a.dueDate).getTime() - new Date(b.dueDate).getTime();
+        }
+      } else {
+        // New cards: by due date (creation order)
+        return new Date(a.dueDate).getTime() - new Date(b.dueDate).getTime();
+      }
+    });
+
     return flashcards;
   }
 
@@ -570,6 +678,17 @@ export class DatabaseService {
 
     const now = new Date().toISOString();
 
+    // Get deck config to check limits
+    const deck = await this.getDeckById(deckId);
+    if (!deck) {
+      throw new Error(`Deck not found: ${deckId}`);
+    }
+
+    const config = deck.config;
+
+    // Get today's review counts to calculate remaining daily allowance
+    const dailyCounts = await this.getDailyReviewCounts(deckId);
+
     // Count new cards (state = 'new' and due for first review)
     const newStmt = this.db.prepare(`
       SELECT COUNT(*) FROM flashcards
@@ -577,8 +696,19 @@ export class DatabaseService {
     `);
     newStmt.bind([deckId, now]);
     newStmt.step();
-    const newCount = (newStmt.get()[0] as number) || 0;
+    const totalNewCards = (newStmt.get()[0] as number) || 0;
     newStmt.free();
+
+    // Calculate remaining new cards based on daily limit
+    let newCount = totalNewCards;
+    const newCardsLimit = Number(config.newCardsLimit) || 0;
+    const newCountToday = Number(dailyCounts.newCount) || 0;
+    if (config.enableNewCardsLimit && newCardsLimit > 0) {
+      const remainingNew = Math.max(0, newCardsLimit - newCountToday);
+      newCount = Math.min(totalNewCards, remainingNew);
+    } else if (config.enableNewCardsLimit && newCardsLimit === 0) {
+      newCount = 0; // No new cards allowed when limit is 0
+    }
 
     // Count learning cards (state = 'learning' and due)
     const learningStmt = this.db.prepare(`
@@ -597,8 +727,19 @@ export class DatabaseService {
     `);
     dueStmt.bind([deckId, now]);
     dueStmt.step();
-    const dueCount = (dueStmt.get()[0] as number) || 0;
+    const totalDueCards = (dueStmt.get()[0] as number) || 0;
     dueStmt.free();
+
+    // Calculate remaining review cards based on daily limit
+    let dueCount = totalDueCards;
+    const reviewCardsLimit = Number(config.reviewCardsLimit) || 0;
+    const reviewCountToday = Number(dailyCounts.reviewCount) || 0;
+    if (config.enableReviewCardsLimit && reviewCardsLimit > 0) {
+      const remainingReview = Math.max(0, reviewCardsLimit - reviewCountToday);
+      dueCount = Math.min(totalDueCards, remainingReview);
+    } else if (config.enableReviewCardsLimit && reviewCardsLimit === 0) {
+      dueCount = 0; // No review cards allowed when limit is 0
+    }
 
     // Total count
     const totalStmt = this.db.prepare(`
@@ -678,9 +819,13 @@ export class DatabaseService {
 
       // Check if filepath column exists
       const hasFilepath = columns.some((col) => col[1] === "filepath");
+      // Check if config column exists
+      const hasConfig = columns.some((col) => col[1] === "config");
 
-      if (!hasFilepath) {
-        console.log("Migrating database schema to support filepath column...");
+      if (!hasFilepath || !hasConfig) {
+        console.log(
+          "Migrating database schema to support filepath and config columns...",
+        );
         console.log(
           "Clearing old data - decks will be rebuilt from files on next sync",
         );

@@ -69,7 +69,14 @@
 - `src/database/` - DatabaseService and type definitions
 - `src/services/` - DeckManager with smart sync logic
 - `src/algorithm/` - FSRS implementation
-- `src/components/` - Svelte UI components
+- `src/components/` - UI components (Svelte + Obsidian modal wrappers)
+  - `DeckListPanel.svelte` - Main deck list with stats and controls
+  - `FlashcardReviewModal.svelte` - Review session UI component
+  - `FlashcardReviewModalWrapper.ts` - Obsidian modal wrapper for review
+  - `DeckConfigUI.svelte` - Deck configuration form component
+  - `DeckConfigModal.ts` - Obsidian modal wrapper for deck config
+  - `ReviewHeatmap.svelte` - GitHub-style activity heatmap
+  - `SettingsTab.ts` - Plugin settings interface
 - `src/__tests__/` - Comprehensive test suite
 
 ## 🎯 Current Status
@@ -88,8 +95,49 @@
 3. ✅ Add a github style heatmap at the bottom left panel based on the reviews done per day
 4. ✅ Filter button on the decks table, to filter decks by name or tag.
 5. ✅ Background job that refreshes the side panel stats and data every 5 seconds
+6. ✅ Create a configuration page for each deck, which is reached by clicking on a cog icon on the row of the deck list. This configuration page should configure for a particular deck, the number of flashcards to review per session.
+7. ✅ Implement Anki-style daily limits for new cards and review cards with proper enforcement
+8. ✅ Review order of flashcard should be similar to anki, it should follow this order:
+  1. Learning Cards
+  	•	Cards currently in a learning or relearning state.
+  	•	These always come first to ensure timely repetition within their interval.
+  	•	Includes cards you've failed or just learned.
+  2. Review Cards (Mature/Due)
+  	•	Cards that are due based on spaced repetition.
+  	•	Shown after all learning cards.
+  	•	Their order is controlled by the deck option "Review order":
+  	•	Oldest due first (default)
+  	•	Random
+  	•	Relative overdueness
+  3. New Cards
+  	•	Cards never reviewed before.
+  	•	Shown after learning and review cards.
+  	•	Their order is set by the deck option “New card order”:
+  	•	Order added (default, based on note ID)
+  	•	Random
+  	•	Due position
 
 ## ✅ Recent Enhancements
+
+### Deck Configuration System
+- Added per-deck configuration with session limits for granular control
+- Implemented deck configuration modal accessible via cog icon in dedicated column
+- Added database support for deck-specific settings with JSON storage
+- Created modular Svelte UI component with reactive controls and validation
+- Integrated Obsidian native modal system with Svelte component architecture
+- Added automatic schema migration for existing databases
+- Preserved backward compatibility with default configuration values
+- Separated UI logic (Svelte) from modal management (Obsidian Modal class)
+- **Enforced session limits**: Review sessions automatically stop when deck limit is reached
+- Added session progress indicators and warnings in review interface
+- Enhanced completion messages to show session limit enforcement
+
+### Modal Architecture Refactoring
+- Extracted FlashcardReviewModalWrapper to separate file for better organization
+- Created DeckConfigModal as dedicated Obsidian modal wrapper for deck configuration
+- Established pattern of Obsidian Modal + Svelte UI component architecture
+- Improved code maintainability by separating modal lifecycle from UI logic
+- Standardized modal wrapper pattern across all plugin modals
 
 ### Real-time Stats Updates
 - Added efficient deck-specific stats refresh after each flashcard review
@@ -172,3 +220,36 @@
 - Database migration system ensures schema compatibility across updates
 - Real-time deck list updates when files are deleted from vault
 - Prevents orphaned decks from remaining after file deletion
+
+### Anki-Style Daily Limits Implementation
+- **Separate New & Review Card Limits**: Independent daily limits for new cards (default: 20) and review cards (default: 100)
+- **Learning Cards Always Shown**: Learning/relearning cards bypass all limits following proven Anki behavior
+- **Daily Progress Tracking**: `getDailyReviewCounts()` method tracks reviews by card type using review log analysis
+- **Database-Level Enforcement**: Smart 3-query approach fetches cards respecting remaining daily allowance
+- **Real-Time Limit Feedback**: Shows daily progress before review sessions and explains when limits are reached
+- **Proper Daily Reset**: Limits reset at midnight for next day's allowance
+- **Enhanced Configuration UI**: Clear sections for new vs review limits with helpful descriptions
+- **Smart Deck Stats**: New/Due counts show remaining daily allowance when limits enabled
+- **Complete Test Coverage**: 43 tests passing including new daily count functionality and NaN prevention
+- **Backward Compatibility**: Automatic schema migration preserves existing data and settings
+
+### Anki-Style Review Order Implementation
+- **Proper Card Ordering**: Learning cards first, then review cards, then new cards (matches Anki exactly)
+- **Review Order Options**: Configurable "Oldest due first" (default) or "Random order" for review cards
+- **Learning Cards Priority**: Always shown first regardless of due date to ensure optimal learning progression
+- **Within-State Sorting**: Learning and new cards by due date, review cards by user preference
+- **Enhanced Configuration**: Added review order dropdown in deck settings with clear options
+- **Database Schema Update**: Added `reviewOrder` field to deck config with proper migration
+- **Comprehensive Testing**: New test coverage for review order functionality
+- **User Experience**: Seamless review flow following proven Anki patterns for maximum learning efficiency
+
+### Smart Deck Stats with Daily Limits Integration
+- **Remaining Allowance Display**: New/Due counts show remaining daily cards when limits are enabled
+- **Visual Limit Indicators**: Calendar emoji (📅) and border highlight when daily limits are active
+- **Contextual Tooltips**: Hover tooltips explain whether counts represent total due cards or remaining daily allowance
+- **Real-Time Updates**: Stats automatically reflect daily progress and remaining capacity
+- **Enhanced User Awareness**: Clear distinction between unlimited and limited deck modes
+- **Intelligent Calculation**: `getDeckStats()` respects daily limits: `min(totalDue, remainingAllowance)`
+- **Bug Fix - NaN Prevention**: Added robust validation for zero/undefined limits to prevent NaN display
+- **Input Validation**: UI ensures limit values are always valid numbers with proper fallbacks
+- **Edge Case Handling**: Zero limits properly show 0 cards available instead of calculation errors
