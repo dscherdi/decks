@@ -1,4 +1,4 @@
-## Decks v1.0.0
+## Decks v1.0.1
 
 **Spaced repetition flashcards for Obsidian with FSRS algorithm**
 
@@ -14,17 +14,9 @@
 - **Forecast Histogram Proportional Sizing Fix**
 - **Project Rename to "Decks"**
 - **MIT License Addition**
+- **Production Build and Release Infrastructure**
 
 ### Changes
-- Fix chart ui
-- Fix migration
-- Add timeElapsed and statistics
-- Add statistics page
-- Bug fixes
-- Bug fix limits
-- Implement limits
-- Add debug logs setting
-- Enhancements, bugfixes
-- Heatmap improvements
+- Fix css
 
-**Minimum Obsidian Version**: 1.0.0
+**Minimum Obsidian Version**: 1.8.10

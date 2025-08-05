@@ -18,7 +18,9 @@ const prod = process.argv[2] === "production";
 
 // Set up directories
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
-const outDir = path.join(__dirname, "demo_vault/.obsidian/plugins/decks");
+const outDir = prod
+  ? path.join(__dirname, "dist")
+  : path.join(__dirname, "demo_vault/.obsidian/plugins/decks");
 const srcDir = path.join(__dirname, "src");
 
 // Ensure output directory exists

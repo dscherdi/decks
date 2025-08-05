@@ -1,4 +1,4 @@
-# Decks v1.0.0
+# Decks v1.0.1
 
 **Decks** is a powerful spaced repetition flashcard plugin for Obsidian that helps you learn and memorize information efficiently using the FSRS algorithm.
 
@@ -17,7 +17,7 @@
 
 ## 📦 Release Files
 
-- `main.js` - Plugin code (202.2 KB)
+- `main.js` - Plugin code (202.9 KB)
 - `manifest.json` - Plugin manifest
 - `styles.css` - Plugin styles
 
@@ -30,7 +30,7 @@
 - **Time Tracking**: Monitor your review pace and efficiency
 - **Anki-Style Reviews**: Familiar review interface with learning/review/new card ordering
 
-## 🆕 What's New in v1.0.0
+## 🆕 What's New in v1.0.1
 
 - **Comprehensive Statistics Modal Implementation**
 - **Time Elapsed Tracking Implementation**
@@ -38,36 +38,14 @@
 - **Forecast Histogram Proportional Sizing Fix**
 - **Project Rename to "Decks"**
 - **MIT License Addition**
+- **Production Build and Release Infrastructure**
 
 ## 📋 Changes in This Release
 
-- Fix chart ui
-- Fix migration
-- Add timeElapsed and statistics
-- Add statistics page
-- Bug fixes
-- Bug fix limits
-- Implement limits
-- Add debug logs setting
-- Enhancements, bugfixes
-- Heatmap improvements
-- Update
-- Improve flashcard id, to avoid collisions
-- Add heatmap
-- add filter
-- Fix updating ui on review
-- Add smart sync
-- Fix intervals
-- Implement full FSRS
-- Fix progress bar
-- Update - Fix Css
-- Add settings page
-- demo_vault update
-- Working first version
-- Fix errors
-- First Version
+- Fix css
 
 
+**Full Changelog**: [v1.0.0...v1.0.1](../../compare/v1.0.0...v1.0.1)
 
 ## 🐛 Issues & Support
 
@@ -81,6 +59,6 @@ MIT License - see [LICENSE](../../blob/main/LICENSE) for details.
 
 ---
 
-**Minimum Obsidian Version**: 1.0.0
-**Plugin Version**: 1.0.0
+**Minimum Obsidian Version**: 1.8.10
+**Plugin Version**: 1.0.1
 **Build Date**: 2025-08-05

@@ -1,8 +1,8 @@
 {
   "id": "decks",
   "name": "Decks",
-  "version": "1.0.0",
-  "minAppVersion": "1.0.0",
+  "version": "1.0.1",
+  "minAppVersion": "1.8.10",
   "description": "Decks - Spaced repetition flashcards for Obsidian with FSRS algorithm",
   "author": "dscherdil",
   "authorUrl": "https://github.com/dscherdi",

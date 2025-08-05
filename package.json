@@ -1,21 +1,19 @@
 {
   "name": "decks",
-  "version": "1.0.0",
+  "version": "1.0.1",
   "description": "Decks - Spaced repetition flashcards for Obsidian with FSRS algorithm",
-  "main": "out/main.js",
+  "main": "dist/main.js",
   "source": "src/main.ts",
   "scripts": {
     "build": "node esbuild.config.mjs production",
     "build:dev": "node esbuild.config.mjs",
     "build:release": "npm run clean && npm run build && npm run package",
-    "clean": "rimraf dist && rimraf *.tgz",
     "package": "node scripts/package-release.mjs",
     "release-notes": "node scripts/generate-release-notes.mjs",
-    "version": "node version-bump.mjs && git add manifest.json versions.json",
+    "version": "node version-bump.mjs",
     "check": "svelte-check --tsconfig ./tsconfig.json",
     "lint": "eslint --ext .ts,.svelte src/",
-    "test": "jest",
-    "test:watch": "jest --watch"
+    "test": "jest"
   },
   "keywords": [
     "obsidian",
