@@ -258,8 +258,11 @@ export class FlashcardsSettingTab extends PluginSettingTab {
       )
       .addToggle((toggle) =>
         toggle
-          .setValue(this.plugin.settings.debug.enableLogging)
+          .setValue(this.plugin.settings.debug?.enableLogging || false)
           .onChange(async (value) => {
+            if (!this.plugin.settings.debug) {
+              this.plugin.settings.debug = { enableLogging: false };
+            }
             this.plugin.settings.debug.enableLogging = value;
             await this.plugin.saveSettings();
           }),

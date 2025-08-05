@@ -127,6 +127,12 @@ export class DeckManager {
 
           const existingDeck = existingDecksByFile.get(filePath);
 
+          this.debugLog(`Checking file: ${filePath}`);
+          this.debugLog(
+            `Existing deck found:`,
+            existingDeck ? `YES (ID: ${existingDeck.id})` : "NO",
+          );
+
           if (existingDeck) {
             // Update existing deck if tag changed
             if (existingDeck.tag !== tag) {
@@ -136,17 +142,23 @@ export class DeckManager {
               await this.db.updateDeck(existingDeck.id, {
                 tag: tag,
               });
+            } else {
+              this.debugLog(
+                `Deck "${deckName}" already exists with correct tag, no update needed`,
+              );
             }
           } else {
             // Create new deck for this file
             const deck: Omit<Deck, "created" | "modified"> = {
-              id: this.generateDeckId(),
+              id: this.generateDeckId(filePath),
               name: deckName, // Store clean file name
               filepath: filePath, // Store full file path separately
               tag: tag,
               lastReviewed: null,
             };
-            this.debugLog(`Creating new deck: "${deckName}" with tag: ${tag}`);
+            this.debugLog(
+              `Creating new deck: "${deckName}" with ID: ${deck.id}, tag: ${tag}, filepath: ${filePath}`,
+            );
             await this.db.createDeck(deck);
             newDecksCreated++;
           }
@@ -345,16 +357,23 @@ export class DeckManager {
       this.debugLog(`No deck found for filepath: ${filePath}`);
       return;
     }
-    this.debugLog(`Found deck:`, deck);
+    this.debugLog(
+      `Found deck ID: ${deck.id}, name: ${deck.name}, filepath: ${deck.filepath}`,
+    );
 
     const file = this.vault.getAbstractFileByPath(filePath);
     if (!file || !(file instanceof TFile)) return;
 
     // Get existing flashcards for this deck
     const existingFlashcards = await this.db.getFlashcardsByDeck(deck.id);
+    this.debugLog(
+      `Found ${existingFlashcards.length} existing flashcards for deck ${deck.name}`,
+    );
+
     const existingById = new Map<string, Flashcard>();
     existingFlashcards.forEach((card) => {
       existingById.set(card.id, card);
+      this.debugLog(`Existing card ID: ${card.id}, Front: "${card.front}"`);
     });
 
     const processedIds = new Set<string>();
@@ -368,17 +387,39 @@ export class DeckManager {
       const contentHash = this.generateContentHash(parsed.back);
       const existingCard = existingById.get(flashcardId);
 
+      this.debugLog(
+        `Processing flashcard: "${parsed.front.substring(0, 50)}..."`,
+      );
+      this.debugLog(
+        `Generated ID: ${flashcardId} (from front: "${parsed.front.substring(0, 30)}..." + deck: ${deck.id})`,
+      );
+      this.debugLog(`Content hash: ${contentHash}`);
+      this.debugLog(`Existing card found:`, existingCard ? "YES" : "NO");
+
+      if (existingCard) {
+        this.debugLog(
+          `Existing card - ID: ${existingCard.id}, Front: "${existingCard.front.substring(0, 30)}...", Hash: ${existingCard.contentHash}`,
+        );
+      }
+
       processedIds.add(flashcardId);
 
       if (existingCard) {
         // Update if content has changed
         if (existingCard.contentHash !== contentHash) {
+          this.debugLog(
+            `Content changed, updating flashcard: ${parsed.front.substring(0, 30)}...`,
+          );
           await this.db.updateFlashcard(existingCard.id, {
             front: parsed.front,
             back: parsed.back,
             type: parsed.type,
             contentHash: contentHash,
           });
+        } else {
+          this.debugLog(
+            `No content change, skipping update: ${parsed.front.substring(0, 30)}...`,
+          );
         }
       } else {
         // Create new flashcard
@@ -476,9 +517,20 @@ export class DeckManager {
   }
 
   /**
-   * Generate unique deck ID
+   * Generate deterministic deck ID based on filepath
    */
-  private generateDeckId(): string {
+  private generateDeckId(filepath?: string): string {
+    if (filepath) {
+      // Generate deterministic ID based on filepath
+      let hash = 0;
+      for (let i = 0; i < filepath.length; i++) {
+        const char = filepath.charCodeAt(i);
+        hash = (hash << 5) - hash + char;
+        hash = hash & hash; // Convert to 32-bit integer
+      }
+      return `deck_${Math.abs(hash).toString(36)}`;
+    }
+    // Fallback to timestamp-based ID for backward compatibility
     return `deck_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
   }
 

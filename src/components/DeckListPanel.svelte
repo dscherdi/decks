@@ -35,7 +35,6 @@
     }
 
     async function handleRefresh() {
-        console.log("Refresh button clicked");
         isRefreshing = true;
         try {
             onRefresh();
@@ -48,7 +47,6 @@
     }
 
     export function updateStatsById(deckId: string, newStats: DeckStats) {
-        console.log("updateStats called - triggering UI refresh");
         isUpdatingStats = true;
         stats.set(deckId, newStats);
         decks = decks;
@@ -56,14 +54,12 @@
     }
     // Function to force UI update when stats change
     export function updateStats(newStats: Map<string, DeckStats>) {
-        console.log("updateStats called - triggering UI refresh");
         isUpdatingStats = true;
         stats = newStats;
         decks = decks;
         isUpdatingStats = false;
     }
     export function updateDecks(newDecks: Deck[]) {
-        console.log("updateDecks called - triggering UI refresh");
         allDecks = newDecks;
         applyFilter();
     }

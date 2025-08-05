@@ -146,7 +146,14 @@ export default class FlashcardsPlugin extends Plugin {
   }
 
   async loadSettings() {
-    this.settings = Object.assign({}, DEFAULT_SETTINGS, await this.loadData());
+    const loadedData = await this.loadData();
+    this.settings = Object.assign({}, DEFAULT_SETTINGS, loadedData);
+
+    // Ensure debug section exists for existing users
+    if (!this.settings.debug) {
+      this.settings.debug = DEFAULT_SETTINGS.debug;
+      await this.saveSettings();
+    }
   }
 
   async saveSettings() {
@@ -534,13 +541,13 @@ class FlashcardsView extends ItemView {
   }
 
   async refreshStatsById(deckId: string) {
-    console.log(
+    this.plugin.debugLog(
       `FlashcardsView.refreshStatsById() executing for deck: ${deckId}`,
     );
     try {
       // Get all stats (same as refresh() method for consistency)
       const deckStats = await this.plugin.getDeckStatsById(deckId);
-      console.log("Updated all deck stats");
+      this.plugin.debugLog("Updated all deck stats");
 
       // Update component using same pattern as refresh()
       if (this.component && deckStats) {
@@ -555,18 +562,18 @@ class FlashcardsView extends ItemView {
     // Clear any existing interval
     this.stopBackgroundRefresh();
 
-    console.log(
+    this.plugin.debugLog(
       `Starting background refresh job (every ${this.plugin.settings.ui.backgroundRefreshInterval} seconds)`,
     );
     this.backgroundRefreshInterval = setInterval(async () => {
-      console.log("Background refresh tick");
+      this.plugin.debugLog("Background refresh tick");
       this.refresh();
     }, this.plugin.settings.ui.backgroundRefreshInterval * 1000);
   }
 
   stopBackgroundRefresh() {
     if (this.backgroundRefreshInterval) {
-      console.log("Stopping background refresh job");
+      this.plugin.debugLog("Stopping background refresh job");
       clearInterval(this.backgroundRefreshInterval);
       this.backgroundRefreshInterval = null;
     }
@@ -585,7 +592,7 @@ class FlashcardsView extends ItemView {
 
   // Test method to check if background job is running
   checkBackgroundJobStatus() {
-    console.log("Background job status:", {
+    this.plugin.debugLog("Background job status:", {
       isRunning: !!this.backgroundRefreshInterval,
       intervalId: this.backgroundRefreshInterval,
       componentExists: !!this.component,

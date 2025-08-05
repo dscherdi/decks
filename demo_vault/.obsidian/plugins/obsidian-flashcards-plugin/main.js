@@ -2429,6 +2429,9 @@ var init_settings = __esm({
       },
       ui: {
         backgroundRefreshInterval: 5
+      },
+      debug: {
+        enableLogging: false
       }
     };
   }
@@ -3031,10 +3034,18 @@ var DatabaseService = class {
 // src/services/DeckManager.ts
 var import_obsidian = require("obsidian");
 var DeckManager = class {
-  constructor(vault, metadataCache, db) {
+  // FlashcardsPlugin reference for debug logging
+  constructor(vault, metadataCache, db, plugin) {
     this.vault = vault;
     this.metadataCache = metadataCache;
     this.db = db;
+    this.plugin = plugin;
+  }
+  debugLog(message, ...args) {
+    var _a;
+    if ((_a = this.plugin) == null ? void 0 : _a.debugLog) {
+      this.plugin.debugLog(message, ...args);
+    }
   }
   /**
    * Scan vault for all decks (files with #flashcards tags)
@@ -3042,19 +3053,19 @@ var DeckManager = class {
   async scanVaultForDecks() {
     const decksMap = /* @__PURE__ */ new Map();
     const files = this.vault.getMarkdownFiles();
-    console.log(`Scanning ${files.length} markdown files for flashcard tags`);
+    this.debugLog(`Scanning ${files.length} markdown files for flashcard tags`);
     for (const file of files) {
       const metadata = this.metadataCache.getFileCache(file);
       if (!metadata) {
-        console.log(`No metadata for file: ${file.path}`);
+        this.debugLog(`No metadata for file: ${file.path}`);
         continue;
       }
-      console.log(`Checking file: ${file.path}`);
+      this.debugLog(`Checking file: ${file.path}`);
       const allTags = [];
       if (metadata.tags) {
         const inlineTags = metadata.tags.map((t) => t.tag);
         allTags.push(...inlineTags);
-        console.log(`File ${file.path} has inline tags:`, inlineTags);
+        this.debugLog(`File ${file.path} has inline tags:`, inlineTags);
       }
       if (metadata.frontmatter && metadata.frontmatter.tags) {
         const frontmatterTags = Array.isArray(metadata.frontmatter.tags) ? metadata.frontmatter.tags : [metadata.frontmatter.tags];
@@ -3062,7 +3073,10 @@ var DeckManager = class {
           (tag) => tag.startsWith("#") ? tag : `#${tag}`
         );
         allTags.push(...normalizedTags);
-        console.log(`File ${file.path} has frontmatter tags:`, normalizedTags);
+        this.debugLog(
+          `File ${file.path} has frontmatter tags:`,
+          normalizedTags
+        );
       }
       if (allTags.length === 0) {
         continue;
@@ -3070,8 +3084,8 @@ var DeckManager = class {
       const flashcardTags = allTags.filter(
         (tag) => tag.startsWith("#flashcards")
       );
-      console.log(`All tags for ${file.path}:`, allTags);
-      console.log(`Flashcard tags for ${file.path}:`, flashcardTags);
+      this.debugLog(`All tags for ${file.path}:`, allTags);
+      this.debugLog(`Flashcard tags for ${file.path}:`, flashcardTags);
       for (const tag of flashcardTags) {
         if (!decksMap.has(tag)) {
           decksMap.set(tag, []);
@@ -3079,7 +3093,7 @@ var DeckManager = class {
         decksMap.get(tag).push(file);
       }
     }
-    console.log(`Found ${decksMap.size} decks:`, Array.from(decksMap.keys()));
+    this.debugLog(`Found ${decksMap.size} decks:`, Array.from(decksMap.keys()));
     return decksMap;
   }
   /**
@@ -3087,11 +3101,11 @@ var DeckManager = class {
    */
   async syncDecks() {
     try {
-      console.log("Starting deck sync...");
+      this.debugLog("Starting deck sync...");
       const decksMap = await this.scanVaultForDecks();
-      console.log("Decks found in vault:", decksMap);
+      this.debugLog("Decks found in vault:", decksMap);
       const existingDecks = await this.db.getAllDecks();
-      console.log("Existing decks in database:", existingDecks);
+      this.debugLog("Existing decks in database:", existingDecks);
       const existingDecksByFile = /* @__PURE__ */ new Map();
       for (const deck of existingDecks) {
         existingDecksByFile.set(deck.filepath, deck);
@@ -3104,18 +3118,27 @@ var DeckManager = class {
           const filePath = file.path;
           const deckName = file.basename;
           const existingDeck = existingDecksByFile.get(filePath);
+          this.debugLog(`Checking file: ${filePath}`);
+          this.debugLog(
+            `Existing deck found:`,
+            existingDeck ? `YES (ID: ${existingDeck.id})` : "NO"
+          );
           if (existingDeck) {
             if (existingDeck.tag !== tag) {
-              console.log(
+              this.debugLog(
                 `Updating deck "${deckName}" tag from ${existingDeck.tag} to ${tag}`
               );
               await this.db.updateDeck(existingDeck.id, {
                 tag
               });
+            } else {
+              this.debugLog(
+                `Deck "${deckName}" already exists with correct tag, no update needed`
+              );
             }
           } else {
             const deck = {
-              id: this.generateDeckId(),
+              id: this.generateDeckId(filePath),
               name: deckName,
               // Store clean file name
               filepath: filePath,
@@ -3123,7 +3146,9 @@ var DeckManager = class {
               tag,
               lastReviewed: null
             };
-            console.log(`Creating new deck: "${deckName}" with tag: ${tag}`);
+            this.debugLog(
+              `Creating new deck: "${deckName}" with ID: ${deck.id}, tag: ${tag}, filepath: ${filePath}`
+            );
             await this.db.createDeck(deck);
             newDecksCreated++;
           }
@@ -3138,14 +3163,14 @@ var DeckManager = class {
       let deletedDecks = 0;
       for (const deck of existingDecks) {
         if (!allFiles.has(deck.filepath)) {
-          console.log(
+          this.debugLog(
             `Deleting orphaned deck: "${deck.name}" (${deck.filepath})`
           );
           await this.db.deleteDeckByFilepath(deck.filepath);
           deletedDecks++;
         }
       }
-      console.log(
+      this.debugLog(
         `Deck sync completed. Processed ${totalFiles} files, created ${newDecksCreated} new decks, deleted ${deletedDecks} orphaned decks.`
       );
     } catch (error) {
@@ -3274,37 +3299,63 @@ var DeckManager = class {
    * Sync flashcards for a specific deck (file)
    */
   async syncFlashcardsForDeck(filePath) {
-    console.log(`Syncing flashcards for deck: ${filePath}`);
+    this.debugLog(`Syncing flashcards for deck: ${filePath}`);
     const deck = await this.db.getDeckByFilepath(filePath);
     if (!deck) {
-      console.log(`No deck found for filepath: ${filePath}`);
+      this.debugLog(`No deck found for filepath: ${filePath}`);
       return;
     }
-    console.log(`Found deck:`, deck);
+    this.debugLog(
+      `Found deck ID: ${deck.id}, name: ${deck.name}, filepath: ${deck.filepath}`
+    );
     const file = this.vault.getAbstractFileByPath(filePath);
     if (!file || !(file instanceof import_obsidian.TFile))
       return;
     const existingFlashcards = await this.db.getFlashcardsByDeck(deck.id);
+    this.debugLog(
+      `Found ${existingFlashcards.length} existing flashcards for deck ${deck.name}`
+    );
     const existingById = /* @__PURE__ */ new Map();
     existingFlashcards.forEach((card) => {
       existingById.set(card.id, card);
+      this.debugLog(`Existing card ID: ${card.id}, Front: "${card.front}"`);
     });
     const processedIds = /* @__PURE__ */ new Set();
     const parsedCards = await this.parseFlashcardsFromFile(file);
-    console.log(`Parsed ${parsedCards.length} flashcards from ${filePath}`);
+    this.debugLog(`Parsed ${parsedCards.length} flashcards from ${filePath}`);
     for (const parsed of parsedCards) {
       const flashcardId = this.generateFlashcardId(parsed.front, deck.id);
       const contentHash = this.generateContentHash(parsed.back);
       const existingCard = existingById.get(flashcardId);
+      this.debugLog(
+        `Processing flashcard: "${parsed.front.substring(0, 50)}..."`
+      );
+      this.debugLog(
+        `Generated ID: ${flashcardId} (from front: "${parsed.front.substring(0, 30)}..." + deck: ${deck.id})`
+      );
+      this.debugLog(`Content hash: ${contentHash}`);
+      this.debugLog(`Existing card found:`, existingCard ? "YES" : "NO");
+      if (existingCard) {
+        this.debugLog(
+          `Existing card - ID: ${existingCard.id}, Front: "${existingCard.front.substring(0, 30)}...", Hash: ${existingCard.contentHash}`
+        );
+      }
       processedIds.add(flashcardId);
       if (existingCard) {
         if (existingCard.contentHash !== contentHash) {
+          this.debugLog(
+            `Content changed, updating flashcard: ${parsed.front.substring(0, 30)}...`
+          );
           await this.db.updateFlashcard(existingCard.id, {
             front: parsed.front,
             back: parsed.back,
             type: parsed.type,
             contentHash
           });
+        } else {
+          this.debugLog(
+            `No content change, skipping update: ${parsed.front.substring(0, 30)}...`
+          );
         }
       } else {
         const flashcard = {
@@ -3327,17 +3378,17 @@ var DeckManager = class {
           lapses: 0,
           lastReviewed: null
         };
-        console.log(`Creating new flashcard: ${flashcard.front}`);
+        this.debugLog(`Creating new flashcard: ${flashcard.front}`);
         await this.db.createFlashcard(flashcard);
       }
     }
     for (const [flashcardId, existingCard] of existingById) {
       if (!processedIds.has(flashcardId)) {
-        console.log(`Deleting flashcard: ${existingCard.front}`);
+        this.debugLog(`Deleting flashcard: ${existingCard.front}`);
         await this.db.deleteFlashcard(existingCard.id);
       }
     }
-    console.log(`Flashcard sync completed for ${filePath}`);
+    this.debugLog(`Flashcard sync completed for ${filePath}`);
   }
   /**
    * Sync flashcards for a specific deck by name (file path)
@@ -3382,9 +3433,18 @@ var DeckManager = class {
     return parts.map((part) => part.charAt(0).toUpperCase() + part.slice(1)).join(" - ");
   }
   /**
-   * Generate unique deck ID
+   * Generate deterministic deck ID based on filepath
    */
-  generateDeckId() {
+  generateDeckId(filepath) {
+    if (filepath) {
+      let hash = 0;
+      for (let i = 0; i < filepath.length; i++) {
+        const char = filepath.charCodeAt(i);
+        hash = (hash << 5) - hash + char;
+        hash = hash & hash;
+      }
+      return `deck_${Math.abs(hash).toString(36)}`;
+    }
     return `deck_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
   }
   /**
@@ -3750,6 +3810,7 @@ var FlashcardsSettingTab = class extends import_obsidian2.PluginSettingTab {
     this.addDatabaseSettings(containerEl);
     this.addReviewSettings(containerEl);
     this.addUISettings(containerEl);
+    this.addDebugSettings(containerEl);
   }
   addFSRSSettings(containerEl) {
     containerEl.createEl("h3", { text: "FSRS Algorithm" });
@@ -3864,6 +3925,27 @@ var FlashcardsSettingTab = class extends import_obsidian2.PluginSettingTab {
           }
         }
       })
+    );
+  }
+  addDebugSettings(containerEl) {
+    containerEl.createEl("h3", { text: "Debug" });
+    containerEl.createEl("p", {
+      text: "Debug settings for troubleshooting and development.",
+      cls: "setting-item-description"
+    });
+    new import_obsidian2.Setting(containerEl).setName("Enable Debug Logging").setDesc(
+      "Show detailed logging in the console for sync operations and flashcard processing"
+    ).addToggle(
+      (toggle) => {
+        var _a;
+        return toggle.setValue(((_a = this.plugin.settings.debug) == null ? void 0 : _a.enableLogging) || false).onChange(async (value) => {
+          if (!this.plugin.settings.debug) {
+            this.plugin.settings.debug = { enableLogging: false };
+          }
+          this.plugin.settings.debug.enableLogging = value;
+          await this.plugin.saveSettings();
+        });
+      }
     );
   }
 };
@@ -6648,6 +6730,13 @@ var FlashcardsPlugin = class extends import_obsidian3.Plugin {
     super(...arguments);
     this.view = null;
   }
+  // Debug logging utility
+  debugLog(message, ...args) {
+    var _a, _b;
+    if ((_b = (_a = this.settings) == null ? void 0 : _a.debug) == null ? void 0 : _b.enableLogging) {
+      console.log(`[Flashcards Debug] ${message}`, ...args);
+    }
+  }
   async onload() {
     console.log("Loading Flashcards plugin");
     await this.loadSettings();
@@ -6663,7 +6752,8 @@ var FlashcardsPlugin = class extends import_obsidian3.Plugin {
       this.deckManager = new DeckManager(
         this.app.vault,
         this.app.metadataCache,
-        this.db
+        this.db,
+        this
       );
       this.fsrs = new FSRS({
         requestRetention: this.settings.fsrs.requestRetention,
@@ -6723,7 +6813,12 @@ var FlashcardsPlugin = class extends import_obsidian3.Plugin {
     this.app.workspace.detachLeavesOfType(VIEW_TYPE_FLASHCARDS);
   }
   async loadSettings() {
-    this.settings = Object.assign({}, DEFAULT_SETTINGS, await this.loadData());
+    const loadedData = await this.loadData();
+    this.settings = Object.assign({}, DEFAULT_SETTINGS, loadedData);
+    if (!this.settings.debug) {
+      this.settings.debug = DEFAULT_SETTINGS.debug;
+      await this.saveSettings();
+    }
   }
   async saveSettings() {
     await this.saveData(this.settings);
@@ -6795,14 +6890,14 @@ var FlashcardsPlugin = class extends import_obsidian3.Plugin {
       workspace.revealLeaf(leaf);
       const decks = await this.db.getAllDecks();
       if (decks.length === 0) {
-        console.log("No decks found, triggering fallback sync...");
+        this.debugLog("No decks found, triggering fallback sync...");
         await this.performSync();
       }
     }
   }
   async handleFileChange(file) {
     const metadata = this.app.metadataCache.getFileCache(file);
-    console.log(`File changed: ${file.path}, metadata:`, metadata);
+    this.debugLog(`File changed: ${file.path}, metadata:`, metadata);
     if (!metadata)
       return;
     const allTags = [];
@@ -6820,7 +6915,7 @@ var FlashcardsPlugin = class extends import_obsidian3.Plugin {
     const hasFlashcardsTag = allTags.some(
       (tag) => tag.startsWith("#flashcards")
     );
-    console.log(`File ${file.path} has flashcards tag:`, hasFlashcardsTag);
+    this.debugLog(`File ${file.path} has flashcards tag:`, hasFlashcardsTag);
     if (hasFlashcardsTag) {
       await this.deckManager.syncDecks();
       await this.deckManager.syncFlashcardsForDeck(file.path);
@@ -6831,24 +6926,24 @@ var FlashcardsPlugin = class extends import_obsidian3.Plugin {
   }
   async performSync() {
     try {
-      console.log("Performing initial sync of decks and flashcards...");
+      this.debugLog("Performing sync of decks and flashcards...");
       await this.deckManager.syncDecks();
       const decks = await this.db.getAllDecks();
-      console.log(
+      this.debugLog(
         `Found ${decks.length} decks after sync:`,
         decks.map((d) => d.name)
       );
       for (const deck of decks) {
-        console.log(
+        this.debugLog(
           `Syncing flashcards for deck: ${deck.name} (${deck.filepath})`
         );
         await this.deckManager.syncFlashcardsForDeck(deck.filepath);
         const flashcards = await this.db.getFlashcardsByDeck(deck.id);
-        console.log(
+        this.debugLog(
           `Deck ${deck.name} now has ${flashcards.length} flashcards`
         );
       }
-      console.log(`Initial sync completed for ${decks.length} decks`);
+      this.debugLog(`Sync completed for ${decks.length} decks`);
       if (this.view) {
         const updatedDecks = await this.getDecks();
         const deckStats = await this.getDeckStats();
@@ -6958,7 +7053,7 @@ var FlashcardsView = class extends import_obsidian3.ItemView {
       props: {
         onDeckClick: (deck) => this.startReview(deck),
         onRefresh: async () => {
-          console.log("onRefresh callback invoked");
+          this.plugin.debugLog("onRefresh callback invoked");
           await this.refresh();
         },
         getReviewCounts: async (days) => {
@@ -6991,20 +7086,20 @@ var FlashcardsView = class extends import_obsidian3.ItemView {
     (_b = this.component) == null ? void 0 : _b.updateStats(deckStats);
   }
   async refresh() {
-    console.log("FlashcardsView.refresh() called");
+    this.plugin.debugLog("FlashcardsView.refresh() called");
     try {
       await this.plugin.performSync();
-      console.log("Refresh complete");
+      this.plugin.debugLog("Refresh complete");
     } catch (error) {
       console.error("Error refreshing flashcards:", error);
       new import_obsidian3.Notice("Error refreshing flashcards. Check console for details.");
     }
   }
   async refreshStats() {
-    console.log("FlashcardsView.refreshStats() executing");
+    this.plugin.debugLog("FlashcardsView.refreshStats() executing");
     try {
       const deckStats = await this.plugin.getDeckStats();
-      console.log("Updated deck stats:", deckStats);
+      this.plugin.debugLog("Updated deck stats:", deckStats);
       if (this.component) {
         this.component.updateStats(deckStats);
       }
@@ -7013,12 +7108,12 @@ var FlashcardsView = class extends import_obsidian3.ItemView {
     }
   }
   async refreshStatsById(deckId) {
-    console.log(
+    this.plugin.debugLog(
       `FlashcardsView.refreshStatsById() executing for deck: ${deckId}`
     );
     try {
       const deckStats = await this.plugin.getDeckStatsById(deckId);
-      console.log("Updated all deck stats");
+      this.plugin.debugLog("Updated all deck stats");
       if (this.component && deckStats) {
         this.component.updateStatsById(deckId, deckStats);
       }
@@ -7028,17 +7123,17 @@ var FlashcardsView = class extends import_obsidian3.ItemView {
   }
   startBackgroundRefresh() {
     this.stopBackgroundRefresh();
-    console.log(
+    this.plugin.debugLog(
       `Starting background refresh job (every ${this.plugin.settings.ui.backgroundRefreshInterval} seconds)`
     );
     this.backgroundRefreshInterval = setInterval(async () => {
-      console.log("Background refresh tick");
+      this.plugin.debugLog("Background refresh tick");
       this.refresh();
     }, this.plugin.settings.ui.backgroundRefreshInterval * 1e3);
   }
   stopBackgroundRefresh() {
     if (this.backgroundRefreshInterval) {
-      console.log("Stopping background refresh job");
+      this.plugin.debugLog("Stopping background refresh job");
       clearInterval(this.backgroundRefreshInterval);
       this.backgroundRefreshInterval = null;
     }
@@ -7054,7 +7149,7 @@ var FlashcardsView = class extends import_obsidian3.ItemView {
   }
   // Test method to check if background job is running
   checkBackgroundJobStatus() {
-    console.log("Background job status:", {
+    this.plugin.debugLog("Background job status:", {
       isRunning: !!this.backgroundRefreshInterval,
       intervalId: this.backgroundRefreshInterval,
       componentExists: !!this.component,
