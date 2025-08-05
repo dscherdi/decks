@@ -286,7 +286,24 @@
 - Updated `reviewFlashcard` function to accept and store time elapsed data
 - Enhanced statistics to show average pace (seconds per card) and total review time
 - Implemented safe database migration using ALTER TABLE to preserve all user data
+- Fixed migration to handle cases where tables don't exist yet (fresh installations)
+- Migration intelligently checks for existing tables and columns before making changes
+- Fixed test migration errors by properly mocking database statements and table existence checks
 - All time measurements stored in milliseconds for precision
+
+### ✅ Deck Filter Tag Suggestions Enhancement
+- Added intelligent tag suggestions dropdown to deck filter input
+- Shows available tags when user starts typing or focuses on empty input
+- Displays up to 5 most relevant tags as clickable suggestions
+- Includes helpful placeholder text with examples
+- Improved user experience with better tag discovery
+
+### ✅ Forecast Histogram Proportional Sizing Fix
+- Fixed forecast bars that became too large with high card counts
+- Implemented proportional bar height calculation based on dataset maximum
+- Set fixed container height (150px) with proper spacing and padding
+- Bar heights now scale proportionally leaving room at top of container
+- Improved visual clarity for review load forecasting across all scenarios
 - **Modal Access**: Added graph icon button next to refresh button in deck list header
 - **Filtering System**: Complete deck filtering (All Decks, by Tag, by Individual Deck)
 - **Timeframe Selection**: Last 12 months or All History options

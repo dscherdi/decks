@@ -24,10 +24,20 @@ const mockAdapter = {
 describe("DatabaseService", () => {
   let dbService: DatabaseService;
   let mockDb: any;
+  let mockStatement: any;
 
   beforeEach(async () => {
     // Reset mocks
     jest.clearAllMocks();
+
+    // Setup mock statement
+    mockStatement = {
+      bind: jest.fn(),
+      step: jest.fn(),
+      get: jest.fn(),
+      free: jest.fn(),
+      run: jest.fn(),
+    };
 
     // Setup mock database
     mockDb = {
@@ -35,6 +45,7 @@ describe("DatabaseService", () => {
       run: jest.fn(),
       export: jest.fn().mockReturnValue(new Uint8Array([1, 2, 3])),
       close: jest.fn(),
+      exec: jest.fn(),
     };
 
     // Mock initSqlJs
@@ -57,16 +68,27 @@ describe("DatabaseService", () => {
       run: jest.fn(),
     };
 
+    // Mock sqlite_master query for table existence checks
+    const mockTableExistsStatement = {
+      step: jest.fn().mockReturnValue(false), // Return false to indicate no tables exist
+      get: jest.fn(),
+      free: jest.fn(),
+      bind: jest.fn(),
+      run: jest.fn(),
+    };
+
     // Setup database prepare to return different mocks based on query
     mockDb.prepare.mockImplementation((sql: string) => {
       if (sql.includes("PRAGMA table_info")) {
         // Return statement that indicates new schema (no columns returned)
         return mockPragmaStatement;
       }
+      if (sql.includes("sqlite_master")) {
+        // Return statement for table existence checks
+        return mockTableExistsStatement;
+      }
       return mockStatement;
     });
-
-    mockDb.exec = jest.fn(); // For migration schema recreation
 
     // Create service
     dbService = new DatabaseService("test.db");

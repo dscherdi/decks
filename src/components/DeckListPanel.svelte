@@ -10,6 +10,10 @@
     let stats = new Map<string, DeckStats>();
     let filterText = "";
     let heatmapComponent: any;
+    let showSuggestions = false;
+    let availableTags: string[] = [];
+    let filteredSuggestions: string[] = [];
+    let inputFocused = false;
 
     export let onDeckClick: (deck: Deck) => void;
     export let onRefresh: () => void;
@@ -68,6 +72,10 @@
     }
     export function updateDecks(newDecks: Deck[]) {
         allDecks = newDecks;
+        // Extract unique tags
+        availableTags = [...new Set(newDecks.map((deck) => deck.tag))].filter(
+            (tag) => tag,
+        );
         applyFilter();
     }
 
@@ -87,7 +95,46 @@
     function handleFilterInput(event: Event) {
         const target = event.target as HTMLInputElement;
         filterText = target.value;
+        updateSuggestions();
         applyFilter();
+    }
+
+    function updateSuggestions() {
+        if (!filterText.trim()) {
+            showSuggestions = false;
+            return;
+        }
+
+        const filter = filterText.toLowerCase();
+        filteredSuggestions = availableTags.filter(
+            (tag) =>
+                tag.toLowerCase().includes(filter) &&
+                tag.toLowerCase() !== filter,
+        );
+        showSuggestions = filteredSuggestions.length > 0;
+    }
+
+    function selectSuggestion(tag: string) {
+        filterText = tag;
+        showSuggestions = false;
+        applyFilter();
+    }
+
+    function handleFilterFocus() {
+        inputFocused = true;
+        if (filterText.trim()) {
+            updateSuggestions();
+        } else if (availableTags.length > 0) {
+            showSuggestions = true;
+        }
+    }
+
+    function handleFilterBlur() {
+        inputFocused = false;
+        // Delay hiding suggestions to allow clicks
+        setTimeout(() => {
+            showSuggestions = false;
+        }, 150);
     }
 
     function handleDeckClick(deck: Deck) {
@@ -185,13 +232,44 @@
     </div>
 
     <div class="filter-section">
-        <input
-            type="text"
-            class="filter-input"
-            placeholder="Filter by name or tag..."
-            bind:value={filterText}
-            on:input={handleFilterInput}
-        />
+        <div class="filter-container">
+            <input
+                type="text"
+                class="filter-input"
+                placeholder="Filter by name or tag... (e.g., 'spanish', '#flashcards')"
+                bind:value={filterText}
+                on:input={handleFilterInput}
+                on:focus={handleFilterFocus}
+                on:blur={handleFilterBlur}
+            />
+            {#if showSuggestions && filteredSuggestions.length > 0}
+                <div class="suggestions-dropdown">
+                    <div class="suggestions-header">Available tags:</div>
+                    {#each filteredSuggestions as tag}
+                        <button
+                            class="suggestion-item"
+                            on:click={() => selectSuggestion(tag)}
+                        >
+                            #{tag}
+                        </button>
+                    {/each}
+                </div>
+            {:else if !filterText.trim() && availableTags.length > 0 && inputFocused}
+                <div class="suggestions-dropdown">
+                    <div class="suggestions-header">
+                        Available tags (click to filter):
+                    </div>
+                    {#each availableTags.slice(0, 5) as tag}
+                        <button
+                            class="suggestion-item"
+                            on:click={() => selectSuggestion(tag)}
+                        >
+                            #{tag}
+                        </button>
+                    {/each}
+                </div>
+            {/if}
+        </div>
     </div>
 
     {#if allDecks.length === 0}
@@ -327,19 +405,61 @@
     }
 
     .filter-section {
-        padding: 8px 16px;
-        border-bottom: 1px solid var(--background-modifier-border);
+        margin-bottom: 16px;
+    }
+
+    .filter-container {
+        position: relative;
     }
 
     .filter-input {
         width: 100%;
-        padding: 6px 8px;
+        padding: 8px 12px;
         border: 1px solid var(--background-modifier-border);
         border-radius: 4px;
         background: var(--background-primary);
         color: var(--text-normal);
         font-size: 14px;
-        transition: border-color 0.2s ease;
+    }
+
+    .suggestions-dropdown {
+        position: absolute;
+        top: 100%;
+        left: 0;
+        right: 0;
+        background: var(--background-primary);
+        border: 1px solid var(--background-modifier-border);
+        border-top: none;
+        border-radius: 0 0 4px 4px;
+        box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+        z-index: 1000;
+        max-height: 200px;
+        overflow-y: auto;
+    }
+
+    .suggestions-header {
+        padding: 8px 12px;
+        font-size: 12px;
+        color: var(--text-muted);
+        border-bottom: 1px solid var(--background-modifier-border);
+        background: var(--background-secondary);
+    }
+
+    .suggestion-item {
+        display: block;
+        width: 100%;
+        padding: 8px 12px;
+        border: none;
+        background: transparent;
+        color: var(--text-normal);
+        text-align: left;
+        font-size: 14px;
+        cursor: pointer;
+        transition: background-color 0.1s ease;
+    }
+
+    .suggestion-item:hover {
+        background: var(--background-modifier-hover);
     }
 
     .filter-input:focus {
@@ -469,7 +589,7 @@
         text-overflow: ellipsis;
         white-space: nowrap;
         display: inline-block;
-        max-width: 100%;
+        max-width: 250px;
     }
 
     .deck-name-link:hover {

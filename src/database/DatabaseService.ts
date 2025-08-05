@@ -815,36 +815,67 @@ export class DatabaseService {
     if (!this.db) return;
 
     try {
-      // Check if we have the old schema (tag UNIQUE constraint)
-      const stmt = this.db.prepare("PRAGMA table_info(decks)");
-      const columns: any[] = [];
+      // Check if tables exist first
+      const tablesStmt = this.db.prepare(`
+        SELECT name FROM sqlite_master
+        WHERE type='table' AND name IN ('decks', 'flashcards', 'review_logs')
+      `);
 
-      while (stmt.step()) {
-        columns.push(stmt.get());
+      const existingTables: string[] = [];
+      while (tablesStmt.step()) {
+        const row = tablesStmt.get();
+        existingTables.push(row[0] as string);
       }
-      stmt.free();
+      tablesStmt.free();
 
-      // Check if filepath column exists
-      const hasFilepath = columns.some((col) => col[1] === "filepath");
-      // Check if config column exists
-      const hasConfig = columns.some((col) => col[1] === "config");
+      // If no tables exist, create them and return
+      if (existingTables.length === 0) {
+        console.log("No existing tables found. Creating initial schema...");
+        await this.createTables();
+        await this.save();
+        return;
+      }
 
-      // Check if time_elapsed column exists in review_logs table
+      // Check if we have the old schema (tag UNIQUE constraint)
+      let hasFilepath = true;
+      let hasConfig = true;
       let hasTimeElapsed = true;
-      try {
-        const reviewLogsStmt = this.db.prepare(
-          "PRAGMA table_info(review_logs)",
-        );
-        const reviewLogsColumns: any[] = [];
-        while (reviewLogsStmt.step()) {
-          reviewLogsColumns.push(reviewLogsStmt.get());
+
+      // Check decks table columns if it exists
+      if (existingTables.includes("decks")) {
+        const stmt = this.db.prepare("PRAGMA table_info(decks)");
+        const columns: any[] = [];
+
+        while (stmt.step()) {
+          columns.push(stmt.get());
         }
-        reviewLogsStmt.free();
-        hasTimeElapsed = reviewLogsColumns.some(
-          (col) => col[1] === "time_elapsed",
-        );
-      } catch (error) {
-        // Table might not exist yet
+        stmt.free();
+
+        hasFilepath = columns.some((col) => col[1] === "filepath");
+        hasConfig = columns.some((col) => col[1] === "config");
+      } else {
+        hasFilepath = false;
+        hasConfig = false;
+      }
+
+      // Check review_logs table columns if it exists
+      if (existingTables.includes("review_logs")) {
+        try {
+          const reviewLogsStmt = this.db.prepare(
+            "PRAGMA table_info(review_logs)",
+          );
+          const reviewLogsColumns: any[] = [];
+          while (reviewLogsStmt.step()) {
+            reviewLogsColumns.push(reviewLogsStmt.get());
+          }
+          reviewLogsStmt.free();
+          hasTimeElapsed = reviewLogsColumns.some(
+            (col) => col[1] === "time_elapsed",
+          );
+        } catch (error) {
+          hasTimeElapsed = false;
+        }
+      } else {
         hasTimeElapsed = false;
       }
 
@@ -855,23 +886,34 @@ export class DatabaseService {
 
         // Add missing columns to existing tables instead of dropping them
         try {
-          if (!hasFilepath) {
-            console.log("Adding filepath column to decks table...");
-            this.db.exec(`ALTER TABLE decks ADD COLUMN filepath TEXT`);
-          }
+          // Ensure all tables exist first
+          if (
+            !existingTables.includes("decks") ||
+            !existingTables.includes("flashcards") ||
+            !existingTables.includes("review_logs")
+          ) {
+            console.log("Missing tables detected. Creating missing tables...");
+            await this.createTables();
+          } else {
+            // Add missing columns to existing tables
+            if (!hasFilepath) {
+              console.log("Adding filepath column to decks table...");
+              this.db.exec(`ALTER TABLE decks ADD COLUMN filepath TEXT`);
+            }
 
-          if (!hasConfig) {
-            console.log("Adding config column to decks table...");
-            this.db.exec(
-              `ALTER TABLE decks ADD COLUMN config TEXT DEFAULT '{}'`,
-            );
-          }
+            if (!hasConfig) {
+              console.log("Adding config column to decks table...");
+              this.db.exec(
+                `ALTER TABLE decks ADD COLUMN config TEXT DEFAULT '{}'`,
+              );
+            }
 
-          if (!hasTimeElapsed) {
-            console.log("Adding time_elapsed column to review_logs table...");
-            this.db.exec(
-              `ALTER TABLE review_logs ADD COLUMN time_elapsed INTEGER NOT NULL DEFAULT 0`,
-            );
+            if (!hasTimeElapsed) {
+              console.log("Adding time_elapsed column to review_logs table...");
+              this.db.exec(
+                `ALTER TABLE review_logs ADD COLUMN time_elapsed INTEGER NOT NULL DEFAULT 0`,
+              );
+            }
           }
 
           console.log(

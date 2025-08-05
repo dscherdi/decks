@@ -228,6 +228,15 @@
         return tomorrowForecast ? tomorrowForecast.dueCount : 0;
     }
 
+    function calculateBarHeight(dueCount: number, maxDueCount: number): number {
+        const barHeight = 400; // Maximum height in pixels (leaving room in 150px container)
+
+        if (maxDueCount === 0) return 0;
+
+        const proportion = dueCount / maxDueCount;
+        return Math.max(proportion * barHeight - 80, 10);
+    }
+
     function getMaturityRatio() {
         if (!statistics?.cardStats) return "0.0";
         const { new: newCards, learning, mature } = statistics.cardStats;
@@ -655,10 +664,14 @@
         <div class="stats-section">
             <h3>Review Load Forecast</h3>
             {#if statistics?.forecast && statistics.forecast.length > 0 && statistics.forecast.some((day) => day.dueCount > 0)}
+                {@const filteredForecast = statistics.forecast
+                    .filter((day) => day.dueCount > 0)
+                    .slice(0, 20)}
+                {@const maxDueCount = Math.max(
+                    ...filteredForecast.map((day) => day.dueCount),
+                )}
                 <div class="forecast-chart">
-                    {#each statistics.forecast
-                        .filter((day) => day.dueCount > 0)
-                        .slice(0, 20) as day, index}
+                    {#each filteredForecast as day, index}
                         {@const originalIndex =
                             statistics.forecast.indexOf(day)}
                         <div
@@ -674,9 +687,9 @@
                         >
                             <div
                                 class="bar"
-                                style="height: {Math.max(
-                                    day.dueCount * 2,
-                                    2,
+                                style="height: {calculateBarHeight(
+                                    day.dueCount,
+                                    maxDueCount,
                                 )}px"
                             ></div>
                             <div class="bar-label">
@@ -891,10 +904,11 @@
         padding: 16px;
         background: var(--background-secondary);
         border-radius: 8px;
-        min-height: 150px;
+        height: 400px;
         overflow-x: auto;
         overflow-y: hidden;
         max-width: 100%;
+        box-sizing: border-box;
     }
 
     .forecast-bar {
