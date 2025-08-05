@@ -12,7 +12,7 @@
 
     export let onDeckClick: (deck: Deck) => void;
     export let onRefresh: () => void;
-    export let getReviewCounts: () => Promise<Map<string, number>>;
+    export let getReviewCounts: (days: number) => Promise<Map<string, number>>;
 
     let isRefreshing = false;
     let isUpdatingStats = false;

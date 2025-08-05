@@ -1,7 +1,7 @@
 <script lang="ts">
     import { onMount, onDestroy } from "svelte";
 
-    export let getReviewCounts: () => Promise<Map<string, number>>;
+    export let getReviewCounts: (days: number) => Promise<Map<string, number>>;
 
     let reviewCounts = new Map<string, number>();
     let days: Array<{ date: string; count: number; dayOfWeek: number }> = [];
@@ -12,6 +12,7 @@
     let isLoading = true;
     let containerElement: HTMLElement;
     let maxWeeks = 52; // Default to full year
+    let containerWidth = 0;
 
     const months = [
         "Jan",
@@ -123,13 +124,10 @@
         return labels;
     }
 
-    function calculateMaxWeeks() {
-        if (!containerElement) return 20; // Conservative default
+    function calculateMaxWeeks(width: number) {
+        if (width === 0) return 20; // Not yet rendered
 
-        const containerWidth = containerElement.clientWidth;
-        if (containerWidth === 0) return 20; // Not yet rendered
-
-        const availableWidth = containerWidth - 50; // Account for padding and day labels
+        const availableWidth = width - 50; // Account for padding and day labels
         const weekWidth = 12; // 10px square + 2px gap
         const calculatedWeeks = Math.floor(availableWidth / weekWidth);
 
@@ -137,14 +135,19 @@
         return Math.min(Math.max(calculatedWeeks, 8), 52);
     }
 
-    function handleResize() {
-        const newMaxWeeks = calculateMaxWeeks();
-        if (newMaxWeeks !== maxWeeks && newMaxWeeks > 0) {
+    // Reactive statement to update maxWeeks when container width changes
+    $: if (containerWidth > 0) {
+        const newMaxWeeks = calculateMaxWeeks(containerWidth);
+        if (newMaxWeeks !== maxWeeks) {
             maxWeeks = newMaxWeeks;
-            // Debounce the refresh to avoid too many updates
-            setTimeout(() => {
-                refresh();
-            }, 100);
+            // Refresh with new week count
+            refresh();
+        }
+    }
+
+    function updateContainerWidth() {
+        if (containerElement) {
+            containerWidth = containerElement.clientWidth;
         }
     }
 
@@ -152,7 +155,7 @@
         isLoading = true;
         try {
             const daysToFetch = maxWeeks * 7;
-            reviewCounts = await getReviewCounts();
+            reviewCounts = await getReviewCounts(daysToFetch);
             maxCount = 0;
             generateDays();
         } catch (error) {
@@ -163,31 +166,21 @@
     }
 
     onMount(() => {
-        // Use setTimeout to ensure DOM is fully rendered
+        // Initial setup with proper timing
         setTimeout(() => {
-            maxWeeks = calculateMaxWeeks();
+            updateContainerWidth();
             refresh();
-        }, 0);
+        }, 100);
 
-        // Use ResizeObserver for better container resize detection
-        let resizeObserver: ResizeObserver;
+        // Listen for window resize to update container width
+        const handleWindowResize = () => {
+            setTimeout(updateContainerWidth, 50);
+        };
 
-        if (containerElement && window.ResizeObserver) {
-            resizeObserver = new ResizeObserver(() => {
-                handleResize();
-            });
-            resizeObserver.observe(containerElement);
-        } else {
-            // Fallback to window resize
-            window.addEventListener("resize", handleResize);
-        }
+        window.addEventListener("resize", handleWindowResize);
 
         return () => {
-            if (resizeObserver) {
-                resizeObserver.disconnect();
-            } else {
-                window.removeEventListener("resize", handleResize);
-            }
+            window.removeEventListener("resize", handleWindowResize);
         };
     });
 </script>
@@ -384,48 +377,6 @@
 
     .intensity-4 {
         background-color: #39d353;
-    }
-
-    /* Dark mode adjustments */
-    .theme-dark .intensity-0 {
-        background-color: #161b22;
-    }
-
-    .theme-dark .intensity-1 {
-        background-color: #0e4429;
-    }
-
-    .theme-dark .intensity-2 {
-        background-color: #006d32;
-    }
-
-    .theme-dark .intensity-3 {
-        background-color: #26a641;
-    }
-
-    .theme-dark .intensity-4 {
-        background-color: #39d353;
-    }
-
-    /* Light mode adjustments */
-    .theme-light .intensity-0 {
-        background-color: #ebedf0;
-    }
-
-    .theme-light .intensity-1 {
-        background-color: #9be9a8;
-    }
-
-    .theme-light .intensity-2 {
-        background-color: #40c463;
-    }
-
-    .theme-light .intensity-3 {
-        background-color: #30a14e;
-    }
-
-    .theme-light .intensity-4 {
-        background-color: #216e39;
     }
 
     .legend {

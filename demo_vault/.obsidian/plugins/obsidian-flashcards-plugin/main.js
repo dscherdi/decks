@@ -4407,7 +4407,7 @@ function __awaiter(thisArg, _arguments, P, generator) {
 
 // src/components/ReviewHeatmap.svelte
 function add_css(target) {
-  append_styles(target, "svelte-cxt4fr", ".heatmap-container.svelte-cxt4fr.svelte-cxt4fr{padding:16px;border-top:1px solid var(--background-modifier-border);background:var(--background-primary);display:flex;flex-direction:column;align-items:center}.heatmap-header.svelte-cxt4fr.svelte-cxt4fr{display:flex;justify-content:space-between;align-items:center;margin-bottom:12px;width:100%}.heatmap-header.svelte-cxt4fr h4.svelte-cxt4fr{margin:0;font-size:14px;font-weight:600;color:var(--text-normal)}.total-reviews.svelte-cxt4fr.svelte-cxt4fr{font-size:12px;color:var(--text-muted)}.loading.svelte-cxt4fr.svelte-cxt4fr{text-align:center;padding:20px;color:var(--text-muted);font-size:12px}.heatmap.svelte-cxt4fr.svelte-cxt4fr{position:relative;margin-top:12px;overflow-x:auto;overflow-y:hidden;max-width:100%}.month-labels.svelte-cxt4fr.svelte-cxt4fr{position:relative;height:12px;margin-bottom:2px;margin-left:18px}.month-label.svelte-cxt4fr.svelte-cxt4fr{position:absolute;font-size:9px;color:var(--text-muted)}.day-labels.svelte-cxt4fr.svelte-cxt4fr{position:absolute;left:-18px;top:16px}.day-label.svelte-cxt4fr.svelte-cxt4fr{position:absolute;font-size:9px;color:var(--text-muted);width:16px;text-align:right}.heatmap-grid.svelte-cxt4fr.svelte-cxt4fr{display:flex;gap:2px;min-width:fit-content}.week.svelte-cxt4fr.svelte-cxt4fr{display:flex;flex-direction:column;gap:2px}.day.svelte-cxt4fr.svelte-cxt4fr{width:10px;height:10px;border-radius:2px;cursor:pointer;transition:all 0.1s ease;flex-shrink:0}.day.svelte-cxt4fr.svelte-cxt4fr:hover{transform:scale(1.3);outline:1px solid var(--text-muted);z-index:10;position:relative}.day.today.svelte-cxt4fr.svelte-cxt4fr{outline:2px solid var(--interactive-accent);outline-offset:1px}.day.today.svelte-cxt4fr.svelte-cxt4fr:hover{outline:2px solid var(--interactive-accent);outline-offset:1px}.intensity-0.svelte-cxt4fr.svelte-cxt4fr{background-color:var(--background-modifier-border)}.intensity-1.svelte-cxt4fr.svelte-cxt4fr{background-color:#0e4429}.intensity-2.svelte-cxt4fr.svelte-cxt4fr{background-color:#006d32}.intensity-3.svelte-cxt4fr.svelte-cxt4fr{background-color:#26a641}.intensity-4.svelte-cxt4fr.svelte-cxt4fr{background-color:#39d353}.legend.svelte-cxt4fr.svelte-cxt4fr{display:flex;align-items:center;justify-content:center;gap:3px;margin-top:6px}.legend-label.svelte-cxt4fr.svelte-cxt4fr{font-size:8px;color:var(--text-muted)}.legend-colors.svelte-cxt4fr.svelte-cxt4fr{display:flex;gap:2px}.legend-square.svelte-cxt4fr.svelte-cxt4fr{width:10px;height:10px;border-radius:2px}");
+  append_styles(target, "svelte-1lazk3n", ".heatmap-container.svelte-1lazk3n.svelte-1lazk3n{padding:16px;border-top:1px solid var(--background-modifier-border);background:var(--background-primary);display:flex;flex-direction:column;align-items:center}.heatmap-header.svelte-1lazk3n.svelte-1lazk3n{display:flex;justify-content:space-between;align-items:center;margin-bottom:12px;width:100%}.heatmap-header.svelte-1lazk3n h4.svelte-1lazk3n{margin:0;font-size:14px;font-weight:600;color:var(--text-normal)}.total-reviews.svelte-1lazk3n.svelte-1lazk3n{font-size:12px;color:var(--text-muted)}.loading.svelte-1lazk3n.svelte-1lazk3n{text-align:center;padding:20px;color:var(--text-muted);font-size:12px}.heatmap.svelte-1lazk3n.svelte-1lazk3n{position:relative;margin-top:12px;overflow-x:auto;overflow-y:hidden;max-width:100%}.month-labels.svelte-1lazk3n.svelte-1lazk3n{position:relative;height:12px;margin-bottom:2px;margin-left:18px}.month-label.svelte-1lazk3n.svelte-1lazk3n{position:absolute;font-size:9px;color:var(--text-muted)}.day-labels.svelte-1lazk3n.svelte-1lazk3n{position:absolute;left:-18px;top:16px}.day-label.svelte-1lazk3n.svelte-1lazk3n{position:absolute;font-size:9px;color:var(--text-muted);width:16px;text-align:right}.heatmap-grid.svelte-1lazk3n.svelte-1lazk3n{display:flex;gap:2px;min-width:fit-content}.week.svelte-1lazk3n.svelte-1lazk3n{display:flex;flex-direction:column;gap:2px}.day.svelte-1lazk3n.svelte-1lazk3n{width:10px;height:10px;border-radius:2px;cursor:pointer;transition:all 0.1s ease;flex-shrink:0}.day.svelte-1lazk3n.svelte-1lazk3n:hover{transform:scale(1.3);outline:1px solid var(--text-muted);z-index:10;position:relative}.day.today.svelte-1lazk3n.svelte-1lazk3n{outline:2px solid var(--interactive-accent);outline-offset:1px}.day.today.svelte-1lazk3n.svelte-1lazk3n:hover{outline:2px solid var(--interactive-accent);outline-offset:1px}.intensity-0.svelte-1lazk3n.svelte-1lazk3n{background-color:var(--background-modifier-border)}.intensity-1.svelte-1lazk3n.svelte-1lazk3n{background-color:#0e4429}.intensity-2.svelte-1lazk3n.svelte-1lazk3n{background-color:#006d32}.intensity-3.svelte-1lazk3n.svelte-1lazk3n{background-color:#26a641}.intensity-4.svelte-1lazk3n.svelte-1lazk3n{background-color:#39d353}.legend.svelte-1lazk3n.svelte-1lazk3n{display:flex;align-items:center;justify-content:center;gap:3px;margin-top:6px}.legend-label.svelte-1lazk3n.svelte-1lazk3n{font-size:8px;color:var(--text-muted)}.legend-colors.svelte-1lazk3n.svelte-1lazk3n{display:flex;gap:2px}.legend-square.svelte-1lazk3n.svelte-1lazk3n{width:10px;height:10px;border-radius:2px}");
 }
 function get_each_context(ctx, list, i) {
   const child_ctx = ctx.slice();
@@ -4438,7 +4438,7 @@ function create_if_block_1(ctx) {
       span = element("span");
       t0 = text(t0_value);
       t1 = text(" reviews");
-      attr(span, "class", "total-reviews svelte-cxt4fr");
+      attr(span, "class", "total-reviews svelte-1lazk3n");
     },
     m(target, anchor) {
       insert(target, span, anchor);
@@ -4493,10 +4493,10 @@ function create_else_block(ctx) {
       }
       t0 = space();
       div1 = element("div");
-      div1.innerHTML = `<span class="day-label svelte-cxt4fr" style="top: 0px">S</span> 
-                <span class="day-label svelte-cxt4fr" style="top: 18px">T</span> 
-                <span class="day-label svelte-cxt4fr" style="top: 36px">T</span> 
-                <span class="day-label svelte-cxt4fr" style="top: 54px">S</span>`;
+      div1.innerHTML = `<span class="day-label svelte-1lazk3n" style="top: 0px">S</span> 
+                <span class="day-label svelte-1lazk3n" style="top: 18px">T</span> 
+                <span class="day-label svelte-1lazk3n" style="top: 36px">T</span> 
+                <span class="day-label svelte-1lazk3n" style="top: 54px">S</span>`;
       t8 = space();
       div2 = element("div");
       for (let i = 0; i < each_blocks.length; i += 1) {
@@ -4504,18 +4504,18 @@ function create_else_block(ctx) {
       }
       t9 = space();
       div10 = element("div");
-      div10.innerHTML = `<span class="legend-label svelte-cxt4fr">Less</span> 
-            <div class="legend-colors svelte-cxt4fr"><div class="legend-square intensity-0 svelte-cxt4fr"></div> 
-                <div class="legend-square intensity-1 svelte-cxt4fr"></div> 
-                <div class="legend-square intensity-2 svelte-cxt4fr"></div> 
-                <div class="legend-square intensity-3 svelte-cxt4fr"></div> 
-                <div class="legend-square intensity-4 svelte-cxt4fr"></div></div> 
-            <span class="legend-label svelte-cxt4fr">More</span>`;
-      attr(div0, "class", "month-labels svelte-cxt4fr");
-      attr(div1, "class", "day-labels svelte-cxt4fr");
-      attr(div2, "class", "heatmap-grid svelte-cxt4fr");
-      attr(div3, "class", "heatmap svelte-cxt4fr");
-      attr(div10, "class", "legend svelte-cxt4fr");
+      div10.innerHTML = `<span class="legend-label svelte-1lazk3n">Less</span> 
+            <div class="legend-colors svelte-1lazk3n"><div class="legend-square intensity-0 svelte-1lazk3n"></div> 
+                <div class="legend-square intensity-1 svelte-1lazk3n"></div> 
+                <div class="legend-square intensity-2 svelte-1lazk3n"></div> 
+                <div class="legend-square intensity-3 svelte-1lazk3n"></div> 
+                <div class="legend-square intensity-4 svelte-1lazk3n"></div></div> 
+            <span class="legend-label svelte-1lazk3n">More</span>`;
+      attr(div0, "class", "month-labels svelte-1lazk3n");
+      attr(div1, "class", "day-labels svelte-1lazk3n");
+      attr(div2, "class", "heatmap-grid svelte-1lazk3n");
+      attr(div3, "class", "heatmap svelte-1lazk3n");
+      attr(div10, "class", "legend svelte-1lazk3n");
     },
     m(target, anchor) {
       insert(target, div3, anchor);
@@ -4597,7 +4597,7 @@ function create_if_block(ctx) {
     c() {
       div = element("div");
       div.textContent = "Loading...";
-      attr(div, "class", "loading svelte-cxt4fr");
+      attr(div, "class", "loading svelte-1lazk3n");
     },
     m(target, anchor) {
       insert(target, div, anchor);
@@ -4620,7 +4620,7 @@ function create_each_block_2(ctx) {
     c() {
       span = element("span");
       t = text(t_value);
-      attr(span, "class", "month-label svelte-cxt4fr");
+      attr(span, "class", "month-label svelte-1lazk3n");
       set_style(
         span,
         "left",
@@ -4650,7 +4650,7 @@ function create_each_block_1(ctx) {
       ctx[4](
         /*day*/
         ctx[19].count
-      ) + " svelte-cxt4fr");
+      ) + " svelte-1lazk3n");
       attr(div, "title", div_title_value = /*day*/
       ctx[19].count + " reviews on " + formatDate(
         /*day*/
@@ -4670,7 +4670,7 @@ function create_each_block_1(ctx) {
       ctx2[4](
         /*day*/
         ctx2[19].count
-      ) + " svelte-cxt4fr")) {
+      ) + " svelte-1lazk3n")) {
         attr(div, "class", div_class_value);
       }
       if (dirty & /*weeks*/
@@ -4713,7 +4713,7 @@ function create_each_block(ctx) {
         each_blocks[i].c();
       }
       t = space();
-      attr(div, "class", "week svelte-cxt4fr");
+      attr(div, "class", "week svelte-1lazk3n");
     },
     m(target, anchor) {
       insert(target, div, anchor);
@@ -4782,9 +4782,9 @@ function create_fragment(ctx) {
         if_block0.c();
       t2 = space();
       if_block1.c();
-      attr(h4, "class", "svelte-cxt4fr");
-      attr(div0, "class", "heatmap-header svelte-cxt4fr");
-      attr(div1, "class", "heatmap-container svelte-cxt4fr");
+      attr(h4, "class", "svelte-1lazk3n");
+      attr(div0, "class", "heatmap-header svelte-1lazk3n");
+      attr(div1, "class", "heatmap-container svelte-1lazk3n");
     },
     m(target, anchor) {
       insert(target, div1, anchor);
@@ -4795,7 +4795,7 @@ function create_fragment(ctx) {
         if_block0.m(div0, null);
       append(div1, t2);
       if_block1.m(div1, null);
-      ctx[8](div1);
+      ctx[10](div1);
     },
     p(ctx2, [dirty]) {
       if (!/*isLoading*/
@@ -4830,7 +4830,7 @@ function create_fragment(ctx) {
       if (if_block0)
         if_block0.d();
       if_block1.d();
-      ctx[8](null);
+      ctx[10](null);
     }
   };
 }
@@ -4847,6 +4847,14 @@ function isToday(dateStr) {
   const today = (/* @__PURE__ */ new Date()).toISOString().split("T")[0];
   return dateStr === today;
 }
+function calculateMaxWeeks(width) {
+  if (width === 0)
+    return 20;
+  const availableWidth = width - 50;
+  const weekWidth = 12;
+  const calculatedWeeks = Math.floor(availableWidth / weekWidth);
+  return Math.min(Math.max(calculatedWeeks, 8), 52);
+}
 var func = (sum, count) => sum + count;
 function instance($$self, $$props, $$invalidate) {
   let { getReviewCounts } = $$props;
@@ -4857,6 +4865,7 @@ function instance($$self, $$props, $$invalidate) {
   let isLoading = true;
   let containerElement;
   let maxWeeks = 52;
+  let containerWidth = 0;
   const months = [
     "Jan",
     "Feb",
@@ -4929,27 +4938,9 @@ function instance($$self, $$props, $$invalidate) {
     });
     return labels;
   }
-  function calculateMaxWeeks() {
-    if (!containerElement)
-      return 20;
-    const containerWidth = containerElement.clientWidth;
-    if (containerWidth === 0)
-      return 20;
-    const availableWidth = containerWidth - 50;
-    const weekWidth = 12;
-    const calculatedWeeks = Math.floor(availableWidth / weekWidth);
-    return Math.min(Math.max(calculatedWeeks, 8), 52);
-  }
-  function handleResize() {
-    const newMaxWeeks = calculateMaxWeeks();
-    if (newMaxWeeks !== maxWeeks && newMaxWeeks > 0) {
-      maxWeeks = newMaxWeeks;
-      setTimeout(
-        () => {
-          refresh();
-        },
-        100
-      );
+  function updateContainerWidth() {
+    if (containerElement) {
+      $$invalidate(9, containerWidth = containerElement.clientWidth);
     }
   }
   function refresh() {
@@ -4957,7 +4948,7 @@ function instance($$self, $$props, $$invalidate) {
       $$invalidate(2, isLoading = true);
       try {
         const daysToFetch = maxWeeks * 7;
-        $$invalidate(0, reviewCounts = yield getReviewCounts());
+        $$invalidate(0, reviewCounts = yield getReviewCounts(daysToFetch));
         maxCount = 0;
         generateDays();
       } catch (error) {
@@ -4970,26 +4961,17 @@ function instance($$self, $$props, $$invalidate) {
   onMount(() => {
     setTimeout(
       () => {
-        maxWeeks = calculateMaxWeeks();
+        updateContainerWidth();
         refresh();
       },
-      0
+      100
     );
-    let resizeObserver;
-    if (containerElement && window.ResizeObserver) {
-      resizeObserver = new ResizeObserver(() => {
-        handleResize();
-      });
-      resizeObserver.observe(containerElement);
-    } else {
-      window.addEventListener("resize", handleResize);
-    }
+    const handleWindowResize = () => {
+      setTimeout(updateContainerWidth, 50);
+    };
+    window.addEventListener("resize", handleWindowResize);
     return () => {
-      if (resizeObserver) {
-        resizeObserver.disconnect();
-      } else {
-        window.removeEventListener("resize", handleResize);
-      }
+      window.removeEventListener("resize", handleWindowResize);
     };
   });
   function div1_binding($$value) {
@@ -5002,6 +4984,19 @@ function instance($$self, $$props, $$invalidate) {
     if ("getReviewCounts" in $$props2)
       $$invalidate(6, getReviewCounts = $$props2.getReviewCounts);
   };
+  $$self.$$.update = () => {
+    if ($$self.$$.dirty & /*containerWidth, maxWeeks*/
+    768) {
+      $:
+        if (containerWidth > 0) {
+          const newMaxWeeks = calculateMaxWeeks(containerWidth);
+          if (newMaxWeeks !== maxWeeks) {
+            $$invalidate(8, maxWeeks = newMaxWeeks);
+            refresh();
+          }
+        }
+    }
+  };
   return [
     reviewCounts,
     weeks,
@@ -5011,6 +5006,8 @@ function instance($$self, $$props, $$invalidate) {
     getMonthLabels,
     getReviewCounts,
     refresh,
+    maxWeeks,
+    containerWidth,
     div1_binding
   ];
 }
@@ -6826,8 +6823,8 @@ var FlashcardsView = class extends import_obsidian2.ItemView {
           console.log("onRefresh callback invoked");
           await this.refresh();
         },
-        getReviewCounts: async () => {
-          return await this.plugin.getReviewCounts();
+        getReviewCounts: async (days) => {
+          return await this.plugin.getReviewCounts(days);
         }
       }
     });

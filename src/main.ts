@@ -374,8 +374,8 @@ class FlashcardsView extends ItemView {
           console.log("onRefresh callback invoked");
           await this.refresh();
         },
-        getReviewCounts: async () => {
-          return await this.plugin.getReviewCounts();
+        getReviewCounts: async (days: number) => {
+          return await this.plugin.getReviewCounts(days);
         },
       },
     });
