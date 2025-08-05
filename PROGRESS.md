@@ -253,3 +253,6 @@
 - **Bug Fix - NaN Prevention**: Added robust validation for zero/undefined limits to prevent NaN display
 - **Input Validation**: UI ensures limit values are always valid numbers with proper fallbacks
 - **Edge Case Handling**: Zero limits properly show 0 cards available instead of calculation errors
+- **Enhanced Exceeded Limit Messaging**: Clear "LIMIT EXCEEDED" indicators when daily allowance surpassed
+- **Learning Cards Explanation**: Notifies users when only learning cards available due to exceeded limits
+- **Complete Test Coverage**: 44 tests passing including exceeded limit scenarios

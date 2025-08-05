@@ -661,6 +661,113 @@ describe("DatabaseService", () => {
       mockGetDailyReviewCounts.mockRestore();
     });
 
+    it("should handle limits set below already reviewed count", async () => {
+      // Mock getDeckById to return a deck with limits below already reviewed count
+      const mockGetDeckById = jest
+        .spyOn(dbService, "getDeckById")
+        .mockResolvedValue({
+          id: "deck_123",
+          name: "Test Deck",
+          filepath: "test.md",
+          tag: "#test",
+          lastReviewed: null,
+          config: {
+            newCardsLimit: 5, // Limit set to 5
+            reviewCardsLimit: 3, // Limit set to 3
+            enableNewCardsLimit: true,
+            enableReviewCardsLimit: true,
+            reviewOrder: "due-date",
+          },
+          created: "2024-01-01",
+          modified: "2024-01-01",
+        });
+
+      // Mock getDailyReviewCounts to return counts above the limits
+      const mockGetDailyReviewCounts = jest
+        .spyOn(dbService, "getDailyReviewCounts")
+        .mockResolvedValue({ newCount: 6, reviewCount: 4 }); // Already reviewed more than limits
+
+      // Mock counts for different queries
+      mockStatement.get
+        .mockReturnValueOnce([10]) // total new cards available
+        .mockReturnValueOnce([2]) // learning count
+        .mockReturnValueOnce([8]) // total review cards available
+        .mockReturnValueOnce([20]); // total count
+
+      const stats = await dbService.getDeckStats("deck_123");
+
+      expect(stats).toEqual({
+        deckId: "deck_123",
+        newCount: 0, // Should be 0 because 6 > 5 (limit exceeded)
+        learningCount: 2, // learning cards are unchanged
+        dueCount: 0, // Should be 0 because 4 > 3 (limit exceeded)
+        totalCount: 20,
+      });
+
+      // Test getReviewableFlashcards with the same scenario
+      // Reset mocks for the learning cards query
+      mockStatement.step
+        .mockReset()
+        .mockReturnValueOnce(true) // first learning card
+        .mockReturnValueOnce(true) // second learning card
+        .mockReturnValueOnce(false) // end learning query
+        .mockReturnValueOnce(false) // no new cards (limit exceeded)
+        .mockReturnValueOnce(false); // no review cards (limit exceeded)
+
+      mockStatement.get
+        .mockReset()
+        .mockReturnValueOnce([
+          "learning_1",
+          "deck_123",
+          "Learning Front 1",
+          "Back",
+          "header-paragraph",
+          "test.md",
+          1,
+          "hash1",
+          "learning",
+          "2024-01-01T00:00:00.000Z",
+          60,
+          0,
+          2.5,
+          1.0,
+          0,
+          null,
+          "2024-01-01",
+          "2024-01-01",
+        ])
+        .mockReturnValueOnce([
+          "learning_2",
+          "deck_123",
+          "Learning Front 2",
+          "Back",
+          "header-paragraph",
+          "test.md",
+          1,
+          "hash2",
+          "learning",
+          "2024-01-02T00:00:00.000Z",
+          60,
+          0,
+          2.5,
+          1.0,
+          0,
+          null,
+          "2024-01-01",
+          "2024-01-01",
+        ]);
+
+      const flashcards = await dbService.getReviewableFlashcards("deck_123");
+
+      // Should only return learning cards since new and review limits are exceeded
+      expect(flashcards).toHaveLength(2); // Only learning cards
+      expect(flashcards.every((card) => card.state === "learning")).toBe(true);
+
+      // Clean up mocks
+      mockGetDeckById.mockRestore();
+      mockGetDailyReviewCounts.mockRestore();
+    });
+
     describe("getReviewableFlashcards", () => {
       it("should query for reviewable cards with correct order", async () => {
         const deckId = "deck_123";

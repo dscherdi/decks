@@ -665,12 +665,33 @@ class FlashcardsView extends ItemView {
       if (config.enableNewCardsLimit || config.enableReviewCardsLimit) {
         let limitInfo = `Daily progress for ${deck.name}:\n`;
         if (config.enableNewCardsLimit) {
-          limitInfo += `New cards: ${dailyCounts.newCount}/${config.newCardsLimit} (${remainingNew} remaining)\n`;
+          if (dailyCounts.newCount >= config.newCardsLimit) {
+            limitInfo += `New cards: ${dailyCounts.newCount}/${config.newCardsLimit} (LIMIT EXCEEDED)\n`;
+          } else {
+            limitInfo += `New cards: ${dailyCounts.newCount}/${config.newCardsLimit} (${remainingNew} remaining)\n`;
+          }
         }
         if (config.enableReviewCardsLimit) {
-          limitInfo += `Review cards: ${dailyCounts.reviewCount}/${config.reviewCardsLimit} (${remainingReview} remaining)`;
+          if (dailyCounts.reviewCount >= config.reviewCardsLimit) {
+            limitInfo += `Review cards: ${dailyCounts.reviewCount}/${config.reviewCardsLimit} (LIMIT EXCEEDED)`;
+          } else {
+            limitInfo += `Review cards: ${dailyCounts.reviewCount}/${config.reviewCardsLimit} (${remainingReview} remaining)`;
+          }
         }
-        new Notice(limitInfo, 4000);
+
+        // Add explanation when limits are exceeded but learning cards are available
+        const newLimitExceeded =
+          config.enableNewCardsLimit &&
+          dailyCounts.newCount >= config.newCardsLimit;
+        const reviewLimitExceeded =
+          config.enableReviewCardsLimit &&
+          dailyCounts.reviewCount >= config.reviewCardsLimit;
+
+        if (newLimitExceeded || reviewLimitExceeded) {
+          limitInfo += `\n\nNote: Only learning cards will be shown (limits exceeded)`;
+        }
+
+        new Notice(limitInfo, 5000);
       }
 
       // Open review modal

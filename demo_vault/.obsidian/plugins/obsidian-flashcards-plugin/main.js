@@ -8275,13 +8275,29 @@ Daily review cards limit reached: ${config.reviewCardsLimit}/${config.reviewCard
         let limitInfo = `Daily progress for ${deck.name}:
 `;
         if (config.enableNewCardsLimit) {
-          limitInfo += `New cards: ${dailyCounts.newCount}/${config.newCardsLimit} (${remainingNew} remaining)
+          if (dailyCounts.newCount >= config.newCardsLimit) {
+            limitInfo += `New cards: ${dailyCounts.newCount}/${config.newCardsLimit} (LIMIT EXCEEDED)
 `;
+          } else {
+            limitInfo += `New cards: ${dailyCounts.newCount}/${config.newCardsLimit} (${remainingNew} remaining)
+`;
+          }
         }
         if (config.enableReviewCardsLimit) {
-          limitInfo += `Review cards: ${dailyCounts.reviewCount}/${config.reviewCardsLimit} (${remainingReview} remaining)`;
+          if (dailyCounts.reviewCount >= config.reviewCardsLimit) {
+            limitInfo += `Review cards: ${dailyCounts.reviewCount}/${config.reviewCardsLimit} (LIMIT EXCEEDED)`;
+          } else {
+            limitInfo += `Review cards: ${dailyCounts.reviewCount}/${config.reviewCardsLimit} (${remainingReview} remaining)`;
+          }
         }
-        new import_obsidian5.Notice(limitInfo, 4e3);
+        const newLimitExceeded = config.enableNewCardsLimit && dailyCounts.newCount >= config.newCardsLimit;
+        const reviewLimitExceeded = config.enableReviewCardsLimit && dailyCounts.reviewCount >= config.reviewCardsLimit;
+        if (newLimitExceeded || reviewLimitExceeded) {
+          limitInfo += `
+
+Note: Only learning cards will be shown (limits exceeded)`;
+        }
+        new import_obsidian5.Notice(limitInfo, 5e3);
       }
       new FlashcardReviewModalWrapper(
         this.app,
