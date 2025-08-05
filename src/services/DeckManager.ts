@@ -13,11 +13,24 @@ export class DeckManager {
   private vault: Vault;
   private metadataCache: MetadataCache;
   private db: DatabaseService;
+  private plugin: any; // FlashcardsPlugin reference for debug logging
 
-  constructor(vault: Vault, metadataCache: MetadataCache, db: DatabaseService) {
+  constructor(
+    vault: Vault,
+    metadataCache: MetadataCache,
+    db: DatabaseService,
+    plugin?: any,
+  ) {
     this.vault = vault;
     this.metadataCache = metadataCache;
     this.db = db;
+    this.plugin = plugin;
+  }
+
+  private debugLog(message: string, ...args: any[]): void {
+    if (this.plugin?.debugLog) {
+      this.plugin.debugLog(message, ...args);
+    }
   }
 
   /**
@@ -26,12 +39,15 @@ export class DeckManager {
   async scanVaultForDecks(): Promise<Map<string, TFile[]>> {
     const decksMap = new Map<string, TFile[]>();
     const files = this.vault.getMarkdownFiles();
+    this.debugLog(`Scanning ${files.length} markdown files for flashcard tags`);
 
     for (const file of files) {
       const metadata = this.metadataCache.getFileCache(file);
       if (!metadata) {
+        this.debugLog(`No metadata for file: ${file.path}`);
         continue;
       }
+      this.debugLog(`Checking file: ${file.path}`);
 
       const allTags: string[] = [];
 
@@ -39,7 +55,7 @@ export class DeckManager {
       if (metadata.tags) {
         const inlineTags = metadata.tags.map((t) => t.tag);
         allTags.push(...inlineTags);
-        console.log(`File ${file.path} has inline tags:`, inlineTags);
+        this.debugLog(`File ${file.path} has inline tags:`, inlineTags);
       }
 
       // Check frontmatter tags
@@ -53,7 +69,10 @@ export class DeckManager {
           tag.startsWith("#") ? tag : `#${tag}`,
         );
         allTags.push(...normalizedTags);
-        console.log(`File ${file.path} has frontmatter tags:`, normalizedTags);
+        this.debugLog(
+          `File ${file.path} has frontmatter tags:`,
+          normalizedTags,
+        );
       }
 
       if (allTags.length === 0) {
@@ -64,6 +83,8 @@ export class DeckManager {
       const flashcardTags = allTags.filter((tag) =>
         tag.startsWith("#flashcards"),
       );
+      this.debugLog(`All tags for ${file.path}:`, allTags);
+      this.debugLog(`Flashcard tags for ${file.path}:`, flashcardTags);
 
       for (const tag of flashcardTags) {
         if (!decksMap.has(tag)) {
@@ -73,7 +94,7 @@ export class DeckManager {
       }
     }
 
-    console.log(`Found ${decksMap.size} decks:`, Array.from(decksMap.keys()));
+    this.debugLog(`Found ${decksMap.size} decks:`, Array.from(decksMap.keys()));
     return decksMap;
   }
 
@@ -82,87 +103,78 @@ export class DeckManager {
    */
   async syncDecks(): Promise<void> {
     try {
-      console.log("Starting deck sync...");
+      this.debugLog("Starting deck sync...");
       const decksMap = await this.scanVaultForDecks();
+      this.debugLog("Decks found in vault:", decksMap);
       const existingDecks = await this.db.getAllDecks();
-      const existingTags = new Set(existingDecks.map((d) => d.tag));
+      this.debugLog("Existing decks in database:", existingDecks);
 
-      console.log(
-        `Found ${decksMap.size} deck tags in vault, ${existingDecks.length} existing decks in database`,
-      );
+      // Create a map of existing decks by file path for quick lookup
+      const existingDecksByFile = new Map<string, Deck>();
+      for (const deck of existingDecks) {
+        existingDecksByFile.set(deck.filepath, deck);
+      }
 
-      // Add new decks
       let newDecksCreated = 0;
+      let totalFiles = 0;
+
+      // Process each file as its own deck
       for (const [tag, files] of decksMap) {
-        if (!existingTags.has(tag)) {
-          try {
-            const deckName = this.extractDeckNameFromFiles(files);
+        for (const file of files) {
+          totalFiles++;
+          const filePath = file.path;
+          const deckName = file.basename; // Use file basename as deck name
 
-            // Check if any file already has a deck ID in frontmatter
-            let existingDeck = null;
-            for (const file of files) {
-              const deckId = this.getDeckIdFromFile(file);
-              if (deckId) {
-                existingDeck = await this.db.getDeckById(deckId);
-                if (existingDeck) {
-                  console.log(
-                    `Found existing deck "${existingDeck.name}" with ID ${deckId} for tag ${tag}`,
-                  );
-                  break;
-                }
-              }
-            }
+          const existingDeck = existingDecksByFile.get(filePath);
 
-            if (existingDeck) {
-              // Update existing deck with new tag if needed
-              if (existingDeck.tag !== tag) {
-                console.log(
-                  `Updating deck "${existingDeck.name}" tag from ${existingDeck.tag} to ${tag}`,
-                );
-                await this.db.updateDeck(existingDeck.id, {
-                  tag: tag,
-                  name: deckName,
-                });
-              }
-
-              // Ensure all files have the deck ID in frontmatter
-              for (const file of files) {
-                await this.storeDeckIdInFile(file, existingDeck.id);
-              }
-            } else {
-              // Create new deck
-              const deck: Omit<Deck, "created" | "modified"> = {
-                id: this.generateDeckId(),
-                name: deckName,
-                tag: tag,
-                lastReviewed: null,
-              };
-              console.log(`Creating new deck: "${deckName}" with tag: ${tag}`);
-              await this.db.createDeck(deck);
-
-              // Add deck ID to frontmatter of all files
-              for (const file of files) {
-                await this.storeDeckIdInFile(file, deck.id);
-              }
-
-              newDecksCreated++;
-            }
-          } catch (error) {
-            console.error(`Failed to create deck for tag ${tag}:`, error);
-            // Continue with other decks instead of failing completely
-          }
-        } else {
-          // Existing deck - ensure frontmatter is up to date
-          const existingDeck = existingDecks.find((d) => d.tag === tag);
           if (existingDeck) {
-            for (const file of files) {
-              await this.storeDeckIdInFile(file, existingDeck.id);
+            // Update existing deck if tag changed
+            if (existingDeck.tag !== tag) {
+              this.debugLog(
+                `Updating deck "${deckName}" tag from ${existingDeck.tag} to ${tag}`,
+              );
+              await this.db.updateDeck(existingDeck.id, {
+                tag: tag,
+              });
             }
+          } else {
+            // Create new deck for this file
+            const deck: Omit<Deck, "created" | "modified"> = {
+              id: this.generateDeckId(),
+              name: deckName, // Store clean file name
+              filepath: filePath, // Store full file path separately
+              tag: tag,
+              lastReviewed: null,
+            };
+            this.debugLog(`Creating new deck: "${deckName}" with tag: ${tag}`);
+            await this.db.createDeck(deck);
+            newDecksCreated++;
           }
         }
       }
 
-      console.log(`Deck sync completed. Created ${newDecksCreated} new decks.`);
+      // Clean up orphaned decks (decks whose files no longer exist)
+      const allFiles = new Set<string>();
+      for (const [tag, files] of decksMap) {
+        for (const file of files) {
+          allFiles.add(file.path);
+        }
+      }
+
+      let deletedDecks = 0;
+      for (const deck of existingDecks) {
+        if (!allFiles.has(deck.filepath)) {
+          this.debugLog(
+            `Deleting orphaned deck: "${deck.name}" (${deck.filepath})`,
+          );
+          await this.db.deleteDeckByFilepath(deck.filepath);
+          deletedDecks++;
+        }
+      }
+
+      this.debugLog(
+        `Deck sync completed. Processed ${totalFiles} files, created ${newDecksCreated} new decks, deleted ${deletedDecks} orphaned decks.`,
+      );
     } catch (error) {
       console.error("Error during deck sync:", error);
       throw error; // Re-throw to let caller handle
@@ -324,14 +336,19 @@ export class DeckManager {
   }
 
   /**
-   * Sync flashcards for a specific deck
+   * Sync flashcards for a specific deck (file)
    */
-  async syncFlashcardsForDeck(deckTag: string): Promise<void> {
-    const deck = await this.db.getDeckByTag(deckTag);
-    if (!deck) return;
+  async syncFlashcardsForDeck(filePath: string): Promise<void> {
+    this.debugLog(`Syncing flashcards for deck: ${filePath}`);
+    const deck = await this.db.getDeckByFilepath(filePath);
+    if (!deck) {
+      this.debugLog(`No deck found for filepath: ${filePath}`);
+      return;
+    }
+    this.debugLog(`Found deck:`, deck);
 
-    const decksMap = await this.scanVaultForDecks();
-    const files = decksMap.get(deckTag) || [];
+    const file = this.vault.getAbstractFileByPath(filePath);
+    if (!file || !(file instanceof TFile)) return;
 
     // Get existing flashcards for this deck
     const existingFlashcards = await this.db.getFlashcardsByDeck(deck.id);
@@ -342,98 +359,9 @@ export class DeckManager {
 
     const processedIds = new Set<string>();
 
-    // Parse and sync flashcards from each file
-    for (const file of files) {
-      const parsedCards = await this.parseFlashcardsFromFile(file);
-
-      for (const parsed of parsedCards) {
-        const flashcardId = this.generateFlashcardId(parsed.front, deck.id);
-        const contentHash = this.generateContentHash(parsed.back);
-        const existingCard = existingById.get(flashcardId);
-
-        processedIds.add(flashcardId);
-
-        if (existingCard) {
-          // Update if content has changed
-          if (existingCard.contentHash !== contentHash) {
-            await this.db.updateFlashcard(existingCard.id, {
-              front: parsed.front,
-              back: parsed.back,
-              type: parsed.type,
-              contentHash: contentHash,
-            });
-          }
-        } else {
-          // Create new flashcard
-          const flashcard: Omit<Flashcard, "created" | "modified"> = {
-            id: flashcardId,
-            deckId: deck.id,
-            front: parsed.front,
-            back: parsed.back,
-            type: parsed.type,
-            sourceFile: file.path,
-            lineNumber: parsed.lineNumber,
-            contentHash: contentHash,
-            state: "new",
-            dueDate: new Date().toISOString(),
-            interval: 0,
-            repetitions: 0,
-            easeFactor: 5.0, // FSRS initial difficulty
-            stability: 2.5, // FSRS initial stability
-            lapses: 0,
-            lastReviewed: null,
-          };
-
-          await this.db.createFlashcard(flashcard);
-        }
-      }
-    }
-
-    // Delete flashcards that are no longer in any file
-    for (const [flashcardId, existingCard] of existingById) {
-      if (!processedIds.has(flashcardId)) {
-        await this.db.deleteFlashcard(existingCard.id);
-      }
-    }
-  }
-
-  /**
-   * Generate content hash for flashcard back content (front is used for ID)
-   */
-  private generateContentHash(back: string): string {
-    let hash = 0;
-    for (let i = 0; i < back.length; i++) {
-      const char = back.charCodeAt(i);
-      hash = (hash << 5) - hash + char;
-      hash = hash & hash; // Convert to 32-bit integer
-    }
-    return Math.abs(hash).toString(16);
-  }
-
-  /**
-   * Sync flashcards for a specific deck by name
-   */
-  async syncFlashcardsForDeckByName(deckName: string): Promise<void> {
-    const deck = await this.db.getDeckByName(deckName);
-    if (!deck) return;
-
-    // Find the file with matching basename
-    const files = this.vault.getMarkdownFiles();
-    const targetFile = files.find((file) => file.basename === deckName);
-    if (!targetFile) return;
-
-    // Get existing flashcards for this deck
-    const existingFlashcards = await this.db.getFlashcardsByDeck(deck.id);
-    const existingById = new Map<string, Flashcard>();
-    existingFlashcards
-      .filter((card) => card.sourceFile === targetFile.path)
-      .forEach((card) => {
-        existingById.set(card.id, card);
-      });
-
     // Parse flashcards from the file
-    const parsedCards = await this.parseFlashcardsFromFile(targetFile);
-    const processedIds = new Set<string>();
+    const parsedCards = await this.parseFlashcardsFromFile(file);
+    this.debugLog(`Parsed ${parsedCards.length} flashcards from ${filePath}`);
 
     for (const parsed of parsedCards) {
       const flashcardId = this.generateFlashcardId(parsed.front, deck.id);
@@ -460,7 +388,7 @@ export class DeckManager {
           front: parsed.front,
           back: parsed.back,
           type: parsed.type,
-          sourceFile: targetFile.path,
+          sourceFile: file.path,
           lineNumber: parsed.lineNumber,
           contentHash: contentHash,
           state: "new",
@@ -473,6 +401,7 @@ export class DeckManager {
           lastReviewed: null,
         };
 
+        this.debugLog(`Creating new flashcard: ${flashcard.front}`);
         await this.db.createFlashcard(flashcard);
       }
     }
@@ -480,9 +409,33 @@ export class DeckManager {
     // Delete flashcards that are no longer in the file
     for (const [flashcardId, existingCard] of existingById) {
       if (!processedIds.has(flashcardId)) {
+        this.debugLog(`Deleting flashcard: ${existingCard.front}`);
         await this.db.deleteFlashcard(existingCard.id);
       }
     }
+
+    this.debugLog(`Flashcard sync completed for ${filePath}`);
+  }
+
+  /**
+   * Sync flashcards for a specific deck by name (file path)
+   */
+  async syncFlashcardsForDeckByName(deckName: string): Promise<void> {
+    // In the new system, deckName is actually the file path
+    await this.syncFlashcardsForDeck(deckName);
+  }
+
+  /**
+   * Generate content hash for flashcard back content (front is used for ID)
+   */
+  private generateContentHash(back: string): string {
+    let hash = 0;
+    for (let i = 0; i < back.length; i++) {
+      const char = back.charCodeAt(i);
+      hash = (hash << 5) - hash + char;
+      hash = hash & hash; // Convert to 32-bit integer
+    }
+    return Math.abs(hash).toString(16);
   }
 
   /**
@@ -542,63 +495,5 @@ export class DeckManager {
       hash = hash & hash; // Convert to 32-bit integer
     }
     return `card_${Math.abs(hash).toString(36)}`;
-  }
-
-  /**
-   * Store deck ID in markdown file
-   */
-  async storeDeckIdInFile(file: TFile, deckId: string): Promise<void> {
-    const content = await this.vault.read(file);
-    const frontmatter = this.metadataCache.getFileCache(file)?.frontmatter;
-
-    // Skip if deck ID already exists and matches
-    if (frontmatter?.["flashcards-deck-id"] === deckId) {
-      return;
-    }
-
-    let newContent: string;
-
-    if (content.startsWith("---\n")) {
-      // File already has frontmatter, update it
-      const endOfFrontmatter = content.indexOf("\n---\n", 4);
-      if (endOfFrontmatter !== -1) {
-        const frontmatterContent = content.slice(4, endOfFrontmatter);
-        const bodyContent = content.slice(endOfFrontmatter + 5);
-
-        // Add or update deck ID in existing frontmatter
-        const lines = frontmatterContent.split("\n");
-        let deckIdExists = false;
-
-        for (let i = 0; i < lines.length; i++) {
-          if (lines[i].startsWith("flashcards-deck-id:")) {
-            lines[i] = `flashcards-deck-id: ${deckId}`;
-            deckIdExists = true;
-            break;
-          }
-        }
-
-        if (!deckIdExists) {
-          lines.push(`flashcards-deck-id: ${deckId}`);
-        }
-
-        newContent = `---\n${lines.join("\n")}\n---\n${bodyContent}`;
-      } else {
-        // Malformed frontmatter, add new frontmatter
-        newContent = `---\nflashcards-deck-id: ${deckId}\n---\n\n${content}`;
-      }
-    } else {
-      // No frontmatter exists, add new frontmatter
-      newContent = `---\nflashcards-deck-id: ${deckId}\n---\n\n${content}`;
-    }
-
-    await this.vault.modify(file, newContent);
-  }
-
-  /**
-   * Get deck ID from file
-   */
-  getDeckIdFromFile(file: TFile): string | null {
-    const frontmatter = this.metadataCache.getFileCache(file)?.frontmatter;
-    return frontmatter?.["flashcards-deck-id"] || null;
   }
 }

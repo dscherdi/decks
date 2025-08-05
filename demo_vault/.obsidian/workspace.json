@@ -13,12 +13,12 @@
             "state": {
               "type": "markdown",
               "state": {
-                "file": "Flashcards/Math-Basics.md",
+                "file": "Flashcards/Spanish-Vocabulary 1.md",
                 "mode": "source",
                 "source": false
               },
               "icon": "lucide-file",
-              "title": "Math-Basics"
+              "title": "Spanish-Vocabulary 1"
             }
           }
         ]
@@ -165,7 +165,7 @@
       }
     ],
     "direction": "horizontal",
-    "width": 791.5
+    "width": 424.5
   },
   "left-ribbon": {
     "hiddenItems": {
@@ -178,11 +178,16 @@
       "obsidian-flashcards-plugin:Flashcards": false
     }
   },
-  "active": "c22c74090ed42546",
+  "active": "296674abb626cb1b",
   "lastOpenFiles": [
-    "Flashcards/Spanish-Vocabulary.md",
+    "Flashcards/Programming-Concepts 1 1.md",
+    "Flashcards/Spanish-Vocabulary 1.md",
+    "Flashcards/Programming-Concepts 1.md",
     "Flashcards/Programming-Concepts.md",
     "Flashcards/Math-Basics.md",
+    "Flashcards/Flashcards for programming.md",
+    "Flashcards/Spanish-Vocabulary.md",
+    "Flashcards/Programming-Concepts for everyone on the entire earth.md",
     "Flashcards-2025-07-17.flashcards",
     "plugins",
     "plugins/obsidian-flashcards-plugin/manifest.json",

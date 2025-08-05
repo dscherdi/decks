@@ -106,6 +106,7 @@ describe("DatabaseService", () => {
         const deck = {
           id: "deck_123",
           name: "Test Deck",
+          filepath: "test.md",
           tag: "#flashcards/test",
           lastReviewed: null,
         };
@@ -118,14 +119,17 @@ describe("DatabaseService", () => {
         expect(mockStatement.run).toHaveBeenCalledWith([
           deck.id,
           deck.name,
+          deck.filepath,
           deck.tag,
           deck.lastReviewed,
           expect.any(String), // created
           expect.any(String), // modified
         ]);
-        expect(result).toMatchObject(deck);
-        expect(result.created).toBeDefined();
-        expect(result.modified).toBeDefined();
+        expect(result).toEqual({
+          ...deck,
+          created: expect.any(String),
+          modified: expect.any(String),
+        });
       });
     });
 
@@ -135,6 +139,7 @@ describe("DatabaseService", () => {
         mockStatement.get.mockReturnValue([
           "deck_123",
           "Test Deck",
+          "test.md",
           "#flashcards/test",
           null,
           "2024-01-01",
@@ -150,6 +155,7 @@ describe("DatabaseService", () => {
         expect(result).toEqual({
           id: "deck_123",
           name: "Test Deck",
+          filepath: "test.md",
           tag: "#flashcards/test",
           lastReviewed: null,
           created: "2024-01-01",
@@ -166,27 +172,29 @@ describe("DatabaseService", () => {
       });
     });
 
-    describe("getDeckByName", () => {
-      it("should retrieve deck by name", async () => {
+    describe("getDeckByFilepath", () => {
+      it("should retrieve deck by filepath", async () => {
         mockStatement.step.mockReturnValue(true);
         mockStatement.get.mockReturnValue([
           "deck_123",
           "Test Deck",
+          "test.md",
           "#flashcards/test",
           null,
           "2024-01-01",
           "2024-01-01",
         ]);
 
-        const result = await dbService.getDeckByName("Test Deck");
+        const result = await dbService.getDeckByFilepath("test.md");
 
         expect(mockDb.prepare).toHaveBeenCalledWith(
-          "SELECT * FROM decks WHERE name = ?",
+          "SELECT * FROM decks WHERE filepath = ?",
         );
-        expect(mockStatement.bind).toHaveBeenCalledWith(["Test Deck"]);
+        expect(mockStatement.bind).toHaveBeenCalledWith(["test.md"]);
         expect(result).toEqual({
           id: "deck_123",
           name: "Test Deck",
+          filepath: "test.md",
           tag: "#flashcards/test",
           lastReviewed: null,
           created: "2024-01-01",
@@ -197,7 +205,7 @@ describe("DatabaseService", () => {
       it("should return null if deck not found", async () => {
         mockStatement.step.mockReturnValue(false);
 
-        const result = await dbService.getDeckByName("Nonexistent Deck");
+        const result = await dbService.getDeckByFilepath("nonexistent.md");
 
         expect(result).toBeNull();
       });
@@ -209,6 +217,7 @@ describe("DatabaseService", () => {
         mockStatement.get.mockReturnValue([
           "deck_123",
           "Test Deck",
+          "test.md",
           "#flashcards/test",
           null,
           "2024-01-01",
@@ -224,6 +233,7 @@ describe("DatabaseService", () => {
         expect(result).toEqual({
           id: "deck_123",
           name: "Test Deck",
+          filepath: "test.md",
           tag: "#flashcards/test",
           lastReviewed: null,
           created: "2024-01-01",
@@ -234,9 +244,21 @@ describe("DatabaseService", () => {
       it("should return null if deck not found", async () => {
         mockStatement.step.mockReturnValue(false);
 
-        const result = await dbService.getDeckById("nonexistent");
+        const result = await dbService.getDeckById("nonexistent_id");
 
         expect(result).toBeNull();
+      });
+    });
+
+    describe("deleteDeckByFilepath", () => {
+      it("should delete deck by filepath", async () => {
+        await dbService.deleteDeckByFilepath("test.md");
+
+        expect(mockDb.prepare).toHaveBeenCalledWith(
+          "DELETE FROM decks WHERE filepath = ?",
+        );
+        expect(mockStatement.run).toHaveBeenCalledWith(["test.md"]);
+        expect(mockStatement.free).toHaveBeenCalled();
       });
     });
 

@@ -1,7 +1,6 @@
 ---
 tags:
   - flashcards/math
-flashcards-deck-id: deck_1754337047835_m8sawsbgb
 ---
 
 # Math Basics Flashcards

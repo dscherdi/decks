@@ -21,6 +21,7 @@ export class DatabaseService {
       const buffer = await this.loadDatabaseFile();
       if (buffer) {
         this.db = new this.SQL.Database(new Uint8Array(buffer));
+        await this.migrateSchemaIfNeeded();
       } else {
         this.db = new this.SQL.Database();
         await this.createTables();
@@ -69,12 +70,14 @@ export class DatabaseService {
   private async createTables(): Promise<void> {
     if (!this.db) throw new Error("Database not initialized");
 
+    // First, create table with new schema
     const sql = `
       -- Decks table
       CREATE TABLE IF NOT EXISTS decks (
         id TEXT PRIMARY KEY,
         name TEXT NOT NULL,
-        tag TEXT NOT NULL UNIQUE,
+        filepath TEXT NOT NULL UNIQUE,
+        tag TEXT NOT NULL,
         last_reviewed TEXT,
         created TEXT NOT NULL,
         modified TEXT NOT NULL
@@ -113,7 +116,7 @@ export class DatabaseService {
         new_interval INTEGER NOT NULL,
         old_ease_factor REAL NOT NULL,
         new_ease_factor REAL NOT NULL,
-        FOREIGN KEY (flashcard_id) REFERENCES flashcards(id) ON DELETE CASCADE
+        FOREIGN KEY (flashcard_id) REFERENCES flashcards(id)
       );
 
       -- Indexes for performance
@@ -130,22 +133,6 @@ export class DatabaseService {
   async createDeck(deck: Omit<Deck, "created" | "modified">): Promise<Deck> {
     if (!this.db) throw new Error("Database not initialized");
 
-    // First check if deck already exists
-    const existingDeck = await this.getDeckByTag(deck.tag);
-    if (existingDeck) {
-      // Update name if it's different (file name might have changed)
-      if (existingDeck.name !== deck.name) {
-        const updateStmt = this.db.prepare(`
-          UPDATE decks SET name = ?, modified = ? WHERE tag = ?
-        `);
-        updateStmt.run([deck.name, new Date().toISOString(), deck.tag]);
-        updateStmt.free();
-        await this.save();
-        return { ...existingDeck, name: deck.name };
-      }
-      return existingDeck;
-    }
-
     const now = new Date().toISOString();
     const fullDeck: Deck = {
       ...deck,
@@ -153,23 +140,28 @@ export class DatabaseService {
       modified: now,
     };
 
-    const stmt = this.db.prepare(`
-      INSERT INTO decks (id, name, tag, last_reviewed, created, modified)
-      VALUES (?, ?, ?, ?, ?, ?)
-    `);
+    try {
+      const stmt = this.db.prepare(`
+        INSERT INTO decks (id, name, filepath, tag, last_reviewed, created, modified)
+        VALUES (?, ?, ?, ?, ?, ?, ?)
+      `);
 
-    stmt.run([
-      fullDeck.id,
-      fullDeck.name,
-      fullDeck.tag,
-      fullDeck.lastReviewed,
-      fullDeck.created,
-      fullDeck.modified,
-    ]);
-    stmt.free();
+      stmt.run([
+        fullDeck.id,
+        fullDeck.name,
+        fullDeck.filepath,
+        fullDeck.tag,
+        fullDeck.lastReviewed,
+        fullDeck.created,
+        fullDeck.modified,
+      ]);
+      stmt.free();
 
-    await this.save();
-    return fullDeck;
+      await this.save();
+      return fullDeck;
+    } catch (error) {
+      throw error;
+    }
   }
 
   async getDeckByTag(tag: string): Promise<Deck | null> {
@@ -185,10 +177,11 @@ export class DatabaseService {
       return {
         id: result[0] as string,
         name: result[1] as string,
-        tag: result[2] as string,
-        lastReviewed: result[3] as string | null,
-        created: result[4] as string,
-        modified: result[5] as string,
+        filepath: result[2] as string,
+        tag: result[3] as string,
+        lastReviewed: result[4] as string | null,
+        created: result[5] as string,
+        modified: result[6] as string,
       };
     }
 
@@ -196,11 +189,11 @@ export class DatabaseService {
     return null;
   }
 
-  async getDeckByName(name: string): Promise<Deck | null> {
+  async getDeckByFilepath(filepath: string): Promise<Deck | null> {
     if (!this.db) throw new Error("Database not initialized");
 
-    const stmt = this.db.prepare("SELECT * FROM decks WHERE name = ?");
-    stmt.bind([name]);
+    const stmt = this.db.prepare("SELECT * FROM decks WHERE filepath = ?");
+    stmt.bind([filepath]);
 
     if (stmt.step()) {
       const result = stmt.get();
@@ -209,10 +202,11 @@ export class DatabaseService {
       return {
         id: result[0] as string,
         name: result[1] as string,
-        tag: result[2] as string,
-        lastReviewed: result[3] as string | null,
-        created: result[4] as string,
-        modified: result[5] as string,
+        filepath: result[2] as string,
+        tag: result[3] as string,
+        lastReviewed: result[4] as string | null,
+        created: result[5] as string,
+        modified: result[6] as string,
       };
     }
 
@@ -233,10 +227,11 @@ export class DatabaseService {
       return {
         id: result[0] as string,
         name: result[1] as string,
-        tag: result[2] as string,
-        lastReviewed: result[3] as string | null,
-        created: result[4] as string,
-        modified: result[5] as string,
+        filepath: result[2] as string,
+        tag: result[3] as string,
+        lastReviewed: result[4] as string | null,
+        created: result[5] as string,
+        modified: result[6] as string,
       };
     }
 
@@ -282,10 +277,11 @@ export class DatabaseService {
       decks.push({
         id: row[0] as string,
         name: row[1] as string,
-        tag: row[2] as string,
-        lastReviewed: row[3] as string | null,
-        created: row[4] as string,
-        modified: row[5] as string,
+        filepath: row[2] as string,
+        tag: row[3] as string,
+        lastReviewed: row[4] as string | null,
+        created: row[5] as string,
+        modified: row[6] as string,
       });
     }
 
@@ -304,6 +300,46 @@ export class DatabaseService {
 
     stmt.run([new Date().toISOString(), new Date().toISOString(), deckId]);
     stmt.free();
+    await this.save();
+  }
+
+  async deleteDeckByFilepath(filepath: string): Promise<void> {
+    if (!this.db) throw new Error("Database not initialized");
+
+    // First get the deck to find its ID
+    const deck = await this.getDeckByFilepath(filepath);
+    if (!deck) return; // Deck doesn't exist
+
+    // Delete all flashcards in this deck (preserve review logs for historical data)
+    const flashcardsStmt = this.db.prepare(
+      "DELETE FROM flashcards WHERE deck_id = ?",
+    );
+    flashcardsStmt.run([deck.id]);
+    flashcardsStmt.free();
+
+    // Finally delete the deck
+    const deckStmt = this.db.prepare("DELETE FROM decks WHERE filepath = ?");
+    deckStmt.run([filepath]);
+    deckStmt.free();
+
+    await this.save();
+  }
+
+  async deleteDeck(deckId: string): Promise<void> {
+    if (!this.db) throw new Error("Database not initialized");
+
+    // Delete all flashcards in this deck (preserve review logs for historical data)
+    const flashcardsStmt = this.db.prepare(
+      "DELETE FROM flashcards WHERE deck_id = ?",
+    );
+    flashcardsStmt.run([deckId]);
+    flashcardsStmt.free();
+
+    // Finally delete the deck
+    const deckStmt = this.db.prepare("DELETE FROM decks WHERE id = ?");
+    deckStmt.run([deckId]);
+    deckStmt.free();
+
     await this.save();
   }
 
@@ -625,6 +661,50 @@ export class DatabaseService {
 
     stmt.free();
     return reviewCounts;
+  }
+
+  private async migrateSchemaIfNeeded(): Promise<void> {
+    if (!this.db) return;
+
+    try {
+      // Check if we have the old schema (tag UNIQUE constraint)
+      const stmt = this.db.prepare("PRAGMA table_info(decks)");
+      const columns: any[] = [];
+
+      while (stmt.step()) {
+        columns.push(stmt.get());
+      }
+      stmt.free();
+
+      // Check if filepath column exists
+      const hasFilepath = columns.some((col) => col[1] === "filepath");
+
+      if (!hasFilepath) {
+        console.log("Migrating database schema to support filepath column...");
+        console.log(
+          "Clearing old data - decks will be rebuilt from files on next sync",
+        );
+
+        // Clear all existing data and recreate with new schema
+        this.db.exec(`
+          -- Drop existing tables
+          DROP TABLE IF EXISTS review_logs;
+          DROP TABLE IF EXISTS flashcards;
+          DROP TABLE IF EXISTS decks;
+        `);
+
+        // Recreate tables with new schema
+        await this.createTables();
+
+        console.log(
+          "Database schema migration completed. Data will be rebuilt from vault files.",
+        );
+        await this.save();
+      }
+    } catch (error) {
+      console.error("Error during schema migration:", error);
+      // Don't throw - let the app continue with potentially old schema
+    }
   }
 
   // Helper methods

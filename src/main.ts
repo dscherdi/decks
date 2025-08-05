@@ -32,6 +32,13 @@ export default class FlashcardsPlugin extends Plugin {
   public view: FlashcardsView | null = null;
   public settings: FlashcardsSettings;
 
+  // Debug logging utility
+  debugLog(message: string, ...args: any[]): void {
+    if (this.settings?.debug?.enableLogging) {
+      console.log(`[Flashcards Debug] ${message}`, ...args);
+    }
+  }
+
   async onload() {
     console.log("Loading Flashcards plugin");
 
@@ -56,6 +63,7 @@ export default class FlashcardsPlugin extends Plugin {
         this.app.vault,
         this.app.metadataCache,
         this.db,
+        this,
       );
       this.fsrs = new FSRS({
         requestRetention: this.settings.fsrs.requestRetention,
@@ -70,6 +78,14 @@ export default class FlashcardsPlugin extends Plugin {
         VIEW_TYPE_FLASHCARDS,
         (leaf) => new FlashcardsView(leaf, this),
       );
+
+      // Schedule initial sync after workspace is ready
+      this.app.workspace.onLayoutReady(() => {
+        // Additional delay to ensure metadata cache is fully populated
+        setTimeout(() => {
+          this.performSync();
+        }, 2000);
+      });
 
       // Add ribbon icon
       this.addRibbonIcon("brain", "Flashcards", () => {
@@ -210,31 +226,102 @@ export default class FlashcardsPlugin extends Plugin {
 
     if (leaf) {
       workspace.revealLeaf(leaf);
+
+      // Fallback sync if no decks exist (initial sync may have failed due to timing)
+      const decks = await this.db.getAllDecks();
+      if (decks.length === 0) {
+        this.debugLog("No decks found, triggering fallback sync...");
+        await this.performSync();
+      }
     }
   }
 
   async handleFileChange(file: TFile) {
     // Check if file has flashcards tag
     const metadata = this.app.metadataCache.getFileCache(file);
-    console.log(`File changed: ${file.path}, metadata:`, metadata);
+    this.debugLog(`File changed: ${file.path}, metadata:`, metadata);
 
-    if (!metadata || !metadata.tags) return;
+    if (!metadata) return;
 
-    const hasFlashcardsTag = metadata.tags.some((tag) =>
-      tag.tag.startsWith("#flashcards"),
+    // Check both inline tags and frontmatter tags
+    const allTags: string[] = [];
+    if (metadata.tags) {
+      allTags.push(...metadata.tags.map((t) => t.tag));
+    }
+    if (metadata.frontmatter && metadata.frontmatter.tags) {
+      const frontmatterTags = Array.isArray(metadata.frontmatter.tags)
+        ? metadata.frontmatter.tags
+        : [metadata.frontmatter.tags];
+      allTags.push(
+        ...frontmatterTags.map((tag) =>
+          tag.startsWith("#") ? tag : `#${tag}`,
+        ),
+      );
+    }
+
+    const hasFlashcardsTag = allTags.some((tag) =>
+      tag.startsWith("#flashcards"),
     );
 
-    console.log(`File ${file.path} has flashcards tag:`, hasFlashcardsTag);
+    this.debugLog(`File ${file.path} has flashcards tag:`, hasFlashcardsTag);
 
-    if (hasFlashcardsTag && this.view) {
-      // Refresh the view
-      await this.view.refresh();
+    if (hasFlashcardsTag) {
+      // Sync decks and flashcards for this file
+      await this.deckManager.syncDecks();
+      await this.deckManager.syncFlashcardsForDeck(file.path);
+
+      if (this.view) {
+        // Refresh the view
+        await this.view.refresh();
+      }
+    }
+  }
+
+  async performSync() {
+    try {
+      this.debugLog("Performing sync of decks and flashcards...");
+
+      // Metadata cache should be ready by now
+
+      // First sync all decks
+      await this.deckManager.syncDecks();
+
+      // Then sync flashcards for each deck
+      const decks = await this.db.getAllDecks();
+      this.debugLog(
+        `Found ${decks.length} decks after sync:`,
+        decks.map((d) => d.name),
+      );
+
+      for (const deck of decks) {
+        this.debugLog(
+          `Syncing flashcards for deck: ${deck.name} (${deck.filepath})`,
+        );
+        await this.deckManager.syncFlashcardsForDeck(deck.filepath);
+
+        // Check how many flashcards were created
+        const flashcards = await this.db.getFlashcardsByDeck(deck.id);
+        this.debugLog(
+          `Deck ${deck.name} now has ${flashcards.length} flashcards`,
+        );
+      }
+
+      this.debugLog(`Sync completed for ${decks.length} decks`);
+
+      // Update the view if it's open (but avoid infinite recursion)
+      if (this.view) {
+        const updatedDecks = await this.getDecks();
+        const deckStats = await this.getDeckStats();
+        this.view.update(updatedDecks, deckStats);
+      }
+    } catch (error) {
+      console.error("Error during initial sync:", error);
     }
   }
 
   async handleFileDelete(file: TFile) {
-    // Remove flashcards from deleted file
-    await this.db.deleteFlashcardsByFile(file.path);
+    // Remove the deck and all associated flashcards/review logs
+    await this.db.deleteDeckByFilepath(file.path);
 
     if (this.view) {
       await this.view.refresh();
@@ -371,7 +458,7 @@ class FlashcardsView extends ItemView {
       props: {
         onDeckClick: (deck: Deck) => this.startReview(deck),
         onRefresh: async () => {
-          console.log("onRefresh callback invoked");
+          this.plugin.debugLog("onRefresh callback invoked");
           await this.refresh();
         },
         getReviewCounts: async (days: number) => {
@@ -412,29 +499,18 @@ class FlashcardsView extends ItemView {
     }
   }
 
+  async update(updatedDecks: Deck[], deckStats: Map<string, DeckStats>) {
+    this.component?.updateDecks(updatedDecks);
+    this.component?.updateStats(deckStats);
+  }
+
   async refresh() {
-    console.log("FlashcardsView.refresh() called");
+    this.plugin.debugLog("FlashcardsView.refresh() called");
     try {
-      // Sync decks with vault
-      console.log("Syncing decks...");
-      await this.plugin.syncDecks();
+      // Perform complete sync like debug command
+      await this.plugin.performSync();
 
-      // Get updated data
-      console.log("Getting decks and stats...");
-      const decks = await this.plugin.getDecks();
-
-      // Get fresh stats after syncing
-      const deckStats = await this.plugin.getDeckStats();
-
-      // Update component
-      if (this.component) {
-        console.log("Updating component with new data");
-        this.component.updateDecks(decks);
-        this.component.updateStats(deckStats);
-      } else {
-        console.error("Component not found!");
-      }
-      console.log("Refresh complete");
+      this.plugin.debugLog("Refresh complete");
     } catch (error) {
       console.error("Error refreshing flashcards:", error);
       new Notice("Error refreshing flashcards. Check console for details.");
@@ -442,11 +518,11 @@ class FlashcardsView extends ItemView {
   }
 
   async refreshStats() {
-    console.log("FlashcardsView.refreshStats() executing");
+    this.plugin.debugLog("FlashcardsView.refreshStats() executing");
     try {
       // Get updated stats only (faster than full refresh)
       const deckStats = await this.plugin.getDeckStats();
-      console.log("Updated deck stats:", deckStats);
+      this.plugin.debugLog("Updated deck stats:", deckStats);
 
       // Update component with new stats - same pattern as refresh()
       if (this.component) {
@@ -484,8 +560,7 @@ class FlashcardsView extends ItemView {
     );
     this.backgroundRefreshInterval = setInterval(async () => {
       console.log("Background refresh tick");
-      // Only refresh if component exists
-      this.refreshStats();
+      this.refresh();
     }, this.plugin.settings.ui.backgroundRefreshInterval * 1000);
   }
 

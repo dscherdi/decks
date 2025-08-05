@@ -1,6 +1,7 @@
 export interface Deck {
   id: string;
   name: string;
+  filepath: string;
   tag: string;
   lastReviewed: string | null;
   created: string;

@@ -30,7 +30,7 @@
     }
 
     function formatDeckName(deck: Deck): string {
-        // Use the actual deck name from the database
+        // deck.name now contains the clean filename without extension
         return deck.name;
     }
 
@@ -166,12 +166,20 @@
             <div class="table-body">
                 {#each decks as deck}
                     {@const stats = getDeckStats(deck.id)}
-                    <button
-                        class="deck-row"
-                        on:click={() => handleDeckClick(deck)}
-                        title="Click to review {deck.name}"
-                    >
-                        <div class="col-deck">{formatDeckName(deck)}</div>
+                    <div class="deck-row">
+                        <div class="col-deck">
+                            <span
+                                class="deck-name-link"
+                                on:click={() => handleDeckClick(deck)}
+                                on:keydown={(e) =>
+                                    e.key === "Enter" && handleDeckClick(deck)}
+                                role="button"
+                                tabindex="0"
+                                title="Click to review {deck.name}"
+                            >
+                                {formatDeckName(deck)}
+                            </span>
+                        </div>
                         <div
                             class="col-stat"
                             class:has-cards={stats.newCount > 0}
@@ -193,7 +201,7 @@
                         >
                             {stats.dueCount}
                         </div>
-                    </button>
+                    </div>
                 {/each}
             </div>
         </div>
@@ -333,32 +341,40 @@
         display: grid;
         grid-template-columns: 1fr 60px 60px 60px;
         gap: 8px;
-        /*padding: 12px 16px;*/
-        border: none;
-        /*background: none;*/
-        width: 100%;
-        text-align: left;
-        cursor: pointer;
-        /*transition: background-color 0.1s ease;*/
-        /*border-bottom: 1px solid var(--background-modifier-border);*/
+        padding: 12px 16px;
+        border-bottom: 1px solid var(--background-modifier-border);
         align-items: center;
     }
 
-    .deck-row:hover {
-        background: var(--background-modifier-hover);
+    .deck-name-link {
+        cursor: pointer;
+        color: var(--text-normal);
+        text-decoration: underline;
+        text-decoration-color: transparent;
+        transition: text-decoration-color 0.2s ease;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+        display: inline-block;
+        max-width: 100%;
     }
 
-    .deck-row:active {
-        background: var(--background-modifier-active);
+    .deck-name-link:hover {
+        text-decoration-color: var(--text-accent);
+        color: var(--text-accent);
+    }
+
+    .deck-name-link:focus {
+        outline: 2px solid var(--interactive-accent);
+        outline-offset: 2px;
+        border-radius: 2px;
     }
 
     .col-deck {
         font-size: 14px;
         color: var(--text-normal);
-        overflow: hidden;
-        text-overflow: ellipsis;
-        white-space: nowrap;
         justify-self: start;
+        min-width: 0;
     }
 
     .col-stat {

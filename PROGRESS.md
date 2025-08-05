@@ -137,3 +137,38 @@
 - Maintains backward compatibility with existing learning progress
 - Updated comprehensive test coverage for new ID generation logic
 - Ensures data integrity across all deck operations and file movements
+
+### Simplified Deck Management
+- Removed deck ID frontmatter logic from markdown files
+- Eliminated `storeDeckIdInFile()` and `getDeckIdFromFile()` methods
+- No longer modifies user's markdown files with plugin-specific metadata
+- Cleaner file management without automatic frontmatter injection
+- Simplified codebase with fewer file modification operations
+- Deck identification now relies purely on tag-based system
+
+### New Deck-File Relationship
+- Changed from "1 Tag → 1 Deck" to "1 File → 1 Deck" relationship
+- Each markdown file with flashcards tags becomes its own separate deck
+- Multiple files can share the same tag but remain distinct decks
+- Deck names display as file basenames (without .md extension) in UI
+- Full file paths stored internally for unique identification
+- Improved organization allowing fine-grained control per file
+- Simplified sync logic treating each file independently
+
+### Enhanced Deck Data Model
+- Added `filepath` property to Deck interface for explicit file path storage
+- Separated `name` (clean filename) from `filepath` (full path) for better organization
+- Updated database schema to include `filepath` column with unique constraint
+- Modified database methods: `getDeckByName` → `getDeckByFilepath` for accurate lookups
+- Cleaner UI display using dedicated `name` field instead of path parsing
+- Improved data integrity with explicit separation of concerns
+- Updated all tests to reflect new data structure
+
+### Automatic Deck Cleanup on File Deletion
+- Added `deleteDeckByFilepath()` method to DatabaseService for removing decks by file path
+- Enhanced `handleFileDelete()` to automatically remove both flashcards and deck when file is deleted
+- Implemented proper cleanup to maintain database integrity when files are removed
+- Added comprehensive tests for file deletion scenarios
+- Database migration system ensures schema compatibility across updates
+- Real-time deck list updates when files are deleted from vault
+- Prevents orphaned decks from remaining after file deletion

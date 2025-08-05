@@ -2440,7 +2440,7 @@ __export(main_exports, {
   default: () => FlashcardsPlugin
 });
 module.exports = __toCommonJS(main_exports);
-var import_obsidian2 = require("obsidian");
+var import_obsidian3 = require("obsidian");
 
 // src/database/DatabaseService.ts
 var import_sql = __toESM(require_sql_wasm());
@@ -2458,6 +2458,7 @@ var DatabaseService = class {
       const buffer = await this.loadDatabaseFile();
       if (buffer) {
         this.db = new this.SQL.Database(new Uint8Array(buffer));
+        await this.migrateSchemaIfNeeded();
       } else {
         this.db = new this.SQL.Database();
         await this.createTables();
@@ -2504,7 +2505,8 @@ var DatabaseService = class {
       CREATE TABLE IF NOT EXISTS decks (
         id TEXT PRIMARY KEY,
         name TEXT NOT NULL,
-        tag TEXT NOT NULL UNIQUE,
+        filepath TEXT NOT NULL UNIQUE,
+        tag TEXT NOT NULL,
         last_reviewed TEXT,
         created TEXT NOT NULL,
         modified TEXT NOT NULL
@@ -2543,7 +2545,7 @@ var DatabaseService = class {
         new_interval INTEGER NOT NULL,
         old_ease_factor REAL NOT NULL,
         new_ease_factor REAL NOT NULL,
-        FOREIGN KEY (flashcard_id) REFERENCES flashcards(id) ON DELETE CASCADE
+        FOREIGN KEY (flashcard_id) REFERENCES flashcards(id)
       );
 
       -- Indexes for performance
@@ -2558,40 +2560,32 @@ var DatabaseService = class {
   async createDeck(deck) {
     if (!this.db)
       throw new Error("Database not initialized");
-    const existingDeck = await this.getDeckByTag(deck.tag);
-    if (existingDeck) {
-      if (existingDeck.name !== deck.name) {
-        const updateStmt = this.db.prepare(`
-          UPDATE decks SET name = ?, modified = ? WHERE tag = ?
-        `);
-        updateStmt.run([deck.name, (/* @__PURE__ */ new Date()).toISOString(), deck.tag]);
-        updateStmt.free();
-        await this.save();
-        return { ...existingDeck, name: deck.name };
-      }
-      return existingDeck;
-    }
     const now = (/* @__PURE__ */ new Date()).toISOString();
     const fullDeck = {
       ...deck,
       created: now,
       modified: now
     };
-    const stmt = this.db.prepare(`
-      INSERT INTO decks (id, name, tag, last_reviewed, created, modified)
-      VALUES (?, ?, ?, ?, ?, ?)
-    `);
-    stmt.run([
-      fullDeck.id,
-      fullDeck.name,
-      fullDeck.tag,
-      fullDeck.lastReviewed,
-      fullDeck.created,
-      fullDeck.modified
-    ]);
-    stmt.free();
-    await this.save();
-    return fullDeck;
+    try {
+      const stmt = this.db.prepare(`
+        INSERT INTO decks (id, name, filepath, tag, last_reviewed, created, modified)
+        VALUES (?, ?, ?, ?, ?, ?, ?)
+      `);
+      stmt.run([
+        fullDeck.id,
+        fullDeck.name,
+        fullDeck.filepath,
+        fullDeck.tag,
+        fullDeck.lastReviewed,
+        fullDeck.created,
+        fullDeck.modified
+      ]);
+      stmt.free();
+      await this.save();
+      return fullDeck;
+    } catch (error) {
+      throw error;
+    }
   }
   async getDeckByTag(tag) {
     if (!this.db)
@@ -2604,30 +2598,32 @@ var DatabaseService = class {
       return {
         id: result[0],
         name: result[1],
-        tag: result[2],
-        lastReviewed: result[3],
-        created: result[4],
-        modified: result[5]
+        filepath: result[2],
+        tag: result[3],
+        lastReviewed: result[4],
+        created: result[5],
+        modified: result[6]
       };
     }
     stmt.free();
     return null;
   }
-  async getDeckByName(name) {
+  async getDeckByFilepath(filepath) {
     if (!this.db)
       throw new Error("Database not initialized");
-    const stmt = this.db.prepare("SELECT * FROM decks WHERE name = ?");
-    stmt.bind([name]);
+    const stmt = this.db.prepare("SELECT * FROM decks WHERE filepath = ?");
+    stmt.bind([filepath]);
     if (stmt.step()) {
       const result = stmt.get();
       stmt.free();
       return {
         id: result[0],
         name: result[1],
-        tag: result[2],
-        lastReviewed: result[3],
-        created: result[4],
-        modified: result[5]
+        filepath: result[2],
+        tag: result[3],
+        lastReviewed: result[4],
+        created: result[5],
+        modified: result[6]
       };
     }
     stmt.free();
@@ -2644,10 +2640,11 @@ var DatabaseService = class {
       return {
         id: result[0],
         name: result[1],
-        tag: result[2],
-        lastReviewed: result[3],
-        created: result[4],
-        modified: result[5]
+        filepath: result[2],
+        tag: result[3],
+        lastReviewed: result[4],
+        created: result[5],
+        modified: result[6]
       };
     }
     stmt.free();
@@ -2682,10 +2679,11 @@ var DatabaseService = class {
       decks.push({
         id: row[0],
         name: row[1],
-        tag: row[2],
-        lastReviewed: row[3],
-        created: row[4],
-        modified: row[5]
+        filepath: row[2],
+        tag: row[3],
+        lastReviewed: row[4],
+        created: row[5],
+        modified: row[6]
       });
     }
     stmt.free();
@@ -2701,6 +2699,35 @@ var DatabaseService = class {
     `);
     stmt.run([(/* @__PURE__ */ new Date()).toISOString(), (/* @__PURE__ */ new Date()).toISOString(), deckId]);
     stmt.free();
+    await this.save();
+  }
+  async deleteDeckByFilepath(filepath) {
+    if (!this.db)
+      throw new Error("Database not initialized");
+    const deck = await this.getDeckByFilepath(filepath);
+    if (!deck)
+      return;
+    const flashcardsStmt = this.db.prepare(
+      "DELETE FROM flashcards WHERE deck_id = ?"
+    );
+    flashcardsStmt.run([deck.id]);
+    flashcardsStmt.free();
+    const deckStmt = this.db.prepare("DELETE FROM decks WHERE filepath = ?");
+    deckStmt.run([filepath]);
+    deckStmt.free();
+    await this.save();
+  }
+  async deleteDeck(deckId) {
+    if (!this.db)
+      throw new Error("Database not initialized");
+    const flashcardsStmt = this.db.prepare(
+      "DELETE FROM flashcards WHERE deck_id = ?"
+    );
+    flashcardsStmt.run([deckId]);
+    flashcardsStmt.free();
+    const deckStmt = this.db.prepare("DELETE FROM decks WHERE id = ?");
+    deckStmt.run([deckId]);
+    deckStmt.free();
     await this.save();
   }
   // Flashcard operations
@@ -2938,6 +2965,38 @@ var DatabaseService = class {
     stmt.free();
     return reviewCounts;
   }
+  async migrateSchemaIfNeeded() {
+    if (!this.db)
+      return;
+    try {
+      const stmt = this.db.prepare("PRAGMA table_info(decks)");
+      const columns = [];
+      while (stmt.step()) {
+        columns.push(stmt.get());
+      }
+      stmt.free();
+      const hasFilepath = columns.some((col) => col[1] === "filepath");
+      if (!hasFilepath) {
+        console.log("Migrating database schema to support filepath column...");
+        console.log(
+          "Clearing old data - decks will be rebuilt from files on next sync"
+        );
+        this.db.exec(`
+          -- Drop existing tables
+          DROP TABLE IF EXISTS review_logs;
+          DROP TABLE IF EXISTS flashcards;
+          DROP TABLE IF EXISTS decks;
+        `);
+        await this.createTables();
+        console.log(
+          "Database schema migration completed. Data will be rebuilt from vault files."
+        );
+        await this.save();
+      }
+    } catch (error) {
+      console.error("Error during schema migration:", error);
+    }
+  }
   // Helper methods
   rowToFlashcard(row) {
     return {
@@ -2970,6 +3029,7 @@ var DatabaseService = class {
 };
 
 // src/services/DeckManager.ts
+var import_obsidian = require("obsidian");
 var DeckManager = class {
   constructor(vault, metadataCache, db) {
     this.vault = vault;
@@ -2982,11 +3042,14 @@ var DeckManager = class {
   async scanVaultForDecks() {
     const decksMap = /* @__PURE__ */ new Map();
     const files = this.vault.getMarkdownFiles();
+    console.log(`Scanning ${files.length} markdown files for flashcard tags`);
     for (const file of files) {
       const metadata = this.metadataCache.getFileCache(file);
       if (!metadata) {
+        console.log(`No metadata for file: ${file.path}`);
         continue;
       }
+      console.log(`Checking file: ${file.path}`);
       const allTags = [];
       if (metadata.tags) {
         const inlineTags = metadata.tags.map((t) => t.tag);
@@ -3007,6 +3070,8 @@ var DeckManager = class {
       const flashcardTags = allTags.filter(
         (tag) => tag.startsWith("#flashcards")
       );
+      console.log(`All tags for ${file.path}:`, allTags);
+      console.log(`Flashcard tags for ${file.path}:`, flashcardTags);
       for (const tag of flashcardTags) {
         if (!decksMap.has(tag)) {
           decksMap.set(tag, []);
@@ -3024,69 +3089,65 @@ var DeckManager = class {
     try {
       console.log("Starting deck sync...");
       const decksMap = await this.scanVaultForDecks();
+      console.log("Decks found in vault:", decksMap);
       const existingDecks = await this.db.getAllDecks();
-      const existingTags = new Set(existingDecks.map((d) => d.tag));
-      console.log(
-        `Found ${decksMap.size} deck tags in vault, ${existingDecks.length} existing decks in database`
-      );
+      console.log("Existing decks in database:", existingDecks);
+      const existingDecksByFile = /* @__PURE__ */ new Map();
+      for (const deck of existingDecks) {
+        existingDecksByFile.set(deck.filepath, deck);
+      }
       let newDecksCreated = 0;
+      let totalFiles = 0;
       for (const [tag, files] of decksMap) {
-        if (!existingTags.has(tag)) {
-          try {
-            const deckName = this.extractDeckNameFromFiles(files);
-            let existingDeck = null;
-            for (const file of files) {
-              const deckId = this.getDeckIdFromFile(file);
-              if (deckId) {
-                existingDeck = await this.db.getDeckById(deckId);
-                if (existingDeck) {
-                  console.log(
-                    `Found existing deck "${existingDeck.name}" with ID ${deckId} for tag ${tag}`
-                  );
-                  break;
-                }
-              }
-            }
-            if (existingDeck) {
-              if (existingDeck.tag !== tag) {
-                console.log(
-                  `Updating deck "${existingDeck.name}" tag from ${existingDeck.tag} to ${tag}`
-                );
-                await this.db.updateDeck(existingDeck.id, {
-                  tag,
-                  name: deckName
-                });
-              }
-              for (const file of files) {
-                await this.storeDeckIdInFile(file, existingDeck.id);
-              }
-            } else {
-              const deck = {
-                id: this.generateDeckId(),
-                name: deckName,
-                tag,
-                lastReviewed: null
-              };
-              console.log(`Creating new deck: "${deckName}" with tag: ${tag}`);
-              await this.db.createDeck(deck);
-              for (const file of files) {
-                await this.storeDeckIdInFile(file, deck.id);
-              }
-              newDecksCreated++;
-            }
-          } catch (error) {
-            console.error(`Failed to create deck for tag ${tag}:`, error);
-          }
-        } else {
-          const existingDeck = existingDecks.find((d) => d.tag === tag);
+        for (const file of files) {
+          totalFiles++;
+          const filePath = file.path;
+          const deckName = file.basename;
+          const existingDeck = existingDecksByFile.get(filePath);
           if (existingDeck) {
-            for (const file of files) {
-              await this.storeDeckIdInFile(file, existingDeck.id);
+            if (existingDeck.tag !== tag) {
+              console.log(
+                `Updating deck "${deckName}" tag from ${existingDeck.tag} to ${tag}`
+              );
+              await this.db.updateDeck(existingDeck.id, {
+                tag
+              });
             }
+          } else {
+            const deck = {
+              id: this.generateDeckId(),
+              name: deckName,
+              // Store clean file name
+              filepath: filePath,
+              // Store full file path separately
+              tag,
+              lastReviewed: null
+            };
+            console.log(`Creating new deck: "${deckName}" with tag: ${tag}`);
+            await this.db.createDeck(deck);
+            newDecksCreated++;
           }
         }
       }
-      console.log(`Deck sync completed. Created ${newDecksCreated} new decks.`);
+      const allFiles = /* @__PURE__ */ new Set();
+      for (const [tag, files] of decksMap) {
+        for (const file of files) {
+          allFiles.add(file.path);
+        }
+      }
+      let deletedDecks = 0;
+      for (const deck of existingDecks) {
+        if (!allFiles.has(deck.filepath)) {
+          console.log(
+            `Deleting orphaned deck: "${deck.name}" (${deck.filepath})`
+          );
+          await this.db.deleteDeckByFilepath(deck.filepath);
+          deletedDecks++;
+        }
+      }
+      console.log(
+        `Deck sync completed. Processed ${totalFiles} files, created ${newDecksCreated} new decks, deleted ${deletedDecks} orphaned decks.`
+      );
     } catch (error) {
       console.error("Error during deck sync:", error);
       throw error;
@@ -3210,97 +3271,27 @@ var DeckManager = class {
     return flashcards;
   }
   /**
-   * Sync flashcards for a specific deck
+   * Sync flashcards for a specific deck (file)
    */
-  async syncFlashcardsForDeck(deckTag) {
-    const deck = await this.db.getDeckByTag(deckTag);
-    if (!deck)
+  async syncFlashcardsForDeck(filePath) {
+    console.log(`Syncing flashcards for deck: ${filePath}`);
+    const deck = await this.db.getDeckByFilepath(filePath);
+    if (!deck) {
+      console.log(`No deck found for filepath: ${filePath}`);
       return;
-    const decksMap = await this.scanVaultForDecks();
-    const files = decksMap.get(deckTag) || [];
+    }
+    console.log(`Found deck:`, deck);
+    const file = this.vault.getAbstractFileByPath(filePath);
+    if (!file || !(file instanceof import_obsidian.TFile))
+      return;
     const existingFlashcards = await this.db.getFlashcardsByDeck(deck.id);
     const existingById = /* @__PURE__ */ new Map();
     existingFlashcards.forEach((card) => {
       existingById.set(card.id, card);
     });
     const processedIds = /* @__PURE__ */ new Set();
-    for (const file of files) {
-      const parsedCards = await this.parseFlashcardsFromFile(file);
-      for (const parsed of parsedCards) {
-        const flashcardId = this.generateFlashcardId(parsed.front, deck.id);
-        const contentHash = this.generateContentHash(parsed.back);
-        const existingCard = existingById.get(flashcardId);
-        processedIds.add(flashcardId);
-        if (existingCard) {
-          if (existingCard.contentHash !== contentHash) {
-            await this.db.updateFlashcard(existingCard.id, {
-              front: parsed.front,
-              back: parsed.back,
-              type: parsed.type,
-              contentHash
-            });
-          }
-        } else {
-          const flashcard = {
-            id: flashcardId,
-            deckId: deck.id,
-            front: parsed.front,
-            back: parsed.back,
-            type: parsed.type,
-            sourceFile: file.path,
-            lineNumber: parsed.lineNumber,
-            contentHash,
-            state: "new",
-            dueDate: (/* @__PURE__ */ new Date()).toISOString(),
-            interval: 0,
-            repetitions: 0,
-            easeFactor: 5,
-            // FSRS initial difficulty
-            stability: 2.5,
-            // FSRS initial stability
-            lapses: 0,
-            lastReviewed: null
-          };
-          await this.db.createFlashcard(flashcard);
-        }
-      }
-    }
-    for (const [flashcardId, existingCard] of existingById) {
-      if (!processedIds.has(flashcardId)) {
-        await this.db.deleteFlashcard(existingCard.id);
-      }
-    }
-  }
-  /**
-   * Generate content hash for flashcard back content (front is used for ID)
-   */
-  generateContentHash(back) {
-    let hash = 0;
-    for (let i = 0; i < back.length; i++) {
-      const char = back.charCodeAt(i);
-      hash = (hash << 5) - hash + char;
-      hash = hash & hash;
-    }
-    return Math.abs(hash).toString(16);
-  }
-  /**
-   * Sync flashcards for a specific deck by name
-   */
-  async syncFlashcardsForDeckByName(deckName) {
-    const deck = await this.db.getDeckByName(deckName);
-    if (!deck)
-      return;
-    const files = this.vault.getMarkdownFiles();
-    const targetFile = files.find((file) => file.basename === deckName);
-    if (!targetFile)
-      return;
-    const existingFlashcards = await this.db.getFlashcardsByDeck(deck.id);
-    const existingById = /* @__PURE__ */ new Map();
-    existingFlashcards.filter((card) => card.sourceFile === targetFile.path).forEach((card) => {
-      existingById.set(card.id, card);
-    });
-    const parsedCards = await this.parseFlashcardsFromFile(targetFile);
-    const processedIds = /* @__PURE__ */ new Set();
+    const parsedCards = await this.parseFlashcardsFromFile(file);
+    console.log(`Parsed ${parsedCards.length} flashcards from ${filePath}`);
     for (const parsed of parsedCards) {
       const flashcardId = this.generateFlashcardId(parsed.front, deck.id);
       const contentHash = this.generateContentHash(parsed.back);
@@ -3322,7 +3313,7 @@ var DeckManager = class {
           front: parsed.front,
           back: parsed.back,
           type: parsed.type,
-          sourceFile: targetFile.path,
+          sourceFile: file.path,
           lineNumber: parsed.lineNumber,
           contentHash,
           state: "new",
@@ -3336,14 +3327,35 @@ var DeckManager = class {
           lapses: 0,
           lastReviewed: null
         };
+        console.log(`Creating new flashcard: ${flashcard.front}`);
         await this.db.createFlashcard(flashcard);
       }
     }
     for (const [flashcardId, existingCard] of existingById) {
       if (!processedIds.has(flashcardId)) {
+        console.log(`Deleting flashcard: ${existingCard.front}`);
         await this.db.deleteFlashcard(existingCard.id);
       }
     }
+    console.log(`Flashcard sync completed for ${filePath}`);
+  }
+  /**
+   * Sync flashcards for a specific deck by name (file path)
+   */
+  async syncFlashcardsForDeckByName(deckName) {
+    await this.syncFlashcardsForDeck(deckName);
+  }
+  /**
+   * Generate content hash for flashcard back content (front is used for ID)
+   */
+  generateContentHash(back) {
+    let hash = 0;
+    for (let i = 0; i < back.length; i++) {
+      const char = back.charCodeAt(i);
+      hash = (hash << 5) - hash + char;
+      hash = hash & hash;
+    }
+    return Math.abs(hash).toString(16);
   }
   /**
    * Extract deck name from files (use the first file's name)
@@ -3387,62 +3399,6 @@ var DeckManager = class {
       hash = hash & hash;
     }
     return `card_${Math.abs(hash).toString(36)}`;
-  }
-  /**
-   * Store deck ID in markdown file
-   */
-  async storeDeckIdInFile(file, deckId) {
-    var _a;
-    const content = await this.vault.read(file);
-    const frontmatter = (_a = this.metadataCache.getFileCache(file)) == null ? void 0 : _a.frontmatter;
-    if ((frontmatter == null ? void 0 : frontmatter["flashcards-deck-id"]) === deckId) {
-      return;
-    }
-    let newContent;
-    if (content.startsWith("---\n")) {
-      const endOfFrontmatter = content.indexOf("\n---\n", 4);
-      if (endOfFrontmatter !== -1) {
-        const frontmatterContent = content.slice(4, endOfFrontmatter);
-        const bodyContent = content.slice(endOfFrontmatter + 5);
-        const lines = frontmatterContent.split("\n");
-        let deckIdExists = false;
-        for (let i = 0; i < lines.length; i++) {
-          if (lines[i].startsWith("flashcards-deck-id:")) {
-            lines[i] = `flashcards-deck-id: ${deckId}`;
-            deckIdExists = true;
-            break;
-          }
-        }
-        if (!deckIdExists) {
-          lines.push(`flashcards-deck-id: ${deckId}`);
-        }
-        newContent = `---
-${lines.join("\n")}
----
-${bodyContent}`;
-      } else {
-        newContent = `---
-flashcards-deck-id: ${deckId}
----
-
-${content}`;
-      }
-    } else {
-      newContent = `---
-flashcards-deck-id: ${deckId}
----
-
-${content}`;
-    }
-    await this.vault.modify(file, newContent);
-  }
-  /**
-   * Get deck ID from file
-   */
-  getDeckIdFromFile(file) {
-    var _a;
-    const frontmatter = (_a = this.metadataCache.getFileCache(file)) == null ? void 0 : _a.frontmatter;
-    return (frontmatter == null ? void 0 : frontmatter["flashcards-deck-id"]) || null;
   }
 };
 
@@ -3780,8 +3736,8 @@ var FSRS = class {
 init_settings();
 
 // src/components/SettingsTab.ts
-var import_obsidian = require("obsidian");
-var FlashcardsSettingTab = class extends import_obsidian.PluginSettingTab {
+var import_obsidian2 = require("obsidian");
+var FlashcardsSettingTab = class extends import_obsidian2.PluginSettingTab {
   constructor(app, plugin) {
     super(app, plugin);
     this.plugin = plugin;
@@ -3801,13 +3757,13 @@ var FlashcardsSettingTab = class extends import_obsidian.PluginSettingTab {
       text: "Configure the Free Spaced Repetition Scheduler algorithm parameters.",
       cls: "setting-item-description"
     });
-    new import_obsidian.Setting(containerEl).setName("Target Retention").setDesc("Desired retention rate for flashcards (0.8 = 80%)").addSlider(
+    new import_obsidian2.Setting(containerEl).setName("Target Retention").setDesc("Desired retention rate for flashcards (0.8 = 80%)").addSlider(
       (slider) => slider.setLimits(0.7, 0.98, 0.01).setValue(this.plugin.settings.fsrs.requestRetention).setDynamicTooltip().onChange(async (value) => {
         this.plugin.settings.fsrs.requestRetention = value;
         await this.plugin.saveSettings();
       })
     );
-    new import_obsidian.Setting(containerEl).setName("Maximum Interval").setDesc("Maximum number of days between reviews").addText(
+    new import_obsidian2.Setting(containerEl).setName("Maximum Interval").setDesc("Maximum number of days between reviews").addText(
       (text2) => text2.setPlaceholder("36500").setValue(this.plugin.settings.fsrs.maximumInterval.toString()).onChange(async (value) => {
         const num = parseInt(value);
         if (!isNaN(num) && num > 0) {
@@ -3816,19 +3772,19 @@ var FlashcardsSettingTab = class extends import_obsidian.PluginSettingTab {
         }
       })
     );
-    new import_obsidian.Setting(containerEl).setName("Easy Bonus").setDesc("Multiplier for easy cards (higher = longer intervals)").addSlider(
+    new import_obsidian2.Setting(containerEl).setName("Easy Bonus").setDesc("Multiplier for easy cards (higher = longer intervals)").addSlider(
       (slider) => slider.setLimits(1.1, 2, 0.1).setValue(this.plugin.settings.fsrs.easyBonus).setDynamicTooltip().onChange(async (value) => {
         this.plugin.settings.fsrs.easyBonus = value;
         await this.plugin.saveSettings();
       })
     );
-    new import_obsidian.Setting(containerEl).setName("Hard Interval").setDesc("Multiplier for hard cards in learning phase").addSlider(
+    new import_obsidian2.Setting(containerEl).setName("Hard Interval").setDesc("Multiplier for hard cards in learning phase").addSlider(
       (slider) => slider.setLimits(1, 2, 0.1).setValue(this.plugin.settings.fsrs.hardInterval).setDynamicTooltip().onChange(async (value) => {
         this.plugin.settings.fsrs.hardInterval = value;
         await this.plugin.saveSettings();
       })
     );
-    new import_obsidian.Setting(containerEl).setName("Reset to Defaults").setDesc("Reset FSRS parameters to default values").addButton(
+    new import_obsidian2.Setting(containerEl).setName("Reset to Defaults").setDesc("Reset FSRS parameters to default values").addButton(
       (button) => button.setButtonText("Reset").setWarning().onClick(async () => {
         const defaultSettings = (await Promise.resolve().then(() => (init_settings(), settings_exports))).DEFAULT_SETTINGS;
         this.plugin.settings.fsrs = { ...defaultSettings.fsrs };
@@ -3839,7 +3795,7 @@ var FlashcardsSettingTab = class extends import_obsidian.PluginSettingTab {
   }
   addDatabaseSettings(containerEl) {
     containerEl.createEl("h3", { text: "Database" });
-    new import_obsidian.Setting(containerEl).setName("Database Path").setDesc("Custom path for the database file (leave empty for default)").addText(
+    new import_obsidian2.Setting(containerEl).setName("Database Path").setDesc("Custom path for the database file (leave empty for default)").addText(
       (text2) => text2.setPlaceholder(
         ".obsidian/plugins/obsidian-flashcards-plugin/flashcards.db"
       ).setValue(this.plugin.settings.database.customPath || "").onChange(async (value) => {
@@ -3847,13 +3803,13 @@ var FlashcardsSettingTab = class extends import_obsidian.PluginSettingTab {
         await this.plugin.saveSettings();
       })
     );
-    new import_obsidian.Setting(containerEl).setName("Auto Backup").setDesc("Automatically backup the database").addToggle(
+    new import_obsidian2.Setting(containerEl).setName("Auto Backup").setDesc("Automatically backup the database").addToggle(
       (toggle) => toggle.setValue(this.plugin.settings.database.autoBackup).onChange(async (value) => {
         this.plugin.settings.database.autoBackup = value;
         await this.plugin.saveSettings();
       })
     );
-    new import_obsidian.Setting(containerEl).setName("Backup Interval").setDesc("Number of days between automatic backups").addText(
+    new import_obsidian2.Setting(containerEl).setName("Backup Interval").setDesc("Number of days between automatic backups").addText(
       (text2) => text2.setPlaceholder("7").setValue(this.plugin.settings.database.backupInterval.toString()).onChange(async (value) => {
         const num = parseInt(value);
         if (!isNaN(num) && num > 0) {
@@ -3865,25 +3821,25 @@ var FlashcardsSettingTab = class extends import_obsidian.PluginSettingTab {
   }
   addReviewSettings(containerEl) {
     containerEl.createEl("h3", { text: "Review Sessions" });
-    new import_obsidian.Setting(containerEl).setName("Show Progress").setDesc("Display progress bar during review sessions").addToggle(
+    new import_obsidian2.Setting(containerEl).setName("Show Progress").setDesc("Display progress bar during review sessions").addToggle(
       (toggle) => toggle.setValue(this.plugin.settings.review.showProgress).onChange(async (value) => {
         this.plugin.settings.review.showProgress = value;
         await this.plugin.saveSettings();
       })
     );
-    new import_obsidian.Setting(containerEl).setName("Keyboard Shortcuts").setDesc("Enable keyboard shortcuts in review modal (1-4 for difficulty)").addToggle(
+    new import_obsidian2.Setting(containerEl).setName("Keyboard Shortcuts").setDesc("Enable keyboard shortcuts in review modal (1-4 for difficulty)").addToggle(
       (toggle) => toggle.setValue(this.plugin.settings.review.enableKeyboardShortcuts).onChange(async (value) => {
         this.plugin.settings.review.enableKeyboardShortcuts = value;
         await this.plugin.saveSettings();
       })
     );
-    new import_obsidian.Setting(containerEl).setName("Session Limit").setDesc("Limit the number of cards per review session").addToggle(
+    new import_obsidian2.Setting(containerEl).setName("Session Limit").setDesc("Limit the number of cards per review session").addToggle(
       (toggle) => toggle.setValue(this.plugin.settings.review.enableSessionLimit).onChange(async (value) => {
         this.plugin.settings.review.enableSessionLimit = value;
         await this.plugin.saveSettings();
       })
     );
-    new import_obsidian.Setting(containerEl).setName("Session Goal").setDesc("Target number of cards per review session").addText(
+    new import_obsidian2.Setting(containerEl).setName("Session Goal").setDesc("Target number of cards per review session").addText(
       (text2) => text2.setPlaceholder("20").setValue(this.plugin.settings.review.sessionGoal.toString()).onChange(async (value) => {
         const num = parseInt(value);
         if (!isNaN(num) && num > 0) {
@@ -3895,7 +3851,7 @@ var FlashcardsSettingTab = class extends import_obsidian.PluginSettingTab {
   }
   addUISettings(containerEl) {
     containerEl.createEl("h3", { text: "User Interface" });
-    new import_obsidian.Setting(containerEl).setName("Background Refresh Interval").setDesc("How often to refresh deck stats in the side panel (in seconds)").addText(
+    new import_obsidian2.Setting(containerEl).setName("Background Refresh Interval").setDesc("How often to refresh deck stats in the side panel (in seconds)").addText(
       (text2) => text2.setPlaceholder("5").setValue(
         this.plugin.settings.ui.backgroundRefreshInterval.toString()
       ).onChange(async (value) => {
@@ -5132,16 +5088,16 @@ var ReviewHeatmap_default = ReviewHeatmap;
 
 // src/components/DeckListPanel.svelte
 function add_css2(target) {
-  append_styles(target, "svelte-1jo2y5w", ".deck-list-panel.svelte-1jo2y5w.svelte-1jo2y5w{min-width:400px;height:100%;display:flex;flex-direction:column;background:var(--background-primary);color:var(--text-normal)}.panel-header.svelte-1jo2y5w.svelte-1jo2y5w{display:flex;justify-content:space-between;align-items:center;padding:12px 16px;border-bottom:1px solid var(--background-modifier-border)}.filter-section.svelte-1jo2y5w.svelte-1jo2y5w{padding:8px 16px;border-bottom:1px solid var(--background-modifier-border)}.filter-input.svelte-1jo2y5w.svelte-1jo2y5w{width:100%;padding:6px 8px;border:1px solid var(--background-modifier-border);border-radius:4px;background:var(--background-primary);color:var(--text-normal);font-size:14px;transition:border-color 0.2s ease}.filter-input.svelte-1jo2y5w.svelte-1jo2y5w:focus{outline:none;border-color:var(--interactive-accent)}.filter-input.svelte-1jo2y5w.svelte-1jo2y5w::placeholder{color:var(--text-muted)}.panel-title.svelte-1jo2y5w.svelte-1jo2y5w{margin:0;font-size:16px;font-weight:600}.refresh-button.svelte-1jo2y5w.svelte-1jo2y5w{background:none;border:none;cursor:pointer;padding:4px;border-radius:4px;color:var(--text-muted);transition:all 0.2s ease;position:relative;z-index:1}.refresh-button.svelte-1jo2y5w.svelte-1jo2y5w:hover{background:var(--background-modifier-hover);color:var(--text-normal)}.refresh-button.svelte-1jo2y5w.svelte-1jo2y5w:disabled{opacity:0.5;cursor:not-allowed}.refresh-button.refreshing.svelte-1jo2y5w svg.svelte-1jo2y5w{animation:svelte-1jo2y5w-spin 1s linear infinite}@keyframes svelte-1jo2y5w-spin{from{transform:rotate(0deg)}to{transform:rotate(360deg)}}.empty-state.svelte-1jo2y5w.svelte-1jo2y5w{flex:1;display:flex;flex-direction:column;justify-content:center;align-items:center;padding:32px;text-align:center}.empty-state.svelte-1jo2y5w p.svelte-1jo2y5w{margin:8px 0}.help-text.svelte-1jo2y5w.svelte-1jo2y5w{font-size:14px;color:var(--text-muted)}.deck-table.svelte-1jo2y5w.svelte-1jo2y5w{flex:1;display:flex;flex-direction:column;overflow:hidden}.table-header.svelte-1jo2y5w.svelte-1jo2y5w{display:grid;grid-template-columns:1fr 60px 60px 60px;gap:8px;padding:8px 16px;font-weight:600;font-size:14px;border-bottom:1px solid var(--background-modifier-border);background:var(--background-secondary);align-items:center}.table-body.svelte-1jo2y5w.svelte-1jo2y5w{flex:1;overflow-y:auto}.deck-row.svelte-1jo2y5w.svelte-1jo2y5w{display:grid;grid-template-columns:1fr 60px 60px 60px;gap:8px;border:none;width:100%;text-align:left;cursor:pointer;align-items:center}.deck-row.svelte-1jo2y5w.svelte-1jo2y5w:hover{background:var(--background-modifier-hover)}.deck-row.svelte-1jo2y5w.svelte-1jo2y5w:active{background:var(--background-modifier-active)}.col-deck.svelte-1jo2y5w.svelte-1jo2y5w{font-size:14px;color:var(--text-normal);overflow:hidden;text-overflow:ellipsis;white-space:nowrap;justify-self:start}.col-stat.svelte-1jo2y5w.svelte-1jo2y5w{text-align:center;font-size:14px;color:var(--text-muted);justify-self:center}.table-header.svelte-1jo2y5w .col-deck.svelte-1jo2y5w{font-size:14px;color:var(--text-normal);justify-self:start}.table-header.svelte-1jo2y5w .col-stat.svelte-1jo2y5w{text-align:center;font-size:14px;color:var(--text-normal);justify-self:center}.col-stat.has-cards.svelte-1jo2y5w.svelte-1jo2y5w{color:#4aa3df;font-weight:500}.col-stat.updating.svelte-1jo2y5w.svelte-1jo2y5w{opacity:0.6;transition:opacity 0.3s ease}.table-body.svelte-1jo2y5w.svelte-1jo2y5w::-webkit-scrollbar{width:8px}.table-body.svelte-1jo2y5w.svelte-1jo2y5w::-webkit-scrollbar-track{background:transparent}.table-body.svelte-1jo2y5w.svelte-1jo2y5w::-webkit-scrollbar-thumb{background:var(--background-modifier-border);border-radius:4px}.table-body.svelte-1jo2y5w.svelte-1jo2y5w::-webkit-scrollbar-thumb:hover{background:var(--background-modifier-border-hover)}");
+  append_styles(target, "svelte-19vy1cl", ".deck-list-panel.svelte-19vy1cl.svelte-19vy1cl{min-width:400px;height:100%;display:flex;flex-direction:column;background:var(--background-primary);color:var(--text-normal)}.panel-header.svelte-19vy1cl.svelte-19vy1cl{display:flex;justify-content:space-between;align-items:center;padding:12px 16px;border-bottom:1px solid var(--background-modifier-border)}.filter-section.svelte-19vy1cl.svelte-19vy1cl{padding:8px 16px;border-bottom:1px solid var(--background-modifier-border)}.filter-input.svelte-19vy1cl.svelte-19vy1cl{width:100%;padding:6px 8px;border:1px solid var(--background-modifier-border);border-radius:4px;background:var(--background-primary);color:var(--text-normal);font-size:14px;transition:border-color 0.2s ease}.filter-input.svelte-19vy1cl.svelte-19vy1cl:focus{outline:none;border-color:var(--interactive-accent)}.filter-input.svelte-19vy1cl.svelte-19vy1cl::placeholder{color:var(--text-muted)}.panel-title.svelte-19vy1cl.svelte-19vy1cl{margin:0;font-size:16px;font-weight:600}.refresh-button.svelte-19vy1cl.svelte-19vy1cl{background:none;border:none;cursor:pointer;padding:4px;border-radius:4px;color:var(--text-muted);transition:all 0.2s ease;position:relative;z-index:1}.refresh-button.svelte-19vy1cl.svelte-19vy1cl:hover{background:var(--background-modifier-hover);color:var(--text-normal)}.refresh-button.svelte-19vy1cl.svelte-19vy1cl:disabled{opacity:0.5;cursor:not-allowed}.refresh-button.refreshing.svelte-19vy1cl svg.svelte-19vy1cl{animation:svelte-19vy1cl-spin 1s linear infinite}@keyframes svelte-19vy1cl-spin{from{transform:rotate(0deg)}to{transform:rotate(360deg)}}.empty-state.svelte-19vy1cl.svelte-19vy1cl{flex:1;display:flex;flex-direction:column;justify-content:center;align-items:center;padding:32px;text-align:center}.empty-state.svelte-19vy1cl p.svelte-19vy1cl{margin:8px 0}.help-text.svelte-19vy1cl.svelte-19vy1cl{font-size:14px;color:var(--text-muted)}.deck-table.svelte-19vy1cl.svelte-19vy1cl{flex:1;display:flex;flex-direction:column;overflow:hidden}.table-header.svelte-19vy1cl.svelte-19vy1cl{display:grid;grid-template-columns:1fr 60px 60px 60px;gap:8px;padding:8px 16px;font-weight:600;font-size:14px;border-bottom:1px solid var(--background-modifier-border);background:var(--background-secondary);align-items:center}.table-body.svelte-19vy1cl.svelte-19vy1cl{flex:1;overflow-y:auto}.deck-row.svelte-19vy1cl.svelte-19vy1cl{display:grid;grid-template-columns:1fr 60px 60px 60px;gap:8px;padding:12px 16px;border-bottom:1px solid var(--background-modifier-border);align-items:center}.deck-name-link.svelte-19vy1cl.svelte-19vy1cl{cursor:pointer;color:var(--text-normal);text-decoration:underline;text-decoration-color:transparent;transition:text-decoration-color 0.2s ease;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;display:inline-block;max-width:100%}.deck-name-link.svelte-19vy1cl.svelte-19vy1cl:hover{text-decoration-color:var(--text-accent);color:var(--text-accent)}.deck-name-link.svelte-19vy1cl.svelte-19vy1cl:focus{outline:2px solid var(--interactive-accent);outline-offset:2px;border-radius:2px}.col-deck.svelte-19vy1cl.svelte-19vy1cl{font-size:14px;color:var(--text-normal);justify-self:start;min-width:0}.col-stat.svelte-19vy1cl.svelte-19vy1cl{text-align:center;font-size:14px;color:var(--text-muted);justify-self:center}.table-header.svelte-19vy1cl .col-deck.svelte-19vy1cl{font-size:14px;color:var(--text-normal);justify-self:start}.table-header.svelte-19vy1cl .col-stat.svelte-19vy1cl{text-align:center;font-size:14px;color:var(--text-normal);justify-self:center}.col-stat.has-cards.svelte-19vy1cl.svelte-19vy1cl{color:#4aa3df;font-weight:500}.col-stat.updating.svelte-19vy1cl.svelte-19vy1cl{opacity:0.6;transition:opacity 0.3s ease}.table-body.svelte-19vy1cl.svelte-19vy1cl::-webkit-scrollbar{width:8px}.table-body.svelte-19vy1cl.svelte-19vy1cl::-webkit-scrollbar-track{background:transparent}.table-body.svelte-19vy1cl.svelte-19vy1cl::-webkit-scrollbar-thumb{background:var(--background-modifier-border);border-radius:4px}.table-body.svelte-19vy1cl.svelte-19vy1cl::-webkit-scrollbar-thumb:hover{background:var(--background-modifier-border-hover)}");
 }
 function get_each_context2(ctx, list, i) {
   const child_ctx = ctx.slice();
-  child_ctx[22] = list[i];
+  child_ctx[23] = list[i];
   const constants_0 = (
     /*getDeckStats*/
     child_ctx[8](
       /*deck*/
-      child_ctx[22].id
+      child_ctx[23].id
     )
   );
   child_ctx[7] = constants_0;
@@ -5164,18 +5120,18 @@ function create_else_block2(ctx) {
     c() {
       div6 = element("div");
       div4 = element("div");
-      div4.innerHTML = `<div class="col-deck svelte-1jo2y5w">Deck</div> 
-                <div class="col-stat svelte-1jo2y5w">New</div> 
-                <div class="col-stat svelte-1jo2y5w">Learn</div> 
-                <div class="col-stat svelte-1jo2y5w">Due</div>`;
+      div4.innerHTML = `<div class="col-deck svelte-19vy1cl">Deck</div> 
+                <div class="col-stat svelte-19vy1cl">New</div> 
+                <div class="col-stat svelte-19vy1cl">Learn</div> 
+                <div class="col-stat svelte-19vy1cl">Due</div>`;
       t7 = space();
       div5 = element("div");
       for (let i = 0; i < each_blocks.length; i += 1) {
         each_blocks[i].c();
       }
-      attr(div4, "class", "table-header svelte-1jo2y5w");
-      attr(div5, "class", "table-body svelte-1jo2y5w");
-      attr(div6, "class", "deck-table svelte-1jo2y5w");
+      attr(div4, "class", "table-header svelte-19vy1cl");
+      attr(div5, "class", "table-body svelte-19vy1cl");
+      attr(div6, "class", "deck-table svelte-19vy1cl");
     },
     m(target, anchor) {
       insert(target, div6, anchor);
@@ -5189,7 +5145,7 @@ function create_else_block2(ctx) {
       }
     },
     p(ctx2, dirty) {
-      if (dirty & /*decks, handleDeckClick, getDeckStats, isUpdatingStats, formatDeckName*/
+      if (dirty & /*getDeckStats, decks, isUpdatingStats, handleDeckClick, formatDeckName*/
       2370) {
         each_value = /*decks*/
         ctx2[1];
@@ -5222,9 +5178,9 @@ function create_if_block_12(ctx) {
   return {
     c() {
       div = element("div");
-      div.innerHTML = `<p class="svelte-1jo2y5w">No decks match your filter.</p> 
-            <p class="help-text svelte-1jo2y5w">Try adjusting your search terms.</p>`;
-      attr(div, "class", "empty-state svelte-1jo2y5w");
+      div.innerHTML = `<p class="svelte-19vy1cl">No decks match your filter.</p> 
+            <p class="help-text svelte-19vy1cl">Try adjusting your search terms.</p>`;
+      attr(div, "class", "empty-state svelte-19vy1cl");
     },
     m(target, anchor) {
       insert(target, div, anchor);
@@ -5241,9 +5197,9 @@ function create_if_block2(ctx) {
   return {
     c() {
       div = element("div");
-      div.innerHTML = `<p class="svelte-1jo2y5w">No flashcard decks found.</p> 
-            <p class="help-text svelte-1jo2y5w">Tag your notes with #flashcards to create decks.</p>`;
-      attr(div, "class", "empty-state svelte-1jo2y5w");
+      div.innerHTML = `<p class="svelte-19vy1cl">No flashcard decks found.</p> 
+            <p class="help-text svelte-19vy1cl">Tag your notes with #flashcards to create decks.</p>`;
+      attr(div, "class", "empty-state svelte-19vy1cl");
     },
     m(target, anchor) {
       insert(target, div, anchor);
@@ -5256,13 +5212,15 @@ function create_if_block2(ctx) {
   };
 }
 function create_each_block2(ctx) {
-  let button;
+  let div4;
   let div0;
+  let span;
   let t0_value = formatDeckName(
     /*deck*/
-    ctx[22]
+    ctx[23]
   ) + "";
   let t0;
+  let span_title_value;
   let t1;
   let div1;
   let t2_value = (
@@ -5285,7 +5243,6 @@ function create_each_block2(ctx) {
   );
   let t6;
   let t7;
-  let button_title_value;
   let mounted;
   let dispose;
   function click_handler() {
@@ -5293,14 +5250,25 @@ function create_each_block2(ctx) {
       /*click_handler*/
       ctx[19](
         /*deck*/
-        ctx[22]
+        ctx[23]
+      )
+    );
+  }
+  function keydown_handler(...args) {
+    return (
+      /*keydown_handler*/
+      ctx[20](
+        /*deck*/
+        ctx[23],
+        ...args
       )
     );
   }
   return {
     c() {
-      button = element("button");
+      div4 = element("div");
       div0 = element("div");
+      span = element("span");
       t0 = text(t0_value);
       t1 = space();
       div1 = element("div");
@@ -5312,8 +5280,13 @@ function create_each_block2(ctx) {
       div3 = element("div");
       t6 = text(t6_value);
       t7 = space();
-      attr(div0, "class", "col-deck svelte-1jo2y5w");
-      attr(div1, "class", "col-stat svelte-1jo2y5w");
+      attr(span, "class", "deck-name-link svelte-19vy1cl");
+      attr(span, "role", "button");
+      attr(span, "tabindex", "0");
+      attr(span, "title", span_title_value = "Click to review " + /*deck*/
+      ctx[23].name);
+      attr(div0, "class", "col-deck svelte-19vy1cl");
+      attr(div1, "class", "col-stat svelte-19vy1cl");
       toggle_class(
         div1,
         "has-cards",
@@ -5326,7 +5299,7 @@ function create_each_block2(ctx) {
         /*isUpdatingStats*/
         ctx[6]
       );
-      attr(div2, "class", "col-stat svelte-1jo2y5w");
+      attr(div2, "class", "col-stat svelte-19vy1cl");
       toggle_class(
         div2,
         "has-cards",
@@ -5339,7 +5312,7 @@ function create_each_block2(ctx) {
         /*isUpdatingStats*/
         ctx[6]
       );
-      attr(div3, "class", "col-stat svelte-1jo2y5w");
+      attr(div3, "class", "col-stat svelte-19vy1cl");
       toggle_class(
         div3,
         "has-cards",
@@ -5352,26 +5325,28 @@ function create_each_block2(ctx) {
         /*isUpdatingStats*/
         ctx[6]
       );
-      attr(button, "class", "deck-row svelte-1jo2y5w");
-      attr(button, "title", button_title_value = "Click to review " + /*deck*/
-      ctx[22].name);
+      attr(div4, "class", "deck-row svelte-19vy1cl");
     },
     m(target, anchor) {
-      insert(target, button, anchor);
-      append(button, div0);
-      append(div0, t0);
-      append(button, t1);
-      append(button, div1);
+      insert(target, div4, anchor);
+      append(div4, div0);
+      append(div0, span);
+      append(span, t0);
+      append(div4, t1);
+      append(div4, div1);
       append(div1, t2);
-      append(button, t3);
-      append(button, div2);
+      append(div4, t3);
+      append(div4, div2);
       append(div2, t4);
-      append(button, t5);
-      append(button, div3);
+      append(div4, t5);
+      append(div4, div3);
       append(div3, t6);
-      append(button, t7);
+      append(div4, t7);
       if (!mounted) {
-        dispose = listen(button, "click", click_handler);
+        dispose = [
+          listen(span, "click", click_handler),
+          listen(span, "keydown", keydown_handler)
+        ];
         mounted = true;
       }
     },
@@ -5380,9 +5355,14 @@ function create_each_block2(ctx) {
       if (dirty & /*decks*/
       2 && t0_value !== (t0_value = formatDeckName(
         /*deck*/
-        ctx[22]
+        ctx[23]
       ) + ""))
         set_data(t0, t0_value);
+      if (dirty & /*decks*/
+      2 && span_title_value !== (span_title_value = "Click to review " + /*deck*/
+      ctx[23].name)) {
+        attr(span, "title", span_title_value);
+      }
       if (dirty & /*decks*/
       2 && t2_value !== (t2_value = /*stats*/
       ctx[7].newCount + ""))
@@ -5449,17 +5429,12 @@ function create_each_block2(ctx) {
           ctx[6]
         );
       }
-      if (dirty & /*decks*/
-      2 && button_title_value !== (button_title_value = "Click to review " + /*deck*/
-      ctx[22].name)) {
-        attr(button, "title", button_title_value);
-      }
     },
     d(detaching) {
       if (detaching)
-        detach(button);
+        detach(div4);
       mounted = false;
-      dispose();
+      run_all(dispose);
     }
   };
 }
@@ -5504,7 +5479,7 @@ function create_fragment2(ctx) {
     )
   };
   reviewheatmap = new ReviewHeatmap_default({ props: reviewheatmap_props });
-  ctx[20](reviewheatmap);
+  ctx[21](reviewheatmap);
   return {
     c() {
       div2 = element("div");
@@ -5524,7 +5499,7 @@ function create_fragment2(ctx) {
       if_block.c();
       t4 = space();
       create_component(reviewheatmap.$$.fragment);
-      attr(h3, "class", "panel-title svelte-1jo2y5w");
+      attr(h3, "class", "panel-title svelte-19vy1cl");
       attr(path0, "d", "M23 4v6h-6");
       attr(path1, "d", "M1 20v-6h6");
       attr(path2, "d", "M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15");
@@ -5537,8 +5512,8 @@ function create_fragment2(ctx) {
       attr(svg, "stroke-width", "2");
       attr(svg, "stroke-linecap", "round");
       attr(svg, "stroke-linejoin", "round");
-      attr(svg, "class", "svelte-1jo2y5w");
-      attr(button, "class", "refresh-button svelte-1jo2y5w");
+      attr(svg, "class", "svelte-19vy1cl");
+      attr(button, "class", "refresh-button svelte-19vy1cl");
       button.disabled = /*isRefreshing*/
       ctx[5];
       toggle_class(
@@ -5547,12 +5522,12 @@ function create_fragment2(ctx) {
         /*isRefreshing*/
         ctx[5]
       );
-      attr(div0, "class", "panel-header svelte-1jo2y5w");
+      attr(div0, "class", "panel-header svelte-19vy1cl");
       attr(input, "type", "text");
-      attr(input, "class", "filter-input svelte-1jo2y5w");
+      attr(input, "class", "filter-input svelte-19vy1cl");
       attr(input, "placeholder", "Filter by name or tag...");
-      attr(div1, "class", "filter-section svelte-1jo2y5w");
-      attr(div2, "class", "deck-list-panel svelte-1jo2y5w");
+      attr(div1, "class", "filter-section svelte-19vy1cl");
+      attr(div2, "class", "deck-list-panel svelte-19vy1cl");
     },
     m(target, anchor) {
       insert(target, div2, anchor);
@@ -5656,7 +5631,7 @@ function create_fragment2(ctx) {
       if (detaching)
         detach(div2);
       if_block.d();
-      ctx[20](null);
+      ctx[21](null);
       destroy_component(reviewheatmap);
       mounted = false;
       run_all(dispose);
@@ -5751,6 +5726,7 @@ function instance2($$self, $$props, $$invalidate) {
     $$invalidate(3, filterText);
   }
   const click_handler = (deck) => handleDeckClick(deck);
+  const keydown_handler = (deck, e) => e.key === "Enter" && handleDeckClick(deck);
   function reviewheatmap_binding($$value) {
     binding_callbacks[$$value ? "unshift" : "push"](() => {
       heatmapComponent = $$value;
@@ -5786,6 +5762,7 @@ function instance2($$self, $$props, $$invalidate) {
     refreshHeatmap,
     input_input_handler,
     click_handler,
+    keydown_handler,
     reviewheatmap_binding
   ];
 }
@@ -6666,7 +6643,7 @@ var FlashcardReviewModal_default = FlashcardReviewModal;
 // src/main.ts
 var VIEW_TYPE_FLASHCARDS = "flashcards-view";
 var DATABASE_PATH = ".obsidian/plugins/obsidian-flashcards-plugin/flashcards.db";
-var FlashcardsPlugin = class extends import_obsidian2.Plugin {
+var FlashcardsPlugin = class extends import_obsidian3.Plugin {
   constructor() {
     super(...arguments);
     this.view = null;
@@ -6699,6 +6676,11 @@ var FlashcardsPlugin = class extends import_obsidian2.Plugin {
         VIEW_TYPE_FLASHCARDS,
         (leaf) => new FlashcardsView(leaf, this)
       );
+      this.app.workspace.onLayoutReady(() => {
+        setTimeout(() => {
+          this.performSync();
+        }, 2e3);
+      });
       this.addRibbonIcon("brain", "Flashcards", () => {
         this.activateView();
       });
@@ -6711,14 +6693,14 @@ var FlashcardsPlugin = class extends import_obsidian2.Plugin {
       });
       this.registerEvent(
         this.app.vault.on("modify", async (file) => {
-          if (file instanceof import_obsidian2.TFile && file.extension === "md") {
+          if (file instanceof import_obsidian3.TFile && file.extension === "md") {
             await this.handleFileChange(file);
           }
         })
       );
       this.registerEvent(
         this.app.vault.on("delete", async (file) => {
-          if (file instanceof import_obsidian2.TFile && file.extension === "md") {
+          if (file instanceof import_obsidian3.TFile && file.extension === "md") {
             await this.handleFileDelete(file);
           }
         })
@@ -6728,7 +6710,7 @@ var FlashcardsPlugin = class extends import_obsidian2.Plugin {
       console.log("Flashcards plugin loaded successfully");
     } catch (error) {
       console.error("Error loading Flashcards plugin:", error);
-      new import_obsidian2.Notice(
+      new import_obsidian3.Notice(
         "Failed to load Flashcards plugin. Check console for details."
       );
     }
@@ -6811,23 +6793,73 @@ var FlashcardsPlugin = class extends import_obsidian2.Plugin {
     }
     if (leaf) {
       workspace.revealLeaf(leaf);
+      const decks = await this.db.getAllDecks();
+      if (decks.length === 0) {
+        console.log("No decks found, triggering fallback sync...");
+        await this.performSync();
+      }
     }
   }
   async handleFileChange(file) {
     const metadata = this.app.metadataCache.getFileCache(file);
     console.log(`File changed: ${file.path}, metadata:`, metadata);
-    if (!metadata || !metadata.tags)
+    if (!metadata)
       return;
-    const hasFlashcardsTag = metadata.tags.some(
-      (tag) => tag.tag.startsWith("#flashcards")
+    const allTags = [];
+    if (metadata.tags) {
+      allTags.push(...metadata.tags.map((t) => t.tag));
+    }
+    if (metadata.frontmatter && metadata.frontmatter.tags) {
+      const frontmatterTags = Array.isArray(metadata.frontmatter.tags) ? metadata.frontmatter.tags : [metadata.frontmatter.tags];
+      allTags.push(
+        ...frontmatterTags.map(
+          (tag) => tag.startsWith("#") ? tag : `#${tag}`
+        )
+      );
+    }
+    const hasFlashcardsTag = allTags.some(
+      (tag) => tag.startsWith("#flashcards")
     );
     console.log(`File ${file.path} has flashcards tag:`, hasFlashcardsTag);
-    if (hasFlashcardsTag && this.view) {
-      await this.view.refresh();
+    if (hasFlashcardsTag) {
+      await this.deckManager.syncDecks();
+      await this.deckManager.syncFlashcardsForDeck(file.path);
+      if (this.view) {
+        await this.view.refresh();
+      }
+    }
+  }
+  async performSync() {
+    try {
+      console.log("Performing initial sync of decks and flashcards...");
+      await this.deckManager.syncDecks();
+      const decks = await this.db.getAllDecks();
+      console.log(
+        `Found ${decks.length} decks after sync:`,
+        decks.map((d) => d.name)
+      );
+      for (const deck of decks) {
+        console.log(
+          `Syncing flashcards for deck: ${deck.name} (${deck.filepath})`
+        );
+        await this.deckManager.syncFlashcardsForDeck(deck.filepath);
+        const flashcards = await this.db.getFlashcardsByDeck(deck.id);
+        console.log(
+          `Deck ${deck.name} now has ${flashcards.length} flashcards`
+        );
+      }
+      console.log(`Initial sync completed for ${decks.length} decks`);
+      if (this.view) {
+        const updatedDecks = await this.getDecks();
+        const deckStats = await this.getDeckStats();
+        this.view.update(updatedDecks, deckStats);
+      }
+    } catch (error) {
+      console.error("Error during initial sync:", error);
     }
   }
   async handleFileDelete(file) {
-    await this.db.deleteFlashcardsByFile(file.path);
+    await this.db.deleteDeckByFilepath(file.path);
     if (this.view) {
       await this.view.refresh();
     }
@@ -6892,13 +6924,13 @@ var FlashcardsPlugin = class extends import_obsidian2.Plugin {
     }
   }
   renderMarkdown(content, el) {
-    const component = new import_obsidian2.Component();
+    const component = new import_obsidian3.Component();
     component.load();
-    import_obsidian2.MarkdownRenderer.renderMarkdown(content, el, "", component);
+    import_obsidian3.MarkdownRenderer.renderMarkdown(content, el, "", component);
     return component;
   }
 };
-var FlashcardsView = class extends import_obsidian2.ItemView {
+var FlashcardsView = class extends import_obsidian3.ItemView {
   constructor(leaf, plugin) {
     super(leaf);
     this.component = null;
@@ -6953,25 +6985,19 @@ var FlashcardsView = class extends import_obsidian2.ItemView {
       this.plugin.view = null;
     }
   }
+  async update(updatedDecks, deckStats) {
+    var _a, _b;
+    (_a = this.component) == null ? void 0 : _a.updateDecks(updatedDecks);
+    (_b = this.component) == null ? void 0 : _b.updateStats(deckStats);
+  }
   async refresh() {
     console.log("FlashcardsView.refresh() called");
     try {
-      console.log("Syncing decks...");
-      await this.plugin.syncDecks();
-      console.log("Getting decks and stats...");
-      const decks = await this.plugin.getDecks();
-      const deckStats = await this.plugin.getDeckStats();
-      if (this.component) {
-        console.log("Updating component with new data");
-        this.component.updateDecks(decks);
-        this.component.updateStats(deckStats);
-      } else {
-        console.error("Component not found!");
-      }
+      await this.plugin.performSync();
       console.log("Refresh complete");
     } catch (error) {
       console.error("Error refreshing flashcards:", error);
-      new import_obsidian2.Notice("Error refreshing flashcards. Check console for details.");
+      new import_obsidian3.Notice("Error refreshing flashcards. Check console for details.");
     }
   }
   async refreshStats() {
@@ -7007,7 +7033,7 @@ var FlashcardsView = class extends import_obsidian2.ItemView {
     );
     this.backgroundRefreshInterval = setInterval(async () => {
       console.log("Background refresh tick");
-      this.refreshStats();
+      this.refresh();
     }, this.plugin.settings.ui.backgroundRefreshInterval * 1e3);
   }
   stopBackgroundRefresh() {
@@ -7042,7 +7068,7 @@ var FlashcardsView = class extends import_obsidian2.ItemView {
       await this.plugin.syncFlashcardsForDeck(deck.name);
       const flashcards = await this.plugin.getReviewableFlashcards(deck.id);
       if (flashcards.length === 0) {
-        new import_obsidian2.Notice(`No cards due for review in ${deck.name}`);
+        new import_obsidian3.Notice(`No cards due for review in ${deck.name}`);
         return;
       }
       new FlashcardReviewModalWrapper(
@@ -7053,11 +7079,11 @@ var FlashcardsView = class extends import_obsidian2.ItemView {
       ).open();
     } catch (error) {
       console.error("Error starting review:", error);
-      new import_obsidian2.Notice("Error starting review. Check console for details.");
+      new import_obsidian3.Notice("Error starting review. Check console for details.");
     }
   }
 };
-var FlashcardReviewModalWrapper = class extends import_obsidian2.Modal {
+var FlashcardReviewModalWrapper = class extends import_obsidian3.Modal {
   constructor(app, plugin, deck, flashcards) {
     super(app);
     this.component = null;
@@ -7102,7 +7128,7 @@ var FlashcardReviewModalWrapper = class extends import_obsidian2.Modal {
       } else if (reason === "no-more-cards") {
         message = `All cards reviewed! Completed ${reviewed} cards from ${this.deck.name}.`;
       }
-      new import_obsidian2.Notice(message);
+      new import_obsidian3.Notice(message);
       if (this.plugin.view) {
         this.plugin.view.refresh();
       }

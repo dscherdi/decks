@@ -27,6 +27,9 @@ export class FlashcardsSettingTab extends PluginSettingTab {
 
     // UI Settings
     this.addUISettings(containerEl);
+
+    // Debug Settings
+    this.addDebugSettings(containerEl);
   }
 
   private addFSRSSettings(containerEl: HTMLElement): void {
@@ -237,6 +240,28 @@ export class FlashcardsSettingTab extends PluginSettingTab {
                 this.plugin.view.restartBackgroundRefresh();
               }
             }
+          }),
+      );
+  }
+
+  private addDebugSettings(containerEl: HTMLElement): void {
+    containerEl.createEl("h3", { text: "Debug" });
+    containerEl.createEl("p", {
+      text: "Debug settings for troubleshooting and development.",
+      cls: "setting-item-description",
+    });
+
+    new Setting(containerEl)
+      .setName("Enable Debug Logging")
+      .setDesc(
+        "Show detailed logging in the console for sync operations and flashcard processing",
+      )
+      .addToggle((toggle) =>
+        toggle
+          .setValue(this.plugin.settings.debug.enableLogging)
+          .onChange(async (value) => {
+            this.plugin.settings.debug.enableLogging = value;
+            await this.plugin.saveSettings();
           }),
       );
   }

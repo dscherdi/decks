@@ -27,6 +27,11 @@ export interface FlashcardsSettings {
   ui: {
     backgroundRefreshInterval: number; // seconds
   };
+
+  // Debug Settings
+  debug: {
+    enableLogging: boolean;
+  };
 }
 
 export const DEFAULT_SETTINGS: FlashcardsSettings = {
@@ -55,5 +60,9 @@ export const DEFAULT_SETTINGS: FlashcardsSettings = {
 
   ui: {
     backgroundRefreshInterval: 5,
+  },
+
+  debug: {
+    enableLogging: false,
   },
 };

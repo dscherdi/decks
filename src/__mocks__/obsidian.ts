@@ -6,10 +6,10 @@ export class TFile {
 
   constructor(path: string) {
     this.path = path;
-    this.name = path.split('/').pop() || '';
-    const parts = this.name.split('.');
-    this.extension = parts.length > 1 ? parts.pop() || '' : '';
-    this.basename = parts.join('.');
+    this.name = path.split("/").pop() || "";
+    const parts = this.name.split(".");
+    this.extension = parts.length > 1 ? parts.pop() || "" : "";
+    this.basename = parts.join(".");
   }
 }
 
@@ -19,7 +19,7 @@ export class TAbstractFile {
 
   constructor(path: string) {
     this.path = path;
-    this.name = path.split('/').pop() || '';
+    this.name = path.split("/").pop() || "";
   }
 }
 
@@ -33,7 +33,7 @@ export class Vault {
   private markdownFiles: TFile[] = [];
 
   async read(file: TFile): Promise<string> {
-    return this.files.get(file.path) || '';
+    return this.files.get(file.path) || "";
   }
 
   async modify(file: TFile, content: string): Promise<void> {
@@ -44,10 +44,14 @@ export class Vault {
     return this.markdownFiles;
   }
 
+  getAbstractFileByPath(path: string): TFile | null {
+    return this.markdownFiles.find((file) => file.path === path) || null;
+  }
+
   // Test helper methods
   _addFile(path: string, content: string): void {
     this.files.set(path, content);
-    if (path.endsWith('.md')) {
+    if (path.endsWith(".md")) {
       this.markdownFiles.push(new TFile(path));
     }
   }
@@ -82,7 +86,7 @@ export class Component {
 
 export class Notice {
   constructor(message: string) {
-    console.log('Notice:', message);
+    console.log("Notice:", message);
   }
 }
 
@@ -95,7 +99,7 @@ export class Plugin {
       vault: new Vault(),
       metadataCache: new MetadataCache(),
     };
-    this.manifest = { dir: '/' };
+    this.manifest = { dir: "/" };
   }
 
   loadData(): Promise<any> {
@@ -113,7 +117,7 @@ export class Modal {
 
   constructor(app: any) {
     this.app = app;
-    this.contentEl = document.createElement('div');
+    this.contentEl = document.createElement("div");
   }
 
   open(): void {}
@@ -126,8 +130,8 @@ export class ItemView {
   contentEl: HTMLElement;
 
   constructor(leaf: any) {
-    this.containerEl = document.createElement('div');
-    this.contentEl = document.createElement('div');
+    this.containerEl = document.createElement("div");
+    this.contentEl = document.createElement("div");
   }
 
   onOpen(): Promise<void> {
@@ -139,15 +143,15 @@ export class ItemView {
   }
 
   getViewType(): string {
-    return '';
+    return "";
   }
 
   getDisplayText(): string {
-    return '';
+    return "";
   }
 
   getIcon(): string {
-    return '';
+    return "";
   }
 }
 
@@ -168,7 +172,7 @@ export class MarkdownRenderer {
     content: string,
     el: HTMLElement,
     sourcePath: string,
-    component: Component
+    component: Component,
   ): void {
     el.innerHTML = content;
   }
