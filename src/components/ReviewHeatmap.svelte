@@ -13,6 +13,7 @@
     let containerElement: HTMLElement;
     let maxWeeks = 52; // Default to full year
     let containerWidth = 0;
+    let currentYear = new Date().getFullYear();
 
     const months = [
         "Jan",
@@ -30,16 +31,19 @@
     ];
 
     function generateDays() {
-        const today = new Date();
+        // Always show full year from January 1 to December 31
+        const yearStart = new Date(currentYear, 0, 1); // January 1st
+        const yearEnd = new Date(currentYear, 11, 31); // December 31st
 
-        // Start from Sunday of the current week
-        const currentWeekStart = new Date(today);
-        const currentDayOfWeek = today.getDay();
-        currentWeekStart.setDate(today.getDate() - currentDayOfWeek);
+        // Start from Sunday of the week containing January 1st
+        const startDate = new Date(yearStart);
+        const startDayOfWeek = startDate.getDay();
+        startDate.setDate(startDate.getDate() - startDayOfWeek);
 
-        // Go back the desired number of weeks, but end at current week
-        const startDate = new Date(currentWeekStart);
-        startDate.setDate(currentWeekStart.getDate() - (maxWeeks - 1) * 7);
+        // End on Saturday of the week containing December 31st
+        const endDate = new Date(yearEnd);
+        const endDayOfWeek = endDate.getDay();
+        endDate.setDate(endDate.getDate() + (6 - endDayOfWeek));
 
         const daysArray: Array<{
             date: string;
@@ -48,22 +52,31 @@
         }> = [];
         const current = new Date(startDate);
 
-        // Generate complete weeks up to and including current week
-        const endDate = new Date(currentWeekStart);
-        endDate.setDate(currentWeekStart.getDate() + 6); // End of current week
-
+        // Generate complete weeks but only include days within the selected year
         while (current <= endDate) {
             const dateStr = current.toISOString().split("T")[0];
-            const count = reviewCounts.get(dateStr) || 0;
+            const currentDateYear = current.getFullYear();
 
-            daysArray.push({
-                date: dateStr,
-                count,
-                dayOfWeek: current.getDay(),
-            });
+            // Only include days that belong to the selected year
+            if (currentDateYear === currentYear) {
+                const count = reviewCounts.get(dateStr) || 0;
 
-            if (count > maxCount) {
-                maxCount = count;
+                daysArray.push({
+                    date: dateStr,
+                    count,
+                    dayOfWeek: current.getDay(),
+                });
+
+                if (count > maxCount) {
+                    maxCount = count;
+                }
+            } else {
+                // Add placeholder for days outside the year to maintain grid structure
+                daysArray.push({
+                    date: dateStr,
+                    count: 0,
+                    dayOfWeek: current.getDay(),
+                });
             }
 
             current.setDate(current.getDate() + 1);
@@ -110,8 +123,10 @@
             if (firstDay) {
                 const date = new Date(firstDay.date);
                 const month = date.getMonth();
+                const year = date.getFullYear();
 
-                if (month !== currentMonth) {
+                // Only show month labels for days within the selected year
+                if (year === currentYear && month !== currentMonth) {
                     currentMonth = month;
                     labels.push({
                         month: months[month],
@@ -151,11 +166,20 @@
         }
     }
 
+    function navigateYear(direction: "prev" | "next") {
+        if (direction === "prev") {
+            currentYear--;
+        } else {
+            currentYear++;
+        }
+        refresh();
+    }
+
     export async function refresh() {
         isLoading = true;
         try {
-            const daysToFetch = maxWeeks * 7;
-            reviewCounts = await getReviewCounts(daysToFetch);
+            // Fetch full year data (365-366 days)
+            reviewCounts = await getReviewCounts(366);
             maxCount = 0;
             generateDays();
         } catch (error) {
@@ -171,66 +195,86 @@
             updateContainerWidth();
             refresh();
         }, 100);
-
-        // Listen for window resize to update container width
-        const handleWindowResize = () => {
-            setTimeout(updateContainerWidth, 50);
-        };
-
-        window.addEventListener("resize", handleWindowResize);
-
-        return () => {
-            window.removeEventListener("resize", handleWindowResize);
-        };
     });
 </script>
 
 <div class="heatmap-container" bind:this={containerElement}>
     <div class="heatmap-header">
-        <h4>Review Activity</h4>
-        {#if !isLoading}
-            <span class="total-reviews">
-                {Array.from(reviewCounts.values()).reduce(
-                    (sum, count) => sum + count,
-                    0,
-                )} reviews
-            </span>
-        {/if}
+        <div class="header-left">
+            <h4>Review Activity</h4>
+            {#if !isLoading}
+                <span class="total-reviews">
+                    {Array.from(reviewCounts.values()).reduce(
+                        (sum, count) => sum + count,
+                        0,
+                    )} reviews
+                </span>
+            {/if}
+        </div>
+        <div class="year-navigation">
+            <button class="nav-button" on:click={() => navigateYear("prev")}>
+                <svg
+                    width="12"
+                    height="12"
+                    viewBox="0 0 24 24"
+                    fill="currentColor"
+                >
+                    <path d="M15.41 7.41L14 6l-6 6 6 6 1.41-1.41L10.83 12z" />
+                </svg>
+            </button>
+            <span class="current-year">{currentYear}</span>
+            <button class="nav-button" on:click={() => navigateYear("next")}>
+                <svg
+                    width="12"
+                    height="12"
+                    viewBox="0 0 24 24"
+                    fill="currentColor"
+                >
+                    <path d="M10 6L8.59 7.41 13.17 12l-4.58 4.59L10 18l6-6z" />
+                </svg>
+            </button>
+        </div>
     </div>
 
     {#if isLoading}
         <div class="loading">Loading...</div>
     {:else}
         <div class="heatmap">
-            <div class="month-labels">
-                {#each getMonthLabels() as { month, offset }}
-                    <span class="month-label" style="left: {offset}px"
-                        >{month}</span
-                    >
-                {/each}
-            </div>
+            <div class="heatmap-content">
+                <div class="month-labels">
+                    {#each getMonthLabels() as { month, offset }}
+                        <span class="month-label" style="left: {offset}px"
+                            >{month}</span
+                        >
+                    {/each}
+                </div>
 
-            <div class="day-labels">
-                <span class="day-label" style="top: 0px">S</span>
-                <span class="day-label" style="top: 18px">T</span>
-                <span class="day-label" style="top: 36px">T</span>
-                <span class="day-label" style="top: 54px">S</span>
-            </div>
+                <div class="day-labels">
+                    <span class="day-label" style="top: 0px">S</span>
+                    <span class="day-label" style="top: 18px">T</span>
+                    <span class="day-label" style="top: 36px">T</span>
+                    <span class="day-label" style="top: 54px">S</span>
+                </div>
 
-            <div class="heatmap-grid">
-                {#each weeks as week}
-                    <div class="week">
-                        {#each week as day}
-                            <div
-                                class="day {getIntensityClass(day.count)}"
-                                class:today={isToday(day.date)}
-                                title="{day.count} reviews on {formatDate(
+                <div class="heatmap-grid">
+                    {#each weeks as week}
+                        <div class="week">
+                            {#each week as day}
+                                {@const dayYear = new Date(
                                     day.date,
-                                )}"
-                            ></div>
-                        {/each}
-                    </div>
-                {/each}
+                                ).getFullYear()}
+                                <div
+                                    class="day {getIntensityClass(day.count)}"
+                                    class:today={isToday(day.date)}
+                                    class:outside-year={dayYear !== currentYear}
+                                    title="{day.count} reviews on {formatDate(
+                                        day.date,
+                                    )}"
+                                ></div>
+                            {/each}
+                        </div>
+                    {/each}
+                </div>
             </div>
         </div>
 
@@ -255,7 +299,7 @@
         background: var(--background-primary);
         display: flex;
         flex-direction: column;
-        align-items: center;
+        align-items: stretch;
     }
 
     .heatmap-header {
@@ -264,6 +308,47 @@
         align-items: center;
         margin-bottom: 12px;
         width: 100%;
+    }
+
+    .header-left {
+        display: flex;
+        flex-direction: column;
+        align-items: flex-start;
+    }
+
+    .year-navigation {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+    }
+
+    .nav-button {
+        background: none;
+        border: 1px solid var(--background-modifier-border);
+        border-radius: 4px;
+        padding: 4px;
+        cursor: pointer;
+        color: var(--text-muted);
+        transition: all 0.2s ease;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        width: 24px;
+        height: 24px;
+    }
+
+    .nav-button:hover {
+        background: var(--background-modifier-hover);
+        color: var(--text-normal);
+        border-color: var(--text-muted);
+    }
+
+    .current-year {
+        font-size: 14px;
+        font-weight: 600;
+        color: var(--text-normal);
+        min-width: 40px;
+        text-align: center;
     }
 
     .heatmap-header h4 {
@@ -291,6 +376,15 @@
         overflow-x: auto;
         overflow-y: hidden;
         max-width: 100%;
+        padding-bottom: 8px;
+        display: flex;
+        justify-content: center;
+    }
+
+    .heatmap-content {
+        position: relative;
+        min-width: fit-content;
+        width: max-content;
     }
 
     .month-labels {
@@ -323,7 +417,7 @@
     .heatmap-grid {
         display: flex;
         gap: 2px;
-        min-width: fit-content;
+        padding-right: 16px;
     }
 
     .week {
@@ -401,5 +495,29 @@
         width: 10px;
         height: 10px;
         border-radius: 2px;
+    }
+
+    .day.outside-year {
+        opacity: 0.3;
+        pointer-events: none;
+    }
+
+    /* Custom scrollbar styling */
+    .heatmap::-webkit-scrollbar {
+        height: 8px;
+    }
+
+    .heatmap::-webkit-scrollbar-track {
+        background: var(--background-primary);
+        border-radius: 4px;
+    }
+
+    .heatmap::-webkit-scrollbar-thumb {
+        background: var(--background-modifier-border);
+        border-radius: 4px;
+    }
+
+    .heatmap::-webkit-scrollbar-thumb:hover {
+        background: var(--text-muted);
     }
 </style>

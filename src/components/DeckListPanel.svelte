@@ -8,7 +8,7 @@
     let allDecks: Deck[] = [];
     let stats = new Map<string, DeckStats>();
     let filterText = "";
-    let heatmapComponent: ReviewHeatmap;
+    let heatmapComponent: any;
 
     export let onDeckClick: (deck: Deck) => void;
     export let onRefresh: () => void;
@@ -39,9 +39,7 @@
         isRefreshing = true;
         try {
             onRefresh();
-            if (heatmapComponent) {
-                await heatmapComponent.refresh();
-            }
+            refreshHeatmap();
         } catch (error) {
             console.error("Error during refresh:", error);
         } finally {

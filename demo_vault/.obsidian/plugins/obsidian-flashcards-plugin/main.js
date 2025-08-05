@@ -4407,22 +4407,27 @@ function __awaiter(thisArg, _arguments, P, generator) {
 
 // src/components/ReviewHeatmap.svelte
 function add_css(target) {
-  append_styles(target, "svelte-1lazk3n", ".heatmap-container.svelte-1lazk3n.svelte-1lazk3n{padding:16px;border-top:1px solid var(--background-modifier-border);background:var(--background-primary);display:flex;flex-direction:column;align-items:center}.heatmap-header.svelte-1lazk3n.svelte-1lazk3n{display:flex;justify-content:space-between;align-items:center;margin-bottom:12px;width:100%}.heatmap-header.svelte-1lazk3n h4.svelte-1lazk3n{margin:0;font-size:14px;font-weight:600;color:var(--text-normal)}.total-reviews.svelte-1lazk3n.svelte-1lazk3n{font-size:12px;color:var(--text-muted)}.loading.svelte-1lazk3n.svelte-1lazk3n{text-align:center;padding:20px;color:var(--text-muted);font-size:12px}.heatmap.svelte-1lazk3n.svelte-1lazk3n{position:relative;margin-top:12px;overflow-x:auto;overflow-y:hidden;max-width:100%}.month-labels.svelte-1lazk3n.svelte-1lazk3n{position:relative;height:12px;margin-bottom:2px;margin-left:18px}.month-label.svelte-1lazk3n.svelte-1lazk3n{position:absolute;font-size:9px;color:var(--text-muted)}.day-labels.svelte-1lazk3n.svelte-1lazk3n{position:absolute;left:-18px;top:16px}.day-label.svelte-1lazk3n.svelte-1lazk3n{position:absolute;font-size:9px;color:var(--text-muted);width:16px;text-align:right}.heatmap-grid.svelte-1lazk3n.svelte-1lazk3n{display:flex;gap:2px;min-width:fit-content}.week.svelte-1lazk3n.svelte-1lazk3n{display:flex;flex-direction:column;gap:2px}.day.svelte-1lazk3n.svelte-1lazk3n{width:10px;height:10px;border-radius:2px;cursor:pointer;transition:all 0.1s ease;flex-shrink:0}.day.svelte-1lazk3n.svelte-1lazk3n:hover{transform:scale(1.3);outline:1px solid var(--text-muted);z-index:10;position:relative}.day.today.svelte-1lazk3n.svelte-1lazk3n{outline:2px solid var(--interactive-accent);outline-offset:1px}.day.today.svelte-1lazk3n.svelte-1lazk3n:hover{outline:2px solid var(--interactive-accent);outline-offset:1px}.intensity-0.svelte-1lazk3n.svelte-1lazk3n{background-color:var(--background-modifier-border)}.intensity-1.svelte-1lazk3n.svelte-1lazk3n{background-color:#0e4429}.intensity-2.svelte-1lazk3n.svelte-1lazk3n{background-color:#006d32}.intensity-3.svelte-1lazk3n.svelte-1lazk3n{background-color:#26a641}.intensity-4.svelte-1lazk3n.svelte-1lazk3n{background-color:#39d353}.legend.svelte-1lazk3n.svelte-1lazk3n{display:flex;align-items:center;justify-content:center;gap:3px;margin-top:6px}.legend-label.svelte-1lazk3n.svelte-1lazk3n{font-size:8px;color:var(--text-muted)}.legend-colors.svelte-1lazk3n.svelte-1lazk3n{display:flex;gap:2px}.legend-square.svelte-1lazk3n.svelte-1lazk3n{width:10px;height:10px;border-radius:2px}");
+  append_styles(target, "svelte-7nm5s5", ".heatmap-container.svelte-7nm5s5.svelte-7nm5s5{padding:16px;border-top:1px solid var(--background-modifier-border);background:var(--background-primary);display:flex;flex-direction:column;align-items:stretch}.heatmap-header.svelte-7nm5s5.svelte-7nm5s5{display:flex;justify-content:space-between;align-items:center;margin-bottom:12px;width:100%}.header-left.svelte-7nm5s5.svelte-7nm5s5{display:flex;flex-direction:column;align-items:flex-start}.year-navigation.svelte-7nm5s5.svelte-7nm5s5{display:flex;align-items:center;gap:8px}.nav-button.svelte-7nm5s5.svelte-7nm5s5{background:none;border:1px solid var(--background-modifier-border);border-radius:4px;padding:4px;cursor:pointer;color:var(--text-muted);transition:all 0.2s ease;display:flex;align-items:center;justify-content:center;width:24px;height:24px}.nav-button.svelte-7nm5s5.svelte-7nm5s5:hover{background:var(--background-modifier-hover);color:var(--text-normal);border-color:var(--text-muted)}.current-year.svelte-7nm5s5.svelte-7nm5s5{font-size:14px;font-weight:600;color:var(--text-normal);min-width:40px;text-align:center}.heatmap-header.svelte-7nm5s5 h4.svelte-7nm5s5{margin:0;font-size:14px;font-weight:600;color:var(--text-normal)}.total-reviews.svelte-7nm5s5.svelte-7nm5s5{font-size:12px;color:var(--text-muted)}.loading.svelte-7nm5s5.svelte-7nm5s5{text-align:center;padding:20px;color:var(--text-muted);font-size:12px}.heatmap.svelte-7nm5s5.svelte-7nm5s5{position:relative;margin-top:12px;overflow-x:auto;overflow-y:hidden;max-width:100%;padding-bottom:8px;display:flex;justify-content:center}.heatmap-content.svelte-7nm5s5.svelte-7nm5s5{position:relative;min-width:fit-content;width:max-content}.month-labels.svelte-7nm5s5.svelte-7nm5s5{position:relative;height:12px;margin-bottom:2px;margin-left:18px}.month-label.svelte-7nm5s5.svelte-7nm5s5{position:absolute;font-size:9px;color:var(--text-muted)}.day-labels.svelte-7nm5s5.svelte-7nm5s5{position:absolute;left:-18px;top:16px}.day-label.svelte-7nm5s5.svelte-7nm5s5{position:absolute;font-size:9px;color:var(--text-muted);width:16px;text-align:right}.heatmap-grid.svelte-7nm5s5.svelte-7nm5s5{display:flex;gap:2px;padding-right:16px}.week.svelte-7nm5s5.svelte-7nm5s5{display:flex;flex-direction:column;gap:2px}.day.svelte-7nm5s5.svelte-7nm5s5{width:10px;height:10px;border-radius:2px;cursor:pointer;transition:all 0.1s ease;flex-shrink:0}.day.svelte-7nm5s5.svelte-7nm5s5:hover{transform:scale(1.3);outline:1px solid var(--text-muted);z-index:10;position:relative}.day.today.svelte-7nm5s5.svelte-7nm5s5{outline:2px solid var(--interactive-accent);outline-offset:1px}.day.today.svelte-7nm5s5.svelte-7nm5s5:hover{outline:2px solid var(--interactive-accent);outline-offset:1px}.intensity-0.svelte-7nm5s5.svelte-7nm5s5{background-color:var(--background-modifier-border)}.intensity-1.svelte-7nm5s5.svelte-7nm5s5{background-color:#0e4429}.intensity-2.svelte-7nm5s5.svelte-7nm5s5{background-color:#006d32}.intensity-3.svelte-7nm5s5.svelte-7nm5s5{background-color:#26a641}.intensity-4.svelte-7nm5s5.svelte-7nm5s5{background-color:#39d353}.legend.svelte-7nm5s5.svelte-7nm5s5{display:flex;align-items:center;justify-content:center;gap:3px;margin-top:6px}.legend-label.svelte-7nm5s5.svelte-7nm5s5{font-size:8px;color:var(--text-muted)}.legend-colors.svelte-7nm5s5.svelte-7nm5s5{display:flex;gap:2px}.legend-square.svelte-7nm5s5.svelte-7nm5s5{width:10px;height:10px;border-radius:2px}.day.outside-year.svelte-7nm5s5.svelte-7nm5s5{opacity:0.3;pointer-events:none}.heatmap.svelte-7nm5s5.svelte-7nm5s5::-webkit-scrollbar{height:8px}.heatmap.svelte-7nm5s5.svelte-7nm5s5::-webkit-scrollbar-track{background:var(--background-primary);border-radius:4px}.heatmap.svelte-7nm5s5.svelte-7nm5s5::-webkit-scrollbar-thumb{background:var(--background-modifier-border);border-radius:4px}.heatmap.svelte-7nm5s5.svelte-7nm5s5::-webkit-scrollbar-thumb:hover{background:var(--text-muted)}");
 }
 function get_each_context(ctx, list, i) {
   const child_ctx = ctx.slice();
-  child_ctx[16] = list[i];
+  child_ctx[20] = list[i];
   return child_ctx;
 }
 function get_each_context_1(ctx, list, i) {
   const child_ctx = ctx.slice();
-  child_ctx[19] = list[i];
+  child_ctx[23] = list[i];
+  const constants_0 = new Date(
+    /*day*/
+    child_ctx[23].date
+  ).getFullYear();
+  child_ctx[24] = constants_0;
   return child_ctx;
 }
 function get_each_context_2(ctx, list, i) {
   const child_ctx = ctx.slice();
-  child_ctx[22] = list[i].month;
-  child_ctx[23] = list[i].offset;
+  child_ctx[27] = list[i].month;
+  child_ctx[28] = list[i].offset;
   return child_ctx;
 }
 function create_if_block_1(ctx) {
@@ -4438,7 +4443,7 @@ function create_if_block_1(ctx) {
       span = element("span");
       t0 = text(t0_value);
       t1 = text(" reviews");
-      attr(span, "class", "total-reviews svelte-1lazk3n");
+      attr(span, "class", "total-reviews svelte-7nm5s5");
     },
     m(target, anchor) {
       insert(target, span, anchor);
@@ -4460,6 +4465,7 @@ function create_if_block_1(ctx) {
   };
 }
 function create_else_block(ctx) {
+  let div4;
   let div3;
   let div0;
   let t0;
@@ -4467,10 +4473,10 @@ function create_else_block(ctx) {
   let t8;
   let div2;
   let t9;
-  let div10;
+  let div11;
   let each_value_2 = (
     /*getMonthLabels*/
-    ctx[5]()
+    ctx[6]()
   );
   let each_blocks_1 = [];
   for (let i = 0; i < each_value_2.length; i += 1) {
@@ -4486,6 +4492,7 @@ function create_else_block(ctx) {
   }
   return {
     c() {
+      div4 = element("div");
       div3 = element("div");
       div0 = element("div");
       for (let i = 0; i < each_blocks_1.length; i += 1) {
@@ -4493,32 +4500,34 @@ function create_else_block(ctx) {
       }
       t0 = space();
       div1 = element("div");
-      div1.innerHTML = `<span class="day-label svelte-1lazk3n" style="top: 0px">S</span> 
-                <span class="day-label svelte-1lazk3n" style="top: 18px">T</span> 
-                <span class="day-label svelte-1lazk3n" style="top: 36px">T</span> 
-                <span class="day-label svelte-1lazk3n" style="top: 54px">S</span>`;
+      div1.innerHTML = `<span class="day-label svelte-7nm5s5" style="top: 0px">S</span> 
+                    <span class="day-label svelte-7nm5s5" style="top: 18px">T</span> 
+                    <span class="day-label svelte-7nm5s5" style="top: 36px">T</span> 
+                    <span class="day-label svelte-7nm5s5" style="top: 54px">S</span>`;
       t8 = space();
       div2 = element("div");
       for (let i = 0; i < each_blocks.length; i += 1) {
         each_blocks[i].c();
       }
       t9 = space();
-      div10 = element("div");
-      div10.innerHTML = `<span class="legend-label svelte-1lazk3n">Less</span> 
-            <div class="legend-colors svelte-1lazk3n"><div class="legend-square intensity-0 svelte-1lazk3n"></div> 
-                <div class="legend-square intensity-1 svelte-1lazk3n"></div> 
-                <div class="legend-square intensity-2 svelte-1lazk3n"></div> 
-                <div class="legend-square intensity-3 svelte-1lazk3n"></div> 
-                <div class="legend-square intensity-4 svelte-1lazk3n"></div></div> 
-            <span class="legend-label svelte-1lazk3n">More</span>`;
-      attr(div0, "class", "month-labels svelte-1lazk3n");
-      attr(div1, "class", "day-labels svelte-1lazk3n");
-      attr(div2, "class", "heatmap-grid svelte-1lazk3n");
-      attr(div3, "class", "heatmap svelte-1lazk3n");
-      attr(div10, "class", "legend svelte-1lazk3n");
+      div11 = element("div");
+      div11.innerHTML = `<span class="legend-label svelte-7nm5s5">Less</span> 
+            <div class="legend-colors svelte-7nm5s5"><div class="legend-square intensity-0 svelte-7nm5s5"></div> 
+                <div class="legend-square intensity-1 svelte-7nm5s5"></div> 
+                <div class="legend-square intensity-2 svelte-7nm5s5"></div> 
+                <div class="legend-square intensity-3 svelte-7nm5s5"></div> 
+                <div class="legend-square intensity-4 svelte-7nm5s5"></div></div> 
+            <span class="legend-label svelte-7nm5s5">More</span>`;
+      attr(div0, "class", "month-labels svelte-7nm5s5");
+      attr(div1, "class", "day-labels svelte-7nm5s5");
+      attr(div2, "class", "heatmap-grid svelte-7nm5s5");
+      attr(div3, "class", "heatmap-content svelte-7nm5s5");
+      attr(div4, "class", "heatmap svelte-7nm5s5");
+      attr(div11, "class", "legend svelte-7nm5s5");
     },
     m(target, anchor) {
-      insert(target, div3, anchor);
+      insert(target, div4, anchor);
+      append(div4, div3);
       append(div3, div0);
       for (let i = 0; i < each_blocks_1.length; i += 1) {
         if (each_blocks_1[i]) {
@@ -4535,13 +4544,13 @@ function create_else_block(ctx) {
         }
       }
       insert(target, t9, anchor);
-      insert(target, div10, anchor);
+      insert(target, div11, anchor);
     },
     p(ctx2, dirty) {
       if (dirty & /*getMonthLabels*/
-      32) {
+      64) {
         each_value_2 = /*getMonthLabels*/
-        ctx2[5]();
+        ctx2[6]();
         let i;
         for (i = 0; i < each_value_2.length; i += 1) {
           const child_ctx = get_each_context_2(ctx2, each_value_2, i);
@@ -4558,8 +4567,8 @@ function create_else_block(ctx) {
         }
         each_blocks_1.length = each_value_2.length;
       }
-      if (dirty & /*weeks, getIntensityClass, formatDate, isToday*/
-      18) {
+      if (dirty & /*weeks, getIntensityClass, formatDate, isToday, Date, currentYear*/
+      50) {
         each_value = /*weeks*/
         ctx2[1];
         let i;
@@ -4581,13 +4590,13 @@ function create_else_block(ctx) {
     },
     d(detaching) {
       if (detaching)
-        detach(div3);
+        detach(div4);
       destroy_each(each_blocks_1, detaching);
       destroy_each(each_blocks, detaching);
       if (detaching)
         detach(t9);
       if (detaching)
-        detach(div10);
+        detach(div11);
     }
   };
 }
@@ -4597,7 +4606,7 @@ function create_if_block(ctx) {
     c() {
       div = element("div");
       div.textContent = "Loading...";
-      attr(div, "class", "loading svelte-1lazk3n");
+      attr(div, "class", "loading svelte-7nm5s5");
     },
     m(target, anchor) {
       insert(target, div, anchor);
@@ -4613,19 +4622,19 @@ function create_each_block_2(ctx) {
   let span;
   let t_value = (
     /*month*/
-    ctx[22] + ""
+    ctx[27] + ""
   );
   let t;
   return {
     c() {
       span = element("span");
       t = text(t_value);
-      attr(span, "class", "month-label svelte-1lazk3n");
+      attr(span, "class", "month-label svelte-7nm5s5");
       set_style(
         span,
         "left",
         /*offset*/
-        ctx[23] + "px"
+        ctx[28] + "px"
       );
     },
     m(target, anchor) {
@@ -4647,19 +4656,26 @@ function create_each_block_1(ctx) {
     c() {
       div = element("div");
       attr(div, "class", div_class_value = "day " + /*getIntensityClass*/
-      ctx[4](
+      ctx[5](
         /*day*/
-        ctx[19].count
-      ) + " svelte-1lazk3n");
+        ctx[23].count
+      ) + " svelte-7nm5s5");
       attr(div, "title", div_title_value = /*day*/
-      ctx[19].count + " reviews on " + formatDate(
+      ctx[23].count + " reviews on " + formatDate(
         /*day*/
-        ctx[19].date
+        ctx[23].date
       ));
       toggle_class(div, "today", isToday(
         /*day*/
-        ctx[19].date
+        ctx[23].date
       ));
+      toggle_class(
+        div,
+        "outside-year",
+        /*dayYear*/
+        ctx[24] !== /*currentYear*/
+        ctx[4]
+      );
     },
     m(target, anchor) {
       insert(target, div, anchor);
@@ -4667,17 +4683,17 @@ function create_each_block_1(ctx) {
     p(ctx2, dirty) {
       if (dirty & /*weeks*/
       2 && div_class_value !== (div_class_value = "day " + /*getIntensityClass*/
-      ctx2[4](
+      ctx2[5](
         /*day*/
-        ctx2[19].count
-      ) + " svelte-1lazk3n")) {
+        ctx2[23].count
+      ) + " svelte-7nm5s5")) {
         attr(div, "class", div_class_value);
       }
       if (dirty & /*weeks*/
       2 && div_title_value !== (div_title_value = /*day*/
-      ctx2[19].count + " reviews on " + formatDate(
+      ctx2[23].count + " reviews on " + formatDate(
         /*day*/
-        ctx2[19].date
+        ctx2[23].date
       ))) {
         attr(div, "title", div_title_value);
       }
@@ -4685,8 +4701,18 @@ function create_each_block_1(ctx) {
       2) {
         toggle_class(div, "today", isToday(
           /*day*/
-          ctx2[19].date
+          ctx2[23].date
         ));
+      }
+      if (dirty & /*weeks, Date, weeks, currentYear*/
+      18) {
+        toggle_class(
+          div,
+          "outside-year",
+          /*dayYear*/
+          ctx2[24] !== /*currentYear*/
+          ctx2[4]
+        );
       }
     },
     d(detaching) {
@@ -4700,7 +4726,7 @@ function create_each_block(ctx) {
   let t;
   let each_value_1 = (
     /*week*/
-    ctx[16]
+    ctx[20]
   );
   let each_blocks = [];
   for (let i = 0; i < each_value_1.length; i += 1) {
@@ -4713,7 +4739,7 @@ function create_each_block(ctx) {
         each_blocks[i].c();
       }
       t = space();
-      attr(div, "class", "week svelte-1lazk3n");
+      attr(div, "class", "week svelte-7nm5s5");
     },
     m(target, anchor) {
       insert(target, div, anchor);
@@ -4725,10 +4751,10 @@ function create_each_block(ctx) {
       append(div, t);
     },
     p(ctx2, dirty) {
-      if (dirty & /*getIntensityClass, weeks, formatDate, isToday*/
-      18) {
+      if (dirty & /*getIntensityClass, weeks, formatDate, isToday, Date, currentYear*/
+      50) {
         each_value_1 = /*week*/
-        ctx2[16];
+        ctx2[20];
         let i;
         for (i = 0; i < each_value_1.length; i += 1) {
           const child_ctx = get_each_context_1(ctx2, each_value_1, i);
@@ -4754,11 +4780,22 @@ function create_each_block(ctx) {
   };
 }
 function create_fragment(ctx) {
-  let div1;
+  let div3;
+  let div2;
   let div0;
   let h4;
   let t1;
   let t2;
+  let div1;
+  let button0;
+  let t3;
+  let span;
+  let t4;
+  let t5;
+  let button1;
+  let t6;
+  let mounted;
+  let dispose;
   let if_block0 = !/*isLoading*/
   ctx[2] && create_if_block_1(ctx);
   function select_block_type(ctx2, dirty) {
@@ -4773,7 +4810,8 @@ function create_fragment(ctx) {
   let if_block1 = current_block_type(ctx);
   return {
     c() {
-      div1 = element("div");
+      div3 = element("div");
+      div2 = element("div");
       div0 = element("div");
       h4 = element("h4");
       h4.textContent = "Review Activity";
@@ -4781,21 +4819,65 @@ function create_fragment(ctx) {
       if (if_block0)
         if_block0.c();
       t2 = space();
+      div1 = element("div");
+      button0 = element("button");
+      button0.innerHTML = `<svg width="12" height="12" viewBox="0 0 24 24" fill="currentColor"><path d="M15.41 7.41L14 6l-6 6 6 6 1.41-1.41L10.83 12z"></path></svg>`;
+      t3 = space();
+      span = element("span");
+      t4 = text(
+        /*currentYear*/
+        ctx[4]
+      );
+      t5 = space();
+      button1 = element("button");
+      button1.innerHTML = `<svg width="12" height="12" viewBox="0 0 24 24" fill="currentColor"><path d="M10 6L8.59 7.41 13.17 12l-4.58 4.59L10 18l6-6z"></path></svg>`;
+      t6 = space();
       if_block1.c();
-      attr(h4, "class", "svelte-1lazk3n");
-      attr(div0, "class", "heatmap-header svelte-1lazk3n");
-      attr(div1, "class", "heatmap-container svelte-1lazk3n");
+      attr(h4, "class", "svelte-7nm5s5");
+      attr(div0, "class", "header-left svelte-7nm5s5");
+      attr(button0, "class", "nav-button svelte-7nm5s5");
+      attr(span, "class", "current-year svelte-7nm5s5");
+      attr(button1, "class", "nav-button svelte-7nm5s5");
+      attr(div1, "class", "year-navigation svelte-7nm5s5");
+      attr(div2, "class", "heatmap-header svelte-7nm5s5");
+      attr(div3, "class", "heatmap-container svelte-7nm5s5");
     },
     m(target, anchor) {
-      insert(target, div1, anchor);
-      append(div1, div0);
+      insert(target, div3, anchor);
+      append(div3, div2);
+      append(div2, div0);
       append(div0, h4);
       append(div0, t1);
       if (if_block0)
         if_block0.m(div0, null);
-      append(div1, t2);
-      if_block1.m(div1, null);
-      ctx[10](div1);
+      append(div2, t2);
+      append(div2, div1);
+      append(div1, button0);
+      append(div1, t3);
+      append(div1, span);
+      append(span, t4);
+      append(div1, t5);
+      append(div1, button1);
+      append(div3, t6);
+      if_block1.m(div3, null);
+      ctx[14](div3);
+      if (!mounted) {
+        dispose = [
+          listen(
+            button0,
+            "click",
+            /*click_handler*/
+            ctx[12]
+          ),
+          listen(
+            button1,
+            "click",
+            /*click_handler_1*/
+            ctx[13]
+          )
+        ];
+        mounted = true;
+      }
     },
     p(ctx2, [dirty]) {
       if (!/*isLoading*/
@@ -4811,6 +4893,13 @@ function create_fragment(ctx) {
         if_block0.d(1);
         if_block0 = null;
       }
+      if (dirty & /*currentYear*/
+      16)
+        set_data(
+          t4,
+          /*currentYear*/
+          ctx2[4]
+        );
       if (current_block_type === (current_block_type = select_block_type(ctx2, dirty)) && if_block1) {
         if_block1.p(ctx2, dirty);
       } else {
@@ -4818,7 +4907,7 @@ function create_fragment(ctx) {
         if_block1 = current_block_type(ctx2);
         if (if_block1) {
           if_block1.c();
-          if_block1.m(div1, null);
+          if_block1.m(div3, null);
         }
       }
     },
@@ -4826,11 +4915,13 @@ function create_fragment(ctx) {
     o: noop,
     d(detaching) {
       if (detaching)
-        detach(div1);
+        detach(div3);
       if (if_block0)
         if_block0.d();
       if_block1.d();
-      ctx[10](null);
+      ctx[14](null);
+      mounted = false;
+      run_all(dispose);
     }
   };
 }
@@ -4866,6 +4957,7 @@ function instance($$self, $$props, $$invalidate) {
   let containerElement;
   let maxWeeks = 52;
   let containerWidth = 0;
+  let currentYear = (/* @__PURE__ */ new Date()).getFullYear();
   const months = [
     "Jan",
     "Feb",
@@ -4881,26 +4973,35 @@ function instance($$self, $$props, $$invalidate) {
     "Dec"
   ];
   function generateDays() {
-    const today = /* @__PURE__ */ new Date();
-    const currentWeekStart = new Date(today);
-    const currentDayOfWeek = today.getDay();
-    currentWeekStart.setDate(today.getDate() - currentDayOfWeek);
-    const startDate = new Date(currentWeekStart);
-    startDate.setDate(currentWeekStart.getDate() - (maxWeeks - 1) * 7);
+    const yearStart = new Date(currentYear, 0, 1);
+    const yearEnd = new Date(currentYear, 11, 31);
+    const startDate = new Date(yearStart);
+    const startDayOfWeek = startDate.getDay();
+    startDate.setDate(startDate.getDate() - startDayOfWeek);
+    const endDate = new Date(yearEnd);
+    const endDayOfWeek = endDate.getDay();
+    endDate.setDate(endDate.getDate() + (6 - endDayOfWeek));
     const daysArray = [];
     const current = new Date(startDate);
-    const endDate = new Date(currentWeekStart);
-    endDate.setDate(currentWeekStart.getDate() + 6);
     while (current <= endDate) {
       const dateStr = current.toISOString().split("T")[0];
-      const count = reviewCounts.get(dateStr) || 0;
-      daysArray.push({
-        date: dateStr,
-        count,
-        dayOfWeek: current.getDay()
-      });
-      if (count > maxCount) {
-        maxCount = count;
+      const currentDateYear = current.getFullYear();
+      if (currentDateYear === currentYear) {
+        const count = reviewCounts.get(dateStr) || 0;
+        daysArray.push({
+          date: dateStr,
+          count,
+          dayOfWeek: current.getDay()
+        });
+        if (count > maxCount) {
+          maxCount = count;
+        }
+      } else {
+        daysArray.push({
+          date: dateStr,
+          count: 0,
+          dayOfWeek: current.getDay()
+        });
       }
       current.setDate(current.getDate() + 1);
     }
@@ -4926,7 +5027,8 @@ function instance($$self, $$props, $$invalidate) {
       if (firstDay) {
         const date = new Date(firstDay.date);
         const month = date.getMonth();
-        if (month !== currentMonth) {
+        const year = date.getFullYear();
+        if (year === currentYear && month !== currentMonth) {
           currentMonth = month;
           labels.push({
             month: months[month],
@@ -4940,15 +5042,22 @@ function instance($$self, $$props, $$invalidate) {
   }
   function updateContainerWidth() {
     if (containerElement) {
-      $$invalidate(9, containerWidth = containerElement.clientWidth);
+      $$invalidate(11, containerWidth = containerElement.clientWidth);
     }
+  }
+  function navigateYear(direction) {
+    if (direction === "prev") {
+      $$invalidate(4, currentYear--, currentYear);
+    } else {
+      $$invalidate(4, currentYear++, currentYear);
+    }
+    refresh();
   }
   function refresh() {
     return __awaiter(this, void 0, void 0, function* () {
       $$invalidate(2, isLoading = true);
       try {
-        const daysToFetch = maxWeeks * 7;
-        $$invalidate(0, reviewCounts = yield getReviewCounts(daysToFetch));
+        $$invalidate(0, reviewCounts = yield getReviewCounts(366));
         maxCount = 0;
         generateDays();
       } catch (error) {
@@ -4966,15 +5075,10 @@ function instance($$self, $$props, $$invalidate) {
       },
       100
     );
-    const handleWindowResize = () => {
-      setTimeout(updateContainerWidth, 50);
-    };
-    window.addEventListener("resize", handleWindowResize);
-    return () => {
-      window.removeEventListener("resize", handleWindowResize);
-    };
   });
-  function div1_binding($$value) {
+  const click_handler = () => navigateYear("prev");
+  const click_handler_1 = () => navigateYear("next");
+  function div3_binding($$value) {
     binding_callbacks[$$value ? "unshift" : "push"](() => {
       containerElement = $$value;
       $$invalidate(3, containerElement);
@@ -4982,16 +5086,16 @@ function instance($$self, $$props, $$invalidate) {
   }
   $$self.$$set = ($$props2) => {
     if ("getReviewCounts" in $$props2)
-      $$invalidate(6, getReviewCounts = $$props2.getReviewCounts);
+      $$invalidate(8, getReviewCounts = $$props2.getReviewCounts);
   };
   $$self.$$.update = () => {
     if ($$self.$$.dirty & /*containerWidth, maxWeeks*/
-    768) {
+    3072) {
       $:
         if (containerWidth > 0) {
           const newMaxWeeks = calculateMaxWeeks(containerWidth);
           if (newMaxWeeks !== maxWeeks) {
-            $$invalidate(8, maxWeeks = newMaxWeeks);
+            $$invalidate(10, maxWeeks = newMaxWeeks);
             refresh();
           }
         }
@@ -5002,22 +5106,26 @@ function instance($$self, $$props, $$invalidate) {
     weeks,
     isLoading,
     containerElement,
+    currentYear,
     getIntensityClass,
     getMonthLabels,
+    navigateYear,
     getReviewCounts,
     refresh,
     maxWeeks,
     containerWidth,
-    div1_binding
+    click_handler,
+    click_handler_1,
+    div3_binding
   ];
 }
 var ReviewHeatmap = class extends SvelteComponent {
   constructor(options) {
     super();
-    init(this, options, instance, create_fragment, safe_not_equal, { getReviewCounts: 6, refresh: 7 }, add_css);
+    init(this, options, instance, create_fragment, safe_not_equal, { getReviewCounts: 8, refresh: 9 }, add_css);
   }
   get refresh() {
-    return this.$$.ctx[7];
+    return this.$$.ctx[9];
   }
 };
 var ReviewHeatmap_default = ReviewHeatmap;
@@ -5585,9 +5693,7 @@ function instance2($$self, $$props, $$invalidate) {
       $$invalidate(5, isRefreshing = true);
       try {
         onRefresh();
-        if (heatmapComponent) {
-          yield heatmapComponent.refresh();
-        }
+        refreshHeatmap();
       } catch (error) {
         console.error("Error during refresh:", error);
       } finally {
