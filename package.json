@@ -1,6 +1,6 @@
 {
   "name": "decks",
-  "version": "1.0.3",
+  "version": "1.0.4",
   "description": "Decks - Spaced repetition flashcards for Obsidian with FSRS algorithm",
   "main": "dist/main.js",
   "source": "src/main.ts",
@@ -22,7 +22,7 @@
     "spaced-repetition",
     "fsrs"
   ],
-  "author": "Your Name",
+  "author": "Xherdi Lika",
   "license": "MIT",
   "dependencies": {
     "sql.js": "^1.8.0",

@@ -1,8 +1,8 @@
 # vscode
 .vscode
 .dist
-.coverage
-
+coverage
+dist
 # Intellij
 *.iml
 .idea
