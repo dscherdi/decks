@@ -2,20 +2,28 @@
     import type FlashcardsPlugin from "../main";
     import { onMount, createEventDispatcher } from "svelte";
     import ReviewHeatmap from "./ReviewHeatmap.svelte";
+    import type { Statistics } from "../database/types";
 
     export let plugin: FlashcardsPlugin;
 
     const dispatch = createEventDispatcher();
 
     let loading = true;
-    let statistics: any = null;
+    let statistics: Statistics | null = null;
     let selectedDeckFilter = "all"; // "all", "tag:tagname", or "deck:deckid"
     let selectedTimeframe = "12months"; // "12months" or "all"
     let availableDecks: any[] = [];
     let availableTags: string[] = [];
     let heatmapComponent: ReviewHeatmap;
 
+    // Derived statistics - computed after loading
+    let todayStats: any = null;
+    let weekStats: any = null;
+    let monthStats: any = null;
+    let yearStats: any = null;
+
     onMount(async () => {
+        loading = true;
         await loadDecksAndTags();
         await loadStatistics();
     });
@@ -33,12 +41,17 @@
 
     async function loadStatistics() {
         try {
-            loading = true;
             statistics = await plugin.getOverallStatistics(
                 selectedDeckFilter,
                 selectedTimeframe,
             );
             console.log("Loaded statistics:", statistics);
+
+            // Compute derived statistics once data is loaded
+            todayStats = getTodayStats();
+            weekStats = getTimeframeStats(7);
+            monthStats = getTimeframeStats(30);
+            yearStats = getTimeframeStats(365);
         } catch (error) {
             console.error("Error loading statistics:", error);
             statistics = {
@@ -48,7 +61,15 @@
                 retentionRate: 0,
                 intervals: [],
                 forecast: [],
-            };
+                averagePace: 0,
+                totalReviewTime: 0,
+            } as Statistics;
+
+            // Set empty derived stats on error
+            todayStats = null;
+            weekStats = null;
+            monthStats = null;
+            yearStats = null;
         } finally {
             loading = false;
         }
@@ -71,13 +92,22 @@
         return `${minutes}m`;
     }
 
+    function formatPace(seconds: number) {
+        if (seconds < 60) {
+            return `${seconds.toFixed(1)}s`;
+        }
+        const minutes = Math.floor(seconds / 60);
+        const remainingSeconds = Math.round(seconds % 60);
+        return `${minutes}m ${remainingSeconds}s`;
+    }
+
     function getTodayStats() {
         if (!statistics?.dailyStats || statistics.dailyStats.length === 0)
             return null;
         const today = new Date().toISOString().split("T")[0];
         // First try to find today's stats, if not available use the most recent
         return (
-            statistics.dailyStats.find((day: any) => day.date === today) ||
+            statistics.dailyStats.find((day) => day.date === today) ||
             statistics.dailyStats[0] ||
             null
         );
@@ -99,7 +129,7 @@
         const cutoffStr = cutoffDate.toISOString().split("T")[0];
 
         const filteredStats = statistics.dailyStats.filter(
-            (day: any) => day.date >= cutoffStr,
+            (day) => day.date >= cutoffStr,
         );
 
         if (filteredStats.length === 0) {
@@ -114,7 +144,7 @@
         }
 
         return filteredStats.reduce(
-            (acc: any, day: any) => ({
+            (acc, day) => ({
                 reviews: acc.reviews + day.reviews,
                 timeSpent: acc.timeSpent + day.timeSpent,
                 newCards: acc.newCards + day.newCards,
@@ -139,21 +169,22 @@
     }
 
     function calculateAverageEase() {
-        if (!statistics?.answerButtons) return 0;
+        if (!statistics?.answerButtons) return "0.00";
         const { again, hard, good, easy } = statistics.answerButtons;
         const total = again + hard + good + easy;
-        if (total === 0) return 0;
+        if (total === 0) return "0.00";
         // Map buttons to values: Again=1, Hard=2, Good=3, Easy=4
         const weightedSum = again * 1 + hard * 2 + good * 3 + easy * 4;
         return (weightedSum / total).toFixed(2);
     }
 
     function calculateAverageInterval() {
-        if (!statistics?.intervals) return 0;
+        if (!statistics?.intervals || statistics.intervals.length === 0)
+            return 0;
         let totalInterval = 0;
         let totalCards = 0;
 
-        statistics.intervals.forEach((interval: any) => {
+        statistics.intervals.forEach((interval) => {
             // Convert interval string to minutes
             const intervalStr = interval.interval;
             let minutes = 0;
@@ -178,37 +209,32 @@
     }
 
     function getDueToday() {
-        if (!statistics?.forecast) return 0;
+        if (!statistics?.forecast || statistics.forecast.length === 0) return 0;
         const today = new Date().toISOString().split("T")[0];
         const todayForecast = statistics.forecast.find(
-            (day: any) => day.date === today,
+            (day) => day.date === today,
         );
         return todayForecast ? todayForecast.dueCount : 0;
     }
 
     function getDueTomorrow() {
-        if (!statistics?.forecast) return 0;
+        if (!statistics?.forecast || statistics.forecast.length === 0) return 0;
         const tomorrow = new Date();
         tomorrow.setDate(tomorrow.getDate() + 1);
         const tomorrowStr = tomorrow.toISOString().split("T")[0];
         const tomorrowForecast = statistics.forecast.find(
-            (day: any) => day.date === tomorrowStr,
+            (day) => day.date === tomorrowStr,
         );
         return tomorrowForecast ? tomorrowForecast.dueCount : 0;
     }
 
     function getMaturityRatio() {
-        if (!statistics?.cardStats) return 0;
+        if (!statistics?.cardStats) return "0.0";
         const { new: newCards, learning, mature } = statistics.cardStats;
         const total = newCards + learning + mature;
-        if (total === 0) return 0;
+        if (total === 0) return "0.0";
         return ((mature / total) * 100).toFixed(1);
     }
-
-    $: todayStats = getTodayStats();
-    $: weekStats = getTimeframeStats(7);
-    $: monthStats = getTimeframeStats(30);
-    $: yearStats = getTimeframeStats(365);
 </script>
 
 <div class="statistics-container">
@@ -229,13 +255,26 @@
                     id="deck-filter"
                     bind:value={selectedDeckFilter}
                     on:change={handleFilterChange}
+                    style="background: var(--background-primary) !important; color: var(--text-normal) !important;"
                 >
-                    <option value="all">All Decks</option>
+                    <option
+                        value="all"
+                        style="background: var(--background-primary) !important; color: var(--text-normal) !important;"
+                        >All Decks</option
+                    >
                     {#each availableTags as tag}
-                        <option value="tag:{tag}">Tag: {tag}</option>
+                        <option
+                            value="tag:{tag}"
+                            style="background: var(--background-primary) !important; color: var(--text-normal) !important;"
+                            >Tag: {tag}</option
+                        >
                     {/each}
                     {#each availableDecks as deck}
-                        <option value="deck:{deck.id}">{deck.name}</option>
+                        <option
+                            value="deck:{deck.id}"
+                            style="background: var(--background-primary) !important; color: var(--text-normal) !important;"
+                            >{deck.name}</option
+                        >
                     {/each}
                 </select>
             </div>
@@ -245,9 +284,18 @@
                     id="timeframe-filter"
                     bind:value={selectedTimeframe}
                     on:change={handleFilterChange}
+                    style="background: var(--background-primary) !important; color: var(--text-normal) !important;"
                 >
-                    <option value="12months">Last 12 Months</option>
-                    <option value="all">All History</option>
+                    <option
+                        value="12months"
+                        style="background: var(--background-primary) !important; color: var(--text-normal) !important;"
+                        >Last 12 Months</option
+                    >
+                    <option
+                        value="all"
+                        style="background: var(--background-primary) !important; color: var(--text-normal) !important;"
+                        >All History</option
+                    >
                 </select>
             </div>
         </div>
@@ -277,6 +325,29 @@
                 <div class="stat-card">
                     <div class="stat-value">{getDueToday()}</div>
                     <div class="stat-label">Due Today</div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Pace Statistics -->
+        <div class="stats-section">
+            <h3>Review Pace</h3>
+            <div class="stats-grid">
+                <div class="stat-card">
+                    <div class="stat-value">
+                        {statistics?.averagePace
+                            ? formatPace(statistics.averagePace)
+                            : "N/A"}
+                    </div>
+                    <div class="stat-label">Average per Card</div>
+                </div>
+                <div class="stat-card">
+                    <div class="stat-value">
+                        {statistics?.totalReviewTime
+                            ? formatTime(statistics.totalReviewTime)
+                            : "N/A"}
+                    </div>
+                    <div class="stat-label">Total Review Time</div>
                 </div>
             </div>
         </div>
@@ -596,10 +667,10 @@
                                 ? 'Today'
                                 : originalIndex === 1
                                   ? 'Tomorrow'
-                                  : `In ${originalIndex} days`}: {day.dueCount} card{day.dueCount !==
+                                  : `Day ${originalIndex} (in ${originalIndex} days)`}: {day.dueCount} card{day.dueCount !==
                             1
                                 ? 's'
-                                : ''}"
+                                : ''} due"
                         >
                             <div
                                 class="bar"
@@ -609,13 +680,7 @@
                                 )}px"
                             ></div>
                             <div class="bar-label">
-                                {#if originalIndex === 0}
-                                    Today
-                                {:else if originalIndex === 1}
-                                    Tomorrow
-                                {:else}
-                                    in {originalIndex}d
-                                {/if}
+                                {originalIndex}
                             </div>
                             <div class="bar-value">{day.dueCount}</div>
                         </div>
@@ -630,30 +695,6 @@
                     <p class="help-text">
                         Add flashcards to your decks to see future review
                         forecasts.
-                    </p>
-                </div>
-            {/if}
-        </div>
-
-        <!-- Intervals -->
-        <div class="stats-section">
-            <h3>Card Interval Distribution</h3>
-            {#if statistics?.intervals && statistics.intervals.length > 0}
-                <div class="intervals-chart">
-                    {#each statistics.intervals as interval}
-                        <div class="interval-bar">
-                            <div class="interval-label">
-                                {interval.interval}
-                            </div>
-                            <div class="interval-value">{interval.count}</div>
-                        </div>
-                    {/each}
-                </div>
-            {:else}
-                <div class="no-data-message">
-                    <p>No interval data available.</p>
-                    <p class="help-text">
-                        Review some cards to see interval distribution.
                     </p>
                 </div>
             {/if}
@@ -719,35 +760,36 @@
     }
 
     .filter-group select {
-        padding: 10px 12px;
-        border: 2px solid var(--background-modifier-border);
-        border-radius: 6px;
+        border: 1px solid var(--background-modifier-border);
+        border-radius: 4px;
         background: var(--background-primary);
         color: var(--text-normal);
         font-size: 14px;
-        font-weight: 500;
+        font-weight: normal;
         appearance: none;
         -webkit-appearance: none;
         -moz-appearance: none;
         cursor: pointer;
         min-width: 180px;
-        background-image: url("data:image/svg+xml;charset=US-ASCII,<svg xmlns='http://www.w3.org/2000/svg' width='4' height='5'><path fill='%23666' d='m0 0 2 2 2-2z'/></svg>");
-        background-repeat: no-repeat;
-        background-position: right 12px center;
-        background-size: 12px;
+        position: relative;
+        /* Force visibility */
+        opacity: 1;
+        z-index: 10;
     }
 
     .filter-group select:focus {
         outline: none;
         border-color: var(--interactive-accent);
-        box-shadow: 0 0 0 2px var(--interactive-accent-hover);
     }
 
     .filter-group select option {
         background: var(--background-primary);
         color: var(--text-normal);
-        font-weight: 500;
         padding: 8px;
+        font-size: 14px;
+        /* Force visibility in dropdown */
+        opacity: 1;
+        visibility: visible;
     }
 
     .stats-section {
@@ -859,28 +901,28 @@
         display: flex;
         flex-direction: column;
         align-items: center;
-        gap: 4px;
-        min-width: 20px;
+        gap: 6px;
+        min-width: 40px;
         flex-shrink: 0;
     }
 
     .bar {
         background: var(--text-accent);
-        width: 12px;
-        border-radius: 2px 2px 0 0;
+        width: 24px;
+        border-radius: 4px 4px 0 0;
         transition: background 0.2s;
     }
 
     .bar-label {
-        font-size: 8px;
+        font-size: 12px;
         color: var(--text-muted);
-        writing-mode: vertical-rl;
-        text-orientation: mixed;
+        font-weight: 500;
     }
 
     .bar-value {
-        font-size: 10px;
+        font-size: 12px;
         color: var(--text-normal);
+        font-weight: 600;
     }
 
     .forecast-note {

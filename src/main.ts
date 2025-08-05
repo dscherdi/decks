@@ -15,7 +15,13 @@ import {
 import { DatabaseService } from "./database/DatabaseService";
 import { DeckManager } from "./services/DeckManager";
 import { FSRS, type Difficulty } from "./algorithm/fsrs";
-import { Deck, Flashcard, DeckStats, DeckConfig } from "./database/types";
+import {
+  Deck,
+  Flashcard,
+  DeckStats,
+  DeckConfig,
+  Statistics,
+} from "./database/types";
 import { FlashcardsSettings, DEFAULT_SETTINGS } from "./settings";
 import { FlashcardsSettingTab } from "./components/SettingsTab";
 import DeckListPanel from "./components/DeckListPanel.svelte";
@@ -424,6 +430,7 @@ export default class FlashcardsPlugin extends Plugin {
   async reviewFlashcard(
     flashcard: Flashcard,
     difficulty: Difficulty,
+    timeElapsed?: number,
   ): Promise<void> {
     // Update flashcard with new scheduling
     const updatedCard = this.fsrs.updateCard(flashcard, difficulty);
@@ -449,6 +456,7 @@ export default class FlashcardsPlugin extends Plugin {
       newInterval: updatedCard.interval,
       oldEaseFactor: flashcard.easeFactor,
       newEaseFactor: updatedCard.easeFactor,
+      timeElapsed: timeElapsed ?? 0,
     });
 
     // Update deck last reviewed
@@ -465,7 +473,7 @@ export default class FlashcardsPlugin extends Plugin {
   async getOverallStatistics(
     deckFilter: string = "all",
     timeframe: string = "12months",
-  ) {
+  ): Promise<Statistics> {
     return await this.db.getOverallStatistics(deckFilter, timeframe);
   }
 

@@ -117,6 +117,7 @@
   	•	Random
   	•	Due position
 9. ✅ Parse header-paragraph flashcards based on a configurable header level setting. The parser for header-paragraphs should parse only headers with that level and paragraphs it contains.
+10. ✅ Add a timelapsed to the review object which tracks how much time it took for the user to review a flashcard from the time it was shown to him until he chooses a difficulty. Use this timelapse in statistics to measure pace of the user seconds/cards.
 
 ## ✅ Recent Enhancements
 
@@ -278,6 +279,14 @@
 - **Test Coverage**: Added test for single file deck creation to prevent regression
 
 ### ✅ Comprehensive Statistics Modal Implementation
+
+### ✅ Time Elapsed Tracking Implementation
+- Added `timeElapsed` field to ReviewLog interface and database schema
+- Modified Svelte review modal to track time from card display to difficulty selection
+- Updated `reviewFlashcard` function to accept and store time elapsed data
+- Enhanced statistics to show average pace (seconds per card) and total review time
+- Implemented automatic database migration for existing installations
+- All time measurements stored in milliseconds for precision
 - **Modal Access**: Added graph icon button next to refresh button in deck list header
 - **Filtering System**: Complete deck filtering (All Decks, by Tag, by Individual Deck)
 - **Timeframe Selection**: Last 12 months or All History options
@@ -321,3 +330,11 @@
 - **Display Logic Fixes**: Corrected conditional rendering to show statistics when data exists
 - **Date Handling**: Fixed today's stats to show most recent data when current day has no reviews
 - **Timeframe Calculations**: Improved week/month/year stats aggregation with proper empty state handling
+- **Dropdown Visibility**: Fixed select dropdown styling with forced colors and !important declarations
+- **Theme Compatibility**: Ensured dropdown text is visible across all Obsidian themes (light/dark modes)
+- **Forecast Chart Improvements**: Wider bars (24px), bigger labels (12px), numeric x-axis for cleaner appearance
+- **Enhanced Tooltips**: More descriptive hover information showing day context and card counts
+- **TypeScript Interface**: Added comprehensive Statistics interface with DailyStats, CardStats, AnswerButtons, etc.
+- **Type Safety**: Improved code reliability with proper typing for all statistics data structures
+- **Execution Order Fix**: Restructured component to load statistics before UI calculations and rendering
+- **Null Safety**: Fixed reactive statement execution order to prevent null reference errors during initialization

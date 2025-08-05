@@ -2565,6 +2565,7 @@ var DatabaseService = class {
         new_interval INTEGER NOT NULL,
         old_ease_factor REAL NOT NULL,
         new_ease_factor REAL NOT NULL,
+        time_elapsed INTEGER NOT NULL DEFAULT 0,
         FOREIGN KEY (flashcard_id) REFERENCES flashcards(id)
       );
 
@@ -2962,8 +2963,8 @@ var DatabaseService = class {
     const stmt = this.db.prepare(`
       INSERT INTO review_logs (
         id, flashcard_id, reviewed_at, difficulty,
-        old_interval, new_interval, old_ease_factor, new_ease_factor
-      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+        old_interval, new_interval, old_ease_factor, new_ease_factor, time_elapsed
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
     `);
     stmt.run([
       id,
@@ -2973,7 +2974,8 @@ var DatabaseService = class {
       log.oldInterval,
       log.newInterval,
       log.oldEaseFactor,
-      log.newEaseFactor
+      log.newEaseFactor,
+      log.timeElapsed
     ]);
     stmt.free();
     await this.save();
@@ -3093,9 +3095,25 @@ var DatabaseService = class {
       stmt.free();
       const hasFilepath = columns.some((col) => col[1] === "filepath");
       const hasConfig = columns.some((col) => col[1] === "config");
-      if (!hasFilepath || !hasConfig) {
+      let hasTimeElapsed = true;
+      try {
+        const reviewLogsStmt = this.db.prepare(
+          "PRAGMA table_info(review_logs)"
+        );
+        const reviewLogsColumns = [];
+        while (reviewLogsStmt.step()) {
+          reviewLogsColumns.push(reviewLogsStmt.get());
+        }
+        reviewLogsStmt.free();
+        hasTimeElapsed = reviewLogsColumns.some(
+          (col) => col[1] === "time_elapsed"
+        );
+      } catch (error) {
+        hasTimeElapsed = false;
+      }
+      if (!hasFilepath || !hasConfig || !hasTimeElapsed) {
         console.log(
-          "Migrating database schema to support filepath and config columns..."
+          "Migrating database schema to support filepath, config, and time_elapsed columns..."
         );
         console.log(
           "Clearing old data - decks will be rebuilt from files on next sync"
@@ -3313,13 +3331,38 @@ var DatabaseService = class {
           dueCount
         });
       }
+      const paceStmt = this.db.prepare(`
+      SELECT
+        AVG(rl.time_elapsed / 1000.0) as avg_pace,
+        SUM(rl.time_elapsed / 1000.0) as total_time
+      FROM review_logs rl
+      JOIN flashcards f ON rl.flashcard_id = f.id
+      ${deckFilterCondition ? "JOIN decks d ON f.deck_id = d.id" : ""}
+      WHERE rl.reviewed_at >= ?
+      ${deckFilterCondition}
+    `);
+      if (deckFilterCondition) {
+        paceStmt.bind([cutoffDate.toISOString(), ...deckFilterParams]);
+      } else {
+        paceStmt.bind([cutoffDate.toISOString()]);
+      }
+      let averagePace = 0;
+      let totalReviewTime = 0;
+      if (paceStmt.step()) {
+        const row = paceStmt.get();
+        averagePace = row[0] || 0;
+        totalReviewTime = row[1] || 0;
+      }
+      paceStmt.free();
       return {
         dailyStats,
         cardStats,
         answerButtons,
         retentionRate,
         intervals,
-        forecast
+        forecast,
+        averagePace,
+        totalReviewTime
       };
     } catch (error) {
       console.error("Error in getOverallStatistics:", error);
@@ -3329,7 +3372,9 @@ var DatabaseService = class {
         answerButtons: { again: 0, hard: 0, good: 0, easy: 0 },
         retentionRate: 0,
         intervals: [],
-        forecast: []
+        forecast: [],
+        averagePace: 0,
+        totalReviewTime: 0
       };
     }
   }
@@ -4876,7 +4921,7 @@ function __awaiter(thisArg, _arguments, P, generator) {
 
 // src/components/ReviewHeatmap.svelte
 function add_css(target) {
-  append_styles(target, "svelte-7nm5s5", ".heatmap-container.svelte-7nm5s5.svelte-7nm5s5{padding:16px;border-top:1px solid var(--background-modifier-border);background:var(--background-primary);display:flex;flex-direction:column;align-items:stretch}.heatmap-header.svelte-7nm5s5.svelte-7nm5s5{display:flex;justify-content:space-between;align-items:center;margin-bottom:12px;width:100%}.header-left.svelte-7nm5s5.svelte-7nm5s5{display:flex;flex-direction:column;align-items:flex-start}.year-navigation.svelte-7nm5s5.svelte-7nm5s5{display:flex;align-items:center;gap:8px}.nav-button.svelte-7nm5s5.svelte-7nm5s5{background:none;border:1px solid var(--background-modifier-border);border-radius:4px;padding:4px;cursor:pointer;color:var(--text-muted);transition:all 0.2s ease;display:flex;align-items:center;justify-content:center;width:24px;height:24px}.nav-button.svelte-7nm5s5.svelte-7nm5s5:hover{background:var(--background-modifier-hover);color:var(--text-normal);border-color:var(--text-muted)}.current-year.svelte-7nm5s5.svelte-7nm5s5{font-size:14px;font-weight:600;color:var(--text-normal);min-width:40px;text-align:center}.heatmap-header.svelte-7nm5s5 h4.svelte-7nm5s5{margin:0;font-size:14px;font-weight:600;color:var(--text-normal)}.total-reviews.svelte-7nm5s5.svelte-7nm5s5{font-size:12px;color:var(--text-muted)}.loading.svelte-7nm5s5.svelte-7nm5s5{text-align:center;padding:20px;color:var(--text-muted);font-size:12px}.heatmap.svelte-7nm5s5.svelte-7nm5s5{position:relative;margin-top:12px;overflow-x:auto;overflow-y:hidden;max-width:100%;padding-bottom:8px;display:flex;justify-content:center}.heatmap-content.svelte-7nm5s5.svelte-7nm5s5{position:relative;min-width:fit-content;width:max-content}.month-labels.svelte-7nm5s5.svelte-7nm5s5{position:relative;height:12px;margin-bottom:2px;margin-left:18px}.month-label.svelte-7nm5s5.svelte-7nm5s5{position:absolute;font-size:9px;color:var(--text-muted)}.day-labels.svelte-7nm5s5.svelte-7nm5s5{position:absolute;left:-18px;top:16px}.day-label.svelte-7nm5s5.svelte-7nm5s5{position:absolute;font-size:9px;color:var(--text-muted);width:16px;text-align:right}.heatmap-grid.svelte-7nm5s5.svelte-7nm5s5{display:flex;gap:2px;padding-right:16px}.week.svelte-7nm5s5.svelte-7nm5s5{display:flex;flex-direction:column;gap:2px}.day.svelte-7nm5s5.svelte-7nm5s5{width:10px;height:10px;border-radius:2px;cursor:pointer;transition:all 0.1s ease;flex-shrink:0}.day.svelte-7nm5s5.svelte-7nm5s5:hover{transform:scale(1.3);outline:1px solid var(--text-muted);z-index:10;position:relative}.day.today.svelte-7nm5s5.svelte-7nm5s5{outline:2px solid var(--interactive-accent);outline-offset:1px}.day.today.svelte-7nm5s5.svelte-7nm5s5:hover{outline:2px solid var(--interactive-accent);outline-offset:1px}.intensity-0.svelte-7nm5s5.svelte-7nm5s5{background-color:var(--background-modifier-border)}.intensity-1.svelte-7nm5s5.svelte-7nm5s5{background-color:#0e4429}.intensity-2.svelte-7nm5s5.svelte-7nm5s5{background-color:#006d32}.intensity-3.svelte-7nm5s5.svelte-7nm5s5{background-color:#26a641}.intensity-4.svelte-7nm5s5.svelte-7nm5s5{background-color:#39d353}.legend.svelte-7nm5s5.svelte-7nm5s5{display:flex;align-items:center;justify-content:center;gap:3px;margin-top:6px}.legend-label.svelte-7nm5s5.svelte-7nm5s5{font-size:8px;color:var(--text-muted)}.legend-colors.svelte-7nm5s5.svelte-7nm5s5{display:flex;gap:2px}.legend-square.svelte-7nm5s5.svelte-7nm5s5{width:10px;height:10px;border-radius:2px}.day.outside-year.svelte-7nm5s5.svelte-7nm5s5{opacity:0.3;pointer-events:none}.heatmap.svelte-7nm5s5.svelte-7nm5s5::-webkit-scrollbar{height:8px}.heatmap.svelte-7nm5s5.svelte-7nm5s5::-webkit-scrollbar-track{background:var(--background-primary);border-radius:4px}.heatmap.svelte-7nm5s5.svelte-7nm5s5::-webkit-scrollbar-thumb{background:var(--background-modifier-border);border-radius:4px}.heatmap.svelte-7nm5s5.svelte-7nm5s5::-webkit-scrollbar-thumb:hover{background:var(--text-muted)}");
+  append_styles(target, "svelte-174z3rr", ".heatmap-container.svelte-174z3rr.svelte-174z3rr{padding:16px;border-top:1px solid var(--background-modifier-border);background:var(--background-primary);display:flex;flex-direction:column;align-items:stretch}.heatmap-header.svelte-174z3rr.svelte-174z3rr{display:flex;justify-content:space-between;align-items:center;margin-bottom:12px;width:100%}.header-left.svelte-174z3rr.svelte-174z3rr{display:flex;flex-direction:column;align-items:flex-start}.year-navigation.svelte-174z3rr.svelte-174z3rr{display:flex;align-items:center;gap:8px}.nav-button.svelte-174z3rr.svelte-174z3rr{background:none;border:1px solid var(--background-modifier-border);border-radius:4px;padding:4px;cursor:pointer;color:var(--text-muted);transition:all 0.2s ease;display:flex;align-items:center;justify-content:center;width:24px;height:24px}.nav-button.svelte-174z3rr.svelte-174z3rr:hover{background:var(--background-modifier-hover);color:var(--text-normal);border-color:var(--text-muted)}.current-year.svelte-174z3rr.svelte-174z3rr{font-size:14px;font-weight:600;color:var(--text-normal);min-width:40px;text-align:center}.heatmap-header.svelte-174z3rr h4.svelte-174z3rr{margin:0;font-size:14px;font-weight:600;color:var(--text-normal)}.total-reviews.svelte-174z3rr.svelte-174z3rr{font-size:12px;color:var(--text-muted)}.loading.svelte-174z3rr.svelte-174z3rr{text-align:center;padding:20px;color:var(--text-muted);font-size:12px}.heatmap.svelte-174z3rr.svelte-174z3rr{position:relative;margin-top:12px;overflow-x:auto;overflow-y:hidden;max-width:100%;padding-bottom:8px;display:flex}.heatmap-content.svelte-174z3rr.svelte-174z3rr{position:relative;min-width:fit-content;width:max-content}.month-labels.svelte-174z3rr.svelte-174z3rr{position:relative;height:12px;margin-bottom:2px;margin-left:18px}.month-label.svelte-174z3rr.svelte-174z3rr{position:absolute;font-size:9px;color:var(--text-muted)}.day-labels.svelte-174z3rr.svelte-174z3rr{position:absolute;left:-18px;top:16px}.day-label.svelte-174z3rr.svelte-174z3rr{position:absolute;font-size:9px;color:var(--text-muted);width:16px;text-align:right}.heatmap-grid.svelte-174z3rr.svelte-174z3rr{display:flex;gap:2px;padding-right:16px}.week.svelte-174z3rr.svelte-174z3rr{display:flex;flex-direction:column;gap:2px}.day.svelte-174z3rr.svelte-174z3rr{width:10px;height:10px;border-radius:2px;cursor:pointer;transition:all 0.1s ease;flex-shrink:0}.day.svelte-174z3rr.svelte-174z3rr:hover{transform:scale(1.3);outline:1px solid var(--text-muted);z-index:10;position:relative}.day.today.svelte-174z3rr.svelte-174z3rr{outline:2px solid var(--interactive-accent);outline-offset:1px}.day.today.svelte-174z3rr.svelte-174z3rr:hover{outline:2px solid var(--interactive-accent);outline-offset:1px}.intensity-0.svelte-174z3rr.svelte-174z3rr{background-color:var(--background-modifier-border)}.intensity-1.svelte-174z3rr.svelte-174z3rr{background-color:#0e4429}.intensity-2.svelte-174z3rr.svelte-174z3rr{background-color:#006d32}.intensity-3.svelte-174z3rr.svelte-174z3rr{background-color:#26a641}.intensity-4.svelte-174z3rr.svelte-174z3rr{background-color:#39d353}.legend.svelte-174z3rr.svelte-174z3rr{display:flex;align-items:center;justify-content:center;gap:3px;margin-top:6px}.legend-label.svelte-174z3rr.svelte-174z3rr{font-size:8px;color:var(--text-muted)}.legend-colors.svelte-174z3rr.svelte-174z3rr{display:flex;gap:2px}.legend-square.svelte-174z3rr.svelte-174z3rr{width:10px;height:10px;border-radius:2px}.day.outside-year.svelte-174z3rr.svelte-174z3rr{opacity:0.3;pointer-events:none}.heatmap.svelte-174z3rr.svelte-174z3rr::-webkit-scrollbar{height:8px}.heatmap.svelte-174z3rr.svelte-174z3rr::-webkit-scrollbar-track{background:var(--background-primary);border-radius:4px}.heatmap.svelte-174z3rr.svelte-174z3rr::-webkit-scrollbar-thumb{background:var(--background-modifier-border);border-radius:4px}.heatmap.svelte-174z3rr.svelte-174z3rr::-webkit-scrollbar-thumb:hover{background:var(--text-muted)}");
 }
 function get_each_context(ctx, list, i) {
   const child_ctx = ctx.slice();
@@ -4912,7 +4957,7 @@ function create_if_block_1(ctx) {
       span = element("span");
       t0 = text(t0_value);
       t1 = text(" reviews");
-      attr(span, "class", "total-reviews svelte-7nm5s5");
+      attr(span, "class", "total-reviews svelte-174z3rr");
     },
     m(target, anchor) {
       insert(target, span, anchor);
@@ -4969,10 +5014,10 @@ function create_else_block(ctx) {
       }
       t0 = space();
       div1 = element("div");
-      div1.innerHTML = `<span class="day-label svelte-7nm5s5" style="top: 0px">S</span> 
-                    <span class="day-label svelte-7nm5s5" style="top: 18px">T</span> 
-                    <span class="day-label svelte-7nm5s5" style="top: 36px">T</span> 
-                    <span class="day-label svelte-7nm5s5" style="top: 54px">S</span>`;
+      div1.innerHTML = `<span class="day-label svelte-174z3rr" style="top: 0px">S</span> 
+                    <span class="day-label svelte-174z3rr" style="top: 18px">T</span> 
+                    <span class="day-label svelte-174z3rr" style="top: 36px">T</span> 
+                    <span class="day-label svelte-174z3rr" style="top: 54px">S</span>`;
       t8 = space();
       div2 = element("div");
       for (let i = 0; i < each_blocks.length; i += 1) {
@@ -4980,19 +5025,19 @@ function create_else_block(ctx) {
       }
       t9 = space();
       div11 = element("div");
-      div11.innerHTML = `<span class="legend-label svelte-7nm5s5">Less</span> 
-            <div class="legend-colors svelte-7nm5s5"><div class="legend-square intensity-0 svelte-7nm5s5"></div> 
-                <div class="legend-square intensity-1 svelte-7nm5s5"></div> 
-                <div class="legend-square intensity-2 svelte-7nm5s5"></div> 
-                <div class="legend-square intensity-3 svelte-7nm5s5"></div> 
-                <div class="legend-square intensity-4 svelte-7nm5s5"></div></div> 
-            <span class="legend-label svelte-7nm5s5">More</span>`;
-      attr(div0, "class", "month-labels svelte-7nm5s5");
-      attr(div1, "class", "day-labels svelte-7nm5s5");
-      attr(div2, "class", "heatmap-grid svelte-7nm5s5");
-      attr(div3, "class", "heatmap-content svelte-7nm5s5");
-      attr(div4, "class", "heatmap svelte-7nm5s5");
-      attr(div11, "class", "legend svelte-7nm5s5");
+      div11.innerHTML = `<span class="legend-label svelte-174z3rr">Less</span> 
+            <div class="legend-colors svelte-174z3rr"><div class="legend-square intensity-0 svelte-174z3rr"></div> 
+                <div class="legend-square intensity-1 svelte-174z3rr"></div> 
+                <div class="legend-square intensity-2 svelte-174z3rr"></div> 
+                <div class="legend-square intensity-3 svelte-174z3rr"></div> 
+                <div class="legend-square intensity-4 svelte-174z3rr"></div></div> 
+            <span class="legend-label svelte-174z3rr">More</span>`;
+      attr(div0, "class", "month-labels svelte-174z3rr");
+      attr(div1, "class", "day-labels svelte-174z3rr");
+      attr(div2, "class", "heatmap-grid svelte-174z3rr");
+      attr(div3, "class", "heatmap-content svelte-174z3rr");
+      attr(div4, "class", "heatmap svelte-174z3rr");
+      attr(div11, "class", "legend svelte-174z3rr");
     },
     m(target, anchor) {
       insert(target, div4, anchor);
@@ -5075,7 +5120,7 @@ function create_if_block(ctx) {
     c() {
       div = element("div");
       div.textContent = "Loading...";
-      attr(div, "class", "loading svelte-7nm5s5");
+      attr(div, "class", "loading svelte-174z3rr");
     },
     m(target, anchor) {
       insert(target, div, anchor);
@@ -5098,7 +5143,7 @@ function create_each_block_2(ctx) {
     c() {
       span = element("span");
       t = text(t_value);
-      attr(span, "class", "month-label svelte-7nm5s5");
+      attr(span, "class", "month-label svelte-174z3rr");
       set_style(
         span,
         "left",
@@ -5128,7 +5173,7 @@ function create_each_block_1(ctx) {
       ctx[5](
         /*day*/
         ctx[23].count
-      ) + " svelte-7nm5s5");
+      ) + " svelte-174z3rr");
       attr(div, "title", div_title_value = /*day*/
       ctx[23].count + " reviews on " + formatDate(
         /*day*/
@@ -5155,7 +5200,7 @@ function create_each_block_1(ctx) {
       ctx2[5](
         /*day*/
         ctx2[23].count
-      ) + " svelte-7nm5s5")) {
+      ) + " svelte-174z3rr")) {
         attr(div, "class", div_class_value);
       }
       if (dirty & /*weeks*/
@@ -5208,7 +5253,7 @@ function create_each_block(ctx) {
         each_blocks[i].c();
       }
       t = space();
-      attr(div, "class", "week svelte-7nm5s5");
+      attr(div, "class", "week svelte-174z3rr");
     },
     m(target, anchor) {
       insert(target, div, anchor);
@@ -5302,14 +5347,14 @@ function create_fragment(ctx) {
       button1.innerHTML = `<svg width="12" height="12" viewBox="0 0 24 24" fill="currentColor"><path d="M10 6L8.59 7.41 13.17 12l-4.58 4.59L10 18l6-6z"></path></svg>`;
       t6 = space();
       if_block1.c();
-      attr(h4, "class", "svelte-7nm5s5");
-      attr(div0, "class", "header-left svelte-7nm5s5");
-      attr(button0, "class", "nav-button svelte-7nm5s5");
-      attr(span, "class", "current-year svelte-7nm5s5");
-      attr(button1, "class", "nav-button svelte-7nm5s5");
-      attr(div1, "class", "year-navigation svelte-7nm5s5");
-      attr(div2, "class", "heatmap-header svelte-7nm5s5");
-      attr(div3, "class", "heatmap-container svelte-7nm5s5");
+      attr(h4, "class", "svelte-174z3rr");
+      attr(div0, "class", "header-left svelte-174z3rr");
+      attr(button0, "class", "nav-button svelte-174z3rr");
+      attr(span, "class", "current-year svelte-174z3rr");
+      attr(button1, "class", "nav-button svelte-174z3rr");
+      attr(div1, "class", "year-navigation svelte-174z3rr");
+      attr(div2, "class", "heatmap-header svelte-174z3rr");
+      attr(div3, "class", "heatmap-container svelte-174z3rr");
     },
     m(target, anchor) {
       insert(target, div3, anchor);
@@ -6251,7 +6296,7 @@ var DeckConfigModal = class extends import_obsidian3.Modal {
 
 // src/components/DeckListPanel.svelte
 function add_css3(target) {
-  append_styles(target, "svelte-1ufhkzf", ".deck-list-panel.svelte-1ufhkzf.svelte-1ufhkzf{min-width:400px;height:100%;display:flex;flex-direction:column;background:var(--background-primary);color:var(--text-normal)}.panel-header.svelte-1ufhkzf.svelte-1ufhkzf{display:flex;justify-content:space-between;align-items:center;padding:12px 16px;border-bottom:1px solid var(--background-modifier-border)}.header-buttons.svelte-1ufhkzf.svelte-1ufhkzf{display:flex;gap:8px;align-items:center}.filter-section.svelte-1ufhkzf.svelte-1ufhkzf{padding:8px 16px;border-bottom:1px solid var(--background-modifier-border)}.filter-input.svelte-1ufhkzf.svelte-1ufhkzf{width:100%;padding:6px 8px;border:1px solid var(--background-modifier-border);border-radius:4px;background:var(--background-primary);color:var(--text-normal);font-size:14px;transition:border-color 0.2s ease}.filter-input.svelte-1ufhkzf.svelte-1ufhkzf:focus{outline:none;border-color:var(--interactive-accent)}.filter-input.svelte-1ufhkzf.svelte-1ufhkzf::placeholder{color:var(--text-muted)}.panel-title.svelte-1ufhkzf.svelte-1ufhkzf{margin:0;font-size:16px;font-weight:600}.stats-button.svelte-1ufhkzf.svelte-1ufhkzf{padding:6px;background:var(--interactive-normal);border:none;border-radius:4px;cursor:pointer;color:var(--text-muted);transition:all 0.2s ease}.stats-button.svelte-1ufhkzf.svelte-1ufhkzf:hover{background:var(--interactive-hover);color:var(--text-normal)}.refresh-button.svelte-1ufhkzf.svelte-1ufhkzf{background:none;border:none;cursor:pointer;padding:4px;border-radius:4px;color:var(--text-muted);transition:all 0.2s ease;position:relative;z-index:1}.refresh-button.svelte-1ufhkzf.svelte-1ufhkzf:hover{background:var(--background-modifier-hover);color:var(--text-normal)}.refresh-button.svelte-1ufhkzf.svelte-1ufhkzf:disabled{opacity:0.5;cursor:not-allowed}.refresh-button.refreshing.svelte-1ufhkzf svg.svelte-1ufhkzf{animation:svelte-1ufhkzf-spin 1s linear infinite}@keyframes svelte-1ufhkzf-spin{from{transform:rotate(0deg)}to{transform:rotate(360deg)}}.empty-state.svelte-1ufhkzf.svelte-1ufhkzf{flex:1;display:flex;flex-direction:column;justify-content:center;align-items:center;padding:32px;text-align:center}.empty-state.svelte-1ufhkzf p.svelte-1ufhkzf{margin:8px 0}.help-text.svelte-1ufhkzf.svelte-1ufhkzf{font-size:14px;color:var(--text-muted)}.deck-table.svelte-1ufhkzf.svelte-1ufhkzf{flex:1;display:flex;flex-direction:column;overflow:hidden}.table-header.svelte-1ufhkzf.svelte-1ufhkzf{display:grid;grid-template-columns:1fr 60px 60px 60px 40px;gap:8px;padding:8px 16px;font-weight:600;font-size:14px;border-bottom:1px solid var(--background-modifier-border);background:var(--background-secondary);align-items:center}.table-body.svelte-1ufhkzf.svelte-1ufhkzf{flex:1;overflow-y:auto}.deck-row.svelte-1ufhkzf.svelte-1ufhkzf{display:grid;grid-template-columns:1fr 60px 60px 60px 40px;gap:8px;padding:12px 16px;border-bottom:1px solid var(--background-modifier-border);align-items:center}.deck-name-link.svelte-1ufhkzf.svelte-1ufhkzf{cursor:pointer;color:var(--text-normal);text-decoration:underline;text-decoration-color:transparent;transition:text-decoration-color 0.2s ease;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;display:inline-block;max-width:100%}.deck-name-link.svelte-1ufhkzf.svelte-1ufhkzf:hover{text-decoration-color:var(--text-accent);color:var(--text-accent)}.deck-name-link.svelte-1ufhkzf.svelte-1ufhkzf:focus{outline:2px solid var(--interactive-accent);outline-offset:2px;border-radius:3px}.col-config.svelte-1ufhkzf.svelte-1ufhkzf{display:flex;align-items:center;justify-content:center}.deck-config-button.svelte-1ufhkzf.svelte-1ufhkzf{background:transparent;border:none;color:var(--text-muted);cursor:pointer;padding:6px;border-radius:3px;display:flex;align-items:center;justify-content:center;transition:all 0.2s ease}.deck-config-button.svelte-1ufhkzf.svelte-1ufhkzf:hover{background:var(--background-modifier-hover);color:var(--text-normal)}.deck-config-button.svelte-1ufhkzf.svelte-1ufhkzf:focus{outline:2px solid var(--interactive-accent);outline-offset:2px}.col-deck.svelte-1ufhkzf.svelte-1ufhkzf{font-size:14px;color:var(--text-normal);justify-self:start;min-width:0}.col-stat.svelte-1ufhkzf.svelte-1ufhkzf{text-align:center;font-size:14px;color:var(--text-muted);justify-self:center}.table-header.svelte-1ufhkzf .col-deck.svelte-1ufhkzf{font-size:14px;color:var(--text-normal);justify-self:start}.table-header.svelte-1ufhkzf .col-stat.svelte-1ufhkzf{text-align:center;font-size:14px;color:var(--text-normal);justify-self:center}.col-stat.has-cards.svelte-1ufhkzf.svelte-1ufhkzf{color:#4aa3df;font-weight:500}.col-stat.updating.svelte-1ufhkzf.svelte-1ufhkzf{opacity:0.6;transition:opacity 0.3s ease}.col-stat.has-limit.svelte-1ufhkzf.svelte-1ufhkzf{position:relative;border-left:2px solid var(--interactive-accent);padding-left:6px}.limit-indicator.svelte-1ufhkzf.svelte-1ufhkzf{font-size:10px;margin-left:4px;opacity:0.7}.table-body.svelte-1ufhkzf.svelte-1ufhkzf::-webkit-scrollbar{width:8px}.table-body.svelte-1ufhkzf.svelte-1ufhkzf::-webkit-scrollbar-track{background:transparent}.table-body.svelte-1ufhkzf.svelte-1ufhkzf::-webkit-scrollbar-thumb{background:var(--background-modifier-border);border-radius:4px}.table-body.svelte-1ufhkzf.svelte-1ufhkzf::-webkit-scrollbar-thumb:hover{background:var(--background-modifier-border-hover)}");
+  append_styles(target, "svelte-k7n1rb", ".deck-list-panel.svelte-k7n1rb.svelte-k7n1rb{min-width:479px;height:100%;display:flex;flex-direction:column;background:var(--background-primary);color:var(--text-normal)}.panel-header.svelte-k7n1rb.svelte-k7n1rb{display:flex;justify-content:space-between;align-items:center;padding:12px 16px;border-bottom:1px solid var(--background-modifier-border)}.header-buttons.svelte-k7n1rb.svelte-k7n1rb{display:flex;gap:8px;align-items:center}.filter-section.svelte-k7n1rb.svelte-k7n1rb{padding:8px 16px;border-bottom:1px solid var(--background-modifier-border)}.filter-input.svelte-k7n1rb.svelte-k7n1rb{width:100%;padding:6px 8px;border:1px solid var(--background-modifier-border);border-radius:4px;background:var(--background-primary);color:var(--text-normal);font-size:14px;transition:border-color 0.2s ease}.filter-input.svelte-k7n1rb.svelte-k7n1rb:focus{outline:none;border-color:var(--interactive-accent)}.filter-input.svelte-k7n1rb.svelte-k7n1rb::placeholder{color:var(--text-muted)}.panel-title.svelte-k7n1rb.svelte-k7n1rb{margin:0;font-size:16px;font-weight:600}.stats-button.svelte-k7n1rb.svelte-k7n1rb{padding:6px;background:var(--interactive-normal);border:none;border-radius:4px;cursor:pointer;color:var(--text-muted);transition:all 0.2s ease}.stats-button.svelte-k7n1rb.svelte-k7n1rb:hover{background:var(--interactive-hover);color:var(--text-normal)}.refresh-button.svelte-k7n1rb.svelte-k7n1rb{background:none;border:none;cursor:pointer;padding:4px;border-radius:4px;color:var(--text-muted);transition:all 0.2s ease;position:relative;z-index:1}.refresh-button.svelte-k7n1rb.svelte-k7n1rb:hover{background:var(--background-modifier-hover);color:var(--text-normal)}.refresh-button.svelte-k7n1rb.svelte-k7n1rb:disabled{opacity:0.5;cursor:not-allowed}.refresh-button.refreshing.svelte-k7n1rb svg.svelte-k7n1rb{animation:svelte-k7n1rb-spin 1s linear infinite}@keyframes svelte-k7n1rb-spin{from{transform:rotate(0deg)}to{transform:rotate(360deg)}}.empty-state.svelte-k7n1rb.svelte-k7n1rb{flex:1;display:flex;flex-direction:column;justify-content:center;align-items:center;padding:32px;text-align:center}.empty-state.svelte-k7n1rb p.svelte-k7n1rb{margin:8px 0}.help-text.svelte-k7n1rb.svelte-k7n1rb{font-size:14px;color:var(--text-muted)}.deck-table.svelte-k7n1rb.svelte-k7n1rb{flex:1;display:flex;flex-direction:column;overflow:hidden}.table-header.svelte-k7n1rb.svelte-k7n1rb{display:grid;grid-template-columns:1fr 60px 60px 60px 40px;gap:8px;padding:8px 16px;font-weight:600;font-size:14px;border-bottom:1px solid var(--background-modifier-border);background:var(--background-secondary);align-items:center}.table-body.svelte-k7n1rb.svelte-k7n1rb{flex:1;overflow-y:auto}.deck-row.svelte-k7n1rb.svelte-k7n1rb{display:grid;grid-template-columns:1fr 60px 60px 60px 40px;gap:8px;padding:12px 16px;border-bottom:1px solid var(--background-modifier-border);align-items:center}.deck-name-link.svelte-k7n1rb.svelte-k7n1rb{cursor:pointer;color:var(--text-normal);text-decoration:underline;text-decoration-color:transparent;transition:text-decoration-color 0.2s ease;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;display:inline-block;max-width:100%}.deck-name-link.svelte-k7n1rb.svelte-k7n1rb:hover{text-decoration-color:var(--text-accent);color:var(--text-accent)}.deck-name-link.svelte-k7n1rb.svelte-k7n1rb:focus{outline:2px solid var(--interactive-accent);outline-offset:2px;border-radius:3px}.col-config.svelte-k7n1rb.svelte-k7n1rb{display:flex;align-items:center;justify-content:center}.deck-config-button.svelte-k7n1rb.svelte-k7n1rb{background:transparent;border:none;color:var(--text-muted);cursor:pointer;padding:6px;border-radius:3px;display:flex;align-items:center;justify-content:center;transition:all 0.2s ease}.deck-config-button.svelte-k7n1rb.svelte-k7n1rb:hover{background:var(--background-modifier-hover);color:var(--text-normal)}.deck-config-button.svelte-k7n1rb.svelte-k7n1rb:focus{outline:2px solid var(--interactive-accent);outline-offset:2px}.col-deck.svelte-k7n1rb.svelte-k7n1rb{font-size:14px;color:var(--text-normal);justify-self:start;min-width:0}.col-stat.svelte-k7n1rb.svelte-k7n1rb{text-align:center;font-size:14px;color:var(--text-muted);justify-self:center}.table-header.svelte-k7n1rb .col-deck.svelte-k7n1rb{font-size:14px;color:var(--text-normal);justify-self:start}.table-header.svelte-k7n1rb .col-stat.svelte-k7n1rb{text-align:center;font-size:14px;color:var(--text-normal);justify-self:center}.col-stat.has-cards.svelte-k7n1rb.svelte-k7n1rb{color:#4aa3df;font-weight:500}.col-stat.updating.svelte-k7n1rb.svelte-k7n1rb{opacity:0.6;transition:opacity 0.3s ease}.col-stat.has-limit.svelte-k7n1rb.svelte-k7n1rb{position:relative;border-left:2px solid var(--interactive-accent);padding-left:6px}.limit-indicator.svelte-k7n1rb.svelte-k7n1rb{font-size:10px;margin-left:4px;opacity:0.7}.table-body.svelte-k7n1rb.svelte-k7n1rb::-webkit-scrollbar{width:8px}.table-body.svelte-k7n1rb.svelte-k7n1rb::-webkit-scrollbar-track{background:transparent}.table-body.svelte-k7n1rb.svelte-k7n1rb::-webkit-scrollbar-thumb{background:var(--background-modifier-border);border-radius:4px}.table-body.svelte-k7n1rb.svelte-k7n1rb::-webkit-scrollbar-thumb:hover{background:var(--background-modifier-border-hover)}");
 }
 function get_each_context2(ctx, list, i) {
   const child_ctx = ctx.slice();
@@ -6283,19 +6328,19 @@ function create_else_block2(ctx) {
     c() {
       div7 = element("div");
       div5 = element("div");
-      div5.innerHTML = `<div class="col-deck svelte-1ufhkzf">Deck</div> 
-                <div class="col-stat svelte-1ufhkzf">New</div> 
-                <div class="col-stat svelte-1ufhkzf">Learn</div> 
-                <div class="col-stat svelte-1ufhkzf">Due</div> 
-                <div class="col-config svelte-1ufhkzf"></div>`;
+      div5.innerHTML = `<div class="col-deck svelte-k7n1rb">Deck</div> 
+                <div class="col-stat svelte-k7n1rb">New</div> 
+                <div class="col-stat svelte-k7n1rb">Learn</div> 
+                <div class="col-stat svelte-k7n1rb">Due</div> 
+                <div class="col-config svelte-k7n1rb"></div>`;
       t8 = space();
       div6 = element("div");
       for (let i = 0; i < each_blocks.length; i += 1) {
         each_blocks[i].c();
       }
-      attr(div5, "class", "table-header svelte-1ufhkzf");
-      attr(div6, "class", "table-body svelte-1ufhkzf");
-      attr(div7, "class", "deck-table svelte-1ufhkzf");
+      attr(div5, "class", "table-header svelte-k7n1rb");
+      attr(div6, "class", "table-body svelte-k7n1rb");
+      attr(div7, "class", "deck-table svelte-k7n1rb");
     },
     m(target, anchor) {
       insert(target, div7, anchor);
@@ -6342,9 +6387,9 @@ function create_if_block_12(ctx) {
   return {
     c() {
       div = element("div");
-      div.innerHTML = `<p class="svelte-1ufhkzf">No decks match your filter.</p> 
-            <p class="help-text svelte-1ufhkzf">Try adjusting your search terms.</p>`;
-      attr(div, "class", "empty-state svelte-1ufhkzf");
+      div.innerHTML = `<p class="svelte-k7n1rb">No decks match your filter.</p> 
+            <p class="help-text svelte-k7n1rb">Try adjusting your search terms.</p>`;
+      attr(div, "class", "empty-state svelte-k7n1rb");
     },
     m(target, anchor) {
       insert(target, div, anchor);
@@ -6361,9 +6406,9 @@ function create_if_block2(ctx) {
   return {
     c() {
       div = element("div");
-      div.innerHTML = `<p class="svelte-1ufhkzf">No flashcard decks found.</p> 
-            <p class="help-text svelte-1ufhkzf">Tag your notes with #flashcards to create decks.</p>`;
-      attr(div, "class", "empty-state svelte-1ufhkzf");
+      div.innerHTML = `<p class="svelte-k7n1rb">No flashcard decks found.</p> 
+            <p class="help-text svelte-k7n1rb">Tag your notes with #flashcards to create decks.</p>`;
+      attr(div, "class", "empty-state svelte-k7n1rb");
     },
     m(target, anchor) {
       insert(target, div, anchor);
@@ -6381,7 +6426,7 @@ function create_if_block_3(ctx) {
     c() {
       span = element("span");
       span.textContent = "\u{1F4C5}";
-      attr(span, "class", "limit-indicator svelte-1ufhkzf");
+      attr(span, "class", "limit-indicator svelte-k7n1rb");
     },
     m(target, anchor) {
       insert(target, span, anchor);
@@ -6398,7 +6443,7 @@ function create_if_block_2(ctx) {
     c() {
       span = element("span");
       span.textContent = "\u{1F4C5}";
-      attr(span, "class", "limit-indicator svelte-1ufhkzf");
+      attr(span, "class", "limit-indicator svelte-k7n1rb");
     },
     m(target, anchor) {
       insert(target, span, anchor);
@@ -6519,13 +6564,13 @@ function create_each_block2(ctx) {
       circle = svg_element("circle");
       path = svg_element("path");
       t10 = space();
-      attr(span, "class", "deck-name-link svelte-1ufhkzf");
+      attr(span, "class", "deck-name-link svelte-k7n1rb");
       attr(span, "role", "button");
       attr(span, "tabindex", "0");
       attr(span, "title", span_title_value = "Click to review " + /*deck*/
       ctx[28].name);
-      attr(div0, "class", "col-deck svelte-1ufhkzf");
-      attr(div1, "class", "col-stat svelte-1ufhkzf");
+      attr(div0, "class", "col-deck svelte-k7n1rb");
+      attr(div1, "class", "col-stat svelte-k7n1rb");
       attr(div1, "title", div1_title_value = /*deck*/
       ctx[28].config.enableNewCardsLimit ? `${/*stats*/
       ctx[8].newCount} new cards available today (limit: ${/*deck*/
@@ -6549,7 +6594,7 @@ function create_each_block2(ctx) {
         /*deck*/
         ctx[28].config.enableNewCardsLimit
       );
-      attr(div2, "class", "col-stat svelte-1ufhkzf");
+      attr(div2, "class", "col-stat svelte-k7n1rb");
       toggle_class(
         div2,
         "has-cards",
@@ -6562,7 +6607,7 @@ function create_each_block2(ctx) {
         /*isUpdatingStats*/
         ctx[7]
       );
-      attr(div3, "class", "col-stat svelte-1ufhkzf");
+      attr(div3, "class", "col-stat svelte-k7n1rb");
       attr(div3, "title", div3_title_value = /*deck*/
       ctx[28].config.enableReviewCardsLimit ? `${/*stats*/
       ctx[8].dueCount} review cards available today (limit: ${/*deck*/
@@ -6599,12 +6644,12 @@ function create_each_block2(ctx) {
       attr(svg, "stroke-width", "2");
       attr(svg, "stroke-linecap", "round");
       attr(svg, "stroke-linejoin", "round");
-      attr(button, "class", "deck-config-button svelte-1ufhkzf");
+      attr(button, "class", "deck-config-button svelte-k7n1rb");
       attr(button, "title", "Configure deck settings");
       attr(button, "aria-label", button_aria_label_value = "Configure " + /*deck*/
       ctx[28].name);
-      attr(div4, "class", "col-config svelte-1ufhkzf");
-      attr(div5, "class", "deck-row svelte-1ufhkzf");
+      attr(div4, "class", "col-config svelte-k7n1rb");
+      attr(div5, "class", "deck-row svelte-k7n1rb");
     },
     m(target, anchor) {
       insert(target, div5, anchor);
@@ -6869,8 +6914,8 @@ function create_fragment3(ctx) {
       if_block.c();
       t5 = space();
       create_component(reviewheatmap.$$.fragment);
-      attr(h3, "class", "panel-title svelte-1ufhkzf");
-      attr(button0, "class", "stats-button svelte-1ufhkzf");
+      attr(h3, "class", "panel-title svelte-k7n1rb");
+      attr(button0, "class", "stats-button svelte-k7n1rb");
       attr(button0, "title", "View Overall Statistics");
       attr(path4, "d", "M23 4v6h-6");
       attr(path5, "d", "M1 20v-6h6");
@@ -6884,8 +6929,8 @@ function create_fragment3(ctx) {
       attr(svg1, "stroke-width", "2");
       attr(svg1, "stroke-linecap", "round");
       attr(svg1, "stroke-linejoin", "round");
-      attr(svg1, "class", "svelte-1ufhkzf");
-      attr(button1, "class", "refresh-button svelte-1ufhkzf");
+      attr(svg1, "class", "svelte-k7n1rb");
+      attr(button1, "class", "refresh-button svelte-k7n1rb");
       button1.disabled = /*isRefreshing*/
       ctx[6];
       toggle_class(
@@ -6894,13 +6939,13 @@ function create_fragment3(ctx) {
         /*isRefreshing*/
         ctx[6]
       );
-      attr(div0, "class", "header-buttons svelte-1ufhkzf");
-      attr(div1, "class", "panel-header svelte-1ufhkzf");
+      attr(div0, "class", "header-buttons svelte-k7n1rb");
+      attr(div1, "class", "panel-header svelte-k7n1rb");
       attr(input, "type", "text");
-      attr(input, "class", "filter-input svelte-1ufhkzf");
+      attr(input, "class", "filter-input svelte-k7n1rb");
       attr(input, "placeholder", "Filter by name or tag...");
-      attr(div2, "class", "filter-section svelte-1ufhkzf");
-      attr(div3, "class", "deck-list-panel svelte-1ufhkzf");
+      attr(div2, "class", "filter-section svelte-k7n1rb");
+      attr(div3, "class", "deck-list-panel svelte-k7n1rb");
     },
     m(target, anchor) {
       insert(target, div3, anchor);
@@ -7222,25 +7267,25 @@ var import_obsidian4 = require("obsidian");
 
 // src/components/StatisticsUI.svelte
 function add_css4(target) {
-  append_styles(target, "svelte-lbb1rg", `.statistics-container.svelte-lbb1rg.svelte-lbb1rg{padding:20px;font-family:var(--font-interface);width:100%;overflow-x:hidden}.loading.svelte-lbb1rg.svelte-lbb1rg,.error.svelte-lbb1rg.svelte-lbb1rg{text-align:center;padding:40px;color:var(--text-muted)}.filters.svelte-lbb1rg.svelte-lbb1rg{display:flex;gap:24px;margin-bottom:24px;padding:20px;background:var(--background-secondary);border-radius:10px;flex-wrap:wrap;justify-content:center}.filter-group.svelte-lbb1rg.svelte-lbb1rg{display:flex;flex-direction:column;gap:8px;min-width:200px}.filter-group.svelte-lbb1rg label.svelte-lbb1rg{font-size:14px;color:var(--text-muted);font-weight:600}.filter-group.svelte-lbb1rg select.svelte-lbb1rg{padding:10px 12px;border:2px solid var(--background-modifier-border);border-radius:6px;background:var(--background-primary);color:var(--text-normal);font-size:14px;font-weight:500;appearance:none;-webkit-appearance:none;-moz-appearance:none;cursor:pointer;min-width:180px;background-image:url("data:image/svg+xml;charset=US-ASCII,<svg xmlns='http://www.w3.org/2000/svg' width='4' height='5'><path fill='%23666' d='m0 0 2 2 2-2z'/></svg>");background-repeat:no-repeat;background-position:right 12px center;background-size:12px}.filter-group.svelte-lbb1rg select.svelte-lbb1rg:focus{outline:none;border-color:var(--interactive-accent);box-shadow:0 0 0 2px var(--interactive-accent-hover)}.filter-group.svelte-lbb1rg select option.svelte-lbb1rg{background:var(--background-primary);color:var(--text-normal);font-weight:500;padding:8px}.stats-section.svelte-lbb1rg.svelte-lbb1rg{margin-bottom:32px;padding-bottom:24px;border-bottom:1px solid var(--background-modifier-border)}.stats-section.svelte-lbb1rg.svelte-lbb1rg:last-of-type{border-bottom:none}.stats-section.svelte-lbb1rg h3.svelte-lbb1rg{margin:0 0 20px 0;color:var(--text-normal);font-size:18px;font-weight:600}.stats-section.svelte-lbb1rg h4.svelte-lbb1rg{margin:24px 0 12px 0;color:var(--text-normal);font-size:16px;font-weight:500}.stats-grid.svelte-lbb1rg.svelte-lbb1rg{display:grid;grid-template-columns:repeat(auto-fit, minmax(150px, 1fr));gap:16px;margin-bottom:20px}.stat-card.svelte-lbb1rg.svelte-lbb1rg{background:var(--background-secondary);padding:16px;border-radius:8px;text-align:center;border:1px solid var(--background-modifier-border);min-height:80px;display:flex;flex-direction:column;justify-content:center}.stat-value.svelte-lbb1rg.svelte-lbb1rg{font-size:24px;font-weight:600;color:var(--text-normal);margin-bottom:4px}.stat-label.svelte-lbb1rg.svelte-lbb1rg{font-size:12px;color:var(--text-muted);text-transform:uppercase;letter-spacing:0.5px}.metrics-grid.svelte-lbb1rg.svelte-lbb1rg{display:grid;grid-template-columns:repeat(auto-fit, minmax(200px, 1fr));gap:16px;margin-bottom:24px}.metric-card.svelte-lbb1rg.svelte-lbb1rg{background:var(--background-secondary);padding:20px;border-radius:8px;border:1px solid var(--background-modifier-border);min-height:100px}.metric-value.svelte-lbb1rg.svelte-lbb1rg{font-size:28px;font-weight:700;color:var(--text-accent);margin-bottom:8px}.metric-label.svelte-lbb1rg.svelte-lbb1rg{font-size:14px;font-weight:600;color:var(--text-normal);margin-bottom:4px}.metric-description.svelte-lbb1rg.svelte-lbb1rg{font-size:11px;color:var(--text-muted);line-height:1.3}.forecast-chart.svelte-lbb1rg.svelte-lbb1rg{display:flex;gap:4px;align-items:flex-end;padding:16px;background:var(--background-secondary);border-radius:8px;min-height:150px;overflow-x:auto;overflow-y:hidden;max-width:100%}.forecast-bar.svelte-lbb1rg.svelte-lbb1rg{display:flex;flex-direction:column;align-items:center;gap:4px;min-width:20px;flex-shrink:0}.bar.svelte-lbb1rg.svelte-lbb1rg{background:var(--text-accent);width:12px;border-radius:2px 2px 0 0;transition:background 0.2s}.bar-label.svelte-lbb1rg.svelte-lbb1rg{font-size:8px;color:var(--text-muted);writing-mode:vertical-rl;text-orientation:mixed}.bar-value.svelte-lbb1rg.svelte-lbb1rg{font-size:10px;color:var(--text-normal)}.forecast-note.svelte-lbb1rg.svelte-lbb1rg{margin-top:8px;font-size:12px;color:var(--text-muted);text-align:center}.button-stats.svelte-lbb1rg.svelte-lbb1rg{display:flex;flex-direction:column;gap:12px}.button-bar.svelte-lbb1rg.svelte-lbb1rg{display:flex;justify-content:space-between;align-items:center;padding:12px 16px;border-radius:6px;background:var(--background-secondary);border:1px solid var(--background-modifier-border)}.button-bar.again.svelte-lbb1rg.svelte-lbb1rg{border-left:4px solid #ef4444}.button-bar.hard.svelte-lbb1rg.svelte-lbb1rg{border-left:4px solid #f97316}.button-bar.good.svelte-lbb1rg.svelte-lbb1rg{border-left:4px solid #22c55e}.button-bar.easy.svelte-lbb1rg.svelte-lbb1rg{border-left:4px solid #3b82f6}.button-label.svelte-lbb1rg.svelte-lbb1rg{font-weight:500;color:var(--text-normal)}.button-count.svelte-lbb1rg.svelte-lbb1rg{font-weight:600;color:var(--text-normal);font-size:18px}.button-percentage.svelte-lbb1rg.svelte-lbb1rg{font-size:12px;color:var(--text-muted)}.intervals-chart.svelte-lbb1rg.svelte-lbb1rg{display:flex;flex-wrap:wrap;gap:12px;padding:16px;background:var(--background-secondary);border-radius:8px;max-width:100%;overflow-x:hidden}.interval-bar.svelte-lbb1rg.svelte-lbb1rg{display:flex;flex-direction:column;align-items:center;padding:12px 8px;background:var(--background-primary);border-radius:6px;min-width:60px;border:1px solid var(--background-modifier-border)}.interval-label.svelte-lbb1rg.svelte-lbb1rg{font-size:12px;color:var(--text-muted);margin-bottom:4px}.interval-value.svelte-lbb1rg.svelte-lbb1rg{font-size:16px;font-weight:600;color:var(--text-normal)}.modal-actions.svelte-lbb1rg.svelte-lbb1rg{display:flex;justify-content:flex-end;gap:8px;margin-top:24px;padding:16px 20px;border-top:1px solid var(--background-modifier-border);background:var(--background-primary);position:sticky;bottom:0;margin-left:-20px;margin-right:-20px}.close-button.svelte-lbb1rg.svelte-lbb1rg{padding:8px 16px;background:var(--interactive-accent);color:var(--text-on-accent);border:none;border-radius:4px;cursor:pointer;font-weight:500}.close-button.svelte-lbb1rg.svelte-lbb1rg:hover{background:var(--interactive-accent-hover)}.forecast-bar.svelte-lbb1rg.svelte-lbb1rg{cursor:pointer;position:relative}.forecast-bar.svelte-lbb1rg:hover .bar.svelte-lbb1rg{opacity:0.8;transition:opacity 0.2s ease}.no-data-message.svelte-lbb1rg.svelte-lbb1rg{text-align:center;padding:24px;background:var(--background-secondary);border-radius:8px;border:1px solid var(--background-modifier-border)}.no-data-message.svelte-lbb1rg p.svelte-lbb1rg{margin:0 0 8px 0;color:var(--text-muted)}.help-text.svelte-lbb1rg.svelte-lbb1rg{font-size:12px !important;color:var(--text-faint) !important;margin:0 !important}.retry-button.svelte-lbb1rg.svelte-lbb1rg{margin-top:12px;padding:8px 16px;background:var(--interactive-accent);color:var(--text-on-accent);border:none;border-radius:4px;cursor:pointer;font-size:14px}.retry-button.svelte-lbb1rg.svelte-lbb1rg:hover{background:var(--interactive-accent-hover)}`);
+  append_styles(target, "svelte-pk96ym", ".statistics-container.svelte-pk96ym.svelte-pk96ym{padding:20px;font-family:var(--font-interface);width:100%;overflow-x:hidden}.loading.svelte-pk96ym.svelte-pk96ym,.error.svelte-pk96ym.svelte-pk96ym{text-align:center;padding:40px;color:var(--text-muted)}.filters.svelte-pk96ym.svelte-pk96ym{display:flex;gap:24px;margin-bottom:24px;padding:20px;background:var(--background-secondary);border-radius:10px;flex-wrap:wrap;justify-content:center}.filter-group.svelte-pk96ym.svelte-pk96ym{display:flex;flex-direction:column;gap:8px;min-width:200px}.filter-group.svelte-pk96ym label.svelte-pk96ym{font-size:14px;color:var(--text-muted);font-weight:600}.filter-group.svelte-pk96ym select.svelte-pk96ym{border:1px solid var(--background-modifier-border);border-radius:4px;background:var(--background-primary);color:var(--text-normal);font-size:14px;font-weight:normal;appearance:none;-webkit-appearance:none;-moz-appearance:none;cursor:pointer;min-width:180px;position:relative;opacity:1;z-index:10}.filter-group.svelte-pk96ym select.svelte-pk96ym:focus{outline:none;border-color:var(--interactive-accent)}.filter-group.svelte-pk96ym select option.svelte-pk96ym{background:var(--background-primary);color:var(--text-normal);padding:8px;font-size:14px;opacity:1;visibility:visible}.stats-section.svelte-pk96ym.svelte-pk96ym{margin-bottom:32px;padding-bottom:24px;border-bottom:1px solid var(--background-modifier-border)}.stats-section.svelte-pk96ym.svelte-pk96ym:last-of-type{border-bottom:none}.stats-section.svelte-pk96ym h3.svelte-pk96ym{margin:0 0 20px 0;color:var(--text-normal);font-size:18px;font-weight:600}.stats-section.svelte-pk96ym h4.svelte-pk96ym{margin:24px 0 12px 0;color:var(--text-normal);font-size:16px;font-weight:500}.stats-grid.svelte-pk96ym.svelte-pk96ym{display:grid;grid-template-columns:repeat(auto-fit, minmax(150px, 1fr));gap:16px;margin-bottom:20px}.stat-card.svelte-pk96ym.svelte-pk96ym{background:var(--background-secondary);padding:16px;border-radius:8px;text-align:center;border:1px solid var(--background-modifier-border);min-height:80px;display:flex;flex-direction:column;justify-content:center}.stat-value.svelte-pk96ym.svelte-pk96ym{font-size:24px;font-weight:600;color:var(--text-normal);margin-bottom:4px}.stat-label.svelte-pk96ym.svelte-pk96ym{font-size:12px;color:var(--text-muted);text-transform:uppercase;letter-spacing:0.5px}.metrics-grid.svelte-pk96ym.svelte-pk96ym{display:grid;grid-template-columns:repeat(auto-fit, minmax(200px, 1fr));gap:16px;margin-bottom:24px}.metric-card.svelte-pk96ym.svelte-pk96ym{background:var(--background-secondary);padding:20px;border-radius:8px;border:1px solid var(--background-modifier-border);min-height:100px}.metric-value.svelte-pk96ym.svelte-pk96ym{font-size:28px;font-weight:700;color:var(--text-accent);margin-bottom:8px}.metric-label.svelte-pk96ym.svelte-pk96ym{font-size:14px;font-weight:600;color:var(--text-normal);margin-bottom:4px}.metric-description.svelte-pk96ym.svelte-pk96ym{font-size:11px;color:var(--text-muted);line-height:1.3}.forecast-chart.svelte-pk96ym.svelte-pk96ym{display:flex;gap:4px;align-items:flex-end;padding:16px;background:var(--background-secondary);border-radius:8px;min-height:150px;overflow-x:auto;overflow-y:hidden;max-width:100%}.forecast-bar.svelte-pk96ym.svelte-pk96ym{display:flex;flex-direction:column;align-items:center;gap:6px;min-width:40px;flex-shrink:0}.bar.svelte-pk96ym.svelte-pk96ym{background:var(--text-accent);width:24px;border-radius:4px 4px 0 0;transition:background 0.2s}.bar-label.svelte-pk96ym.svelte-pk96ym{font-size:12px;color:var(--text-muted);font-weight:500}.bar-value.svelte-pk96ym.svelte-pk96ym{font-size:12px;color:var(--text-normal);font-weight:600}.forecast-note.svelte-pk96ym.svelte-pk96ym{margin-top:8px;font-size:12px;color:var(--text-muted);text-align:center}.button-stats.svelte-pk96ym.svelte-pk96ym{display:flex;flex-direction:column;gap:12px}.button-bar.svelte-pk96ym.svelte-pk96ym{display:flex;justify-content:space-between;align-items:center;padding:12px 16px;border-radius:6px;background:var(--background-secondary);border:1px solid var(--background-modifier-border)}.button-bar.again.svelte-pk96ym.svelte-pk96ym{border-left:4px solid #ef4444}.button-bar.hard.svelte-pk96ym.svelte-pk96ym{border-left:4px solid #f97316}.button-bar.good.svelte-pk96ym.svelte-pk96ym{border-left:4px solid #22c55e}.button-bar.easy.svelte-pk96ym.svelte-pk96ym{border-left:4px solid #3b82f6}.button-label.svelte-pk96ym.svelte-pk96ym{font-weight:500;color:var(--text-normal)}.button-count.svelte-pk96ym.svelte-pk96ym{font-weight:600;color:var(--text-normal);font-size:18px}.button-percentage.svelte-pk96ym.svelte-pk96ym{font-size:12px;color:var(--text-muted)}.modal-actions.svelte-pk96ym.svelte-pk96ym{display:flex;justify-content:flex-end;gap:8px;margin-top:24px;padding:16px 20px;border-top:1px solid var(--background-modifier-border);background:var(--background-primary);position:sticky;bottom:0;margin-left:-20px;margin-right:-20px}.close-button.svelte-pk96ym.svelte-pk96ym{padding:8px 16px;background:var(--interactive-accent);color:var(--text-on-accent);border:none;border-radius:4px;cursor:pointer;font-weight:500}.close-button.svelte-pk96ym.svelte-pk96ym:hover{background:var(--interactive-accent-hover)}.forecast-bar.svelte-pk96ym.svelte-pk96ym{cursor:pointer;position:relative}.forecast-bar.svelte-pk96ym:hover .bar.svelte-pk96ym{opacity:0.8;transition:opacity 0.2s ease}.no-data-message.svelte-pk96ym.svelte-pk96ym{text-align:center;padding:24px;background:var(--background-secondary);border-radius:8px;border:1px solid var(--background-modifier-border)}.no-data-message.svelte-pk96ym p.svelte-pk96ym{margin:0 0 8px 0;color:var(--text-muted)}.help-text.svelte-pk96ym.svelte-pk96ym{font-size:12px !important;color:var(--text-faint) !important;margin:0 !important}.retry-button.svelte-pk96ym.svelte-pk96ym{margin-top:12px;padding:8px 16px;background:var(--interactive-accent);color:var(--text-on-accent);border:none;border-radius:4px;cursor:pointer;font-size:14px}.retry-button.svelte-pk96ym.svelte-pk96ym:hover{background:var(--interactive-accent-hover)}");
 }
 function get_each_context3(ctx, list, i) {
   const child_ctx = ctx.slice();
   child_ctx[28] = list[i];
-  return child_ctx;
-}
-function get_each_context_12(ctx, list, i) {
-  const child_ctx = ctx.slice();
-  child_ctx[31] = list[i];
-  child_ctx[34] = i;
+  child_ctx[31] = i;
   const constants_0 = (
     /*statistics*/
     child_ctx[2].forecast.indexOf(
       /*day*/
-      child_ctx[31]
+      child_ctx[28]
     )
   );
-  child_ctx[32] = constants_0;
+  child_ctx[29] = constants_0;
+  return child_ctx;
+}
+function get_each_context_12(ctx, list, i) {
+  const child_ctx = ctx.slice();
+  child_ctx[32] = list[i];
   return child_ctx;
 }
 function get_each_context_22(ctx, list, i) {
@@ -7248,13 +7293,8 @@ function get_each_context_22(ctx, list, i) {
   child_ctx[35] = list[i];
   return child_ctx;
 }
-function get_each_context_3(ctx, list, i) {
-  const child_ctx = ctx.slice();
-  child_ctx[38] = list[i];
-  return child_ctx;
-}
 function create_else_block3(ctx) {
-  var _a, _b, _c, _d, _e, _f, _g, _h, _i, _j, _k, _l, _m, _n, _o, _p, _q, _r, _s, _t, _u;
+  var _a, _b, _c, _d, _e, _f, _g, _h, _i, _j, _k, _l, _m, _n, _o, _p, _q, _r, _s, _t, _u, _v, _w;
   let div2;
   let div0;
   let label0;
@@ -7309,212 +7349,238 @@ function create_else_block3(ctx) {
   let t24;
   let div13;
   let t26;
-  let div17;
+  let div24;
   let h31;
   let t28;
-  let t29;
-  let div18;
-  let h32;
-  let t31;
-  let t32;
-  let h33;
-  let t34;
-  let t35;
-  let h34;
-  let t37;
-  let t38;
-  let div62;
-  let h35;
-  let t40;
-  let div51;
-  let div22;
+  let div23;
   let div19;
-  let t41_value = (
+  let div17;
+  let t29_value = (
     /*statistics*/
-    (((_g = ctx[2]) == null ? void 0 : _g.retentionRate) || 0).toFixed(1) + ""
+    (((_g = ctx[2]) == null ? void 0 : _g.averagePace) ? formatPace(
+      /*statistics*/
+      ctx[2].averagePace
+    ) : "N/A") + ""
   );
+  let t29;
+  let t30;
+  let div18;
+  let t32;
+  let div22;
+  let div20;
+  let t33_value = (
+    /*statistics*/
+    (((_h = ctx[2]) == null ? void 0 : _h.totalReviewTime) ? formatTime(
+      /*statistics*/
+      ctx[2].totalReviewTime
+    ) : "N/A") + ""
+  );
+  let t33;
+  let t34;
+  let div21;
+  let t36;
+  let div25;
+  let h32;
+  let t38;
+  let t39;
+  let div26;
+  let h33;
   let t41;
   let t42;
-  let t43;
-  let div20;
+  let h34;
+  let t44;
   let t45;
-  let div21;
+  let h35;
   let t47;
-  let div26;
-  let div23;
-  let t49;
-  let div24;
-  let t51;
-  let div25;
-  let t53;
+  let t48;
+  let div70;
+  let h36;
+  let t50;
+  let div59;
   let div30;
   let div27;
-  let t56;
+  let t51_value = (
+    /*statistics*/
+    (((_i = ctx[2]) == null ? void 0 : _i.retentionRate) || 0).toFixed(1) + ""
+  );
+  let t51;
+  let t52;
+  let t53;
   let div28;
-  let t58;
+  let t55;
   let div29;
-  let t60;
+  let t57;
   let div34;
   let div31;
-  let t62;
+  let t59;
   let div32;
-  let t64;
+  let t61;
   let div33;
-  let t66;
+  let t63;
   let div38;
   let div35;
-  let t68;
+  let t66;
   let div36;
-  let t70;
+  let t68;
   let div37;
-  let t72;
+  let t70;
   let div42;
   let div39;
-  let t73_value = (
-    /*statistics*/
-    (((_i = (_h = ctx[2]) == null ? void 0 : _h.cardStats) == null ? void 0 : _i.learning) || 0) + ""
-  );
-  let t73;
-  let t74;
+  let t72;
   let div40;
-  let t76;
+  let t74;
   let div41;
-  let t78;
+  let t76;
   let div46;
   let div43;
-  let t81;
+  let t78;
   let div44;
-  let t83;
+  let t80;
   let div45;
-  let t85;
+  let t82;
   let div50;
   let div47;
-  let t86_value = (
+  let t83_value = (
     /*statistics*/
-    (((_k = (_j = ctx[2]) == null ? void 0 : _j.cardStats) == null ? void 0 : _k.new) || 0) + /*statistics*/
-    (((_m = (_l = ctx[2]) == null ? void 0 : _l.cardStats) == null ? void 0 : _m.learning) || 0) + /*statistics*/
-    (((_o = (_n = ctx[2]) == null ? void 0 : _n.cardStats) == null ? void 0 : _o.mature) || 0) + ""
+    (((_k = (_j = ctx[2]) == null ? void 0 : _j.cardStats) == null ? void 0 : _k.learning) || 0) + ""
   );
-  let t86;
-  let t87;
+  let t83;
+  let t84;
   let div48;
-  let t89;
+  let t86;
   let div49;
-  let t91;
-  let h4;
-  let t93;
-  let div61;
+  let t88;
   let div54;
+  let div51;
+  let t91;
   let div52;
-  let t94_value = (
-    /*statistics*/
-    (((_q = (_p = ctx[2]) == null ? void 0 : _p.cardStats) == null ? void 0 : _q.new) || 0) + ""
-  );
-  let t94;
-  let t95;
+  let t93;
   let div53;
-  let t97;
-  let div57;
-  let div55;
-  let t98_value = (
-    /*statistics*/
-    (((_s = (_r = ctx[2]) == null ? void 0 : _r.cardStats) == null ? void 0 : _s.learning) || 0) + ""
-  );
-  let t98;
-  let t99;
-  let div56;
-  let t101;
-  let div60;
+  let t95;
   let div58;
-  let t102_value = (
+  let div55;
+  let t96_value = (
     /*statistics*/
-    (((_u = (_t = ctx[2]) == null ? void 0 : _t.cardStats) == null ? void 0 : _u.mature) || 0) + ""
+    (((_m = (_l = ctx[2]) == null ? void 0 : _l.cardStats) == null ? void 0 : _m.new) || 0) + /*statistics*/
+    (((_o = (_n = ctx[2]) == null ? void 0 : _n.cardStats) == null ? void 0 : _o.learning) || 0) + /*statistics*/
+    (((_q = (_p = ctx[2]) == null ? void 0 : _p.cardStats) == null ? void 0 : _q.mature) || 0) + ""
   );
-  let t102;
+  let t96;
+  let t97;
+  let div56;
+  let t99;
+  let div57;
+  let t101;
+  let h4;
   let t103;
-  let div59;
+  let div69;
+  let div62;
+  let div60;
+  let t104_value = (
+    /*statistics*/
+    (((_s = (_r = ctx[2]) == null ? void 0 : _r.cardStats) == null ? void 0 : _s.new) || 0) + ""
+  );
+  let t104;
   let t105;
-  let div63;
-  let h36;
+  let div61;
   let t107;
-  let t108;
-  let div64;
-  let h37;
-  let t110;
-  let show_if;
-  let t111;
   let div65;
-  let h38;
-  let t113;
-  let t114;
+  let div63;
+  let t108_value = (
+    /*statistics*/
+    (((_u = (_t = ctx[2]) == null ? void 0 : _t.cardStats) == null ? void 0 : _u.learning) || 0) + ""
+  );
+  let t108;
+  let t109;
+  let div64;
+  let t111;
+  let div68;
   let div66;
-  let h39;
-  let t116;
-  let p;
-  let t118;
-  let reviewheatmap;
-  let t119;
+  let t112_value = (
+    /*statistics*/
+    (((_w = (_v = ctx[2]) == null ? void 0 : _v.cardStats) == null ? void 0 : _w.mature) || 0) + ""
+  );
+  let t112;
+  let t113;
   let div67;
+  let t115;
+  let div71;
+  let h37;
+  let t117;
+  let t118;
+  let div72;
+  let h38;
+  let t120;
+  let show_if;
+  let t121;
+  let div73;
+  let h39;
+  let t123;
+  let p;
+  let t125;
+  let reviewheatmap;
+  let t126;
+  let div74;
   let button;
   let current;
   let mounted;
   let dispose;
-  let each_value_3 = (
+  let each_value_2 = (
     /*availableTags*/
     ctx[6]
   );
   let each_blocks_1 = [];
-  for (let i = 0; i < each_value_3.length; i += 1) {
-    each_blocks_1[i] = create_each_block_3(get_each_context_3(ctx, each_value_3, i));
+  for (let i = 0; i < each_value_2.length; i += 1) {
+    each_blocks_1[i] = create_each_block_22(get_each_context_22(ctx, each_value_2, i));
   }
-  let each_value_2 = (
+  let each_value_1 = (
     /*availableDecks*/
     ctx[5]
   );
   let each_blocks = [];
-  for (let i = 0; i < each_value_2.length; i += 1) {
-    each_blocks[i] = create_each_block_22(get_each_context_22(ctx, each_value_2, i));
+  for (let i = 0; i < each_value_1.length; i += 1) {
+    each_blocks[i] = create_each_block_12(get_each_context_12(ctx, each_value_1, i));
   }
   function select_block_type_1(ctx2, dirty) {
     if (
       /*todayStats*/
-      ctx2[11]
+      ctx2[8]
     )
-      return create_if_block_10;
-    return create_else_block_8;
+      return create_if_block_7;
+    return create_else_block_6;
   }
   let current_block_type = select_block_type_1(ctx, [-1, -1]);
   let if_block0 = current_block_type(ctx);
   function select_block_type_2(ctx2, dirty) {
     if (
       /*weekStats*/
-      ctx2[10] && /*weekStats*/
-      ctx2[10].reviews > 0
+      ctx2[9] && /*weekStats*/
+      ctx2[9].reviews > 0
     )
-      return create_if_block_9;
-    return create_else_block_7;
+      return create_if_block_6;
+    return create_else_block_5;
   }
   let current_block_type_1 = select_block_type_2(ctx, [-1, -1]);
   let if_block1 = current_block_type_1(ctx);
   function select_block_type_3(ctx2, dirty) {
     if (
       /*monthStats*/
-      ctx2[9] && /*monthStats*/
-      ctx2[9].reviews > 0
+      ctx2[10] && /*monthStats*/
+      ctx2[10].reviews > 0
     )
-      return create_if_block_8;
-    return create_else_block_6;
+      return create_if_block_5;
+    return create_else_block_4;
   }
   let current_block_type_2 = select_block_type_3(ctx, [-1, -1]);
   let if_block2 = current_block_type_2(ctx);
   function select_block_type_4(ctx2, dirty) {
     if (
       /*yearStats*/
-      ctx2[8] && /*yearStats*/
-      ctx2[8].reviews > 0
+      ctx2[11] && /*yearStats*/
+      ctx2[11].reviews > 0
     )
-      return create_if_block_7;
-    return create_else_block_5;
+      return create_if_block_4;
+    return create_else_block_3;
   }
   let current_block_type_3 = select_block_type_4(ctx, [-1, -1]);
   let if_block3 = current_block_type_3(ctx);
@@ -7528,8 +7594,8 @@ function create_else_block3(ctx) {
       ctx2[2].answerButtons.good > 0 || /*statistics*/
       ctx2[2].answerButtons.easy > 0)
     )
-      return create_if_block_6;
-    return create_else_block_4;
+      return create_if_block_32;
+    return create_else_block_2;
   }
   let current_block_type_4 = select_block_type_5(ctx, [-1, -1]);
   let if_block4 = current_block_type_4(ctx);
@@ -7544,23 +7610,11 @@ function create_else_block3(ctx) {
       ctx2[2].forecast.length > 0 && /*statistics*/
       ctx2[2].forecast.some(func2));
     if (show_if)
-      return create_if_block_32;
-    return create_else_block_3;
-  }
-  let current_block_type_5 = select_block_type_6(ctx, [-1, -1]);
-  let if_block5 = current_block_type_5(ctx);
-  function select_block_type_8(ctx2, dirty) {
-    var _a2;
-    if (
-      /*statistics*/
-      ((_a2 = ctx2[2]) == null ? void 0 : _a2.intervals) && /*statistics*/
-      ctx2[2].intervals.length > 0
-    )
       return create_if_block_22;
     return create_else_block_1;
   }
-  let current_block_type_6 = select_block_type_8(ctx, [-1, -1]);
-  let if_block6 = current_block_type_6(ctx);
+  let current_block_type_5 = select_block_type_6(ctx, [-1, -1]);
+  let if_block5 = current_block_type_5(ctx);
   let reviewheatmap_props = { getReviewCounts: (
     /*func_2*/
     ctx[22]
@@ -7629,181 +7683,198 @@ function create_else_block3(ctx) {
       div13 = element("div");
       div13.textContent = "Due Today";
       t26 = space();
-      div17 = element("div");
-      h31 = element("h3");
-      h31.textContent = "Today's Statistics";
-      t28 = space();
-      if_block0.c();
-      t29 = space();
-      div18 = element("div");
-      h32 = element("h3");
-      h32.textContent = "This Week";
-      t31 = space();
-      if_block1.c();
-      t32 = space();
-      h33 = element("h3");
-      h33.textContent = "This Month";
-      t34 = space();
-      if_block2.c();
-      t35 = space();
-      h34 = element("h3");
-      h34.textContent = "This Year";
-      t37 = space();
-      if_block3.c();
-      t38 = space();
-      div62 = element("div");
-      h35 = element("h3");
-      h35.textContent = "Deck Statistics & Metrics";
-      t40 = space();
-      div51 = element("div");
-      div22 = element("div");
-      div19 = element("div");
-      t41 = text(t41_value);
-      t42 = text("%");
-      t43 = space();
-      div20 = element("div");
-      div20.textContent = "Retention Rate";
-      t45 = space();
-      div21 = element("div");
-      div21.textContent = '% of reviews answered correctly (excluding "Again")';
-      t47 = space();
-      div26 = element("div");
-      div23 = element("div");
-      div23.textContent = `${/*calculateAverageEase*/
-      ctx[15]()}`;
-      t49 = space();
       div24 = element("div");
-      div24.textContent = "Average Ease";
-      t51 = space();
+      h31 = element("h3");
+      h31.textContent = "Review Pace";
+      t28 = space();
+      div23 = element("div");
+      div19 = element("div");
+      div17 = element("div");
+      t29 = text(t29_value);
+      t30 = space();
+      div18 = element("div");
+      div18.textContent = "Average per Card";
+      t32 = space();
+      div22 = element("div");
+      div20 = element("div");
+      t33 = text(t33_value);
+      t34 = space();
+      div21 = element("div");
+      div21.textContent = "Total Review Time";
+      t36 = space();
       div25 = element("div");
-      div25.textContent = "Mean of ease button values";
-      t53 = space();
+      h32 = element("h3");
+      h32.textContent = "Today's Statistics";
+      t38 = space();
+      if_block0.c();
+      t39 = space();
+      div26 = element("div");
+      h33 = element("h3");
+      h33.textContent = "This Week";
+      t41 = space();
+      if_block1.c();
+      t42 = space();
+      h34 = element("h3");
+      h34.textContent = "This Month";
+      t44 = space();
+      if_block2.c();
+      t45 = space();
+      h35 = element("h3");
+      h35.textContent = "This Year";
+      t47 = space();
+      if_block3.c();
+      t48 = space();
+      div70 = element("div");
+      h36 = element("h3");
+      h36.textContent = "Deck Statistics & Metrics";
+      t50 = space();
+      div59 = element("div");
       div30 = element("div");
       div27 = element("div");
-      div27.textContent = `${/*calculateAverageInterval*/
-      ctx[16]()}d`;
-      t56 = space();
+      t51 = text(t51_value);
+      t52 = text("%");
+      t53 = space();
       div28 = element("div");
-      div28.textContent = "Avg Interval";
-      t58 = space();
+      div28.textContent = "Retention Rate";
+      t55 = space();
       div29 = element("div");
-      div29.textContent = "Mean interval of all review cards";
-      t60 = space();
+      div29.textContent = '% of reviews answered correctly (excluding "Again")';
+      t57 = space();
       div34 = element("div");
       div31 = element("div");
-      div31.textContent = `${/*getDueToday*/
-      ctx[17]()}`;
-      t62 = space();
+      div31.textContent = `${/*calculateAverageEase*/
+      ctx[15]()}`;
+      t59 = space();
       div32 = element("div");
-      div32.textContent = "Due Today";
-      t64 = space();
+      div32.textContent = "Average Ease";
+      t61 = space();
       div33 = element("div");
-      div33.textContent = "Number of cards due today";
-      t66 = space();
+      div33.textContent = "Mean of ease button values";
+      t63 = space();
       div38 = element("div");
       div35 = element("div");
-      div35.textContent = `${/*getDueTomorrow*/
-      ctx[18]()}`;
-      t68 = space();
+      div35.textContent = `${/*calculateAverageInterval*/
+      ctx[16]()}d`;
+      t66 = space();
       div36 = element("div");
-      div36.textContent = "Due Tomorrow";
-      t70 = space();
+      div36.textContent = "Avg Interval";
+      t68 = space();
       div37 = element("div");
-      div37.textContent = "Number of cards due tomorrow";
-      t72 = space();
+      div37.textContent = "Mean interval of all review cards";
+      t70 = space();
       div42 = element("div");
       div39 = element("div");
-      t73 = text(t73_value);
-      t74 = space();
+      div39.textContent = `${/*getDueToday*/
+      ctx[17]()}`;
+      t72 = space();
       div40 = element("div");
-      div40.textContent = "Learning Cards";
-      t76 = space();
+      div40.textContent = "Due Today";
+      t74 = space();
       div41 = element("div");
-      div41.textContent = "Number of cards in the learning queue";
-      t78 = space();
+      div41.textContent = "Number of cards due today";
+      t76 = space();
       div46 = element("div");
       div43 = element("div");
-      div43.textContent = `${/*getMaturityRatio*/
-      ctx[19]()}%`;
-      t81 = space();
+      div43.textContent = `${/*getDueTomorrow*/
+      ctx[18]()}`;
+      t78 = space();
       div44 = element("div");
-      div44.textContent = "Maturity Ratio";
-      t83 = space();
+      div44.textContent = "Due Tomorrow";
+      t80 = space();
       div45 = element("div");
-      div45.textContent = "Mature cards \xF7 total cards";
-      t85 = space();
+      div45.textContent = "Number of cards due tomorrow";
+      t82 = space();
       div50 = element("div");
       div47 = element("div");
-      t86 = text(t86_value);
-      t87 = space();
+      t83 = text(t83_value);
+      t84 = space();
       div48 = element("div");
-      div48.textContent = "Total Cards";
-      t89 = space();
+      div48.textContent = "Learning Cards";
+      t86 = space();
       div49 = element("div");
-      div49.textContent = "All cards in collection";
+      div49.textContent = "Number of cards in the learning queue";
+      t88 = space();
+      div54 = element("div");
+      div51 = element("div");
+      div51.textContent = `${/*getMaturityRatio*/
+      ctx[19]()}%`;
       t91 = space();
+      div52 = element("div");
+      div52.textContent = "Maturity Ratio";
+      t93 = space();
+      div53 = element("div");
+      div53.textContent = "Mature cards \xF7 total cards";
+      t95 = space();
+      div58 = element("div");
+      div55 = element("div");
+      t96 = text(t96_value);
+      t97 = space();
+      div56 = element("div");
+      div56.textContent = "Total Cards";
+      t99 = space();
+      div57 = element("div");
+      div57.textContent = "All cards in collection";
+      t101 = space();
       h4 = element("h4");
       h4.textContent = "Card Status Breakdown";
-      t93 = space();
-      div61 = element("div");
-      div54 = element("div");
-      div52 = element("div");
-      t94 = text(t94_value);
-      t95 = space();
-      div53 = element("div");
-      div53.textContent = "New Cards";
-      t97 = space();
-      div57 = element("div");
-      div55 = element("div");
-      t98 = text(t98_value);
-      t99 = space();
-      div56 = element("div");
-      div56.textContent = "Learning";
-      t101 = space();
-      div60 = element("div");
-      div58 = element("div");
-      t102 = text(t102_value);
       t103 = space();
-      div59 = element("div");
-      div59.textContent = "Mature";
+      div69 = element("div");
+      div62 = element("div");
+      div60 = element("div");
+      t104 = text(t104_value);
       t105 = space();
-      div63 = element("div");
-      h36 = element("h3");
-      h36.textContent = "Answer Button Usage";
+      div61 = element("div");
+      div61.textContent = "New Cards";
       t107 = space();
-      if_block4.c();
-      t108 = space();
-      div64 = element("div");
-      h37 = element("h3");
-      h37.textContent = "Review Load Forecast";
-      t110 = space();
-      if_block5.c();
-      t111 = space();
       div65 = element("div");
-      h38 = element("h3");
-      h38.textContent = "Card Interval Distribution";
-      t113 = space();
-      if_block6.c();
-      t114 = space();
+      div63 = element("div");
+      t108 = text(t108_value);
+      t109 = space();
+      div64 = element("div");
+      div64.textContent = "Learning";
+      t111 = space();
+      div68 = element("div");
       div66 = element("div");
+      t112 = text(t112_value);
+      t113 = space();
+      div67 = element("div");
+      div67.textContent = "Mature";
+      t115 = space();
+      div71 = element("div");
+      h37 = element("h3");
+      h37.textContent = "Answer Button Usage";
+      t117 = space();
+      if_block4.c();
+      t118 = space();
+      div72 = element("div");
+      h38 = element("h3");
+      h38.textContent = "Review Load Forecast";
+      t120 = space();
+      if_block5.c();
+      t121 = space();
+      div73 = element("div");
       h39 = element("h3");
       h39.textContent = "Review Heatmap";
-      t116 = space();
+      t123 = space();
       p = element("p");
       p.textContent = "Daily review activity over time";
-      t118 = space();
+      t125 = space();
       create_component(reviewheatmap.$$.fragment);
-      t119 = space();
-      div67 = element("div");
+      t126 = space();
+      div74 = element("div");
       button = element("button");
       button.textContent = "Close";
       attr(label0, "for", "deck-filter");
-      attr(label0, "class", "svelte-lbb1rg");
+      attr(label0, "class", "svelte-pk96ym");
       option0.__value = "all";
       option0.value = option0.__value;
-      attr(option0, "class", "svelte-lbb1rg");
+      set_style(option0, "background", "var(--background-primary)", 1);
+      set_style(option0, "color", "var(--text-normal)", 1);
+      attr(option0, "class", "svelte-pk96ym");
       attr(select0, "id", "deck-filter");
-      attr(select0, "class", "svelte-lbb1rg");
+      set_style(select0, "background", "var(--background-primary)", 1);
+      set_style(select0, "color", "var(--text-normal)", 1);
+      attr(select0, "class", "svelte-pk96ym");
       if (
         /*selectedDeckFilter*/
         ctx[3] === void 0
@@ -7812,17 +7883,23 @@ function create_else_block3(ctx) {
           /*select0_change_handler*/
           ctx[20].call(select0)
         ));
-      attr(div0, "class", "filter-group svelte-lbb1rg");
+      attr(div0, "class", "filter-group svelte-pk96ym");
       attr(label1, "for", "timeframe-filter");
-      attr(label1, "class", "svelte-lbb1rg");
+      attr(label1, "class", "svelte-pk96ym");
       option1.__value = "12months";
       option1.value = option1.__value;
-      attr(option1, "class", "svelte-lbb1rg");
+      set_style(option1, "background", "var(--background-primary)", 1);
+      set_style(option1, "color", "var(--text-normal)", 1);
+      attr(option1, "class", "svelte-pk96ym");
       option2.__value = "all";
       option2.value = option2.__value;
-      attr(option2, "class", "svelte-lbb1rg");
+      set_style(option2, "background", "var(--background-primary)", 1);
+      set_style(option2, "color", "var(--text-normal)", 1);
+      attr(option2, "class", "svelte-pk96ym");
       attr(select1, "id", "timeframe-filter");
-      attr(select1, "class", "svelte-lbb1rg");
+      set_style(select1, "background", "var(--background-primary)", 1);
+      set_style(select1, "color", "var(--text-normal)", 1);
+      attr(select1, "class", "svelte-pk96ym");
       if (
         /*selectedTimeframe*/
         ctx[4] === void 0
@@ -7831,85 +7908,92 @@ function create_else_block3(ctx) {
           /*select1_change_handler*/
           ctx[21].call(select1)
         ));
-      attr(div1, "class", "filter-group svelte-lbb1rg");
-      attr(div2, "class", "filters svelte-lbb1rg");
-      attr(h30, "class", "svelte-lbb1rg");
-      attr(div3, "class", "stat-value svelte-lbb1rg");
-      attr(div4, "class", "stat-label svelte-lbb1rg");
-      attr(div5, "class", "stat-card svelte-lbb1rg");
-      attr(div6, "class", "stat-value svelte-lbb1rg");
-      attr(div7, "class", "stat-label svelte-lbb1rg");
-      attr(div8, "class", "stat-card svelte-lbb1rg");
-      attr(div9, "class", "stat-value svelte-lbb1rg");
-      attr(div10, "class", "stat-label svelte-lbb1rg");
-      attr(div11, "class", "stat-card svelte-lbb1rg");
-      attr(div12, "class", "stat-value svelte-lbb1rg");
-      attr(div13, "class", "stat-label svelte-lbb1rg");
-      attr(div14, "class", "stat-card svelte-lbb1rg");
-      attr(div15, "class", "stats-grid svelte-lbb1rg");
-      attr(div16, "class", "stats-section svelte-lbb1rg");
-      attr(h31, "class", "svelte-lbb1rg");
-      attr(div17, "class", "stats-section svelte-lbb1rg");
-      attr(h32, "class", "svelte-lbb1rg");
-      attr(h33, "class", "svelte-lbb1rg");
-      attr(h34, "class", "svelte-lbb1rg");
-      attr(div18, "class", "stats-section svelte-lbb1rg");
-      attr(h35, "class", "svelte-lbb1rg");
-      attr(div19, "class", "metric-value svelte-lbb1rg");
-      attr(div20, "class", "metric-label svelte-lbb1rg");
-      attr(div21, "class", "metric-description svelte-lbb1rg");
-      attr(div22, "class", "metric-card svelte-lbb1rg");
-      attr(div23, "class", "metric-value svelte-lbb1rg");
-      attr(div24, "class", "metric-label svelte-lbb1rg");
-      attr(div25, "class", "metric-description svelte-lbb1rg");
-      attr(div26, "class", "metric-card svelte-lbb1rg");
-      attr(div27, "class", "metric-value svelte-lbb1rg");
-      attr(div28, "class", "metric-label svelte-lbb1rg");
-      attr(div29, "class", "metric-description svelte-lbb1rg");
-      attr(div30, "class", "metric-card svelte-lbb1rg");
-      attr(div31, "class", "metric-value svelte-lbb1rg");
-      attr(div32, "class", "metric-label svelte-lbb1rg");
-      attr(div33, "class", "metric-description svelte-lbb1rg");
-      attr(div34, "class", "metric-card svelte-lbb1rg");
-      attr(div35, "class", "metric-value svelte-lbb1rg");
-      attr(div36, "class", "metric-label svelte-lbb1rg");
-      attr(div37, "class", "metric-description svelte-lbb1rg");
-      attr(div38, "class", "metric-card svelte-lbb1rg");
-      attr(div39, "class", "metric-value svelte-lbb1rg");
-      attr(div40, "class", "metric-label svelte-lbb1rg");
-      attr(div41, "class", "metric-description svelte-lbb1rg");
-      attr(div42, "class", "metric-card svelte-lbb1rg");
-      attr(div43, "class", "metric-value svelte-lbb1rg");
-      attr(div44, "class", "metric-label svelte-lbb1rg");
-      attr(div45, "class", "metric-description svelte-lbb1rg");
-      attr(div46, "class", "metric-card svelte-lbb1rg");
-      attr(div47, "class", "metric-value svelte-lbb1rg");
-      attr(div48, "class", "metric-label svelte-lbb1rg");
-      attr(div49, "class", "metric-description svelte-lbb1rg");
-      attr(div50, "class", "metric-card svelte-lbb1rg");
-      attr(div51, "class", "metrics-grid svelte-lbb1rg");
-      attr(h4, "class", "svelte-lbb1rg");
-      attr(div52, "class", "stat-value svelte-lbb1rg");
-      attr(div53, "class", "stat-label svelte-lbb1rg");
-      attr(div54, "class", "stat-card svelte-lbb1rg");
-      attr(div55, "class", "stat-value svelte-lbb1rg");
-      attr(div56, "class", "stat-label svelte-lbb1rg");
-      attr(div57, "class", "stat-card svelte-lbb1rg");
-      attr(div58, "class", "stat-value svelte-lbb1rg");
-      attr(div59, "class", "stat-label svelte-lbb1rg");
-      attr(div60, "class", "stat-card svelte-lbb1rg");
-      attr(div61, "class", "stats-grid svelte-lbb1rg");
-      attr(div62, "class", "stats-section svelte-lbb1rg");
-      attr(h36, "class", "svelte-lbb1rg");
-      attr(div63, "class", "stats-section svelte-lbb1rg");
-      attr(h37, "class", "svelte-lbb1rg");
-      attr(div64, "class", "stats-section svelte-lbb1rg");
-      attr(h38, "class", "svelte-lbb1rg");
-      attr(div65, "class", "stats-section svelte-lbb1rg");
-      attr(h39, "class", "svelte-lbb1rg");
-      attr(div66, "class", "stats-section svelte-lbb1rg");
-      attr(button, "class", "close-button svelte-lbb1rg");
-      attr(div67, "class", "modal-actions svelte-lbb1rg");
+      attr(div1, "class", "filter-group svelte-pk96ym");
+      attr(div2, "class", "filters svelte-pk96ym");
+      attr(h30, "class", "svelte-pk96ym");
+      attr(div3, "class", "stat-value svelte-pk96ym");
+      attr(div4, "class", "stat-label svelte-pk96ym");
+      attr(div5, "class", "stat-card svelte-pk96ym");
+      attr(div6, "class", "stat-value svelte-pk96ym");
+      attr(div7, "class", "stat-label svelte-pk96ym");
+      attr(div8, "class", "stat-card svelte-pk96ym");
+      attr(div9, "class", "stat-value svelte-pk96ym");
+      attr(div10, "class", "stat-label svelte-pk96ym");
+      attr(div11, "class", "stat-card svelte-pk96ym");
+      attr(div12, "class", "stat-value svelte-pk96ym");
+      attr(div13, "class", "stat-label svelte-pk96ym");
+      attr(div14, "class", "stat-card svelte-pk96ym");
+      attr(div15, "class", "stats-grid svelte-pk96ym");
+      attr(div16, "class", "stats-section svelte-pk96ym");
+      attr(h31, "class", "svelte-pk96ym");
+      attr(div17, "class", "stat-value svelte-pk96ym");
+      attr(div18, "class", "stat-label svelte-pk96ym");
+      attr(div19, "class", "stat-card svelte-pk96ym");
+      attr(div20, "class", "stat-value svelte-pk96ym");
+      attr(div21, "class", "stat-label svelte-pk96ym");
+      attr(div22, "class", "stat-card svelte-pk96ym");
+      attr(div23, "class", "stats-grid svelte-pk96ym");
+      attr(div24, "class", "stats-section svelte-pk96ym");
+      attr(h32, "class", "svelte-pk96ym");
+      attr(div25, "class", "stats-section svelte-pk96ym");
+      attr(h33, "class", "svelte-pk96ym");
+      attr(h34, "class", "svelte-pk96ym");
+      attr(h35, "class", "svelte-pk96ym");
+      attr(div26, "class", "stats-section svelte-pk96ym");
+      attr(h36, "class", "svelte-pk96ym");
+      attr(div27, "class", "metric-value svelte-pk96ym");
+      attr(div28, "class", "metric-label svelte-pk96ym");
+      attr(div29, "class", "metric-description svelte-pk96ym");
+      attr(div30, "class", "metric-card svelte-pk96ym");
+      attr(div31, "class", "metric-value svelte-pk96ym");
+      attr(div32, "class", "metric-label svelte-pk96ym");
+      attr(div33, "class", "metric-description svelte-pk96ym");
+      attr(div34, "class", "metric-card svelte-pk96ym");
+      attr(div35, "class", "metric-value svelte-pk96ym");
+      attr(div36, "class", "metric-label svelte-pk96ym");
+      attr(div37, "class", "metric-description svelte-pk96ym");
+      attr(div38, "class", "metric-card svelte-pk96ym");
+      attr(div39, "class", "metric-value svelte-pk96ym");
+      attr(div40, "class", "metric-label svelte-pk96ym");
+      attr(div41, "class", "metric-description svelte-pk96ym");
+      attr(div42, "class", "metric-card svelte-pk96ym");
+      attr(div43, "class", "metric-value svelte-pk96ym");
+      attr(div44, "class", "metric-label svelte-pk96ym");
+      attr(div45, "class", "metric-description svelte-pk96ym");
+      attr(div46, "class", "metric-card svelte-pk96ym");
+      attr(div47, "class", "metric-value svelte-pk96ym");
+      attr(div48, "class", "metric-label svelte-pk96ym");
+      attr(div49, "class", "metric-description svelte-pk96ym");
+      attr(div50, "class", "metric-card svelte-pk96ym");
+      attr(div51, "class", "metric-value svelte-pk96ym");
+      attr(div52, "class", "metric-label svelte-pk96ym");
+      attr(div53, "class", "metric-description svelte-pk96ym");
+      attr(div54, "class", "metric-card svelte-pk96ym");
+      attr(div55, "class", "metric-value svelte-pk96ym");
+      attr(div56, "class", "metric-label svelte-pk96ym");
+      attr(div57, "class", "metric-description svelte-pk96ym");
+      attr(div58, "class", "metric-card svelte-pk96ym");
+      attr(div59, "class", "metrics-grid svelte-pk96ym");
+      attr(h4, "class", "svelte-pk96ym");
+      attr(div60, "class", "stat-value svelte-pk96ym");
+      attr(div61, "class", "stat-label svelte-pk96ym");
+      attr(div62, "class", "stat-card svelte-pk96ym");
+      attr(div63, "class", "stat-value svelte-pk96ym");
+      attr(div64, "class", "stat-label svelte-pk96ym");
+      attr(div65, "class", "stat-card svelte-pk96ym");
+      attr(div66, "class", "stat-value svelte-pk96ym");
+      attr(div67, "class", "stat-label svelte-pk96ym");
+      attr(div68, "class", "stat-card svelte-pk96ym");
+      attr(div69, "class", "stats-grid svelte-pk96ym");
+      attr(div70, "class", "stats-section svelte-pk96ym");
+      attr(h37, "class", "svelte-pk96ym");
+      attr(div71, "class", "stats-section svelte-pk96ym");
+      attr(h38, "class", "svelte-pk96ym");
+      attr(div72, "class", "stats-section svelte-pk96ym");
+      attr(h39, "class", "svelte-pk96ym");
+      attr(div73, "class", "stats-section svelte-pk96ym");
+      attr(button, "class", "close-button svelte-pk96ym");
+      attr(div74, "class", "modal-actions svelte-pk96ym");
     },
     m(target, anchor) {
       insert(target, div2, anchor);
@@ -7976,133 +8060,144 @@ function create_else_block3(ctx) {
       append(div14, t24);
       append(div14, div13);
       insert(target, t26, anchor);
-      insert(target, div17, anchor);
-      append(div17, h31);
-      append(div17, t28);
-      if_block0.m(div17, null);
-      insert(target, t29, anchor);
-      insert(target, div18, anchor);
-      append(div18, h32);
-      append(div18, t31);
-      if_block1.m(div18, null);
-      append(div18, t32);
-      append(div18, h33);
-      append(div18, t34);
-      if_block2.m(div18, null);
-      append(div18, t35);
-      append(div18, h34);
-      append(div18, t37);
-      if_block3.m(div18, null);
-      insert(target, t38, anchor);
-      insert(target, div62, anchor);
-      append(div62, h35);
-      append(div62, t40);
-      append(div62, div51);
-      append(div51, div22);
-      append(div22, div19);
-      append(div19, t41);
-      append(div19, t42);
-      append(div22, t43);
+      insert(target, div24, anchor);
+      append(div24, h31);
+      append(div24, t28);
+      append(div24, div23);
+      append(div23, div19);
+      append(div19, div17);
+      append(div17, t29);
+      append(div19, t30);
+      append(div19, div18);
+      append(div23, t32);
+      append(div23, div22);
       append(div22, div20);
-      append(div22, t45);
+      append(div20, t33);
+      append(div22, t34);
       append(div22, div21);
-      append(div51, t47);
-      append(div51, div26);
-      append(div26, div23);
-      append(div26, t49);
-      append(div26, div24);
-      append(div26, t51);
-      append(div26, div25);
-      append(div51, t53);
-      append(div51, div30);
+      insert(target, t36, anchor);
+      insert(target, div25, anchor);
+      append(div25, h32);
+      append(div25, t38);
+      if_block0.m(div25, null);
+      insert(target, t39, anchor);
+      insert(target, div26, anchor);
+      append(div26, h33);
+      append(div26, t41);
+      if_block1.m(div26, null);
+      append(div26, t42);
+      append(div26, h34);
+      append(div26, t44);
+      if_block2.m(div26, null);
+      append(div26, t45);
+      append(div26, h35);
+      append(div26, t47);
+      if_block3.m(div26, null);
+      insert(target, t48, anchor);
+      insert(target, div70, anchor);
+      append(div70, h36);
+      append(div70, t50);
+      append(div70, div59);
+      append(div59, div30);
       append(div30, div27);
-      append(div30, t56);
+      append(div27, t51);
+      append(div27, t52);
+      append(div30, t53);
       append(div30, div28);
-      append(div30, t58);
+      append(div30, t55);
       append(div30, div29);
-      append(div51, t60);
-      append(div51, div34);
+      append(div59, t57);
+      append(div59, div34);
       append(div34, div31);
-      append(div34, t62);
+      append(div34, t59);
       append(div34, div32);
-      append(div34, t64);
+      append(div34, t61);
       append(div34, div33);
-      append(div51, t66);
-      append(div51, div38);
+      append(div59, t63);
+      append(div59, div38);
       append(div38, div35);
-      append(div38, t68);
+      append(div38, t66);
       append(div38, div36);
-      append(div38, t70);
+      append(div38, t68);
       append(div38, div37);
-      append(div51, t72);
-      append(div51, div42);
+      append(div59, t70);
+      append(div59, div42);
       append(div42, div39);
-      append(div39, t73);
-      append(div42, t74);
+      append(div42, t72);
       append(div42, div40);
-      append(div42, t76);
+      append(div42, t74);
       append(div42, div41);
-      append(div51, t78);
-      append(div51, div46);
+      append(div59, t76);
+      append(div59, div46);
       append(div46, div43);
-      append(div46, t81);
+      append(div46, t78);
       append(div46, div44);
-      append(div46, t83);
+      append(div46, t80);
       append(div46, div45);
-      append(div51, t85);
-      append(div51, div50);
+      append(div59, t82);
+      append(div59, div50);
       append(div50, div47);
-      append(div47, t86);
-      append(div50, t87);
+      append(div47, t83);
+      append(div50, t84);
       append(div50, div48);
-      append(div50, t89);
+      append(div50, t86);
       append(div50, div49);
-      append(div62, t91);
-      append(div62, h4);
-      append(div62, t93);
-      append(div62, div61);
-      append(div61, div54);
+      append(div59, t88);
+      append(div59, div54);
+      append(div54, div51);
+      append(div54, t91);
       append(div54, div52);
-      append(div52, t94);
-      append(div54, t95);
+      append(div54, t93);
       append(div54, div53);
-      append(div61, t97);
-      append(div61, div57);
-      append(div57, div55);
-      append(div55, t98);
-      append(div57, t99);
-      append(div57, div56);
-      append(div61, t101);
-      append(div61, div60);
-      append(div60, div58);
-      append(div58, t102);
-      append(div60, t103);
-      append(div60, div59);
-      insert(target, t105, anchor);
-      insert(target, div63, anchor);
-      append(div63, h36);
-      append(div63, t107);
-      if_block4.m(div63, null);
-      insert(target, t108, anchor);
-      insert(target, div64, anchor);
-      append(div64, h37);
-      append(div64, t110);
-      if_block5.m(div64, null);
-      insert(target, t111, anchor);
-      insert(target, div65, anchor);
-      append(div65, h38);
-      append(div65, t113);
-      if_block6.m(div65, null);
-      insert(target, t114, anchor);
-      insert(target, div66, anchor);
-      append(div66, h39);
-      append(div66, t116);
-      append(div66, p);
-      append(div66, t118);
-      mount_component(reviewheatmap, div66, null);
-      insert(target, t119, anchor);
-      insert(target, div67, anchor);
-      append(div67, button);
+      append(div59, t95);
+      append(div59, div58);
+      append(div58, div55);
+      append(div55, t96);
+      append(div58, t97);
+      append(div58, div56);
+      append(div58, t99);
+      append(div58, div57);
+      append(div70, t101);
+      append(div70, h4);
+      append(div70, t103);
+      append(div70, div69);
+      append(div69, div62);
+      append(div62, div60);
+      append(div60, t104);
+      append(div62, t105);
+      append(div62, div61);
+      append(div69, t107);
+      append(div69, div65);
+      append(div65, div63);
+      append(div63, t108);
+      append(div65, t109);
+      append(div65, div64);
+      append(div69, t111);
+      append(div69, div68);
+      append(div68, div66);
+      append(div66, t112);
+      append(div68, t113);
+      append(div68, div67);
+      insert(target, t115, anchor);
+      insert(target, div71, anchor);
+      append(div71, h37);
+      append(div71, t117);
+      if_block4.m(div71, null);
+      insert(target, t118, anchor);
+      insert(target, div72, anchor);
+      append(div72, h38);
+      append(div72, t120);
+      if_block5.m(div72, null);
+      insert(target, t121, anchor);
+      insert(target, div73, anchor);
+      append(div73, h39);
+      append(div73, t123);
+      append(div73, p);
+      append(div73, t125);
+      mount_component(reviewheatmap, div73, null);
+      insert(target, t126, anchor);
+      insert(target, div74, anchor);
+      append(div74, button);
       current = true;
       if (!mounted) {
         dispose = [
@@ -8141,18 +8236,18 @@ function create_else_block3(ctx) {
       }
     },
     p(ctx2, dirty) {
-      var _a2, _b2, _c2, _d2, _e2, _f2, _g2, _h2, _i2, _j2, _k2, _l2, _m2, _n2, _o2, _p2, _q2, _r2, _s2, _t2, _u2;
+      var _a2, _b2, _c2, _d2, _e2, _f2, _g2, _h2, _i2, _j2, _k2, _l2, _m2, _n2, _o2, _p2, _q2, _r2, _s2, _t2, _u2, _v2, _w2;
       if (dirty[0] & /*availableTags*/
       64) {
-        each_value_3 = /*availableTags*/
+        each_value_2 = /*availableTags*/
         ctx2[6];
         let i;
-        for (i = 0; i < each_value_3.length; i += 1) {
-          const child_ctx = get_each_context_3(ctx2, each_value_3, i);
+        for (i = 0; i < each_value_2.length; i += 1) {
+          const child_ctx = get_each_context_22(ctx2, each_value_2, i);
           if (each_blocks_1[i]) {
             each_blocks_1[i].p(child_ctx, dirty);
           } else {
-            each_blocks_1[i] = create_each_block_3(child_ctx);
+            each_blocks_1[i] = create_each_block_22(child_ctx);
             each_blocks_1[i].c();
             each_blocks_1[i].m(select0, each0_anchor);
           }
@@ -8160,19 +8255,19 @@ function create_else_block3(ctx) {
         for (; i < each_blocks_1.length; i += 1) {
           each_blocks_1[i].d(1);
         }
-        each_blocks_1.length = each_value_3.length;
+        each_blocks_1.length = each_value_2.length;
       }
       if (dirty[0] & /*availableDecks*/
       32) {
-        each_value_2 = /*availableDecks*/
+        each_value_1 = /*availableDecks*/
         ctx2[5];
         let i;
-        for (i = 0; i < each_value_2.length; i += 1) {
-          const child_ctx = get_each_context_22(ctx2, each_value_2, i);
+        for (i = 0; i < each_value_1.length; i += 1) {
+          const child_ctx = get_each_context_12(ctx2, each_value_1, i);
           if (each_blocks[i]) {
             each_blocks[i].p(child_ctx, dirty);
           } else {
-            each_blocks[i] = create_each_block_22(child_ctx);
+            each_blocks[i] = create_each_block_12(child_ctx);
             each_blocks[i].c();
             each_blocks[i].m(select0, null);
           }
@@ -8180,7 +8275,7 @@ function create_else_block3(ctx) {
         for (; i < each_blocks.length; i += 1) {
           each_blocks[i].d(1);
         }
-        each_blocks.length = each_value_2.length;
+        each_blocks.length = each_value_1.length;
       }
       if (dirty[0] & /*selectedDeckFilter, availableDecks, availableTags*/
       104) {
@@ -8210,6 +8305,20 @@ function create_else_block3(ctx) {
       4) && t19_value !== (t19_value = /*statistics*/
       (((_f2 = (_e2 = ctx2[2]) == null ? void 0 : _e2.cardStats) == null ? void 0 : _f2.mature) || 0) + ""))
         set_data(t19, t19_value);
+      if ((!current || dirty[0] & /*statistics*/
+      4) && t29_value !== (t29_value = /*statistics*/
+      (((_g2 = ctx2[2]) == null ? void 0 : _g2.averagePace) ? formatPace(
+        /*statistics*/
+        ctx2[2].averagePace
+      ) : "N/A") + ""))
+        set_data(t29, t29_value);
+      if ((!current || dirty[0] & /*statistics*/
+      4) && t33_value !== (t33_value = /*statistics*/
+      (((_h2 = ctx2[2]) == null ? void 0 : _h2.totalReviewTime) ? formatTime(
+        /*statistics*/
+        ctx2[2].totalReviewTime
+      ) : "N/A") + ""))
+        set_data(t33, t33_value);
       if (current_block_type === (current_block_type = select_block_type_1(ctx2, dirty)) && if_block0) {
         if_block0.p(ctx2, dirty);
       } else {
@@ -8217,7 +8326,7 @@ function create_else_block3(ctx) {
         if_block0 = current_block_type(ctx2);
         if (if_block0) {
           if_block0.c();
-          if_block0.m(div17, null);
+          if_block0.m(div25, null);
         }
       }
       if (current_block_type_1 === (current_block_type_1 = select_block_type_2(ctx2, dirty)) && if_block1) {
@@ -8227,7 +8336,7 @@ function create_else_block3(ctx) {
         if_block1 = current_block_type_1(ctx2);
         if (if_block1) {
           if_block1.c();
-          if_block1.m(div18, t32);
+          if_block1.m(div26, t42);
         }
       }
       if (current_block_type_2 === (current_block_type_2 = select_block_type_3(ctx2, dirty)) && if_block2) {
@@ -8237,7 +8346,7 @@ function create_else_block3(ctx) {
         if_block2 = current_block_type_2(ctx2);
         if (if_block2) {
           if_block2.c();
-          if_block2.m(div18, t35);
+          if_block2.m(div26, t45);
         }
       }
       if (current_block_type_3 === (current_block_type_3 = select_block_type_4(ctx2, dirty)) && if_block3) {
@@ -8247,35 +8356,35 @@ function create_else_block3(ctx) {
         if_block3 = current_block_type_3(ctx2);
         if (if_block3) {
           if_block3.c();
-          if_block3.m(div18, null);
+          if_block3.m(div26, null);
         }
       }
       if ((!current || dirty[0] & /*statistics*/
-      4) && t41_value !== (t41_value = /*statistics*/
-      (((_g2 = ctx2[2]) == null ? void 0 : _g2.retentionRate) || 0).toFixed(1) + ""))
-        set_data(t41, t41_value);
+      4) && t51_value !== (t51_value = /*statistics*/
+      (((_i2 = ctx2[2]) == null ? void 0 : _i2.retentionRate) || 0).toFixed(1) + ""))
+        set_data(t51, t51_value);
       if ((!current || dirty[0] & /*statistics*/
-      4) && t73_value !== (t73_value = /*statistics*/
-      (((_i2 = (_h2 = ctx2[2]) == null ? void 0 : _h2.cardStats) == null ? void 0 : _i2.learning) || 0) + ""))
-        set_data(t73, t73_value);
+      4) && t83_value !== (t83_value = /*statistics*/
+      (((_k2 = (_j2 = ctx2[2]) == null ? void 0 : _j2.cardStats) == null ? void 0 : _k2.learning) || 0) + ""))
+        set_data(t83, t83_value);
       if ((!current || dirty[0] & /*statistics*/
-      4) && t86_value !== (t86_value = /*statistics*/
-      (((_k2 = (_j2 = ctx2[2]) == null ? void 0 : _j2.cardStats) == null ? void 0 : _k2.new) || 0) + /*statistics*/
-      (((_m2 = (_l2 = ctx2[2]) == null ? void 0 : _l2.cardStats) == null ? void 0 : _m2.learning) || 0) + /*statistics*/
-      (((_o2 = (_n2 = ctx2[2]) == null ? void 0 : _n2.cardStats) == null ? void 0 : _o2.mature) || 0) + ""))
-        set_data(t86, t86_value);
+      4) && t96_value !== (t96_value = /*statistics*/
+      (((_m2 = (_l2 = ctx2[2]) == null ? void 0 : _l2.cardStats) == null ? void 0 : _m2.new) || 0) + /*statistics*/
+      (((_o2 = (_n2 = ctx2[2]) == null ? void 0 : _n2.cardStats) == null ? void 0 : _o2.learning) || 0) + /*statistics*/
+      (((_q2 = (_p2 = ctx2[2]) == null ? void 0 : _p2.cardStats) == null ? void 0 : _q2.mature) || 0) + ""))
+        set_data(t96, t96_value);
       if ((!current || dirty[0] & /*statistics*/
-      4) && t94_value !== (t94_value = /*statistics*/
-      (((_q2 = (_p2 = ctx2[2]) == null ? void 0 : _p2.cardStats) == null ? void 0 : _q2.new) || 0) + ""))
-        set_data(t94, t94_value);
+      4) && t104_value !== (t104_value = /*statistics*/
+      (((_s2 = (_r2 = ctx2[2]) == null ? void 0 : _r2.cardStats) == null ? void 0 : _s2.new) || 0) + ""))
+        set_data(t104, t104_value);
       if ((!current || dirty[0] & /*statistics*/
-      4) && t98_value !== (t98_value = /*statistics*/
-      (((_s2 = (_r2 = ctx2[2]) == null ? void 0 : _r2.cardStats) == null ? void 0 : _s2.learning) || 0) + ""))
-        set_data(t98, t98_value);
+      4) && t108_value !== (t108_value = /*statistics*/
+      (((_u2 = (_t2 = ctx2[2]) == null ? void 0 : _t2.cardStats) == null ? void 0 : _u2.learning) || 0) + ""))
+        set_data(t108, t108_value);
       if ((!current || dirty[0] & /*statistics*/
-      4) && t102_value !== (t102_value = /*statistics*/
-      (((_u2 = (_t2 = ctx2[2]) == null ? void 0 : _t2.cardStats) == null ? void 0 : _u2.mature) || 0) + ""))
-        set_data(t102, t102_value);
+      4) && t112_value !== (t112_value = /*statistics*/
+      (((_w2 = (_v2 = ctx2[2]) == null ? void 0 : _v2.cardStats) == null ? void 0 : _w2.mature) || 0) + ""))
+        set_data(t112, t112_value);
       if (current_block_type_4 === (current_block_type_4 = select_block_type_5(ctx2, dirty)) && if_block4) {
         if_block4.p(ctx2, dirty);
       } else {
@@ -8283,7 +8392,7 @@ function create_else_block3(ctx) {
         if_block4 = current_block_type_4(ctx2);
         if (if_block4) {
           if_block4.c();
-          if_block4.m(div63, null);
+          if_block4.m(div71, null);
         }
       }
       if (current_block_type_5 === (current_block_type_5 = select_block_type_6(ctx2, dirty)) && if_block5) {
@@ -8293,17 +8402,7 @@ function create_else_block3(ctx) {
         if_block5 = current_block_type_5(ctx2);
         if (if_block5) {
           if_block5.c();
-          if_block5.m(div64, null);
-        }
-      }
-      if (current_block_type_6 === (current_block_type_6 = select_block_type_8(ctx2, dirty)) && if_block6) {
-        if_block6.p(ctx2, dirty);
-      } else {
-        if_block6.d(1);
-        if_block6 = current_block_type_6(ctx2);
-        if (if_block6) {
-          if_block6.c();
-          if_block6.m(div65, null);
+          if_block5.m(div72, null);
         }
       }
       const reviewheatmap_changes = {};
@@ -8335,44 +8434,43 @@ function create_else_block3(ctx) {
       if (detaching)
         detach(t26);
       if (detaching)
-        detach(div17);
+        detach(div24);
+      if (detaching)
+        detach(t36);
+      if (detaching)
+        detach(div25);
       if_block0.d();
       if (detaching)
-        detach(t29);
+        detach(t39);
       if (detaching)
-        detach(div18);
+        detach(div26);
       if_block1.d();
       if_block2.d();
       if_block3.d();
       if (detaching)
-        detach(t38);
+        detach(t48);
       if (detaching)
-        detach(div62);
+        detach(div70);
       if (detaching)
-        detach(t105);
+        detach(t115);
       if (detaching)
-        detach(div63);
+        detach(div71);
       if_block4.d();
       if (detaching)
-        detach(t108);
+        detach(t118);
       if (detaching)
-        detach(div64);
+        detach(div72);
       if_block5.d();
       if (detaching)
-        detach(t111);
+        detach(t121);
       if (detaching)
-        detach(div65);
-      if_block6.d();
-      if (detaching)
-        detach(t114);
-      if (detaching)
-        detach(div66);
+        detach(div73);
       ctx[23](null);
       destroy_component(reviewheatmap);
       if (detaching)
-        detach(t119);
+        detach(t126);
       if (detaching)
-        detach(div67);
+        detach(div74);
       mounted = false;
       run_all(dispose);
     }
@@ -8393,8 +8491,8 @@ function create_if_block_13(ctx) {
       t1 = space();
       button = element("button");
       button.textContent = "Retry";
-      attr(button, "class", "retry-button svelte-lbb1rg");
-      attr(div, "class", "error svelte-lbb1rg");
+      attr(button, "class", "retry-button svelte-pk96ym");
+      attr(div, "class", "error svelte-pk96ym");
     },
     m(target, anchor) {
       insert(target, div, anchor);
@@ -8428,7 +8526,7 @@ function create_if_block3(ctx) {
     c() {
       div = element("div");
       div.textContent = "Loading statistics...";
-      attr(div, "class", "loading svelte-lbb1rg");
+      attr(div, "class", "loading svelte-pk96ym");
     },
     m(target, anchor) {
       insert(target, div, anchor);
@@ -8442,12 +8540,12 @@ function create_if_block3(ctx) {
     }
   };
 }
-function create_each_block_3(ctx) {
+function create_each_block_22(ctx) {
   let option;
   let t0;
   let t1_value = (
     /*tag*/
-    ctx[38] + ""
+    ctx[35] + ""
   );
   let t1;
   let option_value_value;
@@ -8457,9 +8555,11 @@ function create_each_block_3(ctx) {
       t0 = text("Tag: ");
       t1 = text(t1_value);
       option.__value = option_value_value = "tag:" + /*tag*/
-      ctx[38];
+      ctx[35];
       option.value = option.__value;
-      attr(option, "class", "svelte-lbb1rg");
+      set_style(option, "background", "var(--background-primary)", 1);
+      set_style(option, "color", "var(--text-normal)", 1);
+      attr(option, "class", "svelte-pk96ym");
     },
     m(target, anchor) {
       insert(target, option, anchor);
@@ -8469,11 +8569,11 @@ function create_each_block_3(ctx) {
     p(ctx2, dirty) {
       if (dirty[0] & /*availableTags*/
       64 && t1_value !== (t1_value = /*tag*/
-      ctx2[38] + ""))
+      ctx2[35] + ""))
         set_data(t1, t1_value);
       if (dirty[0] & /*availableTags*/
       64 && option_value_value !== (option_value_value = "tag:" + /*tag*/
-      ctx2[38])) {
+      ctx2[35])) {
         option.__value = option_value_value;
         option.value = option.__value;
       }
@@ -8484,11 +8584,11 @@ function create_each_block_3(ctx) {
     }
   };
 }
-function create_each_block_22(ctx) {
+function create_each_block_12(ctx) {
   let option;
   let t_value = (
     /*deck*/
-    ctx[35].name + ""
+    ctx[32].name + ""
   );
   let t;
   let option_value_value;
@@ -8497,9 +8597,11 @@ function create_each_block_22(ctx) {
       option = element("option");
       t = text(t_value);
       option.__value = option_value_value = "deck:" + /*deck*/
-      ctx[35].id;
+      ctx[32].id;
       option.value = option.__value;
-      attr(option, "class", "svelte-lbb1rg");
+      set_style(option, "background", "var(--background-primary)", 1);
+      set_style(option, "color", "var(--text-normal)", 1);
+      attr(option, "class", "svelte-pk96ym");
     },
     m(target, anchor) {
       insert(target, option, anchor);
@@ -8508,11 +8610,11 @@ function create_each_block_22(ctx) {
     p(ctx2, dirty) {
       if (dirty[0] & /*availableDecks*/
       32 && t_value !== (t_value = /*deck*/
-      ctx2[35].name + ""))
+      ctx2[32].name + ""))
         set_data(t, t_value);
       if (dirty[0] & /*availableDecks*/
       32 && option_value_value !== (option_value_value = "deck:" + /*deck*/
-      ctx2[35].id)) {
+      ctx2[32].id)) {
         option.__value = option_value_value;
         option.value = option.__value;
       }
@@ -8523,15 +8625,15 @@ function create_each_block_22(ctx) {
     }
   };
 }
-function create_else_block_8(ctx) {
+function create_else_block_6(ctx) {
   let div;
   return {
     c() {
       div = element("div");
-      div.innerHTML = `<p class="svelte-lbb1rg">No reviews today yet.</p> 
-                    <p class="help-text svelte-lbb1rg">Start reviewing flashcards to see your daily statistics
+      div.innerHTML = `<p class="svelte-pk96ym">No reviews today yet.</p> 
+                    <p class="help-text svelte-pk96ym">Start reviewing flashcards to see your daily statistics
                         here!</p>`;
-      attr(div, "class", "no-data-message svelte-lbb1rg");
+      attr(div, "class", "no-data-message svelte-pk96ym");
     },
     m(target, anchor) {
       insert(target, div, anchor);
@@ -8543,13 +8645,13 @@ function create_else_block_8(ctx) {
     }
   };
 }
-function create_if_block_10(ctx) {
+function create_if_block_7(ctx) {
   let div6;
   let div2;
   let div0;
   let t0_value = (
     /*todayStats*/
-    ctx[11].reviews + ""
+    ctx[8].reviews + ""
   );
   let t0;
   let t1;
@@ -8559,7 +8661,7 @@ function create_if_block_10(ctx) {
   let div3;
   let t4_value = formatTime(
     /*todayStats*/
-    ctx[11].timeSpent
+    ctx[8].timeSpent
   ) + "";
   let t4;
   let t5;
@@ -8572,7 +8674,7 @@ function create_if_block_10(ctx) {
   let div7;
   let t10_value = (
     /*todayStats*/
-    ctx[11].newCards + ""
+    ctx[8].newCards + ""
   );
   let t10;
   let t11;
@@ -8582,7 +8684,7 @@ function create_if_block_10(ctx) {
   let div10;
   let t14_value = (
     /*todayStats*/
-    ctx[11].learningCards + ""
+    ctx[8].learningCards + ""
   );
   let t14;
   let t15;
@@ -8592,7 +8694,7 @@ function create_if_block_10(ctx) {
   let div13;
   let t18_value = (
     /*todayStats*/
-    ctx[11].reviewCards + ""
+    ctx[8].reviewCards + ""
   );
   let t18;
   let t19;
@@ -8638,24 +8740,24 @@ function create_if_block_10(ctx) {
       t19 = space();
       div14 = element("div");
       div14.textContent = "Review";
-      attr(div0, "class", "stat-value svelte-lbb1rg");
-      attr(div1, "class", "stat-label svelte-lbb1rg");
-      attr(div2, "class", "stat-card svelte-lbb1rg");
-      attr(div3, "class", "stat-value svelte-lbb1rg");
-      attr(div4, "class", "stat-label svelte-lbb1rg");
-      attr(div5, "class", "stat-card svelte-lbb1rg");
-      attr(div6, "class", "stats-grid svelte-lbb1rg");
-      attr(h4, "class", "svelte-lbb1rg");
-      attr(div7, "class", "stat-value svelte-lbb1rg");
-      attr(div8, "class", "stat-label svelte-lbb1rg");
-      attr(div9, "class", "stat-card svelte-lbb1rg");
-      attr(div10, "class", "stat-value svelte-lbb1rg");
-      attr(div11, "class", "stat-label svelte-lbb1rg");
-      attr(div12, "class", "stat-card svelte-lbb1rg");
-      attr(div13, "class", "stat-value svelte-lbb1rg");
-      attr(div14, "class", "stat-label svelte-lbb1rg");
-      attr(div15, "class", "stat-card svelte-lbb1rg");
-      attr(div16, "class", "stats-grid svelte-lbb1rg");
+      attr(div0, "class", "stat-value svelte-pk96ym");
+      attr(div1, "class", "stat-label svelte-pk96ym");
+      attr(div2, "class", "stat-card svelte-pk96ym");
+      attr(div3, "class", "stat-value svelte-pk96ym");
+      attr(div4, "class", "stat-label svelte-pk96ym");
+      attr(div5, "class", "stat-card svelte-pk96ym");
+      attr(div6, "class", "stats-grid svelte-pk96ym");
+      attr(h4, "class", "svelte-pk96ym");
+      attr(div7, "class", "stat-value svelte-pk96ym");
+      attr(div8, "class", "stat-label svelte-pk96ym");
+      attr(div9, "class", "stat-card svelte-pk96ym");
+      attr(div10, "class", "stat-value svelte-pk96ym");
+      attr(div11, "class", "stat-label svelte-pk96ym");
+      attr(div12, "class", "stat-card svelte-pk96ym");
+      attr(div13, "class", "stat-value svelte-pk96ym");
+      attr(div14, "class", "stat-label svelte-pk96ym");
+      attr(div15, "class", "stat-card svelte-pk96ym");
+      attr(div16, "class", "stats-grid svelte-pk96ym");
     },
     m(target, anchor) {
       insert(target, div6, anchor);
@@ -8694,26 +8796,26 @@ function create_if_block_10(ctx) {
     },
     p(ctx2, dirty) {
       if (dirty[0] & /*todayStats*/
-      2048 && t0_value !== (t0_value = /*todayStats*/
-      ctx2[11].reviews + ""))
+      256 && t0_value !== (t0_value = /*todayStats*/
+      ctx2[8].reviews + ""))
         set_data(t0, t0_value);
       if (dirty[0] & /*todayStats*/
-      2048 && t4_value !== (t4_value = formatTime(
+      256 && t4_value !== (t4_value = formatTime(
         /*todayStats*/
-        ctx2[11].timeSpent
+        ctx2[8].timeSpent
       ) + ""))
         set_data(t4, t4_value);
       if (dirty[0] & /*todayStats*/
-      2048 && t10_value !== (t10_value = /*todayStats*/
-      ctx2[11].newCards + ""))
+      256 && t10_value !== (t10_value = /*todayStats*/
+      ctx2[8].newCards + ""))
         set_data(t10, t10_value);
       if (dirty[0] & /*todayStats*/
-      2048 && t14_value !== (t14_value = /*todayStats*/
-      ctx2[11].learningCards + ""))
+      256 && t14_value !== (t14_value = /*todayStats*/
+      ctx2[8].learningCards + ""))
         set_data(t14, t14_value);
       if (dirty[0] & /*todayStats*/
-      2048 && t18_value !== (t18_value = /*todayStats*/
-      ctx2[11].reviewCards + ""))
+      256 && t18_value !== (t18_value = /*todayStats*/
+      ctx2[8].reviewCards + ""))
         set_data(t18, t18_value);
     },
     d(detaching) {
@@ -8730,13 +8832,13 @@ function create_if_block_10(ctx) {
     }
   };
 }
-function create_else_block_7(ctx) {
+function create_else_block_5(ctx) {
   let div;
   return {
     c() {
       div = element("div");
-      div.innerHTML = `<p class="svelte-lbb1rg">No reviews this week yet.</p>`;
-      attr(div, "class", "no-data-message svelte-lbb1rg");
+      div.innerHTML = `<p class="svelte-pk96ym">No reviews this week yet.</p>`;
+      attr(div, "class", "no-data-message svelte-pk96ym");
     },
     m(target, anchor) {
       insert(target, div, anchor);
@@ -8748,140 +8850,12 @@ function create_else_block_7(ctx) {
     }
   };
 }
-function create_if_block_9(ctx) {
+function create_if_block_6(ctx) {
   let div9;
   let div2;
   let div0;
   let t0_value = (
     /*weekStats*/
-    ctx[10].reviews + ""
-  );
-  let t0;
-  let t1;
-  let div1;
-  let t3;
-  let div5;
-  let div3;
-  let t4_value = formatTime(
-    /*weekStats*/
-    ctx[10].timeSpent
-  ) + "";
-  let t4;
-  let t5;
-  let div4;
-  let t7;
-  let div8;
-  let div6;
-  let t8_value = (
-    /*weekStats*/
-    ctx[10].correctRate.toFixed(1) + ""
-  );
-  let t8;
-  let t9;
-  let t10;
-  let div7;
-  return {
-    c() {
-      div9 = element("div");
-      div2 = element("div");
-      div0 = element("div");
-      t0 = text(t0_value);
-      t1 = space();
-      div1 = element("div");
-      div1.textContent = "Cards Studied";
-      t3 = space();
-      div5 = element("div");
-      div3 = element("div");
-      t4 = text(t4_value);
-      t5 = space();
-      div4 = element("div");
-      div4.textContent = "Time Spent";
-      t7 = space();
-      div8 = element("div");
-      div6 = element("div");
-      t8 = text(t8_value);
-      t9 = text("%");
-      t10 = space();
-      div7 = element("div");
-      div7.textContent = "Success Rate";
-      attr(div0, "class", "stat-value svelte-lbb1rg");
-      attr(div1, "class", "stat-label svelte-lbb1rg");
-      attr(div2, "class", "stat-card svelte-lbb1rg");
-      attr(div3, "class", "stat-value svelte-lbb1rg");
-      attr(div4, "class", "stat-label svelte-lbb1rg");
-      attr(div5, "class", "stat-card svelte-lbb1rg");
-      attr(div6, "class", "stat-value svelte-lbb1rg");
-      attr(div7, "class", "stat-label svelte-lbb1rg");
-      attr(div8, "class", "stat-card svelte-lbb1rg");
-      attr(div9, "class", "stats-grid svelte-lbb1rg");
-    },
-    m(target, anchor) {
-      insert(target, div9, anchor);
-      append(div9, div2);
-      append(div2, div0);
-      append(div0, t0);
-      append(div2, t1);
-      append(div2, div1);
-      append(div9, t3);
-      append(div9, div5);
-      append(div5, div3);
-      append(div3, t4);
-      append(div5, t5);
-      append(div5, div4);
-      append(div9, t7);
-      append(div9, div8);
-      append(div8, div6);
-      append(div6, t8);
-      append(div6, t9);
-      append(div8, t10);
-      append(div8, div7);
-    },
-    p(ctx2, dirty) {
-      if (dirty[0] & /*weekStats*/
-      1024 && t0_value !== (t0_value = /*weekStats*/
-      ctx2[10].reviews + ""))
-        set_data(t0, t0_value);
-      if (dirty[0] & /*weekStats*/
-      1024 && t4_value !== (t4_value = formatTime(
-        /*weekStats*/
-        ctx2[10].timeSpent
-      ) + ""))
-        set_data(t4, t4_value);
-      if (dirty[0] & /*weekStats*/
-      1024 && t8_value !== (t8_value = /*weekStats*/
-      ctx2[10].correctRate.toFixed(1) + ""))
-        set_data(t8, t8_value);
-    },
-    d(detaching) {
-      if (detaching)
-        detach(div9);
-    }
-  };
-}
-function create_else_block_6(ctx) {
-  let div;
-  return {
-    c() {
-      div = element("div");
-      div.innerHTML = `<p class="svelte-lbb1rg">No reviews this month yet.</p>`;
-      attr(div, "class", "no-data-message svelte-lbb1rg");
-    },
-    m(target, anchor) {
-      insert(target, div, anchor);
-    },
-    p: noop,
-    d(detaching) {
-      if (detaching)
-        detach(div);
-    }
-  };
-}
-function create_if_block_8(ctx) {
-  let div9;
-  let div2;
-  let div0;
-  let t0_value = (
-    /*monthStats*/
     ctx[9].reviews + ""
   );
   let t0;
@@ -8891,7 +8865,7 @@ function create_if_block_8(ctx) {
   let div5;
   let div3;
   let t4_value = formatTime(
-    /*monthStats*/
+    /*weekStats*/
     ctx[9].timeSpent
   ) + "";
   let t4;
@@ -8901,7 +8875,7 @@ function create_if_block_8(ctx) {
   let div8;
   let div6;
   let t8_value = (
-    /*monthStats*/
+    /*weekStats*/
     ctx[9].correctRate.toFixed(1) + ""
   );
   let t8;
@@ -8932,16 +8906,16 @@ function create_if_block_8(ctx) {
       t10 = space();
       div7 = element("div");
       div7.textContent = "Success Rate";
-      attr(div0, "class", "stat-value svelte-lbb1rg");
-      attr(div1, "class", "stat-label svelte-lbb1rg");
-      attr(div2, "class", "stat-card svelte-lbb1rg");
-      attr(div3, "class", "stat-value svelte-lbb1rg");
-      attr(div4, "class", "stat-label svelte-lbb1rg");
-      attr(div5, "class", "stat-card svelte-lbb1rg");
-      attr(div6, "class", "stat-value svelte-lbb1rg");
-      attr(div7, "class", "stat-label svelte-lbb1rg");
-      attr(div8, "class", "stat-card svelte-lbb1rg");
-      attr(div9, "class", "stats-grid svelte-lbb1rg");
+      attr(div0, "class", "stat-value svelte-pk96ym");
+      attr(div1, "class", "stat-label svelte-pk96ym");
+      attr(div2, "class", "stat-card svelte-pk96ym");
+      attr(div3, "class", "stat-value svelte-pk96ym");
+      attr(div4, "class", "stat-label svelte-pk96ym");
+      attr(div5, "class", "stat-card svelte-pk96ym");
+      attr(div6, "class", "stat-value svelte-pk96ym");
+      attr(div7, "class", "stat-label svelte-pk96ym");
+      attr(div8, "class", "stat-card svelte-pk96ym");
+      attr(div9, "class", "stats-grid svelte-pk96ym");
     },
     m(target, anchor) {
       insert(target, div9, anchor);
@@ -8965,18 +8939,18 @@ function create_if_block_8(ctx) {
       append(div8, div7);
     },
     p(ctx2, dirty) {
-      if (dirty[0] & /*monthStats*/
-      512 && t0_value !== (t0_value = /*monthStats*/
+      if (dirty[0] & /*weekStats*/
+      512 && t0_value !== (t0_value = /*weekStats*/
       ctx2[9].reviews + ""))
         set_data(t0, t0_value);
-      if (dirty[0] & /*monthStats*/
+      if (dirty[0] & /*weekStats*/
       512 && t4_value !== (t4_value = formatTime(
-        /*monthStats*/
+        /*weekStats*/
         ctx2[9].timeSpent
       ) + ""))
         set_data(t4, t4_value);
-      if (dirty[0] & /*monthStats*/
-      512 && t8_value !== (t8_value = /*monthStats*/
+      if (dirty[0] & /*weekStats*/
+      512 && t8_value !== (t8_value = /*weekStats*/
       ctx2[9].correctRate.toFixed(1) + ""))
         set_data(t8, t8_value);
     },
@@ -8986,13 +8960,13 @@ function create_if_block_8(ctx) {
     }
   };
 }
-function create_else_block_5(ctx) {
+function create_else_block_4(ctx) {
   let div;
   return {
     c() {
       div = element("div");
-      div.innerHTML = `<p class="svelte-lbb1rg">No reviews this year yet.</p>`;
-      attr(div, "class", "no-data-message svelte-lbb1rg");
+      div.innerHTML = `<p class="svelte-pk96ym">No reviews this month yet.</p>`;
+      attr(div, "class", "no-data-message svelte-pk96ym");
     },
     m(target, anchor) {
       insert(target, div, anchor);
@@ -9004,13 +8978,13 @@ function create_else_block_5(ctx) {
     }
   };
 }
-function create_if_block_7(ctx) {
+function create_if_block_5(ctx) {
   let div9;
   let div2;
   let div0;
   let t0_value = (
-    /*yearStats*/
-    ctx[8].reviews + ""
+    /*monthStats*/
+    ctx[10].reviews + ""
   );
   let t0;
   let t1;
@@ -9019,8 +8993,8 @@ function create_if_block_7(ctx) {
   let div5;
   let div3;
   let t4_value = formatTime(
-    /*yearStats*/
-    ctx[8].timeSpent
+    /*monthStats*/
+    ctx[10].timeSpent
   ) + "";
   let t4;
   let t5;
@@ -9029,8 +9003,8 @@ function create_if_block_7(ctx) {
   let div8;
   let div6;
   let t8_value = (
-    /*yearStats*/
-    ctx[8].correctRate.toFixed(1) + ""
+    /*monthStats*/
+    ctx[10].correctRate.toFixed(1) + ""
   );
   let t8;
   let t9;
@@ -9060,16 +9034,144 @@ function create_if_block_7(ctx) {
       t10 = space();
       div7 = element("div");
       div7.textContent = "Success Rate";
-      attr(div0, "class", "stat-value svelte-lbb1rg");
-      attr(div1, "class", "stat-label svelte-lbb1rg");
-      attr(div2, "class", "stat-card svelte-lbb1rg");
-      attr(div3, "class", "stat-value svelte-lbb1rg");
-      attr(div4, "class", "stat-label svelte-lbb1rg");
-      attr(div5, "class", "stat-card svelte-lbb1rg");
-      attr(div6, "class", "stat-value svelte-lbb1rg");
-      attr(div7, "class", "stat-label svelte-lbb1rg");
-      attr(div8, "class", "stat-card svelte-lbb1rg");
-      attr(div9, "class", "stats-grid svelte-lbb1rg");
+      attr(div0, "class", "stat-value svelte-pk96ym");
+      attr(div1, "class", "stat-label svelte-pk96ym");
+      attr(div2, "class", "stat-card svelte-pk96ym");
+      attr(div3, "class", "stat-value svelte-pk96ym");
+      attr(div4, "class", "stat-label svelte-pk96ym");
+      attr(div5, "class", "stat-card svelte-pk96ym");
+      attr(div6, "class", "stat-value svelte-pk96ym");
+      attr(div7, "class", "stat-label svelte-pk96ym");
+      attr(div8, "class", "stat-card svelte-pk96ym");
+      attr(div9, "class", "stats-grid svelte-pk96ym");
+    },
+    m(target, anchor) {
+      insert(target, div9, anchor);
+      append(div9, div2);
+      append(div2, div0);
+      append(div0, t0);
+      append(div2, t1);
+      append(div2, div1);
+      append(div9, t3);
+      append(div9, div5);
+      append(div5, div3);
+      append(div3, t4);
+      append(div5, t5);
+      append(div5, div4);
+      append(div9, t7);
+      append(div9, div8);
+      append(div8, div6);
+      append(div6, t8);
+      append(div6, t9);
+      append(div8, t10);
+      append(div8, div7);
+    },
+    p(ctx2, dirty) {
+      if (dirty[0] & /*monthStats*/
+      1024 && t0_value !== (t0_value = /*monthStats*/
+      ctx2[10].reviews + ""))
+        set_data(t0, t0_value);
+      if (dirty[0] & /*monthStats*/
+      1024 && t4_value !== (t4_value = formatTime(
+        /*monthStats*/
+        ctx2[10].timeSpent
+      ) + ""))
+        set_data(t4, t4_value);
+      if (dirty[0] & /*monthStats*/
+      1024 && t8_value !== (t8_value = /*monthStats*/
+      ctx2[10].correctRate.toFixed(1) + ""))
+        set_data(t8, t8_value);
+    },
+    d(detaching) {
+      if (detaching)
+        detach(div9);
+    }
+  };
+}
+function create_else_block_3(ctx) {
+  let div;
+  return {
+    c() {
+      div = element("div");
+      div.innerHTML = `<p class="svelte-pk96ym">No reviews this year yet.</p>`;
+      attr(div, "class", "no-data-message svelte-pk96ym");
+    },
+    m(target, anchor) {
+      insert(target, div, anchor);
+    },
+    p: noop,
+    d(detaching) {
+      if (detaching)
+        detach(div);
+    }
+  };
+}
+function create_if_block_4(ctx) {
+  let div9;
+  let div2;
+  let div0;
+  let t0_value = (
+    /*yearStats*/
+    ctx[11].reviews + ""
+  );
+  let t0;
+  let t1;
+  let div1;
+  let t3;
+  let div5;
+  let div3;
+  let t4_value = formatTime(
+    /*yearStats*/
+    ctx[11].timeSpent
+  ) + "";
+  let t4;
+  let t5;
+  let div4;
+  let t7;
+  let div8;
+  let div6;
+  let t8_value = (
+    /*yearStats*/
+    ctx[11].correctRate.toFixed(1) + ""
+  );
+  let t8;
+  let t9;
+  let t10;
+  let div7;
+  return {
+    c() {
+      div9 = element("div");
+      div2 = element("div");
+      div0 = element("div");
+      t0 = text(t0_value);
+      t1 = space();
+      div1 = element("div");
+      div1.textContent = "Cards Studied";
+      t3 = space();
+      div5 = element("div");
+      div3 = element("div");
+      t4 = text(t4_value);
+      t5 = space();
+      div4 = element("div");
+      div4.textContent = "Time Spent";
+      t7 = space();
+      div8 = element("div");
+      div6 = element("div");
+      t8 = text(t8_value);
+      t9 = text("%");
+      t10 = space();
+      div7 = element("div");
+      div7.textContent = "Success Rate";
+      attr(div0, "class", "stat-value svelte-pk96ym");
+      attr(div1, "class", "stat-label svelte-pk96ym");
+      attr(div2, "class", "stat-card svelte-pk96ym");
+      attr(div3, "class", "stat-value svelte-pk96ym");
+      attr(div4, "class", "stat-label svelte-pk96ym");
+      attr(div5, "class", "stat-card svelte-pk96ym");
+      attr(div6, "class", "stat-value svelte-pk96ym");
+      attr(div7, "class", "stat-label svelte-pk96ym");
+      attr(div8, "class", "stat-card svelte-pk96ym");
+      attr(div9, "class", "stats-grid svelte-pk96ym");
     },
     m(target, anchor) {
       insert(target, div9, anchor);
@@ -9094,18 +9196,18 @@ function create_if_block_7(ctx) {
     },
     p(ctx2, dirty) {
       if (dirty[0] & /*yearStats*/
-      256 && t0_value !== (t0_value = /*yearStats*/
-      ctx2[8].reviews + ""))
+      2048 && t0_value !== (t0_value = /*yearStats*/
+      ctx2[11].reviews + ""))
         set_data(t0, t0_value);
       if (dirty[0] & /*yearStats*/
-      256 && t4_value !== (t4_value = formatTime(
+      2048 && t4_value !== (t4_value = formatTime(
         /*yearStats*/
-        ctx2[8].timeSpent
+        ctx2[11].timeSpent
       ) + ""))
         set_data(t4, t4_value);
       if (dirty[0] & /*yearStats*/
-      256 && t8_value !== (t8_value = /*yearStats*/
-      ctx2[8].correctRate.toFixed(1) + ""))
+      2048 && t8_value !== (t8_value = /*yearStats*/
+      ctx2[11].correctRate.toFixed(1) + ""))
         set_data(t8, t8_value);
     },
     d(detaching) {
@@ -9114,14 +9216,14 @@ function create_if_block_7(ctx) {
     }
   };
 }
-function create_else_block_4(ctx) {
+function create_else_block_2(ctx) {
   let div;
   return {
     c() {
       div = element("div");
-      div.innerHTML = `<p class="svelte-lbb1rg">No answer button data available yet.</p> 
-                    <p class="help-text svelte-lbb1rg">Complete some reviews to see answer button statistics.</p>`;
-      attr(div, "class", "no-data-message svelte-lbb1rg");
+      div.innerHTML = `<p class="svelte-pk96ym">No answer button data available yet.</p> 
+                    <p class="help-text svelte-pk96ym">Complete some reviews to see answer button statistics.</p>`;
+      attr(div, "class", "no-data-message svelte-pk96ym");
     },
     m(target, anchor) {
       insert(target, div, anchor);
@@ -9133,7 +9235,7 @@ function create_else_block_4(ctx) {
     }
   };
 }
-function create_if_block_6(ctx) {
+function create_if_block_32(ctx) {
   let div16;
   let div3;
   let div0;
@@ -9268,23 +9370,23 @@ function create_if_block_6(ctx) {
       div14 = element("div");
       t25 = text(t25_value);
       t26 = text("%");
-      attr(div0, "class", "button-label svelte-lbb1rg");
-      attr(div1, "class", "button-count svelte-lbb1rg");
-      attr(div2, "class", "button-percentage svelte-lbb1rg");
-      attr(div3, "class", "button-bar again svelte-lbb1rg");
-      attr(div4, "class", "button-label svelte-lbb1rg");
-      attr(div5, "class", "button-count svelte-lbb1rg");
-      attr(div6, "class", "button-percentage svelte-lbb1rg");
-      attr(div7, "class", "button-bar hard svelte-lbb1rg");
-      attr(div8, "class", "button-label svelte-lbb1rg");
-      attr(div9, "class", "button-count svelte-lbb1rg");
-      attr(div10, "class", "button-percentage svelte-lbb1rg");
-      attr(div11, "class", "button-bar good svelte-lbb1rg");
-      attr(div12, "class", "button-label svelte-lbb1rg");
-      attr(div13, "class", "button-count svelte-lbb1rg");
-      attr(div14, "class", "button-percentage svelte-lbb1rg");
-      attr(div15, "class", "button-bar easy svelte-lbb1rg");
-      attr(div16, "class", "button-stats svelte-lbb1rg");
+      attr(div0, "class", "button-label svelte-pk96ym");
+      attr(div1, "class", "button-count svelte-pk96ym");
+      attr(div2, "class", "button-percentage svelte-pk96ym");
+      attr(div3, "class", "button-bar again svelte-pk96ym");
+      attr(div4, "class", "button-label svelte-pk96ym");
+      attr(div5, "class", "button-count svelte-pk96ym");
+      attr(div6, "class", "button-percentage svelte-pk96ym");
+      attr(div7, "class", "button-bar hard svelte-pk96ym");
+      attr(div8, "class", "button-label svelte-pk96ym");
+      attr(div9, "class", "button-count svelte-pk96ym");
+      attr(div10, "class", "button-percentage svelte-pk96ym");
+      attr(div11, "class", "button-bar good svelte-pk96ym");
+      attr(div12, "class", "button-label svelte-pk96ym");
+      attr(div13, "class", "button-count svelte-pk96ym");
+      attr(div14, "class", "button-percentage svelte-pk96ym");
+      attr(div15, "class", "button-bar easy svelte-pk96ym");
+      attr(div16, "class", "button-stats svelte-pk96ym");
     },
     m(target, anchor) {
       insert(target, div16, anchor);
@@ -9384,15 +9486,15 @@ function create_if_block_6(ctx) {
     }
   };
 }
-function create_else_block_3(ctx) {
+function create_else_block_1(ctx) {
   let div;
   return {
     c() {
       div = element("div");
-      div.innerHTML = `<p class="svelte-lbb1rg">No upcoming reviews scheduled.</p> 
-                    <p class="help-text svelte-lbb1rg">Add flashcards to your decks to see future review
+      div.innerHTML = `<p class="svelte-pk96ym">No upcoming reviews scheduled.</p> 
+                    <p class="help-text svelte-pk96ym">Add flashcards to your decks to see future review
                         forecasts.</p>`;
-      attr(div, "class", "no-data-message svelte-lbb1rg");
+      attr(div, "class", "no-data-message svelte-pk96ym");
     },
     m(target, anchor) {
       insert(target, div, anchor);
@@ -9404,17 +9506,17 @@ function create_else_block_3(ctx) {
     }
   };
 }
-function create_if_block_32(ctx) {
+function create_if_block_22(ctx) {
   let div;
   let t0;
   let p;
-  let each_value_1 = (
+  let each_value = (
     /*statistics*/
     ctx[2].forecast.filter(func_1).slice(0, 20)
   );
   let each_blocks = [];
-  for (let i = 0; i < each_value_1.length; i += 1) {
-    each_blocks[i] = create_each_block_12(get_each_context_12(ctx, each_value_1, i));
+  for (let i = 0; i < each_value.length; i += 1) {
+    each_blocks[i] = create_each_block3(get_each_context3(ctx, each_value, i));
   }
   return {
     c() {
@@ -9425,8 +9527,8 @@ function create_if_block_32(ctx) {
       t0 = space();
       p = element("p");
       p.textContent = "Showing days with scheduled reviews based on FSRS intervals.";
-      attr(div, "class", "forecast-chart svelte-lbb1rg");
-      attr(p, "class", "forecast-note svelte-lbb1rg");
+      attr(div, "class", "forecast-chart svelte-pk96ym");
+      attr(p, "class", "forecast-note svelte-pk96ym");
     },
     m(target, anchor) {
       insert(target, div, anchor);
@@ -9441,264 +9543,8 @@ function create_if_block_32(ctx) {
     p(ctx2, dirty) {
       if (dirty[0] & /*statistics*/
       4) {
-        each_value_1 = /*statistics*/
-        ctx2[2].forecast.filter(func_1).slice(0, 20);
-        let i;
-        for (i = 0; i < each_value_1.length; i += 1) {
-          const child_ctx = get_each_context_12(ctx2, each_value_1, i);
-          if (each_blocks[i]) {
-            each_blocks[i].p(child_ctx, dirty);
-          } else {
-            each_blocks[i] = create_each_block_12(child_ctx);
-            each_blocks[i].c();
-            each_blocks[i].m(div, null);
-          }
-        }
-        for (; i < each_blocks.length; i += 1) {
-          each_blocks[i].d(1);
-        }
-        each_blocks.length = each_value_1.length;
-      }
-    },
-    d(detaching) {
-      if (detaching)
-        detach(div);
-      destroy_each(each_blocks, detaching);
-      if (detaching)
-        detach(t0);
-      if (detaching)
-        detach(p);
-    }
-  };
-}
-function create_else_block_2(ctx) {
-  let t0;
-  let t1_value = (
-    /*originalIndex*/
-    ctx[32] + ""
-  );
-  let t1;
-  let t2;
-  return {
-    c() {
-      t0 = text("in ");
-      t1 = text(t1_value);
-      t2 = text("d");
-    },
-    m(target, anchor) {
-      insert(target, t0, anchor);
-      insert(target, t1, anchor);
-      insert(target, t2, anchor);
-    },
-    p(ctx2, dirty) {
-      if (dirty[0] & /*statistics*/
-      4 && t1_value !== (t1_value = /*originalIndex*/
-      ctx2[32] + ""))
-        set_data(t1, t1_value);
-    },
-    d(detaching) {
-      if (detaching)
-        detach(t0);
-      if (detaching)
-        detach(t1);
-      if (detaching)
-        detach(t2);
-    }
-  };
-}
-function create_if_block_5(ctx) {
-  let t;
-  return {
-    c() {
-      t = text("Tomorrow");
-    },
-    m(target, anchor) {
-      insert(target, t, anchor);
-    },
-    p: noop,
-    d(detaching) {
-      if (detaching)
-        detach(t);
-    }
-  };
-}
-function create_if_block_4(ctx) {
-  let t;
-  return {
-    c() {
-      t = text("Today");
-    },
-    m(target, anchor) {
-      insert(target, t, anchor);
-    },
-    p: noop,
-    d(detaching) {
-      if (detaching)
-        detach(t);
-    }
-  };
-}
-function create_each_block_12(ctx) {
-  let div3;
-  let div0;
-  let t0;
-  let div1;
-  let t1;
-  let div2;
-  let t2_value = (
-    /*day*/
-    ctx[31].dueCount + ""
-  );
-  let t2;
-  let t3;
-  let div3_title_value;
-  function select_block_type_7(ctx2, dirty) {
-    if (
-      /*originalIndex*/
-      ctx2[32] === 0
-    )
-      return create_if_block_4;
-    if (
-      /*originalIndex*/
-      ctx2[32] === 1
-    )
-      return create_if_block_5;
-    return create_else_block_2;
-  }
-  let current_block_type = select_block_type_7(ctx, [-1, -1]);
-  let if_block = current_block_type(ctx);
-  return {
-    c() {
-      div3 = element("div");
-      div0 = element("div");
-      t0 = space();
-      div1 = element("div");
-      if_block.c();
-      t1 = space();
-      div2 = element("div");
-      t2 = text(t2_value);
-      t3 = space();
-      attr(div0, "class", "bar svelte-lbb1rg");
-      set_style(div0, "height", Math.max(
-        /*day*/
-        ctx[31].dueCount * 2,
-        2
-      ) + "px");
-      attr(div1, "class", "bar-label svelte-lbb1rg");
-      attr(div2, "class", "bar-value svelte-lbb1rg");
-      attr(div3, "class", "forecast-bar svelte-lbb1rg");
-      attr(div3, "title", div3_title_value = /*originalIndex*/
-      (ctx[32] === 0 ? "Today" : (
-        /*originalIndex*/
-        ctx[32] === 1 ? "Tomorrow" : `In ${/*originalIndex*/
-        ctx[32]} days`
-      )) + ": " + /*day*/
-      ctx[31].dueCount + " card" + /*day*/
-      (ctx[31].dueCount !== 1 ? "s" : ""));
-    },
-    m(target, anchor) {
-      insert(target, div3, anchor);
-      append(div3, div0);
-      append(div3, t0);
-      append(div3, div1);
-      if_block.m(div1, null);
-      append(div3, t1);
-      append(div3, div2);
-      append(div2, t2);
-      append(div3, t3);
-    },
-    p(ctx2, dirty) {
-      if (dirty[0] & /*statistics*/
-      4) {
-        set_style(div0, "height", Math.max(
-          /*day*/
-          ctx2[31].dueCount * 2,
-          2
-        ) + "px");
-      }
-      if (current_block_type === (current_block_type = select_block_type_7(ctx2, dirty)) && if_block) {
-        if_block.p(ctx2, dirty);
-      } else {
-        if_block.d(1);
-        if_block = current_block_type(ctx2);
-        if (if_block) {
-          if_block.c();
-          if_block.m(div1, null);
-        }
-      }
-      if (dirty[0] & /*statistics*/
-      4 && t2_value !== (t2_value = /*day*/
-      ctx2[31].dueCount + ""))
-        set_data(t2, t2_value);
-      if (dirty[0] & /*statistics*/
-      4 && div3_title_value !== (div3_title_value = /*originalIndex*/
-      (ctx2[32] === 0 ? "Today" : (
-        /*originalIndex*/
-        ctx2[32] === 1 ? "Tomorrow" : `In ${/*originalIndex*/
-        ctx2[32]} days`
-      )) + ": " + /*day*/
-      ctx2[31].dueCount + " card" + /*day*/
-      (ctx2[31].dueCount !== 1 ? "s" : ""))) {
-        attr(div3, "title", div3_title_value);
-      }
-    },
-    d(detaching) {
-      if (detaching)
-        detach(div3);
-      if_block.d();
-    }
-  };
-}
-function create_else_block_1(ctx) {
-  let div;
-  return {
-    c() {
-      div = element("div");
-      div.innerHTML = `<p class="svelte-lbb1rg">No interval data available.</p> 
-                    <p class="help-text svelte-lbb1rg">Review some cards to see interval distribution.</p>`;
-      attr(div, "class", "no-data-message svelte-lbb1rg");
-    },
-    m(target, anchor) {
-      insert(target, div, anchor);
-    },
-    p: noop,
-    d(detaching) {
-      if (detaching)
-        detach(div);
-    }
-  };
-}
-function create_if_block_22(ctx) {
-  let div;
-  let each_value = (
-    /*statistics*/
-    ctx[2].intervals
-  );
-  let each_blocks = [];
-  for (let i = 0; i < each_value.length; i += 1) {
-    each_blocks[i] = create_each_block3(get_each_context3(ctx, each_value, i));
-  }
-  return {
-    c() {
-      div = element("div");
-      for (let i = 0; i < each_blocks.length; i += 1) {
-        each_blocks[i].c();
-      }
-      attr(div, "class", "intervals-chart svelte-lbb1rg");
-    },
-    m(target, anchor) {
-      insert(target, div, anchor);
-      for (let i = 0; i < each_blocks.length; i += 1) {
-        if (each_blocks[i]) {
-          each_blocks[i].m(div, null);
-        }
-      }
-    },
-    p(ctx2, dirty) {
-      if (dirty[0] & /*statistics*/
-      4) {
         each_value = /*statistics*/
-        ctx2[2].intervals;
+        ctx2[2].forecast.filter(func_1).slice(0, 20);
         let i;
         for (i = 0; i < each_value.length; i += 1) {
           const child_ctx = get_each_context3(ctx2, each_value, i);
@@ -9720,60 +9566,106 @@ function create_if_block_22(ctx) {
       if (detaching)
         detach(div);
       destroy_each(each_blocks, detaching);
+      if (detaching)
+        detach(t0);
+      if (detaching)
+        detach(p);
     }
   };
 }
 function create_each_block3(ctx) {
-  let div2;
+  let div3;
   let div0;
-  let t0_value = (
-    /*interval*/
-    ctx[28].interval + ""
-  );
   let t0;
-  let t1;
   let div1;
-  let t2_value = (
-    /*interval*/
-    ctx[28].count + ""
+  let t1_value = (
+    /*originalIndex*/
+    ctx[29] + ""
   );
+  let t1;
   let t2;
+  let div2;
+  let t3_value = (
+    /*day*/
+    ctx[28].dueCount + ""
+  );
   let t3;
+  let t4;
+  let div3_title_value;
   return {
     c() {
-      div2 = element("div");
+      div3 = element("div");
       div0 = element("div");
-      t0 = text(t0_value);
-      t1 = space();
+      t0 = space();
       div1 = element("div");
-      t2 = text(t2_value);
-      t3 = space();
-      attr(div0, "class", "interval-label svelte-lbb1rg");
-      attr(div1, "class", "interval-value svelte-lbb1rg");
-      attr(div2, "class", "interval-bar svelte-lbb1rg");
+      t1 = text(t1_value);
+      t2 = space();
+      div2 = element("div");
+      t3 = text(t3_value);
+      t4 = space();
+      attr(div0, "class", "bar svelte-pk96ym");
+      set_style(div0, "height", Math.max(
+        /*day*/
+        ctx[28].dueCount * 2,
+        2
+      ) + "px");
+      attr(div1, "class", "bar-label svelte-pk96ym");
+      attr(div2, "class", "bar-value svelte-pk96ym");
+      attr(div3, "class", "forecast-bar svelte-pk96ym");
+      attr(div3, "title", div3_title_value = /*originalIndex*/
+      (ctx[29] === 0 ? "Today" : (
+        /*originalIndex*/
+        ctx[29] === 1 ? "Tomorrow" : `Day ${/*originalIndex*/
+        ctx[29]} (in ${/*originalIndex*/
+        ctx[29]} days)`
+      )) + ": " + /*day*/
+      ctx[28].dueCount + " card" + /*day*/
+      (ctx[28].dueCount !== 1 ? "s" : "") + " due");
     },
     m(target, anchor) {
-      insert(target, div2, anchor);
-      append(div2, div0);
-      append(div0, t0);
-      append(div2, t1);
-      append(div2, div1);
-      append(div1, t2);
+      insert(target, div3, anchor);
+      append(div3, div0);
+      append(div3, t0);
+      append(div3, div1);
+      append(div1, t1);
+      append(div3, t2);
+      append(div3, div2);
       append(div2, t3);
+      append(div3, t4);
     },
     p(ctx2, dirty) {
       if (dirty[0] & /*statistics*/
-      4 && t0_value !== (t0_value = /*interval*/
-      ctx2[28].interval + ""))
-        set_data(t0, t0_value);
+      4) {
+        set_style(div0, "height", Math.max(
+          /*day*/
+          ctx2[28].dueCount * 2,
+          2
+        ) + "px");
+      }
       if (dirty[0] & /*statistics*/
-      4 && t2_value !== (t2_value = /*interval*/
-      ctx2[28].count + ""))
-        set_data(t2, t2_value);
+      4 && t1_value !== (t1_value = /*originalIndex*/
+      ctx2[29] + ""))
+        set_data(t1, t1_value);
+      if (dirty[0] & /*statistics*/
+      4 && t3_value !== (t3_value = /*day*/
+      ctx2[28].dueCount + ""))
+        set_data(t3, t3_value);
+      if (dirty[0] & /*statistics*/
+      4 && div3_title_value !== (div3_title_value = /*originalIndex*/
+      (ctx2[29] === 0 ? "Today" : (
+        /*originalIndex*/
+        ctx2[29] === 1 ? "Tomorrow" : `Day ${/*originalIndex*/
+        ctx2[29]} (in ${/*originalIndex*/
+        ctx2[29]} days)`
+      )) + ": " + /*day*/
+      ctx2[28].dueCount + " card" + /*day*/
+      (ctx2[28].dueCount !== 1 ? "s" : "") + " due")) {
+        attr(div3, "title", div3_title_value);
+      }
     },
     d(detaching) {
       if (detaching)
-        detach(div2);
+        detach(div3);
     }
   };
 }
@@ -9801,7 +9693,7 @@ function create_fragment4(ctx) {
     c() {
       div = element("div");
       if_block.c();
-      attr(div, "class", "statistics-container svelte-lbb1rg");
+      attr(div, "class", "statistics-container svelte-pk96ym");
     },
     m(target, anchor) {
       insert(target, div, anchor);
@@ -9855,13 +9747,17 @@ function formatTime(seconds) {
   }
   return `${minutes}m`;
 }
+function formatPace(seconds) {
+  if (seconds < 60) {
+    return `${seconds.toFixed(1)}s`;
+  }
+  const minutes = Math.floor(seconds / 60);
+  const remainingSeconds = Math.round(seconds % 60);
+  return `${minutes}m ${remainingSeconds}s`;
+}
 var func2 = (day) => day.dueCount > 0;
 var func_1 = (day) => day.dueCount > 0;
 function instance4($$self, $$props, $$invalidate) {
-  let todayStats;
-  let weekStats;
-  let monthStats;
-  let yearStats;
   let { plugin } = $$props;
   const dispatch = createEventDispatcher();
   let loading = true;
@@ -9871,7 +9767,12 @@ function instance4($$self, $$props, $$invalidate) {
   let availableDecks = [];
   let availableTags = [];
   let heatmapComponent;
+  let todayStats = null;
+  let weekStats = null;
+  let monthStats = null;
+  let yearStats = null;
   onMount(() => __awaiter(void 0, void 0, void 0, function* () {
+    $$invalidate(1, loading = true);
     yield loadDecksAndTags();
     yield loadStatistics();
   }));
@@ -9888,9 +9789,12 @@ function instance4($$self, $$props, $$invalidate) {
   function loadStatistics() {
     return __awaiter(this, void 0, void 0, function* () {
       try {
-        $$invalidate(1, loading = true);
         $$invalidate(2, statistics = yield plugin.getOverallStatistics(selectedDeckFilter, selectedTimeframe));
         console.log("Loaded statistics:", statistics);
+        $$invalidate(8, todayStats = getTodayStats());
+        $$invalidate(9, weekStats = getTimeframeStats(7));
+        $$invalidate(10, monthStats = getTimeframeStats(30));
+        $$invalidate(11, yearStats = getTimeframeStats(365));
       } catch (error) {
         console.error("Error loading statistics:", error);
         $$invalidate(2, statistics = {
@@ -9899,8 +9803,14 @@ function instance4($$self, $$props, $$invalidate) {
           answerButtons: { again: 0, hard: 0, good: 0, easy: 0 },
           retentionRate: 0,
           intervals: [],
-          forecast: []
+          forecast: [],
+          averagePace: 0,
+          totalReviewTime: 0
         });
+        $$invalidate(8, todayStats = null);
+        $$invalidate(9, weekStats = null);
+        $$invalidate(10, monthStats = null);
+        $$invalidate(11, yearStats = null);
       } finally {
         $$invalidate(1, loading = false);
       }
@@ -9963,16 +9873,16 @@ function instance4($$self, $$props, $$invalidate) {
   }
   function calculateAverageEase() {
     if (!(statistics === null || statistics === void 0 ? void 0 : statistics.answerButtons))
-      return 0;
+      return "0.00";
     const { again, hard, good, easy } = statistics.answerButtons;
     const total = again + hard + good + easy;
     if (total === 0)
-      return 0;
+      return "0.00";
     const weightedSum = again * 1 + hard * 2 + good * 3 + easy * 4;
     return (weightedSum / total).toFixed(2);
   }
   function calculateAverageInterval() {
-    if (!(statistics === null || statistics === void 0 ? void 0 : statistics.intervals))
+    if (!(statistics === null || statistics === void 0 ? void 0 : statistics.intervals) || statistics.intervals.length === 0)
       return 0;
     let totalInterval = 0;
     let totalCards = 0;
@@ -9995,14 +9905,14 @@ function instance4($$self, $$props, $$invalidate) {
     return Math.round(avgMinutes / 1440);
   }
   function getDueToday() {
-    if (!(statistics === null || statistics === void 0 ? void 0 : statistics.forecast))
+    if (!(statistics === null || statistics === void 0 ? void 0 : statistics.forecast) || statistics.forecast.length === 0)
       return 0;
     const today = (/* @__PURE__ */ new Date()).toISOString().split("T")[0];
     const todayForecast = statistics.forecast.find((day) => day.date === today);
     return todayForecast ? todayForecast.dueCount : 0;
   }
   function getDueTomorrow() {
-    if (!(statistics === null || statistics === void 0 ? void 0 : statistics.forecast))
+    if (!(statistics === null || statistics === void 0 ? void 0 : statistics.forecast) || statistics.forecast.length === 0)
       return 0;
     const tomorrow = /* @__PURE__ */ new Date();
     tomorrow.setDate(tomorrow.getDate() + 1);
@@ -10012,11 +9922,11 @@ function instance4($$self, $$props, $$invalidate) {
   }
   function getMaturityRatio() {
     if (!(statistics === null || statistics === void 0 ? void 0 : statistics.cardStats))
-      return 0;
+      return "0.0";
     const { new: newCards, learning, mature } = statistics.cardStats;
     const total = newCards + learning + mature;
     if (total === 0)
-      return 0;
+      return "0.0";
     return (mature / total * 100).toFixed(1);
   }
   function select0_change_handler() {
@@ -10043,14 +9953,6 @@ function instance4($$self, $$props, $$invalidate) {
     if ("plugin" in $$props2)
       $$invalidate(0, plugin = $$props2.plugin);
   };
-  $:
-    $$invalidate(11, todayStats = getTodayStats());
-  $:
-    $$invalidate(10, weekStats = getTimeframeStats(7));
-  $:
-    $$invalidate(9, monthStats = getTimeframeStats(30));
-  $:
-    $$invalidate(8, yearStats = getTimeframeStats(365));
   return [
     plugin,
     loading,
@@ -10060,10 +9962,10 @@ function instance4($$self, $$props, $$invalidate) {
     availableDecks,
     availableTags,
     heatmapComponent,
-    yearStats,
-    monthStats,
-    weekStats,
     todayStats,
+    weekStats,
+    monthStats,
+    yearStats,
     dispatch,
     loadStatistics,
     handleFilterChange,
@@ -10792,11 +10694,13 @@ function instance5($$self, $$props, $$invalidate) {
   let backEl;
   let schedulingInfo = null;
   let reviewedCount = 0;
+  let cardStartTime = 0;
   function loadCard() {
     if (!currentCard)
       return;
     $$invalidate(5, showAnswer = false);
     $$invalidate(9, schedulingInfo = fsrs.getSchedulingInfo(currentCard));
+    cardStartTime = Date.now();
     if (frontEl) {
       $$invalidate(7, frontEl.innerHTML = "", frontEl);
       renderMarkdown(currentCard.front, frontEl);
@@ -10823,7 +10727,8 @@ function instance5($$self, $$props, $$invalidate) {
         return;
       $$invalidate(6, isLoading = true);
       try {
-        yield onReview(currentCard, difficulty);
+        const timeElapsed = Date.now() - cardStartTime;
+        yield onReview(currentCard, difficulty, timeElapsed);
         reviewedCount++;
         if (onCardReviewed) {
           yield onCardReviewed(currentCard);
@@ -11012,8 +10917,8 @@ var FlashcardReviewModalWrapper = class extends import_obsidian5.Modal {
         deck: this.deck,
         currentIndex: 0,
         onClose: () => this.close(),
-        onReview: async (card, difficulty) => {
-          await this.plugin.reviewFlashcard(card, difficulty);
+        onReview: async (card, difficulty, timeElapsed) => {
+          await this.plugin.reviewFlashcard(card, difficulty, timeElapsed);
         },
         renderMarkdown: (content, el) => {
           const component = this.plugin.renderMarkdown(content, el);
@@ -11348,7 +11253,7 @@ var FlashcardsPlugin = class extends import_obsidian6.Plugin {
       await this.view.refreshStatsById(deckId);
     }
   }
-  async reviewFlashcard(flashcard, difficulty) {
+  async reviewFlashcard(flashcard, difficulty, timeElapsed) {
     const updatedCard = this.fsrs.updateCard(flashcard, difficulty);
     await this.db.updateFlashcard(updatedCard.id, {
       state: updatedCard.state,
@@ -11367,7 +11272,8 @@ var FlashcardsPlugin = class extends import_obsidian6.Plugin {
       oldInterval: flashcard.interval,
       newInterval: updatedCard.interval,
       oldEaseFactor: flashcard.easeFactor,
-      newEaseFactor: updatedCard.easeFactor
+      newEaseFactor: updatedCard.easeFactor,
+      timeElapsed: timeElapsed != null ? timeElapsed : 0
     });
     await this.db.updateDeckLastReviewed(flashcard.deckId);
     if (this.view) {

@@ -5,6 +5,7 @@ import {
   ReviewLog,
   DeckStats,
   DEFAULT_DECK_CONFIG,
+  Statistics,
 } from "./types";
 
 export class DatabaseService {
@@ -123,6 +124,7 @@ export class DatabaseService {
         new_interval INTEGER NOT NULL,
         old_ease_factor REAL NOT NULL,
         new_ease_factor REAL NOT NULL,
+        time_elapsed INTEGER NOT NULL DEFAULT 0,
         FOREIGN KEY (flashcard_id) REFERENCES flashcards(id)
       );
 
@@ -657,8 +659,8 @@ export class DatabaseService {
     const stmt = this.db.prepare(`
       INSERT INTO review_logs (
         id, flashcard_id, reviewed_at, difficulty,
-        old_interval, new_interval, old_ease_factor, new_ease_factor
-      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+        old_interval, new_interval, old_ease_factor, new_ease_factor, time_elapsed
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
     `);
 
     stmt.run([
@@ -670,6 +672,7 @@ export class DatabaseService {
       log.newInterval,
       log.oldEaseFactor,
       log.newEaseFactor,
+      log.timeElapsed,
     ]);
     stmt.free();
 
@@ -826,9 +829,28 @@ export class DatabaseService {
       // Check if config column exists
       const hasConfig = columns.some((col) => col[1] === "config");
 
-      if (!hasFilepath || !hasConfig) {
+      // Check if time_elapsed column exists in review_logs table
+      let hasTimeElapsed = true;
+      try {
+        const reviewLogsStmt = this.db.prepare(
+          "PRAGMA table_info(review_logs)",
+        );
+        const reviewLogsColumns: any[] = [];
+        while (reviewLogsStmt.step()) {
+          reviewLogsColumns.push(reviewLogsStmt.get());
+        }
+        reviewLogsStmt.free();
+        hasTimeElapsed = reviewLogsColumns.some(
+          (col) => col[1] === "time_elapsed",
+        );
+      } catch (error) {
+        // Table might not exist yet
+        hasTimeElapsed = false;
+      }
+
+      if (!hasFilepath || !hasConfig || !hasTimeElapsed) {
         console.log(
-          "Migrating database schema to support filepath and config columns...",
+          "Migrating database schema to support filepath, config, and time_elapsed columns...",
         );
         console.log(
           "Clearing old data - decks will be rebuilt from files on next sync",
@@ -883,22 +905,7 @@ export class DatabaseService {
   async getOverallStatistics(
     deckFilter: string = "all",
     timeframe: string = "12months",
-  ): Promise<{
-    dailyStats: {
-      date: string;
-      reviews: number;
-      timeSpent: number;
-      newCards: number;
-      learningCards: number;
-      reviewCards: number;
-      correctRate: number;
-    }[];
-    cardStats: { new: number; learning: number; mature: number };
-    answerButtons: { again: number; hard: number; good: number; easy: number };
-    retentionRate: number;
-    intervals: { interval: string; count: number }[];
-    forecast: { date: string; dueCount: number }[];
-  }> {
+  ): Promise<Statistics> {
     if (!this.db) throw new Error("Database not initialized");
 
     try {
@@ -1101,6 +1108,33 @@ export class DatabaseService {
         });
       }
 
+      // Calculate pace statistics from time_elapsed data
+      const paceStmt = this.db.prepare(`
+      SELECT
+        AVG(rl.time_elapsed / 1000.0) as avg_pace,
+        SUM(rl.time_elapsed / 1000.0) as total_time
+      FROM review_logs rl
+      JOIN flashcards f ON rl.flashcard_id = f.id
+      ${deckFilterCondition ? "JOIN decks d ON f.deck_id = d.id" : ""}
+      WHERE rl.reviewed_at >= ?
+      ${deckFilterCondition}
+    `);
+
+      if (deckFilterCondition) {
+        paceStmt.bind([cutoffDate.toISOString(), ...deckFilterParams]);
+      } else {
+        paceStmt.bind([cutoffDate.toISOString()]);
+      }
+
+      let averagePace = 0;
+      let totalReviewTime = 0;
+      if (paceStmt.step()) {
+        const row = paceStmt.get();
+        averagePace = (row[0] as number) || 0;
+        totalReviewTime = (row[1] as number) || 0;
+      }
+      paceStmt.free();
+
       return {
         dailyStats,
         cardStats,
@@ -1108,6 +1142,8 @@ export class DatabaseService {
         retentionRate,
         intervals,
         forecast,
+        averagePace,
+        totalReviewTime,
       };
     } catch (error) {
       console.error("Error in getOverallStatistics:", error);
@@ -1119,6 +1155,8 @@ export class DatabaseService {
         retentionRate: 0,
         intervals: [],
         forecast: [],
+        averagePace: 0,
+        totalReviewTime: 0,
       };
     }
   }

@@ -14,6 +14,7 @@
     export let onReview: (
         card: Flashcard,
         difficulty: Difficulty,
+        timeElapsed?: number,
     ) => Promise<void>;
     export let renderMarkdown: (content: string, el: HTMLElement) => void;
     export let settings: any;
@@ -30,6 +31,7 @@
     let backEl: HTMLElement;
     let schedulingInfo: SchedulingInfo | null = null;
     let reviewedCount = 0;
+    let cardStartTime: number = 0;
 
     $: currentCard = flashcards[currentIndex] || null;
     $: progress =
@@ -41,6 +43,7 @@
 
         showAnswer = false;
         schedulingInfo = fsrs.getSchedulingInfo(currentCard);
+        cardStartTime = Date.now(); // Track when card is displayed
 
         // Render front side
         if (frontEl) {
@@ -74,7 +77,8 @@
 
         isLoading = true;
         try {
-            await onReview(currentCard, difficulty);
+            const timeElapsed = Date.now() - cardStartTime;
+            await onReview(currentCard, difficulty, timeElapsed);
             reviewedCount++;
 
             // Trigger stats refresh after each card review

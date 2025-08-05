@@ -38,8 +38,12 @@ export class FlashcardReviewModalWrapper extends Modal {
         deck: this.deck,
         currentIndex: 0,
         onClose: () => this.close(),
-        onReview: async (card: Flashcard, difficulty: Difficulty) => {
-          await this.plugin.reviewFlashcard(card, difficulty);
+        onReview: async (
+          card: Flashcard,
+          difficulty: Difficulty,
+          timeElapsed?: number,
+        ) => {
+          await this.plugin.reviewFlashcard(card, difficulty, timeElapsed);
         },
         renderMarkdown: (content: string, el: HTMLElement) => {
           const component = this.plugin.renderMarkdown(content, el);

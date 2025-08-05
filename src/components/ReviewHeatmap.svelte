@@ -378,7 +378,7 @@
         max-width: 100%;
         padding-bottom: 8px;
         display: flex;
-        justify-content: center;
+        /*justify-content: center;*/
     }
 
     .heatmap-content {

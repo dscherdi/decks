@@ -51,6 +51,7 @@ export interface ReviewLog {
   newInterval: number;
   oldEaseFactor: number;
   newEaseFactor: number;
+  timeElapsed: number; // Time in milliseconds from card display to difficulty selection
 }
 
 export interface DeckStats {
@@ -65,6 +66,50 @@ export interface DatabaseSchema {
   decks: Deck;
   flashcards: Flashcard;
   review_logs: ReviewLog;
+}
+
+export interface DailyStats {
+  date: string;
+  reviews: number;
+  timeSpent: number;
+  newCards: number;
+  learningCards: number;
+  reviewCards: number;
+  correctRate: number;
+}
+
+export interface CardStats {
+  new: number;
+  learning: number;
+  mature: number;
+}
+
+export interface AnswerButtons {
+  again: number;
+  hard: number;
+  good: number;
+  easy: number;
+}
+
+export interface IntervalData {
+  interval: string;
+  count: number;
+}
+
+export interface ForecastData {
+  date: string;
+  dueCount: number;
+}
+
+export interface Statistics {
+  dailyStats: DailyStats[];
+  cardStats: CardStats;
+  answerButtons: AnswerButtons;
+  retentionRate: number;
+  intervals: IntervalData[];
+  forecast: ForecastData[];
+  averagePace: number; // Average seconds per card
+  totalReviewTime: number; // Total time spent reviewing in seconds
 }
 
 export const DEFAULT_DECK_CONFIG: DeckConfig = {

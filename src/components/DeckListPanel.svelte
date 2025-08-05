@@ -304,7 +304,7 @@
 
 <style>
     .deck-list-panel {
-        min-width: 400px;
+        min-width: 479px;
         height: 100%;
         display: flex;
         flex-direction: column;
