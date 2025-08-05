@@ -2427,7 +2427,12 @@ var init_settings = __esm({
         sessionGoal: 20,
         enableSessionLimit: false
       },
+      parsing: {
+        headerLevel: 2
+        // Default to H2 headers
+      },
       ui: {
+        enableBackgroundRefresh: true,
         backgroundRefreshInterval: 5
       },
       debug: {
@@ -2668,10 +2673,12 @@ var DatabaseService = class {
       SET ${updateFields}, modified = ?
       WHERE id = ?
     `);
-    const values = Object.values(updates).map((value, index) => {
-      const key = Object.keys(updates)[index];
-      return key === "config" ? JSON.stringify(value) : value;
-    });
+    const values = Object.values(updates).map(
+      (value, index) => {
+        const key = Object.keys(updates)[index];
+        return key === "config" ? JSON.stringify(value) : value;
+      }
+    );
     values.push(now, deckId);
     stmt.run(values);
     stmt.free();
@@ -3292,12 +3299,17 @@ var DeckManager = class {
    * Parse flashcards from a file
    */
   async parseFlashcardsFromFile(file) {
+    var _a, _b, _c;
     const content = await this.vault.read(file);
     const lines = content.split("\n");
     const flashcards = [];
     const tableFlashcards = this.parseTableFlashcards(lines);
     flashcards.push(...tableFlashcards);
-    const headerFlashcards = this.parseHeaderParagraphFlashcards(lines);
+    const headerLevel = ((_c = (_b = (_a = this.plugin) == null ? void 0 : _a.settings) == null ? void 0 : _b.parsing) == null ? void 0 : _c.headerLevel) || 2;
+    const headerFlashcards = this.parseHeaderParagraphFlashcards(
+      lines,
+      headerLevel
+    );
     flashcards.push(...headerFlashcards);
     return flashcards;
   }
@@ -3342,7 +3354,7 @@ var DeckManager = class {
   /**
    * Parse header+paragraph flashcards
    */
-  parseHeaderParagraphFlashcards(lines) {
+  parseHeaderParagraphFlashcards(lines, headerLevel = 2) {
     const flashcards = [];
     let currentHeader = null;
     let currentContent = [];
@@ -3361,7 +3373,8 @@ var DeckManager = class {
       if (inFrontmatter) {
         continue;
       }
-      if (line.match(/^#{1,6}\s+/)) {
+      const headerRegex = new RegExp(`^#{${headerLevel}}\\s+`);
+      if (line.match(headerRegex)) {
         if (line.match(/^#\s+/) && line.toLowerCase().includes("flashcard")) {
           skipNextParagraph = true;
           currentHeader = null;
@@ -3370,7 +3383,10 @@ var DeckManager = class {
         }
         if (currentHeader && currentContent.length > 0) {
           const card = {
-            front: currentHeader.text.replace(/^#{1,6}\s+/, ""),
+            front: currentHeader.text.replace(
+              new RegExp(`^#{${headerLevel}}\\s+`),
+              ""
+            ),
             back: currentContent.join("\n").trim(),
             type: "header-paragraph",
             lineNumber: currentHeader.lineNumber
@@ -3387,6 +3403,21 @@ var DeckManager = class {
         if (line.trim() === "") {
           skipNextParagraph = false;
         }
+      } else if (line.match(/^#{1,6}\s+/)) {
+        if (currentHeader && currentContent.length > 0) {
+          const card = {
+            front: currentHeader.text.replace(
+              new RegExp(`^#{${headerLevel}}\\s+`),
+              ""
+            ),
+            back: currentContent.join("\n").trim(),
+            type: "header-paragraph",
+            lineNumber: currentHeader.lineNumber
+          };
+          flashcards.push(card);
+        }
+        currentHeader = null;
+        currentContent = [];
       } else if (currentHeader) {
         if (line.trim() === "" && currentContent.length === 0) {
           continue;
@@ -3396,7 +3427,10 @@ var DeckManager = class {
     }
     if (currentHeader && currentContent.length > 0) {
       const card = {
-        front: currentHeader.text.replace(/^#{1,6}\s+/, ""),
+        front: currentHeader.text.replace(
+          new RegExp(`^#{${headerLevel}}\\s+`),
+          ""
+        ),
         back: currentContent.join("\n").trim(),
         type: "header-paragraph",
         lineNumber: currentHeader.lineNumber
@@ -3505,6 +3539,30 @@ var DeckManager = class {
    */
   async syncFlashcardsForDeckByName(deckName) {
     await this.syncFlashcardsForDeck(deckName);
+  }
+  /**
+   * Create deck for a single file without running full sync
+   */
+  async createDeckForFile(filePath, tag) {
+    const file = this.vault.getAbstractFileByPath(filePath);
+    if (!file || !(file instanceof import_obsidian.TFile))
+      return;
+    const deckName = file.basename;
+    const existingDeck = await this.db.getDeckByFilepath(filePath);
+    if (!existingDeck) {
+      const deck = {
+        id: this.generateDeckId(filePath),
+        name: deckName,
+        filepath: filePath,
+        tag,
+        lastReviewed: null,
+        config: DEFAULT_DECK_CONFIG
+      };
+      this.debugLog(
+        `Creating new deck: "${deckName}" with ID: ${deck.id}, tag: ${tag}, filepath: ${filePath}`
+      );
+      await this.db.createDeck(deck);
+    }
   }
   /**
    * Generate content hash for flashcard back content (front is used for ID)
@@ -3919,6 +3977,7 @@ var FlashcardsSettingTab = class extends import_obsidian2.PluginSettingTab {
     this.addFSRSSettings(containerEl);
     this.addDatabaseSettings(containerEl);
     this.addReviewSettings(containerEl);
+    this.addParsingSettings(containerEl);
     this.addUISettings(containerEl);
     this.addDebugSettings(containerEl);
   }
@@ -4020,9 +4079,24 @@ var FlashcardsSettingTab = class extends import_obsidian2.PluginSettingTab {
       })
     );
   }
+  addParsingSettings(containerEl) {
+    containerEl.createEl("h3", { text: "Parsing Settings" });
+    containerEl.createEl("p", {
+      text: "Configure how flashcards are parsed from your notes.",
+      cls: "setting-item-description"
+    });
+    new import_obsidian2.Setting(containerEl).setName("Header Level for Flashcards").setDesc(
+      "Which header level to use for header-paragraph flashcards (H1 = 1, H2 = 2, etc.)"
+    ).addDropdown(
+      (dropdown) => dropdown.addOption("1", "H1 (#)").addOption("2", "H2 (##)").addOption("3", "H3 (###)").addOption("4", "H4 (####)").addOption("5", "H5 (#####)").addOption("6", "H6 (######)").setValue(this.plugin.settings.parsing.headerLevel.toString()).onChange(async (value) => {
+        this.plugin.settings.parsing.headerLevel = parseInt(value);
+        await this.plugin.saveSettings();
+      })
+    );
+  }
   addUISettings(containerEl) {
     containerEl.createEl("h3", { text: "User Interface" });
-    new import_obsidian2.Setting(containerEl).setName("Background Refresh Interval").setDesc("How often to refresh deck stats in the side panel (in seconds)").addText(
+    const intervalSetting = new import_obsidian2.Setting(containerEl).setName("Background Refresh Interval").setDesc("How often to refresh deck stats in the side panel (in seconds)").addText(
       (text2) => text2.setPlaceholder("5").setValue(
         this.plugin.settings.ui.backgroundRefreshInterval.toString()
       ).onChange(async (value) => {
@@ -4035,6 +4109,23 @@ var FlashcardsSettingTab = class extends import_obsidian2.PluginSettingTab {
           }
         }
       })
+    );
+    new import_obsidian2.Setting(containerEl).setName("Enable Background Refresh").setDesc("Automatically refresh deck stats in the side panel").addToggle(
+      (toggle) => toggle.setValue(this.plugin.settings.ui.enableBackgroundRefresh).onChange(async (value) => {
+        this.plugin.settings.ui.enableBackgroundRefresh = value;
+        await this.plugin.saveSettings();
+        intervalSetting.setDisabled(!value);
+        if (this.plugin.view) {
+          if (value) {
+            this.plugin.view.startBackgroundRefresh();
+          } else {
+            this.plugin.view.stopBackgroundRefresh();
+          }
+        }
+      })
+    );
+    intervalSetting.setDisabled(
+      !this.plugin.settings.ui.enableBackgroundRefresh
     );
   }
   addDebugSettings(containerEl) {
@@ -7988,10 +8079,26 @@ var FlashcardsPlugin = class extends import_obsidian5.Plugin {
     );
     this.debugLog(`File ${file.path} has flashcards tag:`, hasFlashcardsTag);
     if (hasFlashcardsTag) {
-      await this.deckManager.syncDecks();
-      await this.deckManager.syncFlashcardsForDeck(file.path);
-      if (this.view) {
-        await this.view.refresh();
+      const existingDeck = await this.db.getDeckByFilepath(file.path);
+      if (existingDeck) {
+        const newTag = allTags.find((tag) => tag.startsWith("#flashcards")) || "#flashcards";
+        if (existingDeck.tag !== newTag) {
+          this.debugLog(
+            `Updating deck tag from ${existingDeck.tag} to ${newTag}`
+          );
+          await this.db.updateDeck(existingDeck.id, { tag: newTag });
+        }
+        await this.deckManager.syncFlashcardsForDeck(file.path);
+        if (this.view) {
+          await this.view.refreshStatsById(existingDeck.id);
+        }
+      } else {
+        const newTag = allTags.find((tag) => tag.startsWith("#flashcards")) || "#flashcards";
+        await this.deckManager.createDeckForFile(file.path, newTag);
+        await this.deckManager.syncFlashcardsForDeck(file.path);
+        if (this.view) {
+          await this.view.refreshStats();
+        }
       }
     }
   }
@@ -8027,7 +8134,7 @@ var FlashcardsPlugin = class extends import_obsidian5.Plugin {
   async handleFileDelete(file) {
     await this.db.deleteDeckByFilepath(file.path);
     if (this.view) {
-      await this.view.refresh();
+      await this.view.refreshStats();
     }
   }
   async syncDecks() {
@@ -8067,6 +8174,9 @@ var FlashcardsPlugin = class extends import_obsidian5.Plugin {
   }
   async updateDeckConfig(deckId, config) {
     await this.db.updateDeck(deckId, { config });
+    if (this.view) {
+      await this.view.refreshStatsById(deckId);
+    }
   }
   async reviewFlashcard(flashcard, difficulty) {
     const updatedCard = this.fsrs.updateCard(flashcard, difficulty);
@@ -8143,7 +8253,9 @@ var FlashcardsView = class extends import_obsidian5.ItemView {
       }
     });
     await this.refresh();
-    this.startBackgroundRefresh();
+    if (this.plugin.settings.ui.enableBackgroundRefresh) {
+      this.startBackgroundRefresh();
+    }
   }
   async onClose() {
     if (this.component) {
@@ -8203,6 +8315,9 @@ var FlashcardsView = class extends import_obsidian5.ItemView {
     }
   }
   startBackgroundRefresh() {
+    if (!this.plugin.settings.ui.enableBackgroundRefresh) {
+      return;
+    }
     this.stopBackgroundRefresh();
     this.plugin.debugLog(
       `Starting background refresh job (every ${this.plugin.settings.ui.backgroundRefreshInterval} seconds)`
@@ -8221,7 +8336,9 @@ var FlashcardsView = class extends import_obsidian5.ItemView {
   }
   restartBackgroundRefresh() {
     this.stopBackgroundRefresh();
-    this.startBackgroundRefresh();
+    if (this.plugin.settings.ui.enableBackgroundRefresh) {
+      this.startBackgroundRefresh();
+    }
   }
   async refreshHeatmap() {
     if (this.component) {

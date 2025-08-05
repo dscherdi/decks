@@ -275,13 +275,37 @@ export default class FlashcardsPlugin extends Plugin {
     this.debugLog(`File ${file.path} has flashcards tag:`, hasFlashcardsTag);
 
     if (hasFlashcardsTag) {
-      // Sync decks and flashcards for this file
-      await this.deckManager.syncDecks();
-      await this.deckManager.syncFlashcardsForDeck(file.path);
+      // Check if deck exists for this file
+      const existingDeck = await this.db.getDeckByFilepath(file.path);
+      if (existingDeck) {
+        // Update deck tag if it changed
+        const newTag =
+          allTags.find((tag) => tag.startsWith("#flashcards")) || "#flashcards";
+        if (existingDeck.tag !== newTag) {
+          this.debugLog(
+            `Updating deck tag from ${existingDeck.tag} to ${newTag}`,
+          );
+          await this.db.updateDeck(existingDeck.id, { tag: newTag });
+        }
 
-      if (this.view) {
-        // Refresh the view
-        await this.view.refresh();
+        // Sync flashcards for this specific deck only
+        await this.deckManager.syncFlashcardsForDeck(file.path);
+
+        // Refresh only this specific deck's stats (fastest option)
+        if (this.view) {
+          await this.view.refreshStatsById(existingDeck.id);
+        }
+      } else {
+        // New file with flashcards tag - create deck for this file only
+        const newTag =
+          allTags.find((tag) => tag.startsWith("#flashcards")) || "#flashcards";
+        await this.deckManager.createDeckForFile(file.path, newTag);
+        await this.deckManager.syncFlashcardsForDeck(file.path);
+
+        // For new decks, refresh all stats to show the new deck
+        if (this.view) {
+          await this.view.refreshStats();
+        }
       }
     }
   }
@@ -333,7 +357,8 @@ export default class FlashcardsPlugin extends Plugin {
     await this.db.deleteDeckByFilepath(file.path);
 
     if (this.view) {
-      await this.view.refresh();
+      // Just refresh stats to remove deleted deck from UI (much faster than full sync)
+      await this.view.refreshStats();
     }
   }
 
@@ -388,6 +413,11 @@ export default class FlashcardsPlugin extends Plugin {
 
   async updateDeckConfig(deckId: string, config: DeckConfig): Promise<void> {
     await this.db.updateDeck(deckId, { config });
+
+    // Refresh stats for this deck since config changes can affect displayed stats
+    if (this.view) {
+      await this.view.refreshStatsById(deckId);
+    }
   }
 
   async reviewFlashcard(
@@ -493,8 +523,10 @@ class FlashcardsView extends ItemView {
     // Initial refresh
     await this.refresh();
 
-    // Start background refresh job (every 5 seconds)
-    this.startBackgroundRefresh();
+    // Start background refresh job if enabled
+    if (this.plugin.settings.ui.enableBackgroundRefresh) {
+      this.startBackgroundRefresh();
+    }
   }
 
   async onClose() {
@@ -575,6 +607,11 @@ class FlashcardsView extends ItemView {
   }
 
   startBackgroundRefresh() {
+    // Don't start if background refresh is disabled
+    if (!this.plugin.settings.ui.enableBackgroundRefresh) {
+      return;
+    }
+
     // Clear any existing interval
     this.stopBackgroundRefresh();
 
@@ -597,7 +634,9 @@ class FlashcardsView extends ItemView {
 
   restartBackgroundRefresh() {
     this.stopBackgroundRefresh();
-    this.startBackgroundRefresh();
+    if (this.plugin.settings.ui.enableBackgroundRefresh) {
+      this.startBackgroundRefresh();
+    }
   }
 
   async refreshHeatmap() {

@@ -254,10 +254,14 @@ export class DatabaseService {
       WHERE id = ?
     `);
 
-    const values = Object.values(updates).map((value, index) => {
-      const key = Object.keys(updates)[index];
-      return key === "config" ? JSON.stringify(value) : value;
-    });
+    const values: (string | null)[] = Object.values(updates).map(
+      (value, index) => {
+        const key = Object.keys(updates)[index];
+        return key === "config"
+          ? JSON.stringify(value)
+          : (value as string | null);
+      },
+    );
     values.push(now, deckId);
     stmt.run(values);
     stmt.free();

@@ -25,6 +25,9 @@ export class FlashcardsSettingTab extends PluginSettingTab {
     // Review Session Settings
     this.addReviewSettings(containerEl);
 
+    // Parsing Settings
+    this.addParsingSettings(containerEl);
+
     // UI Settings
     this.addUISettings(containerEl);
 
@@ -218,10 +221,38 @@ export class FlashcardsSettingTab extends PluginSettingTab {
       );
   }
 
+  private addParsingSettings(containerEl: HTMLElement): void {
+    containerEl.createEl("h3", { text: "Parsing Settings" });
+    containerEl.createEl("p", {
+      text: "Configure how flashcards are parsed from your notes.",
+      cls: "setting-item-description",
+    });
+
+    new Setting(containerEl)
+      .setName("Header Level for Flashcards")
+      .setDesc(
+        "Which header level to use for header-paragraph flashcards (H1 = 1, H2 = 2, etc.)",
+      )
+      .addDropdown((dropdown) =>
+        dropdown
+          .addOption("1", "H1 (#)")
+          .addOption("2", "H2 (##)")
+          .addOption("3", "H3 (###)")
+          .addOption("4", "H4 (####)")
+          .addOption("5", "H5 (#####)")
+          .addOption("6", "H6 (######)")
+          .setValue(this.plugin.settings.parsing.headerLevel.toString())
+          .onChange(async (value) => {
+            this.plugin.settings.parsing.headerLevel = parseInt(value);
+            await this.plugin.saveSettings();
+          }),
+      );
+  }
+
   private addUISettings(containerEl: HTMLElement): void {
     containerEl.createEl("h3", { text: "User Interface" });
 
-    new Setting(containerEl)
+    const intervalSetting = new Setting(containerEl)
       .setName("Background Refresh Interval")
       .setDesc("How often to refresh deck stats in the side panel (in seconds)")
       .addText((text) =>
@@ -242,6 +273,35 @@ export class FlashcardsSettingTab extends PluginSettingTab {
             }
           }),
       );
+
+    new Setting(containerEl)
+      .setName("Enable Background Refresh")
+      .setDesc("Automatically refresh deck stats in the side panel")
+      .addToggle((toggle) =>
+        toggle
+          .setValue(this.plugin.settings.ui.enableBackgroundRefresh)
+          .onChange(async (value) => {
+            this.plugin.settings.ui.enableBackgroundRefresh = value;
+            await this.plugin.saveSettings();
+
+            // Enable/disable interval setting based on toggle
+            intervalSetting.setDisabled(!value);
+
+            // Start or stop background refresh based on setting
+            if (this.plugin.view) {
+              if (value) {
+                this.plugin.view.startBackgroundRefresh();
+              } else {
+                this.plugin.view.stopBackgroundRefresh();
+              }
+            }
+          }),
+      );
+
+    // Set initial state of interval setting
+    intervalSetting.setDisabled(
+      !this.plugin.settings.ui.enableBackgroundRefresh,
+    );
   }
 
   private addDebugSettings(containerEl: HTMLElement): void {

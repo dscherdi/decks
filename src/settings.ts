@@ -23,8 +23,14 @@ export interface FlashcardsSettings {
     enableSessionLimit: boolean;
   };
 
+  // Parsing Settings
+  parsing: {
+    headerLevel: number; // 1-6, which header level to parse for header-paragraph flashcards
+  };
+
   // UI Settings
   ui: {
+    enableBackgroundRefresh: boolean;
     backgroundRefreshInterval: number; // seconds
   };
 
@@ -58,7 +64,12 @@ export const DEFAULT_SETTINGS: FlashcardsSettings = {
     enableSessionLimit: false,
   },
 
+  parsing: {
+    headerLevel: 2, // Default to H2 headers
+  },
+
   ui: {
+    enableBackgroundRefresh: true,
     backgroundRefreshInterval: 5,
   },
 

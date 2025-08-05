@@ -116,6 +116,7 @@
   	•	Order added (default, based on note ID)
   	•	Random
   	•	Due position
+9. ✅ Parse header-paragraph flashcards based on a configurable header level setting. The parser for header-paragraphs should parse only headers with that level and paragraphs it contains.
 
 ## ✅ Recent Enhancements
 
@@ -255,4 +256,23 @@
 - **Edge Case Handling**: Zero limits properly show 0 cards available instead of calculation errors
 - **Enhanced Exceeded Limit Messaging**: Clear "LIMIT EXCEEDED" indicators when daily allowance surpassed
 - **Learning Cards Explanation**: Notifies users when only learning cards available due to exceeded limits
-- **Complete Test Coverage**: 44 tests passing including exceeded limit scenarios
+- **Complete Test Coverage**: 46 tests passing including exceeded limit scenarios
+- **Bug Fix - Deck Configuration Preservation**: Fixed issue where deck configs were reset during file changes
+
+### Configurable Header Level Parsing
+- **Selective Header Parsing**: Configure which header level (H1-H6) to use for header-paragraph flashcards
+- **Settings Integration**: Added parsing settings section with intuitive dropdown (H1 = #, H2 = ##, etc.)
+- **Smart Content Boundaries**: Parser stops at any header level to prevent content mixing between sections
+- **Default H2 Behavior**: Sensible default of H2 headers for most common use cases
+- **Backward Compatible**: Existing setups continue working with automatic H2 default
+- **Enhanced Control**: Users can target specific document structures (H3 for detailed notes, H1 for main topics)
+- **Test Coverage**: Comprehensive testing including different header level configurations
+
+### Deck Configuration Preservation Bug Fix
+- **Root Cause**: File changes triggered full `syncDecks()` which could recreate existing decks with default configs
+- **Smart File Handling**: Modified `handleFileChange()` to update existing decks instead of recreating them
+- **Targeted Operations**: New `createDeckForFile()` method for single file deck creation without full sync
+- **Configuration Safety**: Deck configurations (daily limits, review order, etc.) now preserved during file edits
+- **Efficient Updates**: Only sync flashcards for specific deck when file content changes
+- **Backward Compatibility**: No impact on existing deck creation or initial sync processes
+- **Test Coverage**: Added test for single file deck creation to prevent regression

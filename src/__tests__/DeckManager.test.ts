@@ -288,8 +288,8 @@ It has many attractions.`;
 
       const flashcards = await deckManager.parseFlashcardsFromFile(file);
 
-      // Should include the header as a flashcard since it doesn't contain "flashcard" keyword
-      expect(flashcards).toHaveLength(4);
+      // H1 header should not be parsed when default header level is H2
+      expect(flashcards).toHaveLength(3);
       expect(flashcards[0]).toEqual({
         front: "Hola",
         back: "Hello",
@@ -302,12 +302,98 @@ It has many attractions.`;
         type: "table",
         lineNumber: 7,
       });
-      expect(flashcards[3]).toEqual({
-        front: "Spanish Vocabulary",
-        back: expect.stringContaining("| Spanish | English |"),
+    });
+
+    it("should parse headers based on configured header level", async () => {
+      const content = `# Title (H1)
+
+Some content under H1.
+
+## Question 1 (H2)
+
+Answer to question 1.
+
+### Question 2 (H3)
+
+Answer to question 2.`;
+
+      const file = new TFile("test.md");
+      jest.spyOn(mockVault, "read").mockResolvedValue(content);
+
+      // Create DeckManager with mock plugin that has H2 setting
+      const mockPlugin = {
+        settings: {
+          parsing: {
+            headerLevel: 2,
+          },
+        },
+      };
+      const deckManagerH2 = new DeckManager(
+        mockVault,
+        mockMetadataCache,
+        mockDb,
+        mockPlugin,
+      );
+
+      const flashcardsH2 = await deckManagerH2.parseFlashcardsFromFile(file);
+
+      // Should only parse H2 headers
+      expect(flashcardsH2).toHaveLength(1);
+      expect(flashcardsH2[0]).toEqual({
+        front: "Question 1 (H2)",
+        back: "Answer to question 1.",
         type: "header-paragraph",
-        lineNumber: 1,
+        lineNumber: 5,
       });
+
+      // Test with H3 setting
+      mockPlugin.settings.parsing.headerLevel = 3;
+      const deckManagerH3 = new DeckManager(
+        mockVault,
+        mockMetadataCache,
+        mockDb,
+        mockPlugin,
+      );
+
+      const flashcardsH3 = await deckManagerH3.parseFlashcardsFromFile(file);
+
+      // Should only parse H3 headers
+      expect(flashcardsH3).toHaveLength(1);
+      expect(flashcardsH3[0]).toEqual({
+        front: "Question 2 (H3)",
+        back: "Answer to question 2.",
+        type: "header-paragraph",
+        lineNumber: 9,
+      });
+    });
+
+    it("should create deck for single file without full sync", async () => {
+      const filePath = "test.md";
+      const tag = "#flashcards/test";
+
+      // Add file to vault
+      (mockVault as any)._addFile(filePath, "# Test\nContent");
+
+      // Mock that no deck exists initially
+      mockDb.getDeckByFilepath.mockResolvedValue(null);
+
+      await deckManager.createDeckForFile(filePath, tag);
+
+      // Verify createDeck was called with correct parameters
+      expect(mockDb.createDeck).toHaveBeenCalledWith(
+        expect.objectContaining({
+          name: "test", // file basename
+          filepath: filePath,
+          tag: tag,
+          config: expect.objectContaining({
+            newCardsLimit: 20,
+            reviewCardsLimit: 100,
+            enableNewCardsLimit: false,
+            enableReviewCardsLimit: false,
+            reviewOrder: "due-date",
+          }),
+        }),
+      );
     });
 
     it("should skip document title headers", async () => {
@@ -512,6 +598,182 @@ Answer 1`;
       const files: TFile[] = [];
       const name = (deckManager as any).extractDeckNameFromFiles(files);
       expect(name).toBe("General");
+    });
+  });
+
+  describe("sync efficiency", () => {
+    it("should sync flashcards for specific deck without affecting others", async () => {
+      // Setup multiple files and decks
+      (mockVault as any)._addFile("deck1.md", "# Question 1\nAnswer 1");
+      (mockVault as any)._addFile("deck2.md", "# Question 2\nAnswer 2");
+
+      // Mock metadata for both files
+      (mockMetadataCache as any)._setCache("deck1.md", {
+        tags: [{ tag: "#flashcards/math" }],
+      });
+      (mockMetadataCache as any)._setCache("deck2.md", {
+        tags: [{ tag: "#flashcards/science" }],
+      });
+
+      const deck1: Deck = {
+        id: "deck1",
+        name: "deck1",
+        filepath: "deck1.md",
+        tag: "#flashcards/math",
+        lastReviewed: null,
+        config: {
+          newCardsLimit: 20,
+          reviewCardsLimit: 100,
+          enableNewCardsLimit: false,
+          enableReviewCardsLimit: false,
+          reviewOrder: "due-date",
+        },
+        created: new Date().toISOString(),
+        modified: new Date().toISOString(),
+      };
+
+      const deck2: Deck = {
+        id: "deck2",
+        name: "deck2",
+        filepath: "deck2.md",
+        tag: "#flashcards/science",
+        lastReviewed: null,
+        config: {
+          newCardsLimit: 20,
+          reviewCardsLimit: 100,
+          enableNewCardsLimit: false,
+          enableReviewCardsLimit: false,
+          reviewOrder: "due-date",
+        },
+        created: new Date().toISOString(),
+        modified: new Date().toISOString(),
+      };
+
+      // Mock database calls
+      mockDb.getDeckByFilepath.mockImplementation((filepath) => {
+        if (filepath === "deck1.md") return Promise.resolve(deck1);
+        if (filepath === "deck2.md") return Promise.resolve(deck2);
+        return Promise.resolve(null);
+      });
+
+      mockDb.getFlashcardsByDeck.mockResolvedValue([]);
+
+      // Test syncing only deck1
+      await deckManager.syncFlashcardsForDeck("deck1.md");
+
+      // Verify only deck1 was queried
+      expect(mockDb.getDeckByFilepath).toHaveBeenCalledWith("deck1.md");
+      expect(mockDb.getDeckByFilepath).not.toHaveBeenCalledWith("deck2.md");
+      expect(mockDb.getFlashcardsByDeck).toHaveBeenCalledWith("deck1");
+      expect(mockDb.getFlashcardsByDeck).not.toHaveBeenCalledWith("deck2");
+    });
+
+    it("should create deck for single file without full vault scan", async () => {
+      // Setup single file
+      const filepath = "new-deck.md";
+      const tag = "#flashcards/test";
+
+      // Add the file to mock vault
+      (mockVault as any)._addFile(filepath, "# Test\nContent");
+
+      // Mock that no deck exists yet
+      mockDb.getDeckByFilepath.mockResolvedValue(null);
+      mockDb.createDeck.mockResolvedValue();
+
+      // Test creating deck for specific file
+      await deckManager.createDeckForFile(filepath, tag);
+
+      // Verify targeted operations
+      expect(mockDb.getDeckByFilepath).toHaveBeenCalledWith(filepath);
+      expect(mockDb.createDeck).toHaveBeenCalledWith(
+        expect.objectContaining({
+          name: "new-deck",
+          filepath: filepath,
+          tag: tag,
+        }),
+      );
+
+      // Verify it doesn't scan other files
+      expect(mockDb.getDeckByFilepath).toHaveBeenCalledTimes(1);
+    });
+  });
+
+  describe("deck configuration updates", () => {
+    it("should trigger stats refresh after config update", async () => {
+      // Setup existing deck
+      const deckId = "deck1";
+      const newConfig = {
+        newCardsLimit: 30,
+        reviewCardsLimit: 150,
+        enableNewCardsLimit: true,
+        enableReviewCardsLimit: true,
+        reviewOrder: "random" as const,
+      };
+
+      // Mock database update
+      mockDb.updateDeck.mockResolvedValue();
+
+      // Create a mock plugin with view
+      const mockPlugin = {
+        db: mockDb,
+        view: {
+          refreshStatsById: jest.fn().mockResolvedValue(),
+        },
+        updateDeckConfig: async function (deckId: string, config: any) {
+          await this.db.updateDeck(deckId, { config });
+          if (this.view) {
+            await this.view.refreshStatsById(deckId);
+          }
+        },
+      };
+
+      // Test config update
+      await mockPlugin.updateDeckConfig(deckId, newConfig);
+
+      // Verify database was updated
+      expect(mockDb.updateDeck).toHaveBeenCalledWith(deckId, {
+        config: newConfig,
+      });
+
+      // Verify stats refresh was triggered for the specific deck
+      expect(mockPlugin.view.refreshStatsById).toHaveBeenCalledWith(deckId);
+      expect(mockPlugin.view.refreshStatsById).toHaveBeenCalledTimes(1);
+    });
+
+    it("should handle config update without view gracefully", async () => {
+      // Setup deck config update without view
+      const deckId = "deck1";
+      const newConfig = {
+        newCardsLimit: 25,
+        reviewCardsLimit: 125,
+        enableNewCardsLimit: false,
+        enableReviewCardsLimit: false,
+        reviewOrder: "due-date" as const,
+      };
+
+      mockDb.updateDeck.mockResolvedValue();
+
+      // Create plugin without view
+      const mockPlugin = {
+        db: mockDb,
+        view: null,
+        updateDeckConfig: async function (deckId: string, config: any) {
+          await this.db.updateDeck(deckId, { config });
+          if (this.view) {
+            await this.view.refreshStatsById(deckId);
+          }
+        },
+      };
+
+      // Test config update - should not throw error
+      await expect(
+        mockPlugin.updateDeckConfig(deckId, newConfig),
+      ).resolves.not.toThrow();
+
+      // Verify database was still updated
+      expect(mockDb.updateDeck).toHaveBeenCalledWith(deckId, {
+        config: newConfig,
+      });
     });
   });
 });

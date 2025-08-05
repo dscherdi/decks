@@ -207,7 +207,11 @@ export class DeckManager {
     flashcards.push(...tableFlashcards);
 
     // Then parse header+paragraph flashcards
-    const headerFlashcards = this.parseHeaderParagraphFlashcards(lines);
+    const headerLevel = this.plugin?.settings?.parsing?.headerLevel || 2;
+    const headerFlashcards = this.parseHeaderParagraphFlashcards(
+      lines,
+      headerLevel,
+    );
     flashcards.push(...headerFlashcards);
 
     return flashcards;
@@ -267,7 +271,10 @@ export class DeckManager {
   /**
    * Parse header+paragraph flashcards
    */
-  private parseHeaderParagraphFlashcards(lines: string[]): ParsedFlashcard[] {
+  private parseHeaderParagraphFlashcards(
+    lines: string[],
+    headerLevel: number = 2,
+  ): ParsedFlashcard[] {
     const flashcards: ParsedFlashcard[] = [];
     let currentHeader: { text: string; lineNumber: number } | null = null;
     let currentContent: string[] = [];
@@ -290,8 +297,9 @@ export class DeckManager {
         continue;
       }
 
-      // Check if this is a header
-      if (line.match(/^#{1,6}\s+/)) {
+      // Check if this is a header of the specified level
+      const headerRegex = new RegExp(`^#{${headerLevel}}\\s+`);
+      if (line.match(headerRegex)) {
         // Check if this is a title header (# at start with "Flashcards" in title)
         if (line.match(/^#\s+/) && line.toLowerCase().includes("flashcard")) {
           skipNextParagraph = true;
@@ -303,7 +311,10 @@ export class DeckManager {
         // Save previous flashcard if exists
         if (currentHeader && currentContent.length > 0) {
           const card = {
-            front: currentHeader.text.replace(/^#{1,6}\s+/, ""),
+            front: currentHeader.text.replace(
+              new RegExp(`^#{${headerLevel}}\\s+`),
+              "",
+            ),
             back: currentContent.join("\n").trim(),
             type: "header-paragraph" as const,
             lineNumber: currentHeader.lineNumber,
@@ -324,6 +335,24 @@ export class DeckManager {
         if (line.trim() === "") {
           skipNextParagraph = false;
         }
+      } else if (line.match(/^#{1,6}\s+/)) {
+        // Found another header (any level) - stop current flashcard content
+        if (currentHeader && currentContent.length > 0) {
+          const card = {
+            front: currentHeader.text.replace(
+              new RegExp(`^#{${headerLevel}}\\s+`),
+              "",
+            ),
+            back: currentContent.join("\n").trim(),
+            type: "header-paragraph" as const,
+            lineNumber: currentHeader.lineNumber,
+          };
+
+          flashcards.push(card);
+        }
+        // Reset for potential new header of target level
+        currentHeader = null;
+        currentContent = [];
       } else if (currentHeader) {
         // Skip empty lines at the beginning
         if (line.trim() === "" && currentContent.length === 0) {
@@ -336,7 +365,10 @@ export class DeckManager {
     // Don't forget the last flashcard
     if (currentHeader && currentContent.length > 0) {
       const card = {
-        front: currentHeader.text.replace(/^#{1,6}\s+/, ""),
+        front: currentHeader.text.replace(
+          new RegExp(`^#{${headerLevel}}\\s+`),
+          "",
+        ),
         back: currentContent.join("\n").trim(),
         type: "header-paragraph" as const,
         lineNumber: currentHeader.lineNumber,
@@ -465,6 +497,34 @@ export class DeckManager {
   async syncFlashcardsForDeckByName(deckName: string): Promise<void> {
     // In the new system, deckName is actually the file path
     await this.syncFlashcardsForDeck(deckName);
+  }
+
+  /**
+   * Create deck for a single file without running full sync
+   */
+  async createDeckForFile(filePath: string, tag: string): Promise<void> {
+    const file = this.vault.getAbstractFileByPath(filePath);
+    if (!file || !(file instanceof TFile)) return;
+
+    const deckName = file.basename;
+    const existingDeck = await this.db.getDeckByFilepath(filePath);
+
+    if (!existingDeck) {
+      // Create new deck for this file
+      const deck: Omit<Deck, "created" | "modified"> = {
+        id: this.generateDeckId(filePath),
+        name: deckName,
+        filepath: filePath,
+        tag: tag,
+        lastReviewed: null,
+        config: DEFAULT_DECK_CONFIG,
+      };
+
+      this.debugLog(
+        `Creating new deck: "${deckName}" with ID: ${deck.id}, tag: ${tag}, filepath: ${filePath}`,
+      );
+      await this.db.createDeck(deck);
+    }
   }
 
   /**
