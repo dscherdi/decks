@@ -2,71 +2,161 @@
 
 Decks is a powerful spaced repetition flashcard plugin for Obsidian that helps you learn and memorize information efficiently using the FSRS algorithm, built with TypeScript and Svelte for a reactive and type-safe UI.
 
-## Features
+## Quick Start
 
-- Extract flashcards from markdown files using various formats
-- Advanced FSRS algorithm for optimal spaced repetition
-- Tag-based deck organization and filtering
-- Comprehensive statistics and progress tracking
-- Real-time review heatmaps and analytics
-- Configurable deck settings and daily limits
-- Modern TypeScript codebase for type safety
-- Reactive UI components with Svelte
+1. **Install the Plugin**: Download and enable Decks in your Obsidian plugins
+2. **Open the Panel**: Click the brain icon in the ribbon or use the command palette
+3. **Create Your First Deck**: Follow the guide below to create flashcards
+4. **Start Learning**: Click on any deck to begin reviewing flashcards
 
-## Project Structure
+## Creating Flashcards
 
-```
-decks/
-├── src/                     # Source code
-│   ├── components/          # Svelte UI components
-│   │   ├── DeckListPanel.svelte       # Main deck list view
-│   │   ├── FlashcardReviewModal.svelte # Review interface
-│   │   ├── StatisticsModal.svelte     # Statistics and analytics
-│   │   ├── ReviewHeatmap.svelte       # Activity heatmap
-│   │   └── DeckConfigModal.svelte     # Deck configuration
-│   ├── database/            # Database layer
-│   │   ├── DatabaseService.ts         # SQLite operations
-│   │   └── types.ts                   # Database schemas
-│   ├── services/            # Business logic
-│   │   └── DeckManager.ts             # Deck management
-│   ├── algorithm/           # FSRS implementation
-│   │   └── fsrs.ts                    # Spaced repetition algorithm
-│   ├── main.ts              # Plugin entry point
-│   └── settings.ts          # Plugin settings
-├── demo_vault/              # Test vault for development
-├── manifest.json            # Plugin manifest
-├── package.json             # Dependencies and scripts
-├── esbuild.config.mjs       # Build configuration
-└── tsconfig.json            # TypeScript configuration
+### 📝 Method 1: Header + Paragraph Format
+
+Create a markdown file and tag it with `#flashcards`:
+
+```markdown
+---
+tags: [flashcards/spanish-basics]
+---
+
+# What does "Hola" mean in English?
+Hello
+
+# How do you say "Thank you" in Spanish?
+Gracias
+
+# What is the Spanish word for "water"?
+Agua
 ```
 
-## Development
+**How it works:**
+- Each header becomes the **front** of a flashcard
+- All content until the next header becomes the **back**
+- The filename becomes your deck name
+- Cards are automatically extracted and synced
 
-### Prerequisites
+### 📊 Method 2: Table Format
 
-- Node.js (v14+)
-- npm (v7+)
+Create flashcards using a two-column table:
 
-### Setup
+```markdown
+---
+tags: [flashcards/vocabulary]
+---
 
-1. Clone the repository
-2. Run `npm install` to install dependencies
-3. Build with `npm run build`
+| Question | Answer |
+|----------|---------|
+| What is photosynthesis? | The process by which plants convert sunlight into energy |
+| Define gravity | The force that attracts objects toward each other |
+| What is DNA? | Deoxyribonucleic acid - carries genetic information |
+```
 
-### Build
+**How it works:**
+- First column = **front** of flashcard
+- Second column = **back** of flashcard
+- Header row is ignored
+- Perfect for structured Q&A format
 
-- Production: `npm run build`
-- Type checking: `npm run check`
-- Linting: `npm run lint`
-- Testing: `npm test`
+### 🎯 Best Practices
 
-### Installation
+- **Use descriptive tags**: `#flashcards/spanish-verbs` instead of `#flashcards/deck1`
+- **Keep cards atomic**: One concept per card
+- **Use images and formatting**: Markdown formatting is fully supported
+- **Organize by topic**: Group related concepts in the same deck
 
-1. Build the plugin using `npm run build`
-2. Copy the generated files to your Obsidian vault's plugins directory:
-   - `main.js` - The compiled plugin
-   - `manifest.json` - Plugin manifest
-3. Enable the plugin in Obsidian settings
+## Key Concepts
+
+### 🧠 Learning States
+
+**New Cards** 🆕
+- Cards you've never seen before
+- Shown first in each review session
+- Default limit: 20 new cards per day
+
+**Learning Cards** 📚
+- Cards in short-term review cycle
+- Use fixed intervals: 1min → 10min → 1 day
+- Help reinforce new information while fresh
+
+**Due Cards** ⏰
+- Part of long-term spaced repetition
+- Scheduled based on your performance
+- Intervals grow with successful reviews
+
+### ⚡ FSRS Algorithm
+
+Decks uses the **Free Spaced Repetition Scheduler (FSRS)**, a modern algorithm that:
+
+- **Adapts to your performance**: Cards you struggle with appear more frequently
+- **Optimizes retention**: Maximizes what you remember with minimal reviews
+- **Predicts forgetting**: Schedules reviews just before you'd forget
+- **Learns your patterns**: Improves scheduling based on your review history
+
+### 🎮 Review Process
+
+When reviewing flashcards, you have four difficulty options:
+
+**Again** 🔄 (Red)
+- "I don't remember this at all"
+- Resets the card to learning state
+- Shows the card again soon
+
+**Hard** 😅 (Orange)
+- "I struggled but got it eventually"
+- Increases interval slightly
+- Shorter than normal spacing
+
+**Good** ✅ (Green)
+- "I remembered it correctly"
+- Normal interval increase
+- Default choice for successful recall
+
+**Easy** 🚀 (Blue)
+- "Too easy, I know this well"
+- Longer interval increase
+- Use sparingly for very familiar content
+
+### 📊 Understanding Your Stats
+
+**Daily Progress**
+- Track new cards learned
+- Monitor review accuracy
+- See time spent studying
+
+**Forecast**
+- Predict future review workload
+- Plan your study schedule
+- Understand long-term commitments
+
+**Retention Rate**
+- Measure how well you're remembering
+- Identify problematic topics
+- Adjust study strategies
+
+## How to Use
+
+### 🚀 Getting Started
+
+1. **Create a deck**: Make a markdown file with `#flashcards` tag
+2. **Add flashcards**: Use headers+paragraphs or table format
+3. **Open Decks panel**: Click the brain icon in the sidebar
+4. **Start reviewing**: Click on any deck to begin
+
+### 📈 Daily Workflow
+
+1. **Check your dashboard**: See what's due today
+2. **Review due cards**: Handle spaced repetition reviews first
+3. **Learn new cards**: Add new knowledge within daily limits
+4. **Check progress**: Monitor your learning statistics
+
+### ⚙️ Configuration
+
+Access deck settings to customize:
+- Daily new card limits
+- Review order preferences
+- Deck-specific configurations
+- FSRS algorithm parameters
 
 ### Features
 
@@ -76,15 +166,3 @@ decks/
 - **Deck Management**: Organize flashcards by tags and configure review limits
 - **Review Heatmap**: Visualize your review activity over time
 - **Time Tracking**: Monitor your review pace and efficiency
-
-## License
-
-This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details.
-
-MIT License - Copyright (c) 2024 Decks
-
-Permission is hereby granted, free of charge, to any person obtaining a copy of this software and associated documentation files (the "Software"), to deal in the Software without restriction, including without limitation the rights to use, copy, modify, merge, publish, distribute, sublicense, and/or sell copies of the Software, and to permit persons to whom the Software is furnished to do so, subject to the following conditions:
-
-The above copyright notice and this permission notice shall be included in all copies or substantial portions of the Software.
-
-THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
