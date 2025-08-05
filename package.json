@@ -1,11 +1,16 @@
 {
-  "name": "obsidian-flashcards-canvas",
+  "name": "decks",
   "version": "1.0.0",
-  "description": "Create and review flashcards directly from your canvas files using spaced repetition",
+  "description": "Decks - Spaced repetition flashcards for Obsidian with FSRS algorithm",
   "main": "out/main.js",
   "source": "src/main.ts",
   "scripts": {
     "build": "node esbuild.config.mjs production",
+    "build:dev": "node esbuild.config.mjs",
+    "build:release": "npm run clean && npm run build && npm run package",
+    "clean": "rimraf dist && rimraf *.tgz",
+    "package": "node scripts/package-release.mjs",
+    "release-notes": "node scripts/generate-release-notes.mjs",
     "version": "node version-bump.mjs && git add manifest.json versions.json",
     "check": "svelte-check --tsconfig ./tsconfig.json",
     "lint": "eslint --ext .ts,.svelte src/",
@@ -15,8 +20,9 @@
   "keywords": [
     "obsidian",
     "flashcards",
-    "canvas",
-    "spaced-repetition"
+    "decks",
+    "spaced-repetition",
+    "fsrs"
   ],
   "author": "Your Name",
   "license": "MIT",

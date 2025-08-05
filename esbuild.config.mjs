@@ -18,16 +18,17 @@ const prod = process.argv[2] === "production";
 
 // Set up directories
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
-const outDir = path.join(
-  __dirname,
-  "demo_vault/.obsidian/plugins/obsidian-flashcards-plugin",
-);
+const outDir = path.join(__dirname, "demo_vault/.obsidian/plugins/decks");
 const srcDir = path.join(__dirname, "src");
 
 // Ensure output directory exists
 if (!fs.existsSync(outDir)) {
   fs.mkdirSync(outDir, { recursive: true });
 }
+
+console.log(
+  `Building Decks plugin in ${prod ? "production" : "development"} mode...`,
+);
 
 // Build options
 const buildOptions = {
@@ -57,6 +58,8 @@ const buildOptions = {
   logLevel: "info",
   sourcemap: prod ? false : "inline",
   treeShaking: true,
+  minify: prod,
+  keepNames: prod,
   outfile: path.join(outDir, "main.js"),
   plugins: [
     sveltePlugin({
@@ -80,7 +83,16 @@ const buildOptions = {
 };
 
 // Build
-esbuild.build(buildOptions).catch((err) => {
-  console.error(err);
-  process.exit(1);
-});
+esbuild
+  .build(buildOptions)
+  .then(() => {
+    console.log(`✅ Build completed successfully!`);
+    console.log(`📁 Output: ${buildOptions.outfile}`);
+    const stats = fs.statSync(buildOptions.outfile);
+    console.log(`📊 Size: ${(stats.size / 1024).toFixed(1)} KB`);
+  })
+  .catch((err) => {
+    console.error("❌ Build failed:");
+    console.error(err);
+    process.exit(1);
+  });

@@ -1,12 +1,12 @@
 import { Modal } from "obsidian";
-import type FlashcardsPlugin from "../main";
+import type DecksPlugin from "../main";
 import StatisticsUI from "./StatisticsUI.svelte";
 
 export class StatisticsModal extends Modal {
-  private plugin: FlashcardsPlugin;
+  private plugin: DecksPlugin;
   private component: StatisticsUI | null = null;
 
-  constructor(plugin: FlashcardsPlugin) {
+  constructor(plugin: DecksPlugin) {
     super(plugin.app);
     this.plugin = plugin;
   }

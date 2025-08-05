@@ -1,10 +1,10 @@
 <script lang="ts">
-    import type FlashcardsPlugin from "../main";
+    import type DecksPlugin from "../main";
     import { onMount, createEventDispatcher } from "svelte";
     import ReviewHeatmap from "./ReviewHeatmap.svelte";
     import type { Statistics } from "../database/types";
 
-    export let plugin: FlashcardsPlugin;
+    export let plugin: DecksPlugin;
 
     const dispatch = createEventDispatcher();
 

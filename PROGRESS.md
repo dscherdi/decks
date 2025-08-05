@@ -1,4 +1,4 @@
-# Obsidian Flashcards Plugin - Progress Summary
+# Decks - Progress Summary
 
 ## ✅ Core Features Implemented
 - SQLite database with sql.js for persistence
@@ -304,6 +304,34 @@
 - Set fixed container height (150px) with proper spacing and padding
 - Bar heights now scale proportionally leaving room at top of container
 - Improved visual clarity for review load forecasting across all scenarios
+
+### ✅ Project Rename to "Decks"
+- Renamed project from "obsidian-flashcards-plugin" to "Decks" for cleaner branding
+- Updated all plugin IDs, class names, and file references
+- Changed main plugin class from `FlashcardsPlugin` to `DecksPlugin`
+- Updated view type from "flashcards-view" to "decks-view"
+- Renamed CSS classes from "flashcard-" to "deck-" prefix
+- Updated manifest.json, package.json, and README.md with new branding
+- Changed plugin directory path from ".obsidian/plugins/obsidian-flashcards-plugin" to ".obsidian/plugins/decks"
+- Maintained all functionality while providing cleaner, more focused naming
+
+### ✅ MIT License Addition
+- Added comprehensive MIT License file to the project root
+- Updated README.md with detailed license information and terms
+- Ensured package.json license field is properly set to "MIT"
+- Project now has clear, permissive licensing for open source distribution
+
+### ✅ Production Build and Release Infrastructure
+- Added comprehensive build system for GitHub releases
+- Created `npm run build:release` command for production builds
+- Enhanced esbuild config with production optimizations (minification, tree shaking)
+- Built automated packaging script that creates distribution-ready files
+- Added GitHub Actions workflow for automated releases on version tags
+- Created release notes generator that extracts features from PROGRESS.md
+- Enhanced version bump script with validation and clear next steps
+- Production build creates optimized 202KB bundle with all necessary files
+- Release package includes main.js, manifest.json, styles.css, README.md, and LICENSE
+- Automated workflow runs tests, builds, and creates GitHub releases with proper assets
 - **Modal Access**: Added graph icon button next to refresh button in deck list header
 - **Filtering System**: Complete deck filtering (All Decks, by Tag, by Individual Deck)
 - **Timeframe Selection**: Last 12 months or All History options

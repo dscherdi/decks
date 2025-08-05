@@ -1,11 +1,11 @@
 import { Modal, Component, Notice } from "obsidian";
 import type { Deck, Flashcard } from "../database/types";
 import type { Difficulty } from "../algorithm/fsrs";
-import type FlashcardsPlugin from "../main";
+import type DecksPlugin from "../main";
 import FlashcardReviewModal from "./FlashcardReviewModal.svelte";
 
 export class FlashcardReviewModalWrapper extends Modal {
-  private plugin: FlashcardsPlugin;
+  private plugin: DecksPlugin;
   private deck: Deck;
   private flashcards: Flashcard[];
   private component: FlashcardReviewModal | null = null;
@@ -13,7 +13,7 @@ export class FlashcardReviewModalWrapper extends Modal {
 
   constructor(
     app: any,
-    plugin: FlashcardsPlugin,
+    plugin: DecksPlugin,
     deck: Deck,
     flashcards: Flashcard[],
   ) {
@@ -26,7 +26,7 @@ export class FlashcardReviewModalWrapper extends Modal {
   async onOpen() {
     const { contentEl } = this;
     contentEl.empty();
-    contentEl.addClass("flashcard-review-modal");
+    contentEl.addClass("deck-review-modal");
 
     // Create container for Svelte component
     const container = contentEl.createDiv();

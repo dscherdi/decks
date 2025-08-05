@@ -1,11 +1,11 @@
 import { App, PluginSettingTab, Setting } from "obsidian";
-import FlashcardsPlugin from "../main";
+import DecksPlugin from "../main";
 import { FlashcardsSettings } from "../settings";
 
-export class FlashcardsSettingTab extends PluginSettingTab {
-  plugin: FlashcardsPlugin;
+export class DecksSettingTab extends PluginSettingTab {
+  plugin: DecksPlugin;
 
-  constructor(app: App, plugin: FlashcardsPlugin) {
+  constructor(app: App, plugin: DecksPlugin) {
     super(app, plugin);
     this.plugin = plugin;
   }
@@ -14,7 +14,7 @@ export class FlashcardsSettingTab extends PluginSettingTab {
     const { containerEl } = this;
     containerEl.empty();
 
-    containerEl.createEl("h2", { text: "Flashcards Plugin Settings" });
+    containerEl.createEl("h2", { text: "Decks Plugin Settings" });
 
     // FSRS Algorithm Settings
     this.addFSRSSettings(containerEl);
@@ -125,9 +125,7 @@ export class FlashcardsSettingTab extends PluginSettingTab {
       .setDesc("Custom path for the database file (leave empty for default)")
       .addText((text) =>
         text
-          .setPlaceholder(
-            ".obsidian/plugins/obsidian-flashcards-plugin/flashcards.db",
-          )
+          .setPlaceholder(".obsidian/plugins/decks/flashcards.db")
           .setValue(this.plugin.settings.database.customPath || "")
           .onChange(async (value) => {
             this.plugin.settings.database.customPath =

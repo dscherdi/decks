@@ -1,17 +1,17 @@
 import { Modal } from "obsidian";
 import type { Deck, DeckConfig } from "../database/types";
-import type FlashcardsPlugin from "../main";
+import type DecksPlugin from "../main";
 import DeckConfigUI from "./DeckConfigUI.svelte";
 
 export class DeckConfigModal extends Modal {
   private deck: Deck;
-  private plugin: FlashcardsPlugin;
+  private plugin: DecksPlugin;
   private onSave: (config: DeckConfig) => Promise<void>;
   private config: DeckConfig;
   private component: DeckConfigUI | null = null;
 
   constructor(
-    plugin: FlashcardsPlugin,
+    plugin: DecksPlugin,
     deck: Deck,
     onSave: (config: DeckConfig) => Promise<void>,
   ) {

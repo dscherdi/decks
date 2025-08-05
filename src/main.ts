@@ -23,33 +23,32 @@ import {
   Statistics,
 } from "./database/types";
 import { FlashcardsSettings, DEFAULT_SETTINGS } from "./settings";
-import { FlashcardsSettingTab } from "./components/SettingsTab";
+import { DecksSettingTab } from "./components/SettingsTab";
 import DeckListPanel from "./components/DeckListPanel.svelte";
 import { DeckConfigModal } from "./components/DeckConfigModal";
 import { StatisticsModal } from "./components/StatisticsModal";
 import DeckConfigUI from "./components/DeckConfigUI.svelte";
 import { FlashcardReviewModalWrapper } from "./components/FlashcardReviewModalWrapper";
 
-const VIEW_TYPE_FLASHCARDS = "flashcards-view";
-const DATABASE_PATH =
-  ".obsidian/plugins/obsidian-flashcards-plugin/flashcards.db";
+const VIEW_TYPE_DECKS = "decks-view";
+const DATABASE_PATH = ".obsidian/plugins/decks/flashcards.db";
 
-export default class FlashcardsPlugin extends Plugin {
+export default class DecksPlugin extends Plugin {
   private db: DatabaseService;
   private deckManager: DeckManager;
   private fsrs: FSRS;
-  public view: FlashcardsView | null = null;
+  public view: DecksView | null = null;
   public settings: FlashcardsSettings;
 
   // Debug logging utility
   debugLog(message: string, ...args: any[]): void {
     if (this.settings?.debug?.enableLogging) {
-      console.log(`[Flashcards Debug] ${message}`, ...args);
+      console.log(`[Decks Debug] ${message}`, ...args);
     }
   }
 
   async onload() {
-    console.log("Loading Flashcards plugin");
+    console.log("Loading Decks plugin");
 
     // Load settings
     await this.loadSettings();
@@ -57,7 +56,7 @@ export default class FlashcardsPlugin extends Plugin {
     try {
       // Ensure plugin directory exists
       const adapter = this.app.vault.adapter;
-      const pluginDir = ".obsidian/plugins/obsidian-flashcards-plugin";
+      const pluginDir = ".obsidian/plugins/decks";
       if (!(await adapter.exists(pluginDir))) {
         await adapter.mkdir(pluginDir);
       }
@@ -83,10 +82,7 @@ export default class FlashcardsPlugin extends Plugin {
       });
 
       // Register the side panel view
-      this.registerView(
-        VIEW_TYPE_FLASHCARDS,
-        (leaf) => new FlashcardsView(leaf, this),
-      );
+      this.registerView(VIEW_TYPE_DECKS, (leaf) => new DecksView(leaf, this));
 
       // Schedule initial sync after workspace is ready
       this.app.workspace.onLayoutReady(() => {
@@ -131,19 +127,17 @@ export default class FlashcardsPlugin extends Plugin {
       this.loadStyles();
 
       // Add settings tab
-      this.addSettingTab(new FlashcardsSettingTab(this.app, this));
+      this.addSettingTab(new DecksSettingTab(this.app, this));
 
-      console.log("Flashcards plugin loaded successfully");
+      console.log("Decks plugin loaded successfully");
     } catch (error) {
-      console.error("Error loading Flashcards plugin:", error);
-      new Notice(
-        "Failed to load Flashcards plugin. Check console for details.",
-      );
+      console.error("Error loading Decks plugin:", error);
+      new Notice("Failed to load Decks plugin. Check console for details.");
     }
   }
 
   async onunload() {
-    console.log("Unloading Flashcards plugin");
+    console.log("Unloading Decks plugin");
 
     // Close database connection
     if (this.db) {
@@ -151,7 +145,7 @@ export default class FlashcardsPlugin extends Plugin {
     }
 
     // Remove view
-    this.app.workspace.detachLeavesOfType(VIEW_TYPE_FLASHCARDS);
+    this.app.workspace.detachLeavesOfType(VIEW_TYPE_DECKS);
   }
 
   async loadSettings() {
@@ -180,38 +174,37 @@ export default class FlashcardsPlugin extends Plugin {
 
   private loadStyles() {
     const styleEl = document.createElement("style");
-    styleEl.id = "flashcards-plugin-styles";
+    styleEl.id = "decks-plugin-styles";
     styleEl.textContent = `
-      /* Custom styles for flashcards plugin */
-      .flashcards-view {
+      /* Custom styles for decks plugin */
+      .decks-view {
         padding: 0;
         overflow: hidden;
       }
 
       /* Modal styles */
-      .flashcard-review-modal {
+      .deck-review-modal {
         height: 90vh;
         max-height: 700px;
+        width: 90vw;
+        max-width: 900px;
       }
 
-      .flashcard-review-modal .modal-content {
+      .deck-review-modal .modal-content {
         display: flex;
         flex-direction: column;
         height: 100%;
+        overflow: hidden;
         padding: 0;
-        overflow: hidden;
-        width: 100%;
-        box-sizing: border-box;
       }
 
-      .flashcard-review-modal .modal {
+      .deck-review-modal .modal {
         height: 100%;
         display: flex;
         flex-direction: column;
-        overflow: hidden;
       }
 
-      .flashcard-review-modal .modal-container {
+      .deck-review-modal .modal-container {
         overflow: hidden;
         width: 100%;
         height: 100%;
@@ -224,7 +217,7 @@ export default class FlashcardsPlugin extends Plugin {
     const { workspace } = this.app;
 
     let leaf: WorkspaceLeaf | null = null;
-    const leaves = workspace.getLeavesOfType(VIEW_TYPE_FLASHCARDS);
+    const leaves = workspace.getLeavesOfType(VIEW_TYPE_DECKS);
 
     if (leaves.length > 0) {
       // View already open
@@ -234,7 +227,7 @@ export default class FlashcardsPlugin extends Plugin {
       leaf = workspace.getRightLeaf(false);
       if (leaf) {
         await leaf.setViewState({
-          type: VIEW_TYPE_FLASHCARDS,
+          type: VIEW_TYPE_DECKS,
           active: true,
         });
       }
@@ -491,14 +484,14 @@ export default class FlashcardsPlugin extends Plugin {
   }
 }
 
-class FlashcardsView extends ItemView {
-  private plugin: FlashcardsPlugin;
+class DecksView extends ItemView {
+  private plugin: DecksPlugin;
   private component: DeckListPanel | null = null;
   private markdownComponents: Component[] = [];
   private statsRefreshTimeout: NodeJS.Timeout | null = null;
   private backgroundRefreshInterval: NodeJS.Timeout | null = null;
 
-  constructor(leaf: WorkspaceLeaf, plugin: FlashcardsPlugin) {
+  constructor(leaf: WorkspaceLeaf, plugin: DecksPlugin) {
     super(leaf);
     this.plugin = plugin;
     // Set reference in plugin so we can access this view instance
@@ -506,11 +499,11 @@ class FlashcardsView extends ItemView {
   }
 
   getViewType(): string {
-    return VIEW_TYPE_FLASHCARDS;
+    return VIEW_TYPE_DECKS;
   }
 
   getDisplayText(): string {
-    return "Flashcards";
+    return "Decks";
   }
 
   getIcon(): string {
@@ -520,7 +513,7 @@ class FlashcardsView extends ItemView {
   async onOpen() {
     const container = this.containerEl.children[1];
     container.empty();
-    container.addClass("flashcards-view");
+    container.addClass("decks-view");
 
     // Create and mount Svelte component
     this.component = new DeckListPanel({
@@ -584,20 +577,20 @@ class FlashcardsView extends ItemView {
   }
 
   async refresh() {
-    this.plugin.debugLog("FlashcardsView.refresh() called");
+    this.plugin.debugLog("DecksView.refresh() called");
     try {
       // Perform complete sync like debug command
       await this.plugin.performSync();
 
       this.plugin.debugLog("Refresh complete");
     } catch (error) {
-      console.error("Error refreshing flashcards:", error);
-      new Notice("Error refreshing flashcards. Check console for details.");
+      console.error("Error refreshing decks:", error);
+      new Notice("Error refreshing decks. Check console for details.");
     }
   }
 
   async refreshStats() {
-    this.plugin.debugLog("FlashcardsView.refreshStats() executing");
+    this.plugin.debugLog("DecksView.refreshStats() executing");
     try {
       // Get updated stats only (faster than full refresh)
       const deckStats = await this.plugin.getDeckStats();
@@ -614,7 +607,7 @@ class FlashcardsView extends ItemView {
 
   async refreshStatsById(deckId: string) {
     this.plugin.debugLog(
-      `FlashcardsView.refreshStatsById() executing for deck: ${deckId}`,
+      `DecksView.refreshStatsById() executing for deck: ${deckId}`,
     );
     try {
       // Get all stats (same as refresh() method for consistency)
@@ -683,7 +676,7 @@ class FlashcardsView extends ItemView {
   async startReview(deck: Deck) {
     try {
       // First sync flashcards for this specific deck
-      console.log(`Syncing flashcards for deck before review: ${deck.name}`);
+      console.log(`Syncing cards for deck before review: ${deck.name}`);
       await this.plugin.syncFlashcardsForDeck(deck.name);
 
       // Get daily review counts to show remaining allowance

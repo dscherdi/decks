@@ -165,7 +165,7 @@
       }
     ],
     "direction": "horizontal",
-    "width": 540.5
+    "width": 555.5
   },
   "left-ribbon": {
     "hiddenItems": {
@@ -178,7 +178,7 @@
       "obsidian-flashcards-plugin:Flashcards": false
     }
   },
-  "active": "296674abb626cb1b",
+  "active": "c22c74090ed42546",
   "lastOpenFiles": [
     "Flashcards/Spanish-Vocabulary 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1.md",
     "Flashcards/Spanish-Vocabulary 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1.md",

@@ -23,7 +23,7 @@
         config: DeckConfig,
     ) => Promise<void>;
     export let onOpenStatistics: () => void;
-    export let plugin: any; // FlashcardsPlugin reference
+    export let plugin: any; // DecksPlugin reference
 
     let isRefreshing = false;
     let isUpdatingStats = false;
