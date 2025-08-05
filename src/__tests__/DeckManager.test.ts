@@ -313,16 +313,44 @@ Answer 1`;
 
   describe("flashcard ID generation", () => {
     it("should generate consistent IDs for same content", () => {
-      const id1 = (deckManager as any).generateFlashcardId("What is 2+2?");
-      const id2 = (deckManager as any).generateFlashcardId("What is 2+2?");
+      const deckId = "deck_123";
+      const id1 = (deckManager as any).generateFlashcardId(
+        "What is 2+2?",
+        deckId,
+      );
+      const id2 = (deckManager as any).generateFlashcardId(
+        "What is 2+2?",
+        deckId,
+      );
 
       expect(id1).toBe(id2);
       expect(id1).toMatch(/^card_[a-z0-9]+$/);
     });
 
     it("should generate different IDs for different content", () => {
-      const id1 = (deckManager as any).generateFlashcardId("Question 1");
-      const id2 = (deckManager as any).generateFlashcardId("Question 2");
+      const deckId = "deck_123";
+      const id1 = (deckManager as any).generateFlashcardId(
+        "Question 1",
+        deckId,
+      );
+      const id2 = (deckManager as any).generateFlashcardId(
+        "Question 2",
+        deckId,
+      );
+
+      expect(id1).not.toBe(id2);
+    });
+
+    it("should generate different IDs for same content in different decks", () => {
+      const question = "What is 2+2?";
+      const id1 = (deckManager as any).generateFlashcardId(
+        question,
+        "deck_123",
+      );
+      const id2 = (deckManager as any).generateFlashcardId(
+        question,
+        "deck_456",
+      );
 
       expect(id1).not.toBe(id2);
     });

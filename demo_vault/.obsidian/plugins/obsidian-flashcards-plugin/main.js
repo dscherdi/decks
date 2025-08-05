@@ -3227,7 +3227,7 @@ var DeckManager = class {
     for (const file of files) {
       const parsedCards = await this.parseFlashcardsFromFile(file);
       for (const parsed of parsedCards) {
-        const flashcardId = this.generateFlashcardId(parsed.front);
+        const flashcardId = this.generateFlashcardId(parsed.front, deck.id);
         const contentHash = this.generateContentHash(parsed.back);
         const existingCard = existingById.get(flashcardId);
         processedIds.add(flashcardId);
@@ -3302,7 +3302,7 @@ var DeckManager = class {
     const parsedCards = await this.parseFlashcardsFromFile(targetFile);
     const processedIds = /* @__PURE__ */ new Set();
     for (const parsed of parsedCards) {
-      const flashcardId = this.generateFlashcardId(parsed.front);
+      const flashcardId = this.generateFlashcardId(parsed.front, deck.id);
       const contentHash = this.generateContentHash(parsed.back);
       const existingCard = existingById.get(flashcardId);
       processedIds.add(flashcardId);
@@ -3376,12 +3376,13 @@ var DeckManager = class {
     return `deck_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
   }
   /**
-   * Generate unique flashcard ID using hash of front text
+   * Generate unique flashcard ID using hash of front text and deck ID
    */
-  generateFlashcardId(frontText) {
+  generateFlashcardId(frontText, deckId) {
+    const combined = `${deckId}:${frontText}`;
     let hash = 0;
-    for (let i = 0; i < frontText.length; i++) {
-      const char = frontText.charCodeAt(i);
+    for (let i = 0; i < combined.length; i++) {
+      const char = combined.charCodeAt(i);
       hash = (hash << 5) - hash + char;
       hash = hash & hash;
     }
@@ -4930,18 +4931,25 @@ function instance($$self, $$props, $$invalidate) {
   }
   function calculateMaxWeeks() {
     if (!containerElement)
-      return 52;
+      return 20;
     const containerWidth = containerElement.clientWidth;
-    const availableWidth = containerWidth - 40;
+    if (containerWidth === 0)
+      return 20;
+    const availableWidth = containerWidth - 50;
     const weekWidth = 12;
     const calculatedWeeks = Math.floor(availableWidth / weekWidth);
-    return Math.min(Math.max(calculatedWeeks, 12), 52);
+    return Math.min(Math.max(calculatedWeeks, 8), 52);
   }
   function handleResize() {
     const newMaxWeeks = calculateMaxWeeks();
-    if (newMaxWeeks !== maxWeeks) {
+    if (newMaxWeeks !== maxWeeks && newMaxWeeks > 0) {
       maxWeeks = newMaxWeeks;
-      generateDays();
+      setTimeout(
+        () => {
+          refresh();
+        },
+        100
+      );
     }
   }
   function refresh() {
@@ -4949,7 +4957,7 @@ function instance($$self, $$props, $$invalidate) {
       $$invalidate(2, isLoading = true);
       try {
         const daysToFetch = maxWeeks * 7;
-        $$invalidate(0, reviewCounts = yield getReviewCounts(daysToFetch));
+        $$invalidate(0, reviewCounts = yield getReviewCounts());
         maxCount = 0;
         generateDays();
       } catch (error) {
@@ -4960,11 +4968,28 @@ function instance($$self, $$props, $$invalidate) {
     });
   }
   onMount(() => {
-    maxWeeks = calculateMaxWeeks();
-    refresh();
-    window.addEventListener("resize", handleResize);
+    setTimeout(
+      () => {
+        maxWeeks = calculateMaxWeeks();
+        refresh();
+      },
+      0
+    );
+    let resizeObserver;
+    if (containerElement && window.ResizeObserver) {
+      resizeObserver = new ResizeObserver(() => {
+        handleResize();
+      });
+      resizeObserver.observe(containerElement);
+    } else {
+      window.addEventListener("resize", handleResize);
+    }
     return () => {
-      window.removeEventListener("resize", handleResize);
+      if (resizeObserver) {
+        resizeObserver.disconnect();
+      } else {
+        window.removeEventListener("resize", handleResize);
+      }
     };
   });
   function div1_binding($$value) {
@@ -5002,7 +5027,7 @@ var ReviewHeatmap_default = ReviewHeatmap;
 
 // src/components/DeckListPanel.svelte
 function add_css2(target) {
-  append_styles(target, "svelte-bhki54", ".deck-list-panel.svelte-bhki54.svelte-bhki54{height:100%;display:flex;flex-direction:column;background:var(--background-primary);color:var(--text-normal)}.panel-header.svelte-bhki54.svelte-bhki54{display:flex;justify-content:space-between;align-items:center;padding:12px 16px;border-bottom:1px solid var(--background-modifier-border)}.filter-section.svelte-bhki54.svelte-bhki54{padding:8px 16px;border-bottom:1px solid var(--background-modifier-border)}.filter-input.svelte-bhki54.svelte-bhki54{width:100%;padding:6px 8px;border:1px solid var(--background-modifier-border);border-radius:4px;background:var(--background-primary);color:var(--text-normal);font-size:14px;transition:border-color 0.2s ease}.filter-input.svelte-bhki54.svelte-bhki54:focus{outline:none;border-color:var(--interactive-accent)}.filter-input.svelte-bhki54.svelte-bhki54::placeholder{color:var(--text-muted)}.panel-title.svelte-bhki54.svelte-bhki54{margin:0;font-size:16px;font-weight:600}.refresh-button.svelte-bhki54.svelte-bhki54{background:none;border:none;cursor:pointer;padding:4px;border-radius:4px;color:var(--text-muted);transition:all 0.2s ease;position:relative;z-index:1}.refresh-button.svelte-bhki54.svelte-bhki54:hover{background:var(--background-modifier-hover);color:var(--text-normal)}.refresh-button.svelte-bhki54.svelte-bhki54:disabled{opacity:0.5;cursor:not-allowed}.refresh-button.refreshing.svelte-bhki54 svg.svelte-bhki54{animation:svelte-bhki54-spin 1s linear infinite}@keyframes svelte-bhki54-spin{from{transform:rotate(0deg)}to{transform:rotate(360deg)}}.empty-state.svelte-bhki54.svelte-bhki54{flex:1;display:flex;flex-direction:column;justify-content:center;align-items:center;padding:32px;text-align:center}.empty-state.svelte-bhki54 p.svelte-bhki54{margin:8px 0}.help-text.svelte-bhki54.svelte-bhki54{font-size:14px;color:var(--text-muted)}.deck-table.svelte-bhki54.svelte-bhki54{flex:1;display:flex;flex-direction:column;overflow:hidden}.table-header.svelte-bhki54.svelte-bhki54{display:grid;grid-template-columns:1fr 60px 60px 60px;gap:8px;padding:8px 16px;font-weight:600;font-size:14px;border-bottom:1px solid var(--background-modifier-border);background:var(--background-secondary);align-items:center}.table-body.svelte-bhki54.svelte-bhki54{flex:1;overflow-y:auto}.deck-row.svelte-bhki54.svelte-bhki54{display:grid;grid-template-columns:1fr 60px 60px 60px;gap:8px;padding:12px 16px;border:none;background:none;width:100%;text-align:left;cursor:pointer;transition:background-color 0.1s ease;border-bottom:1px solid var(--background-modifier-border);align-items:center}.deck-row.svelte-bhki54.svelte-bhki54:hover{background:var(--background-modifier-hover)}.deck-row.svelte-bhki54.svelte-bhki54:active{background:var(--background-modifier-active)}.col-deck.svelte-bhki54.svelte-bhki54{font-size:14px;color:var(--text-normal);overflow:hidden;text-overflow:ellipsis;white-space:nowrap;justify-self:start}.col-stat.svelte-bhki54.svelte-bhki54{text-align:center;font-size:14px;color:var(--text-muted);justify-self:center}.table-header.svelte-bhki54 .col-deck.svelte-bhki54{font-size:14px;color:var(--text-normal);justify-self:start}.table-header.svelte-bhki54 .col-stat.svelte-bhki54{text-align:center;font-size:14px;color:var(--text-normal);justify-self:center}.col-stat.has-cards.svelte-bhki54.svelte-bhki54{color:#4aa3df;font-weight:500}.col-stat.updating.svelte-bhki54.svelte-bhki54{opacity:0.6;transition:opacity 0.3s ease}.table-body.svelte-bhki54.svelte-bhki54::-webkit-scrollbar{width:8px}.table-body.svelte-bhki54.svelte-bhki54::-webkit-scrollbar-track{background:transparent}.table-body.svelte-bhki54.svelte-bhki54::-webkit-scrollbar-thumb{background:var(--background-modifier-border);border-radius:4px}.table-body.svelte-bhki54.svelte-bhki54::-webkit-scrollbar-thumb:hover{background:var(--background-modifier-border-hover)}");
+  append_styles(target, "svelte-1jo2y5w", ".deck-list-panel.svelte-1jo2y5w.svelte-1jo2y5w{min-width:400px;height:100%;display:flex;flex-direction:column;background:var(--background-primary);color:var(--text-normal)}.panel-header.svelte-1jo2y5w.svelte-1jo2y5w{display:flex;justify-content:space-between;align-items:center;padding:12px 16px;border-bottom:1px solid var(--background-modifier-border)}.filter-section.svelte-1jo2y5w.svelte-1jo2y5w{padding:8px 16px;border-bottom:1px solid var(--background-modifier-border)}.filter-input.svelte-1jo2y5w.svelte-1jo2y5w{width:100%;padding:6px 8px;border:1px solid var(--background-modifier-border);border-radius:4px;background:var(--background-primary);color:var(--text-normal);font-size:14px;transition:border-color 0.2s ease}.filter-input.svelte-1jo2y5w.svelte-1jo2y5w:focus{outline:none;border-color:var(--interactive-accent)}.filter-input.svelte-1jo2y5w.svelte-1jo2y5w::placeholder{color:var(--text-muted)}.panel-title.svelte-1jo2y5w.svelte-1jo2y5w{margin:0;font-size:16px;font-weight:600}.refresh-button.svelte-1jo2y5w.svelte-1jo2y5w{background:none;border:none;cursor:pointer;padding:4px;border-radius:4px;color:var(--text-muted);transition:all 0.2s ease;position:relative;z-index:1}.refresh-button.svelte-1jo2y5w.svelte-1jo2y5w:hover{background:var(--background-modifier-hover);color:var(--text-normal)}.refresh-button.svelte-1jo2y5w.svelte-1jo2y5w:disabled{opacity:0.5;cursor:not-allowed}.refresh-button.refreshing.svelte-1jo2y5w svg.svelte-1jo2y5w{animation:svelte-1jo2y5w-spin 1s linear infinite}@keyframes svelte-1jo2y5w-spin{from{transform:rotate(0deg)}to{transform:rotate(360deg)}}.empty-state.svelte-1jo2y5w.svelte-1jo2y5w{flex:1;display:flex;flex-direction:column;justify-content:center;align-items:center;padding:32px;text-align:center}.empty-state.svelte-1jo2y5w p.svelte-1jo2y5w{margin:8px 0}.help-text.svelte-1jo2y5w.svelte-1jo2y5w{font-size:14px;color:var(--text-muted)}.deck-table.svelte-1jo2y5w.svelte-1jo2y5w{flex:1;display:flex;flex-direction:column;overflow:hidden}.table-header.svelte-1jo2y5w.svelte-1jo2y5w{display:grid;grid-template-columns:1fr 60px 60px 60px;gap:8px;padding:8px 16px;font-weight:600;font-size:14px;border-bottom:1px solid var(--background-modifier-border);background:var(--background-secondary);align-items:center}.table-body.svelte-1jo2y5w.svelte-1jo2y5w{flex:1;overflow-y:auto}.deck-row.svelte-1jo2y5w.svelte-1jo2y5w{display:grid;grid-template-columns:1fr 60px 60px 60px;gap:8px;border:none;width:100%;text-align:left;cursor:pointer;align-items:center}.deck-row.svelte-1jo2y5w.svelte-1jo2y5w:hover{background:var(--background-modifier-hover)}.deck-row.svelte-1jo2y5w.svelte-1jo2y5w:active{background:var(--background-modifier-active)}.col-deck.svelte-1jo2y5w.svelte-1jo2y5w{font-size:14px;color:var(--text-normal);overflow:hidden;text-overflow:ellipsis;white-space:nowrap;justify-self:start}.col-stat.svelte-1jo2y5w.svelte-1jo2y5w{text-align:center;font-size:14px;color:var(--text-muted);justify-self:center}.table-header.svelte-1jo2y5w .col-deck.svelte-1jo2y5w{font-size:14px;color:var(--text-normal);justify-self:start}.table-header.svelte-1jo2y5w .col-stat.svelte-1jo2y5w{text-align:center;font-size:14px;color:var(--text-normal);justify-self:center}.col-stat.has-cards.svelte-1jo2y5w.svelte-1jo2y5w{color:#4aa3df;font-weight:500}.col-stat.updating.svelte-1jo2y5w.svelte-1jo2y5w{opacity:0.6;transition:opacity 0.3s ease}.table-body.svelte-1jo2y5w.svelte-1jo2y5w::-webkit-scrollbar{width:8px}.table-body.svelte-1jo2y5w.svelte-1jo2y5w::-webkit-scrollbar-track{background:transparent}.table-body.svelte-1jo2y5w.svelte-1jo2y5w::-webkit-scrollbar-thumb{background:var(--background-modifier-border);border-radius:4px}.table-body.svelte-1jo2y5w.svelte-1jo2y5w::-webkit-scrollbar-thumb:hover{background:var(--background-modifier-border-hover)}");
 }
 function get_each_context2(ctx, list, i) {
   const child_ctx = ctx.slice();
@@ -5034,18 +5059,18 @@ function create_else_block2(ctx) {
     c() {
       div6 = element("div");
       div4 = element("div");
-      div4.innerHTML = `<div class="col-deck svelte-bhki54">Deck</div> 
-                <div class="col-stat svelte-bhki54">New</div> 
-                <div class="col-stat svelte-bhki54">Learn</div> 
-                <div class="col-stat svelte-bhki54">Due</div>`;
+      div4.innerHTML = `<div class="col-deck svelte-1jo2y5w">Deck</div> 
+                <div class="col-stat svelte-1jo2y5w">New</div> 
+                <div class="col-stat svelte-1jo2y5w">Learn</div> 
+                <div class="col-stat svelte-1jo2y5w">Due</div>`;
       t7 = space();
       div5 = element("div");
       for (let i = 0; i < each_blocks.length; i += 1) {
         each_blocks[i].c();
       }
-      attr(div4, "class", "table-header svelte-bhki54");
-      attr(div5, "class", "table-body svelte-bhki54");
-      attr(div6, "class", "deck-table svelte-bhki54");
+      attr(div4, "class", "table-header svelte-1jo2y5w");
+      attr(div5, "class", "table-body svelte-1jo2y5w");
+      attr(div6, "class", "deck-table svelte-1jo2y5w");
     },
     m(target, anchor) {
       insert(target, div6, anchor);
@@ -5092,9 +5117,9 @@ function create_if_block_12(ctx) {
   return {
     c() {
       div = element("div");
-      div.innerHTML = `<p class="svelte-bhki54">No decks match your filter.</p> 
-            <p class="help-text svelte-bhki54">Try adjusting your search terms.</p>`;
-      attr(div, "class", "empty-state svelte-bhki54");
+      div.innerHTML = `<p class="svelte-1jo2y5w">No decks match your filter.</p> 
+            <p class="help-text svelte-1jo2y5w">Try adjusting your search terms.</p>`;
+      attr(div, "class", "empty-state svelte-1jo2y5w");
     },
     m(target, anchor) {
       insert(target, div, anchor);
@@ -5111,9 +5136,9 @@ function create_if_block2(ctx) {
   return {
     c() {
       div = element("div");
-      div.innerHTML = `<p class="svelte-bhki54">No flashcard decks found.</p> 
-            <p class="help-text svelte-bhki54">Tag your notes with #flashcards to create decks.</p>`;
-      attr(div, "class", "empty-state svelte-bhki54");
+      div.innerHTML = `<p class="svelte-1jo2y5w">No flashcard decks found.</p> 
+            <p class="help-text svelte-1jo2y5w">Tag your notes with #flashcards to create decks.</p>`;
+      attr(div, "class", "empty-state svelte-1jo2y5w");
     },
     m(target, anchor) {
       insert(target, div, anchor);
@@ -5182,8 +5207,8 @@ function create_each_block2(ctx) {
       div3 = element("div");
       t6 = text(t6_value);
       t7 = space();
-      attr(div0, "class", "col-deck svelte-bhki54");
-      attr(div1, "class", "col-stat svelte-bhki54");
+      attr(div0, "class", "col-deck svelte-1jo2y5w");
+      attr(div1, "class", "col-stat svelte-1jo2y5w");
       toggle_class(
         div1,
         "has-cards",
@@ -5196,7 +5221,7 @@ function create_each_block2(ctx) {
         /*isUpdatingStats*/
         ctx[6]
       );
-      attr(div2, "class", "col-stat svelte-bhki54");
+      attr(div2, "class", "col-stat svelte-1jo2y5w");
       toggle_class(
         div2,
         "has-cards",
@@ -5209,7 +5234,7 @@ function create_each_block2(ctx) {
         /*isUpdatingStats*/
         ctx[6]
       );
-      attr(div3, "class", "col-stat svelte-bhki54");
+      attr(div3, "class", "col-stat svelte-1jo2y5w");
       toggle_class(
         div3,
         "has-cards",
@@ -5222,7 +5247,7 @@ function create_each_block2(ctx) {
         /*isUpdatingStats*/
         ctx[6]
       );
-      attr(button, "class", "deck-row svelte-bhki54");
+      attr(button, "class", "deck-row svelte-1jo2y5w");
       attr(button, "title", button_title_value = "Click to review " + /*deck*/
       ctx[22].name);
     },
@@ -5394,7 +5419,7 @@ function create_fragment2(ctx) {
       if_block.c();
       t4 = space();
       create_component(reviewheatmap.$$.fragment);
-      attr(h3, "class", "panel-title svelte-bhki54");
+      attr(h3, "class", "panel-title svelte-1jo2y5w");
       attr(path0, "d", "M23 4v6h-6");
       attr(path1, "d", "M1 20v-6h6");
       attr(path2, "d", "M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15");
@@ -5407,8 +5432,8 @@ function create_fragment2(ctx) {
       attr(svg, "stroke-width", "2");
       attr(svg, "stroke-linecap", "round");
       attr(svg, "stroke-linejoin", "round");
-      attr(svg, "class", "svelte-bhki54");
-      attr(button, "class", "refresh-button svelte-bhki54");
+      attr(svg, "class", "svelte-1jo2y5w");
+      attr(button, "class", "refresh-button svelte-1jo2y5w");
       button.disabled = /*isRefreshing*/
       ctx[5];
       toggle_class(
@@ -5417,12 +5442,12 @@ function create_fragment2(ctx) {
         /*isRefreshing*/
         ctx[5]
       );
-      attr(div0, "class", "panel-header svelte-bhki54");
+      attr(div0, "class", "panel-header svelte-1jo2y5w");
       attr(input, "type", "text");
-      attr(input, "class", "filter-input svelte-bhki54");
+      attr(input, "class", "filter-input svelte-1jo2y5w");
       attr(input, "placeholder", "Filter by name or tag...");
-      attr(div1, "class", "filter-section svelte-bhki54");
-      attr(div2, "class", "deck-list-panel svelte-bhki54");
+      attr(div1, "class", "filter-section svelte-1jo2y5w");
+      attr(div2, "class", "deck-list-panel svelte-1jo2y5w");
     },
     m(target, anchor) {
       insert(target, div2, anchor);

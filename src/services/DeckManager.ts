@@ -347,7 +347,7 @@ export class DeckManager {
       const parsedCards = await this.parseFlashcardsFromFile(file);
 
       for (const parsed of parsedCards) {
-        const flashcardId = this.generateFlashcardId(parsed.front);
+        const flashcardId = this.generateFlashcardId(parsed.front, deck.id);
         const contentHash = this.generateContentHash(parsed.back);
         const existingCard = existingById.get(flashcardId);
 
@@ -436,7 +436,7 @@ export class DeckManager {
     const processedIds = new Set<string>();
 
     for (const parsed of parsedCards) {
-      const flashcardId = this.generateFlashcardId(parsed.front);
+      const flashcardId = this.generateFlashcardId(parsed.front, deck.id);
       const contentHash = this.generateContentHash(parsed.back);
       const existingCard = existingById.get(flashcardId);
 
@@ -530,13 +530,14 @@ export class DeckManager {
   }
 
   /**
-   * Generate unique flashcard ID using hash of front text
+   * Generate unique flashcard ID using hash of front text and deck ID
    */
-  private generateFlashcardId(frontText: string): string {
-    // Simple hash function for generating ID from front text
+  private generateFlashcardId(frontText: string, deckId: string): string {
+    // Combine front text and deck ID for uniqueness across vault
+    const combined = `${deckId}:${frontText}`;
     let hash = 0;
-    for (let i = 0; i < frontText.length; i++) {
-      const char = frontText.charCodeAt(i);
+    for (let i = 0; i < combined.length; i++) {
+      const char = combined.charCodeAt(i);
       hash = (hash << 5) - hash + char;
       hash = hash & hash; // Convert to 32-bit integer
     }

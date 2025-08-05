@@ -206,6 +206,7 @@
 
 <style>
     .deck-list-panel {
+        min-width: 400px;
         height: 100%;
         display: flex;
         flex-direction: column;
@@ -334,14 +335,14 @@
         display: grid;
         grid-template-columns: 1fr 60px 60px 60px;
         gap: 8px;
-        padding: 12px 16px;
+        /*padding: 12px 16px;*/
         border: none;
-        background: none;
+        /*background: none;*/
         width: 100%;
         text-align: left;
         cursor: pointer;
-        transition: background-color 0.1s ease;
-        border-bottom: 1px solid var(--background-modifier-border);
+        /*transition: background-color 0.1s ease;*/
+        /*border-bottom: 1px solid var(--background-modifier-border);*/
         align-items: center;
     }
 

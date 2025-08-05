@@ -152,7 +152,7 @@
         isLoading = true;
         try {
             const daysToFetch = maxWeeks * 7;
-            reviewCounts = await getReviewCounts(daysToFetch);
+            reviewCounts = await getReviewCounts();
             maxCount = 0;
             generateDays();
         } catch (error) {

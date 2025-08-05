@@ -127,3 +127,13 @@
 - Optimized performance with efficient date range queries
 - Theme-aware styling for both light and dark modes
 - Background refresh integration for automatic data updates
+- Responsive design that adjusts weeks shown based on container width
+
+### Unique Flashcard ID Generation
+- Enhanced flashcard ID generation to include deck ID for vault-wide uniqueness
+- Changed from `generateFlashcardId(frontText)` to `generateFlashcardId(frontText, deckId)`
+- IDs now combine deck ID and front content: `${deckId}:${frontText}` for hashing
+- Prevents ID collisions when same question appears in different decks
+- Maintains backward compatibility with existing learning progress
+- Updated comprehensive test coverage for new ID generation logic
+- Ensures data integrity across all deck operations and file movements
