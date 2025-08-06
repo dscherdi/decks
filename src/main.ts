@@ -366,7 +366,11 @@ export default class DecksPlugin extends Plugin {
 
   async getDeckStatsById(deckId: string): Promise<DeckStats> {
     const headerLevel = this.settings?.parsing?.headerLevel;
-    return await this.db.getDeckStatsFiltered(deckId, headerLevel);
+    const stats = await this.db.getDeckStatsFiltered(deckId, headerLevel);
+    return {
+      deckId,
+      ...stats,
+    };
   }
 
   async updateDeckConfig(deckId: string, config: DeckConfig): Promise<void> {

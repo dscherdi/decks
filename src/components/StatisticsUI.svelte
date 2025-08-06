@@ -731,6 +731,15 @@
             </button>
         </div>
     {/if}
+    <div class="buymeacoffee-badge">
+        <a href="https://www.buymeacoffee.com/dscherdil0">
+            <img
+                src="https://cdn.buymeacoffee.com/buttons/v2/default-yellow.png"
+                alt="Buy Me A Coffee"
+                height="40"
+            />
+        </a>
+    </div>
 </div>
 
 <style>
@@ -1098,5 +1107,11 @@
 
     .retry-button:hover {
         background: var(--interactive-accent-hover);
+    }
+    .buymeacoffee-badge {
+        width: 100%;
+        height: 40px;
+        display: flex;
+        justify-content: center;
     }
 </style>
