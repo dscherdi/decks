@@ -117,22 +117,8 @@ export class DecksSettingTab extends PluginSettingTab {
       );
   }
 
-  private addDatabaseSettings(containerEl: HTMLElement): void {
+  private addDatabaseSettings(containerEl: HTMLElement) {
     containerEl.createEl("h3", { text: "Database" });
-
-    new Setting(containerEl)
-      .setName("Database Path")
-      .setDesc("Custom path for the database file (leave empty for default)")
-      .addText((text) =>
-        text
-          .setPlaceholder(".obsidian/plugins/decks/flashcards.db")
-          .setValue(this.plugin.settings.database.customPath || "")
-          .onChange(async (value) => {
-            this.plugin.settings.database.customPath =
-              value.trim() || undefined;
-            await this.plugin.saveSettings();
-          }),
-      );
 
     new Setting(containerEl)
       .setName("Auto Backup")

@@ -10,7 +10,6 @@ export interface FlashcardsSettings {
 
   // Database Settings
   database: {
-    customPath?: string;
     autoBackup: boolean;
     backupInterval: number; // days
   };

@@ -62,8 +62,7 @@ export default class DecksPlugin extends Plugin {
       }
 
       // Initialize database
-      const dbPath = this.settings.database.customPath || DATABASE_PATH;
-      this.db = new DatabaseService(dbPath);
+      this.db = new DatabaseService(DATABASE_PATH);
       await this.db.initialize();
 
       // Initialize managers
