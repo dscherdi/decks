@@ -122,9 +122,6 @@ export default class DecksPlugin extends Plugin {
         }),
       );
 
-      // Load styles
-      this.loadStyles();
-
       // Add settings tab
       this.addSettingTab(new DecksSettingTab(this.app, this));
 
@@ -169,45 +166,6 @@ export default class DecksPlugin extends Plugin {
       hardInterval: this.settings.fsrs.hardInterval,
       w: this.settings.fsrs.weights,
     });
-  }
-
-  private loadStyles() {
-    const styleEl = document.createElement("style");
-    styleEl.id = "decks-plugin-styles";
-    styleEl.textContent = `
-      /* Custom styles for decks plugin */
-      .decks-view {
-        padding: 0;
-        overflow: hidden;
-      }
-
-      /* Modal styles */
-      .deck-review-modal {
-        height: 90vh;
-        max-height: 700px;
-      }
-
-      .deck-review-modal .modal-content {
-        display: flex;
-        flex-direction: column;
-        height: 100%;
-        overflow: hidden;
-        padding: 0;
-      }
-
-      .deck-review-modal .modal {
-        height: 100%;
-        display: flex;
-        flex-direction: column;
-      }
-
-      .deck-review-modal .modal-container {
-        overflow: hidden;
-        width: 100%;
-        height: 100%;
-      }
-    `;
-    document.head.appendChild(styleEl);
   }
 
   async activateView() {

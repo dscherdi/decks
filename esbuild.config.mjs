@@ -66,11 +66,13 @@ const buildOptions = {
   plugins: [
     sveltePlugin({
       preprocess: sveltePreprocess({
-        sourceMap: !prod,
+        typescript: {
+          tsconfigFile: "./tsconfig.json",
+        },
       }),
       compilerOptions: {
         dev: !prod,
-        css: "injected",
+        css: "external",
       },
     }),
     copy({
@@ -84,14 +86,36 @@ const buildOptions = {
   ],
 };
 
-// Build
+// Build JavaScript first, then handle CSS merging
 esbuild
   .build(buildOptions)
   .then(() => {
+    // Merge component CSS with main styles.css
+    const mainStyles = fs.readFileSync(
+      path.join(__dirname, "styles.css"),
+      "utf8",
+    );
+
+    // esbuild-svelte with external CSS automatically generates main.css
+    let componentStyles = "";
+    const componentCssPath = path.join(outDir, "main.css");
+    if (fs.existsSync(componentCssPath)) {
+      componentStyles = fs.readFileSync(componentCssPath, "utf8");
+      fs.unlinkSync(componentCssPath); // Remove auto-generated file
+    }
+
+    // Merge styles
+    const mergedStyles =
+      mainStyles + "\n\n/* Svelte Component Styles */\n" + componentStyles;
+    fs.writeFileSync(path.join(outDir, "styles.css"), mergedStyles);
+
     console.log(`✅ Build completed successfully!`);
-    console.log(`📁 Output: ${buildOptions.outfile}`);
-    const stats = fs.statSync(buildOptions.outfile);
-    console.log(`📊 Size: ${(stats.size / 1024).toFixed(1)} KB`);
+    console.log(`📁 JS Output: ${buildOptions.outfile}`);
+    console.log(`📁 CSS Output: ${path.join(outDir, "styles.css")}`);
+    const jsStats = fs.statSync(buildOptions.outfile);
+    const cssStats = fs.statSync(path.join(outDir, "styles.css"));
+    console.log(`📊 JS Size: ${(jsStats.size / 1024).toFixed(1)} KB`);
+    console.log(`📊 CSS Size: ${(cssStats.size / 1024).toFixed(1)} KB`);
   })
   .catch((err) => {
     console.error("❌ Build failed:");

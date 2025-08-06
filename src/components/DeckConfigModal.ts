@@ -32,9 +32,8 @@ export class DeckConfigModal extends Modal {
     // Create container for Svelte component
     const componentContainer = contentEl.createDiv("deck-config-container");
 
-    // Add container styles
-    componentContainer.style.padding = "0";
-    componentContainer.style.margin = "0";
+    // Add CSS class for styling
+    componentContainer.addClass("deck-config-container");
 
     // Mount Svelte component
     this.component = new DeckConfigUI({
