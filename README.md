@@ -1,6 +1,10 @@
-# Decks [![Release](https://github.com/dscherdi/decks/actions/workflows/release.yml/badge.svg?branch=main&event=release)](https://github.com/dscherdi/decks/actions/workflows/release.yml)
+# Decks [![Release](https://github.com/dscherdi/decks/actions/workflows/release.yml/badge.svg)](https://github.com/dscherdi/decks/actions/workflows/release.yml)
 
 Decks is a powerful spaced repetition flashcard plugin for Obsidian that helps you learn and memorize information efficiently using the FSRS algorithm, built with TypeScript and Svelte for a reactive and type-safe UI.
+
+## Demo
+
+![Watch the demo](./decks_showcase.gif)
 
 ## Quick Start
 
