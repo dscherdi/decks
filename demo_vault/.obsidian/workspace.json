@@ -165,7 +165,7 @@
       }
     ],
     "direction": "horizontal",
-    "width": 588.5
+    "width": 435.5
   },
   "left-ribbon": {
     "hiddenItems": {
@@ -180,6 +180,7 @@
   },
   "active": "ad4c1808e30b375b",
   "lastOpenFiles": [
+    "Flashcards/Math-Basics.md",
     "Flashcards/Programming-Concepts.md",
     "Flashcards/Programming-Concepts 1.md",
     "Flashcards/Programming-Concepts 1 1.md",
@@ -204,7 +205,6 @@
     "Flashcards/Spanish-Vocabulary 1 1 1 1.md",
     "Flashcards/Spanish-Vocabulary 1 1 1.md",
     "Flashcards/Spanish-Vocabulary 1.md",
-    "Flashcards/Math-Basics.md",
     "Flashcards/Flashcards for programming.md",
     "Flashcards-2025-07-17.flashcards",
     "plugins",

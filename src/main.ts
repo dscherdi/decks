@@ -34,7 +34,7 @@ const VIEW_TYPE_DECKS = "decks-view";
 
 export default class DecksPlugin extends Plugin {
   private db: DatabaseService;
-  private deckManager: DeckManager;
+  public deckManager: DeckManager;
   private fsrs: FSRS;
   public view: DecksView | null = null;
   public settings: FlashcardsSettings;
@@ -331,7 +331,8 @@ export default class DecksPlugin extends Plugin {
   }
 
   async getDeckStats(): Promise<Map<string, DeckStats>> {
-    const stats = await this.db.getAllDeckStats();
+    const headerLevel = this.settings?.parsing?.headerLevel;
+    const stats = await this.db.getAllDeckStatsFiltered(headerLevel);
     const statsMap = new Map<string, DeckStats>();
 
     for (const stat of stats) {
@@ -346,11 +347,13 @@ export default class DecksPlugin extends Plugin {
   }
 
   async getFlashcardsByDeck(deckId: string): Promise<Flashcard[]> {
-    return await this.db.getFlashcardsByDeck(deckId);
+    const headerLevel = this.settings?.parsing?.headerLevel;
+    return await this.db.getFlashcardsByDeckFiltered(deckId, headerLevel);
   }
 
   async getReviewableFlashcards(deckId: string): Promise<Flashcard[]> {
-    return await this.db.getReviewableFlashcards(deckId);
+    const headerLevel = this.settings?.parsing?.headerLevel;
+    return await this.db.getReviewableFlashcardsFiltered(deckId, headerLevel);
   }
 
   async getDailyReviewCounts(
@@ -360,7 +363,8 @@ export default class DecksPlugin extends Plugin {
   }
 
   async getDeckStatsById(deckId: string): Promise<DeckStats> {
-    return await this.db.getDeckStats(deckId);
+    const headerLevel = this.settings?.parsing?.headerLevel;
+    return await this.db.getDeckStatsFiltered(deckId, headerLevel);
   }
 
   async updateDeckConfig(deckId: string, config: DeckConfig): Promise<void> {

@@ -348,6 +348,27 @@
 - Release package includes main.js, manifest.json, styles.css, README.md, and LICENSE
 - Automated workflow runs tests, builds, and creates GitHub releases with proper assets
 - **Modal Access**: Added graph icon button next to refresh button in deck list header
+
+### ✅ Header Level Filtering Implementation
+- **Problem**: Changing header level settings caused flashcards to lose all review progress
+- **KISS Solution**: Store header level with each flashcard and filter at query time instead of deleting/recreating
+- **Database Changes**:
+  - Added `header_level` column to flashcards table (1-6 for header-paragraph cards, null for table cards)
+  - Added automatic migration using `ALTER TABLE` to add column to existing databases
+  - Migration safely handles existing databases without breaking functionality
+  - Updated all database methods to support header level filtering
+  - Added filtered versions: `getFlashcardsByDeckFiltered()`, `getDeckStatsFiltered()`, etc.
+- **Parsing Changes**:
+  - Removed header level filtering during parsing - now parses ALL header levels (H1-H6)
+  - Each header-paragraph flashcard stores its original header level in database
+  - Table flashcards remain unaffected (headerLevel = null)
+- **Query Filtering**:
+  - Main plugin methods now filter flashcards by current header level setting
+  - Filter logic: `(type = 'table' OR header_level = ?)` to include table cards always
+  - Stats, review counts, and deck operations respect header level selection
+- **User Experience**: Instant header level switching without data loss - all flashcards preserved in database
+- **Settings Integration**: Changing header level triggers force sync + view refresh to ensure complete data
+- **Test Coverage**: Added unit tests for multi-level parsing and headerLevel property validation
 - **Filtering System**: Complete deck filtering (All Decks, by Tag, by Individual Deck)
 - **Timeframe Selection**: Last 12 months or All History options
 - **Seven Main Sections**:

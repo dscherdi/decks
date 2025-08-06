@@ -848,4 +848,53 @@ Answer 1`;
       });
     });
   });
+
+  describe("header level parsing", () => {
+    it("should parse all header levels and include headerLevel property", async () => {
+      const content = `# H1 Header
+H1 content
+
+## H2 Header
+H2 content
+
+### H3 Header
+H3 content`;
+
+      const file = new TFile("test.md");
+      jest.spyOn(mockVault, "read").mockResolvedValue(content);
+
+      const flashcards = await deckManager.parseFlashcardsFromFile(file);
+
+      // Should parse all header levels
+      expect(flashcards).toHaveLength(3);
+
+      // Check that headerLevel is set correctly
+      expect(flashcards[0]).toEqual(
+        expect.objectContaining({
+          front: "H1 Header",
+          back: "H1 content",
+          type: "header-paragraph",
+          headerLevel: 1,
+        }),
+      );
+
+      expect(flashcards[1]).toEqual(
+        expect.objectContaining({
+          front: "H2 Header",
+          back: "H2 content",
+          type: "header-paragraph",
+          headerLevel: 2,
+        }),
+      );
+
+      expect(flashcards[2]).toEqual(
+        expect.objectContaining({
+          front: "H3 Header",
+          back: "H3 content",
+          type: "header-paragraph",
+          headerLevel: 3,
+        }),
+      );
+    });
+  });
 });

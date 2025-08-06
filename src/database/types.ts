@@ -29,6 +29,7 @@ export interface Flashcard {
   type: "header-paragraph" | "table";
   sourceFile: string;
   contentHash: string; // Hash of back content only (front is used for ID)
+  headerLevel?: number; // Header level (1-6) for header-paragraph cards, null for table cards
   state: FlashcardState;
   dueDate: string;
   interval: number; // in minutes

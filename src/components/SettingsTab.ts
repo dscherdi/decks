@@ -166,6 +166,14 @@ export class DecksSettingTab extends PluginSettingTab {
           .onChange(async (value) => {
             this.plugin.settings.parsing.headerLevel = parseInt(value);
             await this.plugin.saveSettings();
+
+            // Force sync all decks to ensure all header levels are parsed and stored
+            await this.plugin.performSync(true);
+
+            // Refresh the view to show flashcards for the new header level
+            if (this.plugin.view) {
+              await this.plugin.view.refreshStats();
+            }
           }),
       );
   }

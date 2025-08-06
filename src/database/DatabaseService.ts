@@ -106,6 +106,7 @@ export class DatabaseService {
         type TEXT NOT NULL CHECK (type IN ('header-paragraph', 'table')),
         source_file TEXT NOT NULL,
         content_hash TEXT NOT NULL,
+        header_level INTEGER CHECK (header_level >= 1 AND header_level <= 6),
         state TEXT NOT NULL DEFAULT 'new' CHECK (state IN ('new', 'learning', 'review')),
         due_date TEXT NOT NULL,
         interval INTEGER NOT NULL DEFAULT 0,
@@ -378,9 +379,9 @@ export class DatabaseService {
 
     const stmt = this.db.prepare(`
       INSERT OR REPLACE INTO flashcards (
-        id, deck_id, front, back, type, source_file, content_hash,
+        id, deck_id, front, back, type, source_file, content_hash, header_level,
         state, due_date, interval, repetitions, ease_factor, stability, lapses, last_reviewed, created, modified
-      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
     `);
 
     stmt.run([
@@ -391,6 +392,7 @@ export class DatabaseService {
       fullFlashcard.type,
       fullFlashcard.sourceFile,
       fullFlashcard.contentHash,
+      fullFlashcard.headerLevel || null,
       fullFlashcard.state,
       fullFlashcard.dueDate,
       fullFlashcard.interval,
@@ -417,6 +419,7 @@ export class DatabaseService {
         | "back"
         | "type"
         | "contentHash"
+        | "headerLevel"
         | "state"
         | "dueDate"
         | "interval"
@@ -444,7 +447,9 @@ export class DatabaseService {
                   ? "ease_factor"
                   : key === "lastReviewed"
                     ? "last_reviewed"
-                    : key.replace(/([A-Z])/g, "_$1").toLowerCase();
+                    : key === "headerLevel"
+                      ? "header_level"
+                      : key.replace(/([A-Z])/g, "_$1").toLowerCase();
         return `${dbField} = ?`;
       })
       .join(", ");
@@ -487,17 +492,77 @@ export class DatabaseService {
     return flashcards;
   }
 
+  async getFlashcardsByDeckFiltered(
+    deckId: string,
+    headerLevel?: number,
+  ): Promise<Flashcard[]> {
+    if (!this.db) throw new Error("Database not initialized");
+
+    let query = "SELECT * FROM flashcards WHERE deck_id = ?";
+    const params = [deckId];
+
+    if (headerLevel !== undefined) {
+      query += " AND (type = 'table' OR header_level = ?)";
+      params.push(headerLevel);
+    }
+
+    const stmt = this.db.prepare(query);
+    stmt.bind(params);
+    const flashcards: Flashcard[] = [];
+
+    while (stmt.step()) {
+      const row = stmt.get();
+      flashcards.push(this.rowToFlashcard(row));
+    }
+
+    stmt.free();
+    return flashcards;
+  }
+
   async getDueFlashcards(deckId: string): Promise<Flashcard[]> {
     if (!this.db) throw new Error("Database not initialized");
 
-    const now = new Date().toISOString();
     const stmt = this.db.prepare(`
       SELECT * FROM flashcards
       WHERE deck_id = ? AND due_date <= ?
       ORDER BY due_date
     `);
 
+    const now = new Date().toISOString();
     stmt.bind([deckId, now]);
+    const flashcards: Flashcard[] = [];
+
+    while (stmt.step()) {
+      const row = stmt.get();
+      flashcards.push(this.rowToFlashcard(row));
+    }
+
+    stmt.free();
+    return flashcards;
+  }
+
+  async getDueFlashcardsFiltered(
+    deckId: string,
+    headerLevel?: number,
+  ): Promise<Flashcard[]> {
+    if (!this.db) throw new Error("Database not initialized");
+
+    let query = `
+      SELECT * FROM flashcards
+      WHERE deck_id = ? AND due_date <= ?
+    `;
+    const now = new Date().toISOString();
+    const params = [deckId, now];
+
+    if (headerLevel !== undefined) {
+      query += " AND (type = 'table' OR header_level = ?)";
+      params.push(headerLevel);
+    }
+
+    query += " ORDER BY due_date";
+
+    const stmt = this.db.prepare(query);
+    stmt.bind(params);
     const flashcards: Flashcard[] = [];
 
     while (stmt.step()) {
@@ -660,6 +725,102 @@ export class DatabaseService {
     return flashcards;
   }
 
+  async getReviewableFlashcardsFiltered(
+    deckId: string,
+    headerLevel?: number,
+  ): Promise<Flashcard[]> {
+    if (!this.db) throw new Error("Database not initialized");
+
+    const deck = await this.getDeckById(deckId);
+    if (!deck) throw new Error(`Deck not found: ${deckId}`);
+
+    const config = deck.config;
+    const now = new Date().toISOString();
+    const flashcards: Flashcard[] = [];
+
+    // Header level filter clause
+    const headerFilter =
+      headerLevel !== undefined
+        ? " AND (type = 'table' OR header_level = ?)"
+        : "";
+
+    // 1. Get learning cards (highest priority)
+    let learningQuery = `
+      SELECT * FROM flashcards
+      WHERE deck_id = ? AND due_date <= ? AND state = 'learning'${headerFilter}
+      ORDER BY due_date
+    `;
+    const learningStmt = this.db.prepare(learningQuery);
+    const learningParams = [deckId, now];
+    if (headerLevel !== undefined) learningParams.push(headerLevel);
+    learningStmt.bind(learningParams);
+
+    while (learningStmt.step()) {
+      const row = learningStmt.get();
+      flashcards.push(this.rowToFlashcard(row));
+    }
+    learningStmt.free();
+
+    // 2. Get daily review counts to check limits
+    const dailyCounts = await this.getDailyReviewCounts(deckId);
+
+    // 3. Get new cards (if limit allows)
+    if (
+      !config.enableNewCardsLimit ||
+      dailyCounts.newCount < config.newCardsLimit
+    ) {
+      const remainingNewCards = config.enableNewCardsLimit
+        ? config.newCardsLimit - dailyCounts.newCount
+        : Number.MAX_SAFE_INTEGER;
+
+      let newCardsQuery = `
+        SELECT * FROM flashcards
+        WHERE deck_id = ? AND due_date <= ? AND state = 'new'${headerFilter}
+        ORDER BY due_date
+        ${config.enableNewCardsLimit ? `LIMIT ${remainingNewCards}` : ""}
+      `;
+      const newCardsStmt = this.db.prepare(newCardsQuery);
+      const newCardsParams = [deckId, now];
+      if (headerLevel !== undefined) newCardsParams.push(headerLevel);
+      newCardsStmt.bind(newCardsParams);
+
+      while (newCardsStmt.step()) {
+        const row = newCardsStmt.get();
+        flashcards.push(this.rowToFlashcard(row));
+      }
+      newCardsStmt.free();
+    }
+
+    // 4. Get review cards (if limit allows)
+    if (
+      !config.enableReviewCardsLimit ||
+      dailyCounts.reviewCount < config.reviewCardsLimit
+    ) {
+      const remainingReviewCards = config.enableReviewCardsLimit
+        ? config.reviewCardsLimit - dailyCounts.reviewCount
+        : Number.MAX_SAFE_INTEGER;
+
+      let reviewCardsQuery = `
+        SELECT * FROM flashcards
+        WHERE deck_id = ? AND due_date <= ? AND state = 'review'${headerFilter}
+        ORDER BY due_date
+        ${config.enableReviewCardsLimit ? `LIMIT ${remainingReviewCards}` : ""}
+      `;
+      const reviewCardsStmt = this.db.prepare(reviewCardsQuery);
+      const reviewCardsParams = [deckId, now];
+      if (headerLevel !== undefined) reviewCardsParams.push(headerLevel);
+      reviewCardsStmt.bind(reviewCardsParams);
+
+      while (reviewCardsStmt.step()) {
+        const row = reviewCardsStmt.get();
+        flashcards.push(this.rowToFlashcard(row));
+      }
+      reviewCardsStmt.free();
+    }
+
+    return flashcards;
+  }
+
   async deleteFlashcardsByFile(sourceFile: string): Promise<void> {
     if (!this.db) throw new Error("Database not initialized");
 
@@ -787,6 +948,89 @@ export class DatabaseService {
     };
   }
 
+  async getDeckStatsFiltered(
+    deckId: string,
+    headerLevel?: number,
+  ): Promise<{
+    name: string;
+    newCount: number;
+    learningCount: number;
+    dueCount: number;
+    totalCount: number;
+  }> {
+    if (!this.db) throw new Error("Database not initialized");
+
+    const deck = await this.getDeckById(deckId);
+    if (!deck) {
+      throw new Error(`Deck not found: ${deckId}`);
+    }
+
+    const now = new Date().toISOString();
+    const headerFilter =
+      headerLevel !== undefined
+        ? " AND (type = 'table' OR header_level = ?)"
+        : "";
+
+    // New cards count
+    const newQuery = `
+      SELECT COUNT(*) FROM flashcards
+      WHERE deck_id = ? AND state = 'new' AND due_date <= ?${headerFilter}
+    `;
+    const newStmt = this.db.prepare(newQuery);
+    const newParams = [deckId, now];
+    if (headerLevel !== undefined) newParams.push(headerLevel);
+    newStmt.bind(newParams);
+    newStmt.step();
+    const newCount = newStmt.get()[0] as number;
+    newStmt.free();
+
+    // Learning cards count
+    const learningQuery = `
+      SELECT COUNT(*) FROM flashcards
+      WHERE deck_id = ? AND state = 'learning' AND due_date <= ?${headerFilter}
+    `;
+    const learningStmt = this.db.prepare(learningQuery);
+    const learningParams = [deckId, now];
+    if (headerLevel !== undefined) learningParams.push(headerLevel);
+    learningStmt.bind(learningParams);
+    learningStmt.step();
+    const learningCount = learningStmt.get()[0] as number;
+    learningStmt.free();
+
+    // Due cards count (review cards that are due)
+    const dueQuery = `
+      SELECT COUNT(*) FROM flashcards
+      WHERE deck_id = ? AND state = 'review' AND due_date <= ?${headerFilter}
+    `;
+    const dueStmt = this.db.prepare(dueQuery);
+    const dueParams = [deckId, now];
+    if (headerLevel !== undefined) dueParams.push(headerLevel);
+    dueStmt.bind(dueParams);
+    dueStmt.step();
+    const dueCount = dueStmt.get()[0] as number;
+    dueStmt.free();
+
+    // Total cards count
+    const totalQuery = `
+      SELECT COUNT(*) FROM flashcards WHERE deck_id = ?${headerFilter}
+    `;
+    const totalStmt = this.db.prepare(totalQuery);
+    const totalParams = [deckId];
+    if (headerLevel !== undefined) totalParams.push(headerLevel);
+    totalStmt.bind(totalParams);
+    totalStmt.step();
+    const totalCount = totalStmt.get()[0] as number;
+    totalStmt.free();
+
+    return {
+      name: deck.name,
+      newCount,
+      learningCount,
+      dueCount,
+      totalCount,
+    };
+  }
+
   async getAllDeckStats(): Promise<DeckStats[]> {
     if (!this.db) throw new Error("Database not initialized");
 
@@ -796,6 +1040,27 @@ export class DatabaseService {
     for (const deck of decks) {
       const deckStats = await this.getDeckStats(deck.id);
       stats.push(deckStats);
+    }
+
+    return stats;
+  }
+
+  async getAllDeckStatsFiltered(headerLevel?: number): Promise<DeckStats[]> {
+    if (!this.db) throw new Error("Database not initialized");
+
+    const decks = await this.getAllDecks();
+    const stats: DeckStats[] = [];
+
+    for (const deck of decks) {
+      const deckStats = await this.getDeckStatsFiltered(deck.id, headerLevel);
+      stats.push({
+        deckId: deck.id,
+        name: deckStats.name,
+        newCount: deckStats.newCount,
+        learningCount: deckStats.learningCount,
+        dueCount: deckStats.dueCount,
+        totalCount: deckStats.totalCount,
+      });
     }
 
     return stats;
@@ -861,6 +1126,7 @@ export class DatabaseService {
       let hasFilepath = true;
       let hasConfig = true;
       let hasTimeElapsed = true;
+      let hasHeaderLevel = true;
 
       // Check decks table columns if it exists
       if (existingTables.includes("decks")) {
@@ -877,6 +1143,21 @@ export class DatabaseService {
       } else {
         hasFilepath = false;
         hasConfig = false;
+      }
+
+      // Check flashcards table columns if it exists
+      if (existingTables.includes("flashcards")) {
+        const flashcardsStmt = this.db.prepare("PRAGMA table_info(flashcards)");
+        const flashcardsColumns: any[] = [];
+        while (flashcardsStmt.step()) {
+          flashcardsColumns.push(flashcardsStmt.get());
+        }
+        flashcardsStmt.free();
+        hasHeaderLevel = flashcardsColumns.some(
+          (col) => col[1] === "header_level",
+        );
+      } else {
+        hasHeaderLevel = false;
       }
 
       // Check review_logs table columns if it exists
@@ -900,9 +1181,9 @@ export class DatabaseService {
         hasTimeElapsed = false;
       }
 
-      if (!hasFilepath || !hasConfig || !hasTimeElapsed) {
+      if (!hasFilepath || !hasConfig || !hasTimeElapsed || !hasHeaderLevel) {
         this.debugLog(
-          "Migrating database schema to support filepath, config, and time_elapsed columns...",
+          "Migrating database schema to support filepath, config, time_elapsed, and header_level columns...",
         );
 
         // Add missing columns to existing tables instead of dropping them
@@ -937,6 +1218,15 @@ export class DatabaseService {
               );
               this.db.exec(
                 `ALTER TABLE review_logs ADD COLUMN time_elapsed INTEGER NOT NULL DEFAULT 0`,
+              );
+            }
+
+            if (!hasHeaderLevel) {
+              this.debugLog(
+                "Adding header_level column to flashcards table...",
+              );
+              this.db.exec(
+                `ALTER TABLE flashcards ADD COLUMN header_level INTEGER CHECK (header_level >= 1 AND header_level <= 6)`,
               );
             }
           }
@@ -978,16 +1268,17 @@ export class DatabaseService {
       type: row[4] as "header-paragraph" | "table",
       sourceFile: row[5] as string,
       contentHash: row[6] as string,
-      state: row[7] as "new" | "learning" | "review",
-      dueDate: row[8] as string,
-      interval: row[9] as number,
-      repetitions: row[10] as number,
-      easeFactor: row[11] as number,
-      stability: row[12] as number,
-      lapses: row[13] as number,
-      lastReviewed: row[14] as string | null,
-      created: row[15] as string,
-      modified: row[16] as string,
+      headerLevel: row[7] as number | null,
+      state: row[8] as "new" | "learning" | "review",
+      dueDate: row[9] as string,
+      interval: row[10] as number,
+      repetitions: row[11] as number,
+      easeFactor: row[12] as number,
+      stability: row[13] as number,
+      lapses: row[14] as number,
+      lastReviewed: row[15] as string | null,
+      created: row[16] as string,
+      modified: row[17] as string,
     };
   }
 

@@ -6,6 +6,7 @@ export interface ParsedFlashcard {
   front: string;
   back: string;
   type: "header-paragraph" | "table";
+  headerLevel?: number; // Header level (1-6) for header-paragraph cards, null for table cards
 }
 
 export class DeckManager {
@@ -217,12 +218,8 @@ export class DeckManager {
     const tableFlashcards = this.parseTableFlashcards(lines);
     flashcards.push(...tableFlashcards);
 
-    // Then parse header+paragraph flashcards
-    const headerLevel = this.plugin?.settings?.parsing?.headerLevel || 2;
-    const headerFlashcards = this.parseHeaderParagraphFlashcards(
-      lines,
-      headerLevel,
-    );
+    // Then parse header+paragraph flashcards (all levels)
+    const headerFlashcards = this.parseHeaderParagraphFlashcards(lines);
     flashcards.push(...headerFlashcards);
 
     return flashcards;
@@ -279,14 +276,11 @@ export class DeckManager {
   }
 
   /**
-   * Parse header+paragraph flashcards
+   * Parse header+paragraph flashcards (all header levels)
    */
-  private parseHeaderParagraphFlashcards(
-    lines: string[],
-    headerLevel: number = 2,
-  ): ParsedFlashcard[] {
+  private parseHeaderParagraphFlashcards(lines: string[]): ParsedFlashcard[] {
     const flashcards: ParsedFlashcard[] = [];
-    let currentHeader: { text: string } | null = null;
+    let currentHeader: { text: string; level: number } | null = null;
     let currentContent: string[] = [];
     let inFrontmatter = false;
     let skipNextParagraph = false;
@@ -307,9 +301,10 @@ export class DeckManager {
         continue;
       }
 
-      // Check if this is a header of the specified level
-      const headerRegex = new RegExp(`^#{${headerLevel}}\\s+`);
-      if (line.match(headerRegex)) {
+      // Check if this is any header (H1-H6)
+      const headerMatch = line.match(/^(#{1,6})\s+/);
+      if (headerMatch) {
+        const currentHeaderLevel = headerMatch[1].length;
         // Check if this is a title header (# at start with "Flashcards" in title)
         if (line.match(/^#\s+/) && line.toLowerCase().includes("flashcard")) {
           skipNextParagraph = true;
@@ -321,12 +316,10 @@ export class DeckManager {
         // Save previous flashcard if exists
         if (currentHeader && currentContent.length > 0) {
           const card = {
-            front: currentHeader.text.replace(
-              new RegExp(`^#{${headerLevel}}\\s+`),
-              "",
-            ),
+            front: currentHeader.text.replace(/^#{1,6}\s+/, ""),
             back: currentContent.join("\n").trim(),
             type: "header-paragraph" as const,
+            headerLevel: currentHeader.level,
           };
 
           flashcards.push(card);
@@ -335,6 +328,7 @@ export class DeckManager {
         // Start new flashcard
         currentHeader = {
           text: line,
+          level: currentHeaderLevel,
         };
         currentContent = [];
         skipNextParagraph = false;
@@ -345,14 +339,13 @@ export class DeckManager {
         }
       } else if (line.match(/^#{1,6}\s+/)) {
         // Found another header (any level) - stop current flashcard content
+        // Handle last flashcard
         if (currentHeader && currentContent.length > 0) {
           const card = {
-            front: currentHeader.text.replace(
-              new RegExp(`^#{${headerLevel}}\\s+`),
-              "",
-            ),
+            front: currentHeader.text.replace(/^#{1,6}\s+/, ""),
             back: currentContent.join("\n").trim(),
             type: "header-paragraph" as const,
+            headerLevel: currentHeader.level,
           };
 
           flashcards.push(card);
@@ -372,12 +365,10 @@ export class DeckManager {
     // Don't forget the last flashcard
     if (currentHeader && currentContent.length > 0) {
       const card = {
-        front: currentHeader.text.replace(
-          new RegExp(`^#{${headerLevel}}\\s+`),
-          "",
-        ),
+        front: currentHeader.text.replace(/^#{1,6}\s+/, ""),
         back: currentContent.join("\n").trim(),
         type: "header-paragraph" as const,
+        headerLevel: currentHeader.level,
       };
 
       flashcards.push(card);
@@ -490,6 +481,7 @@ export class DeckManager {
           type: parsed.type,
           sourceFile: file.path,
           contentHash: contentHash,
+          headerLevel: parsed.headerLevel,
           state: "new",
           dueDate: new Date().toISOString(),
           interval: 0,
