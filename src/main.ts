@@ -31,7 +31,6 @@ import DeckConfigUI from "./components/DeckConfigUI.svelte";
 import { FlashcardReviewModalWrapper } from "./components/FlashcardReviewModalWrapper";
 
 const VIEW_TYPE_DECKS = "decks-view";
-const DATABASE_PATH = ".obsidian/plugins/decks/flashcards.db";
 
 export default class DecksPlugin extends Plugin {
   private db: DatabaseService;
@@ -56,13 +55,14 @@ export default class DecksPlugin extends Plugin {
     try {
       // Ensure plugin directory exists
       const adapter = this.app.vault.adapter;
-      const pluginDir = ".obsidian/plugins/decks";
+      const pluginDir = `${this.app.vault.configDir}/plugins/decks`;
       if (!(await adapter.exists(pluginDir))) {
         await adapter.mkdir(pluginDir);
       }
 
       // Initialize database
-      this.db = new DatabaseService(DATABASE_PATH);
+      const databasePath = `${this.app.vault.configDir}/plugins/decks/flashcards.db`;
+      this.db = new DatabaseService(databasePath);
       await this.db.initialize();
 
       // Initialize managers
