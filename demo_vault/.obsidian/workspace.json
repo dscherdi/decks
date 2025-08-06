@@ -13,12 +13,12 @@
             "state": {
               "type": "markdown",
               "state": {
-                "file": "Flashcards/Programming-Concepts.md",
+                "file": "Flashcards/Math-Basics.md",
                 "mode": "source",
                 "source": false
               },
               "icon": "lucide-file",
-              "title": "Programming-Concepts"
+              "title": "Math-Basics"
             }
           }
         ]
@@ -165,7 +165,7 @@
       }
     ],
     "direction": "horizontal",
-    "width": 435.5
+    "width": 486.5
   },
   "left-ribbon": {
     "hiddenItems": {
@@ -178,10 +178,10 @@
       "command-palette:Open command palette": false
     }
   },
-  "active": "ad4c1808e30b375b",
+  "active": "296674abb626cb1b",
   "lastOpenFiles": [
-    "Flashcards/Math-Basics.md",
     "Flashcards/Programming-Concepts.md",
+    "Flashcards/Math-Basics.md",
     "Flashcards/Programming-Concepts 1.md",
     "Flashcards/Programming-Concepts 1 1.md",
     "Flashcards/Spanish-Vocabulary.md",

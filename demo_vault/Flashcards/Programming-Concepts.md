@@ -17,19 +17,7 @@ Key characteristics:
 - Can be changed during program execution
 - Has a specific data type in statically-typed languages
 
-## What is the difference between compiled and interpreted languages?
 
-**Compiled languages** are translated to machine code before execution:
-- Examples: C, C++, Rust, Go
-- Faster execution
-- Compilation step required
-- Platform-specific executables
-
-**Interpreted languages** are executed line-by-line by an interpreter:
-- Examples: Python, JavaScript, Ruby
-- Slower execution
-- No compilation step
-- Platform independent
 
 ## Common Data Structures
 

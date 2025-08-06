@@ -52,6 +52,11 @@ export interface ReviewLog {
   oldEaseFactor: number;
   newEaseFactor: number;
   timeElapsed: number; // Time in milliseconds from card display to difficulty selection
+  // Essential state that cannot be calculated
+  newState: "new" | "learning" | "review";
+  newRepetitions: number;
+  newLapses: number;
+  newStability: number;
 }
 
 export interface DeckStats {

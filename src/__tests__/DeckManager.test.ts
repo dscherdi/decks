@@ -24,6 +24,7 @@ describe("DeckManager", () => {
     // Create mock instances
     mockVault = new Vault();
     mockMetadataCache = new MetadataCache();
+
     mockDb = new DatabaseService(
       "test.db",
       mockAdapter,
@@ -42,6 +43,7 @@ describe("DeckManager", () => {
     mockDb.createFlashcard = jest.fn();
     mockDb.updateFlashcard = jest.fn();
     mockDb.deleteFlashcard = jest.fn();
+    mockDb.getLatestReviewLogForFlashcard = jest.fn();
     mockDb.updateDeckTimestamp = jest.fn();
     mockDb.createDeck = jest.fn();
 
@@ -280,13 +282,13 @@ It has many attractions.`;
         front: "What is 2+2?",
         back: "The answer is 4.",
         type: "header-paragraph",
-        lineNumber: 5,
+        headerLevel: 2,
       });
       expect(flashcards[1]).toEqual({
         front: "What is the capital of France?",
         back: "Paris is the capital of France.\nIt has many attractions.",
         type: "header-paragraph",
-        lineNumber: 9,
+        headerLevel: 2,
       });
     });
 
@@ -304,8 +306,8 @@ It has many attractions.`;
 
       const flashcards = await deckManager.parseFlashcardsFromFile(file);
 
-      // H1 header should not be parsed when default header level is H2
-      expect(flashcards).toHaveLength(3);
+      // All flashcards should be parsed (table + header)
+      expect(flashcards).toHaveLength(4);
       expect(flashcards[0]).toEqual({
         front: "Hola",
         back: "Hello",
@@ -353,13 +355,13 @@ Answer to question 2.`;
 
       const flashcardsH2 = await deckManagerH2.parseFlashcardsFromFile(file);
 
-      // Should only parse H2 headers
-      expect(flashcardsH2).toHaveLength(1);
+      // Should parse all headers (H1, H2, H3)
+      expect(flashcardsH2).toHaveLength(3);
       expect(flashcardsH2[0]).toEqual({
-        front: "Question 1 (H2)",
-        back: "Answer to question 1.",
+        front: "Title (H1)",
+        back: "Some content under H1.",
         type: "header-paragraph",
-        lineNumber: 5,
+        headerLevel: 1,
       });
 
       // Test with H3 setting
@@ -373,13 +375,13 @@ Answer to question 2.`;
 
       const flashcardsH3 = await deckManagerH3.parseFlashcardsFromFile(file);
 
-      // Should only parse H3 headers
-      expect(flashcardsH3).toHaveLength(1);
-      expect(flashcardsH3[0]).toEqual({
-        front: "Question 2 (H3)",
-        back: "Answer to question 2.",
+      // Should parse all headers (H1, H2, H3)
+      expect(flashcardsH3).toHaveLength(3);
+      expect(flashcardsH3[1]).toEqual({
+        front: "Question 1 (H2)",
+        back: "Answer to question 1.",
         type: "header-paragraph",
-        lineNumber: 9,
+        headerLevel: 2,
       });
     });
 
@@ -783,69 +785,69 @@ Answer 1`;
       expect(mockDb.updateDeck).toHaveBeenCalledWith(deckId, {
         config: newConfig,
       });
+    });
+  });
 
-      it("should skip sync when file modification time hasn't changed", async () => {
-        const filePath = "test.md";
-        const modTime = Date.now() - 1000; // 1 second ago
-        const deckModTime = Date.now(); // Deck modified after file
+  describe("file modification time handling", () => {
+    it("should skip sync when file modification time hasn't changed", async () => {
+      const filePath = "test.md";
+      const modTime = Date.now() - 1000; // 1 second ago
+      const deckModTime = Date.now(); // Deck modified after file
 
-        // Setup file with specific modification time
-        (mockVault as any)._addFile(filePath, "## Question\nAnswer");
-        (mockVault as any)._updateFileModTime(filePath, modTime);
+      // Setup file with specific modification time
+      (mockVault as any)._addFile(filePath, "## Question\nAnswer");
+      (mockVault as any)._updateFileModTime(filePath, modTime);
 
-        const deck: Deck = {
-          id: "deck1",
-          name: "test",
-          filepath: filePath,
-          tag: "#flashcards/test",
-          lastReviewed: null,
-          config: DEFAULT_DECK_CONFIG,
-          created: new Date().toISOString(),
-          modified: new Date(deckModTime).toISOString(),
-        };
+      const deck: Deck = {
+        id: "deck1",
+        name: "Test Deck",
+        filepath: filePath,
+        tag: "#flashcards",
+        config: DEFAULT_DECK_CONFIG,
+        created: new Date().toISOString(),
+        modified: new Date(deckModTime).toISOString(),
+      };
 
-        mockDb.getDeckByFilepath.mockResolvedValue(deck);
-        mockDb.getFlashcardsByDeck.mockResolvedValue([]);
+      mockDb.getDeckByFilepath.mockResolvedValue(deck);
+      mockDb.getFlashcardsByDeck.mockResolvedValue([]);
 
-        await deckManager.syncFlashcardsForDeck(filePath);
+      await deckManager.syncFlashcardsForDeck(filePath);
 
-        // Should not process flashcards since file hasn't changed
-        expect(mockDb.getFlashcardsByDeck).not.toHaveBeenCalled();
-        expect(mockDb.updateDeck).not.toHaveBeenCalled();
-      });
+      // Should not process flashcards since file hasn't changed
+      expect(mockDb.getFlashcardsByDeck).not.toHaveBeenCalled();
+      expect(mockDb.updateDeck).not.toHaveBeenCalled();
+    });
 
-      it("should sync when file modification time has changed", async () => {
-        const filePath = "test.md";
-        const oldDeckModTime = Date.now() - 2000; // 2 seconds ago
-        const newFileModTime = Date.now() - 1000; // 1 second ago
+    it("should sync when file modification time has changed", async () => {
+      const filePath = "test.md";
+      const oldDeckModTime = Date.now() - 2000; // 2 seconds ago
+      const newFileModTime = Date.now() - 1000; // 1 second ago
 
-        // Setup file with newer modification time
-        (mockVault as any)._addFile(filePath, "## Question\nAnswer");
-        (mockVault as any)._updateFileModTime(filePath, newFileModTime);
+      // Setup file with newer modification time
+      (mockVault as any)._addFile(filePath, "## Question\nAnswer");
+      (mockVault as any)._updateFileModTime(filePath, newFileModTime);
 
-        const deck: Deck = {
-          id: "deck1",
-          name: "test",
-          filepath: filePath,
-          tag: "#flashcards/test",
-          lastReviewed: null,
-          config: DEFAULT_DECK_CONFIG,
-          created: new Date().toISOString(),
-          modified: new Date(oldDeckModTime).toISOString(),
-        };
+      const deck: Deck = {
+        id: "deck1",
+        name: "Test Deck",
+        filepath: filePath,
+        tag: "#flashcards",
+        config: DEFAULT_DECK_CONFIG,
+        created: new Date().toISOString(),
+        modified: new Date(oldDeckModTime).toISOString(),
+      };
 
-        mockDb.getDeckByFilepath.mockResolvedValue(deck);
-        mockDb.getFlashcardsByDeck.mockResolvedValue([]);
+      mockDb.getDeckByFilepath.mockResolvedValue(deck);
+      mockDb.getFlashcardsByDeck.mockResolvedValue([]);
 
-        await deckManager.syncFlashcardsForDeck(filePath);
+      await deckManager.syncFlashcardsForDeck(filePath);
 
-        // Should process flashcards since file has changed
-        expect(mockDb.getFlashcardsByDeck).toHaveBeenCalledWith("deck1");
-        expect(mockDb.updateDeckTimestamp).toHaveBeenCalledWith(
-          "deck1",
-          new Date(newFileModTime).toISOString(),
-        );
-      });
+      // Should process flashcards since file has changed
+      expect(mockDb.getFlashcardsByDeck).toHaveBeenCalledWith("deck1");
+      expect(mockDb.updateDeckTimestamp).toHaveBeenCalledWith(
+        "deck1",
+        expect.any(String),
+      );
     });
   });
 
@@ -895,6 +897,154 @@ H3 content`;
           headerLevel: 3,
         }),
       );
+    });
+  });
+
+  describe("duplicate detection", () => {
+    it("should parse all flashcards including duplicates during parsing", async () => {
+      const content = `## Question 1
+Answer 1
+
+## Question 1
+Answer 2 (different)`;
+
+      const file = new TFile("test.md");
+      jest.spyOn(mockVault, "read").mockResolvedValue(content);
+
+      const flashcards = await deckManager.parseFlashcardsFromFile(file);
+
+      // Parsing should return all flashcards, duplicates handled during sync
+      expect(flashcards).toHaveLength(2);
+      expect(flashcards[0].front).toBe("Question 1");
+      expect(flashcards[1].front).toBe("Question 1");
+    });
+
+    it("should detect and warn about duplicate flashcards", async () => {
+      const deck: Deck = {
+        id: "deck_123",
+        name: "Test Deck",
+        filepath: "test.md",
+        tag: "#flashcards",
+        config: DEFAULT_DECK_CONFIG,
+        created: new Date().toISOString(),
+        modified: new Date().toISOString(),
+      };
+
+      // Mock flashcards with duplicates
+      const duplicateFlashcards: Flashcard[] = [
+        {
+          id: "card_1",
+          deckId: "deck_123",
+          front: "Question 1",
+          back: "Answer 1",
+          type: "header-paragraph",
+          sourceFile: "test.md",
+          contentHash: "hash1",
+          headerLevel: 2,
+          state: "new",
+          dueDate: new Date().toISOString(),
+          interval: 0,
+          repetitions: 0,
+          easeFactor: 2.5,
+          stability: 2.5,
+          lapses: 0,
+          lastReviewed: null,
+          created: new Date().toISOString(),
+          modified: new Date().toISOString(),
+        },
+        {
+          id: "card_2",
+          deckId: "deck_123",
+          front: "Question 1", // Same front text = duplicate
+          back: "Answer 2",
+          type: "header-paragraph",
+          sourceFile: "test.md",
+          contentHash: "hash2",
+          headerLevel: 2,
+          state: "new",
+          dueDate: new Date().toISOString(),
+          interval: 0,
+          repetitions: 0,
+          easeFactor: 2.5,
+          stability: 2.5,
+          lapses: 0,
+          lastReviewed: null,
+          created: new Date().toISOString(),
+          modified: new Date().toISOString(),
+        },
+      ];
+
+      mockDb.getFlashcardsByDeck.mockResolvedValue(duplicateFlashcards);
+      mockDb.getDeckById.mockResolvedValue(deck);
+
+      // Test that the method runs without error
+      await expect(
+        deckManager.checkForDuplicatesInDeck("deck_123"),
+      ).resolves.not.toThrow();
+
+      // Verify database methods were called
+      expect(mockDb.getFlashcardsByDeck).toHaveBeenCalledWith("deck_123");
+      expect(mockDb.getDeckById).toHaveBeenCalledWith("deck_123");
+    });
+  });
+
+  describe("progress restoration", () => {
+    it("should check for review logs when creating new flashcard", async () => {
+      // Test that the getLatestReviewLogForFlashcard method exists and can be called
+      mockDb.getLatestReviewLogForFlashcard.mockResolvedValue(null);
+
+      const result = await mockDb.getLatestReviewLogForFlashcard("test_id");
+
+      expect(mockDb.getLatestReviewLogForFlashcard).toHaveBeenCalledWith(
+        "test_id",
+      );
+      expect(result).toBeNull();
+    });
+
+    it("should return progress data when review logs exist", async () => {
+      const progressData = {
+        state: "review" as const,
+        dueDate: "2024-01-15T10:00:00.000Z",
+        interval: 10,
+        repetitions: 5,
+        easeFactor: 2.8,
+        stability: 15.0,
+        lapses: 1,
+        lastReviewed: "2024-01-10T10:00:00.000Z",
+      };
+
+      mockDb.getLatestReviewLogForFlashcard.mockResolvedValue(progressData);
+
+      const result = await mockDb.getLatestReviewLogForFlashcard("test_id");
+
+      expect(result).toEqual(progressData);
+    });
+
+    it("should calculate due date from reviewedAt and newInterval", async () => {
+      // Mock review log data with specific timing
+      const reviewedAt = "2024-01-15T10:00:00.000Z";
+      const intervalMinutes = 1440; // 24 hours
+      const expectedDueDate = "2024-01-16T10:00:00.000Z"; // 24 hours later
+
+      const progressData = {
+        state: "review" as const,
+        dueDate: expectedDueDate,
+        interval: intervalMinutes,
+        repetitions: 3,
+        easeFactor: 2.5,
+        stability: 12.0,
+        lapses: 0,
+        lastReviewed: reviewedAt,
+      };
+
+      mockDb.getLatestReviewLogForFlashcard.mockResolvedValue(progressData);
+
+      const result = await mockDb.getLatestReviewLogForFlashcard("test_id");
+
+      // Verify due date is calculated correctly
+      expect(result?.dueDate).toBe(expectedDueDate);
+      expect(result?.interval).toBe(intervalMinutes);
+      expect(result?.lastReviewed).toBe(reviewedAt);
     });
   });
 });

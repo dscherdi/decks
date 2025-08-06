@@ -354,8 +354,9 @@
 - **KISS Solution**: Store header level with each flashcard and filter at query time instead of deleting/recreating
 - **Database Changes**:
   - Added `header_level` column to flashcards table (1-6 for header-paragraph cards, null for table cards)
-  - Added automatic migration using `ALTER TABLE` to add column to existing databases
-  - Migration safely handles existing databases without breaking functionality
+  - Integrated migration into existing `migrateSchemaIfNeeded()` method with simple `ALTER TABLE` statement
+  - Migration follows established pattern alongside filepath, config, and time_elapsed columns
+  - Safe migration with error handling and graceful fallback to table recreation if needed
   - Updated all database methods to support header level filtering
   - Added filtered versions: `getFlashcardsByDeckFiltered()`, `getDeckStatsFiltered()`, etc.
 - **Parsing Changes**:
@@ -369,6 +370,65 @@
 - **User Experience**: Instant header level switching without data loss - all flashcards preserved in database
 - **Settings Integration**: Changing header level triggers force sync + view refresh to ensure complete data
 - **Test Coverage**: Added unit tests for multi-level parsing and headerLevel property validation
+
+### ✅ Duplicate Flashcard Detection and Warnings
+- **Problem**: Users could accidentally create duplicate flashcards with same front text, causing confusion
+- **Solution**: Added comprehensive duplicate detection with user notifications using Obsidian's Notice system
+- **Detection Points**:
+  - During sync: Warns when same front text appears multiple times in a single file
+  - Post-sync: Scans entire deck for duplicates across all files and header levels
+  - Case-insensitive matching with whitespace normalization for robust detection
+- **User Notifications**:
+  - Warning notices with deck name and truncated flashcard text (⚠️ emoji for visibility)
+  - 8-10 second display duration for adequate reading time
+  - Prevents duplicate warnings for same flashcard during single session
+- **Implementation Details**:
+  - Integrated into existing sync workflow with minimal performance impact
+  - Uses `generateFlashcardId()` logic to detect ID collisions before creation
+  - Comprehensive logging for debugging duplicate detection issues
+- **User Experience**: Clear warnings help users identify and resolve duplicate content proactively
+- **Test Coverage**: Unit tests verify duplicate detection logic and database interaction patterns
+
+### ✅ Flashcard Progress Restoration from Extended Review Logs
+- **Problem**: When flashcards get recreated (due to file changes, sync, etc.), users lose all learning progress
+- **Solution**: Complete progress restoration system using extended review log schema with precise due date calculation
+- **Enhanced ReviewLog Schema**:
+  - Extended with essential FSRS fields: `newState`, `newInterval`, `newEaseFactor`, `newRepetitions`, `newLapses`
+  - Stores core progression data (intervals, ease factors) and incremental counters (repetitions, lapses)
+  - Preserves old/new interval and ease factor for statistics and performance tracking
+  - Maintains complete audit trail of learning progression without redundant calculated values
+- **Precise Due Date Calculation**:
+  - Formula: `dueDate = reviewedAt + (newInterval * 60 * 1000)` for mathematical precision
+  - No timing drift or approximation errors - exact FSRS scheduling preserved
+  - Perfect restoration of review timing regardless of when flashcard is recreated
+- **Direct Stability Storage**:
+  - Added `newStability` field to ReviewLog interface and database schema
+  - Stability stored directly when calculated during actual review process
+  - No complex recalculation needed - uses exact FSRS-computed stability values
+  - Eliminates approximation errors and ensures perfect stability restoration
+- **Database Implementation**:
+  - Added `getLatestReviewLogForFlashcard()` method with optimized query: ORDER BY reviewed_at DESC LIMIT 1
+  - Extended review_logs table with `new_stability` column for direct storage
+  - Automatic migration with ALTER TABLE statements for existing databases
+  - Modified flashcard creation logic to check review logs before creating new cards
+  - Complete fallback to default "new" state when no review logs exist
+- **User Experience**:
+  - Seamless progress preservation without user intervention
+  - Success notifications: "✅ Progress restored for flashcard: [name] (review, 5 reviews)"
+  - Perfect data integrity: all learning metrics preserved during file modifications and plugin updates
+  - No data loss during deck syncing, header level changes, or database migrations
+- **Comprehensive Testing**:
+  - Unit tests verify due date calculation: reviewedAt + newInterval accuracy
+  - Direct stability storage and retrieval testing from review logs
+  - Database method functionality and edge case handling
+  - Progress restoration logic with complete state preservation
+  - Migration safety and backwards compatibility
+- **Technical Benefits**:
+  - Optimal storage: essential data preserved, calculated values stored when computed
+  - Direct FSRS integration: stability stored exactly as calculated during review
+  - Simple and reliable: no complex recalculation algorithms or approximations
+  - Future-proof: stored stability values remain accurate regardless of algorithm changes
+  - Performance optimized: single query per flashcard restoration with direct value retrieval
 - **Filtering System**: Complete deck filtering (All Decks, by Tag, by Individual Deck)
 - **Timeframe Selection**: Last 12 months or All History options
 - **Seven Main Sections**:

@@ -60,22 +60,7 @@ export default class DecksPlugin extends Plugin {
         await adapter.mkdir(pluginDir);
       }
 
-      // Initialize database
-      const databasePath = `${this.app.vault.configDir}/plugins/decks/flashcards.db`;
-      this.db = new DatabaseService(
-        databasePath,
-        this.app.vault.adapter,
-        this.debugLog.bind(this),
-      );
-      await this.db.initialize();
-
-      // Initialize managers
-      this.deckManager = new DeckManager(
-        this.app.vault,
-        this.app.metadataCache,
-        this.db,
-        this,
-      );
+      // Initialize FSRS first
       this.fsrs = new FSRS({
         requestRetention: this.settings.fsrs.requestRetention,
         maximumInterval: this.settings.fsrs.maximumInterval,
@@ -83,6 +68,23 @@ export default class DecksPlugin extends Plugin {
         hardInterval: this.settings.fsrs.hardInterval,
         w: this.settings.fsrs.weights,
       });
+
+      // Initialize database
+      const databasePath = `${this.app.vault.configDir}/plugins/decks/flashcards.db`;
+      this.db = new DatabaseService(
+        databasePath,
+        adapter,
+        this.debugLog.bind(this),
+      );
+      await this.db.initialize();
+
+      // Initialize deck manager
+      this.deckManager = new DeckManager(
+        this.app.vault,
+        this.app.metadataCache,
+        this.db,
+        this,
+      );
 
       // Register the side panel view
       this.registerView(VIEW_TYPE_DECKS, (leaf) => new DecksView(leaf, this));
@@ -406,6 +408,10 @@ export default class DecksPlugin extends Plugin {
       oldEaseFactor: flashcard.easeFactor,
       newEaseFactor: updatedCard.easeFactor,
       timeElapsed: timeElapsed ?? 0,
+      newState: updatedCard.state,
+      newRepetitions: updatedCard.repetitions,
+      newLapses: updatedCard.lapses,
+      newStability: updatedCard.stability,
     });
 
     // Update deck last reviewed

@@ -19,11 +19,11 @@ export class DatabaseService {
   constructor(
     dbPath: string,
     adapter: DataAdapter,
-    debugLog?: (message: string, ...args: any[]) => void,
+    debugLog: (message: string, ...args: any[]) => void,
   ) {
     this.dbPath = dbPath;
     this.adapter = adapter;
-    this.debugLog = debugLog || (() => {}); // No-op if not provided
+    this.debugLog = debugLog;
   }
 
   async initialize(): Promise<void> {
@@ -131,6 +131,10 @@ export class DatabaseService {
         old_ease_factor REAL NOT NULL,
         new_ease_factor REAL NOT NULL,
         time_elapsed INTEGER NOT NULL DEFAULT 0,
+        new_state TEXT NOT NULL DEFAULT 'new' CHECK (new_state IN ('new', 'learning', 'review')),
+        new_repetitions INTEGER NOT NULL DEFAULT 0,
+        new_lapses INTEGER NOT NULL DEFAULT 0,
+        new_stability REAL NOT NULL DEFAULT 2.5,
         FOREIGN KEY (flashcard_id) REFERENCES flashcards(id)
       );
 
@@ -503,7 +507,7 @@ export class DatabaseService {
 
     if (headerLevel !== undefined) {
       query += " AND (type = 'table' OR header_level = ?)";
-      params.push(headerLevel);
+      params.push(headerLevel.toString());
     }
 
     const stmt = this.db.prepare(query);
@@ -556,7 +560,7 @@ export class DatabaseService {
 
     if (headerLevel !== undefined) {
       query += " AND (type = 'table' OR header_level = ?)";
-      params.push(headerLevel);
+      params.push(headerLevel.toString());
     }
 
     query += " ORDER BY due_date";
@@ -752,7 +756,7 @@ export class DatabaseService {
     `;
     const learningStmt = this.db.prepare(learningQuery);
     const learningParams = [deckId, now];
-    if (headerLevel !== undefined) learningParams.push(headerLevel);
+    if (headerLevel !== undefined) learningParams.push(headerLevel.toString());
     learningStmt.bind(learningParams);
 
     while (learningStmt.step()) {
@@ -781,7 +785,8 @@ export class DatabaseService {
       `;
       const newCardsStmt = this.db.prepare(newCardsQuery);
       const newCardsParams = [deckId, now];
-      if (headerLevel !== undefined) newCardsParams.push(headerLevel);
+      if (headerLevel !== undefined)
+        newCardsParams.push(headerLevel.toString());
       newCardsStmt.bind(newCardsParams);
 
       while (newCardsStmt.step()) {
@@ -808,7 +813,8 @@ export class DatabaseService {
       `;
       const reviewCardsStmt = this.db.prepare(reviewCardsQuery);
       const reviewCardsParams = [deckId, now];
-      if (headerLevel !== undefined) reviewCardsParams.push(headerLevel);
+      if (headerLevel !== undefined)
+        reviewCardsParams.push(headerLevel.toString());
       reviewCardsStmt.bind(reviewCardsParams);
 
       while (reviewCardsStmt.step()) {
@@ -819,6 +825,61 @@ export class DatabaseService {
     }
 
     return flashcards;
+  }
+
+  async getLatestReviewLogForFlashcard(flashcardId: string): Promise<{
+    state: "new" | "learning" | "review";
+    dueDate: string;
+    interval: number;
+    repetitions: number;
+    easeFactor: number;
+    stability: number;
+    lapses: number;
+    lastReviewed: string;
+  } | null> {
+    if (!this.db) throw new Error("Database not initialized");
+
+    const stmt = this.db.prepare(`
+      SELECT
+        rl.new_state, rl.new_interval, rl.new_ease_factor,
+        rl.new_repetitions, rl.new_lapses, rl.new_stability, rl.reviewed_at
+      FROM review_logs rl
+      WHERE rl.flashcard_id = ?
+      ORDER BY rl.reviewed_at DESC
+      LIMIT 1
+    `);
+
+    stmt.bind([flashcardId]);
+
+    if (stmt.step()) {
+      const row = stmt.get();
+      stmt.free();
+      const reviewedAt = new Date(row[5] as string);
+      const intervalMinutes = row[1] as number;
+      const dueDate = new Date(
+        reviewedAt.getTime() + intervalMinutes * 60 * 1000,
+      );
+
+      const repetitions = row[3] as number;
+      const lapses = row[4] as number;
+      const stability = row[5] as number;
+      const lastReviewed = row[6] as string;
+      const easeFactor = row[2] as number;
+
+      return {
+        state: row[0] as "new" | "learning" | "review",
+        dueDate: dueDate.toISOString(),
+        interval: intervalMinutes,
+        repetitions: repetitions,
+        easeFactor: easeFactor,
+        stability: stability,
+        lapses: lapses,
+        lastReviewed: lastReviewed,
+      };
+    }
+
+    stmt.free();
+    return null;
   }
 
   async deleteFlashcardsByFile(sourceFile: string): Promise<void> {
@@ -841,8 +902,9 @@ export class DatabaseService {
     const stmt = this.db.prepare(`
       INSERT INTO review_logs (
         id, flashcard_id, reviewed_at, difficulty,
-        old_interval, new_interval, old_ease_factor, new_ease_factor, time_elapsed
-      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+        old_interval, new_interval, old_ease_factor, new_ease_factor, time_elapsed,
+        new_state, new_repetitions, new_lapses, new_stability
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
     `);
 
     stmt.run([
@@ -855,6 +917,10 @@ export class DatabaseService {
       log.oldEaseFactor,
       log.newEaseFactor,
       log.timeElapsed,
+      log.newState,
+      log.newRepetitions,
+      log.newLapses,
+      log.newStability,
     ]);
     stmt.free();
 
@@ -978,7 +1044,7 @@ export class DatabaseService {
     `;
     const newStmt = this.db.prepare(newQuery);
     const newParams = [deckId, now];
-    if (headerLevel !== undefined) newParams.push(headerLevel);
+    if (headerLevel !== undefined) newParams.push(headerLevel.toString());
     newStmt.bind(newParams);
     newStmt.step();
     const newCount = newStmt.get()[0] as number;
@@ -991,7 +1057,7 @@ export class DatabaseService {
     `;
     const learningStmt = this.db.prepare(learningQuery);
     const learningParams = [deckId, now];
-    if (headerLevel !== undefined) learningParams.push(headerLevel);
+    if (headerLevel !== undefined) learningParams.push(headerLevel.toString());
     learningStmt.bind(learningParams);
     learningStmt.step();
     const learningCount = learningStmt.get()[0] as number;
@@ -1004,7 +1070,7 @@ export class DatabaseService {
     `;
     const dueStmt = this.db.prepare(dueQuery);
     const dueParams = [deckId, now];
-    if (headerLevel !== undefined) dueParams.push(headerLevel);
+    if (headerLevel !== undefined) dueParams.push(headerLevel.toString());
     dueStmt.bind(dueParams);
     dueStmt.step();
     const dueCount = dueStmt.get()[0] as number;
@@ -1016,7 +1082,7 @@ export class DatabaseService {
     `;
     const totalStmt = this.db.prepare(totalQuery);
     const totalParams = [deckId];
-    if (headerLevel !== undefined) totalParams.push(headerLevel);
+    if (headerLevel !== undefined) totalParams.push(headerLevel.toString());
     totalStmt.bind(totalParams);
     totalStmt.step();
     const totalCount = totalStmt.get()[0] as number;
@@ -1055,7 +1121,6 @@ export class DatabaseService {
       const deckStats = await this.getDeckStatsFiltered(deck.id, headerLevel);
       stats.push({
         deckId: deck.id,
-        name: deckStats.name,
         newCount: deckStats.newCount,
         learningCount: deckStats.learningCount,
         dueCount: deckStats.dueCount,
@@ -1127,6 +1192,7 @@ export class DatabaseService {
       let hasConfig = true;
       let hasTimeElapsed = true;
       let hasHeaderLevel = true;
+      let hasNewReviewLogColumns = true;
 
       // Check decks table columns if it exists
       if (existingTables.includes("decks")) {
@@ -1171,19 +1237,42 @@ export class DatabaseService {
             reviewLogsColumns.push(reviewLogsStmt.get());
           }
           reviewLogsStmt.free();
+
+          const columnNames = reviewLogsColumns.map((col) => col[1]);
+          this.debugLog(`Review logs columns: ${columnNames.join(", ")}`);
+
           hasTimeElapsed = reviewLogsColumns.some(
             (col) => col[1] === "time_elapsed",
           );
+          const hasNewState = reviewLogsColumns.some(
+            (col) => col[1] === "new_state",
+          );
+          const hasNewStability = reviewLogsColumns.some(
+            (col) => col[1] === "new_stability",
+          );
+          hasNewReviewLogColumns = hasNewState && hasNewStability;
+
+          this.debugLog(
+            `Migration check - hasTimeElapsed: ${hasTimeElapsed}, hasNewState: ${hasNewState}, hasNewStability: ${hasNewStability}, hasNewReviewLogColumns: ${hasNewReviewLogColumns}`,
+          );
         } catch (error) {
+          this.debugLog(`Error checking review_logs columns: ${error}`);
           hasTimeElapsed = false;
+          hasNewReviewLogColumns = false;
         }
       } else {
         hasTimeElapsed = false;
       }
 
-      if (!hasFilepath || !hasConfig || !hasTimeElapsed || !hasHeaderLevel) {
+      if (
+        !hasFilepath ||
+        !hasConfig ||
+        !hasTimeElapsed ||
+        !hasHeaderLevel ||
+        !hasNewReviewLogColumns
+      ) {
         this.debugLog(
-          "Migrating database schema to support filepath, config, time_elapsed, and header_level columns...",
+          "Migrating database schema to support filepath, config, time_elapsed, header_level, and new review log columns...",
         );
 
         // Add missing columns to existing tables instead of dropping them
@@ -1229,6 +1318,49 @@ export class DatabaseService {
                 `ALTER TABLE flashcards ADD COLUMN header_level INTEGER CHECK (header_level >= 1 AND header_level <= 6)`,
               );
             }
+
+            // Check and add individual review_logs columns
+            if (existingTables.includes("review_logs")) {
+              const reviewLogsStmt = this.db.prepare(
+                "PRAGMA table_info(review_logs)",
+              );
+              const existingColumns = new Set<string>();
+              while (reviewLogsStmt.step()) {
+                const row = reviewLogsStmt.get();
+                existingColumns.add(row[1] as string);
+              }
+              reviewLogsStmt.free();
+
+              const requiredColumns = [
+                { name: "old_interval", type: "INTEGER DEFAULT 0" },
+                { name: "new_interval", type: "INTEGER DEFAULT 0" },
+                { name: "old_ease_factor", type: "REAL DEFAULT 2.5" },
+                { name: "new_ease_factor", type: "REAL DEFAULT 2.5" },
+                {
+                  name: "new_state",
+                  type: "TEXT DEFAULT 'new' CHECK (new_state IN ('new', 'learning', 'review'))",
+                },
+                { name: "new_repetitions", type: "INTEGER DEFAULT 0" },
+                { name: "new_lapses", type: "INTEGER DEFAULT 0" },
+                { name: "new_stability", type: "REAL DEFAULT 2.5" },
+              ];
+
+              for (const column of requiredColumns) {
+                if (!existingColumns.has(column.name)) {
+                  try {
+                    this.debugLog(`Adding missing column: ${column.name}`);
+                    this.db.exec(
+                      `ALTER TABLE review_logs ADD COLUMN ${column.name} ${column.type}`,
+                    );
+                  } catch (error) {
+                    console.error(
+                      `Failed to add column ${column.name}:`,
+                      error,
+                    );
+                  }
+                }
+              }
+            }
           }
 
           this.debugLog(
@@ -1268,7 +1400,7 @@ export class DatabaseService {
       type: row[4] as "header-paragraph" | "table",
       sourceFile: row[5] as string,
       contentHash: row[6] as string,
-      headerLevel: row[7] as number | null,
+      headerLevel: (row[7] as number | null) || undefined,
       state: row[8] as "new" | "learning" | "review",
       dueDate: row[9] as string,
       interval: row[10] as number,

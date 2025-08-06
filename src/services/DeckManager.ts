@@ -1,4 +1,4 @@
-import { TFile, Vault, MetadataCache, CachedMetadata } from "obsidian";
+import { TFile, Vault, MetadataCache, CachedMetadata, Notice } from "obsidian";
 import { Deck, Flashcard, DEFAULT_DECK_CONFIG } from "../database/types";
 import { DatabaseService } from "../database/DatabaseService";
 
@@ -427,6 +427,7 @@ export class DeckManager {
     });
 
     const processedIds = new Set<string>();
+    const duplicateWarnings = new Set<string>(); // Track duplicates to warn only once per file
 
     // Parse flashcards from the file
     const parsedCards = await this.parseFlashcardsFromFile(file);
@@ -436,6 +437,22 @@ export class DeckManager {
       const flashcardId = this.generateFlashcardId(parsed.front, deck.id);
       const contentHash = this.generateContentHash(parsed.back);
       const existingCard = existingById.get(flashcardId);
+
+      // Check for duplicate front text within the same parsing session
+      if (processedIds.has(flashcardId)) {
+        const duplicateKey = `${deck.name}:${parsed.front}`;
+        if (!duplicateWarnings.has(duplicateKey)) {
+          new Notice(
+            `⚠️ Duplicate flashcard detected in "${deck.name}": "${parsed.front.substring(0, 50)}${parsed.front.length > 50 ? "..." : ""}". Only the first occurrence will be used.`,
+            8000,
+          );
+          duplicateWarnings.add(duplicateKey);
+          this.debugLog(
+            `Duplicate flashcard detected: "${parsed.front}" in deck "${deck.name}"`,
+          );
+        }
+        continue; // Skip this duplicate
+      }
 
       this.debugLog(
         `Processing flashcard: "${parsed.front.substring(0, 50)}..."`,
@@ -472,7 +489,11 @@ export class DeckManager {
           );
         }
       } else {
-        // Create new flashcard
+        // Check for existing review logs to restore progress
+        const previousProgress =
+          await this.db.getLatestReviewLogForFlashcard(flashcardId);
+
+        // Create new flashcard with restored progress if available
         const flashcard: Omit<Flashcard, "created" | "modified"> = {
           id: flashcardId,
           deckId: deck.id,
@@ -482,17 +503,31 @@ export class DeckManager {
           sourceFile: file.path,
           contentHash: contentHash,
           headerLevel: parsed.headerLevel,
-          state: "new",
-          dueDate: new Date().toISOString(),
-          interval: 0,
-          repetitions: 0,
-          easeFactor: 5.0, // FSRS initial difficulty
-          stability: 2.5, // FSRS initial stability
-          lapses: 0,
-          lastReviewed: null,
+          // Restore progress from review logs or use defaults
+          state: previousProgress?.state || "new",
+          dueDate: previousProgress?.dueDate || new Date().toISOString(),
+          interval: previousProgress?.interval || 0,
+          repetitions: previousProgress?.repetitions || 0,
+          easeFactor: previousProgress?.easeFactor || 5.0, // FSRS initial difficulty
+          stability: previousProgress?.stability || 2.5, // FSRS initial stability
+          lapses: previousProgress?.lapses || 0,
+          lastReviewed: previousProgress?.lastReviewed || null,
         };
 
-        this.debugLog(`Creating new flashcard: ${flashcard.front}`);
+        if (previousProgress) {
+          this.debugLog(
+            `Restoring flashcard progress from review logs: ${flashcard.front} (state: ${previousProgress.state}, interval: ${previousProgress.interval})`,
+          );
+
+          // Notify user that progress was restored
+          new Notice(
+            `✅ Progress restored for flashcard: "${parsed.front.substring(0, 40)}${parsed.front.length > 40 ? "..." : ""}" (${previousProgress.state}, ${previousProgress.repetitions} reviews)`,
+            5000,
+          );
+        } else {
+          this.debugLog(`Creating new flashcard: ${flashcard.front}`);
+        }
+
         await this.db.createFlashcard(flashcard);
       }
     }
@@ -507,6 +542,9 @@ export class DeckManager {
 
     // Update deck's modified timestamp to match file modification time
     await this.db.updateDeckTimestamp(deck.id, fileModifiedTime.toISOString());
+
+    // Check for duplicates in the deck and warn user if found
+    await this.checkForDuplicatesInDeck(deck.id);
 
     this.debugLog(`Sync completed for deck: ${deck.name}`);
   }
@@ -636,5 +674,38 @@ export class DeckManager {
       hash = hash & hash; // Convert to 32-bit integer
     }
     return `card_${Math.abs(hash).toString(36)}`;
+  }
+
+  /**
+   * Check for duplicate flashcards in a deck and warn the user
+   */
+  async checkForDuplicatesInDeck(deckId: string): Promise<void> {
+    const existingFlashcards = await this.db.getFlashcardsByDeck(deckId);
+    const frontTextMap = new Map<string, Flashcard[]>();
+
+    // Group flashcards by front text
+    for (const card of existingFlashcards) {
+      const normalizedFront = card.front.trim().toLowerCase();
+      if (!frontTextMap.has(normalizedFront)) {
+        frontTextMap.set(normalizedFront, []);
+      }
+      frontTextMap.get(normalizedFront)!.push(card);
+    }
+
+    // Find and warn about duplicates
+    const deck = await this.db.getDeckById(deckId);
+    const deckName = deck?.name || "Unknown Deck";
+
+    for (const [frontText, cards] of frontTextMap) {
+      if (cards.length > 1) {
+        new Notice(
+          `⚠️ Found ${cards.length} duplicate flashcards in "${deckName}": "${cards[0].front.substring(0, 50)}${cards[0].front.length > 50 ? "..." : ""}". Consider removing duplicates to avoid confusion.`,
+          10000,
+        );
+        this.debugLog(
+          `Duplicate flashcards found in deck "${deckName}": "${cards[0].front}" (${cards.length} copies)`,
+        );
+      }
+    }
   }
 }

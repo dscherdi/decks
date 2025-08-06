@@ -1080,4 +1080,93 @@ describe("DatabaseService", () => {
       expect(mockDb.close).toHaveBeenCalled();
     });
   });
+
+  describe("getLatestReviewLogForFlashcard", () => {
+    it("should calculate due date from reviewedAt and newInterval", async () => {
+      const reviewedAt = "2024-01-15T10:00:00.000Z";
+      const intervalMinutes = 1440; // 24 hours
+      const expectedDueDate = "2024-01-16T10:00:00.000Z"; // 24 hours later
+
+      // Mock database query result
+      mockStatement.step.mockReturnValue(true);
+      mockStatement.get.mockReturnValue([
+        "review", // new_state
+        intervalMinutes, // new_interval
+        2.5, // new_ease_factor
+        3, // new_repetitions
+        0, // new_lapses
+        reviewedAt, // reviewed_at
+      ]);
+
+      const result =
+        await dbService.getLatestReviewLogForFlashcard("test_card_id");
+
+      expect(mockDb.prepare).toHaveBeenCalledWith(
+        expect.stringContaining("SELECT"),
+      );
+      expect(mockStatement.bind).toHaveBeenCalledWith(["test_card_id"]);
+
+      expect(result).toEqual({
+        state: "review",
+        dueDate: expectedDueDate,
+        interval: intervalMinutes,
+        repetitions: 3,
+        easeFactor: 2.5,
+        stability: 2.5,
+        lapses: 0,
+        lastReviewed: reviewedAt,
+      });
+    });
+
+    it("should return null when no review logs exist", async () => {
+      mockStatement.step.mockReturnValue(false);
+
+      const result =
+        await dbService.getLatestReviewLogForFlashcard("nonexistent_card");
+
+      expect(result).toBeNull();
+    });
+
+    it("should use stored stability from review logs when restoring progress", async () => {
+      const reviewedAt = "2024-01-15T10:00:00.000Z";
+      const intervalMinutes = 1440; // 24 hours
+      const repetitions = 5;
+      const lapses = 1;
+      const easeFactor = 2.3;
+
+      // Mock database query result
+      mockStatement.step.mockReturnValue(true);
+      mockStatement.get.mockReturnValue([
+        "review", // new_state
+        intervalMinutes, // new_interval
+        easeFactor, // new_ease_factor
+        repetitions, // new_repetitions
+        lapses, // new_lapses
+        reviewedAt, // reviewed_at
+      ]);
+
+      const expectedStability = 15.2;
+
+      // Mock database query result with stability
+      mockStatement.get.mockReturnValue([
+        "review", // new_state
+        intervalMinutes, // new_interval
+        easeFactor, // new_ease_factor
+        repetitions, // new_repetitions
+        lapses, // new_lapses
+        expectedStability, // new_stability
+        reviewedAt, // reviewed_at
+      ]);
+
+      const result =
+        await dbService.getLatestReviewLogForFlashcard("test_card_id");
+
+      // Verify result contains stored stability
+      expect(result?.stability).toBe(expectedStability);
+      expect(result?.state).toBe("review");
+      expect(result?.repetitions).toBe(repetitions);
+      expect(result?.lapses).toBe(lapses);
+      expect(result?.easeFactor).toBe(easeFactor);
+    });
+  });
 });
