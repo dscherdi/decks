@@ -19,9 +19,6 @@ export class DecksSettingTab extends PluginSettingTab {
     // FSRS Algorithm Settings
     this.addFSRSSettings(containerEl);
 
-    // Database Settings
-    this.addDatabaseSettings(containerEl);
-
     // Review Session Settings
     this.addReviewSettings(containerEl);
 
@@ -113,38 +110,6 @@ export class DecksSettingTab extends PluginSettingTab {
             this.plugin.settings.fsrs = { ...defaultSettings.fsrs };
             await this.plugin.saveSettings();
             this.display(); // Refresh the settings tab
-          }),
-      );
-  }
-
-  private addDatabaseSettings(containerEl: HTMLElement) {
-    containerEl.createEl("h3", { text: "Database" });
-
-    new Setting(containerEl)
-      .setName("Auto Backup")
-      .setDesc("Automatically backup the database")
-      .addToggle((toggle) =>
-        toggle
-          .setValue(this.plugin.settings.database.autoBackup)
-          .onChange(async (value) => {
-            this.plugin.settings.database.autoBackup = value;
-            await this.plugin.saveSettings();
-          }),
-      );
-
-    new Setting(containerEl)
-      .setName("Backup Interval")
-      .setDesc("Number of days between automatic backups")
-      .addText((text) =>
-        text
-          .setPlaceholder("7")
-          .setValue(this.plugin.settings.database.backupInterval.toString())
-          .onChange(async (value) => {
-            const num = parseInt(value);
-            if (!isNaN(num) && num > 0) {
-              this.plugin.settings.database.backupInterval = num;
-              await this.plugin.saveSettings();
-            }
           }),
       );
   }
