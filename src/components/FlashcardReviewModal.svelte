@@ -47,7 +47,7 @@
 
         // Render front side
         if (frontEl) {
-            frontEl.innerHTML = "";
+            frontEl.empty();
             renderMarkdown(currentCard.front, frontEl);
         }
 
@@ -55,7 +55,7 @@
         // Use tick() to ensure DOM is updated before rendering
         tick().then(() => {
             if (backEl) {
-                backEl.innerHTML = "";
+                backEl.empty();
                 renderMarkdown(currentCard.back, backEl);
             }
         });
@@ -66,7 +66,7 @@
         // Ensure back element is rendered after showAnswer becomes true
         tick().then(() => {
             if (backEl && currentCard) {
-                backEl.innerHTML = "";
+                backEl.empty();
                 renderMarkdown(currentCard.back, backEl);
             }
         });

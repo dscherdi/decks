@@ -12,8 +12,6 @@ export interface FlashcardsSettings {
   review: {
     showProgress: boolean;
     enableKeyboardShortcuts: boolean;
-    sessionGoal: number; // cards per session
-    enableSessionLimit: boolean;
   };
 
   // Parsing Settings
@@ -48,8 +46,6 @@ export const DEFAULT_SETTINGS: FlashcardsSettings = {
   review: {
     showProgress: true,
     enableKeyboardShortcuts: true,
-    sessionGoal: 20,
-    enableSessionLimit: false,
   },
 
   parsing: {

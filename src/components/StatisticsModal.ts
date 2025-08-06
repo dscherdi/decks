@@ -16,8 +16,8 @@ export class StatisticsModal extends Modal {
     contentEl.empty();
 
     // Add CSS classes for styling
-    const modalEl = this.containerEl.querySelector(".modal") as HTMLElement;
-    if (modalEl) {
+    const modalEl = this.containerEl.querySelector(".modal");
+    if (modalEl instanceof HTMLElement) {
       modalEl.addClass("statistics-modal");
     }
     this.containerEl.addClass("statistics-modal-container");

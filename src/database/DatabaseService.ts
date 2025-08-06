@@ -1,4 +1,5 @@
 import initSqlJs, { Database, SqlJsStatic } from "sql.js";
+import { DataAdapter } from "obsidian";
 import {
   Deck,
   Flashcard,
@@ -12,9 +13,17 @@ export class DatabaseService {
   private db: Database | null = null;
   private SQL: SqlJsStatic | null = null;
   private dbPath: string;
+  private adapter: DataAdapter;
+  private debugLog: (message: string, ...args: any[]) => void;
 
-  constructor(dbPath: string) {
+  constructor(
+    dbPath: string,
+    adapter: DataAdapter,
+    debugLog?: (message: string, ...args: any[]) => void,
+  ) {
     this.dbPath = dbPath;
+    this.adapter = adapter;
+    this.debugLog = debugLog || (() => {}); // No-op if not provided
   }
 
   async initialize(): Promise<void> {
@@ -41,15 +50,13 @@ export class DatabaseService {
 
   private async loadDatabaseFile(): Promise<ArrayBuffer | null> {
     try {
-      // In Obsidian, we'll store the database in the plugin folder
-      const adapter = (window as any).app.vault.adapter;
-      if (await adapter.exists(this.dbPath)) {
-        const data = await adapter.readBinary(this.dbPath);
+      if (await this.adapter.exists(this.dbPath)) {
+        const data = await this.adapter.readBinary(this.dbPath);
         return data;
       }
       return null;
     } catch (error) {
-      console.log("Database file doesn't exist yet, will create new one");
+      this.debugLog("Database file doesn't exist yet, will create new one");
       return null;
     }
   }
@@ -59,15 +66,14 @@ export class DatabaseService {
 
     try {
       const data = this.db.export();
-      const adapter = (window as any).app.vault.adapter;
 
       // Ensure directory exists
       const dir = this.dbPath.substring(0, this.dbPath.lastIndexOf("/"));
-      if (!(await adapter.exists(dir))) {
-        await adapter.mkdir(dir);
+      if (!(await this.adapter.exists(dir))) {
+        await this.adapter.mkdir(dir);
       }
 
-      await adapter.writeBinary(this.dbPath, Buffer.from(data));
+      await this.adapter.writeBinary(this.dbPath, Buffer.from(data));
     } catch (error) {
       console.error("Failed to save database:", error);
       throw error;
@@ -99,7 +105,6 @@ export class DatabaseService {
         back TEXT NOT NULL,
         type TEXT NOT NULL CHECK (type IN ('header-paragraph', 'table')),
         source_file TEXT NOT NULL,
-        line_number INTEGER NOT NULL,
         content_hash TEXT NOT NULL,
         state TEXT NOT NULL DEFAULT 'new' CHECK (state IN ('new', 'learning', 'review')),
         due_date TEXT NOT NULL,
@@ -153,20 +158,20 @@ export class DatabaseService {
   }
 
   // Deck operations
-  async createDeck(deck: Omit<Deck, "created" | "modified">): Promise<Deck> {
+  async createDeck(deck: Omit<Deck, "created">): Promise<Deck> {
     if (!this.db) throw new Error("Database not initialized");
 
     const now = new Date().toISOString();
     const fullDeck: Deck = {
       ...deck,
       created: now,
-      modified: now,
     };
 
     try {
       const stmt = this.db.prepare(`
-        INSERT INTO decks (id, name, filepath, tag, last_reviewed, config, created, modified)
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+        INSERT OR REPLACE INTO decks (
+          id, name, filepath, tag, last_reviewed, config, created, modified
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?)
       `);
 
       stmt.run([
@@ -243,6 +248,12 @@ export class DatabaseService {
     if (!this.db) throw new Error("Database not initialized");
 
     const now = new Date().toISOString();
+
+    // Handle empty updates object - no database changes needed
+    if (Object.keys(updates).length === 0) {
+      return;
+    }
+
     const updateFields = Object.keys(updates)
       .map((key) => {
         const dbField = key === "lastReviewed" ? "last_reviewed" : key;
@@ -266,6 +277,19 @@ export class DatabaseService {
     );
     values.push(now, deckId);
     stmt.run(values);
+    stmt.free();
+    await this.save();
+  }
+
+  async updateDeckTimestamp(deckId: string, timestamp: string): Promise<void> {
+    if (!this.db) throw new Error("Database not initialized");
+
+    const stmt = this.db.prepare(`
+      UPDATE decks
+      SET modified = ?
+      WHERE id = ?
+    `);
+    stmt.run([timestamp, deckId]);
     stmt.free();
     await this.save();
   }
@@ -354,9 +378,9 @@ export class DatabaseService {
 
     const stmt = this.db.prepare(`
       INSERT OR REPLACE INTO flashcards (
-        id, deck_id, front, back, type, source_file, line_number, content_hash,
+        id, deck_id, front, back, type, source_file, content_hash,
         state, due_date, interval, repetitions, ease_factor, stability, lapses, last_reviewed, created, modified
-      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
     `);
 
     stmt.run([
@@ -366,7 +390,6 @@ export class DatabaseService {
       fullFlashcard.back,
       fullFlashcard.type,
       fullFlashcard.sourceFile,
-      fullFlashcard.lineNumber,
       fullFlashcard.contentHash,
       fullFlashcard.state,
       fullFlashcard.dueDate,
@@ -415,15 +438,13 @@ export class DatabaseService {
             ? "content_hash"
             : key === "sourceFile"
               ? "source_file"
-              : key === "lineNumber"
-                ? "line_number"
-                : key === "dueDate"
-                  ? "due_date"
-                  : key === "easeFactor"
-                    ? "ease_factor"
-                    : key === "lastReviewed"
-                      ? "last_reviewed"
-                      : key.replace(/([A-Z])/g, "_$1").toLowerCase();
+              : key === "dueDate"
+                ? "due_date"
+                : key === "easeFactor"
+                  ? "ease_factor"
+                  : key === "lastReviewed"
+                    ? "last_reviewed"
+                    : key.replace(/([A-Z])/g, "_$1").toLowerCase();
         return `${dbField} = ?`;
       })
       .join(", ");
@@ -830,7 +851,7 @@ export class DatabaseService {
 
       // If no tables exist, create them and return
       if (existingTables.length === 0) {
-        console.log("No existing tables found. Creating initial schema...");
+        this.debugLog("No existing tables found. Creating initial schema...");
         await this.createTables();
         await this.save();
         return;
@@ -880,7 +901,7 @@ export class DatabaseService {
       }
 
       if (!hasFilepath || !hasConfig || !hasTimeElapsed) {
-        console.log(
+        this.debugLog(
           "Migrating database schema to support filepath, config, and time_elapsed columns...",
         );
 
@@ -892,37 +913,41 @@ export class DatabaseService {
             !existingTables.includes("flashcards") ||
             !existingTables.includes("review_logs")
           ) {
-            console.log("Missing tables detected. Creating missing tables...");
+            this.debugLog(
+              "Missing tables detected. Creating missing tables...",
+            );
             await this.createTables();
           } else {
             // Add missing columns to existing tables
             if (!hasFilepath) {
-              console.log("Adding filepath column to decks table...");
+              this.debugLog("Adding filepath column to decks table...");
               this.db.exec(`ALTER TABLE decks ADD COLUMN filepath TEXT`);
             }
 
             if (!hasConfig) {
-              console.log("Adding config column to decks table...");
+              this.debugLog("Adding config column to decks table...");
               this.db.exec(
                 `ALTER TABLE decks ADD COLUMN config TEXT DEFAULT '{}'`,
               );
             }
 
             if (!hasTimeElapsed) {
-              console.log("Adding time_elapsed column to review_logs table...");
+              this.debugLog(
+                "Adding time_elapsed column to review_logs table...",
+              );
               this.db.exec(
                 `ALTER TABLE review_logs ADD COLUMN time_elapsed INTEGER NOT NULL DEFAULT 0`,
               );
             }
           }
 
-          console.log(
+          this.debugLog(
             "Database schema migration completed. All user data preserved.",
           );
           await this.save();
         } catch (error) {
           console.error("Error during column migration:", error);
-          console.log("Falling back to table recreation...");
+          this.debugLog("Falling back to table recreation...");
 
           // Only if ALTER TABLE fails, recreate tables
           this.db.exec(`
@@ -931,7 +956,7 @@ export class DatabaseService {
             DROP TABLE IF EXISTS decks;
           `);
           await this.createTables();
-          console.log(
+          this.debugLog(
             "Database recreated. Data will be rebuilt from vault files.",
           );
           await this.save();
@@ -952,18 +977,17 @@ export class DatabaseService {
       back: row[3] as string,
       type: row[4] as "header-paragraph" | "table",
       sourceFile: row[5] as string,
-      lineNumber: row[6] as number,
-      contentHash: row[7] as string,
-      state: row[8] as "new" | "learning" | "review",
-      dueDate: row[9] as string,
-      interval: row[10] as number,
-      repetitions: row[11] as number,
-      easeFactor: row[12] as number,
-      stability: row[13] as number,
-      lapses: row[14] as number,
-      lastReviewed: row[15] as string | null,
-      created: row[16] as string,
-      modified: row[17] as string,
+      contentHash: row[6] as string,
+      state: row[7] as "new" | "learning" | "review",
+      dueDate: row[8] as string,
+      interval: row[9] as number,
+      repetitions: row[10] as number,
+      easeFactor: row[11] as number,
+      stability: row[12] as number,
+      lapses: row[13] as number,
+      lastReviewed: row[14] as string | null,
+      created: row[15] as string,
+      modified: row[16] as string,
     };
   }
 

@@ -47,7 +47,7 @@ export default class DecksPlugin extends Plugin {
   }
 
   async onload() {
-    console.log("Loading Decks plugin");
+    this.debugLog("Loading Decks plugin");
 
     // Load settings
     await this.loadSettings();
@@ -62,7 +62,11 @@ export default class DecksPlugin extends Plugin {
 
       // Initialize database
       const databasePath = `${this.app.vault.configDir}/plugins/decks/flashcards.db`;
-      this.db = new DatabaseService(databasePath);
+      this.db = new DatabaseService(
+        databasePath,
+        this.app.vault.adapter,
+        this.debugLog.bind(this),
+      );
       await this.db.initialize();
 
       // Initialize managers
@@ -125,7 +129,7 @@ export default class DecksPlugin extends Plugin {
       // Add settings tab
       this.addSettingTab(new DecksSettingTab(this.app, this));
 
-      console.log("Decks plugin loaded successfully");
+      this.debugLog("Decks plugin loaded successfully");
     } catch (error) {
       console.error("Error loading Decks plugin:", error);
       new Notice("Failed to load Decks plugin. Check console for details.");
@@ -133,15 +137,12 @@ export default class DecksPlugin extends Plugin {
   }
 
   async onunload() {
-    console.log("Unloading Decks plugin");
+    this.debugLog("Unloading Decks plugin");
 
     // Close database connection
     if (this.db) {
       await this.db.close();
     }
-
-    // Remove view
-    this.app.workspace.detachLeavesOfType(VIEW_TYPE_DECKS);
   }
 
   async loadSettings() {
@@ -265,9 +266,11 @@ export default class DecksPlugin extends Plugin {
     }
   }
 
-  async performSync() {
+  async performSync(forceSync: boolean = false) {
     try {
-      this.debugLog("Performing sync of decks and flashcards...");
+      this.debugLog(
+        `Performing ${forceSync ? "forced " : ""}sync of decks and flashcards...`,
+      );
 
       // Metadata cache should be ready by now
 
@@ -283,9 +286,9 @@ export default class DecksPlugin extends Plugin {
 
       for (const deck of decks) {
         this.debugLog(
-          `Syncing flashcards for deck: ${deck.name} (${deck.filepath})`,
+          `${forceSync ? "Force s" : "S"}yncing flashcards for deck: ${deck.name} (${deck.filepath})`,
         );
-        await this.deckManager.syncFlashcardsForDeck(deck.filepath);
+        await this.deckManager.syncFlashcardsForDeck(deck.filepath, forceSync);
 
         // Check how many flashcards were created
         const flashcards = await this.db.getFlashcardsByDeck(deck.id);
@@ -294,16 +297,10 @@ export default class DecksPlugin extends Plugin {
         );
       }
 
-      this.debugLog(`Sync completed for ${decks.length} decks`);
-
-      // Update the view if it's open (but avoid infinite recursion)
-      if (this.view) {
-        const updatedDecks = await this.getDecks();
-        const deckStats = await this.getDeckStats();
-        this.view.update(updatedDecks, deckStats);
-      }
+      this.debugLog("Sync completed successfully");
     } catch (error) {
-      console.error("Error during initial sync:", error);
+      console.error("Error during sync:", error);
+      throw error;
     }
   }
 
@@ -477,7 +474,7 @@ class DecksView extends ItemView {
         onDeckClick: (deck: Deck) => this.startReview(deck),
         onRefresh: async () => {
           this.plugin.debugLog("onRefresh callback invoked");
-          await this.refresh();
+          await this.refresh(true);
         },
         getReviewCounts: async (days: number) => {
           return await this.plugin.getReviewCounts(days);
@@ -493,7 +490,7 @@ class DecksView extends ItemView {
     });
 
     // Initial refresh
-    await this.refresh();
+    await this.refresh(true);
 
     // Start background refresh job if enabled
     if (this.plugin.settings.ui.enableBackgroundRefresh) {
@@ -531,11 +528,16 @@ class DecksView extends ItemView {
     this.component?.updateStats(deckStats);
   }
 
-  async refresh() {
+  async refresh(force: boolean = false) {
     this.plugin.debugLog("DecksView.refresh() called");
     try {
-      // Perform complete sync like debug command
-      await this.plugin.performSync();
+      // Perform sync with force parameter
+      await this.plugin.performSync(force);
+
+      // Update the view with refreshed data
+      const updatedDecks = await this.plugin.getDecks();
+      const deckStats = await this.plugin.getDeckStats();
+      this.update(updatedDecks, deckStats);
 
       this.plugin.debugLog("Refresh complete");
     } catch (error) {
@@ -631,7 +633,9 @@ class DecksView extends ItemView {
   async startReview(deck: Deck) {
     try {
       // First sync flashcards for this specific deck
-      console.log(`Syncing cards for deck before review: ${deck.name}`);
+      this.plugin.debugLog(
+        `Syncing cards for deck before review: ${deck.name}`,
+      );
       await this.plugin.syncFlashcardsForDeck(deck.name);
 
       // Get daily review counts to show remaining allowance

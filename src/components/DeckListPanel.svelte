@@ -134,7 +134,7 @@
         // Delay hiding suggestions to allow clicks
         setTimeout(() => {
             showSuggestions = false;
-        }, 150);
+        }, 200);
     }
 
     function handleDeckClick(deck: Deck) {
@@ -248,9 +248,10 @@
                     {#each filteredSuggestions as tag}
                         <button
                             class="suggestion-item"
-                            on:click={() => selectSuggestion(tag)}
+                            on:mousedown|preventDefault={() =>
+                                selectSuggestion(tag)}
                         >
-                            #{tag}
+                            {tag}
                         </button>
                     {/each}
                 </div>
@@ -262,9 +263,10 @@
                     {#each availableTags.slice(0, 5) as tag}
                         <button
                             class="suggestion-item"
-                            on:click={() => selectSuggestion(tag)}
+                            on:mousedown|preventDefault={() =>
+                                selectSuggestion(tag)}
                         >
-                            #{tag}
+                            {tag}
                         </button>
                     {/each}
                 </div>

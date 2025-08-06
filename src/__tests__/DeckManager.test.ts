@@ -1,10 +1,18 @@
 import { DeckManager } from "../services/DeckManager";
 import { DatabaseService } from "../database/DatabaseService";
 import { Vault, MetadataCache, TFile, CachedMetadata } from "obsidian";
-import { Deck, Flashcard } from "../database/types";
+import { Deck, Flashcard, DEFAULT_DECK_CONFIG } from "../database/types";
 
 // Mock the database service
 jest.mock("../database/DatabaseService");
+
+// Mock adapter
+const mockAdapter = {
+  exists: jest.fn(),
+  readBinary: jest.fn(),
+  writeBinary: jest.fn(),
+  mkdir: jest.fn(),
+};
 
 describe("DeckManager", () => {
   let deckManager: DeckManager;
@@ -16,7 +24,11 @@ describe("DeckManager", () => {
     // Create mock instances
     mockVault = new Vault();
     mockMetadataCache = new MetadataCache();
-    mockDb = new DatabaseService("test.db") as jest.Mocked<DatabaseService>;
+    mockDb = new DatabaseService(
+      "test.db",
+      mockAdapter,
+      () => {},
+    ) as jest.Mocked<DatabaseService>; // Empty debugLog for tests
 
     // Reset mocks
     jest.clearAllMocks();
@@ -30,6 +42,8 @@ describe("DeckManager", () => {
     mockDb.createFlashcard = jest.fn();
     mockDb.updateFlashcard = jest.fn();
     mockDb.deleteFlashcard = jest.fn();
+    mockDb.updateDeckTimestamp = jest.fn();
+    mockDb.createDeck = jest.fn();
 
     // Create DeckManager instance
     deckManager = new DeckManager(mockVault, mockMetadataCache, mockDb);
@@ -145,6 +159,7 @@ describe("DeckManager", () => {
           filepath: "math.md",
           tag: "#flashcards/math",
           lastReviewed: null,
+          config: DEFAULT_DECK_CONFIG,
           created: "2024-01-01",
           modified: "2024-01-01",
         },
@@ -214,6 +229,7 @@ describe("DeckManager", () => {
         filepath: "test.md",
         tag: "#flashcards/test",
         lastReviewed: null,
+        config: DEFAULT_DECK_CONFIG,
         created: "2024-01-01",
         modified: "2024-01-01",
       };
@@ -443,6 +459,7 @@ Answer 1`;
         filepath: "test.md",
         tag: "#flashcards/test",
         lastReviewed: null,
+        config: DEFAULT_DECK_CONFIG,
         created: "2024-01-01",
         modified: "2024-01-01",
       };
@@ -487,14 +504,8 @@ Answer 1`;
   describe("flashcard ID generation", () => {
     it("should generate consistent IDs for same content", () => {
       const deckId = "deck_123";
-      const id1 = (deckManager as any).generateFlashcardId(
-        "What is 2+2?",
-        deckId,
-      );
-      const id2 = (deckManager as any).generateFlashcardId(
-        "What is 2+2?",
-        deckId,
-      );
+      const id1 = deckManager.generateFlashcardId("What is 2+2?", deckId);
+      const id2 = deckManager.generateFlashcardId("What is 2+2?", deckId);
 
       expect(id1).toBe(id2);
       expect(id1).toMatch(/^card_[a-z0-9]+$/);
@@ -502,28 +513,16 @@ Answer 1`;
 
     it("should generate different IDs for different content", () => {
       const deckId = "deck_123";
-      const id1 = (deckManager as any).generateFlashcardId(
-        "Question 1",
-        deckId,
-      );
-      const id2 = (deckManager as any).generateFlashcardId(
-        "Question 2",
-        deckId,
-      );
+      const id1 = deckManager.generateFlashcardId("Question 1", deckId);
+      const id2 = deckManager.generateFlashcardId("Question 2", deckId);
 
       expect(id1).not.toBe(id2);
     });
 
     it("should generate different IDs for same content in different decks", () => {
       const question = "What is 2+2?";
-      const id1 = (deckManager as any).generateFlashcardId(
-        question,
-        "deck_123",
-      );
-      const id2 = (deckManager as any).generateFlashcardId(
-        question,
-        "deck_456",
-      );
+      const id1 = deckManager.generateFlashcardId(question, "deck_123");
+      const id2 = deckManager.generateFlashcardId(question, "deck_456");
 
       expect(id1).not.toBe(id2);
     });
@@ -535,6 +534,7 @@ Answer 1`;
         filepath: "test.md",
         tag: "#flashcards/test",
         lastReviewed: null,
+        config: DEFAULT_DECK_CONFIG,
         created: "2024-01-01",
         modified: "2024-01-01",
       };
@@ -582,7 +582,7 @@ Answer 1`;
         { basename: "Math Formulas", path: "math.md" } as TFile,
         { basename: "Algebra", path: "algebra.md" } as TFile,
       ];
-      const name = (deckManager as any).extractDeckNameFromFiles(files);
+      const name = deckManager.extractDeckNameFromFiles(files);
       expect(name).toBe("Math Formulas");
     });
 
@@ -590,13 +590,13 @@ Answer 1`;
       const files = [
         { basename: "Spanish Vocabulary", path: "spanish.md" } as TFile,
       ];
-      const name = (deckManager as any).extractDeckNameFromFiles(files);
+      const name = deckManager.extractDeckNameFromFiles(files);
       expect(name).toBe("Spanish Vocabulary");
     });
 
     it("should handle empty files array", () => {
       const files: TFile[] = [];
-      const name = (deckManager as any).extractDeckNameFromFiles(files);
+      const name = deckManager.extractDeckNameFromFiles(files);
       expect(name).toBe("General");
     });
   });
@@ -678,7 +678,16 @@ Answer 1`;
 
       // Mock that no deck exists yet
       mockDb.getDeckByFilepath.mockResolvedValue(null);
-      mockDb.createDeck.mockResolvedValue();
+      mockDb.createDeck.mockResolvedValue({
+        id: "test_deck",
+        name: "test",
+        filepath: filepath,
+        tag: tag,
+        lastReviewed: null,
+        config: DEFAULT_DECK_CONFIG,
+        created: new Date().toISOString(),
+        modified: new Date().toISOString(),
+      });
 
       // Test creating deck for specific file
       await deckManager.createDeckForFile(filepath, tag);
@@ -773,6 +782,69 @@ Answer 1`;
       // Verify database was still updated
       expect(mockDb.updateDeck).toHaveBeenCalledWith(deckId, {
         config: newConfig,
+      });
+
+      it("should skip sync when file modification time hasn't changed", async () => {
+        const filePath = "test.md";
+        const modTime = Date.now() - 1000; // 1 second ago
+        const deckModTime = Date.now(); // Deck modified after file
+
+        // Setup file with specific modification time
+        (mockVault as any)._addFile(filePath, "## Question\nAnswer");
+        (mockVault as any)._updateFileModTime(filePath, modTime);
+
+        const deck: Deck = {
+          id: "deck1",
+          name: "test",
+          filepath: filePath,
+          tag: "#flashcards/test",
+          lastReviewed: null,
+          config: DEFAULT_DECK_CONFIG,
+          created: new Date().toISOString(),
+          modified: new Date(deckModTime).toISOString(),
+        };
+
+        mockDb.getDeckByFilepath.mockResolvedValue(deck);
+        mockDb.getFlashcardsByDeck.mockResolvedValue([]);
+
+        await deckManager.syncFlashcardsForDeck(filePath);
+
+        // Should not process flashcards since file hasn't changed
+        expect(mockDb.getFlashcardsByDeck).not.toHaveBeenCalled();
+        expect(mockDb.updateDeck).not.toHaveBeenCalled();
+      });
+
+      it("should sync when file modification time has changed", async () => {
+        const filePath = "test.md";
+        const oldDeckModTime = Date.now() - 2000; // 2 seconds ago
+        const newFileModTime = Date.now() - 1000; // 1 second ago
+
+        // Setup file with newer modification time
+        (mockVault as any)._addFile(filePath, "## Question\nAnswer");
+        (mockVault as any)._updateFileModTime(filePath, newFileModTime);
+
+        const deck: Deck = {
+          id: "deck1",
+          name: "test",
+          filepath: filePath,
+          tag: "#flashcards/test",
+          lastReviewed: null,
+          config: DEFAULT_DECK_CONFIG,
+          created: new Date().toISOString(),
+          modified: new Date(oldDeckModTime).toISOString(),
+        };
+
+        mockDb.getDeckByFilepath.mockResolvedValue(deck);
+        mockDb.getFlashcardsByDeck.mockResolvedValue([]);
+
+        await deckManager.syncFlashcardsForDeck(filePath);
+
+        // Should process flashcards since file has changed
+        expect(mockDb.getFlashcardsByDeck).toHaveBeenCalledWith("deck1");
+        expect(mockDb.updateDeckTimestamp).toHaveBeenCalledWith(
+          "deck1",
+          new Date(newFileModTime).toISOString(),
+        );
       });
     });
   });

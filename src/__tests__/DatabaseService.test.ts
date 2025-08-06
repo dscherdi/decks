@@ -91,7 +91,7 @@ describe("DatabaseService", () => {
     });
 
     // Create service
-    dbService = new DatabaseService("test.db");
+    dbService = new DatabaseService("test.db", mockAdapter, () => {}); // Empty debugLog for tests
     await dbService.initialize();
   });
 
@@ -122,7 +122,11 @@ describe("DatabaseService", () => {
       mockAdapter.exists.mockResolvedValue(true);
       mockAdapter.readBinary.mockResolvedValue(new ArrayBuffer(8));
 
-      const dbService2 = new DatabaseService("existing.db");
+      const dbService2 = new DatabaseService(
+        "existing.db",
+        mockAdapter,
+        () => {},
+      ); // Empty debugLog for tests
       await dbService2.initialize();
 
       expect(mockAdapter.readBinary).toHaveBeenCalledWith("existing.db");
@@ -437,7 +441,6 @@ describe("DatabaseService", () => {
           back: "The answer is 4",
           type: "header-paragraph" as const,
           sourceFile: "math.md",
-          lineNumber: 5,
           contentHash: "abc123",
           state: "new" as const,
           dueDate: new Date().toISOString(),
@@ -461,7 +464,6 @@ describe("DatabaseService", () => {
           flashcard.back,
           flashcard.type,
           flashcard.sourceFile,
-          flashcard.lineNumber,
           flashcard.contentHash,
           flashcard.state,
           flashcard.dueDate,

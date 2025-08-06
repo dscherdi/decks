@@ -140,34 +140,6 @@ export class DecksSettingTab extends PluginSettingTab {
             await this.plugin.saveSettings();
           }),
       );
-
-    new Setting(containerEl)
-      .setName("Session Limit")
-      .setDesc("Limit the number of cards per review session")
-      .addToggle((toggle) =>
-        toggle
-          .setValue(this.plugin.settings.review.enableSessionLimit)
-          .onChange(async (value) => {
-            this.plugin.settings.review.enableSessionLimit = value;
-            await this.plugin.saveSettings();
-          }),
-      );
-
-    new Setting(containerEl)
-      .setName("Session Goal")
-      .setDesc("Target number of cards per review session")
-      .addText((text) =>
-        text
-          .setPlaceholder("20")
-          .setValue(this.plugin.settings.review.sessionGoal.toString())
-          .onChange(async (value) => {
-            const num = parseInt(value);
-            if (!isNaN(num) && num > 0) {
-              this.plugin.settings.review.sessionGoal = num;
-              await this.plugin.saveSettings();
-            }
-          }),
-      );
   }
 
   private addParsingSettings(containerEl: HTMLElement): void {

@@ -45,7 +45,7 @@
                 selectedDeckFilter,
                 selectedTimeframe,
             );
-            console.log("Loaded statistics:", statistics);
+            plugin.debugLog("Loaded statistics:", statistics);
 
             // Compute derived statistics once data is loaded
             todayStats = getTodayStats();

@@ -6,7 +6,6 @@ export interface ParsedFlashcard {
   front: string;
   back: string;
   type: "header-paragraph" | "table";
-  lineNumber: number;
 }
 
 export class DeckManager {
@@ -149,13 +148,25 @@ export class DeckManager {
             }
           } else {
             // Create new deck for this file
-            const deck: Omit<Deck, "created" | "modified"> = {
+            const file = this.vault.getAbstractFileByPath(filePath);
+            let deckModTime = new Date();
+
+            if (file instanceof TFile) {
+              const fileModTime = new Date(file.stat.mtime);
+              const fileCreateTime = new Date(file.stat.ctime);
+              // Use the earlier of file modification time or file creation time
+              deckModTime =
+                fileModTime < fileCreateTime ? fileModTime : fileCreateTime;
+            }
+
+            const deck: Omit<Deck, "created"> = {
               id: this.generateDeckId(filePath),
               name: deckName, // Store clean file name
               filepath: filePath, // Store full file path separately
               tag: tag,
               lastReviewed: null,
               config: DEFAULT_DECK_CONFIG,
+              modified: deckModTime.toISOString(),
             };
             this.debugLog(
               `Creating new deck: "${deckName}" with ID: ${deck.id}, tag: ${tag}, filepath: ${filePath}`,
@@ -257,7 +268,6 @@ export class DeckManager {
             front: cells[0],
             back: cells[1],
             type: "table",
-            lineNumber: i + 1,
           });
         }
       } else {
@@ -276,7 +286,7 @@ export class DeckManager {
     headerLevel: number = 2,
   ): ParsedFlashcard[] {
     const flashcards: ParsedFlashcard[] = [];
-    let currentHeader: { text: string; lineNumber: number } | null = null;
+    let currentHeader: { text: string } | null = null;
     let currentContent: string[] = [];
     let inFrontmatter = false;
     let skipNextParagraph = false;
@@ -317,7 +327,6 @@ export class DeckManager {
             ),
             back: currentContent.join("\n").trim(),
             type: "header-paragraph" as const,
-            lineNumber: currentHeader.lineNumber,
           };
 
           flashcards.push(card);
@@ -326,7 +335,6 @@ export class DeckManager {
         // Start new flashcard
         currentHeader = {
           text: line,
-          lineNumber: i + 1,
         };
         currentContent = [];
         skipNextParagraph = false;
@@ -345,7 +353,6 @@ export class DeckManager {
             ),
             back: currentContent.join("\n").trim(),
             type: "header-paragraph" as const,
-            lineNumber: currentHeader.lineNumber,
           };
 
           flashcards.push(card);
@@ -371,7 +378,6 @@ export class DeckManager {
         ),
         back: currentContent.join("\n").trim(),
         type: "header-paragraph" as const,
-        lineNumber: currentHeader.lineNumber,
       };
 
       flashcards.push(card);
@@ -383,7 +389,10 @@ export class DeckManager {
   /**
    * Sync flashcards for a specific deck (file)
    */
-  async syncFlashcardsForDeck(filePath: string): Promise<void> {
+  async syncFlashcardsForDeck(
+    filePath: string,
+    force: boolean = false,
+  ): Promise<void> {
     this.debugLog(`Syncing flashcards for deck: ${filePath}`);
     const deck = await this.db.getDeckByFilepath(filePath);
     if (!deck) {
@@ -396,6 +405,23 @@ export class DeckManager {
 
     const file = this.vault.getAbstractFileByPath(filePath);
     if (!file || !(file instanceof TFile)) return;
+
+    // Get file modification time
+    const fileModifiedTime = new Date(file.stat.mtime);
+
+    // Check if file has been modified since last deck update (unless forced)
+    if (!force) {
+      const deckModifiedTime = new Date(deck.modified);
+      if (fileModifiedTime <= deckModifiedTime) {
+        this.debugLog(
+          `File ${filePath} not modified since last sync, skipping`,
+        );
+        return;
+      }
+    }
+    this.debugLog(
+      `File modified: ${fileModifiedTime.toISOString()}, last sync: ${deck.modified}`,
+    );
 
     // Get existing flashcards for this deck
     const existingFlashcards = await this.db.getFlashcardsByDeck(deck.id);
@@ -463,7 +489,6 @@ export class DeckManager {
           back: parsed.back,
           type: parsed.type,
           sourceFile: file.path,
-          lineNumber: parsed.lineNumber,
           contentHash: contentHash,
           state: "new",
           dueDate: new Date().toISOString(),
@@ -488,7 +513,10 @@ export class DeckManager {
       }
     }
 
-    this.debugLog(`Flashcard sync completed for ${filePath}`);
+    // Update deck's modified timestamp to match file modification time
+    await this.db.updateDeckTimestamp(deck.id, fileModifiedTime.toISOString());
+
+    this.debugLog(`Sync completed for deck: ${deck.name}`);
   }
 
   /**
@@ -511,13 +539,21 @@ export class DeckManager {
 
     if (!existingDeck) {
       // Create new deck for this file
-      const deck: Omit<Deck, "created" | "modified"> = {
+      const fileModTime = new Date(file.stat.mtime);
+      const fileCreateTime = new Date(file.stat.ctime);
+
+      // Use the earlier of file modification time or file creation time
+      const deckModTime =
+        fileModTime < fileCreateTime ? fileModTime : fileCreateTime;
+
+      const deck: Omit<Deck, "created"> = {
         id: this.generateDeckId(filePath),
         name: deckName,
         filepath: filePath,
         tag: tag,
         lastReviewed: null,
         config: DEFAULT_DECK_CONFIG,
+        modified: deckModTime.toISOString(),
       };
 
       this.debugLog(
@@ -543,7 +579,7 @@ export class DeckManager {
   /**
    * Extract deck name from files (use the first file's name)
    */
-  private extractDeckNameFromFiles(files: TFile[]): string {
+  public extractDeckNameFromFiles(files: TFile[]): string {
     if (files.length === 0) {
       return "General";
     }
@@ -598,7 +634,7 @@ export class DeckManager {
   /**
    * Generate unique flashcard ID using hash of front text and deck ID
    */
-  private generateFlashcardId(frontText: string, deckId: string): string {
+  public generateFlashcardId(frontText: string, deckId: string): string {
     // Combine front text and deck ID for uniqueness across vault
     const combined = `${deckId}:${frontText}`;
     let hash = 0;

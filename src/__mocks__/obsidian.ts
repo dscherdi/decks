@@ -3,6 +3,7 @@ export class TFile {
   basename: string;
   extension: string;
   name: string;
+  stat: { mtime: number };
 
   constructor(path: string) {
     this.path = path;
@@ -10,6 +11,7 @@ export class TFile {
     const parts = this.name.split(".");
     this.extension = parts.length > 1 ? parts.pop() || "" : "";
     this.basename = parts.join(".");
+    this.stat = { mtime: Date.now() };
   }
 }
 
@@ -53,6 +55,13 @@ export class Vault {
     this.files.set(path, content);
     if (path.endsWith(".md")) {
       this.markdownFiles.push(new TFile(path));
+    }
+  }
+
+  _updateFileModTime(path: string, mtime: number): void {
+    const file = this.markdownFiles.find((f) => f.path === path);
+    if (file) {
+      file.stat.mtime = mtime;
     }
   }
 
@@ -174,6 +183,6 @@ export class MarkdownRenderer {
     sourcePath: string,
     component: Component,
   ): void {
-    el.innerHTML = content;
+    el.textContent = content;
   }
 }
