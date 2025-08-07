@@ -1,9 +1,9 @@
 export class TFile {
   path: string;
-  basename: string;
-  extension: string;
   name: string;
-  stat: { mtime: number };
+  extension: string;
+  basename: string;
+  stat: { mtime: number; ctime: number };
 
   constructor(path: string) {
     this.path = path;
@@ -11,7 +11,8 @@ export class TFile {
     const parts = this.name.split(".");
     this.extension = parts.length > 1 ? parts.pop() || "" : "";
     this.basename = parts.join(".");
-    this.stat = { mtime: Date.now() };
+    const now = Date.now();
+    this.stat = { mtime: now, ctime: now };
   }
 }
 
@@ -62,6 +63,7 @@ export class Vault {
     const file = this.markdownFiles.find((f) => f.path === path);
     if (file) {
       file.stat.mtime = mtime;
+      file.stat.ctime = mtime;
     }
   }
 

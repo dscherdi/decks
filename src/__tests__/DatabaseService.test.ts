@@ -167,7 +167,7 @@ describe("DatabaseService", () => {
         const result = await dbService.createDeck(deck);
 
         expect(mockDb.prepare).toHaveBeenCalledWith(
-          expect.stringContaining("INSERT INTO decks"),
+          expect.stringContaining("INSERT OR REPLACE INTO decks"),
         );
         expect(mockStatement.run).toHaveBeenCalledWith([
           deck.id,
@@ -175,9 +175,9 @@ describe("DatabaseService", () => {
           deck.filepath,
           deck.tag,
           deck.lastReviewed,
-          expect.any(String), // config
-          expect.any(String), // created
-          expect.any(String), // modified
+          expect.any(String), // config JSON
+          expect.any(String), // created timestamp
+          expect.any(String), // modified timestamp
         ]);
         expect(result).toEqual({
           ...deck,
@@ -349,7 +349,8 @@ describe("DatabaseService", () => {
         expect(mockDb.prepare).toHaveBeenCalledWith(
           "SELECT * FROM decks WHERE filepath = ?",
         );
-        expect(mockDb.prepare).toHaveBeenCalledWith(
+        // Flashcards are no longer cascade deleted to preserve progress
+        expect(mockDb.prepare).not.toHaveBeenCalledWith(
           "DELETE FROM flashcards WHERE deck_id = ?",
         );
         expect(mockDb.prepare).toHaveBeenCalledWith(
@@ -465,6 +466,7 @@ describe("DatabaseService", () => {
           flashcard.type,
           flashcard.sourceFile,
           flashcard.contentHash,
+          flashcard.headerLevel || null,
           flashcard.state,
           flashcard.dueDate,
           flashcard.interval,
@@ -1095,6 +1097,7 @@ describe("DatabaseService", () => {
         2.5, // new_ease_factor
         3, // new_repetitions
         0, // new_lapses
+        2.5, // new_stability
         reviewedAt, // reviewed_at
       ]);
 
@@ -1114,7 +1117,7 @@ describe("DatabaseService", () => {
         easeFactor: 2.5,
         stability: 2.5,
         lapses: 0,
-        lastReviewed: reviewedAt,
+        lastReviewed: "2024-01-15T10:00:00.000Z",
       });
     });
 

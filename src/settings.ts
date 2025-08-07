@@ -28,6 +28,7 @@ export interface FlashcardsSettings {
   // Debug Settings
   debug: {
     enableLogging: boolean;
+    performanceLogs: boolean;
   };
 }
 
@@ -59,5 +60,6 @@ export const DEFAULT_SETTINGS: FlashcardsSettings = {
 
   debug: {
     enableLogging: false,
+    performanceLogs: false,
   },
 };

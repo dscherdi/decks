@@ -48,7 +48,7 @@
     async function handleRefresh() {
         isRefreshing = true;
         try {
-            onRefresh();
+            await onRefresh();
             refreshHeatmap();
         } catch (error) {
             console.error("Error during refresh:", error);

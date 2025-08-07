@@ -13,12 +13,12 @@
             "state": {
               "type": "markdown",
               "state": {
-                "file": "Flashcards/Math flashcards.md",
+                "file": "Flashcards/1000 German adjectives.md",
                 "mode": "source",
                 "source": false
               },
               "icon": "lucide-file",
-              "title": "Math flashcards"
+              "title": "1000 German adjectives"
             }
           }
         ]
@@ -141,17 +141,17 @@
             "state": {
               "type": "outline",
               "state": {
-                "file": "Flashcards/Programming-Concepts.md",
+                "file": "Flashcards/1005 German verbs.md",
                 "followCursor": false,
                 "showSearch": false,
                 "searchQuery": ""
               },
               "icon": "lucide-list",
-              "title": "Outline of Programming-Concepts"
+              "title": "Outline of 1005 German verbs"
             }
           },
           {
-            "id": "ad4c1808e30b375b",
+            "id": "350cc6703e763420",
             "type": "leaf",
             "state": {
               "type": "decks-view",
@@ -165,24 +165,32 @@
       }
     ],
     "direction": "horizontal",
-    "width": 486.5
+    "width": 492.5
   },
   "left-ribbon": {
     "hiddenItems": {
-      "decks:Flashcards": false,
       "switcher:Open quick switcher": false,
       "graph:Open graph view": false,
       "canvas:Create new canvas": false,
       "daily-notes:Open today's daily note": false,
       "templates:Insert template": false,
-      "command-palette:Open command palette": false
+      "command-palette:Open command palette": false,
+      "decks:Flashcards": false
     }
   },
   "active": "296674abb626cb1b",
   "lastOpenFiles": [
-    "Flashcards/Programming-Concepts.md",
+    "Flashcards/1005 German verbs.md",
+    "Flashcards/1000 German adjectives.md",
     "Flashcards/Math flashcards.md",
     "Flashcards/Math-Basics.md",
+    "Flashcards/1005 German verbs 1.md",
+    "Flashcards/German 1.md",
+    "Flashcards/German_full.md",
+    "Flashcards/German_backup.md",
+    "Flashcards/German_dedup.md",
+    "Flashcards/German_clean.md",
+    "Flashcards/Programming-Concepts.md",
     "Flashcards/Programming-Concepts 1.md",
     "Flashcards/Programming-Concepts 1 1.md",
     "Flashcards/Spanish-Vocabulary.md",
@@ -198,14 +206,6 @@
     "Flashcards/Spanish-Vocabulary 1 1 1 1 1 1 1 1 1 1 1 1.md",
     "Flashcards/Spanish-Vocabulary 1 1 1 1 1 1 1 1 1 1 1.md",
     "Flashcards/Spanish-Vocabulary 1 1 1 1 1 1 1 1 1 1.md",
-    "Flashcards/Spanish-Vocabulary 1 1 1 1 1 1 1 1 1.md",
-    "Flashcards/Spanish-Vocabulary 1 1 1 1 1 1 1 1.md",
-    "Flashcards/Spanish-Vocabulary 1 1 1 1 1 1 1.md",
-    "Flashcards/Spanish-Vocabulary 1 1 1 1 1 1.md",
-    "Flashcards/Spanish-Vocabulary 1 1 1 1 1.md",
-    "Flashcards/Spanish-Vocabulary 1 1 1 1.md",
-    "Flashcards/Spanish-Vocabulary 1 1 1.md",
-    "Flashcards/Spanish-Vocabulary 1.md",
     "Flashcards-2025-07-17.flashcards",
     "plugins",
     "plugins/obsidian-flashcards-plugin/manifest.json",

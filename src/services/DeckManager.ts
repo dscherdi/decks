@@ -1,6 +1,7 @@
 import { TFile, Vault, MetadataCache, CachedMetadata, Notice } from "obsidian";
 import { Deck, Flashcard, DEFAULT_DECK_CONFIG } from "../database/types";
 import { DatabaseService } from "../database/DatabaseService";
+import DecksPlugin from "@/main";
 
 export interface ParsedFlashcard {
   front: string;
@@ -13,13 +14,18 @@ export class DeckManager {
   private vault: Vault;
   private metadataCache: MetadataCache;
   private db: DatabaseService;
-  private plugin: any; // FlashcardsPlugin reference for debug logging
+  private plugin: DecksPlugin | undefined; // Plugin reference for debug logging
+
+  // Pre-compiled regex patterns for better performance
+  private static readonly HEADER_REGEX = /^(#{1,6})\s+/;
+  private static readonly TABLE_ROW_REGEX = /^\|.*\|$/;
+  private static readonly TABLE_SEPARATOR_REGEX = /^\|[\s-]+\|[\s-]+\|$/;
 
   constructor(
     vault: Vault,
     metadataCache: MetadataCache,
     db: DatabaseService,
-    plugin?: any,
+    plugin?: DecksPlugin,
   ) {
     this.vault = vault;
     this.metadataCache = metadataCache;
@@ -27,9 +33,26 @@ export class DeckManager {
     this.plugin = plugin;
   }
 
+  /**
+   * Helper method for timing operations
+   */
+  private formatTime(ms: number): string {
+    if (ms < 1000) {
+      return `${ms.toFixed(2)}ms`;
+    } else {
+      return `${(ms / 1000).toFixed(2)}s`;
+    }
+  }
+
   private debugLog(message: string, ...args: any[]): void {
     if (this.plugin?.debugLog) {
       this.plugin.debugLog(message, ...args);
+    }
+  }
+
+  private performanceLog(message: string, ...args: any[]): void {
+    if (this.plugin?.performanceLog) {
+      this.plugin.performanceLog(message, ...args);
     }
   }
 
@@ -102,6 +125,7 @@ export class DeckManager {
    * Sync decks with database
    */
   async syncDecks(): Promise<void> {
+    const syncDecksStartTime = performance.now();
     try {
       this.debugLog("Starting deck sync...");
       const decksMap = await this.scanVaultForDecks();
@@ -200,6 +224,10 @@ export class DeckManager {
       this.debugLog(
         `Deck sync completed. Processed ${totalFiles} files, created ${newDecksCreated} new decks, deleted ${deletedDecks} orphaned decks.`,
       );
+      const syncDecksTime = performance.now() - syncDecksStartTime;
+      this.performanceLog(
+        `Deck sync completed successfully in ${this.formatTime(syncDecksTime)} (${newDecksCreated} created, ${deletedDecks} deleted)`,
+      );
     } catch (error) {
       console.error("Error during deck sync:", error);
       throw error; // Re-throw to let caller handle
@@ -210,57 +238,81 @@ export class DeckManager {
    * Parse flashcards from a file
    */
   async parseFlashcardsFromFile(file: TFile): Promise<ParsedFlashcard[]> {
+    const parseStartTime = performance.now();
+
+    // Read and parse content
     const content = await this.vault.read(file);
-    const lines = content.split("\n");
-    const flashcards: ParsedFlashcard[] = [];
+    const readTime = performance.now() - parseStartTime;
 
-    // Check for table flashcards first
-    const tableFlashcards = this.parseTableFlashcards(lines);
-    flashcards.push(...tableFlashcards);
+    const parseContentStartTime = performance.now();
+    const flashcards = this.parseFlashcardsFromContent(content);
+    const parseTime = performance.now() - parseContentStartTime;
 
-    // Then parse header+paragraph flashcards (all levels)
-    const headerFlashcards = this.parseHeaderParagraphFlashcards(lines);
-    flashcards.push(...headerFlashcards);
+    const totalTime = performance.now() - parseStartTime;
+
+    this.performanceLog(
+      `Parsed ${flashcards.length} flashcards from ${file.path} in ${this.formatTime(totalTime)} (read: ${this.formatTime(readTime)}, parse: ${this.formatTime(parseTime)})`,
+    );
 
     return flashcards;
   }
 
   /**
-   * Parse table-based flashcards
+   * Parse flashcards from content string (optimized single-pass parsing)
    */
-  private parseTableFlashcards(lines: string[]): ParsedFlashcard[] {
+  private parseFlashcardsFromContent(content: string): ParsedFlashcard[] {
+    const lines = content.split("\n");
     const flashcards: ParsedFlashcard[] = [];
+
+    // Single pass through lines for both table and header parsing
     let inTable = false;
-    let tableStartLine = 0;
     let headerSeen = false;
+    let currentHeader: { text: string; level: number } | null = null;
+    let currentContent: string[] = [];
+    let inFrontmatter = false;
+    let skipNextParagraph = false;
+
+    // Use pre-compiled regex patterns for better performance
 
     for (let i = 0; i < lines.length; i++) {
-      const line = lines[i].trim();
+      const line = lines[i];
+      const trimmedLine = line.trim();
 
-      // Check if this is a table row
-      if (line.startsWith("|") && line.endsWith("|")) {
+      // Handle frontmatter
+      if (i === 0 && trimmedLine === "---") {
+        inFrontmatter = true;
+        continue;
+      }
+      if (inFrontmatter) {
+        if (trimmedLine === "---") {
+          inFrontmatter = false;
+        }
+        continue;
+      }
+
+      // Check for table rows
+      if (DeckManager.TABLE_ROW_REGEX.test(trimmedLine)) {
         if (!inTable) {
           inTable = true;
-          tableStartLine = i;
           headerSeen = false;
         }
 
-        // Skip the header row and separator row
+        // Skip header and separator rows
         if (!headerSeen) {
           headerSeen = true;
           continue;
         }
-        if (line.match(/^\|[\s-]+\|[\s-]+\|$/)) {
+        if (DeckManager.TABLE_SEPARATOR_REGEX.test(trimmedLine)) {
           continue;
         }
 
         // Parse table row
-        const cells = line
+        const cells = trimmedLine
+          .slice(1, -1) // Remove leading/trailing pipes
           .split("|")
-          .map((cell) => cell.trim())
-          .filter((cell) => cell.length > 0);
+          .map((cell) => cell.trim());
 
-        if (cells.length >= 2) {
+        if (cells.length >= 2 && cells[0] && cells[1]) {
           flashcards.push({
             front: cells[0],
             back: cells[1],
@@ -268,113 +320,142 @@ export class DeckManager {
           });
         }
       } else {
-        inTable = false;
+        // Not a table row, end table processing
+        if (inTable) {
+          inTable = false;
+        }
+
+        // Check for headers
+        const headerMatch = DeckManager.HEADER_REGEX.exec(line);
+        if (headerMatch) {
+          const currentHeaderLevel = headerMatch[1].length;
+
+          // Check for title headers to skip
+          if (line.match(/^#\s+/) && line.toLowerCase().includes("flashcard")) {
+            skipNextParagraph = true;
+            this.finalizeCurrentHeader(
+              currentHeader,
+              currentContent,
+              flashcards,
+            );
+            currentHeader = null;
+            currentContent = [];
+            continue;
+          }
+
+          // Finalize previous header
+          this.finalizeCurrentHeader(currentHeader, currentContent, flashcards);
+
+          // Start new header
+          currentHeader = {
+            text: line,
+            level: currentHeaderLevel,
+          };
+          currentContent = [];
+          skipNextParagraph = false;
+        } else if (skipNextParagraph) {
+          if (trimmedLine === "") {
+            skipNextParagraph = false;
+          }
+        } else if (currentHeader) {
+          // Skip empty lines at the beginning of content
+          if (trimmedLine === "" && currentContent.length === 0) {
+            continue;
+          }
+          currentContent.push(line);
+        }
       }
     }
+
+    // Finalize last header
+    this.finalizeCurrentHeader(currentHeader, currentContent, flashcards);
 
     return flashcards;
   }
 
   /**
-   * Parse header+paragraph flashcards (all header levels)
+   * Helper to finalize current header flashcard
    */
-  private parseHeaderParagraphFlashcards(lines: string[]): ParsedFlashcard[] {
-    const flashcards: ParsedFlashcard[] = [];
-    let currentHeader: { text: string; level: number } | null = null;
-    let currentContent: string[] = [];
-    let inFrontmatter = false;
-    let skipNextParagraph = false;
-
-    for (let i = 0; i < lines.length; i++) {
-      const line = lines[i];
-
-      // Skip frontmatter
-      if (i === 0 && line === "---") {
-        inFrontmatter = true;
-        continue;
-      }
-      if (inFrontmatter && line === "---") {
-        inFrontmatter = false;
-        continue;
-      }
-      if (inFrontmatter) {
-        continue;
-      }
-
-      // Check if this is any header (H1-H6)
-      const headerMatch = line.match(/^(#{1,6})\s+/);
-      if (headerMatch) {
-        const currentHeaderLevel = headerMatch[1].length;
-        // Check if this is a title header (# at start with "Flashcards" in title)
-        if (line.match(/^#\s+/) && line.toLowerCase().includes("flashcard")) {
-          skipNextParagraph = true;
-          currentHeader = null;
-          currentContent = [];
-          continue;
-        }
-
-        // Save previous flashcard if exists
-        if (currentHeader && currentContent.length > 0) {
-          const card = {
-            front: currentHeader.text.replace(/^#{1,6}\s+/, ""),
-            back: currentContent.join("\n").trim(),
-            type: "header-paragraph" as const,
-            headerLevel: currentHeader.level,
-          };
-
-          flashcards.push(card);
-        }
-
-        // Start new flashcard
-        currentHeader = {
-          text: line,
-          level: currentHeaderLevel,
-        };
-        currentContent = [];
-        skipNextParagraph = false;
-      } else if (skipNextParagraph) {
-        // Skip lines after a title header until we hit another header or empty line
-        if (line.trim() === "") {
-          skipNextParagraph = false;
-        }
-      } else if (line.match(/^#{1,6}\s+/)) {
-        // Found another header (any level) - stop current flashcard content
-        // Handle last flashcard
-        if (currentHeader && currentContent.length > 0) {
-          const card = {
-            front: currentHeader.text.replace(/^#{1,6}\s+/, ""),
-            back: currentContent.join("\n").trim(),
-            type: "header-paragraph" as const,
-            headerLevel: currentHeader.level,
-          };
-
-          flashcards.push(card);
-        }
-        // Reset for potential new header of target level
-        currentHeader = null;
-        currentContent = [];
-      } else if (currentHeader) {
-        // Skip empty lines at the beginning
-        if (line.trim() === "" && currentContent.length === 0) {
-          continue;
-        }
-        currentContent.push(line);
-      }
-    }
-
-    // Don't forget the last flashcard
+  private finalizeCurrentHeader(
+    currentHeader: { text: string; level: number } | null,
+    currentContent: string[],
+    flashcards: ParsedFlashcard[],
+  ): void {
     if (currentHeader && currentContent.length > 0) {
-      const card = {
+      flashcards.push({
         front: currentHeader.text.replace(/^#{1,6}\s+/, ""),
         back: currentContent.join("\n").trim(),
-        type: "header-paragraph" as const,
+        type: "header-paragraph",
         headerLevel: currentHeader.level,
-      };
+      });
+    }
+  }
 
-      flashcards.push(card);
+  /**
+   * Execute batch database operations for better performance
+   */
+  private async executeBatchOperations(
+    operations: Array<{
+      type: "create" | "update" | "delete";
+      flashcardId?: string;
+      flashcard?: Omit<Flashcard, "created" | "modified">;
+      updates?: any;
+    }>,
+  ): Promise<void> {
+    const batchStartTime = performance.now();
+    const BATCH_SIZE = 50;
+    let createCount = 0;
+    let updateCount = 0;
+    let deleteCount = 0;
+
+    for (let i = 0; i < operations.length; i += BATCH_SIZE) {
+      const chunk = operations.slice(i, i + BATCH_SIZE);
+      const chunkStartTime = performance.now();
+
+      // Execute chunk operations
+      for (const op of chunk) {
+        try {
+          switch (op.type) {
+            case "create":
+              if (op.flashcard) {
+                await this.db.createFlashcard(op.flashcard);
+                createCount++;
+              }
+              break;
+            case "update":
+              if (op.flashcardId && op.updates) {
+                await this.db.updateFlashcard(op.flashcardId, op.updates);
+                updateCount++;
+              }
+              break;
+            case "delete":
+              if (op.flashcardId) {
+                await this.db.deleteFlashcard(op.flashcardId);
+                deleteCount++;
+              }
+              break;
+          }
+        } catch (error) {
+          console.error(`Failed to execute ${op.type} operation:`, error);
+          // Continue with other operations
+        }
+      }
+
+      const chunkTime = performance.now() - chunkStartTime;
+      this.performanceLog(
+        `Batch ${Math.floor(i / BATCH_SIZE) + 1}: ${chunk.length} operations in ${this.formatTime(chunkTime)}`,
+      );
+
+      // Yield control between chunks
+      if (i + BATCH_SIZE < operations.length) {
+        await new Promise((resolve) => setTimeout(resolve, 10));
+      }
     }
 
-    return flashcards;
+    const totalBatchTime = performance.now() - batchStartTime;
+    this.performanceLog(
+      `Batch operations completed in ${this.formatTime(totalBatchTime)} (${createCount} created, ${updateCount} updated, ${deleteCount} deleted)`,
+    );
   }
 
   /**
@@ -384,7 +465,9 @@ export class DeckManager {
     filePath: string,
     force: boolean = false,
   ): Promise<void> {
+    const deckSyncStartTime = performance.now();
     this.debugLog(`Syncing flashcards for deck: ${filePath}`);
+
     const deck = await this.db.getDeckByFilepath(filePath);
     if (!deck) {
       this.debugLog(`No deck found for filepath: ${filePath}`);
@@ -433,8 +516,18 @@ export class DeckManager {
     const parsedCards = await this.parseFlashcardsFromFile(file);
     this.debugLog(`Parsed ${parsedCards.length} flashcards from ${filePath}`);
 
-    for (const parsed of parsedCards) {
-      const flashcardId = this.generateFlashcardId(parsed.front, deck.id);
+    // Batch operations for better performance
+    const batchOperations: Array<{
+      type: "create" | "update" | "delete";
+      flashcardId?: string;
+      flashcard?: Omit<Flashcard, "created" | "modified">;
+      updates?: any;
+    }> = [];
+
+    // Process flashcards in chunks to avoid blocking UI with large datasets
+    for (let i = 0; i < parsedCards.length; i++) {
+      const parsed = parsedCards[i];
+      const flashcardId = this.generateFlashcardId(parsed.front);
       const contentHash = this.generateContentHash(parsed.back);
       const existingCard = existingById.get(flashcardId);
 
@@ -471,17 +564,26 @@ export class DeckManager {
 
       processedIds.add(flashcardId);
 
+      // Yield control every 50 flashcards to keep UI responsive
+      if (i % 50 === 49) {
+        await new Promise((resolve) => setTimeout(resolve, 5));
+      }
+
       if (existingCard) {
         // Update if content has changed
         if (existingCard.contentHash !== contentHash) {
           this.debugLog(
             `Content changed, updating flashcard: ${parsed.front.substring(0, 30)}...`,
           );
-          await this.db.updateFlashcard(existingCard.id, {
-            front: parsed.front,
-            back: parsed.back,
-            type: parsed.type,
-            contentHash: contentHash,
+          batchOperations.push({
+            type: "update",
+            flashcardId: existingCard.id,
+            updates: {
+              front: parsed.front,
+              back: parsed.back,
+              type: parsed.type,
+              contentHash: contentHash,
+            },
           });
         } else {
           this.debugLog(
@@ -528,7 +630,10 @@ export class DeckManager {
           this.debugLog(`Creating new flashcard: ${flashcard.front}`);
         }
 
-        await this.db.createFlashcard(flashcard);
+        batchOperations.push({
+          type: "create",
+          flashcard: flashcard,
+        });
       }
     }
 
@@ -536,17 +641,31 @@ export class DeckManager {
     for (const [flashcardId, existingCard] of existingById) {
       if (!processedIds.has(flashcardId)) {
         this.debugLog(`Deleting flashcard: ${existingCard.front}`);
-        await this.db.deleteFlashcard(existingCard.id);
+        batchOperations.push({
+          type: "delete",
+          flashcardId: existingCard.id,
+        });
       }
     }
 
+    // Execute all batch operations
+    if (batchOperations.length > 0) {
+      this.debugLog(
+        `Executing ${batchOperations.length} batch database operations`,
+      );
+      await this.executeBatchOperations(batchOperations);
+    }
+
     // Update deck's modified timestamp to match file modification time
+    const timestampStartTime = performance.now();
     await this.db.updateDeckTimestamp(deck.id, fileModifiedTime.toISOString());
-
-    // Check for duplicates in the deck and warn user if found
     await this.checkForDuplicatesInDeck(deck.id);
+    const timestampTime = performance.now() - timestampStartTime;
 
-    this.debugLog(`Sync completed for deck: ${deck.name}`);
+    const totalDeckSyncTime = performance.now() - deckSyncStartTime;
+    this.performanceLog(
+      `Sync completed for deck: ${deck.name} in ${this.formatTime(totalDeckSyncTime)} (${parsedCards.length} flashcards, ${batchOperations.length} operations, cleanup: ${this.formatTime(timestampTime)})`,
+    );
   }
 
   /**
@@ -646,7 +765,7 @@ export class DeckManager {
   /**
    * Generate deterministic deck ID based on filepath
    */
-  private generateDeckId(filepath?: string): string {
+  public generateDeckId(filepath?: string): string {
     if (filepath) {
       // Generate deterministic ID based on filepath
       let hash = 0;
@@ -662,14 +781,13 @@ export class DeckManager {
   }
 
   /**
-   * Generate unique flashcard ID using hash of front text and deck ID
+   * Generate unique flashcard ID using hash of front text only
    */
-  public generateFlashcardId(frontText: string, deckId: string): string {
-    // Combine front text and deck ID for uniqueness across vault
-    const combined = `${deckId}:${frontText}`;
+  public generateFlashcardId(frontText: string, deckId?: string): string {
+    // Use only front text for ID generation to preserve progress across deck changes
     let hash = 0;
-    for (let i = 0; i < combined.length; i++) {
-      const char = combined.charCodeAt(i);
+    for (let i = 0; i < frontText.length; i++) {
+      const char = frontText.charCodeAt(i);
       hash = (hash << 5) - hash + char;
       hash = hash & hash; // Convert to 32-bit integer
     }
@@ -707,5 +825,18 @@ export class DeckManager {
         );
       }
     }
+  }
+
+  /**
+   * Update deck IDs for all flashcards when a deck ID changes (e.g., file rename)
+   */
+  async updateFlashcardDeckIds(
+    oldDeckId: string,
+    newDeckId: string,
+  ): Promise<void> {
+    this.debugLog(
+      `Updating flashcard deck IDs from ${oldDeckId} to ${newDeckId}`,
+    );
+    await this.db.updateFlashcardDeckIds(oldDeckId, newDeckId);
   }
 }

@@ -306,19 +306,17 @@ It has many attractions.`;
 
       const flashcards = await deckManager.parseFlashcardsFromFile(file);
 
-      // All flashcards should be parsed (table + header)
-      expect(flashcards).toHaveLength(4);
+      // Only table flashcards should be parsed (header has no content)
+      expect(flashcards).toHaveLength(3);
       expect(flashcards[0]).toEqual({
         front: "Hola",
         back: "Hello",
         type: "table",
-        lineNumber: 5,
       });
       expect(flashcards[2]).toEqual({
         front: "Gracias",
         back: "Thank you",
         type: "table",
-        lineNumber: 7,
       });
     });
 
@@ -505,28 +503,26 @@ Answer 1`;
 
   describe("flashcard ID generation", () => {
     it("should generate consistent IDs for same content", () => {
-      const deckId = "deck_123";
-      const id1 = deckManager.generateFlashcardId("What is 2+2?", deckId);
-      const id2 = deckManager.generateFlashcardId("What is 2+2?", deckId);
+      const id1 = deckManager.generateFlashcardId("What is 2+2?");
+      const id2 = deckManager.generateFlashcardId("What is 2+2?");
 
       expect(id1).toBe(id2);
       expect(id1).toMatch(/^card_[a-z0-9]+$/);
     });
 
     it("should generate different IDs for different content", () => {
-      const deckId = "deck_123";
-      const id1 = deckManager.generateFlashcardId("Question 1", deckId);
-      const id2 = deckManager.generateFlashcardId("Question 2", deckId);
+      const id1 = deckManager.generateFlashcardId("Question 1");
+      const id2 = deckManager.generateFlashcardId("Question 2");
 
       expect(id1).not.toBe(id2);
     });
 
-    it("should generate different IDs for same content in different decks", () => {
+    it("should generate same IDs for same content across decks", () => {
       const question = "What is 2+2?";
-      const id1 = deckManager.generateFlashcardId(question, "deck_123");
-      const id2 = deckManager.generateFlashcardId(question, "deck_456");
+      const id1 = deckManager.generateFlashcardId(question);
+      const id2 = deckManager.generateFlashcardId(question);
 
-      expect(id1).not.toBe(id2);
+      expect(id1).toBe(id2);
     });
 
     it("should sync flashcards by deck name", async () => {
@@ -618,7 +614,7 @@ Answer 1`;
       });
 
       const deck1: Deck = {
-        id: "deck1",
+        id: deckManager.generateDeckId("deck1.md"),
         name: "deck1",
         filepath: "deck1.md",
         tag: "#flashcards/math",
@@ -635,7 +631,7 @@ Answer 1`;
       };
 
       const deck2: Deck = {
-        id: "deck2",
+        id: deckManager.generateDeckId("deck2.md"),
         name: "deck2",
         filepath: "deck2.md",
         tag: "#flashcards/science",
@@ -660,14 +656,14 @@ Answer 1`;
 
       mockDb.getFlashcardsByDeck.mockResolvedValue([]);
 
-      // Test syncing only deck1
-      await deckManager.syncFlashcardsForDeck("deck1.md");
+      // Test syncing only deck1 (force sync to bypass modification time check)
+      await deckManager.syncFlashcardsForDeck("deck1.md", true);
 
       // Verify only deck1 was queried
       expect(mockDb.getDeckByFilepath).toHaveBeenCalledWith("deck1.md");
       expect(mockDb.getDeckByFilepath).not.toHaveBeenCalledWith("deck2.md");
-      expect(mockDb.getFlashcardsByDeck).toHaveBeenCalledWith("deck1");
-      expect(mockDb.getFlashcardsByDeck).not.toHaveBeenCalledWith("deck2");
+      expect(mockDb.getFlashcardsByDeck).toHaveBeenCalledWith(deck1.id);
+      expect(mockDb.getFlashcardsByDeck).not.toHaveBeenCalledWith(deck2.id);
     });
 
     it("should create deck for single file without full vault scan", async () => {

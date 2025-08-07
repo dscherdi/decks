@@ -250,9 +250,32 @@ export class DecksSettingTab extends PluginSettingTab {
           .setValue(this.plugin.settings.debug?.enableLogging || false)
           .onChange(async (value) => {
             if (!this.plugin.settings.debug) {
-              this.plugin.settings.debug = { enableLogging: false };
+              this.plugin.settings.debug = {
+                enableLogging: false,
+                performanceLogs: false,
+              };
             }
             this.plugin.settings.debug.enableLogging = value;
+            await this.plugin.saveSettings();
+          }),
+      );
+
+    new Setting(containerEl)
+      .setName("Enable Performance Logs")
+      .setDesc(
+        "Show performance timing metrics in the console (sync times, parsing performance, etc.)",
+      )
+      .addToggle((toggle) =>
+        toggle
+          .setValue(this.plugin.settings.debug?.performanceLogs || false)
+          .onChange(async (value) => {
+            if (!this.plugin.settings.debug) {
+              this.plugin.settings.debug = {
+                enableLogging: false,
+                performanceLogs: false,
+              };
+            }
+            this.plugin.settings.debug.performanceLogs = value;
             await this.plugin.saveSettings();
           }),
       );

@@ -16,8 +16,12 @@ describe("Settings", () => {
     });
 
     it("should have valid types for UI settings", () => {
-      expect(typeof DEFAULT_SETTINGS.ui.enableBackgroundRefresh).toBe("boolean");
-      expect(typeof DEFAULT_SETTINGS.ui.backgroundRefreshInterval).toBe("number");
+      expect(typeof DEFAULT_SETTINGS.ui.enableBackgroundRefresh).toBe(
+        "boolean",
+      );
+      expect(typeof DEFAULT_SETTINGS.ui.backgroundRefreshInterval).toBe(
+        "number",
+      );
     });
   });
 
@@ -27,11 +31,19 @@ describe("Settings", () => {
 
       // Verify the settings object conforms to the interface
       expect(settings.fsrs).toBeDefined();
-      expect(settings.database).toBeDefined();
       expect(settings.review).toBeDefined();
       expect(settings.parsing).toBeDefined();
       expect(settings.ui).toBeDefined();
       expect(settings.debug).toBeDefined();
+    });
+
+    it("should have debug settings with enableLogging and performanceLogs", () => {
+      const debugSettings = DEFAULT_SETTINGS.debug;
+
+      expect(debugSettings.enableLogging).toBeDefined();
+      expect(debugSettings.performanceLogs).toBeDefined();
+      expect(typeof debugSettings.enableLogging).toBe("boolean");
+      expect(typeof debugSettings.performanceLogs).toBe("boolean");
     });
 
     it("should have valid UI settings structure", () => {
@@ -53,6 +65,21 @@ describe("Settings", () => {
       const interval = DEFAULT_SETTINGS.ui.backgroundRefreshInterval;
       expect(interval).toBeGreaterThanOrEqual(1);
       expect(interval).toBeLessThanOrEqual(60);
+    });
+  });
+
+  describe("Debug settings", () => {
+    it("should have enableLogging set to false by default", () => {
+      expect(DEFAULT_SETTINGS.debug.enableLogging).toBe(false);
+    });
+
+    it("should have performanceLogs set to false by default", () => {
+      expect(DEFAULT_SETTINGS.debug.performanceLogs).toBe(false);
+    });
+
+    it("should have valid types for debug settings", () => {
+      expect(typeof DEFAULT_SETTINGS.debug.enableLogging).toBe("boolean");
+      expect(typeof DEFAULT_SETTINGS.debug.performanceLogs).toBe("boolean");
     });
   });
 });

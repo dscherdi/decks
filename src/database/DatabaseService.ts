@@ -163,13 +163,14 @@ export class DatabaseService {
   }
 
   // Deck operations
-  async createDeck(deck: Omit<Deck, "created">): Promise<Deck> {
+  async createDeck(deck: Omit<Deck, "created" | "modified">): Promise<Deck> {
     if (!this.db) throw new Error("Database not initialized");
 
     const now = new Date().toISOString();
     const fullDeck: Deck = {
       ...deck,
       created: now,
+      modified: now,
     };
 
     try {
@@ -328,6 +329,28 @@ export class DatabaseService {
     await this.save();
   }
 
+  async renameDeck(
+    oldDeckId: string,
+    newDeckId: string,
+    newName: string,
+    newFilepath: string,
+  ): Promise<void> {
+    if (!this.db) throw new Error("Database not initialized");
+
+    const now = new Date().toISOString();
+
+    // Update the deck with new ID, name, and filepath
+    const stmt = this.db.prepare(`
+      UPDATE decks
+      SET id = ?, name = ?, filepath = ?, modified = ?
+      WHERE id = ?
+    `);
+
+    stmt.run([newDeckId, newName, newFilepath, now, oldDeckId]);
+    stmt.free();
+    await this.save();
+  }
+
   async deleteDeckByFilepath(filepath: string): Promise<void> {
     if (!this.db) throw new Error("Database not initialized");
 
@@ -335,12 +358,8 @@ export class DatabaseService {
     const deck = await this.getDeckByFilepath(filepath);
     if (!deck) return; // Deck doesn't exist
 
-    // Delete all flashcards in this deck (preserve review logs for historical data)
-    const flashcardsStmt = this.db.prepare(
-      "DELETE FROM flashcards WHERE deck_id = ?",
-    );
-    flashcardsStmt.run([deck.id]);
-    flashcardsStmt.free();
+    // Don't delete flashcards to preserve progress - they will be orphaned but can be reassigned later
+    // Only review logs are preserved for historical data
 
     // Finally delete the deck
     const deckStmt = this.db.prepare("DELETE FROM decks WHERE filepath = ?");
@@ -353,12 +372,8 @@ export class DatabaseService {
   async deleteDeck(deckId: string): Promise<void> {
     if (!this.db) throw new Error("Database not initialized");
 
-    // Delete all flashcards in this deck (preserve review logs for historical data)
-    const flashcardsStmt = this.db.prepare(
-      "DELETE FROM flashcards WHERE deck_id = ?",
-    );
-    flashcardsStmt.run([deckId]);
-    flashcardsStmt.free();
+    // Don't delete flashcards to preserve progress - they will be orphaned but can be reassigned later
+    // Only review logs are preserved for historical data
 
     // Finally delete the deck
     const deckStmt = this.db.prepare("DELETE FROM decks WHERE id = ?");
@@ -476,6 +491,20 @@ export class DatabaseService {
 
     const stmt = this.db.prepare("DELETE FROM flashcards WHERE id = ?");
     stmt.run([flashcardId]);
+    stmt.free();
+    await this.save();
+  }
+
+  async updateFlashcardDeckIds(
+    oldDeckId: string,
+    newDeckId: string,
+  ): Promise<void> {
+    if (!this.db) throw new Error("Database not initialized");
+
+    const stmt = this.db.prepare(
+      "UPDATE flashcards SET deck_id = ? WHERE deck_id = ?",
+    );
+    stmt.run([newDeckId, oldDeckId]);
     stmt.free();
     await this.save();
   }
@@ -854,7 +883,7 @@ export class DatabaseService {
     if (stmt.step()) {
       const row = stmt.get();
       stmt.free();
-      const reviewedAt = new Date(row[5] as string);
+      const reviewedAt = new Date(row[6] as string);
       const intervalMinutes = row[1] as number;
       const dueDate = new Date(
         reviewedAt.getTime() + intervalMinutes * 60 * 1000,
