@@ -120,6 +120,18 @@
   	•	Due position
 9. ✅ Parse header-paragraph flashcards based on a configurable header level setting. The parser for header-paragraphs should parse only headers with that level and paragraphs it contains.
 10. ✅ Add a timelapsed to the review object which tracks how much time it took for the user to review a flashcard from the time it was shown to him until he chooses a difficulty. Use this timelapse in statistics to measure pace of the user seconds/cards.
+11. Mobile support:
+  - The modals and views position and size must be adapted for mobile use.
+12. Export deck to anki:
+  - A deck can be exported to anki by clicking on the cog icon of the deck, on the deck list.
+  - The cog will open a select dropdown where the user can select the option Export to anki.
+  - The select dropdown will contain these options:
+    - Export to anki
+    - Configure deck
+  - The export to anki function opens a configuration modal where the user can select options for exporting to anki:
+    - The note type
+    - Tags the user would like to add to anki
+    - Specific anki Deck
 
 ## ✅ Recent Enhancements
 
