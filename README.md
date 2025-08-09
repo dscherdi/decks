@@ -2,6 +2,7 @@
 
 Decks is a powerful spaced repetition flashcard plugin for Obsidian that helps you learn and memorize information efficiently using the FSRS algorithm, built with TypeScript and Svelte for a reactive and type-safe UI.
 
+If you like this plugin, consider buying me a coffee and I will add more features.
 <a href="https://www.buymeacoffee.com/dscherdil0">
   <img src="https://cdn.buymeacoffee.com/buttons/v2/default-yellow.png" alt="Buy Me A Coffee" height="40">
 </a>

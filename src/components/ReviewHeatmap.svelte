@@ -409,7 +409,7 @@
 
     .months-container {
         display: flex;
-        gap: 16px;
+        gap: 2px;
         min-width: fit-content;
         align-items: flex-start;
     }
@@ -588,7 +588,7 @@
         }
 
         .months-container {
-            gap: 8px;
+            gap: 2px;
         }
 
         .month-label {
@@ -644,7 +644,7 @@
         }
 
         .months-container {
-            gap: 6px;
+            gap: 2px;
         }
 
         .month-grid {
