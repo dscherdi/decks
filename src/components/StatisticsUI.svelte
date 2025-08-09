@@ -28,6 +28,72 @@
         await loadStatistics();
     });
 
+    function mountFilterComponents() {
+        // Deck filter dropdown
+        if (deckFilterContainer) {
+            new Setting(deckFilterContainer)
+                .setName("Show data for:")
+                .addDropdown((dropdown) => {
+
+                    dropdown.addOption("all","AllDecks");
+
+                availableTags.forEach((tag) => {
+                    dropdown.addOption(`tag:${tag}`, `Tag: ${tag}`);
+                    availableTags.forEach((tag) => {
+                        dropdown.addOption(`tag:${tag}`, `Tag: ${tag}`);
+                    });
+
+                    availableDecks.forEach((deck) => {
+                        dropdown.addOption(`deck:${deck.id}`, deck.name);
+                    });
+
+                    dropdown.setValue(selectedDeckFilter);
+                    dropdown.onChange((value) => {
+                        selectedDeckFilter = value;
+                        handleFilterChange();
+                    });
+        }
+
+        // Timeframe filter dropdown
+        if (timeframeFilterContainer) {
+            new Setting(timeframeFilterContainer)
+                .setName("Timeframe:")
+                .addDropdown((dropdown) =>
+                    dropdown
+                        .addOption("12months", "Last 12 Months")
+                        .addOption("all", "All History")
+                        .setValue(selectedTimeframe)
+                        .onChange((value) => {
+                            selectedTimeframe = value;
+                            handleFilterChange();
+                        }),
+                );
+
+                availableDecks.forEach((deck) => {
+                    dropdown.addOption(`deck:${deck.id}`, deck.name);
+                });
+
+                dropdown.setValue(selectedDeckFilter);
+                dropdown.onChange((value) => {
+                    selectedDeckFilter = value;
+                    handleFilterChange();
+                });
+            });
+        }
+                new Setting(
+                timeframeFilterContainer,
+            ).addDropdown((dropdown) =>
+                dropdown
+                    .addOption("12months", "Last 12 Months")
+                    .addOption("all", "All History")
+                    .setValue(selectedTimeframe)
+                    .onChange((value) => {
+                        selectedTimeframe = value;
+                        handleFilterChange();
+                    }),
+            );
+}
+
     async function loadDecksAndTags() {
         try {
             availableDecks = await plugin.getDecks();
@@ -258,55 +324,8 @@
         </div>
     {:else}
         <div class="filters">
-            <div class="filter-group">
-                <label for="deck-filter">Show data for:</label>
-                <select
-                    id="deck-filter"
-                    bind:value={selectedDeckFilter}
-                    on:change={handleFilterChange}
-                    style="background: var(--background-primary) !important; color: var(--text-normal) !important;"
-                >
-                    <option
-                        value="all"
-                        style="background: var(--background-primary) !important; color: var(--text-normal) !important;"
-                        >All Decks</option
-                    >
-                    {#each availableTags as tag}
-                        <option
-                            value="tag:{tag}"
-                            style="background: var(--background-primary) !important; color: var(--text-normal) !important;"
-                            >Tag: {tag}</option
-                        >
-                    {/each}
-                    {#each availableDecks as deck}
-                        <option
-                            value="deck:{deck.id}"
-                            style="background: var(--background-primary) !important; color: var(--text-normal) !important;"
-                            >{deck.name}</option
-                        >
-                    {/each}
-                </select>
-            </div>
-            <div class="filter-group">
-                <label for="timeframe-filter">Timeframe:</label>
-                <select
-                    id="timeframe-filter"
-                    bind:value={selectedTimeframe}
-                    on:change={handleFilterChange}
-                    style="background: var(--background-primary) !important; color: var(--text-normal) !important;"
-                >
-                    <option
-                        value="12months"
-                        style="background: var(--background-primary) !important; color: var(--text-normal) !important;"
-                        >Last 12 Months</option
-                    >
-                    <option
-                        value="all"
-                        style="background: var(--background-primary) !important; color: var(--text-normal) !important;"
-                        >All History</option
-                    >
-                </select>
-            </div>
+            <div bind:this={deckFilterContainer}></div>
+            <div bind:this={timeframeFilterContainer}></div>
         </div>
 
         <!-- Current Status -->
@@ -731,7 +750,7 @@
             </button>
         </div>
     {/if}
-    <div class="buymeacoffee-badge">
+    <div class="stats-section buymeacoffee-badge">
         <a href="https://www.buymeacoffee.com/dscherdil0">
             <img
                 src="https://cdn.buymeacoffee.com/buttons/v2/default-yellow.png"
@@ -768,10 +787,7 @@
         justify-content: center;
     }
 
-    .filter-group {
-        display: flex;
-        flex-direction: column;
-        gap: 8px;
+    .filters > div {
         min-width: 200px;
     }
 
