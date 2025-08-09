@@ -74,6 +74,7 @@ const buildOptions = {
         dev: !prod,
         css: "external",
       },
+      filterWarnings: () => false,
     }),
     copy({
       assets: [

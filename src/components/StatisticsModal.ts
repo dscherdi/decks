@@ -19,6 +19,11 @@ export class StatisticsModal extends Modal {
     const modalEl = this.containerEl.querySelector(".modal");
     if (modalEl instanceof HTMLElement) {
       modalEl.addClass("statistics-modal");
+
+      // Add mobile-specific classes
+      if (window.innerWidth <= 768) {
+        modalEl.addClass("statistics-modal-mobile");
+      }
     }
     this.containerEl.addClass("statistics-modal-container");
     contentEl.addClass("statistics-modal-content");
@@ -43,10 +48,32 @@ export class StatisticsModal extends Modal {
     this.component.$on("close", () => {
       this.close();
     });
+
+    // Handle window resize for mobile adaptation
+    const handleResize = () => {
+      if (modalEl instanceof HTMLElement) {
+        if (window.innerWidth <= 768) {
+          modalEl.addClass("statistics-modal-mobile");
+        } else {
+          modalEl.removeClass("statistics-modal-mobile");
+        }
+      }
+    };
+
+    window.addEventListener("resize", handleResize);
+
+    // Store resize handler for cleanup
+    (this as any)._resizeHandler = handleResize;
   }
 
   onClose() {
     const { contentEl } = this;
+
+    // Clean up resize handler
+    if ((this as any)._resizeHandler) {
+      window.removeEventListener("resize", (this as any)._resizeHandler);
+      delete (this as any)._resizeHandler;
+    }
 
     // Destroy Svelte component
     if (this.component) {

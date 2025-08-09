@@ -1,5 +1,6 @@
 <script lang="ts">
-    import { createEventDispatcher } from "svelte";
+    import { createEventDispatcher, onMount } from "svelte";
+    import { Setting } from "obsidian";
     import type { Deck, DeckConfig, ReviewOrder } from "../database/types";
 
     export let deck: Deck;
@@ -17,6 +18,11 @@
     let enableReviewCardsLimit = config.enableReviewCardsLimit;
     let reviewOrder: ReviewOrder = config.reviewOrder;
     let saving = false;
+    let newCardsLimitContainer: HTMLElement;
+    let reviewCardsLimitContainer: HTMLElement;
+    let enableNewCardsContainer: HTMLElement;
+    let enableReviewCardsContainer: HTMLElement;
+    let reviewOrderContainer: HTMLElement;
 
     // Reactive statement to update config when values change
     $: {
@@ -51,6 +57,92 @@
             handleSave();
         }
     }
+
+    onMount(() => {
+        // Enable New Cards Limit Toggle
+        if (enableNewCardsContainer) {
+            new Setting(enableNewCardsContainer)
+                .setName("Enable New Cards Limit")
+                .setDesc(
+                    "Limit how many new cards (never seen before) can be shown per day",
+                )
+                .addToggle((toggle) =>
+                    toggle.setValue(enableNewCardsLimit).onChange((value) => {
+                        enableNewCardsLimit = value;
+                    }),
+                );
+        }
+
+        // New Cards Limit Input
+        if (newCardsLimitContainer) {
+            new Setting(newCardsLimitContainer)
+                .setName("New Cards per Day")
+                .setDesc("Maximum number of new cards to introduce per day")
+                .addText((text) =>
+                    text
+                        .setPlaceholder("20")
+                        .setValue(newCardsLimit.toString())
+                        .onChange((value) => {
+                            const num = parseInt(value);
+                            if (!isNaN(num) && num >= 0) {
+                                newCardsLimit = num;
+                            }
+                        }),
+                );
+        }
+
+        // Enable Review Cards Limit Toggle
+        if (enableReviewCardsContainer) {
+            new Setting(enableReviewCardsContainer)
+                .setName("Enable Review Cards Limit")
+                .setDesc(
+                    "Limit how many review cards (due for repetition) can be shown per day",
+                )
+                .addToggle((toggle) =>
+                    toggle
+                        .setValue(enableReviewCardsLimit)
+                        .onChange((value) => {
+                            enableReviewCardsLimit = value;
+                        }),
+                );
+        }
+
+        // Review Cards Limit Input
+        if (reviewCardsLimitContainer) {
+            new Setting(reviewCardsLimitContainer)
+                .setName("Review Cards per Day")
+                .setDesc("Maximum number of review cards to show per day")
+                .addText((text) =>
+                    text
+                        .setPlaceholder("100")
+                        .setValue(reviewCardsLimit.toString())
+                        .onChange((value) => {
+                            const num = parseInt(value);
+                            if (!isNaN(num) && num >= 0) {
+                                reviewCardsLimit = num;
+                            }
+                        }),
+                );
+        }
+
+        // Review Order Dropdown
+        if (reviewOrderContainer) {
+            new Setting(reviewOrderContainer)
+                .setName("Review Order")
+                .setDesc(
+                    "Order in which review cards are presented during study",
+                )
+                .addDropdown((dropdown) =>
+                    dropdown
+                        .addOption("due-date", "Oldest due first")
+                        .addOption("random", "Random order")
+                        .setValue(reviewOrder)
+                        .onChange((value: ReviewOrder) => {
+                            reviewOrder = value;
+                        }),
+                );
+        }
+    });
 </script>
 
 <svelte:window on:keydown={handleKeydown} />
@@ -74,103 +166,18 @@
             limits.
         </div>
 
-        <!-- New Cards Section -->
-        <div class="setting-item">
-            <div class="setting-item-info">
-                <div class="setting-item-name">Enable New Cards Limit</div>
-                <div class="setting-item-description">
-                    Limit how many new cards (never seen before) can be shown
-                    per day
-                </div>
-            </div>
-            <div class="setting-item-control">
-                <label class="checkbox-container">
-                    <input
-                        type="checkbox"
-                        bind:checked={enableNewCardsLimit}
-                        class="checkbox-input"
-                    />
-                    <div class="checkbox-slider"></div>
-                </label>
-            </div>
-        </div>
-
-        <div class="setting-item" class:disabled={!enableNewCardsLimit}>
-            <div class="setting-item-info">
-                <div class="setting-item-name">New Cards per Day</div>
-                <div class="setting-item-description">
-                    Maximum number of new cards to introduce per day
-                </div>
-            </div>
-            <div class="setting-item-control">
-                <input
-                    type="number"
-                    bind:value={newCardsLimit}
-                    min="0"
-                    max="999"
-                    disabled={!enableNewCardsLimit}
-                    class="session-limit-input"
-                    placeholder="20"
-                />
-            </div>
-        </div>
-
-        <!-- Review Cards Section -->
-        <div class="setting-item">
-            <div class="setting-item-info">
-                <div class="setting-item-name">Enable Review Cards Limit</div>
-                <div class="setting-item-description">
-                    Limit how many review cards (due for repetition) can be
-                    shown per day
-                </div>
-            </div>
-            <div class="setting-item-control">
-                <label class="checkbox-container">
-                    <input
-                        type="checkbox"
-                        bind:checked={enableReviewCardsLimit}
-                        class="checkbox-input"
-                    />
-                    <div class="checkbox-slider"></div>
-                </label>
-            </div>
-        </div>
-
-        <div class="setting-item" class:disabled={!enableReviewCardsLimit}>
-            <div class="setting-item-info">
-                <div class="setting-item-name">Review Cards per Day</div>
-                <div class="setting-item-description">
-                    Maximum number of review cards to show per day
-                </div>
-            </div>
-            <div class="setting-item-control">
-                <input
-                    type="number"
-                    bind:value={reviewCardsLimit}
-                    min="0"
-                    max="9999"
-                    disabled={!enableReviewCardsLimit}
-                    class="session-limit-input"
-                    placeholder="100"
-                />
-            </div>
-        </div>
-
-        <!-- Review Order Section -->
-        <div class="setting-item">
-            <div class="setting-item-info">
-                <div class="setting-item-name">Review Order</div>
-                <div class="setting-item-description">
-                    Order in which review cards are presented during study
-                </div>
-            </div>
-            <div class="setting-item-control">
-                <select bind:value={reviewOrder} class="review-order-select">
-                    <option value="due-date">Oldest due first</option>
-                    <option value="random">Random order</option>
-                </select>
-            </div>
-        </div>
+        <!-- Obsidian Native Components -->
+        <div bind:this={enableNewCardsContainer}></div>
+        <div
+            bind:this={newCardsLimitContainer}
+            class:disabled={!enableNewCardsLimit}
+        ></div>
+        <div bind:this={enableReviewCardsContainer}></div>
+        <div
+            bind:this={reviewCardsLimitContainer}
+            class:disabled={!enableReviewCardsLimit}
+        ></div>
+        <div bind:this={reviewOrderContainer}></div>
     </div>
 
     <!-- Action Buttons -->
@@ -283,87 +290,10 @@
         flex-shrink: 0;
     }
 
-    .checkbox-container {
-        position: relative;
-        display: inline-block;
-        cursor: pointer;
-    }
-
-    .checkbox-input {
-        position: absolute;
-        opacity: 0;
-        cursor: pointer;
-    }
-
-    .checkbox-slider {
-        width: 42px;
-        height: 24px;
-        background: var(--background-modifier-border);
-        border-radius: 12px;
-        position: relative;
-        transition: background-color 0.2s ease;
-    }
-
-    .checkbox-slider::before {
-        content: "";
-        position: absolute;
-        width: 18px;
-        height: 18px;
-        border-radius: 50%;
-        background: white;
-        top: 3px;
-        left: 3px;
-        transition: transform 0.2s ease;
-    }
-
-    .checkbox-container::after {
-        display: none !important;
-    }
-
-    .checkbox-input:checked + .checkbox-slider {
-        background: var(--interactive-accent);
-    }
-
-    .checkbox-input:checked + .checkbox-slider::before {
-        transform: translateX(18px);
-    }
-
-    .session-limit-input {
-        width: 80px;
-        padding: 6px 8px;
-        border: 1px solid var(--background-modifier-border);
-        border-radius: 4px;
-        background: var(--background-primary);
-        color: var(--text-normal);
-        font-size: 0.9em;
-    }
-
-    .session-limit-input:focus {
-        outline: none;
-        border-color: var(--interactive-accent);
-        box-shadow: 0 0 0 2px var(--interactive-accent-hover);
-    }
-
-    .session-limit-input:disabled {
+    /* Disabled state for Obsidian Setting containers */
+    .disabled {
         opacity: 0.5;
-        cursor: not-allowed;
-        background: var(--background-modifier-border-hover);
-    }
-
-    .review-order-select {
-        padding: 6px 8px;
-        border: 1px solid var(--background-modifier-border);
-        border-radius: 4px;
-        background: var(--background-primary);
-        color: var(--text-normal);
-        font-size: 0.9em;
-        min-width: 140px;
-    }
-
-    .review-order-select:focus {
-        outline: none;
-        border-color: var(--interactive-accent);
-        box-shadow: 0 0 0 2px var(--interactive-accent-hover);
+        pointer-events: none;
     }
 
     .modal-footer {
@@ -410,5 +340,96 @@
     .modal-footer button:focus {
         outline: 2px solid var(--interactive-accent);
         outline-offset: 2px;
+    }
+
+    /* Mobile responsive styles */
+    @media (max-width: 768px) {
+        .deck-config-ui {
+            padding: 0;
+        }
+
+        .deck-info-section {
+            margin-bottom: 20px;
+            padding: 12px;
+        }
+
+        .deck-info-section h3 {
+            font-size: 1em;
+        }
+
+        .deck-settings-section h3 {
+            font-size: 1em;
+        }
+
+        .modal-footer {
+            padding-top: 20px;
+            flex-direction: column-reverse;
+            gap: 8px;
+        }
+
+        .modal-footer button {
+            width: 100%;
+            padding: 12px 16px;
+            font-size: 16px;
+            min-height: 44px; /* Touch-friendly */
+        }
+    }
+
+    @media (max-width: 480px) {
+        .deck-info-section {
+            padding: 10px;
+        }
+
+        .deck-info-list li {
+            font-size: 0.85em;
+        }
+
+        .setting-item-description-global {
+            font-size: 0.75em;
+            padding: 10px;
+        }
+
+        .modal-footer button {
+            padding: 14px 20px;
+        }
+    }
+
+    @media (max-width: 390px) {
+        /* iPhone 12 Pro and similar 390px width phones */
+        .deck-config-ui {
+            padding: 0;
+            max-width: 390px;
+        }
+
+        .deck-info-section {
+            padding: 8px;
+            margin-bottom: 16px;
+        }
+
+        .deck-info-section h3 {
+            font-size: 0.9em;
+        }
+
+        .deck-info-list li {
+            font-size: 0.8em;
+        }
+
+        .deck-settings-section h3 {
+            font-size: 0.9em;
+        }
+
+        .setting-item-description-global {
+            font-size: 0.7em;
+            padding: 8px;
+        }
+
+        .modal-footer {
+            padding-top: 16px;
+        }
+
+        .modal-footer button {
+            padding: 12px 16px;
+            font-size: 14px;
+        }
     }
 </style>

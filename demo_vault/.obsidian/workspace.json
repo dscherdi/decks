@@ -13,12 +13,26 @@
             "state": {
               "type": "markdown",
               "state": {
-                "file": "Flashcards/1000 German adjectives.md",
+                "file": "Flashcards/1200 Deutsche Redewendungen.md",
                 "mode": "source",
                 "source": false
               },
               "icon": "lucide-file",
-              "title": "1000 German adjectives"
+              "title": "1200 Deutsche Redewendungen"
+            }
+          },
+          {
+            "id": "05fbaba1a691dfd6",
+            "type": "leaf",
+            "state": {
+              "type": "markdown",
+              "state": {
+                "file": "Flashcards/1200 Deutsche Redewendungen.md",
+                "mode": "source",
+                "source": false
+              },
+              "icon": "lucide-file",
+              "title": "1200 Deutsche Redewendungen"
             }
           }
         ]
@@ -78,7 +92,8 @@
       }
     ],
     "direction": "horizontal",
-    "width": 200
+    "width": 336.5,
+    "collapsed": true
   },
   "right": {
     "id": "2e1e063bc04f303d",
@@ -94,7 +109,7 @@
             "state": {
               "type": "backlink",
               "state": {
-                "file": "Flashcards/Math-Basics.md",
+                "file": "Flashcards/1200 Deutsche Redewendungen.md",
                 "collapseAll": false,
                 "extraContext": false,
                 "sortOrder": "alphabetical",
@@ -104,7 +119,7 @@
                 "unlinkedCollapsed": true
               },
               "icon": "links-coming-in",
-              "title": "Backlinks for Math-Basics"
+              "title": "Backlinks for 1200 Deutsche Redewendungen"
             }
           },
           {
@@ -113,11 +128,12 @@
             "state": {
               "type": "outgoing-link",
               "state": {
+                "file": "Flashcards/1200 Deutsche Redewendungen.md",
                 "linksCollapsed": false,
                 "unlinkedCollapsed": true
               },
               "icon": "links-going-out",
-              "title": "Outgoing links"
+              "title": "Outgoing links from 1200 Deutsche Redewendungen"
             }
           },
           {
@@ -141,13 +157,13 @@
             "state": {
               "type": "outline",
               "state": {
-                "file": "Flashcards/1005 German verbs.md",
+                "file": "Flashcards/1200 Deutsche Redewendungen.md",
                 "followCursor": false,
                 "showSearch": false,
                 "searchQuery": ""
               },
               "icon": "lucide-list",
-              "title": "Outline of 1005 German verbs"
+              "title": "Outline of 1200 Deutsche Redewendungen"
             }
           },
           {
@@ -165,7 +181,7 @@
       }
     ],
     "direction": "horizontal",
-    "width": 492.5
+    "width": 499.5
   },
   "left-ribbon": {
     "hiddenItems": {
@@ -178,10 +194,21 @@
       "decks:Flashcards": false
     }
   },
-  "active": "296674abb626cb1b",
+  "active": "350cc6703e763420",
   "lastOpenFiles": [
-    "Flashcards/1005 German verbs.md",
-    "Flashcards/1000 German adjectives.md",
+    "Flashcards/500 Nomen-Verb Verbindungen.md",
+    "Flashcards/1200 Deutsche Redewendungen.md",
+    "Flashcards/10000 German nouns.md",
+    "Flashcards/4200 German Adjectives.md",
+    "Flashcards/2000 German verbs.md.backup",
+    "Flashcards/5000 German Adjectives.md.backup",
+    "Flashcards/2000 German verbs.md",
+    "Flashcards/verbs.md",
+    "Flashcards/clean_no_duplicates.md",
+    "Flashcards/temp_no_duplicates.md",
+    "Flashcards/temp_clean.md",
+    "Flashcards/30000 German nouns_backup.md",
+    "Flashcards/1000 German adjectives_cleaned.md",
     "Flashcards/Math flashcards.md",
     "Flashcards/Math-Basics.md",
     "Flashcards/1005 German verbs 1.md",
@@ -196,16 +223,6 @@
     "Flashcards/Spanish-Vocabulary.md",
     "Flashcards/Spanish-Vocabulary 1 1.md",
     "Flashcards/Spanish-Vocabulary 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1.md",
-    "Flashcards/Spanish-Vocabulary 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1.md",
-    "Flashcards/Spanish-Vocabulary 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1.md",
-    "Flashcards/Spanish-Vocabulary 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1.md",
-    "Flashcards/Spanish-Vocabulary 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1.md",
-    "Flashcards/Spanish-Vocabulary 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1.md",
-    "Flashcards/Spanish-Vocabulary 1 1 1 1 1 1 1 1 1 1 1 1 1 1.md",
-    "Flashcards/Spanish-Vocabulary 1 1 1 1 1 1 1 1 1 1 1 1 1.md",
-    "Flashcards/Spanish-Vocabulary 1 1 1 1 1 1 1 1 1 1 1 1.md",
-    "Flashcards/Spanish-Vocabulary 1 1 1 1 1 1 1 1 1 1 1.md",
-    "Flashcards/Spanish-Vocabulary 1 1 1 1 1 1 1 1 1 1.md",
     "Flashcards-2025-07-17.flashcards",
     "plugins",
     "plugins/obsidian-flashcards-plugin/manifest.json",

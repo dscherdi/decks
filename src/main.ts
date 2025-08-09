@@ -84,7 +84,9 @@ export default class DecksPlugin extends Plugin {
   }
 
   private showProgressNotice(message: string): void {
-    this.progressNotice = new Notice(message, 0);
+    if (this.settings?.ui?.enableNotices !== false) {
+      this.progressNotice = new Notice(message, 0);
+    }
   }
 
   private hideProgressNotice(): void {
@@ -190,7 +192,9 @@ export default class DecksPlugin extends Plugin {
       this.debugLog("Decks plugin loaded successfully");
     } catch (error) {
       console.error("Error loading Decks plugin:", error);
-      new Notice("Failed to load Decks plugin. Check console for details.");
+      if (this.settings?.ui?.enableNotices !== false) {
+        new Notice("Failed to load Decks plugin. Check console for details.");
+      }
     }
   }
 
@@ -333,7 +337,9 @@ export default class DecksPlugin extends Plugin {
       this.debugLog("Performing initial background sync...");
 
       // Show progress notice for large syncs
-      notice = new Notice("🔄 Syncing flashcards in background...", 0);
+      if (this.settings?.ui?.enableNotices !== false) {
+        notice = new Notice("🔄 Syncing flashcards in background...", 0);
+      }
 
       // Use requestIdleCallback or setTimeout to ensure non-blocking execution
       await new Promise((resolve) => setTimeout(resolve, 100));
@@ -757,7 +763,9 @@ class DecksView extends ItemView {
       this.plugin.debugLog("Refresh complete");
     } catch (error) {
       console.error("Error refreshing decks:", error);
-      new Notice("Error refreshing decks. Check console for details.");
+      if (this.plugin.settings?.ui?.enableNotices !== false) {
+        new Notice("Error refreshing decks. Check console for details.");
+      }
     }
   }
 
@@ -887,7 +895,9 @@ class DecksView extends ItemView {
           message += `\n\nDaily review cards limit reached: ${config.reviewCardsLimit}/${config.reviewCardsLimit}`;
         }
 
-        new Notice(message);
+        if (this.plugin.settings?.ui?.enableNotices !== false) {
+          new Notice(message);
+        }
         return;
       }
 
@@ -921,7 +931,9 @@ class DecksView extends ItemView {
           limitInfo += `\n\nNote: Only learning cards will be shown (limits exceeded)`;
         }
 
-        new Notice(limitInfo, 5000);
+        if (this.plugin.settings?.ui?.enableNotices !== false) {
+          new Notice(limitInfo, 5000);
+        }
       }
 
       // Open review modal
@@ -933,7 +945,9 @@ class DecksView extends ItemView {
       ).open();
     } catch (error) {
       console.error("Error starting review:", error);
-      new Notice("Error starting review. Check console for details.");
+      if (this.plugin.settings?.ui?.enableNotices !== false) {
+        new Notice("Error starting review. Check console for details.");
+      }
     }
   }
 }

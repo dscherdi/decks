@@ -535,10 +535,12 @@ export class DeckManager {
       if (processedIds.has(flashcardId)) {
         const duplicateKey = `${deck.name}:${parsed.front}`;
         if (!duplicateWarnings.has(duplicateKey)) {
-          new Notice(
-            `⚠️ Duplicate flashcard detected in "${deck.name}": "${parsed.front.substring(0, 50)}${parsed.front.length > 50 ? "..." : ""}". Only the first occurrence will be used.`,
-            8000,
-          );
+          if (this.plugin?.settings?.ui?.enableNotices) {
+            new Notice(
+              `⚠️ Duplicate flashcard detected in "${deck.name}": "${parsed.front.substring(0, 50)}${parsed.front.length > 50 ? "..." : ""}". Only the first occurrence will be used.`,
+              8000,
+            );
+          }
           duplicateWarnings.add(duplicateKey);
           this.debugLog(
             `Duplicate flashcard detected: "${parsed.front}" in deck "${deck.name}"`,
@@ -622,10 +624,12 @@ export class DeckManager {
           );
 
           // Notify user that progress was restored
-          new Notice(
-            `✅ Progress restored for flashcard: "${parsed.front.substring(0, 40)}${parsed.front.length > 40 ? "..." : ""}" (${previousProgress.state}, ${previousProgress.repetitions} reviews)`,
-            5000,
-          );
+          if (this.plugin?.settings?.ui?.enableNotices) {
+            new Notice(
+              `✅ Progress restored for flashcard: "${parsed.front.substring(0, 40)}${parsed.front.length > 40 ? "..." : ""}" (${previousProgress.state}, ${previousProgress.repetitions} reviews)`,
+              5000,
+            );
+          }
         } else {
           this.debugLog(`Creating new flashcard: ${flashcard.front}`);
         }
@@ -816,10 +820,12 @@ export class DeckManager {
 
     for (const [frontText, cards] of frontTextMap) {
       if (cards.length > 1) {
-        new Notice(
-          `⚠️ Found ${cards.length} duplicate flashcards in "${deckName}": "${cards[0].front.substring(0, 50)}${cards[0].front.length > 50 ? "..." : ""}". Consider removing duplicates to avoid confusion.`,
-          10000,
-        );
+        if (this.plugin?.settings?.ui?.enableNotices) {
+          new Notice(
+            `⚠️ Found ${cards.length} duplicate flashcards in "${deckName}": "${cards[0].front.substring(0, 50)}${cards[0].front.length > 50 ? "..." : ""}". Consider removing duplicates to avoid confusion.`,
+            10000,
+          );
+        }
         this.debugLog(
           `Duplicate flashcards found in deck "${deckName}": "${cards[0].front}" (${cards.length} copies)`,
         );

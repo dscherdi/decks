@@ -1,4 +1,4 @@
-import { Modal } from "obsidian";
+import { Modal, Platform } from "obsidian";
 import type { Deck, DeckConfig } from "../database/types";
 import type DecksPlugin from "../main";
 import DeckConfigUI from "./DeckConfigUI.svelte";
@@ -25,6 +25,12 @@ export class DeckConfigModal extends Modal {
   onOpen() {
     const { contentEl } = this;
     contentEl.empty();
+
+    // Add mobile-specific classes
+    const modalEl = this.containerEl.querySelector(".modal");
+    if (modalEl instanceof HTMLElement && window.innerWidth <= 768) {
+      modalEl.addClass("deck-config-modal-mobile");
+    }
 
     // Modal title
     contentEl.createEl("h2", { text: `Configure Deck: ${this.deck.name}` });
@@ -56,6 +62,23 @@ export class DeckConfigModal extends Modal {
     this.component.$on("configChange", (event) => {
       this.config = event.detail;
     });
+
+    // Handle window resize for mobile adaptation
+    const handleResize = () => {
+      const modalEl = this.containerEl.querySelector(".modal");
+      if (modalEl instanceof HTMLElement) {
+        if (Platform.isIosApp || Platform.isAndroidApp) {
+          modalEl.addClass("deck-config-modal-mobile");
+        } else {
+          modalEl.removeClass("deck-config-modal-mobile");
+        }
+      }
+    };
+
+    window.addEventListener("resize", handleResize);
+
+    // Store resize handler for cleanup
+    (this as any)._resizeHandler = handleResize;
   }
 
   private async handleSave(config: DeckConfig) {
@@ -70,6 +93,12 @@ export class DeckConfigModal extends Modal {
 
   onClose() {
     const { contentEl } = this;
+
+    // Clean up resize handler
+    if ((this as any)._resizeHandler) {
+      window.removeEventListener("resize", (this as any)._resizeHandler);
+      delete (this as any)._resizeHandler;
+    }
 
     // Destroy Svelte component
     if (this.component) {

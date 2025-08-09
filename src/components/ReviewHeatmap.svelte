@@ -112,31 +112,64 @@
         return dateStr === today;
     }
 
-    function getMonthLabels(): Array<{ month: string; offset: number }> {
+    function getMonthsData(): Array<{
+        month: string;
+        weeks: Array<Array<{ date: string; count: number; dayOfWeek: number }>>;
+    }> {
         if (weeks.length === 0) return [];
 
-        const labels: Array<{ month: string; offset: number }> = [];
+        const monthsData: Array<{
+            month: string;
+            weeks: Array<
+                Array<{ date: string; count: number; dayOfWeek: number }>
+            >;
+        }> = [];
         let currentMonth = -1;
+        let currentMonthWeeks: Array<
+            Array<{ date: string; count: number; dayOfWeek: number }>
+        > = [];
 
-        weeks.forEach((week, weekIndex) => {
+        weeks.forEach((week) => {
             const firstDay = week[0];
             if (firstDay) {
                 const date = new Date(firstDay.date);
                 const month = date.getMonth();
                 const year = date.getFullYear();
 
-                // Only show month labels for days within the selected year
-                if (year === currentYear && month !== currentMonth) {
-                    currentMonth = month;
-                    labels.push({
-                        month: months[month],
-                        offset: weekIndex * 12, // 12px per week (10px square + 2px gap)
-                    });
+                // Only process weeks within the selected year
+                if (year === currentYear) {
+                    if (month !== currentMonth) {
+                        // Save previous month if it exists
+                        if (
+                            currentMonth !== -1 &&
+                            currentMonthWeeks.length > 0
+                        ) {
+                            monthsData.push({
+                                month: months[currentMonth],
+                                weeks: currentMonthWeeks,
+                            });
+                        }
+
+                        // Start new month
+                        currentMonth = month;
+                        currentMonthWeeks = [week];
+                    } else {
+                        // Add week to current month
+                        currentMonthWeeks.push(week);
+                    }
                 }
             }
         });
 
-        return labels;
+        // Don't forget the last month
+        if (currentMonth !== -1 && currentMonthWeeks.length > 0) {
+            monthsData.push({
+                month: months[currentMonth],
+                weeks: currentMonthWeeks,
+            });
+        }
+
+        return monthsData;
     }
 
     function calculateMaxWeeks(width: number) {
@@ -240,41 +273,34 @@
         <div class="loading">Loading...</div>
     {:else}
         <div class="heatmap">
-            <div class="heatmap-content">
-                <div class="month-labels">
-                    {#each getMonthLabels() as { month, offset }}
-                        <span class="month-label" style="left: {offset}px"
-                            >{month}</span
-                        >
-                    {/each}
-                </div>
-
-                <div class="day-labels">
-                    <span class="day-label" style="top: 0px">S</span>
-                    <span class="day-label" style="top: 18px">T</span>
-                    <span class="day-label" style="top: 36px">T</span>
-                    <span class="day-label" style="top: 54px">S</span>
-                </div>
-
-                <div class="heatmap-grid">
-                    {#each weeks as week}
-                        <div class="week">
-                            {#each week as day}
-                                {@const dayYear = new Date(
-                                    day.date,
-                                ).getFullYear()}
-                                <div
-                                    class="day {getIntensityClass(day.count)}"
-                                    class:today={isToday(day.date)}
-                                    class:outside-year={dayYear !== currentYear}
-                                    title="{day.count} reviews on {formatDate(
-                                        day.date,
-                                    )}"
-                                ></div>
+            <div class="months-container">
+                {#each getMonthsData() as { month, weeks: monthWeeks }}
+                    <div class="month-container">
+                        <div class="month-label">{month}</div>
+                        <div class="month-grid">
+                            {#each monthWeeks as week}
+                                <div class="week">
+                                    {#each week as day}
+                                        {@const dayYear = new Date(
+                                            day.date,
+                                        ).getFullYear()}
+                                        <div
+                                            class="day {getIntensityClass(
+                                                day.count,
+                                            )}"
+                                            class:today={isToday(day.date)}
+                                            class:outside-year={dayYear !==
+                                                currentYear}
+                                            title="{day.count} reviews on {formatDate(
+                                                day.date,
+                                            )}"
+                                        ></div>
+                                    {/each}
+                                </div>
                             {/each}
                         </div>
-                    {/each}
-                </div>
+                    </div>
+                {/each}
             </div>
         </div>
 
@@ -381,10 +407,23 @@
         /*justify-content: center;*/
     }
 
-    .heatmap-content {
-        position: relative;
+    .months-container {
+        display: flex;
+        gap: 16px;
         min-width: fit-content;
-        width: max-content;
+        align-items: flex-start;
+    }
+
+    .month-container {
+        display: flex;
+        flex-direction: column;
+        gap: 4px;
+        align-items: center;
+    }
+
+    .month-grid {
+        display: flex;
+        gap: 2px;
     }
 
     .month-labels {
@@ -395,7 +434,6 @@
     }
 
     .month-label {
-        position: absolute;
         font-size: 9px;
         color: var(--text-muted);
     }
@@ -412,12 +450,6 @@
         color: var(--text-muted);
         width: 16px;
         text-align: right;
-    }
-
-    .heatmap-grid {
-        display: flex;
-        gap: 2px;
-        padding-right: 16px;
     }
 
     .week {
@@ -519,5 +551,204 @@
 
     .heatmap::-webkit-scrollbar-thumb:hover {
         background: var(--text-muted);
+    }
+
+    /* Mobile responsive styles */
+    @media (max-width: 768px) {
+        .heatmap-container {
+            padding: 8px;
+        }
+
+        .heatmap-header {
+            flex-direction: column;
+            align-items: flex-start;
+            gap: 8px;
+        }
+
+        .header-left {
+            width: 100%;
+        }
+
+        .year-navigation {
+            width: 100%;
+        }
+
+        .nav-button {
+            padding: 6px;
+            width: 36px;
+            height: 36px;
+        }
+
+        .day-labels {
+            left: 0;
+        }
+
+        .day-label {
+            font-size: 8px;
+        }
+
+        .months-container {
+            gap: 8px;
+        }
+
+        .month-label {
+            font-size: 9px;
+        }
+
+        .heatmap::-webkit-scrollbar {
+            height: 4px;
+        }
+    }
+
+    @media (max-width: 480px) {
+        .heatmap-container {
+            padding: 6px;
+        }
+
+        .heatmap-header h4 {
+            font-size: 14px;
+        }
+
+        .total-reviews {
+            font-size: 10px;
+        }
+
+        .current-year {
+            font-size: 12px;
+            padding: 4px 8px;
+        }
+
+        .nav-button {
+            padding: 4px;
+            width: 28px;
+            height: 28px;
+        }
+
+        .nav-button svg {
+            width: 14px;
+            height: 14px;
+        }
+
+        .month-label {
+            font-size: 8px;
+            min-width: 40px;
+        }
+
+        .day-label {
+            font-size: 7px;
+            width: 12px;
+        }
+
+        .day-labels {
+            left: 0;
+        }
+
+        .months-container {
+            gap: 6px;
+        }
+
+        .month-grid {
+            gap: 1px;
+        }
+
+        .legend {
+            margin-top: 8px;
+        }
+
+        .legend-label {
+            font-size: 8px;
+        }
+
+        .legend-square {
+            width: 8px;
+            height: 8px;
+        }
+
+        .day {
+            width: 8px;
+            height: 8px;
+            border-radius: 1px;
+        }
+
+        .week {
+            gap: 1px;
+        }
+    }
+
+    @media (max-width: 390px) {
+        /* iPhone 12 Pro and similar 390px width phones */
+        .heatmap-container {
+            padding: 6px;
+            max-width: 390px;
+        }
+
+        .heatmap-header {
+            margin-bottom: 8px;
+        }
+
+        .heatmap-header h4 {
+            font-size: 12px;
+        }
+
+        .total-reviews {
+            font-size: 10px;
+        }
+
+        .current-year {
+            font-size: 12px;
+            min-width: 30px;
+        }
+
+        .nav-button {
+            width: 24px;
+            height: 24px;
+            min-height: 24px;
+            min-width: 24px;
+        }
+
+        .nav-button svg {
+            width: 8px;
+            height: 8px;
+        }
+
+        .month-label {
+            font-size: 7px;
+        }
+
+        .day-label {
+            font-size: 7px;
+            width: 10px;
+        }
+
+        .day-labels {
+            left: -12px;
+        }
+
+        .day {
+            width: 7px;
+            height: 7px;
+        }
+
+        .legend-square {
+            width: 7px;
+            height: 7px;
+        }
+
+        .legend-label {
+            font-size: 6px;
+        }
+
+        .week {
+            gap: 1px;
+        }
+
+        .heatmap-grid {
+            gap: 1px;
+            padding-right: 8px;
+        }
+
+        .heatmap {
+            margin-top: 8px;
+        }
     }
 </style>

@@ -560,8 +560,105 @@
         color: var(--text-muted);
     }
 
-    /* Responsive adjustments */
+    /* Mobile responsive styles */
+    @media (max-width: 768px) {
+        .modal-header {
+            padding: 12px 16px;
+        }
+
+        .modal-header h3 {
+            font-size: 16px;
+        }
+
+        .card-content {
+            padding: 20px 12px;
+            gap: 20px;
+        }
+
+        .card-side {
+            padding: 20px 16px;
+            max-width: none;
+        }
+
+        .card-side.front {
+            font-size: 18px;
+        }
+
+        .card-side.back {
+            font-size: 15px;
+        }
+
+        .action-buttons {
+            padding: 16px;
+        }
+
+        .show-answer-button {
+            padding: 14px 24px;
+            font-size: 16px;
+            min-height: 44px; /* Touch-friendly */
+        }
+
+        .difficulty-buttons {
+            gap: 6px;
+            padding: 0 8px;
+        }
+
+        .difficulty-button {
+            padding: 10px 6px;
+            min-height: 44px; /* Touch-friendly */
+        }
+
+        .button-label {
+            font-size: 13px;
+        }
+
+        .interval {
+            font-size: 11px;
+        }
+    }
+
     @media (max-width: 500px) {
+        .modal-header {
+            padding: 10px 12px;
+            flex-direction: column;
+            gap: 8px;
+            align-items: flex-start;
+        }
+
+        .modal-header h3 {
+            font-size: 14px;
+        }
+
+        .progress-info {
+            align-self: flex-end;
+        }
+
+        .card-content {
+            padding: 16px 8px;
+            gap: 16px;
+        }
+
+        .card-side {
+            padding: 16px 12px;
+        }
+
+        .card-side.front {
+            font-size: 16px;
+        }
+
+        .card-side.back {
+            font-size: 14px;
+        }
+
+        .action-buttons {
+            padding: 12px;
+        }
+
+        .show-answer-button {
+            padding: 12px 20px;
+            font-size: 15px;
+        }
+
         .difficulty-buttons {
             gap: 4px;
             padding: 0 5px;
@@ -569,6 +666,7 @@
 
         .difficulty-button {
             padding: 8px 4px;
+            min-height: 40px;
         }
 
         .button-label {
@@ -583,9 +681,85 @@
             font-size: 8px;
             padding: 1px 2px;
         }
+    }
+
+    @media (max-width: 390px) {
+        .modal-header {
+            padding: 8px 10px;
+        }
+
+        .modal-header h3 {
+            font-size: 13px;
+        }
+
+        .progress-info {
+            font-size: 12px;
+        }
 
         .card-content {
-            padding: 16px 8px;
+            padding: 14px 8px;
+            gap: 14px;
+        }
+
+        .card-side {
+            padding: 14px 12px;
+        }
+
+        .card-side.front {
+            font-size: 15px;
+        }
+
+        .card-side.back {
+            font-size: 13px;
+        }
+
+        .action-buttons {
+            padding: 10px 8px;
+        }
+
+        .show-answer-button {
+            padding: 10px 16px;
+            font-size: 14px;
+        }
+
+        .difficulty-buttons {
+            gap: 3px;
+            padding: 0 4px;
+            max-width: 374px; /* Fit within 390px with padding */
+        }
+
+        .difficulty-button {
+            padding: 8px 3px;
+            min-height: 42px;
+        }
+
+        .button-label {
+            font-size: 11px;
+        }
+
+        .interval {
+            font-size: 9px;
+        }
+
+        .difficulty-button .shortcut {
+            font-size: 7px;
+            padding: 1px 2px;
+        }
+    }
+
+    @media (max-width: 380px) {
+        .card-content {
+            padding: 12px 6px;
+        }
+
+        .difficulty-buttons {
+            gap: 2px;
+            padding: 0 3px;
+        }
+
+        .difficulty-button {
+            padding: 6px 2px;
+            min-height: 40px;
         }
     }
 </style>

@@ -28,6 +28,12 @@ export class FlashcardReviewModalWrapper extends Modal {
     contentEl.empty();
     contentEl.addClass("deck-review-modal");
 
+    // Add mobile-specific classes
+    const modalEl = this.containerEl.querySelector(".modal");
+    if (modalEl instanceof HTMLElement && window.innerWidth <= 768) {
+      modalEl.addClass("deck-review-modal-mobile");
+    }
+
     // Create container for Svelte component
     const container = contentEl.createDiv();
 
@@ -69,16 +75,41 @@ export class FlashcardReviewModalWrapper extends Modal {
         message = `All available cards reviewed! Completed ${reviewed} cards from ${this.deck.name}.`;
       }
 
-      new Notice(message);
+      if (this.plugin.settings?.ui?.enableNotices !== false) {
+        new Notice(message);
+      }
 
       // Refresh the view to update stats
       if (this.plugin.view) {
         this.plugin.view.refresh();
       }
     });
+
+    // Handle window resize for mobile adaptation
+    const handleResize = () => {
+      const modalEl = this.containerEl.querySelector(".modal");
+      if (modalEl instanceof HTMLElement) {
+        if (window.innerWidth <= 768) {
+          modalEl.addClass("deck-review-modal-mobile");
+        } else {
+          modalEl.removeClass("deck-review-modal-mobile");
+        }
+      }
+    };
+
+    window.addEventListener("resize", handleResize);
+
+    // Store resize handler for cleanup
+    (this as any)._resizeHandler = handleResize;
   }
 
   onClose() {
+    // Clean up resize handler
+    if ((this as any)._resizeHandler) {
+      window.removeEventListener("resize", (this as any)._resizeHandler);
+      delete (this as any)._resizeHandler;
+    }
+
     if (this.component) {
       this.component.$destroy();
       this.component = null;

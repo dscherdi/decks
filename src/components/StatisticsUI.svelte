@@ -1,6 +1,7 @@
 <script lang="ts">
     import type DecksPlugin from "../main";
-    import { onMount, createEventDispatcher } from "svelte";
+    import { onMount, createEventDispatcher, tick } from "svelte";
+    import { Setting } from "obsidian";
     import ReviewHeatmap from "./ReviewHeatmap.svelte";
     import type { Statistics } from "../database/types";
 
@@ -15,6 +16,8 @@
     let availableDecks: any[] = [];
     let availableTags: string[] = [];
     let heatmapComponent: ReviewHeatmap;
+    let deckFilterContainer: HTMLElement;
+    let timeframeFilterContainer: HTMLElement;
 
     // Derived statistics - computed after loading
     let todayStats: any = null;
@@ -26,19 +29,22 @@
         loading = true;
         await loadDecksAndTags();
         await loadStatistics();
+
+        // Mount filter components after data is loaded
+        tick().then(() => {
+            mountFilterComponents();
+        });
     });
 
     function mountFilterComponents() {
         // Deck filter dropdown
         if (deckFilterContainer) {
             new Setting(deckFilterContainer)
-                .setName("Show data for:")
+                .setName("Select Deck(s):")
+                .setClass("deck-filter-container")
                 .addDropdown((dropdown) => {
+                    dropdown.addOption("all", "All Decks");
 
-                    dropdown.addOption("all","AllDecks");
-
-                availableTags.forEach((tag) => {
-                    dropdown.addOption(`tag:${tag}`, `Tag: ${tag}`);
                     availableTags.forEach((tag) => {
                         dropdown.addOption(`tag:${tag}`, `Tag: ${tag}`);
                     });
@@ -46,53 +52,31 @@
                     availableDecks.forEach((deck) => {
                         dropdown.addOption(`deck:${deck.id}`, deck.name);
                     });
-
                     dropdown.setValue(selectedDeckFilter);
-                    dropdown.onChange((value) => {
+                    dropdown.onChange((value: string) => {
                         selectedDeckFilter = value;
                         handleFilterChange();
                     });
+                });
         }
 
         // Timeframe filter dropdown
         if (timeframeFilterContainer) {
             new Setting(timeframeFilterContainer)
                 .setName("Timeframe:")
+                .setClass("timeframe-filter-container")
                 .addDropdown((dropdown) =>
                     dropdown
                         .addOption("12months", "Last 12 Months")
                         .addOption("all", "All History")
                         .setValue(selectedTimeframe)
-                        .onChange((value) => {
+                        .onChange((value: string) => {
                             selectedTimeframe = value;
                             handleFilterChange();
                         }),
                 );
-
-                availableDecks.forEach((deck) => {
-                    dropdown.addOption(`deck:${deck.id}`, deck.name);
-                });
-
-                dropdown.setValue(selectedDeckFilter);
-                dropdown.onChange((value) => {
-                    selectedDeckFilter = value;
-                    handleFilterChange();
-                });
-            });
         }
-                new Setting(
-                timeframeFilterContainer,
-            ).addDropdown((dropdown) =>
-                dropdown
-                    .addOption("12months", "Last 12 Months")
-                    .addOption("all", "All History")
-                    .setValue(selectedTimeframe)
-                    .onChange((value) => {
-                        selectedTimeframe = value;
-                        handleFilterChange();
-                    }),
-            );
-}
+    }
 
     async function loadDecksAndTags() {
         try {
@@ -760,6 +744,9 @@
         </a>
     </div>
 </div>
+{#if false}
+    <div class="deck-filter-container timeframe-filter-container"></div>
+{/if}
 
 <style>
     .statistics-container {
@@ -789,45 +776,6 @@
 
     .filters > div {
         min-width: 200px;
-    }
-
-    .filter-group label {
-        font-size: 14px;
-        color: var(--text-muted);
-        font-weight: 600;
-    }
-
-    .filter-group select {
-        border: 1px solid var(--background-modifier-border);
-        border-radius: 4px;
-        background: var(--background-primary);
-        color: var(--text-normal);
-        font-size: 14px;
-        font-weight: normal;
-        appearance: none;
-        -webkit-appearance: none;
-        -moz-appearance: none;
-        cursor: pointer;
-        min-width: 180px;
-        position: relative;
-        /* Force visibility */
-        opacity: 1;
-        z-index: 10;
-    }
-
-    .filter-group select:focus {
-        outline: none;
-        border-color: var(--interactive-accent);
-    }
-
-    .filter-group select option {
-        background: var(--background-primary);
-        color: var(--text-normal);
-        padding: 8px;
-        font-size: 14px;
-        /* Force visibility in dropdown */
-        opacity: 1;
-        visibility: visible;
     }
 
     .stats-section {
@@ -1129,5 +1077,300 @@
         height: 40px;
         display: flex;
         justify-content: center;
+    }
+
+    /* Mobile responsive styles */
+    @media (max-width: 768px) {
+        .statistics-container {
+            padding: 12px;
+        }
+
+        .filters {
+            gap: 16px;
+            padding: 16px;
+            flex-direction: column;
+        }
+
+        .filters > div {
+            min-width: unset;
+            width: 100%;
+        }
+
+        .stats-grid {
+            grid-template-columns: repeat(auto-fit, minmax(120px, 1fr));
+            gap: 12px;
+        }
+
+        .stat-card {
+            padding: 12px;
+            min-height: 70px;
+        }
+
+        .stat-value {
+            font-size: 20px;
+        }
+
+        .metrics-grid {
+            grid-template-columns: 1fr;
+            gap: 12px;
+        }
+
+        .metric-card {
+            padding: 16px;
+            min-height: 80px;
+        }
+
+        .metric-value {
+            font-size: 24px;
+        }
+
+        .forecast-chart {
+            height: 300px;
+            padding: 12px;
+        }
+
+        .forecast-bar {
+            min-width: 32px;
+        }
+
+        .bar {
+            width: 20px;
+        }
+
+        .bar-label,
+        .bar-value {
+            font-size: 11px;
+        }
+
+        .button-bar {
+            padding: 10px 12px;
+            flex-direction: column;
+            gap: 8px;
+            text-align: center;
+        }
+
+        .button-count {
+            font-size: 16px;
+        }
+
+        .modal-actions {
+            padding: 12px 16px;
+            margin-left: -12px;
+            margin-right: -12px;
+        }
+
+        .close-button {
+            padding: 12px 24px;
+            font-size: 16px;
+            min-height: 44px; /* Touch-friendly size */
+        }
+
+        .intervals-chart {
+            padding: 12px;
+            gap: 8px;
+        }
+
+        .interval-bar {
+            min-width: 50px;
+            padding: 8px 6px;
+        }
+    }
+
+    @media (max-width: 480px) {
+        .statistics-container {
+            padding: 8px;
+        }
+
+        .filters {
+            padding: 12px;
+            gap: 12px;
+        }
+
+        .stats-grid {
+            grid-template-columns: repeat(2, 1fr);
+            gap: 8px;
+        }
+
+        .stat-card {
+            padding: 10px;
+            min-height: 60px;
+        }
+
+        .stat-value {
+            font-size: 18px;
+        }
+
+        .stat-label {
+            font-size: 11px;
+        }
+
+        .metric-card {
+            padding: 12px;
+        }
+
+        .metric-value {
+            font-size: 20px;
+        }
+
+        .forecast-chart {
+            height: 250px;
+            padding: 8px;
+        }
+
+        .forecast-bar {
+            min-width: 28px;
+            gap: 4px;
+        }
+
+        .bar {
+            width: 16px;
+        }
+
+        .bar-label,
+        .bar-value {
+            font-size: 10px;
+        }
+
+        .modal-actions {
+            padding: 8px 12px;
+            margin-left: -8px;
+            margin-right: -8px;
+        }
+
+        .buymeacoffee-badge {
+            height: 35px;
+        }
+    }
+
+    @media (max-width: 390px) {
+        .timeframe-filter-container {
+            flex-direction: column;
+        }
+
+        .deck-filter-container {
+            flex-direction: column;
+        }
+
+        .statistics-container {
+            padding: 6px;
+            max-width: 390px;
+        }
+
+        .filters {
+            padding: 8px;
+            gap: 8px;
+        }
+
+        .filters > div {
+            min-width: unset;
+        }
+
+        .stats-grid {
+            grid-template-columns: repeat(2, 1fr);
+            gap: 6px;
+        }
+
+        .stat-card {
+            padding: 8px;
+            min-height: 55px;
+        }
+
+        .stat-value {
+            font-size: 16px;
+        }
+
+        .stat-label {
+            font-size: 10px;
+        }
+
+        .metrics-grid {
+            grid-template-columns: 1fr;
+            gap: 8px;
+        }
+
+        .metric-card {
+            padding: 10px;
+            min-height: 70px;
+        }
+
+        .metric-value {
+            font-size: 18px;
+        }
+
+        .metric-label {
+            font-size: 12px;
+        }
+
+        .metric-description {
+            font-size: 10px;
+        }
+
+        .forecast-chart {
+            height: 220px;
+            padding: 6px;
+        }
+
+        .forecast-bar {
+            min-width: 24px;
+            gap: 2px;
+        }
+
+        .bar {
+            width: 14px;
+        }
+
+        .bar-label,
+        .bar-value {
+            font-size: 9px;
+        }
+
+        .button-stats {
+            gap: 8px;
+        }
+
+        .button-bar {
+            padding: 8px 10px;
+        }
+
+        .button-label {
+            font-size: 11px;
+        }
+
+        .button-count {
+            font-size: 14px;
+        }
+
+        .button-percentage {
+            font-size: 10px;
+        }
+
+        .modal-actions {
+            padding: 6px 8px;
+            margin-left: -6px;
+            margin-right: -6px;
+        }
+
+        .close-button {
+            padding: 10px 20px;
+            font-size: 14px;
+        }
+
+        .intervals-chart {
+            padding: 8px;
+            gap: 6px;
+        }
+
+        .interval-bar {
+            min-width: 45px;
+            padding: 6px 4px;
+        }
+
+        .interval-label {
+            font-size: 10px;
+        }
+
+        .interval-value {
+            font-size: 14px;
+        }
     }
 </style>

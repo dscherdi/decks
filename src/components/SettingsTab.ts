@@ -227,6 +227,20 @@ export class DecksSettingTab extends PluginSettingTab {
           }),
       );
 
+    new Setting(containerEl)
+      .setName("Enable Notices")
+      .setDesc(
+        "Show notification messages for completed review sessions and sync operations",
+      )
+      .addToggle((toggle) =>
+        toggle
+          .setValue(this.plugin.settings.ui.enableNotices)
+          .onChange(async (value) => {
+            this.plugin.settings.ui.enableNotices = value;
+            await this.plugin.saveSettings();
+          }),
+      );
+
     // Set initial state of interval setting
     intervalSetting.setDisabled(
       !this.plugin.settings.ui.enableBackgroundRefresh,

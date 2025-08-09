@@ -77,3 +77,171 @@
     padding: 0;
     margin: 0;
 }
+
+/* Ensure full width on mobile */
+.workspace-leaf-content[data-type="decks-view"] {
+    width: 100%;
+}
+
+.workspace-leaf-content[data-type="decks-view"] .view-content {
+    width: 100%;
+    padding: 0;
+}
+
+/* Mobile responsive styles */
+@media (max-width: 768px) {
+    /* Mobile deck list panel adaptations */
+    .decks-view {
+        min-width: unset;
+        width: 100% !important;
+        max-width: 100vw;
+    }
+
+    .workspace-leaf-content[data-type="decks-view"] {
+        width: 100% !important;
+        max-width: 100vw;
+    }
+
+    .workspace-leaf-content[data-type="decks-view"] .view-content {
+        width: 100% !important;
+        max-width: 100vw;
+        padding: 0;
+    }
+
+    /* Review modal mobile styles */
+    .deck-review-modal {
+        height: 100vh;
+        max-height: none;
+    }
+
+    .deck-review-modal .modal,
+    .deck-review-modal-mobile {
+        width: 100vw;
+        height: 100vh;
+        max-width: none;
+        max-height: none;
+        border-radius: 0;
+        margin: 0;
+        top: 0;
+        left: 0;
+        transform: none;
+        position: fixed;
+    }
+
+    /* Statistics modal mobile styles */
+    .statistics-modal .modal,
+    .statistics-modal-mobile {
+        width: 100vw;
+        height: 100vh;
+        max-width: none;
+        max-height: none;
+        border-radius: 0;
+        margin: 0;
+        top: 0;
+        left: 0;
+        transform: none;
+    }
+
+    /* Deck config modal mobile styles */
+    .deck-config-modal-mobile {
+        width: 100vw;
+        height: 100vh;
+        max-width: none;
+        max-height: none;
+        border-radius: 0;
+        margin: 0;
+        top: 0;
+        left: 0;
+        transform: none;
+        position: fixed;
+    }
+
+    .statistics-modal-title {
+        padding: 0 16px;
+        font-size: 18px;
+    }
+
+    .statistics-modal-component-container {
+        height: calc(100vh - 60px);
+        padding: 0;
+    }
+}
+
+@media (max-width: 480px) {
+    /* Extra small screens */
+    .statistics-modal-title {
+        padding: 0 12px;
+        font-size: 16px;
+    }
+
+    .statistics-modal-component-container {
+        height: calc(100vh - 50px);
+    }
+}
+
+@media (max-width: 390px) {
+    /* iPhone 12 Pro and similar width phones */
+    .decks-view {
+        width: 100% !important;
+        max-width: 390px !important;
+        min-width: unset;
+    }
+
+    .workspace-leaf-content[data-type="decks-view"] {
+        width: 100% !important;
+        max-width: 390px !important;
+        padding: 0;
+    }
+
+    .workspace-leaf-content[data-type="decks-view"] .view-content {
+        width: 100% !important;
+        max-width: 390px !important;
+        padding: 0;
+    }
+
+    /* Modal adaptations for 390px */
+    .deck-review-modal .modal,
+    .deck-review-modal-mobile {
+        width: 390px !important;
+        max-width: 390px !important;
+    }
+
+    .statistics-modal .modal,
+    .statistics-modal-mobile {
+        width: 390px !important;
+        max-width: 390px !important;
+    }
+
+    .deck-config-modal-mobile {
+        width: 390px !important;
+        max-width: 390px !important;
+    }
+
+    .statistics-modal-title {
+        padding: 0 8px;
+        font-size: 14px;
+    }
+
+    .statistics-modal-component-container {
+        height: calc(100vh - 45px);
+    }
+}
+
+/* Touch-friendly button sizes for all mobile devices */
+@media (hover: none) and (pointer: coarse) {
+    button {
+        min-height: 44px;
+        min-width: 44px;
+    }
+
+    .difficulty-button {
+        min-height: 48px;
+    }
+
+    .deck-config-button,
+    .stats-button,
+    .refresh-button {
+        min-height: 44px;
+        min-width: 44px;
+    }
+}

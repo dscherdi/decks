@@ -23,6 +23,7 @@ export interface FlashcardsSettings {
   ui: {
     enableBackgroundRefresh: boolean;
     backgroundRefreshInterval: number; // seconds
+    enableNotices: boolean;
   };
 
   // Debug Settings
@@ -56,6 +57,7 @@ export const DEFAULT_SETTINGS: FlashcardsSettings = {
   ui: {
     enableBackgroundRefresh: true,
     backgroundRefreshInterval: 5,
+    enableNotices: true,
   },
 
   debug: {

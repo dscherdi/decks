@@ -384,7 +384,7 @@
 
 <style>
     .deck-list-panel {
-        min-width: 479px;
+        min-width: 328px;
         height: 100%;
         display: flex;
         flex-direction: column;
@@ -412,11 +412,12 @@
 
     .filter-container {
         position: relative;
+        max-width: calc(100% - 10px);
     }
 
     .filter-input {
         width: 100%;
-        padding: 8px 12px;
+        padding: 0 0 0 2px;
         border: 1px solid var(--background-modifier-border);
         border-radius: 4px;
         background: var(--background-primary);
@@ -589,7 +590,7 @@
         transition: text-decoration-color 0.2s ease;
         overflow: hidden;
         text-overflow: ellipsis;
-        white-space: nowrap;
+        white-space: break-spaces;
         display: inline-block;
         max-width: 250px;
     }
@@ -698,5 +699,209 @@
 
     .table-body::-webkit-scrollbar-thumb:hover {
         background: var(--background-modifier-border-hover);
+    }
+    /* Mobile responsive styles */
+    @media (max-width: 768px) {
+        .deck-list-panel {
+            min-width: unset;
+            width: 100%;
+        }
+
+        .panel-header {
+            padding: 10px 16px;
+            flex-wrap: wrap;
+            gap: 8px;
+        }
+
+        .panel-title {
+            font-size: 14px;
+        }
+
+        .header-buttons {
+            gap: 6px;
+        }
+
+        .stats-button,
+        .refresh-button {
+            padding: 8px;
+            min-height: 44px; /* Touch-friendly size */
+            min-width: 44px;
+        }
+
+        .filter-input {
+            padding: 0 0 0 2px;
+            font-size: 16px; /* Prevent zoom on iOS */
+        }
+
+        .table-header {
+            grid-template-columns: 1fr 55px 55px 55px 44px;
+            padding: 8px 16px;
+            font-size: 12px;
+        }
+
+        .deck-row {
+            grid-template-columns: 1fr 55px 55px 55px 44px;
+            padding: 12px 16px;
+        }
+
+        .deck-name-link {
+            max-width: none;
+            font-size: 14px;
+        }
+
+        .col-stat {
+            font-size: 13px;
+        }
+
+        .deck-config-button {
+            padding: 8px;
+            min-height: 44px;
+            min-width: 44px;
+        }
+
+        .empty-state {
+            padding: 24px 16px;
+        }
+    }
+
+    @media (max-width: 480px) {
+        .panel-header {
+            padding: 8px 12px;
+        }
+
+        .panel-title {
+            font-size: 13px;
+        }
+
+        .table-header {
+            grid-template-columns: 1fr 45px 45px 45px 40px;
+            padding: 6px 12px;
+            font-size: 11px;
+        }
+
+        .deck-row {
+            grid-template-columns: 1fr 45px 45px 45px 40px;
+            padding: 10px 12px;
+        }
+
+        .deck-name-link {
+            max-width: none;
+            font-size: 13px;
+        }
+
+        .col-stat {
+            font-size: 12px;
+        }
+
+        .deck-config-button {
+            padding: 6px;
+            min-height: 40px;
+            min-width: 40px;
+        }
+
+        .filter-input {
+            padding: 0 0 0 2px;
+        }
+
+        .suggestions-dropdown {
+            max-height: 150px;
+        }
+
+        .suggestion-item {
+            padding: 12px;
+            font-size: 16px; /* Touch-friendly */
+        }
+
+        .empty-state {
+            padding: 20px 12px;
+        }
+
+        .help-text {
+            font-size: 13px;
+        }
+    }
+
+    @media (max-width: 390px) {
+        .deck-list-panel {
+            min-width: unset;
+            width: 100%;
+            max-width: calc(100% - 38px);
+        }
+
+        .panel-header {
+            padding: 8px 12px;
+        }
+
+        .panel-title {
+            font-size: 12px;
+        }
+
+        .header-buttons {
+            gap: 4px;
+        }
+
+        .stats-button,
+        .refresh-button {
+            padding: 6px;
+            min-height: 36px;
+            min-width: 36px;
+        }
+
+        .filter-input {
+            padding: 0 0 0 2px;
+            font-size: 14px;
+        }
+
+        .table-header {
+            grid-template-columns: 1fr 38px 38px 38px 36px;
+            padding: 4px 8px;
+            font-size: 10px;
+            gap: 4px;
+        }
+
+        .deck-row {
+            grid-template-columns: 1fr 38px 38px 38px 36px;
+            padding: 8px 8px;
+            gap: 4px;
+        }
+
+        .deck-name-link {
+            max-width: none;
+            font-size: 12px;
+            overflow: hidden;
+            text-overflow: ellipsis;
+            white-space: break-spaces;
+        }
+
+        .col-stat {
+            font-size: 11px;
+        }
+
+        .table-header .col-stat {
+            font-size: 10px;
+        }
+
+        .deck-config-button {
+            padding: 4px;
+            min-height: 36px;
+            min-width: 36px;
+        }
+
+        .suggestions-dropdown {
+            max-height: 120px;
+        }
+
+        .suggestion-item {
+            padding: 10px 8px;
+            font-size: 14px;
+        }
+
+        .empty-state {
+            padding: 16px 8px;
+        }
+
+        .help-text {
+            font-size: 12px;
+        }
     }
 </style>

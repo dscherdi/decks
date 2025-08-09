@@ -6,6 +6,6 @@
   "description": "Decks - Spaced repetition flashcards plugin with FSRS algorithm",
   "author": "Xherdi Lika",
   "authorUrl": "https://github.com/dscherdi",
-  "isDesktopOnly": true,
+  "isDesktopOnly": false,
   "fundingUrl": "https://buymeacoffee.com/dscherdil0"
 }
