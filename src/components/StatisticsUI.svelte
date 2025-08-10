@@ -19,6 +19,10 @@
     let deckFilterContainer: HTMLElement;
     let timeframeFilterContainer: HTMLElement;
 
+    // Track last event to prevent double execution
+    let lastEventTime = 0;
+    let lastEventType = "";
+
     // Derived statistics - computed after loading
     let todayStats: any = null;
     let weekStats: any = null;
@@ -87,6 +91,21 @@
         } catch (error) {
             console.error("Error loading decks and tags:", error);
         }
+    }
+
+    function handleTouchClick(callback: () => void, event: Event) {
+        const now = Date.now();
+        const eventType = event.type;
+
+        // Prevent double execution within 100ms
+        if (now - lastEventTime < 100 && lastEventType !== eventType) {
+            return;
+        }
+
+        lastEventTime = now;
+        lastEventType = eventType;
+
+        callback();
     }
 
     async function loadStatistics() {
@@ -302,7 +321,11 @@
     {:else if !statistics}
         <div class="error">
             <p>Failed to load statistics</p>
-            <button class="retry-button" on:click={loadStatistics}>
+            <button
+                class="retry-button"
+                on:click={(e) => handleTouchClick(loadStatistics, e)}
+                on:touchend={(e) => handleTouchClick(loadStatistics, e)}
+            >
                 Retry
             </button>
         </div>
@@ -729,7 +752,12 @@
         </div>
 
         <div class="modal-actions">
-            <button class="close-button" on:click={() => dispatch("close")}>
+            <button
+                class="close-button"
+                on:click={(e) => handleTouchClick(() => dispatch("close"), e)}
+                on:touchend={(e) =>
+                    handleTouchClick(() => dispatch("close"), e)}
+            >
                 Close
             </button>
         </div>
@@ -1022,10 +1050,17 @@
         border: none;
         border-radius: 4px;
         cursor: pointer;
-        font-weight: 500;
+        transition: all 0.2s ease;
+        min-height: 44px;
+        min-width: 80px;
+        touch-action: manipulation;
+        -webkit-tap-highlight-color: transparent;
+        -webkit-touch-callout: none;
+        user-select: none;
     }
 
-    .close-button:hover {
+    .close-button:hover,
+    .close-button:active {
         background: var(--interactive-accent-hover);
     }
 
@@ -1066,10 +1101,17 @@
         border: none;
         border-radius: 4px;
         cursor: pointer;
-        font-size: 14px;
+        transition: all 0.2s ease;
+        min-height: 44px;
+        min-width: 80px;
+        touch-action: manipulation;
+        -webkit-tap-highlight-color: transparent;
+        -webkit-touch-callout: none;
+        user-select: none;
     }
 
-    .retry-button:hover {
+    .retry-button:hover,
+    .retry-button:active {
         background: var(--interactive-accent-hover);
     }
     .buymeacoffee-badge {

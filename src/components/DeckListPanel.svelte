@@ -28,6 +28,10 @@
     let isRefreshing = false;
     let isUpdatingStats = false;
 
+    // Track last event to prevent double execution
+    let lastEventTime = 0;
+    let lastEventType = "";
+
     function getDeckStats(deckId: string): DeckStats {
         return (
             stats.get(deckId) ?? {
@@ -172,6 +176,21 @@
         modal.open();
     }
 
+    function handleTouchClick(callback: () => void, event: Event) {
+        const now = Date.now();
+        const eventType = event.type;
+
+        // Prevent double execution within 100ms
+        if (now - lastEventTime < 100 && lastEventType !== eventType) {
+            return;
+        }
+
+        lastEventTime = now;
+        lastEventType = eventType;
+
+        callback();
+    }
+
     onMount(() => {
         // Initial load
         handleRefresh();
@@ -184,7 +203,8 @@
         <div class="header-buttons">
             <button
                 class="stats-button"
-                on:click={onOpenStatistics}
+                on:click={(e) => handleTouchClick(onOpenStatistics, e)}
+                on:touchend={(e) => handleTouchClick(onOpenStatistics, e)}
                 title="View Overall Statistics"
             >
                 <svg
@@ -207,7 +227,8 @@
             <button
                 class="refresh-button"
                 class:refreshing={isRefreshing}
-                on:click={handleRefresh}
+                on:click={(e) => handleTouchClick(handleRefresh, e)}
+                on:touchend={(e) => handleTouchClick(handleRefresh, e)}
                 disabled={isRefreshing}
             >
                 <svg
@@ -250,6 +271,16 @@
                             class="suggestion-item"
                             on:mousedown|preventDefault={() =>
                                 selectSuggestion(tag)}
+                            on:click={(e) =>
+                                handleTouchClick(
+                                    () => selectSuggestion(tag),
+                                    e,
+                                )}
+                            on:touchend={(e) =>
+                                handleTouchClick(
+                                    () => selectSuggestion(tag),
+                                    e,
+                                )}
                         >
                             {tag}
                         </button>
@@ -265,6 +296,16 @@
                             class="suggestion-item"
                             on:mousedown|preventDefault={() =>
                                 selectSuggestion(tag)}
+                            on:click={(e) =>
+                                handleTouchClick(
+                                    () => selectSuggestion(tag),
+                                    e,
+                                )}
+                            on:touchend={(e) =>
+                                handleTouchClick(
+                                    () => selectSuggestion(tag),
+                                    e,
+                                )}
                         >
                             {tag}
                         </button>
@@ -303,7 +344,16 @@
                         <div class="col-deck">
                             <span
                                 class="deck-name-link"
-                                on:click={() => handleDeckClick(deck)}
+                                on:click={(e) =>
+                                    handleTouchClick(
+                                        () => handleDeckClick(deck),
+                                        e,
+                                    )}
+                                on:touchend={(e) =>
+                                    handleTouchClick(
+                                        () => handleDeckClick(deck),
+                                        e,
+                                    )}
                                 on:keydown={(e) =>
                                     e.key === "Enter" && handleDeckClick(deck)}
                                 role="button"
@@ -351,7 +401,16 @@
                         <div class="col-config">
                             <button
                                 class="deck-config-button"
-                                on:click={(e) => handleConfigClick(deck, e)}
+                                on:click={(e) =>
+                                    handleTouchClick(
+                                        () => handleConfigClick(deck, e),
+                                        e,
+                                    )}
+                                on:touchend={(e) =>
+                                    handleTouchClick(
+                                        () => handleConfigClick(deck, e),
+                                        e,
+                                    )}
                                 title="Configure deck settings"
                                 aria-label="Configure {deck.name}"
                             >
@@ -384,19 +443,25 @@
 
 <style>
     .deck-list-panel {
-        min-width: 328px;
+        width: 100%;
         height: 100%;
         display: flex;
         flex-direction: column;
         background: var(--background-primary);
         color: var(--text-normal);
+        touch-action: manipulation;
+        -webkit-touch-callout: none;
+        -webkit-user-select: none;
+        -moz-user-select: none;
+        -ms-user-select: none;
+        user-select: none;
     }
 
     .panel-header {
         display: flex;
         justify-content: space-between;
         align-items: center;
-        padding: 12px 16px;
+        padding: 12px;
         border-bottom: 1px solid var(--background-modifier-border);
     }
 
@@ -407,22 +472,24 @@
     }
 
     .filter-section {
-        margin-bottom: 16px;
+        margin: 0 12px 16px 12px;
     }
 
     .filter-container {
         position: relative;
-        max-width: calc(100% - 10px);
+        width: 100%;
     }
 
     .filter-input {
         width: 100%;
-        padding: 0 0 0 2px;
+        padding: 8px 12px;
         border: 1px solid var(--background-modifier-border);
         border-radius: 4px;
         background: var(--background-primary);
         color: var(--text-normal);
         font-size: 14px;
+        height: 32px;
+        box-sizing: border-box;
     }
 
     .suggestions-dropdown {
@@ -459,9 +526,14 @@
         font-size: 14px;
         cursor: pointer;
         transition: background-color 0.1s ease;
+        touch-action: manipulation;
+        -webkit-tap-highlight-color: transparent;
+        -webkit-touch-callout: none;
+        user-select: none;
     }
 
-    .suggestion-item:hover {
+    .suggestion-item:hover,
+    .suggestion-item:active {
         background: var(--background-modifier-hover);
     }
 
@@ -483,14 +555,19 @@
     .stats-button {
         padding: 6px;
         background: var(--interactive-normal);
-        border: none;
+        border: 1px solid var(--interactive-normal);
         border-radius: 4px;
         cursor: pointer;
         color: var(--text-muted);
         transition: all 0.2s ease;
+        touch-action: manipulation;
+        -webkit-tap-highlight-color: transparent;
+        -webkit-touch-callout: none;
+        user-select: none;
     }
 
-    .stats-button:hover {
+    .stats-button:hover,
+    .stats-button:active {
         background: var(--interactive-hover);
         color: var(--text-normal);
     }
@@ -505,9 +582,14 @@
         transition: all 0.2s ease;
         position: relative;
         z-index: 1;
+        touch-action: manipulation;
+        -webkit-tap-highlight-color: transparent;
+        -webkit-touch-callout: none;
+        user-select: none;
     }
 
-    .refresh-button:hover {
+    .refresh-button:hover,
+    .refresh-button:active {
         background: var(--background-modifier-hover);
         color: var(--text-normal);
     }
@@ -550,17 +632,18 @@
     }
 
     .deck-table {
-        flex: 1;
         display: flex;
         flex-direction: column;
         overflow: hidden;
+        width: 100%;
+        box-sizing: border-box;
     }
 
     .table-header {
         display: grid;
         grid-template-columns: 1fr 60px 60px 60px 40px;
         gap: 8px;
-        padding: 8px 16px;
+        padding: 8px 12px;
         font-weight: 600;
         font-size: 14px;
         border-bottom: 1px solid var(--background-modifier-border);
@@ -577,7 +660,7 @@
         display: grid;
         grid-template-columns: 1fr 60px 60px 60px 40px;
         gap: 8px;
-        padding: 12px 16px;
+        padding: 12px;
         border-bottom: 1px solid var(--background-modifier-border);
         align-items: center;
     }
@@ -593,9 +676,14 @@
         white-space: break-spaces;
         display: inline-block;
         max-width: 250px;
+        touch-action: manipulation;
+        -webkit-tap-highlight-color: transparent;
+        -webkit-touch-callout: none;
+        user-select: none;
     }
 
-    .deck-name-link:hover {
+    .deck-name-link:hover,
+    .deck-name-link:active {
         text-decoration-color: var(--text-accent);
         color: var(--text-accent);
     }
@@ -615,17 +703,22 @@
     .deck-config-button {
         background: transparent;
         border: none;
-        color: var(--text-muted);
+        padding: 4px;
+        border-radius: 4px;
         cursor: pointer;
-        padding: 6px;
-        border-radius: 3px;
+        color: var(--text-muted);
         display: flex;
         align-items: center;
         justify-content: center;
         transition: all 0.2s ease;
+        touch-action: manipulation;
+        -webkit-tap-highlight-color: transparent;
+        -webkit-touch-callout: none;
+        user-select: none;
     }
 
-    .deck-config-button:hover {
+    .deck-config-button:hover,
+    .deck-config-button:active {
         background: var(--background-modifier-hover);
         color: var(--text-normal);
     }

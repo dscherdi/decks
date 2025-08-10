@@ -24,6 +24,10 @@
     let enableReviewCardsContainer: HTMLElement;
     let reviewOrderContainer: HTMLElement;
 
+    // Track last event to prevent double execution
+    let lastEventTime = 0;
+    let lastEventType = "";
+
     // Reactive statement to update config when values change
     $: {
         const newConfig = {
@@ -46,6 +50,21 @@
             reviewOrder,
         };
         dispatch("save", finalConfig);
+    }
+
+    function handleTouchClick(callback: () => void, event: Event) {
+        const now = Date.now();
+        const eventType = event.type;
+
+        // Prevent double execution within 100ms
+        if (now - lastEventTime < 100 && lastEventType !== eventType) {
+            return;
+        }
+
+        lastEventTime = now;
+        lastEventType = eventType;
+
+        callback();
     }
 
     function handleCancel() {
@@ -182,10 +201,19 @@
 
     <!-- Action Buttons -->
     <div class="modal-footer">
-        <button class="mod-cta" on:click={handleSave} disabled={saving}>
+        <button
+            class="mod-cta"
+            on:click={(e) => handleTouchClick(handleSave, e)}
+            on:touchend={(e) => handleTouchClick(handleSave, e)}
+            disabled={saving}
+        >
             {saving ? "Saving..." : "Save"}
         </button>
-        <button on:click={handleCancel} disabled={saving}>Cancel</button>
+        <button
+            on:click={(e) => handleTouchClick(handleCancel, e)}
+            on:touchend={(e) => handleTouchClick(handleCancel, e)}
+            disabled={saving}>Cancel</button
+        >
     </div>
 </div>
 
@@ -313,11 +341,17 @@
         background: var(--background-primary);
         color: var(--text-normal);
         cursor: pointer;
-        font-size: 0.9em;
         transition: all 0.2s ease;
+        touch-action: manipulation;
+        -webkit-tap-highlight-color: transparent;
+        -webkit-touch-callout: none;
+        user-select: none;
+        min-height: 44px;
+        min-width: 80px;
     }
 
-    .modal-footer button:hover:not(:disabled) {
+    .modal-footer button:hover:not(:disabled),
+    .modal-footer button:active:not(:disabled) {
         background: var(--background-modifier-hover);
     }
 
@@ -332,7 +366,8 @@
         border-color: var(--interactive-accent);
     }
 
-    .modal-footer button.mod-cta:hover:not(:disabled) {
+    .modal-footer button.mod-cta:hover:not(:disabled),
+    .modal-footer button.mod-cta:active:not(:disabled) {
         background: var(--interactive-accent-hover);
         border-color: var(--interactive-accent-hover);
     }
@@ -391,6 +426,7 @@
 
         .modal-footer button {
             padding: 14px 20px;
+            min-height: 52px;
         }
     }
 

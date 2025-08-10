@@ -33,6 +33,10 @@
     let reviewedCount = 0;
     let cardStartTime: number = 0;
 
+    // Track last event to prevent double execution
+    let lastEventTime = 0;
+    let lastEventType = "";
+
     $: currentCard = flashcards[currentIndex] || null;
     $: progress =
         flashcards.length > 0 ? (currentIndex / flashcards.length) * 100 : 0;
@@ -134,6 +138,21 @@
         }
     }
 
+    function handleTouchClick(callback: () => void, event: Event) {
+        const now = Date.now();
+        const eventType = event.type;
+
+        // Prevent double execution within 100ms
+        if (now - lastEventTime < 100 && lastEventType !== eventType) {
+            return;
+        }
+
+        lastEventTime = now;
+        lastEventType = eventType;
+
+        callback();
+    }
+
     onMount(() => {
         loadCard();
         window.addEventListener("keydown", handleKeydown);
@@ -177,7 +196,11 @@
 
         <div class="action-buttons">
             {#if !showAnswer}
-                <button class="show-answer-button" on:click={revealAnswer}>
+                <button
+                    class="show-answer-button"
+                    on:click={(e) => handleTouchClick(revealAnswer, e)}
+                    on:touchend={(e) => handleTouchClick(revealAnswer, e)}
+                >
                     <span>Show Answer</span>
                     <span class="shortcut">Space</span>
                 </button>
@@ -187,7 +210,16 @@
                 <div class="difficulty-buttons">
                     <button
                         class="difficulty-button again"
-                        on:click={() => handleDifficulty("again")}
+                        on:click={(e) =>
+                            handleTouchClick(
+                                () => handleDifficulty("again"),
+                                e,
+                            )}
+                        on:touchend={(e) =>
+                            handleTouchClick(
+                                () => handleDifficulty("again"),
+                                e,
+                            )}
                         disabled={isLoading}
                     >
                         <div class="button-label">Again</div>
@@ -199,7 +231,10 @@
 
                     <button
                         class="difficulty-button hard"
-                        on:click={() => handleDifficulty("hard")}
+                        on:click={(e) =>
+                            handleTouchClick(() => handleDifficulty("hard"), e)}
+                        on:touchend={(e) =>
+                            handleTouchClick(() => handleDifficulty("hard"), e)}
                         disabled={isLoading}
                     >
                         <div class="button-label">Hard</div>
@@ -211,7 +246,10 @@
 
                     <button
                         class="difficulty-button good"
-                        on:click={() => handleDifficulty("good")}
+                        on:click={(e) =>
+                            handleTouchClick(() => handleDifficulty("good"), e)}
+                        on:touchend={(e) =>
+                            handleTouchClick(() => handleDifficulty("good"), e)}
                         disabled={isLoading}
                     >
                         <div class="button-label">Good</div>
@@ -223,7 +261,10 @@
 
                     <button
                         class="difficulty-button easy"
-                        on:click={() => handleDifficulty("easy")}
+                        on:click={(e) =>
+                            handleTouchClick(() => handleDifficulty("easy"), e)}
+                        on:touchend={(e) =>
+                            handleTouchClick(() => handleDifficulty("easy"), e)}
                         disabled={isLoading}
                     >
                         <div class="button-label">Easy</div>
@@ -375,14 +416,21 @@
         border: none;
         border-radius: 6px;
         cursor: pointer;
+        transition: all 0.2s ease;
         display: flex;
+        justify-content: space-between;
         align-items: center;
-        justify-content: center;
-        gap: 8px;
+        position: relative;
         box-sizing: border-box;
+        min-height: 48px;
+        touch-action: manipulation;
+        -webkit-tap-highlight-color: transparent;
+        -webkit-touch-callout: none;
+        user-select: none;
     }
 
-    .show-answer-button:hover {
+    .show-answer-button:hover,
+    .show-answer-button:active {
         background: var(--interactive-accent-hover);
     }
 
@@ -411,22 +459,29 @@
     .difficulty-button {
         flex: 1;
         min-width: 0;
-        padding: 10px 6px;
-        border: 1px solid var(--background-modifier-border);
-        background: var(--background-secondary);
-        border-radius: 6px;
+        padding: 12px 8px;
+        border: 2px solid var(--background-modifier-border);
+        background: var(--background-primary);
+        color: var(--text-normal);
+        border-radius: 8px;
         cursor: pointer;
+        transition: all 0.2s ease;
+        position: relative;
+        font-family: inherit;
+        min-height: 60px;
         display: flex;
         flex-direction: column;
         align-items: center;
+        justify-content: center;
         gap: 2px;
-        transition: all 0.2s ease;
-        position: relative;
-        box-sizing: border-box;
-        white-space: nowrap;
+        touch-action: manipulation;
+        -webkit-tap-highlight-color: transparent;
+        -webkit-touch-callout: none;
+        user-select: none;
     }
 
-    .difficulty-button:hover {
+    .difficulty-button:hover,
+    .difficulty-button:active {
         transform: translateY(-2px);
         box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
     }
@@ -605,7 +660,7 @@
 
         .difficulty-button {
             padding: 10px 6px;
-            min-height: 44px; /* Touch-friendly */
+            min-height: 48px; /* Touch-friendly */
         }
 
         .button-label {
@@ -657,6 +712,7 @@
         .show-answer-button {
             padding: 12px 20px;
             font-size: 15px;
+            min-height: 52px;
         }
 
         .difficulty-buttons {

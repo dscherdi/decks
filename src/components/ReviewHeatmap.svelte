@@ -15,6 +15,10 @@
     let containerWidth = 0;
     let currentYear = new Date().getFullYear();
 
+    // Track last event to prevent double execution
+    let lastEventTime = 0;
+    let lastEventType = "";
+
     const months = [
         "Jan",
         "Feb",
@@ -205,7 +209,23 @@
         } else {
             currentYear++;
         }
+        generateDays();
         refresh();
+    }
+
+    function handleTouchClick(callback: () => void, event: Event) {
+        const now = Date.now();
+        const eventType = event.type;
+
+        // Prevent double execution within 100ms
+        if (now - lastEventTime < 100 && lastEventType !== eventType) {
+            return;
+        }
+
+        lastEventTime = now;
+        lastEventType = eventType;
+
+        callback();
     }
 
     export async function refresh() {
@@ -245,7 +265,13 @@
             {/if}
         </div>
         <div class="year-navigation">
-            <button class="nav-button" on:click={() => navigateYear("prev")}>
+            <button
+                class="nav-button"
+                on:click={(e) =>
+                    handleTouchClick(() => navigateYear("prev"), e)}
+                on:touchend={(e) =>
+                    handleTouchClick(() => navigateYear("prev"), e)}
+            >
                 <svg
                     width="12"
                     height="12"
@@ -256,7 +282,13 @@
                 </svg>
             </button>
             <span class="current-year">{currentYear}</span>
-            <button class="nav-button" on:click={() => navigateYear("next")}>
+            <button
+                class="nav-button"
+                on:click={(e) =>
+                    handleTouchClick(() => navigateYear("next"), e)}
+                on:touchend={(e) =>
+                    handleTouchClick(() => navigateYear("next"), e)}
+            >
                 <svg
                     width="12"
                     height="12"
@@ -320,12 +352,18 @@
 
 <style>
     .heatmap-container {
-        padding: 16px;
+        padding: 12px;
         border-top: 1px solid var(--background-modifier-border);
         background: var(--background-primary);
         display: flex;
         flex-direction: column;
         align-items: stretch;
+        touch-action: manipulation;
+        -webkit-touch-callout: none;
+        -webkit-user-select: none;
+        -moz-user-select: none;
+        -ms-user-select: none;
+        user-select: none;
     }
 
     .heatmap-header {
@@ -352,21 +390,28 @@
         background: none;
         border: 1px solid var(--background-modifier-border);
         border-radius: 4px;
-        padding: 4px;
+        padding: 8px;
         cursor: pointer;
         color: var(--text-muted);
-        transition: all 0.2s ease;
         display: flex;
         align-items: center;
         justify-content: center;
-        width: 24px;
-        height: 24px;
+        transition: all 0.2s ease;
+        width: 32px;
+        height: 32px;
+        min-width: 32px;
+        min-height: 32px;
+        touch-action: manipulation;
+        -webkit-tap-highlight-color: transparent;
+        -webkit-touch-callout: none;
+        user-select: none;
     }
 
-    .nav-button:hover {
+    .nav-button:hover,
+    .nav-button:active {
         background: var(--background-modifier-hover);
         color: var(--text-normal);
-        border-color: var(--text-muted);
+        border-color: var(--background-modifier-border-hover);
     }
 
     .current-year {
@@ -575,8 +620,10 @@
 
         .nav-button {
             padding: 6px;
-            width: 36px;
-            height: 36px;
+            width: 44px;
+            height: 44px;
+            min-width: 44px;
+            min-height: 44px;
         }
 
         .day-labels {
@@ -620,8 +667,10 @@
 
         .nav-button {
             padding: 4px;
-            width: 28px;
-            height: 28px;
+            width: 40px;
+            height: 40px;
+            min-width: 40px;
+            min-height: 40px;
         }
 
         .nav-button svg {
