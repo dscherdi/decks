@@ -67,6 +67,11 @@ export interface DeckStats {
   totalCount: number;
 }
 
+export interface AnkiExportConfig {
+  ankiDeckName: string;
+  separator: string;
+}
+
 export interface DatabaseSchema {
   decks: Deck;
   flashcards: Flashcard;

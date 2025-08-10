@@ -4,6 +4,7 @@
     import type { Deck, DeckStats, DeckConfig } from "../database/types";
     import ReviewHeatmap from "./ReviewHeatmap.svelte";
     import { DeckConfigModal } from "./DeckConfigModal";
+    import { AnkiExportModal } from "./AnkiExportModal";
 
     let decks: Deck[] = [];
     let allDecks: Deck[] = [];
@@ -14,6 +15,13 @@
     let availableTags: string[] = [];
     let filteredSuggestions: string[] = [];
     let inputFocused = false;
+    let activeDropdown: HTMLElement | null = null;
+    let activeDropdownDeckId: string | null = null;
+    let dropdownEventListeners: {
+        click?: (e: Event) => void;
+        scroll?: () => void;
+        resize?: () => void;
+    } = {};
 
     export let onDeckClick: (deck: Deck) => void;
     export let onRefresh: () => void;
@@ -154,6 +162,148 @@
     function handleConfigClick(deck: Deck, event: Event) {
         event.stopPropagation();
 
+        // If clicking the same cog, close the dropdown
+        if (activeDropdown && activeDropdownDeckId === deck.id) {
+            closeActiveDropdown();
+            return;
+        }
+
+        // Close any existing dropdown
+        closeActiveDropdown();
+
+        // Create dropdown menu
+        const dropdown = document.createElement("div");
+        dropdown.className = "deck-config-dropdown";
+
+        const configOption = document.createElement("div");
+        configOption.className = "dropdown-option";
+        configOption.textContent = "Configure deck";
+        configOption.onclick = () => {
+            closeActiveDropdown();
+            openDeckConfig(deck);
+        };
+
+        const exportOption = document.createElement("div");
+        exportOption.className = "dropdown-option";
+        exportOption.textContent = "Export to Anki";
+        exportOption.onclick = () => {
+            closeActiveDropdown();
+            openAnkiExport(deck);
+        };
+
+        dropdown.appendChild(configOption);
+        dropdown.appendChild(exportOption);
+
+        // Position dropdown with viewport bounds checking
+        const button = event.target as HTMLElement;
+        const rect = button.getBoundingClientRect();
+        const viewportWidth = window.innerWidth;
+        const viewportHeight = window.innerHeight;
+
+        dropdown.style.position = "fixed";
+        dropdown.style.zIndex = "1000";
+
+        // Temporarily append to measure dimensions
+        dropdown.style.visibility = "hidden";
+        document.body.appendChild(dropdown);
+        const dropdownRect = dropdown.getBoundingClientRect();
+
+        // Calculate optimal position
+        let top = rect.bottom + 5;
+        let left = rect.left;
+
+        // Adjust if dropdown would go below viewport
+        if (top + dropdownRect.height > viewportHeight - 10) {
+            top = rect.top - dropdownRect.height - 5;
+        }
+
+        // Adjust if dropdown would go right of viewport
+        if (left + dropdownRect.width > viewportWidth - 10) {
+            left = viewportWidth - dropdownRect.width - 10;
+        }
+
+        // Ensure it doesn't go above or left of viewport
+        top = Math.max(10, top);
+        left = Math.max(10, left);
+
+        dropdown.style.top = `${top}px`;
+        dropdown.style.left = `${left}px`;
+        dropdown.style.visibility = "visible";
+
+        // Store active dropdown reference
+        activeDropdown = dropdown;
+        activeDropdownDeckId = deck.id;
+
+        // Store event listener functions for cleanup
+        dropdownEventListeners.click = (e: Event) => {
+            if (!dropdown.contains(e.target as Node)) {
+                closeActiveDropdown();
+            }
+        };
+        dropdownEventListeners.scroll = closeActiveDropdown;
+        dropdownEventListeners.resize = closeActiveDropdown;
+
+        // Add event listeners with slight delay to prevent immediate closure
+        setTimeout(() => {
+            if (dropdownEventListeners.click) {
+                document.addEventListener(
+                    "click",
+                    dropdownEventListeners.click,
+                );
+            }
+            if (dropdownEventListeners.scroll) {
+                window.addEventListener(
+                    "scroll",
+                    dropdownEventListeners.scroll,
+                    true,
+                );
+            }
+            if (dropdownEventListeners.resize) {
+                window.addEventListener(
+                    "resize",
+                    dropdownEventListeners.resize,
+                );
+            }
+        }, 0);
+    }
+
+    function closeActiveDropdown() {
+        if (activeDropdown) {
+            activeDropdown.remove();
+            activeDropdown = null;
+            activeDropdownDeckId = null;
+
+            // Clean up all event listeners
+            if (dropdownEventListeners.click) {
+                document.removeEventListener(
+                    "click",
+                    dropdownEventListeners.click,
+                );
+            }
+            if (dropdownEventListeners.scroll) {
+                window.removeEventListener(
+                    "scroll",
+                    dropdownEventListeners.scroll,
+                    true,
+                );
+            }
+            if (dropdownEventListeners.resize) {
+                window.removeEventListener(
+                    "resize",
+                    dropdownEventListeners.resize,
+                );
+            }
+
+            // Clear stored references
+            dropdownEventListeners = {};
+        }
+    }
+
+    onDestroy(() => {
+        closeActiveDropdown();
+    });
+
+    function openDeckConfig(deck: Deck) {
         const modal = new DeckConfigModal(
             plugin,
             deck,
@@ -173,6 +323,11 @@
             },
         );
 
+        modal.open();
+    }
+
+    function openAnkiExport(deck: Deck) {
+        const modal = new AnkiExportModal(plugin, deck);
         modal.open();
     }
 
@@ -674,7 +829,6 @@
         overflow: hidden;
         text-overflow: ellipsis;
         white-space: break-spaces;
-        display: inline-block;
         max-width: 250px;
         touch-action: manipulation;
         -webkit-tap-highlight-color: transparent;
@@ -996,5 +1150,31 @@
         .help-text {
             font-size: 12px;
         }
+    }
+
+    /* Dropdown styles */
+    :global(.deck-config-dropdown) {
+        background: var(--background-primary);
+        border: 1px solid var(--background-modifier-border);
+        border-radius: 6px;
+        box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+        padding: 4px 0;
+        min-width: 140px;
+    }
+
+    :global(.dropdown-option) {
+        padding: 8px 12px;
+        cursor: pointer;
+        font-size: 0.9em;
+        color: var(--text-normal);
+        transition: background-color 0.15s ease;
+    }
+
+    :global(.dropdown-option:hover) {
+        background: var(--background-modifier-hover);
+    }
+
+    :global(.dropdown-option:active) {
+        background: var(--background-modifier-active);
     }
 </style>

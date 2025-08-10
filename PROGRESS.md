@@ -122,7 +122,7 @@
 10. ✅ Add a timelapsed to the review object which tracks how much time it took for the user to review a flashcard from the time it was shown to him until he chooses a difficulty. Use this timelapse in statistics to measure pace of the user seconds/cards.
 11. ✅ Mobile support:
   - The modals and views position and size must be adapted for mobile use.
-12. Export deck to anki:
+12. ✅ Export deck to anki:
   - A deck can be exported to anki by clicking on the cog icon of the deck, on the deck list.
   - The cog will open a select dropdown where the user can select the option Export to anki.
   - The select dropdown will contain these options:
@@ -598,6 +598,43 @@
 - **Intelligent Display**: Extended forecast to 90 days, displaying first 20 days with actual due cards
 - **Native Tooltips**: Hover over forecast bars to see detailed information using reliable browser tooltips
 - **Enhanced UX**: Simple, consistent tooltip experience showing "Today/Tomorrow/In X days: Y cards"
+
+### ✅ Enhanced Heatmap Layout
+- **Month Separation**: Replaced single continuous grid with individual month containers
+- **Improved Readability**: Each month now has its own label and container for better visual separation
+- **Responsive Design**: Maintains mobile compatibility with proper spacing and touch targets
+- **Clean Architecture**: Simplified CSS layout using flexbox for month organization
+
+### ✅ Full Width Layout Optimization
+- **Left Panel Utilization**: Deck list now uses 100% of available left panel width
+- **Removed Width Constraints**: Eliminated 328px minimum width limitation
+- **Consistent Padding**: Unified 12px padding across all panel components
+- **Better Space Usage**: Tables, filters, and heatmap all stretch to panel edges
+- **Mobile Responsive**: Maintains full width behavior across all screen sizes
+
+### ✅ Comprehensive Touch Support Implementation
+- **Unified Event Handling**: Added `handleTouchClick()` function to prevent double execution
+- **Touch Properties**: Applied `touch-action: manipulation` and removed tap highlights
+- **Proper Touch Targets**: Minimum 44px touch targets on mobile (Apple HIG compliant)
+- **Visual Feedback**: Added `:active` states alongside `:hover` for immediate touch response
+- **Cross-Component Coverage**: Touch support added to all interactive elements:
+  - DeckListPanel: Stats, refresh, config buttons, deck links, filter suggestions
+  - ReviewHeatmap: Year navigation buttons
+  - FlashcardReviewModal: Show answer and all difficulty buttons
+  - DeckConfigUI: Save/cancel modal buttons
+  - StatisticsUI: Close/retry buttons
+- **Performance**: Eliminates 300ms tap delay on iOS Safari
+- **Accessibility**: Maintains proper focus states and keyboard navigation
+
+### ✅ Mobile Modal Experience Enhancement
+- **Smart Margins**: Modals no longer fill entire screen on mobile
+- **Progressive Spacing**: 20px margins on tablets, 16px on phones, 8px on small screens
+- **Professional Appearance**: Maintains modal look vs full-screen takeover
+- **Border Radius Preservation**: Keeps rounded corners on mobile devices
+- **Responsive Heights**: Calculated heights account for margins (`calc(100vh - margins)`)
+- **Safe Minimums**: 280px min-width and 400px min-height protection
+- **Cross-Modal Consistency**: Applied to review, statistics, and config modals
+- **Touch-Friendly**: Large enough for easy interaction while providing visual breathing room
 - **Empty State Handling**: Graceful display when no reviews exist yet, with helpful guidance messages
 - **Current Status Section**: Always shows current card counts (New, Learning, Mature, Due Today) even without reviews
 - **Robust Error Handling**: Statistics queries wrapped in try-catch with fallback empty data structures
