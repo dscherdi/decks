@@ -3,8 +3,6 @@ export interface FlashcardsSettings {
   fsrs: {
     requestRetention: number;
     maximumInterval: number;
-    easyBonus: number;
-    hardInterval: number;
     weights: number[];
   };
 
@@ -37,8 +35,6 @@ export const DEFAULT_SETTINGS: FlashcardsSettings = {
   fsrs: {
     requestRetention: 0.9,
     maximumInterval: 36500, // 100 years
-    easyBonus: 1.3,
-    hardInterval: 1.2,
     weights: [
       0.4072, 1.1829, 3.1262, 15.4722, 7.2102, 0.5316, 1.0651, 0.0234, 1.616,
       0.1544, 1.0824, 1.9813, 0.0953, 0.2975, 2.2042, 0.2407, 2.9466,

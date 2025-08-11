@@ -19,7 +19,7 @@ export interface Deck {
   modified: string;
 }
 
-export type FlashcardState = "new" | "learning" | "review";
+export type FlashcardState = "new" | "review";
 
 export interface Flashcard {
   id: string;
@@ -53,7 +53,7 @@ export interface ReviewLog {
   newEaseFactor: number;
   timeElapsed: number; // Time in milliseconds from card display to difficulty selection
   // Essential state that cannot be calculated
-  newState: "new" | "learning" | "review";
+  newState: "new" | "review";
   newRepetitions: number;
   newLapses: number;
   newStability: number;
@@ -62,7 +62,6 @@ export interface ReviewLog {
 export interface DeckStats {
   deckId: string;
   newCount: number;
-  learningCount: number;
   dueCount: number;
   totalCount: number;
 }
@@ -90,7 +89,6 @@ export interface DailyStats {
 
 export interface CardStats {
   new: number;
-  learning: number;
   mature: number;
 }
 

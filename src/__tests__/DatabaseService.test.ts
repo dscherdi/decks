@@ -563,21 +563,19 @@ describe("DatabaseService", () => {
         .spyOn(dbService, "getDailyReviewCounts")
         .mockResolvedValue({ newCount: 0, reviewCount: 0 });
 
-      // Mock counts for different queries
+      // Mock counts for different queries (no learning count in pure FSRS)
       mockStatement.get
         .mockReturnValueOnce([5]) // new count
-        .mockReturnValueOnce([3]) // learning count
-        .mockReturnValueOnce([7]) // due count
-        .mockReturnValueOnce([15]); // total count
+        .mockReturnValueOnce([3]) // due count
+        .mockReturnValueOnce([8]); // total count
 
       const stats = await dbService.getDeckStats("deck_123");
 
       expect(stats).toEqual({
         deckId: "deck_123",
         newCount: 5,
-        learningCount: 3,
-        dueCount: 7,
-        totalCount: 15,
+        dueCount: 3,
+        totalCount: 8,
       });
 
       // Clean up mocks
@@ -611,21 +609,19 @@ describe("DatabaseService", () => {
         .spyOn(dbService, "getDailyReviewCounts")
         .mockResolvedValue({ newCount: 3, reviewCount: 5 });
 
-      // Mock counts for different queries
+      // Mock counts for different queries (no learning count in pure FSRS)
       mockStatement.get
         .mockReturnValueOnce([15]) // total new cards available
-        .mockReturnValueOnce([4]) // learning count (unchanged)
         .mockReturnValueOnce([25]) // total review cards available
-        .mockReturnValueOnce([44]); // total count
+        .mockReturnValueOnce([40]); // total count
 
       const stats = await dbService.getDeckStats("deck_123");
 
       expect(stats).toEqual({
         deckId: "deck_123",
         newCount: 7, // min(15, 10-3) = 7 remaining new cards
-        learningCount: 4, // learning cards are unchanged
         dueCount: 15, // min(25, 20-5) = 15 remaining review cards
-        totalCount: 44,
+        totalCount: 40,
       });
 
       // Clean up mocks
@@ -659,27 +655,24 @@ describe("DatabaseService", () => {
         .spyOn(dbService, "getDailyReviewCounts")
         .mockResolvedValue({ newCount: 0, reviewCount: 0 });
 
-      // Mock counts for different queries
+      // Mock counts for different queries (no learning count in pure FSRS)
       mockStatement.get
         .mockReturnValueOnce([10]) // total new cards available
-        .mockReturnValueOnce([5]) // learning count
         .mockReturnValueOnce([20]) // total review cards available
-        .mockReturnValueOnce([35]); // total count
+        .mockReturnValueOnce([30]); // total count
 
       const stats = await dbService.getDeckStats("deck_123");
 
       expect(stats).toEqual({
         deckId: "deck_123",
         newCount: 0, // Should be 0 when limit is 0, not NaN
-        learningCount: 5, // learning cards are unchanged
-        dueCount: 0, // Should be 0 when limit is 0, not NaN
-        totalCount: 35,
+        dueCount: 0,
+        totalCount: 30,
       });
 
       // Verify no NaN values
       expect(Number.isNaN(stats.newCount)).toBe(false);
       expect(Number.isNaN(stats.dueCount)).toBe(false);
-      expect(Number.isNaN(stats.learningCount)).toBe(false);
       expect(Number.isNaN(stats.totalCount)).toBe(false);
 
       // Clean up mocks
@@ -713,81 +706,35 @@ describe("DatabaseService", () => {
         .spyOn(dbService, "getDailyReviewCounts")
         .mockResolvedValue({ newCount: 6, reviewCount: 4 }); // Already reviewed more than limits
 
-      // Mock counts for different queries
+      // Mock counts for different queries (no learning count in pure FSRS)
       mockStatement.get
         .mockReturnValueOnce([10]) // total new cards available
-        .mockReturnValueOnce([2]) // learning count
         .mockReturnValueOnce([8]) // total review cards available
-        .mockReturnValueOnce([20]); // total count
+        .mockReturnValueOnce([18]); // total count
 
       const stats = await dbService.getDeckStats("deck_123");
 
       expect(stats).toEqual({
         deckId: "deck_123",
         newCount: 0, // Should be 0 because 6 > 5 (limit exceeded)
-        learningCount: 2, // learning cards are unchanged
         dueCount: 0, // Should be 0 because 4 > 3 (limit exceeded)
-        totalCount: 20,
+        totalCount: 18,
       });
 
       // Test getReviewableFlashcards with the same scenario
-      // Reset mocks for the learning cards query
+      // Reset mocks for queries (no learning cards in pure FSRS)
       mockStatement.step
         .mockReset()
-        .mockReturnValueOnce(true) // first learning card
-        .mockReturnValueOnce(true) // second learning card
-        .mockReturnValueOnce(false) // end learning query
+        .mockReturnValueOnce(false) // no learning cards
         .mockReturnValueOnce(false) // no new cards (limit exceeded)
         .mockReturnValueOnce(false); // no review cards (limit exceeded)
 
-      mockStatement.get
-        .mockReset()
-        .mockReturnValueOnce([
-          "learning_1",
-          "deck_123",
-          "Learning Front 1",
-          "Back",
-          "header-paragraph",
-          "test.md",
-          1,
-          "hash1",
-          "learning",
-          "2024-01-01T00:00:00.000Z",
-          60,
-          0,
-          2.5,
-          1.0,
-          0,
-          null,
-          "2024-01-01",
-          "2024-01-01",
-        ])
-        .mockReturnValueOnce([
-          "learning_2",
-          "deck_123",
-          "Learning Front 2",
-          "Back",
-          "header-paragraph",
-          "test.md",
-          1,
-          "hash2",
-          "learning",
-          "2024-01-02T00:00:00.000Z",
-          60,
-          0,
-          2.5,
-          1.0,
-          0,
-          null,
-          "2024-01-01",
-          "2024-01-01",
-        ]);
+      // No learning cards in pure FSRS - remove mock data
 
       const flashcards = await dbService.getReviewableFlashcards("deck_123");
 
-      // Should only return learning cards since new and review limits are exceeded
-      expect(flashcards).toHaveLength(2); // Only learning cards
-      expect(flashcards.every((card) => card.state === "learning")).toBe(true);
+      // Should return no cards since new and review limits are exceeded and no learning cards exist
+      expect(flashcards).toHaveLength(0); // No cards when limits exceeded
 
       // Clean up mocks
       mockGetDeckById.mockRestore();
@@ -833,9 +780,7 @@ describe("DatabaseService", () => {
         );
 
         // Should call three separate queries for learning, new, and review cards
-        expect(mockDb.prepare).toHaveBeenCalledWith(
-          expect.stringContaining("state = 'learning'"),
-        );
+        // No learning state queries in pure FSRS
         expect(mockDb.prepare).toHaveBeenCalledWith(
           expect.stringContaining("state = 'new'"),
         );
@@ -928,42 +873,22 @@ describe("DatabaseService", () => {
 
         mockStatement.get
           .mockReturnValueOnce([
-            "learning_1",
+            "review_1",
             deckId,
-            "Learning Front 1",
+            "Review Front 1",
             "Back",
             "header-paragraph",
             "test.md",
             1,
             "hash1",
-            "learning",
+            "review",
             "2024-01-01T00:00:00.000Z",
-            60,
-            0,
-            2.5,
-            1.0,
-            0,
-            null,
-            "2024-01-01",
-            "2024-01-01",
-          ])
-          .mockReturnValueOnce([
-            "learning_2",
-            deckId,
-            "Learning Front 2",
-            "Back",
-            "header-paragraph",
-            "test.md",
+            1440,
             1,
-            "hash2",
-            "learning",
-            "2024-01-02T00:00:00.000Z",
-            60,
-            0,
             2.5,
             1.0,
             0,
-            null,
+            "2024-01-01T00:00:00.000Z",
             "2024-01-01",
             "2024-01-01",
           ])
@@ -1008,9 +933,9 @@ describe("DatabaseService", () => {
             "2024-01-01",
           ])
           .mockReturnValueOnce([
-            "review_1",
+            "review_2",
             deckId,
-            "Review Front 1",
+            "Review Front 2",
             "Back",
             "header-paragraph",
             "test.md",
@@ -1023,29 +948,23 @@ describe("DatabaseService", () => {
             2.5,
             1.0,
             0,
-            null,
+            "2024-01-01T00:00:00.000Z",
             "2024-01-01",
             "2024-01-01",
           ]);
 
         const result = await dbService.getReviewableFlashcards(deckId);
 
-        // Verify Anki order: learning first, then review, then new
-        expect(result).toHaveLength(5);
-        expect(result[0].state).toBe("learning");
-        expect(result[1].state).toBe("learning");
-        expect(result[2].state).toBe("review");
+        // Verify pure FSRS order: review first, then new (no learning state)
+        expect(result).toHaveLength(4);
+        expect(result[0].state).toBe("review");
+        expect(result[1].state).toBe("review");
+        expect(result[2].state).toBe("new");
         expect(result[3].state).toBe("new");
-        expect(result[4].state).toBe("new");
-
-        // Verify within learning cards, earliest due date comes first
-        expect(new Date(result[0].dueDate).getTime()).toBeLessThan(
-          new Date(result[1].dueDate).getTime(),
-        );
 
         // Verify within new cards, earliest due date comes first
-        expect(new Date(result[3].dueDate).getTime()).toBeLessThan(
-          new Date(result[4].dueDate).getTime(),
+        expect(new Date(result[2].dueDate).getTime()).toBeLessThan(
+          new Date(result[3].dueDate).getTime(),
         );
 
         // Clean up mocks

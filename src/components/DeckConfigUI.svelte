@@ -181,8 +181,7 @@
     <div class="deck-settings-section">
         <h3>Daily Card Limits</h3>
         <div class="setting-item-description-global">
-            Learning/relearning cards are always shown and not subject to these
-            limits.
+            New cards are subject to daily limits when enabled.
         </div>
 
         <!-- Obsidian Native Components -->

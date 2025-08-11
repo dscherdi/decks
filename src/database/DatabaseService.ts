@@ -107,7 +107,7 @@ export class DatabaseService {
         source_file TEXT NOT NULL,
         content_hash TEXT NOT NULL,
         header_level INTEGER CHECK (header_level >= 1 AND header_level <= 6),
-        state TEXT NOT NULL DEFAULT 'new' CHECK (state IN ('new', 'learning', 'review')),
+        state TEXT NOT NULL DEFAULT 'new' CHECK (state IN ('new', 'review')),
         due_date TEXT NOT NULL,
         interval INTEGER NOT NULL DEFAULT 0,
         repetitions INTEGER NOT NULL DEFAULT 0,
@@ -131,7 +131,7 @@ export class DatabaseService {
         old_ease_factor REAL NOT NULL,
         new_ease_factor REAL NOT NULL,
         time_elapsed INTEGER NOT NULL DEFAULT 0,
-        new_state TEXT NOT NULL DEFAULT 'new' CHECK (new_state IN ('new', 'learning', 'review')),
+        new_state TEXT NOT NULL DEFAULT 'new' CHECK (new_state IN ('new', 'review')),
         new_repetitions INTEGER NOT NULL DEFAULT 0,
         new_lapses INTEGER NOT NULL DEFAULT 0,
         new_stability REAL NOT NULL DEFAULT 2.5,
@@ -664,18 +664,7 @@ export class DatabaseService {
     // Get today's review counts to calculate remaining daily allowance
     const dailyCounts = await this.getDailyReviewCounts(deckId);
 
-    // 1. Always get ALL learning cards (not subject to limits per Anki behavior)
-    const learningStmt = this.db.prepare(`
-      SELECT * FROM flashcards
-      WHERE deck_id = ? AND due_date <= ? AND state = 'learning'
-      ORDER BY due_date
-    `);
-    learningStmt.bind([deckId, now]);
-    while (learningStmt.step()) {
-      const row = learningStmt.get();
-      flashcards.push(this.rowToFlashcard(row));
-    }
-    learningStmt.free();
+    // 1. No learning cards in pure FSRS - skip learning card retrieval
 
     // 2. Get new cards with remaining daily limit
     const newCardsLimit = Number(config.newCardsLimit) || 0;
@@ -727,9 +716,9 @@ export class DatabaseService {
       reviewCardsStmt.free();
     }
 
-    // Sort final result: Anki order - learning first, then review, then new
+    // Sort final result: review first, then new
     flashcards.sort((a, b) => {
-      const stateOrder = { learning: 1, review: 2, new: 3 };
+      const stateOrder = { review: 1, new: 2 };
       const aOrder = stateOrder[a.state];
       const bOrder = stateOrder[b.state];
 
@@ -738,10 +727,7 @@ export class DatabaseService {
       }
 
       // Within same state, apply specific ordering rules
-      if (a.state === "learning") {
-        // Learning cards: always by due date (earliest first)
-        return new Date(a.dueDate).getTime() - new Date(b.dueDate).getTime();
-      } else if (a.state === "review") {
+      if (a.state === "review") {
         // Review cards: follow deck config preference
         if (config.reviewOrder === "random") {
           return Math.random() - 0.5;
@@ -749,10 +735,12 @@ export class DatabaseService {
           // Default: oldest due first
           return new Date(a.dueDate).getTime() - new Date(b.dueDate).getTime();
         }
-      } else {
-        // New cards: by due date (creation order)
+      } else if (a.state === "new") {
+        // New cards: always by due date (earliest first)
         return new Date(a.dueDate).getTime() - new Date(b.dueDate).getTime();
       }
+
+      return 0;
     });
 
     return flashcards;
@@ -777,22 +765,7 @@ export class DatabaseService {
         ? " AND (type = 'table' OR header_level = ?)"
         : "";
 
-    // 1. Get learning cards (highest priority)
-    let learningQuery = `
-      SELECT * FROM flashcards
-      WHERE deck_id = ? AND due_date <= ? AND state = 'learning'${headerFilter}
-      ORDER BY due_date
-    `;
-    const learningStmt = this.db.prepare(learningQuery);
-    const learningParams = [deckId, now];
-    if (headerLevel !== undefined) learningParams.push(headerLevel.toString());
-    learningStmt.bind(learningParams);
-
-    while (learningStmt.step()) {
-      const row = learningStmt.get();
-      flashcards.push(this.rowToFlashcard(row));
-    }
-    learningStmt.free();
+    // 1. No learning cards in pure FSRS - skip learning card retrieval
 
     // 2. Get daily review counts to check limits
     const dailyCounts = await this.getDailyReviewCounts(deckId);
@@ -994,15 +967,8 @@ export class DatabaseService {
       newCount = 0; // No new cards allowed when limit is 0
     }
 
-    // Count learning cards (state = 'learning' and due)
-    const learningStmt = this.db.prepare(`
-      SELECT COUNT(*) FROM flashcards
-      WHERE deck_id = ? AND state = 'learning' AND due_date <= ?
-    `);
-    learningStmt.bind([deckId, now]);
-    learningStmt.step();
-    const learningCount = (learningStmt.get()[0] as number) || 0;
-    learningStmt.free();
+    // No learning cards in pure FSRS
+    const learningCount = 0;
 
     // Count review cards (state = 'review' and due)
     const dueStmt = this.db.prepare(`
@@ -1037,7 +1003,6 @@ export class DatabaseService {
     return {
       deckId,
       newCount,
-      learningCount,
       dueCount,
       totalCount,
     };
@@ -1049,7 +1014,6 @@ export class DatabaseService {
   ): Promise<{
     name: string;
     newCount: number;
-    learningCount: number;
     dueCount: number;
     totalCount: number;
   }> {
@@ -1079,18 +1043,8 @@ export class DatabaseService {
     const newCount = newStmt.get()[0] as number;
     newStmt.free();
 
-    // Learning cards count
-    const learningQuery = `
-      SELECT COUNT(*) FROM flashcards
-      WHERE deck_id = ? AND state = 'learning' AND due_date <= ?${headerFilter}
-    `;
-    const learningStmt = this.db.prepare(learningQuery);
-    const learningParams = [deckId, now];
-    if (headerLevel !== undefined) learningParams.push(headerLevel.toString());
-    learningStmt.bind(learningParams);
-    learningStmt.step();
-    const learningCount = learningStmt.get()[0] as number;
-    learningStmt.free();
+    // No learning cards in pure FSRS
+    const learningCount = 0;
 
     // Due cards count (review cards that are due)
     const dueQuery = `
@@ -1120,7 +1074,6 @@ export class DatabaseService {
     return {
       name: deck.name,
       newCount,
-      learningCount,
       dueCount,
       totalCount,
     };
@@ -1151,7 +1104,6 @@ export class DatabaseService {
       stats.push({
         deckId: deck.id,
         newCount: deckStats.newCount,
-        learningCount: deckStats.learningCount,
         dueCount: deckStats.dueCount,
         totalCount: deckStats.totalCount,
       });
@@ -1430,7 +1382,7 @@ export class DatabaseService {
       sourceFile: row[5] as string,
       contentHash: row[6] as string,
       headerLevel: (row[7] as number | null) || undefined,
-      state: row[8] as "new" | "learning" | "review",
+      state: row[8] as "new" | "review",
       dueDate: row[9] as string,
       interval: row[10] as number,
       repetitions: row[11] as number,
@@ -1480,7 +1432,6 @@ export class DatabaseService {
         COUNT(*) as reviews,
         COUNT(CASE WHEN difficulty != 'again' THEN 1 END) as correct,
         COUNT(CASE WHEN f.state = 'new' THEN 1 END) as new_cards,
-        COUNT(CASE WHEN f.state = 'learning' THEN 1 END) as learning_cards,
         COUNT(CASE WHEN f.state = 'review' THEN 1 END) as review_cards
       FROM review_logs rl
       JOIN flashcards f ON rl.flashcard_id = f.id
@@ -1506,8 +1457,8 @@ export class DatabaseService {
           reviews: reviews,
           timeSpent: reviews * 30, // Estimate 30 seconds per review
           newCards: row[3] as number,
-          learningCards: row[4] as number,
-          reviewCards: row[5] as number,
+          learningCards: 0, // No learning cards in pure FSRS
+          reviewCards: row[4] as number,
           correctRate: reviews > 0 ? (correct / reviews) * 100 : 0,
         });
       }
@@ -1527,7 +1478,6 @@ export class DatabaseService {
 
       const cardStats = {
         new: 0,
-        learning: 0,
         mature: 0,
       };
 
@@ -1540,7 +1490,6 @@ export class DatabaseService {
         const state = row[0] as string;
         const count = row[1] as number;
         if (state === "new") cardStats.new = count;
-        else if (state === "learning") cardStats.learning = count;
         else if (state === "review") cardStats.mature = count;
       }
       cardStatsStmt.free();
@@ -1691,7 +1640,7 @@ export class DatabaseService {
       // Return empty data structure instead of throwing
       return {
         dailyStats: [],
-        cardStats: { new: 0, learning: 0, mature: 0 },
+        cardStats: { new: 0, mature: 0 },
         answerButtons: { again: 0, hard: 0, good: 0, easy: 0 },
         retentionRate: 0,
         intervals: [],

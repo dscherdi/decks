@@ -45,7 +45,6 @@
             stats.get(deckId) ?? {
                 deckId,
                 newCount: 0,
-                learningCount: 0,
                 dueCount: 0,
                 totalCount: 0,
             }
@@ -487,7 +486,6 @@
             <div class="table-header">
                 <div class="col-deck">Deck</div>
                 <div class="col-stat">New</div>
-                <div class="col-stat">Learn</div>
                 <div class="col-stat">Due</div>
                 <div class="col-config"></div>
             </div>
@@ -534,10 +532,11 @@
                         </div>
                         <div
                             class="col-stat"
-                            class:has-cards={stats.learningCount > 0}
+                            class:has-cards={false}
                             class:updating={isUpdatingStats}
+                            style="display: none;"
                         >
-                            {stats.learningCount}
+                            0
                         </div>
                         <div
                             class="col-stat"

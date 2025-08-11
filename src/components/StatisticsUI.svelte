@@ -125,7 +125,7 @@
             console.error("Error loading statistics:", error);
             statistics = {
                 dailyStats: [],
-                cardStats: { new: 0, learning: 0, mature: 0 },
+                cardStats: { new: 0, mature: 0 },
                 answerButtons: { again: 0, hard: 0, good: 0, easy: 0 },
                 retentionRate: 0,
                 intervals: [],
@@ -217,7 +217,7 @@
                 reviews: acc.reviews + day.reviews,
                 timeSpent: acc.timeSpent + day.timeSpent,
                 newCards: acc.newCards + day.newCards,
-                learningCards: acc.learningCards + day.learningCards,
+                learningCards: 0, // No learning cards in pure FSRS
                 reviewCards: acc.reviewCards + day.reviewCards,
                 correctRate:
                     acc.reviews + day.reviews > 0
@@ -308,8 +308,8 @@
 
     function getMaturityRatio() {
         if (!statistics?.cardStats) return "0.0";
-        const { new: newCards, learning, mature } = statistics.cardStats;
-        const total = newCards + learning + mature;
+        const { new: newCards, mature } = statistics.cardStats;
+        const total = newCards + mature;
         if (total === 0) return "0.0";
         return ((mature / total) * 100).toFixed(1);
     }
@@ -346,10 +346,10 @@
                     <div class="stat-label">New Cards</div>
                 </div>
                 <div class="stat-card">
-                    <div class="stat-value">
-                        {statistics?.cardStats?.learning || 0}
+                    <div class="stat-value" style="display: none;">0</div>
+                    <div class="stat-label" style="display: none;">
+                        Learning
                     </div>
-                    <div class="stat-label">Learning</div>
                 </div>
                 <div class="stat-card">
                     <div class="stat-value">
@@ -410,8 +410,8 @@
                         <div class="stat-value">{todayStats.newCards}</div>
                         <div class="stat-label">New Cards</div>
                     </div>
-                    <div class="stat-card">
-                        <div class="stat-value">{todayStats.learningCards}</div>
+                    <div class="stat-card" style="display: none;">
+                        <div class="stat-value">0</div>
                         <div class="stat-label">Learning</div>
                     </div>
                     <div class="stat-card">
@@ -555,11 +555,11 @@
                     </div>
                 </div>
                 <div class="metric-card">
-                    <div class="metric-value">
-                        {statistics?.cardStats?.learning || 0}
+                    <div class="metric-value" style="display: none;">0</div>
+                    <div class="metric-label" style="display: none;">
+                        Learning Cards
                     </div>
-                    <div class="metric-label">Learning Cards</div>
-                    <div class="metric-description">
+                    <div class="metric-description" style="display: none;">
                         Number of cards in the learning queue
                     </div>
                 </div>
@@ -573,7 +573,6 @@
                 <div class="metric-card">
                     <div class="metric-value">
                         {(statistics?.cardStats?.new || 0) +
-                            (statistics?.cardStats?.learning || 0) +
                             (statistics?.cardStats?.mature || 0)}
                     </div>
                     <div class="metric-label">Total Cards</div>
@@ -592,10 +591,10 @@
                     <div class="stat-label">New Cards</div>
                 </div>
                 <div class="stat-card">
-                    <div class="stat-value">
-                        {statistics?.cardStats?.learning || 0}
+                    <div class="stat-value" style="display: none;">0</div>
+                    <div class="stat-label" style="display: none;">
+                        Learning
                     </div>
-                    <div class="stat-label">Learning</div>
                 </div>
                 <div class="stat-card">
                     <div class="stat-value">

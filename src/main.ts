@@ -114,8 +114,6 @@ export default class DecksPlugin extends Plugin {
       this.fsrs = new FSRS({
         requestRetention: this.settings.fsrs.requestRetention,
         maximumInterval: this.settings.fsrs.maximumInterval,
-        easyBonus: this.settings.fsrs.easyBonus,
-        hardInterval: this.settings.fsrs.hardInterval,
         w: this.settings.fsrs.weights,
       });
 
@@ -225,8 +223,6 @@ export default class DecksPlugin extends Plugin {
     this.fsrs = new FSRS({
       requestRetention: this.settings.fsrs.requestRetention,
       maximumInterval: this.settings.fsrs.maximumInterval,
-      easyBonus: this.settings.fsrs.easyBonus,
-      hardInterval: this.settings.fsrs.hardInterval,
       w: this.settings.fsrs.weights,
     });
   }

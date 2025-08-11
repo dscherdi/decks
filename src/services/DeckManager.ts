@@ -608,7 +608,10 @@ export class DeckManager {
           contentHash: contentHash,
           headerLevel: parsed.headerLevel,
           // Restore progress from review logs or use defaults
-          state: previousProgress?.state || "new",
+          state:
+            previousProgress?.state === "learning"
+              ? "review"
+              : previousProgress?.state || "new",
           dueDate: previousProgress?.dueDate || new Date().toISOString(),
           interval: previousProgress?.interval || 0,
           repetitions: previousProgress?.repetitions || 0,

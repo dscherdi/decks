@@ -70,34 +70,6 @@ export class DecksSettingTab extends PluginSettingTab {
       );
 
     new Setting(containerEl)
-      .setName("Easy Bonus")
-      .setDesc("Multiplier for easy cards (higher = longer intervals)")
-      .addSlider((slider) =>
-        slider
-          .setLimits(1.1, 2.0, 0.1)
-          .setValue(this.plugin.settings.fsrs.easyBonus)
-          .setDynamicTooltip()
-          .onChange(async (value) => {
-            this.plugin.settings.fsrs.easyBonus = value;
-            await this.plugin.saveSettings();
-          }),
-      );
-
-    new Setting(containerEl)
-      .setName("Hard Interval")
-      .setDesc("Multiplier for hard cards in learning phase")
-      .addSlider((slider) =>
-        slider
-          .setLimits(1.0, 2.0, 0.1)
-          .setValue(this.plugin.settings.fsrs.hardInterval)
-          .setDynamicTooltip()
-          .onChange(async (value) => {
-            this.plugin.settings.fsrs.hardInterval = value;
-            await this.plugin.saveSettings();
-          }),
-      );
-
-    new Setting(containerEl)
       .setName("Reset to Defaults")
       .setDesc("Reset FSRS parameters to default values")
       .addButton((button) =>

@@ -133,6 +133,44 @@
     - Tags the user would like to add to anki
     - Specific anki Deck
 
+### ✅ Todo 13 - Pure FSRS Implementation
+
+**Successfully implemented Pure FSRS algorithm with the following changes:**
+
+**✅ Core Algorithm Changes:**
+- Removed all step-based logic (getNewCardInterval, learningProgressionMultiplier, hardInterval, easyBonus)
+- Simplified to only two states: "New" and "Review" (no Learning/Relearning states)
+- Implemented pure FSRS initialization for new cards with all ratings going directly to Review state
+- All intervals are now ≥1 day (minimum 1440 minutes) - no minute-based learning steps
+- Proper FSRS state transitions: New → Review (permanent)
+
+**✅ Data Model Updates:**
+- Updated database schema to only allow "new" and "review" states
+- Proper storage of stability, difficulty, reps, lapses, lastReviewed
+- Legacy learning state cards are automatically migrated to review state
+- Removed obsolete FSRS parameters from settings interface
+
+**✅ Algorithm Compliance:**
+- getSchedulingInfo() returns four different futures without mutating original card
+- updateCard() properly handles initialization vs subsequent reviews
+- Maximum interval capping works correctly (36500 days)
+- All ratings maintain monotonic interval progression (Hard < Good < Easy)
+- Proper lapse counting and stability updates for Again ratings
+
+**✅ UI/UX Updates:**
+- Removed Learning column from deck statistics displays
+- Updated settings to remove obsolete parameters (easyBonus, hardInterval, etc.)
+- Simplified deck configuration descriptions
+- Hidden learning card references in statistics panels
+
+**✅ Testing & Verification:**
+- Comprehensive test suite covering all pure FSRS requirements
+- Migration support for existing cards with legacy states
+- All edge cases and algorithm correctness verified
+- Build and TypeScript compilation successful
+
+The implementation now fully complies with pure FSRS specifications and passes all required sanity tests.
+
 ## ✅ Recent Enhancements
 
 ### Deck Configuration System
@@ -648,6 +686,59 @@
 - **Forecast Chart Improvements**: Wider bars (24px), bigger labels (12px), numeric x-axis for cleaner appearance
 - **Enhanced Tooltips**: More descriptive hover information showing day context and card counts
 - **TypeScript Interface**: Added comprehensive Statistics interface with DailyStats, CardStats, AnswerButtons, etc.
+
+### ✅ Anki Export Implementation
+- **Dropdown Menu System**: Replaced direct config modal with dropdown offering "Configure deck" and "Export to Anki" options
+- **Smart Positioning**: Dropdown automatically adjusts position to stay within viewport bounds
+- **State Management**: Only one dropdown open at a time, clicking same cog closes dropdown
+- **Event Cleanup**: Proper cleanup of click, scroll, and resize event listeners
+- **Export Modal**: Dedicated AnkiExportModal with simplified configuration interface
+- **Configurable Separators**: User can choose from tab, semicolon, colon, pipe, comma, or space separators
+- **Default Tab Format**: Uses tab separator by default for maximum Anki compatibility
+- **Content Sanitization**: Proper escaping of chosen separator characters in flashcard content
+- **Markdown Conversion**: Converts markdown formatting to HTML (bold, italic, code)
+- **File Download**: Generates and downloads Anki-compatible text files
+- **Mobile Responsive**: Full mobile support with touch-friendly interactions
+- **Import Instructions**: Clear step-by-step guide for importing into Anki
+- **Error Handling**: Graceful handling of empty decks and export failures
+- **Progress Feedback**: Loading states and success notifications for user feedback
+
+### ✅ FSRS Algorithm Test Suite Implementation
+- **Comprehensive Test Coverage**: 23 test cases covering all FSRS algorithm functionality
+- **State Transition Testing**: Verified proper transitions between New → Learning → Review states
+- **Easy Button Graduation**: Confirmed New cards pressing Easy graduate directly to Review state
+- **Lapse Functionality**: Tested Again button properly increments lapses and resets to Learning
+- **Learning Card Progression**: Verified Again/Hard/Good/Easy behavior in Learning phase
+- **Review Card Behavior**: Confirmed Review cards maintain proper state and intervals
+- **Relearning Support**: Tested cards with lapses behave correctly in relearning phase
+- **Edge Case Handling**: High lapses, zero stability, future due dates all properly handled
+- **Interval Validation**: Confirmed proper interval progression (1min → 6min → 10min → 4days for new cards)
+- **FSRS Compliance**: All state transitions follow FSRS-4.5 algorithm specifications
+- **Mocked Date Testing**: Consistent test results with controlled Date.now mocking
+- **Proper Type Usage**: Tests use actual Flashcard objects instead of internal FSRSCard types
+- **Algorithm Bug Fix**: Fixed missing return statements in Learning card graduation logic
+- **Review Card Fix**: Resolved issue where Review cards were incorrectly processed as New cards
+
+### ✅ FSRS Settings Configuration Enhancement
+- **Configurable Hard Interval**: Replaced hardcoded 1.2 multiplier with `hardInterval` from settings
+- **Settings-Based Parameters**: FSRS algorithm now uses configured values instead of hardcoded constants
+- **Learning Progression Multiplier**: Added configurable `learningProgressionMultiplier` for Good button advancement
+- **Parameter Integration**: All FSRS settings properly passed from main plugin to algorithm instance
+- **Dynamic Reconfiguration**: FSRS instance updates automatically when settings change
+- **Backwards Compatibility**: Default values maintain existing behavior for users without custom settings
+- **Settings Interface**: Added `learningProgressionMultiplier` to FSRSParameters interface
+- **Easy Bonus Handling**: Confirmed proper use of algorithm weights vs direct easyBonus parameter
+- **Maximum Interval**: Uses configured maximum interval from settings instead of hardcoded values
+- **Request Retention**: Algorithm respects user-configured target retention rate
+
+### ✅ Easy Button Graduation Fix
+- **Direct Graduation**: New cards pressing Easy now graduate directly to Review state instead of Learning
+- **FSRS Compliance**: Proper state transitions following FSRS algorithm specifications
+- **Stability Initialization**: Easy cards get proper stability and difficulty values for Review phase
+- **4-Day Interval**: New Easy cards correctly receive 4-day initial review interval
+- **Bug Resolution**: Fixed incorrect state assignment that kept Easy cards in Learning phase
+- **State Consistency**: Learning/Relearning cards continue to graduate properly to Review on Easy
+- **Algorithm Integrity**: Maintains proper FSRS state machine: New → Review (Easy) or New → Learning (other ratings)
 - **Type Safety**: Improved code reliability with proper typing for all statistics data structures
 - **Execution Order Fix**: Restructured component to load statistics before UI calculations and rendering
 - **Null Safety**: Fixed reactive statement execution order to prevent null reference errors during initialization
