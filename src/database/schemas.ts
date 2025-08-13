@@ -79,7 +79,7 @@ export const CREATE_TABLES_SQL = `
     card_template_id TEXT,
     content_hash TEXT,
     client TEXT,
-    FOREIGN KEY (flashcard_id) REFERENCES flashcards(id) ON DELETE CASCADE
+    FOREIGN KEY (flashcard_id) REFERENCES flashcards(id)
   );
 
   -- Create indexes
@@ -119,14 +119,16 @@ export function buildMigrationSQL(db: Database): string {
   const decksSelect = [
     "id",
     "name",
+    decksColumns.includes("filepath") ? "filepath" : `'' as filepath`,
     "tag",
     "last_reviewed",
-    "created",
-    "modified",
-    decksColumns.includes("filepath") ? "filepath" : `'' as filepath`,
     decksColumns.includes("config")
       ? "config"
       : `'{"newCardsLimit":20,"reviewCardsLimit":100,"enableNewCardsLimit":false,"enableReviewCardsLimit":false,"reviewOrder":"due-date","fsrs":{"requestRetention":0.9,"profile":"STANDARD"}}' as config`,
+    decksColumns.includes("created") ? "created" : `datetime('now') as created`,
+    decksColumns.includes("modified")
+      ? "modified"
+      : `datetime('now') as modified`,
   ].join(", ");
 
   // Build flashcards migration
@@ -168,7 +170,7 @@ export function buildMigrationSQL(db: Database): string {
     reviewLogsColumns.includes("last_reviewed_at")
       ? "last_reviewed_at"
       : `datetime('now') as last_reviewed_at`,
-    "shown_at",
+    reviewLogsColumns.includes("shown_at") ? "shown_at" : "NULL as shown_at",
     reviewLogsColumns.includes("reviewed_at")
       ? "reviewed_at"
       : `datetime('now') as reviewed_at`,
@@ -176,7 +178,9 @@ export function buildMigrationSQL(db: Database): string {
     reviewLogsColumns.includes("rating_label")
       ? "rating_label"
       : `'good' as rating_label`,
-    "time_elapsed_ms",
+    reviewLogsColumns.includes("time_elapsed_ms")
+      ? "time_elapsed_ms"
+      : "NULL as time_elapsed_ms",
     reviewLogsColumns.includes("old_state")
       ? "old_state"
       : `'new' as old_state`,
@@ -237,10 +241,16 @@ export function buildMigrationSQL(db: Database): string {
     reviewLogsColumns.includes("scheduler_version")
       ? "scheduler_version"
       : `'1.0' as scheduler_version`,
-    "note_model_id",
-    "card_template_id",
-    "content_hash",
-    "client",
+    reviewLogsColumns.includes("note_model_id")
+      ? "note_model_id"
+      : "NULL as note_model_id",
+    reviewLogsColumns.includes("card_template_id")
+      ? "card_template_id"
+      : "NULL as card_template_id",
+    reviewLogsColumns.includes("content_hash")
+      ? "content_hash"
+      : "NULL as content_hash",
+    reviewLogsColumns.includes("client") ? "client" : "NULL as client",
   ].join(", ");
 
   return `
@@ -316,7 +326,7 @@ export function buildMigrationSQL(db: Database): string {
       card_template_id TEXT,
       content_hash TEXT,
       client TEXT,
-      FOREIGN KEY (flashcard_id) REFERENCES flashcards(id) ON DELETE CASCADE
+      FOREIGN KEY (flashcard_id) REFERENCES flashcards(id)
     );
 
     -- Copy data with dynamic column mapping
@@ -595,71 +605,3 @@ export const SQL_QUERIES = {
       AND rl.time_elapsed_ms > 0
   `,
 };
-
-// Migration helper functions
-export function getCurrentSchemaVersion(db: Database): number {
-  try {
-    const stmt = db.prepare(`PRAGMA user_version`);
-    let version = 0;
-    if (stmt.step()) {
-      const row = stmt.get();
-      version = Number(row[0]) || 0;
-    }
-    stmt.free();
-    return version;
-  } catch (error) {
-    return 0;
-  }
-}
-
-export function needsMigration(db: Database): boolean {
-  return getCurrentSchemaVersion(db) !== CURRENT_SCHEMA_VERSION;
-}
-
-/**
- * Creates fresh database tables when no database file exists
- */
-export function createTables(
-  db: Database,
-  debugLog?: (message: string) => void,
-): void {
-  const log = debugLog || (() => {});
-
-  try {
-    log(`Creating fresh database schema (version ${CURRENT_SCHEMA_VERSION})`);
-    db.run(CREATE_TABLES_SQL);
-    log(`✅ Database schema created successfully`);
-  } catch (error) {
-    log(`❌ Schema creation failed: ${error}`);
-    throw new Error(`Schema creation failed: ${error}`);
-  }
-}
-
-/**
- * Migrates existing database when schema version doesn't match current version
- */
-export function migrate(
-  db: Database,
-  debugLog?: (message: string) => void,
-): void {
-  const log = debugLog || (() => {});
-  const currentVersion = getCurrentSchemaVersion(db);
-
-  if (currentVersion === CURRENT_SCHEMA_VERSION) {
-    log(`Schema is already up to date (version ${CURRENT_SCHEMA_VERSION})`);
-    return;
-  }
-
-  log(
-    `Migrating schema from version ${currentVersion} to ${CURRENT_SCHEMA_VERSION}`,
-  );
-
-  try {
-    const migrationSQL = buildMigrationSQL(db);
-    db.run(migrationSQL);
-    log(`✅ Migration completed successfully`);
-  } catch (error) {
-    log(`❌ Migration failed: ${error}`);
-    throw new Error(`Migration failed: ${error}`);
-  }
-}

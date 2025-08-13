@@ -100,7 +100,18 @@ export class DatabaseService {
 
   // Helper method to parse deck rows
   private parseDeckRow(row: any[]): Deck {
-    let config = row[5] ? JSON.parse(row[5] as string) : DEFAULT_DECK_CONFIG;
+    let config = DEFAULT_DECK_CONFIG;
+
+    if (row[5]) {
+      try {
+        config = JSON.parse(row[5] as string);
+      } catch (error) {
+        this.debugLog(
+          `Failed to parse deck config JSON: ${row[5]}, using default config. Error: ${error}`,
+        );
+        config = DEFAULT_DECK_CONFIG;
+      }
+    }
 
     // Migration: Add FSRS settings if missing
     if (!config.fsrs) {

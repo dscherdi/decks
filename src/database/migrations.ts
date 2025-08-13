@@ -44,9 +44,6 @@ export function createTables(
   }
 }
 
-/**
- * Migrates existing database when schema version doesn't match current version
- */
 export function migrate(
   db: Database,
   debugLog?: (message: string) => void,
@@ -64,11 +61,79 @@ export function migrate(
   );
 
   try {
-    var migrationSql = buildMigrationSQL(db);
-    db.run(migrationSql);
+    // Check for database corruption before migration
+    if (isDatabaseCorrupted(db, log)) {
+      log(`⚠️ Database corruption detected, performing recovery migration`);
+      performRecoveryMigration(db, log);
+      return;
+    }
+
+    const migrationSQL = buildMigrationSQL(db);
+    db.run(migrationSQL);
     log(`✅ Migration completed successfully`);
   } catch (error) {
-    log(`❌ Migration failed: ${error}`);
-    throw new Error(`Migration failed: ${error}`);
+    log(`❌ Migration failed: ${error}, attempting recovery...`);
+
+    try {
+      performRecoveryMigration(db, log);
+      log(`✅ Recovery migration completed successfully`);
+    } catch (recoveryError) {
+      log(`❌ Recovery migration also failed: ${recoveryError}`);
+      throw new Error(`Migration and recovery both failed: ${error}`);
+    }
+  }
+}
+
+/**
+ * Check if database is corrupted
+ */
+function isDatabaseCorrupted(
+  db: Database,
+  log: (message: string) => void,
+): boolean {
+  try {
+    // Test basic table queries
+    const tables = ["decks", "flashcards", "review_logs"];
+    for (const table of tables) {
+      const stmt = db.prepare(`SELECT COUNT(*) FROM ${table} LIMIT 1`);
+      stmt.step();
+      stmt.free();
+    }
+    return false;
+  } catch (error) {
+    log(`Database corruption detected: ${error}`);
+    return true;
+  }
+}
+
+/**
+ * Perform recovery migration when database is corrupted
+ */
+function performRecoveryMigration(
+  db: Database,
+  log: (message: string) => void,
+): void {
+  log(`Starting recovery migration - creating fresh schema`);
+
+  try {
+    // Drop all existing tables and start fresh
+    db.run(`
+      PRAGMA foreign_keys = OFF;
+      BEGIN;
+
+      DROP TABLE IF EXISTS review_logs;
+      DROP TABLE IF EXISTS flashcards;
+      DROP TABLE IF EXISTS decks;
+
+      COMMIT;
+      PRAGMA foreign_keys = ON;
+    `);
+
+    // Create fresh tables
+    db.run(CREATE_TABLES_SQL);
+    log(`✅ Recovery migration completed - fresh schema created`);
+  } catch (error) {
+    log(`❌ Recovery migration failed: ${error}`);
+    throw new Error(`Recovery migration failed: ${error}`);
   }
 }

@@ -171,17 +171,17 @@
             "state": {
               "type": "outline",
               "state": {
-                "file": "Flashcards/1200 Deutsche Redewendungen.md",
+                "file": "Flashcards/test.md",
                 "followCursor": false,
                 "showSearch": false,
                 "searchQuery": ""
               },
               "icon": "lucide-list",
-              "title": "Outline of 1200 Deutsche Redewendungen"
+              "title": "Outline of test"
             }
           },
           {
-            "id": "350cc6703e763420",
+            "id": "a1b1108ee06e09c1",
             "type": "leaf",
             "state": {
               "type": "decks-view",
@@ -199,19 +199,19 @@
   },
   "left-ribbon": {
     "hiddenItems": {
+      "decks:Flashcards": false,
       "switcher:Open quick switcher": false,
       "graph:Open graph view": false,
       "canvas:Create new canvas": false,
       "daily-notes:Open today's daily note": false,
       "templates:Insert template": false,
-      "command-palette:Open command palette": false,
-      "decks:Flashcards": false
+      "command-palette:Open command palette": false
     }
   },
-  "active": "5fcf267587b284e5",
+  "active": "a1b1108ee06e09c1",
   "lastOpenFiles": [
-    "My Note.md",
     "Flashcards/test.md",
+    "My Note.md",
     "Flashcards/1200 Deutsche Redewendungen.md",
     "Flashcards/500 Nomen-Verb Verbindungen.md",
     "Flashcards/10000 German nouns.md",

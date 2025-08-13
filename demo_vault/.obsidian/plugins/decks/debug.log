@@ -49,3 +49,88 @@
 [2025-08-13T19:08:23.376Z] Updated all deck stats
 [2025-08-13T19:08:24.919Z] File Flashcards/500 Nomen-Verb Verbindungen.md not modified since last sync, skipping
 [2025-08-13T19:08:24.945Z] Refresh complete
+[2025-08-13T19:13:53.850Z] ✅ Migration completed successfully
+[2025-08-13T19:13:53.880Z] Decks plugin loaded successfully
+[2025-08-13T19:13:53.943Z] Decks found in vault: {}
+[2025-08-13T19:13:59.081Z] Performing initial background sync...
+[2025-08-13T19:13:59.198Z] Decks found in vault: {}
+[2025-08-13T19:16:30.672Z] Decks plugin loaded successfully
+[2025-08-13T19:16:30.749Z] Refresh complete
+[2025-08-13T19:16:30.876Z] Creating new deck: "test" with ID: deck_shvzt5, tag: #flashcards, filepath: Flashcards/test.md
+[2025-08-13T19:16:30.916Z] Creating new deck: "Programming-Concepts" with ID: deck_26088a, tag: #flashcards/programming/concepts, filepath: Flashcards/Programming-Concepts.md
+[2025-08-13T19:16:30.948Z] Creating new deck: "Math-Basics" with ID: deck_ep2xd5, tag: #flashcards/math, filepath: Flashcards/Math-Basics.md
+[2025-08-13T19:16:30.969Z] Creating new deck: "4200 German Adjectives" with ID: deck_3cjj2x, tag: #flashcards/german, filepath: Flashcards/4200 German Adjectives.md
+[2025-08-13T19:16:30.982Z] Creating new deck: "500 Nomen-Verb Verbindungen" with ID: deck_3kr9lg, tag: #flashcards/german, filepath: Flashcards/500 Nomen-Verb Verbindungen.md
+[2025-08-13T19:16:31.016Z] Creating new deck: "2000 German verbs" with ID: deck_cr6nq3, tag: #flashcards/german, filepath: Flashcards/2000 German verbs.md
+[2025-08-13T19:16:31.043Z] Creating new deck: "1200 Deutsche Redewendungen" with ID: deck_lp8v1m, tag: #flashcards/german, filepath: Flashcards/1200 Deutsche Redewendungen.md
+[2025-08-13T19:16:31.075Z] Creating new deck: "10000 German nouns" with ID: deck_lbzk2j, tag: #flashcards/german, filepath: Flashcards/10000 German nouns.md
+[2025-08-13T19:16:31.099Z] Failed to parse deck config JSON: 2025-08-11T10:42:10.259Z, using default config. Error: SyntaxError: Unexpected non-whitespace character after JSON at position 4 (line 1 column 5)
+[2025-08-13T19:16:31.117Z] Found 0 existing flashcards for deck 10000 German nouns
+[2025-08-13T19:16:31.126Z] Creating new flashcard: Zeit
+[2025-08-13T19:16:31.157Z] Existing card found: NO
+[2025-08-13T19:16:31.320Z] Content hash: 49377041
+[2025-08-13T19:16:32.479Z] Executing 3723 batch database operations
+[2025-08-13T19:16:35.951Z] Sync already in progress, skipping...
+[2025-08-13T19:17:20.566Z] Migration failed: Error: Migration failed: Error: no such table: decks
+[2025-08-13T19:17:35.326Z] Migration failed: Error: Migration failed: Error: no such table: decks
+[2025-08-13T19:18:43.075Z] Migration failed: Error: Migration failed: Error: no such table: decks
+[2025-08-13T19:20:03.917Z] Migration failed: Error: Migration failed: Error: no such table: decks
+[2025-08-13T19:25:30.263Z] Migration failed: Error: Migration failed: Error: no such table: decks
+[2025-08-13T19:25:43.118Z] Migration failed: Error: Migration failed: Error: no such table: decks
+[2025-08-13T19:29:22.243Z] Migration failed: Error: Migration failed: Error: no such table: decks
+[2025-08-13T19:35:22.273Z] ✅ Recovery migration completed - fresh schema created
+[2025-08-13T19:35:22.276Z] Decks plugin loaded successfully
+[2025-08-13T19:35:27.435Z] Performing initial background sync...
+[2025-08-13T19:35:27.542Z] Creating new deck: "test" with ID: deck_shvzt5, tag: #flashcards, filepath: Flashcards/test.md
+[2025-08-13T19:35:27.557Z] Creating new deck: "Spanish-Vocabulary" with ID: deck_bvk4i2, tag: #flashcards/spanish, filepath: Flashcards/Spanish-Vocabulary.md
+[2025-08-13T19:35:27.572Z] Creating new deck: "Programming-Concepts" with ID: deck_26088a, tag: #flashcards/programming/concepts, filepath: Flashcards/Programming-Concepts.md
+[2025-08-13T19:35:27.574Z] Creating new deck: "Math-Basics" with ID: deck_ep2xd5, tag: #flashcards/math, filepath: Flashcards/Math-Basics.md
+[2025-08-13T19:35:27.576Z] Creating new deck: "500 Nomen-Verb Verbindungen" with ID: deck_3kr9lg, tag: #flashcards/german, filepath: Flashcards/500 Nomen-Verb Verbindungen.md
+[2025-08-13T19:35:27.579Z] Creating new deck: "4200 German Adjectives" with ID: deck_3cjj2x, tag: #flashcards/german, filepath: Flashcards/4200 German Adjectives.md
+[2025-08-13T19:35:27.581Z] Creating new deck: "2000 German verbs" with ID: deck_cr6nq3, tag: #flashcards/german, filepath: Flashcards/2000 German verbs.md
+[2025-08-13T19:35:27.583Z] Creating new deck: "1200 Deutsche Redewendungen" with ID: deck_lp8v1m, tag: #flashcards/german, filepath: Flashcards/1200 Deutsche Redewendungen.md
+[2025-08-13T19:35:27.585Z] Creating new deck: "10000 German nouns" with ID: deck_lbzk2j, tag: #flashcards/german, filepath: Flashcards/10000 German nouns.md
+[2025-08-13T19:35:27.589Z] File Flashcards/500 Nomen-Verb Verbindungen.md not modified since last sync, skipping
+[2025-08-13T19:35:27.600Z] File Flashcards/test.md not modified since last sync, skipping
+[2025-08-13T19:35:27.794Z] Found 0 existing flashcards for deck 10000 German nouns
+[2025-08-13T19:35:27.823Z] Processing flashcard: "Nacht..."
+[2025-08-13T19:35:28.065Z] Processing flashcard: "Schuld..."
+[2025-08-13T19:35:29.186Z] Executing 3723 batch database operations
+[2025-08-13T19:35:35.562Z] No deck found for filepath: 4200 German Adjectives
+[2025-08-13T19:35:43.926Z] Found 0 existing flashcards for deck 1200 Deutsche Redewendungen
+[2025-08-13T19:35:43.939Z] Processing flashcard: "auf der Bärenhaut liegen..."
+[2025-08-13T19:35:43.981Z] Existing card found: NO
+[2025-08-13T19:35:44.375Z] Executing 1200 batch database operations
+[2025-08-13T19:35:49.191Z] Found 0 existing flashcards for deck 2000 German verbs
+[2025-08-13T19:35:49.212Z] Existing card found: NO
+[2025-08-13T19:35:49.316Z] Existing card found: NO
+[2025-08-13T19:35:49.930Z] Executing 2015 batch database operations
+[2025-08-13T19:35:51.196Z] No deck found for filepath: 10000 German nouns
+[2025-08-13T19:35:54.656Z] Refresh complete
+[2025-08-13T19:35:57.193Z] No deck found for filepath: 2000 German verbs
+[2025-08-13T19:35:59.696Z] Found 0 existing flashcards for deck 4200 German Adjectives
+[2025-08-13T19:35:59.707Z] Processing flashcard: "**neu**..."
+[2025-08-13T19:35:59.731Z] Existing card found: NO
+[2025-08-13T19:35:59.899Z] Existing card found: NO
+[2025-08-13T19:36:01.243Z] Executing 4199 batch database operations
+[2025-08-13T19:37:12.684Z] Found 0 existing flashcards for deck 500 Nomen-Verb Verbindungen
+[2025-08-13T19:37:12.702Z] Existing card found: NO
+[2025-08-13T19:37:13.294Z] Existing card found: NO
+[2025-08-13T19:37:14.295Z] Existing card found: NO
+[2025-08-13T19:37:15.294Z] Existing card found: NO
+[2025-08-13T19:37:16.298Z] Existing card found: NO
+[2025-08-13T19:37:17.300Z] Existing card found: NO
+[2025-08-13T19:37:18.297Z] Existing card found: NO
+[2025-08-13T19:37:19.297Z] Existing card found: NO
+[2025-08-13T19:37:20.297Z] Existing card found: NO
+[2025-08-13T19:37:21.297Z] Existing card found: NO
+[2025-08-13T19:37:22.278Z] Executing 501 batch database operations
+[2025-08-13T19:37:33.277Z] Found 0 existing flashcards for deck Math-Basics
+[2025-08-13T19:37:33.284Z] Executing 6 batch database operations
+[2025-08-13T19:37:33.381Z] Found 0 existing flashcards for deck Programming-Concepts
+[2025-08-13T19:37:33.390Z] Executing 27 batch database operations
+[2025-08-13T19:37:33.648Z] Found 0 existing flashcards for deck Spanish-Vocabulary
+[2025-08-13T19:37:33.663Z] Executing 47 batch database operations
+[2025-08-13T19:37:34.113Z] Found 0 existing flashcards for deck test
+[2025-08-13T19:37:34.117Z] Executing 1 batch database operations
+[2025-08-13T19:37:34.154Z] Refresh complete
