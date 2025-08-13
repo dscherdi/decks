@@ -1,7 +1,7 @@
 {
   "id": "decks",
   "name": "Decks",
-  "version": "1.0.8",
+  "version": "1.0.9",
   "minAppVersion": "1.8.10",
   "description": "Decks - Spaced repetition flashcards plugin with FSRS algorithm",
   "author": "Xherdi Lika",
