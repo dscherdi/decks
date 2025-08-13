@@ -12,6 +12,7 @@ module.exports = {
     ],
   },
   moduleFileExtensions: ["ts", "js", "json"],
+  extensionsToTreatAsEsm: [".ts"],
   collectCoverageFrom: [
     "src/**/*.ts",
     "!src/**/*.d.ts",
@@ -26,4 +27,5 @@ module.exports = {
     // Mock sql.js
     "^sql\\.js$": "<rootDir>/src/__mocks__/sql.js.ts",
   },
+  transformIgnorePatterns: ["node_modules/(?!(sql\\.js)/)"],
 };

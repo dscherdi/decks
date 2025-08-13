@@ -100,6 +100,34 @@ export default class DecksPlugin extends Plugin {
   debugLog(message: string, ...args: any[]): void {
     if (this.settings?.debug?.enableLogging) {
       console.log(`[Decks Debug] ${message}`, ...args);
+      this.writeToLogFile(message, ...args);
+    }
+  }
+
+  private async writeToLogFile(message: string, ...args: any[]): Promise<void> {
+    try {
+      const adapter = this.app.vault.adapter;
+      const logPath = `${this.app.vault.configDir}/plugins/decks/debug.log`;
+
+      const timestamp = new Date().toISOString();
+      const argsStr =
+        args.length > 0
+          ? ` ${args
+              .map((arg) =>
+                typeof arg === "object" ? JSON.stringify(arg) : String(arg),
+              )
+              .join(" ")}`
+          : "";
+      const logEntry = `[${timestamp}] ${message}${argsStr}\n`;
+
+      let existingContent = "";
+      if (await adapter.exists(logPath)) {
+        existingContent = await adapter.read(logPath);
+      }
+
+      await adapter.write(logPath, existingContent + logEntry);
+    } catch (error) {
+      console.error("[Decks Debug] Failed to write to log file:", error);
     }
   }
 

@@ -5,9 +5,9 @@ export class TFile {
   basename: string;
   stat: { mtime: number; ctime: number };
 
-  constructor(path: string) {
-    this.path = path;
-    this.name = path.split("/").pop() || "";
+  constructor(path?: string) {
+    this.path = path || "";
+    this.name = (path || "").split("/").pop() || "";
     const parts = this.name.split(".");
     this.extension = parts.length > 1 ? parts.pop() || "" : "";
     this.basename = parts.join(".");

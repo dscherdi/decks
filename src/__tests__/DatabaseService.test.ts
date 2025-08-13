@@ -1,19 +1,38 @@
 import { DatabaseService } from "../database/DatabaseService";
 import { Deck, Flashcard, DeckStats } from "../database/types";
 import initSqlJs from "sql.js";
+import { DataAdapter } from "obsidian";
 
 // Mock sql.js
 jest.mock("sql.js");
 
+// Mock types
+interface MockDataAdapter extends Partial<DataAdapter> {
+  exists: jest.Mock;
+  mkdir: jest.Mock;
+  readBinary: jest.Mock;
+  writeBinary: jest.Mock;
+}
+
+interface MockGlobal {
+  window: {
+    app: {
+      vault: {
+        adapter: MockDataAdapter;
+      };
+    };
+  };
+}
+
 // Mock window.app.vault.adapter
-const mockAdapter = {
+const mockAdapter: MockDataAdapter = {
   exists: jest.fn(),
   mkdir: jest.fn(),
   readBinary: jest.fn(),
   writeBinary: jest.fn(),
 };
 
-(global as any).window = {
+(global as unknown as MockGlobal).window = {
   app: {
     vault: {
       adapter: mockAdapter,
@@ -49,9 +68,10 @@ describe("DatabaseService", () => {
     };
 
     // Mock initSqlJs
-    (initSqlJs as jest.Mock).mockResolvedValue({
+    (initSqlJs as jest.MockedFunction<typeof initSqlJs>).mockResolvedValue({
       Database: jest.fn().mockImplementation(() => mockDb),
-    });
+      Statement: jest.fn(),
+    } as any);
 
     // Mock adapter methods
     mockAdapter.exists.mockResolvedValue(false);
@@ -91,7 +111,11 @@ describe("DatabaseService", () => {
     });
 
     // Create service
-    dbService = new DatabaseService("test.db", mockAdapter, () => {}); // Empty debugLog for tests
+    dbService = new DatabaseService(
+      "test.db",
+      mockAdapter as DataAdapter,
+      () => {},
+    ); // Empty debugLog for tests
     await dbService.initialize();
   });
 
@@ -104,17 +128,13 @@ describe("DatabaseService", () => {
       expect(initSqlJs).toHaveBeenCalled();
       expect(mockDb.run).toHaveBeenCalled();
 
-      // Check if CREATE TABLE statements were executed
+      // Check if migration SQL was executed (now includes transaction wrapper)
       const createTableCalls = mockDb.run.mock.calls;
-      expect(createTableCalls[0][0]).toContain(
-        "CREATE TABLE IF NOT EXISTS decks",
-      );
-      expect(createTableCalls[0][0]).toContain(
-        "CREATE TABLE IF NOT EXISTS flashcards",
-      );
-      expect(createTableCalls[0][0]).toContain(
-        "CREATE TABLE IF NOT EXISTS review_logs",
-      );
+      const allSql = createTableCalls.map((call) => call[0]).join(" ");
+      expect(allSql).toContain("CREATE TABLE decks");
+      expect(allSql).toContain("CREATE TABLE flashcards");
+      expect(allSql).toContain("CREATE TABLE review_logs");
+      expect(allSql).toContain("PRAGMA user_version = 2");
     });
 
     it("should load existing database if file exists", async () => {
@@ -124,7 +144,7 @@ describe("DatabaseService", () => {
 
       const dbService2 = new DatabaseService(
         "existing.db",
-        mockAdapter,
+        mockAdapter as DataAdapter,
         () => {},
       ); // Empty debugLog for tests
       await dbService2.initialize();
@@ -161,6 +181,10 @@ describe("DatabaseService", () => {
             enableNewCardsLimit: false,
             enableReviewCardsLimit: false,
             reviewOrder: "due-date",
+            fsrs: {
+              requestRetention: 0.9,
+              profile: "STANDARD",
+            },
           },
         };
 
@@ -565,6 +589,10 @@ describe("DatabaseService", () => {
             enableNewCardsLimit: false,
             enableReviewCardsLimit: false,
             reviewOrder: "due-date",
+            fsrs: {
+              requestRetention: 0.9,
+              profile: "STANDARD",
+            },
           },
           created: "2024-01-01",
           modified: "2024-01-01",
@@ -606,11 +634,15 @@ describe("DatabaseService", () => {
           tag: "#test",
           lastReviewed: null,
           config: {
-            newCardsLimit: 10,
-            reviewCardsLimit: 20,
+            newCardsLimit: 5,
+            reviewCardsLimit: 10,
             enableNewCardsLimit: true,
             enableReviewCardsLimit: true,
             reviewOrder: "due-date",
+            fsrs: {
+              requestRetention: 0.9,
+              profile: "STANDARD",
+            },
           },
           created: "2024-01-01",
           modified: "2024-01-01",
@@ -631,8 +663,8 @@ describe("DatabaseService", () => {
 
       expect(stats).toEqual({
         deckId: "deck_123",
-        newCount: 7, // min(15, 10-3) = 7 remaining new cards
-        dueCount: 15, // min(25, 20-5) = 15 remaining review cards
+        newCount: 2, // min(15, 5-3) = 2 remaining new cards
+        dueCount: 5, // min(25, 10-5) = 5 remaining review cards
         totalCount: 40,
       });
 
@@ -657,6 +689,10 @@ describe("DatabaseService", () => {
             enableNewCardsLimit: true,
             enableReviewCardsLimit: true,
             reviewOrder: "due-date",
+            fsrs: {
+              requestRetention: 0.9,
+              profile: "STANDARD",
+            },
           },
           created: "2024-01-01",
           modified: "2024-01-01",
@@ -708,6 +744,10 @@ describe("DatabaseService", () => {
             enableNewCardsLimit: true,
             enableReviewCardsLimit: true,
             reviewOrder: "due-date",
+            fsrs: {
+              requestRetention: 0.9,
+              profile: "STANDARD",
+            },
           },
           created: "2024-01-01",
           modified: "2024-01-01",
@@ -767,11 +807,15 @@ describe("DatabaseService", () => {
             tag: "#test",
             lastReviewed: null,
             config: {
-              newCardsLimit: 20,
-              reviewCardsLimit: 100,
-              enableNewCardsLimit: false,
-              enableReviewCardsLimit: false,
+              newCardsLimit: 5,
+              reviewCardsLimit: 10,
+              enableNewCardsLimit: true,
+              enableReviewCardsLimit: true,
               reviewOrder: "due-date",
+              fsrs: {
+                requestRetention: 0.9,
+                profile: "STANDARD",
+              },
             },
             created: "2024-01-01",
             modified: "2024-01-01",
@@ -861,6 +905,10 @@ describe("DatabaseService", () => {
               enableNewCardsLimit: false,
               enableReviewCardsLimit: false,
               reviewOrder: "due-date",
+              fsrs: {
+                requestRetention: 0.9,
+                profile: "STANDARD",
+              },
             },
             created: "2024-01-01",
             modified: "2024-01-01",

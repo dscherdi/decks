@@ -3,7 +3,10 @@
   "compilerOptions": {
     "types": ["jest", "node"],
     "esModuleInterop": true,
-    "allowSyntheticDefaultImports": true
+    "allowSyntheticDefaultImports": true,
+    "module": "CommonJS",
+    "target": "ES2020",
+    "moduleResolution": "node"
   },
   "include": [
     "src/**/*.test.ts",

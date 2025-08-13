@@ -1,40 +1,112 @@
 import { DeckManager } from "../services/DeckManager";
 import { DatabaseService } from "../database/DatabaseService";
-import { Vault, MetadataCache, TFile, CachedMetadata } from "obsidian";
+import {
+  Vault,
+  MetadataCache,
+  TFile,
+  CachedMetadata,
+  DataAdapter,
+} from "obsidian";
 import { Deck, Flashcard, DEFAULT_DECK_CONFIG } from "../database/types";
 
 // Mock the database service
 jest.mock("../database/DatabaseService");
 
+// Mock types
+interface MockDataAdapter extends Partial<DataAdapter> {
+  exists: jest.Mock;
+  readBinary: jest.Mock;
+  writeBinary: jest.Mock;
+  mkdir: jest.Mock;
+  getName: jest.Mock;
+  stat: jest.Mock;
+  list: jest.Mock;
+  read: jest.Mock;
+  write: jest.Mock;
+  append: jest.Mock;
+  process: jest.Mock;
+  getResourcePath: jest.Mock;
+  remove: jest.Mock;
+  trashSystem: jest.Mock;
+  trashLocal: jest.Mock;
+  rmdir: jest.Mock;
+  rename: jest.Mock;
+  copy: jest.Mock;
+}
+
+interface MockTFileConstructor {
+  new (path?: string): TFile;
+}
+
+interface MockPluginView {
+  refreshStatsById: jest.Mock;
+}
+
+interface MockPlugin {
+  db: jest.Mocked<DatabaseService>;
+  view: MockPluginView | null;
+  updateDeckConfig: (deckId: string, config: any) => Promise<void>;
+  settings?: {
+    parsing: {
+      headerLevel: number;
+    };
+  };
+}
+
+interface MockVault extends Vault {
+  _addFile: (path: string, content: string) => void;
+  _updateFileModTime: (path: string, mtime: number) => void;
+  _clear: () => void;
+}
+
+interface MockMetadataCache extends MetadataCache {
+  _setCache: (path: string, metadata: CachedMetadata) => void;
+  _clear: () => void;
+}
+
 // Mock adapter
-const mockAdapter = {
+const mockAdapter: MockDataAdapter = {
   exists: jest.fn(),
   readBinary: jest.fn(),
   writeBinary: jest.fn(),
   mkdir: jest.fn(),
+  getName: jest.fn().mockReturnValue("mock-adapter"),
+  stat: jest.fn(),
+  list: jest.fn().mockResolvedValue([]),
+  read: jest.fn(),
+  write: jest.fn(),
+  append: jest.fn(),
+  process: jest.fn(),
+  getResourcePath: jest.fn(),
+  remove: jest.fn(),
+  trashSystem: jest.fn(),
+  trashLocal: jest.fn(),
+  rmdir: jest.fn(),
+  rename: jest.fn(),
+  copy: jest.fn(),
 };
 
 describe("DeckManager", () => {
   let deckManager: DeckManager;
-  let mockVault: Vault;
-  let mockMetadataCache: MetadataCache;
+  let mockVault: MockVault;
+  let mockMetadataCache: MockMetadataCache;
   let mockDb: jest.Mocked<DatabaseService>;
 
   beforeEach(() => {
     // Create mock instances
-    mockVault = new Vault();
-    mockMetadataCache = new MetadataCache();
+    mockVault = new Vault() as MockVault;
+    mockMetadataCache = new MetadataCache() as MockMetadataCache;
 
     mockDb = new DatabaseService(
       "test.db",
-      mockAdapter,
+      mockAdapter as DataAdapter,
       () => {},
     ) as jest.Mocked<DatabaseService>; // Empty debugLog for tests
 
     // Reset mocks
     jest.clearAllMocks();
-    (mockVault as any)._clear();
-    (mockMetadataCache as any)._clear();
+    mockVault._clear();
+    mockMetadataCache._clear();
 
     // Setup default mock returns
     mockDb.getDeckByFilepath = jest.fn().mockResolvedValue(null);
@@ -54,18 +126,34 @@ describe("DeckManager", () => {
   describe("scanVaultForDecks", () => {
     it("should find decks with #flashcards tags", async () => {
       // Add test files to vault
-      (mockVault as any)._addFile("math.md", "# Math\nContent");
-      (mockVault as any)._addFile("spanish.md", "# Spanish\nContent");
-      (mockVault as any)._addFile("no-tags.md", "# No Tags\nContent");
+      mockVault._addFile("math.md", "# Math\nContent");
+      mockVault._addFile("spanish.md", "# Spanish\nContent");
+      mockVault._addFile("no-tags.md", "# No Tags\nContent");
 
       // Set metadata for files
-      (mockMetadataCache as any)._setCache("math.md", {
-        tags: [{ tag: "#flashcards/math" }],
+      mockMetadataCache._setCache("math.md", {
+        tags: [
+          {
+            tag: "#flashcards/math",
+            position: {
+              start: { line: 0, col: 0, offset: 0 },
+              end: { line: 0, col: 0, offset: 0 },
+            },
+          },
+        ],
       });
-      (mockMetadataCache as any)._setCache("spanish.md", {
-        tags: [{ tag: "#flashcards/spanish/vocabulary" }],
+      mockMetadataCache._setCache("spanish.md", {
+        tags: [
+          {
+            tag: "#flashcards/spanish/vocabulary",
+            position: {
+              start: { line: 0, col: 0, offset: 0 },
+              end: { line: 0, col: 0, offset: 0 },
+            },
+          },
+        ],
       });
-      (mockMetadataCache as any)._setCache("no-tags.md", {
+      mockMetadataCache._setCache("no-tags.md", {
         tags: [],
       });
 
@@ -82,13 +170,13 @@ describe("DeckManager", () => {
 
     it("should handle frontmatter tags", async () => {
       // Add file with frontmatter tags
-      (mockVault as any)._addFile(
+      mockVault._addFile(
         "frontmatter.md",
         "---\ntags: flashcards/science\n---\n# Science",
       );
 
       // Set metadata with frontmatter
-      (mockMetadataCache as any)._setCache("frontmatter.md", {
+      mockMetadataCache._setCache("frontmatter.md", {
         frontmatter: {
           tags: "flashcards/science",
         },
@@ -101,12 +189,12 @@ describe("DeckManager", () => {
     });
 
     it("should handle array of frontmatter tags", async () => {
-      (mockVault as any)._addFile(
+      mockVault._addFile(
         "multi-tags.md",
         "---\ntags: [flashcards/math, other-tag]\n---\n# Content",
       );
 
-      (mockMetadataCache as any)._setCache("multi-tags.md", {
+      mockMetadataCache._setCache("multi-tags.md", {
         frontmatter: {
           tags: ["flashcards/math", "other-tag"],
         },
@@ -133,9 +221,17 @@ describe("DeckManager", () => {
       );
 
       // Add file with deck
-      (mockVault as any)._addFile("new-deck.md", "# Content");
-      (mockMetadataCache as any)._setCache("new-deck.md", {
-        tags: [{ tag: "#flashcards/history" }],
+      mockVault._addFile("new-deck.md", "# Content");
+      mockMetadataCache._setCache("new-deck.md", {
+        tags: [
+          {
+            tag: "#flashcards/history",
+            position: {
+              start: { line: 0, col: 0, offset: 0 },
+              end: { line: 0, col: 0, offset: 0 },
+            },
+          },
+        ],
       });
 
       // Sync decks
@@ -168,9 +264,17 @@ describe("DeckManager", () => {
       ]);
 
       // Add file with existing deck tag
-      (mockVault as any)._addFile("math.md", "# Content");
-      (mockMetadataCache as any)._setCache("math.md", {
-        tags: [{ tag: "#flashcards/math" }],
+      mockVault._addFile("math.md", "# Content");
+      mockMetadataCache._setCache("math.md", {
+        tags: [
+          {
+            tag: "#flashcards/math",
+            position: {
+              start: { line: 0, col: 0, offset: 0 },
+              end: { line: 0, col: 0, offset: 0 },
+            },
+          },
+        ],
       });
 
       await deckManager.syncDecks();
@@ -192,13 +296,29 @@ describe("DeckManager", () => {
       );
 
       // Add two files with same tag
-      (mockVault as any)._addFile("math1.md", "# Math 1");
-      (mockMetadataCache as any)._setCache("math1.md", {
-        tags: [{ tag: "#flashcards/math" }],
+      mockVault._addFile("math1.md", "# Math 1");
+      mockMetadataCache._setCache("math1.md", {
+        tags: [
+          {
+            tag: "#flashcards/math",
+            position: {
+              start: { line: 0, col: 0, offset: 0 },
+              end: { line: 0, col: 0, offset: 0 },
+            },
+          },
+        ],
       });
-      (mockVault as any)._addFile("math2.md", "# Math 2");
-      (mockMetadataCache as any)._setCache("math2.md", {
-        tags: [{ tag: "#flashcards/math" }],
+      mockVault._addFile("math2.md", "# Math 2");
+      mockMetadataCache._setCache("math2.md", {
+        tags: [
+          {
+            tag: "#flashcards/math",
+            position: {
+              start: { line: 0, col: 0, offset: 0 },
+              end: { line: 0, col: 0, offset: 0 },
+            },
+          },
+        ],
       });
 
       await deckManager.syncDecks();
@@ -241,7 +361,7 @@ describe("DeckManager", () => {
       mockDb.deleteFlashcardsByFile = jest.fn().mockResolvedValue(undefined);
 
       // Add file
-      (mockVault as any)._addFile("test.md", "# Test Content");
+      mockVault._addFile("test.md", "# Test Content");
 
       // Simulate file deletion by calling handleFileDelete directly
       const deckManager = new DeckManager(mockVault, mockMetadataCache, mockDb);
@@ -272,7 +392,7 @@ The answer is 4.
 Paris is the capital of France.
 It has many attractions.`;
 
-      const file = new TFile("test.md");
+      const file = new (TFile as MockTFileConstructor)("test.md");
       jest.spyOn(mockVault, "read").mockResolvedValue(content);
 
       const flashcards = await deckManager.parseFlashcardsFromFile(file);
@@ -301,7 +421,7 @@ It has many attractions.`;
 | Adiós | Goodbye |
 | Gracias | Thank you |`;
 
-      const file = new TFile("spanish.md");
+      const file = new (TFile as MockTFileConstructor)("spanish.md");
       jest.spyOn(mockVault, "read").mockResolvedValue(content);
 
       const flashcards = await deckManager.parseFlashcardsFromFile(file);
@@ -333,11 +453,14 @@ Answer to question 1.
 
 Answer to question 2.`;
 
-      const file = new TFile("test.md");
+      const file = new (TFile as MockTFileConstructor)("test.md");
       jest.spyOn(mockVault, "read").mockResolvedValue(content);
 
       // Create DeckManager with mock plugin that has H2 setting
-      const mockPlugin = {
+      const mockPlugin: MockPlugin = {
+        db: mockDb,
+        view: null,
+        updateDeckConfig: async () => {},
         settings: {
           parsing: {
             headerLevel: 2,
@@ -363,7 +486,7 @@ Answer to question 2.`;
       });
 
       // Test with H3 setting
-      mockPlugin.settings.parsing.headerLevel = 3;
+      mockPlugin.settings!.parsing.headerLevel = 3;
       const deckManagerH3 = new DeckManager(
         mockVault,
         mockMetadataCache,
@@ -388,7 +511,7 @@ Answer to question 2.`;
       const tag = "#flashcards/test";
 
       // Add file to vault
-      (mockVault as any)._addFile(filePath, "# Test\nContent");
+      mockVault._addFile(filePath, "# Test\nContent");
 
       // Mock that no deck exists initially
       mockDb.getDeckByFilepath.mockResolvedValue(null);
@@ -421,7 +544,7 @@ This is a description.
 
 First answer.`;
 
-      const file = new TFile("test.md");
+      const file = new (TFile as MockTFileConstructor)("test.md");
       jest.spyOn(mockVault, "read").mockResolvedValue(content);
 
       const flashcards = await deckManager.parseFlashcardsFromFile(file);
@@ -441,7 +564,7 @@ tags: flashcards/test
 
 Answer 1`;
 
-      const file = new TFile("test.md");
+      const file = new (TFile as MockTFileConstructor)("test.md");
       jest.spyOn(mockVault, "read").mockResolvedValue(content);
 
       const flashcards = await deckManager.parseFlashcardsFromFile(file);
@@ -478,9 +601,17 @@ Answer 1`;
       );
 
       // Add file
-      (mockVault as any)._addFile("test.md", "## Question\n\nAnswer");
-      (mockMetadataCache as any)._setCache("test.md", {
-        tags: [{ tag: "#flashcards/test" }],
+      mockVault._addFile("test.md", "## Question\n\nAnswer");
+      mockMetadataCache._setCache("test.md", {
+        tags: [
+          {
+            tag: "#flashcards/test",
+            position: {
+              start: { line: 0, col: 0, offset: 0 },
+              end: { line: 0, col: 0, offset: 0 },
+            },
+          },
+        ],
       });
 
       await deckManager.syncFlashcardsForDeck("test.md");
@@ -551,9 +682,17 @@ Answer 1`;
       );
 
       // Add file
-      (mockVault as any)._addFile("test.md", "## Question\n\nAnswer");
-      (mockMetadataCache as any)._setCache("test.md", {
-        tags: [{ tag: "#flashcards/test" }],
+      mockVault._addFile("test.md", "## Question\n\nAnswer");
+      mockMetadataCache._setCache("test.md", {
+        tags: [
+          {
+            tag: "#flashcards/test",
+            position: {
+              start: { line: 0, col: 0, offset: 0 },
+              end: { line: 0, col: 0, offset: 0 },
+            },
+          },
+        ],
       });
 
       await deckManager.syncFlashcardsForDeckByName("test.md");
@@ -602,15 +741,31 @@ Answer 1`;
   describe("sync efficiency", () => {
     it("should sync flashcards for specific deck without affecting others", async () => {
       // Setup multiple files and decks
-      (mockVault as any)._addFile("deck1.md", "# Question 1\nAnswer 1");
-      (mockVault as any)._addFile("deck2.md", "# Question 2\nAnswer 2");
+      mockVault._addFile("deck1.md", "# Question 1\nAnswer 1");
+      mockVault._addFile("deck2.md", "# Question 2\nAnswer 2");
 
       // Mock metadata for both files
-      (mockMetadataCache as any)._setCache("deck1.md", {
-        tags: [{ tag: "#flashcards/math" }],
+      mockMetadataCache._setCache("deck1.md", {
+        tags: [
+          {
+            tag: "#flashcards/math",
+            position: {
+              start: { line: 0, col: 0, offset: 0 },
+              end: { line: 0, col: 0, offset: 0 },
+            },
+          },
+        ],
       });
-      (mockMetadataCache as any)._setCache("deck2.md", {
-        tags: [{ tag: "#flashcards/science" }],
+      mockMetadataCache._setCache("deck2.md", {
+        tags: [
+          {
+            tag: "#flashcards/science",
+            position: {
+              start: { line: 0, col: 0, offset: 0 },
+              end: { line: 0, col: 0, offset: 0 },
+            },
+          },
+        ],
       });
 
       const deck1: Deck = {
@@ -625,6 +780,10 @@ Answer 1`;
           enableNewCardsLimit: false,
           enableReviewCardsLimit: false,
           reviewOrder: "due-date",
+          fsrs: {
+            requestRetention: 0.9,
+            profile: "STANDARD",
+          },
         },
         created: new Date().toISOString(),
         modified: new Date().toISOString(),
@@ -637,11 +796,15 @@ Answer 1`;
         tag: "#flashcards/science",
         lastReviewed: null,
         config: {
-          newCardsLimit: 20,
-          reviewCardsLimit: 100,
+          newCardsLimit: 30,
+          reviewCardsLimit: 150,
           enableNewCardsLimit: false,
           enableReviewCardsLimit: false,
           reviewOrder: "due-date",
+          fsrs: {
+            requestRetention: 0.9,
+            profile: "STANDARD",
+          },
         },
         created: new Date().toISOString(),
         modified: new Date().toISOString(),
@@ -672,7 +835,7 @@ Answer 1`;
       const tag = "#flashcards/test";
 
       // Add the file to mock vault
-      (mockVault as any)._addFile(filepath, "# Test\nContent");
+      mockVault._addFile(filepath, "# Test\nContent");
 
       // Mock that no deck exists yet
       mockDb.getDeckByFilepath.mockResolvedValue(null);
@@ -721,10 +884,10 @@ Answer 1`;
       mockDb.updateDeck.mockResolvedValue();
 
       // Create a mock plugin with view
-      const mockPlugin = {
+      const mockPlugin: MockPlugin = {
         db: mockDb,
         view: {
-          refreshStatsById: jest.fn().mockResolvedValue(),
+          refreshStatsById: jest.fn().mockResolvedValue(undefined),
         },
         updateDeckConfig: async function (deckId: string, config: any) {
           await this.db.updateDeck(deckId, { config });
@@ -743,25 +906,29 @@ Answer 1`;
       });
 
       // Verify stats refresh was triggered for the specific deck
-      expect(mockPlugin.view.refreshStatsById).toHaveBeenCalledWith(deckId);
-      expect(mockPlugin.view.refreshStatsById).toHaveBeenCalledTimes(1);
+      expect(mockPlugin.view!.refreshStatsById).toHaveBeenCalledWith(deckId);
+      expect(mockPlugin.view!.refreshStatsById).toHaveBeenCalledTimes(1);
     });
 
     it("should handle config update without view gracefully", async () => {
       // Setup deck config update without view
       const deckId = "deck1";
-      const newConfig = {
-        newCardsLimit: 25,
-        reviewCardsLimit: 125,
+      const testConfig = {
+        newCardsLimit: 10,
+        reviewCardsLimit: 50,
         enableNewCardsLimit: false,
         enableReviewCardsLimit: false,
         reviewOrder: "due-date" as const,
+        fsrs: {
+          requestRetention: 0.9,
+          profile: "STANDARD" as const,
+        },
       };
 
       mockDb.updateDeck.mockResolvedValue();
 
       // Create plugin without view
-      const mockPlugin = {
+      const mockPlugin: MockPlugin = {
         db: mockDb,
         view: null,
         updateDeckConfig: async function (deckId: string, config: any) {
@@ -774,12 +941,12 @@ Answer 1`;
 
       // Test config update - should not throw error
       await expect(
-        mockPlugin.updateDeckConfig(deckId, newConfig),
+        mockPlugin.updateDeckConfig(deckId, testConfig),
       ).resolves.not.toThrow();
 
       // Verify database was still updated
       expect(mockDb.updateDeck).toHaveBeenCalledWith(deckId, {
-        config: newConfig,
+        config: testConfig,
       });
     });
   });
@@ -791,8 +958,8 @@ Answer 1`;
       const deckModTime = Date.now(); // Deck modified after file
 
       // Setup file with specific modification time
-      (mockVault as any)._addFile(filePath, "## Question\nAnswer");
-      (mockVault as any)._updateFileModTime(filePath, modTime);
+      mockVault._addFile(filePath, "## Question\nAnswer");
+      mockVault._updateFileModTime(filePath, modTime);
 
       const deck: Deck = {
         id: "deck1",
@@ -800,6 +967,7 @@ Answer 1`;
         filepath: filePath,
         tag: "#flashcards",
         config: DEFAULT_DECK_CONFIG,
+        lastReviewed: null,
         created: new Date().toISOString(),
         modified: new Date(deckModTime).toISOString(),
       };
@@ -820,8 +988,8 @@ Answer 1`;
       const newFileModTime = Date.now() - 1000; // 1 second ago
 
       // Setup file with newer modification time
-      (mockVault as any)._addFile(filePath, "## Question\nAnswer");
-      (mockVault as any)._updateFileModTime(filePath, newFileModTime);
+      mockVault._addFile(filePath, "## Question\nAnswer");
+      mockVault._updateFileModTime(filePath, newFileModTime);
 
       const deck: Deck = {
         id: "deck1",
@@ -829,6 +997,7 @@ Answer 1`;
         filepath: filePath,
         tag: "#flashcards",
         config: DEFAULT_DECK_CONFIG,
+        lastReviewed: null,
         created: new Date().toISOString(),
         modified: new Date(oldDeckModTime).toISOString(),
       };
@@ -858,7 +1027,7 @@ H2 content
 ### H3 Header
 H3 content`;
 
-      const file = new TFile("test.md");
+      const file = new (TFile as MockTFileConstructor)("test.md");
       jest.spyOn(mockVault, "read").mockResolvedValue(content);
 
       const flashcards = await deckManager.parseFlashcardsFromFile(file);
@@ -904,7 +1073,7 @@ Answer 1
 ## Question 1
 Answer 2 (different)`;
 
-      const file = new TFile("test.md");
+      const file = new (TFile as MockTFileConstructor)("test.md");
       jest.spyOn(mockVault, "read").mockResolvedValue(content);
 
       const flashcards = await deckManager.parseFlashcardsFromFile(file);
@@ -922,6 +1091,7 @@ Answer 2 (different)`;
         filepath: "test.md",
         tag: "#flashcards",
         config: DEFAULT_DECK_CONFIG,
+        lastReviewed: null,
         created: new Date().toISOString(),
         modified: new Date().toISOString(),
       };
@@ -999,14 +1169,34 @@ Answer 2 (different)`;
 
     it("should return progress data when review logs exist", async () => {
       const progressData = {
-        state: "review" as const,
-        dueDate: "2024-01-15T10:00:00.000Z",
-        interval: 10,
-        repetitions: 5,
-        difficulty: 2.8,
-        stability: 15.0,
-        lapses: 1,
-        lastReviewed: "2024-01-10T10:00:00.000Z",
+        id: "review_log_1",
+        flashcardId: "test_id",
+        lastReviewedAt: "2024-01-10T10:00:00.000Z",
+        reviewedAt: "2024-01-15T10:00:00.000Z",
+        rating: 3 as 3,
+        ratingLabel: "good" as const,
+        oldState: "review" as const,
+        oldRepetitions: 4,
+        oldLapses: 1,
+        oldStability: 10.0,
+        oldDifficulty: 2.8,
+        newState: "review" as const,
+        newRepetitions: 5,
+        newLapses: 1,
+        newStability: 15.0,
+        newDifficulty: 2.8,
+        oldIntervalMinutes: 7200,
+        newIntervalMinutes: 14400,
+        oldDueAt: "2024-01-14T10:00:00.000Z",
+        newDueAt: "2024-01-15T10:00:00.000Z",
+        elapsedDays: 5,
+        retrievability: 0.8,
+        requestRetention: 0.9,
+        profile: "STANDARD" as const,
+        maximumIntervalDays: 36500,
+        minMinutes: 1,
+        fsrsWeightsVersion: "v1",
+        schedulerVersion: "1.0",
       };
 
       mockDb.getLatestReviewLogForFlashcard.mockResolvedValue(progressData);
@@ -1023,14 +1213,34 @@ Answer 2 (different)`;
       const expectedDueDate = "2024-01-16T10:00:00.000Z"; // 24 hours later
 
       const progressData = {
-        state: "review" as const,
-        dueDate: expectedDueDate,
-        interval: intervalMinutes,
-        repetitions: 3,
-        difficulty: 2.5,
-        stability: 12.0,
-        lapses: 0,
-        lastReviewed: reviewedAt,
+        id: "review_log_2",
+        flashcardId: "test_id",
+        lastReviewedAt: "2024-01-14T10:00:00.000Z",
+        reviewedAt: reviewedAt,
+        rating: 3 as 3,
+        ratingLabel: "good" as const,
+        oldState: "review" as const,
+        oldRepetitions: 2,
+        oldLapses: 0,
+        oldStability: 5.0,
+        oldDifficulty: 2.5,
+        newState: "review" as const,
+        newRepetitions: 3,
+        newLapses: 0,
+        newStability: 10.0,
+        newDifficulty: 2.5,
+        oldIntervalMinutes: 720,
+        newIntervalMinutes: intervalMinutes,
+        oldDueAt: "2024-01-15T10:00:00.000Z",
+        newDueAt: expectedDueDate,
+        elapsedDays: 1,
+        retrievability: 0.85,
+        requestRetention: 0.9,
+        profile: "STANDARD" as const,
+        maximumIntervalDays: 36500,
+        minMinutes: 1,
+        fsrsWeightsVersion: "v1",
+        schedulerVersion: "1.0",
       };
 
       mockDb.getLatestReviewLogForFlashcard.mockResolvedValue(progressData);
@@ -1038,9 +1248,10 @@ Answer 2 (different)`;
       const result = await mockDb.getLatestReviewLogForFlashcard("test_id");
 
       // Verify due date is calculated correctly
-      expect(result?.dueDate).toBe(expectedDueDate);
-      expect(result?.interval).toBe(intervalMinutes);
-      expect(result?.lastReviewed).toBe(reviewedAt);
+      expect(result).not.toBeNull();
+      expect(result!.newDueAt).toBe(expectedDueDate);
+      expect(result!.newIntervalMinutes).toBe(intervalMinutes);
+      expect(result!.lastReviewedAt).toBe("2024-01-14T10:00:00.000Z");
     });
   });
 });

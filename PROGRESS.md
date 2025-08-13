@@ -500,141 +500,6 @@ COMMIT;
 
 	•	In sql.js you must re-export the DB buffer after migration and persist it (IndexedDB or file).
 
-const data = db.export(); // Uint8Array
-await idb.put('db', data, 'main');
-
-
-
-TypeScript skeleton (sql.js):
-
-type Migration = {
-  from: number;
-  to: number;
-  up: (db: SQL.Database) => void;
-};
-
-const migrations: Migration[] = [
-  {
-    from: 0, to: 1,
-    up: (db) => {
-      db.exec(`
-        PRAGMA foreign_keys = OFF;
-        BEGIN;
-        CREATE TABLE flashcards(
-          id TEXT PRIMARY KEY,
-          front TEXT NOT NULL,
-          back  TEXT NOT NULL,
-          state TEXT NOT NULL CHECK(state IN ('new','review')),
-          stability REAL,
-          difficulty REAL,
-          repetitions INTEGER NOT NULL DEFAULT 0,
-          lapses INTEGER NOT NULL DEFAULT 0,
-          lastReviewedAt TEXT,
-          dueAt TEXT,
-          intervalMinutes REAL
-        );
-        CREATE INDEX idx_flashcards_dueAt ON flashcards(dueAt);
-        COMMIT;
-        PRAGMA foreign_keys = ON;
-      `);
-    }
-  },
-  {
-    // Example: add column
-    from: 1, to: 2,
-    up: (db) => {
-      db.exec(`
-        BEGIN;
-        ALTER TABLE flashcards ADD COLUMN profileSnapshot TEXT DEFAULT 'STANDARD';
-        COMMIT;
-      `);
-    }
-  },
-  {
-    // Example: drop/rename columns in review_log by rebuild
-    from: 2, to: 3,
-    up: (db) => {
-      db.exec(`
-        PRAGMA foreign_keys = OFF;
-        BEGIN;
-        CREATE TABLE review_log_new(
-          id TEXT PRIMARY KEY,
-          flashcardId TEXT NOT NULL,
-          lastReviewedAt TEXT NOT NULL,
-          shownAt TEXT,
-          reviewedAt TEXT NOT NULL,
-          rating INTEGER NOT NULL CHECK(rating BETWEEN 1 AND 4),
-          ratingLabel TEXT NOT NULL,
-          elapsedDays REAL NOT NULL,
-          retrievability REAL NOT NULL,
-          oldState TEXT NOT NULL,
-          oldRepetitions INTEGER NOT NULL,
-          oldLapses INTEGER NOT NULL,
-          oldStability REAL NOT NULL,
-          oldDifficulty REAL NOT NULL,
-          newState TEXT NOT NULL,
-          newRepetitions INTEGER NOT NULL,
-          newLapses INTEGER NOT NULL,
-          newStability REAL NOT NULL,
-          newDifficulty REAL NOT NULL,
-          oldIntervalMinutes REAL NOT NULL,
-          newIntervalMinutes REAL NOT NULL,
-          oldDueAt TEXT NOT NULL,
-          newDueAt TEXT NOT NULL,
-          requestRetention REAL NOT NULL,
-          maximumIntervalDays INTEGER NOT NULL,
-          minMinutes INTEGER NOT NULL,
-          profile TEXT NOT NULL,
-          weightsVersion TEXT NOT NULL,
-          schedulerVersion TEXT NOT NULL,
-          client TEXT,
-          FOREIGN KEY(flashcardId) REFERENCES flashcards(id) ON DELETE CASCADE
-        );
-        INSERT INTO review_log_new (
-          id, flashcardId, lastReviewedAt, shownAt, reviewedAt,
-          rating, ratingLabel, elapsedDays, retrievability,
-          oldState, oldRepetitions, oldLapses, oldStability, oldDifficulty,
-          newState, newRepetitions, newLapses, newStability, newDifficulty,
-          oldIntervalMinutes, newIntervalMinutes, oldDueAt, newDueAt,
-          requestRetention, maximumIntervalDays, minMinutes, profile, weightsVersion, schedulerVersion, client
-        )
-        SELECT
-          id, flashcardId, lastReviewedAt, shownAt, reviewedAt,
-          rating, ratingLabel, elapsedDays, retrievability,
-          oldState, oldRepetitions, oldLapses, oldStability, oldDifficulty,
-          newState, newRepetitions, newLapses, newStability, newDifficulty,
-          oldIntervalMinutes, newIntervalMinutes, oldDueAt, newDueAt,
-          requestRetention, maximumIntervalDays, minMinutes, profile, weightsVersion, schedulerVersion, client
-        FROM review_log;  -- adjust mapping if columns changed
-        DROP TABLE review_log;
-        ALTER TABLE review_log_new RENAME TO review_log;
-        CREATE INDEX idx_review_log_card_time ON review_log(flashcardId, reviewedAt);
-        COMMIT;
-        PRAGMA foreign_keys = ON;
-      `);
-    }
-  }
-];
-
-export function migrate(db: SQL.Database) {
-  const getVer = db.exec(`PRAGMA user_version`)[0]?.values?.[0]?.[0] ?? 0;
-  let ver = Number(getVer) || 0;
-
-  for (const m of migrations) {
-    if (m.from === ver) {
-      try {
-        m.up(db);
-        db.exec(`PRAGMA user_version = ${m.to};`);
-        ver = m.to;
-      } catch (e) {
-        // rollback any open transaction
-        try { db.exec(`ROLLBACK;`); } catch {}
-        throw e;
-      }
-    }
-  }
-}
-
 Notes:
 	•	sql.js has no WAL; transactions are still atomic within the in‑memory VM. Always export the DB bytes only after migrate() succeeds.
 	•	For renames, SQLite supports ALTER TABLE t RENAME COLUMN old TO new in newer engines, but for maximum compatibility in sql.js, prefer rebuilds.
@@ -1222,3 +1087,15 @@ Notes:
 - **Type Safety**: Improved code reliability with proper typing for all statistics data structures
 - **Execution Order Fix**: Restructured component to load statistics before UI calculations and rendering
 - **Null Safety**: Fixed reactive statement execution order to prevent null reference errors during initialization
+
+### ✅ Database Schema Extraction and Migration System
+- **SQL Query Centralization**: Extracted all 25+ SQL queries from DatabaseService into `schemas.ts` as named constants
+- **Schema Separation**: Split into `CREATE_TABLES_SQL` (fresh databases) and `MIGRATE_TABLES_SQL` (existing databases)
+- **File-Based Detection**: Database initialization now checks file existence instead of schema version
+- **Clean Fresh Installs**: New databases use direct table creation without migration overhead
+- **Recreate Migration Pattern**: Existing databases use CREATE → INSERT → DROP → RENAME for schema updates
+- **Query Organization**: Categorized SQL constants by operation type (deck, flashcard, review log, statistics)
+- **Type Safety**: All SQL queries properly typed and validated through constants
+- **Maintainability**: Single source of truth for all database schema definitions
+- **Performance**: Faster initialization for fresh databases with direct table creation
+- **Reliability**: Simplified logic reduces edge cases and improves error handling
