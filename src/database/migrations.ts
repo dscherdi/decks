@@ -2,7 +2,7 @@ import { Database } from "sql.js";
 import {
   CREATE_TABLES_SQL,
   CURRENT_SCHEMA_VERSION,
-  MIGRATE_TABLES_SQL,
+  buildMigrationSQL,
 } from "./schemas";
 
 // Migration helper functions
@@ -64,7 +64,8 @@ export function migrate(
   );
 
   try {
-    db.run(MIGRATE_TABLES_SQL);
+    var migrationSql = buildMigrationSQL(db);
+    db.run(migrationSql);
     log(`✅ Migration completed successfully`);
   } catch (error) {
     log(`❌ Migration failed: ${error}`);
