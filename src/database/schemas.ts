@@ -174,10 +174,88 @@ export const MIGRATE_TABLES_SQL = `
     FOREIGN KEY (flashcard_id) REFERENCES flashcards(id) ON DELETE CASCADE
   );
 
-  -- Copy existing data if tables exist
-  INSERT OR IGNORE INTO decks_new SELECT * FROM decks WHERE EXISTS (SELECT 1 FROM sqlite_master WHERE type='table' AND name='decks');
-  INSERT OR IGNORE INTO flashcards_new SELECT * FROM flashcards WHERE EXISTS (SELECT 1 FROM sqlite_master WHERE type='table' AND name='flashcards');
-  INSERT OR IGNORE INTO review_logs_new SELECT * FROM review_logs WHERE EXISTS (SELECT 1 FROM sqlite_master WHERE type='table' AND name='review_logs');
+  -- Copy existing data if tables exist with column mapping and defaults
+  INSERT OR IGNORE INTO decks_new (
+    id, name, filepath, tag, last_reviewed, config, created, modified
+  )
+  SELECT
+    id, name,
+    COALESCE(filepath, '') as filepath,
+    tag, last_reviewed,
+    COALESCE(config, '{"newCardsLimit":20,"reviewCardsLimit":100,"enableNewCardsLimit":false,"enableReviewCardsLimit":false,"reviewOrder":"due-date","fsrs":{"requestRetention":0.9,"profile":"STANDARD"}}') as config,
+    COALESCE(created, datetime('now')) as created,
+    COALESCE(modified, datetime('now')) as modified
+  FROM decks
+  WHERE EXISTS (SELECT 1 FROM sqlite_master WHERE type='table' AND name='decks');
+
+  INSERT OR IGNORE INTO flashcards_new (
+    id, deck_id, front, back, type, source_file, content_hash, header_level,
+    state, due_date, interval, repetitions, difficulty, stability, lapses,
+    last_reviewed, created, modified
+  )
+  SELECT
+    id, deck_id, front, back,
+    COALESCE(type, 'header-paragraph') as type,
+    COALESCE(source_file, '') as source_file,
+    COALESCE(content_hash, '') as content_hash,
+    header_level,
+    COALESCE(state, 'new') as state,
+    COALESCE(due_date, datetime('now')) as due_date,
+    COALESCE(interval, 0) as interval,
+    COALESCE(repetitions, 0) as repetitions,
+    COALESCE(difficulty, 5.0) as difficulty,
+    COALESCE(stability, 0) as stability,
+    COALESCE(lapses, 0) as lapses,
+    last_reviewed,
+    COALESCE(created, datetime('now')) as created,
+    COALESCE(modified, datetime('now')) as modified
+  FROM flashcards
+  WHERE EXISTS (SELECT 1 FROM sqlite_master WHERE type='table' AND name='flashcards');
+
+  -- Copy review_logs data with extensive column mapping and defaults
+  INSERT OR IGNORE INTO review_logs_new (
+    id, flashcard_id, last_reviewed_at, shown_at, reviewed_at,
+    rating, rating_label, time_elapsed_ms,
+    old_state, old_repetitions, old_lapses, old_stability, old_difficulty,
+    new_state, new_repetitions, new_lapses, new_stability, new_difficulty,
+    old_interval_minutes, new_interval_minutes, old_due_at, new_due_at,
+    elapsed_days, retrievability, request_retention, profile,
+    maximum_interval_days, min_minutes, fsrs_weights_version, scheduler_version,
+    note_model_id, card_template_id, content_hash, client
+  )
+  SELECT
+    id, flashcard_id,
+    COALESCE(last_reviewed_at, datetime('now')) as last_reviewed_at,
+    shown_at,
+    COALESCE(reviewed_at, datetime('now')) as reviewed_at,
+    COALESCE(rating, 3) as rating,
+    COALESCE(rating_label, 'good') as rating_label,
+    time_elapsed_ms,
+    COALESCE(old_state, 'new') as old_state,
+    COALESCE(old_repetitions, 0) as old_repetitions,
+    COALESCE(old_lapses, 0) as old_lapses,
+    COALESCE(old_stability, 0) as old_stability,
+    COALESCE(old_difficulty, 5.0) as old_difficulty,
+    COALESCE(new_state, 'review') as new_state,
+    COALESCE(new_repetitions, 1) as new_repetitions,
+    COALESCE(new_lapses, 0) as new_lapses,
+    COALESCE(new_stability, 2.5) as new_stability,
+    COALESCE(new_difficulty, 5.0) as new_difficulty,
+    COALESCE(old_interval_minutes, 0) as old_interval_minutes,
+    COALESCE(new_interval_minutes, 1440) as new_interval_minutes,
+    COALESCE(old_due_at, datetime('now')) as old_due_at,
+    COALESCE(new_due_at, datetime('now', '+1 day')) as new_due_at,
+    COALESCE(elapsed_days, 1.0) as elapsed_days,
+    COALESCE(retrievability, 0.9) as retrievability,
+    COALESCE(request_retention, 0.9) as request_retention,
+    COALESCE(profile, 'STANDARD') as profile,
+    COALESCE(maximum_interval_days, 36500) as maximum_interval_days,
+    COALESCE(min_minutes, 1) as min_minutes,
+    COALESCE(fsrs_weights_version, '1.0') as fsrs_weights_version,
+    COALESCE(scheduler_version, '1.0') as scheduler_version,
+    note_model_id, card_template_id, content_hash, client
+  FROM review_logs
+  WHERE EXISTS (SELECT 1 FROM sqlite_master WHERE type='table' AND name='review_logs');
 
   -- Drop old tables if they exist
   DROP TABLE IF EXISTS review_logs;
