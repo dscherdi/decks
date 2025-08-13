@@ -14,7 +14,7 @@ import {
 
 import { DatabaseService } from "./database/DatabaseService";
 import { DeckManager } from "./services/DeckManager";
-import { FSRS, type Difficulty } from "./algorithm/fsrs";
+import { FSRS, type Difficulty, type SchedulingInfo } from "./algorithm/fsrs";
 import {
   Deck,
   Flashcard,
@@ -29,13 +29,57 @@ import { DeckConfigModal } from "./components/DeckConfigModal";
 import { StatisticsModal } from "./components/StatisticsModal";
 import DeckConfigUI from "./components/DeckConfigUI.svelte";
 import { FlashcardReviewModalWrapper } from "./components/FlashcardReviewModalWrapper";
+import {
+  getMinMinutesForProfile,
+  getMaxIntervalDaysForProfile,
+} from "./algorithm/fsrs-weights";
 
 const VIEW_TYPE_DECKS = "decks-view";
+
+/**
+ * Deep merge utility that ignores null and undefined values
+ * This prevents null values in loaded data from overriding valid defaults
+ */
+function deepMergeIgnoreNull(target: any, source: any): any {
+  if (source === null || source === undefined) {
+    return target;
+  }
+
+  if (typeof source !== "object" || Array.isArray(source)) {
+    return source;
+  }
+
+  const result = { ...target };
+
+  for (const key in source) {
+    if (source.hasOwnProperty(key)) {
+      const sourceValue = source[key];
+
+      if (sourceValue === null || sourceValue === undefined) {
+        // Keep the target value, don't override with null/undefined
+        continue;
+      }
+
+      if (
+        typeof sourceValue === "object" &&
+        !Array.isArray(sourceValue) &&
+        target[key]
+      ) {
+        // Recursively merge objects
+        result[key] = deepMergeIgnoreNull(target[key], sourceValue);
+      } else {
+        // Use source value for primitives and arrays
+        result[key] = sourceValue;
+      }
+    }
+  }
+
+  return result;
+}
 
 export default class DecksPlugin extends Plugin {
   private db: DatabaseService;
   public deckManager: DeckManager;
-  private fsrs: FSRS;
   public view: DecksView | null = null;
   public settings: FlashcardsSettings;
   private isSyncing: boolean = false;
@@ -110,12 +154,7 @@ export default class DecksPlugin extends Plugin {
         await adapter.mkdir(pluginDir);
       }
 
-      // Initialize FSRS first
-      this.fsrs = new FSRS({
-        requestRetention: this.settings.fsrs.requestRetention,
-        maximumInterval: this.settings.fsrs.maximumInterval,
-        w: this.settings.fsrs.weights,
-      });
+      // FSRS instances are now created per-deck as needed
 
       // Initialize database
       const databasePath = `${this.app.vault.configDir}/plugins/decks/flashcards.db`;
@@ -135,7 +174,32 @@ export default class DecksPlugin extends Plugin {
       );
 
       // Register the side panel view
-      this.registerView(VIEW_TYPE_DECKS, (leaf) => new DecksView(leaf, this));
+      this.registerView(
+        VIEW_TYPE_DECKS,
+        (leaf) =>
+          new DecksView(
+            this,
+            leaf,
+            this.createFSRSForDeck.bind(this),
+            this.settings,
+            this.debugLog.bind(this),
+            this.performSync.bind(this),
+            this.getDecks.bind(this),
+            this.getDeckStats.bind(this),
+            this.getDeckStatsById.bind(this),
+            this.getReviewCounts.bind(this),
+            this.updateDeckConfig.bind(this),
+            this.openStatisticsModal.bind(this),
+            this.deckManager.syncFlashcardsForDeck.bind(this.deckManager),
+            this.db.getDailyReviewCounts.bind(this.db),
+            this.db.getReviewableFlashcards.bind(this.db),
+            this.reviewFlashcard.bind(this),
+            this.renderMarkdown.bind(this),
+            (view: DecksView | null) => {
+              this.view = view;
+            },
+          ),
+      );
 
       // Schedule initial sync after workspace is ready
       this.app.workspace.onLayoutReady(() => {
@@ -185,7 +249,36 @@ export default class DecksPlugin extends Plugin {
       );
 
       // Add settings tab
-      this.addSettingTab(new DecksSettingTab(this.app, this));
+      this.addSettingTab(
+        new DecksSettingTab(
+          this.app,
+          this,
+          this.settings,
+          this.saveSettings.bind(this),
+          this.performSync.bind(this),
+          async () => {
+            if (this.view) {
+              await this.view.refreshStats();
+            }
+          },
+          () => {
+            if (this.view) {
+              this.view.restartBackgroundRefresh();
+            }
+          },
+          () => {
+            if (this.view) {
+              this.view.startBackgroundRefresh();
+            }
+          },
+          () => {
+            if (this.view) {
+              this.view.stopBackgroundRefresh();
+            }
+          },
+          this.db.purgeDatabase.bind(this.db),
+        ),
+      );
 
       this.debugLog("Decks plugin loaded successfully");
     } catch (error) {
@@ -207,23 +300,23 @@ export default class DecksPlugin extends Plugin {
 
   async loadSettings() {
     const loadedData = await this.loadData();
-    this.settings = Object.assign({}, DEFAULT_SETTINGS, loadedData);
+    this.settings = deepMergeIgnoreNull(DEFAULT_SETTINGS, loadedData);
 
-    // Ensure debug section exists for existing users
-    if (!this.settings.debug) {
-      this.settings.debug = DEFAULT_SETTINGS.debug;
-      await this.saveSettings();
-    }
+    // Deep merge ensures all properties have valid defaults
   }
 
   async saveSettings() {
     await this.saveData(this.settings);
+    // FSRS instances are now deck-specific, no global instance to update
+  }
 
-    // Update FSRS instance with new settings
-    this.fsrs = new FSRS({
-      requestRetention: this.settings.fsrs.requestRetention,
-      maximumInterval: this.settings.fsrs.maximumInterval,
-      w: this.settings.fsrs.weights,
+  /**
+   * Create FSRS instance for a specific deck using its configuration
+   */
+  createFSRSForDeck(deck: Deck): FSRS {
+    return new FSRS({
+      requestRetention: deck.config.fsrs.requestRetention,
+      profile: deck.config.fsrs.profile,
     });
   }
 
@@ -576,8 +669,43 @@ export default class DecksPlugin extends Plugin {
     };
   }
 
-  async updateDeckConfig(deckId: string, config: DeckConfig): Promise<void> {
-    await this.db.updateDeck(deckId, { config });
+  async updateDeckConfig(
+    deckId: string,
+    config: Partial<DeckConfig>,
+  ): Promise<void> {
+    // Validate profile and requestRetention if provided
+    if (
+      config.fsrs?.profile &&
+      !["INTENSIVE", "STANDARD"].includes(config.fsrs.profile)
+    ) {
+      throw new Error(`Invalid profile: ${config.fsrs.profile}`);
+    }
+
+    if (config.fsrs?.requestRetention !== undefined) {
+      const rr = config.fsrs.requestRetention;
+      if (rr <= 0.5 || rr >= 0.995) {
+        throw new Error(
+          `requestRetention must be in range (0.5, 0.995), got ${rr}`,
+        );
+      }
+    }
+
+    // Get current config and merge with updates
+    const currentConfig = await this.getDeckConfig(deckId);
+    if (!currentConfig) {
+      throw new Error(`Deck not found: ${deckId}`);
+    }
+
+    const updatedConfig = {
+      ...currentConfig,
+      ...config,
+      fsrs: {
+        ...currentConfig.fsrs,
+        ...config.fsrs,
+      },
+    };
+
+    await this.db.updateDeck(deckId, { config: updatedConfig });
 
     // Refresh stats for this deck since config changes can affect displayed stats
     if (this.view) {
@@ -585,40 +713,141 @@ export default class DecksPlugin extends Plugin {
     }
   }
 
+  /**
+   * Get deck configuration
+   */
+  async getDeckConfig(deckId: string): Promise<DeckConfig | null> {
+    const decks = await this.db.getAllDecks();
+    const deck = decks.find((d) => d.id === deckId);
+    return deck ? deck.config : null;
+  }
+
+  /**
+   * Schedule preview for a card showing all four rating outcomes
+   */
+  async schedulePreview(
+    cardId: string,
+    now: Date = new Date(),
+  ): Promise<SchedulingInfo | null> {
+    // Find the card by searching all decks
+    const decks = await this.db.getAllDecks();
+    let targetCard: Flashcard | null = null;
+    let targetDeck: Deck | null = null;
+
+    for (const deck of decks) {
+      const flashcards = await this.db.getFlashcardsByDeck(deck.id);
+      const card = flashcards.find((f: Flashcard) => f.id === cardId);
+      if (card) {
+        targetCard = card;
+        targetDeck = deck;
+        break;
+      }
+    }
+
+    if (!targetCard || !targetDeck) {
+      return null;
+    }
+
+    const fsrs = this.createFSRSForDeck(targetDeck);
+    return fsrs.getSchedulingInfo(targetCard);
+  }
+
   async reviewFlashcard(
+    deck: Deck,
     flashcard: Flashcard,
-    difficulty: Difficulty,
+    difficulty: "again" | "hard" | "good" | "easy",
     timeElapsed?: number,
   ): Promise<void> {
-    // Update flashcard with new scheduling
-    const updatedCard = this.fsrs.updateCard(flashcard, difficulty);
+    const fsrs = this.createFSRSForDeck(deck);
 
-    // Save to database
+    const reviewedAt = new Date().toISOString();
+    const lastReviewedAt = flashcard.lastReviewed || flashcard.dueDate;
+
+    // Calculate elapsed days and retrievability using FSRS
+    const elapsedDays = flashcard.lastReviewed
+      ? Math.max(
+          0,
+          (new Date(reviewedAt).getTime() -
+            new Date(flashcard.lastReviewed).getTime()) /
+            86400000,
+        )
+      : 0;
+
+    const retrievability = fsrs.getRetrievability(
+      flashcard,
+      new Date(reviewedAt),
+    );
+
+    const updatedCard = fsrs.updateCard(flashcard, difficulty);
+
+    // Convert difficulty string to rating number
+    const ratingMap = { again: 1, hard: 2, good: 3, easy: 4 } as const;
+    const rating = ratingMap[difficulty];
+
+    // Generate weights version hash based on profile
+    const weightsHash = `${deck.config.fsrs.profile}-v1.0`;
+
+    // Update the flashcard in the database
     await this.db.updateFlashcard(updatedCard.id, {
       state: updatedCard.state,
       dueDate: updatedCard.dueDate,
       interval: updatedCard.interval,
       repetitions: updatedCard.repetitions,
-      easeFactor: updatedCard.easeFactor,
+      difficulty: updatedCard.difficulty,
       stability: updatedCard.stability,
       lapses: updatedCard.lapses,
       lastReviewed: updatedCard.lastReviewed,
     });
 
-    // Log the review
+    // Log the comprehensive review
     await this.db.createReviewLog({
       flashcardId: flashcard.id,
-      reviewedAt: new Date().toISOString(),
-      difficulty,
-      oldInterval: flashcard.interval,
-      newInterval: updatedCard.interval,
-      oldEaseFactor: flashcard.easeFactor,
-      newEaseFactor: updatedCard.easeFactor,
-      timeElapsed: timeElapsed ?? 0,
+
+      // Timestamps
+      lastReviewedAt,
+      reviewedAt,
+      timeElapsedMs: timeElapsed,
+
+      // Rating
+      rating,
+      ratingLabel: difficulty,
+
+      // Pre-state
+      oldState: flashcard.state,
+      oldRepetitions: flashcard.repetitions,
+      oldLapses: flashcard.lapses,
+      oldStability: flashcard.stability,
+      oldDifficulty: flashcard.difficulty,
+
+      // Post-state
       newState: updatedCard.state,
       newRepetitions: updatedCard.repetitions,
       newLapses: updatedCard.lapses,
       newStability: updatedCard.stability,
+      newDifficulty: updatedCard.difficulty,
+
+      // Intervals & due times
+      oldIntervalMinutes: flashcard.interval,
+      newIntervalMinutes: updatedCard.interval,
+      oldDueAt: flashcard.dueDate,
+      newDueAt: updatedCard.dueDate,
+
+      // Derived values
+      elapsedDays,
+      retrievability,
+
+      // Config snapshot
+      requestRetention: deck.config.fsrs.requestRetention,
+      profile: deck.config.fsrs.profile,
+      maximumIntervalDays: getMaxIntervalDaysForProfile(
+        deck.config.fsrs.profile,
+      ),
+      minMinutes: getMinMinutesForProfile(deck.config.fsrs.profile),
+      fsrsWeightsVersion: weightsHash,
+      schedulerVersion: "1.0",
+
+      // Content context
+      contentHash: flashcard.contentHash,
     });
 
     // Update deck last reviewed
@@ -655,16 +884,87 @@ export default class DecksPlugin extends Plugin {
 
 class DecksView extends ItemView {
   private plugin: DecksPlugin;
+  private createFSRSForDeck: (deck: Deck) => FSRS;
+  private settings: FlashcardsSettings;
+  private debugLog: (message: string, ...args: any[]) => void;
+  private performSync: (force?: boolean) => Promise<void>;
+  private getDecks: () => Promise<Deck[]>;
+  private getDeckStats: () => Promise<Map<string, DeckStats>>;
+  private getDeckStatsById: (deckId: string) => Promise<DeckStats | null>;
+  private getReviewCounts: (days: number) => Promise<any>;
+  private updateDeckConfig: (
+    deckId: string,
+    config: DeckConfig,
+  ) => Promise<void>;
+  private openStatisticsModal: () => void;
+  private syncFlashcardsForDeck: (deckName: string) => Promise<void>;
+  private getDailyReviewCounts: (
+    deckId: string,
+  ) => Promise<{ newCount: number; reviewCount: number }>;
+  private getReviewableFlashcards: (deckId: string) => Promise<Flashcard[]>;
+  private reviewFlashcard: (
+    card: Flashcard,
+    difficulty: Difficulty,
+    timeElapsed?: number,
+  ) => Promise<void>;
+  private renderMarkdown: (
+    content: string,
+    el: HTMLElement,
+  ) => Component | null;
+  private setViewReference: (view: DecksView | null) => void;
   private component: DeckListPanel | null = null;
   private markdownComponents: Component[] = [];
   private statsRefreshTimeout: NodeJS.Timeout | null = null;
   private backgroundRefreshInterval: NodeJS.Timeout | null = null;
 
-  constructor(leaf: WorkspaceLeaf, plugin: DecksPlugin) {
+  constructor(
+    plugin: DecksPlugin,
+    leaf: WorkspaceLeaf,
+    createFSRSForDeck: (deck: Deck) => FSRS,
+    settings: FlashcardsSettings,
+    debugLog: (message: string, ...args: any[]) => void,
+    performSync: (force?: boolean) => Promise<void>,
+    getDecks: () => Promise<Deck[]>,
+    getDeckStats: () => Promise<Map<string, DeckStats>>,
+    getDeckStatsById: (deckId: string) => Promise<DeckStats | null>,
+    getReviewCounts: (
+      days: number,
+    ) => Promise<{ newCount: number; reviewCount: number }>,
+    updateDeckConfig: (deckId: string, config: DeckConfig) => Promise<void>,
+    openStatisticsModal: () => void,
+    syncFlashcardsForDeck: (deckName: string) => Promise<void>,
+    getDailyReviewCounts: (
+      deckId: string,
+    ) => Promise<{ newCount: number; reviewCount: number }>,
+    getReviewableFlashcards: (deckId: string) => Promise<Flashcard[]>,
+    reviewFlashcard: (
+      card: Flashcard,
+      difficulty: Difficulty,
+      timeElapsed?: number,
+    ) => Promise<void>,
+    renderMarkdown: (content: string, el: HTMLElement) => Component | null,
+    setViewReference: (view: DecksView | null) => void,
+  ) {
     super(leaf);
     this.plugin = plugin;
+    this.createFSRSForDeck = createFSRSForDeck;
+    this.settings = settings;
+    this.debugLog = debugLog;
+    this.performSync = performSync;
+    this.getDecks = getDecks;
+    this.getDeckStats = getDeckStats;
+    this.getDeckStatsById = getDeckStatsById;
+    this.getReviewCounts = getReviewCounts;
+    this.updateDeckConfig = updateDeckConfig;
+    this.openStatisticsModal = openStatisticsModal;
+    this.syncFlashcardsForDeck = syncFlashcardsForDeck;
+    this.getDailyReviewCounts = getDailyReviewCounts;
+    this.getReviewableFlashcards = getReviewableFlashcards;
+    this.reviewFlashcard = reviewFlashcard;
+    this.renderMarkdown = renderMarkdown;
+    this.setViewReference = setViewReference;
     // Set reference in plugin so we can access this view instance
-    this.plugin.view = this;
+    this.setViewReference(this);
   }
 
   getViewType(): string {
@@ -690,17 +990,17 @@ class DecksView extends ItemView {
       props: {
         onDeckClick: (deck: Deck) => this.startReview(deck),
         onRefresh: async () => {
-          this.plugin.debugLog("onRefresh callback invoked");
+          this.debugLog("onRefresh callback invoked");
           await this.refresh(true);
         },
         getReviewCounts: async (days: number) => {
-          return await this.plugin.getReviewCounts(days);
+          return await this.getReviewCounts(days);
         },
         onUpdateDeckConfig: async (deckId: string, config: DeckConfig) => {
-          await this.plugin.updateDeckConfig(deckId, config);
+          await this.updateDeckConfig(deckId, config);
         },
         onOpenStatistics: () => {
-          this.plugin.openStatisticsModal();
+          this.openStatisticsModal();
         },
         plugin: this.plugin,
       },
@@ -710,7 +1010,7 @@ class DecksView extends ItemView {
     await this.refresh(true);
 
     // Start background refresh job if enabled
-    if (this.plugin.settings.ui.enableBackgroundRefresh) {
+    if (this.settings.ui.enableBackgroundRefresh) {
       this.startBackgroundRefresh();
     }
   }
@@ -735,9 +1035,7 @@ class DecksView extends ItemView {
     this.markdownComponents = [];
 
     // Clear reference in plugin
-    if (this.plugin.view === this) {
-      this.plugin.view = null;
-    }
+    this.setViewReference(null);
   }
 
   async update(updatedDecks: Deck[], deckStats: Map<string, DeckStats>) {
@@ -746,80 +1044,79 @@ class DecksView extends ItemView {
   }
 
   async refresh(force: boolean = false) {
-    this.plugin.debugLog("DecksView.refresh() called");
+    this.debugLog("DecksView.refresh() called");
     try {
       // Perform sync with force parameter
-      await this.plugin.performSync(force);
+      await this.performSync(force);
 
       // Update the view with refreshed data
-      const updatedDecks = await this.plugin.getDecks();
-      const deckStats = await this.plugin.getDeckStats();
+      const updatedDecks = await this.getDecks();
+      const deckStats = await this.getDeckStats();
       this.update(updatedDecks, deckStats);
 
-      this.plugin.debugLog("Refresh complete");
+      this.debugLog("Refresh complete");
     } catch (error) {
       console.error("Error refreshing decks:", error);
-      if (this.plugin.settings?.ui?.enableNotices !== false) {
+      if (this.settings?.ui?.enableNotices !== false) {
         new Notice("Error refreshing decks. Check console for details.");
       }
     }
   }
 
   async refreshStats() {
-    this.plugin.debugLog("DecksView.refreshStats() executing");
+    this.debugLog("DecksView.refreshStats() executing");
     try {
       // Get updated stats only (faster than full refresh)
-      const deckStats = await this.plugin.getDeckStats();
-      this.plugin.debugLog("Updated deck stats:", deckStats);
+      const deckStats = await this.getDeckStats();
+      this.debugLog("Updated deck stats:", deckStats);
 
       // Update component with new stats - same pattern as refresh()
       if (this.component) {
         this.component.updateStats(deckStats);
       }
     } catch (error) {
-      console.error("Error refreshing deck stats:", error);
+      console.error("Error refreshing stats:", error);
     }
   }
 
   async refreshStatsById(deckId: string) {
-    this.plugin.debugLog(
-      `DecksView.refreshStatsById() executing for deck: ${deckId}`,
-    );
+    this.debugLog(`DecksView.refreshStatsById() executing for deck: ${deckId}`);
     try {
       // Get all stats (same as refresh() method for consistency)
-      const deckStats = await this.plugin.getDeckStatsById(deckId);
-      this.plugin.debugLog("Updated all deck stats");
+      const deckStats = await this.getDeckStatsById(deckId);
+      this.debugLog("Updated all deck stats");
 
       // Update component using same pattern as refresh()
       if (this.component && deckStats) {
         this.component.updateStatsById(deckId, deckStats);
       }
     } catch (error) {
-      console.error(`Error refreshing stats for deck ${deckId}:`, error);
+      console.error("Error refreshing stats by ID:", error);
     }
   }
 
   startBackgroundRefresh() {
     // Don't start if background refresh is disabled
-    if (!this.plugin.settings.ui.enableBackgroundRefresh) {
+    if (!this.settings.ui.enableBackgroundRefresh) {
       return;
     }
 
     // Clear any existing interval
     this.stopBackgroundRefresh();
 
-    this.plugin.debugLog(
-      `Starting background refresh job (every ${this.plugin.settings.ui.backgroundRefreshInterval} seconds)`,
+    this.debugLog(
+      `Starting background refresh job (every ${this.settings.ui.backgroundRefreshInterval} seconds)`,
     );
+
     this.backgroundRefreshInterval = setInterval(async () => {
-      this.plugin.debugLog("Background refresh tick");
+      this.debugLog("Background refresh tick");
       this.refresh();
-    }, this.plugin.settings.ui.backgroundRefreshInterval * 1000);
+    }, this.settings.ui.backgroundRefreshInterval * 1000);
   }
 
   stopBackgroundRefresh() {
     if (this.backgroundRefreshInterval) {
-      this.plugin.debugLog("Stopping background refresh job");
+      this.debugLog("Stopping background refresh job");
       clearInterval(this.backgroundRefreshInterval);
       this.backgroundRefreshInterval = null;
     }
@@ -827,38 +1124,35 @@ class DecksView extends ItemView {
 
   restartBackgroundRefresh() {
     this.stopBackgroundRefresh();
-    if (this.plugin.settings.ui.enableBackgroundRefresh) {
+    if (this.settings.ui.enableBackgroundRefresh) {
       this.startBackgroundRefresh();
     }
   }
 
   async refreshHeatmap() {
     if (this.component) {
-      await this.component.refreshHeatmap();
+      this.component.refreshHeatmap();
     }
   }
 
   // Test method to check if background job is running
   checkBackgroundJobStatus() {
-    this.plugin.debugLog("Background job status:", {
+    this.debugLog("Background job status:", {
       isRunning: !!this.backgroundRefreshInterval,
       intervalId: this.backgroundRefreshInterval,
       componentExists: !!this.component,
-      refreshInterval: this.plugin.settings.ui.backgroundRefreshInterval,
+      refreshInterval: this.settings.ui.backgroundRefreshInterval,
     });
-    return !!this.backgroundRefreshInterval;
   }
 
   async startReview(deck: Deck) {
     try {
       // First sync flashcards for this specific deck
-      this.plugin.debugLog(
-        `Syncing cards for deck before review: ${deck.name}`,
-      );
-      await this.plugin.syncFlashcardsForDeck(deck.name);
+      this.debugLog(`Syncing cards for deck before review: ${deck.name}`);
+      await this.syncFlashcardsForDeck(deck.name);
 
       // Get daily review counts to show remaining allowance
-      const dailyCounts = await this.plugin.getDailyReviewCounts(deck.id);
+      const dailyCounts = await this.getDailyReviewCounts(deck.id);
 
       // Calculate remaining daily allowance
       const config = deck.config;
@@ -870,7 +1164,7 @@ class DecksView extends ItemView {
         : "unlimited";
 
       // Get all flashcards that are due for review (respecting daily limits)
-      const flashcards = await this.plugin.getReviewableFlashcards(deck.id);
+      const flashcards = await this.getReviewableFlashcards(deck.id);
 
       if (flashcards.length === 0) {
         let message = `No cards due for review in ${deck.name}`;
@@ -891,7 +1185,7 @@ class DecksView extends ItemView {
           message += `\n\nDaily review cards limit reached: ${config.reviewCardsLimit}/${config.reviewCardsLimit}`;
         }
 
-        if (this.plugin.settings?.ui?.enableNotices !== false) {
+        if (this.settings?.ui?.enableNotices !== false) {
           new Notice(message);
         }
         return;
@@ -927,7 +1221,7 @@ class DecksView extends ItemView {
           limitInfo += `\n\nNote: Only learning cards will be shown (limits exceeded)`;
         }
 
-        if (this.plugin.settings?.ui?.enableNotices !== false) {
+        if (this.settings?.ui?.enableNotices !== false) {
           new Notice(limitInfo, 5000);
         }
       }
@@ -935,13 +1229,18 @@ class DecksView extends ItemView {
       // Open review modal
       new FlashcardReviewModalWrapper(
         this.app,
-        this.plugin,
         deck,
         flashcards,
+        this.createFSRSForDeck(deck),
+        this.settings,
+        this.reviewFlashcard.bind(this),
+        this.renderMarkdown,
+        this.refresh.bind(this),
+        this.refreshStatsById.bind(this),
       ).open();
     } catch (error) {
       console.error("Error starting review:", error);
-      if (this.plugin.settings?.ui?.enableNotices !== false) {
+      if (this.settings?.ui?.enableNotices !== false) {
         new Notice("Error starting review. Check console for details.");
       }
     }

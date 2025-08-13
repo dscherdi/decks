@@ -1,6 +1,7 @@
 <script lang="ts">
-    import { onMount, createEventDispatcher, tick } from "svelte";
-    import type { Flashcard, Deck } from "../database/types";
+    import { createEventDispatcher, onMount, tick } from "svelte";
+    import type { Deck, Flashcard } from "../database/types";
+    import type { FlashcardsSettings } from "../settings";
     import {
         FSRS,
         type SchedulingInfo,
@@ -17,13 +18,13 @@
         timeElapsed?: number,
     ) => Promise<void>;
     export let renderMarkdown: (content: string, el: HTMLElement) => void;
-    export let settings: any;
+    export let settings: FlashcardsSettings;
+    export let fsrs: FSRS;
     export let onCardReviewed:
-        | ((card: Flashcard) => Promise<void>)
+        | ((reviewedCard: Flashcard) => Promise<void>)
         | undefined = undefined;
 
     const dispatch = createEventDispatcher();
-    const fsrs = new FSRS();
 
     let showAnswer = false;
     let isLoading = false;

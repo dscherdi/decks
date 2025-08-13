@@ -111,7 +111,7 @@ export class DatabaseService {
         due_date TEXT NOT NULL,
         interval INTEGER NOT NULL DEFAULT 0,
         repetitions INTEGER NOT NULL DEFAULT 0,
-        ease_factor REAL NOT NULL DEFAULT 2.5,
+        difficulty REAL NOT NULL DEFAULT 5.0,
         stability REAL NOT NULL DEFAULT 2.5,
         lapses INTEGER NOT NULL DEFAULT 0,
         last_reviewed TEXT,
@@ -124,18 +124,56 @@ export class DatabaseService {
       CREATE TABLE IF NOT EXISTS review_logs (
         id TEXT PRIMARY KEY,
         flashcard_id TEXT NOT NULL,
+
+        -- Timestamps
+        last_reviewed_at TEXT NOT NULL,
+        shown_at TEXT,
         reviewed_at TEXT NOT NULL,
-        difficulty TEXT NOT NULL CHECK (difficulty IN ('again', 'hard', 'good', 'easy')),
-        old_interval INTEGER NOT NULL,
-        new_interval INTEGER NOT NULL,
-        old_ease_factor REAL NOT NULL,
-        new_ease_factor REAL NOT NULL,
-        time_elapsed INTEGER NOT NULL DEFAULT 0,
-        new_state TEXT NOT NULL DEFAULT 'new' CHECK (new_state IN ('new', 'review')),
+
+        -- Rating
+        rating INTEGER NOT NULL CHECK (rating IN (1, 2, 3, 4)),
+        rating_label TEXT NOT NULL CHECK (rating_label IN ('again', 'hard', 'good', 'easy')),
+        time_elapsed_ms INTEGER,
+
+        -- Pre-state (for exact reconstruction)
+        old_state TEXT NOT NULL CHECK (old_state IN ('new', 'review')),
+        old_repetitions INTEGER NOT NULL DEFAULT 0,
+        old_lapses INTEGER NOT NULL DEFAULT 0,
+        old_stability REAL NOT NULL DEFAULT 0,
+        old_difficulty REAL NOT NULL DEFAULT 5.0,
+
+        -- Post-state
+        new_state TEXT NOT NULL CHECK (new_state IN ('new', 'review')),
         new_repetitions INTEGER NOT NULL DEFAULT 0,
         new_lapses INTEGER NOT NULL DEFAULT 0,
         new_stability REAL NOT NULL DEFAULT 2.5,
-        FOREIGN KEY (flashcard_id) REFERENCES flashcards(id)
+        new_difficulty REAL NOT NULL DEFAULT 5.0,
+
+        -- Intervals & due times (explicit units)
+        old_interval_minutes INTEGER NOT NULL,
+        new_interval_minutes INTEGER NOT NULL,
+        old_due_at TEXT NOT NULL,
+        new_due_at TEXT NOT NULL,
+
+        -- Derived at review time
+        elapsed_days REAL NOT NULL,
+        retrievability REAL NOT NULL,
+
+        -- Config snapshot
+        request_retention REAL NOT NULL,
+        profile TEXT NOT NULL CHECK (profile IN ('INTENSIVE', 'STANDARD')),
+        maximum_interval_days INTEGER NOT NULL,
+        min_minutes INTEGER NOT NULL,
+        fsrs_weights_version TEXT NOT NULL,
+        scheduler_version TEXT NOT NULL,
+
+        -- Optional content/context
+        note_model_id TEXT,
+        card_template_id TEXT,
+        content_hash TEXT,
+        client TEXT CHECK (client IN ('web', 'desktop', 'mobile')),
+
+        FOREIGN KEY (flashcard_id) REFERENCES flashcards (id)
       );
 
       -- Indexes for performance
@@ -150,13 +188,23 @@ export class DatabaseService {
 
   // Helper method to parse deck rows
   private parseDeckRow(row: any[]): Deck {
+    let config = row[5] ? JSON.parse(row[5] as string) : DEFAULT_DECK_CONFIG;
+
+    // Migration: Add FSRS settings if missing
+    if (!config.fsrs) {
+      config = {
+        ...config,
+        fsrs: DEFAULT_DECK_CONFIG.fsrs,
+      };
+    }
+
     return {
       id: row[0] as string,
       name: row[1] as string,
       filepath: row[2] as string,
       tag: row[3] as string,
       lastReviewed: row[4] as string | null,
-      config: row[5] ? JSON.parse(row[5] as string) : DEFAULT_DECK_CONFIG,
+      config,
       created: row[6] as string,
       modified: row[7] as string,
     };
@@ -399,7 +447,7 @@ export class DatabaseService {
     const stmt = this.db.prepare(`
       INSERT OR REPLACE INTO flashcards (
         id, deck_id, front, back, type, source_file, content_hash, header_level,
-        state, due_date, interval, repetitions, ease_factor, stability, lapses, last_reviewed, created, modified
+        state, due_date, interval, repetitions, difficulty, stability, lapses, last_reviewed, created, modified
       ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
     `);
 
@@ -414,11 +462,11 @@ export class DatabaseService {
       fullFlashcard.headerLevel || null,
       fullFlashcard.state,
       fullFlashcard.dueDate,
-      fullFlashcard.interval,
-      fullFlashcard.repetitions,
-      fullFlashcard.easeFactor,
-      fullFlashcard.stability,
-      fullFlashcard.lapses,
+      flashcard.interval,
+      flashcard.repetitions,
+      flashcard.difficulty,
+      flashcard.stability,
+      flashcard.lapses,
       fullFlashcard.lastReviewed,
       fullFlashcard.created,
       fullFlashcard.modified,
@@ -443,7 +491,7 @@ export class DatabaseService {
         | "dueDate"
         | "interval"
         | "repetitions"
-        | "easeFactor"
+        | "difficulty"
         | "stability"
         | "lapses"
         | "lastReviewed"
@@ -462,8 +510,8 @@ export class DatabaseService {
               ? "source_file"
               : key === "dueDate"
                 ? "due_date"
-                : key === "easeFactor"
-                  ? "ease_factor"
+                : key === "difficulty"
+                  ? "difficulty"
                   : key === "lastReviewed"
                     ? "last_reviewed"
                     : key === "headerLevel"
@@ -623,21 +671,21 @@ export class DatabaseService {
       WHERE f.deck_id = ?
         AND rl.reviewed_at >= ?
         AND rl.reviewed_at <= ?
-        AND (rl.old_interval = 0 OR f.repetitions = 1)
+        AND (rl.old_interval_minutes = 0 OR f.repetitions = 1)
     `);
     newCardsStmt.bind([deckId, todayStart, todayEnd]);
     const newResult = newCardsStmt.step() ? newCardsStmt.get() : [0];
     const newCount = Number(newResult[0]) || 0;
     newCardsStmt.free();
 
-    // Count review cards reviewed today (reviews where old_interval > 0)
+    // Count review cards reviewed today (reviews where old_interval_minutes > 0)
     const reviewCardsStmt = this.db.prepare(`
       SELECT COUNT(*) as count FROM review_logs rl
       JOIN flashcards f ON rl.flashcard_id = f.id
       WHERE f.deck_id = ?
         AND rl.reviewed_at >= ?
         AND rl.reviewed_at <= ?
-        AND rl.old_interval > 0
+        AND rl.old_interval_minutes > 0
     `);
     reviewCardsStmt.bind([deckId, todayStart, todayEnd]);
     const reviewResult = reviewCardsStmt.step() ? reviewCardsStmt.get() : [0];
@@ -829,22 +877,22 @@ export class DatabaseService {
     return flashcards;
   }
 
-  async getLatestReviewLogForFlashcard(flashcardId: string): Promise<{
-    state: "new" | "learning" | "review";
-    dueDate: string;
-    interval: number;
-    repetitions: number;
-    easeFactor: number;
-    stability: number;
-    lapses: number;
-    lastReviewed: string;
-  } | null> {
+  async getLatestReviewLogForFlashcard(
+    flashcardId: string,
+  ): Promise<ReviewLog | null> {
     if (!this.db) throw new Error("Database not initialized");
 
     const stmt = this.db.prepare(`
       SELECT
-        rl.new_state, rl.new_interval, rl.new_ease_factor,
-        rl.new_repetitions, rl.new_lapses, rl.new_stability, rl.reviewed_at
+        rl.id, rl.flashcard_id, rl.last_reviewed_at, rl.shown_at, rl.reviewed_at,
+        rl.rating, rl.rating_label, rl.time_elapsed_ms,
+        rl.old_state, rl.old_repetitions, rl.old_lapses, rl.old_stability, rl.old_difficulty,
+        rl.new_state, rl.new_repetitions, rl.new_lapses, rl.new_stability, rl.new_difficulty,
+        rl.old_interval_minutes, rl.new_interval_minutes, rl.old_due_at, rl.new_due_at,
+        rl.elapsed_days, rl.retrievability,
+        rl.request_retention, rl.maximum_interval_days, rl.min_minutes,
+        rl.fsrs_weights_version, rl.scheduler_version,
+        rl.note_model_id, rl.card_template_id, rl.content_hash, rl.client
       FROM review_logs rl
       WHERE rl.flashcard_id = ?
       ORDER BY rl.reviewed_at DESC
@@ -856,27 +904,44 @@ export class DatabaseService {
     if (stmt.step()) {
       const row = stmt.get();
       stmt.free();
-      const reviewedAt = new Date(row[6] as string);
-      const intervalMinutes = row[1] as number;
-      const dueDate = new Date(
-        reviewedAt.getTime() + intervalMinutes * 60 * 1000,
-      );
-
-      const repetitions = row[3] as number;
-      const lapses = row[4] as number;
-      const stability = row[5] as number;
-      const lastReviewed = row[6] as string;
-      const easeFactor = row[2] as number;
 
       return {
-        state: row[0] as "new" | "learning" | "review",
-        dueDate: dueDate.toISOString(),
-        interval: intervalMinutes,
-        repetitions: repetitions,
-        easeFactor: easeFactor,
-        stability: stability,
-        lapses: lapses,
-        lastReviewed: lastReviewed,
+        id: row[0] as string,
+        flashcardId: row[1] as string,
+        lastReviewedAt: row[2] as string,
+        shownAt: row[3] as string | undefined,
+        reviewedAt: row[4] as string,
+        rating: row[5] as 1 | 2 | 3 | 4,
+        ratingLabel: row[6] as "again" | "hard" | "good" | "easy",
+        timeElapsedMs: row[7] as number | undefined,
+        oldState: row[8] as "new" | "review",
+        oldRepetitions: row[9] as number,
+        oldLapses: row[10] as number,
+        oldStability: row[11] as number,
+        oldDifficulty: row[12] as number,
+        newState: row[13] as "new" | "review",
+        newRepetitions: row[14] as number,
+        newLapses: row[15] as number,
+        newStability: row[16] as number,
+        newDifficulty: row[17] as number,
+        oldIntervalMinutes: row[18] as number,
+        newIntervalMinutes: row[19] as number,
+        oldDueAt: row[20] as string,
+        newDueAt: row[21] as string,
+        elapsedDays: row[22] as number,
+        retrievability: row[23] as number,
+        requestRetention: row[24] as number,
+        profile: ((row[25] as string) || "STANDARD") as
+          | "INTENSIVE"
+          | "STANDARD",
+        maximumIntervalDays: row[26] as number,
+        minMinutes: row[27] as number,
+        fsrsWeightsVersion: row[28] as string,
+        schedulerVersion: row[29] as string,
+        noteModelId: row[30] as string | undefined,
+        cardTemplateId: row[31] as string | undefined,
+        contentHash: row[32] as string | undefined,
+        client: row[33] as "web" | "desktop" | "mobile" | undefined,
       };
     }
 
@@ -903,26 +968,52 @@ export class DatabaseService {
 
     const stmt = this.db.prepare(`
       INSERT INTO review_logs (
-        id, flashcard_id, reviewed_at, difficulty,
-        old_interval, new_interval, old_ease_factor, new_ease_factor, time_elapsed,
-        new_state, new_repetitions, new_lapses, new_stability
-      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        id, flashcard_id, last_reviewed_at, shown_at, reviewed_at,
+        rating, rating_label, time_elapsed_ms,
+        old_state, old_repetitions, old_lapses, old_stability, old_difficulty,
+        new_state, new_repetitions, new_lapses, new_stability, new_difficulty,
+        old_interval_minutes, new_interval_minutes, old_due_at, new_due_at,
+        elapsed_days, retrievability,
+        request_retention, profile, maximum_interval_days, min_minutes, fsrs_weights_version, scheduler_version,
+        note_model_id, card_template_id, content_hash, client
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
     `);
 
     stmt.run([
       id,
       log.flashcardId,
+      log.lastReviewedAt,
+      log.shownAt || null,
       log.reviewedAt,
-      log.difficulty,
-      log.oldInterval,
-      log.newInterval,
-      log.oldEaseFactor,
-      log.newEaseFactor,
-      log.timeElapsed,
+      log.rating,
+      log.ratingLabel,
+      log.timeElapsedMs || null,
+      log.oldState,
+      log.oldRepetitions,
+      log.oldLapses,
+      log.oldStability,
+      log.oldDifficulty,
       log.newState,
       log.newRepetitions,
       log.newLapses,
       log.newStability,
+      log.newDifficulty,
+      log.oldIntervalMinutes,
+      log.newIntervalMinutes,
+      log.oldDueAt,
+      log.newDueAt,
+      log.elapsedDays,
+      log.retrievability,
+      log.requestRetention,
+      log.profile,
+      log.maximumIntervalDays,
+      log.minMinutes,
+      log.fsrsWeightsVersion,
+      log.schedulerVersion,
+      log.noteModelId || null,
+      log.cardTemplateId || null,
+      log.contentHash || null,
+      log.client || null,
     ]);
     stmt.free();
 
@@ -1146,6 +1237,8 @@ export class DatabaseService {
   private async migrateSchemaIfNeeded(): Promise<void> {
     if (!this.db) return;
 
+    this.debugLog("Starting database schema migration check...");
+
     try {
       // Check if tables exist first
       const tablesStmt = this.db.prepare(`
@@ -1287,7 +1380,7 @@ export class DatabaseService {
                 "Adding time_elapsed column to review_logs table...",
               );
               this.db.exec(
-                `ALTER TABLE review_logs ADD COLUMN time_elapsed INTEGER NOT NULL DEFAULT 0`,
+                `ALTER TABLE review_logs ADD COLUMN time_elapsed INTEGER DEFAULT 0`,
               );
             }
 
@@ -1298,6 +1391,42 @@ export class DatabaseService {
               this.db.exec(
                 `ALTER TABLE flashcards ADD COLUMN header_level INTEGER CHECK (header_level >= 1 AND header_level <= 6)`,
               );
+            }
+
+            // Check and add difficulty column
+            const flashcardsStmt = this.db.prepare(
+              "PRAGMA table_info(flashcards)",
+            );
+            let hasDifficulty = false;
+            while (flashcardsStmt.step()) {
+              const row = flashcardsStmt.get();
+              if (row[1] === "difficulty") {
+                hasDifficulty = true;
+                break;
+              }
+            }
+            flashcardsStmt.free();
+
+            if (!hasDifficulty) {
+              this.debugLog("Adding difficulty column to flashcards table...");
+              this.db.exec(
+                `ALTER TABLE flashcards ADD COLUMN difficulty REAL DEFAULT 5.0`,
+              );
+
+              // Migrate existing easeFactor values to difficulty if easeFactor column exists
+              this.debugLog(
+                "Migrating easeFactor values to difficulty column...",
+              );
+              try {
+                this.db.exec(
+                  `UPDATE flashcards SET difficulty = ease_factor WHERE ease_factor IS NOT NULL AND (difficulty IS NULL OR difficulty = 0)`,
+                );
+              } catch (e) {
+                // easeFactor column might not exist in newer schemas
+                this.debugLog(
+                  "easeFactor column not found, skipping migration",
+                );
+              }
             }
 
             // Check and add individual review_logs columns
@@ -1312,36 +1441,300 @@ export class DatabaseService {
               }
               reviewLogsStmt.free();
 
+              this.debugLog(
+                `Existing review_logs columns: ${Array.from(existingColumns).join(", ")}`,
+              );
+
+              // Re-populate existingColumns set for later use
+              const checkColumnsStmt = this.db.prepare(
+                "PRAGMA table_info(review_logs)",
+              );
+              const finalExistingColumns = new Set<string>();
+              while (checkColumnsStmt.step()) {
+                const row = checkColumnsStmt.get();
+                finalExistingColumns.add(row[1] as string);
+              }
+              checkColumnsStmt.free();
+
+              // All required columns for review_logs table
               const requiredColumns = [
-                { name: "old_interval", type: "INTEGER DEFAULT 0" },
-                { name: "new_interval", type: "INTEGER DEFAULT 0" },
-                { name: "old_ease_factor", type: "REAL DEFAULT 2.5" },
-                { name: "new_ease_factor", type: "REAL DEFAULT 2.5" },
+                { name: "rating", type: "INTEGER", defaultValue: "3" },
+                { name: "rating_label", type: "TEXT", defaultValue: "'good'" },
+                { name: "last_reviewed_at", type: "TEXT", defaultValue: "''" },
+                { name: "elapsed_days", type: "REAL", defaultValue: "0.0" },
+                { name: "retrievability", type: "REAL", defaultValue: "0.9" },
                 {
-                  name: "new_state",
-                  type: "TEXT DEFAULT 'new' CHECK (new_state IN ('new', 'learning', 'review'))",
+                  name: "request_retention",
+                  type: "REAL",
+                  defaultValue: "0.9",
                 },
-                { name: "new_repetitions", type: "INTEGER DEFAULT 0" },
-                { name: "new_lapses", type: "INTEGER DEFAULT 0" },
-                { name: "new_stability", type: "REAL DEFAULT 2.5" },
+                {
+                  name: "profile",
+                  type: "TEXT",
+                  defaultValue: "'STANDARD'",
+                },
+                {
+                  name: "maximum_interval_days",
+                  type: "INTEGER",
+                  defaultValue: "36500",
+                },
+                { name: "min_minutes", type: "INTEGER", defaultValue: "1" },
+                {
+                  name: "fsrs_weights_version",
+                  type: "TEXT",
+                  defaultValue: "'default'",
+                },
+                {
+                  name: "scheduler_version",
+                  type: "TEXT",
+                  defaultValue: "'1.0'",
+                },
+                { name: "note_model_id", type: "TEXT" },
+                { name: "card_template_id", type: "TEXT" },
+                { name: "content_hash", type: "TEXT" },
+                { name: "client", type: "TEXT" },
+                { name: "shown_at", type: "TEXT" },
+                { name: "time_elapsed_ms", type: "INTEGER" },
+                { name: "old_state", type: "TEXT", defaultValue: "'new'" },
+                { name: "old_repetitions", type: "INTEGER", defaultValue: "0" },
+                { name: "old_lapses", type: "INTEGER", defaultValue: "0" },
+                { name: "old_stability", type: "REAL", defaultValue: "0.0" },
+                { name: "old_difficulty", type: "REAL", defaultValue: "5.0" },
+                { name: "new_state", type: "TEXT", defaultValue: "'review'" },
+                { name: "new_repetitions", type: "INTEGER", defaultValue: "0" },
+                { name: "new_lapses", type: "INTEGER", defaultValue: "0" },
+                { name: "new_stability", type: "REAL", defaultValue: "2.5" },
+                { name: "new_difficulty", type: "REAL", defaultValue: "5.0" },
+                {
+                  name: "old_interval_minutes",
+                  type: "INTEGER",
+                  defaultValue: "0",
+                },
+                {
+                  name: "new_interval_minutes",
+                  type: "INTEGER",
+                  defaultValue: "1440",
+                },
+                { name: "old_due_at", type: "TEXT", defaultValue: "''" },
+                { name: "new_due_at", type: "TEXT", defaultValue: "''" },
               ];
 
+              // Add columns one by one with verification
+              let addedColumns = 0;
               for (const column of requiredColumns) {
-                if (!existingColumns.has(column.name)) {
+                if (!finalExistingColumns.has(column.name)) {
                   try {
-                    this.debugLog(`Adding missing column: ${column.name}`);
+                    this.debugLog(
+                      `Adding missing column: ${column.name} ${column.type}`,
+                    );
                     this.db.exec(
                       `ALTER TABLE review_logs ADD COLUMN ${column.name} ${column.type}`,
                     );
+
+                    // Verify column was added
+                    const checkStmt = this.db.prepare(
+                      "PRAGMA table_info(review_logs)",
+                    );
+                    let columnExists = false;
+                    while (checkStmt.step()) {
+                      const row = checkStmt.get();
+                      if (row[1] === column.name) {
+                        columnExists = true;
+                        break;
+                      }
+                    }
+                    checkStmt.free();
+
+                    if (columnExists) {
+                      this.debugLog(
+                        `✓ Column ${column.name} added successfully`,
+                      );
+                      addedColumns++;
+
+                      // Set default values for existing rows if specified
+                      if (column.defaultValue) {
+                        this.db.exec(
+                          `UPDATE review_logs SET ${column.name} = ${column.defaultValue} WHERE ${column.name} IS NULL`,
+                        );
+                      }
+                    } else {
+                      console.error(
+                        `Column ${column.name} was not added despite no error`,
+                      );
+                    }
                   } catch (error) {
                     console.error(
                       `Failed to add column ${column.name}:`,
                       error,
                     );
                   }
+                } else {
+                  this.debugLog(`Column ${column.name} already exists`);
                 }
               }
+
+              this.debugLog(
+                `Migration completed. Added ${addedColumns} new columns to review_logs`,
+              );
+
+              // Force a database save to ensure changes are persisted
+              await this.save();
+
+              // Verify critical columns were added successfully
+              const verifyStmt = this.db.prepare(
+                "PRAGMA table_info(review_logs)",
+              );
+              const finalColumns = new Set<string>();
+              while (verifyStmt.step()) {
+                const row = verifyStmt.get();
+                finalColumns.add(row[1] as string);
+              }
+              verifyStmt.free();
+
+              const missingCritical = [
+                "new_interval_minutes",
+                "new_state",
+                "new_difficulty",
+              ].filter((col) => !finalColumns.has(col));
+
+              if (missingCritical.length > 0) {
+                console.error(
+                  `Critical columns still missing after migration: ${missingCritical.join(", ")}`,
+                );
+                this.debugLog(
+                  `All columns after migration: ${Array.from(finalColumns).join(", ")}`,
+                );
+              } else {
+                this.debugLog("All critical columns verified present");
+              }
+
+              // Handle legacy data migration using UPDATE statements
+              const hasLegacyData =
+                finalExistingColumns.has("difficulty") &&
+                finalExistingColumns.has("old_interval") &&
+                !finalExistingColumns.has("rating");
+
+              if (hasLegacyData) {
+                this.debugLog("Migrating legacy review_logs data...");
+
+                // Update rating from difficulty
+                this.db.exec(`
+                  UPDATE review_logs
+                  SET rating = CASE difficulty
+                    WHEN 'again' THEN 1
+                    WHEN 'hard' THEN 2
+                    WHEN 'good' THEN 3
+                    WHEN 'easy' THEN 4
+                    ELSE 3
+                  END
+                  WHERE rating IS NULL OR rating = 0
+                `);
+
+                // Update rating_label from difficulty
+                this.db.exec(`
+                  UPDATE review_logs
+                  SET rating_label = difficulty
+                  WHERE rating_label IS NULL OR rating_label = ''
+                `);
+
+                // Update time_elapsed_ms from time_elapsed
+                if (finalExistingColumns.has("time_elapsed")) {
+                  this.db.exec(`
+                    UPDATE review_logs
+                    SET time_elapsed_ms = time_elapsed
+                    WHERE time_elapsed_ms IS NULL
+                  `);
+                }
+
+                // Update interval columns
+                if (finalExistingColumns.has("old_interval")) {
+                  this.db.exec(`
+                    UPDATE review_logs
+                    SET old_interval_minutes = COALESCE(old_interval, 0)
+                    WHERE old_interval_minutes IS NULL OR old_interval_minutes = 0
+                  `);
+                }
+
+                if (finalExistingColumns.has("new_interval")) {
+                  this.db.exec(`
+                    UPDATE review_logs
+                    SET new_interval_minutes = COALESCE(new_interval, 1440)
+                    WHERE new_interval_minutes IS NULL OR new_interval_minutes = 0
+                  `);
+                }
+
+                this.debugLog("Legacy review_logs data migration completed");
+              }
             }
+          }
+
+          // Migrate FSRS configs to use profiles
+          this.debugLog("Migrating FSRS configs to profile format...");
+          try {
+            const configStmt = this.db.prepare("SELECT id, config FROM decks");
+            const updates: Array<{ id: string; config: string }> = [];
+
+            while (configStmt.step()) {
+              const row = configStmt.get();
+              const deckId = row[0] as string;
+              const configStr = row[1] as string;
+
+              try {
+                const config = JSON.parse(configStr);
+
+                // Check if config needs migration (has old format)
+                if (
+                  config.fsrs &&
+                  (config.fsrs.weights ||
+                    config.fsrs.maximumInterval !== undefined ||
+                    config.fsrs.minMinutes !== undefined)
+                ) {
+                  // Determine profile based on minMinutes or weights
+                  let profile = "STANDARD";
+                  if (config.fsrs.minMinutes && config.fsrs.minMinutes < 1440) {
+                    profile = "INTENSIVE";
+                  }
+
+                  // Create new config with profile format
+                  const newConfig = {
+                    ...config,
+                    fsrs: {
+                      requestRetention: config.fsrs.requestRetention || 0.9,
+                      profile: profile,
+                    },
+                  };
+
+                  updates.push({
+                    id: deckId,
+                    config: JSON.stringify(newConfig),
+                  });
+                }
+              } catch (parseError) {
+                this.debugLog(
+                  `Failed to parse config for deck ${deckId}, skipping migration`,
+                );
+              }
+            }
+            configStmt.free();
+
+            // Apply updates
+            for (const update of updates) {
+              const updateStmt = this.db.prepare(
+                "UPDATE decks SET config = ? WHERE id = ?",
+              );
+              updateStmt.run([update.config, update.id]);
+              updateStmt.free();
+            }
+
+            if (updates.length > 0) {
+              this.debugLog(
+                `Migrated ${updates.length} deck configs to FSRS profile format`,
+              );
+            }
+          } catch (error) {
+            this.debugLog(
+              "FSRS config migration failed, continuing with existing configs",
+            );
           }
 
           this.debugLog(
@@ -1350,19 +1743,10 @@ export class DatabaseService {
           await this.save();
         } catch (error) {
           console.error("Error during column migration:", error);
-          this.debugLog("Falling back to table recreation...");
-
-          // Only if ALTER TABLE fails, recreate tables
-          this.db.exec(`
-            DROP TABLE IF EXISTS review_logs;
-            DROP TABLE IF EXISTS flashcards;
-            DROP TABLE IF EXISTS decks;
-          `);
-          await this.createTables();
           this.debugLog(
-            "Database recreated. Data will be rebuilt from vault files.",
+            "Column migration failed, but preserving existing data.",
           );
-          await this.save();
+          // Don't throw - continue with existing schema
         }
       }
     } catch (error) {
@@ -1386,7 +1770,7 @@ export class DatabaseService {
       dueDate: row[9] as string,
       interval: row[10] as number,
       repetitions: row[11] as number,
-      easeFactor: row[12] as number,
+      difficulty: row[12] as number,
       stability: row[13] as number,
       lapses: row[14] as number,
       lastReviewed: row[15] as string | null,
@@ -1497,14 +1881,14 @@ export class DatabaseService {
       // Get answer button stats
       const answerButtonsStmt = this.db.prepare(`
       SELECT
-        rl.difficulty,
+        rl.rating_label,
         COUNT(*) as count
       FROM review_logs rl
       JOIN flashcards f ON rl.flashcard_id = f.id
       ${deckFilterCondition ? "JOIN decks d ON f.deck_id = d.id" : ""}
       WHERE DATE(rl.reviewed_at) >= DATE(?)
       ${deckFilterCondition}
-      GROUP BY rl.difficulty
+      GROUP BY rl.rating_label
     `);
 
       const answerButtons = {
@@ -1521,9 +1905,9 @@ export class DatabaseService {
 
       while (answerButtonsStmt.step()) {
         const row = answerButtonsStmt.get();
-        const difficulty = row[0] as string;
+        const ratingLabel = row[0] as string;
         const count = row[1] as number;
-        answerButtons[difficulty as keyof typeof answerButtons] = count;
+        answerButtons[ratingLabel as keyof typeof answerButtons] = count;
       }
       answerButtonsStmt.free();
 
@@ -1598,11 +1982,11 @@ export class DatabaseService {
         });
       }
 
-      // Calculate pace statistics from time_elapsed data
+      // Calculate pace statistics from time_elapsed_ms data
       const paceStmt = this.db.prepare(`
       SELECT
-        AVG(rl.time_elapsed / 1000.0) as avg_pace,
-        SUM(rl.time_elapsed / 1000.0) as total_time
+        AVG(rl.time_elapsed_ms / 1000.0) as avg_pace,
+        SUM(rl.time_elapsed_ms / 1000.0) as total_time
       FROM review_logs rl
       JOIN flashcards f ON rl.flashcard_id = f.id
       ${deckFilterCondition ? "JOIN decks d ON f.deck_id = d.id" : ""}
@@ -1648,6 +2032,32 @@ export class DatabaseService {
         averagePace: 0,
         totalReviewTime: 0,
       };
+    }
+  }
+
+  async purgeDatabase(): Promise<void> {
+    this.debugLog("Purging database - deleting all data");
+
+    try {
+      if (this.db) {
+        // Drop all tables to completely reset the database
+        this.db.exec(`
+          DROP TABLE IF EXISTS review_logs;
+          DROP TABLE IF EXISTS flashcards;
+          DROP TABLE IF EXISTS decks;
+        `);
+
+        this.debugLog("All tables dropped, recreating schema");
+
+        // Recreate tables with fresh schema
+        await this.createTables();
+        await this.save();
+
+        this.debugLog("Database purged and recreated successfully");
+      }
+    } catch (error) {
+      console.error("Error purging database:", error);
+      throw error;
     }
   }
 

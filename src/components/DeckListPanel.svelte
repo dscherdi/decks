@@ -31,7 +31,7 @@
         config: DeckConfig,
     ) => Promise<void>;
     export let onOpenStatistics: () => void;
-    export let plugin: any; // DecksPlugin reference
+    export let plugin: any = null; // TODO: Refactor to pass specific functions instead of whole plugin
 
     let isRefreshing = false;
     let isUpdatingStats = false;
@@ -303,6 +303,10 @@
     });
 
     function openDeckConfig(deck: Deck) {
+        if (!plugin) {
+            console.warn("Plugin not available for deck config");
+            return;
+        }
         const modal = new DeckConfigModal(
             plugin,
             deck,
@@ -315,17 +319,20 @@
                     );
                     if (deckIndex !== -1) {
                         allDecks[deckIndex].config = config;
+                        // Force reactivity
                         allDecks = [...allDecks];
-                        applyFilter();
                     }
                 }
             },
         );
-
         modal.open();
     }
 
     function openAnkiExport(deck: Deck) {
+        if (!plugin) {
+            console.warn("Plugin not available for Anki export");
+            return;
+        }
         const modal = new AnkiExportModal(plugin, deck);
         modal.open();
     }
@@ -795,7 +802,7 @@
 
     .table-header {
         display: grid;
-        grid-template-columns: 1fr 60px 60px 60px 40px;
+        grid-template-columns: 1fr 60px 60px 60px;
         gap: 8px;
         padding: 8px 12px;
         font-weight: 600;
@@ -812,7 +819,7 @@
 
     .deck-row {
         display: grid;
-        grid-template-columns: 1fr 60px 60px 60px 40px;
+        grid-template-columns: 1fr 60px 60px 60px;
         gap: 8px;
         padding: 12px;
         border-bottom: 1px solid var(--background-modifier-border);

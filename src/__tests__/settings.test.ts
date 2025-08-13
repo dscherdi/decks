@@ -30,7 +30,6 @@ describe("Settings", () => {
       const settings: FlashcardsSettings = DEFAULT_SETTINGS;
 
       // Verify the settings object conforms to the interface
-      expect(settings.fsrs).toBeDefined();
       expect(settings.review).toBeDefined();
       expect(settings.parsing).toBeDefined();
       expect(settings.ui).toBeDefined();

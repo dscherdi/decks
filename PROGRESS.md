@@ -171,6 +171,486 @@
 
 The implementation now fully complies with pure FSRS specifications and passes all required sanity tests.
 
+
+### ✅ TODO 14: FSRS with subday schedules
+
+Do all of the following to support sub‑day intervals in your pure FSRS implementation.
+	1.	Interval math
+
+	•	Replace day-based function with minute-based:
+
+private nextIntervalMinutes(stability: number): number {
+  const k = Math.log(this.params.requestRetention) / Math.log(0.9); // < 0
+  const minutes = stability * k * 1440; // may be < 1d
+  const floor = this.params.minMinutes ?? 15;              // configurable, e.g., 10–30
+  const cap   = (this.params.maximumInterval ?? 36500) * 1440;
+  return Math.max(floor, Math.min(minutes, cap));
+}
+
+	•	Remove the ≥1‑day clamp and any Math.round inside scheduling logic. Round only for display.
+
+	2.	Parameters
+
+	•	Extend FSRSParameters:
+
+export interface FSRSParameters {
+  w: number[];
+  requestRetention: number;   // (0,1)
+  maximumInterval: number;    // days
+  minMinutes: number;         // e.g., 15
+}
+
+	•	Validate on set: 0.5 ≤ requestRetention ≤ 0.99, w.length===17, minMinutes ≥ 1.
+
+	3.	Elapsed time
+
+	•	Keep fractional days; no rounding:
+
+private getElapsedDays(last: Date, now: Date): number {
+  return Math.max(0, (now.getTime() - last.getTime()) / 86400000);
+}
+
+	4.	Scheduling pipeline
+
+	•	Preview:
+
+private calculateScheduleForRating(card: FSRSCard, rating: number, now: Date): SchedulingCard {
+  const updated = this.calculateUpdatedFsrsCard(card, rating, now); // updates S/D, reps, lapses, lastReview=now, state=Review
+  const intervalMin = this.nextIntervalMinutes(updated.stability);
+  return this.createSchedulingCard(intervalMin, updated, now);
+}
+
+	•	Update:
+	•	Persist interval in minutes (float or int).
+	•	Persist dueDate = now + intervalMinutes.
+	•	Never reintroduce Learning/Relearning paths.
+
+	5.	Storage schema
+
+	•	Keep explicit FSRS fields; stop overloading:
+	•	stability: number
+	•	difficulty: number  // 1–10
+	•	repetitions: number
+	•	lapses: number
+	•	lastReviewed: ISO string
+	•	dueDate: ISO string
+	•	interval: number    // minutes
+	•	state: "new" | "review"
+	•	✅ Removed easeFactor completely - now using only difficulty field for FSRS.
+
+	6.	Initialization (first rating)
+
+	•	Unchanged conceptually; output can be sub‑day:
+	•	stability = initStability(r)
+	•	difficulty = initDifficulty(r)
+	•	reps=1
+	•	lapses += (r===1)
+	•	lastReview=now
+	•	intervalMinutes = nextIntervalMinutes(stability)
+	•	dueDate = now + intervalMinutes
+	•	state="review"
+
+	7.	UI/UX
+
+	•	Deck counts: compute “Due” by dueDate <= now. No “Learn” bucket.
+	•	Interval display already ok; ensure it prefers minutes/hours < 1 day.
+	•	Show predicted intervals for the four buttons using getSchedulingInfo() with minute precision.
+
+	8.	Queue/scheduler behavior
+
+	•	Allow multiple appearances in the same day. The scheduling loop must check due items continuously or on user action; do not batch strictly by calendar day.
+	•	Add per-session anti-thrash guard: never schedule below minMinutes. Optional soft limit on total appearances per day per card (e.g., ≤ 6) to avoid pathological loops.
+
+	9.	Code removals
+
+	•	Remove:
+	•	Any >= 1440 graduation checks.
+	•	Any minute-step logic (1m/6m/10m/4d).
+	•	learningProgressionMultiplier, hardInterval, easyBonus, “graduating/easy interval” comments.
+	•	Ensure FSRSState remains only "New" | "Review"; never set "Learning"/"Relearning".
+
+	10.	Preview purity
+
+	•	getSchedulingInfo() must not mutate stored cards. You already return a derived SchedulingCard; keep cloning and avoid side effects.
+
+	11.	Rounding discipline
+
+	•	Store canonical interval in minutes (integer). If you want exactness, store double and round for UI only.
+	•	Never round stability/difficulty; store full precision.
+
+	12.	Migration
+
+	•	Existing cards:
+	•	✅ Migration completed: easeFactor values copied to difficulty during schema migration.
+	•	Keep stability if present. If missing, initialize on the next rating only; do not guess.
+	•	Convert any day-based interval to minutes once, if you previously stored days.
+	•	Backfill dueDate if null: now to force immediate review visibility.
+
+	13.	Tests
+
+	•	New card + Good:
+	•	Produces interval ≥ minMinutes, < 1 day for low initial stability if weights are tuned; state becomes Review.
+	•	Review + Again:
+	•	Increments lapses, reduces stability via FSRS update, returns interval ≥ minMinutes and typically short (minutes/hours).
+	•	Monotonic button order:
+	•	For same state: Again < Hard < Good < Easy in minutes.
+	•	Continuous-time correctness:
+	•	With elapsedDays = 0.5, results differ from elapsedDays = 1.
+	•	Cap and floor:
+	•	Intervals never fall below minMinutes and never exceed maximumInterval*1440.
+
+	14.	Optional tuning for sub‑day starts
+
+	•	Lower w[0..3] (initial stability after first rating) to target first intervals in minutes/hours:
+	•	Again/Hard/Good/Easy stabilities ≈ [20, 40, 120, 480] minutes ÷ 1440, adjusted by requestRetention.
+	•	Raise requestRetention to 0.96–0.98 for tighter spacing near exams.
+
+	15.	Defensive coding
+
+	•	Guard invalid params; throw on w.length!==17 or requestRetention∉(0,1).
+	•	Clamp difficulty to [1,10] after updates; you already do.
+
+Implement items 1–15, then remove any leftover references to day floors or step-based scheduling.
+
+### TODO 15: FSRS config profiles
+
+Implement deck‑configuration profiles in FSRS settings. Produce TypeScript code and minimal schema changes. Enforce all constraints.
+
+Scope
+	•	Deck config FSRS section exposes:
+	•	requestRetention: number in (0,1), default 0.90.
+	•	profile: "INTENSIVE" | "STANDARD".
+	•	Deck config FSRS section must NOT store FSRS weights, minMinutes, or maximumIntervalDays. These are hardcoded.
+	•	Profiles:
+  	•	INTENSIVE: pure FSRS from the first rating with fractional (minute) intervals all the way. Initial target intervals:
+     	•	Again=1m, Hard=5m, Good=10m, Easy=40 min.
+     	•	There are no steps; all spacing is FSRS‑driven with minute granularity thereafter.
+  	•	STANDARD: pure FSRS, day‑based; minimum interval clamp = 1 day; no sub‑day outputs.
+
+FSRS internals (hardcoded, not user‑editable)
+	•	FSRS_WEIGHTS_STANDARD = FSRS‑4.5 weights.
+	•	FSRS_WEIGHTS_SUBDAY: same as FSRS‑4.5 except w0..w3 set to match the intensive targets in days:
+	•	w0 = 1/1440, w1 = 5/1440, w2 = 10/1440, w3 = 40/1440.
+	•	Note: first‑interval minutes scale by k = ln(requestRetention)/ln(0.9). With requestRetention=0.90, k=1. If user changes requestRetention, first intervals scale by k.
+	•	Global clamps (hardcoded):
+	•	maximumIntervalDays = 36500.
+	•	minMinutes_INTENSIVE = 1.
+	•	minMinutes_STANDARD = 1440 (i.e., 1 day).
+
+Scheduling rules (both profiles)
+	•	States: "new" → first rating → "review" permanently. No Learning/Relearning.
+	•	At each rating:
+	•	Compute elapsedDays = max(0, (now - lastReviewedAt)/86_400_000).
+	•	R = (1 + elapsedDays/(9*S))^(-1).
+	•	Update difficulty and stability via FSRS‑4.5 equations (weights per profile’s hardcoded set).
+	•	Compute next interval:
+
+k = ln(requestRetention)/ln(0.9)
+nextMinutes = clamp(minMinutes, maximumIntervalDays*1440, stability * k * 1440)
+
+
+	•	dueAt = now + nextMinutes * 60_000.
+
+	•	Profile differences:
+	•	INTENSIVE: use FSRS_WEIGHTS_SUBDAY; minMinutes = 1.
+	•	STANDARD: use FSRS_WEIGHTS_STANDARD; minMinutes = 1440.
+
+Data model
+	•	 DeckConfig.fsrs: { requestRetention: number, profile: "INTENSIVE"|"STANDARD" }.
+	-    Reviewlog - store profile
+
+
+API
+	•	getDeckConfig(deckId) → DeckConfig.
+	•	updateDeckConfig(deckId, { requestRetention?, profile? }) with validation; changing profile does not retro‑mutate existing card states.
+	•	schedulePreview(cardId, now) returns four outcomes using the current deck’s profile rules, minute‑granularity.
+
+Validation
+	•	requestRetention ∈ (0.5, 0.995); clamp or reject outside.
+	•	profile ∈ {"INTENSIVE","STANDARD"}.
+	•	Ensure weights arrays have length 17; throw on misconfig.
+	•	Clamp difficulty to [1,10], stability to ≥ 1e‑12.
+	•	Store intervalMinutes as number; compute due by timestamp math (UTC). No calendar‑day buckets.
+
+Precision policy
+	•	All FSRS math uses IEEE‑754 doubles. No rounding inside logic. Round only in UI formatting.
+	•	Keep stability, difficulty unrounded in storage.
+	•	Intervals stored as minutes (float or int). Display rounding only.
+
+Migration
+	•	Drop any deck‑level storage for weights/min/max intervals.
+	•	Existing "new" cards follow the profile’s initialization on next review.
+	•	Existing "review" cards keep their FSRS state; switching profile only changes which hardcoded weights and minMinutes are used on subsequent reviews.
+	•	Backfill profileSnapshot on next review.
+
+Tests
+	•	INTENSIVE:
+    	•	New+Again ⇒ ~1m (≥1m floor).
+    	•	New+Good ⇒ ~10m.
+    	•	Subsequent reviews produce continuous minute/hour growth; no step logic is ever invoked.
+	•	STANDARD:
+    	•	New+Good ⇒ ≥1 day; sub‑day never produced.
+    	•	Monotonicity per review: Again < Hard < Good < Easy for same card/time.
+    	•	Changing requestRetention scales intervals by factor ln(rr)/ln(0.9); verify first‑interval scaling and subsequent growth.
+    	•	Precision: after 100 updates, stability finite and positive; no unintended quantization.
+
+#### Behaviour when the user changes profiles
+
+Do this when a user switches profiles:
+	1.	Persist the change
+
+	•	Update deck config: profile, requestRetention, bump configVersion. No other fields.
+
+	2.	Do not touch existing cards
+
+	•	Do not reinitialize stability/difficulty.
+	•	Do not rewrite dueAt or intervalMinutes.
+	•	Do not rescale anything.
+
+	3.	Apply new rules on the next review
+
+	•	On each card’s next rating, use the new profile’s:
+	•	weights (INTENSIVE=sub‑day w0..w3; STANDARD=FSRS‑4.5),
+	•	minMinutes (INTENSIVE=1, STANDARD=1440),
+	•	current requestRetention.
+	•	Write profileSnapshot on the card to the new profile at that moment.
+	•	Log the profile used in the review log row.
+
+	4.	New cards after the switch
+
+	•	Initialize with the new profile immediately.
+	•	INTENSIVE: first intervals ~1m/5m/10m/40m (scaled by ln(rr)/ln(0.9)), minute granularity thereafter.
+	•	STANDARD: first interval ≥1 day, day floor thereafter.
+
+	5.	In‑flight edge cases
+
+	•	If switching to STANDARD while some cards are due in <1 day, keep their current dueAt; the day floor applies only after you answer them.
+	•	If switching to INTENSIVE while some cards are due in many days, keep dueAt; minute granularity applies only after the next answer.
+
+	6.	Preview/UI
+
+	•	Recompute button previews immediately using the new profile for all cards (without mutating storage).
+	•	Deck “Due” counts remain based on stored dueAt; they won’t jump on profile change.
+
+	7.	Auditing
+
+	•	Insert a profile_changed system log with deckId, oldProfile, newProfile, oldRR, newRR, configVersion, timestamp.
+	•	Include profile, requestRetention, and weightsVersion in each subsequent ReviewLog.
+
+	8.	Safety/validation
+
+	•	Validate profile ∈ {"INTENSIVE","STANDARD"} and 0.5 < requestRetention < 0.995.
+	•	Scheduler must read profile and rr at rating time; never cache per‑session beyond a single compute call.
+
+This preserves card history, avoids retroactive rewrites, and cleanly switches behavior at the next interaction.
+
+### TODO 16: Proper Migration
+
+Use schema versioning, run ordered migrations inside a transaction, and rebuild tables when removing fields.
+
+Procedure:
+	1.	Versioning
+
+	•	Store current schema version with PRAGMA user_version.
+	•	Bump it after each successful migration.
+
+	2.	Apply-once migration runner
+
+	•	Keep an ordered list {from,to,up}.
+	•	Read PRAGMA user_version; run all up where from === currentVersion.
+	•	Wrap the entire step in a single transaction; rollback on error; only then PRAGMA user_version = to.
+
+	3.	Adding a column (cheap)
+
+	•	ALTER TABLE table ADD COLUMN new_col TYPE DEFAULT <value>;
+	•	Backfill if needed with UPDATE.
+
+	4.	Dropping or changing a column (rebuild)
+
+	•	Create a new table with the desired shape.
+	•	Copy only the columns you keep/transform.
+	•	Swap names; recreate indexes/constraints; drop the old table.
+	•	Pattern:
+
+BEGIN;
+CREATE TABLE new_table( ...desired columns... );
+INSERT INTO new_table (c1, c2, c3)
+  SELECT c1, c2, transform(c_old) AS c2, c3 FROM old_table;
+DROP TABLE old_table;
+ALTER TABLE new_table RENAME TO old_table;
+CREATE INDEX ...; -- recreate
+COMMIT;
+
+
+
+	5.	Foreign keys and integrity
+
+	•	PRAGMA foreign_keys = OFF; before rebuild; ON; after.
+	•	If you use them, also PRAGMA defer_foreign_keys = ON; inside the transaction.
+
+	6.	Indices and triggers
+
+	•	You must recreate them after rebuild; ALTER TABLE ... RENAME does not move them.
+
+	7.	Vacuum (optional)
+
+	•	After large rebuilds: VACUUM; to reclaim space.
+
+	8.	Persistence
+
+	•	In sql.js you must re-export the DB buffer after migration and persist it (IndexedDB or file).
+
+const data = db.export(); // Uint8Array
+await idb.put('db', data, 'main');
+
+
+
+TypeScript skeleton (sql.js):
+
+type Migration = {
+  from: number;
+  to: number;
+  up: (db: SQL.Database) => void;
+};
+
+const migrations: Migration[] = [
+  {
+    from: 0, to: 1,
+    up: (db) => {
+      db.exec(`
+        PRAGMA foreign_keys = OFF;
+        BEGIN;
+        CREATE TABLE flashcards(
+          id TEXT PRIMARY KEY,
+          front TEXT NOT NULL,
+          back  TEXT NOT NULL,
+          state TEXT NOT NULL CHECK(state IN ('new','review')),
+          stability REAL,
+          difficulty REAL,
+          repetitions INTEGER NOT NULL DEFAULT 0,
+          lapses INTEGER NOT NULL DEFAULT 0,
+          lastReviewedAt TEXT,
+          dueAt TEXT,
+          intervalMinutes REAL
+        );
+        CREATE INDEX idx_flashcards_dueAt ON flashcards(dueAt);
+        COMMIT;
+        PRAGMA foreign_keys = ON;
+      `);
+    }
+  },
+  {
+    // Example: add column
+    from: 1, to: 2,
+    up: (db) => {
+      db.exec(`
+        BEGIN;
+        ALTER TABLE flashcards ADD COLUMN profileSnapshot TEXT DEFAULT 'STANDARD';
+        COMMIT;
+      `);
+    }
+  },
+  {
+    // Example: drop/rename columns in review_log by rebuild
+    from: 2, to: 3,
+    up: (db) => {
+      db.exec(`
+        PRAGMA foreign_keys = OFF;
+        BEGIN;
+        CREATE TABLE review_log_new(
+          id TEXT PRIMARY KEY,
+          flashcardId TEXT NOT NULL,
+          lastReviewedAt TEXT NOT NULL,
+          shownAt TEXT,
+          reviewedAt TEXT NOT NULL,
+          rating INTEGER NOT NULL CHECK(rating BETWEEN 1 AND 4),
+          ratingLabel TEXT NOT NULL,
+          elapsedDays REAL NOT NULL,
+          retrievability REAL NOT NULL,
+          oldState TEXT NOT NULL,
+          oldRepetitions INTEGER NOT NULL,
+          oldLapses INTEGER NOT NULL,
+          oldStability REAL NOT NULL,
+          oldDifficulty REAL NOT NULL,
+          newState TEXT NOT NULL,
+          newRepetitions INTEGER NOT NULL,
+          newLapses INTEGER NOT NULL,
+          newStability REAL NOT NULL,
+          newDifficulty REAL NOT NULL,
+          oldIntervalMinutes REAL NOT NULL,
+          newIntervalMinutes REAL NOT NULL,
+          oldDueAt TEXT NOT NULL,
+          newDueAt TEXT NOT NULL,
+          requestRetention REAL NOT NULL,
+          maximumIntervalDays INTEGER NOT NULL,
+          minMinutes INTEGER NOT NULL,
+          profile TEXT NOT NULL,
+          weightsVersion TEXT NOT NULL,
+          schedulerVersion TEXT NOT NULL,
+          client TEXT,
+          FOREIGN KEY(flashcardId) REFERENCES flashcards(id) ON DELETE CASCADE
+        );
+        INSERT INTO review_log_new (
+          id, flashcardId, lastReviewedAt, shownAt, reviewedAt,
+          rating, ratingLabel, elapsedDays, retrievability,
+          oldState, oldRepetitions, oldLapses, oldStability, oldDifficulty,
+          newState, newRepetitions, newLapses, newStability, newDifficulty,
+          oldIntervalMinutes, newIntervalMinutes, oldDueAt, newDueAt,
+          requestRetention, maximumIntervalDays, minMinutes, profile, weightsVersion, schedulerVersion, client
+        )
+        SELECT
+          id, flashcardId, lastReviewedAt, shownAt, reviewedAt,
+          rating, ratingLabel, elapsedDays, retrievability,
+          oldState, oldRepetitions, oldLapses, oldStability, oldDifficulty,
+          newState, newRepetitions, newLapses, newStability, newDifficulty,
+          oldIntervalMinutes, newIntervalMinutes, oldDueAt, newDueAt,
+          requestRetention, maximumIntervalDays, minMinutes, profile, weightsVersion, schedulerVersion, client
+        FROM review_log;  -- adjust mapping if columns changed
+        DROP TABLE review_log;
+        ALTER TABLE review_log_new RENAME TO review_log;
+        CREATE INDEX idx_review_log_card_time ON review_log(flashcardId, reviewedAt);
+        COMMIT;
+        PRAGMA foreign_keys = ON;
+      `);
+    }
+  }
+];
+
+export function migrate(db: SQL.Database) {
+  const getVer = db.exec(`PRAGMA user_version`)[0]?.values?.[0]?.[0] ?? 0;
+  let ver = Number(getVer) || 0;
+
+  for (const m of migrations) {
+    if (m.from === ver) {
+      try {
+        m.up(db);
+        db.exec(`PRAGMA user_version = ${m.to};`);
+        ver = m.to;
+      } catch (e) {
+        // rollback any open transaction
+        try { db.exec(`ROLLBACK;`); } catch {}
+        throw e;
+      }
+    }
+  }
+}
+
+Notes:
+	•	sql.js has no WAL; transactions are still atomic within the in‑memory VM. Always export the DB bytes only after migrate() succeeds.
+	•	For renames, SQLite supports ALTER TABLE t RENAME COLUMN old TO new in newer engines, but for maximum compatibility in sql.js, prefer rebuilds.
+	•	Always recreate indexes and triggers after rebuilds.
+
+**✅ Implementation Complete:**
+- Added `minMinutes` parameter to FSRSParameters interface with default 15 minutes
+- Replaced day-based `nextInterval()` with minute-based `nextIntervalMinutes()`
+- Removed ≥1-day clamps and Math.round from scheduling logic
+- Updated `getElapsedDays()` to maintain fractional precision
+- Added parameter validation for w.length===17, requestRetention∈(0,1), minMinutes≥1
+- Updated storage to use minute-based intervals with proper floor/cap logic
+- Enhanced UI settings to configure minimum interval
+- Comprehensive test suite validates sub-day scheduling, parameter validation, and continuous workflow
+- ✅ Migrated from easeFactor to difficulty field - backward compatibility maintained via migration
+
 ## ✅ Recent Enhancements
 
 ### Deck Configuration System
@@ -445,9 +925,9 @@ The implementation now fully complies with pure FSRS specifications and passes a
 - **Problem**: When flashcards get recreated (due to file changes, sync, etc.), users lose all learning progress
 - **Solution**: Complete progress restoration system using extended review log schema with precise due date calculation
 - **Enhanced ReviewLog Schema**:
-  - Extended with essential FSRS fields: `newState`, `newInterval`, `newEaseFactor`, `newRepetitions`, `newLapses`
-  - Stores core progression data (intervals, ease factors) and incremental counters (repetitions, lapses)
-  - Preserves old/new interval and ease factor for statistics and performance tracking
+  - Extended with essential FSRS fields: `newState`, `newInterval`, `newRepetitions`, `newLapses`, `newStability`
+  - Stores core progression data (intervals, difficulty) and incremental counters (repetitions, lapses)
+  - Preserves old/new interval and difficulty for statistics and performance tracking
   - Maintains complete audit trail of learning progression without redundant calculated values
 - **Precise Due Date Calculation**:
   - Formula: `dueDate = reviewedAt + (newInterval * 60 * 1000)` for mathematical precision

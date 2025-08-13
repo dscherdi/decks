@@ -1,11 +1,15 @@
 import { FSRS } from "../algorithm/fsrs";
 import { Flashcard } from "../database/types";
+import {
+  FSRS_WEIGHTS_STANDARD,
+  FSRS_WEIGHTS_SUBDAY,
+} from "../algorithm/fsrs-weights";
 
 describe("FSRS Algorithm - Pure Implementation", () => {
   let fsrs: FSRS;
 
   beforeEach(() => {
-    fsrs = new FSRS();
+    fsrs = new FSRS({ requestRetention: 0.9, profile: "INTENSIVE" });
   });
 
   describe("New Card Initialization", () => {
@@ -21,7 +25,7 @@ describe("FSRS Algorithm - Pure Implementation", () => {
       dueDate: new Date().toISOString(),
       interval: 0,
       repetitions: 0,
-      easeFactor: 0,
+      difficulty: 0,
       stability: 0,
       lapses: 0,
       lastReviewed: null,
@@ -37,7 +41,8 @@ describe("FSRS Algorithm - Pure Implementation", () => {
       expect(againCard.stability).toBeGreaterThan(0);
       expect(againCard.difficulty).toBeGreaterThan(0);
       expect(againCard.repetitions).toBe(1);
-      expect(againCard.interval).toBeGreaterThanOrEqual(1440); // At least 1 day
+      expect(againCard.interval).toBeGreaterThanOrEqual(1); // Should be at least 1 minute
+      expect(againCard.interval).toBeLessThan(10); // Should be around 1 minute
     });
 
     it("should initialize new card with Hard rating", () => {
@@ -48,7 +53,8 @@ describe("FSRS Algorithm - Pure Implementation", () => {
       expect(hardCard.stability).toBeGreaterThan(0);
       expect(hardCard.difficulty).toBeGreaterThan(0);
       expect(hardCard.repetitions).toBe(1);
-      expect(hardCard.interval).toBeGreaterThanOrEqual(1440); // At least 1 day
+      expect(hardCard.interval).toBeGreaterThan(1); // Should be more than again
+      expect(hardCard.interval).toBeLessThan(30); // Should be around 5 minutes
     });
 
     it("should initialize new card with Good rating", () => {
@@ -59,7 +65,8 @@ describe("FSRS Algorithm - Pure Implementation", () => {
       expect(goodCard.stability).toBeGreaterThan(0);
       expect(goodCard.difficulty).toBeGreaterThan(0);
       expect(goodCard.repetitions).toBe(1);
-      expect(goodCard.interval).toBeGreaterThanOrEqual(1440); // At least 1 day
+      expect(goodCard.interval).toBeGreaterThanOrEqual(1); // At least minMinutes
+      expect(goodCard.interval).toBeLessThan(60); // Should be around 10 minutes with intensive profile
     });
 
     it("should initialize new card with Easy rating", () => {
@@ -70,7 +77,8 @@ describe("FSRS Algorithm - Pure Implementation", () => {
       expect(easyCard.stability).toBeGreaterThan(0);
       expect(easyCard.difficulty).toBeGreaterThan(0);
       expect(easyCard.repetitions).toBe(1);
-      expect(easyCard.interval).toBeGreaterThanOrEqual(1440); // At least 1 day
+      expect(easyCard.interval).toBeGreaterThan(30); // Should be more than good
+      expect(easyCard.interval).toBeLessThan(120); // Should be around 40 minutes with intensive profile
     });
 
     it("should set lapses correctly on first rating", () => {
@@ -83,13 +91,13 @@ describe("FSRS Algorithm - Pure Implementation", () => {
       expect(schedulingInfo.easy.repetitions).toBe(1);
     });
 
-    it("should never return intervals less than 1 day", () => {
+    it("should never return intervals less than minMinutes", () => {
       const schedulingInfo = fsrs.getSchedulingInfo(newCard);
 
-      expect(schedulingInfo.again.interval).toBeGreaterThanOrEqual(1440);
-      expect(schedulingInfo.hard.interval).toBeGreaterThanOrEqual(1440);
-      expect(schedulingInfo.good.interval).toBeGreaterThanOrEqual(1440);
-      expect(schedulingInfo.easy.interval).toBeGreaterThanOrEqual(1440);
+      expect(schedulingInfo.again.interval).toBeGreaterThanOrEqual(1);
+      expect(schedulingInfo.hard.interval).toBeGreaterThanOrEqual(1);
+      expect(schedulingInfo.good.interval).toBeGreaterThanOrEqual(1);
+      expect(schedulingInfo.easy.interval).toBeGreaterThanOrEqual(1);
     });
   });
 
@@ -106,7 +114,7 @@ describe("FSRS Algorithm - Pure Implementation", () => {
       dueDate: new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString(), // Due yesterday
       interval: 1440, // 1 day
       repetitions: 3,
-      easeFactor: 5.5, // FSRS difficulty
+      difficulty: 5.5, // FSRS difficulty
       stability: 2.5,
       lapses: 1,
       lastReviewed: new Date(Date.now() - 48 * 60 * 60 * 1000).toISOString(), // 2 days ago
@@ -187,7 +195,7 @@ describe("FSRS Algorithm - Pure Implementation", () => {
         dueDate: new Date().toISOString(),
         interval: 0,
         repetitions: 0,
-        easeFactor: 0,
+        difficulty: 0,
         stability: 0,
         lapses: 0,
         lastReviewed: null,
@@ -217,7 +225,7 @@ describe("FSRS Algorithm - Pure Implementation", () => {
         dueDate: new Date().toISOString(),
         interval: 2880, // 2 days
         repetitions: 2,
-        easeFactor: 6.0, // FSRS difficulty
+        difficulty: 6.0, // FSRS difficulty
         stability: 5.0,
         lapses: 0,
         lastReviewed: new Date(
@@ -237,7 +245,7 @@ describe("FSRS Algorithm - Pure Implementation", () => {
   });
 
   describe("Pure FSRS Compliance", () => {
-    it("should never schedule intervals less than 1 day", () => {
+    it("should never schedule intervals less than minMinutes", () => {
       const testCards = [
         {
           id: "1",
@@ -266,7 +274,7 @@ describe("FSRS Algorithm - Pure Implementation", () => {
           contentHash: `hash${cardData.id}`,
           dueDate: new Date().toISOString(),
           interval: 0,
-          easeFactor: cardData.difficulty,
+          difficulty: cardData.difficulty,
           lapses: 0,
           lastReviewed: null,
           created: new Date().toISOString(),
@@ -275,11 +283,237 @@ describe("FSRS Algorithm - Pure Implementation", () => {
 
         const schedulingInfo = fsrs.getSchedulingInfo(card);
 
-        expect(schedulingInfo.again.interval).toBeGreaterThanOrEqual(1440);
-        expect(schedulingInfo.hard.interval).toBeGreaterThanOrEqual(1440);
-        expect(schedulingInfo.good.interval).toBeGreaterThanOrEqual(1440);
-        expect(schedulingInfo.easy.interval).toBeGreaterThanOrEqual(1440);
+        expect(schedulingInfo.again.interval).toBeGreaterThanOrEqual(1);
+        expect(schedulingInfo.hard.interval).toBeGreaterThanOrEqual(1);
+        expect(schedulingInfo.good.interval).toBeGreaterThanOrEqual(1);
+        expect(schedulingInfo.easy.interval).toBeGreaterThanOrEqual(1);
       });
+    });
+
+    it("should support sub-day intervals with low stability", () => {
+      // Create FSRS with intensive profile for sub-day intervals
+      const subDayFsrs = new FSRS({
+        requestRetention: 0.9,
+        profile: "INTENSIVE", // Sub-day intervals
+      });
+
+      const newCard: Flashcard = {
+        id: "subday-test",
+        deckId: "test-deck",
+        front: "Sub-day Test",
+        back: "Answer",
+        type: "header-paragraph",
+        sourceFile: "test.md",
+        contentHash: "hashsubday",
+        state: "new",
+        dueDate: new Date().toISOString(),
+        interval: 0,
+        repetitions: 0,
+        difficulty: 0,
+        stability: 0,
+        lapses: 0,
+        lastReviewed: null,
+        created: new Date().toISOString(),
+        modified: new Date().toISOString(),
+      };
+
+      const schedulingInfo = subDayFsrs.getSchedulingInfo(newCard);
+
+      // Should respect minMinutes floor
+      expect(schedulingInfo.again.interval).toBeGreaterThanOrEqual(1);
+      expect(schedulingInfo.hard.interval).toBeGreaterThanOrEqual(1);
+      expect(schedulingInfo.good.interval).toBeGreaterThanOrEqual(1);
+      expect(schedulingInfo.easy.interval).toBeGreaterThanOrEqual(1);
+
+      // With low initial stability, intervals could be sub-day but >= minMinutes
+      expect(schedulingInfo.again.interval).toBeLessThan(1440); // Less than 1 day is now allowed
+    });
+
+    it("should validate FSRS parameters", () => {
+      // Should throw on invalid w length
+      expect(() => {
+        new FSRS({ requestRetention: 0.9, profile: "INVALID" as any }); // Invalid profile
+      }).toThrow("Invalid profile");
+
+      // Should throw on invalid requestRetention
+      expect(() => {
+        new FSRS({ requestRetention: -0.1, profile: "STANDARD" });
+      }).toThrow("requestRetention must be in range (0.5, 0.995)");
+
+      expect(() => {
+        new FSRS({ requestRetention: 1.1, profile: "STANDARD" });
+      }).toThrow("requestRetention must be in range (0.5, 0.995)");
+
+      // Profile and requestRetention validation is sufficient for new system
+    });
+
+    it("should support continuous sub-day scheduling workflow", () => {
+      // Create FSRS optimized for sub-day intervals
+      const subDayFsrs = new FSRS({
+        requestRetention: 0.95, // Higher retention for frequent reviews
+        profile: "INTENSIVE", // Use intensive profile for sub-day intervals
+      });
+
+      let card: Flashcard = {
+        id: "continuous-test",
+        deckId: "test-deck",
+        front: "Continuous Test",
+        back: "Answer",
+        type: "header-paragraph",
+        sourceFile: "test.md",
+        contentHash: "hashcontinuous",
+        state: "new",
+        dueDate: new Date().toISOString(),
+        interval: 0,
+        repetitions: 0,
+        difficulty: 0,
+        stability: 0,
+        lapses: 0,
+        lastReviewed: null,
+        created: new Date().toISOString(),
+        modified: new Date().toISOString(),
+      };
+
+      // First review - should create sub-day interval
+      card = subDayFsrs.updateCard(card, "good");
+      expect(card.interval).toBeGreaterThanOrEqual(1); // >= minMinutes
+      expect(card.interval).toBeLessThan(1440); // Should be sub-day with intensive profile
+      expect(card.state).toBe("review");
+      expect(card.repetitions).toBe(1);
+
+      // Simulate time passing and review again
+      const firstDueTime = new Date(card.dueDate).getTime();
+      const reviewTime = new Date(firstDueTime + 30 * 60 * 1000); // 30 minutes later
+
+      // Update lastReviewed for next calculation
+      card.lastReviewed = reviewTime.toISOString();
+
+      // Second review - again rating should still respect minMinutes
+      card = subDayFsrs.updateCard(card, "again");
+      expect(card.interval).toBeGreaterThanOrEqual(1);
+      expect(card.lapses).toBe(1); // Should increment lapses
+      expect(card.repetitions).toBe(2);
+    });
+
+    it("should handle invalid stability and interval edge cases", () => {
+      const testCard: Flashcard = {
+        id: "edge-case-test",
+        deckId: "test-deck",
+        front: "Edge Case Test",
+        back: "Answer",
+        type: "header-paragraph",
+        sourceFile: "test.md",
+        contentHash: "hashedge",
+        state: "review",
+        dueDate: new Date().toISOString(),
+        interval: 0,
+        repetitions: 1,
+        difficulty: NaN, // Invalid difficulty
+        stability: NaN, // Invalid stability
+        lapses: 0,
+        lastReviewed: new Date().toISOString(),
+        created: new Date().toISOString(),
+        modified: new Date().toISOString(),
+      };
+
+      // Should not throw and should return valid intervals
+      const schedulingInfo = fsrs.getSchedulingInfo(testCard);
+
+      expect(schedulingInfo.again.interval).toBeGreaterThanOrEqual(1);
+      expect(schedulingInfo.hard.interval).toBeGreaterThanOrEqual(1);
+      expect(schedulingInfo.good.interval).toBeGreaterThanOrEqual(1);
+      expect(schedulingInfo.easy.interval).toBeGreaterThanOrEqual(1);
+
+      // All due dates should be valid
+      expect(() => new Date(schedulingInfo.again.dueDate)).not.toThrow();
+      expect(() => new Date(schedulingInfo.hard.dueDate)).not.toThrow();
+      expect(() => new Date(schedulingInfo.good.dueDate)).not.toThrow();
+      expect(() => new Date(schedulingInfo.easy.dueDate)).not.toThrow();
+    });
+
+    it("should recover from NaN stability calculations in real scenarios", () => {
+      // Create a card that might cause NaN stability through extreme calculations
+      const problematicCard: Flashcard = {
+        id: "nan-recovery-test",
+        deckId: "test-deck",
+        front: "NaN Recovery Test",
+        back: "Answer",
+        type: "header-paragraph",
+        sourceFile: "test.md",
+        contentHash: "hashnan",
+        state: "review",
+        dueDate: new Date().toISOString(),
+        interval: 1440,
+        repetitions: 100, // Very high repetitions
+        difficulty: 0, // Invalid difficulty
+        stability: 0, // Invalid stability
+        lapses: 50, // High lapses
+        lastReviewed: new Date(Date.now() - 1000000000).toISOString(), // Very old review
+        created: new Date().toISOString(),
+        modified: new Date().toISOString(),
+      };
+
+      // Should recover gracefully and not throw
+      expect(() => {
+        const schedulingInfo = fsrs.getSchedulingInfo(problematicCard);
+        expect(schedulingInfo.again.interval).toBeGreaterThanOrEqual(1);
+        expect(isFinite(schedulingInfo.again.interval)).toBe(true);
+        expect(schedulingInfo.again.dueDate).toBeTruthy();
+      }).not.toThrow();
+
+      // Should also work for updateCard
+      expect(() => {
+        const updated = fsrs.updateCard(problematicCard, "again");
+        expect(updated.interval).toBeGreaterThanOrEqual(1);
+        expect(isFinite(updated.interval)).toBe(true);
+        expect(updated.stability).toBeGreaterThan(0);
+        expect(isFinite(updated.stability)).toBe(true);
+      }).not.toThrow();
+    });
+
+    it("should produce target intervals with sub-day optimized weights", () => {
+      const newCard: Flashcard = {
+        id: "subday-target-test",
+        deckId: "test-deck",
+        front: "Sub-day Target Test",
+        back: "Answer",
+        type: "header-paragraph",
+        sourceFile: "test.md",
+        contentHash: "hashsubdayTarget",
+        state: "new",
+        dueDate: new Date().toISOString(),
+        interval: 0,
+        repetitions: 0,
+        difficulty: 0,
+        stability: 0,
+        lapses: 0,
+        lastReviewed: null,
+        created: new Date().toISOString(),
+        modified: new Date().toISOString(),
+      };
+
+      const schedulingInfo = fsrs.getSchedulingInfo(newCard);
+
+      // With intensive profile, should produce sub-day intervals
+      expect(schedulingInfo.good.interval).toBeLessThan(1440); // Sub-day
+      expect(schedulingInfo.good.interval).toBeGreaterThan(5); // Reasonable minimum
+
+      // Verify button order: Again < Hard < Good < Easy
+      expect(schedulingInfo.again.interval).toBeLessThan(
+        schedulingInfo.hard.interval,
+      );
+      expect(schedulingInfo.hard.interval).toBeLessThan(
+        schedulingInfo.good.interval,
+      );
+      expect(schedulingInfo.good.interval).toBeLessThan(
+        schedulingInfo.easy.interval,
+      );
+
+      // All should be >= minMinutes
+      expect(schedulingInfo.again.interval).toBeGreaterThanOrEqual(1);
+      expect(schedulingInfo.hard.interval).toBeGreaterThanOrEqual(1);
+      expect(schedulingInfo.good.interval).toBeGreaterThanOrEqual(1);
+      expect(schedulingInfo.easy.interval).toBeGreaterThanOrEqual(1);
     });
 
     it("should maintain monotonic interval progression for ratings 2-4", () => {
@@ -295,7 +529,7 @@ describe("FSRS Algorithm - Pure Implementation", () => {
         dueDate: new Date().toISOString(),
         interval: 1440,
         repetitions: 3,
-        easeFactor: 5.0,
+        difficulty: 5.0,
         stability: 3.0,
         lapses: 0,
         lastReviewed: new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString(),
@@ -327,7 +561,7 @@ describe("FSRS Algorithm - Pure Implementation", () => {
         dueDate: new Date().toISOString(),
         interval: 2880,
         repetitions: 5,
-        easeFactor: 4.5,
+        difficulty: 4.5,
         stability: 4.0,
         lapses: 1,
         lastReviewed: new Date(Date.now() - 48 * 60 * 60 * 1000).toISOString(),
@@ -356,7 +590,7 @@ describe("FSRS Algorithm - Pure Implementation", () => {
         dueDate: new Date().toISOString(),
         interval: 0,
         repetitions: 0,
-        easeFactor: 0,
+        difficulty: 0,
         stability: 0,
         lapses: 0,
         lastReviewed: null,
@@ -390,7 +624,7 @@ describe("FSRS Algorithm - Pure Implementation", () => {
         dueDate: new Date().toISOString(),
         interval: 0,
         repetitions: 0,
-        easeFactor: 0,
+        difficulty: 0,
         stability: 0,
         lapses: 0,
         lastReviewed: null,
@@ -401,8 +635,8 @@ describe("FSRS Algorithm - Pure Implementation", () => {
       const updatedCard = fsrs.updateCard(newCard, "good");
 
       expect(updatedCard.stability).toBeGreaterThan(0);
-      expect(updatedCard.easeFactor).toBeGreaterThan(0); // Difficulty stored in easeFactor
-      expect(updatedCard.stability).not.toBe(updatedCard.easeFactor);
+      expect(updatedCard.difficulty).toBeGreaterThan(0); // Explicit difficulty field
+      expect(updatedCard.stability).not.toBe(updatedCard.difficulty);
     });
 
     it("should maintain reps and lapses counters", () => {
@@ -418,7 +652,7 @@ describe("FSRS Algorithm - Pure Implementation", () => {
         dueDate: new Date().toISOString(),
         interval: 1440,
         repetitions: 2,
-        easeFactor: 5.0,
+        difficulty: 5.0,
         stability: 3.0,
         lapses: 1,
         lastReviewed: new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString(),
@@ -453,7 +687,7 @@ describe("FSRS Algorithm - Pure Implementation", () => {
         dueDate: new Date().toISOString(),
         interval: 2880, // 2 days
         repetitions: 1,
-        easeFactor: 5.0,
+        difficulty: 5.0,
         stability: 2.0,
         lapses: 0,
         lastReviewed: new Date(
@@ -484,7 +718,7 @@ describe("FSRS Algorithm - Pure Implementation", () => {
         dueDate: new Date().toISOString(),
         interval: 1440,
         repetitions: 2,
-        easeFactor: 5.0,
+        difficulty: 5.0,
         stability: 2.5,
         lapses: 0,
         lastReviewed: new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString(),
@@ -514,7 +748,7 @@ describe("FSRS Algorithm - Pure Implementation", () => {
           dueDate: new Date().toISOString(),
           interval: 0,
           repetitions: 0,
-          easeFactor: 0,
+          difficulty: 0,
           stability: 0,
           lapses: 0,
           lastReviewed: null,
@@ -526,7 +760,7 @@ describe("FSRS Algorithm - Pure Implementation", () => {
         expect(easySchedule.state).toBe("review");
         expect(easySchedule.stability).toBeGreaterThan(0);
         expect(easySchedule.difficulty).toBeGreaterThan(0);
-        expect(easySchedule.interval).toBeGreaterThanOrEqual(1440);
+        expect(easySchedule.interval).toBeGreaterThanOrEqual(5); // Sub-day intervals allowed
 
         // Test 2: Review + rating=1 keeps state Review, increments lapses
         const reviewCard: Flashcard = {
@@ -541,7 +775,7 @@ describe("FSRS Algorithm - Pure Implementation", () => {
           dueDate: new Date().toISOString(),
           interval: 2880,
           repetitions: 2,
-          easeFactor: 5.0,
+          difficulty: 5.0,
           stability: 3.0,
           lapses: 1,
           lastReviewed: new Date(
@@ -595,7 +829,7 @@ describe("FSRS Algorithm - Pure Implementation", () => {
         dueDate: new Date().toISOString(),
         interval: 1440,
         repetitions: 3,
-        easeFactor: 2.5, // Old SM-2 ease factor
+        difficulty: 2.5, // FSRS difficulty
         stability: 0, // Missing FSRS data
         lapses: 0,
         lastReviewed: new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString(),
@@ -609,6 +843,91 @@ describe("FSRS Algorithm - Pure Implementation", () => {
       expect(schedulingInfo.good.state).toBe("review");
       expect(schedulingInfo.good.stability).toBeGreaterThan(0);
       expect(schedulingInfo.good.difficulty).toBeGreaterThan(0);
+    });
+
+    describe("getRetrievability", () => {
+      it("should calculate retrievability using FSRS forgetting curve", () => {
+        const card: Flashcard = {
+          id: "test-card",
+          deckId: "test-deck",
+          front: "Test",
+          back: "Answer",
+          type: "header-paragraph",
+          sourceFile: "test.md",
+          contentHash: "hash123",
+          state: "review",
+          dueDate: new Date().toISOString(),
+          interval: 1440,
+          repetitions: 3,
+          difficulty: 5.0,
+          stability: 3.0,
+          lapses: 0,
+          lastReviewed: new Date(
+            Date.now() - 3 * 24 * 60 * 60 * 1000,
+          ).toISOString(), // 3 days ago
+          created: new Date().toISOString(),
+          modified: new Date().toISOString(),
+        };
+
+        const reviewedAt = new Date();
+        const retrievability = fsrs.getRetrievability(card, reviewedAt);
+
+        // Should use FSRS forgetting curve formula: (1 + t/(9*S))^-1
+        // With t=3 days, S=3.0: (1 + 3/(9*3))^-1 = (1 + 1/9)^-1 = (10/9)^-1 = 0.9
+        expect(retrievability).toBeCloseTo(0.9, 2);
+      });
+
+      it("should return default retrievability for new cards", () => {
+        const newCard: Flashcard = {
+          id: "new-card",
+          deckId: "test-deck",
+          front: "Test",
+          back: "Answer",
+          type: "header-paragraph",
+          sourceFile: "test.md",
+          contentHash: "hash123",
+          state: "new",
+          dueDate: new Date().toISOString(),
+          interval: 0,
+          repetitions: 0,
+          difficulty: 0,
+          stability: 0,
+          lapses: 0,
+          lastReviewed: null,
+          created: new Date().toISOString(),
+          modified: new Date().toISOString(),
+        };
+
+        const retrievability = fsrs.getRetrievability(newCard);
+        expect(retrievability).toBe(0.9);
+      });
+
+      it("should handle cards with zero stability", () => {
+        const card: Flashcard = {
+          id: "test-card",
+          deckId: "test-deck",
+          front: "Test",
+          back: "Answer",
+          type: "header-paragraph",
+          sourceFile: "test.md",
+          contentHash: "hash123",
+          state: "review",
+          dueDate: new Date().toISOString(),
+          interval: 1440,
+          repetitions: 1,
+          difficulty: 5.0,
+          stability: 0, // Invalid stability
+          lapses: 0,
+          lastReviewed: new Date(
+            Date.now() - 24 * 60 * 60 * 1000,
+          ).toISOString(),
+          created: new Date().toISOString(),
+          modified: new Date().toISOString(),
+        };
+
+        const retrievability = fsrs.getRetrievability(card);
+        expect(retrievability).toBe(0.9);
+      });
     });
   });
 });

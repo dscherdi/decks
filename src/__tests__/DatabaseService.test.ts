@@ -196,7 +196,7 @@ describe("DatabaseService", () => {
           "test.md",
           "#flashcards/test",
           null,
-          '{"newCardsLimit":20,"reviewCardsLimit":100,"enableNewCardsLimit":false,"enableReviewCardsLimit":false,"reviewOrder":"due-date"}',
+          '{"newCardsLimit":20,"reviewCardsLimit":100,"enableNewCardsLimit":false,"enableReviewCardsLimit":false,"reviewOrder":"due-date","fsrs":{"requestRetention":0.9,"profile":"STANDARD"}}',
           "2024-01-01",
           "2024-01-01",
         ]);
@@ -219,6 +219,10 @@ describe("DatabaseService", () => {
             enableNewCardsLimit: false,
             enableReviewCardsLimit: false,
             reviewOrder: "due-date",
+            fsrs: {
+              requestRetention: 0.9,
+              profile: "STANDARD",
+            },
           },
           created: "2024-01-01",
           modified: "2024-01-01",
@@ -243,7 +247,7 @@ describe("DatabaseService", () => {
           "test.md",
           "#flashcards/test",
           null,
-          '{"newCardsLimit":20,"reviewCardsLimit":100,"enableNewCardsLimit":false,"enableReviewCardsLimit":false,"reviewOrder":"due-date"}',
+          '{"newCardsLimit":20,"reviewCardsLimit":100,"enableNewCardsLimit":false,"enableReviewCardsLimit":false,"reviewOrder":"due-date","fsrs":{"requestRetention":0.9,"profile":"STANDARD"}}',
           "2024-01-01",
           "2024-01-01",
         ]);
@@ -266,6 +270,10 @@ describe("DatabaseService", () => {
             enableNewCardsLimit: false,
             enableReviewCardsLimit: false,
             reviewOrder: "due-date",
+            fsrs: {
+              requestRetention: 0.9,
+              profile: "STANDARD",
+            },
           },
           created: "2024-01-01",
           modified: "2024-01-01",
@@ -290,7 +298,7 @@ describe("DatabaseService", () => {
           "test.md",
           "#flashcards/test",
           null,
-          '{"newCardsLimit":20,"reviewCardsLimit":100,"enableNewCardsLimit":false,"enableReviewCardsLimit":false,"reviewOrder":"due-date"}',
+          '{"newCardsLimit":20,"reviewCardsLimit":100,"enableNewCardsLimit":false,"enableReviewCardsLimit":false,"reviewOrder":"due-date","fsrs":{"requestRetention":0.9,"profile":"STANDARD"}}',
           "2024-01-01",
           "2024-01-01",
         ]);
@@ -313,6 +321,10 @@ describe("DatabaseService", () => {
             enableNewCardsLimit: false,
             enableReviewCardsLimit: false,
             reviewOrder: "due-date",
+            fsrs: {
+              requestRetention: 0.9,
+              profile: "STANDARD",
+            },
           },
           created: "2024-01-01",
           modified: "2024-01-01",
@@ -338,7 +350,7 @@ describe("DatabaseService", () => {
           "test.md",
           "#flashcards/test",
           null,
-          '{"newCardsLimit":20,"reviewCardsLimit":100,"enableNewCardsLimit":false,"enableReviewCardsLimit":false,"reviewOrder":"due-date"}',
+          '{"newCardsLimit":20,"reviewCardsLimit":100,"enableNewCardsLimit":false,"enableReviewCardsLimit":false,"reviewOrder":"due-date","fsrs":{"requestRetention":0.9,"profile":"STANDARD"}}',
           "2024-01-01",
           "2024-01-01",
         ]);
@@ -447,8 +459,8 @@ describe("DatabaseService", () => {
           dueDate: new Date().toISOString(),
           interval: 0,
           repetitions: 0,
-          easeFactor: 5.0,
           stability: 2.5,
+          difficulty: 5.0,
           lapses: 0,
           lastReviewed: null,
         };
@@ -471,7 +483,7 @@ describe("DatabaseService", () => {
           flashcard.dueDate,
           flashcard.interval,
           flashcard.repetitions,
-          flashcard.easeFactor,
+          flashcard.difficulty,
           flashcard.stability,
           flashcard.lapses,
           flashcard.lastReviewed,
@@ -822,10 +834,10 @@ describe("DatabaseService", () => {
 
         // Should prepare queries for both new and review cards
         expect(mockDb.prepare).toHaveBeenCalledWith(
-          expect.stringContaining("old_interval = 0"),
+          expect.stringContaining("old_interval_minutes = 0"),
         );
         expect(mockDb.prepare).toHaveBeenCalledWith(
-          expect.stringContaining("old_interval > 0"),
+          expect.stringContaining("old_interval_minutes > 0"),
         );
       });
     });
@@ -1003,21 +1015,47 @@ describe("DatabaseService", () => {
   });
 
   describe("getLatestReviewLogForFlashcard", () => {
-    it("should calculate due date from reviewedAt and newInterval", async () => {
+    it("should return latest review log for flashcard", async () => {
       const reviewedAt = "2024-01-15T10:00:00.000Z";
       const intervalMinutes = 1440; // 24 hours
-      const expectedDueDate = "2024-01-16T10:00:00.000Z"; // 24 hours later
 
-      // Mock database query result
+      // Mock database query result - full ReviewLog row
       mockStatement.step.mockReturnValue(true);
       mockStatement.get.mockReturnValue([
+        "log_id", // id
+        "test_card_id", // flashcard_id
+        "2024-01-14T10:00:00.000Z", // last_reviewed_at
+        "2024-01-15T09:00:00.000Z", // shown_at
+        "2024-01-15T10:00:00.000Z", // reviewed_at
+        3, // rating
+        "good", // rating_label
+        5000, // time_elapsed_ms
+        "new", // old_state
+        2, // old_repetitions
+        0, // old_lapses
+        2.0, // old_stability
+        5.0, // old_difficulty
         "review", // new_state
-        intervalMinutes, // new_interval
-        2.5, // new_ease_factor
         3, // new_repetitions
         0, // new_lapses
         2.5, // new_stability
-        reviewedAt, // reviewed_at
+        2.5, // new_difficulty
+        720, // old_interval_minutes
+        1440, // new_interval_minutes
+        "2024-01-14T10:00:00.000Z", // old_due_at
+        "2024-01-16T10:00:00.000Z", // new_due_at
+        1.0, // elapsed_days
+        0.9, // retrievability
+        0.9, // request_retention
+        "STANDARD", // profile
+        36500, // maximum_interval_days
+        1440, // min_minutes
+        "STANDARD-v1.0", // fsrs_weights_version
+        "1.0", // scheduler_version
+        null, // note_model_id
+        null, // card_template_id
+        null, // content_hash
+        "desktop", // client
       ]);
 
       const result =
@@ -1029,14 +1067,40 @@ describe("DatabaseService", () => {
       expect(mockStatement.bind).toHaveBeenCalledWith(["test_card_id"]);
 
       expect(result).toEqual({
-        state: "review",
-        dueDate: expectedDueDate,
-        interval: intervalMinutes,
-        repetitions: 3,
-        easeFactor: 2.5,
-        stability: 2.5,
-        lapses: 0,
-        lastReviewed: "2024-01-15T10:00:00.000Z",
+        id: "log_id",
+        flashcardId: "test_card_id",
+        lastReviewedAt: "2024-01-14T10:00:00.000Z",
+        shownAt: "2024-01-15T09:00:00.000Z",
+        reviewedAt: "2024-01-15T10:00:00.000Z",
+        rating: 3,
+        ratingLabel: "good",
+        timeElapsedMs: 5000,
+        oldState: "new",
+        oldRepetitions: 2,
+        oldLapses: 0,
+        oldStability: 2,
+        oldDifficulty: 5,
+        newState: "review",
+        newRepetitions: 3,
+        newLapses: 0,
+        newStability: 2.5,
+        newDifficulty: 2.5,
+        oldIntervalMinutes: 720,
+        newIntervalMinutes: 1440,
+        oldDueAt: "2024-01-14T10:00:00.000Z",
+        newDueAt: "2024-01-16T10:00:00.000Z",
+        elapsedDays: 1,
+        retrievability: 0.9,
+        requestRetention: 0.9,
+        profile: "STANDARD",
+        maximumIntervalDays: 36500,
+        minMinutes: 1440,
+        fsrsWeightsVersion: "STANDARD-v1.0",
+        schedulerVersion: "1.0",
+        noteModelId: null,
+        cardTemplateId: null,
+        contentHash: null,
+        client: "desktop",
       });
     });
 
@@ -1054,41 +1118,57 @@ describe("DatabaseService", () => {
       const intervalMinutes = 1440; // 24 hours
       const repetitions = 5;
       const lapses = 1;
-      const easeFactor = 2.3;
-
-      // Mock database query result
-      mockStatement.step.mockReturnValue(true);
-      mockStatement.get.mockReturnValue([
-        "review", // new_state
-        intervalMinutes, // new_interval
-        easeFactor, // new_ease_factor
-        repetitions, // new_repetitions
-        lapses, // new_lapses
-        reviewedAt, // reviewed_at
-      ]);
-
+      const difficulty = 2.3;
       const expectedStability = 15.2;
 
-      // Mock database query result with stability
+      // Mock database query result - full ReviewLog row (25 columns)
+      mockStatement.step.mockReturnValue(true);
       mockStatement.get.mockReturnValue([
+        "log_id", // id
+        "test_card_id", // flashcard_id
+        "2024-01-14T10:00:00.000Z", // last_reviewed_at
+        "2024-01-15T09:00:00.000Z", // shown_at
+        reviewedAt, // reviewed_at
+        3, // rating
+        "good", // rating_label
+        5000, // time_elapsed_ms
+        "review", // old_state
+        4, // old_repetitions
+        lapses, // old_lapses
+        12.0, // old_stability
+        2.5, // old_difficulty
         "review", // new_state
-        intervalMinutes, // new_interval
-        easeFactor, // new_ease_factor
         repetitions, // new_repetitions
         lapses, // new_lapses
         expectedStability, // new_stability
-        reviewedAt, // reviewed_at
+        difficulty, // new_difficulty
+        720, // old_interval_minutes
+        intervalMinutes, // new_interval_minutes
+        "2024-01-14T10:00:00.000Z", // old_due_at
+        "2024-01-16T10:00:00.000Z", // new_due_at
+        1.0, // elapsed_days
+        0.9, // retrievability
+        0.9, // request_retention
+        "STANDARD", // profile
+        36500, // maximum_interval_days
+        1440, // min_minutes
+        "STANDARD-v1.0", // fsrs_weights_version
+        "1.0", // scheduler_version
+        null, // note_model_id
+        null, // card_template_id
+        null, // content_hash
+        "desktop", // client
       ]);
 
       const result =
         await dbService.getLatestReviewLogForFlashcard("test_card_id");
 
       // Verify result contains stored stability
-      expect(result?.stability).toBe(expectedStability);
-      expect(result?.state).toBe("review");
-      expect(result?.repetitions).toBe(repetitions);
-      expect(result?.lapses).toBe(lapses);
-      expect(result?.easeFactor).toBe(easeFactor);
+      expect(result?.newStability).toBe(expectedStability);
+      expect(result?.newState).toBe("review");
+      expect(result?.newRepetitions).toBe(repetitions);
+      expect(result?.newLapses).toBe(lapses);
+      expect(result?.newDifficulty).toBe(difficulty);
     });
   });
 });

@@ -1,5 +1,10 @@
 import { TFile, Vault, MetadataCache, CachedMetadata, Notice } from "obsidian";
-import { Deck, Flashcard, DEFAULT_DECK_CONFIG } from "../database/types";
+import {
+  Deck,
+  Flashcard,
+  ReviewLog,
+  DEFAULT_DECK_CONFIG,
+} from "../database/types";
 import { DatabaseService } from "../database/DatabaseService";
 import DecksPlugin from "@/main";
 
@@ -608,28 +613,30 @@ export class DeckManager {
           contentHash: contentHash,
           headerLevel: parsed.headerLevel,
           // Restore progress from review logs or use defaults
-          state:
-            previousProgress?.state === "learning"
-              ? "review"
-              : previousProgress?.state || "new",
-          dueDate: previousProgress?.dueDate || new Date().toISOString(),
-          interval: previousProgress?.interval || 0,
-          repetitions: previousProgress?.repetitions || 0,
-          easeFactor: previousProgress?.easeFactor || 5.0, // FSRS initial difficulty
-          stability: previousProgress?.stability || 2.5, // FSRS initial stability
-          lapses: previousProgress?.lapses || 0,
-          lastReviewed: previousProgress?.lastReviewed || null,
+          state: previousProgress?.newState || "new",
+          dueDate: previousProgress
+            ? new Date(
+                new Date(previousProgress.reviewedAt).getTime() +
+                  previousProgress.newIntervalMinutes * 60 * 1000,
+              ).toISOString()
+            : new Date().toISOString(),
+          interval: previousProgress?.newIntervalMinutes || 0,
+          repetitions: previousProgress?.newRepetitions || 0,
+          difficulty: previousProgress?.newDifficulty || 5.0, // FSRS initial difficulty
+          stability: previousProgress?.newStability || 2.5, // FSRS initial stability
+          lapses: previousProgress?.newLapses || 0,
+          lastReviewed: previousProgress?.reviewedAt || null,
         };
 
         if (previousProgress) {
           this.debugLog(
-            `Restoring flashcard progress from review logs: ${flashcard.front} (state: ${previousProgress.state}, interval: ${previousProgress.interval})`,
+            `Restoring flashcard progress from review logs: ${flashcard.front} (state: ${previousProgress.newState}, interval: ${previousProgress.newIntervalMinutes})`,
           );
 
           // Notify user that progress was restored
           if (this.plugin?.settings?.ui?.enableNotices) {
             new Notice(
-              `✅ Progress restored for flashcard: "${parsed.front.substring(0, 40)}${parsed.front.length > 40 ? "..." : ""}" (${previousProgress.state}, ${previousProgress.repetitions} reviews)`,
+              `✅ Progress restored for flashcard: "${parsed.front.substring(0, 40)}${parsed.front.length > 40 ? "..." : ""}" (${previousProgress.newState}, ${previousProgress.newRepetitions} reviews)`,
               5000,
             );
           }

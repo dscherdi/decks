@@ -1,3 +1,5 @@
+import { DEFAULT_FSRS_PARAMETERS } from "../algorithm/fsrs-weights";
+
 export type ReviewOrder = "due-date" | "random";
 
 export interface DeckConfig {
@@ -6,6 +8,10 @@ export interface DeckConfig {
   enableNewCardsLimit: boolean; // Whether to enforce new cards limit
   enableReviewCardsLimit: boolean; // Whether to enforce review cards limit
   reviewOrder: ReviewOrder; // Order for review cards: oldest due first or random
+  fsrs: {
+    requestRetention: number;
+    profile: "INTENSIVE" | "STANDARD";
+  };
 }
 
 export interface Deck {
@@ -34,7 +40,7 @@ export interface Flashcard {
   dueDate: string;
   interval: number; // in minutes
   repetitions: number;
-  easeFactor: number; // Used to store FSRS difficulty
+  difficulty: number; // FSRS difficulty value (1-10)
   stability: number; // FSRS stability value
   lapses: number; // Number of times card was forgotten
   lastReviewed: string | null; // Last review date
@@ -45,18 +51,54 @@ export interface Flashcard {
 export interface ReviewLog {
   id: string;
   flashcardId: string;
-  reviewedAt: string;
-  difficulty: "again" | "hard" | "good" | "easy";
-  oldInterval: number;
-  newInterval: number;
-  oldEaseFactor: number;
-  newEaseFactor: number;
-  timeElapsed: number; // Time in milliseconds from card display to difficulty selection
-  // Essential state that cannot be calculated
-  newState: "new" | "review";
+
+  // Timestamps
+  lastReviewedAt: string; // before this review
+  shownAt?: string; // when card was shown (optional)
+  reviewedAt: string; // when rating was recorded
+
+  // Rating
+  rating: 1 | 2 | 3 | 4; // Again=1, Hard=2, Good=3, Easy=4
+  ratingLabel: "again" | "hard" | "good" | "easy";
+  timeElapsedMs?: number; // if not deriving from shownAt
+
+  // Pre-state (for exact reconstruction)
+  oldState: "new" | "review";
+  oldRepetitions: number;
+  oldLapses: number;
+  oldStability: number;
+  oldDifficulty: number;
+
+  // Post-state
+  newState: "new" | "review"; // will be "review" in pure FSRS
   newRepetitions: number;
   newLapses: number;
   newStability: number;
+  newDifficulty: number;
+
+  // Intervals & due times (explicit units)
+  oldIntervalMinutes: number;
+  newIntervalMinutes: number;
+  oldDueAt: string;
+  newDueAt: string;
+
+  // Derived at review time
+  elapsedDays: number; // (reviewedAt - lastReviewedAt) / 86400000
+  retrievability: number; // R
+
+  // Config snapshot
+  requestRetention: number;
+  profile: "INTENSIVE" | "STANDARD";
+  maximumIntervalDays: number;
+  minMinutes: number;
+  fsrsWeightsVersion: string; // or weightsHash
+  schedulerVersion: string;
+
+  // Optional content/context
+  noteModelId?: string;
+  cardTemplateId?: string;
+  contentHash?: string;
+  client?: "web" | "desktop" | "mobile";
 }
 
 export interface DeckStats {
@@ -126,4 +168,8 @@ export const DEFAULT_DECK_CONFIG: DeckConfig = {
   enableNewCardsLimit: false,
   enableReviewCardsLimit: false,
   reviewOrder: "due-date",
+  fsrs: {
+    requestRetention: DEFAULT_FSRS_PARAMETERS.requestRetention,
+    profile: "STANDARD",
+  },
 };

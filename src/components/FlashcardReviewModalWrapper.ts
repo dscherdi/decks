@@ -1,26 +1,55 @@
 import { Modal, Component, Notice } from "obsidian";
 import type { Deck, Flashcard } from "../database/types";
 import type { Difficulty } from "../algorithm/fsrs";
-import type DecksPlugin from "../main";
+import { FSRS } from "../algorithm/fsrs";
+import type { FlashcardsSettings } from "../settings";
 import FlashcardReviewModal from "./FlashcardReviewModal.svelte";
 
 export class FlashcardReviewModalWrapper extends Modal {
-  private plugin: DecksPlugin;
   private deck: Deck;
   private flashcards: Flashcard[];
+  private fsrs: FSRS;
+  private settings: FlashcardsSettings;
+  private reviewFlashcard: (
+    deck: Deck,
+    card: Flashcard,
+    difficulty: Difficulty,
+    timeElapsed?: number,
+  ) => Promise<void>;
+  private renderMarkdown: (
+    content: string,
+    el: HTMLElement,
+  ) => Component | null;
+  private refreshStats: () => Promise<void>;
+  private refreshStatsById: (deckId: string) => Promise<void>;
   private component: FlashcardReviewModal | null = null;
   private markdownComponents: Component[] = [];
 
   constructor(
     app: any,
-    plugin: DecksPlugin,
     deck: Deck,
     flashcards: Flashcard[],
+    fsrs: FSRS,
+    settings: FlashcardsSettings,
+    reviewFlashcard: (
+      deck: Deck,
+      card: Flashcard,
+      difficulty: Difficulty,
+      timeElapsed?: number,
+    ) => Promise<void>,
+    renderMarkdown: (content: string, el: HTMLElement) => Component | null,
+    refreshStats: () => Promise<void>,
+    refreshStatsById: (deckId: string) => Promise<void>,
   ) {
     super(app);
-    this.plugin = plugin;
     this.deck = deck;
     this.flashcards = flashcards;
+    this.fsrs = fsrs;
+    this.settings = settings;
+    this.reviewFlashcard = reviewFlashcard;
+    this.renderMarkdown = renderMarkdown;
+    this.refreshStats = refreshStats;
+    this.refreshStatsById = refreshStatsById;
   }
 
   async onOpen() {
@@ -49,25 +78,26 @@ export class FlashcardReviewModalWrapper extends Modal {
           difficulty: Difficulty,
           timeElapsed?: number,
         ) => {
-          await this.plugin.reviewFlashcard(card, difficulty, timeElapsed);
+          await this.reviewFlashcard(this.deck, card, difficulty, timeElapsed);
         },
         renderMarkdown: (content: string, el: HTMLElement) => {
-          const component = this.plugin.renderMarkdown(content, el);
+          const component = this.renderMarkdown(content, el);
           if (component) {
             this.markdownComponents.push(component);
           }
         },
-        settings: this.plugin.settings,
+        settings: this.settings,
+        fsrs: this.fsrs,
         onCardReviewed: async (reviewedCard: Flashcard) => {
           // Refresh stats for the specific deck being reviewed (more efficient)
-          if (this.plugin.view && reviewedCard) {
-            await this.plugin.view.refreshStatsById(reviewedCard.deckId);
+          if (reviewedCard) {
+            await this.refreshStatsById(reviewedCard.deckId);
           }
         },
       },
     });
 
-    this.component.$on("complete", (event) => {
+    this.component.$on("complete", async (event) => {
       const { reason, reviewed } = event.detail;
       let message = `Review session complete for ${this.deck.name}!`;
 
@@ -75,14 +105,12 @@ export class FlashcardReviewModalWrapper extends Modal {
         message = `All available cards reviewed! Completed ${reviewed} cards from ${this.deck.name}.`;
       }
 
-      if (this.plugin.settings?.ui?.enableNotices !== false) {
+      if (this.settings?.ui?.enableNotices !== false) {
         new Notice(message);
       }
 
       // Refresh the view to update stats
-      if (this.plugin.view) {
-        this.plugin.view.refresh();
-      }
+      await this.refreshStats();
     });
 
     // Handle window resize for mobile adaptation
@@ -120,8 +148,6 @@ export class FlashcardReviewModalWrapper extends Modal {
     this.markdownComponents = [];
 
     // Refresh view when closing
-    if (this.plugin.view) {
-      this.plugin.view.refresh();
-    }
+    this.refreshStats();
   }
 }

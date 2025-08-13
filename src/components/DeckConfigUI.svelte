@@ -2,6 +2,7 @@
     import { createEventDispatcher, onMount } from "svelte";
     import { Setting } from "obsidian";
     import type { Deck, DeckConfig, ReviewOrder } from "../database/types";
+    import type { FSRSProfile } from "../algorithm/fsrs-weights";
 
     export let deck: Deck;
     export let config: DeckConfig;
@@ -17,12 +18,18 @@
     let enableNewCardsLimit = config.enableNewCardsLimit;
     let enableReviewCardsLimit = config.enableReviewCardsLimit;
     let reviewOrder: ReviewOrder = config.reviewOrder;
+    let requestRetention = config.fsrs.requestRetention;
+    let profile: FSRSProfile = config.fsrs.profile;
     let saving = false;
     let newCardsLimitContainer: HTMLElement;
-    let reviewCardsLimitContainer: HTMLElement;
     let enableNewCardsContainer: HTMLElement;
+    let reviewCardsLimitContainer: HTMLElement;
     let enableReviewCardsContainer: HTMLElement;
+    let enableReviewCardsLimitContainer: HTMLElement;
     let reviewOrderContainer: HTMLElement;
+    let requestRetentionContainer: HTMLElement;
+    let profileContainer: HTMLElement;
+    let fsrsResetContainer: HTMLElement;
 
     // Track last event to prevent double execution
     let lastEventTime = 0;
@@ -36,6 +43,10 @@
             enableNewCardsLimit,
             enableReviewCardsLimit,
             reviewOrder,
+            fsrs: {
+                requestRetention: Number(requestRetention) || 0.9,
+                profile: profile,
+            },
         };
         dispatch("configChange", newConfig);
     }
@@ -48,6 +59,10 @@
             enableNewCardsLimit,
             enableReviewCardsLimit,
             reviewOrder,
+            fsrs: {
+                requestRetention: Number(requestRetention) || 0.9,
+                profile: profile,
+            },
         };
         dispatch("save", finalConfig);
     }
@@ -161,6 +176,54 @@
                         }),
                 );
         }
+
+        // FSRS Settings
+        if (requestRetentionContainer) {
+            new Setting(requestRetentionContainer)
+                .setName("Request Retention")
+                .setDesc("Target recall rate for reviews (0.5-0.995)")
+                .addSlider((slider) =>
+                    slider
+                        .setLimits(0.5, 0.995, 0.01)
+                        .setValue(requestRetention)
+                        .setDynamicTooltip()
+                        .onChange((value) => {
+                            requestRetention = value;
+                        }),
+                );
+        }
+
+        if (profileContainer) {
+            new Setting(profileContainer)
+                .setName("FSRS Profile")
+                .setDesc(
+                    "INTENSIVE: Sub-day intervals (1m/5m/10m/40m). STANDARD: Day-based intervals (≥1 day minimum)",
+                )
+                .addDropdown((dropdown) =>
+                    dropdown
+                        .addOption("INTENSIVE", "Intensive (Sub-day)")
+                        .addOption("STANDARD", "Standard (Day-based)")
+                        .setValue(profile)
+                        .onChange((value: string) => {
+                            if (value === "INTENSIVE" || value === "STANDARD") {
+                                profile = value;
+                            }
+                        }),
+                );
+        }
+
+        if (fsrsResetContainer) {
+            new Setting(fsrsResetContainer)
+                .setName("Reset FSRS Settings")
+                .setDesc("Reset all FSRS parameters to default values")
+                .setName("Reset to Defaults")
+                .addButton((button) =>
+                    button.setButtonText("Reset to Defaults").onClick(() => {
+                        requestRetention = 0.9;
+                        profile = "STANDARD";
+                    }),
+                );
+        }
     });
 </script>
 
@@ -196,6 +259,19 @@
             class:disabled={!enableReviewCardsLimit}
         ></div>
         <div bind:this={reviewOrderContainer}></div>
+    </div>
+
+    <!-- FSRS Algorithm Settings -->
+    <div class="deck-settings-section">
+        <h3>FSRS Algorithm Settings</h3>
+        <div class="setting-item-description-global">
+            These settings control the spaced repetition algorithm for this
+            deck.
+        </div>
+
+        <div bind:this={requestRetentionContainer}></div>
+        <div bind:this={profileContainer}></div>
+        <div bind:this={fsrsResetContainer}></div>
     </div>
 
     <!-- Action Buttons -->
