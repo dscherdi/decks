@@ -505,6 +505,10 @@ Notes:
 	•	For renames, SQLite supports ALTER TABLE t RENAME COLUMN old TO new in newer engines, but for maximum compatibility in sql.js, prefer rebuilds.
 	•	Always recreate indexes and triggers after rebuilds.
 
+### Database migration should be run one table at a time in a series of transactions
+
+
+
 **✅ Implementation Complete:**
 - Added `minMinutes` parameter to FSRSParameters interface with default 15 minutes
 - Replaced day-based `nextInterval()` with minute-based `nextIntervalMinutes()`

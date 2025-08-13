@@ -134,3 +134,25 @@
 [2025-08-13T19:37:34.113Z] Found 0 existing flashcards for deck test
 [2025-08-13T19:37:34.117Z] Executing 1 batch database operations
 [2025-08-13T19:37:34.154Z] Refresh complete
+[2025-08-13T19:44:10.600Z] ✅ Migration completed successfully
+[2025-08-13T19:44:10.628Z] Decks plugin loaded successfully
+[2025-08-13T19:44:10.715Z] Refresh complete
+[2025-08-13T19:44:10.855Z] Creating new deck: "4200 German Adjectives" with ID: deck_3cjj2x, tag: #flashcards/german, filepath: Flashcards/4200 German Adjectives.md
+[2025-08-13T19:44:10.918Z] Creating new deck: "500 Nomen-Verb Verbindungen" with ID: deck_3kr9lg, tag: #flashcards/german, filepath: Flashcards/500 Nomen-Verb Verbindungen.md
+[2025-08-13T19:44:10.930Z] Creating new deck: "2000 German verbs" with ID: deck_cr6nq3, tag: #flashcards/german, filepath: Flashcards/2000 German verbs.md
+[2025-08-13T19:44:10.952Z] Creating new deck: "1200 Deutsche Redewendungen" with ID: deck_lp8v1m, tag: #flashcards/german, filepath: Flashcards/1200 Deutsche Redewendungen.md
+[2025-08-13T19:44:10.969Z] Creating new deck: "10000 German nouns" with ID: deck_lbzk2j, tag: #flashcards/german, filepath: Flashcards/10000 German nouns.md
+[2025-08-13T19:44:10.993Z] Creating new deck: "Spanish-Vocabulary" with ID: deck_bvk4i2, tag: #flashcards/spanish, filepath: Flashcards/Spanish-Vocabulary.md
+[2025-08-13T19:44:11.013Z] Creating new deck: "Programming-Concepts" with ID: deck_26088a, tag: #flashcards/programming/concepts, filepath: Flashcards/Programming-Concepts.md
+[2025-08-13T19:44:11.029Z] Creating new deck: "Math-Basics" with ID: deck_ep2xd5, tag: #flashcards/math, filepath: Flashcards/Math-Basics.md
+[2025-08-13T19:44:11.047Z] Deleting orphaned deck: "10000 German nouns" (08 Flashcards/German/10000 German nouns.md)
+[2025-08-13T19:44:11.064Z] Deleting orphaned deck: "1200 Deutsche Redewendungen" (08 Flashcards/German/1200 Deutsche Redewendungen.md)
+[2025-08-13T19:44:11.084Z] Deleting orphaned deck: "2000 German verbs" (08 Flashcards/German/2000 German verbs.md)
+[2025-08-13T19:44:11.100Z] Deleting orphaned deck: "4200 German Adjectives" (08 Flashcards/German/4200 German Adjectives.md)
+[2025-08-13T19:44:11.116Z] Deleting orphaned deck: "500 Nomen-Verb Verbindungen" (08 Flashcards/German/500 Nomen-Verb Verbindungen.md)
+[2025-08-13T19:44:11.140Z] Found 0 existing flashcards for deck 10000 German nouns
+[2025-08-13T19:44:11.147Z] Generated ID: card_sar0uh (from front: "Wasser..." + deck: deck_lbzk2j)
+[2025-08-13T19:44:11.174Z] Processing flashcard: "Bus..."
+[2025-08-13T19:44:11.363Z] Creating new flashcard: Richter
+[2025-08-13T19:44:12.468Z] Executing 3723 batch database operations
+[2025-08-13T19:44:15.925Z] Sync already in progress, skipping...
