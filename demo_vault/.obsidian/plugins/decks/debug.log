@@ -156,3 +156,66 @@
 [2025-08-13T19:44:11.363Z] Creating new flashcard: Richter
 [2025-08-13T19:44:12.468Z] Executing 3723 batch database operations
 [2025-08-13T19:44:15.925Z] Sync already in progress, skipping...
+[2025-08-13T19:45:25.691Z] Found 0 existing flashcards for deck 1200 Deutsche Redewendungen
+[2025-08-13T19:45:25.715Z] Existing card found: NO
+[2025-08-13T19:45:26.284Z] Existing card found: NO
+[2025-08-13T19:45:27.288Z] Existing card found: NO
+[2025-08-13T19:45:28.287Z] Existing card found: NO
+[2025-08-13T19:45:29.282Z] Existing card found: NO
+[2025-08-13T19:45:30.285Z] Existing card found: NO
+[2025-08-13T19:45:31.284Z] Existing card found: NO
+[2025-08-13T19:45:32.152Z] Existing card found: NO
+[2025-08-13T19:45:32.213Z] Creating new flashcard: wie ein Dynamo
+[2025-08-13T19:45:32.477Z] Executing 1200 batch database operations
+[2025-08-13T19:45:50.702Z] Migration failed: Error: Migration and recovery both failed: Error: Recovery migration failed: Error: database disk image is malformed
+[2025-08-13T19:46:46.955Z] Migration failed: Error: Migration and recovery both failed: Error: Recovery migration failed: Error: database disk image is malformed
+[2025-08-14T11:17:35.180Z] ✅ Database schema created successfully
+[2025-08-14T11:17:35.187Z] Decks plugin loaded successfully
+[2025-08-14T11:17:39.355Z] Refresh complete
+[2025-08-14T11:17:39.384Z] Creating new deck: "Spanish-Vocabulary" with ID: deck_bvk4i2, tag: #flashcards/spanish, filepath: Flashcards/Spanish-Vocabulary.md
+[2025-08-14T11:17:39.403Z] Creating new deck: "Programming-Concepts" with ID: deck_26088a, tag: #flashcards/programming/concepts, filepath: Flashcards/Programming-Concepts.md
+[2025-08-14T11:17:39.405Z] Creating new deck: "Math-Basics" with ID: deck_ep2xd5, tag: #flashcards/math, filepath: Flashcards/Math-Basics.md
+[2025-08-14T11:17:39.407Z] Creating new deck: "500 Nomen-Verb Verbindungen" with ID: deck_3kr9lg, tag: #flashcards/german, filepath: Flashcards/500 Nomen-Verb Verbindungen.md
+[2025-08-14T11:17:39.412Z] Creating new deck: "4200 German Adjectives" with ID: deck_3cjj2x, tag: #flashcards/german, filepath: Flashcards/4200 German Adjectives.md
+[2025-08-14T11:17:39.414Z] Creating new deck: "2000 German verbs" with ID: deck_cr6nq3, tag: #flashcards/german, filepath: Flashcards/2000 German verbs.md
+[2025-08-14T11:17:39.417Z] Creating new deck: "1200 Deutsche Redewendungen" with ID: deck_lp8v1m, tag: #flashcards/german, filepath: Flashcards/1200 Deutsche Redewendungen.md
+[2025-08-14T11:17:39.420Z] Creating new deck: "10000 German nouns" with ID: deck_lbzk2j, tag: #flashcards/german, filepath: Flashcards/10000 German nouns.md
+[2025-08-14T11:17:39.423Z] Found 0 existing flashcards for deck 10000 German nouns
+[2025-08-14T11:17:39.499Z] Generated ID: card_15mis4 (from front: "Hotel..." + deck: deck_lbzk2j)
+[2025-08-14T11:17:39.662Z] Generated ID: card_17n2oy (from front: "Lehre..." + deck: deck_lbzk2j)
+[2025-08-14T11:17:40.809Z] Executing 3723 batch database operations
+[2025-08-14T11:17:53.711Z] Found 0 existing flashcards for deck 1200 Deutsche Redewendungen
+[2025-08-14T11:17:53.724Z] Existing card found: NO
+[2025-08-14T11:17:53.779Z] Existing card found: NO
+[2025-08-14T11:17:53.941Z] Executing 1200 batch database operations
+[2025-08-14T11:17:58.007Z] Found 0 existing flashcards for deck 2000 German verbs
+[2025-08-14T11:17:58.018Z] Generated ID: card_of1y7d (from front: "**werden**..." + deck: deck_cr6nq3)
+[2025-08-14T11:17:58.031Z] Existing card found: NO
+[2025-08-14T11:17:58.115Z] Existing card found: NO
+[2025-08-14T11:17:58.384Z] Executing 2015 batch database operations
+[2025-08-14T11:18:06.636Z] Found 0 existing flashcards for deck 4200 German Adjectives
+[2025-08-14T11:18:06.646Z] Existing card found: NO
+[2025-08-14T11:18:06.681Z] Existing card found: NO
+[2025-08-14T11:18:06.846Z] Existing card found: NO
+[2025-08-14T11:18:07.400Z] Executing 4199 batch database operations
+[2025-08-14T11:18:59.704Z] Found 0 existing flashcards for deck 500 Nomen-Verb Verbindungen
+[2025-08-14T11:18:59.710Z] Existing card found: NO
+[2025-08-14T11:19:00.270Z] Existing card found: NO
+[2025-08-14T11:19:01.269Z] Existing card found: NO
+[2025-08-14T11:19:02.269Z] Existing card found: NO
+[2025-08-14T11:19:03.271Z] Existing card found: NO
+[2025-08-14T11:19:04.269Z] Existing card found: NO
+[2025-08-14T11:19:05.262Z] Existing card found: NO
+[2025-08-14T11:19:06.267Z] Existing card found: NO
+[2025-08-14T11:19:07.265Z] Existing card found: NO
+[2025-08-14T11:19:08.266Z] Existing card found: NO
+[2025-08-14T11:19:09.259Z] Executing 501 batch database operations
+[2025-08-14T11:19:20.272Z] Found 0 existing flashcards for deck Math-Basics
+[2025-08-14T11:19:20.275Z] Executing 6 batch database operations
+[2025-08-14T11:19:20.357Z] Found 0 existing flashcards for deck Programming-Concepts
+[2025-08-14T11:19:20.361Z] Executing 27 batch database operations
+[2025-08-14T11:19:20.598Z] Found 0 existing flashcards for deck Spanish-Vocabulary
+[2025-08-14T11:19:20.607Z] Executing 47 batch database operations
+[2025-08-14T11:19:21.004Z] Found 0 existing flashcards for deck test
+[2025-08-14T11:19:21.007Z] Executing 1 batch database operations
+[2025-08-14T11:19:21.036Z] Refresh complete

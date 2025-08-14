@@ -1,14 +1,14 @@
 import { Modal, Component, Notice } from "obsidian";
 import type { Deck, Flashcard } from "../database/types";
 import type { Difficulty } from "../algorithm/fsrs";
-import { FSRS } from "../algorithm/fsrs";
+import type { Scheduler } from "../services/Scheduler";
 import type { FlashcardsSettings } from "../settings";
 import FlashcardReviewModal from "./FlashcardReviewModal.svelte";
 
 export class FlashcardReviewModalWrapper extends Modal {
   private deck: Deck;
   private flashcards: Flashcard[];
-  private fsrs: FSRS;
+  private scheduler: Scheduler;
   private settings: FlashcardsSettings;
   private reviewFlashcard: (
     deck: Deck,
@@ -22,6 +22,7 @@ export class FlashcardReviewModalWrapper extends Modal {
   ) => Component | null;
   private refreshStats: () => Promise<void>;
   private refreshStatsById: (deckId: string) => Promise<void>;
+  private getReviewableFlashcards: (deckId: string) => Promise<Flashcard[]>;
   private component: FlashcardReviewModal | null = null;
   private markdownComponents: Component[] = [];
 
@@ -29,7 +30,7 @@ export class FlashcardReviewModalWrapper extends Modal {
     app: any,
     deck: Deck,
     flashcards: Flashcard[],
-    fsrs: FSRS,
+    scheduler: Scheduler,
     settings: FlashcardsSettings,
     reviewFlashcard: (
       deck: Deck,
@@ -40,16 +41,18 @@ export class FlashcardReviewModalWrapper extends Modal {
     renderMarkdown: (content: string, el: HTMLElement) => Component | null,
     refreshStats: () => Promise<void>,
     refreshStatsById: (deckId: string) => Promise<void>,
+    getReviewableFlashcards: (deckId: string) => Promise<Flashcard[]>,
   ) {
     super(app);
     this.deck = deck;
     this.flashcards = flashcards;
-    this.fsrs = fsrs;
+    this.scheduler = scheduler;
     this.settings = settings;
     this.reviewFlashcard = reviewFlashcard;
     this.renderMarkdown = renderMarkdown;
     this.refreshStats = refreshStats;
     this.refreshStatsById = refreshStatsById;
+    this.getReviewableFlashcards = getReviewableFlashcards;
   }
 
   async onOpen() {
@@ -87,12 +90,15 @@ export class FlashcardReviewModalWrapper extends Modal {
           }
         },
         settings: this.settings,
-        fsrs: this.fsrs,
+        scheduler: this.scheduler,
         onCardReviewed: async (reviewedCard: Flashcard) => {
           // Refresh stats for the specific deck being reviewed (more efficient)
           if (reviewedCard) {
             await this.refreshStatsById(reviewedCard.deckId);
           }
+        },
+        refreshCardList: async () => {
+          return await this.getReviewableFlashcards(this.deck.id);
         },
       },
     });

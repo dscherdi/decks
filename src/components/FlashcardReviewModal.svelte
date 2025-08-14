@@ -2,11 +2,8 @@
     import { createEventDispatcher, onMount, tick } from "svelte";
     import type { Deck, Flashcard } from "../database/types";
     import type { FlashcardsSettings } from "../settings";
-    import {
-        FSRS,
-        type SchedulingInfo,
-        type Difficulty,
-    } from "../algorithm/fsrs";
+    import { FSRS, type Difficulty } from "../algorithm/fsrs";
+    import type { Scheduler, SchedulingPreview } from "../services/Scheduler";
 
     export let flashcards: Flashcard[] = [];
     export let deck: Deck;
@@ -19,10 +16,12 @@
     ) => Promise<void>;
     export let renderMarkdown: (content: string, el: HTMLElement) => void;
     export let settings: FlashcardsSettings;
-    export let fsrs: FSRS;
+    export let scheduler: Scheduler;
     export let onCardReviewed:
         | ((reviewedCard: Flashcard) => Promise<void>)
         | undefined = undefined;
+    export let refreshCardList: (() => Promise<Flashcard[]>) | undefined =
+        undefined;
 
     const dispatch = createEventDispatcher();
 
@@ -30,7 +29,7 @@
     let isLoading = false;
     let frontEl: HTMLElement;
     let backEl: HTMLElement;
-    let schedulingInfo: SchedulingInfo | null = null;
+    let schedulingInfo: SchedulingPreview | null = null;
     let reviewedCount = 0;
     let cardStartTime: number = 0;
 
@@ -43,11 +42,16 @@
         flashcards.length > 0 ? (currentIndex / flashcards.length) * 100 : 0;
     $: remainingCards = flashcards.length - currentIndex;
 
-    function loadCard() {
+    async function loadCard() {
         if (!currentCard) return;
 
         showAnswer = false;
-        schedulingInfo = fsrs.getSchedulingInfo(currentCard);
+        try {
+            schedulingInfo = await scheduler.preview(currentCard.id);
+        } catch (error) {
+            console.error("Error getting scheduling preview:", error);
+            schedulingInfo = null;
+        }
         cardStartTime = Date.now(); // Track when card is displayed
 
         // Render front side
@@ -91,9 +95,65 @@
                 await onCardReviewed(currentCard);
             }
 
-            // Move to next card or complete session
-            if (currentIndex < flashcards.length - 1) {
-                currentIndex++;
+            // Remove the current card from the list to prevent immediate re-showing
+            const reviewedCardId = currentCard.id;
+            flashcards = flashcards.filter(
+                (card) => card.id !== reviewedCardId,
+            );
+
+            // Refresh card list to get newly due cards
+            // Refresh card list to get newly due cards (for TODO 18)
+            if (refreshCardList) {
+                const newCards = await refreshCardList();
+
+                // Add any new cards that aren't already in our list
+                const currentCardIds = new Set(flashcards.map((c) => c.id));
+                const newlyDueCards = newCards.filter(
+                    (card) => !currentCardIds.has(card.id),
+                );
+
+                if (newlyDueCards.length > 0) {
+                    flashcards = [...flashcards, ...newlyDueCards];
+
+                    // Re-sort to maintain proper order (review cards first, then new cards)
+                    flashcards.sort((a, b) => {
+                        const stateOrder = { review: 1, new: 2 };
+                        const aOrder = stateOrder[a.state];
+                        const bOrder = stateOrder[b.state];
+
+                        if (aOrder !== bOrder) {
+                            return aOrder - bOrder;
+                        }
+
+                        // Within same state, apply deck config ordering rules
+                        if (a.state === "review") {
+                            // Review cards: follow deck config preference
+                            if (deck.config.reviewOrder === "random") {
+                                return Math.random() - 0.5;
+                            } else {
+                                // Default: oldest due first
+                                return (
+                                    new Date(a.dueDate).getTime() -
+                                    new Date(b.dueDate).getTime()
+                                );
+                            }
+                        } else if (a.state === "new") {
+                            // New cards: always by due date (earliest first)
+                            return (
+                                new Date(a.dueDate).getTime() -
+                                new Date(b.dueDate).getTime()
+                            );
+                        }
+
+                        return 0;
+                    });
+                }
+            }
+
+            // After re-sorting, reset to the beginning of the sorted list
+            // This ensures we follow proper card order (review cards first, etc.)
+            if (flashcards.length > 0) {
+                currentIndex = 0;
                 loadCard();
             } else {
                 // Review session complete
@@ -111,7 +171,15 @@
     }
 
     function getIntervalDisplay(minutes: number): string {
-        return FSRS.getIntervalDisplay(minutes);
+        if (minutes < 60) {
+            return `${Math.round(minutes)}m`;
+        } else if (minutes < 1440) {
+            const hours = Math.round(minutes / 60);
+            return `${hours}h`;
+        } else {
+            const days = Math.round(minutes / 1440);
+            return `${days}d`;
+        }
     }
 
     function handleKeydown(event: KeyboardEvent) {

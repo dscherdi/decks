@@ -5,7 +5,6 @@
     import type DecksPlugin from "../main";
 
     export let deck: Deck;
-    export let plugin: DecksPlugin;
 
     const dispatch = createEventDispatcher<{
         export: AnkiExportConfig;

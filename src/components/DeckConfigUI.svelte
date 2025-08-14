@@ -354,45 +354,6 @@
         border-left: 3px solid var(--interactive-accent);
     }
 
-    .setting-item {
-        display: flex;
-        align-items: flex-start;
-        justify-content: space-between;
-        margin-bottom: 20px;
-        padding: 12px 0;
-    }
-
-    .setting-item:last-child {
-        border-bottom: none;
-        margin-bottom: 0;
-    }
-
-    .setting-item.disabled {
-        opacity: 0.5;
-    }
-
-    .setting-item-info {
-        flex: 1;
-        margin-right: 16px;
-    }
-
-    .setting-item-name {
-        font-weight: 500;
-        color: var(--text-normal);
-        margin-bottom: 4px;
-        font-size: 0.9em;
-    }
-
-    .setting-item-description {
-        font-size: 0.8em;
-        color: var(--text-muted);
-        line-height: 1.4;
-    }
-
-    .setting-item-control {
-        flex-shrink: 0;
-    }
-
     /* Disabled state for Obsidian Setting containers */
     .disabled {
         opacity: 0.5;

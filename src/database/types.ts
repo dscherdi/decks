@@ -131,6 +131,7 @@ export interface DailyStats {
 
 export interface CardStats {
   new: number;
+  review: number;
   mature: number;
 }
 
@@ -173,3 +174,27 @@ export const DEFAULT_DECK_CONFIG: DeckConfig = {
     profile: "STANDARD",
   },
 };
+
+/**
+ * Determine if a flashcard is mature (interval > 21 days)
+ * TODO 19: Mature cards are flashcards that have an interval over 21 days
+ */
+export function isCardMature(flashcard: Flashcard): boolean {
+  const MATURE_THRESHOLD_MINUTES = 21 * 24 * 60; // 21 days in minutes = 30,240
+  return (
+    flashcard.state === "review" &&
+    flashcard.interval > MATURE_THRESHOLD_MINUTES
+  );
+}
+
+/**
+ * Get the card maturity type for classification
+ */
+export function getCardMaturityType(
+  flashcard: Flashcard,
+): "new" | "review" | "mature" {
+  if (flashcard.state === "new") {
+    return "new";
+  }
+  return isCardMature(flashcard) ? "mature" : "review";
+}

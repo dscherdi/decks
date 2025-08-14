@@ -548,11 +548,14 @@ export const SQL_QUERIES = {
 
   GET_CARD_STATS: `
     SELECT
-      f.state,
-      COUNT(*) as count,
-      AVG(f.repetitions) as avg_repetitions
+      CASE
+        WHEN f.state = 'new' THEN 'new'
+        WHEN f.state = 'review' AND f.interval > 30240 THEN 'mature'
+        ELSE 'review'
+      END as card_type,
+      COUNT(*) as count
     FROM flashcards f
-    GROUP BY f.state
+    GROUP BY card_type
   `,
 
   GET_ANSWER_BUTTON_STATS: `

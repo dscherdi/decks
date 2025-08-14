@@ -505,20 +505,225 @@ Notes:
 	•	For renames, SQLite supports ALTER TABLE t RENAME COLUMN old TO new in newer engines, but for maximum compatibility in sql.js, prefer rebuilds.
 	•	Always recreate indexes and triggers after rebuilds.
 
-### Database migration should be run one table at a time in a series of transactions
+### TODO 17: Database migration should be run one table at a time in a series of transactions
+
+### ✅ TODO 18: During a review session, all cards reviewed that are due will not be shown in this session until the next session.
+
+**COMPLETED** - Implemented dynamic card reloading during review sessions without session-based locking.
+
+**Implementation Summary:**
+- **Dynamic Card List Refresh**: After each card review, the system refreshes the available card list to check for newly due cards
+- **No Session Locking**: Reviewed cards are removed from the current list but can reappear when they become due again
+- **Real-Time Due Checking**: Cards that reach their due time during the session are automatically added back
+- **Profile Support**: Works for both INTENSIVE (sub-day intervals) and STANDARD (1+ day intervals) profiles
+- **Seamless Experience**: Session continues as long as cards are available, respecting daily limits
+
+**Technical Changes:**
+- Modified `FlashcardReviewModal.svelte` to refresh card list after each review
+- Added `refreshCardList` prop to dynamically load newly due cards
+- Updated `FlashcardReviewModalWrapper.ts` to pass card refresh function
+- Enhanced session management to support continuous card flow without artificial session locks
+
+**Behavior:**
+- INTENSIVE: Cards with 1-10 minute intervals resurface in same session when due
+- STANDARD: Cards with 1+ day intervals won't reappear same day (not due until next day)
+- No "seen-this-session" filtering - purely time-based due checking
 
 
+### ✅ TODO 19: Mature cards are flashcards that have an interval over 21 days.
+
+**COMPLETED** - Implemented proper mature card classification based on interval length.
+
+**Implementation Summary:**
+- **Definition**: Mature cards are review cards with intervals > 21 days (30,240 minutes)
+- **Database Query Update**: Modified `GET_CARD_STATS` to classify cards as new/review/mature based on interval
+- **Type System**: Added `isCardMature()` and `getCardMaturityType()` utility functions
+- **Statistics Enhancement**: Updated CardStats interface to distinguish between review and mature cards
+- **UI Updates**: Enhanced StatisticsUI to show separate counts for New, Review, and Mature cards
+- **Comprehensive Testing**: Added test suite with 12 test cases covering edge cases and real-world intervals
+
+**Technical Changes:**
+- Updated `schemas.ts`: Modified `GET_CARD_STATS` query to use `CASE WHEN f.interval > 30240` logic
+- Updated `types.ts`: Added `review` field to `CardStats` interface and utility functions
+- Updated `DatabaseService.ts`: Enhanced `getOverallStatistics()` to handle three card types
+- Updated `StatisticsUI.svelte`: Added Review card display and fixed total/maturity calculations
+- Added `mature-cards.test.ts`: Comprehensive test coverage for mature card classification
+
+**Behavior:**
+- **New Cards**: state = 'new' (regardless of interval)
+- **Review Cards**: state = 'review' AND interval ≤ 21 days (30,240 minutes)
+- **Mature Cards**: state = 'review' AND interval > 21 days (30,240 minutes)
+- **Statistics**: Proper counts and maturity ratio calculation including all three categories
+
+### ✅ TODO 20: Scheduler implementation
+
+Unify the logic of a scheduler split in multiple components (FlashcardsReviewModal, Main.ts, DatabaseService.ts, fsrs.ts, etc) into a new component Scheduler.ts
+
+
+Definition: a scheduler is the deterministic component that, given the current time and each card’s memory state, decides which card to show next and when each card will be shown again.
+
+The pseudocode in this description are meant as a guide (it may be missing things), make sure to check with current implementation and adapt accordingly.
+
+
+Core responsibilities
+	•	Select next due card.
+	•	Update card state from a rating (Again/Hard/Good/Easy).
+	•	Compute the next review time (dueAt) and interval.
+	•	Maintain invariants across profiles and options.
+	•	Persist changes atomically and idempotently.
+
+The current implementation implements these responsibilities in different components, we need to find them and unify them in a Scheduler component
+
+Inputs
+	•	Now (UTC timestamp).
+	•	Card state: {state, stability, difficulty, repetitions, lapses, lastReviewedAt, dueAt, intervalMinutes, deckId, profileSnapshot}.
+	•	Deck config: {requestRetention, profile}.
+	•	FSRS parameters: weights for the chosen profile, maximumIntervalDays, minMinutes (hardcoded, not user-editable).
+	•	User action: rating ∈ {1,2,3,4}.
+
+Outputs
+	•	Next card to present (or none).
+	•	Updated card record after a rating.
+	•	Review log entry.
+
+Invariants
+	•	Only two states: "new" and "review". First rating moves "new"→"review". Never demote.
+	•	Intervals are minute-based; dueAt = lastReviewedAt + intervalMinutes.
+	•	INTENSIVE profile allows sub-day intervals (minMinutes ≥ 1). STANDARD clamps to ≥ 1 day.
+	•	Button order monotonic: Again < Hard < Good < Easy.
+	•	No “session lockout”: a card can reappear in the same session when its dueAt arrives.
+
+Queues
+	•	Due queue: cards with dueAt <= now, ordered by dueAt ASC, then tie-breaker (e.g., oldest lastReviewedAt).
+	•	Pending queue: empty by default; optionally for UI prefetch or filtered study modes.
+	•	New queue: selection policy for unseen cards (respect daily new limits if you implement them).
+
+Selection policy
+	•	If any due cards exist: show the earliest dueAt.
+	•	Else, if allowNew and new quota remains: pick next new card (deterministic ordering).
+	•	Else: idle until next dueAt or end session.
+
+Rating update
+	•	Compute elapsedDays = max(0, (now - lastReviewedAt) / 86_400_000).
+	•	Compute retrievability R = (1 + elapsedDays / (9 * stability))^(-1) (clamp stability > 0).
+	•	Update difficulty:
+d' = w7*w4 + (1-w7)*(d - w6*(rating-3)), clamp to [1,10].
+	•	Update stability:
+s' = s * (1 + exp(w8) * (11 - d') * s^(-w9) * (exp((1 - R) * w10) - 1) * hardPenalty(r) * easyBonus(r)), clamp > 0.
+	•	Next interval (minutes):
+k = ln(requestRetention)/ln(0.9),
+minutes = clamp(minMinutes, maxDays*1440, s' * k * 1440).
+	•	Persist:
+	•	state="review"
+	•	repetitions += 1
+	•	lapses += (rating===1 ? 1 : 0)
+	•	lastReviewedAt = now
+	•	intervalMinutes = minutes
+	•	dueAt = now + minutes*60_000
+	•	profileSnapshot = deck.profile
+
+Review logging (immutable)
+	•	Store: cardId, reviewedAt, rating, elapsedDays, retrievability, old/new stability, old/new difficulty, old/new intervalMinutes, old/new dueAt, old/new repetitions, old/new lapses, old/new state, requestRetention, profile, weightsVersion, schedulerVersion.
+
+Profile behavior
+	•	INTENSIVE: use sub-day weights (w0..w3 encode first-interval targets like 1m/5m/10m/40m), minMinutes=1.
+	•	STANDARD: use FSRS-4.5 weights, minMinutes=1440.
+	•	Switching profiles affects only subsequent computations; do not mutate existing card fields immediately.
+
+APIs
+	•	getNext(now, deckId, options) → Card | null
+	•	preview(cardId, now) → {again, hard, good, easy}: SchedulingCard (no mutations)
+	•	rate(cardId, rating, now) → UpdatedCard (mutates, logs review)
+	•	peekDue(now, deckId, limit) → Card[]
+	•	timeToNext(now, deckId) → milliseconds | null
+
+Pseudocode
+
+function getNext(now: Date, deckId: string): Card | null {
+  const due = db.select(`
+    SELECT * FROM cards
+    WHERE deckId=? AND dueAt <= ?
+    ORDER BY dueAt ASC, lastReviewedAt ASC
+    LIMIT 1
+  `, [deckId, now.toISOString()]);
+  if (due) return due;
+
+  if (allowNew(deckId)) {
+    return pickNextNew(deckId);
+  }
+  return null;
+}
+
+function rate(card: Card, rating: 1|2|3|4, now: Date): Card {
+  const cfg = getDeckConfig(card.deckId);
+  const prof = cfg.profile;
+  const weights = (prof === "INTENSIVE") ? FSRS_WEIGHTS_SUBDAY : FSRS_WEIGHTS_STANDARD;
+  const minMinutes = (prof === "INTENSIVE") ? 1 : 1440;
+  const k = Math.log(cfg.requestRetention) / Math.log(0.9);
+
+  const isNew = card.state === "new" || !isFinite(card.stability) || !isFinite(card.difficulty);
+  const old = snapshot(card);
+
+  let d = isNew ? initDifficulty(rating, weights) : card.difficulty;
+  let s = isNew ? initStability(rating, weights)  : card.stability;
+
+  const elapsedDays = isNew ? 0 : Math.max(0, (now.getTime() - new Date(card.lastReviewedAt).getTime()) / 86400000);
+  const R = isNew ? 1 : retrievability(elapsedDays, s);
+
+  d = clamp1to10(nextDifficulty(d, rating, weights));
+  s = clampPos(nextStability(d, s, R, rating, weights));
+
+  const minutes = Math.max(minMinutes, Math.min(s * k * 1440, 36500*1440));
+  const dueAt = new Date(now.getTime() + minutes * 60000).toISOString();
+
+  const updated = {
+    ...card,
+    state: "review",
+    difficulty: d,
+    stability: s,
+    repetitions: (card.repetitions ?? 0) + 1,
+    lapses: (card.lapses ?? 0) + (rating === 1 ? 1 : 0),
+    lastReviewedAt: now.toISOString(),
+    intervalMinutes: minutes,
+    dueAt,
+    profileSnapshot: prof
+  };
+
+  db.updateCard(updated);
+  logReview(old, updated, { rating, elapsedDays, R, cfg, weightsVersion: version(weights) });
+
+  return updated;
+}
+
+Concurrency and atomicity
+	•	Wrap rate() mutations and review-log insert in a single transaction.
+	•	On resume/focus, rebuild the due queue from timestamps; never rely on in-memory session flags.
+
+Performance
+	•	Index on (deckId, dueAt) for fast due selection.
+	•	Keep a small in-memory buffer of the next N due cards; refresh after every rating.
+
+Testing
+	•	Determinism: given fixed time, config, and card state, outputs are stable.
+	•	Monotonicity across ratings.
+	•	Sub-day resurfacing works in INTENSIVE; not in STANDARD.
+	•	No clock-dependent bugs across DST changes (UTC arithmetic only).
+
+This is the scheduler contract and behavior your plugin should implement.
 
 **✅ Implementation Complete:**
-- Added `minMinutes` parameter to FSRSParameters interface with default 15 minutes
-- Replaced day-based `nextInterval()` with minute-based `nextIntervalMinutes()`
-- Removed ≥1-day clamps and Math.round from scheduling logic
-- Updated `getElapsedDays()` to maintain fractional precision
-- Added parameter validation for w.length===17, requestRetention∈(0,1), minMinutes≥1
-- Updated storage to use minute-based intervals with proper floor/cap logic
-- Enhanced UI settings to configure minimum interval
-- Comprehensive test suite validates sub-day scheduling, parameter validation, and continuous workflow
-- ✅ Migrated from easeFactor to difficulty field - backward compatibility maintained via migration
+- Created unified `Scheduler.ts` component consolidating scattered scheduling logic
+- Implemented core APIs: `getNext()`, `rate()`, `preview()`, `peekDue()`, `timeToNext()`
+- Unified card selection logic from FlashcardReviewModal, Main.ts, and DatabaseService
+- Added atomic transaction support for rating operations with review logging
+- Maintains proper FSRS invariants and state transitions (new→review)
+- Supports both INTENSIVE (sub-day) and STANDARD (daily+) profiles
+- Deterministic card selection with proper due date ordering
+- Database transaction wrapping ensures data consistency
+- Comprehensive test suite validates all scheduler operations
+- Updated main.ts to use scheduler for `reviewFlashcard()` and `schedulePreview()`
+- Added `getFlashcardById()` method to DatabaseService for efficient card lookup
+- Maintains backward compatibility with existing review and scheduling workflows
 
 ## ✅ Recent Enhancements
 

@@ -38,7 +38,6 @@ export class AnkiExportModal extends Modal {
       target: componentContainer,
       props: {
         deck: this.deck,
-        plugin: this.plugin,
       },
     });
 

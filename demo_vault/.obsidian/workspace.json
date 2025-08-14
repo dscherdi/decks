@@ -181,7 +181,7 @@
             }
           },
           {
-            "id": "a1b1108ee06e09c1",
+            "id": "7ea5c22d6b931aff",
             "type": "leaf",
             "state": {
               "type": "decks-view",
@@ -195,7 +195,7 @@
       }
     ],
     "direction": "horizontal",
-    "width": 309.5
+    "width": 592.5
   },
   "left-ribbon": {
     "hiddenItems": {
@@ -208,7 +208,7 @@
       "command-palette:Open command palette": false
     }
   },
-  "active": "a1b1108ee06e09c1",
+  "active": "5fcf267587b284e5",
   "lastOpenFiles": [
     "Flashcards/test.md",
     "My Note.md",

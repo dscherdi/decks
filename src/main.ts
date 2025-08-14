@@ -14,6 +14,7 @@ import {
 
 import { DatabaseService } from "./database/DatabaseService";
 import { DeckManager } from "./services/DeckManager";
+import { Scheduler } from "./services/Scheduler";
 import { FSRS, type Difficulty, type SchedulingInfo } from "./algorithm/fsrs";
 import {
   Deck,
@@ -80,6 +81,7 @@ function deepMergeIgnoreNull(target: any, source: any): any {
 export default class DecksPlugin extends Plugin {
   private db: DatabaseService;
   public deckManager: DeckManager;
+  private scheduler: Scheduler;
   public view: DecksView | null = null;
   public settings: FlashcardsSettings;
   private isSyncing: boolean = false;
@@ -201,6 +203,9 @@ export default class DecksPlugin extends Plugin {
         this,
       );
 
+      // Initialize scheduler
+      this.scheduler = new Scheduler(this.db);
+
       // Register the side panel view
       this.registerView(
         VIEW_TYPE_DECKS,
@@ -208,7 +213,7 @@ export default class DecksPlugin extends Plugin {
           new DecksView(
             this,
             leaf,
-            this.createFSRSForDeck.bind(this),
+            this.scheduler,
             this.settings,
             this.debugLog.bind(this),
             this.performSync.bind(this),
@@ -220,7 +225,7 @@ export default class DecksPlugin extends Plugin {
             this.openStatisticsModal.bind(this),
             this.deckManager.syncFlashcardsForDeck.bind(this.deckManager),
             this.db.getDailyReviewCounts.bind(this.db),
-            this.db.getReviewableFlashcards.bind(this.db),
+            this.getReviewableFlashcards.bind(this),
             this.reviewFlashcard.bind(this),
             this.renderMarkdown.bind(this),
             (view: DecksView | null) => {
@@ -336,16 +341,6 @@ export default class DecksPlugin extends Plugin {
   async saveSettings() {
     await this.saveData(this.settings);
     // FSRS instances are now deck-specific, no global instance to update
-  }
-
-  /**
-   * Create FSRS instance for a specific deck using its configuration
-   */
-  createFSRSForDeck(deck: Deck): FSRS {
-    return new FSRS({
-      requestRetention: deck.config.fsrs.requestRetention,
-      profile: deck.config.fsrs.profile,
-    });
   }
 
   async activateView() {
@@ -682,6 +677,11 @@ export default class DecksPlugin extends Plugin {
     return await this.db.getReviewableFlashcardsFiltered(deckId, headerLevel);
   }
 
+  async getNextCard(deckId: string): Promise<Flashcard | null> {
+    const headerLevel = this.settings?.parsing?.headerLevel;
+    return await this.scheduler.getNext(new Date(), deckId, { headerLevel });
+  }
+
   async getDailyReviewCounts(
     deckId: string,
   ): Promise<{ newCount: number; reviewCount: number }> {
@@ -757,27 +757,7 @@ export default class DecksPlugin extends Plugin {
     cardId: string,
     now: Date = new Date(),
   ): Promise<SchedulingInfo | null> {
-    // Find the card by searching all decks
-    const decks = await this.db.getAllDecks();
-    let targetCard: Flashcard | null = null;
-    let targetDeck: Deck | null = null;
-
-    for (const deck of decks) {
-      const flashcards = await this.db.getFlashcardsByDeck(deck.id);
-      const card = flashcards.find((f: Flashcard) => f.id === cardId);
-      if (card) {
-        targetCard = card;
-        targetDeck = deck;
-        break;
-      }
-    }
-
-    if (!targetCard || !targetDeck) {
-      return null;
-    }
-
-    const fsrs = this.createFSRSForDeck(targetDeck);
-    return fsrs.getSchedulingInfo(targetCard);
+    return await this.scheduler.preview(cardId, now);
   }
 
   async reviewFlashcard(
@@ -786,97 +766,13 @@ export default class DecksPlugin extends Plugin {
     difficulty: "again" | "hard" | "good" | "easy",
     timeElapsed?: number,
   ): Promise<void> {
-    const fsrs = this.createFSRSForDeck(deck);
-
-    const reviewedAt = new Date().toISOString();
-    const lastReviewedAt = flashcard.lastReviewed || flashcard.dueDate;
-
-    // Calculate elapsed days and retrievability using FSRS
-    const elapsedDays = flashcard.lastReviewed
-      ? Math.max(
-          0,
-          (new Date(reviewedAt).getTime() -
-            new Date(flashcard.lastReviewed).getTime()) /
-            86400000,
-        )
-      : 0;
-
-    const retrievability = fsrs.getRetrievability(
-      flashcard,
-      new Date(reviewedAt),
+    // Use unified scheduler for rating
+    await this.scheduler.rate(
+      flashcard.id,
+      difficulty,
+      new Date(),
+      timeElapsed,
     );
-
-    const updatedCard = fsrs.updateCard(flashcard, difficulty);
-
-    // Convert difficulty string to rating number
-    const ratingMap = { again: 1, hard: 2, good: 3, easy: 4 } as const;
-    const rating = ratingMap[difficulty];
-
-    // Generate weights version hash based on profile
-    const weightsHash = `${deck.config.fsrs.profile}-v1.0`;
-
-    // Update the flashcard in the database
-    await this.db.updateFlashcard(updatedCard.id, {
-      state: updatedCard.state,
-      dueDate: updatedCard.dueDate,
-      interval: updatedCard.interval,
-      repetitions: updatedCard.repetitions,
-      difficulty: updatedCard.difficulty,
-      stability: updatedCard.stability,
-      lapses: updatedCard.lapses,
-      lastReviewed: updatedCard.lastReviewed,
-    });
-
-    // Log the comprehensive review
-    await this.db.createReviewLog({
-      flashcardId: flashcard.id,
-
-      // Timestamps
-      lastReviewedAt,
-      reviewedAt,
-      timeElapsedMs: timeElapsed,
-
-      // Rating
-      rating,
-      ratingLabel: difficulty,
-
-      // Pre-state
-      oldState: flashcard.state,
-      oldRepetitions: flashcard.repetitions,
-      oldLapses: flashcard.lapses,
-      oldStability: flashcard.stability,
-      oldDifficulty: flashcard.difficulty,
-
-      // Post-state
-      newState: updatedCard.state,
-      newRepetitions: updatedCard.repetitions,
-      newLapses: updatedCard.lapses,
-      newStability: updatedCard.stability,
-      newDifficulty: updatedCard.difficulty,
-
-      // Intervals & due times
-      oldIntervalMinutes: flashcard.interval,
-      newIntervalMinutes: updatedCard.interval,
-      oldDueAt: flashcard.dueDate,
-      newDueAt: updatedCard.dueDate,
-
-      // Derived values
-      elapsedDays,
-      retrievability,
-
-      // Config snapshot
-      requestRetention: deck.config.fsrs.requestRetention,
-      profile: deck.config.fsrs.profile,
-      maximumIntervalDays: getMaxIntervalDaysForProfile(
-        deck.config.fsrs.profile,
-      ),
-      minMinutes: getMinMinutesForProfile(deck.config.fsrs.profile),
-      fsrsWeightsVersion: weightsHash,
-      schedulerVersion: "1.0",
-
-      // Content context
-      contentHash: flashcard.contentHash,
-    });
 
     // Update deck last reviewed
     await this.db.updateDeckLastReviewed(flashcard.deckId);
@@ -912,7 +808,7 @@ export default class DecksPlugin extends Plugin {
 
 class DecksView extends ItemView {
   private plugin: DecksPlugin;
-  private createFSRSForDeck: (deck: Deck) => FSRS;
+  private scheduler: Scheduler;
   private settings: FlashcardsSettings;
   private debugLog: (message: string, ...args: any[]) => void;
   private performSync: (force?: boolean) => Promise<void>;
@@ -948,7 +844,7 @@ class DecksView extends ItemView {
   constructor(
     plugin: DecksPlugin,
     leaf: WorkspaceLeaf,
-    createFSRSForDeck: (deck: Deck) => FSRS,
+    scheduler: Scheduler,
     settings: FlashcardsSettings,
     debugLog: (message: string, ...args: any[]) => void,
     performSync: (force?: boolean) => Promise<void>,
@@ -957,10 +853,13 @@ class DecksView extends ItemView {
     getDeckStatsById: (deckId: string) => Promise<DeckStats | null>,
     getReviewCounts: (
       days: number,
-    ) => Promise<{ newCount: number; reviewCount: number }>,
-    updateDeckConfig: (deckId: string, config: DeckConfig) => Promise<void>,
-    openStatisticsModal: () => void,
-    syncFlashcardsForDeck: (deckName: string) => Promise<void>,
+    ) => Promise<Map<string, { date: string; reviews: number }[]>>,
+    updateDeckConfig: (
+      deckId: string,
+      config: Partial<DeckConfig>,
+    ) => Promise<void>,
+    openStatisticsModal: (deckFilter?: string) => void,
+    syncFlashcardsForDeck: (deckId: string) => Promise<void>,
     getDailyReviewCounts: (
       deckId: string,
     ) => Promise<{ newCount: number; reviewCount: number }>,
@@ -975,7 +874,7 @@ class DecksView extends ItemView {
   ) {
     super(leaf);
     this.plugin = plugin;
-    this.createFSRSForDeck = createFSRSForDeck;
+    this.scheduler = scheduler;
     this.settings = settings;
     this.debugLog = debugLog;
     this.performSync = performSync;
@@ -1259,12 +1158,13 @@ class DecksView extends ItemView {
         this.app,
         deck,
         flashcards,
-        this.createFSRSForDeck(deck),
+        this.scheduler,
         this.settings,
         this.reviewFlashcard.bind(this),
         this.renderMarkdown,
         this.refresh.bind(this),
         this.refreshStatsById.bind(this),
+        this.getReviewableFlashcards.bind(this),
       ).open();
     } catch (error) {
       console.error("Error starting review:", error);

@@ -125,7 +125,7 @@
             console.error("Error loading statistics:", error);
             statistics = {
                 dailyStats: [],
-                cardStats: { new: 0, mature: 0 },
+                cardStats: { new: 0, review: 0, mature: 0 },
                 answerButtons: { again: 0, hard: 0, good: 0, easy: 0 },
                 retentionRate: 0,
                 intervals: [],
@@ -308,8 +308,8 @@
 
     function getMaturityRatio() {
         if (!statistics?.cardStats) return "0.0";
-        const { new: newCards, mature } = statistics.cardStats;
-        const total = newCards + mature;
+        const { new: newCards, review, mature } = statistics.cardStats;
+        const total = newCards + (review || 0) + mature;
         if (total === 0) return "0.0";
         return ((mature / total) * 100).toFixed(1);
     }
@@ -350,6 +350,12 @@
                     <div class="stat-label" style="display: none;">
                         Learning
                     </div>
+                </div>
+                <div class="stat-card">
+                    <div class="stat-value">
+                        {statistics?.cardStats?.review || 0}
+                    </div>
+                    <div class="stat-label">Review</div>
                 </div>
                 <div class="stat-card">
                     <div class="stat-value">
@@ -573,6 +579,7 @@
                 <div class="metric-card">
                     <div class="metric-value">
                         {(statistics?.cardStats?.new || 0) +
+                            (statistics?.cardStats?.review || 0) +
                             (statistics?.cardStats?.mature || 0)}
                     </div>
                     <div class="metric-label">Total Cards</div>
@@ -994,40 +1001,6 @@
         color: var(--text-muted);
     }
 
-    .intervals-chart {
-        display: flex;
-        flex-wrap: wrap;
-        gap: 12px;
-        padding: 16px;
-        background: var(--background-secondary);
-        border-radius: 8px;
-        max-width: 100%;
-        overflow-x: hidden;
-    }
-
-    .interval-bar {
-        display: flex;
-        flex-direction: column;
-        align-items: center;
-        padding: 12px 8px;
-        background: var(--background-primary);
-        border-radius: 6px;
-        min-width: 60px;
-        border: 1px solid var(--background-modifier-border);
-    }
-
-    .interval-label {
-        font-size: 12px;
-        color: var(--text-muted);
-        margin-bottom: 4px;
-    }
-
-    .interval-value {
-        font-size: 16px;
-        font-weight: 600;
-        color: var(--text-normal);
-    }
-
     .modal-actions {
         display: flex;
         justify-content: flex-end;
@@ -1204,16 +1177,6 @@
             padding: 12px 24px;
             font-size: 16px;
             min-height: 44px; /* Touch-friendly size */
-        }
-
-        .intervals-chart {
-            padding: 12px;
-            gap: 8px;
-        }
-
-        .interval-bar {
-            min-width: 50px;
-            padding: 8px 6px;
         }
     }
 
@@ -1393,24 +1356,6 @@
 
         .close-button {
             padding: 10px 20px;
-            font-size: 14px;
-        }
-
-        .intervals-chart {
-            padding: 8px;
-            gap: 6px;
-        }
-
-        .interval-bar {
-            min-width: 45px;
-            padding: 6px 4px;
-        }
-
-        .interval-label {
-            font-size: 10px;
-        }
-
-        .interval-value {
             font-size: 14px;
         }
     }

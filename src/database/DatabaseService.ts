@@ -1190,6 +1190,7 @@ export class DatabaseService {
 
       const cardStats = {
         new: 0,
+        review: 0,
         mature: 0,
       };
 
@@ -1199,10 +1200,11 @@ export class DatabaseService {
 
       while (cardStatsStmt.step()) {
         const row = cardStatsStmt.get();
-        const state = row[0] as string;
+        const cardType = row[0] as string;
         const count = row[1] as number;
-        if (state === "new") cardStats.new = count;
-        else if (state === "review") cardStats.mature = count;
+        if (cardType === "new") cardStats.new = count;
+        else if (cardType === "review") cardStats.review = count;
+        else if (cardType === "mature") cardStats.mature = count;
       }
       cardStatsStmt.free();
 
@@ -1358,7 +1360,7 @@ export class DatabaseService {
       // Return empty data structure instead of throwing
       return {
         dailyStats: [],
-        cardStats: { new: 0, mature: 0 },
+        cardStats: { new: 0, review: 0, mature: 0 },
         answerButtons: { again: 0, hard: 0, good: 0, easy: 0 },
         retentionRate: 0,
         intervals: [],
@@ -1393,6 +1395,57 @@ export class DatabaseService {
       console.error("Error purging database:", error);
       throw error;
     }
+  }
+
+  async getFlashcardById(cardId: string): Promise<Flashcard | null> {
+    if (!this.db) throw new Error("Database not initialized");
+
+    const stmt = this.db.prepare("SELECT * FROM flashcards WHERE id = ?");
+    stmt.bind([cardId]);
+
+    let flashcard: Flashcard | null = null;
+    if (stmt.step()) {
+      const row = stmt.get();
+      flashcard = this.rowToFlashcard(row);
+    }
+
+    stmt.free();
+    return flashcard;
+  }
+
+  /**
+   * Execute multiple operations in a database transaction
+   */
+  async runInTransaction<T>(operations: () => Promise<T>): Promise<T> {
+    if (!this.db) throw new Error("Database not initialized");
+
+    try {
+      this.db.exec("BEGIN TRANSACTION");
+      const result = await operations();
+      this.db.exec("COMMIT");
+      return result;
+    } catch (error) {
+      this.db.exec("ROLLBACK");
+      throw error;
+    }
+  }
+
+  /**
+   * Execute a raw SQL query and return results
+   */
+  async query(sql: string, params: any[] = []): Promise<any[]> {
+    if (!this.db) throw new Error("Database not initialized");
+
+    const stmt = this.db.prepare(sql);
+    stmt.bind(params);
+
+    const results: any[] = [];
+    while (stmt.step()) {
+      results.push(stmt.get());
+    }
+
+    stmt.free();
+    return results;
   }
 
   async close(): Promise<void> {
