@@ -15,7 +15,7 @@ export const CREATE_TABLES_SQL = `
     filepath TEXT NOT NULL UNIQUE,
     tag TEXT NOT NULL,
     last_reviewed TEXT,
-    config TEXT NOT NULL DEFAULT '{"newCardsLimit":20,"reviewCardsLimit":100,"enableNewCardsLimit":false,"enableReviewCardsLimit":false,"reviewOrder":"due-date","fsrs":{"requestRetention":0.9,"profile":"STANDARD"}}',
+    config TEXT NOT NULL DEFAULT '{"newCardsPerDay":0,"reviewCardsPerDay":0,"headerLevel":2,"reviewOrder":"due-date","fsrs":{"requestRetention":0.9,"profile":"STANDARD"}}',
     created TEXT NOT NULL,
     modified TEXT NOT NULL
   );
@@ -29,7 +29,7 @@ export const CREATE_TABLES_SQL = `
     type TEXT NOT NULL CHECK (type IN ('header-paragraph', 'table')),
     source_file TEXT NOT NULL,
     content_hash TEXT NOT NULL,
-    header_level INTEGER CHECK (header_level >= 1 AND header_level <= 6),
+
     state TEXT NOT NULL CHECK (state IN ('new', 'review')),
     due_date TEXT NOT NULL,
     interval REAL NOT NULL,
@@ -124,7 +124,7 @@ export function buildMigrationSQL(db: Database): string {
     "last_reviewed",
     decksColumns.includes("config")
       ? "config"
-      : `'{"newCardsLimit":20,"reviewCardsLimit":100,"enableNewCardsLimit":false,"enableReviewCardsLimit":false,"reviewOrder":"due-date","fsrs":{"requestRetention":0.9,"profile":"STANDARD"}}' as config`,
+      : `'{"newCardsPerDay":0,"reviewCardsPerDay":0,"headerLevel":2,"reviewOrder":"due-date","fsrs":{"requestRetention":0.9,"profile":"STANDARD"}}' as config`,
     decksColumns.includes("created") ? "created" : `datetime('now') as created`,
     decksColumns.includes("modified")
       ? "modified"
@@ -144,7 +144,7 @@ export function buildMigrationSQL(db: Database): string {
     flashcardsColumns.includes("content_hash")
       ? "content_hash"
       : `'' as content_hash`,
-    "header_level",
+
     flashcardsColumns.includes("state") ? "state" : `'new' as state`,
     flashcardsColumns.includes("due_date")
       ? "due_date"
@@ -264,7 +264,7 @@ export function buildMigrationSQL(db: Database): string {
       filepath TEXT NOT NULL UNIQUE,
       tag TEXT NOT NULL,
       last_reviewed TEXT,
-      config TEXT NOT NULL DEFAULT '{"newCardsLimit":20,"reviewCardsLimit":100,"enableNewCardsLimit":false,"enableReviewCardsLimit":false,"reviewOrder":"due-date","fsrs":{"requestRetention":0.9,"profile":"STANDARD"}}',
+      config TEXT NOT NULL DEFAULT '{"newCardsPerDay":0,"reviewCardsPerDay":0,"headerLevel":2,"reviewOrder":"due-date","fsrs":{"requestRetention":0.9,"profile":"STANDARD"}}',
       created TEXT NOT NULL,
       modified TEXT NOT NULL
     );
@@ -277,7 +277,7 @@ export function buildMigrationSQL(db: Database): string {
       type TEXT NOT NULL CHECK (type IN ('header-paragraph', 'table')),
       source_file TEXT NOT NULL,
       content_hash TEXT NOT NULL,
-      header_level INTEGER CHECK (header_level >= 1 AND header_level <= 6),
+
       state TEXT NOT NULL CHECK (state IN ('new', 'review')),
       due_date TEXT NOT NULL,
       interval REAL NOT NULL,
@@ -333,7 +333,7 @@ export function buildMigrationSQL(db: Database): string {
     INSERT OR IGNORE INTO decks_new (id, name, filepath, tag, last_reviewed, config, created, modified)
     SELECT ${decksSelect} FROM decks WHERE EXISTS (SELECT 1 FROM sqlite_master WHERE type='table' AND name='decks');
 
-    INSERT OR IGNORE INTO flashcards_new (id, deck_id, front, back, type, source_file, content_hash, header_level, state, due_date, interval, repetitions, difficulty, stability, lapses, last_reviewed, created, modified)
+    INSERT OR IGNORE INTO flashcards_new (id, deck_id, front, back, type, source_file, content_hash, state, due_date, interval, repetitions, difficulty, stability, lapses, last_reviewed, created, modified)
     SELECT ${flashcardsSelect} FROM flashcards WHERE EXISTS (SELECT 1 FROM sqlite_master WHERE type='table' AND name='flashcards');
 
     INSERT OR IGNORE INTO review_logs_new (id, flashcard_id, last_reviewed_at, shown_at, reviewed_at, rating, rating_label, time_elapsed_ms, old_state, old_repetitions, old_lapses, old_stability, old_difficulty, new_state, new_repetitions, new_lapses, new_stability, new_difficulty, old_interval_minutes, new_interval_minutes, old_due_at, new_due_at, elapsed_days, retrievability, request_retention, profile, maximum_interval_days, min_minutes, fsrs_weights_version, scheduler_version, note_model_id, card_template_id, content_hash, client)
@@ -408,9 +408,9 @@ export const SQL_QUERIES = {
   INSERT_FLASHCARD: `
     INSERT OR REPLACE INTO flashcards (
       id, deck_id, front, back, type, source_file, content_hash,
-      header_level, state, due_date, interval, repetitions,
+      state, due_date, interval, repetitions,
       difficulty, stability, lapses, last_reviewed, created, modified
-    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
   `,
 
   DELETE_FLASHCARD: `DELETE FROM flashcards WHERE id = ?`,

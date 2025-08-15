@@ -1,8 +1,15 @@
-import { Flashcard, FlashcardState, Deck, ReviewLog } from "../database/types";
+import {
+  Flashcard,
+  FlashcardState,
+  Deck,
+  ReviewLog,
+  hasNewCardsLimit,
+  hasReviewCardsLimit,
+} from "../database/types";
 import { DatabaseService } from "../database/DatabaseService";
 import {
   FSRS,
-  type Difficulty,
+  type RatingLabel,
   type SchedulingInfo,
   type SchedulingCard,
 } from "../algorithm/fsrs";
@@ -15,7 +22,6 @@ import {
 
 export interface SchedulerOptions {
   allowNew?: boolean;
-  headerLevel?: number;
 }
 
 export interface SchedulingPreview {
@@ -47,17 +53,17 @@ export class Scheduler {
     deckId: string,
     options: SchedulerOptions = {},
   ): Promise<Flashcard | null> {
-    const { allowNew = true, headerLevel } = options;
+    const { allowNew = true } = options;
 
     // First check for due cards
-    const dueCard = await this.getNextDueCard(now, deckId, headerLevel);
+    const dueCard = await this.getNextDueCard(now, deckId);
     if (dueCard) {
       return dueCard;
     }
 
     // If no due cards and new cards allowed, get next new card
     if (allowNew && (await this.hasNewCardQuota(deckId))) {
-      return await this.getNextNewCard(deckId, headerLevel);
+      return await this.getNextNewCard(deckId);
     }
 
     return null;
@@ -78,7 +84,7 @@ export class Scheduler {
 
     this.updateFSRSForDeck(deck);
 
-    const ratings: Difficulty[] = ["again", "hard", "good", "easy"];
+    const ratings: RatingLabel[] = ["again", "hard", "good", "easy"];
     const preview: Partial<SchedulingPreview> = {};
 
     for (const rating of ratings) {
@@ -101,7 +107,7 @@ export class Scheduler {
    */
   async rate(
     cardId: string,
-    rating: Difficulty,
+    rating: RatingLabel,
     now: Date = new Date(),
     timeElapsed?: number,
   ): Promise<Flashcard> {
@@ -172,21 +178,19 @@ export class Scheduler {
       contentHash: card.contentHash,
     };
 
-    // Atomic update: card state + review log
-    await this.db.runInTransaction(async () => {
-      await this.db.updateFlashcard(updatedCard.id, {
-        state: updatedCard.state,
-        dueDate: updatedCard.dueDate,
-        interval: updatedCard.interval,
-        repetitions: updatedCard.repetitions,
-        difficulty: updatedCard.difficulty,
-        stability: updatedCard.stability,
-        lapses: updatedCard.lapses,
-        lastReviewed: updatedCard.lastReviewed,
-      });
-
-      await this.db.createReviewLog(reviewLog);
+    // Update card state and create review log
+    await this.db.updateFlashcard(updatedCard.id, {
+      state: updatedCard.state,
+      dueDate: updatedCard.dueDate,
+      interval: updatedCard.interval,
+      repetitions: updatedCard.repetitions,
+      difficulty: updatedCard.difficulty,
+      stability: updatedCard.stability,
+      lapses: updatedCard.lapses,
+      lastReviewed: updatedCard.lastReviewed,
     });
+
+    await this.db.createReviewLog(reviewLog);
 
     return updatedCard;
   }
@@ -198,7 +202,6 @@ export class Scheduler {
     now: Date,
     deckId: string,
     limit: number = 10,
-    headerLevel?: number,
   ): Promise<Flashcard[]> {
     const deck = await this.db.getDeckById(deckId);
     if (!deck) return [];
@@ -208,11 +211,6 @@ export class Scheduler {
       WHERE deck_id = ? AND due_date <= ? AND state = 'review'
     `;
     const params = [deckId, now.toISOString()];
-
-    if (headerLevel !== undefined) {
-      query += " AND (type = 'table' OR header_level = ?)";
-      params.push(headerLevel.toString());
-    }
 
     // Apply review order from deck configuration
     if (deck.config.reviewOrder === "random") {
@@ -254,7 +252,6 @@ export class Scheduler {
   private async getNextDueCard(
     now: Date,
     deckId: string,
-    headerLevel?: number,
   ): Promise<Flashcard | null> {
     // Check review card daily limits first
     if (!(await this.hasReviewCardQuota(deckId))) {
@@ -270,11 +267,6 @@ export class Scheduler {
     `;
     const params = [deckId, now.toISOString()];
 
-    if (headerLevel !== undefined) {
-      query += " AND (type = 'table' OR header_level = ?)";
-      params.push(headerLevel.toString());
-    }
-
     // Apply review order from deck configuration
     if (deck.config.reviewOrder === "random") {
       query += " ORDER BY RANDOM() LIMIT 1";
@@ -287,20 +279,12 @@ export class Scheduler {
     return results.length > 0 ? results[0] : null;
   }
 
-  private async getNextNewCard(
-    deckId: string,
-    headerLevel?: number,
-  ): Promise<Flashcard | null> {
+  private async getNextNewCard(deckId: string): Promise<Flashcard | null> {
     let query = `
       SELECT * FROM flashcards
       WHERE deck_id = ? AND state = 'new'
     `;
     const params = [deckId];
-
-    if (headerLevel !== undefined) {
-      query += " AND (type = 'table' OR header_level = ?)";
-      params.push(headerLevel.toString());
-    }
 
     query += " ORDER BY due_date ASC LIMIT 1";
 
@@ -312,20 +296,20 @@ export class Scheduler {
     const deck = await this.db.getDeckById(deckId);
     if (!deck) return false;
 
-    if (!deck.config.enableNewCardsLimit) return true;
+    if (!hasNewCardsLimit(deck.config)) return true;
 
     const dailyCounts = await this.db.getDailyReviewCounts(deckId);
-    return dailyCounts.newCount < deck.config.newCardsLimit;
+    return dailyCounts.newCount < deck.config.newCardsPerDay;
   }
 
   private async hasReviewCardQuota(deckId: string): Promise<boolean> {
     const deck = await this.db.getDeckById(deckId);
     if (!deck) return false;
 
-    if (!deck.config.enableReviewCardsLimit) return true;
+    if (!hasReviewCardsLimit(deck.config)) return true;
 
     const dailyCounts = await this.db.getDailyReviewCounts(deckId);
-    return dailyCounts.reviewCount < deck.config.reviewCardsLimit;
+    return dailyCounts.reviewCount < deck.config.reviewCardsPerDay;
   }
 
   private updateFSRSForDeck(deck: Deck): void {
@@ -352,8 +336,8 @@ export class Scheduler {
     return Math.pow(1 + elapsedDays / (9 * card.stability), -1);
   }
 
-  private ratingToNumber(rating: Difficulty): number {
-    const ratingMap: Record<Difficulty, number> = {
+  private ratingToNumber(rating: RatingLabel): number {
+    const ratingMap: Record<RatingLabel, number> = {
       again: 1,
       hard: 2,
       good: 3,
@@ -396,17 +380,16 @@ export class Scheduler {
       type: row[4] as "header-paragraph" | "table",
       sourceFile: row[5] as string,
       contentHash: row[6] as string,
-      headerLevel: row[7] as number | undefined,
-      state: row[8] as FlashcardState,
-      dueDate: row[9] as string,
-      interval: row[10] as number,
-      repetitions: row[11] as number,
-      difficulty: row[12] as number,
-      stability: row[13] as number,
-      lapses: row[14] as number,
-      lastReviewed: row[15] as string | null,
-      created: row[16] as string,
-      modified: row[17] as string,
+      state: row[7] as FlashcardState,
+      dueDate: row[8] as string,
+      interval: row[9] as number,
+      repetitions: row[10] as number,
+      difficulty: row[11] as number,
+      stability: row[12] as number,
+      lapses: row[13] as number,
+      lastReviewed: row[14] as string | null,
+      created: row[15] as string,
+      modified: row[16] as string,
     };
   }
 }

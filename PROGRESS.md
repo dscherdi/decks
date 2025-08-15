@@ -725,6 +725,15 @@ This is the scheduler contract and behavior your plugin should implement.
 - Added `getFlashcardById()` method to DatabaseService for efficient card lookup
 - Maintains backward compatibility with existing review and scheduling workflows
 
+
+### TODO 21: Header level should be a deck-specific configuration
+
+- Remove header level from general settings
+- Add header level setting in deck specific configuration
+- Ensure header level is read from deck configuration (default h2) persistent in database
+- Header level should be removed from Flashcard interface and added to Deck interface and
+
+
 ## ✅ Recent Enhancements
 
 ### Deck Configuration System

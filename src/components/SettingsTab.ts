@@ -85,37 +85,15 @@ export class DecksSettingTab extends PluginSettingTab {
   }
 
   private addParsingSettings(containerEl: HTMLElement): void {
-    containerEl.createEl("h3", { text: "Parsing Settings" });
-    containerEl.createEl("p", {
-      text: "Configure how flashcards are parsed from your notes.",
-      cls: "setting-item-description",
-    });
+    containerEl.createEl("h3", { text: "Parsing" });
 
-    new Setting(containerEl)
-      .setName("Header Level for Flashcards")
-      .setDesc(
-        "Which header level to use for header-paragraph flashcards (H1 = 1, H2 = 2, etc.)",
-      )
-      .addDropdown((dropdown) =>
-        dropdown
-          .addOption("1", "H1 (#)")
-          .addOption("2", "H2 (##)")
-          .addOption("3", "H3 (###)")
-          .addOption("4", "H4 (####)")
-          .addOption("5", "H5 (#####)")
-          .addOption("6", "H6 (######)")
-          .setValue(this.settings.parsing.headerLevel.toString())
-          .onChange(async (value) => {
-            this.settings.parsing.headerLevel = parseInt(value);
-            await this.saveSettings();
-
-            // Force sync all decks to ensure all header levels are parsed and stored
-            await this.performSync(true);
-
-            // Refresh the view to show flashcards for the new header level
-            await this.refreshViewStats();
-          }),
-      );
+    const parseSettingsDesc = containerEl.createDiv();
+    parseSettingsDesc.innerHTML = `
+      <p style="color: var(--text-muted); font-size: 0.9em; margin: 10px 0;">
+        Header level settings have been moved to individual deck configurations.
+        Configure header levels per deck in the deck settings.
+      </p>
+    `;
   }
 
   private addUISettings(containerEl: HTMLElement): void {

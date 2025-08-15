@@ -2,11 +2,15 @@ import initSqlJs, { Database, SqlJsStatic } from "sql.js";
 import { DataAdapter } from "obsidian";
 import {
   Deck,
+  DeckConfig,
+  ReviewOrder,
   Flashcard,
   ReviewLog,
   DeckStats,
-  DEFAULT_DECK_CONFIG,
   Statistics,
+  DEFAULT_DECK_CONFIG,
+  hasNewCardsLimit,
+  hasReviewCardsLimit,
 } from "./types";
 import { SQL_QUERIES } from "./schemas";
 import { createTables, migrate, needsMigration } from "./migrations";
@@ -118,6 +122,30 @@ export class DatabaseService {
       config = {
         ...config,
         fsrs: DEFAULT_DECK_CONFIG.fsrs,
+      };
+    }
+
+    // Migration: Add new property names if missing
+    if (
+      config.newCardsPerDay === undefined &&
+      (config as any).newCardsLimit !== undefined
+    ) {
+      config = {
+        ...config,
+        newCardsPerDay: (config as any).enableNewCardsLimit
+          ? (config as any).newCardsLimit
+          : 0,
+        reviewCardsPerDay: (config as any).enableReviewCardsLimit
+          ? (config as any).reviewCardsLimit
+          : 0,
+      };
+    }
+
+    // Migration: Add headerLevel if missing
+    if (config.headerLevel === undefined) {
+      config = {
+        ...config,
+        headerLevel: DEFAULT_DECK_CONFIG.headerLevel,
       };
     }
 
@@ -285,6 +313,26 @@ export class DatabaseService {
     await this.save();
   }
 
+  async updateDeckHeaderLevel(
+    deckId: string,
+    headerLevel: number,
+  ): Promise<void> {
+    if (!this.db) throw new Error("Database not initialized");
+
+    const now = new Date().toISOString();
+
+    // Update the header_level column directly
+    const stmt = this.db.prepare(`
+      UPDATE decks
+      SET header_level = ?, modified = ?
+      WHERE id = ?
+    `);
+
+    stmt.run([headerLevel, now, deckId]);
+    stmt.free();
+    await this.save();
+  }
+
   async renameDeck(
     oldDeckId: string,
     newDeckId: string,
@@ -358,7 +406,6 @@ export class DatabaseService {
       fullFlashcard.type,
       fullFlashcard.sourceFile,
       fullFlashcard.contentHash,
-      fullFlashcard.headerLevel || null,
       fullFlashcard.state,
       fullFlashcard.dueDate,
       flashcard.interval,
@@ -385,7 +432,6 @@ export class DatabaseService {
         | "back"
         | "type"
         | "contentHash"
-        | "headerLevel"
         | "state"
         | "dueDate"
         | "interval"
@@ -413,9 +459,7 @@ export class DatabaseService {
                   ? "difficulty"
                   : key === "lastReviewed"
                     ? "last_reviewed"
-                    : key === "headerLevel"
-                      ? "header_level"
-                      : key.replace(/([A-Z])/g, "_$1").toLowerCase();
+                    : key.replace(/([A-Z])/g, "_$1").toLowerCase();
         return `${dbField} = ?`;
       })
       .join(", ");
@@ -467,33 +511,6 @@ export class DatabaseService {
     return flashcards;
   }
 
-  async getFlashcardsByDeckFiltered(
-    deckId: string,
-    headerLevel?: number,
-  ): Promise<Flashcard[]> {
-    if (!this.db) throw new Error("Database not initialized");
-
-    let query = "SELECT * FROM flashcards WHERE deck_id = ?";
-    const params = [deckId];
-
-    if (headerLevel !== undefined) {
-      query += " AND (type = 'table' OR header_level = ?)";
-      params.push(headerLevel.toString());
-    }
-
-    const stmt = this.db.prepare(query);
-    stmt.bind(params);
-    const flashcards: Flashcard[] = [];
-
-    while (stmt.step()) {
-      const row = stmt.get();
-      flashcards.push(this.rowToFlashcard(row));
-    }
-
-    stmt.free();
-    return flashcards;
-  }
-
   async getDueFlashcards(deckId: string): Promise<Flashcard[]> {
     if (!this.db) throw new Error("Database not initialized");
 
@@ -501,39 +518,6 @@ export class DatabaseService {
 
     const now = new Date().toISOString();
     stmt.bind([deckId, now]);
-    const flashcards: Flashcard[] = [];
-
-    while (stmt.step()) {
-      const row = stmt.get();
-      flashcards.push(this.rowToFlashcard(row));
-    }
-
-    stmt.free();
-    return flashcards;
-  }
-
-  async getDueFlashcardsFiltered(
-    deckId: string,
-    headerLevel?: number,
-  ): Promise<Flashcard[]> {
-    if (!this.db) throw new Error("Database not initialized");
-
-    let query = `
-      SELECT * FROM flashcards
-      WHERE deck_id = ? AND due_date <= ?
-    `;
-    const now = new Date().toISOString();
-    const params = [deckId, now];
-
-    if (headerLevel !== undefined) {
-      query += " AND (type = 'table' OR header_level = ?)";
-      params.push(headerLevel.toString());
-    }
-
-    query += " ORDER BY due_date";
-
-    const stmt = this.db.prepare(query);
-    stmt.bind(params);
     const flashcards: Flashcard[] = [];
 
     while (stmt.step()) {
@@ -593,17 +577,17 @@ export class DatabaseService {
     // 1. No learning cards in pure FSRS - skip learning card retrieval
 
     // 2. Get new cards with remaining daily limit
-    const newCardsLimit = Number(config.newCardsLimit) || 0;
+    const newCardsLimit = Number(config.newCardsPerDay) || 0;
     const newCountToday = Number(dailyCounts.newCount) || 0;
     const remainingNewCards =
-      config.enableNewCardsLimit && newCardsLimit > 0
+      hasNewCardsLimit(config) && newCardsLimit > 0
         ? Math.max(0, newCardsLimit - newCountToday)
-        : config.enableNewCardsLimit && newCardsLimit === 0
+        : hasNewCardsLimit(config) && newCardsLimit === 0
           ? 0
           : Number.MAX_SAFE_INTEGER;
 
     if (remainingNewCards > 0) {
-      const sql = `${SQL_QUERIES.GET_NEW_CARDS_FOR_REVIEW}${config.enableNewCardsLimit ? ` LIMIT ${remainingNewCards}` : ""}`;
+      const sql = `${SQL_QUERIES.GET_NEW_CARDS_FOR_REVIEW}${hasNewCardsLimit(config) ? ` LIMIT ${remainingNewCards}` : ""}`;
       const newCardsStmt = this.db.prepare(sql);
       newCardsStmt.bind([deckId, now]);
       while (newCardsStmt.step()) {
@@ -614,17 +598,17 @@ export class DatabaseService {
     }
 
     // 3. Get review cards with remaining daily limit
-    const reviewCardsLimit = Number(config.reviewCardsLimit) || 0;
+    const reviewCardsLimit = Number(config.reviewCardsPerDay) || 0;
     const reviewCountToday = Number(dailyCounts.reviewCount) || 0;
     const remainingReviewCards =
-      config.enableReviewCardsLimit && reviewCardsLimit > 0
+      hasReviewCardsLimit(config) && reviewCardsLimit > 0
         ? Math.max(0, reviewCardsLimit - reviewCountToday)
-        : config.enableReviewCardsLimit && reviewCardsLimit === 0
+        : hasReviewCardsLimit(config) && reviewCardsLimit === 0
           ? 0
           : Number.MAX_SAFE_INTEGER;
 
     if (remainingReviewCards > 0) {
-      const sql = `${SQL_QUERIES.GET_REVIEW_CARDS_FOR_REVIEW}${config.enableReviewCardsLimit ? ` LIMIT ${remainingReviewCards}` : ""}`;
+      const sql = `${SQL_QUERIES.GET_REVIEW_CARDS_FOR_REVIEW}${hasReviewCardsLimit(config) ? ` LIMIT ${remainingReviewCards}` : ""}`;
       const reviewCardsStmt = this.db.prepare(sql);
       reviewCardsStmt.bind([deckId, now]);
       while (reviewCardsStmt.step()) {
@@ -660,89 +644,6 @@ export class DatabaseService {
 
       return 0;
     });
-
-    return flashcards;
-  }
-
-  async getReviewableFlashcardsFiltered(
-    deckId: string,
-    headerLevel?: number,
-  ): Promise<Flashcard[]> {
-    if (!this.db) throw new Error("Database not initialized");
-
-    const deck = await this.getDeckById(deckId);
-    if (!deck) throw new Error(`Deck not found: ${deckId}`);
-
-    const config = deck.config;
-    const now = new Date().toISOString();
-    const flashcards: Flashcard[] = [];
-
-    // Header level filter clause
-    const headerFilter =
-      headerLevel !== undefined
-        ? " AND (type = 'table' OR header_level = ?)"
-        : "";
-
-    // 1. No learning cards in pure FSRS - skip learning card retrieval
-
-    // 2. Get daily review counts to check limits
-    const dailyCounts = await this.getDailyReviewCounts(deckId);
-
-    // 3. Get new cards (if limit allows)
-    if (
-      !config.enableNewCardsLimit ||
-      dailyCounts.newCount < config.newCardsLimit
-    ) {
-      const remainingNewCards = config.enableNewCardsLimit
-        ? config.newCardsLimit - dailyCounts.newCount
-        : Number.MAX_SAFE_INTEGER;
-
-      let newCardsQuery = `
-        SELECT * FROM flashcards
-        WHERE deck_id = ? AND due_date <= ? AND state = 'new'${headerFilter}
-        ORDER BY due_date
-        ${config.enableNewCardsLimit ? `LIMIT ${remainingNewCards}` : ""}
-      `;
-      const newCardsStmt = this.db.prepare(newCardsQuery);
-      const newCardsParams = [deckId, now];
-      if (headerLevel !== undefined)
-        newCardsParams.push(headerLevel.toString());
-      newCardsStmt.bind(newCardsParams);
-
-      while (newCardsStmt.step()) {
-        const row = newCardsStmt.get();
-        flashcards.push(this.rowToFlashcard(row));
-      }
-      newCardsStmt.free();
-    }
-
-    // 4. Get review cards (if limit allows)
-    if (
-      !config.enableReviewCardsLimit ||
-      dailyCounts.reviewCount < config.reviewCardsLimit
-    ) {
-      const remainingReviewCards = config.enableReviewCardsLimit
-        ? config.reviewCardsLimit - dailyCounts.reviewCount
-        : Number.MAX_SAFE_INTEGER;
-
-      let reviewCardsQuery = `
-        SELECT * FROM flashcards
-        WHERE deck_id = ? AND due_date <= ? AND state = 'review'${headerFilter}
-        ORDER BY due_date
-        ${config.enableReviewCardsLimit ? `LIMIT ${remainingReviewCards}` : ""}
-      `;
-      const reviewCardsStmt = this.db.prepare(reviewCardsQuery);
-      const reviewCardsParams = [deckId, now];
-      if (headerLevel !== undefined)
-        reviewCardsParams.push(headerLevel.toString());
-      reviewCardsStmt.bind(reviewCardsParams);
-
-      while (reviewCardsStmt.step()) {
-        const row = reviewCardsStmt.get();
-        flashcards.push(this.rowToFlashcard(row));
-      }
-      reviewCardsStmt.free();
-    }
 
     return flashcards;
   }
@@ -888,12 +789,12 @@ export class DatabaseService {
 
     // Calculate remaining new cards based on daily limit
     let newCount = totalNewCards;
-    const newCardsLimit = Number(config.newCardsLimit) || 0;
+    const newCardsLimit = Number(config.newCardsPerDay) || 0;
     const newCountToday = Number(dailyCounts.newCount) || 0;
-    if (config.enableNewCardsLimit && newCardsLimit > 0) {
+    if (hasNewCardsLimit(config) && newCardsLimit > 0) {
       const remainingNew = Math.max(0, newCardsLimit - newCountToday);
       newCount = Math.min(totalNewCards, remainingNew);
-    } else if (config.enableNewCardsLimit && newCardsLimit === 0) {
+    } else if (hasNewCardsLimit(config) && newCardsLimit === 0) {
       newCount = 0; // No new cards allowed when limit is 0
     }
 
@@ -909,12 +810,12 @@ export class DatabaseService {
 
     // Calculate remaining review cards based on daily limit
     let dueCount = totalDueCards;
-    const reviewCardsLimit = Number(config.reviewCardsLimit) || 0;
+    const reviewCardsLimit = Number(config.reviewCardsPerDay) || 0;
     const reviewCountToday = Number(dailyCounts.reviewCount) || 0;
-    if (config.enableReviewCardsLimit && reviewCardsLimit > 0) {
+    if (hasReviewCardsLimit(config) && reviewCardsLimit > 0) {
       const remainingReview = Math.max(0, reviewCardsLimit - reviewCountToday);
       dueCount = Math.min(totalDueCards, remainingReview);
-    } else if (config.enableReviewCardsLimit && reviewCardsLimit === 0) {
+    } else if (hasReviewCardsLimit(config) && reviewCardsLimit === 0) {
       dueCount = 0; // No review cards allowed when limit is 0
     }
 
@@ -933,77 +834,6 @@ export class DatabaseService {
     };
   }
 
-  async getDeckStatsFiltered(
-    deckId: string,
-    headerLevel?: number,
-  ): Promise<{
-    name: string;
-    newCount: number;
-    dueCount: number;
-    totalCount: number;
-  }> {
-    if (!this.db) throw new Error("Database not initialized");
-
-    const deck = await this.getDeckById(deckId);
-    if (!deck) {
-      throw new Error(`Deck not found: ${deckId}`);
-    }
-
-    const now = new Date().toISOString();
-    const headerFilter =
-      headerLevel !== undefined
-        ? " AND (type = 'table' OR header_level = ?)"
-        : "";
-
-    // New cards count
-    const newQuery = `
-      SELECT COUNT(*) FROM flashcards
-      WHERE deck_id = ? AND state = 'new' AND due_date <= ?${headerFilter}
-    `;
-    const newStmt = this.db.prepare(newQuery);
-    const newParams = [deckId, now];
-    if (headerLevel !== undefined) newParams.push(headerLevel.toString());
-    newStmt.bind(newParams);
-    newStmt.step();
-    const newCount = newStmt.get()[0] as number;
-    newStmt.free();
-
-    // No learning cards in pure FSRS
-    const learningCount = 0;
-
-    // Due cards count (review cards that are due)
-    const dueQuery = `
-      SELECT COUNT(*) FROM flashcards
-      WHERE deck_id = ? AND state = 'review' AND due_date <= ?${headerFilter}
-    `;
-    const dueStmt = this.db.prepare(dueQuery);
-    const dueParams = [deckId, now];
-    if (headerLevel !== undefined) dueParams.push(headerLevel.toString());
-    dueStmt.bind(dueParams);
-    dueStmt.step();
-    const dueCount = dueStmt.get()[0] as number;
-    dueStmt.free();
-
-    // Total cards count
-    const totalQuery = `
-      SELECT COUNT(*) FROM flashcards WHERE deck_id = ?${headerFilter}
-    `;
-    const totalStmt = this.db.prepare(totalQuery);
-    const totalParams = [deckId];
-    if (headerLevel !== undefined) totalParams.push(headerLevel.toString());
-    totalStmt.bind(totalParams);
-    totalStmt.step();
-    const totalCount = totalStmt.get()[0] as number;
-    totalStmt.free();
-
-    return {
-      name: deck.name,
-      newCount,
-      dueCount,
-      totalCount,
-    };
-  }
-
   async getAllDeckStats(): Promise<DeckStats[]> {
     if (!this.db) throw new Error("Database not initialized");
 
@@ -1013,25 +843,6 @@ export class DatabaseService {
     for (const deck of decks) {
       const deckStats = await this.getDeckStats(deck.id);
       stats.push(deckStats);
-    }
-
-    return stats;
-  }
-
-  async getAllDeckStatsFiltered(headerLevel?: number): Promise<DeckStats[]> {
-    if (!this.db) throw new Error("Database not initialized");
-
-    const decks = await this.getAllDecks();
-    const stats: DeckStats[] = [];
-
-    for (const deck of decks) {
-      const deckStats = await this.getDeckStatsFiltered(deck.id, headerLevel);
-      stats.push({
-        deckId: deck.id,
-        newCount: deckStats.newCount,
-        dueCount: deckStats.dueCount,
-        totalCount: deckStats.totalCount,
-      });
     }
 
     return stats;
@@ -1091,17 +902,16 @@ export class DatabaseService {
       type: row[4] as "header-paragraph" | "table",
       sourceFile: row[5] as string,
       contentHash: row[6] as string,
-      headerLevel: (row[7] as number | null) || undefined,
-      state: row[8] as "new" | "review",
-      dueDate: row[9] as string,
-      interval: row[10] as number,
-      repetitions: row[11] as number,
-      difficulty: row[12] as number,
-      stability: row[13] as number,
-      lapses: row[14] as number,
-      lastReviewed: row[15] as string | null,
-      created: row[16] as string,
-      modified: row[17] as string,
+      state: row[7] as "new" | "review",
+      dueDate: row[8] as string,
+      interval: row[9] as number,
+      repetitions: row[10] as number,
+      difficulty: row[11] as number,
+      stability: row[12] as number,
+      lapses: row[13] as number,
+      lastReviewed: row[14] as string | null,
+      created: row[15] as string,
+      modified: row[16] as string,
     };
   }
 
@@ -1415,6 +1225,7 @@ export class DatabaseService {
 
   /**
    * Execute multiple operations in a database transaction
+   * Note: For sql.js compatibility, avoid using this for now
    */
   async runInTransaction<T>(operations: () => Promise<T>): Promise<T> {
     if (!this.db) throw new Error("Database not initialized");
@@ -1425,7 +1236,12 @@ export class DatabaseService {
       this.db.exec("COMMIT");
       return result;
     } catch (error) {
-      this.db.exec("ROLLBACK");
+      try {
+        this.db.exec("ROLLBACK");
+      } catch (rollbackError) {
+        // Ignore rollback errors - transaction may have already been rolled back
+        console.warn("Transaction rollback failed:", rollbackError);
+      }
       throw error;
     }
   }

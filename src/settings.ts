@@ -9,7 +9,7 @@ export interface FlashcardsSettings {
 
   // Parsing Settings
   parsing: {
-    headerLevel: number; // 1-6, which header level to parse for header-paragraph flashcards
+    // Parsing settings can be added here in the future
   };
 
   // UI Settings
@@ -33,7 +33,7 @@ export const DEFAULT_SETTINGS: FlashcardsSettings = {
   },
 
   parsing: {
-    headerLevel: 2, // Default to H2 headers
+    // Default parsing settings
   },
 
   ui: {

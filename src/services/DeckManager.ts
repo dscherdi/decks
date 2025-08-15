@@ -12,7 +12,6 @@ export interface ParsedFlashcard {
   front: string;
   back: string;
   type: "header-paragraph" | "table";
-  headerLevel?: number; // Header level (1-6) for header-paragraph cards, null for table cards
 }
 
 export class DeckManager {
@@ -242,7 +241,10 @@ export class DeckManager {
   /**
    * Parse flashcards from a file
    */
-  async parseFlashcardsFromFile(file: TFile): Promise<ParsedFlashcard[]> {
+  async parseFlashcardsFromFile(
+    file: TFile,
+    headerLevel: number = 2,
+  ): Promise<ParsedFlashcard[]> {
     const parseStartTime = performance.now();
 
     // Read and parse content
@@ -250,7 +252,7 @@ export class DeckManager {
     const readTime = performance.now() - parseStartTime;
 
     const parseContentStartTime = performance.now();
-    const flashcards = this.parseFlashcardsFromContent(content);
+    const flashcards = this.parseFlashcardsFromContent(content, headerLevel);
     const parseTime = performance.now() - parseContentStartTime;
 
     const totalTime = performance.now() - parseStartTime;
@@ -265,7 +267,10 @@ export class DeckManager {
   /**
    * Parse flashcards from content string (optimized single-pass parsing)
    */
-  private parseFlashcardsFromContent(content: string): ParsedFlashcard[] {
+  private parseFlashcardsFromContent(
+    content: string,
+    headerLevel: number = 2,
+  ): ParsedFlashcard[] {
     const lines = content.split("\n");
     const flashcards: ParsedFlashcard[] = [];
 
@@ -342,6 +347,7 @@ export class DeckManager {
               currentHeader,
               currentContent,
               flashcards,
+              headerLevel,
             );
             currentHeader = null;
             currentContent = [];
@@ -349,7 +355,12 @@ export class DeckManager {
           }
 
           // Finalize previous header
-          this.finalizeCurrentHeader(currentHeader, currentContent, flashcards);
+          this.finalizeCurrentHeader(
+            currentHeader,
+            currentContent,
+            flashcards,
+            headerLevel,
+          );
 
           // Start new header
           currentHeader = {
@@ -373,7 +384,12 @@ export class DeckManager {
     }
 
     // Finalize last header
-    this.finalizeCurrentHeader(currentHeader, currentContent, flashcards);
+    this.finalizeCurrentHeader(
+      currentHeader,
+      currentContent,
+      flashcards,
+      headerLevel,
+    );
 
     return flashcards;
   }
@@ -385,13 +401,17 @@ export class DeckManager {
     currentHeader: { text: string; level: number } | null,
     currentContent: string[],
     flashcards: ParsedFlashcard[],
+    targetHeaderLevel: number,
   ): void {
-    if (currentHeader && currentContent.length > 0) {
+    if (
+      currentHeader &&
+      currentContent.length > 0 &&
+      currentHeader.level === targetHeaderLevel
+    ) {
       flashcards.push({
         front: currentHeader.text.replace(/^#{1,6}\s+/, ""),
         back: currentContent.join("\n").trim(),
         type: "header-paragraph",
-        headerLevel: currentHeader.level,
       });
     }
   }
@@ -517,10 +537,6 @@ export class DeckManager {
     const processedIds = new Set<string>();
     const duplicateWarnings = new Set<string>(); // Track duplicates to warn only once per file
 
-    // Parse flashcards from the file
-    const parsedCards = await this.parseFlashcardsFromFile(file);
-    this.debugLog(`Parsed ${parsedCards.length} flashcards from ${filePath}`);
-
     // Batch operations for better performance
     const batchOperations: Array<{
       type: "create" | "update" | "delete";
@@ -528,6 +544,13 @@ export class DeckManager {
       flashcard?: Omit<Flashcard, "created" | "modified">;
       updates?: any;
     }> = [];
+
+    // Parse flashcards from the file using deck's header level configuration
+    const parsedCards = await this.parseFlashcardsFromFile(
+      file,
+      deck.config.headerLevel,
+    );
+    this.debugLog(`Parsed ${parsedCards.length} flashcards from ${filePath}`);
 
     // Process flashcards in chunks to avoid blocking UI with large datasets
     for (let i = 0; i < parsedCards.length; i++) {
@@ -611,7 +634,7 @@ export class DeckManager {
           type: parsed.type,
           sourceFile: file.path,
           contentHash: contentHash,
-          headerLevel: parsed.headerLevel,
+
           // Restore progress from review logs or use defaults
           state: previousProgress?.newState || "new",
           dueDate: previousProgress

@@ -15,13 +15,15 @@ import {
 import { DatabaseService } from "./database/DatabaseService";
 import { DeckManager } from "./services/DeckManager";
 import { Scheduler } from "./services/Scheduler";
-import { FSRS, type Difficulty, type SchedulingInfo } from "./algorithm/fsrs";
+import { FSRS, type RatingLabel, type SchedulingInfo } from "./algorithm/fsrs";
 import {
   Deck,
   Flashcard,
   DeckStats,
   DeckConfig,
   Statistics,
+  hasNewCardsLimit,
+  hasReviewCardsLimit,
 } from "./database/types";
 import { FlashcardsSettings, DEFAULT_SETTINGS } from "./settings";
 import { DecksSettingTab } from "./components/SettingsTab";
@@ -225,7 +227,6 @@ export default class DecksPlugin extends Plugin {
             this.openStatisticsModal.bind(this),
             this.deckManager.syncFlashcardsForDeck.bind(this.deckManager),
             this.db.getDailyReviewCounts.bind(this.db),
-            this.getReviewableFlashcards.bind(this),
             this.reviewFlashcard.bind(this),
             this.renderMarkdown.bind(this),
             (view: DecksView | null) => {
@@ -652,8 +653,7 @@ export default class DecksPlugin extends Plugin {
   }
 
   async getDeckStats(): Promise<Map<string, DeckStats>> {
-    const headerLevel = this.settings?.parsing?.headerLevel;
-    const stats = await this.db.getAllDeckStatsFiltered(headerLevel);
+    const stats = await this.db.getAllDeckStats();
     const statsMap = new Map<string, DeckStats>();
 
     for (const stat of stats) {
@@ -668,18 +668,11 @@ export default class DecksPlugin extends Plugin {
   }
 
   async getFlashcardsByDeck(deckId: string): Promise<Flashcard[]> {
-    const headerLevel = this.settings?.parsing?.headerLevel;
-    return await this.db.getFlashcardsByDeckFiltered(deckId, headerLevel);
-  }
-
-  async getReviewableFlashcards(deckId: string): Promise<Flashcard[]> {
-    const headerLevel = this.settings?.parsing?.headerLevel;
-    return await this.db.getReviewableFlashcardsFiltered(deckId, headerLevel);
+    return await this.db.getFlashcardsByDeck(deckId);
   }
 
   async getNextCard(deckId: string): Promise<Flashcard | null> {
-    const headerLevel = this.settings?.parsing?.headerLevel;
-    return await this.scheduler.getNext(new Date(), deckId, { headerLevel });
+    return await this.scheduler.getNext(new Date(), deckId, {});
   }
 
   async getDailyReviewCounts(
@@ -689,12 +682,8 @@ export default class DecksPlugin extends Plugin {
   }
 
   async getDeckStatsById(deckId: string): Promise<DeckStats> {
-    const headerLevel = this.settings?.parsing?.headerLevel;
-    const stats = await this.db.getDeckStatsFiltered(deckId, headerLevel);
-    return {
-      deckId,
-      ...stats,
-    };
+    const stats = await this.db.getDeckStats(deckId);
+    return stats;
   }
 
   async updateDeckConfig(
@@ -724,6 +713,11 @@ export default class DecksPlugin extends Plugin {
       throw new Error(`Deck not found: ${deckId}`);
     }
 
+    // Check if header level is changing
+    const headerLevelChanged =
+      config.headerLevel !== undefined &&
+      config.headerLevel !== currentConfig.headerLevel;
+
     const updatedConfig = {
       ...currentConfig,
       ...config,
@@ -734,6 +728,17 @@ export default class DecksPlugin extends Plugin {
     };
 
     await this.db.updateDeck(deckId, { config: updatedConfig });
+
+    // If header level changed, force resync the deck to clean up old flashcards
+    if (headerLevelChanged) {
+      const deck = await this.db.getDeckById(deckId);
+      if (deck) {
+        this.debugLog(
+          `Header level changed for deck ${deck.name}, forcing resync`,
+        );
+        await this.deckManager.syncFlashcardsForDeck(deck.filepath, true);
+      }
+    }
 
     // Refresh stats for this deck since config changes can affect displayed stats
     if (this.view) {
@@ -825,10 +830,9 @@ class DecksView extends ItemView {
   private getDailyReviewCounts: (
     deckId: string,
   ) => Promise<{ newCount: number; reviewCount: number }>;
-  private getReviewableFlashcards: (deckId: string) => Promise<Flashcard[]>;
   private reviewFlashcard: (
     card: Flashcard,
-    difficulty: Difficulty,
+    difficulty: RatingLabel,
     timeElapsed?: number,
   ) => Promise<void>;
   private renderMarkdown: (
@@ -863,10 +867,9 @@ class DecksView extends ItemView {
     getDailyReviewCounts: (
       deckId: string,
     ) => Promise<{ newCount: number; reviewCount: number }>,
-    getReviewableFlashcards: (deckId: string) => Promise<Flashcard[]>,
     reviewFlashcard: (
       card: Flashcard,
-      difficulty: Difficulty,
+      rating: RatingLabel,
       timeElapsed?: number,
     ) => Promise<void>,
     renderMarkdown: (content: string, el: HTMLElement) => Component | null,
@@ -886,7 +889,6 @@ class DecksView extends ItemView {
     this.openStatisticsModal = openStatisticsModal;
     this.syncFlashcardsForDeck = syncFlashcardsForDeck;
     this.getDailyReviewCounts = getDailyReviewCounts;
-    this.getReviewableFlashcards = getReviewableFlashcards;
     this.reviewFlashcard = reviewFlashcard;
     this.renderMarkdown = renderMarkdown;
     this.setViewReference = setViewReference;
@@ -1083,33 +1085,34 @@ class DecksView extends ItemView {
 
       // Calculate remaining daily allowance
       const config = deck.config;
-      const remainingNew = config.enableNewCardsLimit
-        ? Math.max(0, config.newCardsLimit - dailyCounts.newCount)
+      const remainingNew = hasNewCardsLimit(config)
+        ? Math.max(0, config.newCardsPerDay - dailyCounts.newCount)
         : "unlimited";
-      const remainingReview = config.enableReviewCardsLimit
-        ? Math.max(0, config.reviewCardsLimit - dailyCounts.reviewCount)
+      const remainingReview = hasReviewCardsLimit(config)
+        ? Math.max(0, config.reviewCardsPerDay - dailyCounts.reviewCount)
         : "unlimited";
 
-      // Get all flashcards that are due for review (respecting daily limits)
-      const flashcards = await this.getReviewableFlashcards(deck.id);
+      // Check if there are any cards available using the scheduler
+      const nextCard = await this.scheduler.getNext(new Date(), deck.id, {
+        allowNew: true,
+      });
 
-      if (flashcards.length === 0) {
+      if (!nextCard) {
         let message = `No cards due for review in ${deck.name}`;
 
         // Check if limits are the reason no cards are available
-        const newLimitReached =
-          config.enableNewCardsLimit && remainingNew === 0;
+        const newLimitReached = hasNewCardsLimit(config) && remainingNew === 0;
         const reviewLimitReached =
-          config.enableReviewCardsLimit && remainingReview === 0;
+          hasReviewCardsLimit(config) && remainingReview === 0;
 
         if (newLimitReached && reviewLimitReached) {
           message += `\n\nDaily limits reached:`;
-          message += `\nNew cards: ${config.newCardsLimit}/${config.newCardsLimit}`;
-          message += `\nReview cards: ${config.reviewCardsLimit}/${config.reviewCardsLimit}`;
+          message += `\nNew cards: ${config.newCardsPerDay}/${config.newCardsPerDay}`;
+          message += `\nReview cards: ${config.reviewCardsPerDay}/${config.reviewCardsPerDay}`;
         } else if (newLimitReached) {
-          message += `\n\nDaily new cards limit reached: ${config.newCardsLimit}/${config.newCardsLimit}`;
+          message += `\n\nDaily new cards limit reached: ${config.newCardsPerDay}/${config.newCardsPerDay}`;
         } else if (reviewLimitReached) {
-          message += `\n\nDaily review cards limit reached: ${config.reviewCardsLimit}/${config.reviewCardsLimit}`;
+          message += `\n\nDaily review cards limit reached: ${config.reviewCardsPerDay}/${config.reviewCardsPerDay}`;
         }
 
         if (this.settings?.ui?.enableNotices !== false) {
@@ -1119,30 +1122,30 @@ class DecksView extends ItemView {
       }
 
       // Show daily limit info before starting review if limits are active
-      if (config.enableNewCardsLimit || config.enableReviewCardsLimit) {
+      if (hasNewCardsLimit(config) || hasReviewCardsLimit(config)) {
         let limitInfo = `Daily progress for ${deck.name}:\n`;
-        if (config.enableNewCardsLimit) {
-          if (dailyCounts.newCount >= config.newCardsLimit) {
-            limitInfo += `New cards: ${dailyCounts.newCount}/${config.newCardsLimit} (LIMIT EXCEEDED)\n`;
+        if (hasNewCardsLimit(config)) {
+          if (dailyCounts.newCount >= config.newCardsPerDay) {
+            limitInfo += `New cards: ${dailyCounts.newCount}/${config.newCardsPerDay} (LIMIT EXCEEDED)\n`;
           } else {
-            limitInfo += `New cards: ${dailyCounts.newCount}/${config.newCardsLimit} (${remainingNew} remaining)\n`;
+            limitInfo += `New cards: ${dailyCounts.newCount}/${config.newCardsPerDay} (${remainingNew} remaining)\n`;
           }
         }
-        if (config.enableReviewCardsLimit) {
-          if (dailyCounts.reviewCount >= config.reviewCardsLimit) {
-            limitInfo += `Review cards: ${dailyCounts.reviewCount}/${config.reviewCardsLimit} (LIMIT EXCEEDED)`;
+        if (hasReviewCardsLimit(config)) {
+          if (dailyCounts.reviewCount >= config.reviewCardsPerDay) {
+            limitInfo += `Review cards: ${dailyCounts.reviewCount}/${config.reviewCardsPerDay} (LIMIT EXCEEDED)`;
           } else {
-            limitInfo += `Review cards: ${dailyCounts.reviewCount}/${config.reviewCardsLimit} (${remainingReview} remaining)`;
+            limitInfo += `Review cards: ${dailyCounts.reviewCount}/${config.reviewCardsPerDay} (${remainingReview} remaining)`;
           }
         }
 
         // Add explanation when limits are exceeded but learning cards are available
         const newLimitExceeded =
-          config.enableNewCardsLimit &&
-          dailyCounts.newCount >= config.newCardsLimit;
+          hasNewCardsLimit(config) &&
+          dailyCounts.newCount >= config.newCardsPerDay;
         const reviewLimitExceeded =
-          config.enableReviewCardsLimit &&
-          dailyCounts.reviewCount >= config.reviewCardsLimit;
+          hasReviewCardsLimit(config) &&
+          dailyCounts.reviewCount >= config.reviewCardsPerDay;
 
         if (newLimitExceeded || reviewLimitExceeded) {
           limitInfo += `\n\nNote: Only learning cards will be shown (limits exceeded)`;
@@ -1157,14 +1160,13 @@ class DecksView extends ItemView {
       new FlashcardReviewModalWrapper(
         this.app,
         deck,
-        flashcards,
+        [nextCard],
         this.scheduler,
         this.settings,
         this.reviewFlashcard.bind(this),
         this.renderMarkdown,
         this.refresh.bind(this),
         this.refreshStatsById.bind(this),
-        this.getReviewableFlashcards.bind(this),
       ).open();
     } catch (error) {
       console.error("Error starting review:", error);

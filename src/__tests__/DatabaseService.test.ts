@@ -176,11 +176,10 @@ describe("DatabaseService", () => {
           tag: "#flashcards/test",
           lastReviewed: null,
           config: {
-            newCardsLimit: 20,
-            reviewCardsLimit: 100,
-            enableNewCardsLimit: false,
-            enableReviewCardsLimit: false,
+            newCardsPerDay: 0,
+            reviewCardsPerDay: 0,
             reviewOrder: "due-date",
+            headerLevel: 2,
             fsrs: {
               requestRetention: 0.9,
               profile: "STANDARD",
@@ -220,7 +219,7 @@ describe("DatabaseService", () => {
           "test.md",
           "#flashcards/test",
           null,
-          '{"newCardsLimit":20,"reviewCardsLimit":100,"enableNewCardsLimit":false,"enableReviewCardsLimit":false,"reviewOrder":"due-date","fsrs":{"requestRetention":0.9,"profile":"STANDARD"}}',
+          '{"newCardsLimit":20,"reviewCardsLimit":100,"enableNewCardsLimit":false,"enableReviewCardsLimit":false,"reviewOrder":"due-date","headerLevel":2,"fsrs":{"requestRetention":0.9,"profile":"STANDARD"}}',
           "2024-01-01",
           "2024-01-01",
         ]);
@@ -243,6 +242,7 @@ describe("DatabaseService", () => {
             enableNewCardsLimit: false,
             enableReviewCardsLimit: false,
             reviewOrder: "due-date",
+            headerLevel: 2,
             fsrs: {
               requestRetention: 0.9,
               profile: "STANDARD",
@@ -271,7 +271,7 @@ describe("DatabaseService", () => {
           "test.md",
           "#flashcards/test",
           null,
-          '{"newCardsLimit":20,"reviewCardsLimit":100,"enableNewCardsLimit":false,"enableReviewCardsLimit":false,"reviewOrder":"due-date","fsrs":{"requestRetention":0.9,"profile":"STANDARD"}}',
+          '{"newCardsLimit":20,"reviewCardsLimit":100,"enableNewCardsLimit":false,"enableReviewCardsLimit":false,"reviewOrder":"due-date","headerLevel":2,"fsrs":{"requestRetention":0.9,"profile":"STANDARD"}}',
           "2024-01-01",
           "2024-01-01",
         ]);
@@ -294,6 +294,7 @@ describe("DatabaseService", () => {
             enableNewCardsLimit: false,
             enableReviewCardsLimit: false,
             reviewOrder: "due-date",
+            headerLevel: 2,
             fsrs: {
               requestRetention: 0.9,
               profile: "STANDARD",
@@ -322,7 +323,7 @@ describe("DatabaseService", () => {
           "test.md",
           "#flashcards/test",
           null,
-          '{"newCardsLimit":20,"reviewCardsLimit":100,"enableNewCardsLimit":false,"enableReviewCardsLimit":false,"reviewOrder":"due-date","fsrs":{"requestRetention":0.9,"profile":"STANDARD"}}',
+          '{"newCardsLimit":20,"reviewCardsLimit":100,"enableNewCardsLimit":false,"enableReviewCardsLimit":false,"reviewOrder":"due-date","headerLevel":2,"fsrs":{"requestRetention":0.9,"profile":"STANDARD"}}',
           "2024-01-01",
           "2024-01-01",
         ]);
@@ -345,6 +346,7 @@ describe("DatabaseService", () => {
             enableNewCardsLimit: false,
             enableReviewCardsLimit: false,
             reviewOrder: "due-date",
+            headerLevel: 2,
             fsrs: {
               requestRetention: 0.9,
               profile: "STANDARD",
@@ -374,7 +376,7 @@ describe("DatabaseService", () => {
           "test.md",
           "#flashcards/test",
           null,
-          '{"newCardsLimit":20,"reviewCardsLimit":100,"enableNewCardsLimit":false,"enableReviewCardsLimit":false,"reviewOrder":"due-date","fsrs":{"requestRetention":0.9,"profile":"STANDARD"}}',
+          '{"newCardsLimit":20,"reviewCardsLimit":100,"enableNewCardsLimit":false,"enableReviewCardsLimit":false,"reviewOrder":"due-date","headerLevel":2,"fsrs":{"requestRetention":0.9,"profile":"STANDARD"}}',
           "2024-01-01",
           "2024-01-01",
         ]);
@@ -428,7 +430,7 @@ describe("DatabaseService", () => {
             "math.md",
             "#flashcards/math",
             null,
-            '{"newCardsLimit":20,"reviewCardsLimit":100,"enableNewCardsLimit":false,"enableReviewCardsLimit":false,"reviewOrder":"due-date"}',
+            '{"newCardsLimit":20,"reviewCardsLimit":100,"enableNewCardsLimit":false,"enableReviewCardsLimit":false,"reviewOrder":"due-date","headerLevel":2}',
             "2024-01-01",
             "2024-01-01",
           ])
@@ -438,7 +440,7 @@ describe("DatabaseService", () => {
             "science.md",
             "#flashcards/science",
             null,
-            '{"newCardsLimit":20,"reviewCardsLimit":100,"enableNewCardsLimit":false,"enableReviewCardsLimit":false,"reviewOrder":"due-date"}',
+            '{"newCardsLimit":20,"reviewCardsLimit":100,"enableNewCardsLimit":false,"enableReviewCardsLimit":false,"reviewOrder":"due-date","headerLevel":2}',
             "2024-01-01",
             "2024-01-01",
           ]);
@@ -502,7 +504,7 @@ describe("DatabaseService", () => {
           flashcard.type,
           flashcard.sourceFile,
           flashcard.contentHash,
-          flashcard.headerLevel || null,
+
           flashcard.state,
           flashcard.dueDate,
           flashcard.interval,
@@ -584,11 +586,10 @@ describe("DatabaseService", () => {
           tag: "#test",
           lastReviewed: null,
           config: {
-            newCardsLimit: 20,
-            reviewCardsLimit: 100,
-            enableNewCardsLimit: false,
-            enableReviewCardsLimit: false,
+            newCardsPerDay: 0,
+            reviewCardsPerDay: 0,
             reviewOrder: "due-date",
+            headerLevel: 2,
             fsrs: {
               requestRetention: 0.9,
               profile: "STANDARD",
@@ -634,11 +635,10 @@ describe("DatabaseService", () => {
           tag: "#test",
           lastReviewed: null,
           config: {
-            newCardsLimit: 5,
-            reviewCardsLimit: 10,
-            enableNewCardsLimit: true,
-            enableReviewCardsLimit: true,
+            newCardsPerDay: 20,
+            reviewCardsPerDay: 100,
             reviewOrder: "due-date",
+            headerLevel: 2,
             fsrs: {
               requestRetention: 0.9,
               profile: "STANDARD",
@@ -684,11 +684,10 @@ describe("DatabaseService", () => {
           tag: "#test",
           lastReviewed: null,
           config: {
-            newCardsLimit: 0,
-            reviewCardsLimit: 0,
-            enableNewCardsLimit: true,
-            enableReviewCardsLimit: true,
+            newCardsPerDay: 0,
+            reviewCardsPerDay: 0,
             reviewOrder: "due-date",
+            headerLevel: 2,
             fsrs: {
               requestRetention: 0.9,
               profile: "STANDARD",
@@ -739,11 +738,10 @@ describe("DatabaseService", () => {
           tag: "#test",
           lastReviewed: null,
           config: {
-            newCardsLimit: 5, // Limit set to 5
-            reviewCardsLimit: 3, // Limit set to 3
-            enableNewCardsLimit: true,
-            enableReviewCardsLimit: true,
+            newCardsPerDay: 5, // Limit set to 5
+            reviewCardsPerDay: 3, // Limit set to 3
             reviewOrder: "due-date",
+            headerLevel: 2,
             fsrs: {
               requestRetention: 0.9,
               profile: "STANDARD",
@@ -807,11 +805,10 @@ describe("DatabaseService", () => {
             tag: "#test",
             lastReviewed: null,
             config: {
-              newCardsLimit: 5,
-              reviewCardsLimit: 10,
-              enableNewCardsLimit: true,
-              enableReviewCardsLimit: true,
+              newCardsPerDay: 5,
+              reviewCardsPerDay: 3,
               reviewOrder: "due-date",
+              headerLevel: 2,
               fsrs: {
                 requestRetention: 0.9,
                 profile: "STANDARD",
@@ -900,11 +897,10 @@ describe("DatabaseService", () => {
             tag: "#test",
             lastReviewed: null,
             config: {
-              newCardsLimit: 20,
-              reviewCardsLimit: 100,
-              enableNewCardsLimit: false,
-              enableReviewCardsLimit: false,
+              newCardsPerDay: 20,
+              reviewCardsPerDay: 100,
               reviewOrder: "due-date",
+              headerLevel: 2,
               fsrs: {
                 requestRetention: 0.9,
                 profile: "STANDARD",

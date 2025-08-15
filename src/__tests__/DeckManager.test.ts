@@ -117,6 +117,7 @@ describe("DeckManager", () => {
     mockDb.deleteFlashcard = jest.fn();
     mockDb.getLatestReviewLogForFlashcard = jest.fn();
     mockDb.updateDeckTimestamp = jest.fn();
+    mockDb.updateDeckHeaderLevel = jest.fn();
     mockDb.createDeck = jest.fn();
 
     // Create DeckManager instance
@@ -395,20 +396,18 @@ It has many attractions.`;
       const file = new (TFile as MockTFileConstructor)("test.md");
       jest.spyOn(mockVault, "read").mockResolvedValue(content);
 
-      const flashcards = await deckManager.parseFlashcardsFromFile(file);
+      const flashcards = await deckManager.parseFlashcardsFromFile(file, 2);
 
       expect(flashcards).toHaveLength(2);
       expect(flashcards[0]).toEqual({
         front: "What is 2+2?",
         back: "The answer is 4.",
         type: "header-paragraph",
-        headerLevel: 2,
       });
       expect(flashcards[1]).toEqual({
         front: "What is the capital of France?",
         back: "Paris is the capital of France.\nIt has many attractions.",
         type: "header-paragraph",
-        headerLevel: 2,
       });
     });
 
@@ -457,54 +456,75 @@ Answer to question 2.`;
       jest.spyOn(mockVault, "read").mockResolvedValue(content);
 
       // Create DeckManager with mock plugin that has H2 setting
-      const mockPlugin: MockPlugin = {
-        db: mockDb,
-        view: null,
-        updateDeckConfig: async () => {},
-        settings: {
-          parsing: {
-            headerLevel: 2,
-          },
-        },
-      };
-      const deckManagerH2 = new DeckManager(
-        mockVault,
-        mockMetadataCache,
-        mockDb,
-        mockPlugin,
-      );
-
-      const flashcardsH2 = await deckManagerH2.parseFlashcardsFromFile(file);
-
-      // Should parse all headers (H1, H2, H3)
-      expect(flashcardsH2).toHaveLength(3);
-      expect(flashcardsH2[0]).toEqual({
+      // Test parsing with different header levels
+      // Parser now only captures the specified header level
+      const flashcardsH1 = await deckManager.parseFlashcardsFromFile(file, 1);
+      expect(flashcardsH1).toHaveLength(1);
+      expect(flashcardsH1[0]).toEqual({
         front: "Title (H1)",
         back: "Some content under H1.",
         type: "header-paragraph",
-        headerLevel: 1,
       });
 
-      // Test with H3 setting
-      mockPlugin.settings!.parsing.headerLevel = 3;
-      const deckManagerH3 = new DeckManager(
-        mockVault,
-        mockMetadataCache,
-        mockDb,
-        mockPlugin,
-      );
-
-      const flashcardsH3 = await deckManagerH3.parseFlashcardsFromFile(file);
-
-      // Should parse all headers (H1, H2, H3)
-      expect(flashcardsH3).toHaveLength(3);
-      expect(flashcardsH3[1]).toEqual({
+      const flashcardsH2 = await deckManager.parseFlashcardsFromFile(file, 2);
+      expect(flashcardsH2).toHaveLength(1);
+      expect(flashcardsH2[0]).toEqual({
         front: "Question 1 (H2)",
         back: "Answer to question 1.",
         type: "header-paragraph",
-        headerLevel: 2,
+      });
+
+      const flashcardsH3 = await deckManager.parseFlashcardsFromFile(file, 3);
+      expect(flashcardsH3).toHaveLength(1);
+      expect(flashcardsH3[0]).toEqual({
+        front: "Question 2 (H3)",
+        back: "Answer to question 2.",
+        type: "header-paragraph",
       });
     });
+
+    it("should generate consistent flashcard IDs by stripping header symbols", async () => {
+      // Test that the same content at different header levels generates the same ID
+      const content1 = `# My Question\nThis is the answer.`;
+      const content2 = `## My Question\nThis is the answer.`;
+      const content3 = `### My Question\nThis is the answer.`;
+
+      // Mock the file reading for each content
+      const file1 = { path: "test1.md", stat: { mtime: Date.now() } } as TFile;
+      const file2 = { path: "test2.md", stat: { mtime: Date.now() } } as TFile;
+      const file3 = { path: "test3.md", stat: { mtime: Date.now() } } as TFile;
+
+      jest
+        .spyOn(mockVault, "read")
+        .mockResolvedValueOnce(content1)
+        .mockResolvedValueOnce(content2)
+        .mockResolvedValueOnce(content3);
+
+      const flashcards1 = await deckManager.parseFlashcardsFromFile(file1, 1);
+      const flashcards2 = await deckManager.parseFlashcardsFromFile(file2, 2);
+      const flashcards3 = await deckManager.parseFlashcardsFromFile(file3, 3);
+
+      // All should have same front text (stripped of # symbols)
+      expect(flashcards1[0].front).toBe("My Question");
+      expect(flashcards2[0].front).toBe("My Question");
+      expect(flashcards3[0].front).toBe("My Question");
+
+      // Generate IDs for all three - should be identical
+      const id1 = deckManager.generateFlashcardId(flashcards1[0].front);
+      const id2 = deckManager.generateFlashcardId(flashcards2[0].front);
+      const id3 = deckManager.generateFlashcardId(flashcards3[0].front);
+
+      expect(id1).toBe(id2);
+      expect(id2).toBe(id3);
+      expect(id1).toBe(id3);
+    });
+
+    // TODO: Add integration test for header level change detection
+    // Manual testing required:
+    // 1. Create a deck with H2 headers and some flashcards
+    // 2. Change deck config to use H1 headers
+    // 3. Verify old H2 flashcards are deleted and new H1 flashcards are created
+    // 4. Verify lastHeaderLevel is updated in database
 
     it("should create deck for single file without full sync", async () => {
       const filePath = "test.md";
@@ -525,11 +545,10 @@ Answer to question 2.`;
           filepath: filePath,
           tag: tag,
           config: expect.objectContaining({
-            newCardsLimit: 20,
-            reviewCardsLimit: 100,
-            enableNewCardsLimit: false,
-            enableReviewCardsLimit: false,
+            newCardsPerDay: 0,
+            reviewCardsPerDay: 0,
             reviewOrder: "due-date",
+            headerLevel: 2,
           }),
         }),
       );
@@ -775,11 +794,10 @@ Answer 1`;
         tag: "#flashcards/math",
         lastReviewed: null,
         config: {
-          newCardsLimit: 20,
-          reviewCardsLimit: 100,
-          enableNewCardsLimit: false,
-          enableReviewCardsLimit: false,
+          newCardsPerDay: 0,
+          reviewCardsPerDay: 0,
           reviewOrder: "due-date",
+          headerLevel: 2,
           fsrs: {
             requestRetention: 0.9,
             profile: "STANDARD",
@@ -796,11 +814,10 @@ Answer 1`;
         tag: "#flashcards/science",
         lastReviewed: null,
         config: {
-          newCardsLimit: 30,
-          reviewCardsLimit: 150,
-          enableNewCardsLimit: false,
-          enableReviewCardsLimit: false,
+          newCardsPerDay: 0,
+          reviewCardsPerDay: 0,
           reviewOrder: "due-date",
+          headerLevel: 2,
           fsrs: {
             requestRetention: 0.9,
             profile: "STANDARD",
@@ -1017,51 +1034,47 @@ Answer 1`;
   });
 
   describe("header level parsing", () => {
-    it("should parse all header levels and include headerLevel property", async () => {
-      const content = `# H1 Header
+    it("should parse specific header level only", async () => {
+      const content = `
+# H1 Header
 H1 content
 
 ## H2 Header
 H2 content
 
 ### H3 Header
-H3 content`;
+H3 content
+      `.trim();
 
       const file = new (TFile as MockTFileConstructor)("test.md");
       jest.spyOn(mockVault, "read").mockResolvedValue(content);
 
-      const flashcards = await deckManager.parseFlashcardsFromFile(file);
+      // Parse only H2 headers
+      const flashcardsH2 = await deckManager.parseFlashcardsFromFile(file, 2);
+      expect(flashcardsH2).toHaveLength(1);
+      expect(flashcardsH2[0]).toEqual({
+        front: "H2 Header",
+        back: "H2 content",
+        type: "header-paragraph",
+      });
 
-      // Should parse all header levels
-      expect(flashcards).toHaveLength(3);
+      // Parse only H1 headers
+      const flashcardsH1 = await deckManager.parseFlashcardsFromFile(file, 1);
+      expect(flashcardsH1).toHaveLength(1);
+      expect(flashcardsH1[0]).toEqual({
+        front: "H1 Header",
+        back: "H1 content",
+        type: "header-paragraph",
+      });
 
-      // Check that headerLevel is set correctly
-      expect(flashcards[0]).toEqual(
-        expect.objectContaining({
-          front: "H1 Header",
-          back: "H1 content",
-          type: "header-paragraph",
-          headerLevel: 1,
-        }),
-      );
-
-      expect(flashcards[1]).toEqual(
-        expect.objectContaining({
-          front: "H2 Header",
-          back: "H2 content",
-          type: "header-paragraph",
-          headerLevel: 2,
-        }),
-      );
-
-      expect(flashcards[2]).toEqual(
-        expect.objectContaining({
-          front: "H3 Header",
-          back: "H3 content",
-          type: "header-paragraph",
-          headerLevel: 3,
-        }),
-      );
+      // Parse only H3 headers
+      const flashcardsH3 = await deckManager.parseFlashcardsFromFile(file, 3);
+      expect(flashcardsH3).toHaveLength(1);
+      expect(flashcardsH3[0]).toEqual({
+        front: "H3 Header",
+        back: "H3 content",
+        type: "header-paragraph",
+      });
     });
   });
 
@@ -1106,7 +1119,7 @@ Answer 2 (different)`;
           type: "header-paragraph",
           sourceFile: "test.md",
           contentHash: "hash1",
-          headerLevel: 2,
+
           state: "new",
           dueDate: new Date().toISOString(),
           interval: 0,
@@ -1126,7 +1139,7 @@ Answer 2 (different)`;
           type: "header-paragraph",
           sourceFile: "test.md",
           contentHash: "hash2",
-          headerLevel: 2,
+
           state: "new",
           dueDate: new Date().toISOString(),
           interval: 0,

@@ -9,7 +9,7 @@ import {
   validateRequestRetention,
 } from "./fsrs-weights";
 
-export type Difficulty = "again" | "hard" | "good" | "easy";
+export type RatingLabel = "again" | "hard" | "good" | "easy";
 
 export interface FSRSParameters {
   requestRetention: number; // target retention rate (0,1)
@@ -140,7 +140,7 @@ export class FSRS {
   /**
    * Update a flashcard based on the selected difficulty
    */
-  updateCard(card: Flashcard, difficulty: Difficulty): Flashcard {
+  updateCard(card: Flashcard, difficulty: RatingLabel): Flashcard {
     const rating = this.difficultyToRating(difficulty);
     const fsrsCard = this.flashcardToFSRS(card);
     const now = new Date();
@@ -540,7 +540,7 @@ export class FSRS {
     return state === "New" ? "new" : "review";
   }
 
-  private difficultyToRating(difficulty: Difficulty): number {
+  private difficultyToRating(difficulty: RatingLabel): number {
     switch (difficulty) {
       case "again":
         return 1;

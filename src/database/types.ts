@@ -3,11 +3,17 @@ import { DEFAULT_FSRS_PARAMETERS } from "../algorithm/fsrs-weights";
 export type ReviewOrder = "due-date" | "random";
 
 export interface DeckConfig {
-  newCardsLimit: number; // Max new cards per day
-  reviewCardsLimit: number; // Max review cards per day
-  enableNewCardsLimit: boolean; // Whether to enforce new cards limit
-  enableReviewCardsLimit: boolean; // Whether to enforce review cards limit
+  // Daily limits
+  newCardsPerDay: number; // 0 = unlimited
+  reviewCardsPerDay: number; // 0 = unlimited
+
+  // Content parsing
+  headerLevel: number; // 1-6, which header level to parse for header-paragraph flashcards
+
+  // Review behavior
   reviewOrder: ReviewOrder; // Order for review cards: oldest due first or random
+
+  // FSRS algorithm settings
   fsrs: {
     requestRetention: number;
     profile: "INTENSIVE" | "STANDARD";
@@ -35,7 +41,7 @@ export interface Flashcard {
   type: "header-paragraph" | "table";
   sourceFile: string;
   contentHash: string; // Hash of back content only (front is used for ID)
-  headerLevel?: number; // Header level (1-6) for header-paragraph cards, null for table cards
+
   state: FlashcardState;
   dueDate: string;
   interval: number; // in minutes
@@ -164,16 +170,24 @@ export interface Statistics {
 }
 
 export const DEFAULT_DECK_CONFIG: DeckConfig = {
-  newCardsLimit: 20,
-  reviewCardsLimit: 100,
-  enableNewCardsLimit: false,
-  enableReviewCardsLimit: false,
+  newCardsPerDay: 0, // 0 = unlimited
+  reviewCardsPerDay: 0, // 0 = unlimited
+  headerLevel: 2, // Default to H2 headers
   reviewOrder: "due-date",
   fsrs: {
     requestRetention: DEFAULT_FSRS_PARAMETERS.requestRetention,
     profile: "STANDARD",
   },
 };
+
+// Utility functions for daily limits
+export function hasNewCardsLimit(config: DeckConfig): boolean {
+  return config.newCardsPerDay > 0;
+}
+
+export function hasReviewCardsLimit(config: DeckConfig): boolean {
+  return config.reviewCardsPerDay > 0;
+}
 
 /**
  * Determine if a flashcard is mature (interval > 21 days)

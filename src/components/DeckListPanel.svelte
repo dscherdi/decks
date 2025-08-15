@@ -59,7 +59,7 @@
     async function handleRefresh() {
         isRefreshing = true;
         try {
-            await onRefresh();
+            onRefresh();
             refreshHeatmap();
         } catch (error) {
             console.error("Error during refresh:", error);
@@ -527,13 +527,13 @@
                             class="col-stat"
                             class:has-cards={stats.newCount > 0}
                             class:updating={isUpdatingStats}
-                            class:has-limit={deck.config.enableNewCardsLimit}
-                            title={deck.config.enableNewCardsLimit
-                                ? `${stats.newCount} new cards available today (limit: ${deck.config.newCardsLimit})`
+                            class:has-limit={deck.config.newCardsPerDay > 0}
+                            title={deck.config.newCardsPerDay > 0
+                                ? `${stats.newCount} new cards available today (limit: ${deck.config.newCardsPerDay})`
                                 : `${stats.newCount} new cards due`}
                         >
                             {stats.newCount}
-                            {#if deck.config.enableNewCardsLimit}
+                            {#if deck.config.newCardsPerDay > 0}
                                 <span class="limit-indicator">📅</span>
                             {/if}
                         </div>
@@ -549,13 +549,13 @@
                             class="col-stat"
                             class:has-cards={stats.dueCount > 0}
                             class:updating={isUpdatingStats}
-                            class:has-limit={deck.config.enableReviewCardsLimit}
-                            title={deck.config.enableReviewCardsLimit
-                                ? `${stats.dueCount} review cards available today (limit: ${deck.config.reviewCardsLimit})`
+                            class:has-limit={deck.config.reviewCardsPerDay > 0}
+                            title={deck.config.reviewCardsPerDay > 0
+                                ? `${stats.dueCount} review cards available today (limit: ${deck.config.reviewCardsPerDay})`
                                 : `${stats.dueCount} review cards due`}
                         >
                             {stats.dueCount}
-                            {#if deck.config.enableReviewCardsLimit}
+                            {#if deck.config.reviewCardsPerDay > 0}
                                 <span class="limit-indicator">📅</span>
                             {/if}
                         </div>

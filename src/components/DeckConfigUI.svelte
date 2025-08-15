@@ -13,11 +13,12 @@
         configChange: DeckConfig;
     }>();
 
-    let newCardsLimit = config.newCardsLimit;
-    let reviewCardsLimit = config.reviewCardsLimit;
-    let enableNewCardsLimit = config.enableNewCardsLimit;
-    let enableReviewCardsLimit = config.enableReviewCardsLimit;
+    let newCardsLimit = config.newCardsPerDay;
+    let reviewCardsLimit = config.reviewCardsPerDay;
+    let enableNewCardsLimit = config.newCardsPerDay > 0;
+    let enableReviewCardsLimit = config.reviewCardsPerDay > 0;
     let reviewOrder: ReviewOrder = config.reviewOrder;
+    let headerLevel = config.headerLevel;
     let requestRetention = config.fsrs.requestRetention;
     let profile: FSRSProfile = config.fsrs.profile;
     let saving = false;
@@ -27,6 +28,7 @@
     let enableReviewCardsContainer: HTMLElement;
     let enableReviewCardsLimitContainer: HTMLElement;
     let reviewOrderContainer: HTMLElement;
+    let headerLevelContainer: HTMLElement;
     let requestRetentionContainer: HTMLElement;
     let profileContainer: HTMLElement;
     let fsrsResetContainer: HTMLElement;
@@ -38,11 +40,14 @@
     // Reactive statement to update config when values change
     $: {
         const newConfig = {
-            newCardsLimit: Number(newCardsLimit) || 0,
-            reviewCardsLimit: Number(reviewCardsLimit) || 0,
-            enableNewCardsLimit,
-            enableReviewCardsLimit,
+            newCardsPerDay: enableNewCardsLimit
+                ? Number(newCardsLimit) || 0
+                : 0,
+            reviewCardsPerDay: enableReviewCardsLimit
+                ? Number(reviewCardsLimit) || 0
+                : 0,
             reviewOrder,
+            headerLevel: Number(headerLevel) || 2,
             fsrs: {
                 requestRetention: Number(requestRetention) || 0.9,
                 profile: profile,
@@ -54,11 +59,14 @@
     function handleSave() {
         saving = true;
         const finalConfig: DeckConfig = {
-            newCardsLimit: Number(newCardsLimit) || 0,
-            reviewCardsLimit: Number(reviewCardsLimit) || 0,
-            enableNewCardsLimit,
-            enableReviewCardsLimit,
+            newCardsPerDay: enableNewCardsLimit
+                ? Number(newCardsLimit) || 0
+                : 0,
+            reviewCardsPerDay: enableReviewCardsLimit
+                ? Number(reviewCardsLimit) || 0
+                : 0,
             reviewOrder,
+            headerLevel: Number(headerLevel) || 2,
             fsrs: {
                 requestRetention: Number(requestRetention) || 0.9,
                 profile: profile,
@@ -177,6 +185,28 @@
                 );
         }
 
+        // Header Level Dropdown
+        if (headerLevelContainer) {
+            new Setting(headerLevelContainer)
+                .setName("Header Level for Flashcards")
+                .setDesc(
+                    "Which header level to use for header-paragraph flashcards",
+                )
+                .addDropdown((dropdown) =>
+                    dropdown
+                        .addOption("1", "H1 (#)")
+                        .addOption("2", "H2 (##)")
+                        .addOption("3", "H3 (###)")
+                        .addOption("4", "H4 (####)")
+                        .addOption("5", "H5 (#####)")
+                        .addOption("6", "H6 (######)")
+                        .setValue(headerLevel.toString())
+                        .onChange((value) => {
+                            headerLevel = parseInt(value);
+                        }),
+                );
+        }
+
         // FSRS Settings
         if (requestRetentionContainer) {
             new Setting(requestRetentionContainer)
@@ -259,6 +289,16 @@
             class:disabled={!enableReviewCardsLimit}
         ></div>
         <div bind:this={reviewOrderContainer}></div>
+    </div>
+
+    <!-- Parsing Settings -->
+    <div class="deck-settings-section">
+        <h3>Parsing Settings</h3>
+        <div class="setting-item-description-global">
+            Configure how flashcards are parsed from your notes for this deck.
+        </div>
+
+        <div bind:this={headerLevelContainer}></div>
     </div>
 
     <!-- FSRS Algorithm Settings -->

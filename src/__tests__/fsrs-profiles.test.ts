@@ -1,4 +1,4 @@
-import { FSRS, FSRSParameters, Difficulty } from "../algorithm/fsrs";
+import { FSRS, FSRSParameters, RatingLabel } from "../algorithm/fsrs";
 import {
   FSRS_WEIGHTS_STANDARD,
   FSRS_WEIGHTS_SUBDAY,
@@ -253,7 +253,7 @@ describe("FSRS Profiles", () => {
       const patterns = ["good", "hard", "good", "easy", "again"];
 
       for (let i = 0; i < patterns.length; i++) {
-        card = standardFSRS.updateCard(card, patterns[i] as Difficulty);
+        card = standardFSRS.updateCard(card, patterns[i] as RatingLabel);
         const scheduling = standardFSRS.getSchedulingInfo(card);
 
         // Allow for edge cases where intervals might be equal due to algorithm constraints
@@ -290,7 +290,7 @@ describe("FSRS Profiles", () => {
               : i % 2 === 0
                 ? "good"
                 : "easy";
-        card = standardFSRS.updateCard(card, difficulty as Difficulty);
+        card = standardFSRS.updateCard(card, difficulty as RatingLabel);
 
         // Stability should remain finite and positive
         expect(isFinite(card.stability)).toBe(true);

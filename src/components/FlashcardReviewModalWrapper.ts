@@ -1,19 +1,19 @@
 import { Modal, Component, Notice } from "obsidian";
 import type { Deck, Flashcard } from "../database/types";
-import type { Difficulty } from "../algorithm/fsrs";
+import type { RatingLabel } from "../algorithm/fsrs";
 import type { Scheduler } from "../services/Scheduler";
 import type { FlashcardsSettings } from "../settings";
 import FlashcardReviewModal from "./FlashcardReviewModal.svelte";
 
 export class FlashcardReviewModalWrapper extends Modal {
   private deck: Deck;
-  private flashcards: Flashcard[];
+  private initialCard: Flashcard | null;
   private scheduler: Scheduler;
   private settings: FlashcardsSettings;
   private reviewFlashcard: (
     deck: Deck,
     card: Flashcard,
-    difficulty: Difficulty,
+    difficulty: RatingLabel,
     timeElapsed?: number,
   ) => Promise<void>;
   private renderMarkdown: (
@@ -22,7 +22,6 @@ export class FlashcardReviewModalWrapper extends Modal {
   ) => Component | null;
   private refreshStats: () => Promise<void>;
   private refreshStatsById: (deckId: string) => Promise<void>;
-  private getReviewableFlashcards: (deckId: string) => Promise<Flashcard[]>;
   private component: FlashcardReviewModal | null = null;
   private markdownComponents: Component[] = [];
 
@@ -35,24 +34,22 @@ export class FlashcardReviewModalWrapper extends Modal {
     reviewFlashcard: (
       deck: Deck,
       card: Flashcard,
-      difficulty: Difficulty,
+      rating: RatingLabel,
       timeElapsed?: number,
     ) => Promise<void>,
     renderMarkdown: (content: string, el: HTMLElement) => Component | null,
     refreshStats: () => Promise<void>,
     refreshStatsById: (deckId: string) => Promise<void>,
-    getReviewableFlashcards: (deckId: string) => Promise<Flashcard[]>,
   ) {
     super(app);
     this.deck = deck;
-    this.flashcards = flashcards;
+    this.initialCard = flashcards.length > 0 ? flashcards[0] : null;
     this.scheduler = scheduler;
     this.settings = settings;
     this.reviewFlashcard = reviewFlashcard;
     this.renderMarkdown = renderMarkdown;
     this.refreshStats = refreshStats;
     this.refreshStatsById = refreshStatsById;
-    this.getReviewableFlashcards = getReviewableFlashcards;
   }
 
   async onOpen() {
@@ -72,16 +69,15 @@ export class FlashcardReviewModalWrapper extends Modal {
     this.component = new FlashcardReviewModal({
       target: container,
       props: {
-        flashcards: this.flashcards,
+        initialCard: this.initialCard,
         deck: this.deck,
-        currentIndex: 0,
         onClose: () => this.close(),
         onReview: async (
           card: Flashcard,
-          difficulty: Difficulty,
+          rating: RatingLabel,
           timeElapsed?: number,
         ) => {
-          await this.reviewFlashcard(this.deck, card, difficulty, timeElapsed);
+          await this.reviewFlashcard(this.deck, card, rating, timeElapsed);
         },
         renderMarkdown: (content: string, el: HTMLElement) => {
           const component = this.renderMarkdown(content, el);
@@ -96,9 +92,6 @@ export class FlashcardReviewModalWrapper extends Modal {
           if (reviewedCard) {
             await this.refreshStatsById(reviewedCard.deckId);
           }
-        },
-        refreshCardList: async () => {
-          return await this.getReviewableFlashcards(this.deck.id);
         },
       },
     });

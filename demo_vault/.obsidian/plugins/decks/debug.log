@@ -219,3 +219,51 @@
 [2025-08-14T11:19:21.004Z] Found 0 existing flashcards for deck test
 [2025-08-14T11:19:21.007Z] Executing 1 batch database operations
 [2025-08-14T11:19:21.036Z] Refresh complete
+[2025-08-14T15:15:23.274Z] Decks plugin loaded successfully
+[2025-08-14T15:15:23.406Z] Refresh complete
+[2025-08-14T15:15:24.159Z] No content change, skipping update: Teilstück...
+[2025-08-14T15:15:28.630Z] Sync already in progress, skipping...
+[2025-08-14T15:15:32.941Z] No content change, skipping update: da steppt der Bär...
+[2025-08-14T15:15:34.477Z] Existing card ID: card_uhm64m, Front: "**modulieren**"
+[2025-08-14T15:15:36.300Z] Executing 65 batch database operations
+[2025-08-14T15:15:41.068Z] Existing card ID: card_rxziyu, Front: "**kanonisch**"
+[2025-08-14T15:15:41.738Z] Executing 65 batch database operations
+[2025-08-14T15:15:51.482Z] Existing card ID: card_q1az4y, Front: "Stil entwickeln"
+[2025-08-14T15:15:51.582Z] No content change, skipping update: Stil entwickeln...
+[2025-08-14T15:15:52.270Z] Existing card ID: card_v7q7si, Front: "What is the factorial of a number?"
+[2025-08-14T15:15:52.849Z] No content change, skipping update: What is the factorial of a num...
+[2025-08-14T15:15:52.861Z] Existing card ID: card_css29, Front: "What is the difference between == and === in JavaScript?"
+[2025-08-14T15:15:52.869Z] No content change, skipping update: What is the difference between...
+[2025-08-14T15:15:52.908Z] Existing card ID: card_ue68zz, Front: "domingo"
+[2025-08-14T15:15:52.942Z] No content change, skipping update: domingo...
+[2025-08-14T15:15:52.998Z] Existing card ID: card_fmvo52, Front: "Whats my note?"
+[2025-08-14T15:15:53.066Z] No content change, skipping update: Whats my note?...
+[2025-08-14T15:15:53.081Z] Refresh complete
+[2025-08-14T15:17:09.844Z] No deck found for filepath: 1200 Deutsche Redewendungen
+[2025-08-14T15:20:53.497Z] Syncing flashcards for deck: 10000 German nouns (Flashcards/10000 German nouns.md)
+[2025-08-14T15:20:53.637Z] Refresh complete
+[2025-08-14T15:20:55.517Z] Decks plugin loaded successfully
+[2025-08-14T15:20:55.731Z] Refresh complete
+[2025-08-14T15:20:57.205Z] No content change, skipping update: Teilstück...
+[2025-08-14T15:21:04.149Z] Existing card ID: card_nm2778, Front: "da steppt der Bär"
+[2025-08-14T15:21:10.210Z] No content change, skipping update: da steppt der Bär...
+[2025-08-14T15:21:12.434Z] Existing card ID: card_uhm64m, Front: "**modulieren**"
+[2025-08-14T15:21:14.811Z] Executing 65 batch database operations
+[2025-08-14T15:21:21.668Z] Existing card ID: card_rxziyu, Front: "**kanonisch**"
+[2025-08-14T15:21:23.204Z] Executing 65 batch database operations
+[2025-08-14T15:21:37.452Z] Existing card ID: card_q1az4y, Front: "Stil entwickeln"
+[2025-08-14T15:21:37.639Z] No content change, skipping update: Stil entwickeln...
+[2025-08-14T15:21:38.609Z] Existing card ID: card_v7q7si, Front: "What is the factorial of a number?"
+[2025-08-14T15:21:39.301Z] No content change, skipping update: What is the factorial of a num...
+[2025-08-14T15:21:39.324Z] Existing card ID: card_css29, Front: "What is the difference between == and === in JavaScript?"
+[2025-08-14T15:21:39.342Z] No content change, skipping update: What is the difference between...
+[2025-08-14T15:21:39.406Z] Existing card ID: card_ue68zz, Front: "domingo"
+[2025-08-14T15:21:39.463Z] No content change, skipping update: domingo...
+[2025-08-14T15:21:39.570Z] Existing card ID: card_fmvo52, Front: "Whats my note?"
+[2025-08-14T15:21:39.639Z] No content change, skipping update: Whats my note?...
+[2025-08-14T15:21:39.660Z] Refresh complete
+[2025-08-14T15:22:39.569Z] No deck found for filepath: 1200 Deutsche Redewendungen
+[2025-08-14T15:22:41.429Z] Updated all deck stats
+[2025-08-14T15:22:45.784Z] Updated all deck stats
+[2025-08-14T15:22:49.830Z] File Flashcards/500 Nomen-Verb Verbindungen.md not modified since last sync, skipping
+[2025-08-14T15:22:49.855Z] Refresh complete

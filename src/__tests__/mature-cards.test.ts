@@ -15,7 +15,7 @@ describe("Mature Cards (TODO 19)", () => {
     type: "header-paragraph",
     sourceFile: "test.md",
     contentHash: "hash123",
-    headerLevel: 1,
+
     state,
     dueDate: new Date().toISOString(),
     interval, // in minutes

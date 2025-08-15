@@ -2,16 +2,15 @@
     import { createEventDispatcher, onMount, tick } from "svelte";
     import type { Deck, Flashcard } from "../database/types";
     import type { FlashcardsSettings } from "../settings";
-    import { FSRS, type Difficulty } from "../algorithm/fsrs";
+    import { FSRS, type RatingLabel } from "../algorithm/fsrs";
     import type { Scheduler, SchedulingPreview } from "../services/Scheduler";
 
-    export let flashcards: Flashcard[] = [];
     export let deck: Deck;
-    export let currentIndex: number = 0;
+    export let initialCard: Flashcard | null = null;
     export let onClose: () => void;
     export let onReview: (
         card: Flashcard,
-        difficulty: Difficulty,
+        difficulty: RatingLabel,
         timeElapsed?: number,
     ) => Promise<void>;
     export let renderMarkdown: (content: string, el: HTMLElement) => void;
@@ -20,8 +19,6 @@
     export let onCardReviewed:
         | ((reviewedCard: Flashcard) => Promise<void>)
         | undefined = undefined;
-    export let refreshCardList: (() => Promise<Flashcard[]>) | undefined =
-        undefined;
 
     const dispatch = createEventDispatcher();
 
@@ -32,15 +29,14 @@
     let schedulingInfo: SchedulingPreview | null = null;
     let reviewedCount = 0;
     let cardStartTime: number = 0;
+    let currentCard: Flashcard | null = initialCard;
+    let totalReviewed = 0;
 
     // Track last event to prevent double execution
     let lastEventTime = 0;
     let lastEventType = "";
 
-    $: currentCard = flashcards[currentIndex] || null;
-    $: progress =
-        flashcards.length > 0 ? (currentIndex / flashcards.length) * 100 : 0;
-    $: remainingCards = flashcards.length - currentIndex;
+    $: progress = totalReviewed > 0 ? (reviewedCount / totalReviewed) * 100 : 0;
 
     async function loadCard() {
         if (!currentCard) return;
@@ -63,7 +59,7 @@
         // Pre-render back side but keep it hidden
         // Use tick() to ensure DOM is updated before rendering
         tick().then(() => {
-            if (backEl) {
+            if (backEl && currentCard) {
                 backEl.empty();
                 renderMarkdown(currentCard.back, backEl);
             }
@@ -81,80 +77,28 @@
         });
     }
 
-    async function handleDifficulty(difficulty: Difficulty) {
+    async function handleReview(rating: RatingLabel) {
         if (!currentCard || isLoading) return;
 
         isLoading = true;
         try {
             const timeElapsed = Date.now() - cardStartTime;
-            await onReview(currentCard, difficulty, timeElapsed);
+            await onReview(currentCard, rating, timeElapsed);
             reviewedCount++;
+            totalReviewed++;
 
             // Trigger stats refresh after each card review
             if (onCardReviewed) {
                 await onCardReviewed(currentCard);
             }
 
-            // Remove the current card from the list to prevent immediate re-showing
-            const reviewedCardId = currentCard.id;
-            flashcards = flashcards.filter(
-                (card) => card.id !== reviewedCardId,
-            );
+            // Get the next card from the scheduler
+            currentCard = await scheduler.getNext(new Date(), deck.id, {
+                allowNew: true,
+            });
 
-            // Refresh card list to get newly due cards
-            // Refresh card list to get newly due cards (for TODO 18)
-            if (refreshCardList) {
-                const newCards = await refreshCardList();
-
-                // Add any new cards that aren't already in our list
-                const currentCardIds = new Set(flashcards.map((c) => c.id));
-                const newlyDueCards = newCards.filter(
-                    (card) => !currentCardIds.has(card.id),
-                );
-
-                if (newlyDueCards.length > 0) {
-                    flashcards = [...flashcards, ...newlyDueCards];
-
-                    // Re-sort to maintain proper order (review cards first, then new cards)
-                    flashcards.sort((a, b) => {
-                        const stateOrder = { review: 1, new: 2 };
-                        const aOrder = stateOrder[a.state];
-                        const bOrder = stateOrder[b.state];
-
-                        if (aOrder !== bOrder) {
-                            return aOrder - bOrder;
-                        }
-
-                        // Within same state, apply deck config ordering rules
-                        if (a.state === "review") {
-                            // Review cards: follow deck config preference
-                            if (deck.config.reviewOrder === "random") {
-                                return Math.random() - 0.5;
-                            } else {
-                                // Default: oldest due first
-                                return (
-                                    new Date(a.dueDate).getTime() -
-                                    new Date(b.dueDate).getTime()
-                                );
-                            }
-                        } else if (a.state === "new") {
-                            // New cards: always by due date (earliest first)
-                            return (
-                                new Date(a.dueDate).getTime() -
-                                new Date(b.dueDate).getTime()
-                            );
-                        }
-
-                        return 0;
-                    });
-                }
-            }
-
-            // After re-sorting, reset to the beginning of the sorted list
-            // This ensures we follow proper card order (review cards first, etc.)
-            if (flashcards.length > 0) {
-                currentIndex = 0;
-                loadCard();
+            if (currentCard) {
+                await loadCard();
             } else {
                 // Review session complete
                 dispatch("complete", {
@@ -191,17 +135,17 @@
         } else if (showAnswer) {
             switch (event.key) {
                 case "1":
-                    handleDifficulty("again");
+                    handleReview("again");
                     break;
                 case "2":
-                    handleDifficulty("hard");
+                    handleReview("hard");
                     break;
                 case "3":
                 case " ":
-                    handleDifficulty("good");
+                    handleReview("good");
                     break;
                 case "4":
-                    handleDifficulty("easy");
+                    handleReview("easy");
                     break;
             }
         }
@@ -222,8 +166,24 @@
         callback();
     }
 
-    onMount(() => {
-        loadCard();
+    onMount(async () => {
+        // If no initial card provided, get the first card from scheduler
+        if (!currentCard) {
+            currentCard = await scheduler.getNext(new Date(), deck.id, {
+                allowNew: true,
+            });
+        }
+
+        if (currentCard) {
+            await loadCard();
+        } else {
+            // No cards available
+            dispatch("complete", {
+                reason: "no-more-cards",
+                reviewed: 0,
+            });
+        }
+
         window.addEventListener("keydown", handleKeydown);
 
         return () => {
@@ -240,8 +200,12 @@
     <div class="modal-header">
         <h3>Review Session - {deck.name}</h3>
         <div class="progress-info">
-            <span>{currentIndex + 1} / {flashcards.length}</span>
-            <span class="remaining">({remainingCards} remaining)</span>
+            <span>Reviewed: {reviewedCount}</span>
+            <span class="remaining"
+                >({currentCard
+                    ? "More cards available"
+                    : "Session complete"})</span
+            >
         </div>
     </div>
 
@@ -280,15 +244,9 @@
                     <button
                         class="difficulty-button again"
                         on:click={(e) =>
-                            handleTouchClick(
-                                () => handleDifficulty("again"),
-                                e,
-                            )}
+                            handleTouchClick(() => handleReview("again"), e)}
                         on:touchend={(e) =>
-                            handleTouchClick(
-                                () => handleDifficulty("again"),
-                                e,
-                            )}
+                            handleTouchClick(() => handleReview("again"), e)}
                         disabled={isLoading}
                     >
                         <div class="button-label">Again</div>
@@ -301,9 +259,9 @@
                     <button
                         class="difficulty-button hard"
                         on:click={(e) =>
-                            handleTouchClick(() => handleDifficulty("hard"), e)}
+                            handleTouchClick(() => handleReview("hard"), e)}
                         on:touchend={(e) =>
-                            handleTouchClick(() => handleDifficulty("hard"), e)}
+                            handleTouchClick(() => handleReview("hard"), e)}
                         disabled={isLoading}
                     >
                         <div class="button-label">Hard</div>
@@ -316,9 +274,9 @@
                     <button
                         class="difficulty-button good"
                         on:click={(e) =>
-                            handleTouchClick(() => handleDifficulty("good"), e)}
+                            handleTouchClick(() => handleReview("good"), e)}
                         on:touchend={(e) =>
-                            handleTouchClick(() => handleDifficulty("good"), e)}
+                            handleTouchClick(() => handleReview("good"), e)}
                         disabled={isLoading}
                     >
                         <div class="button-label">Good</div>
@@ -331,9 +289,9 @@
                     <button
                         class="difficulty-button easy"
                         on:click={(e) =>
-                            handleTouchClick(() => handleDifficulty("easy"), e)}
+                            handleTouchClick(() => handleReview("easy"), e)}
                         on:touchend={(e) =>
-                            handleTouchClick(() => handleDifficulty("easy"), e)}
+                            handleTouchClick(() => handleReview("easy"), e)}
                         disabled={isLoading}
                     >
                         <div class="button-label">Easy</div>
