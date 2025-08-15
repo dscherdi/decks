@@ -354,7 +354,7 @@
 
     onMount(() => {
         // Initial load
-        handleRefresh();
+        // handleRefresh();
     });
 </script>
 

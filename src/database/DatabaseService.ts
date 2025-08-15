@@ -6,6 +6,7 @@ import {
   ReviewOrder,
   Flashcard,
   ReviewLog,
+  ReviewSession,
   DeckStats,
   Statistics,
   DEFAULT_DECK_CONFIG,
@@ -85,6 +86,230 @@ export class DatabaseService {
     } catch (error) {
       console.error("Failed to save database:", error);
       throw error;
+    }
+  }
+
+  // Generic CRUD helper methods
+  private executeStatement(sql: string, params: any[] = []): void {
+    if (!this.db) throw new Error("Database not initialized");
+    const stmt = this.db.prepare(sql);
+    try {
+      stmt.run(params);
+    } finally {
+      stmt.free();
+    }
+  }
+
+  private executeStatementWithSave(
+    sql: string,
+    params: any[] = [],
+  ): Promise<void> {
+    return this.executeStatementWithCallback(sql, params, () => this.save());
+  }
+
+  private async executeStatementWithCallback(
+    sql: string,
+    params: any[],
+    callback?: () => Promise<void>,
+  ): Promise<void> {
+    if (!this.db) throw new Error("Database not initialized");
+    let stmt;
+    try {
+      stmt = this.db.prepare(sql);
+      stmt.run(params);
+      stmt.free();
+      stmt = null;
+      if (callback) {
+        await callback();
+      }
+    } catch (error) {
+      if (stmt) {
+        try {
+          stmt.free();
+        } catch (freeError) {
+          console.error(`Failed to free statement:`, freeError);
+        }
+      }
+      throw error;
+    }
+  }
+
+  private queryAll<T>(
+    sql: string,
+    params: any[] = [],
+    parser: (row: any) => T,
+  ): T[] {
+    if (!this.db) throw new Error("Database not initialized");
+    const stmt = this.db.prepare(sql);
+    const results: T[] = [];
+    try {
+      if (params.length > 0) {
+        stmt.bind(params);
+      }
+      while (stmt.step()) {
+        results.push(parser(stmt.get()));
+      }
+    } finally {
+      stmt.free();
+    }
+    return results;
+  }
+
+  private queryOne<T>(
+    sql: string,
+    params: any[] = [],
+    parser: (row: any) => T,
+  ): T | null {
+    const results = this.queryAll(sql, params, parser);
+    return results.length > 0 ? results[0] : null;
+  }
+
+  // Transaction methods
+  beginTransaction(): void {
+    if (!this.db) throw new Error("Database not initialized");
+    this.db.run("BEGIN TRANSACTION;");
+  }
+
+  commitTransaction(): void {
+    if (!this.db) throw new Error("Database not initialized");
+    this.db.run("COMMIT;");
+  }
+
+  rollbackTransaction(): void {
+    if (!this.db) throw new Error("Database not initialized");
+    this.db.run("ROLLBACK;");
+  }
+
+  // Batch operations using single prepared statements
+  batchCreateFlashcards(
+    flashcards: Array<Omit<Flashcard, "created" | "modified">>,
+  ): void {
+    if (!this.db) throw new Error("Database not initialized");
+    if (flashcards.length === 0) return;
+
+    const stmt = this.db.prepare(SQL_QUERIES.INSERT_FLASHCARD);
+    const now = new Date().toISOString();
+
+    try {
+      for (const flashcard of flashcards) {
+        stmt.run([
+          flashcard.id,
+          flashcard.deckId,
+          flashcard.front,
+          flashcard.back,
+          flashcard.type,
+          flashcard.sourceFile,
+          flashcard.contentHash,
+          flashcard.state,
+          flashcard.dueDate,
+          flashcard.interval,
+          flashcard.repetitions,
+          flashcard.difficulty,
+          flashcard.stability,
+          flashcard.lapses,
+          flashcard.lastReviewed,
+          now, // created
+          now, // modified
+        ]);
+      }
+    } finally {
+      stmt.free();
+    }
+  }
+
+  batchUpdateFlashcards(
+    updates: Array<{
+      id: string;
+      updates: Partial<
+        Pick<
+          Flashcard,
+          | "front"
+          | "back"
+          | "type"
+          | "contentHash"
+          | "state"
+          | "dueDate"
+          | "interval"
+          | "repetitions"
+          | "difficulty"
+          | "stability"
+          | "lapses"
+          | "lastReviewed"
+        >
+      >;
+    }>,
+  ): void {
+    if (!this.db) throw new Error("Database not initialized");
+    if (updates.length === 0) return;
+
+    const now = new Date().toISOString();
+
+    // Group updates by fields to minimize prepared statements
+    const updateGroups = new Map<
+      string,
+      Array<{ id: string; values: any[] }>
+    >();
+
+    for (const { id, updates: updateData } of updates) {
+      const fields = [];
+      const values = [];
+
+      for (const [key, value] of Object.entries(updateData)) {
+        if (value !== undefined) {
+          const dbField =
+            key === "dueDate"
+              ? "due_date"
+              : key === "lastReviewed"
+                ? "last_reviewed"
+                : key === "contentHash"
+                  ? "content_hash"
+                  : key;
+          fields.push(`${dbField} = ?`);
+          values.push(value);
+        }
+      }
+
+      if (fields.length === 0) continue;
+
+      fields.push("modified = ?");
+      values.push(now, id);
+
+      const fieldSignature = fields.slice(0, -1).join(","); // Exclude modified field for grouping
+      if (!updateGroups.has(fieldSignature)) {
+        updateGroups.set(fieldSignature, []);
+      }
+      updateGroups.get(fieldSignature)!.push({ id, values });
+    }
+
+    // Execute grouped updates
+    for (const [fieldSignature, groupUpdates] of updateGroups) {
+      const fields = fieldSignature.split(",").map((f) => f.trim());
+      fields.push("modified = ?");
+      const sql = `UPDATE flashcards SET ${fields.join(", ")} WHERE id = ?`;
+      const stmt = this.db.prepare(sql);
+
+      try {
+        for (const { values } of groupUpdates) {
+          stmt.run(values);
+        }
+      } finally {
+        stmt.free();
+      }
+    }
+  }
+
+  batchDeleteFlashcards(flashcardIds: string[]): void {
+    if (!this.db) throw new Error("Database not initialized");
+    if (flashcardIds.length === 0) return;
+
+    const stmt = this.db.prepare(SQL_QUERIES.DELETE_FLASHCARD);
+
+    try {
+      for (const id of flashcardIds) {
+        stmt.run([id]);
+      }
+    } finally {
+      stmt.free();
     }
   }
 
@@ -195,51 +420,27 @@ export class DatabaseService {
   }
 
   async getDeckByTag(tag: string): Promise<Deck | null> {
-    if (!this.db) throw new Error("Database not initialized");
-
-    const stmt = this.db.prepare(SQL_QUERIES.GET_DECK_BY_TAG);
-    stmt.bind([tag]);
-
-    if (stmt.step()) {
-      const result = stmt.get();
-      stmt.free();
-      return this.parseDeckRow(result);
-    }
-
-    stmt.free();
-    return null;
+    return this.queryOne(
+      SQL_QUERIES.GET_DECK_BY_TAG,
+      [tag],
+      this.parseDeckRow.bind(this),
+    );
   }
 
   async getDeckByFilepath(filepath: string): Promise<Deck | null> {
-    if (!this.db) throw new Error("Database not initialized");
-
-    const stmt = this.db.prepare(SQL_QUERIES.GET_DECK_BY_FILEPATH);
-    stmt.bind([filepath]);
-
-    if (stmt.step()) {
-      const result = stmt.get();
-      stmt.free();
-      return this.parseDeckRow(result);
-    }
-
-    stmt.free();
-    return null;
+    return this.queryOne(
+      SQL_QUERIES.GET_DECK_BY_FILEPATH,
+      [filepath],
+      this.parseDeckRow.bind(this),
+    );
   }
 
   async getDeckById(id: string): Promise<Deck | null> {
-    if (!this.db) throw new Error("Database not initialized");
-
-    const stmt = this.db.prepare(SQL_QUERIES.GET_DECK_BY_ID);
-    stmt.bind([id]);
-
-    if (stmt.step()) {
-      const result = stmt.get();
-      stmt.free();
-      return this.parseDeckRow(result);
-    }
-
-    stmt.free();
-    return null;
+    return this.queryOne(
+      SQL_QUERIES.GET_DECK_BY_ID,
+      [id],
+      this.parseDeckRow.bind(this),
+    );
   }
 
   async updateDeck(
@@ -279,38 +480,41 @@ export class DatabaseService {
     await this.save();
   }
 
-  async updateDeckTimestamp(deckId: string, timestamp: string): Promise<void> {
-    if (!this.db) throw new Error("Database not initialized");
+  private updateDeckTimestampCore(deckId: string, timestamp: string): void {
+    this.executeStatement(SQL_QUERIES.UPDATE_DECK_TIMESTAMP, [
+      timestamp,
+      deckId,
+    ]);
+  }
 
-    const stmt = this.db.prepare(SQL_QUERIES.UPDATE_DECK_TIMESTAMP);
-    stmt.run([timestamp, deckId]);
-    stmt.free();
+  async updateDeckTimestamp(deckId: string, timestamp: string): Promise<void> {
+    this.updateDeckTimestampCore(deckId, timestamp);
     await this.save();
+  }
+
+  // Version without save for use in transactions
+  async updateDeckTimestampWithoutSave(
+    deckId: string,
+    timestamp: string,
+  ): Promise<void> {
+    this.updateDeckTimestampCore(deckId, timestamp);
   }
 
   async getAllDecks(): Promise<Deck[]> {
-    if (!this.db) throw new Error("Database not initialized");
-
-    const stmt = this.db.prepare(SQL_QUERIES.GET_ALL_DECKS);
-    const decks: Deck[] = [];
-
-    while (stmt.step()) {
-      const row = stmt.get();
-      decks.push(this.parseDeckRow(row));
-    }
-
-    stmt.free();
-    return decks;
+    return this.queryAll(
+      SQL_QUERIES.GET_ALL_DECKS,
+      [],
+      this.parseDeckRow.bind(this),
+    );
   }
 
   async updateDeckLastReviewed(deckId: string): Promise<void> {
-    if (!this.db) throw new Error("Database not initialized");
-
-    const stmt = this.db.prepare(SQL_QUERIES.UPDATE_DECK_LAST_REVIEWED);
-
-    stmt.run([new Date().toISOString(), new Date().toISOString(), deckId]);
-    stmt.free();
-    await this.save();
+    const now = new Date().toISOString();
+    await this.executeStatementWithSave(SQL_QUERIES.UPDATE_DECK_LAST_REVIEWED, [
+      now,
+      now,
+      deckId,
+    ]);
   }
 
   async updateDeckHeaderLevel(
@@ -339,16 +543,14 @@ export class DatabaseService {
     newName: string,
     newFilepath: string,
   ): Promise<void> {
-    if (!this.db) throw new Error("Database not initialized");
-
     const now = new Date().toISOString();
-
-    // Update the deck with new ID, name, and filepath
-    const stmt = this.db.prepare(SQL_QUERIES.RENAME_DECK);
-
-    stmt.run([newDeckId, newName, newFilepath, now, oldDeckId]);
-    stmt.free();
-    await this.save();
+    await this.executeStatementWithSave(SQL_QUERIES.RENAME_DECK, [
+      newDeckId,
+      newName,
+      newFilepath,
+      now,
+      oldDeckId,
+    ]);
   }
 
   async deleteDeckByFilepath(filepath: string): Promise<void> {
@@ -384,9 +586,9 @@ export class DatabaseService {
   }
 
   // Flashcard operations
-  async createFlashcard(
+  private createFlashcardCore(
     flashcard: Omit<Flashcard, "created" | "modified">,
-  ): Promise<Flashcard> {
+  ): Flashcard {
     if (!this.db) throw new Error("Database not initialized");
 
     const now = new Date().toISOString();
@@ -396,31 +598,104 @@ export class DatabaseService {
       modified: now,
     };
 
-    const stmt = this.db.prepare(SQL_QUERIES.INSERT_FLASHCARD);
+    let stmt;
+    try {
+      stmt = this.db.prepare(SQL_QUERIES.INSERT_FLASHCARD);
+      stmt.run([
+        fullFlashcard.id,
+        fullFlashcard.deckId,
+        fullFlashcard.front,
+        fullFlashcard.back,
+        fullFlashcard.type,
+        fullFlashcard.sourceFile,
+        fullFlashcard.contentHash,
+        fullFlashcard.state,
+        fullFlashcard.dueDate,
+        flashcard.interval,
+        flashcard.repetitions,
+        flashcard.difficulty,
+        flashcard.stability,
+        flashcard.lapses,
+        fullFlashcard.lastReviewed,
+        fullFlashcard.created,
+        fullFlashcard.modified,
+      ]);
+      stmt.free();
+      return fullFlashcard;
+    } catch (error) {
+      console.error(`Failed to create flashcard ${fullFlashcard.id}:`, error);
+      if (stmt) {
+        try {
+          stmt.free();
+        } catch (freeError) {
+          console.error(`Failed to free statement:`, freeError);
+        }
+      }
+      throw error;
+    }
+  }
 
-    stmt.run([
-      fullFlashcard.id,
-      fullFlashcard.deckId,
-      fullFlashcard.front,
-      fullFlashcard.back,
-      fullFlashcard.type,
-      fullFlashcard.sourceFile,
-      fullFlashcard.contentHash,
-      fullFlashcard.state,
-      fullFlashcard.dueDate,
-      flashcard.interval,
-      flashcard.repetitions,
-      flashcard.difficulty,
-      flashcard.stability,
-      flashcard.lapses,
-      fullFlashcard.lastReviewed,
-      fullFlashcard.created,
-      fullFlashcard.modified,
-    ]);
-    stmt.free();
-
+  async createFlashcard(
+    flashcard: Omit<Flashcard, "created" | "modified">,
+  ): Promise<Flashcard> {
+    const result = this.createFlashcardCore(flashcard);
     await this.save();
-    return fullFlashcard;
+    return result;
+  }
+
+  // Version without save for use in transactions
+  async createFlashcardWithoutSave(
+    flashcard: Omit<Flashcard, "created" | "modified">,
+  ): Promise<Flashcard> {
+    return this.createFlashcardCore(flashcard);
+  }
+
+  private updateFlashcardCore(
+    flashcardId: string,
+    updates: Partial<
+      Pick<
+        Flashcard,
+        | "front"
+        | "back"
+        | "type"
+        | "contentHash"
+        | "state"
+        | "dueDate"
+        | "interval"
+        | "repetitions"
+        | "difficulty"
+        | "stability"
+        | "lapses"
+        | "lastReviewed"
+      >
+    >,
+  ): void {
+    const now = new Date().toISOString();
+    const fields = [];
+    const values = [];
+
+    for (const [key, value] of Object.entries(updates)) {
+      if (value !== undefined) {
+        const dbField =
+          key === "dueDate"
+            ? "due_date"
+            : key === "lastReviewed"
+              ? "last_reviewed"
+              : key === "contentHash"
+                ? "content_hash"
+                : key;
+        fields.push(`${dbField} = ?`);
+        values.push(value);
+      }
+    }
+
+    if (fields.length === 0) return;
+
+    fields.push("modified = ?");
+    values.push(now, flashcardId);
+
+    const sql = `UPDATE flashcards SET ${fields.join(", ")} WHERE id = ?`;
+    this.executeStatement(sql, values);
   }
 
   async updateFlashcard(
@@ -443,116 +718,97 @@ export class DatabaseService {
       >
     >,
   ): Promise<void> {
-    if (!this.db) throw new Error("Database not initialized");
-
-    const now = new Date().toISOString();
-    const updateFields = Object.keys(updates)
-      .map((key) => {
-        const dbField =
-          key === "contentHash"
-            ? "content_hash"
-            : key === "sourceFile"
-              ? "source_file"
-              : key === "dueDate"
-                ? "due_date"
-                : key === "difficulty"
-                  ? "difficulty"
-                  : key === "lastReviewed"
-                    ? "last_reviewed"
-                    : key.replace(/([A-Z])/g, "_$1").toLowerCase();
-        return `${dbField} = ?`;
-      })
-      .join(", ");
-
-    const sql = `UPDATE flashcards SET ${updateFields}, modified = ? WHERE id = ?`;
-    const stmt = this.db.prepare(sql);
-
-    const values = Object.values(updates);
-    values.push(now, flashcardId);
-    stmt.run(values);
-    stmt.free();
+    this.updateFlashcardCore(flashcardId, updates);
     await this.save();
   }
 
-  async deleteFlashcard(flashcardId: string): Promise<void> {
-    if (!this.db) throw new Error("Database not initialized");
+  // Version without save for use in transactions
+  async updateFlashcardWithoutSave(
+    flashcardId: string,
+    updates: Partial<
+      Pick<
+        Flashcard,
+        | "front"
+        | "back"
+        | "type"
+        | "contentHash"
+        | "state"
+        | "dueDate"
+        | "interval"
+        | "repetitions"
+        | "difficulty"
+        | "stability"
+        | "lapses"
+        | "lastReviewed"
+      >
+    >,
+  ): Promise<void> {
+    this.updateFlashcardCore(flashcardId, updates);
+  }
 
-    const stmt = this.db.prepare(SQL_QUERIES.DELETE_FLASHCARD);
-    stmt.run([flashcardId]);
-    stmt.free();
+  private deleteFlashcardCore(flashcardId: string): void {
+    this.executeStatement(SQL_QUERIES.DELETE_FLASHCARD, [flashcardId]);
+  }
+
+  async deleteFlashcard(flashcardId: string): Promise<void> {
+    this.deleteFlashcardCore(flashcardId);
     await this.save();
+  }
+
+  // Version without save for use in transactions
+  async deleteFlashcardWithoutSave(flashcardId: string): Promise<void> {
+    this.deleteFlashcardCore(flashcardId);
   }
 
   async updateFlashcardDeckIds(
     oldDeckId: string,
     newDeckId: string,
   ): Promise<void> {
-    if (!this.db) throw new Error("Database not initialized");
-
-    const stmt = this.db.prepare(SQL_QUERIES.UPDATE_FLASHCARD_DECK_IDS);
-    stmt.run([newDeckId, oldDeckId]);
-    stmt.free();
-    await this.save();
+    await this.executeStatementWithSave(SQL_QUERIES.UPDATE_FLASHCARD_DECK_IDS, [
+      newDeckId,
+      oldDeckId,
+    ]);
   }
 
   async getFlashcardsByDeck(deckId: string): Promise<Flashcard[]> {
-    if (!this.db) throw new Error("Database not initialized");
-
-    const stmt = this.db.prepare(SQL_QUERIES.GET_FLASHCARDS_BY_DECK);
-    stmt.bind([deckId]);
-    const flashcards: Flashcard[] = [];
-
-    while (stmt.step()) {
-      const row = stmt.get();
-      flashcards.push(this.rowToFlashcard(row));
-    }
-
-    stmt.free();
-    return flashcards;
+    return this.queryAll(
+      SQL_QUERIES.GET_FLASHCARDS_BY_DECK,
+      [deckId],
+      this.rowToFlashcard.bind(this),
+    );
   }
 
   async getDueFlashcards(deckId: string): Promise<Flashcard[]> {
-    if (!this.db) throw new Error("Database not initialized");
-
-    const stmt = this.db.prepare(SQL_QUERIES.GET_DUE_FLASHCARDS);
-
     const now = new Date().toISOString();
-    stmt.bind([deckId, now]);
-    const flashcards: Flashcard[] = [];
-
-    while (stmt.step()) {
-      const row = stmt.get();
-      flashcards.push(this.rowToFlashcard(row));
-    }
-
-    stmt.free();
-    return flashcards;
+    return this.queryAll(
+      SQL_QUERIES.GET_DUE_FLASHCARDS,
+      [deckId, now],
+      this.rowToFlashcard.bind(this),
+    );
   }
 
   async getDailyReviewCounts(
     deckId: string,
   ): Promise<{ newCount: number; reviewCount: number }> {
-    if (!this.db) throw new Error("Database not initialized");
-
     const today = new Date().toISOString().split("T")[0]; // YYYY-MM-DD format
     const todayStart = `${today}T00:00:00.000Z`;
     const todayEnd = `${today}T23:59:59.999Z`;
 
     // Count new cards reviewed today (reviews where old_repetitions was 0)
-    const newCardsStmt = this.db.prepare(SQL_QUERIES.COUNT_NEW_CARDS_TODAY);
-    newCardsStmt.bind([deckId, todayStart, todayEnd]);
-    const newResult = newCardsStmt.step() ? newCardsStmt.get() : [0];
-    const newCount = Number(newResult[0]) || 0;
-    newCardsStmt.free();
+    const newResult = this.queryOne(
+      SQL_QUERIES.COUNT_NEW_CARDS_TODAY,
+      [deckId, todayStart, todayEnd],
+      (row) => Number(row[0]),
+    );
+    const newCount = newResult || 0;
 
     // Count review cards reviewed today (reviews where old_interval_minutes > 0)
-    const reviewCardsStmt = this.db.prepare(
+    const reviewResult = this.queryOne(
       SQL_QUERIES.COUNT_REVIEW_CARDS_TODAY,
+      [deckId, todayStart, todayEnd],
+      (row) => Number(row[0]),
     );
-    reviewCardsStmt.bind([deckId, todayStart, todayEnd]);
-    const reviewResult = reviewCardsStmt.step() ? reviewCardsStmt.get() : [0];
-    const reviewCount = Number(reviewResult[0]) || 0;
-    reviewCardsStmt.free();
+    const reviewCount = reviewResult || 0;
 
     return { newCount, reviewCount };
   }
@@ -706,12 +962,9 @@ export class DatabaseService {
   }
 
   async deleteFlashcardsByFile(sourceFile: string): Promise<void> {
-    if (!this.db) throw new Error("Database not initialized");
-
-    const stmt = this.db.prepare(SQL_QUERIES.DELETE_FLASHCARDS_BY_FILE);
-    stmt.run([sourceFile]);
-    stmt.free();
-    await this.save();
+    await this.executeStatementWithSave(SQL_QUERIES.DELETE_FLASHCARDS_BY_FILE, [
+      sourceFile,
+    ]);
   }
 
   // Review log operations
@@ -725,6 +978,7 @@ export class DatabaseService {
     stmt.run([
       id,
       log.flashcardId,
+      log.sessionId || null,
       log.lastReviewedAt,
       log.shownAt || null,
       log.reviewedAt,
@@ -761,6 +1015,97 @@ export class DatabaseService {
     stmt.free();
 
     await this.save();
+  }
+
+  // Review session operations
+  async createReviewSession(
+    session: Omit<ReviewSession, "id">,
+  ): Promise<string> {
+    if (!this.db) throw new Error("Database not initialized");
+
+    const id = `session_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
+
+    const stmt = this.db.prepare(SQL_QUERIES.INSERT_REVIEW_SESSION);
+    stmt.run([
+      id,
+      session.deckId,
+      session.startedAt,
+      session.endedAt || null,
+      session.goalTotal,
+      session.doneUnique,
+    ]);
+    stmt.free();
+
+    await this.save();
+    return id;
+  }
+
+  async getReviewSessionById(sessionId: string): Promise<ReviewSession | null> {
+    if (!this.db) throw new Error("Database not initialized");
+
+    const stmt = this.db.prepare(SQL_QUERIES.GET_REVIEW_SESSION_BY_ID);
+    stmt.bind([sessionId]);
+
+    if (stmt.step()) {
+      const row = stmt.get();
+      stmt.free();
+      return this.rowToReviewSession(row);
+    }
+
+    stmt.free();
+    return null;
+  }
+
+  async getActiveReviewSession(deckId: string): Promise<ReviewSession | null> {
+    if (!this.db) throw new Error("Database not initialized");
+
+    const stmt = this.db.prepare(SQL_QUERIES.GET_ACTIVE_REVIEW_SESSION);
+    stmt.bind([deckId]);
+
+    if (stmt.step()) {
+      const row = stmt.get();
+      stmt.free();
+      return this.rowToReviewSession(row);
+    }
+
+    stmt.free();
+    return null;
+  }
+
+  async updateReviewSessionDoneUnique(
+    sessionId: string,
+    doneUnique: number,
+  ): Promise<void> {
+    await this.executeStatementWithSave(
+      SQL_QUERIES.UPDATE_REVIEW_SESSION_DONE_UNIQUE,
+      [doneUnique, sessionId],
+    );
+  }
+
+  async endReviewSession(sessionId: string, endedAt: string): Promise<void> {
+    await this.executeStatementWithSave(SQL_QUERIES.UPDATE_REVIEW_SESSION_END, [
+      endedAt,
+      sessionId,
+    ]);
+  }
+
+  async isCardReviewedInSession(
+    sessionId: string,
+    flashcardId: string,
+  ): Promise<boolean> {
+    if (!this.db) throw new Error("Database not initialized");
+
+    const stmt = this.db.prepare(SQL_QUERIES.CHECK_CARD_REVIEWED_IN_SESSION);
+    stmt.bind([sessionId, flashcardId]);
+
+    let count = 0;
+    if (stmt.step()) {
+      const row = stmt.get();
+      count = row[0] as number;
+    }
+    stmt.free();
+
+    return count > 0;
   }
 
   // Statistics operations
@@ -912,6 +1257,17 @@ export class DatabaseService {
       lastReviewed: row[14] as string | null,
       created: row[15] as string,
       modified: row[16] as string,
+    };
+  }
+
+  private rowToReviewSession(row: any[]): ReviewSession {
+    return {
+      id: row[0] as string,
+      deckId: row[1] as string,
+      startedAt: row[2] as string,
+      endedAt: row[3] as string | null,
+      goalTotal: row[4] as number,
+      doneUnique: row[5] as number,
     };
   }
 
@@ -1208,19 +1564,11 @@ export class DatabaseService {
   }
 
   async getFlashcardById(cardId: string): Promise<Flashcard | null> {
-    if (!this.db) throw new Error("Database not initialized");
-
-    const stmt = this.db.prepare("SELECT * FROM flashcards WHERE id = ?");
-    stmt.bind([cardId]);
-
-    let flashcard: Flashcard | null = null;
-    if (stmt.step()) {
-      const row = stmt.get();
-      flashcard = this.rowToFlashcard(row);
-    }
-
-    stmt.free();
-    return flashcard;
+    return this.queryOne(
+      "SELECT * FROM flashcards WHERE id = ?",
+      [cardId],
+      this.rowToFlashcard.bind(this),
+    );
   }
 
   /**

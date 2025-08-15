@@ -14,7 +14,9 @@ import {
 
 import { DatabaseService } from "./database/DatabaseService";
 import { DeckManager } from "./services/DeckManager";
+import { DeckSynchronizer } from "./services/DeckSynchronizer";
 import { Scheduler } from "./services/Scheduler";
+import { yieldToUI } from "./utils/ui";
 import { FSRS, type RatingLabel, type SchedulingInfo } from "./algorithm/fsrs";
 import {
   Deck,
@@ -83,10 +85,10 @@ function deepMergeIgnoreNull(target: any, source: any): any {
 export default class DecksPlugin extends Plugin {
   private db: DatabaseService;
   public deckManager: DeckManager;
+  private deckSynchronizer: DeckSynchronizer;
   private scheduler: Scheduler;
   public view: DecksView | null = null;
   public settings: FlashcardsSettings;
-  private isSyncing: boolean = false;
   private progressNotice: Notice | null = null;
 
   /**
@@ -197,12 +199,20 @@ export default class DecksPlugin extends Plugin {
       );
       await this.db.initialize();
 
-      // Initialize deck manager
+      // Initialize deck manager with optimized main-thread approach
       this.deckManager = new DeckManager(
         this.app.vault,
         this.app.metadataCache,
         this.db,
         this,
+      );
+
+      // Initialize deck synchronizer
+      this.deckSynchronizer = new DeckSynchronizer(
+        this.db,
+        this.deckManager,
+        this.debugLog.bind(this),
+        this.performanceLog.bind(this),
       );
 
       // Initialize scheduler
@@ -225,7 +235,7 @@ export default class DecksPlugin extends Plugin {
             this.getReviewCounts.bind(this),
             this.updateDeckConfig.bind(this),
             this.openStatisticsModal.bind(this),
-            this.deckManager.syncFlashcardsForDeck.bind(this.deckManager),
+            this.deckSynchronizer.syncDeck.bind(this.deckSynchronizer),
             this.db.getDailyReviewCounts.bind(this.db),
             this.reviewFlashcard.bind(this),
             this.renderMarkdown.bind(this),
@@ -289,7 +299,7 @@ export default class DecksPlugin extends Plugin {
           this,
           this.settings,
           this.saveSettings.bind(this),
-          this.performSync.bind(this),
+          this.performSyncWithProgress.bind(this),
           async () => {
             if (this.view) {
               await this.view.refreshStats();
@@ -366,15 +376,6 @@ export default class DecksPlugin extends Plugin {
 
     if (leaf) {
       workspace.revealLeaf(leaf);
-
-      // Optional background sync if no decks exist (non-blocking)
-      const decks = await this.db.getAllDecks();
-      if (decks.length === 0) {
-        this.debugLog("No decks found, scheduling background sync...");
-        setTimeout(() => {
-          this.performInitialSync();
-        }, 1000);
-      }
     }
   }
 
@@ -422,7 +423,8 @@ export default class DecksPlugin extends Plugin {
         }
 
         // Sync flashcards for this specific deck only
-        await this.deckManager.syncFlashcardsForDeck(file.path);
+        await yieldToUI();
+        await this.deckSynchronizer.syncDeck(file.path);
 
         // Refresh only this specific deck's stats (fastest option)
         if (this.view) {
@@ -432,8 +434,10 @@ export default class DecksPlugin extends Plugin {
         // New file with flashcards tag - create deck for this file only
         const newTag =
           allTags.find((tag) => tag.startsWith("#flashcards")) || "#flashcards";
-        await this.deckManager.createDeckForFile(file.path, newTag);
-        await this.deckManager.syncFlashcardsForDeck(file.path);
+        await yieldToUI();
+        await this.deckSynchronizer.createDeckForFile(file.path, newTag);
+        await yieldToUI();
+        await this.deckSynchronizer.syncDeck(file.path);
 
         // For new decks, refresh all stats to show the new deck
         if (this.view) {
@@ -451,26 +455,24 @@ export default class DecksPlugin extends Plugin {
 
       // Show progress notice for large syncs
       if (this.settings?.ui?.enableNotices !== false) {
-        notice = new Notice("🔄 Syncing flashcards in background...", 0);
+        notice = new Notice("🔄 Syncing flashcards in background...", 5000);
       }
 
       // Use requestIdleCallback or setTimeout to ensure non-blocking execution
       await new Promise((resolve) => setTimeout(resolve, 100));
 
-      await this.performSync(false);
+      await this.deckSynchronizer.performInitialSync();
+
+      if (this.view) {
+        const updatedDecks = await this.getDecks();
+        const deckStats = await this.getDeckStats();
+        this.view.update(updatedDecks, deckStats);
+      }
 
       const totalTime = performance.now() - startTime;
       this.performanceLog(
         `Initial sync completed successfully in ${this.formatTime(totalTime)}`,
       );
-
-      // Update notice to show completion
-      if (notice) {
-        notice.setMessage(
-          `✅ Flashcard sync completed (${this.formatTime(totalTime)})`,
-        );
-        setTimeout(() => notice?.hide(), 3000);
-      }
     } catch (error) {
       console.error("Error during initial sync:", error);
 
@@ -483,123 +485,42 @@ export default class DecksPlugin extends Plugin {
     }
   }
 
-  async performSync(forceSync: boolean = false) {
-    if (this.isSyncing) {
-      this.debugLog("Sync already in progress, skipping...");
-      return;
+  async performSync(forceSync: boolean = false): Promise<void> {
+    const result = await this.deckSynchronizer.performSync({
+      forceSync,
+      showProgress: false,
+    });
+
+    if (!result.success && result.error) {
+      throw result.error;
     }
+  }
 
-    this.isSyncing = true;
-    const syncStartTime = performance.now();
-
-    // Show progress notice for force refresh
-    if (forceSync) {
-      this.showProgressNotice(
-        "🔄 Force refreshing flashcards...\n" + this.createProgressBar(0),
-      );
-    }
-
-    try {
-      this.debugLog(
-        `Performing ${forceSync ? "forced " : ""}sync of decks and flashcards...`,
-      );
-
-      // Metadata cache should be ready by now
-
-      // First sync all decks
-      if (forceSync) this.updateProgress("🔍 Discovering decks...", 10);
-      const decksStartTime = performance.now();
-      await this.deckManager.syncDecks();
-      const decksTime = performance.now() - decksStartTime;
-      this.performanceLog(
-        `Deck discovery completed in ${this.formatTime(decksTime)}`,
-      );
-
-      // Then sync flashcards for each deck
-      const decks = await this.db.getAllDecks();
-      this.debugLog(
-        `Found ${decks.length} decks after sync:`,
-        decks.map((d) => d.name),
-      );
-
-      if (forceSync)
-        this.updateProgress(`📚 Processing ${decks.length} decks...`, 20);
-
-      let totalFlashcards = 0;
-      const flashcardSyncStartTime = performance.now();
-
-      // Process decks in chunks to avoid blocking the UI
-      for (let i = 0; i < decks.length; i++) {
-        const deck = decks[i];
-        const deckStartTime = performance.now();
-
-        // Update progress for force refresh
+  async performSyncWithProgress(forceSync: boolean = false): Promise<void> {
+    const result = await this.deckSynchronizer.performSync({
+      forceSync,
+      showProgress: true,
+      onProgress: (progress) => {
         if (forceSync) {
-          const deckProgress = 20 + (i / decks.length) * 70;
-          this.updateProgress(
-            `📄 Processing deck: ${deck.name} (${i + 1}/${decks.length})`,
-            deckProgress,
-          );
+          if (progress.percentage === 0) {
+            this.showProgressNotice(
+              "🔄 Force refreshing flashcards...\n" + this.createProgressBar(0),
+            );
+          }
+          this.updateProgress(progress.message, progress.percentage);
+          if (progress.percentage === 100) {
+            setTimeout(() => this.hideProgressNotice(), 3000);
+          }
         }
+      },
+    });
 
-        this.debugLog(
-          `${forceSync ? "Force s" : "S"}yncing flashcards for deck: ${deck.name} (${deck.filepath})`,
-        );
-        await this.deckManager.syncFlashcardsForDeck(deck.filepath, forceSync);
-
-        // Check how many flashcards were created
-        const flashcards = await this.db.getFlashcardsByDeck(deck.id);
-        const deckTime = performance.now() - deckStartTime;
-        totalFlashcards += flashcards.length;
-
-        this.performanceLog(
-          `Deck ${deck.name} processed in ${this.formatTime(deckTime)} - ${flashcards.length} flashcards`,
-        );
-
-        // Yield control every 5 decks to keep UI responsive
-        if (i % 5 === 4) {
-          await new Promise((resolve) => setTimeout(resolve, 10));
-        }
-      }
-
-      if (forceSync) this.updateProgress("✅ Finalizing sync...", 95);
-
-      const flashcardSyncTime = performance.now() - flashcardSyncStartTime;
-      const totalSyncTime = performance.now() - syncStartTime;
-
-      this.performanceLog(
-        `Flashcard processing completed in ${this.formatTime(flashcardSyncTime)}`,
-      );
-      this.performanceLog(
-        `Total sync completed in ${this.formatTime(totalSyncTime)} - ${totalFlashcards} flashcards across ${decks.length} decks`,
-      );
-
-      // Performance summary
-      if (decks.length > 0) {
-        const avgDeckTime = flashcardSyncTime / decks.length;
-        const avgFlashcardTime =
-          totalFlashcards > 0 ? flashcardSyncTime / totalFlashcards : 0;
-        this.performanceLog(
-          `Performance: ${this.formatTime(avgDeckTime)}/deck, ${this.formatTime(avgFlashcardTime)}/flashcard`,
-        );
-      }
-
-      if (forceSync) {
-        this.updateProgress(
-          `✅ Sync complete! Processed ${totalFlashcards} flashcards across ${decks.length} decks in ${this.formatTime(totalSyncTime)}`,
-          100,
-        );
-        setTimeout(() => this.hideProgressNotice(), 3000);
-      }
-    } catch (error) {
-      console.error("Error during sync:", error);
+    if (!result.success && result.error) {
       if (forceSync) {
         this.updateProgress("❌ Sync failed - check console for details", 0);
         setTimeout(() => this.hideProgressNotice(), 5000);
       }
-      throw error;
-    } finally {
-      this.isSyncing = false;
+      throw result.error;
     }
   }
 
@@ -627,7 +548,7 @@ export default class DecksPlugin extends Plugin {
       await this.db.renameDeck(oldDeckId, newDeckId, file.basename, file.path);
 
       // Update all flashcard deck IDs
-      await this.deckManager.updateFlashcardDeckIds(oldDeckId, newDeckId);
+      await this.deckSynchronizer.updateFlashcardDeckIds(oldDeckId, newDeckId);
 
       // Refresh view if available
       if (this.view) {
@@ -641,7 +562,7 @@ export default class DecksPlugin extends Plugin {
   }
 
   async syncFlashcardsForDeck(deckName: string) {
-    await this.deckManager.syncFlashcardsForDeckByName(deckName);
+    await this.deckSynchronizer.syncDeck(deckName);
   }
 
   async getReviewCounts(days: number = 365): Promise<Map<string, number>> {
@@ -649,7 +570,8 @@ export default class DecksPlugin extends Plugin {
   }
 
   async getDecks(): Promise<Deck[]> {
-    return await this.db.getAllDecks();
+    await yieldToUI();
+    return this.db.getAllDecks();
   }
 
   async getDeckStats(): Promise<Map<string, DeckStats>> {
@@ -736,7 +658,8 @@ export default class DecksPlugin extends Plugin {
         this.debugLog(
           `Header level changed for deck ${deck.name}, forcing resync`,
         );
-        await this.deckManager.syncFlashcardsForDeck(deck.filepath, true);
+        await yieldToUI();
+        await this.deckSynchronizer.syncDeck(deck.filepath, true);
       }
     }
 
@@ -935,8 +858,8 @@ class DecksView extends ItemView {
       },
     });
 
-    // Initial refresh
-    await this.refresh(true);
+    // // Initial refresh
+    // await this.refresh(false);
 
     // Start background refresh job if enabled
     if (this.settings.ui.enableBackgroundRefresh) {

@@ -1,6 +1,6 @@
 ---
 tags:
-  - flashcards/german
+  - notflashcards/german
 ---
 
 This is a list of 30000 most common german nouns. Ranging from everyday life and specialized fields to literary nouns.
@@ -3731,4 +3731,3 @@ This is a list of 30000 most common german nouns. Ranging from everyday life and
 | Auszug | (der, Auszüge) Extrakt. Beispiel: "Der Auszug ist informativ." Synonyme: Extrakt, Excerpt, Summary |
 | Excerpt | (das, Excerpts) Auszug. Beispiel: "Das Excerpt ist prägnant." Synonyme: Auszug, Ausschnitt, Fragment |
 | Ausschnitt | (der, Ausschnitte) Excerpt. Beispiel: "Der Ausschnitt ist interessant." Synonyme: Excerpt, Fragment, Segment |
-| Teilstück | (das, Teilstücke) Bruchstück. Beispiel: "Das Teilstück ist komplett." Synonyme: Bruchstück, Segment, Abschnitt |

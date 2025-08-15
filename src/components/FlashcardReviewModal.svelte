@@ -1,9 +1,13 @@
 <script lang="ts">
-    import { createEventDispatcher, onMount, tick } from "svelte";
+    import { createEventDispatcher, onMount, onDestroy, tick } from "svelte";
     import type { Deck, Flashcard } from "../database/types";
     import type { FlashcardsSettings } from "../settings";
     import { FSRS, type RatingLabel } from "../algorithm/fsrs";
-    import type { Scheduler, SchedulingPreview } from "../services/Scheduler";
+    import type {
+        Scheduler,
+        SchedulingPreview,
+        SessionProgress,
+    } from "../services/Scheduler";
 
     export let deck: Deck;
     export let initialCard: Flashcard | null = null;
@@ -30,13 +34,46 @@
     let reviewedCount = 0;
     let cardStartTime: number = 0;
     let currentCard: Flashcard | null = initialCard;
-    let totalReviewed = 0;
+    let sessionId: string | null = null;
+    let sessionProgress: SessionProgress | null = null;
 
     // Track last event to prevent double execution
     let lastEventTime = 0;
     let lastEventType = "";
 
-    $: progress = totalReviewed > 0 ? (reviewedCount / totalReviewed) * 100 : 0;
+    $: progress = sessionProgress ? sessionProgress.progress : 0;
+
+    onMount(async () => {
+        // Initialize review session
+        sessionId = await scheduler.startFreshSession(deck.id);
+        scheduler.setCurrentSession(sessionId);
+        sessionProgress = await scheduler.getSessionProgress(sessionId);
+
+        // If no initial card provided, get the first card from scheduler
+        if (!currentCard) {
+            currentCard = await scheduler.getNext(new Date(), deck.id, {
+                allowNew: true,
+            });
+        }
+
+        if (currentCard) {
+            await loadCard();
+        } else {
+            // No cards available
+            dispatch("complete", {
+                reason: "no-more-cards",
+                reviewed: 0,
+            });
+        }
+
+        // Add keydown event listener
+        window.addEventListener("keydown", handleKeydown);
+    });
+
+    onDestroy(() => {
+        // Clean up keydown event listener
+        window.removeEventListener("keydown", handleKeydown);
+    });
 
     async function loadCard() {
         if (!currentCard) return;
@@ -85,7 +122,11 @@
             const timeElapsed = Date.now() - cardStartTime;
             await onReview(currentCard, rating, timeElapsed);
             reviewedCount++;
-            totalReviewed++;
+
+            // Update session progress after review
+            if (sessionId) {
+                sessionProgress = await scheduler.getSessionProgress(sessionId);
+            }
 
             // Trigger stats refresh after each card review
             if (onCardReviewed) {
@@ -100,10 +141,18 @@
             if (currentCard) {
                 await loadCard();
             } else {
+                // End the review session
+                if (sessionId) {
+                    await scheduler.endReviewSession(sessionId);
+                    scheduler.setCurrentSession(null);
+                }
+
                 // Review session complete
                 dispatch("complete", {
                     reason: "no-more-cards",
-                    reviewed: reviewedCount,
+                    reviewed: sessionProgress
+                        ? sessionProgress.doneUnique
+                        : reviewedCount,
                 });
                 onClose();
             }
@@ -129,10 +178,24 @@
     function handleKeydown(event: KeyboardEvent) {
         if (isLoading) return;
 
+        const now = Date.now();
+        const eventType = "keyboard";
+
+        // Prevent double execution within 100ms (same as touch protection)
+        if (now - lastEventTime < 100 && lastEventType === eventType) {
+            return;
+        }
+
         if (!showAnswer && event.key === " ") {
             event.preventDefault();
+            lastEventTime = now;
+            lastEventType = eventType;
             revealAnswer();
         } else if (showAnswer) {
+            // Update timing before handling review
+            lastEventTime = now;
+            lastEventType = eventType;
+
             switch (event.key) {
                 case "1":
                     handleReview("again");
@@ -166,31 +229,6 @@
         callback();
     }
 
-    onMount(async () => {
-        // If no initial card provided, get the first card from scheduler
-        if (!currentCard) {
-            currentCard = await scheduler.getNext(new Date(), deck.id, {
-                allowNew: true,
-            });
-        }
-
-        if (currentCard) {
-            await loadCard();
-        } else {
-            // No cards available
-            dispatch("complete", {
-                reason: "no-more-cards",
-                reviewed: 0,
-            });
-        }
-
-        window.addEventListener("keydown", handleKeydown);
-
-        return () => {
-            window.removeEventListener("keydown", handleKeydown);
-        };
-    });
-
     $: if (currentCard) {
         loadCard();
     }
@@ -200,11 +238,17 @@
     <div class="modal-header">
         <h3>Review Session - {deck.name}</h3>
         <div class="progress-info">
-            <span>Reviewed: {reviewedCount}</span>
+            <span
+                >Reviewed: {sessionProgress
+                    ? sessionProgress.doneUnique
+                    : reviewedCount}</span
+            >
             <span class="remaining"
-                >({currentCard
-                    ? "More cards available"
-                    : "Session complete"})</span
+                >({sessionProgress
+                    ? `${sessionProgress.goalTotal - sessionProgress.doneUnique} remaining`
+                    : currentCard
+                      ? "More cards available"
+                      : "Session complete"})</span
             >
         </div>
     </div>

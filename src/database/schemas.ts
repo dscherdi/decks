@@ -1,7 +1,7 @@
 import { Database } from "sql.js";
 
 // Current Schema Version
-export const CURRENT_SCHEMA_VERSION = 2;
+export const CURRENT_SCHEMA_VERSION = 4;
 
 // SQL Table Creation Schema - Used when database file doesn't exist
 export const CREATE_TABLES_SQL = `
@@ -9,7 +9,7 @@ export const CREATE_TABLES_SQL = `
   BEGIN;
 
   -- Decks table
-  CREATE TABLE decks (
+  CREATE TABLE IF NOT EXISTS decks (
     id TEXT PRIMARY KEY,
     name TEXT NOT NULL,
     filepath TEXT NOT NULL UNIQUE,
@@ -21,7 +21,7 @@ export const CREATE_TABLES_SQL = `
   );
 
   -- Flashcards table
-  CREATE TABLE flashcards (
+  CREATE TABLE IF NOT EXISTS flashcards (
     id TEXT PRIMARY KEY,
     deck_id TEXT NOT NULL,
     front TEXT NOT NULL,
@@ -40,13 +40,25 @@ export const CREATE_TABLES_SQL = `
     last_reviewed TEXT,
     created TEXT NOT NULL,
     modified TEXT NOT NULL,
-    FOREIGN KEY (deck_id) REFERENCES decks(id) ON DELETE CASCADE
+    FOREIGN KEY (deck_id) REFERENCES decks(id)
+  );
+
+  -- Review sessions table
+  CREATE TABLE IF NOT EXISTS review_sessions (
+    id TEXT PRIMARY KEY,
+    deck_id TEXT NOT NULL,
+    started_at TEXT NOT NULL,
+    ended_at TEXT,
+    goal_total INTEGER NOT NULL,
+    done_unique INTEGER NOT NULL DEFAULT 0,
+    FOREIGN KEY (deck_id) REFERENCES decks(id)
   );
 
   -- Review logs table
-  CREATE TABLE review_logs (
+  CREATE TABLE IF NOT EXISTS review_logs (
     id TEXT PRIMARY KEY,
     flashcard_id TEXT NOT NULL,
+    session_id TEXT,
     last_reviewed_at TEXT NOT NULL,
     shown_at TEXT,
     reviewed_at TEXT NOT NULL,
@@ -79,13 +91,16 @@ export const CREATE_TABLES_SQL = `
     card_template_id TEXT,
     content_hash TEXT,
     client TEXT,
-    FOREIGN KEY (flashcard_id) REFERENCES flashcards(id)
+    FOREIGN KEY (flashcard_id) REFERENCES flashcards(id),
+    FOREIGN KEY (session_id) REFERENCES review_sessions(id)
   );
 
   -- Create indexes
   CREATE INDEX IF NOT EXISTS idx_flashcards_deck_id ON flashcards(deck_id);
   CREATE INDEX IF NOT EXISTS idx_flashcards_due_date ON flashcards(due_date);
+  CREATE INDEX IF NOT EXISTS idx_review_sessions_deck_id ON review_sessions(deck_id);
   CREATE INDEX IF NOT EXISTS idx_review_logs_flashcard_id ON review_logs(flashcard_id);
+  CREATE INDEX IF NOT EXISTS idx_review_logs_session_id ON review_logs(session_id);
   CREATE INDEX IF NOT EXISTS idx_review_logs_reviewed_at ON review_logs(reviewed_at);
 
   -- Set schema version
@@ -114,6 +129,7 @@ export function buildMigrationSQL(db: Database): string {
   const decksColumns = getColumnNames(db, "decks");
   const flashcardsColumns = getColumnNames(db, "flashcards");
   const reviewLogsColumns = getColumnNames(db, "review_logs");
+  const reviewSessionsColumns = getColumnNames(db, "review_sessions");
 
   // Build decks migration
   const decksSelect = [
@@ -167,6 +183,9 @@ export function buildMigrationSQL(db: Database): string {
   const reviewLogsSelect = [
     "id",
     "flashcard_id",
+    reviewLogsColumns.includes("session_id")
+      ? "session_id"
+      : "NULL as session_id",
     reviewLogsColumns.includes("last_reviewed_at")
       ? "last_reviewed_at"
       : `datetime('now') as last_reviewed_at`,
@@ -253,6 +272,16 @@ export function buildMigrationSQL(db: Database): string {
     reviewLogsColumns.includes("client") ? "client" : "NULL as client",
   ].join(", ");
 
+  // Build review_sessions migration
+  const reviewSessionsSelect = [
+    "id",
+    "deck_id",
+    "started_at",
+    "ended_at",
+    "goal_total",
+    "done_unique",
+  ].join(", ");
+
   return `
     PRAGMA foreign_keys = OFF;
     BEGIN;
@@ -288,12 +317,23 @@ export function buildMigrationSQL(db: Database): string {
       last_reviewed TEXT,
       created TEXT NOT NULL,
       modified TEXT NOT NULL,
-      FOREIGN KEY (deck_id) REFERENCES decks(id) ON DELETE CASCADE
+      FOREIGN KEY (deck_id) REFERENCES decks(id)
+    );
+
+    CREATE TABLE review_sessions_new (
+      id TEXT PRIMARY KEY,
+      deck_id TEXT NOT NULL,
+      started_at TEXT NOT NULL,
+      ended_at TEXT,
+      goal_total INTEGER NOT NULL,
+      done_unique INTEGER NOT NULL DEFAULT 0,
+      FOREIGN KEY (deck_id) REFERENCES decks_new(id)
     );
 
     CREATE TABLE review_logs_new (
       id TEXT PRIMARY KEY,
       flashcard_id TEXT NOT NULL,
+      session_id TEXT,
       last_reviewed_at TEXT NOT NULL,
       shown_at TEXT,
       reviewed_at TEXT NOT NULL,
@@ -326,7 +366,8 @@ export function buildMigrationSQL(db: Database): string {
       card_template_id TEXT,
       content_hash TEXT,
       client TEXT,
-      FOREIGN KEY (flashcard_id) REFERENCES flashcards(id)
+      FOREIGN KEY (flashcard_id) REFERENCES flashcards(id),
+      FOREIGN KEY (session_id) REFERENCES review_sessions(id)
     );
 
     -- Copy data with dynamic column mapping
@@ -336,23 +377,30 @@ export function buildMigrationSQL(db: Database): string {
     INSERT OR IGNORE INTO flashcards_new (id, deck_id, front, back, type, source_file, content_hash, state, due_date, interval, repetitions, difficulty, stability, lapses, last_reviewed, created, modified)
     SELECT ${flashcardsSelect} FROM flashcards WHERE EXISTS (SELECT 1 FROM sqlite_master WHERE type='table' AND name='flashcards');
 
-    INSERT OR IGNORE INTO review_logs_new (id, flashcard_id, last_reviewed_at, shown_at, reviewed_at, rating, rating_label, time_elapsed_ms, old_state, old_repetitions, old_lapses, old_stability, old_difficulty, new_state, new_repetitions, new_lapses, new_stability, new_difficulty, old_interval_minutes, new_interval_minutes, old_due_at, new_due_at, elapsed_days, retrievability, request_retention, profile, maximum_interval_days, min_minutes, fsrs_weights_version, scheduler_version, note_model_id, card_template_id, content_hash, client)
+    INSERT OR IGNORE INTO review_logs_new (id, flashcard_id, session_id, last_reviewed_at, shown_at, reviewed_at, rating, rating_label, time_elapsed_ms, old_state, old_repetitions, old_lapses, old_stability, old_difficulty, new_state, new_repetitions, new_lapses, new_stability, new_difficulty, old_interval_minutes, new_interval_minutes, old_due_at, new_due_at, elapsed_days, retrievability, request_retention, profile, maximum_interval_days, min_minutes, fsrs_weights_version, scheduler_version, note_model_id, card_template_id, content_hash, client)
     SELECT ${reviewLogsSelect} FROM review_logs WHERE EXISTS (SELECT 1 FROM sqlite_master WHERE type='table' AND name='review_logs');
+
+    INSERT OR IGNORE INTO review_sessions_new (id, deck_id, started_at, ended_at, goal_total, done_unique)
+    SELECT ${reviewSessionsSelect} FROM review_sessions WHERE EXISTS (SELECT 1 FROM sqlite_master WHERE type='table' AND name='review_logs');
 
     -- Drop old tables
     DROP TABLE IF EXISTS review_logs;
     DROP TABLE IF EXISTS flashcards;
     DROP TABLE IF EXISTS decks;
+    DROP TABLE IF EXISTS review_sessions;
 
     -- Rename new tables
     ALTER TABLE decks_new RENAME TO decks;
     ALTER TABLE flashcards_new RENAME TO flashcards;
+    ALTER TABLE review_sessions_new RENAME TO review_sessions;
     ALTER TABLE review_logs_new RENAME TO review_logs;
 
     -- Create indexes
     CREATE INDEX IF NOT EXISTS idx_flashcards_deck_id ON flashcards(deck_id);
     CREATE INDEX IF NOT EXISTS idx_flashcards_due_date ON flashcards(due_date);
+    CREATE INDEX IF NOT EXISTS idx_review_sessions_deck_id ON review_sessions(deck_id);
     CREATE INDEX IF NOT EXISTS idx_review_logs_flashcard_id ON review_logs(flashcard_id);
+    CREATE INDEX IF NOT EXISTS idx_review_logs_session_id ON review_logs(session_id);
     CREATE INDEX IF NOT EXISTS idx_review_logs_reviewed_at ON review_logs(reviewed_at);
 
     -- Set schema version
@@ -411,6 +459,7 @@ export const SQL_QUERIES = {
       state, due_date, interval, repetitions,
       difficulty, stability, lapses, last_reviewed, created, modified
     ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+
   `,
 
   DELETE_FLASHCARD: `DELETE FROM flashcards WHERE id = ?`,
@@ -440,7 +489,7 @@ export const SQL_QUERIES = {
   // Review log operations
   INSERT_REVIEW_LOG: `
     INSERT INTO review_logs (
-      id, flashcard_id, last_reviewed_at, shown_at, reviewed_at,
+      id, flashcard_id, session_id, last_reviewed_at, shown_at, reviewed_at,
       rating, rating_label, time_elapsed_ms,
       old_state, old_repetitions, old_lapses, old_stability, old_difficulty,
       new_state, new_repetitions, new_lapses, new_stability, new_difficulty,
@@ -449,7 +498,7 @@ export const SQL_QUERIES = {
       request_retention, profile, maximum_interval_days, min_minutes,
       fsrs_weights_version, scheduler_version,
       note_model_id, card_template_id, content_hash, client
-    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
   `,
 
   GET_LATEST_REVIEW_LOG: `
@@ -606,5 +655,39 @@ export const SQL_QUERIES = {
     WHERE rl.reviewed_at >= ? AND rl.reviewed_at <= ?
       AND rl.time_elapsed_ms IS NOT NULL
       AND rl.time_elapsed_ms > 0
+  `,
+
+  // Review Session operations
+  INSERT_REVIEW_SESSION: `
+    INSERT INTO review_sessions (
+      id, deck_id, started_at, ended_at, goal_total, done_unique
+    ) VALUES (?, ?, ?, ?, ?, ?)
+  `,
+
+  GET_REVIEW_SESSION_BY_ID: `SELECT * FROM review_sessions WHERE id = ?`,
+
+  UPDATE_REVIEW_SESSION_DONE_UNIQUE: `
+    UPDATE review_sessions
+    SET done_unique = ?
+    WHERE id = ?
+  `,
+
+  UPDATE_REVIEW_SESSION_END: `
+    UPDATE review_sessions
+    SET ended_at = ?
+    WHERE id = ?
+  `,
+
+  GET_ACTIVE_REVIEW_SESSION: `
+    SELECT * FROM review_sessions
+    WHERE deck_id = ? AND ended_at IS NULL
+    ORDER BY started_at DESC
+    LIMIT 1
+  `,
+
+  CHECK_CARD_REVIEWED_IN_SESSION: `
+    SELECT COUNT(*) as count
+    FROM review_logs
+    WHERE session_id = ? AND flashcard_id = ?
   `,
 };

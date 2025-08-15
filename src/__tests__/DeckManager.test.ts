@@ -714,7 +714,7 @@ Answer 1`;
         ],
       });
 
-      await deckManager.syncFlashcardsForDeckByName("test.md");
+      await deckManager.syncFlashcardsForDeck("test.md");
 
       // Verify deck was found by filepath
       expect(mockDb.getDeckByFilepath).toHaveBeenCalledWith("test.md");

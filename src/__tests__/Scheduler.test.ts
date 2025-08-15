@@ -19,6 +19,23 @@ describe("Scheduler", () => {
       jest.fn(),
     ) as jest.Mocked<DatabaseService>;
     scheduler = new Scheduler(mockDb);
+
+    // Add default mock methods for ReviewSession functionality
+    mockDb.createReviewSession = jest.fn().mockResolvedValue("session_123");
+    mockDb.getReviewSessionById = jest.fn().mockResolvedValue({
+      id: "session_123",
+      deckId: "deck_1",
+      startedAt: new Date().toISOString(),
+      endedAt: null,
+      goalTotal: 5,
+      doneUnique: 0,
+    });
+    mockDb.getActiveReviewSession = jest.fn().mockResolvedValue(null);
+    mockDb.updateReviewSessionDoneUnique = jest
+      .fn()
+      .mockResolvedValue(undefined);
+    mockDb.endReviewSession = jest.fn().mockResolvedValue(undefined);
+    mockDb.isCardReviewedInSession = jest.fn().mockResolvedValue(false);
   });
 
   describe("getNext", () => {
@@ -81,7 +98,6 @@ describe("Scheduler", () => {
           "header-paragraph",
           "test.md",
           "hash123",
-          null,
           "review",
           mockCard.dueDate,
           1440,
@@ -160,17 +176,16 @@ describe("Scheduler", () => {
         [
           "card_new",
           "deck_1",
-          "New Question",
-          "New Answer",
+          "Question",
+          "Answer",
           "header-paragraph",
           "test.md",
           "hash456",
-          null,
           "new",
           mockNewCard.dueDate,
           0,
           0,
-          0,
+          5,
           0,
           0,
           null,
@@ -384,6 +399,183 @@ describe("Scheduler", () => {
       const result = await scheduler.timeToNext(new Date(), "deck_1");
 
       expect(result).toBeNull();
+    });
+
+    describe("Review Session Management", () => {
+      beforeEach(() => {
+        // Mock ReviewSession-related database methods
+        mockDb.createReviewSession = jest.fn().mockResolvedValue("session_123");
+        mockDb.getReviewSessionById = jest.fn().mockResolvedValue({
+          id: "session_123",
+          deckId: "deck_1",
+          startedAt: new Date().toISOString(),
+          endedAt: null,
+          goalTotal: 5,
+          doneUnique: 0,
+        });
+        mockDb.getActiveReviewSession = jest.fn().mockResolvedValue(null);
+        mockDb.updateReviewSessionDoneUnique = jest
+          .fn()
+          .mockResolvedValue(undefined);
+        mockDb.endReviewSession = jest.fn().mockResolvedValue(undefined);
+        mockDb.isCardReviewedInSession = jest.fn().mockResolvedValue(false);
+        mockDb.query = jest.fn().mockResolvedValue([[5]]);
+      });
+
+      test("should start and track review session progress", async () => {
+        // Mock deck and cards
+        const mockDeck: Deck = {
+          id: "deck_1",
+          name: "Test Deck",
+          filepath: "test.md",
+          tag: "test",
+          lastReviewed: null,
+          config: {
+            newCardsPerDay: 0,
+            reviewCardsPerDay: 0,
+            headerLevel: 2,
+            reviewOrder: "due-date",
+            fsrs: { requestRetention: 0.9, profile: "STANDARD" },
+          },
+          created: new Date().toISOString(),
+          modified: new Date().toISOString(),
+        };
+
+        mockDb.getDeckById.mockResolvedValue(mockDeck);
+        mockDb.getDailyReviewCounts.mockResolvedValue({
+          newCount: 0,
+          reviewCount: 0,
+        });
+
+        // Start session
+        const sessionId = await scheduler.startReviewSession("deck_1");
+        expect(sessionId).toBe("session_123");
+        expect(mockDb.createReviewSession).toHaveBeenCalled();
+
+        // Get progress
+        const progress = await scheduler.getSessionProgress(sessionId);
+        expect(progress).toEqual({
+          doneUnique: 0,
+          goalTotal: 5,
+          progress: 0,
+        });
+      });
+
+      test("should track unique card reviews in session", async () => {
+        const mockCard: Flashcard = {
+          id: "card_1",
+          deckId: "deck_1",
+          front: "Question",
+          back: "Answer",
+          type: "header-paragraph",
+          sourceFile: "test.md",
+          contentHash: "hash1",
+          state: "review",
+          dueDate: new Date().toISOString(),
+          interval: 1440,
+          repetitions: 1,
+          difficulty: 5.0,
+          stability: 2.5,
+          lapses: 0,
+          lastReviewed: null,
+          created: new Date().toISOString(),
+          modified: new Date().toISOString(),
+        };
+
+        const mockDeck: Deck = {
+          id: "deck_1",
+          name: "Test Deck",
+          filepath: "test.md",
+          tag: "test",
+          lastReviewed: null,
+          config: {
+            newCardsPerDay: 0,
+            reviewCardsPerDay: 0,
+            headerLevel: 2,
+            reviewOrder: "due-date",
+            fsrs: { requestRetention: 0.9, profile: "STANDARD" },
+          },
+          created: new Date().toISOString(),
+          modified: new Date().toISOString(),
+        };
+
+        mockDb.getFlashcardById.mockResolvedValue(mockCard);
+        mockDb.getDeckById.mockResolvedValue(mockDeck);
+        mockDb.updateFlashcard.mockResolvedValue(undefined);
+        mockDb.createReviewLog.mockResolvedValue(undefined);
+
+        // Set current session
+        scheduler.setCurrentSession("session_123");
+        expect(scheduler.getCurrentSession()).toBe("session_123");
+
+        // First review should increment unique count
+        mockDb.isCardReviewedInSession.mockResolvedValueOnce(false);
+        await scheduler.rate("card_1", "good");
+        expect(mockDb.updateReviewSessionDoneUnique).toHaveBeenCalledWith(
+          "session_123",
+          1,
+        );
+
+        // Second review of same card should not increment
+        mockDb.isCardReviewedInSession.mockResolvedValueOnce(true);
+        await scheduler.rate("card_1", "again");
+        expect(mockDb.updateReviewSessionDoneUnique).toHaveBeenCalledTimes(1);
+      });
+
+      test("should always start fresh sessions", async () => {
+        const mockDeck: Deck = {
+          id: "deck_1",
+          name: "Test Deck",
+          filepath: "test.md",
+          tag: "test",
+          lastReviewed: null,
+          config: {
+            newCardsPerDay: 0,
+            reviewCardsPerDay: 0,
+            headerLevel: 2,
+            reviewOrder: "due-date",
+            fsrs: { requestRetention: 0.9, profile: "STANDARD" },
+          },
+          created: new Date().toISOString(),
+          modified: new Date().toISOString(),
+        };
+
+        mockDb.getDeckById.mockResolvedValue(mockDeck);
+        mockDb.getDailyReviewCounts.mockResolvedValue({
+          newCount: 0,
+          reviewCount: 0,
+        });
+
+        // Should create new session when none exists
+        const sessionId1 = await scheduler.startFreshSession("deck_1");
+        expect(sessionId1).toBe("session_123");
+        expect(scheduler.getCurrentSession()).toBe("session_123");
+
+        // Mock an existing active session for the next test
+        mockDb.getActiveReviewSession.mockResolvedValueOnce({
+          id: "existing_session",
+          deckId: "deck_1",
+          startedAt: new Date().toISOString(),
+          endedAt: null,
+          goalTotal: 5,
+          doneUnique: 2,
+        });
+
+        // Should end existing session and create new one
+        const sessionId2 = await scheduler.startFreshSession("deck_1");
+        expect(sessionId2).toBe("session_123");
+        expect(mockDb.endReviewSession).toHaveBeenCalledWith(
+          "existing_session",
+          expect.any(String),
+        );
+
+        // Manual end session test
+        await scheduler.endReviewSession(sessionId2);
+        expect(mockDb.endReviewSession).toHaveBeenCalledWith(
+          sessionId2,
+          expect.any(String),
+        );
+      });
     });
   });
 

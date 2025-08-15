@@ -128,7 +128,7 @@ describe("FSRS Algorithm - Pure Implementation", () => {
 
       expect(againCard.state).toBe("review");
       expect(againCard.repetitions).toBe(4);
-      expect(againCard.interval).toBeGreaterThanOrEqual(1440); // At least 1 day
+      expect(againCard.interval).toBe(1); // INTENSIVE profile: 1 minute for Again
     });
 
     it("should increment lapses when pressing Again on review card", () => {
@@ -160,8 +160,8 @@ describe("FSRS Algorithm - Pure Implementation", () => {
       const againCard = schedulingInfo.again;
 
       // Again rating should result in shorter interval than current
-      // Note: In FSRS, Again rating reduces stability but minimum interval is 1 day
-      expect(againCard.interval).toBeGreaterThanOrEqual(1440);
+      // Note: In INTENSIVE profile, Again rating always gives 1 minute minimum
+      expect(againCard.interval).toBe(1);
       expect(againCard.state).toBe("review");
     });
 
@@ -927,6 +927,190 @@ describe("FSRS Algorithm - Pure Implementation", () => {
 
         const retrievability = fsrs.getRetrievability(card);
         expect(retrievability).toBe(0.9);
+      });
+    });
+
+    describe("Again Rating Minimum Interval", () => {
+      it("should always use minimum interval for Again rating in INTENSIVE profile", () => {
+        const fsrsIntensive = new FSRS({
+          requestRetention: 0.9,
+          profile: "INTENSIVE",
+        });
+
+        const reviewCard: Flashcard = {
+          id: "again-test-1",
+          deckId: "test-deck",
+          front: "Again Test",
+          back: "Answer",
+          type: "header-paragraph",
+          sourceFile: "test.md",
+          contentHash: "againhash",
+          state: "review",
+          dueDate: new Date().toISOString(),
+          interval: 2880, // 2 days
+          repetitions: 5,
+          difficulty: 6.0,
+          stability: 10.0, // High stability
+          lapses: 2,
+          lastReviewed: new Date(
+            Date.now() - 24 * 60 * 60 * 1000,
+          ).toISOString(),
+          created: new Date().toISOString(),
+          modified: new Date().toISOString(),
+        };
+
+        const againSchedule = fsrsIntensive.getSchedulingInfo(reviewCard).again;
+
+        // INTENSIVE profile should always give 1 minute for Again rating
+        expect(againSchedule.interval).toBe(1);
+        expect(againSchedule.state).toBe("review");
+        // Note: lapses are tracked internally, not in SchedulingCard interface
+      });
+
+      it("should always use minimum interval for Again rating in STANDARD profile", () => {
+        const fsrsStandard = new FSRS({
+          requestRetention: 0.9,
+          profile: "STANDARD",
+        });
+
+        const reviewCard: Flashcard = {
+          id: "again-test-2",
+          deckId: "test-deck",
+          front: "Again Test Standard",
+          back: "Answer",
+          type: "header-paragraph",
+          sourceFile: "test.md",
+          contentHash: "againhash2",
+          state: "review",
+          dueDate: new Date().toISOString(),
+          interval: 10080, // 7 days
+          repetitions: 10,
+          difficulty: 8.0,
+          stability: 30.0, // Very high stability
+          lapses: 0,
+          lastReviewed: new Date(
+            Date.now() - 24 * 60 * 60 * 1000,
+          ).toISOString(),
+          created: new Date().toISOString(),
+          modified: new Date().toISOString(),
+        };
+
+        const againSchedule = fsrsStandard.getSchedulingInfo(reviewCard).again;
+
+        // STANDARD profile should always give 1440 minutes (1 day) for Again rating
+        expect(againSchedule.interval).toBe(1440);
+        expect(againSchedule.state).toBe("review");
+        // Note: lapses are tracked internally, not in SchedulingCard interface
+      });
+
+      it("should use calculated interval for non-Again ratings", () => {
+        const fsrsIntensive = new FSRS({
+          requestRetention: 0.9,
+          profile: "INTENSIVE",
+        });
+
+        const reviewCard: Flashcard = {
+          id: "good-test-1",
+          deckId: "test-deck",
+          front: "Good Test",
+          back: "Answer",
+          type: "header-paragraph",
+          sourceFile: "test.md",
+          contentHash: "goodhash",
+          state: "review",
+          dueDate: new Date().toISOString(),
+          interval: 1440, // 1 day
+          repetitions: 2,
+          difficulty: 5.0,
+          stability: 2.0,
+          lapses: 0,
+          lastReviewed: new Date(
+            Date.now() - 24 * 60 * 60 * 1000,
+          ).toISOString(),
+          created: new Date().toISOString(),
+          modified: new Date().toISOString(),
+        };
+
+        const goodSchedule = fsrsIntensive.getSchedulingInfo(reviewCard).good;
+
+        // Good rating should use calculated interval based on stability, not minimum
+        expect(goodSchedule.interval).toBeGreaterThan(1); // Should be more than 1 minute
+        expect(goodSchedule.state).toBe("review");
+        // Note: lapses are tracked internally, not in SchedulingCard interface
+      });
+
+      it("should show correct Again interval in preview for review cards", () => {
+        const fsrsIntensive = new FSRS({
+          requestRetention: 0.9,
+          profile: "INTENSIVE",
+        });
+
+        const reviewCard: Flashcard = {
+          id: "preview-test-1",
+          deckId: "test-deck",
+          front: "Preview Test",
+          back: "Answer",
+          type: "header-paragraph",
+          sourceFile: "test.md",
+          contentHash: "previewhash",
+          state: "review",
+          dueDate: new Date().toISOString(),
+          interval: 7200, // 5 days
+          repetitions: 8,
+          difficulty: 7.0,
+          stability: 15.0, // High stability
+          lapses: 1,
+          lastReviewed: new Date(
+            Date.now() - 24 * 60 * 60 * 1000,
+          ).toISOString(),
+          created: new Date().toISOString(),
+          modified: new Date().toISOString(),
+        };
+
+        const schedulingInfo = fsrsIntensive.getSchedulingInfo(reviewCard);
+
+        // INTENSIVE profile should show 1 minute for Again in preview
+        expect(schedulingInfo.again.interval).toBe(1);
+
+        // Other ratings should show calculated intervals
+        expect(schedulingInfo.good.interval).toBeGreaterThan(1);
+        expect(schedulingInfo.hard.interval).toBeGreaterThan(1);
+        expect(schedulingInfo.easy.interval).toBeGreaterThan(1);
+      });
+
+      it("should show correct Again interval in updateCard for review cards", () => {
+        const fsrsStandard = new FSRS({
+          requestRetention: 0.9,
+          profile: "STANDARD",
+        });
+
+        const reviewCard: Flashcard = {
+          id: "update-test-1",
+          deckId: "test-deck",
+          front: "Update Test",
+          back: "Answer",
+          type: "header-paragraph",
+          sourceFile: "test.md",
+          contentHash: "updatehash",
+          state: "review",
+          dueDate: new Date().toISOString(),
+          interval: 14400, // 10 days
+          repetitions: 12,
+          difficulty: 8.5,
+          stability: 25.0, // Very high stability
+          lapses: 0,
+          lastReviewed: new Date(
+            Date.now() - 24 * 60 * 60 * 1000,
+          ).toISOString(),
+          created: new Date().toISOString(),
+          modified: new Date().toISOString(),
+        };
+
+        const updatedCard = fsrsStandard.updateCard(reviewCard, "again");
+
+        // STANDARD profile should give 1440 minutes (1 day) for Again
+        expect(updatedCard.interval).toBe(1440);
+        expect(updatedCard.state).toBe("review");
       });
     });
   });

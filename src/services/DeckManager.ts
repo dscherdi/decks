@@ -6,7 +6,11 @@ import {
   DEFAULT_DECK_CONFIG,
 } from "../database/types";
 import { DatabaseService } from "../database/DatabaseService";
+import { yieldToUI, yieldEvery } from "../utils/ui";
 import DecksPlugin from "@/main";
+
+// Maximum number of flashcards to process per deck for performance
+const MAX_FLASHCARDS_PER_DECK = 50000;
 
 export interface ParsedFlashcard {
   front: string;
@@ -18,7 +22,7 @@ export class DeckManager {
   private vault: Vault;
   private metadataCache: MetadataCache;
   private db: DatabaseService;
-  private plugin: DecksPlugin | undefined; // Plugin reference for debug logging
+  private plugin?: DecksPlugin;
 
   // Pre-compiled regex patterns for better performance
   private static readonly HEADER_REGEX = /^(#{1,6})\s+/;
@@ -324,7 +328,7 @@ export class DeckManager {
 
         if (cells.length >= 2 && cells[0] && cells[1]) {
           flashcards.push({
-            front: cells[0],
+            front: cells[0], // TODO strip of unnecessary characters
             back: cells[1],
             type: "table",
           });
@@ -417,7 +421,7 @@ export class DeckManager {
   }
 
   /**
-   * Execute batch database operations for better performance
+   * Execute batch database operations using transactions with prepared statements for optimal performance
    */
   private async executeBatchOperations(
     operations: Array<{
@@ -428,59 +432,75 @@ export class DeckManager {
     }>,
   ): Promise<void> {
     const batchStartTime = performance.now();
-    const BATCH_SIZE = 50;
     let createCount = 0;
     let updateCount = 0;
     let deleteCount = 0;
 
-    for (let i = 0; i < operations.length; i += BATCH_SIZE) {
-      const chunk = operations.slice(i, i + BATCH_SIZE);
-      const chunkStartTime = performance.now();
+    this.debugLog(`Starting transaction for ${operations.length} operations`);
 
-      // Execute chunk operations
-      for (const op of chunk) {
-        try {
-          switch (op.type) {
-            case "create":
-              if (op.flashcard) {
-                await this.db.createFlashcard(op.flashcard);
-                createCount++;
-              }
-              break;
-            case "update":
-              if (op.flashcardId && op.updates) {
-                await this.db.updateFlashcard(op.flashcardId, op.updates);
-                updateCount++;
-              }
-              break;
-            case "delete":
-              if (op.flashcardId) {
-                await this.db.deleteFlashcard(op.flashcardId);
-                deleteCount++;
-              }
-              break;
-          }
-        } catch (error) {
-          console.error(`Failed to execute ${op.type} operation:`, error);
-          // Continue with other operations
-        }
-      }
+    try {
+      // Yield to UI before starting transaction
+      await yieldToUI();
 
-      const chunkTime = performance.now() - chunkStartTime;
-      this.performanceLog(
-        `Batch ${Math.floor(i / BATCH_SIZE) + 1}: ${chunk.length} operations in ${this.formatTime(chunkTime)}`,
+      // Begin transaction
+      this.db.beginTransaction();
+      this.debugLog(`Transaction started successfully`);
+
+      // Group operations by type for batch processing
+      const deleteOps = operations.filter(
+        (op) => op.type === "delete" && op.flashcardId,
+      );
+      const createOps = operations.filter(
+        (op) => op.type === "create" && op.flashcard,
+      );
+      const updateOps = operations.filter(
+        (op) => op.type === "update" && op.flashcardId && op.updates,
       );
 
-      // Yield control between chunks
-      if (i + BATCH_SIZE < operations.length) {
-        await new Promise((resolve) => setTimeout(resolve, 10));
+      // Execute all DELETE operations with single prepared statement
+      if (deleteOps.length > 0) {
+        this.db.batchDeleteFlashcards(deleteOps.map((op) => op.flashcardId!));
+        deleteCount = deleteOps.length;
+        this.debugLog(`Batch deleted ${deleteCount} flashcards`);
       }
-    }
 
-    const totalBatchTime = performance.now() - batchStartTime;
-    this.performanceLog(
-      `Batch operations completed in ${this.formatTime(totalBatchTime)} (${createCount} created, ${updateCount} updated, ${deleteCount} deleted)`,
-    );
+      // Execute all CREATE operations with single prepared statement
+      if (createOps.length > 0) {
+        this.db.batchCreateFlashcards(createOps.map((op) => op.flashcard!));
+        createCount = createOps.length;
+        this.debugLog(`Batch created ${createCount} flashcards`);
+      }
+
+      // Execute all UPDATE operations with single prepared statement
+      if (updateOps.length > 0) {
+        this.db.batchUpdateFlashcards(
+          updateOps.map((op) => ({
+            id: op.flashcardId!,
+            updates: op.updates!,
+          })),
+        );
+        updateCount = updateOps.length;
+        this.debugLog(`Batch updated ${updateCount} flashcards`);
+      }
+
+      // Commit transaction
+      this.db.commitTransaction();
+      this.debugLog(`Transaction committed successfully`);
+
+      const totalBatchTime = performance.now() - batchStartTime;
+      this.performanceLog(
+        `Transaction completed in ${this.formatTime(totalBatchTime)} (${createCount} created, ${updateCount} updated, ${deleteCount} deleted)`,
+      );
+    } catch (error) {
+      console.error(`Critical error in transaction:`, error);
+      try {
+        this.db.rollbackTransaction();
+        this.debugLog(`Transaction rolled back due to error`);
+      } catch (rollbackError) {
+        console.error(`Failed to rollback transaction:`, rollbackError);
+      }
+      throw error;
+    }
   }
 
   /**
@@ -493,6 +513,7 @@ export class DeckManager {
     const deckSyncStartTime = performance.now();
     this.debugLog(`Syncing flashcards for deck: ${filePath}`);
 
+    await yieldToUI();
     const deck = await this.db.getDeckByFilepath(filePath);
     if (!deck) {
       this.debugLog(`No deck found for filepath: ${filePath}`);
@@ -522,7 +543,8 @@ export class DeckManager {
       `File modified: ${fileModifiedTime.toISOString()}, last sync: ${deck.modified}`,
     );
 
-    // Get existing flashcards for this deck
+    // Get existing flashcards for this deck to determine what changed
+    await yieldToUI();
     const existingFlashcards = await this.db.getFlashcardsByDeck(deck.id);
     this.debugLog(
       `Found ${existingFlashcards.length} existing flashcards for deck ${deck.name}`,
@@ -546,14 +568,34 @@ export class DeckManager {
     }> = [];
 
     // Parse flashcards from the file using deck's header level configuration
-    const parsedCards = await this.parseFlashcardsFromFile(
+    const allParsedCards = await this.parseFlashcardsFromFile(
       file,
       deck.config.headerLevel,
     );
-    this.debugLog(`Parsed ${parsedCards.length} flashcards from ${filePath}`);
+
+    // Limit to first 4000 flashcards per deck
+    const parsedCards = allParsedCards.slice(0, MAX_FLASHCARDS_PER_DECK);
+
+    this.debugLog(
+      `Parsed ${allParsedCards.length} flashcards from ${filePath}, processing first ${parsedCards.length} (limit: ${MAX_FLASHCARDS_PER_DECK})`,
+    );
+
+    if (allParsedCards.length > MAX_FLASHCARDS_PER_DECK) {
+      this.debugLog(
+        `⚠️ Deck "${deck.name}" exceeds flashcard limit. ${allParsedCards.length - MAX_FLASHCARDS_PER_DECK} flashcards will be skipped.`,
+      );
+      if (this.plugin?.settings?.ui?.enableNotices) {
+        new Notice(
+          `⚠️ Deck "${deck.name}" has ${allParsedCards.length} flashcards. Only processing first ${MAX_FLASHCARDS_PER_DECK} for performance.`,
+          8000,
+        );
+      }
+    }
 
     // Process flashcards in chunks to avoid blocking UI with large datasets
     for (let i = 0; i < parsedCards.length; i++) {
+      // Yield control to UI every 50 flashcards to prevent blocking
+      await yieldEvery(i);
       const parsed = parsedCards[i];
       const flashcardId = this.generateFlashcardId(parsed.front);
       const contentHash = this.generateContentHash(parsed.back);
@@ -583,7 +625,6 @@ export class DeckManager {
       this.debugLog(
         `Generated ID: ${flashcardId} (from front: "${parsed.front.substring(0, 30)}..." + deck: ${deck.id})`,
       );
-      this.debugLog(`Content hash: ${contentHash}`);
       this.debugLog(`Existing card found:`, existingCard ? "YES" : "NO");
 
       if (existingCard) {
@@ -593,11 +634,6 @@ export class DeckManager {
       }
 
       processedIds.add(flashcardId);
-
-      // Yield control every 50 flashcards to keep UI responsive
-      if (i % 50 === 49) {
-        await new Promise((resolve) => setTimeout(resolve, 5));
-      }
 
       if (existingCard) {
         // Update if content has changed
@@ -691,26 +727,38 @@ export class DeckManager {
         `Executing ${batchOperations.length} batch database operations`,
       );
       await this.executeBatchOperations(batchOperations);
+      this.debugLog(`Batch operations completed successfully`);
     }
 
-    // Update deck's modified timestamp to match file modification time
+    // Update deck's modified timestamp to match file modification time (without save)
     const timestampStartTime = performance.now();
-    await this.db.updateDeckTimestamp(deck.id, fileModifiedTime.toISOString());
-    await this.checkForDuplicatesInDeck(deck.id);
+    try {
+      this.debugLog(`Updating deck timestamp for: ${deck.name}`);
+      await this.db.updateDeckTimestampWithoutSave(
+        deck.id,
+        fileModifiedTime.toISOString(),
+      );
+      this.debugLog(`Deck timestamp updated successfully`);
+    } catch (error) {
+      console.error(`Failed to update deck timestamp for ${deck.name}:`, error);
+      throw error;
+    }
+
+    try {
+      this.debugLog(`Checking for duplicates in deck: ${deck.name}`);
+      await this.checkForDuplicatesInDeck(deck.id);
+      this.debugLog(`Duplicate check completed for deck: ${deck.name}`);
+    } catch (error) {
+      console.error(`Failed to check duplicates for ${deck.name}:`, error);
+      throw error;
+    }
+
     const timestampTime = performance.now() - timestampStartTime;
 
     const totalDeckSyncTime = performance.now() - deckSyncStartTime;
     this.performanceLog(
-      `Sync completed for deck: ${deck.name} in ${this.formatTime(totalDeckSyncTime)} (${parsedCards.length} flashcards, ${batchOperations.length} operations, cleanup: ${this.formatTime(timestampTime)})`,
+      `Sync completed for deck: ${deck.name} in ${this.formatTime(totalDeckSyncTime)} (${parsedCards.length} flashcards, ${batchOperations.length} operations, cleanup: ${this.formatTime(timestampTime)}) - DB save deferred`,
     );
-  }
-
-  /**
-   * Sync flashcards for a specific deck by name (file path)
-   */
-  async syncFlashcardsForDeckByName(deckName: string): Promise<void> {
-    // In the new system, deckName is actually the file path
-    await this.syncFlashcardsForDeck(deckName);
   }
 
   /**
@@ -721,6 +769,7 @@ export class DeckManager {
     if (!file || !(file instanceof TFile)) return;
 
     const deckName = file.basename;
+    await yieldToUI();
     const existingDeck = await this.db.getDeckByFilepath(filePath);
 
     if (!existingDeck) {
@@ -835,6 +884,7 @@ export class DeckManager {
    * Check for duplicate flashcards in a deck and warn the user
    */
   async checkForDuplicatesInDeck(deckId: string): Promise<void> {
+    await yieldToUI();
     const existingFlashcards = await this.db.getFlashcardsByDeck(deckId);
     const frontTextMap = new Map<string, Flashcard[]>();
 
@@ -876,6 +926,7 @@ export class DeckManager {
     this.debugLog(
       `Updating flashcard deck IDs from ${oldDeckId} to ${newDeckId}`,
     );
+    await yieldToUI();
     await this.db.updateFlashcardDeckIds(oldDeckId, newDeckId);
   }
 }

@@ -54,9 +54,19 @@ export interface Flashcard {
   modified: string;
 }
 
+export interface ReviewSession {
+  id: string;
+  deckId: string;
+  startedAt: string; // ISO datetime
+  endedAt: string | null; // ISO datetime when user closes session, can be null
+  goalTotal: number; // COUNT(dueAt <= now) at session start; if limits defined take Top LimitAmount
+  doneUnique: number; // unique number of cards seen
+}
+
 export interface ReviewLog {
   id: string;
   flashcardId: string;
+  sessionId?: string; // Reference to review session (no cascade delete)
 
   // Timestamps
   lastReviewedAt: string; // before this review
@@ -123,6 +133,7 @@ export interface DatabaseSchema {
   decks: Deck;
   flashcards: Flashcard;
   review_logs: ReviewLog;
+  review_sessions: ReviewSession;
 }
 
 export interface DailyStats {

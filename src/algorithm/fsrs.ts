@@ -151,7 +151,14 @@ export class FSRS {
       rating,
       now,
     );
-    const intervalMinutes = this.nextIntervalMinutes(updatedFsrsCard.stability);
+    let intervalMinutes: number;
+
+    // For "Again" rating (1), always use minimum interval regardless of stability
+    if (rating === 1) {
+      intervalMinutes = this.getMinMinutes();
+    } else {
+      intervalMinutes = this.nextIntervalMinutes(updatedFsrsCard.stability);
+    }
     const schedule = this.createSchedulingCard(
       intervalMinutes,
       updatedFsrsCard,
@@ -241,7 +248,14 @@ export class FSRS {
       updatedCard.stability = this.initStability(rating);
     }
 
-    const intervalMinutes = this.nextIntervalMinutes(updatedCard.stability);
+    let intervalMinutes: number;
+
+    // For "Again" rating (1), always use minimum interval regardless of stability
+    if (rating === 1) {
+      intervalMinutes = this.getMinMinutes();
+    } else {
+      intervalMinutes = this.nextIntervalMinutes(updatedCard.stability);
+    }
 
     return this.createSchedulingCard(intervalMinutes, updatedCard, now);
   }

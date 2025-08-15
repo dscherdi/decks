@@ -726,12 +726,42 @@ This is the scheduler contract and behavior your plugin should implement.
 - Maintains backward compatibility with existing review and scheduling workflows
 
 
-### TODO 21: Header level should be a deck-specific configuration
+### ✅ TODO 21: Header level should be a deck-specific configuration
 
 - Remove header level from general settings
 - Add header level setting in deck specific configuration
 - Ensure header level is read from deck configuration (default h2) persistent in database
 - Header level should be removed from Flashcard interface and added to Deck interface and
+
+
+### ✅ TODO 22: Progress bar fix
+
+**IMPLEMENTED**: Unique-first progress tracking with session-based architecture.
+
+**Key Features Implemented:**
+- `ReviewSession` interface and database table with fields:
+  - `id`, `deckId`, `startedAt`, `endedAt`, `goalTotal`, `doneUnique`
+- Session-based progress calculation: `progress = doneUnique / goalTotal`
+- Updated `ReviewLog` schema with optional `sessionId` field (no cascade delete)
+- Scheduler manages active sessions internally for seamless integration
+- Progress only increments on first review of a card per session
+- Cards can reappear when due but don't affect progress after first answer
+
+**Implementation Details:**
+- **Database Schema v3**: Added `review_sessions` table and `session_id` to `review_logs`
+- **Scheduler Enhanced**: 
+  - `startReviewSession()`, `getSessionProgress()`, `endReviewSession()`
+  - `getOrCreateActiveSession()` for automatic session management
+  - Internal session tracking with `setCurrentSession()`
+- **FlashcardReviewModal**: Session initialization on mount, real-time progress updates
+- **Migration**: Automatic schema migration from v2 to v3 with backward compatibility
+
+**Progress Behavior:**
+- Goal calculated at session start: due cards + available new cards (respecting daily limits)
+- First review of any card increments `doneUnique`
+- Subsequent reviews of same card don't affect progress
+- Progress bar shows: `(doneUnique / goalTotal) * 100`
+- Display format: "Reviewed: X (Y remaining)"
 
 
 ## ✅ Recent Enhancements
@@ -1327,3 +1357,19 @@ This is the scheduler contract and behavior your plugin should implement.
 - **Maintainability**: Single source of truth for all database schema definitions
 - **Performance**: Faster initialization for fresh databases with direct table creation
 - **Reliability**: Simplified logic reduces edge cases and improves error handling
+
+### ✅ Header Level as Deck-Specific Configuration & Schema Cleanup
+- **Removed Header Level from Global Settings**: Moved parsing header level from plugin settings to individual deck configurations
+- **Deck-Specific Header Level**: Each deck can now have its own header level (H1-H6) independent of other decks
+- **Removed Header Level Column from Flashcards**: Eliminated `header_level` column from flashcards table - no longer needed in database schema
+- **Parse-Time Filtering**: Changed from parse-all-then-filter to parse-only-required-level approach for better performance
+- **Automatic Flashcard Cleanup**: When header level changes in deck config, automatically deletes old flashcards and creates new ones
+- **Consistent Flashcard IDs**: Header symbols (`#`) are stripped during ID generation to ensure same content gets same ID across header levels
+- **Force Resync on Config Change**: Deck configuration changes trigger immediate resync to clean up incompatible flashcards
+- **Cleaner DeckConfig Interface**: Simplified config structure with `newCardsPerDay`/`reviewCardsPerDay` (0 = unlimited) instead of boolean + limit pairs
+- **Utility Functions**: Added `hasNewCardsLimit()` and `hasReviewCardsLimit()` helper functions for cleaner code
+- **Backward Compatibility**: Migration logic handles old config formats automatically during database upgrades
+- **Updated All Components**: Fixed all TypeScript files, Svelte components, and test files to use new config structure
+- **Preserved User Progress**: Flashcard progress is maintained when changing header levels if content matches
+
+Showing symbols 1-67 (total symbols: 67)

@@ -3,6 +3,7 @@ import {
   FlashcardState,
   Deck,
   ReviewLog,
+  ReviewSession,
   hasNewCardsLimit,
   hasReviewCardsLimit,
 } from "../database/types";
@@ -19,6 +20,7 @@ import {
   getMaxIntervalDaysForProfile,
   FSRSProfile,
 } from "../algorithm/fsrs-weights";
+import { yieldToUI } from "../utils/ui";
 
 export interface SchedulerOptions {
   allowNew?: boolean;
@@ -31,6 +33,12 @@ export interface SchedulingPreview {
   easy: SchedulingCard;
 }
 
+export interface SessionProgress {
+  doneUnique: number;
+  goalTotal: number;
+  progress: number; // 0-100
+}
+
 /**
  * Unified scheduler that consolidates all card selection and scheduling logic.
  * Handles deterministic card selection, FSRS-based interval calculation,
@@ -39,10 +47,129 @@ export interface SchedulingPreview {
 export class Scheduler {
   private db: DatabaseService;
   private fsrs: FSRS;
+  private currentSessionId: string | null = null;
 
   constructor(db: DatabaseService) {
     this.db = db;
     this.fsrs = new FSRS();
+  }
+
+  /**
+   * Start a new review session for a deck
+   */
+  async startReviewSession(
+    deckId: string,
+    now: Date = new Date(),
+  ): Promise<string> {
+    const deck = await this.db.getDeckById(deckId);
+    if (!deck) {
+      throw new Error(`Deck not found: ${deckId}`);
+    }
+
+    // Calculate goal total more accurately
+    const dailyCounts = await this.db.getDailyReviewCounts(deckId);
+    const dueCardCount = await this.getDueCardCount(now, deckId);
+    const newCardCount = await this.getNewCardCount(deckId);
+
+    let goalTotal = 0;
+
+    // Add due review cards (applying daily limits if configured)
+    if (hasReviewCardsLimit(deck.config)) {
+      const remainingReviewQuota = Math.max(
+        0,
+        deck.config.reviewCardsPerDay - dailyCounts.reviewCount,
+      );
+      goalTotal += Math.min(dueCardCount, remainingReviewQuota);
+    } else {
+      goalTotal += dueCardCount;
+    }
+
+    // Add new cards (applying daily limits if configured)
+    if (hasNewCardsLimit(deck.config)) {
+      const remainingNewQuota = Math.max(
+        0,
+        deck.config.newCardsPerDay - dailyCounts.newCount,
+      );
+      goalTotal += Math.min(newCardCount, remainingNewQuota);
+    } else {
+      // newCardsPerDay: 0 means unlimited
+      goalTotal += newCardCount;
+    }
+
+    // Ensure at least 1 for progress calculation
+    const finalGoalTotal = Math.max(1, goalTotal);
+
+    const sessionId = await this.db.createReviewSession({
+      deckId,
+      startedAt: now.toISOString(),
+      endedAt: null,
+      goalTotal: finalGoalTotal,
+      doneUnique: 0,
+    });
+
+    return sessionId;
+  }
+
+  /**
+   * Get progress for a review session
+   */
+  async getSessionProgress(sessionId: string): Promise<SessionProgress | null> {
+    const session = await this.db.getReviewSessionById(sessionId);
+    if (!session) return null;
+
+    const progress =
+      session.goalTotal > 0
+        ? Math.min(100, (session.doneUnique / session.goalTotal) * 100)
+        : 0;
+
+    return {
+      doneUnique: session.doneUnique,
+      goalTotal: session.goalTotal,
+      progress,
+    };
+  }
+
+  /**
+   * End a review session
+   */
+  async endReviewSession(
+    sessionId: string,
+    now: Date = new Date(),
+  ): Promise<void> {
+    await this.db.endReviewSession(sessionId, now.toISOString());
+  }
+
+  /**
+   * Start a fresh review session for a deck (ends any existing session)
+   */
+  async startFreshSession(
+    deckId: string,
+    now: Date = new Date(),
+  ): Promise<string> {
+    // End any existing active session first
+    // TODO: End by taking the review time of last review log with session id of active session
+    const activeSession = await this.db.getActiveReviewSession(deckId);
+    if (activeSession) {
+      await this.db.endReviewSession(activeSession.id, now.toISOString());
+    }
+
+    // Start a new session
+    this.currentSessionId = await this.startReviewSession(deckId, now);
+    return this.currentSessionId;
+  }
+
+  /**
+   * Set the current active session for tracking
+   */
+  setCurrentSession(sessionId: string | null): void {
+    this.currentSessionId = sessionId;
+  }
+
+  /**
+   * Get the current active session
+   */
+  getCurrentSession(): string | null {
+    return this.currentSessionId;
   }
 
   /**
@@ -103,7 +230,7 @@ export class Scheduler {
   }
 
   /**
-   * Rate a card and update its state atomically
+   * Rate a card and update its state atomically with session tracking
    */
   async rate(
     cardId: string,
@@ -131,9 +258,33 @@ export class Scheduler {
     const elapsedDays = this.getElapsedDays(card, now);
     const retrievability = this.calculateRetrievability(card, elapsedDays);
 
+    // Check if this is the first time reviewing this card in the session
+    let isFirstReviewInSession = false;
+    if (this.currentSessionId) {
+      isFirstReviewInSession = !(await this.db.isCardReviewedInSession(
+        this.currentSessionId,
+        card.id,
+      ));
+
+      // Update session progress if first review
+      if (isFirstReviewInSession) {
+        const session = await this.db.getReviewSessionById(
+          this.currentSessionId,
+        );
+        if (session) {
+          const newDoneUnique = session.doneUnique + 1;
+          await this.db.updateReviewSessionDoneUnique(
+            this.currentSessionId,
+            newDoneUnique,
+          );
+        }
+      }
+    }
+
     // Create review log entry
     const reviewLog: Omit<ReviewLog, "id"> = {
       flashcardId: card.id,
+      sessionId: this.currentSessionId || undefined,
       lastReviewedAt: oldCard.lastReviewed || oldCard.dueDate,
       reviewedAt: now.toISOString(),
       rating: this.ratingToNumber(rating) as 1 | 2 | 3 | 4,
@@ -179,6 +330,7 @@ export class Scheduler {
     };
 
     // Update card state and create review log
+    await yieldToUI();
     await this.db.updateFlashcard(updatedCard.id, {
       state: updatedCard.state,
       dueDate: updatedCard.dueDate,
@@ -190,6 +342,7 @@ export class Scheduler {
       lastReviewed: updatedCard.lastReviewed,
     });
 
+    await yieldToUI();
     await this.db.createReviewLog(reviewLog);
 
     return updatedCard;
@@ -348,6 +501,26 @@ export class Scheduler {
 
   private getWeightsHash(profile: FSRSProfile): string {
     return `${profile}-v1.0`;
+  }
+
+  private async getDueCardCount(now: Date, deckId: string): Promise<number> {
+    const query = `
+    SELECT COUNT(*) as count
+    FROM flashcards
+    WHERE deck_id = ? AND due_date <= ? AND state = 'review'
+  `;
+    const results = await this.queryRaw(query, [deckId, now.toISOString()]);
+    return results.length > 0 ? (results[0][0] as number) : 0;
+  }
+
+  private async getNewCardCount(deckId: string): Promise<number> {
+    const query = `
+    SELECT COUNT(*) as count
+    FROM flashcards
+    WHERE deck_id = ? AND state = 'new'
+  `;
+    const results = await this.queryRaw(query, [deckId]);
+    return results.length > 0 ? (results[0][0] as number) : 0;
   }
 
   /**
