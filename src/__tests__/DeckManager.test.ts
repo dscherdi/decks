@@ -117,8 +117,16 @@ describe("DeckManager", () => {
     mockDb.deleteFlashcard = jest.fn();
     mockDb.getLatestReviewLogForFlashcard = jest.fn();
     mockDb.updateDeckTimestamp = jest.fn();
+    mockDb.updateDeckTimestampWithoutSave = jest.fn();
     mockDb.updateDeckHeaderLevel = jest.fn();
     mockDb.createDeck = jest.fn();
+    // Add batch operation mocks
+    mockDb.beginTransaction = jest.fn();
+    mockDb.commitTransaction = jest.fn();
+    mockDb.rollbackTransaction = jest.fn();
+    mockDb.batchCreateFlashcards = jest.fn();
+    mockDb.batchUpdateFlashcards = jest.fn();
+    mockDb.batchDeleteFlashcards = jest.fn();
 
     // Create DeckManager instance
     deckManager = new DeckManager(mockVault, mockMetadataCache, mockDb);
@@ -638,16 +646,17 @@ Answer 1`;
       // Verify existing flashcards were checked
       expect(mockDb.getFlashcardsByDeck).toHaveBeenCalledWith("deck_123");
 
-      // Verify new flashcard was created with contentHash
-      expect(mockDb.createFlashcard).toHaveBeenCalledTimes(1);
-      expect(mockDb.createFlashcard).toHaveBeenCalledWith(
+      // Verify batch operations were called
+      expect(mockDb.beginTransaction).toHaveBeenCalled();
+      expect(mockDb.batchCreateFlashcards).toHaveBeenCalledWith([
         expect.objectContaining({
           deckId: "deck_123",
           front: "Question",
           back: "Answer",
           contentHash: expect.any(String),
         }),
-      );
+      ]);
+      expect(mockDb.commitTransaction).toHaveBeenCalled();
     });
   });
 
@@ -720,15 +729,15 @@ Answer 1`;
       expect(mockDb.getDeckByFilepath).toHaveBeenCalledWith("test.md");
       // Verify existing flashcards were checked
       expect(mockDb.getFlashcardsByDeck).toHaveBeenCalledWith("deck_123");
-      // Verify new flashcard was created with contentHash
-      expect(mockDb.createFlashcard).toHaveBeenCalledWith(
+      // Verify batch operations were called
+      expect(mockDb.batchCreateFlashcards).toHaveBeenCalledWith([
         expect.objectContaining({
           deckId: "deck_123",
           front: "Question",
           back: "Answer",
           contentHash: expect.any(String),
         }),
-      );
+      ]);
     });
   });
 
@@ -1026,7 +1035,7 @@ Answer 1`;
 
       // Should process flashcards since file has changed
       expect(mockDb.getFlashcardsByDeck).toHaveBeenCalledWith("deck1");
-      expect(mockDb.updateDeckTimestamp).toHaveBeenCalledWith(
+      expect(mockDb.updateDeckTimestampWithoutSave).toHaveBeenCalledWith(
         "deck1",
         expect.any(String),
       );
