@@ -137,6 +137,62 @@ describe("FSRS Algorithm - Pure Implementation", () => {
       expect(updatedCard.state).toBe("review"); // Still in review state
     });
 
+    it("should increase difficulty and reset stability when pressing Again on review card", () => {
+      // Create a card with moderate difficulty and high stability from multiple reviews
+      const experiencedCard: Flashcard = {
+        ...reviewCard,
+        difficulty: 5.5,
+        stability: 45.7,
+        repetitions: 10,
+        lapses: 1,
+      };
+
+      const updatedCard = fsrs.updateCard(experiencedCard, "again");
+
+      // After "Again", difficulty should increase (become harder)
+      expect(updatedCard.difficulty).toBeGreaterThan(
+        experiencedCard.difficulty,
+      );
+
+      // Stability should be reset to w[0] (much lower than before)
+      expect(updatedCard.stability).toBeLessThan(experiencedCard.stability);
+      expect(updatedCard.stability).toBeLessThan(5); // Should be reset to w[0] which is typically small
+
+      // Lapses should increment
+      expect(updatedCard.lapses).toBe(experiencedCard.lapses + 1);
+
+      // Repetitions should increment
+      expect(updatedCard.repetitions).toBe(experiencedCard.repetitions + 1);
+    });
+
+    it("should reset stability to w[0] specifically for Again rating", () => {
+      // Create a card with known high stability
+      const cardWithHighStability: Flashcard = {
+        ...reviewCard,
+        difficulty: 6.0,
+        stability: 30.5,
+        repetitions: 5,
+        lapses: 0,
+      };
+
+      const updatedCard = fsrs.updateCard(cardWithHighStability, "again");
+
+      // Get the w[0] weight directly from FSRS
+      const fsrsWeights = (fsrs as any).getWeights();
+      const expectedStability = fsrsWeights[0];
+
+      // Stability should be exactly w[0]
+      expect(updatedCard.stability).toBe(expectedStability);
+      expect(updatedCard.stability).toBeLessThan(5); // w[0] should be small
+
+      // Verify other Again rating behaviors
+      expect(updatedCard.difficulty).toBeGreaterThan(
+        cardWithHighStability.difficulty,
+      );
+      expect(updatedCard.lapses).toBe(1);
+      expect(updatedCard.repetitions).toBe(6);
+    });
+
     it("should keep review card in Review state for all ratings", () => {
       const schedulingInfo = fsrs.getSchedulingInfo(reviewCard);
 

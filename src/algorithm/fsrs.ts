@@ -203,30 +203,44 @@ export class FSRS {
       newCard.reps += 1;
 
       if (rating === 1) {
+        // "Again" rating: Increase difficulty and reset stability to w[0]
         newCard.lapses += 1;
-      }
 
-      // Validate current stability before using it
-      if (!isFinite(newCard.stability) || newCard.stability <= 0) {
-        newCard.stability = this.initStability(3); // Default to "good" rating stability
-      }
+        // Validate current difficulty before using it
+        if (!isFinite(newCard.difficulty) || newCard.difficulty <= 0) {
+          newCard.difficulty = this.initDifficulty(3); // Default to "good" rating difficulty
+        }
 
-      const retrievability = this.forgettingCurve(
-        newCard.elapsedDays,
-        newCard.stability,
-      );
+        // Calculate difficulty normally (this will increase it for "Again")
+        newCard.difficulty = this.nextDifficulty(newCard.difficulty, rating);
 
-      newCard.difficulty = this.nextDifficulty(newCard.difficulty, rating);
-      newCard.stability = this.nextStability(
-        newCard.difficulty,
-        newCard.stability,
-        retrievability,
-        rating,
-      );
-
-      // Final validation of calculated stability
-      if (!isFinite(newCard.stability) || newCard.stability <= 0) {
+        // Reset stability
         newCard.stability = this.initStability(rating);
+      } else {
+        // For other ratings, calculate normally
+
+        // Validate current stability before using it
+        if (!isFinite(newCard.stability) || newCard.stability <= 0) {
+          newCard.stability = this.initStability(3); // Default to "good" rating stability
+        }
+
+        const retrievability = this.forgettingCurve(
+          newCard.elapsedDays,
+          newCard.stability,
+        );
+
+        newCard.difficulty = this.nextDifficulty(newCard.difficulty, rating);
+        newCard.stability = this.nextStability(
+          newCard.difficulty,
+          newCard.stability,
+          retrievability,
+          rating,
+        );
+
+        // Final validation of calculated stability
+        if (!isFinite(newCard.stability) || newCard.stability <= 0) {
+          newCard.stability = this.initStability(rating);
+        }
       }
 
       newCard.lastReview = now;

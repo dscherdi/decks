@@ -999,10 +999,14 @@ class DecksView extends ItemView {
       // Calculate remaining daily allowance
       const config = deck.config;
       const remainingNew = hasNewCardsLimit(config)
-        ? Math.max(0, config.newCardsPerDay - dailyCounts.newCount)
+        ? config.newCardsPerDay === 0
+          ? "none"
+          : Math.max(0, config.newCardsPerDay - dailyCounts.newCount)
         : "unlimited";
       const remainingReview = hasReviewCardsLimit(config)
-        ? Math.max(0, config.reviewCardsPerDay - dailyCounts.reviewCount)
+        ? config.reviewCardsPerDay === 0
+          ? "none"
+          : Math.max(0, config.reviewCardsPerDay - dailyCounts.reviewCount)
         : "unlimited";
 
       // Check if there are any cards available using the scheduler
@@ -1014,9 +1018,12 @@ class DecksView extends ItemView {
         let message = `No cards due for review in ${deck.name}`;
 
         // Check if limits are the reason no cards are available
-        const newLimitReached = hasNewCardsLimit(config) && remainingNew === 0;
+        const newLimitReached =
+          hasNewCardsLimit(config) &&
+          (remainingNew === 0 || remainingNew === "none");
         const reviewLimitReached =
-          hasReviewCardsLimit(config) && remainingReview === 0;
+          hasReviewCardsLimit(config) &&
+          (remainingReview === 0 || remainingReview === "none");
 
         if (newLimitReached && reviewLimitReached) {
           message += `\n\nDaily limits reached:`;
@@ -1038,27 +1045,33 @@ class DecksView extends ItemView {
       if (hasNewCardsLimit(config) || hasReviewCardsLimit(config)) {
         let limitInfo = `Daily progress for ${deck.name}:\n`;
         if (hasNewCardsLimit(config)) {
-          if (dailyCounts.newCount >= config.newCardsPerDay) {
+          if (config.newCardsPerDay === 0) {
+            limitInfo += `New cards: DISABLED (0 allowed per day)\n`;
+          } else if (dailyCounts.newCount >= config.newCardsPerDay) {
             limitInfo += `New cards: ${dailyCounts.newCount}/${config.newCardsPerDay} (LIMIT EXCEEDED)\n`;
           } else {
             limitInfo += `New cards: ${dailyCounts.newCount}/${config.newCardsPerDay} (${remainingNew} remaining)\n`;
           }
         }
         if (hasReviewCardsLimit(config)) {
-          if (dailyCounts.reviewCount >= config.reviewCardsPerDay) {
-            limitInfo += `Review cards: ${dailyCounts.reviewCount}/${config.reviewCardsPerDay} (LIMIT EXCEEDED)`;
+          if (config.reviewCardsPerDay === 0) {
+            limitInfo += `Review cards: DISABLED (0 allowed per day)\n`;
+          } else if (dailyCounts.reviewCount >= config.reviewCardsPerDay) {
+            limitInfo += `Review cards: ${dailyCounts.reviewCount}/${config.reviewCardsPerDay} (LIMIT EXCEEDED)\n`;
           } else {
-            limitInfo += `Review cards: ${dailyCounts.reviewCount}/${config.reviewCardsPerDay} (${remainingReview} remaining)`;
+            limitInfo += `Review cards: ${dailyCounts.reviewCount}/${config.reviewCardsPerDay} (${remainingReview} remaining)\n`;
           }
         }
 
         // Add explanation when limits are exceeded but learning cards are available
         const newLimitExceeded =
           hasNewCardsLimit(config) &&
-          dailyCounts.newCount >= config.newCardsPerDay;
+          (config.newCardsPerDay === 0 ||
+            dailyCounts.newCount >= config.newCardsPerDay);
         const reviewLimitExceeded =
           hasReviewCardsLimit(config) &&
-          dailyCounts.reviewCount >= config.reviewCardsPerDay;
+          (config.reviewCardsPerDay === 0 ||
+            dailyCounts.reviewCount >= config.reviewCardsPerDay);
 
         if (newLimitExceeded || reviewLimitExceeded) {
           limitInfo += `\n\nNote: Only learning cards will be shown (limits exceeded)`;

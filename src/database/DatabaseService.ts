@@ -359,10 +359,26 @@ export class DatabaseService {
         ...config,
         newCardsPerDay: (config as any).enableNewCardsLimit
           ? (config as any).newCardsLimit
-          : 0,
+          : -1, // Use -1 for unlimited (was 0 in old system)
         reviewCardsPerDay: (config as any).enableReviewCardsLimit
           ? (config as any).reviewCardsLimit
-          : 0,
+          : -1, // Use -1 for unlimited (was 0 in old system)
+      };
+    }
+
+    // Migration: Convert old 0 = unlimited to new -1 = unlimited semantics
+    // Only migrate if it looks like the old default config (both 0, headerLevel 2, due-date order)
+    if (
+      config.newCardsPerDay === 0 &&
+      config.reviewCardsPerDay === 0 &&
+      config.headerLevel === 2 &&
+      config.reviewOrder === "due-date"
+    ) {
+      // This looks like an old unlimited default config, migrate to new semantics
+      config = {
+        ...config,
+        newCardsPerDay: -1,
+        reviewCardsPerDay: -1,
       };
     }
 
@@ -833,7 +849,7 @@ export class DatabaseService {
     // 1. No learning cards in pure FSRS - skip learning card retrieval
 
     // 2. Get new cards with remaining daily limit
-    const newCardsLimit = Number(config.newCardsPerDay) || 0;
+    const newCardsLimit = config.newCardsPerDay;
     const newCountToday = Number(dailyCounts.newCount) || 0;
     const remainingNewCards =
       hasNewCardsLimit(config) && newCardsLimit > 0
@@ -854,8 +870,9 @@ export class DatabaseService {
     }
 
     // 3. Get review cards with remaining daily limit
-    const reviewCardsLimit = Number(config.reviewCardsPerDay) || 0;
+    const reviewCardsLimit = config.reviewCardsPerDay;
     const reviewCountToday = Number(dailyCounts.reviewCount) || 0;
+    // Calculate remaining review cards based on daily limit
     const remainingReviewCards =
       hasReviewCardsLimit(config) && reviewCardsLimit > 0
         ? Math.max(0, reviewCardsLimit - reviewCountToday)
@@ -1134,7 +1151,7 @@ export class DatabaseService {
 
     // Calculate remaining new cards based on daily limit
     let newCount = totalNewCards;
-    const newCardsLimit = Number(config.newCardsPerDay) || 0;
+    const newCardsLimit = config.newCardsPerDay;
     const newCountToday = Number(dailyCounts.newCount) || 0;
     if (hasNewCardsLimit(config) && newCardsLimit > 0) {
       const remainingNew = Math.max(0, newCardsLimit - newCountToday);
@@ -1155,7 +1172,7 @@ export class DatabaseService {
 
     // Calculate remaining review cards based on daily limit
     let dueCount = totalDueCards;
-    const reviewCardsLimit = Number(config.reviewCardsPerDay) || 0;
+    const reviewCardsLimit = config.reviewCardsPerDay;
     const reviewCountToday = Number(dailyCounts.reviewCount) || 0;
     if (hasReviewCardsLimit(config) && reviewCardsLimit > 0) {
       const remainingReview = Math.max(0, reviewCardsLimit - reviewCountToday);

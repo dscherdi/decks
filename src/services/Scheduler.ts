@@ -75,24 +75,35 @@ export class Scheduler {
 
     // Add due review cards (applying daily limits if configured)
     if (hasReviewCardsLimit(deck.config)) {
-      const remainingReviewQuota = Math.max(
-        0,
-        deck.config.reviewCardsPerDay - dailyCounts.reviewCount,
-      );
-      goalTotal += Math.min(dueCardCount, remainingReviewQuota);
+      if (deck.config.reviewCardsPerDay === 0) {
+        // 0 = no review cards allowed
+        goalTotal += 0;
+      } else {
+        const remainingReviewQuota = Math.max(
+          0,
+          deck.config.reviewCardsPerDay - dailyCounts.reviewCount,
+        );
+        goalTotal += Math.min(dueCardCount, remainingReviewQuota);
+      }
     } else {
+      // -1 = unlimited
       goalTotal += dueCardCount;
     }
 
     // Add new cards (applying daily limits if configured)
     if (hasNewCardsLimit(deck.config)) {
-      const remainingNewQuota = Math.max(
-        0,
-        deck.config.newCardsPerDay - dailyCounts.newCount,
-      );
-      goalTotal += Math.min(newCardCount, remainingNewQuota);
+      if (deck.config.newCardsPerDay === 0) {
+        // 0 = no new cards allowed
+        goalTotal += 0;
+      } else {
+        const remainingNewQuota = Math.max(
+          0,
+          deck.config.newCardsPerDay - dailyCounts.newCount,
+        );
+        goalTotal += Math.min(newCardCount, remainingNewQuota);
+      }
     } else {
-      // newCardsPerDay: 0 means unlimited
+      // -1 = unlimited
       goalTotal += newCardCount;
     }
 
@@ -182,10 +193,12 @@ export class Scheduler {
   ): Promise<Flashcard | null> {
     const { allowNew = true } = options;
 
-    // First check for due cards
-    const dueCard = await this.getNextDueCard(now, deckId);
-    if (dueCard) {
-      return dueCard;
+    // First check for due cards with quota
+    if (await this.hasReviewCardQuota(deckId)) {
+      const dueCard = await this.getNextDueCard(now, deckId);
+      if (dueCard) {
+        return dueCard;
+      }
     }
 
     // If no due cards and new cards allowed, get next new card
@@ -404,11 +417,6 @@ export class Scheduler {
     now: Date,
     deckId: string,
   ): Promise<Flashcard | null> {
-    // Check review card daily limits first
-    if (!(await this.hasReviewCardQuota(deckId))) {
-      return null;
-    }
-
     const deck = await this.db.getDeckById(deckId);
     if (!deck) return null;
 
@@ -447,7 +455,9 @@ export class Scheduler {
     const deck = await this.db.getDeckById(deckId);
     if (!deck) return false;
 
-    if (!hasNewCardsLimit(deck.config)) return true;
+    if (!hasNewCardsLimit(deck.config)) return true; // -1 = unlimited
+
+    if (deck.config.newCardsPerDay === 0) return false; // 0 = no cards
 
     const dailyCounts = await this.db.getDailyReviewCounts(deckId);
     return dailyCounts.newCount < deck.config.newCardsPerDay;
@@ -457,7 +467,9 @@ export class Scheduler {
     const deck = await this.db.getDeckById(deckId);
     if (!deck) return false;
 
-    if (!hasReviewCardsLimit(deck.config)) return true;
+    if (!hasReviewCardsLimit(deck.config)) return true; // -1 = unlimited
+
+    if (deck.config.reviewCardsPerDay === 0) return false; // 0 = no cards
 
     const dailyCounts = await this.db.getDailyReviewCounts(deckId);
     return dailyCounts.reviewCount < deck.config.reviewCardsPerDay;

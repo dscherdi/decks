@@ -4,8 +4,8 @@ export type ReviewOrder = "due-date" | "random";
 
 export interface DeckConfig {
   // Daily limits
-  newCardsPerDay: number; // 0 = unlimited
-  reviewCardsPerDay: number; // 0 = unlimited
+  newCardsPerDay: number; // -1 = unlimited, 0 = no cards, >0 = daily limit
+  reviewCardsPerDay: number; // -1 = unlimited, 0 = no cards, >0 = daily limit
 
   // Content parsing
   headerLevel: number; // 1-6, which header level to parse for header-paragraph flashcards
@@ -181,8 +181,8 @@ export interface Statistics {
 }
 
 export const DEFAULT_DECK_CONFIG: DeckConfig = {
-  newCardsPerDay: 0, // 0 = unlimited
-  reviewCardsPerDay: 0, // 0 = unlimited
+  newCardsPerDay: -1, // -1 = unlimited, 0 = no cards
+  reviewCardsPerDay: -1, // -1 = unlimited, 0 = no cards
   headerLevel: 2, // Default to H2 headers
   reviewOrder: "due-date",
   fsrs: {
@@ -193,11 +193,11 @@ export const DEFAULT_DECK_CONFIG: DeckConfig = {
 
 // Utility functions for daily limits
 export function hasNewCardsLimit(config: DeckConfig): boolean {
-  return config.newCardsPerDay > 0;
+  return config.newCardsPerDay >= 0;
 }
 
 export function hasReviewCardsLimit(config: DeckConfig): boolean {
-  return config.reviewCardsPerDay > 0;
+  return config.reviewCardsPerDay >= 0;
 }
 
 /**

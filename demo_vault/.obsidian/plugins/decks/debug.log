@@ -177,3 +177,62 @@
 [2025-08-16T00:09:48.221Z] Existing card ID: card_fmvo52, Front: "Whats my note?"
 [2025-08-16T00:09:48.287Z] Saving database after processing all decks...
 [2025-08-16T00:09:48.446Z] Refresh complete
+[2025-08-16T09:25:34.487Z] Decks plugin loaded successfully
+[2025-08-16T09:25:39.166Z] Performing initial background sync...
+[2025-08-16T09:25:39.267Z] Scanning 11 markdown files for flashcard tags
+[2025-08-16T09:25:39.475Z] Saving database after processing all decks...
+[2025-08-16T09:25:39.672Z] Sync complete, hiding progress notice
+[2025-08-16T09:25:44.449Z] No deck found for filepath: 1200 Deutsche Redewendungen
+[2025-08-16T09:25:47.194Z] Updated all deck stats
+[2025-08-16T09:25:49.668Z] Updated all deck stats
+[2025-08-16T09:25:55.544Z] Updated all deck stats
+[2025-08-16T09:26:00.743Z] Updated all deck stats
+[2025-08-16T09:26:03.375Z] Updated all deck stats
+[2025-08-16T09:26:41.856Z] Existing card ID: card_nm2778, Front: "da steppt der Bär"
+[2025-08-16T09:26:42.079Z] Existing card ID: card_uhm64m, Front: "**modulieren**"
+[2025-08-16T09:26:42.813Z] Existing card ID: card_rxziyu, Front: "**kanonisch**"
+[2025-08-16T09:26:45.136Z] Existing card ID: card_q1az4y, Front: "Stil entwickeln"
+[2025-08-16T09:26:49.075Z] Existing card ID: card_v7q7si, Front: "What is the factorial of a number?"
+[2025-08-16T09:26:54.608Z] Existing card ID: card_css29, Front: "What is the difference between == and === in JavaScript?"
+[2025-08-16T09:26:59.938Z] Existing card ID: card_ue68zz, Front: "domingo"
+[2025-08-16T09:27:00.417Z] Existing card ID: card_fmvo52, Front: "Whats my note?"
+[2025-08-16T09:27:00.460Z] Saving database after processing all decks...
+[2025-08-16T09:27:00.594Z] Refresh complete
+[2025-08-16T09:27:04.069Z] No deck found for filepath: 1200 Deutsche Redewendungen
+[2025-08-16T09:27:08.076Z] Updated all deck stats
+[2025-08-16T09:27:09.764Z] Updated all deck stats
+[2025-08-16T09:27:10.571Z] Updated all deck stats
+[2025-08-16T09:27:12.339Z] Updated all deck stats
+[2025-08-16T09:27:13.470Z] Updated all deck stats
+[2025-08-16T09:29:19.242Z] Decks plugin loaded successfully
+[2025-08-16T09:29:23.225Z] Performing initial background sync...
+[2025-08-16T09:29:23.330Z] Starting deck sync...
+[2025-08-16T09:29:23.470Z] Saving database after processing all decks...
+[2025-08-16T09:29:23.515Z] Sync complete, hiding progress notice
+[2025-08-16T09:29:26.375Z] No deck found for filepath: 1200 Deutsche Redewendungen
+[2025-08-16T09:29:28.508Z] Updated all deck stats
+[2025-08-16T09:29:29.696Z] Updated all deck stats
+[2025-08-16T09:29:30.583Z] Updated all deck stats
+[2025-08-16T09:29:31.550Z] Updated all deck stats
+[2025-08-16T09:29:32.593Z] Updated all deck stats
+[2025-08-16T09:29:33.594Z] Updated all deck stats
+[2025-08-16T09:29:35.514Z] Updated all deck stats
+[2025-08-16T09:30:12.316Z] Existing card ID: card_nm2778, Front: "da steppt der Bär"
+[2025-08-16T09:30:12.537Z] Existing card ID: card_uhm64m, Front: "**modulieren**"
+[2025-08-16T09:30:13.226Z] Existing card ID: card_rxziyu, Front: "**kanonisch**"
+[2025-08-16T09:30:15.284Z] Existing card ID: card_q1az4y, Front: "Stil entwickeln"
+[2025-08-16T09:30:19.030Z] Existing card ID: card_v7q7si, Front: "What is the factorial of a number?"
+[2025-08-16T09:30:24.567Z] Existing card ID: card_css29, Front: "What is the difference between == and === in JavaScript?"
+[2025-08-16T09:30:29.109Z] Existing card ID: card_ue68zz, Front: "domingo"
+[2025-08-16T09:30:29.711Z] Existing card ID: card_fmvo52, Front: "Whats my note?"
+[2025-08-16T09:30:29.771Z] Saving database after processing all decks...
+[2025-08-16T09:30:29.968Z] Refresh complete
+[2025-08-16T09:30:32.667Z] No deck found for filepath: 1200 Deutsche Redewendungen
+[2025-08-16T09:30:40.700Z] Updated all deck stats
+[2025-08-16T09:30:45.536Z] No deck found for filepath: 1200 Deutsche Redewendungen
+[2025-08-16T09:30:46.552Z] Updated all deck stats
+[2025-08-16T09:30:49.045Z] Updated all deck stats
+[2025-08-16T09:30:49.916Z] Updated all deck stats
+[2025-08-16T09:30:51.229Z] Updated all deck stats
+[2025-08-16T09:30:51.902Z] Updated all deck stats
+[2025-08-16T09:30:52.821Z] Updated all deck stats

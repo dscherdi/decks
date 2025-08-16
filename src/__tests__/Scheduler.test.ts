@@ -67,8 +67,8 @@ describe("Scheduler", () => {
         tag: "#test",
         lastReviewed: null,
         config: {
-          newCardsPerDay: 0,
-          reviewCardsPerDay: 0,
+          newCardsPerDay: -1, // -1 = unlimited
+          reviewCardsPerDay: -1, // -1 = unlimited
           reviewOrder: "due-date",
           headerLevel: 2,
           fsrs: {
@@ -126,8 +126,8 @@ describe("Scheduler", () => {
         tag: "#test",
         lastReviewed: null,
         config: {
-          newCardsPerDay: 0,
-          reviewCardsPerDay: 0,
+          newCardsPerDay: -1, // -1 = unlimited
+          reviewCardsPerDay: -1, // -1 = unlimited
           reviewOrder: "due-date",
           headerLevel: 2,
           fsrs: {
@@ -211,8 +211,8 @@ describe("Scheduler", () => {
         tag: "#test",
         lastReviewed: null,
         config: {
-          newCardsPerDay: 0,
-          reviewCardsPerDay: 0,
+          newCardsPerDay: 0, // 0 = no new cards
+          reviewCardsPerDay: 0, // 0 = no review cards
           reviewOrder: "due-date",
           headerLevel: 2,
           fsrs: {
@@ -274,8 +274,8 @@ describe("Scheduler", () => {
         tag: "#test",
         lastReviewed: null,
         config: {
-          newCardsPerDay: 0,
-          reviewCardsPerDay: 0,
+          newCardsPerDay: -1, // -1 = unlimited
+          reviewCardsPerDay: -1, // -1 = unlimited
           reviewOrder: "due-date",
           headerLevel: 2,
           fsrs: {
@@ -347,8 +347,8 @@ describe("Scheduler", () => {
         tag: "#test",
         lastReviewed: null,
         config: {
-          newCardsPerDay: 0,
-          reviewCardsPerDay: 0,
+          newCardsPerDay: -1, // -1 = unlimited
+          reviewCardsPerDay: -1, // -1 = unlimited
           reviewOrder: "due-date",
           headerLevel: 2,
           fsrs: {
@@ -431,8 +431,8 @@ describe("Scheduler", () => {
           tag: "test",
           lastReviewed: null,
           config: {
-            newCardsPerDay: 0,
-            reviewCardsPerDay: 0,
+            newCardsPerDay: -1, // -1 = unlimited
+            reviewCardsPerDay: -1, // -1 = unlimited
             headerLevel: 2,
             reviewOrder: "due-date",
             fsrs: { requestRetention: 0.9, profile: "STANDARD" },
@@ -489,8 +489,8 @@ describe("Scheduler", () => {
           tag: "test",
           lastReviewed: null,
           config: {
-            newCardsPerDay: 0,
-            reviewCardsPerDay: 0,
+            newCardsPerDay: -1, // -1 = unlimited
+            reviewCardsPerDay: -1, // -1 = unlimited
             headerLevel: 2,
             reviewOrder: "due-date",
             fsrs: { requestRetention: 0.9, profile: "STANDARD" },
@@ -530,8 +530,8 @@ describe("Scheduler", () => {
           tag: "test",
           lastReviewed: null,
           config: {
-            newCardsPerDay: 0,
-            reviewCardsPerDay: 0,
+            newCardsPerDay: -1, // -1 = unlimited
+            reviewCardsPerDay: -1, // -1 = unlimited
             headerLevel: 2,
             reviewOrder: "due-date",
             fsrs: { requestRetention: 0.9, profile: "STANDARD" },
@@ -589,7 +589,7 @@ describe("Scheduler", () => {
         lastReviewed: null,
         config: {
           newCardsPerDay: 2,
-          reviewCardsPerDay: 0,
+          reviewCardsPerDay: -1, // -1 = unlimited
           reviewOrder: "due-date",
           headerLevel: 2,
           fsrs: {
@@ -626,7 +626,7 @@ describe("Scheduler", () => {
         tag: "#test",
         lastReviewed: null,
         config: {
-          newCardsPerDay: 0,
+          newCardsPerDay: -1, // -1 = unlimited
           reviewCardsPerDay: 1,
           reviewOrder: "due-date",
           headerLevel: 2,
@@ -663,8 +663,8 @@ describe("Scheduler", () => {
         tag: "#test",
         lastReviewed: null,
         config: {
-          newCardsPerDay: 0,
-          reviewCardsPerDay: 0,
+          newCardsPerDay: -1, // -1 = unlimited
+          reviewCardsPerDay: -1, // -1 = unlimited
           reviewOrder: "random",
           headerLevel: 2,
           fsrs: {
@@ -743,12 +743,12 @@ describe("Scheduler", () => {
         tag: "#test",
         lastReviewed: null,
         config: {
-          newCardsPerDay: 0,
-          reviewCardsPerDay: 0,
+          newCardsPerDay: -1, // -1 = unlimited
+          reviewCardsPerDay: -1, // -1 = unlimited
           reviewOrder: "due-date",
           headerLevel: 2,
           fsrs: {
-            requestRetention: 0.9,
+            requestRetention: 0.8,
             profile: "INTENSIVE",
           },
         },
@@ -765,6 +765,211 @@ describe("Scheduler", () => {
       // The scheduler should have used INTENSIVE profile settings
       // This is verified by the fact that preview completed successfully
       // with the INTENSIVE profile configuration
+    });
+
+    it("should check review quota before due cards and new quota before new cards", async () => {
+      const mockDeck: Deck = {
+        id: "deck_1",
+        name: "Test Deck",
+        filepath: "test.md",
+        tag: "#test",
+        lastReviewed: null,
+        config: {
+          newCardsPerDay: 1,
+          reviewCardsPerDay: 1,
+          reviewOrder: "due-date",
+          headerLevel: 2,
+          fsrs: {
+            requestRetention: 0.9,
+            profile: "STANDARD",
+          },
+        },
+        created: new Date().toISOString(),
+        modified: new Date().toISOString(),
+      };
+
+      // Mock deck lookup - called multiple times for quota checks
+      mockDb.getDeckById.mockResolvedValue(mockDeck);
+
+      // Mock that review quota is exhausted but new quota is available
+      mockDb.getDailyReviewCounts.mockResolvedValue({
+        newCount: 0, // 0 of 1 new cards used
+        reviewCount: 1, // 1 of 1 review cards used (exhausted)
+      });
+
+      // Mock that there are new cards available
+      // Since review quota is exhausted, getNextDueCard won't be called
+      // Only getNextNewCard will be called
+      const mockNewCard: Flashcard = {
+        id: "card_new",
+        deckId: "deck_1",
+        front: "New Question",
+        back: "New Answer",
+        type: "header-paragraph",
+        sourceFile: "test.md",
+        contentHash: "hash_new",
+        state: "new",
+        dueDate: new Date().toISOString(),
+        interval: 0,
+        repetitions: 0,
+        difficulty: 0,
+        stability: 0,
+        lapses: 0,
+        lastReviewed: null,
+        created: new Date().toISOString(),
+        modified: new Date().toISOString(),
+      };
+
+      // Mock new card query (getNextNewCard)
+      mockDb.query.mockResolvedValueOnce([
+        [
+          mockNewCard.id,
+          mockNewCard.deckId,
+          mockNewCard.front,
+          mockNewCard.back,
+          mockNewCard.type,
+          mockNewCard.sourceFile,
+          mockNewCard.contentHash,
+          mockNewCard.state,
+          mockNewCard.dueDate,
+          mockNewCard.interval,
+          mockNewCard.repetitions,
+          mockNewCard.difficulty,
+          mockNewCard.stability,
+          mockNewCard.lapses,
+          mockNewCard.lastReviewed,
+          mockNewCard.created,
+          mockNewCard.modified,
+        ],
+      ]);
+
+      const result = await scheduler.getNext(new Date(), "deck_1", {
+        allowNew: true,
+      });
+
+      // Should return new card since review quota is exhausted but new quota available
+      expect(result).toBeDefined();
+      expect(result?.id).toBe("card_new");
+      expect(result?.state).toBe("new");
+    });
+
+    it("should treat 0 as no cards and -1 as unlimited", async () => {
+      // Test deck with 0 for both limits (no cards allowed)
+      const noDeck: Deck = {
+        id: "deck_no_cards",
+        name: "No Cards Deck",
+        filepath: "no.md",
+        tag: "#no",
+        lastReviewed: null,
+        config: {
+          newCardsPerDay: 0, // 0 = no cards
+          reviewCardsPerDay: 0, // 0 = no cards
+          reviewOrder: "due-date",
+          headerLevel: 2,
+          fsrs: {
+            requestRetention: 0.9,
+            profile: "STANDARD",
+          },
+        },
+        created: new Date().toISOString(),
+        modified: new Date().toISOString(),
+      };
+
+      // Test deck with -1 for both limits (unlimited)
+      const unlimitedDeck: Deck = {
+        id: "deck_unlimited",
+        name: "Unlimited Deck",
+        filepath: "unlimited.md",
+        tag: "#unlimited",
+        lastReviewed: null,
+        config: {
+          newCardsPerDay: -1, // -1 = unlimited
+          reviewCardsPerDay: -1, // -1 = unlimited
+          reviewOrder: "due-date",
+          headerLevel: 2,
+          fsrs: {
+            requestRetention: 0.9,
+            profile: "STANDARD",
+          },
+        },
+        created: new Date().toISOString(),
+        modified: new Date().toISOString(),
+      };
+
+      // Mock daily counts showing no usage
+      mockDb.getDailyReviewCounts.mockResolvedValue({
+        newCount: 0,
+        reviewCount: 0,
+      });
+
+      // Test 0 = no cards behavior
+      mockDb.getDeckById.mockResolvedValueOnce(noDeck);
+      const noCardsResult = await scheduler.getNext(
+        new Date(),
+        "deck_no_cards",
+        {
+          allowNew: true,
+        },
+      );
+      expect(noCardsResult).toBeNull(); // Should return null with 0 limits
+
+      // Test -1 = unlimited behavior
+      mockDb.getDeckById.mockResolvedValue(unlimitedDeck);
+
+      // Mock empty due cards query but available new card
+      mockDb.query.mockResolvedValueOnce([]); // No due cards
+
+      const mockNewCard: Flashcard = {
+        id: "card_unlimited",
+        deckId: "deck_unlimited",
+        front: "Unlimited Question",
+        back: "Unlimited Answer",
+        type: "header-paragraph",
+        sourceFile: "unlimited.md",
+        contentHash: "hash_unlimited",
+        state: "new",
+        dueDate: new Date().toISOString(),
+        interval: 0,
+        repetitions: 0,
+        difficulty: 0,
+        stability: 0,
+        lapses: 0,
+        lastReviewed: null,
+        created: new Date().toISOString(),
+        modified: new Date().toISOString(),
+      };
+
+      mockDb.query.mockResolvedValueOnce([
+        [
+          mockNewCard.id,
+          mockNewCard.deckId,
+          mockNewCard.front,
+          mockNewCard.back,
+          mockNewCard.type,
+          mockNewCard.sourceFile,
+          mockNewCard.contentHash,
+          mockNewCard.state,
+          mockNewCard.dueDate,
+          mockNewCard.interval,
+          mockNewCard.repetitions,
+          mockNewCard.difficulty,
+          mockNewCard.stability,
+          mockNewCard.lapses,
+          mockNewCard.lastReviewed,
+          mockNewCard.created,
+          mockNewCard.modified,
+        ],
+      ]);
+
+      const unlimitedResult = await scheduler.getNext(
+        new Date(),
+        "deck_unlimited",
+        {
+          allowNew: true,
+        },
+      );
+      expect(unlimitedResult).toBeDefined();
+      expect(unlimitedResult?.id).toBe("card_unlimited");
     });
   });
 });

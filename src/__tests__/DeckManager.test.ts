@@ -553,8 +553,8 @@ Answer to question 2.`;
           filepath: filePath,
           tag: tag,
           config: expect.objectContaining({
-            newCardsPerDay: 0,
-            reviewCardsPerDay: 0,
+            newCardsPerDay: -1, // -1 = unlimited
+            reviewCardsPerDay: -1, // -1 = unlimited
             reviewOrder: "due-date",
             headerLevel: 2,
           }),
@@ -803,8 +803,8 @@ Answer 1`;
         tag: "#flashcards/math",
         lastReviewed: null,
         config: {
-          newCardsPerDay: 0,
-          reviewCardsPerDay: 0,
+          newCardsPerDay: -1, // -1 = unlimited
+          reviewCardsPerDay: -1, // -1 = unlimited
           reviewOrder: "due-date",
           headerLevel: 2,
           fsrs: {
@@ -823,8 +823,8 @@ Answer 1`;
         tag: "#flashcards/science",
         lastReviewed: null,
         config: {
-          newCardsPerDay: 0,
-          reviewCardsPerDay: 0,
+          newCardsPerDay: -1, // -1 = unlimited
+          reviewCardsPerDay: -1, // -1 = unlimited
           reviewOrder: "due-date",
           headerLevel: 2,
           fsrs: {
