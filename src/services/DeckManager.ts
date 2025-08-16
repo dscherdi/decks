@@ -500,25 +500,25 @@ export class DeckManager {
   }
 
   /**
-   * Sync flashcards for a specific deck (file)
+   * Sync flashcards for a specific deck
    */
   async syncFlashcardsForDeck(
-    filePath: string,
+    deckId: string,
     force: boolean = false,
   ): Promise<void> {
     const deckSyncStartTime = performance.now();
-    this.debugLog(`Syncing flashcards for deck: ${filePath}`);
+    this.debugLog(`Syncing flashcards for deck ID: ${deckId}`);
 
-    const deck = await this.db.getDeckByFilepath(filePath);
+    const deck = await this.db.getDeckById(deckId);
     if (!deck) {
-      this.debugLog(`No deck found for filepath: ${filePath}`);
+      this.debugLog(`No deck found for ID: ${deckId}`);
       return;
     }
     this.debugLog(
       `Found deck ID: ${deck.id}, name: ${deck.name}, filepath: ${deck.filepath}`,
     );
 
-    const file = this.vault.getAbstractFileByPath(filePath);
+    const file = this.vault.getAbstractFileByPath(deck.filepath);
     if (!file || !(file instanceof TFile)) return;
 
     // Get file modification time
@@ -529,7 +529,7 @@ export class DeckManager {
       const deckModifiedTime = new Date(deck.modified);
       if (fileModifiedTime <= deckModifiedTime) {
         this.debugLog(
-          `File ${filePath} not modified since last sync, skipping`,
+          `File ${deck.filepath} not modified since last sync, skipping`,
         );
         return;
       }
@@ -571,7 +571,7 @@ export class DeckManager {
     const parsedCards = allParsedCards.slice(0, MAX_FLASHCARDS_PER_DECK);
 
     this.debugLog(
-      `Parsed ${allParsedCards.length} flashcards from ${filePath}, processing first ${parsedCards.length} (limit: ${MAX_FLASHCARDS_PER_DECK})`,
+      `Parsed ${allParsedCards.length} flashcards from ${deck.filepath}, processing first ${parsedCards.length} (limit: ${MAX_FLASHCARDS_PER_DECK})`,
     );
 
     if (allParsedCards.length > MAX_FLASHCARDS_PER_DECK) {

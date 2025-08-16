@@ -614,7 +614,7 @@ Answer 1`;
         modified: "2024-01-01",
       };
 
-      mockDb.getDeckByFilepath.mockResolvedValue(deck);
+      mockDb.getDeckById.mockResolvedValue(deck);
       mockDb.getFlashcardsByDeck.mockResolvedValue([]);
       mockDb.updateFlashcard.mockResolvedValue();
       mockDb.deleteFlashcard.mockResolvedValue();
@@ -641,7 +641,7 @@ Answer 1`;
         ],
       });
 
-      await deckManager.syncFlashcardsForDeck("test.md");
+      await deckManager.syncFlashcardsForDeck("deck_123");
 
       // Verify existing flashcards were checked
       expect(mockDb.getFlashcardsByDeck).toHaveBeenCalledWith("deck_123");
@@ -696,7 +696,7 @@ Answer 1`;
         modified: "2024-01-01",
       };
 
-      mockDb.getDeckByFilepath.mockResolvedValue(deck);
+      mockDb.getDeckById.mockResolvedValue(deck);
       mockDb.getFlashcardsByDeck.mockResolvedValue([]);
       mockDb.updateFlashcard.mockResolvedValue();
       mockDb.deleteFlashcard.mockResolvedValue();
@@ -723,10 +723,10 @@ Answer 1`;
         ],
       });
 
-      await deckManager.syncFlashcardsForDeck("test.md");
+      await deckManager.syncFlashcardsForDeck("deck_123");
 
-      // Verify deck was found by filepath
-      expect(mockDb.getDeckByFilepath).toHaveBeenCalledWith("test.md");
+      // Verify deck was found by ID
+      expect(mockDb.getDeckById).toHaveBeenCalledWith("deck_123");
       // Verify existing flashcards were checked
       expect(mockDb.getFlashcardsByDeck).toHaveBeenCalledWith("deck_123");
       // Verify batch operations were called
@@ -837,20 +837,24 @@ Answer 1`;
       };
 
       // Mock database calls
-      mockDb.getDeckByFilepath.mockImplementation((filepath) => {
-        if (filepath === "deck1.md") return Promise.resolve(deck1);
-        if (filepath === "deck2.md") return Promise.resolve(deck2);
+      mockDb.getDeckById.mockImplementation((deckId) => {
+        if (deckId === "deck_1") return Promise.resolve(deck1);
+        if (deckId === "deck_2") return Promise.resolve(deck2);
         return Promise.resolve(null);
       });
 
       mockDb.getFlashcardsByDeck.mockResolvedValue([]);
 
+      // Add mock files for the decks
+      mockVault._addFile("deck1.md", "## Question 1\n\nAnswer 1");
+      mockVault._addFile("deck2.md", "## Question 2\n\nAnswer 2");
+
       // Test syncing only deck1 (force sync to bypass modification time check)
-      await deckManager.syncFlashcardsForDeck("deck1.md", true);
+      await deckManager.syncFlashcardsForDeck("deck_1", true);
 
       // Verify only deck1 was queried
-      expect(mockDb.getDeckByFilepath).toHaveBeenCalledWith("deck1.md");
-      expect(mockDb.getDeckByFilepath).not.toHaveBeenCalledWith("deck2.md");
+      expect(mockDb.getDeckById).toHaveBeenCalledWith("deck_1");
+      expect(mockDb.getDeckById).not.toHaveBeenCalledWith("deck_2");
       expect(mockDb.getFlashcardsByDeck).toHaveBeenCalledWith(deck1.id);
       expect(mockDb.getFlashcardsByDeck).not.toHaveBeenCalledWith(deck2.id);
     });
@@ -998,10 +1002,10 @@ Answer 1`;
         modified: new Date(deckModTime).toISOString(),
       };
 
-      mockDb.getDeckByFilepath.mockResolvedValue(deck);
+      mockDb.getDeckById.mockResolvedValue(deck);
       mockDb.getFlashcardsByDeck.mockResolvedValue([]);
 
-      await deckManager.syncFlashcardsForDeck(filePath);
+      await deckManager.syncFlashcardsForDeck("deck_123");
 
       // Should not process flashcards since file hasn't changed
       expect(mockDb.getFlashcardsByDeck).not.toHaveBeenCalled();
@@ -1028,10 +1032,10 @@ Answer 1`;
         modified: new Date(oldDeckModTime).toISOString(),
       };
 
-      mockDb.getDeckByFilepath.mockResolvedValue(deck);
+      mockDb.getDeckById.mockResolvedValue(deck);
       mockDb.getFlashcardsByDeck.mockResolvedValue([]);
 
-      await deckManager.syncFlashcardsForDeck(filePath);
+      await deckManager.syncFlashcardsForDeck("deck_123");
 
       // Should process flashcards since file has changed
       expect(mockDb.getFlashcardsByDeck).toHaveBeenCalledWith("deck1");

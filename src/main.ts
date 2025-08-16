@@ -431,7 +431,7 @@ export default class DecksPlugin extends Plugin {
 
         // Sync flashcards for this specific deck only
         await yieldToUI();
-        await this.deckSynchronizer.syncDeck(file.path);
+        await this.deckSynchronizer.syncDeck(existingDeck.id);
 
         // Refresh only this specific deck's stats (fastest option)
         if (this.view) {
@@ -443,7 +443,12 @@ export default class DecksPlugin extends Plugin {
           allTags.find((tag) => tag.startsWith("#flashcards")) || "#flashcards";
         await this.deckSynchronizer.createDeckForFile(file.path, newTag);
         await yieldToUI();
-        await this.deckSynchronizer.syncDeck(file.path);
+
+        // Get the newly created deck and sync it
+        const newDeck = await this.db.getDeckByFilepath(file.path);
+        if (newDeck) {
+          await this.deckSynchronizer.syncDeck(newDeck.id);
+        }
 
         // For new decks, refresh all stats to show the new deck
         if (this.view) {
@@ -553,8 +558,8 @@ export default class DecksPlugin extends Plugin {
     await this.deckManager.syncDecks();
   }
 
-  async syncFlashcardsForDeck(deckName: string) {
-    await this.deckSynchronizer.syncDeck(deckName);
+  async syncFlashcardsForDeck(deckId: string) {
+    await this.deckSynchronizer.syncDeck(deckId);
   }
 
   async getReviewCounts(days: number = 365): Promise<Map<string, number>> {
@@ -741,7 +746,7 @@ class DecksView extends ItemView {
     config: DeckConfig,
   ) => Promise<void>;
   private openStatisticsModal: () => void;
-  private syncFlashcardsForDeck: (deckName: string) => Promise<void>;
+  private syncFlashcardsForDeck: (deckId: string) => Promise<void>;
   private getDailyReviewCounts: (
     deckId: string,
   ) => Promise<{ newCount: number; reviewCount: number }>;
@@ -1030,7 +1035,7 @@ class DecksView extends ItemView {
     try {
       // First sync flashcards for this specific deck
       this.debugLog(`Syncing cards for deck before review: ${deck.name}`);
-      await this.syncFlashcardsForDeck(deck.name);
+      await this.syncFlashcardsForDeck(deck.id);
 
       // Get daily review counts to show remaining allowance
       const dailyCounts = await this.getDailyReviewCounts(deck.id);

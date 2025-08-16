@@ -107,7 +107,6 @@ export class FlashcardReviewModalWrapper extends Modal {
       if (this.settings?.ui?.enableNotices !== false) {
         new Notice(message);
       }
-
       // Refresh the view to update stats
       await this.refreshStatsById(this.deck.id);
     });
@@ -130,7 +129,9 @@ export class FlashcardReviewModalWrapper extends Modal {
     (this as any)._resizeHandler = handleResize;
   }
 
-  onClose() {
+  async onClose() {
+    await this.scheduler.save();
+
     // Clean up resize handler
     if ((this as any)._resizeHandler) {
       window.removeEventListener("resize", (this as any)._resizeHandler);

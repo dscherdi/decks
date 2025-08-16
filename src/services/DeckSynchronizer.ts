@@ -148,7 +148,7 @@ export class DeckSynchronizer {
           `${forceSync ? "Force s" : "S"}yncing flashcards for deck: ${deck.name} (${deck.filepath})`,
         );
 
-        await this.deckManager.syncFlashcardsForDeck(deck.filepath, forceSync);
+        await this.deckManager.syncFlashcardsForDeck(deck.id, forceSync);
         await yieldToUI();
 
         // Track performance metrics
@@ -239,14 +239,20 @@ export class DeckSynchronizer {
    * Sync flashcards for a specific deck
    */
   async syncDeck(
-    deckName: string,
+    deckId: string,
     forceSync: boolean = false,
     onProgress?: (progress: { message: string; percentage: number }) => void,
   ): Promise<void> {
-    this.debugLog(`Syncing specific deck: ${deckName}`);
+    this.debugLog(`Syncing specific deck ID: ${deckId}`);
 
-    const deckDisplayName =
-      deckName.split("/").pop()?.replace(".md", "") || deckName;
+    // Get deck to extract display name
+    const deck = await this.db.getDeckById(deckId);
+    if (!deck) {
+      this.debugLog(`No deck found for ID: ${deckId}`);
+      return;
+    }
+
+    const deckDisplayName = deck.name;
 
     if (onProgress) {
       onProgress({
@@ -256,7 +262,7 @@ export class DeckSynchronizer {
     }
 
     const startTime = performance.now();
-    await this.deckManager.syncFlashcardsForDeck(deckName, forceSync);
+    await this.deckManager.syncFlashcardsForDeck(deckId, forceSync);
     const duration = performance.now() - startTime;
 
     if (onProgress) {

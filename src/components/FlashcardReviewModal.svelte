@@ -70,11 +70,6 @@
         window.addEventListener("keydown", handleKeydown);
     });
 
-    onDestroy(() => {
-        // Clean up keydown event listener
-        window.removeEventListener("keydown", handleKeydown);
-    });
-
     async function loadCard() {
         if (!currentCard) return;
 
@@ -141,7 +136,7 @@
             if (currentCard) {
                 await loadCard();
             } else {
-                // End the review session
+                // End the review session and save all data
                 if (sessionId) {
                     await scheduler.endReviewSession(sessionId);
                     scheduler.setCurrentSession(null);
@@ -214,20 +209,62 @@
         }
     }
 
-    function handleTouchClick(callback: () => void, event: Event) {
-        const now = Date.now();
-        const eventType = event.type;
-
-        // Prevent double execution within 100ms
-        if (now - lastEventTime < 100 && lastEventType !== eventType) {
-            return;
-        }
-
-        lastEventTime = now;
-        lastEventType = eventType;
-
-        callback();
+    // Mobile-optimized pointer events - eliminates 300ms delay and ghost clicks
+    function rate(v: 1 | 2 | 3 | 4) {
+        if (v === 1) handleReview("again");
+        else if (v === 2) handleReview("hard");
+        else if (v === 3) handleReview("good");
+        else if (v === 4) handleReview("easy");
     }
+
+    const onShowAnswer = (e: PointerEvent) => {
+        e.preventDefault();
+        console.log(
+            "Show answer event:",
+            e.type,
+            "pointerType:",
+            e.pointerType,
+        );
+        revealAnswer();
+    };
+
+    // Enhanced mobile event binding with diagnostics
+    function bindRate(node: HTMLElement, value: 1 | 2 | 3 | 4) {
+        const h = (e: PointerEvent) => {
+            e.preventDefault();
+            console.log("Direct binding event:", e.type, "value:", value);
+            rate(value);
+        };
+        node.addEventListener("pointerup", h, { passive: false });
+        node.style.touchAction = "manipulation";
+
+        // Diagnostic event listeners
+        ["pointerdown", "pointerup", "click", "touchend"].forEach((t) =>
+            node.addEventListener(t, (e) =>
+                console.log("evt", t, (e as PointerEvent).pointerType),
+            ),
+        );
+
+        return {
+            destroy() {
+                node.removeEventListener("pointerup", h);
+            },
+        };
+    }
+
+    onDestroy(async () => {
+        // Clean up keydown event listener
+        window.removeEventListener("keydown", handleKeydown);
+
+        // Review session complete
+        dispatch("complete", {
+            reason: "manual-close",
+            reviewed: sessionProgress
+                ? sessionProgress.doneUnique
+                : reviewedCount,
+        });
+        onClose();
+    });
 
     $: if (currentCard) {
         loadCard();
@@ -275,8 +312,10 @@
             {#if !showAnswer}
                 <button
                     class="show-answer-button"
-                    on:click={(e) => handleTouchClick(revealAnswer, e)}
-                    on:touchend={(e) => handleTouchClick(revealAnswer, e)}
+                    disabled={isLoading}
+                    on:pointerup={onShowAnswer}
+                    style="touch-action: manipulation;"
+                    type="button"
                 >
                     <span>Show Answer</span>
                     <span class="shortcut">Space</span>
@@ -286,12 +325,10 @@
             {#if showAnswer && schedulingInfo}
                 <div class="difficulty-buttons">
                     <button
-                        class="difficulty-button again"
-                        on:click={(e) =>
-                            handleTouchClick(() => handleReview("again"), e)}
-                        on:touchend={(e) =>
-                            handleTouchClick(() => handleReview("again"), e)}
+                        use:bindRate={1}
+                        class="difficulty-button again rate-btn"
                         disabled={isLoading}
+                        type="button"
                     >
                         <div class="button-label">Again</div>
                         <div class="interval">
@@ -301,12 +338,10 @@
                     </button>
 
                     <button
-                        class="difficulty-button hard"
-                        on:click={(e) =>
-                            handleTouchClick(() => handleReview("hard"), e)}
-                        on:touchend={(e) =>
-                            handleTouchClick(() => handleReview("hard"), e)}
+                        use:bindRate={2}
+                        class="difficulty-button hard rate-btn"
                         disabled={isLoading}
+                        type="button"
                     >
                         <div class="button-label">Hard</div>
                         <div class="interval">
@@ -316,12 +351,10 @@
                     </button>
 
                     <button
-                        class="difficulty-button good"
-                        on:click={(e) =>
-                            handleTouchClick(() => handleReview("good"), e)}
-                        on:touchend={(e) =>
-                            handleTouchClick(() => handleReview("good"), e)}
+                        use:bindRate={3}
+                        class="difficulty-button good rate-btn"
                         disabled={isLoading}
+                        type="button"
                     >
                         <div class="button-label">Good</div>
                         <div class="interval">
@@ -331,12 +364,10 @@
                     </button>
 
                     <button
-                        class="difficulty-button easy"
-                        on:click={(e) =>
-                            handleTouchClick(() => handleReview("easy"), e)}
-                        on:touchend={(e) =>
-                            handleTouchClick(() => handleReview("easy"), e)}
+                        use:bindRate={4}
+                        class="difficulty-button easy rate-btn"
                         disabled={isLoading}
+                        type="button"
                     >
                         <div class="button-label">Easy</div>
                         <div class="interval">
@@ -480,11 +511,15 @@
         max-width: 400px;
         margin: 0 auto;
         padding: 12px 24px;
+        min-height: 44px;
+        min-width: 44px;
         font-size: 16px;
         font-weight: 500;
         background: var(--interactive-accent);
         color: var(--text-on-accent);
         border: none;
+        pointer-events: auto !important;
+        touch-action: manipulation;
         border-radius: 6px;
         cursor: pointer;
         transition: all 0.2s ease;
@@ -527,27 +562,35 @@
         margin: 0 auto;
     }
 
-    .difficulty-button {
+    .difficulty-button,
+    .rate-btn {
         flex: 1;
-        min-width: 0;
+        min-width: 44px;
+        min-height: 44px;
         padding: 12px 8px;
+        pointer-events: auto !important;
+        touch-action: manipulation !important;
         border: 2px solid var(--background-modifier-border);
         background: var(--background-primary);
         color: var(--text-normal);
-        border-radius: 8px;
+        border-radius: 6px;
         cursor: pointer;
         transition: all 0.2s ease;
         position: relative;
-        font-family: inherit;
-        min-height: 60px;
+        z-index: 10;
         display: flex;
         flex-direction: column;
         align-items: center;
         justify-content: center;
-        gap: 2px;
-        touch-action: manipulation;
-        -webkit-tap-highlight-color: transparent;
+        gap: 4px;
+        text-align: center;
+        overflow: hidden;
+        opacity: 1 !important;
+        -webkit-tap-highlight-color: transparent !important;
         -webkit-touch-callout: none;
+        -webkit-user-select: none;
+        -moz-user-select: none;
+        -ms-user-select: none;
         user-select: none;
     }
 
@@ -810,38 +853,143 @@
         }
     }
 
-    @media (max-width: 390px) {
-        .modal-header {
-            padding: 8px 10px;
-        }
+    /* Mobile modal overlay protection - Blocker #3 */
+    .review-modal {
+        position: relative;
+        z-index: 1000;
+        pointer-events: auto;
+    }
 
-        .modal-header h3 {
-            font-size: 13px;
-        }
+    /* Prevent form submission issues - Blocker #5 */
+    /* No submit buttons present in this modal */
 
-        .progress-info {
-            font-size: 12px;
-        }
+    /* Override Obsidian mobile CSS interference - Blocker #12 */
+    .rate-btn,
+    .difficulty-button,
+    .show-answer-button {
+        pointer-events: auto !important;
+        opacity: 1 !important;
+        touch-action: manipulation !important;
+        -webkit-tap-highlight-color: transparent !important;
+        position: relative !important;
+        z-index: 10 !important;
+    }
 
-        .card-content {
-            padding: 14px 8px;
-            gap: 14px;
-        }
+    /* Disabled state override - Blocker #4 */
+    .rate-btn:disabled,
+    .difficulty-button:disabled,
+    .show-answer-button:disabled {
+        opacity: 0.6 !important;
+        pointer-events: none !important;
+        cursor: not-allowed !important;
+    }
 
-        .card-side {
-            padding: 14px 12px;
-        }
+    /* Focus trap compatibility - Blocker #8 */
+    .action-buttons {
+        pointer-events: auto;
+        position: relative;
+        z-index: 5;
+    }
 
-        .card-side.front {
-            font-size: 15px;
-        }
+    /* Prevent parent event blocking - Blocker #7 */
+    .difficulty-buttons {
+        pointer-events: auto;
+        position: relative;
+        z-index: 5;
+    }
 
-        .card-side.back {
-            font-size: 13px;
+    /* Mobile safe area and viewport optimizations */
+    @media screen and (max-height: 600px) {
+        .review-modal {
+            max-height: 90vh;
+            overflow-y: auto;
         }
 
         .action-buttons {
-            padding: 10px 8px;
+            padding-bottom: calc(20px + env(safe-area-inset-bottom));
+        }
+    }
+
+    /* Mobile keyboard and safe area protection - Blocker #9 */
+    .action-buttons {
+        padding-bottom: calc(20px + env(safe-area-inset-bottom));
+        padding-left: env(safe-area-inset-left);
+        padding-right: env(safe-area-inset-right);
+        position: relative;
+        bottom: 0;
+    }
+
+    /* Viewport resize protection */
+    @media (orientation: landscape) and (max-height: 500px) {
+        .action-buttons {
+            padding: 8px 16px;
+            padding-bottom: calc(8px + env(safe-area-inset-bottom));
+        }
+
+        .difficulty-button,
+        .rate-btn {
+            min-height: 40px;
+            padding: 8px 4px;
+        }
+    }
+
+    /* Mobile safe area insets - Blocker #9 */
+    .review-modal {
+        padding-bottom: env(safe-area-inset-bottom);
+        padding-left: env(safe-area-inset-left);
+        padding-right: env(safe-area-inset-right);
+        padding-top: env(safe-area-inset-top);
+        box-sizing: border-box;
+        max-width: 100vw;
+        max-height: 100vh;
+        overflow-x: hidden;
+    }
+
+    /* Additional mobile optimizations */
+    @media (hover: none) and (pointer: coarse) {
+        .rate-btn,
+        .difficulty-button,
+        .show-answer-button {
+            min-height: 48px !important;
+            min-width: 48px !important;
+            font-size: 16px !important;
+            line-height: 1.2;
+        }
+    }
+
+    @media (max-width: 390px) {
+        .modal-header {
+            padding: 12px 16px;
+        }
+
+        .modal-header h3 {
+            font-size: 14px;
+        }
+
+        .progress-info {
+            font-size: 11px;
+        }
+
+        .card-content {
+            padding: 12px 16px;
+            min-height: 150px;
+        }
+
+        .card-side {
+            min-height: 120px;
+        }
+
+        .card-side.front {
+            min-height: 120px;
+        }
+
+        .card-side.back {
+            min-height: 120px;
+        }
+
+        .action-buttons {
+            padding: 12px 16px;
+            padding-bottom: calc(12px + env(safe-area-inset-bottom));
         }
 
         .show-answer-button {
@@ -850,14 +998,13 @@
         }
 
         .difficulty-buttons {
-            gap: 3px;
+            gap: 4px;
             padding: 0 4px;
-            max-width: 374px; /* Fit within 390px with padding */
         }
 
         .difficulty-button {
-            padding: 8px 3px;
-            min-height: 42px;
+            padding: 8px 4px;
+            font-size: 11px;
         }
 
         .button-label {
@@ -865,28 +1012,31 @@
         }
 
         .interval {
-            font-size: 9px;
+            font-size: 10px;
         }
 
         .difficulty-button .shortcut {
-            font-size: 7px;
-            padding: 1px 2px;
+            display: none;
         }
     }
 
     @media (max-width: 380px) {
         .card-content {
-            padding: 12px 6px;
+            min-height: 120px;
         }
 
         .difficulty-buttons {
             gap: 2px;
-            padding: 0 3px;
+            padding: 0 2px;
         }
 
         .difficulty-button {
             padding: 6px 2px;
-            min-height: 40px;
+            font-size: 10px;
+        }
+
+        .action-buttons {
+            padding-bottom: calc(12px + env(safe-area-inset-bottom));
         }
     }
 </style>

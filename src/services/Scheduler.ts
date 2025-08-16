@@ -68,6 +68,8 @@ export class Scheduler {
 
     // Calculate goal total more accurately
     const dailyCounts = await this.db.getDailyReviewCounts(deckId);
+    // Include cards due within next 15 minutes for session goal calculation
+    // This ensures cards that become due during the review session count towards the goal
     const dueCardCount = await this.getDueCardCount(now, deckId);
     const newCardCount = await this.getNewCardCount(deckId);
 
@@ -342,7 +344,7 @@ export class Scheduler {
       contentHash: card.contentHash,
     };
 
-    // Update card state and create review log
+    // Update card state and create review log (no save during review)
     await this.db.updateFlashcard(updatedCard.id, {
       state: updatedCard.state,
       dueDate: updatedCard.dueDate,
@@ -354,9 +356,20 @@ export class Scheduler {
       lastReviewed: updatedCard.lastReviewed,
     });
 
+    await yieldToUI();
+
     await this.db.createReviewLog(reviewLog);
 
     return updatedCard;
+  }
+
+  /**
+   * Save all pending changes to disk
+   */
+  async save(): Promise<void> {
+    console.log("Scheduler: Saving database to disk");
+    await this.db.save();
+    console.log("Scheduler: Database save completed");
   }
 
   /**
@@ -514,12 +527,17 @@ export class Scheduler {
   }
 
   private async getDueCardCount(now: Date, deckId: string): Promise<number> {
+    // Include cards due within the next 15 minutes for session goal calculation
+    const fifteenMinutesLater = new Date(now.getTime() + 15 * 60 * 1000);
     const query = `
     SELECT COUNT(*) as count
     FROM flashcards
     WHERE deck_id = ? AND due_date <= ? AND state = 'review'
   `;
-    const results = await this.queryRaw(query, [deckId, now.toISOString()]);
+    const results = await this.queryRaw(query, [
+      deckId,
+      fifteenMinutesLater.toISOString(),
+    ]);
     return results.length > 0 ? (results[0][0] as number) : 0;
   }
 

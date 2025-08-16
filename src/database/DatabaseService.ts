@@ -735,31 +735,6 @@ export class DatabaseService {
     >,
   ): Promise<void> {
     this.updateFlashcardCore(flashcardId, updates);
-    await this.save();
-  }
-
-  // Version without save for use in transactions
-  async updateFlashcardWithoutSave(
-    flashcardId: string,
-    updates: Partial<
-      Pick<
-        Flashcard,
-        | "front"
-        | "back"
-        | "type"
-        | "contentHash"
-        | "state"
-        | "dueDate"
-        | "interval"
-        | "repetitions"
-        | "difficulty"
-        | "stability"
-        | "lapses"
-        | "lastReviewed"
-      >
-    >,
-  ): Promise<void> {
-    this.updateFlashcardCore(flashcardId, updates);
   }
 
   private deleteFlashcardCore(flashcardId: string): void {
@@ -1030,8 +1005,6 @@ export class DatabaseService {
       log.client || null,
     ]);
     stmt.free();
-
-    await this.save();
   }
 
   // Review session operations
