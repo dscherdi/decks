@@ -439,9 +439,6 @@ export class DeckManager {
     this.debugLog(`Starting transaction for ${operations.length} operations`);
 
     try {
-      // Yield to UI before starting transaction
-      await yieldToUI();
-
       // Begin transaction
       this.db.beginTransaction();
       this.debugLog(`Transaction started successfully`);
@@ -463,14 +460,12 @@ export class DeckManager {
         deleteCount = deleteOps.length;
         this.debugLog(`Batch deleted ${deleteCount} flashcards`);
       }
-
       // Execute all CREATE operations with single prepared statement
       if (createOps.length > 0) {
         this.db.batchCreateFlashcards(createOps.map((op) => op.flashcard!));
         createCount = createOps.length;
         this.debugLog(`Batch created ${createCount} flashcards`);
       }
-
       // Execute all UPDATE operations with single prepared statement
       if (updateOps.length > 0) {
         this.db.batchUpdateFlashcards(
@@ -482,6 +477,7 @@ export class DeckManager {
         updateCount = updateOps.length;
         this.debugLog(`Batch updated ${updateCount} flashcards`);
       }
+      await yieldToUI();
 
       // Commit transaction
       this.db.commitTransaction();
@@ -513,7 +509,6 @@ export class DeckManager {
     const deckSyncStartTime = performance.now();
     this.debugLog(`Syncing flashcards for deck: ${filePath}`);
 
-    await yieldToUI();
     const deck = await this.db.getDeckByFilepath(filePath);
     if (!deck) {
       this.debugLog(`No deck found for filepath: ${filePath}`);
@@ -544,7 +539,6 @@ export class DeckManager {
     );
 
     // Get existing flashcards for this deck to determine what changed
-    await yieldToUI();
     const existingFlashcards = await this.db.getFlashcardsByDeck(deck.id);
     this.debugLog(
       `Found ${existingFlashcards.length} existing flashcards for deck ${deck.name}`,
@@ -595,7 +589,6 @@ export class DeckManager {
     // Process flashcards in chunks to avoid blocking UI with large datasets
     for (let i = 0; i < parsedCards.length; i++) {
       // Yield control to UI every 50 flashcards to prevent blocking
-      await yieldEvery(i);
       const parsed = parsedCards[i];
       const flashcardId = this.generateFlashcardId(parsed.front);
       const contentHash = this.generateContentHash(parsed.back);
@@ -634,7 +627,7 @@ export class DeckManager {
       }
 
       processedIds.add(flashcardId);
-
+      await yieldEvery(i);
       if (existingCard) {
         // Update if content has changed
         if (existingCard.contentHash !== contentHash) {
@@ -759,6 +752,7 @@ export class DeckManager {
     this.performanceLog(
       `Sync completed for deck: ${deck.name} in ${this.formatTime(totalDeckSyncTime)} (${parsedCards.length} flashcards, ${batchOperations.length} operations, cleanup: ${this.formatTime(timestampTime)}) - DB save deferred`,
     );
+    yieldToUI();
   }
 
   /**
@@ -769,7 +763,6 @@ export class DeckManager {
     if (!file || !(file instanceof TFile)) return;
 
     const deckName = file.basename;
-    await yieldToUI();
     const existingDeck = await this.db.getDeckByFilepath(filePath);
 
     if (!existingDeck) {
@@ -884,7 +877,6 @@ export class DeckManager {
    * Check for duplicate flashcards in a deck and warn the user
    */
   async checkForDuplicatesInDeck(deckId: string): Promise<void> {
-    await yieldToUI();
     const existingFlashcards = await this.db.getFlashcardsByDeck(deckId);
     const frontTextMap = new Map<string, Flashcard[]>();
 
@@ -926,7 +918,6 @@ export class DeckManager {
     this.debugLog(
       `Updating flashcard deck IDs from ${oldDeckId} to ${newDeckId}`,
     );
-    await yieldToUI();
     await this.db.updateFlashcardDeckIds(oldDeckId, newDeckId);
   }
 }

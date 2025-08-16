@@ -90,6 +90,7 @@ export default class DecksPlugin extends Plugin {
   public view: DecksView | null = null;
   public settings: FlashcardsSettings;
   private progressNotice: Notice | null = null;
+  private hasShownInitialProgress = false;
 
   /**
    * Helper method for timing operations
@@ -162,8 +163,13 @@ export default class DecksPlugin extends Plugin {
   }
 
   private showProgressNotice(message: string): void {
+    this.debugLog(`showProgressNotice called with: ${message}`);
+    this.debugLog(`enableNotices setting: ${this.settings?.ui?.enableNotices}`);
     if (this.settings?.ui?.enableNotices !== false) {
+      this.debugLog("Creating progress notice");
       this.progressNotice = new Notice(message, 0);
+    } else {
+      this.debugLog("Notices disabled, not showing progress notice");
     }
   }
 
@@ -250,7 +256,7 @@ export default class DecksPlugin extends Plugin {
         // Additional delay to ensure metadata cache is fully populated and app is responsive
         setTimeout(() => {
           this.performInitialSync();
-        }, 5000);
+        }, 2000);
       });
 
       // Add ribbon icon
@@ -299,7 +305,7 @@ export default class DecksPlugin extends Plugin {
           this,
           this.settings,
           this.saveSettings.bind(this),
-          this.performSyncWithProgress.bind(this),
+          this.performSync.bind(this),
           async () => {
             if (this.view) {
               await this.view.refreshStats();
@@ -434,7 +440,6 @@ export default class DecksPlugin extends Plugin {
         // New file with flashcards tag - create deck for this file only
         const newTag =
           allTags.find((tag) => tag.startsWith("#flashcards")) || "#flashcards";
-        await yieldToUI();
         await this.deckSynchronizer.createDeckForFile(file.path, newTag);
         await yieldToUI();
         await this.deckSynchronizer.syncDeck(file.path);
@@ -448,22 +453,18 @@ export default class DecksPlugin extends Plugin {
   }
 
   async performInitialSync() {
-    let notice: Notice | null = null;
     try {
       const startTime = performance.now();
       this.debugLog("Performing initial background sync...");
 
-      // Show progress notice for large syncs
-      if (this.settings?.ui?.enableNotices !== false) {
-        notice = new Notice("🔄 Syncing flashcards in background...", 5000);
-      }
-
       // Use requestIdleCallback or setTimeout to ensure non-blocking execution
       await new Promise((resolve) => setTimeout(resolve, 100));
 
-      await this.deckSynchronizer.performInitialSync();
+      // Use the main performSync method which has progress notices
+      await this.performSync(false);
 
       if (this.view) {
+        // Update the view with refreshed data
         const updatedDecks = await this.getDecks();
         const deckStats = await this.getDeckStats();
         this.view.update(updatedDecks, deckStats);
@@ -475,12 +476,6 @@ export default class DecksPlugin extends Plugin {
       );
     } catch (error) {
       console.error("Error during initial sync:", error);
-
-      // Show error notice
-      if (notice) {
-        notice.setMessage("⚠️ Flashcard sync failed - check console");
-        setTimeout(() => notice?.hide(), 5000);
-      }
       // Don't throw - let the app continue working even if initial sync fails
     }
   }
@@ -488,38 +483,34 @@ export default class DecksPlugin extends Plugin {
   async performSync(forceSync: boolean = false): Promise<void> {
     const result = await this.deckSynchronizer.performSync({
       forceSync,
-      showProgress: false,
-    });
-
-    if (!result.success && result.error) {
-      throw result.error;
-    }
-  }
-
-  async performSyncWithProgress(forceSync: boolean = false): Promise<void> {
-    const result = await this.deckSynchronizer.performSync({
-      forceSync,
       showProgress: true,
       onProgress: (progress) => {
-        if (forceSync) {
-          if (progress.percentage === 0) {
-            this.showProgressNotice(
-              "🔄 Force refreshing flashcards...\n" + this.createProgressBar(0),
-            );
-          }
-          this.updateProgress(progress.message, progress.percentage);
-          if (progress.percentage === 100) {
-            setTimeout(() => this.hideProgressNotice(), 3000);
-          }
+        this.debugLog(
+          `Progress: ${progress.percentage}% - ${progress.message}`,
+        );
+        if (!this.hasShownInitialProgress) {
+          const message = forceSync
+            ? "🔄 Force refreshing flashcards...\n" +
+              this.createProgressBar(progress.percentage)
+            : "🔄 Syncing flashcards...\n" +
+              this.createProgressBar(progress.percentage);
+          this.debugLog(`Showing initial progress notice: ${message}`);
+          this.showProgressNotice(message);
+          this.hasShownInitialProgress = true;
+        }
+        this.updateProgress(progress.message, progress.percentage);
+        if (progress.percentage === 100) {
+          this.debugLog("Sync complete, hiding progress notice");
+          this.hasShownInitialProgress = false;
+          setTimeout(() => this.hideProgressNotice(), 3000);
         }
       },
     });
 
     if (!result.success && result.error) {
-      if (forceSync) {
-        this.updateProgress("❌ Sync failed - check console for details", 0);
-        setTimeout(() => this.hideProgressNotice(), 5000);
-      }
+      this.updateProgress("❌ Sync failed - check console for details", 0);
+      this.hasShownInitialProgress = false;
+      setTimeout(() => this.hideProgressNotice(), 5000);
       throw result.error;
     }
   }
@@ -570,7 +561,6 @@ export default class DecksPlugin extends Plugin {
   }
 
   async getDecks(): Promise<Deck[]> {
-    await yieldToUI();
     return this.db.getAllDecks();
   }
 

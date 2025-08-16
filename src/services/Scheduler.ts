@@ -330,7 +330,6 @@ export class Scheduler {
     };
 
     // Update card state and create review log
-    await yieldToUI();
     await this.db.updateFlashcard(updatedCard.id, {
       state: updatedCard.state,
       dueDate: updatedCard.dueDate,
@@ -342,7 +341,6 @@ export class Scheduler {
       lastReviewed: updatedCard.lastReviewed,
     });
 
-    await yieldToUI();
     await this.db.createReviewLog(reviewLog);
 
     return updatedCard;

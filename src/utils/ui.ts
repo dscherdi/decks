@@ -7,11 +7,11 @@
  * Uses requestAnimationFrame in browser environments, setTimeout in Node.js (tests)
  */
 export async function yieldToUI(): Promise<void> {
-  await new Promise<void>((resolve) => {
+  await new Promise((resolve) => {
     if (typeof requestAnimationFrame !== "undefined") {
-      requestAnimationFrame(() => resolve());
+      requestAnimationFrame(() => resolve(null));
     } else {
-      setTimeout(() => resolve(), 0);
+      setTimeout(() => resolve(null), 0);
     }
   });
 }
@@ -21,7 +21,10 @@ export async function yieldToUI(): Promise<void> {
  * @param currentIndex - Current iteration index
  * @param yieldInterval - Yield every N iterations (default: 50)
  */
-export async function yieldEvery(currentIndex: number, yieldInterval: number = 50): Promise<void> {
+export async function yieldEvery(
+  currentIndex: number,
+  yieldInterval: number = 100,
+): Promise<void> {
   if (currentIndex > 0 && currentIndex % yieldInterval === 0) {
     await yieldToUI();
   }
@@ -36,7 +39,7 @@ export async function yieldEvery(currentIndex: number, yieldInterval: number = 5
 export async function processWithYielding<T, R>(
   items: T[],
   processor: (item: T, index: number) => R | Promise<R>,
-  yieldInterval: number = 50
+  yieldInterval: number = 50,
 ): Promise<R[]> {
   const results: R[] = [];
 

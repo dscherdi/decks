@@ -109,7 +109,7 @@ export class FlashcardReviewModalWrapper extends Modal {
       }
 
       // Refresh the view to update stats
-      await this.refreshStats();
+      await this.refreshStatsById(this.deck.id);
     });
 
     // Handle window resize for mobile adaptation
@@ -147,6 +147,6 @@ export class FlashcardReviewModalWrapper extends Modal {
     this.markdownComponents = [];
 
     // Refresh view when closing
-    this.refreshStats();
+    this.refreshStatsById(this.deck.id);
   }
 }

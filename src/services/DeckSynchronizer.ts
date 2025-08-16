@@ -70,7 +70,7 @@ export class DeckSynchronizer {
       // Add delay to ensure workspace is fully ready
       await new Promise((resolve) => setTimeout(resolve, 5000));
 
-      await this.performSync({ forceSync: false, showProgress: false });
+      await this.performSync({ forceSync: false, showProgress: true });
 
       this.debugLog("Initial sync completed successfully");
     } catch (error) {
@@ -104,7 +104,7 @@ export class DeckSynchronizer {
       }
 
       const decksStartTime = performance.now();
-      await yieldToUI();
+      // await yieldToUI();
       await this.deckManager.syncDecks();
       const decksTime = performance.now() - decksStartTime;
 
@@ -113,7 +113,7 @@ export class DeckSynchronizer {
       );
 
       // Step 2: Get all decks and prepare for flashcard sync
-      await yieldToUI();
+      // await yieldToUI();
       const decks = await this.db.getAllDecks();
       this.debugLog(
         `Found ${decks.length} decks after sync:`,
@@ -148,11 +148,10 @@ export class DeckSynchronizer {
           `${forceSync ? "Force s" : "S"}yncing flashcards for deck: ${deck.name} (${deck.filepath})`,
         );
 
-        await yieldToUI();
         await this.deckManager.syncFlashcardsForDeck(deck.filepath, forceSync);
+        await yieldToUI();
 
         // Track performance metrics
-        await yieldToUI();
         const flashcards = await this.db.getFlashcardsByDeck(deck.id);
         const deckTime = performance.now() - deckStartTime;
         totalFlashcards += flashcards.length;
@@ -169,8 +168,10 @@ export class DeckSynchronizer {
 
       this.debugLog("Saving database after processing all decks...");
       const saveStartTime = performance.now();
+
       await yieldToUI();
       await this.db.save();
+
       const saveTime = performance.now() - saveStartTime;
 
       this.debugLog("Database saved successfully");
@@ -239,7 +240,6 @@ export class DeckSynchronizer {
    */
   async syncDeck(deckName: string, forceSync: boolean = false): Promise<void> {
     this.debugLog(`Syncing specific deck: ${deckName}`);
-    await yieldToUI();
     await this.deckManager.syncFlashcardsForDeck(deckName, forceSync);
   }
 
@@ -248,7 +248,6 @@ export class DeckSynchronizer {
    */
   async createDeckForFile(filePath: string, tag: string): Promise<void> {
     this.debugLog(`Creating deck for file: ${filePath} with tag: ${tag}`);
-    await yieldToUI();
     await this.deckManager.createDeckForFile(filePath, tag);
   }
 

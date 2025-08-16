@@ -72,7 +72,7 @@ export class DatabaseService {
 
   async save(): Promise<void> {
     if (!this.db) throw new Error("Database not initialized");
-
+    // await new Promise((r) => requestAnimationFrame(() => r(null)));
     try {
       const data = this.db.export();
 
