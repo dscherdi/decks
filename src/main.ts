@@ -146,7 +146,7 @@ export default class DecksPlugin extends Plugin {
   }
 
   // Progress tracking utility
-  private updateProgress(message: string, progress: number = 0): void {
+  public updateProgress(message: string, progress: number = 0): void {
     if (this.progressNotice) {
       const progressBar = this.createProgressBar(progress);
       this.progressNotice.setMessage(`${message}\n${progressBar}`);
@@ -162,7 +162,7 @@ export default class DecksPlugin extends Plugin {
     return `[${bar}] ${percentage}%`;
   }
 
-  private showProgressNotice(message: string): void {
+  public showProgressNotice(message: string): void {
     this.debugLog(`showProgressNotice called with: ${message}`);
     this.debugLog(`enableNotices setting: ${this.settings?.ui?.enableNotices}`);
     if (this.settings?.ui?.enableNotices !== false) {
@@ -173,7 +173,7 @@ export default class DecksPlugin extends Plugin {
     }
   }
 
-  private hideProgressNotice(): void {
+  public hideProgressNotice(): void {
     if (this.progressNotice) {
       this.progressNotice.hide();
       this.progressNotice = null;
@@ -231,6 +231,7 @@ export default class DecksPlugin extends Plugin {
           new DecksView(
             this,
             leaf,
+            this.deckSynchronizer,
             this.scheduler,
             this.settings,
             this.debugLog.bind(this),
@@ -726,6 +727,7 @@ export default class DecksPlugin extends Plugin {
 
 class DecksView extends ItemView {
   private plugin: DecksPlugin;
+  private deckSynchronizer: DeckSynchronizer;
   private scheduler: Scheduler;
   private settings: FlashcardsSettings;
   private debugLog: (message: string, ...args: any[]) => void;
@@ -761,6 +763,7 @@ class DecksView extends ItemView {
   constructor(
     plugin: DecksPlugin,
     leaf: WorkspaceLeaf,
+    deckSynchronizer: DeckSynchronizer,
     scheduler: Scheduler,
     settings: FlashcardsSettings,
     debugLog: (message: string, ...args: any[]) => void,
@@ -768,13 +771,8 @@ class DecksView extends ItemView {
     getDecks: () => Promise<Deck[]>,
     getDeckStats: () => Promise<Map<string, DeckStats>>,
     getDeckStatsById: (deckId: string) => Promise<DeckStats | null>,
-    getReviewCounts: (
-      days: number,
-    ) => Promise<Map<string, { date: string; reviews: number }[]>>,
-    updateDeckConfig: (
-      deckId: string,
-      config: Partial<DeckConfig>,
-    ) => Promise<void>,
+    getReviewCounts: (days: number) => Promise<Map<string, number> | undefined>,
+    updateDeckConfig: (deckId: string, config: DeckConfig) => Promise<void>,
     openStatisticsModal: (deckFilter?: string) => void,
     syncFlashcardsForDeck: (deckId: string) => Promise<void>,
     getDailyReviewCounts: (
@@ -790,6 +788,7 @@ class DecksView extends ItemView {
   ) {
     super(leaf);
     this.plugin = plugin;
+    this.deckSynchronizer = deckSynchronizer;
     this.scheduler = scheduler;
     this.settings = settings;
     this.debugLog = debugLog;
@@ -833,7 +832,47 @@ class DecksView extends ItemView {
         onDeckClick: (deck: Deck) => this.startReview(deck),
         onRefresh: async () => {
           this.debugLog("onRefresh callback invoked");
-          await this.refresh(true);
+          await this.refresh(false);
+        },
+        onForceRefreshDeck: async (deckFilepath: string) => {
+          this.debugLog(
+            "onForceRefreshDeck callback invoked for deck:",
+            deckFilepath,
+          );
+
+          // Show progress notice for single deck refresh
+          const deckDisplayName =
+            deckFilepath.split("/").pop()?.replace(".md", "") || deckFilepath;
+          this.plugin.showProgressNotice(
+            `🔄 Force refreshing deck: ${deckDisplayName}...`,
+          );
+
+          try {
+            await this.deckSynchronizer.syncDeck(
+              deckFilepath,
+              true,
+              (progress) => {
+                this.plugin.updateProgress(
+                  progress.message,
+                  progress.percentage,
+                );
+
+                if (progress.percentage === 100) {
+                  setTimeout(() => this.plugin.hideProgressNotice(), 2000);
+                }
+              },
+            );
+
+            // Refresh stats after force refresh
+            await this.refreshStats();
+          } catch (error) {
+            this.plugin.updateProgress(
+              "❌ Deck refresh failed - check console for details",
+              0,
+            );
+            setTimeout(() => this.plugin.hideProgressNotice(), 3000);
+            throw error;
+          }
         },
         getReviewCounts: async (days: number) => {
           return await this.getReviewCounts(days);

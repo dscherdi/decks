@@ -217,7 +217,7 @@ export class DeckSynchronizer {
 
       if (showProgress && onProgress) {
         onProgress({
-          message: "❌ Sync failed - check console for details",
+          message: `❌ Sync failed - check console for details, message: ${error.message}, stack ${error.stack}`,
           percentage: 0,
         });
       }
@@ -238,9 +238,33 @@ export class DeckSynchronizer {
   /**
    * Sync flashcards for a specific deck
    */
-  async syncDeck(deckName: string, forceSync: boolean = false): Promise<void> {
+  async syncDeck(
+    deckName: string,
+    forceSync: boolean = false,
+    onProgress?: (progress: { message: string; percentage: number }) => void,
+  ): Promise<void> {
     this.debugLog(`Syncing specific deck: ${deckName}`);
+
+    const deckDisplayName =
+      deckName.split("/").pop()?.replace(".md", "") || deckName;
+
+    if (onProgress) {
+      onProgress({
+        message: `🔄 Force refreshing deck: ${deckDisplayName}...`,
+        percentage: 20,
+      });
+    }
+
+    const startTime = performance.now();
     await this.deckManager.syncFlashcardsForDeck(deckName, forceSync);
+    const duration = performance.now() - startTime;
+
+    if (onProgress) {
+      onProgress({
+        message: `✅ Force refresh complete: ${deckDisplayName} (${Math.round(duration)}ms)`,
+        percentage: 100,
+      });
+    }
   }
 
   /**

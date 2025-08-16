@@ -13,7 +13,7 @@ export class FlashcardReviewModalWrapper extends Modal {
   private reviewFlashcard: (
     deck: Deck,
     card: Flashcard,
-    difficulty: RatingLabel,
+    rating: RatingLabel,
     timeElapsed?: number,
   ) => Promise<void>;
   private renderMarkdown: (

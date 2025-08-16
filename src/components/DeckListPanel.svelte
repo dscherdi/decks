@@ -25,6 +25,7 @@
 
     export let onDeckClick: (deck: Deck) => void;
     export let onRefresh: () => void;
+    export let onForceRefreshDeck: (deckFilepath: string) => Promise<void>;
     export let getReviewCounts: (days: number) => Promise<Map<string, number>>;
     export let onUpdateDeckConfig: (
         deckId: string,
@@ -63,6 +64,18 @@
             refreshHeatmap();
         } catch (error) {
             console.error("Error during refresh:", error);
+        } finally {
+            isRefreshing = false;
+        }
+    }
+
+    async function handleForceRefreshDeck(deck: Deck) {
+        isRefreshing = true;
+        try {
+            await onForceRefreshDeck(deck.filepath);
+            refreshHeatmap();
+        } catch (error) {
+            console.error("Error during deck force refresh:", error);
         } finally {
             isRefreshing = false;
         }
@@ -182,6 +195,14 @@
             openDeckConfig(deck);
         };
 
+        const forceRefreshOption = document.createElement("div");
+        forceRefreshOption.className = "dropdown-option";
+        forceRefreshOption.textContent = "Force refresh";
+        forceRefreshOption.onclick = () => {
+            closeActiveDropdown();
+            handleForceRefreshDeck(deck);
+        };
+
         const exportOption = document.createElement("div");
         exportOption.className = "dropdown-option";
         exportOption.textContent = "Export to Anki";
@@ -191,6 +212,7 @@
         };
 
         dropdown.appendChild(configOption);
+        dropdown.appendChild(forceRefreshOption);
         dropdown.appendChild(exportOption);
 
         // Position dropdown with viewport bounds checking

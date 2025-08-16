@@ -82,7 +82,7 @@ export class DatabaseService {
         await this.adapter.mkdir(dir);
       }
 
-      await this.adapter.writeBinary(this.dbPath, Buffer.from(data));
+      await this.adapter.writeBinary(this.dbPath, data);
     } catch (error) {
       console.error("Failed to save database:", error);
       throw error;

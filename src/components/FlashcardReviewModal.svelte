@@ -14,7 +14,7 @@
     export let onClose: () => void;
     export let onReview: (
         card: Flashcard,
-        difficulty: RatingLabel,
+        rating: RatingLabel,
         timeElapsed?: number,
     ) => Promise<void>;
     export let renderMarkdown: (content: string, el: HTMLElement) => void;

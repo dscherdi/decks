@@ -236,3 +236,46 @@
 [2025-08-16T09:30:51.229Z] Updated all deck stats
 [2025-08-16T09:30:51.902Z] Updated all deck stats
 [2025-08-16T09:30:52.821Z] Updated all deck stats
+[2025-08-16T10:29:23.726Z] Decks plugin loaded successfully
+[2025-08-16T10:29:28.503Z] Performing initial background sync...
+[2025-08-16T10:29:28.610Z] Deck "1200 Deutsche Redewendungen" already exists with correct tag, no update needed
+[2025-08-16T10:29:28.789Z] Saving database after processing all decks...
+[2025-08-16T10:29:28.989Z] Sync complete, hiding progress notice
+[2025-08-16T10:29:31.376Z] Flashcard tags for Flashcards/500 Nomen-Verb Verbindungen.md: ["#flashcards/german"]
+[2025-08-16T10:29:31.511Z] Saving database after processing all decks...
+[2025-08-16T10:29:31.603Z] Refresh complete
+[2025-08-16T10:29:35.751Z] Existing card ID: card_nm2778, Front: "da steppt der Bär"
+[2025-08-16T10:29:35.909Z] Updated deck stats: {}
+[2025-08-16T10:30:22.944Z] No deck found for filepath: 1200 Deutsche Redewendungen
+[2025-08-16T10:30:24.409Z] Updated all deck stats
+[2025-08-16T10:30:25.538Z] Updated all deck stats
+[2025-08-16T10:30:26.407Z] Updated all deck stats
+[2025-08-16T10:30:27.169Z] Updated all deck stats
+[2025-08-16T10:30:27.909Z] Updated all deck stats
+[2025-08-16T10:30:28.541Z] Updated all deck stats
+[2025-08-16T10:30:29.258Z] Updated all deck stats
+[2025-08-16T10:30:30.033Z] Updated all deck stats
+[2025-08-16T10:30:30.902Z] Updated all deck stats
+[2025-08-16T10:30:32.728Z] Updated all deck stats
+[2025-08-16T10:30:33.710Z] No deck found for filepath: 2000 German verbs
+[2025-08-16T10:30:34.946Z] Updated all deck stats
+[2025-08-16T10:30:35.858Z] Updated all deck stats
+[2025-08-16T10:30:37.318Z] Updated all deck stats
+[2025-08-16T10:30:38.463Z] Updated all deck stats
+[2025-08-16T10:33:24.512Z] Decks plugin loaded successfully
+[2025-08-16T10:33:28.563Z] Performing initial background sync...
+[2025-08-16T10:33:28.666Z] Starting deck sync...
+[2025-08-16T10:33:28.843Z] Saving database after processing all decks...
+[2025-08-16T10:33:28.994Z] Sync complete, hiding progress notice
+[2025-08-16T10:33:31.197Z] Flashcard tags for Flashcards/2000 German verbs.md: ["#flashcards/german"]
+[2025-08-16T10:33:31.337Z] File Flashcards/Spanish-Vocabulary.md not modified since last sync, skipping
+[2025-08-16T10:33:31.353Z] Saving database after processing all decks...
+[2025-08-16T10:33:31.444Z] Refresh complete
+[2025-08-16T10:33:34.380Z] Existing card ID: card_nm2778, Front: "da steppt der Bär"
+[2025-08-16T10:33:34.562Z] Updated deck stats: {}
+[2025-08-16T10:33:38.298Z] Existing card ID: card_uhm64m, Front: "**modulieren**"
+[2025-08-16T10:33:38.566Z] Updated deck stats: {}
+[2025-08-16T10:33:44.236Z] Existing card ID: card_rxziyu, Front: "**kanonisch**"
+[2025-08-16T10:33:44.755Z] Updated deck stats: {}
+[2025-08-16T10:33:49.612Z] Existing card ID: card_q1az4y, Front: "Stil entwickeln"
+[2025-08-16T10:33:54.441Z] Updated deck stats: {}
