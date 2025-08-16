@@ -15,8 +15,8 @@
 
     let newCardsLimit = config.newCardsPerDay;
     let reviewCardsLimit = config.reviewCardsPerDay;
-    let enableNewCardsLimit = config.newCardsPerDay > 0;
-    let enableReviewCardsLimit = config.reviewCardsPerDay > 0;
+    let enableNewCardsLimit = config.hasNewCardsLimitEnabled;
+    let enableReviewCardsLimit = config.hasReviewCardsLimitEnabled;
     let reviewOrder: ReviewOrder = config.reviewOrder;
     let headerLevel = config.headerLevel;
     let requestRetention = config.fsrs.requestRetention;
@@ -40,12 +40,10 @@
     // Reactive statement to update config when values change
     $: {
         const newConfig = {
-            newCardsPerDay: enableNewCardsLimit
-                ? Number(newCardsLimit) || 0
-                : 0,
-            reviewCardsPerDay: enableReviewCardsLimit
-                ? Number(reviewCardsLimit) || 0
-                : 0,
+            hasNewCardsLimitEnabled: enableNewCardsLimit,
+            newCardsPerDay: Number(newCardsLimit) || 20,
+            hasReviewCardsLimitEnabled: enableReviewCardsLimit,
+            reviewCardsPerDay: Number(reviewCardsLimit) || 100,
             reviewOrder,
             headerLevel: Number(headerLevel) || 2,
             fsrs: {
@@ -59,12 +57,10 @@
     function handleSave() {
         saving = true;
         const finalConfig: DeckConfig = {
-            newCardsPerDay: enableNewCardsLimit
-                ? Number(newCardsLimit) || 0
-                : 0,
-            reviewCardsPerDay: enableReviewCardsLimit
-                ? Number(reviewCardsLimit) || 0
-                : 0,
+            hasNewCardsLimitEnabled: enableNewCardsLimit,
+            newCardsPerDay: Number(newCardsLimit) || 20,
+            hasReviewCardsLimitEnabled: enableReviewCardsLimit,
+            reviewCardsPerDay: Number(reviewCardsLimit) || 100,
             reviewOrder,
             headerLevel: Number(headerLevel) || 2,
             fsrs: {

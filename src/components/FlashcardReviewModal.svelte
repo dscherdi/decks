@@ -730,7 +730,7 @@
     }
 
     /* Mobile responsive styles */
-    @media (max-width: 768px) {
+    /*@media (max-width: 768px) {
         .modal-header {
             padding: 12px 16px;
         }
@@ -764,7 +764,7 @@
         .show-answer-button {
             padding: 14px 24px;
             font-size: 16px;
-            min-height: 44px; /* Touch-friendly */
+            min-height: 44px;
         }
 
         .difficulty-buttons {
@@ -774,7 +774,7 @@
 
         .difficulty-button {
             padding: 10px 6px;
-            min-height: 48px; /* Touch-friendly */
+            min-height: 48px;
         }
 
         .button-label {
@@ -784,9 +784,9 @@
         .interval {
             font-size: 11px;
         }
-    }
+    }*/
 
-    @media (max-width: 500px) {
+    /*@media (max-width: 500px) {
         .modal-header {
             padding: 10px 12px;
             flex-direction: column;
@@ -851,7 +851,7 @@
             font-size: 8px;
             padding: 1px 2px;
         }
-    }
+    }*/
 
     /* Mobile modal overlay protection - Blocker #3 */
     .review-modal {
@@ -898,8 +898,122 @@
         z-index: 5;
     }
 
+    /* Mobile responsive styles */
+    /*@media (max-width: 768px) {
+        .review-modal {
+            padding: 16px 12px;
+            font-size: 14px;
+        }
+
+        .modal-header h3 {
+            font-size: 18px;
+            margin-bottom: 8px;
+        }
+
+        .progress-info {
+            font-size: 13px;
+            margin-bottom: 12px;
+        }
+
+        .card-front,
+        .card-back {
+            font-size: 16px;
+            padding: 16px 12px;
+            margin: 12px 0;
+        }
+
+        .difficulty-buttons {
+            gap: 6px;
+            padding: 0 8px;
+        }
+
+        .difficulty-button,
+        .rate-btn {
+            padding: 10px 6px;
+            font-size: 13px;
+            min-height: 44px;
+        }
+
+        .shortcut {
+            font-size: 11px;
+            padding: 1px 4px;
+        }
+    }
+
+    @media (max-width: 480px) {
+        .review-modal {
+            padding: 12px 8px;
+            font-size: 13px;
+        }
+
+        .modal-header h3 {
+            font-size: 16px;
+            text-align: center;
+        }
+
+        .progress-info {
+            font-size: 12px;
+            text-align: center;
+        }
+
+        .card-front,
+        .card-back {
+            font-size: 15px;
+            padding: 12px 8px;
+            margin: 10px 0;
+        }
+
+        .difficulty-buttons {
+            gap: 4px;
+            padding: 0 4px;
+            flex-wrap: wrap;
+        }
+
+        .difficulty-button,
+        .rate-btn {
+            flex: 1;
+            min-width: calc(25% - 3px);
+            padding: 8px 4px;
+            font-size: 12px;
+            min-height: 40px;
+        }
+
+        .shortcut {
+            display: none; /* Hide shortcuts on small screens
+        }
+    }
+
+    @media (max-width: 390px) {
+        .review-modal {
+            padding: 8px 4px;
+            font-size: 12px;
+        }
+
+        .modal-header h3 {
+            font-size: 14px;
+        }
+
+        .progress-info {
+            font-size: 11px;
+        }
+
+        .card-front,
+        .card-back {
+            font-size: 14px;
+            padding: 10px 6px;
+            margin: 8px 0;
+        }
+
+        .difficulty-button,
+        .rate-btn {
+            padding: 6px 2px;
+            font-size: 11px;
+            min-height: 36px;
+        }
+    }
+
     /* Mobile safe area and viewport optimizations */
-    @media screen and (max-height: 600px) {
+    /*@media screen and (max-height: 600px) {
         .review-modal {
             max-height: 90vh;
             overflow-y: auto;
@@ -908,7 +1022,7 @@
         .action-buttons {
             padding-bottom: calc(20px + env(safe-area-inset-bottom));
         }
-    }
+    }*/
 
     /* Mobile keyboard and safe area protection - Blocker #9 */
     .action-buttons {
@@ -919,7 +1033,7 @@
         bottom: 0;
     }
 
-    /* Viewport resize protection */
+    /*
     @media (orientation: landscape) and (max-height: 500px) {
         .action-buttons {
             padding: 8px 16px;
@@ -931,7 +1045,7 @@
             min-height: 40px;
             padding: 8px 4px;
         }
-    }
+    }*/
 
     /* Mobile safe area insets - Blocker #9 */
     .review-modal {
@@ -946,7 +1060,7 @@
     }
 
     /* Additional mobile optimizations */
-    @media (hover: none) and (pointer: coarse) {
+    /*@media (hover: none) and (pointer: coarse) {
         .rate-btn,
         .difficulty-button,
         .show-answer-button {
@@ -955,9 +1069,9 @@
             font-size: 16px !important;
             line-height: 1.2;
         }
-    }
+    }*/
 
-    @media (max-width: 390px) {
+    /*@media (max-width: 390px) {
         .modal-header {
             padding: 12px 16px;
         }
@@ -1018,9 +1132,9 @@
         .difficulty-button .shortcut {
             display: none;
         }
-    }
+    }*/
 
-    @media (max-width: 380px) {
+    /*@media (max-width: 380px) {
         .card-content {
             min-height: 120px;
         }
@@ -1038,5 +1152,5 @@
         .action-buttons {
             padding-bottom: calc(12px + env(safe-area-inset-bottom));
         }
-    }
+    }*/
 </style>

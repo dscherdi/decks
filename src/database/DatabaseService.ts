@@ -10,8 +10,6 @@ import {
   DeckStats,
   Statistics,
   DEFAULT_DECK_CONFIG,
-  hasNewCardsLimit,
-  hasReviewCardsLimit,
 } from "./types";
 import { SQL_QUERIES } from "./schemas";
 import { createTables, migrate, needsMigration } from "./migrations";
@@ -350,35 +348,32 @@ export class DatabaseService {
       };
     }
 
-    // Migration: Add new property names if missing
+    // Migration: Add new boolean limit fields if missing
+    if (config.hasNewCardsLimitEnabled === undefined) {
+      // Convert from old -1/0/positive number system to new boolean system
+      config = {
+        ...config,
+        hasNewCardsLimitEnabled: config.newCardsPerDay >= 0,
+        hasReviewCardsLimitEnabled: config.reviewCardsPerDay >= 0,
+        newCardsPerDay:
+          config.newCardsPerDay >= 0 ? config.newCardsPerDay || 20 : 20,
+        reviewCardsPerDay:
+          config.reviewCardsPerDay >= 0 ? config.reviewCardsPerDay || 100 : 100,
+      };
+    }
+
+    // Migration: Add new property names if missing (very old format)
     if (
       config.newCardsPerDay === undefined &&
       (config as any).newCardsLimit !== undefined
     ) {
       config = {
         ...config,
-        newCardsPerDay: (config as any).enableNewCardsLimit
-          ? (config as any).newCardsLimit
-          : -1, // Use -1 for unlimited (was 0 in old system)
-        reviewCardsPerDay: (config as any).enableReviewCardsLimit
-          ? (config as any).reviewCardsLimit
-          : -1, // Use -1 for unlimited (was 0 in old system)
-      };
-    }
-
-    // Migration: Convert old 0 = unlimited to new -1 = unlimited semantics
-    // Only migrate if it looks like the old default config (both 0, headerLevel 2, due-date order)
-    if (
-      config.newCardsPerDay === 0 &&
-      config.reviewCardsPerDay === 0 &&
-      config.headerLevel === 2 &&
-      config.reviewOrder === "due-date"
-    ) {
-      // This looks like an old unlimited default config, migrate to new semantics
-      config = {
-        ...config,
-        newCardsPerDay: -1,
-        reviewCardsPerDay: -1,
+        hasNewCardsLimitEnabled: (config as any).enableNewCardsLimit || false,
+        newCardsPerDay: (config as any).newCardsLimit || 20,
+        hasReviewCardsLimitEnabled:
+          (config as any).enableReviewCardsLimit || false,
+        reviewCardsPerDay: (config as any).reviewCardsLimit || 100,
       };
     }
 
@@ -826,15 +821,12 @@ export class DatabaseService {
     // 2. Get new cards with remaining daily limit
     const newCardsLimit = config.newCardsPerDay;
     const newCountToday = Number(dailyCounts.newCount) || 0;
-    const remainingNewCards =
-      hasNewCardsLimit(config) && newCardsLimit > 0
-        ? Math.max(0, newCardsLimit - newCountToday)
-        : hasNewCardsLimit(config) && newCardsLimit === 0
-          ? 0
-          : Number.MAX_SAFE_INTEGER;
+    const remainingNewCards = config.hasNewCardsLimitEnabled
+      ? Math.max(0, newCardsLimit - newCountToday)
+      : Number.MAX_SAFE_INTEGER;
 
     if (remainingNewCards > 0) {
-      const sql = `${SQL_QUERIES.GET_NEW_CARDS_FOR_REVIEW}${hasNewCardsLimit(config) ? ` LIMIT ${remainingNewCards}` : ""}`;
+      const sql = `${SQL_QUERIES.GET_NEW_CARDS_FOR_REVIEW}${config.hasNewCardsLimitEnabled ? ` LIMIT ${remainingNewCards}` : ""}`;
       const newCardsStmt = this.db.prepare(sql);
       newCardsStmt.bind([deckId, now]);
       while (newCardsStmt.step()) {
@@ -848,15 +840,12 @@ export class DatabaseService {
     const reviewCardsLimit = config.reviewCardsPerDay;
     const reviewCountToday = Number(dailyCounts.reviewCount) || 0;
     // Calculate remaining review cards based on daily limit
-    const remainingReviewCards =
-      hasReviewCardsLimit(config) && reviewCardsLimit > 0
-        ? Math.max(0, reviewCardsLimit - reviewCountToday)
-        : hasReviewCardsLimit(config) && reviewCardsLimit === 0
-          ? 0
-          : Number.MAX_SAFE_INTEGER;
+    const remainingReviewCards = config.hasReviewCardsLimitEnabled
+      ? Math.max(0, reviewCardsLimit - reviewCountToday)
+      : Number.MAX_SAFE_INTEGER;
 
     if (remainingReviewCards > 0) {
-      const sql = `${SQL_QUERIES.GET_REVIEW_CARDS_FOR_REVIEW}${hasReviewCardsLimit(config) ? ` LIMIT ${remainingReviewCards}` : ""}`;
+      const sql = `${SQL_QUERIES.GET_REVIEW_CARDS_FOR_REVIEW}${config.hasReviewCardsLimitEnabled ? ` LIMIT ${remainingReviewCards}` : ""}`;
       const reviewCardsStmt = this.db.prepare(sql);
       reviewCardsStmt.bind([deckId, now]);
       while (reviewCardsStmt.step()) {
@@ -1126,11 +1115,9 @@ export class DatabaseService {
     let newCount = totalNewCards;
     const newCardsLimit = config.newCardsPerDay;
     const newCountToday = Number(dailyCounts.newCount) || 0;
-    if (hasNewCardsLimit(config) && newCardsLimit > 0) {
+    if (config.hasNewCardsLimitEnabled) {
       const remainingNew = Math.max(0, newCardsLimit - newCountToday);
       newCount = Math.min(totalNewCards, remainingNew);
-    } else if (hasNewCardsLimit(config) && newCardsLimit === 0) {
-      newCount = 0; // No new cards allowed when limit is 0
     }
 
     // No learning cards in pure FSRS
@@ -1147,11 +1134,9 @@ export class DatabaseService {
     let dueCount = totalDueCards;
     const reviewCardsLimit = config.reviewCardsPerDay;
     const reviewCountToday = Number(dailyCounts.reviewCount) || 0;
-    if (hasReviewCardsLimit(config) && reviewCardsLimit > 0) {
+    if (config.hasReviewCardsLimitEnabled) {
       const remainingReview = Math.max(0, reviewCardsLimit - reviewCountToday);
       dueCount = Math.min(totalDueCards, remainingReview);
-    } else if (hasReviewCardsLimit(config) && reviewCardsLimit === 0) {
-      dueCount = 0; // No review cards allowed when limit is 0
     }
 
     // Total count

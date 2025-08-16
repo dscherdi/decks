@@ -4,8 +4,10 @@ export type ReviewOrder = "due-date" | "random";
 
 export interface DeckConfig {
   // Daily limits
-  newCardsPerDay: number; // -1 = unlimited, 0 = no cards, >0 = daily limit
-  reviewCardsPerDay: number; // -1 = unlimited, 0 = no cards, >0 = daily limit
+  hasNewCardsLimitEnabled: boolean; // false = unlimited new cards
+  newCardsPerDay: number; // daily limit when hasNewCardsLimitEnabled is true
+  hasReviewCardsLimitEnabled: boolean; // false = unlimited review cards
+  reviewCardsPerDay: number; // daily limit when hasReviewCardsLimitEnabled is true
 
   // Content parsing
   headerLevel: number; // 1-6, which header level to parse for header-paragraph flashcards
@@ -181,8 +183,10 @@ export interface Statistics {
 }
 
 export const DEFAULT_DECK_CONFIG: DeckConfig = {
-  newCardsPerDay: -1, // -1 = unlimited, 0 = no cards
-  reviewCardsPerDay: -1, // -1 = unlimited, 0 = no cards
+  hasNewCardsLimitEnabled: false, // unlimited by default
+  newCardsPerDay: 20, // default limit when enabled
+  hasReviewCardsLimitEnabled: false, // unlimited by default
+  reviewCardsPerDay: 100, // default limit when enabled
   headerLevel: 2, // Default to H2 headers
   reviewOrder: "due-date",
   fsrs: {
@@ -193,11 +197,11 @@ export const DEFAULT_DECK_CONFIG: DeckConfig = {
 
 // Utility functions for daily limits
 export function hasNewCardsLimit(config: DeckConfig): boolean {
-  return config.newCardsPerDay >= 0;
+  return config.hasNewCardsLimitEnabled;
 }
 
 export function hasReviewCardsLimit(config: DeckConfig): boolean {
-  return config.reviewCardsPerDay >= 0;
+  return config.hasReviewCardsLimitEnabled;
 }
 
 /**

@@ -4,8 +4,6 @@ import {
   Deck,
   ReviewLog,
   ReviewSession,
-  hasNewCardsLimit,
-  hasReviewCardsLimit,
 } from "../database/types";
 import { DatabaseService } from "../database/DatabaseService";
 import {
@@ -48,10 +46,15 @@ export class Scheduler {
   private db: DatabaseService;
   private fsrs: FSRS;
   private currentSessionId: string | null = null;
+  private debugLog: (message: string, ...args: any[]) => void;
 
-  constructor(db: DatabaseService) {
+  constructor(
+    db: DatabaseService,
+    debugLog: (message: string, ...args: any[]) => void = () => {},
+  ) {
     this.db = db;
     this.fsrs = new FSRS();
+    this.debugLog = debugLog;
   }
 
   /**
@@ -61,10 +64,13 @@ export class Scheduler {
     deckId: string,
     now: Date = new Date(),
   ): Promise<string> {
+    this.debugLog(`Starting review session for deck: ${deckId}`);
     const deck = await this.db.getDeckById(deckId);
     if (!deck) {
+      this.debugLog(`Error: Deck not found: ${deckId}`);
       throw new Error(`Deck not found: ${deckId}`);
     }
+    this.debugLog(`Found deck: ${deck.name} (${deck.id})`);
 
     // Calculate goal total more accurately
     const dailyCounts = await this.db.getDailyReviewCounts(deckId);
@@ -76,36 +82,26 @@ export class Scheduler {
     let goalTotal = 0;
 
     // Add due review cards (applying daily limits if configured)
-    if (hasReviewCardsLimit(deck.config)) {
-      if (deck.config.reviewCardsPerDay === 0) {
-        // 0 = no review cards allowed
-        goalTotal += 0;
-      } else {
-        const remainingReviewQuota = Math.max(
-          0,
-          deck.config.reviewCardsPerDay - dailyCounts.reviewCount,
-        );
-        goalTotal += Math.min(dueCardCount, remainingReviewQuota);
-      }
+    if (deck.config.hasReviewCardsLimitEnabled) {
+      const remainingReviewQuota = Math.max(
+        0,
+        deck.config.reviewCardsPerDay - dailyCounts.reviewCount,
+      );
+      goalTotal += Math.min(dueCardCount, remainingReviewQuota);
     } else {
-      // -1 = unlimited
+      // unlimited
       goalTotal += dueCardCount;
     }
 
     // Add new cards (applying daily limits if configured)
-    if (hasNewCardsLimit(deck.config)) {
-      if (deck.config.newCardsPerDay === 0) {
-        // 0 = no new cards allowed
-        goalTotal += 0;
-      } else {
-        const remainingNewQuota = Math.max(
-          0,
-          deck.config.newCardsPerDay - dailyCounts.newCount,
-        );
-        goalTotal += Math.min(newCardCount, remainingNewQuota);
-      }
+    if (deck.config.hasNewCardsLimitEnabled) {
+      const remainingNewQuota = Math.max(
+        0,
+        deck.config.newCardsPerDay - dailyCounts.newCount,
+      );
+      goalTotal += Math.min(newCardCount, remainingNewQuota);
     } else {
-      // -1 = unlimited
+      // unlimited
       goalTotal += newCardCount;
     }
 
@@ -120,6 +116,9 @@ export class Scheduler {
       doneUnique: 0,
     });
 
+    this.debugLog(
+      `Review session created: ${sessionId}, goal: ${finalGoalTotal}`,
+    );
     return sessionId;
   }
 
@@ -191,23 +190,45 @@ export class Scheduler {
   async getNext(
     now: Date,
     deckId: string,
-    options: SchedulerOptions = {},
+    options: { allowNew?: boolean } = {},
   ): Promise<Flashcard | null> {
+    this.debugLog(
+      `Getting next card for deck: ${deckId}, allowNew: ${options.allowNew}`,
+    );
+
     const { allowNew = true } = options;
 
     // First check for due cards with quota
     if (await this.hasReviewCardQuota(deckId)) {
+      this.debugLog(`Checking for due cards for deck: ${deckId}`);
       const dueCard = await this.getNextDueCard(now, deckId);
       if (dueCard) {
+        this.debugLog(`Found due card: ${dueCard.id}`);
         return dueCard;
       }
+      this.debugLog(`No due cards found for deck: ${deckId}`);
+    } else {
+      this.debugLog(`Review card quota exhausted for deck: ${deckId}`);
     }
 
     // If no due cards and new cards allowed, get next new card
+    // Then check for new cards with quota
     if (allowNew && (await this.hasNewCardQuota(deckId))) {
-      return await this.getNextNewCard(deckId);
+      this.debugLog(`Checking for new cards for deck: ${deckId}`);
+      const newCard = await this.getNextNewCard(deckId);
+      if (newCard) {
+        this.debugLog(`Found new card: ${newCard.id}`);
+      } else {
+        this.debugLog(`No new cards found for deck: ${deckId}`);
+      }
+      return newCard;
+    } else if (!allowNew) {
+      this.debugLog(`New cards not allowed for this request`);
+    } else {
+      this.debugLog(`New card quota exhausted for deck: ${deckId}`);
     }
 
+    this.debugLog(`No cards available for deck: ${deckId}`);
     return null;
   }
 
@@ -253,16 +274,22 @@ export class Scheduler {
     now: Date = new Date(),
     timeElapsed?: number,
   ): Promise<Flashcard> {
+    this.debugLog(`Rating card ${cardId} with rating: ${rating}`);
     const card = await this.db.getFlashcardById(cardId);
     if (!card) {
+      this.debugLog(`Error: Card not found: ${cardId}`);
       throw new Error(`Card not found: ${cardId}`);
     }
 
     const deck = await this.db.getDeckById(card.deckId);
     if (!deck) {
+      this.debugLog(`Error: Deck not found: ${card.deckId}`);
       throw new Error(`Deck not found: ${card.deckId}`);
     }
 
+    this.debugLog(
+      `Found card: ${card.front.substring(0, 50)}... in deck: ${deck.name}`,
+    );
     this.updateFSRSForDeck(deck);
 
     // Calculate new card state
@@ -367,9 +394,9 @@ export class Scheduler {
    * Save all pending changes to disk
    */
   async save(): Promise<void> {
-    console.log("Scheduler: Saving database to disk");
+    this.debugLog("Scheduler: Saving database to disk");
     await this.db.save();
-    console.log("Scheduler: Database save completed");
+    this.debugLog("Scheduler: Database save completed");
   }
 
   /**
@@ -380,6 +407,7 @@ export class Scheduler {
     deckId: string,
     limit: number = 10,
   ): Promise<Flashcard[]> {
+    this.debugLog(`Peeking at due cards for deck: ${deckId}, limit: ${limit}`);
     const deck = await this.db.getDeckById(deckId);
     if (!deck) return [];
 
@@ -398,7 +426,9 @@ export class Scheduler {
     }
     params.push(limit.toString());
 
-    return await this.queryFlashcards(query, params);
+    const dueCards = await this.queryFlashcards(query, params);
+    this.debugLog(`Found ${dueCards.length} due cards for deck: ${deckId}`);
+    return dueCards;
   }
 
   /**
@@ -468,9 +498,7 @@ export class Scheduler {
     const deck = await this.db.getDeckById(deckId);
     if (!deck) return false;
 
-    if (!hasNewCardsLimit(deck.config)) return true; // -1 = unlimited
-
-    if (deck.config.newCardsPerDay === 0) return false; // 0 = no cards
+    if (!deck.config.hasNewCardsLimitEnabled) return true; // unlimited
 
     const dailyCounts = await this.db.getDailyReviewCounts(deckId);
     return dailyCounts.newCount < deck.config.newCardsPerDay;
@@ -480,9 +508,7 @@ export class Scheduler {
     const deck = await this.db.getDeckById(deckId);
     if (!deck) return false;
 
-    if (!hasReviewCardsLimit(deck.config)) return true; // -1 = unlimited
-
-    if (deck.config.reviewCardsPerDay === 0) return false; // 0 = no cards
+    if (!deck.config.hasReviewCardsLimitEnabled) return true; // unlimited
 
     const dailyCounts = await this.db.getDailyReviewCounts(deckId);
     return dailyCounts.reviewCount < deck.config.reviewCardsPerDay;

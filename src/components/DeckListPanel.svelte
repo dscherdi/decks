@@ -2,6 +2,7 @@
     import { onMount, onDestroy } from "svelte";
     import { writable } from "svelte/store";
     import type { Deck, DeckStats, DeckConfig } from "../database/types";
+
     import ReviewHeatmap from "./ReviewHeatmap.svelte";
     import { DeckConfigModal } from "./DeckConfigModal";
     import { AnkiExportModal } from "./AnkiExportModal";
@@ -25,7 +26,7 @@
 
     export let onDeckClick: (deck: Deck) => void;
     export let onRefresh: () => void;
-    export let onForceRefreshDeck: (deckFilepath: string) => Promise<void>;
+    export let onForceRefreshDeck: (deckId: string) => Promise<void>;
     export let getReviewCounts: (days: number) => Promise<Map<string, number>>;
     export let onUpdateDeckConfig: (
         deckId: string,
@@ -72,7 +73,7 @@
     async function handleForceRefreshDeck(deck: Deck) {
         isRefreshing = true;
         try {
-            await onForceRefreshDeck(deck.filepath);
+            await onForceRefreshDeck(deck.id);
             refreshHeatmap();
         } catch (error) {
             console.error("Error during deck force refresh:", error);
@@ -549,13 +550,14 @@
                             class="col-stat"
                             class:has-cards={stats.newCount > 0}
                             class:updating={isUpdatingStats}
-                            class:has-limit={deck.config.newCardsPerDay > 0}
-                            title={deck.config.newCardsPerDay > 0
+                            class:has-limit={deck.config
+                                .hasNewCardsLimitEnabled}
+                            title={deck.config.hasNewCardsLimitEnabled
                                 ? `${stats.newCount} new cards available today (limit: ${deck.config.newCardsPerDay})`
                                 : `${stats.newCount} new cards due`}
                         >
                             {stats.newCount}
-                            {#if deck.config.newCardsPerDay > 0}
+                            {#if deck.config.hasNewCardsLimitEnabled}
                                 <span class="limit-indicator">📅</span>
                             {/if}
                         </div>
@@ -571,13 +573,14 @@
                             class="col-stat"
                             class:has-cards={stats.dueCount > 0}
                             class:updating={isUpdatingStats}
-                            class:has-limit={deck.config.reviewCardsPerDay > 0}
-                            title={deck.config.reviewCardsPerDay > 0
+                            class:has-limit={deck.config
+                                .hasReviewCardsLimitEnabled}
+                            title={deck.config.hasReviewCardsLimitEnabled
                                 ? `${stats.dueCount} review cards available today (limit: ${deck.config.reviewCardsPerDay})`
                                 : `${stats.dueCount} review cards due`}
                         >
                             {stats.dueCount}
-                            {#if deck.config.reviewCardsPerDay > 0}
+                            {#if deck.config.hasReviewCardsLimitEnabled}
                                 <span class="limit-indicator">📅</span>
                             {/if}
                         </div>
@@ -1004,8 +1007,35 @@
         }
 
         .filter-input {
-            padding: 0 0 0 2px;
+            padding: 8px 12px;
             font-size: 16px; /* Prevent zoom on iOS */
+            width: 100%;
+            box-sizing: border-box;
+        }
+
+        .filter-section {
+            margin: 0 8px 16px 8px;
+            width: calc(100% - 16px);
+            box-sizing: border-box;
+        }
+
+        .deck-list-panel {
+            padding: 8px;
+        }
+
+        .panel-header {
+            padding: 12px 8px;
+            flex-wrap: wrap;
+            gap: 8px;
+        }
+
+        .header-buttons {
+            gap: 8px;
+        }
+
+        .deck-table {
+            margin: 0 8px;
+            width: calc(100% - 16px);
         }
 
         .table-header {
@@ -1039,7 +1069,7 @@
         }
     }
 
-    @media (max-width: 480px) {
+    /*@media (max-width: 480px) {
         .panel-header {
             padding: 8px 12px;
         }
@@ -1075,7 +1105,61 @@
         }
 
         .filter-input {
-            padding: 0 0 0 2px;
+            padding: 8px 12px;
+            width: 100%;
+            box-sizing: border-box;
+            font-size: 16px; /* Prevent zoom on iOS
+        }
+
+        .filter-section {
+            margin: 0 4px 12px 4px;
+            width: calc(100% - 8px);
+            box-sizing: border-box;
+        }
+
+        .deck-list-panel {
+            padding: 4px;
+        }
+
+        .panel-header {
+            padding: 8px 4px;
+            flex-direction: column;
+            align-items: stretch;
+            gap: 8px;
+        }
+
+        .panel-title {
+            text-align: center;
+            margin-bottom: 8px;
+        }
+
+        .header-buttons {
+            justify-content: center;
+            gap: 12px;
+        }
+
+        .deck-table {
+            margin: 0 4px;
+            width: calc(100% - 8px);
+        }
+
+        .table-header {
+            padding: 4px 8px;
+            font-size: 11px;
+        }
+
+        .deck-row {
+            padding: 8px;
+            gap: 4px;
+        }
+
+        .deck-name-link {
+            font-size: 13px;
+            line-height: 1.3;
+        }
+
+        .col-stat {
+            font-size: 11px;
         }
 
         .suggestions-dropdown {
@@ -1084,7 +1168,7 @@
 
         .suggestion-item {
             padding: 12px;
-            font-size: 16px; /* Touch-friendly */
+            font-size: 16px; /* Touch-friendly
         }
 
         .empty-state {
@@ -1123,8 +1207,77 @@
         }
 
         .filter-input {
-            padding: 0 0 0 2px;
+            padding: 6px 8px;
             font-size: 14px;
+            width: 100%;
+            box-sizing: border-box;
+        }
+
+        .filter-section {
+            margin: 0 2px 8px 2px;
+            width: calc(100% - 4px);
+            box-sizing: border-box;
+        }
+
+        .deck-list-panel {
+            padding: 2px;
+        }
+
+        .panel-header {
+            padding: 6px 2px;
+            flex-direction: column;
+            align-items: stretch;
+            gap: 6px;
+        }
+
+        .panel-title {
+            text-align: center;
+            font-size: 12px;
+            margin-bottom: 4px;
+        }
+
+        .header-buttons {
+            justify-content: center;
+            gap: 8px;
+        }
+
+        .deck-table {
+            margin: 0 2px;
+            width: calc(100% - 4px);
+        }
+
+        .table-header {
+            padding: 2px 4px;
+            font-size: 9px;
+            gap: 2px;
+        }
+
+        .deck-row {
+            padding: 6px 4px;
+            gap: 2px;
+        }
+
+        .deck-name-link {
+            font-size: 12px;
+            line-height: 1.2;
+            word-break: break-word;
+        }
+
+        .col-stat {
+            font-size: 10px;
+        }
+
+        .deck-config-button {
+            padding: 4px;
+            min-height: 32px;
+            min-width: 32px;
+        }
+
+        .stats-button,
+        .refresh-button {
+            padding: 4px;
+            min-height: 32px;
+            min-width: 32px;
         }
 
         .table-header {
@@ -1178,7 +1331,7 @@
         .help-text {
             font-size: 12px;
         }
-    }
+    }*/
 
     /* Dropdown styles */
     :global(.deck-config-dropdown) {

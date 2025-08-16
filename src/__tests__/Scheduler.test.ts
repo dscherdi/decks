@@ -18,7 +18,7 @@ describe("Scheduler", () => {
       {} as any,
       jest.fn(),
     ) as jest.Mocked<DatabaseService>;
-    scheduler = new Scheduler(mockDb);
+    scheduler = new Scheduler(mockDb, jest.fn());
 
     // Add default mock methods for ReviewSession functionality
     mockDb.createReviewSession = jest.fn().mockResolvedValue("session_123");
@@ -67,8 +67,10 @@ describe("Scheduler", () => {
         tag: "#test",
         lastReviewed: null,
         config: {
-          newCardsPerDay: -1, // -1 = unlimited
-          reviewCardsPerDay: -1, // -1 = unlimited
+          hasNewCardsLimitEnabled: false, // unlimited
+          newCardsPerDay: 20,
+          hasReviewCardsLimitEnabled: false, // unlimited
+          reviewCardsPerDay: 100,
           reviewOrder: "due-date",
           headerLevel: 2,
           fsrs: {
@@ -126,8 +128,10 @@ describe("Scheduler", () => {
         tag: "#test",
         lastReviewed: null,
         config: {
-          newCardsPerDay: -1, // -1 = unlimited
-          reviewCardsPerDay: -1, // -1 = unlimited
+          hasNewCardsLimitEnabled: false, // unlimited
+          newCardsPerDay: 20,
+          hasReviewCardsLimitEnabled: false, // unlimited
+          reviewCardsPerDay: 100,
           reviewOrder: "due-date",
           headerLevel: 2,
           fsrs: {
@@ -211,7 +215,9 @@ describe("Scheduler", () => {
         tag: "#test",
         lastReviewed: null,
         config: {
+          hasNewCardsLimitEnabled: true,
           newCardsPerDay: 0, // 0 = no new cards
+          hasReviewCardsLimitEnabled: true,
           reviewCardsPerDay: 0, // 0 = no review cards
           reviewOrder: "due-date",
           headerLevel: 2,
@@ -274,8 +280,10 @@ describe("Scheduler", () => {
         tag: "#test",
         lastReviewed: null,
         config: {
-          newCardsPerDay: -1, // -1 = unlimited
-          reviewCardsPerDay: -1, // -1 = unlimited
+          hasNewCardsLimitEnabled: false, // unlimited
+          newCardsPerDay: 20,
+          hasReviewCardsLimitEnabled: false, // unlimited
+          reviewCardsPerDay: 100,
           reviewOrder: "due-date",
           headerLevel: 2,
           fsrs: {
@@ -347,8 +355,10 @@ describe("Scheduler", () => {
         tag: "#test",
         lastReviewed: null,
         config: {
-          newCardsPerDay: -1, // -1 = unlimited
-          reviewCardsPerDay: -1, // -1 = unlimited
+          hasNewCardsLimitEnabled: false, // unlimited
+          newCardsPerDay: 20,
+          hasReviewCardsLimitEnabled: false, // unlimited
+          reviewCardsPerDay: 100,
           reviewOrder: "due-date",
           headerLevel: 2,
           fsrs: {
@@ -431,8 +441,10 @@ describe("Scheduler", () => {
           tag: "test",
           lastReviewed: null,
           config: {
-            newCardsPerDay: -1, // -1 = unlimited
-            reviewCardsPerDay: -1, // -1 = unlimited
+            hasNewCardsLimitEnabled: false, // unlimited
+            newCardsPerDay: 20,
+            hasReviewCardsLimitEnabled: false, // unlimited
+            reviewCardsPerDay: 100,
             headerLevel: 2,
             reviewOrder: "due-date",
             fsrs: { requestRetention: 0.9, profile: "STANDARD" },
@@ -489,8 +501,10 @@ describe("Scheduler", () => {
           tag: "test",
           lastReviewed: null,
           config: {
-            newCardsPerDay: -1, // -1 = unlimited
-            reviewCardsPerDay: -1, // -1 = unlimited
+            hasNewCardsLimitEnabled: false, // unlimited
+            newCardsPerDay: 20,
+            hasReviewCardsLimitEnabled: false, // unlimited
+            reviewCardsPerDay: 100,
             headerLevel: 2,
             reviewOrder: "due-date",
             fsrs: { requestRetention: 0.9, profile: "STANDARD" },
@@ -530,8 +544,10 @@ describe("Scheduler", () => {
           tag: "test",
           lastReviewed: null,
           config: {
-            newCardsPerDay: -1, // -1 = unlimited
-            reviewCardsPerDay: -1, // -1 = unlimited
+            hasNewCardsLimitEnabled: false, // unlimited
+            newCardsPerDay: 20,
+            hasReviewCardsLimitEnabled: false, // unlimited
+            reviewCardsPerDay: 100,
             headerLevel: 2,
             reviewOrder: "due-date",
             fsrs: { requestRetention: 0.9, profile: "STANDARD" },
@@ -588,8 +604,10 @@ describe("Scheduler", () => {
         tag: "#test",
         lastReviewed: null,
         config: {
+          hasNewCardsLimitEnabled: true,
           newCardsPerDay: 2,
-          reviewCardsPerDay: -1, // -1 = unlimited
+          hasReviewCardsLimitEnabled: false, // unlimited
+          reviewCardsPerDay: 100,
           reviewOrder: "due-date",
           headerLevel: 2,
           fsrs: {
@@ -626,7 +644,9 @@ describe("Scheduler", () => {
         tag: "#test",
         lastReviewed: null,
         config: {
-          newCardsPerDay: -1, // -1 = unlimited
+          hasNewCardsLimitEnabled: false, // unlimited
+          newCardsPerDay: 20,
+          hasReviewCardsLimitEnabled: true,
           reviewCardsPerDay: 1,
           reviewOrder: "due-date",
           headerLevel: 2,
@@ -663,8 +683,10 @@ describe("Scheduler", () => {
         tag: "#test",
         lastReviewed: null,
         config: {
-          newCardsPerDay: -1, // -1 = unlimited
-          reviewCardsPerDay: -1, // -1 = unlimited
+          hasNewCardsLimitEnabled: false, // unlimited
+          newCardsPerDay: 20,
+          hasReviewCardsLimitEnabled: false, // unlimited
+          reviewCardsPerDay: 100,
           reviewOrder: "random",
           headerLevel: 2,
           fsrs: {
@@ -743,8 +765,10 @@ describe("Scheduler", () => {
         tag: "#test",
         lastReviewed: null,
         config: {
-          newCardsPerDay: -1, // -1 = unlimited
-          reviewCardsPerDay: -1, // -1 = unlimited
+          hasNewCardsLimitEnabled: false, // unlimited
+          newCardsPerDay: 20,
+          hasReviewCardsLimitEnabled: false, // unlimited
+          reviewCardsPerDay: 100,
           reviewOrder: "due-date",
           headerLevel: 2,
           fsrs: {
@@ -775,7 +799,9 @@ describe("Scheduler", () => {
         tag: "#test",
         lastReviewed: null,
         config: {
+          hasNewCardsLimitEnabled: true,
           newCardsPerDay: 1,
+          hasReviewCardsLimitEnabled: true,
           reviewCardsPerDay: 1,
           reviewOrder: "due-date",
           headerLevel: 2,
@@ -862,8 +888,10 @@ describe("Scheduler", () => {
         tag: "#no",
         lastReviewed: null,
         config: {
-          newCardsPerDay: 0, // 0 = no cards
-          reviewCardsPerDay: 0, // 0 = no cards
+          hasNewCardsLimitEnabled: true,
+          newCardsPerDay: 0, // 0 = no new cards
+          hasReviewCardsLimitEnabled: true,
+          reviewCardsPerDay: 0, // 0 = no review cards
           reviewOrder: "due-date",
           headerLevel: 2,
           fsrs: {
@@ -883,8 +911,10 @@ describe("Scheduler", () => {
         tag: "#unlimited",
         lastReviewed: null,
         config: {
-          newCardsPerDay: -1, // -1 = unlimited
-          reviewCardsPerDay: -1, // -1 = unlimited
+          hasNewCardsLimitEnabled: false, // unlimited
+          newCardsPerDay: 20,
+          hasReviewCardsLimitEnabled: false, // unlimited
+          reviewCardsPerDay: 100,
           reviewOrder: "due-date",
           headerLevel: 2,
           fsrs: {
@@ -989,8 +1019,10 @@ describe("Scheduler", () => {
         tag: "test",
         lastReviewed: null,
         config: {
-          newCardsPerDay: -1,
-          reviewCardsPerDay: -1,
+          hasNewCardsLimitEnabled: false,
+          newCardsPerDay: 20,
+          hasReviewCardsLimitEnabled: false,
+          reviewCardsPerDay: 100,
           headerLevel: 2,
           reviewOrder: "due-date",
           fsrs: { requestRetention: 0.9, profile: "STANDARD" },
@@ -1046,8 +1078,10 @@ describe("Scheduler", () => {
         tag: "test",
         lastReviewed: null,
         config: {
-          newCardsPerDay: -1,
-          reviewCardsPerDay: -1,
+          hasNewCardsLimitEnabled: false,
+          newCardsPerDay: 20,
+          hasReviewCardsLimitEnabled: false,
+          reviewCardsPerDay: 100,
           headerLevel: 2,
           reviewOrder: "due-date",
           fsrs: { requestRetention: 0.9, profile: "STANDARD" },
@@ -1091,8 +1125,10 @@ describe("Scheduler", () => {
         tag: "test",
         lastReviewed: null,
         config: {
-          newCardsPerDay: -1,
-          reviewCardsPerDay: -1,
+          hasNewCardsLimitEnabled: false,
+          newCardsPerDay: 20,
+          hasReviewCardsLimitEnabled: false,
+          reviewCardsPerDay: 100,
           headerLevel: 2,
           reviewOrder: "due-date",
           fsrs: { requestRetention: 0.9, profile: "STANDARD" },

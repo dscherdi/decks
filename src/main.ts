@@ -222,7 +222,7 @@ export default class DecksPlugin extends Plugin {
       );
 
       // Initialize scheduler
-      this.scheduler = new Scheduler(this.db);
+      this.scheduler = new Scheduler(this.db, this.debugLog.bind(this));
 
       // Register the side panel view
       this.registerView(
@@ -231,6 +231,7 @@ export default class DecksPlugin extends Plugin {
           new DecksView(
             this,
             leaf,
+            this.db,
             this.deckSynchronizer,
             this.scheduler,
             this.settings,
@@ -732,6 +733,7 @@ export default class DecksPlugin extends Plugin {
 
 class DecksView extends ItemView {
   private plugin: DecksPlugin;
+  private db: DatabaseService;
   private deckSynchronizer: DeckSynchronizer;
   private scheduler: Scheduler;
   private settings: FlashcardsSettings;
@@ -768,6 +770,7 @@ class DecksView extends ItemView {
   constructor(
     plugin: DecksPlugin,
     leaf: WorkspaceLeaf,
+    database: DatabaseService,
     deckSynchronizer: DeckSynchronizer,
     scheduler: Scheduler,
     settings: FlashcardsSettings,
@@ -793,6 +796,7 @@ class DecksView extends ItemView {
   ) {
     super(leaf);
     this.plugin = plugin;
+    this.db = database;
     this.deckSynchronizer = deckSynchronizer;
     this.scheduler = scheduler;
     this.settings = settings;
@@ -839,34 +843,28 @@ class DecksView extends ItemView {
           this.debugLog("onRefresh callback invoked");
           await this.refresh(false);
         },
-        onForceRefreshDeck: async (deckFilepath: string) => {
+        onForceRefreshDeck: async (deckId: string) => {
           this.debugLog(
             "onForceRefreshDeck callback invoked for deck:",
-            deckFilepath,
+            deckId,
           );
 
-          // Show progress notice for single deck refresh
-          const deckDisplayName =
-            deckFilepath.split("/").pop()?.replace(".md", "") || deckFilepath;
+          // Get deck to extract display name
+          const deck = await this.db.getDeckById(deckId);
+          const deckDisplayName = deck ? deck.name : deckId;
+
           this.plugin.showProgressNotice(
             `🔄 Force refreshing deck: ${deckDisplayName}...`,
           );
 
           try {
-            await this.deckSynchronizer.syncDeck(
-              deckFilepath,
-              true,
-              (progress) => {
-                this.plugin.updateProgress(
-                  progress.message,
-                  progress.percentage,
-                );
+            await this.deckSynchronizer.syncDeck(deckId, true, (progress) => {
+              this.plugin.updateProgress(progress.message, progress.percentage);
 
-                if (progress.percentage === 100) {
-                  setTimeout(() => this.plugin.hideProgressNotice(), 2000);
-                }
-              },
-            );
+              if (progress.percentage === 100) {
+                setTimeout(() => this.plugin.hideProgressNotice(), 2000);
+              }
+            });
 
             // Refresh stats after force refresh
             await this.refreshStats();
@@ -1036,7 +1034,7 @@ class DecksView extends ItemView {
       // First sync flashcards for this specific deck
       this.debugLog(`Syncing cards for deck before review: ${deck.name}`);
       await this.syncFlashcardsForDeck(deck.id);
-
+      await yieldToUI();
       // Get daily review counts to show remaining allowance
       const dailyCounts = await this.getDailyReviewCounts(deck.id);
 

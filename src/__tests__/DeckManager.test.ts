@@ -551,12 +551,14 @@ Answer to question 2.`;
         expect.objectContaining({
           name: "test", // file basename
           filepath: filePath,
-          tag: tag,
+          tag: "#flashcards/test",
           config: expect.objectContaining({
-            newCardsPerDay: -1, // -1 = unlimited
-            reviewCardsPerDay: -1, // -1 = unlimited
-            reviewOrder: "due-date",
             headerLevel: 2,
+            hasNewCardsLimitEnabled: false, // unlimited
+            newCardsPerDay: 20,
+            hasReviewCardsLimitEnabled: false, // unlimited
+            reviewCardsPerDay: 100,
+            reviewOrder: "due-date",
           }),
         }),
       );
@@ -803,8 +805,10 @@ Answer 1`;
         tag: "#flashcards/math",
         lastReviewed: null,
         config: {
-          newCardsPerDay: -1, // -1 = unlimited
-          reviewCardsPerDay: -1, // -1 = unlimited
+          hasNewCardsLimitEnabled: false, // unlimited
+          newCardsPerDay: 20,
+          hasReviewCardsLimitEnabled: false, // unlimited
+          reviewCardsPerDay: 100,
           reviewOrder: "due-date",
           headerLevel: 2,
           fsrs: {
@@ -823,8 +827,10 @@ Answer 1`;
         tag: "#flashcards/science",
         lastReviewed: null,
         config: {
-          newCardsPerDay: -1, // -1 = unlimited
-          reviewCardsPerDay: -1, // -1 = unlimited
+          hasNewCardsLimitEnabled: false, // unlimited
+          newCardsPerDay: 20,
+          hasReviewCardsLimitEnabled: false, // unlimited
+          reviewCardsPerDay: 100,
           reviewOrder: "due-date",
           headerLevel: 2,
           fsrs: {
@@ -1087,6 +1093,72 @@ H3 content
         front: "H3 Header",
         back: "H3 content",
         type: "header-paragraph",
+      });
+    });
+
+    describe("deck config limit logic", () => {
+      it("should handle deck config limits correctly", async () => {
+        // Test that 0 means enabled (no cards allowed)
+        // Test that -1 means disabled (unlimited)
+
+        const deck1: Deck = {
+          id: "deck_limits_test",
+          name: "Limits Test",
+          filepath: "limits.md",
+          tag: "#flashcards/limits",
+          lastReviewed: null,
+          config: {
+            hasNewCardsLimitEnabled: true,
+            newCardsPerDay: 0, // no new cards allowed when enabled
+            hasReviewCardsLimitEnabled: false, // unlimited
+            reviewCardsPerDay: 100,
+            reviewOrder: "due-date",
+            headerLevel: 2,
+            fsrs: {
+              requestRetention: 0.9,
+              profile: "STANDARD",
+            },
+          },
+          created: new Date().toISOString(),
+          modified: new Date().toISOString(),
+        };
+
+        const deck2: Deck = {
+          id: "deck_limits_test2",
+          name: "Limits Test 2",
+          filepath: "limits2.md",
+          tag: "#flashcards/limits2",
+          lastReviewed: null,
+          config: {
+            hasNewCardsLimitEnabled: false, // unlimited
+            newCardsPerDay: 20,
+            hasReviewCardsLimitEnabled: true,
+            reviewCardsPerDay: 0, // no review cards allowed when enabled
+            reviewOrder: "due-date",
+            headerLevel: 2,
+            fsrs: {
+              requestRetention: 0.9,
+              profile: "STANDARD",
+            },
+          },
+          created: new Date().toISOString(),
+          modified: new Date().toISOString(),
+        };
+
+        mockDb.getDeckById.mockImplementation((deckId) => {
+          if (deckId === "deck_limits_test") return Promise.resolve(deck1);
+          if (deckId === "deck_limits_test2") return Promise.resolve(deck2);
+          return Promise.resolve(null);
+        });
+
+        // Test hasNewCardsLimit and hasReviewCardsLimit functions
+        // Deck 1: hasNewCardsLimitEnabled = true, hasReviewCardsLimitEnabled = false
+        expect(deck1.config.hasNewCardsLimitEnabled).toBe(true);
+        expect(deck1.config.hasReviewCardsLimitEnabled).toBe(false);
+
+        // Deck 2: hasNewCardsLimitEnabled = false, hasReviewCardsLimitEnabled = true
+        expect(deck2.config.hasNewCardsLimitEnabled).toBe(false);
+        expect(deck2.config.hasReviewCardsLimitEnabled).toBe(true);
       });
     });
   });

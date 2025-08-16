@@ -1,7 +1,7 @@
 import { Database } from "sql.js";
 
 // Current Schema Version
-export const CURRENT_SCHEMA_VERSION = 4;
+export const CURRENT_SCHEMA_VERSION = 5;
 
 // SQL Table Creation Schema - Used when database file doesn't exist
 export const CREATE_TABLES_SQL = `
@@ -15,7 +15,7 @@ export const CREATE_TABLES_SQL = `
     filepath TEXT NOT NULL UNIQUE,
     tag TEXT NOT NULL,
     last_reviewed TEXT,
-    config TEXT NOT NULL DEFAULT '{"newCardsPerDay":0,"reviewCardsPerDay":0,"headerLevel":2,"reviewOrder":"due-date","fsrs":{"requestRetention":0.9,"profile":"STANDARD"}}',
+    config TEXT NOT NULL DEFAULT '{"hasNewCardsLimitEnabled":false,"newCardsPerDay":20,"hasReviewCardsLimitEnabled":false,"reviewCardsPerDay":100,"headerLevel":2,"reviewOrder":"due-date","fsrs":{"requestRetention":0.9,"profile":"STANDARD"}}',
     created TEXT NOT NULL,
     modified TEXT NOT NULL
   );
@@ -140,7 +140,7 @@ export function buildMigrationSQL(db: Database): string {
     "last_reviewed",
     decksColumns.includes("config")
       ? "config"
-      : `'{"newCardsPerDay":0,"reviewCardsPerDay":0,"headerLevel":2,"reviewOrder":"due-date","fsrs":{"requestRetention":0.9,"profile":"STANDARD"}}' as config`,
+      : `'{"hasNewCardsLimitEnabled":false,"newCardsPerDay":20,"hasReviewCardsLimitEnabled":false,"reviewCardsPerDay":100,"headerLevel":2,"reviewOrder":"due-date","fsrs":{"requestRetention":0.9,"profile":"STANDARD"}}' as config`,
     decksColumns.includes("created") ? "created" : `datetime('now') as created`,
     decksColumns.includes("modified")
       ? "modified"
@@ -293,7 +293,7 @@ export function buildMigrationSQL(db: Database): string {
       filepath TEXT NOT NULL UNIQUE,
       tag TEXT NOT NULL,
       last_reviewed TEXT,
-      config TEXT NOT NULL DEFAULT '{"newCardsPerDay":0,"reviewCardsPerDay":0,"headerLevel":2,"reviewOrder":"due-date","fsrs":{"requestRetention":0.9,"profile":"STANDARD"}}',
+      config TEXT NOT NULL DEFAULT '{"hasNewCardsLimitEnabled":false,"newCardsPerDay":20,"hasReviewCardsLimitEnabled":false,"reviewCardsPerDay":100,"headerLevel":2,"reviewOrder":"due-date","fsrs":{"requestRetention":0.9,"profile":"STANDARD"}}',
       created TEXT NOT NULL,
       modified TEXT NOT NULL
     );

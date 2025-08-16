@@ -428,12 +428,29 @@
     .workspace-leaf-content[data-type="decks-view"] {
         width: 100% !important;
         max-width: 100vw;
+        padding: 0;
     }
 
     .workspace-leaf-content[data-type="decks-view"] .view-content {
         width: 100% !important;
         max-width: 100vw;
-        padding: 0;
+        padding: 0 8px;
+        box-sizing: border-box;
+    }
+
+    /* Better touch targets */
+    .decks-view button,
+    .deck-list-panel button,
+    .review-modal button {
+        min-height: 44px;
+        min-width: 44px;
+        padding: 8px 12px;
+    }
+
+    /* Improve text readability */
+    .decks-view {
+        font-size: 14px;
+        line-height: 1.4;
     }
 
     /* Review modal mobile styles */
@@ -446,15 +463,16 @@
     .deck-review-modal .modal,
     .deck-review-modal-mobile {
         width: calc(100vw - 40px);
-        height: calc(100vh - 40px);
+        height: calc(100vh - 80px);
         max-width: calc(100vw - 40px);
-        max-height: calc(100vh - 40px);
+        max-height: calc(100vh - 80px);
         border-radius: 8px;
         margin: 20px;
-        top: 20px;
+        top: 40px;
         left: 20px;
         transform: none;
         position: fixed;
+        box-shadow: 0 6px 15px rgba(0, 0, 0, 0.2);
     }
 
     /* Statistics modal mobile styles */
@@ -466,24 +484,26 @@
         max-height: calc(100vh - 80px);
         border-radius: 8px;
         margin: 20px;
-        top: 20px;
+        top: 40px;
         left: 20px;
         transform: none;
         position: fixed;
+        box-shadow: 0 6px 15px rgba(0, 0, 0, 0.2);
     }
 
     /* Deck config modal mobile styles */
     .deck-config-modal-mobile {
         width: calc(100vw - 40px);
-        height: calc(100vh - 40px);
+        height: calc(100vh - 80px);
         max-width: calc(100vw - 40px);
-        max-height: calc(100vh - 40px);
+        max-height: calc(100vh - 80px);
         border-radius: 8px;
         margin: 20px;
-        top: 20px;
+        top: 40px;
         left: 20px;
         transform: none;
         position: fixed;
+        box-shadow: 0 6px 15px rgba(0, 0, 0, 0.2);
     }
 
     .statistics-modal-title {
@@ -498,18 +518,111 @@
 }
 
 @media (max-width: 480px) {
-    /* Extra small screens */
+    /* Extra small screens - optimized spacing */
+    .workspace-leaf-content[data-type="decks-view"] .view-content {
+        padding: 0 4px;
+    }
+
+    /* Smaller modal spacing */
+    .deck-review-modal .modal,
+    .deck-review-modal-mobile {
+        width: calc(100vw - 16px);
+        height: calc(100vh - 80px);
+        max-width: calc(100vw - 16px);
+        max-height: calc(100vh - 80px);
+        margin: 8px;
+        top: 40px;
+        left: 8px;
+    }
+
+    .statistics-modal .modal,
+    .statistics-modal-mobile {
+        width: calc(100vw - 16px);
+        height: calc(100vh - 80px);
+        max-width: calc(100vw - 16px);
+        max-height: calc(100vh - 80px);
+        margin: 8px;
+        top: 40px;
+        left: 8px;
+    }
+
+    .deck-config-modal-mobile {
+        width: calc(100vw - 16px);
+        height: calc(100vh - 80px);
+        max-width: calc(100vw - 16px);
+        max-height: calc(100vh - 80px);
+        margin: 8px;
+        top: 40px;
+        left: 8px;
+    }
+
     .statistics-modal-title {
-        padding: 0 12px;
-        font-size: 16px;
+        padding: 0 8px;
+        font-size: 14px;
     }
 
     .statistics-modal-component-container {
-        height: calc(100vh - 50px);
+        height: calc(100vh - 70px);
+        padding: 0 4px;
+    }
+
+    /* Smaller touch targets for small screens */
+    .decks-view button,
+    .deck-list-panel button {
+        min-height: 40px;
+        min-width: 40px;
+        padding: 6px 8px;
+        font-size: 12px;
+    }
+
+    /* Compact text */
+    .decks-view {
+        font-size: 12px;
+        line-height: 1.3;
     }
 }
 
 @media (max-width: 390px) {
+    /* Very small screens - ultra compact */
+    .workspace-leaf-content[data-type="decks-view"] .view-content {
+        padding: 0 2px;
+    }
+
+    /* Ultra compact modals */
+    .deck-review-modal .modal,
+    .deck-review-modal-mobile,
+    .statistics-modal .modal,
+    .statistics-modal-mobile,
+    .deck-config-modal-mobile {
+        width: calc(100vw - 8px);
+        height: calc(100vh - 60px);
+        max-width: calc(100vw - 8px);
+        max-height: calc(100vh - 60px);
+        margin: 4px;
+        top: 30px;
+        left: 4px;
+    }
+
+    .statistics-modal-title {
+        padding: 0 4px;
+        font-size: 12px;
+    }
+
+    /* Very small touch targets */
+    .decks-view button,
+    .deck-list-panel button {
+        min-height: 36px;
+        min-width: 36px;
+        padding: 4px 6px;
+        font-size: 11px;
+    }
+
+    /* Ultra compact text */
+    .decks-view {
+        font-size: 11px;
+        line-height: 1.2;
+    }
+}
     /* iPhone 12 Pro and similar width phones */
     .decks-view {
         width: 100% !important;
@@ -583,8 +696,42 @@
     }
 }
 
-/* Very small screens (320px and below) */
+/* Ultra small screens (320px and below) */
 @media (max-width: 320px) {
+    /* Minimal padding for ultra small screens */
+    .workspace-leaf-content[data-type="decks-view"] .view-content {
+        padding: 0 1px;
+    }
+
+    /* Minimal modals */
+    .deck-review-modal .modal,
+    .deck-review-modal-mobile,
+    .statistics-modal .modal,
+    .statistics-modal-mobile,
+    .deck-config-modal-mobile {
+        width: calc(100vw - 4px);
+        height: calc(100vh - 40px);
+        max-width: calc(100vw - 4px);
+        max-height: calc(100vh - 40px);
+        margin: 2px;
+        top: 20px;
+        left: 2px;
+    }
+
+    /* Minimal touch targets */
+    .decks-view button,
+    .deck-list-panel button {
+        min-height: 32px;
+        min-width: 32px;
+        padding: 2px 4px;
+        font-size: 10px;
+    }
+
+    /* Minimal text */
+    .decks-view {
+        font-size: 10px;
+        line-height: 1.1;
+    }
     .deck-review-modal {
         margin: 8px;
         height: calc(100vh - 16px);

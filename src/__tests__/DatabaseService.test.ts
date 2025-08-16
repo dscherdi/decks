@@ -97,7 +97,9 @@ describe("DatabaseService", () => {
           tag: "#flashcards/test",
           lastReviewed: null,
           config: {
+            hasNewCardsLimitEnabled: false,
             newCardsPerDay: 20,
+            hasReviewCardsLimitEnabled: false,
             reviewCardsPerDay: 100,
             headerLevel: 2,
             reviewOrder: "due-date",
@@ -165,12 +167,14 @@ describe("DatabaseService", () => {
         const updates = {
           name: "Updated Deck Name",
           config: {
-            newCardsPerDay: 25,
-            reviewCardsPerDay: 150,
-            headerLevel: 3,
+            hasNewCardsLimitEnabled: false,
+            newCardsPerDay: 50,
+            hasReviewCardsLimitEnabled: false,
+            reviewCardsPerDay: 200,
+            headerLevel: 2,
             reviewOrder: "random" as const,
             fsrs: {
-              requestRetention: 0.95,
+              requestRetention: 0.8,
               profile: "INTENSIVE" as const,
             },
           },
