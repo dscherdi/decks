@@ -8,6 +8,7 @@
         SchedulingPreview,
         SessionProgress,
     } from "../services/Scheduler";
+    import { yieldToUI } from "@/utils/ui";
 
     export let deck: Deck;
     export let initialCard: Flashcard | null = null;
@@ -126,12 +127,14 @@
             // Trigger stats refresh after each card review
             if (onCardReviewed) {
                 await onCardReviewed(currentCard);
+                await yieldToUI();
             }
 
             // Get the next card from the scheduler
             currentCard = await scheduler.getNext(new Date(), deck.id, {
                 allowNew: true,
             });
+            await yieldToUI();
 
             if (currentCard) {
                 await loadCard();
@@ -209,12 +212,11 @@
         }
     }
 
-    // Mobile-optimized pointer events - eliminates 300ms delay and ghost clicks
-    function rate(v: 1 | 2 | 3 | 4) {
-        if (v === 1) handleReview("again");
-        else if (v === 2) handleReview("hard");
-        else if (v === 3) handleReview("good");
-        else if (v === 4) handleReview("easy");
+    async function rate(v: 1 | 2 | 3 | 4) {
+        if (v === 1) await handleReview("again");
+        else if (v === 2) await handleReview("hard");
+        else if (v === 3) await handleReview("good");
+        else if (v === 4) await handleReview("easy");
     }
 
     const onShowAnswer = (e: PointerEvent) => {
@@ -228,29 +230,12 @@
         revealAnswer();
     };
 
-    // Enhanced mobile event binding with diagnostics
-    function bindRate(node: HTMLElement, value: 1 | 2 | 3 | 4) {
-        const h = (e: PointerEvent) => {
-            e.preventDefault();
-            console.log("Direct binding event:", e.type, "value:", value);
-            rate(value);
-        };
-        node.addEventListener("pointerup", h, { passive: false });
-        node.style.touchAction = "manipulation";
-
-        // Diagnostic event listeners
-        ["pointerdown", "pointerup", "click", "touchend"].forEach((t) =>
-            node.addEventListener(t, (e) =>
-                console.log("evt", t, (e as PointerEvent).pointerType),
-            ),
-        );
-
-        return {
-            destroy() {
-                node.removeEventListener("pointerup", h);
-            },
-        };
-    }
+    const onRating = async (e: PointerEvent, v: 1 | 2 | 3 | 4) => {
+        e.preventDefault();
+        console.log("Pointer event:", e.type, "value:", v);
+        await rate(v);
+        await yieldToUI();
+    };
 
     onDestroy(async () => {
         // Clean up keydown event listener
@@ -325,9 +310,10 @@
             {#if showAnswer && schedulingInfo}
                 <div class="difficulty-buttons">
                     <button
-                        use:bindRate={1}
                         class="difficulty-button again rate-btn"
                         disabled={isLoading}
+                        on:pointerup={async (e) => await onRating(e, 1)}
+                        style="touch-action: manipulation;"
                         type="button"
                     >
                         <div class="button-label">Again</div>
@@ -338,8 +324,9 @@
                     </button>
 
                     <button
-                        use:bindRate={2}
                         class="difficulty-button hard rate-btn"
+                        on:pointerup={async (e) => await onRating(e, 2)}
+                        style="touch-action: manipulation;"
                         disabled={isLoading}
                         type="button"
                     >
@@ -351,8 +338,8 @@
                     </button>
 
                     <button
-                        use:bindRate={3}
                         class="difficulty-button good rate-btn"
+                        on:pointerup={async (e) => await onRating(e, 3)}
                         disabled={isLoading}
                         type="button"
                     >
@@ -364,8 +351,8 @@
                     </button>
 
                     <button
-                        use:bindRate={4}
                         class="difficulty-button easy rate-btn"
+                        on:pointerup={async (e) => await onRating(e, 4)}
                         disabled={isLoading}
                         type="button"
                     >
@@ -730,7 +717,17 @@
     }
 
     /* Mobile responsive styles */
-    /*@media (max-width: 768px) {
+    @media (max-width: 768px) {
+        .review-modal {
+            padding-bottom: env(safe-area-inset-bottom);
+            padding-left: env(safe-area-inset-left);
+            padding-right: env(safe-area-inset-right);
+            padding-top: env(safe-area-inset-top);
+            box-sizing: border-box;
+            /*width: 90vw;*/
+            /*height: 90vh;*/
+            overflow-x: hidden;
+        }
         .modal-header {
             padding: 12px 16px;
         }
@@ -784,7 +781,7 @@
         .interval {
             font-size: 11px;
         }
-    }*/
+    }
 
     /*@media (max-width: 500px) {
         .modal-header {
@@ -1054,8 +1051,8 @@
         padding-right: env(safe-area-inset-right);
         padding-top: env(safe-area-inset-top);
         box-sizing: border-box;
-        max-width: 100vw;
-        max-height: 100vh;
+        /*max-width: 100vw;*/
+        /*max-height: 100vh;*/
         overflow-x: hidden;
     }
 

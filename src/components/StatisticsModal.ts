@@ -19,12 +19,8 @@ export class StatisticsModal extends Modal {
     const modalEl = this.containerEl.querySelector(".modal");
     if (modalEl instanceof HTMLElement) {
       modalEl.addClass("statistics-modal");
-
-      // Add mobile-specific classes
-      if (window.innerWidth <= 768) {
-        modalEl.addClass("statistics-modal-mobile");
-      }
     }
+
     this.containerEl.addClass("statistics-modal-container");
     contentEl.addClass("statistics-modal-content");
 

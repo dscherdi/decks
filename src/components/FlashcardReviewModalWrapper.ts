@@ -59,8 +59,8 @@ export class FlashcardReviewModalWrapper extends Modal {
 
     // Add mobile-specific classes
     const modalEl = this.containerEl.querySelector(".modal");
-    if (modalEl instanceof HTMLElement && window.innerWidth <= 768) {
-      modalEl.addClass("deck-review-modal-mobile");
+    if (modalEl instanceof HTMLElement) {
+      modalEl.addClass("deck-review-modal");
     }
 
     // Create container for Svelte component

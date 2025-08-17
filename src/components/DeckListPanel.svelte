@@ -436,201 +436,207 @@
         </div>
     </div>
 
-    <div class="filter-section">
-        <div class="filter-container">
-            <input
-                type="text"
-                class="filter-input"
-                placeholder="Filter by name or tag... (e.g., 'spanish', '#flashcards')"
-                bind:value={filterText}
-                on:input={handleFilterInput}
-                on:focus={handleFilterFocus}
-                on:blur={handleFilterBlur}
-            />
-            {#if showSuggestions && filteredSuggestions.length > 0}
-                <div class="suggestions-dropdown">
-                    <div class="suggestions-header">Available tags:</div>
-                    {#each filteredSuggestions as tag}
-                        <button
-                            class="suggestion-item"
-                            on:mousedown|preventDefault={() =>
-                                selectSuggestion(tag)}
-                            on:click={(e) =>
-                                handleTouchClick(
-                                    () => selectSuggestion(tag),
-                                    e,
-                                )}
-                            on:touchend={(e) =>
-                                handleTouchClick(
-                                    () => selectSuggestion(tag),
-                                    e,
-                                )}
-                        >
-                            {tag}
-                        </button>
-                    {/each}
-                </div>
-            {:else if !filterText.trim() && availableTags.length > 0 && inputFocused}
-                <div class="suggestions-dropdown">
-                    <div class="suggestions-header">
-                        Available tags (click to filter):
+    <div class="deck-content">
+        <div class="filter-section">
+            <div class="filter-container">
+                <input
+                    type="text"
+                    class="filter-input"
+                    placeholder="Filter by name or tag... (e.g., 'spanish', '#flashcards')"
+                    bind:value={filterText}
+                    on:input={handleFilterInput}
+                    on:focus={handleFilterFocus}
+                    on:blur={handleFilterBlur}
+                />
+                {#if showSuggestions && filteredSuggestions.length > 0}
+                    <div class="suggestions-dropdown">
+                        <div class="suggestions-header">Available tags:</div>
+                        {#each filteredSuggestions as tag}
+                            <button
+                                class="suggestion-item"
+                                on:mousedown|preventDefault={() =>
+                                    selectSuggestion(tag)}
+                                on:click={(e) =>
+                                    handleTouchClick(
+                                        () => selectSuggestion(tag),
+                                        e,
+                                    )}
+                                on:touchend={(e) =>
+                                    handleTouchClick(
+                                        () => selectSuggestion(tag),
+                                        e,
+                                    )}
+                            >
+                                {tag}
+                            </button>
+                        {/each}
                     </div>
-                    {#each availableTags.slice(0, 5) as tag}
-                        <button
-                            class="suggestion-item"
-                            on:mousedown|preventDefault={() =>
-                                selectSuggestion(tag)}
-                            on:click={(e) =>
-                                handleTouchClick(
-                                    () => selectSuggestion(tag),
-                                    e,
-                                )}
-                            on:touchend={(e) =>
-                                handleTouchClick(
-                                    () => selectSuggestion(tag),
-                                    e,
-                                )}
-                        >
-                            {tag}
-                        </button>
+                {:else if !filterText.trim() && availableTags.length > 0 && inputFocused}
+                    <div class="suggestions-dropdown">
+                        <div class="suggestions-header">
+                            Available tags (click to filter):
+                        </div>
+                        {#each availableTags.slice(0, 5) as tag}
+                            <button
+                                class="suggestion-item"
+                                on:mousedown|preventDefault={() =>
+                                    selectSuggestion(tag)}
+                                on:click={(e) =>
+                                    handleTouchClick(
+                                        () => selectSuggestion(tag),
+                                        e,
+                                    )}
+                                on:touchend={(e) =>
+                                    handleTouchClick(
+                                        () => selectSuggestion(tag),
+                                        e,
+                                    )}
+                            >
+                                {tag}
+                            </button>
+                        {/each}
+                    </div>
+                {/if}
+            </div>
+        </div>
+
+        {#if allDecks.length === 0}
+            <div class="empty-state">
+                <p>No flashcard decks found.</p>
+                <p class="help-text">
+                    Tag your notes with #flashcards to create decks.
+                </p>
+            </div>
+        {:else if decks.length === 0}
+            <div class="empty-state">
+                <p>No decks match your filter.</p>
+                <p class="help-text">Try adjusting your search terms.</p>
+            </div>
+        {:else}
+            <div class="deck-table">
+                <div class="table-header">
+                    <div class="col-deck">Deck</div>
+                    <div class="col-stat">New</div>
+                    <div class="col-stat">Due</div>
+                    <div class="col-config"></div>
+                </div>
+
+                <div class="table-body">
+                    {#each decks as deck}
+                        {@const stats = getDeckStats(deck.id)}
+                        <div class="deck-row">
+                            <div class="col-deck">
+                                <span
+                                    class="deck-name-link"
+                                    on:click={(e) =>
+                                        handleTouchClick(
+                                            () => handleDeckClick(deck),
+                                            e,
+                                        )}
+                                    on:touchend={(e) =>
+                                        handleTouchClick(
+                                            () => handleDeckClick(deck),
+                                            e,
+                                        )}
+                                    on:keydown={(e) =>
+                                        e.key === "Enter" &&
+                                        handleDeckClick(deck)}
+                                    role="button"
+                                    tabindex="0"
+                                    title="Click to review {deck.name}"
+                                >
+                                    {formatDeckName(deck)}
+                                </span>
+                            </div>
+                            <div
+                                class="col-stat"
+                                class:has-cards={stats.newCount > 0}
+                                class:updating={isUpdatingStats}
+                                class:has-limit={deck.config
+                                    .hasNewCardsLimitEnabled}
+                                title={deck.config.hasNewCardsLimitEnabled
+                                    ? `${stats.newCount} new cards available today (limit: ${deck.config.newCardsPerDay})`
+                                    : `${stats.newCount} new cards due`}
+                            >
+                                {stats.newCount}
+                                {#if deck.config.hasNewCardsLimitEnabled}
+                                    <span class="limit-indicator">📅</span>
+                                {/if}
+                            </div>
+                            <div
+                                class="col-stat"
+                                class:has-cards={false}
+                                class:updating={isUpdatingStats}
+                                style="display: none;"
+                            >
+                                0
+                            </div>
+                            <div
+                                class="col-stat"
+                                class:has-cards={stats.dueCount > 0}
+                                class:updating={isUpdatingStats}
+                                class:has-limit={deck.config
+                                    .hasReviewCardsLimitEnabled}
+                                title={deck.config.hasReviewCardsLimitEnabled
+                                    ? `${stats.dueCount} review cards available today (limit: ${deck.config.reviewCardsPerDay})`
+                                    : `${stats.dueCount} review cards due`}
+                            >
+                                {stats.dueCount}
+                                {#if deck.config.hasReviewCardsLimitEnabled}
+                                    <span class="limit-indicator">📅</span>
+                                {/if}
+                            </div>
+                            <div class="col-config">
+                                <button
+                                    class="deck-config-button"
+                                    on:click={(e) =>
+                                        handleTouchClick(
+                                            () => handleConfigClick(deck, e),
+                                            e,
+                                        )}
+                                    on:touchend={(e) =>
+                                        handleTouchClick(
+                                            () => handleConfigClick(deck, e),
+                                            e,
+                                        )}
+                                    title="Configure deck settings"
+                                    aria-label="Configure {deck.name}"
+                                >
+                                    <svg
+                                        xmlns="http://www.w3.org/2000/svg"
+                                        width="16"
+                                        height="16"
+                                        viewBox="0 0 24 24"
+                                        fill="none"
+                                        stroke="currentColor"
+                                        stroke-width="2"
+                                        stroke-linecap="round"
+                                        stroke-linejoin="round"
+                                    >
+                                        <circle cx="12" cy="12" r="3"></circle>
+                                        <path
+                                            d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1 1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z"
+                                        ></path>
+                                    </svg>
+                                </button>
+                            </div>
+                        </div>
                     {/each}
                 </div>
-            {/if}
-        </div>
+            </div>
+        {/if}
     </div>
 
-    {#if allDecks.length === 0}
-        <div class="empty-state">
-            <p>No flashcard decks found.</p>
-            <p class="help-text">
-                Tag your notes with #flashcards to create decks.
-            </p>
-        </div>
-    {:else if decks.length === 0}
-        <div class="empty-state">
-            <p>No decks match your filter.</p>
-            <p class="help-text">Try adjusting your search terms.</p>
-        </div>
-    {:else}
-        <div class="deck-table">
-            <div class="table-header">
-                <div class="col-deck">Deck</div>
-                <div class="col-stat">New</div>
-                <div class="col-stat">Due</div>
-                <div class="col-config"></div>
-            </div>
-
-            <div class="table-body">
-                {#each decks as deck}
-                    {@const stats = getDeckStats(deck.id)}
-                    <div class="deck-row">
-                        <div class="col-deck">
-                            <span
-                                class="deck-name-link"
-                                on:click={(e) =>
-                                    handleTouchClick(
-                                        () => handleDeckClick(deck),
-                                        e,
-                                    )}
-                                on:touchend={(e) =>
-                                    handleTouchClick(
-                                        () => handleDeckClick(deck),
-                                        e,
-                                    )}
-                                on:keydown={(e) =>
-                                    e.key === "Enter" && handleDeckClick(deck)}
-                                role="button"
-                                tabindex="0"
-                                title="Click to review {deck.name}"
-                            >
-                                {formatDeckName(deck)}
-                            </span>
-                        </div>
-                        <div
-                            class="col-stat"
-                            class:has-cards={stats.newCount > 0}
-                            class:updating={isUpdatingStats}
-                            class:has-limit={deck.config
-                                .hasNewCardsLimitEnabled}
-                            title={deck.config.hasNewCardsLimitEnabled
-                                ? `${stats.newCount} new cards available today (limit: ${deck.config.newCardsPerDay})`
-                                : `${stats.newCount} new cards due`}
-                        >
-                            {stats.newCount}
-                            {#if deck.config.hasNewCardsLimitEnabled}
-                                <span class="limit-indicator">📅</span>
-                            {/if}
-                        </div>
-                        <div
-                            class="col-stat"
-                            class:has-cards={false}
-                            class:updating={isUpdatingStats}
-                            style="display: none;"
-                        >
-                            0
-                        </div>
-                        <div
-                            class="col-stat"
-                            class:has-cards={stats.dueCount > 0}
-                            class:updating={isUpdatingStats}
-                            class:has-limit={deck.config
-                                .hasReviewCardsLimitEnabled}
-                            title={deck.config.hasReviewCardsLimitEnabled
-                                ? `${stats.dueCount} review cards available today (limit: ${deck.config.reviewCardsPerDay})`
-                                : `${stats.dueCount} review cards due`}
-                        >
-                            {stats.dueCount}
-                            {#if deck.config.hasReviewCardsLimitEnabled}
-                                <span class="limit-indicator">📅</span>
-                            {/if}
-                        </div>
-                        <div class="col-config">
-                            <button
-                                class="deck-config-button"
-                                on:click={(e) =>
-                                    handleTouchClick(
-                                        () => handleConfigClick(deck, e),
-                                        e,
-                                    )}
-                                on:touchend={(e) =>
-                                    handleTouchClick(
-                                        () => handleConfigClick(deck, e),
-                                        e,
-                                    )}
-                                title="Configure deck settings"
-                                aria-label="Configure {deck.name}"
-                            >
-                                <svg
-                                    xmlns="http://www.w3.org/2000/svg"
-                                    width="16"
-                                    height="16"
-                                    viewBox="0 0 24 24"
-                                    fill="none"
-                                    stroke="currentColor"
-                                    stroke-width="2"
-                                    stroke-linecap="round"
-                                    stroke-linejoin="round"
-                                >
-                                    <circle cx="12" cy="12" r="3"></circle>
-                                    <path
-                                        d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1 1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z"
-                                    ></path>
-                                </svg>
-                            </button>
-                        </div>
-                    </div>
-                {/each}
-            </div>
-        </div>
-    {/if}
-
-    <ReviewHeatmap bind:this={heatmapComponent} {getReviewCounts} />
+    <div class="heatmap-section">
+        <ReviewHeatmap bind:this={heatmapComponent} {getReviewCounts} />
+    </div>
 </div>
 
 <style>
     .deck-list-panel {
         width: 100%;
         height: 100%;
+        max-height: 100vh;
         display: flex;
         flex-direction: column;
         background: var(--background-primary);
@@ -641,6 +647,25 @@
         -moz-user-select: none;
         -ms-user-select: none;
         user-select: none;
+        overflow: hidden;
+    }
+
+    .deck-content {
+        flex: 1;
+        display: flex;
+        flex-direction: column;
+        overflow: hidden;
+        min-height: 0;
+        max-height: calc(100vh - 450px);
+    }
+
+    .heatmap-section {
+        flex-shrink: 0;
+        border-top: 1px solid var(--background-modifier-border);
+        background: var(--background-primary);
+        height: 120px;
+        min-height: 120px;
+        max-height: 120px;
     }
 
     .panel-header {
@@ -818,11 +843,13 @@
     }
 
     .deck-table {
+        flex: 1;
         display: flex;
         flex-direction: column;
         overflow: hidden;
         width: 100%;
         box-sizing: border-box;
+        min-height: 0;
     }
 
     .table-header {
@@ -840,13 +867,14 @@
     .table-body {
         flex: 1;
         overflow-y: auto;
+        max-height: calc(100vh - 240px);
     }
 
     .deck-row {
         display: grid;
         grid-template-columns: 1fr 60px 60px 60px;
         gap: 8px;
-        padding: 12px;
+        padding: 6px;
         border-bottom: 1px solid var(--background-modifier-border);
         align-items: center;
     }
@@ -1039,13 +1067,13 @@
         }
 
         .table-header {
-            grid-template-columns: 1fr 55px 55px 55px 44px;
+            grid-template-columns: 1fr 55px 55px 55px;
             padding: 8px 16px;
             font-size: 12px;
         }
 
         .deck-row {
-            grid-template-columns: 1fr 55px 55px 55px 44px;
+            grid-template-columns: 1fr 55px 55px 55px;
             padding: 12px 16px;
         }
 

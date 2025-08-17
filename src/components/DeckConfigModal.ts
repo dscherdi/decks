@@ -28,8 +28,8 @@ export class DeckConfigModal extends Modal {
 
     // Add mobile-specific classes
     const modalEl = this.containerEl.querySelector(".modal");
-    if (modalEl instanceof HTMLElement && window.innerWidth <= 768) {
-      modalEl.addClass("deck-config-modal-mobile");
+    if (modalEl instanceof HTMLElement) {
+      modalEl.addClass("deck-config-modal");
     }
 
     // Modal title
