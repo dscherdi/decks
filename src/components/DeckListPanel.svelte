@@ -946,6 +946,8 @@
         color: var(--text-normal);
         justify-self: start;
         min-width: 0;
+        width: 100%;
+        overflow: hidden;
     }
 
     .col-stat {
@@ -1074,11 +1076,9 @@
 
         .deck-row {
             grid-template-columns: 1fr 55px 55px 55px;
-            padding: 12px 16px;
         }
 
         .deck-name-link {
-            max-width: none;
             font-size: 14px;
         }
 
