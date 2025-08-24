@@ -198,6 +198,40 @@
         return seconds.toFixed(2) + "s/card";
     }
 
+    /**
+     * Unified function to update all UI components in the DeckListPanel.
+     * This consolidates all UI updates to prevent scattered update calls throughout the codebase.
+     *
+     * @param newDecks - Optional array of decks to update the deck list
+     * @param newStats - Optional map of all deck stats to update all deck statistics
+     * @param singleDeckId - Optional deck ID for updating a single deck's stats
+     * @param singleDeckStats - Optional stats for a single deck (used with singleDeckId)
+     *
+     * Updates performed:
+     * - Deck list (if newDecks provided)
+     * - Deck statistics (if newStats or single deck stats provided)
+     * - Review heatmap (always)
+     * - Study statistics (always)
+     */
+    export async function updateAll(
+        newDecks?: Deck[],
+        newStats?: Map<string, DeckStats>,
+        singleDeckId?: string,
+        singleDeckStats?: DeckStats,
+    ) {
+        if (newDecks) {
+            updateDecks(newDecks);
+        }
+        if (newStats) {
+            updateStats(newStats);
+        }
+        if (singleDeckId && singleDeckStats) {
+            updateStatsById(singleDeckId, singleDeckStats);
+        }
+        refreshHeatmap();
+        await loadStudyStats();
+    }
+
     // Load study stats on component mount
     onMount(() => {
         loadStudyStats();

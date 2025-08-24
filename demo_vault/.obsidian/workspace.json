@@ -20,8 +20,21 @@
               "icon": "lucide-file",
               "title": "1200 Deutsche Redewendungen"
             }
+          },
+          {
+            "id": "9818a81660d9ea29",
+            "type": "leaf",
+            "state": {
+              "type": "release-notes",
+              "state": {
+                "currentVersion": "1.9.11"
+              },
+              "icon": "lucide-book-up",
+              "title": "Release Notes 1.9.11"
+            }
           }
-        ]
+        ],
+        "currentTab": 1
       }
     ],
     "direction": "vertical"
@@ -170,6 +183,7 @@
   },
   "left-ribbon": {
     "hiddenItems": {
+      "bases:Create new base": false,
       "decks:Flashcards": false,
       "switcher:Open quick switcher": false,
       "graph:Open graph view": false,
@@ -179,7 +193,7 @@
       "command-palette:Open command palette": false
     }
   },
-  "active": "43e0c06474e1a885",
+  "active": "9818a81660d9ea29",
   "lastOpenFiles": [
     "No Flashcards",
     "Flashcards/4200 German Adjectives.md",

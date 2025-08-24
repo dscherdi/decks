@@ -171,6 +171,7 @@ export class DeckSynchronizer {
 
       await yieldToUI();
       await this.db.save();
+      await yieldToUI();
 
       const saveTime = performance.now() - saveStartTime;
 

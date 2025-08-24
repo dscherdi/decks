@@ -72,3 +72,40 @@
 [2025-08-24T20:10:41.406Z] Scheduler: Database save completed
 [2025-08-24T20:10:52.968Z] Existing card ID: card_nm2778, Front: "da steppt der Bär"
 [2025-08-24T20:10:53.475Z] Updated deck stats: {}
+[2025-08-24T20:17:06.979Z] Decks plugin loaded successfully
+[2025-08-24T20:17:11.118Z] Performing initial background sync...
+[2025-08-24T20:17:11.221Z] Creating progress notice
+[2025-08-24T20:17:11.325Z] File Flashcards/Programming-Concepts.md not modified since last sync, skipping
+[2025-08-24T20:17:11.350Z] Saving database after processing all decks...
+[2025-08-24T20:17:11.421Z] Sync complete, hiding progress notice
+[2025-08-24T20:29:20.868Z] Checking file: Flashcards/500 Nomen-Verb Verbindungen.md
+[2025-08-24T20:29:21.033Z] Saving database after processing all decks...
+[2025-08-24T20:29:21.131Z] Refresh complete
+[2025-08-24T20:29:23.715Z] Existing card ID: card_uhm64m, Front: "**modulieren**"
+[2025-08-24T20:29:24.377Z] Updated deck stats: {}
+[2025-08-24T20:29:27.834Z] Existing card ID: card_nm2778, Front: "da steppt der Bär"
+[2025-08-24T20:29:30.451Z] Updated deck stats: {}
+[2025-08-24T20:29:34.883Z] Existing card ID: card_rxziyu, Front: "**kanonisch**"
+[2025-08-24T20:29:36.138Z] Updated deck stats: {}
+[2025-08-24T20:29:40.508Z] Existing card ID: card_uhm64m, Front: "**modulieren**"
+[2025-08-24T20:29:45.433Z] Updated deck stats: {}
+[2025-08-24T20:29:51.133Z] Existing card ID: card_q1az4y, Front: "Stil entwickeln"
+[2025-08-24T20:29:53.638Z] Updated deck stats: {}
+[2025-08-24T20:29:58.188Z] Existing card ID: card_v7q7si, Front: "What is the factorial of a number?"
+[2025-08-24T20:29:58.222Z] Updated deck stats: {}
+[2025-08-24T20:30:00.844Z] Existing card ID: card_css29, Front: "What is the difference between == and === in JavaScript?"
+[2025-08-24T20:30:00.884Z] Updated deck stats: {}
+[2025-08-24T20:30:04.133Z] Existing card ID: card_nm2778, Front: "da steppt der Bär"
+[2025-08-24T20:30:04.515Z] Updated deck stats: {}
+[2025-08-24T20:48:36.487Z] Decks plugin loaded successfully
+[2025-08-24T20:48:38.640Z] All tags for Flashcards/4200 German Adjectives.md: ["#flashcards/german"]
+[2025-08-24T20:48:38.767Z] Saving database after processing all decks...
+[2025-08-24T20:48:38.821Z] Sync complete, hiding progress notice
+[2025-08-24T20:48:44.769Z] Showing initial progress notice: 🔄 Syncing flashcards...
+[███░░░░░░░░░░░░░░░░░░░░░░] 10%
+[2025-08-24T20:48:44.903Z] File Flashcards/Spanish-Vocabulary.md not modified since last sync, skipping
+[2025-08-24T20:48:44.915Z] Saving database after processing all decks...
+[2025-08-24T20:48:45.006Z] Refresh complete
+[2025-08-24T20:49:11.438Z] Review session created: session_1756068551437_drnbly72p, goal: 1935
+[2025-08-24T20:49:12.590Z] Scheduler: Saving database to disk
+[2025-08-24T20:49:12.616Z] Scheduler: Database save completed

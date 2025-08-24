@@ -473,7 +473,7 @@ export default class DecksPlugin extends Plugin {
       this.debugLog("Performing initial background sync...");
 
       // Use requestIdleCallback or setTimeout to ensure non-blocking execution
-      await new Promise((resolve) => setTimeout(resolve, 100));
+      await yieldToUI();
 
       // Use the main performSync method which has progress notices
       await this.performSync(false);
@@ -482,8 +482,10 @@ export default class DecksPlugin extends Plugin {
         // Update the view with refreshed data
         const updatedDecks = await this.getDecks();
         const deckStats = await this.getDeckStats();
-        this.view.update(updatedDecks, deckStats);
+        await this.view.update(updatedDecks, deckStats);
       }
+
+      await yieldToUI();
 
       const totalTime = performance.now() - startTime;
       this.performanceLog(
@@ -713,8 +715,6 @@ export default class DecksPlugin extends Plugin {
     // Refresh stats for this specific deck if view exists
     if (this.view) {
       await this.view.refreshStatsById(flashcard.deckId);
-      // Also refresh heatmap since a new review was completed
-      await this.view.refreshHeatmap();
     }
   }
 
@@ -934,8 +934,7 @@ class DecksView extends ItemView {
   }
 
   async update(updatedDecks: Deck[], deckStats: Map<string, DeckStats>) {
-    this.component?.updateDecks(updatedDecks);
-    this.component?.updateStats(deckStats);
+    await this.component?.updateAll(updatedDecks, deckStats);
   }
 
   async refresh(force: boolean = false) {
@@ -965,9 +964,9 @@ class DecksView extends ItemView {
       const deckStats = await this.getDeckStats();
       this.debugLog("Updated deck stats:", deckStats);
 
-      // Update component with new stats - same pattern as refresh()
+      // Update component with new stats using unified function
       if (this.component) {
-        this.component.updateStats(deckStats);
+        await this.component.updateAll(undefined, deckStats);
       }
     } catch (error) {
       console.error("Error refreshing stats:", error);
@@ -977,13 +976,13 @@ class DecksView extends ItemView {
   async refreshStatsById(deckId: string) {
     this.debugLog(`DecksView.refreshStatsById() executing for deck: ${deckId}`);
     try {
-      // Get all stats (same as refresh() method for consistency)
+      // Get stats for the specific deck
       const deckStats = await this.getDeckStatsById(deckId);
-      this.debugLog("Updated all deck stats");
+      this.debugLog("Updated deck stats for:", deckId);
 
-      // Update component using same pattern as refresh()
+      // Update component using unified function
       if (this.component && deckStats) {
-        this.component.updateStatsById(deckId, deckStats);
+        await this.component.updateAll(undefined, undefined, deckId, deckStats);
       }
     } catch (error) {
       console.error("Error refreshing stats by ID:", error);
@@ -1025,9 +1024,7 @@ class DecksView extends ItemView {
   }
 
   async refreshHeatmap() {
-    if (this.component) {
-      this.component.refreshHeatmap();
-    }
+    await this.component?.updateAll();
   }
 
   // Test method to check if background job is running
