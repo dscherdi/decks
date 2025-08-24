@@ -558,6 +558,9 @@ export default class DecksPlugin extends Plugin {
       // Update all flashcard deck IDs
       await this.deckSynchronizer.updateFlashcardDeckIds(oldDeckId, newDeckId);
 
+      await yieldToUI();
+
+      await this.db.save();
       // Refresh view if available
       if (this.view) {
         await this.view.refreshStats();

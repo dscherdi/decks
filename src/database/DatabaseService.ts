@@ -13,6 +13,7 @@ import {
 } from "./types";
 import { SQL_QUERIES } from "./schemas";
 import { createTables, migrate, needsMigration } from "./migrations";
+import { yieldToUI } from "@/utils/ui";
 
 export class DatabaseService {
   private db: Database | null = null;
@@ -70,7 +71,7 @@ export class DatabaseService {
 
   async save(): Promise<void> {
     if (!this.db) throw new Error("Database not initialized");
-    // await new Promise((r) => requestAnimationFrame(() => r(null)));
+
     try {
       const data = this.db.export();
 
@@ -423,7 +424,6 @@ export class DatabaseService {
       ]);
       stmt.free();
 
-      await this.save();
       return fullDeck;
     } catch (error) {
       throw error;
@@ -488,7 +488,6 @@ export class DatabaseService {
     values.push(now, deckId);
     stmt.run(values);
     stmt.free();
-    await this.save();
   }
 
   private updateDeckTimestampCore(deckId: string, timestamp: string): void {
@@ -500,7 +499,6 @@ export class DatabaseService {
 
   async updateDeckTimestamp(deckId: string, timestamp: string): Promise<void> {
     this.updateDeckTimestampCore(deckId, timestamp);
-    await this.save();
   }
 
   // Version without save for use in transactions
@@ -545,7 +543,6 @@ export class DatabaseService {
 
     stmt.run([headerLevel, now, deckId]);
     stmt.free();
-    await this.save();
   }
 
   async renameDeck(
@@ -555,7 +552,7 @@ export class DatabaseService {
     newFilepath: string,
   ): Promise<void> {
     const now = new Date().toISOString();
-    await this.executeStatementWithSave(SQL_QUERIES.RENAME_DECK, [
+    this.executeStatement(SQL_QUERIES.RENAME_DECK, [
       newDeckId,
       newName,
       newFilepath,
@@ -578,8 +575,6 @@ export class DatabaseService {
     const stmt = this.db.prepare(SQL_QUERIES.DELETE_DECK_BY_FILEPATH);
     stmt.run([filepath]);
     stmt.free();
-
-    await this.save();
   }
 
   async deleteDeck(deckId: string): Promise<void> {
@@ -592,8 +587,6 @@ export class DatabaseService {
     const stmt = this.db.prepare(SQL_QUERIES.DELETE_DECK);
     stmt.run([deckId]);
     stmt.free();
-
-    await this.save();
   }
 
   // Flashcard operations
@@ -650,7 +643,6 @@ export class DatabaseService {
     flashcard: Omit<Flashcard, "created" | "modified">,
   ): Promise<Flashcard> {
     const result = this.createFlashcardCore(flashcard);
-    await this.save();
     return result;
   }
 
@@ -738,7 +730,6 @@ export class DatabaseService {
 
   async deleteFlashcard(flashcardId: string): Promise<void> {
     this.deleteFlashcardCore(flashcardId);
-    await this.save();
   }
 
   // Version without save for use in transactions
@@ -750,7 +741,7 @@ export class DatabaseService {
     oldDeckId: string,
     newDeckId: string,
   ): Promise<void> {
-    await this.executeStatementWithSave(SQL_QUERIES.UPDATE_FLASHCARD_DECK_IDS, [
+    this.executeStatement(SQL_QUERIES.UPDATE_FLASHCARD_DECK_IDS, [
       newDeckId,
       oldDeckId,
     ]);
@@ -943,9 +934,7 @@ export class DatabaseService {
   }
 
   async deleteFlashcardsByFile(sourceFile: string): Promise<void> {
-    await this.executeStatementWithSave(SQL_QUERIES.DELETE_FLASHCARDS_BY_FILE, [
-      sourceFile,
-    ]);
+    this.executeStatement(SQL_QUERIES.DELETE_FLASHCARDS_BY_FILE, [sourceFile]);
   }
 
   // Review log operations
@@ -1228,6 +1217,8 @@ export class DatabaseService {
     const totalHours = totalResult[0] || 0;
     totalStmt.free();
 
+    await yieldToUI();
+
     // Get past month hours
     const monthStmt = this.db.prepare(`
       SELECT SUM(time_elapsed_ms / 1000.0 / 3600.0) as monthHours
@@ -1241,6 +1232,8 @@ export class DatabaseService {
     const pastMonthHours = monthResult[0] || 0;
     monthStmt.free();
 
+    await yieldToUI();
+
     // Get past week hours
     const weekStmt = this.db.prepare(`
       SELECT SUM(time_elapsed_ms / 1000.0 / 3600.0) as weekHours
@@ -1253,6 +1246,8 @@ export class DatabaseService {
     const weekResult = weekStmt.get();
     const pastWeekHours = weekResult[0] || 0;
     weekStmt.free();
+
+    await yieldToUI();
 
     // Get today's stats
     const todayStmt = this.db.prepare(`
@@ -1271,6 +1266,8 @@ export class DatabaseService {
     const todayHours = todayResult[1] || 0;
     const todayPaceSeconds = todayResult[2] || 0;
     todayStmt.free();
+
+    await yieldToUI();
 
     return {
       totalHours: Number(totalHours),

@@ -27,6 +27,8 @@ module.exports = {
     "^obsidian$": "<rootDir>/src/__mocks__/obsidian.ts",
     // Mock sql.js
     "^sql\\.js$": "<rootDir>/src/__mocks__/sql.js.ts",
+    // Handle @ alias
+    "^@/(.*)$": "<rootDir>/src/$1",
   },
   transformIgnorePatterns: ["node_modules/(?!(sql\\.js)/)"],
 };
