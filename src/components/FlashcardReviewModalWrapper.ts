@@ -63,15 +63,11 @@ export class FlashcardReviewModalWrapper extends Modal {
       modalEl.addClass("deck-review-modal");
     }
 
-    // Create container for Svelte component
-    const container = contentEl.createDiv();
-
     this.component = new FlashcardReviewModal({
-      target: container,
+      target: contentEl,
       props: {
         initialCard: this.initialCard,
         deck: this.deck,
-        onClose: () => this.close(),
         onReview: async (
           card: Flashcard,
           rating: RatingLabel,
@@ -97,18 +93,18 @@ export class FlashcardReviewModalWrapper extends Modal {
     });
 
     this.component.$on("complete", async (event) => {
+      console.log("Review Complete");
       const { reason, reviewed } = event.detail;
       let message = `Review session complete for ${this.deck.name}!`;
-
-      if (reason === "no-more-cards") {
-        message = `All available cards reviewed! Completed ${reviewed} cards from ${this.deck.name}.`;
-      }
 
       if (this.settings?.ui?.enableNotices !== false) {
         new Notice(message);
       }
       // Refresh the view to update stats
       await this.refreshStatsById(this.deck.id);
+
+      // Save db
+      await this.scheduler.save();
     });
 
     // Handle window resize for mobile adaptation
@@ -130,8 +126,6 @@ export class FlashcardReviewModalWrapper extends Modal {
   }
 
   async onClose() {
-    await this.scheduler.save();
-
     // Clean up resize handler
     if ((this as any)._resizeHandler) {
       window.removeEventListener("resize", (this as any)._resizeHandler);

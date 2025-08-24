@@ -639,6 +639,7 @@
         max-height: 100vh;
         display: flex;
         flex-direction: column;
+        justify-content: space-between;
         background: var(--background-primary);
         color: var(--text-normal);
         touch-action: manipulation;
@@ -648,6 +649,7 @@
         -ms-user-select: none;
         user-select: none;
         overflow: hidden;
+        padding-bottom: 12px;
     }
 
     .deck-content {
@@ -656,16 +658,12 @@
         flex-direction: column;
         overflow: hidden;
         min-height: 0;
-        max-height: calc(100vh - 450px);
     }
 
     .heatmap-section {
         flex-shrink: 0;
         border-top: 1px solid var(--background-modifier-border);
         background: var(--background-primary);
-        height: 120px;
-        min-height: 120px;
-        max-height: 120px;
     }
 
     .panel-header {

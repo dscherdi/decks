@@ -12,7 +12,6 @@
 
     export let deck: Deck;
     export let initialCard: Flashcard | null = null;
-    export let onClose: () => void;
     export let onReview: (
         card: Flashcard,
         rating: RatingLabel,
@@ -29,6 +28,7 @@
 
     let showAnswer = false;
     let isLoading = false;
+    let reviewFinished = false;
     let frontEl: HTMLElement;
     let backEl: HTMLElement;
     let schedulingInfo: SchedulingPreview | null = null;
@@ -60,11 +60,7 @@
         if (currentCard) {
             await loadCard();
         } else {
-            // No cards available
-            dispatch("complete", {
-                reason: "no-more-cards",
-                reviewed: 0,
-            });
+            await endReview();
         }
 
         // Add keydown event listener
@@ -139,20 +135,7 @@
             if (currentCard) {
                 await loadCard();
             } else {
-                // End the review session and save all data
-                if (sessionId) {
-                    await scheduler.endReviewSession(sessionId);
-                    scheduler.setCurrentSession(null);
-                }
-
-                // Review session complete
-                dispatch("complete", {
-                    reason: "no-more-cards",
-                    reviewed: sessionProgress
-                        ? sessionProgress.doneUnique
-                        : reviewedCount,
-                });
-                onClose();
+                await endReview();
             }
         } catch (error) {
             console.error("Error reviewing card:", error);
@@ -242,14 +225,25 @@
         window.removeEventListener("keydown", handleKeydown);
 
         // Review session complete
+        await endReview();
+    });
+
+    const endReview = async () => {
+        if (reviewFinished) return;
+        // End the review session
+        if (sessionId) {
+            await scheduler.endReviewSession(sessionId);
+            scheduler.setCurrentSession(null);
+        }
+
         dispatch("complete", {
-            reason: "manual-close",
+            reason: "end-review",
             reviewed: sessionProgress
                 ? sessionProgress.doneUnique
                 : reviewedCount,
         });
-        onClose();
-    });
+        reviewFinished = true;
+    };
 
     $: if (currentCard) {
         loadCard();
@@ -853,7 +847,6 @@
     /* Mobile modal overlay protection - Blocker #3 */
     .review-modal {
         position: relative;
-        z-index: 1000;
         pointer-events: auto;
     }
 

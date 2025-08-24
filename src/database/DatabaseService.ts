@@ -521,7 +521,7 @@ export class DatabaseService {
 
   async updateDeckLastReviewed(deckId: string): Promise<void> {
     const now = new Date().toISOString();
-    await this.executeStatementWithSave(SQL_QUERIES.UPDATE_DECK_LAST_REVIEWED, [
+    this.executeStatement(SQL_QUERIES.UPDATE_DECK_LAST_REVIEWED, [
       now,
       now,
       deckId,
@@ -1015,7 +1015,6 @@ export class DatabaseService {
     ]);
     stmt.free();
 
-    await this.save();
     return id;
   }
 
@@ -1055,14 +1054,14 @@ export class DatabaseService {
     sessionId: string,
     doneUnique: number,
   ): Promise<void> {
-    await this.executeStatementWithSave(
-      SQL_QUERIES.UPDATE_REVIEW_SESSION_DONE_UNIQUE,
-      [doneUnique, sessionId],
-    );
+    this.executeStatement(SQL_QUERIES.UPDATE_REVIEW_SESSION_DONE_UNIQUE, [
+      doneUnique,
+      sessionId,
+    ]);
   }
 
   async endReviewSession(sessionId: string, endedAt: string): Promise<void> {
-    await this.executeStatementWithSave(SQL_QUERIES.UPDATE_REVIEW_SESSION_END, [
+    this.executeStatement(SQL_QUERIES.UPDATE_REVIEW_SESSION_END, [
       endedAt,
       sessionId,
     ]);

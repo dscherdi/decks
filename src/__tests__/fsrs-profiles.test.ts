@@ -143,11 +143,11 @@ describe("FSRS Profiles", () => {
       );
       expect(scheduling.good.interval).toBeLessThan(60);
 
-      // Easy should be ~40 minutes
+      // Easy should be ~1 day
       expect(scheduling.easy.interval).toBeGreaterThan(
         scheduling.good.interval,
       );
-      expect(scheduling.easy.interval).toBeLessThan(120);
+      expect(scheduling.easy.interval).toBeLessThanOrEqual(1440);
     });
 
     test("should maintain minute granularity throughout", () => {

@@ -16,13 +16,13 @@ export const FSRS_WEIGHTS_STANDARD: number[] = [
 
 /**
  * FSRS weights optimized for intensive sub-day intervals
- * w[0-3] set to match intensive targets in days: 1m/5m/10m/40m
+ * w[0-3] set to match intensive targets in days: 1m/5m/10m/1day
  */
 export const FSRS_WEIGHTS_SUBDAY: number[] = [
   1 / 1440, // w[0] - Again: 1 minute
   5 / 1440, // w[1] - Hard: 5 minutes
   10 / 1440, // w[2] - Good: 10 minutes
-  40 / 1440, // w[3] - Easy: 40 minutes
+  1, // w[3] - Easy: 1 day
 
   // Keep FSRS-4.5 defaults for remaining parameters
   7.2102,

@@ -1,7 +1,7 @@
 <script lang="ts">
     import type DecksPlugin from "../main";
     import { onMount, createEventDispatcher, tick } from "svelte";
-    import { Setting } from "obsidian";
+    import { ButtonComponent, Setting } from "obsidian";
     import ReviewHeatmap from "./ReviewHeatmap.svelte";
     import type { Statistics } from "../database/types";
 

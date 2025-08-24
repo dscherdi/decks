@@ -78,7 +78,7 @@ describe("FSRS Algorithm - Pure Implementation", () => {
       expect(easyCard.difficulty).toBeGreaterThan(0);
       expect(easyCard.repetitions).toBe(1);
       expect(easyCard.interval).toBeGreaterThan(30); // Should be more than good
-      expect(easyCard.interval).toBeLessThan(120); // Should be around 40 minutes with intensive profile
+      expect(easyCard.interval).toBeLessThanOrEqual(1440); // Should be around 1 day with intensive profile
     });
 
     it("should set lapses correctly on first rating", () => {
