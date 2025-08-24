@@ -1192,6 +1192,96 @@ export class DatabaseService {
     return reviewCounts;
   }
 
+  async getStudyStats(): Promise<{
+    totalHours: number;
+    pastMonthHours: number;
+    pastWeekHours: number;
+    todayCards: number;
+    todayHours: number;
+    todayPaceSeconds: number;
+  }> {
+    if (!this.db) throw new Error("Database not initialized");
+
+    const now = new Date();
+    const todayStart = new Date(
+      now.getFullYear(),
+      now.getMonth(),
+      now.getDate(),
+    );
+    const todayEnd = new Date(todayStart);
+    todayEnd.setDate(todayEnd.getDate() + 1);
+
+    const weekStart = new Date(todayStart);
+    weekStart.setDate(weekStart.getDate() - 7);
+
+    const monthStart = new Date(todayStart);
+    monthStart.setDate(monthStart.getDate() - 30);
+
+    // Get total hours
+    const totalStmt = this.db.prepare(`
+      SELECT SUM(time_elapsed_ms / 1000.0 / 3600.0) as totalHours
+      FROM review_logs
+      WHERE time_elapsed_ms IS NOT NULL
+    `);
+    totalStmt.step();
+    const totalResult = totalStmt.get();
+    const totalHours = totalResult[0] || 0;
+    totalStmt.free();
+
+    // Get past month hours
+    const monthStmt = this.db.prepare(`
+      SELECT SUM(time_elapsed_ms / 1000.0 / 3600.0) as monthHours
+      FROM review_logs
+      WHERE time_elapsed_ms IS NOT NULL
+        AND reviewed_at >= ?
+    `);
+    monthStmt.bind([monthStart.toISOString()]);
+    monthStmt.step();
+    const monthResult = monthStmt.get();
+    const pastMonthHours = monthResult[0] || 0;
+    monthStmt.free();
+
+    // Get past week hours
+    const weekStmt = this.db.prepare(`
+      SELECT SUM(time_elapsed_ms / 1000.0 / 3600.0) as weekHours
+      FROM review_logs
+      WHERE time_elapsed_ms IS NOT NULL
+        AND reviewed_at >= ?
+    `);
+    weekStmt.bind([weekStart.toISOString()]);
+    weekStmt.step();
+    const weekResult = weekStmt.get();
+    const pastWeekHours = weekResult[0] || 0;
+    weekStmt.free();
+
+    // Get today's stats
+    const todayStmt = this.db.prepare(`
+      SELECT
+        COUNT(*) as cards,
+        SUM(time_elapsed_ms / 1000.0 / 3600.0) as hours,
+        AVG(time_elapsed_ms / 1000.0) as avgSeconds
+      FROM review_logs
+      WHERE reviewed_at >= ? AND reviewed_at < ?
+        AND time_elapsed_ms IS NOT NULL
+    `);
+    todayStmt.bind([todayStart.toISOString(), todayEnd.toISOString()]);
+    todayStmt.step();
+    const todayResult = todayStmt.get();
+    const todayCards = todayResult[0] || 0;
+    const todayHours = todayResult[1] || 0;
+    const todayPaceSeconds = todayResult[2] || 0;
+    todayStmt.free();
+
+    return {
+      totalHours: Number(totalHours),
+      pastMonthHours: Number(pastMonthHours),
+      pastWeekHours: Number(pastWeekHours),
+      todayCards: Number(todayCards),
+      todayHours: Number(todayHours),
+      todayPaceSeconds: Number(todayPaceSeconds),
+    };
+  }
+
   private async migrateSchemaIfNeeded(): Promise<void> {
     if (!this.db) return;
 

@@ -880,6 +880,9 @@ class DecksView extends ItemView {
         getReviewCounts: async (days: number) => {
           return await this.getReviewCounts(days);
         },
+        getStudyStats: async () => {
+          return await this.db.getStudyStats();
+        },
         onUpdateDeckConfig: async (deckId: string, config: DeckConfig) => {
           await this.updateDeckConfig(deckId, config);
         },

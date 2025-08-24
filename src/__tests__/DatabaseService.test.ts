@@ -357,6 +357,97 @@ describe("DatabaseService", () => {
     });
   });
 
+  describe("study statistics", () => {
+    describe("getStudyStats", () => {
+      it("should return study statistics from review logs", async () => {
+        // Mock multiple statements for different queries
+        const totalStmt = {
+          ...mockStatement,
+          get: jest.fn().mockReturnValue([100.69]),
+        };
+        const monthStmt = {
+          ...mockStatement,
+          get: jest.fn().mockReturnValue([17.41]),
+        };
+        const weekStmt = {
+          ...mockStatement,
+          get: jest.fn().mockReturnValue([9.94]),
+        };
+        const todayStmt = {
+          ...mockStatement,
+          get: jest.fn().mockReturnValue([417, 2.15, 18.52]),
+        };
+
+        mockDb.prepare
+          .mockReturnValueOnce(totalStmt)
+          .mockReturnValueOnce(monthStmt)
+          .mockReturnValueOnce(weekStmt)
+          .mockReturnValueOnce(todayStmt);
+
+        const stats = await dbService.getStudyStats();
+
+        expect(stats).toEqual({
+          totalHours: 100.69,
+          pastMonthHours: 17.41,
+          pastWeekHours: 9.94,
+          todayCards: 417,
+          todayHours: 2.15,
+          todayPaceSeconds: 18.52,
+        });
+
+        expect(mockDb.prepare).toHaveBeenCalledTimes(4);
+        expect(totalStmt.step).toHaveBeenCalled();
+        expect(monthStmt.step).toHaveBeenCalled();
+        expect(weekStmt.step).toHaveBeenCalled();
+        expect(todayStmt.step).toHaveBeenCalled();
+        expect(totalStmt.free).toHaveBeenCalled();
+        expect(monthStmt.free).toHaveBeenCalled();
+        expect(weekStmt.free).toHaveBeenCalled();
+        expect(todayStmt.free).toHaveBeenCalled();
+      });
+
+      it("should handle null values gracefully", async () => {
+        const nullStmt = {
+          ...mockStatement,
+          get: jest.fn().mockReturnValue([null]),
+        };
+        const emptyStmt = {
+          ...mockStatement,
+          get: jest.fn().mockReturnValue([null, null, null]),
+        };
+
+        mockDb.prepare
+          .mockReturnValueOnce(nullStmt)
+          .mockReturnValueOnce(nullStmt)
+          .mockReturnValueOnce(nullStmt)
+          .mockReturnValueOnce(emptyStmt);
+
+        const stats = await dbService.getStudyStats();
+
+        expect(stats).toEqual({
+          totalHours: 0,
+          pastMonthHours: 0,
+          pastWeekHours: 0,
+          todayCards: 0,
+          todayHours: 0,
+          todayPaceSeconds: 0,
+        });
+      });
+
+      it("should throw error when database not initialized", async () => {
+        const uninitializedService = new DatabaseService(
+          "test.db",
+          mockAdapter,
+          debugLog,
+        );
+
+        await expect(uninitializedService.getStudyStats()).rejects.toThrow(
+          "Database not initialized",
+        );
+      });
+    });
+  });
+
   describe("database persistence", () => {
     it("should save database to file", async () => {
       await dbService.save();

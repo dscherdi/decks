@@ -33,10 +33,19 @@
         config: DeckConfig,
     ) => Promise<void>;
     export let onOpenStatistics: () => void;
+    export let getStudyStats: (() => Promise<any>) | null = null;
     export let plugin: any = null; // TODO: Refactor to pass specific functions instead of whole plugin
 
     let isRefreshing = false;
     let isUpdatingStats = false;
+    let studyStats = {
+        totalHours: 0,
+        pastMonthHours: 0,
+        pastWeekHours: 0,
+        todayCards: 0,
+        todayHours: 0,
+        todayPaceSeconds: 0,
+    };
 
     // Track last event to prevent double execution
     let lastEventTime = 0;
@@ -63,6 +72,7 @@
         try {
             onRefresh();
             refreshHeatmap();
+            await loadStudyStats();
         } catch (error) {
             console.error("Error during refresh:", error);
         } finally {
@@ -75,6 +85,7 @@
         try {
             await onForceRefreshDeck(deck.id);
             refreshHeatmap();
+            await loadStudyStats();
         } catch (error) {
             console.error("Error during deck force refresh:", error);
         } finally {
@@ -86,6 +97,7 @@
         isUpdatingStats = true;
         stats.set(deckId, newStats);
         decks = decks;
+        loadStudyStats().catch(console.error);
         isUpdatingStats = false;
     }
     // Function to force UI update when stats change
@@ -171,6 +183,25 @@
             heatmapComponent.refresh();
         }
     }
+
+    async function loadStudyStats() {
+        if (getStudyStats) {
+            studyStats = await getStudyStats();
+        }
+    }
+
+    function formatHours(hours: number): string {
+        return hours.toFixed(2) + " hrs";
+    }
+
+    function formatPace(seconds: number): string {
+        return seconds.toFixed(2) + "s/card";
+    }
+
+    // Load study stats on component mount
+    onMount(() => {
+        loadStudyStats();
+    });
 
     function handleConfigClick(deck: Deck, event: Event) {
         event.stopPropagation();
@@ -629,6 +660,37 @@
 
     <div class="heatmap-section">
         <ReviewHeatmap bind:this={heatmapComponent} {getReviewCounts} />
+    </div>
+
+    <div class="study-stats-section">
+        {#if studyStats.todayCards > 0}
+            <div class="today-summary">
+                Studied {studyStats.todayCards} cards in {formatHours(
+                    studyStats.todayHours,
+                )} today ({formatPace(studyStats.todayPaceSeconds)})
+            </div>
+        {/if}
+
+        <div class="stats-grid">
+            <div class="stat-item">
+                <div class="stat-label">Total</div>
+                <div class="stat-value">
+                    {formatHours(studyStats.totalHours)}
+                </div>
+            </div>
+            <div class="stat-item">
+                <div class="stat-label">Past Month</div>
+                <div class="stat-value">
+                    {formatHours(studyStats.pastMonthHours)}
+                </div>
+            </div>
+            <div class="stat-item">
+                <div class="stat-label">Past Week</div>
+                <div class="stat-value">
+                    {formatHours(studyStats.pastWeekHours)}
+                </div>
+            </div>
+        </div>
     </div>
 </div>
 
@@ -1383,5 +1445,65 @@
 
     :global(.dropdown-option:active) {
         background: var(--background-modifier-active);
+    }
+
+    /* Study Statistics Section */
+    .study-stats-section {
+        margin-top: 16px;
+        padding: 16px;
+    }
+
+    .today-summary {
+        text-align: center;
+        font-size: 14px;
+        font-weight: 500;
+        color: var(--text-normal);
+        margin-bottom: 16px;
+        padding-bottom: 12px;
+        border-bottom: 1px solid var(--background-modifier-border);
+    }
+
+    .stats-grid {
+        display: grid;
+        grid-template-columns: 1fr 1fr 1fr;
+        gap: 16px;
+    }
+
+    .stat-item {
+        text-align: center;
+    }
+
+    .stat-label {
+        font-size: 12px;
+        color: var(--text-muted);
+        margin-bottom: 4px;
+        text-transform: uppercase;
+        letter-spacing: 0.5px;
+    }
+
+    .stat-value {
+        font-size: 16px;
+        font-weight: 600;
+        color: var(--text-accent);
+    }
+
+    @media (max-width: 768px) {
+        .study-stats-section {
+            margin-top: 12px;
+            padding: 12px;
+        }
+
+        .today-summary {
+            font-size: 13px;
+            margin-bottom: 12px;
+        }
+
+        .stats-grid {
+            gap: 12px;
+        }
+
+        .stat-value {
+            font-size: 14px;
+        }
     }
 </style>
