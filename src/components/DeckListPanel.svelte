@@ -711,7 +711,7 @@
         -ms-user-select: none;
         user-select: none;
         overflow: hidden;
-        padding-bottom: 12px;
+        padding-bottom: 12px !important;
     }
 
     .deck-content {
@@ -1449,7 +1449,6 @@
 
     /* Study Statistics Section */
     .study-stats-section {
-        margin-top: 16px;
         padding: 16px;
     }
 

@@ -375,6 +375,7 @@
         color: var(--text-normal);
         overflow: hidden;
         width: 100%;
+        margin-top: 15px;
     }
 
     .modal-header {
