@@ -68,6 +68,8 @@ export class FlashcardReviewModalWrapper extends Modal {
       }
     }
 
+    contentEl.addClass("decks-review-modal-container");
+
     this.component = new FlashcardReviewModal({
       target: contentEl,
       props: {

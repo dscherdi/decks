@@ -25,12 +25,14 @@
             "id": "9818a81660d9ea29",
             "type": "leaf",
             "state": {
-              "type": "release-notes",
+              "type": "markdown",
               "state": {
-                "currentVersion": "1.9.11"
+                "file": "Flashcards/Programming-Concepts.md",
+                "mode": "source",
+                "source": false
               },
-              "icon": "lucide-book-up",
-              "title": "Release Notes 1.9.11"
+              "icon": "lucide-file",
+              "title": "Programming-Concepts"
             }
           }
         ],
@@ -179,7 +181,7 @@
       }
     ],
     "direction": "horizontal",
-    "width": 409.5
+    "width": 582.5
   },
   "left-ribbon": {
     "hiddenItems": {

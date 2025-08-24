@@ -17,6 +17,30 @@ Key characteristics:
 - Can be changed during program execution
 - Has a specific data type in statically-typed languages
 
+Recursion is a programming technique where a function calls itself to solve a problem by breaking it down into smaller subproblems.
+
+Essential components:
+1. **Base case**: The condition that stops the recursion
+2. **Recursive case**: The function calling itself with modified parameters
+
+Example: Factorial
+```
+factorial(n):
+    if n <= 1: return 1  // base case
+    return n * factorial(n-1)  // recursive case
+```
+
+Polymorphism is an object-oriented programming principle that allows objects of different types to be treated as instances of the same type through inheritance or interfaces.
+
+Types of polymorphism:
+- **Compile-time (Static)**: Method overloading, operator overloading
+- **Runtime (Dynamic)**: Method overriding through inheritance
+- **Parametric**: Generics/Templates
+
+Benefits:
+- Code reusability
+- Flexibility
+- Extensibility
 
 
 ## Common Data Structures

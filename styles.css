@@ -321,6 +321,10 @@
     -webkit-tap-highlight-color: rgba(0, 0, 0, 0);
 }
 
+.decks-review-modal-container {
+    height: 98%;
+}
+
 /* Modal styles */
 .decks-modal {
     height: 85vh;
