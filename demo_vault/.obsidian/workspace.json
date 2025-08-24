@@ -78,8 +78,7 @@
       }
     ],
     "direction": "horizontal",
-    "width": 301.5,
-    "collapsed": true
+    "width": 301.5
   },
   "right": {
     "id": "2e1e063bc04f303d",
@@ -180,8 +179,9 @@
       "command-palette:Open command palette": false
     }
   },
-  "active": "7ea5c22d6b931aff",
+  "active": "43e0c06474e1a885",
   "lastOpenFiles": [
+    "No Flashcards",
     "Flashcards/4200 German Adjectives.md",
     "Flashcards/test.md",
     "My Note.md",
@@ -209,7 +209,6 @@
     "Flashcards/Programming-Concepts 1.md",
     "Flashcards/Programming-Concepts 1 1.md",
     "Flashcards/Spanish-Vocabulary.md",
-    "Flashcards/Spanish-Vocabulary 1 1.md",
     "Flashcards-2025-07-17.flashcards",
     "plugins",
     "plugins/obsidian-flashcards-plugin/manifest.json",

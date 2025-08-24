@@ -749,7 +749,7 @@ This is the scheduler contract and behavior your plugin should implement.
 
 **Implementation Details:**
 - **Database Schema v3**: Added `review_sessions` table and `session_id` to `review_logs`
-- **Scheduler Enhanced**: 
+- **Scheduler Enhanced**:
   - `startReviewSession()`, `getSessionProgress()`, `endReviewSession()`
   - `getOrCreateActiveSession()` for automatic session management
   - Internal session tracking with `setCurrentSession()`
@@ -763,6 +763,23 @@ This is the scheduler contract and behavior your plugin should implement.
 - Progress bar shows: `(doneUnique / goalTotal) * 100`
 - Display format: "Reviewed: X (Y remaining)"
 
+### ✅ TODO 23: Default Folder Search Path
+
+When we scan the vault for decks (markdown files with #flashcards tags)
+we currently go through the whole vault and scan every markdown file and check the frontmatter section of the file
+In a large vault this is very time consuming, so we need to implement a setting in the SettingsTab where the user can select the folder where the decks are located
+The settings should be an input box and it should suggest existing folders in the vault.
+Then this path is taken and used to filter the markdown files that are scanned in DeckManager, and only those markdown files that are located under the path that we specify will be processed.
+
+**Implementation completed:**
+- Added `folderSearchPath` setting to settings interface with default empty value
+- Added folder search path input field to SettingsTab with basic folder suggestions
+- Modified DeckManager to filter files by folder path when specified
+- Added `updateFolderSearchPath()` method to DeckManager for dynamic updates
+- Updated main plugin to pass folder search path to DeckManager constructor
+- Modified saveSettings to update DeckManager when folder path changes
+- Added comprehensive tests for folder filtering functionality
+- Empty/blank folder path scans entire vault (default behavior preserved)
 
 ## ✅ Recent Enhancements
 

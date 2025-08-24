@@ -345,7 +345,7 @@
 }
 
 .decks-modal-mobile .modal-header {
-    transform: translateY(env(safe-area-inset-top));
+    padding-top: translateY(env(safe-area-inset-top));
 }
 
 .decks-deck-review-modal .modal-content {

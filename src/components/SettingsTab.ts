@@ -87,13 +87,33 @@ export class DecksSettingTab extends PluginSettingTab {
   private addParsingSettings(containerEl: HTMLElement): void {
     containerEl.createEl("h3", { text: "Parsing" });
 
-    const parseSettingsDesc = containerEl.createDiv();
-    parseSettingsDesc.innerHTML = `
-      <p style="color: var(--text-muted); font-size: 0.9em; margin: 10px 0;">
-        Header level settings have been moved to individual deck configurations.
-        Configure header levels per deck in the deck settings.
-      </p>
-    `;
+    // Get all folders for dropdown options
+    const folderOptions: Record<string, string> = {
+      "": "Scan entire vault (default)",
+    };
+
+    this.app.vault.getAllFolders().forEach((folder) => {
+      folderOptions[folder.path] = folder.path;
+    });
+
+    new Setting(containerEl)
+      .setName("Folder Search Path")
+      .setDesc(
+        "Limit scanning to a specific folder. Select 'Scan entire vault' to scan all files.",
+      )
+      .addDropdown((dropdown) => {
+        // Add options to dropdown
+        Object.entries(folderOptions).forEach(([value, display]) => {
+          dropdown.addOption(value, display);
+        });
+
+        dropdown
+          .setValue(this.settings.parsing.folderSearchPath)
+          .onChange(async (value) => {
+            this.settings.parsing.folderSearchPath = value;
+            await this.saveSettings();
+          });
+      });
   }
 
   private addUISettings(containerEl: HTMLElement): void {

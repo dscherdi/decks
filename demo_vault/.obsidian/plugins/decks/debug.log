@@ -4,3 +4,71 @@
 [2025-08-17T16:00:37.311Z] Scheduler: Saving database to disk
 [2025-08-17T16:00:37.401Z] Updated all deck stats
 [2025-08-17T16:00:37.431Z] Updated all deck stats
+[2025-08-24T20:04:16.117Z] Checking file: Flashcards/Programming-Concepts.md
+[2025-08-24T20:04:16.271Z] Saving database after processing all decks...
+[2025-08-24T20:04:16.435Z] Refresh complete
+[2025-08-24T20:05:05.863Z] Deleting orphaned deck: "1200 Deutsche Redewendungen" (Flashcards/1200 Deutsche Redewendungen.md)
+[2025-08-24T20:05:05.935Z] Deleting orphaned deck: "2000 German verbs" (Flashcards/2000 German verbs.md)
+[2025-08-24T20:05:05.974Z] Deleting orphaned deck: "4200 German Adjectives" (Flashcards/4200 German Adjectives.md)
+[2025-08-24T20:05:06.008Z] Deleting orphaned deck: "500 Nomen-Verb Verbindungen" (Flashcards/500 Nomen-Verb Verbindungen.md)
+[2025-08-24T20:05:06.046Z] Deleting orphaned deck: "Math-Basics" (Flashcards/Math-Basics.md)
+[2025-08-24T20:05:06.080Z] Deleting orphaned deck: "Programming-Concepts" (Flashcards/Programming-Concepts.md)
+[2025-08-24T20:05:06.118Z] Deleting orphaned deck: "Spanish-Vocabulary" (Flashcards/Spanish-Vocabulary.md)
+[2025-08-24T20:05:06.159Z] Deleting orphaned deck: "test" (Flashcards/test.md)
+[2025-08-24T20:05:06.197Z] Saving database after processing all decks...
+[2025-08-24T20:05:06.239Z] Refresh complete
+[2025-08-24T20:05:15.059Z] Creating new deck: "test" with ID: deck_shvzt5, tag: #flashcards, filepath: Flashcards/test.md
+[2025-08-24T20:05:15.134Z] Creating new deck: "Spanish-Vocabulary" with ID: deck_bvk4i2, tag: #flashcards/spanish, filepath: Flashcards/Spanish-Vocabulary.md
+[2025-08-24T20:05:15.173Z] Creating new deck: "Programming-Concepts" with ID: deck_26088a, tag: #flashcards/programming/concepts, filepath: Flashcards/Programming-Concepts.md
+[2025-08-24T20:05:15.208Z] Creating new deck: "Math-Basics" with ID: deck_ep2xd5, tag: #flashcards/math, filepath: Flashcards/Math-Basics.md
+[2025-08-24T20:05:15.221Z] Creating new deck: "500 Nomen-Verb Verbindungen" with ID: deck_3kr9lg, tag: #flashcards/german, filepath: Flashcards/500 Nomen-Verb Verbindungen.md
+[2025-08-24T20:05:15.251Z] Creating new deck: "4200 German Adjectives" with ID: deck_3cjj2x, tag: #flashcards/german, filepath: Flashcards/4200 German Adjectives.md
+[2025-08-24T20:05:15.288Z] Creating new deck: "2000 German verbs" with ID: deck_cr6nq3, tag: #flashcards/german, filepath: Flashcards/2000 German verbs.md
+[2025-08-24T20:05:15.326Z] Creating new deck: "1200 Deutsche Redewendungen" with ID: deck_lp8v1m, tag: #flashcards/german, filepath: Flashcards/1200 Deutsche Redewendungen.md
+[2025-08-24T20:05:15.460Z] File Flashcards/Math-Basics.md not modified since last sync, skipping
+[2025-08-24T20:05:15.486Z] Saving database after processing all decks...
+[2025-08-24T20:05:15.531Z] Refresh complete
+[2025-08-24T20:05:21.602Z] Review session created: session_1756065921602_0ldmqdcv8, goal: 1200
+[2025-08-24T20:05:22.706Z] Scheduler: Saving database to disk
+[2025-08-24T20:05:22.742Z] Scheduler: Database save completed
+[2025-08-24T20:05:24.908Z] File Flashcards/1200 Deutsche Redewendungen.md not modified since last sync, skipping
+[2025-08-24T20:05:25.038Z] Saving database after processing all decks...
+[2025-08-24T20:05:25.122Z] Refresh complete
+[2025-08-24T20:05:26.800Z] Existing card ID: card_nm2778, Front: "da steppt der Bär"
+[2025-08-24T20:05:27.200Z] Updated deck stats: {}
+[2025-08-24T20:05:32.758Z] Decks plugin loaded successfully
+[2025-08-24T20:05:37.233Z] File Flashcards/2000 German verbs.md not modified since last sync, skipping
+[2025-08-24T20:05:37.336Z] Saving database after processing all decks...
+[2025-08-24T20:05:37.433Z] Refresh complete
+[2025-08-24T20:09:14.185Z] Decks plugin loaded successfully
+[2025-08-24T20:09:18.225Z] Performing initial background sync...
+[2025-08-24T20:09:18.329Z] Starting deck sync...
+[2025-08-24T20:09:18.485Z] Saving database after processing all decks...
+[2025-08-24T20:09:18.542Z] Sync complete, hiding progress notice
+[2025-08-24T20:10:06.603Z] Deleting orphaned deck: "1200 Deutsche Redewendungen" (Flashcards/1200 Deutsche Redewendungen.md)
+[2025-08-24T20:10:06.666Z] Deleting orphaned deck: "2000 German verbs" (Flashcards/2000 German verbs.md)
+[2025-08-24T20:10:06.712Z] Deleting orphaned deck: "4200 German Adjectives" (Flashcards/4200 German Adjectives.md)
+[2025-08-24T20:10:06.747Z] Deleting orphaned deck: "500 Nomen-Verb Verbindungen" (Flashcards/500 Nomen-Verb Verbindungen.md)
+[2025-08-24T20:10:06.817Z] Deleting orphaned deck: "Math-Basics" (Flashcards/Math-Basics.md)
+[2025-08-24T20:10:06.838Z] Deleting orphaned deck: "Programming-Concepts" (Flashcards/Programming-Concepts.md)
+[2025-08-24T20:10:06.873Z] Deleting orphaned deck: "Spanish-Vocabulary" (Flashcards/Spanish-Vocabulary.md)
+[2025-08-24T20:10:06.930Z] Deleting orphaned deck: "test" (Flashcards/test.md)
+[2025-08-24T20:10:06.982Z] Saving database after processing all decks...
+[2025-08-24T20:10:07.082Z] Refresh complete
+[2025-08-24T20:10:17.892Z] Creating new deck: "test" with ID: deck_shvzt5, tag: #flashcards, filepath: Flashcards/test.md
+[2025-08-24T20:10:17.980Z] Creating new deck: "Spanish-Vocabulary" with ID: deck_bvk4i2, tag: #flashcards/spanish, filepath: Flashcards/Spanish-Vocabulary.md
+[2025-08-24T20:10:18.013Z] Creating new deck: "Programming-Concepts" with ID: deck_26088a, tag: #flashcards/programming/concepts, filepath: Flashcards/Programming-Concepts.md
+[2025-08-24T20:10:18.050Z] Creating new deck: "Math-Basics" with ID: deck_ep2xd5, tag: #flashcards/math, filepath: Flashcards/Math-Basics.md
+[2025-08-24T20:10:18.086Z] Creating new deck: "500 Nomen-Verb Verbindungen" with ID: deck_3kr9lg, tag: #flashcards/german, filepath: Flashcards/500 Nomen-Verb Verbindungen.md
+[2025-08-24T20:10:18.097Z] Creating new deck: "4200 German Adjectives" with ID: deck_3cjj2x, tag: #flashcards/german, filepath: Flashcards/4200 German Adjectives.md
+[2025-08-24T20:10:18.136Z] Creating new deck: "2000 German verbs" with ID: deck_cr6nq3, tag: #flashcards/german, filepath: Flashcards/2000 German verbs.md
+[2025-08-24T20:10:18.147Z] Creating new deck: "1200 Deutsche Redewendungen" with ID: deck_lp8v1m, tag: #flashcards/german, filepath: Flashcards/1200 Deutsche Redewendungen.md
+[2025-08-24T20:10:18.343Z] File Flashcards/Programming-Concepts.md not modified since last sync, skipping
+[2025-08-24T20:10:18.349Z] File Flashcards/Spanish-Vocabulary.md not modified since last sync, skipping
+[2025-08-24T20:10:18.366Z] Saving database after processing all decks...
+[2025-08-24T20:10:18.422Z] Refresh complete
+[2025-08-24T20:10:37.282Z] Review session created: session_1756066237281_qxujeu876, goal: 1200
+[2025-08-24T20:10:41.368Z] Scheduler: Saving database to disk
+[2025-08-24T20:10:41.406Z] Scheduler: Database save completed
+[2025-08-24T20:10:52.968Z] Existing card ID: card_nm2778, Front: "da steppt der Bär"
+[2025-08-24T20:10:53.475Z] Updated deck stats: {}

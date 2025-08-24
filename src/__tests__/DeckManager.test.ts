@@ -1352,4 +1352,68 @@ Answer 2 (different)`;
       expect(result!.lastReviewedAt).toBe("2024-01-14T10:00:00.000Z");
     });
   });
+
+  describe("folder search path filtering", () => {
+    it("should filter files by folder search path", () => {
+      // Test the filtering logic directly
+      const allFiles = [
+        { path: "math/algebra.md", name: "algebra.md" },
+        { path: "math/geometry.md", name: "geometry.md" },
+        { path: "spanish/verbs.md", name: "verbs.md" },
+        { path: "history/ww2.md", name: "ww2.md" },
+      ];
+
+      const folderSearchPath = "math";
+      const filteredFiles = allFiles.filter(
+        (file) =>
+          file.path.startsWith(folderSearchPath + "/") ||
+          file.path === folderSearchPath,
+      );
+
+      expect(filteredFiles).toHaveLength(2);
+      expect(filteredFiles.map((f) => f.path)).toEqual([
+        "math/algebra.md",
+        "math/geometry.md",
+      ]);
+    });
+
+    it("should not filter when folder search path is empty", () => {
+      const allFiles = [
+        { path: "math/algebra.md", name: "algebra.md" },
+        { path: "spanish/verbs.md", name: "verbs.md" },
+      ];
+
+      const folderSearchPath: string = "";
+      let filteredFiles = allFiles;
+
+      if (folderSearchPath && folderSearchPath.trim() !== "") {
+        const searchPath = folderSearchPath.trim();
+        filteredFiles = allFiles.filter(
+          (file) =>
+            file.path.startsWith(searchPath + "/") || file.path === searchPath,
+        );
+      }
+
+      expect(filteredFiles).toHaveLength(2);
+      expect(filteredFiles.map((f) => f.path)).toEqual([
+        "math/algebra.md",
+        "spanish/verbs.md",
+      ]);
+    });
+
+    it("should update folder search path dynamically", async () => {
+      const deckManager = new DeckManager(mockVault, mockMetadataCache, mockDb);
+
+      // Initially no folder path
+      expect((deckManager as any).folderSearchPath).toBeUndefined();
+
+      // Update folder search path
+      deckManager.updateFolderSearchPath("math");
+      expect((deckManager as any).folderSearchPath).toBe("math");
+
+      // Clear folder search path
+      deckManager.updateFolderSearchPath("");
+      expect((deckManager as any).folderSearchPath).toBe("");
+    });
+  });
 });

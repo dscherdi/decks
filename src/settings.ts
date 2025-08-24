@@ -9,7 +9,7 @@ export interface FlashcardsSettings {
 
   // Parsing Settings
   parsing: {
-    // Parsing settings can be added here in the future
+    folderSearchPath: string; // Folder path to scan for flashcard files, empty means scan entire vault
   };
 
   // UI Settings
@@ -33,7 +33,7 @@ export const DEFAULT_SETTINGS: FlashcardsSettings = {
   },
 
   parsing: {
-    // Default parsing settings
+    folderSearchPath: "", // Default: scan entire vault
   },
 
   ui: {

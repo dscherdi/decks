@@ -23,6 +23,7 @@ export class DeckManager {
   private metadataCache: MetadataCache;
   private db: DatabaseService;
   private plugin?: DecksPlugin;
+  private folderSearchPath?: string;
 
   // Pre-compiled regex patterns for better performance
   private static readonly HEADER_REGEX = /^(#{1,6})\s+/;
@@ -34,11 +35,20 @@ export class DeckManager {
     metadataCache: MetadataCache,
     db: DatabaseService,
     plugin?: DecksPlugin,
+    folderSearchPath?: string,
   ) {
     this.vault = vault;
     this.metadataCache = metadataCache;
     this.db = db;
     this.plugin = plugin;
+    this.folderSearchPath = folderSearchPath;
+  }
+
+  /**
+   * Update the folder search path for filtering files
+   */
+  updateFolderSearchPath(folderSearchPath?: string): void {
+    this.folderSearchPath = folderSearchPath;
   }
 
   /**
@@ -69,7 +79,20 @@ export class DeckManager {
    */
   async scanVaultForDecks(): Promise<Map<string, TFile[]>> {
     const decksMap = new Map<string, TFile[]>();
-    const files = this.vault.getMarkdownFiles();
+    let files = this.vault.getMarkdownFiles();
+
+    // Filter files by folder search path if specified
+    if (this.folderSearchPath && this.folderSearchPath.trim() !== "") {
+      const searchPath = this.folderSearchPath.trim();
+      files = files.filter(
+        (file) =>
+          file.path.startsWith(searchPath + "/") || file.path === searchPath,
+      );
+      this.debugLog(
+        `Filtered to ${files.length} files in folder: ${searchPath}`,
+      );
+    }
+
     this.debugLog(`Scanning ${files.length} markdown files for flashcard tags`);
 
     for (const file of files) {

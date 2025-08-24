@@ -211,6 +211,7 @@ export default class DecksPlugin extends Plugin {
         this.app.metadataCache,
         this.db,
         this,
+        this.settings.parsing.folderSearchPath,
       );
 
       // Initialize deck synchronizer
@@ -360,6 +361,13 @@ export default class DecksPlugin extends Plugin {
   async saveSettings() {
     await this.saveData(this.settings);
     // FSRS instances are now deck-specific, no global instance to update
+
+    // Update DeckManager folder search path if it exists
+    if (this.deckManager) {
+      this.deckManager.updateFolderSearchPath(
+        this.settings.parsing.folderSearchPath,
+      );
+    }
   }
 
   async activateView() {
