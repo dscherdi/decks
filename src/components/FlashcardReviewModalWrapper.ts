@@ -55,12 +55,17 @@ export class FlashcardReviewModalWrapper extends Modal {
   async onOpen() {
     const { contentEl } = this;
     contentEl.empty();
-    contentEl.addClass("deck-review-modal");
 
     // Add mobile-specific classes
     const modalEl = this.containerEl.querySelector(".modal");
     if (modalEl instanceof HTMLElement) {
-      modalEl.addClass("deck-review-modal");
+      modalEl.addClass("decks-modal");
+
+      if (window.innerWidth <= 768) {
+        modalEl.addClass("decks-modal-mobile");
+      } else {
+        modalEl.removeClass("decks-modal-mobile");
+      }
     }
 
     this.component = new FlashcardReviewModal({
@@ -112,9 +117,9 @@ export class FlashcardReviewModalWrapper extends Modal {
       const modalEl = this.containerEl.querySelector(".modal");
       if (modalEl instanceof HTMLElement) {
         if (window.innerWidth <= 768) {
-          modalEl.addClass("deck-review-modal-mobile");
+          modalEl.addClass("decks-modal-mobile");
         } else {
-          modalEl.removeClass("deck-review-modal-mobile");
+          modalEl.removeClass("decks-modal-mobile");
         }
       }
     };

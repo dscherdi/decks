@@ -12,26 +12,26 @@
 
 /* Scoped touch support for interactive elements within plugin containers */
 .decks-view button,
-.deck-list-panel button,
-.review-modal button,
-.statistics-container button,
-.anki-export-ui button,
-.deck-config-ui button,
-.heatmap-container button,
+.decks-deck-list-panel button,
+.decks-review-modal button,
+.decks-statistics-container button,
+.decks-anki-export-ui button,
+.decks-deck-config-ui button,
+.decks-heatmap-container button,
 .decks-view [role="button"],
-.deck-list-panel [role="button"],
-.review-modal [role="button"],
-.statistics-container [role="button"],
-.anki-export-ui [role="button"],
-.deck-config-ui [role="button"],
-.heatmap-container [role="button"],
-.decks-view .clickable,
-.deck-list-panel .clickable,
-.review-modal .clickable,
-.statistics-container .clickable,
-.anki-export-ui .clickable,
-.deck-config-ui .clickable,
-.heatmap-container .clickable {
+.decks-deck-list-panel [role="button"],
+.decks-review-modal [role="button"],
+.decks-statistics-container [role="button"],
+.decks-anki-export-ui [role="button"],
+.decks-deck-config-ui [role="button"],
+.decks-heatmap-container [role="button"],
+.decks-view .decks-clickable,
+.decks-deck-list-panel .decks-clickable,
+.decks-review-modal .decks-clickable,
+.decks-statistics-container .decks-clickable,
+.decks-anki-export-ui .decks-clickable,
+.decks-deck-config-ui .decks-clickable,
+.decks-heatmap-container .decks-clickable {
     touch-action: manipulation;
     -webkit-tap-highlight-color: transparent;
     -webkit-touch-callout: none;
@@ -43,26 +43,26 @@
 
 /* Enhanced focus states for accessibility - scoped to plugin containers */
 .decks-view button:focus,
-.deck-list-panel button:focus,
-.review-modal button:focus,
-.statistics-container button:focus,
-.anki-export-ui button:focus,
-.deck-config-ui button:focus,
-.heatmap-container button:focus,
+.decks-deck-list-panel button:focus,
+.decks-review-modal button:focus,
+.decks-statistics-container button:focus,
+.decks-anki-export-ui button:focus,
+.decks-deck-config-ui button:focus,
+.decks-heatmap-container button:focus,
 .decks-view [role="button"]:focus,
-.deck-list-panel [role="button"]:focus,
-.review-modal [role="button"]:focus,
-.statistics-container [role="button"]:focus,
-.anki-export-ui [role="button"]:focus,
-.deck-config-ui [role="button"]:focus,
-.heatmap-container [role="button"]:focus,
-.decks-view .clickable:focus,
-.deck-list-panel .clickable:focus,
-.review-modal .clickable:focus,
-.statistics-container .clickable:focus,
-.anki-export-ui .clickable:focus,
-.deck-config-ui .clickable:focus,
-.heatmap-container .clickable:focus {
+.decks-deck-list-panel [role="button"]:focus,
+.decks-review-modal [role="button"]:focus,
+.decks-statistics-container [role="button"]:focus,
+.decks-anki-export-ui [role="button"]:focus,
+.decks-deck-config-ui [role="button"]:focus,
+.decks-heatmap-container [role="button"]:focus,
+.decks-view .decks-clickable:focus,
+.decks-deck-list-panel .decks-clickable:focus,
+.decks-review-modal .decks-clickable:focus,
+.decks-statistics-container .decks-clickable:focus,
+.decks-anki-export-ui .decks-clickable:focus,
+.decks-deck-config-ui .decks-clickable:focus,
+.decks-heatmap-container .decks-clickable:focus {
     outline: 2px solid var(--interactive-accent);
     outline-offset: 2px;
     z-index: 10;
@@ -70,26 +70,26 @@
 
 /* Active states for touch feedback - scoped to plugin containers */
 .decks-view button:active,
-.deck-list-panel button:active,
-.review-modal button:active,
-.statistics-container button:active,
-.anki-export-ui button:active,
-.deck-config-ui button:active,
-.heatmap-container button:active,
+.decks-deck-list-panel button:active,
+.decks-review-modal button:active,
+.decks-statistics-container button:active,
+.decks-anki-export-ui button:active,
+.decks-deck-config-ui button:active,
+.decks-heatmap-container button:active,
 .decks-view [role="button"]:active,
-.deck-list-panel [role="button"]:active,
-.review-modal [role="button"]:active,
-.statistics-container [role="button"]:active,
-.anki-export-ui [role="button"]:active,
-.deck-config-ui [role="button"]:active,
-.heatmap-container [role="button"]:active,
-.decks-view .clickable:active,
-.deck-list-panel .clickable:active,
-.review-modal .clickable:active,
-.statistics-container .clickable:active,
-.anki-export-ui .clickable:active,
-.deck-config-ui .clickable:active,
-.heatmap-container .clickable:active {
+.decks-deck-list-panel [role="button"]:active,
+.decks-review-modal [role="button"]:active,
+.decks-statistics-container [role="button"]:active,
+.decks-anki-export-ui [role="button"]:active,
+.decks-deck-config-ui [role="button"]:active,
+.decks-heatmap-container [role="button"]:active,
+.decks-view .decks-clickable:active,
+.decks-deck-list-panel .decks-clickable:active,
+.decks-review-modal .decks-clickable:active,
+.decks-statistics-container .decks-clickable:active,
+.decks-anki-export-ui .decks-clickable:active,
+.decks-deck-config-ui .decks-clickable:active,
+.decks-heatmap-container .decks-clickable:active {
     transform: scale(0.95);
     transition: transform 0.1s ease;
 }
@@ -97,52 +97,52 @@
 /* Ensure proper touch targets on mobile - scoped to plugin containers */
 @media (max-width: 768px) {
     .decks-view button,
-    .deck-list-panel button,
-    .review-modal button,
-    .statistics-container button,
-    .anki-export-ui button,
-    .deck-config-ui button,
-    .heatmap-container button,
+    .decks-deck-list-panel button,
+    .decks-review-modal button,
+    .decks-statistics-container button,
+    .decks-anki-export-ui button,
+    .decks-deck-config-ui button,
+    .decks-heatmap-container button,
     .decks-view [role="button"],
-    .deck-list-panel [role="button"],
-    .review-modal [role="button"],
-    .statistics-container [role="button"],
-    .anki-export-ui [role="button"],
-    .deck-config-ui [role="button"],
-    .heatmap-container [role="button"],
-    .decks-view .clickable,
-    .deck-list-panel .clickable,
-    .review-modal .clickable,
-    .statistics-container .clickable,
-    .anki-export-ui .clickable,
-    .deck-config-ui .clickable,
-    .heatmap-container .clickable {
+    .decks-deck-list-panel [role="button"],
+    .decks-review-modal [role="button"],
+    .decks-statistics-container [role="button"],
+    .decks-anki-export-ui [role="button"],
+    .decks-deck-config-ui [role="button"],
+    .decks-heatmap-container [role="button"],
+    .decks-view .decks-clickable,
+    .decks-deck-list-panel .decks-clickable,
+    .decks-review-modal .decks-clickable,
+    .decks-statistics-container .decks-clickable,
+    .decks-anki-export-ui .decks-clickable,
+    .decks-deck-config-ui .decks-clickable,
+    .decks-heatmap-container .decks-clickable {
         min-height: 44px;
         min-width: 44px;
     }
 
     /* Enhanced touch feedback on mobile - scoped to plugin containers */
     .decks-view button:active,
-    .deck-list-panel button:active,
-    .review-modal button:active,
-    .statistics-container button:active,
-    .anki-export-ui button:active,
-    .deck-config-ui button:active,
-    .heatmap-container button:active,
+    .decks-deck-list-panel button:active,
+    .decks-review-modal button:active,
+    .decks-statistics-container button:active,
+    .decks-anki-export-ui button:active,
+    .decks-deck-config-ui button:active,
+    .decks-heatmap-container button:active,
     .decks-view [role="button"]:active,
-    .deck-list-panel [role="button"]:active,
-    .review-modal [role="button"]:active,
-    .statistics-container [role="button"]:active,
-    .anki-export-ui [role="button"]:active,
-    .deck-config-ui [role="button"]:active,
-    .heatmap-container [role="button"]:active,
-    .decks-view .clickable:active,
-    .deck-list-panel .clickable:active,
-    .review-modal .clickable:active,
-    .statistics-container .clickable:active,
-    .anki-export-ui .clickable:active,
-    .deck-config-ui .clickable:active,
-    .heatmap-container .clickable:active {
+    .decks-deck-list-panel [role="button"]:active,
+    .decks-review-modal [role="button"]:active,
+    .decks-statistics-container [role="button"]:active,
+    .decks-anki-export-ui [role="button"]:active,
+    .decks-deck-config-ui [role="button"]:active,
+    .decks-heatmap-container [role="button"]:active,
+    .decks-view .decks-clickable:active,
+    .decks-deck-list-panel .decks-clickable:active,
+    .decks-review-modal .decks-clickable:active,
+    .decks-statistics-container .decks-clickable:active,
+    .decks-anki-export-ui .decks-clickable:active,
+    .decks-deck-config-ui .decks-clickable:active,
+    .decks-heatmap-container .decks-clickable:active {
         transform: scale(0.98);
         background: var(--background-modifier-active-hover);
     }
@@ -150,26 +150,26 @@
 
 @media (max-width: 480px) {
     .decks-view button,
-    .deck-list-panel button,
-    .review-modal button,
-    .statistics-container button,
-    .anki-export-ui button,
-    .deck-config-ui button,
-    .heatmap-container button,
+    .decks-deck-list-panel button,
+    .decks-review-modal button,
+    .decks-statistics-container button,
+    .decks-anki-export-ui button,
+    .decks-deck-config-ui button,
+    .decks-heatmap-container button,
     .decks-view [role="button"],
-    .deck-list-panel [role="button"],
-    .review-modal [role="button"],
-    .statistics-container [role="button"],
-    .anki-export-ui [role="button"],
-    .deck-config-ui [role="button"],
-    .heatmap-container [role="button"],
-    .decks-view .clickable,
-    .deck-list-panel .clickable,
-    .review-modal .clickable,
-    .statistics-container .clickable,
-    .anki-export-ui .clickable,
-    .deck-config-ui .clickable,
-    .heatmap-container .clickable {
+    .decks-deck-list-panel [role="button"],
+    .decks-review-modal [role="button"],
+    .decks-statistics-container [role="button"],
+    .decks-anki-export-ui [role="button"],
+    .decks-deck-config-ui [role="button"],
+    .decks-heatmap-container [role="button"],
+    .decks-view .decks-clickable,
+    .decks-deck-list-panel .decks-clickable,
+    .decks-review-modal .decks-clickable,
+    .decks-statistics-container .decks-clickable,
+    .decks-anki-export-ui .decks-clickable,
+    .decks-deck-config-ui .decks-clickable,
+    .decks-heatmap-container .decks-clickable {
         min-height: 40px;
         min-width: 40px;
     }
@@ -177,40 +177,40 @@
 
 /* Remove tap delay on iOS - scoped to plugin containers */
 .decks-view a,
-.deck-list-panel a,
-.review-modal a,
-.statistics-container a,
-.anki-export-ui a,
-.deck-config-ui a,
-.heatmap-container a,
+.decks-deck-list-panel a,
+.decks-review-modal a,
+.decks-statistics-container a,
+.decks-anki-export-ui a,
+.decks-deck-config-ui a,
+.decks-heatmap-container a,
 .decks-view button,
-.deck-list-panel button,
-.review-modal button,
-.statistics-container button,
-.anki-export-ui button,
-.deck-config-ui button,
-.heatmap-container button,
+.decks-deck-list-panel button,
+.decks-review-modal button,
+.decks-statistics-container button,
+.decks-anki-export-ui button,
+.decks-deck-config-ui button,
+.decks-heatmap-container button,
 .decks-view input,
-.deck-list-panel input,
-.review-modal input,
-.statistics-container input,
-.anki-export-ui input,
-.deck-config-ui input,
-.heatmap-container input,
+.decks-deck-list-panel input,
+.decks-review-modal input,
+.decks-statistics-container input,
+.decks-anki-export-ui input,
+.decks-deck-config-ui input,
+.decks-heatmap-container input,
 .decks-view textarea,
-.deck-list-panel textarea,
-.review-modal textarea,
-.statistics-container textarea,
-.anki-export-ui textarea,
-.deck-config-ui textarea,
-.heatmap-container textarea,
+.decks-deck-list-panel textarea,
+.decks-review-modal textarea,
+.decks-statistics-container textarea,
+.decks-anki-export-ui textarea,
+.decks-deck-config-ui textarea,
+.decks-heatmap-container textarea,
 .decks-view select,
-.deck-list-panel select,
-.review-modal select,
-.statistics-container select,
-.anki-export-ui select,
-.deck-config-ui select,
-.heatmap-container select {
+.decks-deck-list-panel select,
+.decks-review-modal select,
+.decks-statistics-container select,
+.decks-anki-export-ui select,
+.decks-deck-config-ui select,
+.decks-heatmap-container select {
     -webkit-tap-highlight-color: transparent;
     touch-action: manipulation;
     -webkit-user-drag: none;
@@ -218,48 +218,48 @@
 }
 
 /* Prevent text selection on interactive elements - scoped to plugin containers */
-.decks-view .deck-name-link,
-.deck-list-panel .deck-name-link,
-.review-modal .deck-name-link,
-.statistics-container .deck-name-link,
-.anki-export-ui .deck-name-link,
-.deck-config-ui .deck-name-link,
-.heatmap-container .deck-name-link,
-.decks-view .suggestion-item,
-.deck-list-panel .suggestion-item,
-.review-modal .suggestion-item,
-.statistics-container .suggestion-item,
-.anki-export-ui .suggestion-item,
-.deck-config-ui .suggestion-item,
-.heatmap-container .suggestion-item,
-.decks-view .nav-button,
-.deck-list-panel .nav-button,
-.review-modal .nav-button,
-.statistics-container .nav-button,
-.anki-export-ui .nav-button,
-.deck-config-ui .nav-button,
-.heatmap-container .nav-button,
-.decks-view .stats-button,
-.deck-list-panel .stats-button,
-.review-modal .stats-button,
-.statistics-container .stats-button,
-.anki-export-ui .stats-button,
-.deck-config-ui .stats-button,
-.heatmap-container .stats-button,
-.decks-view .refresh-button,
-.deck-list-panel .refresh-button,
-.review-modal .refresh-button,
-.statistics-container .refresh-button,
-.anki-export-ui .refresh-button,
-.deck-config-ui .refresh-button,
-.heatmap-container .refresh-button,
-.decks-view .deck-config-button,
-.deck-list-panel .deck-config-button,
-.review-modal .deck-config-button,
-.statistics-container .deck-config-button,
-.anki-export-ui .deck-config-button,
-.deck-config-ui .deck-config-button,
-.heatmap-container .deck-config-button {
+.decks-view .decks-deck-name-link,
+.decks-deck-list-panel .decks-deck-name-link,
+.decks-review-modal .decks-deck-name-link,
+.decks-statistics-container .decks-deck-name-link,
+.decks-anki-export-ui .decks-deck-name-link,
+.decks-deck-config-ui .decks-deck-name-link,
+.decks-heatmap-container .decks-deck-name-link,
+.decks-view .decks-suggestion-item,
+.decks-deck-list-panel .decks-suggestion-item,
+.decks-review-modal .decks-suggestion-item,
+.decks-statistics-container .decks-suggestion-item,
+.decks-anki-export-ui .decks-suggestion-item,
+.decks-deck-config-ui .decks-suggestion-item,
+.decks-heatmap-container .decks-suggestion-item,
+.decks-view .decks-nav-button,
+.decks-deck-list-panel .decks-nav-button,
+.decks-review-modal .decks-nav-button,
+.decks-statistics-container .decks-nav-button,
+.decks-anki-export-ui .decks-nav-button,
+.decks-deck-config-ui .decks-nav-button,
+.decks-heatmap-container .decks-nav-button,
+.decks-view .decks-stats-button,
+.decks-deck-list-panel .decks-stats-button,
+.decks-review-modal .decks-stats-button,
+.decks-statistics-container .decks-stats-button,
+.decks-anki-export-ui .decks-stats-button,
+.decks-deck-config-ui .decks-stats-button,
+.decks-heatmap-container .decks-stats-button,
+.decks-view .decks-refresh-button,
+.decks-deck-list-panel .decks-refresh-button,
+.decks-review-modal .decks-refresh-button,
+.decks-statistics-container .decks-refresh-button,
+.decks-anki-export-ui .decks-refresh-button,
+.decks-deck-config-ui .decks-refresh-button,
+.decks-heatmap-container .decks-refresh-button,
+.decks-view .decks-deck-config-button,
+.decks-deck-list-panel .decks-deck-config-button,
+.decks-review-modal .decks-deck-config-button,
+.decks-statistics-container .decks-deck-config-button,
+.decks-anki-export-ui .decks-deck-config-button,
+.decks-deck-config-ui .decks-deck-config-button,
+.decks-heatmap-container .decks-deck-config-button {
     -webkit-user-select: none;
     -moz-user-select: none;
     -ms-user-select: none;
@@ -268,73 +268,87 @@
 }
 
 /* Fast click for iOS Safari - scoped to plugin containers */
-.decks-view .deck-name-link,
-.deck-list-panel .deck-name-link,
-.review-modal .deck-name-link,
-.statistics-container .deck-name-link,
-.anki-export-ui .deck-name-link,
-.deck-config-ui .deck-name-link,
-.heatmap-container .deck-name-link,
-.decks-view .suggestion-item,
-.deck-list-panel .suggestion-item,
-.review-modal .suggestion-item,
-.statistics-container .suggestion-item,
-.anki-export-ui .suggestion-item,
-.deck-config-ui .suggestion-item,
-.heatmap-container .suggestion-item,
-.decks-view .nav-button,
-.deck-list-panel .nav-button,
-.review-modal .nav-button,
-.statistics-container .nav-button,
-.anki-export-ui .nav-button,
-.deck-config-ui .nav-button,
-.heatmap-container .nav-button,
-.decks-view .stats-button,
-.deck-list-panel .stats-button,
-.review-modal .stats-button,
-.statistics-container .stats-button,
-.anki-export-ui .stats-button,
-.deck-config-ui .stats-button,
-.heatmap-container .stats-button,
-.decks-view .refresh-button,
-.deck-list-panel .refresh-button,
-.review-modal .refresh-button,
-.statistics-container .refresh-button,
-.anki-export-ui .refresh-button,
-.deck-config-ui .refresh-button,
-.heatmap-container .refresh-button,
-.decks-view .deck-config-button,
-.deck-list-panel .deck-config-button,
-.review-modal .deck-config-button,
-.statistics-container .deck-config-button,
-.anki-export-ui .deck-config-button,
-.deck-config-ui .deck-config-button,
-.heatmap-container .deck-config-button,
+.decks-view .decks-deck-name-link,
+.decks-deck-list-panel .decks-deck-name-link,
+.decks-review-modal .decks-deck-name-link,
+.decks-statistics-container .decks-deck-name-link,
+.decks-anki-export-ui .decks-deck-name-link,
+.decks-deck-config-ui .decks-deck-name-link,
+.decks-heatmap-container .decks-deck-name-link,
+.decks-view .decks-suggestion-item,
+.decks-deck-list-panel .decks-suggestion-item,
+.decks-review-modal .decks-suggestion-item,
+.decks-statistics-container .decks-suggestion-item,
+.decks-anki-export-ui .decks-suggestion-item,
+.decks-deck-config-ui .decks-suggestion-item,
+.decks-heatmap-container .decks-suggestion-item,
+.decks-view .decks-nav-button,
+.decks-deck-list-panel .decks-nav-button,
+.decks-review-modal .decks-nav-button,
+.decks-statistics-container .decks-nav-button,
+.decks-anki-export-ui .decks-nav-button,
+.decks-deck-config-ui .decks-nav-button,
+.decks-heatmap-container .decks-nav-button,
+.decks-view .decks-stats-button,
+.decks-deck-list-panel .decks-stats-button,
+.decks-review-modal .decks-stats-button,
+.decks-statistics-container .decks-stats-button,
+.decks-anki-export-ui .decks-stats-button,
+.decks-deck-config-ui .decks-stats-button,
+.decks-heatmap-container .decks-stats-button,
+.decks-view .decks-refresh-button,
+.decks-deck-list-panel .decks-refresh-button,
+.decks-review-modal .decks-refresh-button,
+.decks-statistics-container .decks-refresh-button,
+.decks-anki-export-ui .decks-refresh-button,
+.decks-deck-config-ui .decks-refresh-button,
+.decks-heatmap-container .decks-refresh-button,
+.decks-view .decks-deck-config-button,
+.decks-deck-list-panel .decks-deck-config-button,
+.decks-review-modal .decks-deck-config-button,
+.decks-statistics-container .decks-deck-config-button,
+.decks-anki-export-ui .decks-deck-config-button,
+.decks-deck-config-ui .decks-deck-config-button,
+.decks-heatmap-container .decks-deck-config-button,
 .decks-view button,
-.deck-list-panel button,
-.review-modal button,
-.statistics-container button,
-.anki-export-ui button,
-.deck-config-ui button,
-.heatmap-container button {
+.decks-deck-list-panel button,
+.decks-review-modal button,
+.decks-statistics-container button,
+.decks-anki-export-ui button,
+.decks-deck-config-ui button,
+.decks-heatmap-container button {
     cursor: pointer;
     -webkit-tap-highlight-color: rgba(0, 0, 0, 0);
 }
 
 /* Modal styles */
-.deck-review-modal {
+.decks-modal {
     height: 85vh;
     max-height: 85vh;
 }
 
-.deck-review-modal-mobile {
+.decks-modal-mobile {
     height: 100% !important;
     max-height: 100vh !important;
     width: 100% !important;
     max-width: 100vw !important;
+    padding-top: env(safe-area-inset-top);
+    padding-left: env(safe-area-inset-left);
+    padding-right: env(safe-area-inset-right);
+    padding-bottom: env(safe-area-inset-bottom);
 }
 
-.deck-review-modal .modal-content {
+.decks-modal-mobile .modal-close-button {
+    z-index: 1000;
+    position: absolute;
+    transform: translateY(env(safe-area-inset-top));
+}
+
+.decks-modal-mobile .modal-header {
+    padding-top: translateY(env(safe-area-inset-top));
+}
+
+.decks-deck-review-modal .modal-content {
     display: flex;
     flex-direction: column;
     height: 100%;
@@ -342,19 +356,19 @@
     padding: 0;
 }
 
-.deck-review-modal .modal {
+.decks-deck-review-modal .modal {
     height: 100%;
     display: flex;
     flex-direction: column;
 }
 
-.deck-review-modal .modal-container {
+.decks-deck-review-modal .modal-container {
     overflow: hidden;
     width: 100%;
     height: 100%;
 }
 
-.statistics-modal .modal {
+.decks-statistics-modal .modal {
     width: 100%;
     max-width: 85vw;
     height: 100%;
@@ -366,7 +380,7 @@
     transform: translate(-50%, -50%);
 }
 
-.statistics-modal-container {
+.decks-statistics-modal-container {
     display: flex;
     align-items: center;
     justify-content: center;
@@ -378,28 +392,28 @@
     z-index: 1000;
 }
 
-.statistics-modal-content {
+.decks-statistics-modal-content {
     overflow: hidden;
     height: 100%;
 }
 
 /* Extra small screen protection */
-.deck-review-modal .modal,
-.deck-review-modal-mobile,
-.statistics-modal .modal,
-.statistics-modal-mobile,
-.deck-config-modal-mobile {
+.decks-deck-review-modal .modal,
+.decks-deck-review-modal-mobile,
+.decks-statistics-modal .modal,
+.decks-statistics-modal-mobile,
+.decks-deck-config-modal-mobile {
     min-width: 280px !important;
     min-height: 400px !important;
 }
 
-.statistics-modal-title {
+.decks-statistics-modal-title {
     font-size: 16px;
     margin: 0 0 12px 0;
     padding: 0 16px;
 }
 
-.statistics-modal-component-container {
+.decks-statistics-modal-component-container {
     padding: 0;
     margin: 0;
     height: calc(80vh - 60px);
@@ -408,7 +422,7 @@
     overflow-x: hidden;
 }
 
-.deck-config-container {
+.decks-deck-config-container {
     padding: 0;
     margin: 0;
 }
@@ -425,47 +439,47 @@
 /* Touch-friendly button sizes for all mobile devices - scoped to plugin containers */
 @media (hover: none) and (pointer: coarse) {
     .decks-view button,
-    .deck-list-panel button,
-    .review-modal button,
-    .statistics-container button,
-    .anki-export-ui button,
-    .deck-config-ui button,
-    .heatmap-container button {
+    .decks-deck-list-panel button,
+    .decks-review-modal button,
+    .decks-statistics-container button,
+    .decks-anki-export-ui button,
+    .decks-deck-config-ui button,
+    .decks-heatmap-container button {
         min-height: 44px;
         min-width: 44px;
     }
 
-    .decks-view .difficulty-button,
-    .deck-list-panel .difficulty-button,
-    .review-modal .difficulty-button,
-    .statistics-container .difficulty-button,
-    .anki-export-ui .difficulty-button,
-    .deck-config-ui .difficulty-button,
-    .heatmap-container .difficulty-button {
+    .decks-view .decks-difficulty-button,
+    .decks-deck-list-panel .decks-difficulty-button,
+    .decks-review-modal .decks-difficulty-button,
+    .decks-statistics-container .decks-difficulty-button,
+    .decks-anki-export-ui .decks-difficulty-button,
+    .decks-deck-config-ui .decks-difficulty-button,
+    .decks-heatmap-container .decks-difficulty-button {
         min-height: 48px;
     }
 
-    .decks-view .deck-config-button,
-    .deck-list-panel .deck-config-button,
-    .review-modal .deck-config-button,
-    .statistics-container .deck-config-button,
-    .anki-export-ui .deck-config-button,
-    .deck-config-ui .deck-config-button,
-    .heatmap-container .deck-config-button,
-    .decks-view .stats-button,
-    .deck-list-panel .stats-button,
-    .review-modal .stats-button,
-    .statistics-container .stats-button,
-    .anki-export-ui .stats-button,
-    .deck-config-ui .stats-button,
-    .heatmap-container .stats-button,
-    .decks-view .refresh-button,
-    .deck-list-panel .refresh-button,
-    .review-modal .refresh-button,
-    .statistics-container .refresh-button,
-    .anki-export-ui .refresh-button,
-    .deck-config-ui .refresh-button,
-    .heatmap-container .refresh-button {
+    .decks-view .decks-deck-config-button,
+    .decks-deck-list-panel .decks-deck-config-button,
+    .decks-review-modal .decks-deck-config-button,
+    .decks-statistics-container .decks-deck-config-button,
+    .decks-anki-export-ui .decks-deck-config-button,
+    .decks-deck-config-ui .decks-deck-config-button,
+    .decks-heatmap-container .decks-deck-config-button,
+    .decks-view .decks-stats-button,
+    .decks-deck-list-panel .decks-stats-button,
+    .decks-review-modal .decks-stats-button,
+    .decks-statistics-container .decks-stats-button,
+    .decks-anki-export-ui .decks-stats-button,
+    .decks-deck-config-ui .decks-stats-button,
+    .decks-heatmap-container .decks-stats-button,
+    .decks-view .decks-refresh-button,
+    .decks-deck-list-panel .decks-refresh-button,
+    .decks-review-modal .decks-refresh-button,
+    .decks-statistics-container .decks-refresh-button,
+    .decks-anki-export-ui .decks-refresh-button,
+    .decks-deck-config-ui .decks-refresh-button,
+    .decks-heatmap-container .decks-refresh-button {
         min-height: 44px;
         min-width: 44px;
     }

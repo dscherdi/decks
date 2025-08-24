@@ -217,10 +217,10 @@
 
         // Create dropdown menu
         const dropdown = document.createElement("div");
-        dropdown.className = "deck-config-dropdown";
+        dropdown.className = "decks-deck-config-dropdown";
 
         const configOption = document.createElement("div");
-        configOption.className = "dropdown-option";
+        configOption.className = "decks-dropdown-option";
         configOption.textContent = "Configure deck";
         configOption.onclick = () => {
             closeActiveDropdown();
@@ -228,7 +228,7 @@
         };
 
         const forceRefreshOption = document.createElement("div");
-        forceRefreshOption.className = "dropdown-option";
+        forceRefreshOption.className = "decks-dropdown-option";
         forceRefreshOption.textContent = "Force refresh";
         forceRefreshOption.onclick = () => {
             closeActiveDropdown();
@@ -236,7 +236,7 @@
         };
 
         const exportOption = document.createElement("div");
-        exportOption.className = "dropdown-option";
+        exportOption.className = "decks-dropdown-option";
         exportOption.textContent = "Export to Anki";
         exportOption.onclick = () => {
             closeActiveDropdown();
@@ -412,12 +412,12 @@
     });
 </script>
 
-<div class="deck-list-panel">
-    <div class="panel-header">
-        <h3 class="panel-title">Flashcard Decks</h3>
-        <div class="header-buttons">
+<div class="decks-deck-list-panel">
+    <div class="decks-panel-header">
+        <h3 class="decks-panel-title">Flashcard Decks</h3>
+        <div class="decks-header-buttons">
             <button
-                class="stats-button"
+                class="decks-stats-button"
                 on:click={(e) => handleTouchClick(onOpenStatistics, e)}
                 on:touchend={(e) => handleTouchClick(onOpenStatistics, e)}
                 title="View Overall Statistics"
@@ -440,7 +440,7 @@
                 </svg>
             </button>
             <button
-                class="refresh-button"
+                class="decks-refresh-button"
                 class:refreshing={isRefreshing}
                 on:click={(e) => handleTouchClick(handleRefresh, e)}
                 on:touchend={(e) => handleTouchClick(handleRefresh, e)}
@@ -467,12 +467,12 @@
         </div>
     </div>
 
-    <div class="deck-content">
-        <div class="filter-section">
-            <div class="filter-container">
+    <div class="decks-deck-content">
+        <div class="decks-filter-section">
+            <div class="decks-filter-container">
                 <input
                     type="text"
-                    class="filter-input"
+                    class="decks-filter-input"
                     placeholder="Filter by name or tag... (e.g., 'spanish', '#flashcards')"
                     bind:value={filterText}
                     on:input={handleFilterInput}
@@ -480,11 +480,13 @@
                     on:blur={handleFilterBlur}
                 />
                 {#if showSuggestions && filteredSuggestions.length > 0}
-                    <div class="suggestions-dropdown">
-                        <div class="suggestions-header">Available tags:</div>
+                    <div class="decks-suggestions-dropdown">
+                        <div class="decks-suggestions-header">
+                            Filter by tags:
+                        </div>
                         {#each filteredSuggestions as tag}
                             <button
-                                class="suggestion-item"
+                                class="decks-suggestion-item"
                                 on:mousedown|preventDefault={() =>
                                     selectSuggestion(tag)}
                                 on:click={(e) =>
@@ -503,13 +505,13 @@
                         {/each}
                     </div>
                 {:else if !filterText.trim() && availableTags.length > 0 && inputFocused}
-                    <div class="suggestions-dropdown">
-                        <div class="suggestions-header">
+                    <div class="decks-suggestions-dropdown">
+                        <div class="decks-suggestions-header">
                             Available tags (click to filter):
                         </div>
                         {#each availableTags.slice(0, 5) as tag}
                             <button
-                                class="suggestion-item"
+                                class="decks-suggestion-item"
                                 on:mousedown|preventDefault={() =>
                                     selectSuggestion(tag)}
                                 on:click={(e) =>
@@ -532,33 +534,33 @@
         </div>
 
         {#if allDecks.length === 0}
-            <div class="empty-state">
+            <div class="decks-empty-state">
                 <p>No flashcard decks found.</p>
-                <p class="help-text">
+                <p class="decks-help-text">
                     Tag your notes with #flashcards to create decks.
                 </p>
             </div>
         {:else if decks.length === 0}
-            <div class="empty-state">
+            <div class="decks-empty-state">
                 <p>No decks match your filter.</p>
-                <p class="help-text">Try adjusting your search terms.</p>
+                <p class="decks-help-text">Try adjusting your search terms.</p>
             </div>
         {:else}
-            <div class="deck-table">
-                <div class="table-header">
-                    <div class="col-deck">Deck</div>
-                    <div class="col-stat">New</div>
-                    <div class="col-stat">Due</div>
-                    <div class="col-config"></div>
+            <div class="decks-deck-table">
+                <div class="decks-table-header">
+                    <div class="decks-col-deck">Deck</div>
+                    <div class="decks-col-stat">New</div>
+                    <div class="decks-col-stat">Due</div>
+                    <div class="decks-col-config"></div>
                 </div>
 
-                <div class="table-body">
+                <div class="decks-table-body">
                     {#each decks as deck}
                         {@const stats = getDeckStats(deck.id)}
-                        <div class="deck-row">
-                            <div class="col-deck">
+                        <div class="decks-deck-row">
+                            <div class="decks-col-deck">
                                 <span
-                                    class="deck-name-link"
+                                    class="decks-deck-name-link"
                                     on:click={(e) =>
                                         handleTouchClick(
                                             () => handleDeckClick(deck),
@@ -580,7 +582,7 @@
                                 </span>
                             </div>
                             <div
-                                class="col-stat"
+                                class="decks-col-stat"
                                 class:has-cards={stats.newCount > 0}
                                 class:updating={isUpdatingStats}
                                 class:has-limit={deck.config
@@ -591,11 +593,12 @@
                             >
                                 {stats.newCount}
                                 {#if deck.config.hasNewCardsLimitEnabled}
-                                    <span class="limit-indicator">📅</span>
+                                    <span class="decks-limit-indicator">⚠</span
+                                    >
                                 {/if}
                             </div>
                             <div
-                                class="col-stat"
+                                class="decks-col-stat"
                                 class:has-cards={false}
                                 class:updating={isUpdatingStats}
                                 style="display: none;"
@@ -603,7 +606,7 @@
                                 0
                             </div>
                             <div
-                                class="col-stat"
+                                class="decks-col-stat"
                                 class:has-cards={stats.dueCount > 0}
                                 class:updating={isUpdatingStats}
                                 class:has-limit={deck.config
@@ -614,12 +617,13 @@
                             >
                                 {stats.dueCount}
                                 {#if deck.config.hasReviewCardsLimitEnabled}
-                                    <span class="limit-indicator">📅</span>
+                                    <span class="decks-limit-indicator">📅</span
+                                    >
                                 {/if}
                             </div>
-                            <div class="col-config">
+                            <div class="decks-col-config">
                                 <button
-                                    class="deck-config-button"
+                                    class="decks-deck-config-button"
                                     on:click={(e) =>
                                         handleTouchClick(
                                             () => handleConfigClick(deck, e),
@@ -658,35 +662,35 @@
         {/if}
     </div>
 
-    <div class="heatmap-section">
+    <div class="decks-heatmap-section">
         <ReviewHeatmap bind:this={heatmapComponent} {getReviewCounts} />
     </div>
 
-    <div class="study-stats-section">
+    <div class="decks-study-stats-section">
         {#if studyStats.todayCards > 0}
-            <div class="today-summary">
+            <div class="decks-today-summary">
                 Studied {studyStats.todayCards} cards in {formatHours(
                     studyStats.todayHours,
                 )} today ({formatPace(studyStats.todayPaceSeconds)})
             </div>
         {/if}
 
-        <div class="stats-grid">
-            <div class="stat-item">
-                <div class="stat-label">Total</div>
-                <div class="stat-value">
+        <div class="decks-stats-grid">
+            <div class="decks-stat-item">
+                <div class="decks-stat-label">Total</div>
+                <div class="decks-stat-value">
                     {formatHours(studyStats.totalHours)}
                 </div>
             </div>
-            <div class="stat-item">
-                <div class="stat-label">Past Month</div>
-                <div class="stat-value">
+            <div class="decks-stat-item">
+                <div class="decks-stat-label">Past Month</div>
+                <div class="decks-stat-value">
                     {formatHours(studyStats.pastMonthHours)}
                 </div>
             </div>
-            <div class="stat-item">
-                <div class="stat-label">Past Week</div>
-                <div class="stat-value">
+            <div class="decks-stat-item">
+                <div class="decks-stat-label">Past Week</div>
+                <div class="decks-stat-value">
                     {formatHours(studyStats.pastWeekHours)}
                 </div>
             </div>
@@ -695,7 +699,7 @@
 </div>
 
 <style>
-    .deck-list-panel {
+    .decks-deck-list-panel {
         width: 100%;
         height: 100%;
         max-height: 100vh;
@@ -714,7 +718,7 @@
         padding-bottom: 12px !important;
     }
 
-    .deck-content {
+    .decks-deck-content {
         flex: 1;
         display: flex;
         flex-direction: column;
@@ -722,13 +726,13 @@
         min-height: 0;
     }
 
-    .heatmap-section {
+    .decks-heatmap-section {
         flex-shrink: 0;
         border-top: 1px solid var(--background-modifier-border);
         background: var(--background-primary);
     }
 
-    .panel-header {
+    .decks-panel-header {
         display: flex;
         justify-content: space-between;
         align-items: center;
@@ -736,22 +740,22 @@
         border-bottom: 1px solid var(--background-modifier-border);
     }
 
-    .header-buttons {
+    .decks-header-buttons {
         display: flex;
         gap: 8px;
         align-items: center;
     }
 
-    .filter-section {
+    .decks-filter-section {
         margin: 0 12px 16px 12px;
     }
 
-    .filter-container {
+    .decks-filter-container {
         position: relative;
         width: 100%;
     }
 
-    .filter-input {
+    .decks-filter-input {
         width: 100%;
         padding: 8px 12px;
         border: 1px solid var(--background-modifier-border);
@@ -763,7 +767,7 @@
         box-sizing: border-box;
     }
 
-    .suggestions-dropdown {
+    .decks-suggestions-dropdown {
         position: absolute;
         top: 100%;
         left: 0;
@@ -778,7 +782,7 @@
         overflow-y: auto;
     }
 
-    .suggestions-header {
+    .decks-suggestions-header {
         padding: 8px 12px;
         font-size: 12px;
         color: var(--text-muted);
@@ -786,7 +790,7 @@
         background: var(--background-secondary);
     }
 
-    .suggestion-item {
+    .decks-suggestion-item {
         display: block;
         width: 100%;
         padding: 8px 12px;
@@ -803,27 +807,27 @@
         user-select: none;
     }
 
-    .suggestion-item:hover,
-    .suggestion-item:active {
+    .decks-suggestion-item:hover,
+    .decks-suggestion-item:active {
         background: var(--background-modifier-hover);
     }
 
-    .filter-input:focus {
+    .decks-filter-input:focus {
         outline: none;
         border-color: var(--interactive-accent);
     }
 
-    .filter-input::placeholder {
+    .decks-filter-input::placeholder {
         color: var(--text-muted);
     }
 
-    .panel-title {
+    .decks-panel-title {
         margin: 0;
         font-size: 16px;
         font-weight: 600;
     }
 
-    .stats-button {
+    .decks-stats-button {
         padding: 6px;
         background: var(--interactive-normal);
         border: 1px solid var(--interactive-normal);
@@ -837,13 +841,13 @@
         user-select: none;
     }
 
-    .stats-button:hover,
-    .stats-button:active {
+    .decks-stats-button:hover,
+    .decks-stats-button:active {
         background: var(--interactive-hover);
         color: var(--text-normal);
     }
 
-    .refresh-button {
+    .decks-refresh-button {
         background: none;
         border: none;
         cursor: pointer;
@@ -859,18 +863,18 @@
         user-select: none;
     }
 
-    .refresh-button:hover,
-    .refresh-button:active {
+    .decks-refresh-button:hover,
+    .decks-refresh-button:active {
         background: var(--background-modifier-hover);
         color: var(--text-normal);
     }
 
-    .refresh-button:disabled {
+    .decks-refresh-button:disabled {
         opacity: 0.5;
         cursor: not-allowed;
     }
 
-    .refresh-button.refreshing svg {
+    .decks-refresh-button.refreshing svg {
         animation: spin 1s linear infinite;
     }
 
@@ -883,7 +887,7 @@
         }
     }
 
-    .empty-state {
+    .decks-empty-state {
         flex: 1;
         display: flex;
         flex-direction: column;
@@ -893,16 +897,16 @@
         text-align: center;
     }
 
-    .empty-state p {
+    .decks-empty-state p {
         margin: 8px 0;
     }
 
-    .help-text {
+    .decks-help-text {
         font-size: 14px;
         color: var(--text-muted);
     }
 
-    .deck-table {
+    .decks-deck-table {
         flex: 1;
         display: flex;
         flex-direction: column;
@@ -912,7 +916,7 @@
         min-height: 0;
     }
 
-    .table-header {
+    .decks-table-header {
         display: grid;
         grid-template-columns: 1fr 60px 60px 60px;
         gap: 8px;
@@ -924,13 +928,13 @@
         align-items: center;
     }
 
-    .table-body {
+    .decks-table-body {
         flex: 1;
         overflow-y: auto;
         max-height: calc(100vh - 240px);
     }
 
-    .deck-row {
+    .decks-deck-row {
         display: grid;
         grid-template-columns: 1fr 60px 60px 60px;
         gap: 8px;
@@ -939,7 +943,7 @@
         align-items: center;
     }
 
-    .deck-name-link {
+    .decks-deck-name-link {
         cursor: pointer;
         color: var(--text-normal);
         text-decoration: underline;
@@ -955,25 +959,25 @@
         user-select: none;
     }
 
-    .deck-name-link:hover,
-    .deck-name-link:active {
+    .decks-deck-name-link:hover,
+    .decks-deck-name-link:active {
         text-decoration-color: var(--text-accent);
         color: var(--text-accent);
     }
 
-    .deck-name-link:focus {
+    .decks-deck-name-link:focus {
         outline: 2px solid var(--interactive-accent);
         outline-offset: 2px;
         border-radius: 3px;
     }
 
-    .col-config {
+    .decks-col-config {
         display: flex;
         align-items: center;
         justify-content: center;
     }
 
-    .deck-config-button {
+    .decks-deck-config-button {
         background: transparent;
         border: none;
         padding: 4px;
@@ -990,18 +994,18 @@
         user-select: none;
     }
 
-    .deck-config-button:hover,
-    .deck-config-button:active {
+    .decks-deck-config-button:hover,
+    .decks-deck-config-button:active {
         background: var(--background-modifier-hover);
         color: var(--text-normal);
     }
 
-    .deck-config-button:focus {
+    .decks-deck-config-button:focus {
         outline: 2px solid var(--interactive-accent);
         outline-offset: 2px;
     }
 
-    .col-deck {
+    .decks-col-deck {
         font-size: 14px;
         color: var(--text-normal);
         justify-self: start;
@@ -1010,149 +1014,149 @@
         overflow: hidden;
     }
 
-    .col-stat {
+    .decks-col-stat {
         text-align: center;
         font-size: 14px;
         color: var(--text-muted);
         justify-self: center;
     }
 
-    .table-header .col-deck {
+    .decks-table-header .decks-col-deck {
         font-size: 14px;
         color: var(--text-normal);
         justify-self: start;
     }
 
-    .table-header .col-stat {
+    .decks-table-header .decks-col-stat {
         text-align: center;
         font-size: 14px;
         color: var(--text-normal);
         justify-self: center;
     }
 
-    .col-stat.has-cards {
+    .decks-col-stat.has-cards {
         color: #4aa3df;
         font-weight: 500;
     }
 
-    .col-stat.updating {
+    .decks-col-stat.updating {
         opacity: 0.6;
         transition: opacity 0.3s ease;
     }
 
-    .col-stat.has-limit {
+    .decks-col-stat.has-limit {
         position: relative;
         border-left: 2px solid var(--interactive-accent);
         padding-left: 6px;
     }
 
-    .limit-indicator {
+    .decks-limit-indicator {
         font-size: 10px;
         margin-left: 4px;
         opacity: 0.7;
     }
 
-    .table-body::-webkit-scrollbar {
+    .decks-table-body::-webkit-scrollbar {
         width: 8px;
     }
 
-    .table-body::-webkit-scrollbar-track {
+    .decks-table-body::-webkit-scrollbar-track {
         background: transparent;
     }
 
-    .table-body::-webkit-scrollbar-thumb {
+    .decks-table-body::-webkit-scrollbar-thumb {
         background: var(--background-modifier-border);
         border-radius: 4px;
     }
 
-    .table-body::-webkit-scrollbar-thumb:hover {
+    .decks-table-body::-webkit-scrollbar-thumb:hover {
         background: var(--background-modifier-border-hover);
     }
     /* Mobile responsive styles */
     @media (max-width: 768px) {
-        .deck-list-panel {
+        .decks-deck-list-panel {
             min-width: unset;
             width: 100%;
         }
 
-        .panel-header {
+        .decks-panel-header {
             padding: 10px 16px;
             flex-wrap: wrap;
             gap: 8px;
         }
 
-        .panel-title {
+        .decks-panel-title {
             font-size: 14px;
         }
 
-        .header-buttons {
+        .decks-header-buttons {
             gap: 6px;
         }
 
-        .stats-button,
-        .refresh-button {
+        .decks-stats-button,
+        .decks-refresh-button {
             padding: 8px;
             min-height: 44px; /* Touch-friendly size */
             min-width: 44px;
         }
 
-        .filter-input {
+        .decks-filter-input {
             padding: 8px 12px;
             font-size: 16px; /* Prevent zoom on iOS */
             width: 100%;
             box-sizing: border-box;
         }
 
-        .filter-section {
+        .decks-filter-section {
             margin: 0 8px 16px 8px;
             width: calc(100% - 16px);
             box-sizing: border-box;
         }
 
-        .deck-list-panel {
+        .decks-deck-list-panel {
             padding: 8px;
         }
 
-        .panel-header {
+        .decks-panel-header {
             padding: 12px 8px;
             flex-wrap: wrap;
             gap: 8px;
         }
 
-        .header-buttons {
+        .decks-header-buttons {
             gap: 8px;
         }
 
-        .deck-table {
+        .decks-deck-table {
             margin: 0 8px;
             width: calc(100% - 16px);
         }
 
-        .table-header {
+        .decks-table-header {
             grid-template-columns: 1fr 55px 55px 55px;
             padding: 8px 16px;
             font-size: 12px;
         }
 
-        .deck-row {
+        .decks-deck-row {
             grid-template-columns: 1fr 55px 55px 55px;
         }
 
-        .deck-name-link {
+        .decks-deck-name-link {
             font-size: 14px;
         }
 
-        .col-stat {
+        .decks-col-stat {
             font-size: 13px;
         }
 
-        .deck-config-button {
+        .decks-deck-config-button {
             padding: 8px;
             min-height: 44px;
             min-width: 44px;
         }
 
-        .empty-state {
+        .decks-empty-state {
             padding: 24px 16px;
         }
     }
@@ -1422,7 +1426,7 @@
     }*/
 
     /* Dropdown styles */
-    :global(.deck-config-dropdown) {
+    :global(.decks-deck-config-dropdown) {
         background: var(--background-primary);
         border: 1px solid var(--background-modifier-border);
         border-radius: 6px;
@@ -1431,7 +1435,7 @@
         min-width: 140px;
     }
 
-    :global(.dropdown-option) {
+    :global(.decks-dropdown-option) {
         padding: 8px 12px;
         cursor: pointer;
         font-size: 0.9em;
@@ -1439,20 +1443,20 @@
         transition: background-color 0.15s ease;
     }
 
-    :global(.dropdown-option:hover) {
+    :global(.decks-dropdown-option:hover) {
         background: var(--background-modifier-hover);
     }
 
-    :global(.dropdown-option:active) {
+    :global(.decks-dropdown-option:active) {
         background: var(--background-modifier-active);
     }
 
     /* Study Statistics Section */
-    .study-stats-section {
+    .decks-study-stats-section {
         padding: 16px;
     }
 
-    .today-summary {
+    .decks-today-summary {
         text-align: center;
         font-size: 14px;
         font-weight: 500;
@@ -1462,17 +1466,17 @@
         border-bottom: 1px solid var(--background-modifier-border);
     }
 
-    .stats-grid {
+    .decks-stats-grid {
         display: grid;
         grid-template-columns: 1fr 1fr 1fr;
         gap: 16px;
     }
 
-    .stat-item {
+    .decks-stat-item {
         text-align: center;
     }
 
-    .stat-label {
+    .decks-stat-label {
         font-size: 12px;
         color: var(--text-muted);
         margin-bottom: 4px;
@@ -1480,28 +1484,28 @@
         letter-spacing: 0.5px;
     }
 
-    .stat-value {
+    .decks-stat-value {
         font-size: 16px;
         font-weight: 600;
         color: var(--text-accent);
     }
 
     @media (max-width: 768px) {
-        .study-stats-section {
+        .decks-study-stats-section {
             margin-top: 12px;
             padding: 12px;
         }
 
-        .today-summary {
+        .decks-today-summary {
             font-size: 13px;
             margin-bottom: 12px;
         }
 
-        .stats-grid {
+        .decks-stats-grid {
             gap: 12px;
         }
 
-        .stat-value {
+        .decks-stat-value {
             font-size: 14px;
         }
     }

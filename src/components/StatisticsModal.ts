@@ -18,23 +18,20 @@ export class StatisticsModal extends Modal {
     // Add CSS classes for styling
     const modalEl = this.containerEl.querySelector(".modal");
     if (modalEl instanceof HTMLElement) {
-      modalEl.addClass("statistics-modal");
+      modalEl.addClass("decks-modal");
+      if (window.innerWidth <= 768) {
+        modalEl.addClass("decks-modal-mobile");
+      } else {
+        modalEl.removeClass("decks-modal-mobile");
+      }
     }
 
-    this.containerEl.addClass("statistics-modal-container");
-    contentEl.addClass("statistics-modal-content");
-
-    // Modal title
-    const titleEl = contentEl.createEl("h2", { text: "Overall Statistics" });
-    titleEl.addClass("statistics-modal-title");
-
-    // Create container for Svelte component
-    const componentContainer = contentEl.createDiv("statistics-container");
-    componentContainer.addClass("statistics-modal-component-container");
+    this.containerEl.addClass("decks-statistics-modal-container");
+    contentEl.addClass("decks-statistics-modal-content");
 
     // Mount Svelte component
     this.component = new StatisticsUI({
-      target: componentContainer,
+      target: contentEl,
       props: {
         plugin: this.plugin,
       },
@@ -49,9 +46,9 @@ export class StatisticsModal extends Modal {
     const handleResize = () => {
       if (modalEl instanceof HTMLElement) {
         if (window.innerWidth <= 768) {
-          modalEl.addClass("statistics-modal-mobile");
+          modalEl.addClass("decks-modal-mobile");
         } else {
-          modalEl.removeClass("statistics-modal-mobile");
+          modalEl.removeClass("decks-modal-mobile");
         }
       }
     };

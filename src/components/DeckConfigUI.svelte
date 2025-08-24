@@ -255,11 +255,12 @@
 
 <svelte:window on:keydown={handleKeydown} />
 
-<div class="deck-config-ui">
+<div class="decks-deck-config-ui">
+    <h2 class="">Configure Deck: {deck.name}</h2>
     <!-- Deck Information Section -->
-    <div class="deck-info-section">
+    <div class="decks-deck-info-section">
         <h3>Deck Information</h3>
-        <ul class="deck-info-list">
+        <ul class="decks-deck-info-list">
             <li><strong>Name:</strong> {deck.name}</li>
             <li><strong>Tag:</strong> {deck.tag}</li>
             <li><strong>File:</strong> {deck.filepath}</li>
@@ -267,9 +268,9 @@
     </div>
 
     <!-- Settings Section -->
-    <div class="deck-settings-section">
+    <div class="decks-deck-settings-section">
         <h3>Daily Card Limits</h3>
-        <div class="setting-item-description-global">
+        <div class="decks-setting-item-description-global">
             New cards are subject to daily limits when enabled.
         </div>
 
@@ -288,9 +289,9 @@
     </div>
 
     <!-- Parsing Settings -->
-    <div class="deck-settings-section">
+    <div class="decks-deck-settings-section">
         <h3>Parsing Settings</h3>
-        <div class="setting-item-description-global">
+        <div class="decks-setting-item-description-global">
             Configure how flashcards are parsed from your notes for this deck.
         </div>
 
@@ -298,9 +299,9 @@
     </div>
 
     <!-- FSRS Algorithm Settings -->
-    <div class="deck-settings-section">
+    <div class="decks-deck-settings-section">
         <h3>FSRS Algorithm Settings</h3>
-        <div class="setting-item-description-global">
+        <div class="decks-setting-item-description-global">
             These settings control the spaced repetition algorithm for this
             deck.
         </div>
@@ -311,7 +312,7 @@
     </div>
 
     <!-- Action Buttons -->
-    <div class="modal-footer">
+    <div class="decks-modal-footer">
         <button
             class="mod-cta"
             on:click={(e) => handleTouchClick(handleSave, e)}
@@ -329,11 +330,11 @@
 </div>
 
 <style>
-    .deck-config-ui {
-        padding: 0;
+    .decks-deck-config-ui {
+        padding: 20px;
     }
 
-    .deck-info-section {
+    .decks-deck-info-section {
         margin-bottom: 24px;
         padding: 16px;
         background: var(--background-secondary);
@@ -341,45 +342,45 @@
         border: 1px solid var(--background-modifier-border);
     }
 
-    .deck-info-section h3 {
+    .decks-deck-info-section h3 {
         margin: 0 0 12px 0;
         font-size: 1.1em;
         color: var(--text-normal);
         font-weight: 600;
     }
 
-    .deck-info-list {
+    .decks-deck-info-list {
         margin: 0;
         padding: 0;
         list-style: none;
     }
 
-    .deck-info-list li {
+    .decks-deck-info-list li {
         margin: 0 0 8px 0;
         font-size: 0.9em;
         color: var(--text-muted);
     }
 
-    .deck-info-list li:last-child {
+    .decks-deck-info-list li:last-child {
         margin-bottom: 0;
     }
 
-    .deck-info-list strong {
+    .decks-deck-info-list strong {
         color: var(--text-normal);
     }
 
-    .deck-settings-section {
+    .decks-deck-settings-section {
         margin-bottom: 24px;
     }
 
-    .deck-settings-section h3 {
+    .decks-deck-settings-section h3 {
         margin: 0 0 16px 0;
         font-size: 1.1em;
         color: var(--text-normal);
         font-weight: 600;
     }
 
-    .setting-item-description-global {
+    .decks-setting-item-description-global {
         font-size: 0.8em;
         color: var(--text-muted);
         line-height: 1.4;
@@ -396,7 +397,7 @@
         pointer-events: none;
     }
 
-    .modal-footer {
+    .decks-modal-footer {
         display: flex;
         align-items: center;
         justify-content: flex-end;
@@ -406,7 +407,7 @@
         border-top: 1px solid var(--background-modifier-border);
     }
 
-    .modal-footer button {
+    .decks-modal-footer button {
         padding: 8px 16px;
         border-radius: 4px;
         border: 1px solid var(--background-modifier-border);
@@ -422,59 +423,55 @@
         min-width: 80px;
     }
 
-    .modal-footer button:hover:not(:disabled),
-    .modal-footer button:active:not(:disabled) {
+    .decks-modal-footer button:hover:not(:disabled),
+    .decks-modal-footer button:active:not(:disabled) {
         background: var(--background-modifier-hover);
     }
 
-    .modal-footer button:disabled {
+    .decks-modal-footer button:disabled {
         opacity: 0.5;
         cursor: not-allowed;
     }
 
-    .modal-footer button.mod-cta {
+    .decks-modal-footer button.mod-cta {
         background: var(--interactive-accent);
         color: var(--text-on-accent);
         border-color: var(--interactive-accent);
     }
 
-    .modal-footer button.mod-cta:hover:not(:disabled),
-    .modal-footer button.mod-cta:active:not(:disabled) {
+    .decks-modal-footer button.mod-cta:hover:not(:disabled),
+    .decks-modal-footer button.mod-cta:active:not(:disabled) {
         background: var(--interactive-accent-hover);
         border-color: var(--interactive-accent-hover);
     }
 
-    .modal-footer button:focus {
+    .decks-modal-footer button:focus {
         outline: 2px solid var(--interactive-accent);
         outline-offset: 2px;
     }
 
     /* Mobile responsive styles */
     @media (max-width: 768px) {
-        .deck-config-ui {
-            padding: 0;
-        }
-
-        .deck-info-section {
+        .decks-deck-info-section {
             margin-bottom: 20px;
             padding: 12px;
         }
 
-        .deck-info-section h3 {
+        .decks-deck-info-section h3 {
             font-size: 1em;
         }
 
-        .deck-settings-section h3 {
+        .decks-deck-settings-section h3 {
             font-size: 1em;
         }
 
-        .modal-footer {
+        .decks-modal-footer {
             padding-top: 20px;
             flex-direction: column-reverse;
             gap: 8px;
         }
 
-        .modal-footer button {
+        .decks-modal-footer button {
             width: 100%;
             padding: 12px 16px;
             font-size: 16px;
@@ -483,20 +480,20 @@
     }
 
     @media (max-width: 480px) {
-        .deck-info-section {
+        .decks-deck-info-section {
             padding: 10px;
         }
 
-        .deck-info-list li {
+        .decks-deck-info-list li {
             font-size: 0.85em;
         }
 
-        .setting-item-description-global {
+        .decks-setting-item-description-global {
             font-size: 0.75em;
             padding: 10px;
         }
 
-        .modal-footer button {
+        .decks-modal-footer button {
             padding: 14px 20px;
             min-height: 52px;
         }
@@ -504,38 +501,37 @@
 
     @media (max-width: 390px) {
         /* iPhone 12 Pro and similar 390px width phones */
-        .deck-config-ui {
-            padding: 0;
+        .decks-deck-config-ui {
             max-width: 390px;
         }
 
-        .deck-info-section {
+        .decks-deck-info-section {
             padding: 8px;
             margin-bottom: 16px;
         }
 
-        .deck-info-section h3 {
+        .decks-deck-info-section h3 {
             font-size: 0.9em;
         }
 
-        .deck-info-list li {
+        .decks-deck-info-list li {
             font-size: 0.8em;
         }
 
-        .deck-settings-section h3 {
+        .decks-deck-settings-section h3 {
             font-size: 0.9em;
         }
 
-        .setting-item-description-global {
+        .decks-setting-item-description-global {
             font-size: 0.7em;
             padding: 8px;
         }
 
-        .modal-footer {
+        .decks-modal-footer {
             padding-top: 16px;
         }
 
-        .modal-footer button {
+        .decks-modal-footer button {
             padding: 12px 16px;
             font-size: 14px;
         }

@@ -29,21 +29,20 @@ export class DeckConfigModal extends Modal {
     // Add mobile-specific classes
     const modalEl = this.containerEl.querySelector(".modal");
     if (modalEl instanceof HTMLElement) {
-      modalEl.addClass("deck-config-modal");
+      modalEl.addClass("decks-modal");
+      if (window.innerWidth <= 768) {
+        modalEl.addClass("decks-modal-mobile");
+      } else {
+        modalEl.removeClass("decks-modal-mobile");
+      }
     }
 
     // Modal title
-    contentEl.createEl("h2", { text: `Configure Deck: ${this.deck.name}` });
-
-    // Create container for Svelte component
-    const componentContainer = contentEl.createDiv("deck-config-container");
-
-    // Add CSS class for styling
-    componentContainer.addClass("deck-config-container");
+    contentEl.addClass("decks-deck-config-container");
 
     // Mount Svelte component
     this.component = new DeckConfigUI({
-      target: componentContainer,
+      target: contentEl,
       props: {
         deck: this.deck,
         config: this.config,
@@ -67,10 +66,10 @@ export class DeckConfigModal extends Modal {
     const handleResize = () => {
       const modalEl = this.containerEl.querySelector(".modal");
       if (modalEl instanceof HTMLElement) {
-        if (Platform.isIosApp || Platform.isAndroidApp) {
-          modalEl.addClass("deck-config-modal-mobile");
+        if (window.innerWidth <= 768) {
+          modalEl.addClass("decks-modal-mobile");
         } else {
-          modalEl.removeClass("deck-config-modal-mobile");
+          modalEl.removeClass("decks-modal-mobile");
         }
       }
     };

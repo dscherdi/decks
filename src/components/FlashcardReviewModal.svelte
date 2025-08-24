@@ -202,15 +202,10 @@
         else if (v === 4) await handleReview("easy");
     }
 
-    const onShowAnswer = (e: PointerEvent) => {
+    const onShowAnswer = async (e: PointerEvent) => {
         e.preventDefault();
-        console.log(
-            "Show answer event:",
-            e.type,
-            "pointerType:",
-            e.pointerType,
-        );
         revealAnswer();
+        await yieldToUI();
     };
 
     const onRating = async (e: PointerEvent, v: 1 | 2 | 3 | 4) => {
@@ -250,16 +245,16 @@
     }
 </script>
 
-<div class="review-modal">
-    <div class="modal-header">
+<div class="decks-review-modal">
+    <div class="decks-modal-header">
         <h3>Review Session - {deck.name}</h3>
-        <div class="progress-info">
+        <div class="decks-progress-info">
             <span
                 >Reviewed: {sessionProgress
                     ? sessionProgress.doneUnique
                     : reviewedCount}</span
             >
-            <span class="remaining"
+            <span class="decks-remaining"
                 >({sessionProgress
                     ? `${sessionProgress.goalTotal - sessionProgress.doneUnique} remaining`
                     : currentCard
@@ -270,115 +265,122 @@
     </div>
 
     {#if settings?.review?.showProgress !== false}
-        <div class="review-progress-bar">
-            <div class="progress-fill" style="width: {progress}%"></div>
+        <div class="decks-review-progress-bar">
+            <div class="decks-progress-fill" style="width: {progress}%"></div>
         </div>
     {/if}
 
     {#if currentCard}
-        <div class="card-content">
-            <div class="question-section">
-                <div class="card-side front" bind:this={frontEl}></div>
+        <div class="decks-card-content">
+            <div class="decks-question-section">
+                <div
+                    class="decks-card-side decks-front"
+                    bind:this={frontEl}
+                ></div>
             </div>
 
-            <div class="answer-section" class:hidden={!showAnswer}>
-                <div class="separator"></div>
-                <div class="card-side back" bind:this={backEl}></div>
+            <div class="decks-answer-section" class:hidden={!showAnswer}>
+                <div class="decks-separator"></div>
+                <div
+                    class="decks-card-side decks-back"
+                    bind:this={backEl}
+                ></div>
             </div>
         </div>
 
-        <div class="action-buttons">
+        <div class="decks-action-buttons">
             {#if !showAnswer}
                 <button
-                    class="show-answer-button"
+                    class="decks-show-answer-button"
                     disabled={isLoading}
-                    on:pointerup={onShowAnswer}
+                    on:pointerup={async (e) => await onShowAnswer(e)}
                     style="touch-action: manipulation;"
                     type="button"
                 >
                     <span>Show Answer</span>
-                    <span class="shortcut">Space</span>
+                    <span class="decks-shortcut">Space</span>
                 </button>
             {/if}
 
             {#if showAnswer && schedulingInfo}
-                <div class="difficulty-buttons">
+                <div class="decks-difficulty-buttons">
                     <button
-                        class="difficulty-button again rate-btn"
+                        class="decks-difficulty-button decks-again decks-rate-btn"
                         disabled={isLoading}
                         on:pointerup={async (e) => await onRating(e, 1)}
                         style="touch-action: manipulation;"
                         type="button"
                     >
-                        <div class="button-label">Again</div>
-                        <div class="interval">
+                        <div class="decks-button-label">Again</div>
+                        <div class="decks-interval">
                             {getIntervalDisplay(schedulingInfo.again.interval)}
                         </div>
-                        <div class="shortcut">1</div>
+                        <div class="decks-shortcut">1</div>
                     </button>
 
                     <button
-                        class="difficulty-button hard rate-btn"
+                        class="decks-difficulty-button decks-hard decks-rate-btn"
                         on:pointerup={async (e) => await onRating(e, 2)}
                         style="touch-action: manipulation;"
                         disabled={isLoading}
                         type="button"
                     >
-                        <div class="button-label">Hard</div>
-                        <div class="interval">
+                        <div class="decks-button-label">Hard</div>
+                        <div class="decks-interval">
                             {getIntervalDisplay(schedulingInfo.hard.interval)}
                         </div>
-                        <div class="shortcut">2</div>
+                        <div class="decks-shortcut">2</div>
                     </button>
 
                     <button
-                        class="difficulty-button good rate-btn"
+                        class="decks-difficulty-button decks-good decks-rate-btn"
                         on:pointerup={async (e) => await onRating(e, 3)}
                         disabled={isLoading}
                         type="button"
                     >
-                        <div class="button-label">Good</div>
-                        <div class="interval">
+                        <div class="decks-button-label">Good</div>
+                        <div class="decks-interval">
                             {getIntervalDisplay(schedulingInfo.good.interval)}
                         </div>
-                        <div class="shortcut">3</div>
+                        <div class="decks-shortcut">3</div>
                     </button>
 
                     <button
-                        class="difficulty-button easy rate-btn"
+                        class="decks-difficulty-button decks-easy decks-rate-btn"
                         on:pointerup={async (e) => await onRating(e, 4)}
                         disabled={isLoading}
                         type="button"
                     >
-                        <div class="button-label">Easy</div>
-                        <div class="interval">
+                        <div class="decks-button-label">Easy</div>
+                        <div class="decks-interval">
                             {getIntervalDisplay(schedulingInfo.easy.interval)}
                         </div>
-                        <div class="shortcut">4</div>
+                        <div class="decks-shortcut">4</div>
                     </button>
                 </div>
             {/if}
         </div>
     {:else}
-        <div class="empty-state">
+        <div class="decks-empty-state">
             <p>No cards to review</p>
         </div>
     {/if}
 </div>
 
 <style>
-    .review-modal {
+    .decks-review-modal {
         display: flex;
         flex-direction: column;
-        height: 100%;
+        height: 98%;
         background: var(--background-primary);
         color: var(--text-normal);
         overflow: hidden;
         width: 100%;
         margin-top: 15px;
+        justify-content: space-between;
     }
 
-    .modal-header {
+    .decks-modal-header {
         display: flex;
         align-items: center;
         justify-content: space-between;
@@ -386,35 +388,35 @@
         border-bottom: 1px solid var(--background-modifier-border);
     }
 
-    .modal-header h3 {
+    .decks-modal-header h3 {
         margin: 0;
         font-size: 18px;
         font-weight: 600;
     }
 
-    .progress-info {
+    .decks-progress-info {
         display: flex;
         gap: 8px;
         font-size: 14px;
     }
 
-    .remaining {
+    .decks-remaining {
         color: var(--text-muted);
     }
 
-    .review-progress-bar {
+    .decks-review-progress-bar {
         height: 4px;
         background: var(--background-modifier-border);
         position: relative;
     }
 
-    .progress-fill {
+    .decks-progress-fill {
         height: 100%;
         background: var(--interactive-accent);
         transition: width 0.3s ease;
     }
 
-    .card-content {
+    .decks-card-content {
         flex: 1;
         overflow-y: auto;
         overflow-x: hidden;
@@ -429,14 +431,14 @@
         min-height: 0;
     }
 
-    .question-section,
-    .answer-section {
+    .decks-question-section,
+    .decks-answer-section {
         width: 100%;
         display: flex;
         justify-content: center;
     }
 
-    .card-side {
+    .decks-card-side {
         background: var(--background-secondary);
         border: 1px solid var(--background-modifier-border);
         border-radius: 8px;
@@ -449,18 +451,18 @@
         overflow-wrap: break-word;
     }
 
-    .card-side.front {
+    .decks-card-side.decks-front {
         text-align: center;
         font-size: 20px;
         font-weight: 500;
     }
 
-    .card-side.back {
+    .decks-card-side.decks-back {
         font-size: 16px;
         line-height: 1.6;
     }
 
-    .answer-section {
+    .decks-answer-section {
         width: 100%;
         display: flex;
         flex-direction: column;
@@ -468,11 +470,11 @@
         align-items: center;
     }
 
-    .answer-section.hidden {
+    .decks-answer-section.hidden {
         display: none;
     }
 
-    .separator {
+    .decks-separator {
         height: 1px;
         background: var(--background-modifier-border);
         margin: 16px auto;
@@ -480,7 +482,7 @@
         max-width: 600px;
     }
 
-    .action-buttons {
+    .decks-action-buttons {
         padding: 20px;
         border-top: 1px solid var(--background-modifier-border);
         flex-shrink: 0;
@@ -488,7 +490,7 @@
         box-sizing: border-box;
     }
 
-    .show-answer-button {
+    .decks-show-answer-button {
         width: 100%;
         max-width: 400px;
         margin: 0 auto;
@@ -517,12 +519,12 @@
         user-select: none;
     }
 
-    .show-answer-button:hover,
-    .show-answer-button:active {
+    .decks-show-answer-button:hover,
+    .decks-show-answer-button:active {
         background: var(--interactive-accent-hover);
     }
 
-    .shortcut {
+    .decks-shortcut {
         font-size: 12px;
         opacity: 0.8;
         padding: 2px 6px;
@@ -532,7 +534,7 @@
         display: inline-block;
     }
 
-    .difficulty-buttons {
+    .decks-difficulty-buttons {
         display: flex;
         gap: 8px;
         justify-content: center;
@@ -544,8 +546,8 @@
         margin: 0 auto;
     }
 
-    .difficulty-button,
-    .rate-btn {
+    .decks-difficulty-button,
+    .decks-rate-btn {
         flex: 1;
         min-width: 44px;
         min-height: 44px;
@@ -576,69 +578,73 @@
         user-select: none;
     }
 
-    .difficulty-button:hover,
-    .difficulty-button:active {
+    .decks-difficulty-button:hover,
+    .decks-difficulty-button:active {
         transform: translateY(-2px);
         box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
     }
 
-    .difficulty-button:disabled {
+    .decks-difficulty-button:disabled {
         opacity: 0.5;
         cursor: not-allowed;
         transform: none;
     }
 
-    .difficulty-button.again {
+    .decks-difficulty-button.decks-again {
         border-color: #e74c3c;
     }
 
-    .difficulty-button.again:hover:not(:disabled) {
+    .decks-difficulty-button.decks-again:hover,
+    .decks-difficulty-button.decks-again:active {
         background: #e74c3c;
         color: white;
     }
 
-    .difficulty-button.hard {
+    .decks-difficulty-button.decks-hard {
         border-color: #f39c12;
     }
 
-    .difficulty-button.hard:hover:not(:disabled) {
+    .decks-difficulty-button.decks-hard:hover,
+    .decks-difficulty-button.decks-hard:active {
         background: #f39c12;
         color: white;
     }
 
-    .difficulty-button.good {
+    .decks-difficulty-button.decks-good {
         border-color: #27ae60;
     }
 
-    .difficulty-button.good:hover:not(:disabled) {
+    .decks-difficulty-button.decks-good:hover,
+    .decks-difficulty-button.decks-good:active {
         background: #27ae60;
         color: white;
     }
 
-    .difficulty-button.easy {
+    .decks-difficulty-button.decks-easy {
         border-color: #3498db;
     }
 
-    .difficulty-button.easy:hover:not(:disabled) {
+    .decks-difficulty-button.decks-easy:hover,
+    .decks-difficulty-button.decks-easy:active {
         background: #3498db;
         color: white;
     }
 
-    .button-label {
+    .decks-button-label {
         font-weight: 600;
         font-size: 13px;
     }
 
-    .interval {
+    .decks-interval {
         font-size: 11px;
         color: var(--text-muted);
     }
 
-    .difficulty-button:hover .interval {
+    .decks-difficulty-button:hover .decks-interval {
         color: inherit;
     }
 
-    .difficulty-button .shortcut {
+    .decks-difficulty-button .decks-shortcut {
         position: absolute;
         top: 2px;
         right: 2px;
@@ -649,7 +655,7 @@
         opacity: 0.7;
     }
 
-    .empty-state {
+    .decks-empty-state {
         flex: 1;
         display: flex;
         align-items: center;
@@ -713,7 +719,7 @@
 
     /* Mobile responsive styles */
     @media (max-width: 768px) {
-        .review-modal {
+        .decks-review-modal {
             padding-bottom: env(safe-area-inset-bottom);
             padding-left: env(safe-area-inset-left);
             padding-right: env(safe-area-inset-right);
@@ -723,57 +729,57 @@
             /*height: 90vh;*/
             overflow-x: hidden;
         }
-        .modal-header {
+        .decks-modal-header {
             padding: 12px 16px;
         }
 
-        .modal-header h3 {
+        .decks-modal-header h3 {
             font-size: 16px;
         }
 
-        .card-content {
+        .decks-card-content {
             padding: 20px 12px;
             gap: 20px;
         }
 
-        .card-side {
+        .decks-card-side {
             padding: 20px 16px;
             max-width: none;
         }
 
-        .card-side.front {
+        .decks-card-side.decks-front {
             font-size: 18px;
         }
 
-        .card-side.back {
+        .decks-card-side.decks-back {
             font-size: 15px;
         }
 
-        .action-buttons {
+        .decks-action-buttons {
             padding: 16px;
         }
 
-        .show-answer-button {
+        .decks-show-answer-button {
             padding: 14px 24px;
             font-size: 16px;
             min-height: 44px;
         }
 
-        .difficulty-buttons {
+        .decks-difficulty-buttons {
             gap: 6px;
             padding: 0 8px;
         }
 
-        .difficulty-button {
+        .decks-difficulty-button {
             padding: 10px 6px;
             min-height: 48px;
         }
 
-        .button-label {
+        .decks-button-label {
             font-size: 13px;
         }
 
-        .interval {
+        .decks-interval {
             font-size: 11px;
         }
     }
@@ -790,63 +796,63 @@
             font-size: 14px;
         }
 
-        .progress-info {
+        .decks-progress-info {
             align-self: flex-end;
         }
 
-        .card-content {
+        .decks-card-content {
             padding: 16px 8px;
             gap: 16px;
         }
 
-        .card-side {
+        .decks-card-side {
             padding: 16px 12px;
         }
 
-        .card-side.front {
+        .decks-card-side.decks-front {
             font-size: 16px;
         }
 
-        .card-side.back {
+        .decks-card-side.decks-back {
             font-size: 14px;
         }
 
-        .action-buttons {
+        .decks-action-buttons {
             padding: 12px;
         }
 
-        .show-answer-button {
+        .decks-show-answer-button {
             padding: 12px 20px;
             font-size: 15px;
             min-height: 52px;
         }
 
-        .difficulty-buttons {
+        .decks-difficulty-buttons {
             gap: 4px;
             padding: 0 5px;
         }
 
-        .difficulty-button {
+        .decks-difficulty-button {
             padding: 8px 4px;
             min-height: 40px;
         }
 
-        .button-label {
+        .decks-button-label {
             font-size: 12px;
         }
 
-        .interval {
+        .decks-interval {
             font-size: 10px;
         }
 
-        .difficulty-button .shortcut {
+        .decks-difficulty-button .decks-shortcut {
             font-size: 8px;
             padding: 1px 2px;
         }
     }*/
 
     /* Mobile modal overlay protection - Blocker #3 */
-    .review-modal {
+    .decks-review-modal {
         position: relative;
         pointer-events: auto;
     }
@@ -855,9 +861,9 @@
     /* No submit buttons present in this modal */
 
     /* Override Obsidian mobile CSS interference - Blocker #12 */
-    .rate-btn,
-    .difficulty-button,
-    .show-answer-button {
+    .decks-rate-btn,
+    .decks-difficulty-button,
+    .decks-show-answer-button {
         pointer-events: auto !important;
         opacity: 1 !important;
         touch-action: manipulation !important;
@@ -867,23 +873,23 @@
     }
 
     /* Disabled state override - Blocker #4 */
-    .rate-btn:disabled,
-    .difficulty-button:disabled,
-    .show-answer-button:disabled {
+    .decks-rate-btn:disabled,
+    .decks-difficulty-button:disabled,
+    .decks-show-answer-button:disabled {
         opacity: 0.6 !important;
         pointer-events: none !important;
         cursor: not-allowed !important;
     }
 
     /* Focus trap compatibility - Blocker #8 */
-    .action-buttons {
+    .decks-action-buttons {
         pointer-events: auto;
         position: relative;
         z-index: 5;
     }
 
     /* Prevent parent event blocking - Blocker #7 */
-    .difficulty-buttons {
+    .decks-difficulty-buttons {
         pointer-events: auto;
         position: relative;
         z-index: 5;
@@ -891,7 +897,7 @@
 
     /* Mobile responsive styles */
     /*@media (max-width: 768px) {
-        .review-modal {
+        .decks-review-modal {
             padding: 16px 12px;
             font-size: 14px;
         }
@@ -1016,7 +1022,7 @@
     }*/
 
     /* Mobile keyboard and safe area protection - Blocker #9 */
-    .action-buttons {
+    .decks-action-buttons {
         padding-bottom: calc(20px + env(safe-area-inset-bottom));
         padding-left: env(safe-area-inset-left);
         padding-right: env(safe-area-inset-right);
@@ -1039,7 +1045,7 @@
     }*/
 
     /* Mobile safe area insets - Blocker #9 */
-    .review-modal {
+    .decks-review-modal {
         padding-bottom: env(safe-area-inset-bottom);
         padding-left: env(safe-area-inset-left);
         padding-right: env(safe-area-inset-right);

@@ -1358,7 +1358,46 @@ This is the scheduler contract and behavior your plugin should implement.
 - **Performance**: Faster initialization for fresh databases with direct table creation
 - **Reliability**: Simplified logic reduces edge cases and improves error handling
 
-### ✅ Header Level as Deck-Specific Configuration & Schema Cleanup
+### ✅ Header Level as Deck-Specific Configuration & Schema Cleanup [L1361-1362]
+
+### ✅ Complete CSS Refactoring with Decks Prefix [L1363-1364]
+**Status:** ✅ Complete
+**Branch:** main
+**Files Modified:** 6 Svelte components + styles.css
+**Description:**
+Refactored all CSS classes throughout the project to use a `decks-` prefix for better isolation and to prevent conflicts with other plugins. This ensures that the plugin's styles won't interfere with other Obsidian plugins or themes.
+
+**Key Changes:**
+- **All CSS classes prefixed**: Added `decks-` prefix to every CSS class across all components
+- **Component isolation**: Each component's styles are properly scoped with prefixed classes
+- **Mobile compatibility**: All responsive styles updated with new prefixed classes
+- **Global styles**: Main `styles.css` updated with new class names
+- **Build verification**: Project builds successfully with no errors after refactoring
+
+**Files Updated:**
+- `styles.css` - Main stylesheet with prefixed classes
+- `DeckListPanel.svelte` - All CSS classes prefixed (deck-list-panel → decks-deck-list-panel)
+- `FlashcardReviewModal.svelte` - All CSS classes prefixed (review-modal → decks-review-modal)
+- `ReviewHeatmap.svelte` - All CSS classes prefixed (heatmap-container → decks-heatmap-container)
+- `StatisticsUI.svelte` - All CSS classes prefixed (statistics-container → decks-statistics-container)
+- `DeckConfigUI.svelte` - All CSS classes prefixed (deck-config-ui → decks-deck-config-ui)
+- `AnkiExportUI.svelte` - All CSS classes prefixed (anki-export-ui → decks-anki-export-ui)
+
+**Examples of transformations:**
+- `.stats-button` → `.decks-stats-button`
+- `.difficulty-button` → `.decks-difficulty-button`
+- `.forecast-chart` → `.decks-forecast-chart`
+- `.heatmap-header` → `.decks-heatmap-header`
+- `.modal-actions` → `.decks-modal-actions`
+
+**Technical Benefits:**
+- Complete CSS isolation from other plugins
+- Maintains all existing functionality and responsive design
+- No performance impact - purely structural change
+- Future-proof against CSS conflicts
+- Better maintainability with consistent naming convention
+
+This refactoring ensures the plugin can coexist cleanly with any other Obsidian plugins without CSS interference while maintaining all desktop and mobile functionality.
 - **Removed Header Level from Global Settings**: Moved parsing header level from plugin settings to individual deck configurations
 - **Deck-Specific Header Level**: Each deck can now have its own header level (H1-H6) independent of other decks
 - **Removed Header Level Column from Flashcards**: Eliminated `header_level` column from flashcards table - no longer needed in database schema

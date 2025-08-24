@@ -21,21 +21,20 @@ export class AnkiExportModal extends Modal {
     // Add mobile-specific classes
     const modalEl = this.containerEl.querySelector(".modal");
     if (modalEl instanceof HTMLElement && window.innerWidth <= 768) {
-      modalEl.addClass("anki-export-modal-mobile");
+      modalEl.addClass("decks-modal");
+      if (window.innerWidth <= 768) {
+        modalEl.addClass("decks-modal-mobile");
+      } else {
+        modalEl.removeClass("decks-modal-mobile");
+      }
     }
 
-    // Modal title
-    contentEl.createEl("h2", { text: `Export to Anki: ${this.deck.name}` });
-
-    // Create container for Svelte component
-    const componentContainer = contentEl.createDiv("anki-export-container");
-
     // Add CSS class for styling
-    componentContainer.addClass("anki-export-container");
+    contentEl.addClass("decks-anki-export-container");
 
     // Mount Svelte component
     this.component = new AnkiExportUI({
-      target: componentContainer,
+      target: contentEl,
       props: {
         deck: this.deck,
       },
@@ -55,9 +54,9 @@ export class AnkiExportModal extends Modal {
       const modalEl = this.containerEl.querySelector(".modal");
       if (modalEl instanceof HTMLElement) {
         if (window.innerWidth <= 768) {
-          modalEl.addClass("anki-export-modal-mobile");
+          modalEl.addClass("decks-modal-mobile");
         } else {
-          modalEl.removeClass("anki-export-modal-mobile");
+          modalEl.removeClass("decks-modal-mobile");
         }
       }
     };

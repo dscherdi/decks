@@ -96,9 +96,9 @@
     }
 
     function getIntensityClass(count: number): string {
-        if (count === 0) return "intensity-0";
+        if (count === 0) return "decks-intensity-0";
         const intensity = Math.min(Math.ceil((count / maxCount) * 4), 4);
-        return `intensity-${intensity}`;
+        return `decks-intensity-${intensity}`;
     }
 
     function formatDate(dateStr: string): string {
@@ -251,12 +251,12 @@
     });
 </script>
 
-<div class="heatmap-container" bind:this={containerElement}>
-    <div class="heatmap-header">
-        <div class="header-left">
+<div class="decks-heatmap-container" bind:this={containerElement}>
+    <div class="decks-heatmap-header">
+        <div class="decks-header-left">
             <h4>Review Activity</h4>
             {#if !isLoading}
-                <span class="total-reviews">
+                <span class="decks-total-reviews">
                     {Array.from(reviewCounts.values()).reduce(
                         (sum, count) => sum + count,
                         0,
@@ -264,9 +264,9 @@
                 </span>
             {/if}
         </div>
-        <div class="year-navigation">
+        <div class="decks-year-navigation">
             <button
-                class="nav-button"
+                class="decks-nav-button"
                 on:click={(e) =>
                     handleTouchClick(() => navigateYear("prev"), e)}
                 on:touchend={(e) =>
@@ -281,9 +281,9 @@
                     <path d="M15.41 7.41L14 6l-6 6 6 6 1.41-1.41L10.83 12z" />
                 </svg>
             </button>
-            <span class="current-year">{currentYear}</span>
+            <span class="decks-current-year">{currentYear}</span>
             <button
-                class="nav-button"
+                class="decks-nav-button"
                 on:click={(e) =>
                     handleTouchClick(() => navigateYear("next"), e)}
                 on:touchend={(e) =>
@@ -302,25 +302,27 @@
     </div>
 
     {#if isLoading}
-        <div class="loading">Loading...</div>
+        <div class="decks-loading">Loading...</div>
     {:else}
-        <div class="heatmap">
-            <div class="months-container">
+        <div class="decks-heatmap">
+            <div class="decks-months-container">
                 {#each getMonthsData() as { month, weeks: monthWeeks }}
-                    <div class="month-container">
-                        <div class="month-label">{month}</div>
-                        <div class="month-grid">
+                    <div class="decks-month-container">
+                        <div class="decks-month-label">{month}</div>
+                        <div class="decks-month-grid">
                             {#each monthWeeks as week}
-                                <div class="week">
+                                <div class="decks-week">
                                     {#each week as day}
                                         {@const dayYear = new Date(
                                             day.date,
                                         ).getFullYear()}
                                         <div
-                                            class="day {getIntensityClass(
+                                            class="decks-day {getIntensityClass(
                                                 day.count,
                                             )}"
-                                            class:today={isToday(day.date)}
+                                            class:decks-today={isToday(
+                                                day.date,
+                                            )}
                                             class:outside-year={dayYear !==
                                                 currentYear}
                                             title="{day.count} reviews on {formatDate(
@@ -336,22 +338,22 @@
             </div>
         </div>
 
-        <div class="legend">
-            <span class="legend-label">Less</span>
-            <div class="legend-colors">
-                <div class="legend-square intensity-0"></div>
-                <div class="legend-square intensity-1"></div>
-                <div class="legend-square intensity-2"></div>
-                <div class="legend-square intensity-3"></div>
-                <div class="legend-square intensity-4"></div>
+        <div class="decks-legend">
+            <span class="decks-legend-label">Less</span>
+            <div class="decks-legend-colors">
+                <div class="decks-legend-square decks-intensity-0"></div>
+                <div class="decks-legend-square decks-intensity-1"></div>
+                <div class="decks-legend-square decks-intensity-2"></div>
+                <div class="decks-legend-square decks-intensity-3"></div>
+                <div class="decks-legend-square decks-intensity-4"></div>
             </div>
-            <span class="legend-label">More</span>
+            <span class="decks-legend-label">More</span>
         </div>
     {/if}
 </div>
 
 <style>
-    .heatmap-container {
+    .decks-heatmap-container {
         padding: 12px;
         border-top: 1px solid var(--background-modifier-border);
         background: var(--background-primary);
@@ -366,7 +368,7 @@
         user-select: none;
     }
 
-    .heatmap-header {
+    .decks-heatmap-header {
         display: flex;
         justify-content: space-between;
         align-items: center;
@@ -374,19 +376,19 @@
         width: 100%;
     }
 
-    .header-left {
+    .decks-header-left {
         display: flex;
         flex-direction: column;
         align-items: flex-start;
     }
 
-    .year-navigation {
+    .decks-year-navigation {
         display: flex;
         align-items: center;
         gap: 8px;
     }
 
-    .nav-button {
+    .decks-nav-button {
         background: none;
         border: 1px solid var(--background-modifier-border);
         border-radius: 4px;
@@ -407,14 +409,14 @@
         user-select: none;
     }
 
-    .nav-button:hover,
-    .nav-button:active {
+    .decks-nav-button:hover,
+    .decks-nav-button:active {
         background: var(--background-modifier-hover);
         color: var(--text-normal);
         border-color: var(--background-modifier-border-hover);
     }
 
-    .current-year {
+    .decks-current-year {
         font-size: 14px;
         font-weight: 600;
         color: var(--text-normal);
@@ -422,26 +424,26 @@
         text-align: center;
     }
 
-    .heatmap-header h4 {
+    .decks-heatmap-header h4 {
         margin: 0;
         font-size: 14px;
         font-weight: 600;
         color: var(--text-normal);
     }
 
-    .total-reviews {
+    .decks-total-reviews {
         font-size: 12px;
         color: var(--text-muted);
     }
 
-    .loading {
+    .decks-loading {
         text-align: center;
         padding: 20px;
         color: var(--text-muted);
         font-size: 12px;
     }
 
-    .heatmap {
+    .decks-heatmap {
         position: relative;
         margin-top: 12px;
         overflow-x: auto;
@@ -452,33 +454,33 @@
         /*justify-content: center;*/
     }
 
-    .months-container {
+    .decks-months-container {
         display: flex;
         gap: 2px;
         min-width: fit-content;
         align-items: flex-start;
     }
 
-    .month-container {
+    .decks-month-container {
         display: flex;
         flex-direction: column;
         gap: 4px;
         align-items: center;
     }
 
-    .month-grid {
+    .decks-month-grid {
         display: flex;
         gap: 2px;
     }
 
-    .month-labels {
+    .decks-month-labels {
         position: relative;
         height: 12px;
         margin-bottom: 2px;
         margin-left: 18px;
     }
 
-    .month-label {
+    .decks-month-label {
         font-size: 9px;
         color: var(--text-muted);
     }
@@ -497,13 +499,13 @@
         text-align: right;
     }
 
-    .week {
+    .decks-week {
         display: flex;
         flex-direction: column;
         gap: 2px;
     }
 
-    .day {
+    .decks-day {
         width: 10px;
         height: 10px;
         border-radius: 2px;
@@ -512,14 +514,14 @@
         flex-shrink: 0;
     }
 
-    .day:hover {
+    .decks-day:hover {
         transform: scale(1.3);
         outline: 1px solid var(--text-muted);
         z-index: 10;
         position: relative;
     }
 
-    .day.today {
+    .decks-day.decks-today {
         outline: 2px solid var(--interactive-accent);
         outline-offset: 1px;
     }
@@ -530,27 +532,27 @@
     }
 
     /* Intensity colors - GitHub style */
-    .intensity-0 {
+    .decks-intensity-0 {
         background-color: var(--background-modifier-border);
     }
 
-    .intensity-1 {
+    .decks-intensity-1 {
         background-color: #0e4429;
     }
 
-    .intensity-2 {
+    .decks-intensity-2 {
         background-color: #006d32;
     }
 
-    .intensity-3 {
+    .decks-intensity-3 {
         background-color: #26a641;
     }
 
-    .intensity-4 {
+    .decks-intensity-4 {
         background-color: #39d353;
     }
 
-    .legend {
+    .decks-legend {
         display: flex;
         align-items: center;
         justify-content: center;
@@ -558,67 +560,67 @@
         margin-top: 6px;
     }
 
-    .legend-label {
+    .decks-legend-label {
         font-size: 8px;
         color: var(--text-muted);
     }
 
-    .legend-colors {
+    .decks-legend-colors {
         display: flex;
         gap: 2px;
     }
 
-    .legend-square {
+    .decks-legend-square {
         width: 10px;
         height: 10px;
         border-radius: 2px;
     }
 
-    .day.outside-year {
+    .decks-day.outside-year {
         opacity: 0.3;
         pointer-events: none;
     }
 
     /* Custom scrollbar styling */
-    .heatmap::-webkit-scrollbar {
+    .decks-heatmap::-webkit-scrollbar {
         height: 8px;
     }
 
-    .heatmap::-webkit-scrollbar-track {
+    .decks-heatmap::-webkit-scrollbar-track {
         background: var(--background-primary);
         border-radius: 4px;
     }
 
-    .heatmap::-webkit-scrollbar-thumb {
+    .decks-heatmap::-webkit-scrollbar-thumb {
         background: var(--background-modifier-border);
         border-radius: 4px;
     }
 
-    .heatmap::-webkit-scrollbar-thumb:hover {
+    .decks-heatmap::-webkit-scrollbar-thumb:hover {
         background: var(--text-muted);
     }
 
     /* Mobile responsive styles */
     @media (max-width: 768px) {
-        .heatmap-container {
+        .decks-heatmap-container {
             padding: 8px;
         }
 
-        .heatmap-header {
+        .decks-heatmap-header {
             flex-direction: column;
             align-items: flex-start;
             gap: 8px;
         }
 
-        .header-left {
+        .decks-header-left h4 {
             width: 100%;
         }
 
-        .year-navigation {
+        .decks-year-navigation {
             width: 100%;
         }
 
-        .nav-button {
+        .decks-nav-button {
             padding: 6px;
             width: 44px;
             height: 44px;
@@ -626,46 +628,46 @@
             min-height: 44px;
         }
 
-        .day-labels {
+        .decks-day-labels {
             left: 0;
         }
 
-        .day-label {
+        .decks-day-label {
             font-size: 8px;
         }
 
-        .months-container {
+        .decks-months-container {
             gap: 2px;
         }
 
-        .month-label {
+        .decks-month-label {
             font-size: 9px;
         }
 
-        .heatmap::-webkit-scrollbar {
+        .decks-heatmap::-webkit-scrollbar {
             height: 4px;
         }
     }
 
     @media (max-width: 480px) {
-        .heatmap-container {
+        .decks-heatmap-container {
             padding: 6px;
         }
 
-        .heatmap-header h4 {
+        .decks-heatmap-header h4 {
             font-size: 14px;
         }
 
-        .total-reviews {
+        .decks-total-reviews {
             font-size: 10px;
         }
 
-        .current-year {
+        .decks-current-year {
             font-size: 12px;
             padding: 4px 8px;
         }
 
-        .nav-button {
+        .decks-nav-button {
             padding: 4px;
             width: 40px;
             height: 40px;
@@ -673,130 +675,130 @@
             min-height: 40px;
         }
 
-        .nav-button svg {
+        .decks-nav-button svg {
             width: 14px;
             height: 14px;
         }
 
-        .month-label {
+        .decks-month-label {
             font-size: 8px;
             min-width: 40px;
         }
 
-        .day-label {
+        .decks-day-label {
             font-size: 7px;
             width: 12px;
         }
 
-        .day-labels {
+        .decks-day-labels {
             left: 0;
         }
 
-        .months-container {
+        .decks-month-container {
             gap: 2px;
         }
 
-        .month-grid {
+        .decks-month-grid {
             gap: 1px;
         }
 
-        .legend {
+        .decks-legend {
             margin-top: 8px;
         }
 
-        .legend-label {
+        .decks-legend-label {
             font-size: 8px;
         }
 
-        .legend-square {
+        .decks-legend-square {
             width: 8px;
             height: 8px;
         }
 
-        .day {
+        .decks-day {
             width: 8px;
             height: 8px;
             border-radius: 1px;
         }
 
-        .week {
+        .decks-week {
             gap: 1px;
         }
     }
 
     @media (max-width: 390px) {
         /* iPhone 12 Pro and similar 390px width phones */
-        .heatmap-container {
+        .decks-heatmap-container {
             padding: 6px;
             max-width: 390px;
         }
 
-        .heatmap-header {
+        .decks-heatmap-header {
             margin-bottom: 8px;
         }
 
-        .heatmap-header h4 {
+        .decks-heatmap-header h4 {
             font-size: 12px;
         }
 
-        .total-reviews {
+        .decks-total-reviews {
             font-size: 10px;
         }
 
-        .current-year {
+        .decks-current-year {
             font-size: 12px;
             min-width: 30px;
         }
 
-        .nav-button {
+        .decks-nav-button {
             width: 24px;
             height: 24px;
             min-height: 24px;
             min-width: 24px;
         }
 
-        .nav-button svg {
+        .decks-nav-button svg {
             width: 8px;
             height: 8px;
         }
 
-        .month-label {
+        .decks-month-label {
             font-size: 7px;
         }
 
-        .day-label {
+        .decks-day-label {
             font-size: 7px;
             width: 10px;
         }
 
-        .day-labels {
+        .decks-day-labels {
             left: -12px;
         }
 
-        .day {
+        .decks-day {
             width: 7px;
             height: 7px;
         }
 
-        .legend-square {
+        .decks-legend-square {
             width: 7px;
             height: 7px;
         }
 
-        .legend-label {
+        .decks-legend-label {
             font-size: 6px;
         }
 
-        .week {
+        .decks-week {
             gap: 1px;
         }
 
-        .heatmap-grid {
+        .decks-heatmap-grid {
             gap: 1px;
             padding-right: 8px;
         }
 
-        .heatmap {
+        .decks-heatmap {
             margin-top: 8px;
         }
     }
