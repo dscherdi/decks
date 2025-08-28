@@ -28,12 +28,14 @@
     export let onRefresh: () => void;
     export let onForceRefreshDeck: (deckId: string) => Promise<void>;
     export let getReviewCounts: (days: number) => Promise<Map<string, number>>;
-    export let onUpdateDeckConfig: (
+    export const onUpdateDeckConfig: (
         deckId: string,
         config: DeckConfig,
-    ) => Promise<void>;
+    ) => Promise<void> = async () => {};
     export let onOpenStatistics: () => void;
     export let getStudyStats: (() => Promise<any>) | null = null;
+    export let getDatabase: () => any;
+    export let getDeckSynchronizer: () => any;
     export let plugin: any = null; // TODO: Refactor to pass specific functions instead of whole plugin
 
     let isRefreshing = false;
@@ -391,22 +393,25 @@
     });
 
     function openDeckConfig(deck: Deck) {
-        if (!plugin) {
-            console.warn("Plugin not available for deck config");
-            return;
-        }
         const modal = new DeckConfigModal(
-            plugin,
+            plugin.app,
             deck,
-            async (config: DeckConfig) => {
-                if (onUpdateDeckConfig) {
-                    await onUpdateDeckConfig(deck.id, config);
-                    // Update the local deck config
+            getDatabase(),
+            getDeckSynchronizer(),
+            async (deckId: string) => {
+                // Refresh stats after deck config change
+                await onForceRefreshDeck(deckId);
+                // Update the local deck config
+                const updatedDecks = await getDatabase().getAllDecks();
+                const updatedDeck = updatedDecks.find(
+                    (d: Deck) => d.id === deckId,
+                );
+                if (updatedDeck) {
                     const deckIndex = allDecks.findIndex(
-                        (d) => d.id === deck.id,
+                        (d: Deck) => d.id === deckId,
                     );
                     if (deckIndex !== -1) {
-                        allDecks[deckIndex].config = config;
+                        allDecks[deckIndex] = updatedDeck;
                         // Force reactivity
                         allDecks = [...allDecks];
                     }
@@ -421,7 +426,7 @@
             console.warn("Plugin not available for Anki export");
             return;
         }
-        const modal = new AnkiExportModal(plugin, deck);
+        const modal = new AnkiExportModal(plugin.app, deck, getDatabase());
         modal.open();
     }
 

@@ -19,6 +19,9 @@ import {
   FSRSProfile,
 } from "../algorithm/fsrs-weights";
 import { yieldToUI } from "../utils/ui";
+import { Logger } from "../utils/logging";
+import { FlashcardsSettings } from "../settings";
+import { DataAdapter } from "obsidian";
 
 export interface SchedulerOptions {
   allowNew?: boolean;
@@ -46,15 +49,21 @@ export class Scheduler {
   private db: DatabaseService;
   private fsrs: FSRS;
   private currentSessionId: string | null = null;
-  private debugLog: (message: string, ...args: any[]) => void;
+  private logger: Logger;
 
   constructor(
     db: DatabaseService,
-    debugLog: (message: string, ...args: any[]) => void = () => {},
+    settings: FlashcardsSettings,
+    adapter: DataAdapter,
+    configDir: string,
   ) {
     this.db = db;
     this.fsrs = new FSRS();
-    this.debugLog = debugLog;
+    this.logger = new Logger(settings, adapter, configDir);
+  }
+
+  private debugLog(message: string, ...args: any[]): void {
+    this.logger.debug(message, ...args);
   }
 
   /**

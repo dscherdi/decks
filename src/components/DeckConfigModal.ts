@@ -1,24 +1,31 @@
 import { Modal, Platform } from "obsidian";
 import type { Deck, DeckConfig } from "../database/types";
-import type DecksPlugin from "../main";
+import type { DatabaseService } from "../database/DatabaseService";
+import type { DeckSynchronizer } from "../services/DeckSynchronizer";
+import { yieldToUI } from "../utils/ui";
 import DeckConfigUI from "./DeckConfigUI.svelte";
 
 export class DeckConfigModal extends Modal {
   private deck: Deck;
-  private plugin: DecksPlugin;
-  private onSave: (config: DeckConfig) => Promise<void>;
+  private db: DatabaseService;
+  private deckSynchronizer: DeckSynchronizer;
+  private onRefreshStats: (deckId: string) => Promise<void>;
   private config: DeckConfig;
   private component: DeckConfigUI | null = null;
+  private resizeHandler?: () => void;
 
   constructor(
-    plugin: DecksPlugin,
+    app: any,
     deck: Deck,
-    onSave: (config: DeckConfig) => Promise<void>,
+    db: DatabaseService,
+    deckSynchronizer: DeckSynchronizer,
+    onRefreshStats: (deckId: string) => Promise<void>,
   ) {
-    super(plugin.app);
-    this.plugin = plugin;
+    super(app);
     this.deck = deck;
-    this.onSave = onSave;
+    this.db = db;
+    this.deckSynchronizer = deckSynchronizer;
+    this.onRefreshStats = onRefreshStats;
     this.config = { ...deck.config };
   }
 
@@ -77,12 +84,12 @@ export class DeckConfigModal extends Modal {
     window.addEventListener("resize", handleResize);
 
     // Store resize handler for cleanup
-    (this as any)._resizeHandler = handleResize;
+    this.resizeHandler = handleResize;
   }
 
   private async handleSave(config: DeckConfig) {
     try {
-      await this.onSave(config);
+      await this.updateDeckConfig(this.deck.id, config);
       this.close();
     } catch (error) {
       console.error("Error saving deck configuration:", error);
@@ -90,13 +97,75 @@ export class DeckConfigModal extends Modal {
     }
   }
 
+  private async updateDeckConfig(
+    deckId: string,
+    config: Partial<DeckConfig>,
+  ): Promise<void> {
+    // Validate profile and requestRetention if provided
+    if (
+      config.fsrs?.profile &&
+      !["INTENSIVE", "STANDARD"].includes(config.fsrs.profile)
+    ) {
+      throw new Error(`Invalid profile: ${config.fsrs.profile}`);
+    }
+
+    if (config.fsrs?.requestRetention !== undefined) {
+      const rr = config.fsrs.requestRetention;
+      if (rr <= 0.5 || rr >= 0.995) {
+        throw new Error(
+          `requestRetention must be in range (0.5, 0.995), got ${rr}`,
+        );
+      }
+    }
+
+    // Get current config and merge with updates
+    const decks = await this.db.getAllDecks();
+    const deck = decks.find((d) => d.id === deckId);
+    if (!deck) {
+      throw new Error(`Deck not found: ${deckId}`);
+    }
+
+    const currentConfig = deck.config;
+
+    // Check if header level is changing
+    const headerLevelChanged =
+      config.headerLevel !== undefined &&
+      config.headerLevel !== currentConfig.headerLevel;
+
+    const updatedConfig = {
+      ...currentConfig,
+      ...config,
+      fsrs: {
+        ...currentConfig.fsrs,
+        ...config.fsrs,
+      },
+    };
+
+    await this.db.updateDeck(deckId, { config: updatedConfig });
+
+    // If header level changed, force resync the deck to clean up old flashcards
+    if (headerLevelChanged) {
+      const updatedDeck = await this.db.getDeckById(deckId);
+      if (updatedDeck) {
+        console.log(
+          `Header level changed for deck ${updatedDeck.name}, forcing resync`,
+        );
+        await yieldToUI();
+        await this.deckSynchronizer.syncDeck(updatedDeck.filepath, true);
+      }
+    }
+
+    // Refresh stats for this deck since config changes can affect displayed stats
+    await this.onRefreshStats(deckId);
+  }
+
   onClose() {
     const { contentEl } = this;
 
     // Clean up resize handler
-    if ((this as any)._resizeHandler) {
-      window.removeEventListener("resize", (this as any)._resizeHandler);
-      delete (this as any)._resizeHandler;
+    if (this.resizeHandler) {
+      window.removeEventListener("resize", this.resizeHandler);
+      this.resizeHandler = undefined;
     }
 
     // Destroy Svelte component

@@ -7,6 +7,8 @@ import {
 } from "../database/types";
 import { DatabaseService } from "../database/DatabaseService";
 import { yieldToUI, yieldEvery } from "../utils/ui";
+import { Logger, formatTime } from "../utils/logging";
+import { FileFilter } from "../utils/fileFilter";
 import DecksPlugin from "@/main";
 
 // Maximum number of flashcards to process per deck for performance
@@ -23,7 +25,8 @@ export class DeckManager {
   private metadataCache: MetadataCache;
   private db: DatabaseService;
   private plugin?: DecksPlugin;
-  private folderSearchPath?: string;
+  private logger?: Logger;
+  private fileFilter: FileFilter;
 
   // Pre-compiled regex patterns for better performance
   private static readonly HEADER_REGEX = /^(#{1,6})\s+/;
@@ -41,37 +44,29 @@ export class DeckManager {
     this.metadataCache = metadataCache;
     this.db = db;
     this.plugin = plugin;
-    this.folderSearchPath = folderSearchPath;
+    this.fileFilter = new FileFilter(folderSearchPath);
+    if (plugin?.settings && plugin?.app) {
+      this.logger = new Logger(
+        plugin.settings,
+        this.vault.adapter,
+        plugin.app.vault.configDir,
+      );
+    }
   }
 
   /**
    * Update the folder search path for filtering files
    */
   updateFolderSearchPath(folderSearchPath?: string): void {
-    this.folderSearchPath = folderSearchPath;
-  }
-
-  /**
-   * Helper method for timing operations
-   */
-  private formatTime(ms: number): string {
-    if (ms < 1000) {
-      return `${ms.toFixed(2)}ms`;
-    } else {
-      return `${(ms / 1000).toFixed(2)}s`;
-    }
+    this.fileFilter.updateFolderSearchPath(folderSearchPath);
   }
 
   private debugLog(message: string, ...args: any[]): void {
-    if (this.plugin?.debugLog) {
-      this.plugin.debugLog(message, ...args);
-    }
+    this.logger?.debug(message, ...args);
   }
 
   private performanceLog(message: string, ...args: any[]): void {
-    if (this.plugin?.performanceLog) {
-      this.plugin.performanceLog(message, ...args);
-    }
+    this.logger?.performance(message, ...args);
   }
 
   /**
@@ -82,16 +77,8 @@ export class DeckManager {
     let files = this.vault.getMarkdownFiles();
 
     // Filter files by folder search path if specified
-    if (this.folderSearchPath && this.folderSearchPath.trim() !== "") {
-      const searchPath = this.folderSearchPath.trim();
-      files = files.filter(
-        (file) =>
-          file.path.startsWith(searchPath + "/") || file.path === searchPath,
-      );
-      this.debugLog(
-        `Filtered to ${files.length} files in folder: ${searchPath}`,
-      );
-    }
+    files = this.fileFilter.filterFiles(files);
+    this.debugLog(`Filtered to ${files.length} files for scanning`);
 
     this.debugLog(`Scanning ${files.length} markdown files for flashcard tags`);
 
@@ -257,7 +244,7 @@ export class DeckManager {
       );
       const syncDecksTime = performance.now() - syncDecksStartTime;
       this.performanceLog(
-        `Deck sync completed successfully in ${this.formatTime(syncDecksTime)} (${newDecksCreated} created, ${deletedDecks} deleted)`,
+        `Deck sync completed successfully in ${formatTime(syncDecksTime)} (${newDecksCreated} created, ${deletedDecks} deleted)`,
       );
     } catch (error) {
       console.error("Error during deck sync:", error);
@@ -285,7 +272,7 @@ export class DeckManager {
     const totalTime = performance.now() - parseStartTime;
 
     this.performanceLog(
-      `Parsed ${flashcards.length} flashcards from ${file.path} in ${this.formatTime(totalTime)} (read: ${this.formatTime(readTime)}, parse: ${this.formatTime(parseTime)})`,
+      `Parsed ${flashcards.length} flashcards from ${file.path} in ${formatTime(totalTime)} (read: ${formatTime(readTime)}, parse: ${formatTime(parseTime)})`,
     );
 
     return flashcards;
@@ -508,7 +495,7 @@ export class DeckManager {
 
       const totalBatchTime = performance.now() - batchStartTime;
       this.performanceLog(
-        `Transaction completed in ${this.formatTime(totalBatchTime)} (${createCount} created, ${updateCount} updated, ${deleteCount} deleted)`,
+        `Transaction completed in ${formatTime(totalBatchTime)} (${createCount} created, ${updateCount} updated, ${deleteCount} deleted)`,
       );
     } catch (error) {
       console.error(`Critical error in transaction:`, error);
@@ -773,7 +760,7 @@ export class DeckManager {
 
     const totalDeckSyncTime = performance.now() - deckSyncStartTime;
     this.performanceLog(
-      `Sync completed for deck: ${deck.name} in ${this.formatTime(totalDeckSyncTime)} (${parsedCards.length} flashcards, ${batchOperations.length} operations, cleanup: ${this.formatTime(timestampTime)}) - DB save deferred`,
+      `Sync completed for deck: ${deck.name} in ${formatTime(totalDeckSyncTime)} (${parsedCards.length} flashcards, ${batchOperations.length} operations, cleanup: ${formatTime(timestampTime)}) - DB save deferred`,
     );
     yieldToUI();
   }

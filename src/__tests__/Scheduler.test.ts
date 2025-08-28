@@ -18,7 +18,12 @@ describe("Scheduler", () => {
       {} as any,
       jest.fn(),
     ) as jest.Mocked<DatabaseService>;
-    scheduler = new Scheduler(mockDb, jest.fn());
+    scheduler = new Scheduler(
+      mockDb,
+      { debug: { enableLogging: false, performanceLogs: false } } as any,
+      {} as any,
+      "",
+    );
 
     // Add default mock methods for ReviewSession functionality
     mockDb.createReviewSession = jest.fn().mockResolvedValue("session_123");

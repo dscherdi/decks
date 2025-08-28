@@ -1,17 +1,18 @@
 <script lang="ts">
-    import type DecksPlugin from "../main";
     import { onMount, createEventDispatcher, tick } from "svelte";
     import { ButtonComponent, Setting } from "obsidian";
     import ReviewHeatmap from "./ReviewHeatmap.svelte";
     import type { Statistics } from "../database/types";
+    import type { DatabaseService } from "../database/DatabaseService";
 
-    export let plugin: DecksPlugin;
+    export let db: DatabaseService;
+    export let deckFilter: string = "all";
 
     const dispatch = createEventDispatcher();
 
     let loading = true;
     let statistics: Statistics | null = null;
-    let selectedDeckFilter = "all"; // "all", "tag:tagname", or "deck:deckid"
+    let selectedDeckFilter = deckFilter; // "all", "tag:tagname", or "deck:deckid"
     let selectedTimeframe = "12months"; // "12months" or "all"
     let availableDecks: any[] = [];
     let availableTags: string[] = [];
@@ -84,7 +85,7 @@
 
     async function loadDecksAndTags() {
         try {
-            availableDecks = await plugin.getDecks();
+            availableDecks = await db.getAllDecks();
             availableTags = [
                 ...new Set(availableDecks.map((deck) => deck.tag)),
             ];
@@ -110,11 +111,10 @@
 
     async function loadStatistics() {
         try {
-            statistics = await plugin.getOverallStatistics(
+            statistics = await db.getOverallStatistics(
                 selectedDeckFilter,
                 selectedTimeframe,
             );
-            plugin.debugLog("Loaded statistics:", statistics);
 
             // Compute derived statistics once data is loaded
             todayStats = getTodayStats();
@@ -783,7 +783,7 @@
                 <ReviewHeatmap
                     bind:this={heatmapComponent}
                     getReviewCounts={async (days) => {
-                        return await plugin.getReviewCounts(days);
+                        return await db.getReviewCountsByDate(days);
                     }}
                 />
             </div>

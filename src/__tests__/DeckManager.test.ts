@@ -1405,15 +1405,25 @@ Answer 2 (different)`;
       const deckManager = new DeckManager(mockVault, mockMetadataCache, mockDb);
 
       // Initially no folder path
-      expect((deckManager as any).folderSearchPath).toBeUndefined();
+      expect((deckManager as any).fileFilter).toBeDefined();
 
       // Update folder search path
       deckManager.updateFolderSearchPath("math");
-      expect((deckManager as any).folderSearchPath).toBe("math");
+      // Test that the method exists and works (behavior test rather than implementation test)
+      const testFiles = [
+        { path: "math/algebra.md" } as any,
+        { path: "science/physics.md" } as any,
+      ];
+      const filtered = (deckManager as any).fileFilter.filterFiles(testFiles);
+      expect(filtered.length).toBe(1);
+      expect(filtered[0].path).toBe("math/algebra.md");
 
       // Clear folder search path
       deckManager.updateFolderSearchPath("");
-      expect((deckManager as any).folderSearchPath).toBe("");
+      const allFiltered = (deckManager as any).fileFilter.filterFiles(
+        testFiles,
+      );
+      expect(allFiltered.length).toBe(2);
     });
   });
 });

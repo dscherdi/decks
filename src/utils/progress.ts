@@ -1,0 +1,40 @@
+import { Notice } from "obsidian";
+import { FlashcardsSettings } from "../settings";
+
+export class ProgressTracker {
+  private progressNotice: Notice | null = null;
+  private settings: FlashcardsSettings;
+
+  constructor(settings: FlashcardsSettings) {
+    this.settings = settings;
+  }
+
+  show(message: string): void {
+    if (this.settings?.ui?.enableNotices !== false) {
+      this.progressNotice = new Notice(message, 0);
+    }
+  }
+
+  update(message: string, progress: number = 0): void {
+    if (this.progressNotice) {
+      const progressBar = this.createProgressBar(progress);
+      this.progressNotice.setMessage(`${message}\n${progressBar}`);
+    }
+  }
+
+  hide(): void {
+    if (this.progressNotice) {
+      this.progressNotice.hide();
+      this.progressNotice = null;
+    }
+  }
+
+  private createProgressBar(progress: number): string {
+    const width = 25;
+    const filled = Math.round((progress / 100) * width);
+    const empty = width - filled;
+    const bar = "█".repeat(filled) + "░".repeat(empty);
+    const percentage = Math.round(progress);
+    return `[${bar}] ${percentage}%`;
+  }
+}

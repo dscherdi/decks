@@ -1,14 +1,17 @@
-import { Modal } from "obsidian";
-import type DecksPlugin from "../main";
+import { Modal, App } from "obsidian";
+import { DatabaseService } from "../database/DatabaseService";
 import StatisticsUI from "./StatisticsUI.svelte";
 
 export class StatisticsModal extends Modal {
-  private plugin: DecksPlugin;
+  private db: DatabaseService;
+  private deckFilter?: string;
   private component: StatisticsUI | null = null;
+  private resizeHandler?: () => void;
 
-  constructor(plugin: DecksPlugin) {
-    super(plugin.app);
-    this.plugin = plugin;
+  constructor(app: App, db: DatabaseService, deckFilter?: string) {
+    super(app);
+    this.db = db;
+    this.deckFilter = deckFilter;
   }
 
   onOpen() {
@@ -30,10 +33,12 @@ export class StatisticsModal extends Modal {
     contentEl.addClass("decks-statistics-modal-content");
 
     // Mount Svelte component
+    // Create the Svelte component
     this.component = new StatisticsUI({
       target: contentEl,
       props: {
-        plugin: this.plugin,
+        db: this.db,
+        deckFilter: this.deckFilter,
       },
     });
 
@@ -56,16 +61,16 @@ export class StatisticsModal extends Modal {
     window.addEventListener("resize", handleResize);
 
     // Store resize handler for cleanup
-    (this as any)._resizeHandler = handleResize;
+    this.resizeHandler = handleResize;
   }
 
   onClose() {
     const { contentEl } = this;
 
     // Clean up resize handler
-    if ((this as any)._resizeHandler) {
-      window.removeEventListener("resize", (this as any)._resizeHandler);
-      delete (this as any)._resizeHandler;
+    if (this.resizeHandler) {
+      window.removeEventListener("resize", this.resizeHandler);
+      this.resizeHandler = undefined;
     }
 
     // Destroy Svelte component

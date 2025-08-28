@@ -223,7 +223,7 @@
             new Setting(profileContainer)
                 .setName("FSRS Profile")
                 .setDesc(
-                    "INTENSIVE: Sub-day intervals (1m/5m/10m/40m). STANDARD: Day-based intervals (≥1 day minimum)",
+                    "INTENSIVE: Sub-day intervals (1m/5m/10m/1d). STANDARD: Day-based intervals (≥1 day minimum)",
                 )
                 .addDropdown((dropdown) =>
                     dropdown

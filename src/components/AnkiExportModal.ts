@@ -1,17 +1,18 @@
 import { Modal, Notice } from "obsidian";
 import type { Deck, AnkiExportConfig } from "../database/types";
-import type DecksPlugin from "../main";
+import type { DatabaseService } from "../database/DatabaseService";
 import AnkiExportUI from "./AnkiExportUI.svelte";
 
 export class AnkiExportModal extends Modal {
   private deck: Deck;
-  private plugin: DecksPlugin;
+  private db: DatabaseService;
   private component: AnkiExportUI | null = null;
+  private resizeHandler?: () => void;
 
-  constructor(plugin: DecksPlugin, deck: Deck) {
-    super(plugin.app);
-    this.plugin = plugin;
+  constructor(app: any, deck: Deck, db: DatabaseService) {
+    super(app);
     this.deck = deck;
+    this.db = db;
   }
 
   onOpen() {
@@ -64,13 +65,13 @@ export class AnkiExportModal extends Modal {
     window.addEventListener("resize", handleResize);
 
     // Store resize handler for cleanup
-    (this as any)._resizeHandler = handleResize;
+    this.resizeHandler = handleResize;
   }
 
   private async handleExport(config: AnkiExportConfig) {
     try {
       // Get flashcards for this deck
-      const flashcards = await this.plugin.getFlashcardsByDeck(this.deck.id);
+      const flashcards = await this.db.getFlashcardsByDeck(this.deck.id);
 
       if (flashcards.length === 0) {
         new Notice("No flashcards found in this deck to export");
@@ -154,9 +155,9 @@ export class AnkiExportModal extends Modal {
     const { contentEl } = this;
 
     // Clean up resize handler
-    if ((this as any)._resizeHandler) {
-      window.removeEventListener("resize", (this as any)._resizeHandler);
-      delete (this as any)._resizeHandler;
+    if (this.resizeHandler) {
+      window.removeEventListener("resize", this.resizeHandler);
+      this.resizeHandler = undefined;
     }
 
     // Destroy Svelte component

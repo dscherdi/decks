@@ -1,8 +1,9 @@
-import { Modal, Component, Notice } from "obsidian";
+import { Modal, Component, Notice, MarkdownRenderer } from "obsidian";
 import type { Deck, Flashcard } from "../database/types";
 import type { RatingLabel } from "../algorithm/fsrs";
 import type { Scheduler } from "../services/Scheduler";
 import type { FlashcardsSettings } from "../settings";
+import type { DatabaseService } from "../database/DatabaseService";
 import FlashcardReviewModal from "./FlashcardReviewModal.svelte";
 
 export class FlashcardReviewModalWrapper extends Modal {
@@ -10,20 +11,24 @@ export class FlashcardReviewModalWrapper extends Modal {
   private initialCard: Flashcard | null;
   private scheduler: Scheduler;
   private settings: FlashcardsSettings;
-  private reviewFlashcard: (
-    deck: Deck,
-    card: Flashcard,
-    rating: RatingLabel,
-    timeElapsed?: number,
-  ) => Promise<void>;
-  private renderMarkdown: (
-    content: string,
-    el: HTMLElement,
-  ) => Component | null;
+  private db: DatabaseService;
   private refreshStats: () => Promise<void>;
   private refreshStatsById: (deckId: string) => Promise<void>;
   private component: FlashcardReviewModal | null = null;
   private markdownComponents: Component[] = [];
+  private resizeHandler?: () => void;
+
+  private renderMarkdown(content: string, el: HTMLElement): Component | null {
+    try {
+      const component = new Component();
+      MarkdownRenderer.renderMarkdown(content, el, "", component);
+      return component;
+    } catch (error) {
+      console.error("Error rendering markdown:", error);
+      el.textContent = content;
+      return null;
+    }
+  }
 
   constructor(
     app: any,
@@ -31,13 +36,7 @@ export class FlashcardReviewModalWrapper extends Modal {
     flashcards: Flashcard[],
     scheduler: Scheduler,
     settings: FlashcardsSettings,
-    reviewFlashcard: (
-      deck: Deck,
-      card: Flashcard,
-      rating: RatingLabel,
-      timeElapsed?: number,
-    ) => Promise<void>,
-    renderMarkdown: (content: string, el: HTMLElement) => Component | null,
+    db: DatabaseService,
     refreshStats: () => Promise<void>,
     refreshStatsById: (deckId: string) => Promise<void>,
   ) {
@@ -46,10 +45,30 @@ export class FlashcardReviewModalWrapper extends Modal {
     this.initialCard = flashcards.length > 0 ? flashcards[0] : null;
     this.scheduler = scheduler;
     this.settings = settings;
-    this.reviewFlashcard = reviewFlashcard;
-    this.renderMarkdown = renderMarkdown;
+    this.db = db;
     this.refreshStats = refreshStats;
     this.refreshStatsById = refreshStatsById;
+  }
+
+  private async reviewFlashcard(
+    deck: Deck,
+    flashcard: Flashcard,
+    difficulty: "again" | "hard" | "good" | "easy",
+    timeElapsed?: number,
+  ): Promise<void> {
+    // Use unified scheduler for rating
+    await this.scheduler.rate(
+      flashcard.id,
+      difficulty,
+      new Date(),
+      timeElapsed,
+    );
+
+    // Update deck last reviewed
+    await this.db.updateDeckLastReviewed(flashcard.deckId);
+
+    // Refresh stats for this specific deck
+    await this.refreshStatsById(flashcard.deckId);
   }
 
   async onOpen() {
@@ -129,14 +148,14 @@ export class FlashcardReviewModalWrapper extends Modal {
     window.addEventListener("resize", handleResize);
 
     // Store resize handler for cleanup
-    (this as any)._resizeHandler = handleResize;
+    this.resizeHandler = handleResize;
   }
 
   async onClose() {
     // Clean up resize handler
-    if ((this as any)._resizeHandler) {
-      window.removeEventListener("resize", (this as any)._resizeHandler);
-      delete (this as any)._resizeHandler;
+    if (this.resizeHandler) {
+      window.removeEventListener("resize", this.resizeHandler);
+      this.resizeHandler = undefined;
     }
 
     if (this.component) {

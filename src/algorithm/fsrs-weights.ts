@@ -18,30 +18,10 @@ export const FSRS_WEIGHTS_STANDARD: number[] = [
  * FSRS weights optimized for intensive sub-day intervals
  * w[0-3] set to match intensive targets in days: 1m/5m/10m/1day
  */
-export const FSRS_WEIGHTS_SUBDAY: number[] = [
-  1 / 1440, // w[0] - Again: 1 minute
-  5 / 1440, // w[1] - Hard: 5 minutes
-  10 / 1440, // w[2] - Good: 10 minutes
-  1, // w[3] - Easy: 1 day
-
-  // Keep FSRS-4.5 defaults for remaining parameters
-  7.2102,
-  0.5316,
-  1.0651,
-  0.0234,
-  1.616,
-  0.1544,
-  1.0824,
-  1.9813,
-  0.0953,
-  0.2975,
-  2.2042,
-  0.2407,
-  2.9466,
-];
+export const FSRS_WEIGHTS_SUBDAY: number[] = createSubDayWeights();
 
 /**
- * Default FSRS weights (backward compatibility)
+ * Default FSRS weights
  */
 export const DEFAULT_FSRS_WEIGHTS: number[] = FSRS_WEIGHTS_STANDARD;
 
@@ -119,26 +99,6 @@ export function roundForDisplay(value: number, decimals: number): string {
 }
 
 /**
- * Validates that a numeric value maintains sufficient precision
- * @param value - The numeric value to validate
- * @param minSignificantDigits - Minimum required significant digits (default: 12)
- * @returns true if precision is sufficient
- */
-export function validatePrecision(
-  value: number,
-  minSignificantDigits: number = 12,
-): boolean {
-  if (!isFinite(value) || value === 0) {
-    return isFinite(value);
-  }
-
-  const valueStr = Math.abs(value).toString();
-  const significantDigits = valueStr.replace(/[^0-9]/g, "").length;
-
-  return significantDigits >= minSignificantDigits;
-}
-
-/**
  * Creates sub-day optimized weights with custom initial intervals
  * @param againMinutes - Target interval for Again rating (default: 1 minute)
  * @param hardMinutes - Target interval for Hard rating (default: 6 minutes)
@@ -157,7 +117,7 @@ export function createSubDayWeights(
     hardMinutes / 1440, // w[1] - Hard stability
     goodMinutes / 1440, // w[2] - Good stability
     easyMinutes / 1440, // w[3] - Easy stability
-    ...DEFAULT_FSRS_WEIGHTS.slice(4), // Keep remaining weights
+    ...FSRS_WEIGHTS_STANDARD.slice(4), // Keep remaining weights
   ];
 }
 
@@ -181,6 +141,4 @@ export function validateRequestRetention(retention: number): boolean {
 export const WEIGHT_PRESETS = {
   INTENSIVE: FSRS_WEIGHTS_SUBDAY,
   STANDARD: FSRS_WEIGHTS_STANDARD,
-  RELAXED: createSubDayWeights(30, 60, 180, 720),
-  ORIGINAL: FSRS_WEIGHTS_STANDARD,
 } as const;

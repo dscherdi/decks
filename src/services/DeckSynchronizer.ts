@@ -2,6 +2,9 @@ import { Notice } from "obsidian";
 import { DatabaseService } from "../database/DatabaseService";
 import { DeckManager } from "./DeckManager";
 import { yieldToUI } from "../utils/ui";
+import { Logger, formatTime } from "../utils/logging";
+import { FlashcardsSettings } from "../settings";
+import { DataAdapter } from "obsidian";
 
 export interface SyncProgress {
   message: string;
@@ -27,19 +30,26 @@ export class DeckSynchronizer {
   private db: DatabaseService;
   private deckManager: DeckManager;
   private isSyncing: boolean = false;
-  private debugLog: (message: string, ...args: any[]) => void;
-  private performanceLog: (message: string) => void;
+  private logger: Logger;
 
   constructor(
     db: DatabaseService,
     deckManager: DeckManager,
-    debugLog: (message: string, ...args: any[]) => void,
-    performanceLog: (message: string) => void,
+    settings: FlashcardsSettings,
+    adapter: DataAdapter,
+    configDir: string,
   ) {
     this.db = db;
     this.deckManager = deckManager;
-    this.debugLog = debugLog;
-    this.performanceLog = performanceLog;
+    this.logger = new Logger(settings, adapter, configDir);
+  }
+
+  private debugLog(message: string, ...args: any[]): void {
+    this.logger.debug(message, ...args);
+  }
+
+  private performanceLog(message: string, ...args: any[]): void {
+    this.logger.performance(message, ...args);
   }
 
   /**
@@ -52,13 +62,6 @@ export class DeckSynchronizer {
   /**
    * Format time duration in human-readable format
    */
-  private formatTime(ms: number): string {
-    if (ms < 1000) {
-      return `${ms.toFixed(2)}ms`;
-    } else {
-      return `${(ms / 1000).toFixed(2)}s`;
-    }
-  }
 
   /**
    * Perform initial sync with graceful error handling
@@ -109,7 +112,7 @@ export class DeckSynchronizer {
       const decksTime = performance.now() - decksStartTime;
 
       this.performanceLog(
-        `Deck discovery completed in ${this.formatTime(decksTime)}`,
+        `Deck discovery completed in ${formatTime(decksTime)}`,
       );
 
       // Step 2: Get all decks and prepare for flashcard sync
@@ -157,7 +160,7 @@ export class DeckSynchronizer {
         totalFlashcards += flashcards.length;
 
         this.performanceLog(
-          `Deck ${deck.name} processed in ${this.formatTime(deckTime)} - ${flashcards.length} flashcards`,
+          `Deck ${deck.name} processed in ${formatTime(deckTime)} - ${flashcards.length} flashcards`,
         );
       }
 
@@ -177,7 +180,7 @@ export class DeckSynchronizer {
 
       this.debugLog("Database saved successfully");
       this.performanceLog(
-        `Database saved in ${this.formatTime(saveTime)} after processing ${decks.length} decks`,
+        `Database saved in ${formatTime(saveTime)} after processing ${decks.length} decks`,
       );
 
       // Step 5: Calculate final metrics
@@ -185,7 +188,7 @@ export class DeckSynchronizer {
       const totalSyncTime = performance.now() - syncStartTime;
 
       this.performanceLog(
-        `Total sync completed in ${this.formatTime(totalSyncTime)} - ${totalFlashcards} flashcards across ${decks.length} decks`,
+        `Total sync completed in ${formatTime(totalSyncTime)} - ${totalFlashcards} flashcards across ${decks.length} decks`,
       );
 
       // Performance summary
@@ -194,14 +197,14 @@ export class DeckSynchronizer {
         const avgFlashcardTime =
           totalFlashcards > 0 ? flashcardSyncTime / totalFlashcards : 0;
         this.performanceLog(
-          `Performance: ${this.formatTime(avgDeckTime)}/deck, ${this.formatTime(avgFlashcardTime)}/flashcard`,
+          `Performance: ${formatTime(avgDeckTime)}/deck, ${formatTime(avgFlashcardTime)}/flashcard`,
         );
       }
 
       // Final progress update
       if (showProgress && onProgress) {
         onProgress({
-          message: `✅ Sync complete! Processed ${totalFlashcards} flashcards across ${decks.length} decks in ${this.formatTime(totalSyncTime)} (DB saved in ${this.formatTime(saveTime)})`,
+          message: `✅ Sync complete! Processed ${totalFlashcards} flashcards across ${decks.length} decks in ${formatTime(totalSyncTime)} (DB saved in ${formatTime(saveTime)})`,
           percentage: 100,
         });
       }

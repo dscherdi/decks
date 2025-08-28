@@ -364,17 +364,27 @@ export class DatabaseService {
     }
 
     // Migration: Add new property names if missing (very old format)
+    // Handle legacy config format migration
+    interface LegacyDeckConfig {
+      newCardsLimit?: number;
+      enableNewCardsLimit?: boolean;
+      reviewCardsLimit?: number;
+      enableReviewCardsLimit?: boolean;
+    }
+
+    const legacyConfig = config as DeckConfig & LegacyDeckConfig;
+
     if (
       config.newCardsPerDay === undefined &&
-      (config as any).newCardsLimit !== undefined
+      legacyConfig.newCardsLimit !== undefined
     ) {
       config = {
         ...config,
-        hasNewCardsLimitEnabled: (config as any).enableNewCardsLimit || false,
-        newCardsPerDay: (config as any).newCardsLimit || 20,
+        hasNewCardsLimitEnabled: legacyConfig.enableNewCardsLimit || false,
+        newCardsPerDay: legacyConfig.newCardsLimit || 20,
         hasReviewCardsLimitEnabled:
-          (config as any).enableReviewCardsLimit || false,
-        reviewCardsPerDay: (config as any).reviewCardsLimit || 100,
+          legacyConfig.enableReviewCardsLimit || false,
+        reviewCardsPerDay: legacyConfig.reviewCardsLimit || 100,
       };
     }
 
