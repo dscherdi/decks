@@ -72,6 +72,7 @@ export class Scheduler {
   async startReviewSession(
     deckId: string,
     now: Date = new Date(),
+    sessionDurationMinutes?: number,
   ): Promise<string> {
     this.debugLog(`Starting review session for deck: ${deckId}`);
     const deck = await this.db.getDeckById(deckId);
@@ -83,9 +84,13 @@ export class Scheduler {
 
     // Calculate goal total more accurately
     const dailyCounts = await this.db.getDailyReviewCounts(deckId);
-    // Include cards due within next 15 minutes for session goal calculation
+    // Include cards due within session duration for session goal calculation
     // This ensures cards that become due during the review session count towards the goal
-    const dueCardCount = await this.getDueCardCount(now, deckId);
+    const dueCardCount = await this.getDueCardCount(
+      now,
+      deckId,
+      sessionDurationMinutes,
+    );
     const newCardCount = await this.getNewCardCount(deckId);
 
     let goalTotal = 0;
@@ -166,6 +171,7 @@ export class Scheduler {
   async startFreshSession(
     deckId: string,
     now: Date = new Date(),
+    sessionDurationMinutes?: number,
   ): Promise<string> {
     // End any existing active session first
     // TODO: End by taking the review time of last review log with session id of active session
@@ -175,7 +181,11 @@ export class Scheduler {
     }
 
     // Start a new session
-    this.currentSessionId = await this.startReviewSession(deckId, now);
+    this.currentSessionId = await this.startReviewSession(
+      deckId,
+      now,
+      sessionDurationMinutes,
+    );
     return this.currentSessionId;
   }
 
@@ -561,9 +571,15 @@ export class Scheduler {
     return `${profile}-v1.0`;
   }
 
-  private async getDueCardCount(now: Date, deckId: string): Promise<number> {
-    // Include cards due within the next 15 minutes for session goal calculation
-    const fifteenMinutesLater = new Date(now.getTime() + 15 * 60 * 1000);
+  private async getDueCardCount(
+    now: Date,
+    deckId: string,
+    sessionDurationMinutes: number = 25,
+  ): Promise<number> {
+    // Include cards due within the session duration for session goal calculation
+    const sessionEndTime = new Date(
+      now.getTime() + sessionDurationMinutes * 60 * 1000,
+    );
     const query = `
     SELECT COUNT(*) as count
     FROM flashcards
@@ -571,7 +587,7 @@ export class Scheduler {
   `;
     const results = await this.queryRaw(query, [
       deckId,
-      fifteenMinutesLater.toISOString(),
+      sessionEndTime.toISOString(),
     ]);
     return results.length > 0 ? (results[0][0] as number) : 0;
   }

@@ -28,10 +28,6 @@
     export let onRefresh: () => void;
     export let onForceRefreshDeck: (deckId: string) => Promise<void>;
     export let getReviewCounts: (days: number) => Promise<Map<string, number>>;
-    export const onUpdateDeckConfig: (
-        deckId: string,
-        config: DeckConfig,
-    ) => Promise<void> = async () => {};
     export let onOpenStatistics: () => void;
     export let getStudyStats: (() => Promise<any>) | null = null;
     export let getDatabase: () => any;

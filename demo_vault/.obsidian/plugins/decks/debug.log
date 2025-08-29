@@ -151,3 +151,123 @@
 [2025-08-24T21:06:43.197Z] Review session created: session_1756069603196_1fn3usdno, goal: 26
 [2025-08-24T21:06:47.050Z] Scheduler: Saving database to disk
 [2025-08-24T21:06:47.089Z] Scheduler: Database save completed
+[2025-08-24T21:32:22.566Z] Showing initial progress notice: 🔄 Syncing flashcards...
+[███░░░░░░░░░░░░░░░░░░░░░░] 10%
+[2025-08-24T21:32:22.723Z] File Flashcards/Spanish-Vocabulary.md not modified since last sync, skipping
+[2025-08-24T21:32:22.739Z] Saving database after processing all decks...
+[2025-08-24T21:32:22.857Z] Refresh complete
+[2025-08-24T21:32:25.448Z] Decks plugin loaded successfully
+[2025-08-24T21:32:27.668Z] Performing initial background sync...
+[2025-08-24T21:32:27.672Z] Showing initial progress notice: 🔄 Syncing flashcards...
+[███░░░░░░░░░░░░░░░░░░░░░░] 10%
+[2025-08-24T21:32:27.773Z] File Flashcards/Programming-Concepts.md not modified since last sync, skipping
+[2025-08-24T21:32:27.798Z] Saving database after processing all decks...
+[2025-08-24T21:32:27.923Z] Sync complete, hiding progress notice
+[2025-08-24T21:32:36.436Z] Flashcard tags for Flashcards/Programming-Concepts.md: ["#flashcards/programming/concepts"]
+[2025-08-24T21:32:36.586Z] Saving database after processing all decks...
+[2025-08-24T21:32:36.674Z] Refresh complete
+[2025-08-29T21:19:26.659Z] Loading Decks plugin
+[2025-08-29T21:19:26.979Z] Decks plugin loaded successfully
+[2025-08-29T21:19:29.188Z] Performing initial background sync...
+[2025-08-29T21:19:29.192Z] Progress: 0% - ❌ Sync failed - check console for details, message: this.updateProgress is not a function, stack TypeError: this.updateProgress is not a function
+    at onProgress (plugin:decks:16669:14)
+    at DeckSynchronizer.performSync (plugin:decks:5224:9)
+    at DecksView.performSync (plugin:decks:16656:48)
+    at DecksPlugin.performInitialSync (plugin:decks:17128:25)
+[2025-08-29T21:19:37.858Z] Progress: 0% - ❌ Sync failed - check console for details, message: this.updateProgress is not a function, stack TypeError: this.updateProgress is not a function
+    at onProgress (plugin:decks:16669:14)
+    at DeckSynchronizer.performSync (plugin:decks:5224:9)
+    at DecksView.performSync (plugin:decks:16656:48)
+    at DecksView.refresh (plugin:decks:16691:18)
+    at onRefresh (plugin:decks:16576:22)
+    at eval (plugin:decks:15895:9)
+    at Generator.next (<anonymous>)
+    at eval (plugin:decks:7131:67)
+    at new Promise (<anonymous>)
+    at __awaiter (plugin:decks:7113:10)
+[2025-08-29T21:24:10.292Z] Loading Decks plugin
+[2025-08-29T21:24:10.332Z] Decks plugin loaded successfully
+[2025-08-29T21:24:12.565Z] Performing initial background sync...
+[2025-08-29T21:24:12.574Z] Checking file: Flashcards/Math-Basics.md
+[2025-08-29T21:24:12.721Z] File Flashcards/Spanish-Vocabulary.md not modified since last sync, skipping
+[2025-08-29T21:24:12.752Z] Saving database after processing all decks...
+[2025-08-29T21:24:12.840Z] File Flashcards/1200 Deutsche Redewendungen.md not modified since last sync, skipping
+[2025-08-29T21:24:12.935Z] File Flashcards/Programming-Concepts.md not modified since last sync, skipping
+[2025-08-29T21:24:12.969Z] File Flashcards/test.md not modified since last sync, skipping
+[2025-08-29T21:24:12.985Z] Saving database after processing all decks...
+[2025-08-29T21:24:13.033Z] Refresh complete
+[2025-08-29T21:24:17.936Z] Review session created: session_1756502657934_tpu1kiev2, goal: 1200
+[2025-08-29T21:24:22.641Z] Updated deck stats for: deck_lp8v1m
+[2025-08-29T21:24:22.721Z] Updated deck stats for: deck_lp8v1m
+[2025-08-29T21:24:22.802Z] Found due card: card_pat6bq
+[2025-08-29T21:24:26.138Z] Updated deck stats for: deck_lp8v1m
+[2025-08-29T21:24:26.205Z] Updated deck stats for: deck_lp8v1m
+[2025-08-29T21:24:26.286Z] Found due card: card_6mmky4
+[2025-08-29T21:24:27.909Z] Found card: ins kalte Wasser springen... in deck: 1200 Deutsche Redewendungen
+[2025-08-29T21:24:27.924Z] Updated deck stats for: deck_lp8v1m
+[2025-08-29T21:24:28.004Z] Updated deck stats for: deck_lp8v1m
+[2025-08-29T21:24:28.086Z] Found due card: card_42vba5
+[2025-08-29T21:24:33.758Z] Updated deck stats for: deck_lp8v1m
+[2025-08-29T21:24:33.821Z] Updated deck stats for: deck_lp8v1m
+[2025-08-29T21:24:33.903Z] Found due card: card_68yibm
+[2025-08-29T21:24:35.841Z] Found card: Öl ins Feuer gießen... in deck: 1200 Deutsche Redewendungen
+[2025-08-29T21:24:35.854Z] Updated deck stats for: deck_lp8v1m
+[2025-08-29T21:24:35.921Z] Updated deck stats for: deck_lp8v1m
+[2025-08-29T21:24:36.003Z] Found due card: card_aqkrwe
+[2025-08-29T21:24:38.167Z] Found card: die Nase vorn haben... in deck: 1200 Deutsche Redewendungen
+[2025-08-29T21:24:38.175Z] Updated deck stats for: deck_lp8v1m
+[2025-08-29T21:24:38.255Z] Updated deck stats for: deck_lp8v1m
+[2025-08-29T21:24:38.336Z] Found due card: card_f2mv1e
+[2025-08-29T21:24:42.426Z] Found card: jemandem das Wasser abgraben... in deck: 1200 Deutsche Redewendungen
+[2025-08-29T21:24:42.439Z] Updated deck stats for: deck_lp8v1m
+[2025-08-29T21:24:42.504Z] Updated deck stats for: deck_lp8v1m
+[2025-08-29T21:24:42.586Z] Found due card: card_m1kant
+[2025-08-29T21:24:43.986Z] Updated deck stats for: deck_lp8v1m
+[2025-08-29T21:24:44.034Z] Scheduler: Saving database to disk
+[2025-08-29T21:24:44.056Z] Scheduler: Database save completed
+[2025-08-29T21:26:50.691Z] Review session created: session_1756502810690_xmtkcaz76, goal: 1949
+[2025-08-29T21:26:52.909Z] Found card: **finden**... in deck: 2000 German verbs
+[2025-08-29T21:26:52.923Z] Updated deck stats for: deck_cr6nq3
+[2025-08-29T21:26:52.989Z] Updated deck stats for: deck_cr6nq3
+[2025-08-29T21:26:53.071Z] Found due card: card_7n76la
+[2025-08-29T21:26:54.375Z] Updated deck stats for: deck_cr6nq3
+[2025-08-29T21:26:54.440Z] Updated deck stats for: deck_cr6nq3
+[2025-08-29T21:26:54.521Z] Found due card: card_plhge0
+[2025-08-29T21:26:55.994Z] Updated deck stats for: deck_cr6nq3
+[2025-08-29T21:26:56.073Z] Updated deck stats for: deck_cr6nq3
+[2025-08-29T21:26:56.154Z] Found due card: card_qz6waa
+[2025-08-29T21:26:59.602Z] Updated deck stats for: deck_cr6nq3
+[2025-08-29T21:26:59.672Z] Updated deck stats for: deck_cr6nq3
+[2025-08-29T21:26:59.754Z] Found due card: card_1nla11
+[2025-08-29T21:27:03.783Z] Updated deck stats for: deck_cr6nq3
+[2025-08-29T21:27:03.857Z] Updated deck stats for: deck_cr6nq3
+[2025-08-29T21:27:03.937Z] Found due card: card_4igeta
+[2025-08-29T21:27:06.401Z] Found card: **lassen**... in deck: 2000 German verbs
+[2025-08-29T21:27:06.406Z] Updated deck stats for: deck_cr6nq3
+[2025-08-29T21:27:06.473Z] Updated deck stats for: deck_cr6nq3
+[2025-08-29T21:27:06.553Z] Found due card: card_iv3peb
+[2025-08-29T21:27:11.008Z] Updated deck stats for: deck_cr6nq3
+[2025-08-29T21:27:11.073Z] Updated deck stats for: deck_cr6nq3
+[2025-08-29T21:27:11.154Z] Found due card: card_yrijwp
+[2025-08-29T21:27:12.527Z] Updated deck stats for: deck_cr6nq3
+[2025-08-29T21:27:12.590Z] Updated deck stats for: deck_cr6nq3
+[2025-08-29T21:27:12.671Z] Found due card: card_xmkq6m
+[2025-08-29T21:27:14.028Z] Updated deck stats for: deck_cr6nq3
+[2025-08-29T21:27:14.090Z] Updated deck stats for: deck_cr6nq3
+[2025-08-29T21:27:14.171Z] Found due card: card_of1y7d
+[2025-08-29T21:27:15.343Z] Updated deck stats for: deck_cr6nq3
+[2025-08-29T21:27:15.407Z] Updated deck stats for: deck_cr6nq3
+[2025-08-29T21:27:15.488Z] Found due card: card_talis4
+[2025-08-29T21:27:16.657Z] Found card: **können**... in deck: 2000 German verbs
+[2025-08-29T21:27:16.673Z] Updated deck stats for: deck_cr6nq3
+[2025-08-29T21:27:16.740Z] Updated deck stats for: deck_cr6nq3
+[2025-08-29T21:27:16.821Z] Found due card: card_zdz588
+[2025-08-29T21:27:18.059Z] Updated deck stats for: deck_cr6nq3
+[2025-08-29T21:27:18.123Z] Updated deck stats for: deck_cr6nq3
+[2025-08-29T21:27:18.204Z] Found due card: card_qexav5
+[2025-08-29T21:27:20.006Z] Updated deck stats for: deck_cr6nq3
+[2025-08-29T21:27:20.073Z] Updated deck stats for: deck_cr6nq3
+[2025-08-29T21:27:20.154Z] Found due card: card_plb71e
+[2025-08-29T21:27:24.964Z] Updated deck stats for: deck_cr6nq3
+[2025-08-29T21:27:25.003Z] Scheduler: Saving database to disk
+[2025-08-29T21:27:25.020Z] Scheduler: Database save completed

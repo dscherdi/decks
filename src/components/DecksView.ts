@@ -20,22 +20,21 @@ import { FlashcardReviewModalWrapper } from "./FlashcardReviewModalWrapper";
 import { StatisticsModal } from "./StatisticsModal";
 import { FSRS, type RatingLabel } from "@/algorithm/fsrs";
 import DeckListPanel from "./DeckListPanel.svelte";
+import { ProgressTracker } from "@/utils/progress";
 
 export class DecksView extends ItemView {
   private db: DatabaseService;
   private deckSynchronizer: DeckSynchronizer;
   private scheduler: Scheduler;
   private settings: FlashcardsSettings;
-  private logger: Logger;
   private setViewReference: (view: DecksView | null) => void;
   private hasShownInitialProgress = false;
-  private showProgressNotice: (message: string) => void;
-  private updateProgress: (message: string, progress?: number) => void;
-  private hideProgressNotice: () => void;
   private component: DeckListPanel | null = null;
   private markdownComponents: Component[] = [];
   private statsRefreshTimeout: NodeJS.Timeout | null = null;
   private backgroundRefreshInterval: NodeJS.Timeout | null = null;
+  private progressTracker: ProgressTracker;
+  private logger: Logger;
 
   constructor(
     leaf: WorkspaceLeaf,
@@ -43,25 +42,20 @@ export class DecksView extends ItemView {
     deckSynchronizer: DeckSynchronizer,
     scheduler: Scheduler,
     settings: FlashcardsSettings,
+    progressTracker: ProgressTracker,
+    logger: Logger,
     setViewReference: (view: DecksView | null) => void,
-    showProgressNotice: (message: string) => void,
-    updateProgress: (message: string, progress?: number) => void,
-    hideProgressNotice: () => void,
   ) {
     super(leaf);
     this.db = database;
     this.deckSynchronizer = deckSynchronizer;
     this.scheduler = scheduler;
     this.settings = settings;
-    this.logger = new Logger(
-      settings,
-      this.app.vault.adapter,
-      this.app.vault.configDir,
-    );
+    this.logger = logger;
+
+    this.progressTracker = progressTracker;
+
     this.setViewReference = setViewReference;
-    this.showProgressNotice = showProgressNotice;
-    this.updateProgress = updateProgress;
-    this.hideProgressNotice = hideProgressNotice;
     // Set reference in plugin so we can access this view instance
     this.setViewReference(this);
   }
@@ -89,11 +83,11 @@ export class DecksView extends ItemView {
       props: {
         onDeckClick: (deck: Deck) => this.startReview(deck),
         onRefresh: async () => {
-          this.debugLog("onRefresh callback invoked");
+          this.logger.debug("onRefresh callback invoked");
           await this.refresh(false);
         },
         onForceRefreshDeck: async (deckId: string) => {
-          this.debugLog(
+          this.logger.debug(
             "onForceRefreshDeck callback invoked for deck:",
             deckId,
           );
@@ -102,27 +96,30 @@ export class DecksView extends ItemView {
           const deck = await this.db.getDeckById(deckId);
           const deckDisplayName = deck ? deck.name : deckId;
 
-          this.showProgressNotice(
+          this.progressTracker.show(
             `🔄 Force refreshing deck: ${deckDisplayName}...`,
           );
 
           try {
             await this.deckSynchronizer.syncDeck(deckId, true, (progress) => {
-              this.updateProgress(progress.message, progress.percentage);
+              this.progressTracker.update(
+                progress.message,
+                progress.percentage,
+              );
 
               if (progress.percentage === 100) {
-                setTimeout(() => this.hideProgressNotice(), 2000);
+                setTimeout(() => this.progressTracker.hide(), 2000);
               }
             });
 
             // Refresh stats after force refresh
             await this.refreshStats();
           } catch (error) {
-            this.updateProgress(
+            this.progressTracker.update(
               "❌ Deck refresh failed - check console for details",
               0,
             );
-            setTimeout(() => this.hideProgressNotice(), 3000);
+            setTimeout(() => this.progressTracker.hide(), 3000);
             throw error;
           }
         },
@@ -131,9 +128,6 @@ export class DecksView extends ItemView {
         },
         getStudyStats: async () => {
           return await this.db.getStudyStats();
-        },
-        onUpdateDeckConfig: async (deckId: string, config: DeckConfig) => {
-          // DeckConfigModal handles this logic internally now
         },
         onOpenStatistics: () => {
           this.openStatisticsModal();
@@ -184,10 +178,6 @@ export class DecksView extends ItemView {
     await this.component?.updateAll(updatedDecks, deckStats);
   }
 
-  private debugLog(message: string, ...args: any[]): void {
-    this.logger?.debug(message, ...args);
-  }
-
   private async getAllDeckStatsMap(): Promise<Map<string, DeckStats>> {
     const stats = await this.db.getAllDeckStats();
     const statsMap = new Map<string, DeckStats>();
@@ -202,30 +192,33 @@ export class DecksView extends ItemView {
       forceSync,
       showProgress: true,
       onProgress: (progress) => {
-        this.debugLog(
+        this.logger.debug(
           `Progress: ${progress.percentage}% - ${progress.message}`,
         );
         if (!this.hasShownInitialProgress) {
           const message = forceSync
             ? "🔄 Force refreshing flashcards..."
             : "🔄 Syncing flashcards...";
-          this.debugLog(`Showing initial progress notice: ${message}`);
-          this.showProgressNotice(message);
+          this.logger.debug(`Showing initial progress notice: ${message}`);
+          this.progressTracker.show(message);
           this.hasShownInitialProgress = true;
         }
-        this.updateProgress(progress.message, progress.percentage);
+        this.progressTracker.update(progress.message, progress.percentage);
         if (progress.percentage === 100) {
-          this.debugLog("Sync complete, hiding progress notice");
+          this.logger.debug("Sync complete, hiding progress notice");
           this.hasShownInitialProgress = false;
-          setTimeout(() => this.hideProgressNotice(), 3000);
+          setTimeout(() => this.progressTracker.hide(), 3000);
         }
       },
     });
 
     if (!result.success && result.error) {
-      this.updateProgress("❌ Sync failed - check console for details", 0);
+      this.progressTracker.update(
+        "❌ Sync failed - check console for details",
+        0,
+      );
       this.hasShownInitialProgress = false;
-      setTimeout(() => this.hideProgressNotice(), 5000);
+      setTimeout(() => this.progressTracker.hide(), 5000);
       throw result.error;
     }
   }
@@ -235,7 +228,7 @@ export class DecksView extends ItemView {
   }
 
   async refresh(force: boolean = false) {
-    this.debugLog("DecksView.refresh() called");
+    this.logger.debug("DecksView.refresh() called");
     try {
       // Perform sync with force parameter
       await this.performSync(force);
@@ -245,7 +238,7 @@ export class DecksView extends ItemView {
       const deckStats = await this.getAllDeckStatsMap();
       this.update(updatedDecks, deckStats);
 
-      this.debugLog("Refresh complete");
+      this.logger.debug("Refresh complete");
     } catch (error) {
       console.error("Error refreshing decks:", error);
       if (this.settings?.ui?.enableNotices !== false) {
@@ -255,11 +248,11 @@ export class DecksView extends ItemView {
   }
 
   async refreshStats() {
-    this.debugLog("DecksView.refreshStats() executing");
+    this.logger.debug("DecksView.refreshStats() executing");
     try {
       // Get updated stats only (faster than full refresh)
       const deckStats = await this.getAllDeckStatsMap();
-      this.debugLog("Updated deck stats:", deckStats);
+      this.logger.debug("Updated deck stats:", deckStats);
 
       // Update component with new stats using unified function
       if (this.component) {
@@ -271,11 +264,13 @@ export class DecksView extends ItemView {
   }
 
   async refreshStatsById(deckId: string) {
-    this.debugLog(`DecksView.refreshStatsById() executing for deck: ${deckId}`);
+    this.logger.debug(
+      `DecksView.refreshStatsById() executing for deck: ${deckId}`,
+    );
     try {
       // Get stats for the specific deck
       const deckStats = await this.db.getDeckStats(deckId);
-      this.debugLog("Updated deck stats for:", deckId);
+      this.logger.debug("Updated deck stats for:", deckId);
 
       // Update component using unified function
       if (this.component && deckStats) {
@@ -295,19 +290,19 @@ export class DecksView extends ItemView {
     // Clear any existing interval
     this.stopBackgroundRefresh();
 
-    this.debugLog(
+    this.logger.debug(
       `Starting background refresh job (every ${this.settings.ui.backgroundRefreshInterval} seconds)`,
     );
 
     this.backgroundRefreshInterval = setInterval(async () => {
-      this.debugLog("Background refresh tick");
+      this.logger.debug("Background refresh tick");
       this.refresh();
     }, this.settings.ui.backgroundRefreshInterval * 1000);
   }
 
   stopBackgroundRefresh() {
     if (this.backgroundRefreshInterval) {
-      this.debugLog("Stopping background refresh job");
+      this.logger.debug("Stopping background refresh job");
       clearInterval(this.backgroundRefreshInterval);
       this.backgroundRefreshInterval = null;
     }
@@ -326,7 +321,7 @@ export class DecksView extends ItemView {
 
   // Test method to check if background job is running
   checkBackgroundJobStatus() {
-    this.debugLog("Background job status:", {
+    this.logger.debug("Background job status:", {
       isRunning: !!this.backgroundRefreshInterval,
       intervalId: this.backgroundRefreshInterval,
       componentExists: !!this.component,
@@ -337,7 +332,7 @@ export class DecksView extends ItemView {
   async startReview(deck: Deck) {
     try {
       // First sync flashcards for this specific deck
-      this.debugLog(`Syncing cards for deck before review: ${deck.name}`);
+      this.logger.debug(`Syncing cards for deck before review: ${deck.name}`);
       await this.deckSynchronizer.syncDeck(deck.id);
       await yieldToUI();
       // Get daily review counts to show remaining allowance

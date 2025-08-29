@@ -5,6 +5,7 @@ export interface FlashcardsSettings {
   review: {
     showProgress: boolean;
     enableKeyboardShortcuts: boolean;
+    sessionDuration: number; // Session duration in minutes (1-60, default 25)
   };
 
   // Parsing Settings
@@ -30,6 +31,7 @@ export const DEFAULT_SETTINGS: FlashcardsSettings = {
   review: {
     showProgress: true,
     enableKeyboardShortcuts: true,
+    sessionDuration: 25,
   },
 
   parsing: {

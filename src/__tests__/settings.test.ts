@@ -36,6 +36,15 @@ describe("Settings", () => {
       expect(settings.debug).toBeDefined();
     });
 
+    it("should have review settings with sessionDuration", () => {
+      const reviewSettings = DEFAULT_SETTINGS.review;
+
+      expect(reviewSettings.showProgress).toBeDefined();
+      expect(reviewSettings.enableKeyboardShortcuts).toBeDefined();
+      expect(reviewSettings.sessionDuration).toBeDefined();
+      expect(typeof reviewSettings.sessionDuration).toBe("number");
+    });
+
     it("should have debug settings with enableLogging and performanceLogs", () => {
       const debugSettings = DEFAULT_SETTINGS.debug;
 
@@ -79,6 +88,22 @@ describe("Settings", () => {
     it("should have valid types for debug settings", () => {
       expect(typeof DEFAULT_SETTINGS.debug.enableLogging).toBe("boolean");
       expect(typeof DEFAULT_SETTINGS.debug.performanceLogs).toBe("boolean");
+    });
+  });
+
+  describe("Session duration settings", () => {
+    it("should have sessionDuration set to 25 minutes by default", () => {
+      expect(DEFAULT_SETTINGS.review.sessionDuration).toBe(25);
+    });
+
+    it("should have sessionDuration within valid range", () => {
+      const duration = DEFAULT_SETTINGS.review.sessionDuration;
+      expect(duration).toBeGreaterThanOrEqual(1);
+      expect(duration).toBeLessThanOrEqual(60);
+    });
+
+    it("should have valid type for sessionDuration", () => {
+      expect(typeof DEFAULT_SETTINGS.review.sessionDuration).toBe("number");
     });
   });
 });

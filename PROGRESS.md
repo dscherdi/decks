@@ -781,6 +781,49 @@ Then this path is taken and used to filter the markdown files that are scanned i
 - Added comprehensive tests for folder filtering functionality
 - Empty/blank folder path scans entire vault (default behavior preserved)
 
+
+### ✅ TODO 24: Implement session duration on flashcard review
+
+**COMPLETED** - Session duration timer with auto-close functionality.
+
+**Implementation Summary:**
+- **Configurable Duration**: Added `sessionDuration` setting (1-60 minutes, default 25)
+- **Settings Integration**: Added session duration input to SettingsTab with validation
+- **Visual Timer**: Countdown timer displayed in modal header showing remaining time
+- **Auto-Close**: Modal automatically closes when session time expires
+- **Fresh Sessions**: Each new session starts with full timer duration (no resume)
+
+**Technical Details:**
+- **Settings Schema**: Added `sessionDuration` to `review` settings section
+- **Real-Time Display**: Timer updates every second with MM:SS format
+- **Warning Indicator**: Timer turns red when less than 1 minute remains
+- **Mobile Responsive**: Timer layout adapts for mobile devices with stacked header
+- **Memory Management**: Proper cleanup of timer intervals on modal close/destroy
+- **Session Integration**: Timer automatically ends review session when time expires
+
+**User Experience:**
+- Clear countdown display: "Time Remaining: 25:00"
+- Visual warning when approaching timeout (red text)
+- Automatic session completion preserves all review progress
+- New sessions always start fresh with configured duration
+- Mobile-friendly layout with timer positioned appropriately
+
+**Session Duration Integration:**
+- **Smart Goal Calculation**: Session goal now includes cards due within the configured session duration
+- **Dynamic Card Counting**: Scheduler uses session duration (not hardcoded 15 minutes) to determine total reviewable cards
+- **Accurate Progress**: Progress bar reflects cards that will actually become due during the session
+- **Scheduler Enhancement**: `startReviewSession()` and `startFreshSession()` accept session duration parameter
+- **Flexible Duration**: Different session lengths properly calculate different card totals
+- **Test Coverage**: Added comprehensive tests for session duration integration (194 total tests passing)
+
+
+### TODO 25: Implement a db backup mechanism. 
+
+- The backup happens automatically once a day. 
+- The flashcards db is cloned in the same directory as the plugin. 
+- The backup db's name is [Backup] Flashcards.db
+- There is only one backup db, which is overwriten everytime the backup happens. 
+
 ## ✅ Recent Enhancements
 
 ### Deck Configuration System

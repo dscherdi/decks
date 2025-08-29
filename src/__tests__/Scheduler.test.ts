@@ -1008,10 +1008,10 @@ describe("Scheduler", () => {
     });
   });
 
-  describe("session goal calculation with 15-minute due card inclusion", () => {
+  describe("session goal calculation with session duration due card inclusion", () => {
     // Tests verify that session goals include cards becoming due during review sessions
     // This prevents users from encountering "extra" cards after reaching their goal
-    it("should include cards due within next 15 minutes in session goal", async () => {
+    it("should include cards due within session duration in session goal", async () => {
       const now = new Date();
       const fiveMinutesLater = new Date(now.getTime() + 5 * 60 * 1000);
       const tenMinutesLater = new Date(now.getTime() + 10 * 60 * 1000);
@@ -1044,37 +1044,35 @@ describe("Scheduler", () => {
       });
 
       // Mock db.query to simulate different due cards counts
-      // When called with 15-minute buffer, return 3 cards (2 within 15min + 1 due now)
+      // When called with 10-minute session duration buffer, return 3 cards
       // When called for new cards, return 0
       mockDb.query = jest
         .fn()
-        .mockImplementationOnce(() => Promise.resolve([[3]])) // Due cards with 15min buffer
+        .mockImplementationOnce(() => Promise.resolve([[3]])) // Due cards with session duration buffer
         .mockImplementationOnce(() => Promise.resolve([[0]])); // New cards
 
-      const sessionId = await scheduler.startReviewSession("deck_1", now);
+      const sessionId = await scheduler.startReviewSession("deck_1", now, 10);
 
-      // Verify the session was created with correct goal including 15-minute buffer
+      // Verify the session was created with correct goal including session duration buffer
       expect(mockDb.createReviewSession).toHaveBeenCalledWith({
         deckId: "deck_1",
         startedAt: now.toISOString(),
         endedAt: null,
-        goalTotal: 3, // Should include cards due within 15 minutes
+        goalTotal: 3, // Should include cards due within session duration
         doneUnique: 0,
       });
 
-      // Verify db.query was called with 15-minute buffer for due cards
-      const expectedFifteenMinutesLater = new Date(
-        now.getTime() + 15 * 60 * 1000,
-      );
+      // Verify db.query was called with 10-minute session duration buffer for due cards
+      const expectedSessionEndTime = new Date(now.getTime() + 10 * 60 * 1000);
       expect(mockDb.query).toHaveBeenCalledWith(
         expect.stringContaining(
           "WHERE deck_id = ? AND due_date <= ? AND state = 'review'",
         ),
-        ["deck_1", expectedFifteenMinutesLater.toISOString()],
+        ["deck_1", expectedSessionEndTime.toISOString()],
       );
     });
 
-    it("should not include cards due beyond 15 minutes in session goal", async () => {
+    it("should not include cards due beyond session duration in session goal", async () => {
       const now = new Date();
       const mockDeck: Deck = {
         id: "deck_1",
@@ -1101,27 +1099,25 @@ describe("Scheduler", () => {
         reviewCount: 0,
       });
 
-      // Mock scenario: 1 card due now, 0 additional within 15 minutes
+      // Mock scenario: 1 card due now, 0 additional within 5 minutes session duration
       mockDb.query = jest
         .fn()
-        .mockImplementationOnce(() => Promise.resolve([[1]])) // Due cards with 15min buffer
+        .mockImplementationOnce(() => Promise.resolve([[1]])) // Due cards with session duration buffer
         .mockImplementationOnce(() => Promise.resolve([[0]])); // New cards
 
-      await scheduler.startReviewSession("deck_1", now);
+      await scheduler.startReviewSession("deck_1", now, 5);
 
-      // Verify the query included exactly 15 minutes, not more
-      const expectedFifteenMinutesLater = new Date(
-        now.getTime() + 15 * 60 * 1000,
-      );
+      // Verify the query included exactly 5 minutes session duration, not more
+      const expectedSessionEndTime = new Date(now.getTime() + 5 * 60 * 1000);
       expect(mockDb.query).toHaveBeenCalledWith(
         expect.stringContaining(
           "WHERE deck_id = ? AND due_date <= ? AND state = 'review'",
         ),
-        ["deck_1", expectedFifteenMinutesLater.toISOString()],
+        ["deck_1", expectedSessionEndTime.toISOString()],
       );
     });
 
-    it("should handle edge case when no cards are due within 15 minutes", async () => {
+    it("should handle edge case when no cards are due within session duration", async () => {
       const now = new Date();
       const mockDeck: Deck = {
         id: "deck_1",
@@ -1149,21 +1145,66 @@ describe("Scheduler", () => {
       });
 
       // Mock scenario: 0 cards due within 15 minutes, 0 new cards
+      // Mock scenario: no cards due within 3 minutes session duration
       mockDb.query = jest
         .fn()
-        .mockImplementationOnce(() => Promise.resolve([[0]])) // Due cards with 15min buffer
+        .mockImplementationOnce(() => Promise.resolve([[0]])) // Due cards with session duration buffer
         .mockImplementationOnce(() => Promise.resolve([[0]])); // New cards
 
-      await scheduler.startReviewSession("deck_1", now);
+      await scheduler.startReviewSession("deck_1", now, 3);
 
-      // Should create session with minimum goal of 1 (as per existing logic)
       expect(mockDb.createReviewSession).toHaveBeenCalledWith({
         deckId: "deck_1",
         startedAt: now.toISOString(),
         endedAt: null,
-        goalTotal: 1, // Minimum goal even when no cards available
+        goalTotal: 1, // Should be at least 1 for progress calculation
         doneUnique: 0,
       });
+    });
+
+    it("should use default 25-minute session duration when no parameter provided", async () => {
+      const now = new Date();
+      const mockDeck: Deck = {
+        id: "deck_1",
+        name: "Test Deck",
+        filepath: "test.md",
+        tag: "test",
+        lastReviewed: null,
+        config: {
+          hasNewCardsLimitEnabled: false,
+          newCardsPerDay: 20,
+          hasReviewCardsLimitEnabled: false,
+          reviewCardsPerDay: 100,
+          headerLevel: 2,
+          reviewOrder: "due-date",
+          fsrs: { requestRetention: 0.9, profile: "STANDARD" },
+        },
+        created: new Date().toISOString(),
+        modified: new Date().toISOString(),
+      };
+
+      mockDb.getDeckById.mockResolvedValue(mockDeck);
+      mockDb.getDailyReviewCounts.mockResolvedValue({
+        newCount: 0,
+        reviewCount: 0,
+      });
+
+      // Mock scenario: some due cards within 25 minutes
+      mockDb.query = jest
+        .fn()
+        .mockImplementationOnce(() => Promise.resolve([[2]])) // Due cards with 25min default buffer
+        .mockImplementationOnce(() => Promise.resolve([[0]])); // New cards
+
+      await scheduler.startReviewSession("deck_1", now);
+
+      // Verify db.query was called with 25-minute default session duration buffer
+      const expectedSessionEndTime = new Date(now.getTime() + 25 * 60 * 1000);
+      expect(mockDb.query).toHaveBeenCalledWith(
+        expect.stringContaining(
+          "WHERE deck_id = ? AND due_date <= ? AND state = 'review'",
+        ),
+        ["deck_1", expectedSessionEndTime.toISOString()],
+      );
     });
   });
 });

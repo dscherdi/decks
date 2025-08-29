@@ -38,17 +38,30 @@
     let sessionId: string | null = null;
     let sessionProgress: SessionProgress | null = null;
 
+    // Session timer variables
+    let sessionStartTime: number = 0;
+    let sessionTimeRemaining: number = 0;
+    let sessionTimer: NodeJS.Timeout | null = null;
+
     // Track last event to prevent double execution
     let lastEventTime = 0;
     let lastEventType = "";
 
     $: progress = sessionProgress ? sessionProgress.progress : 0;
+    $: timeRemainingDisplay = formatTimeRemaining(sessionTimeRemaining);
 
     onMount(async () => {
         // Initialize review session
-        sessionId = await scheduler.startFreshSession(deck.id);
+        sessionId = await scheduler.startFreshSession(
+            deck.id,
+            new Date(),
+            settings.review.sessionDuration,
+        );
         scheduler.setCurrentSession(sessionId);
         sessionProgress = await scheduler.getSessionProgress(sessionId);
+
+        // Initialize session timer
+        startSessionTimer();
 
         // If no initial card provided, get the first card from scheduler
         if (!currentCard) {
@@ -210,7 +223,6 @@
 
     const onRating = async (e: PointerEvent, v: 1 | 2 | 3 | 4) => {
         e.preventDefault();
-        console.log("Pointer event:", e.type, "value:", v);
         await rate(v);
         await yieldToUI();
     };
@@ -219,12 +231,25 @@
         // Clean up keydown event listener
         window.removeEventListener("keydown", handleKeydown);
 
+        // Clean up session timer
+        if (sessionTimer) {
+            clearInterval(sessionTimer);
+            sessionTimer = null;
+        }
+
         // Review session complete
         await endReview();
     });
 
     const endReview = async () => {
         if (reviewFinished) return;
+
+        // Clean up session timer
+        if (sessionTimer) {
+            clearInterval(sessionTimer);
+            sessionTimer = null;
+        }
+
         // End the review session
         if (sessionId) {
             await scheduler.endReviewSession(sessionId);
@@ -240,6 +265,30 @@
         reviewFinished = true;
     };
 
+    function startSessionTimer() {
+        const sessionDurationMs = settings.review.sessionDuration * 60 * 1000; // Convert minutes to milliseconds
+        sessionStartTime = Date.now();
+        sessionTimeRemaining = sessionDurationMs;
+
+        // Update timer every second
+        sessionTimer = setInterval(() => {
+            const elapsed = Date.now() - sessionStartTime;
+            sessionTimeRemaining = Math.max(0, sessionDurationMs - elapsed);
+
+            // Auto-close when time is up
+            if (sessionTimeRemaining <= 0) {
+                endReview();
+            }
+        }, 1000);
+    }
+
+    function formatTimeRemaining(ms: number): string {
+        const totalSeconds = Math.ceil(ms / 1000);
+        const minutes = Math.floor(totalSeconds / 60);
+        const seconds = totalSeconds % 60;
+        return `${minutes}:${seconds.toString().padStart(2, "0")}`;
+    }
+
     $: if (currentCard) {
         loadCard();
     }
@@ -248,19 +297,30 @@
 <div class="decks-review-modal">
     <div class="decks-modal-header">
         <h3>Review Session - {deck.name}</h3>
-        <div class="decks-progress-info">
-            <span
-                >Reviewed: {sessionProgress
-                    ? sessionProgress.doneUnique
-                    : reviewedCount}</span
-            >
-            <span class="decks-remaining"
-                >({sessionProgress
-                    ? `${sessionProgress.goalTotal - sessionProgress.doneUnique} remaining`
-                    : currentCard
-                      ? "More cards available"
-                      : "Session complete"})</span
-            >
+        <div class="decks-header-stats">
+            <div class="decks-progress-info">
+                <span
+                    >Reviewed: {sessionProgress
+                        ? sessionProgress.doneUnique
+                        : reviewedCount}</span
+                >
+                <span class="decks-remaining"
+                    >({sessionProgress
+                        ? `${sessionProgress.goalTotal - sessionProgress.doneUnique} remaining`
+                        : currentCard
+                          ? "More cards available"
+                          : "Session complete"})</span
+                >
+            </div>
+            <div class="decks-timer-display">
+                <span class="decks-timer-label">Time Remaining:</span>
+                <span
+                    class="decks-timer-value"
+                    class:decks-timer-warning={sessionTimeRemaining < 60000}
+                >
+                    {timeRemainingDisplay}
+                </span>
+            </div>
         </div>
     </div>
 
@@ -382,8 +442,8 @@
 
     .decks-modal-header {
         display: flex;
-        align-items: center;
-        justify-content: space-between;
+        flex-direction: column;
+        gap: 8px;
         padding: 16px 20px;
         border-bottom: 1px solid var(--background-modifier-border);
     }
@@ -394,10 +454,39 @@
         font-weight: 600;
     }
 
+    .decks-header-stats {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        flex-wrap: wrap;
+        gap: 12px;
+    }
+
     .decks-progress-info {
         display: flex;
         gap: 8px;
         font-size: 14px;
+    }
+
+    .decks-timer-display {
+        display: flex;
+        align-items: center;
+        gap: 6px;
+        font-size: 14px;
+    }
+
+    .decks-timer-label {
+        color: var(--text-muted);
+    }
+
+    .decks-timer-value {
+        font-weight: 600;
+        color: var(--text-normal);
+        font-family: monospace;
+    }
+
+    .decks-timer-value.decks-timer-warning {
+        color: var(--text-error);
     }
 
     .decks-remaining {
@@ -781,6 +870,27 @@
 
         .decks-interval {
             font-size: 11px;
+        }
+
+        .decks-header-stats {
+            flex-direction: column;
+            gap: 8px;
+            align-items: flex-start;
+        }
+
+        .decks-timer-display {
+            align-self: flex-end;
+            font-size: 13px;
+        }
+    }
+
+    @media (max-width: 480px) {
+        .decks-timer-display {
+            font-size: 12px;
+        }
+
+        .decks-progress-info {
+            font-size: 13px;
         }
     }
 

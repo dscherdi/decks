@@ -93,7 +93,7 @@
       }
     ],
     "direction": "horizontal",
-    "width": 301.5
+    "width": 241.5
   },
   "right": {
     "id": "2e1e063bc04f303d",
@@ -181,7 +181,7 @@
       }
     ],
     "direction": "horizontal",
-    "width": 582.5
+    "width": 308.5
   },
   "left-ribbon": {
     "hiddenItems": {
@@ -195,7 +195,7 @@
       "command-palette:Open command palette": false
     }
   },
-  "active": "9818a81660d9ea29",
+  "active": "7ea5c22d6b931aff",
   "lastOpenFiles": [
     "No Flashcards",
     "Flashcards/4200 German Adjectives.md",

@@ -67,11 +67,6 @@ export default class DecksPlugin extends Plugin {
   private progressTracker: ProgressTracker;
   private hasShownInitialProgress = false;
 
-  // Convenience method for logging
-  private debugLog(message: string, ...args: any[]): void {
-    this.logger?.debug(message, ...args);
-  }
-
   async onload() {
     // Load settings first
     await this.loadSettings();
@@ -84,7 +79,7 @@ export default class DecksPlugin extends Plugin {
     );
     this.progressTracker = new ProgressTracker(this.settings);
 
-    this.debugLog("Loading Decks plugin");
+    this.logger.debug("Loading Decks plugin");
 
     try {
       // Ensure plugin directory exists
@@ -101,7 +96,7 @@ export default class DecksPlugin extends Plugin {
       this.db = new DatabaseService(
         databasePath,
         adapter,
-        this.debugLog.bind(this),
+        this.logger.debug.bind(this),
       );
       await this.db.initialize();
 
@@ -141,13 +136,11 @@ export default class DecksPlugin extends Plugin {
             this.deckSynchronizer,
             this.scheduler,
             this.settings,
+            this.progressTracker,
+            this.logger,
             (view: DecksView | null) => {
               this.view = view;
             },
-            (message: string) => this.progressTracker?.show(message),
-            (message: string, progress?: number) =>
-              this.progressTracker?.update(message, progress || 0),
-            () => this.progressTracker?.hide(),
           ),
       );
 
@@ -230,7 +223,7 @@ export default class DecksPlugin extends Plugin {
         ),
       );
 
-      this.debugLog("Decks plugin loaded successfully");
+      this.logger.debug("Decks plugin loaded successfully");
     } catch (error) {
       console.error("Error loading Decks plugin:", error);
       if (this.settings?.ui?.enableNotices !== false) {
@@ -240,7 +233,7 @@ export default class DecksPlugin extends Plugin {
   }
 
   async onunload() {
-    this.debugLog("Unloading Decks plugin");
+    this.logger.debug("Unloading Decks plugin");
 
     // Close database connection
     if (this.db) {
@@ -295,7 +288,7 @@ export default class DecksPlugin extends Plugin {
   async handleFileChange(file: TFile) {
     // Check if file has flashcards tag
     const metadata = this.app.metadataCache.getFileCache(file);
-    this.debugLog(`File changed: ${file.path}, metadata:`, metadata);
+    this.logger.debug(`File changed: ${file.path}, metadata:`, metadata);
 
     if (!metadata) return;
 
@@ -319,7 +312,10 @@ export default class DecksPlugin extends Plugin {
       tag.startsWith("#flashcards"),
     );
 
-    this.debugLog(`File ${file.path} has flashcards tag:`, hasFlashcardsTag);
+    this.logger.debug(
+      `File ${file.path} has flashcards tag:`,
+      hasFlashcardsTag,
+    );
 
     if (hasFlashcardsTag) {
       // Check if deck exists for this file
@@ -329,7 +325,7 @@ export default class DecksPlugin extends Plugin {
         const newTag =
           allTags.find((tag) => tag.startsWith("#flashcards")) || "#flashcards";
         if (existingDeck.tag !== newTag) {
-          this.debugLog(
+          this.logger.debug(
             `Updating deck tag from ${existingDeck.tag} to ${newTag}`,
           );
           await this.db.updateDeck(existingDeck.id, { tag: newTag });
@@ -367,7 +363,7 @@ export default class DecksPlugin extends Plugin {
   async performInitialSync() {
     try {
       const startTime = performance.now();
-      this.debugLog("Performing initial background sync...");
+      this.logger.debug("Performing initial background sync...");
 
       // Use requestIdleCallback or setTimeout to ensure non-blocking execution
       await yieldToUI();
@@ -408,8 +404,8 @@ export default class DecksPlugin extends Plugin {
         const oldDeckId = oldDeck.id;
         const newDeckId = this.deckManager.generateDeckId(file.path);
 
-        this.debugLog(`File renamed from ${oldPath} to ${file.path}`);
-        this.debugLog(`Updating deck ID from ${oldDeckId} to ${newDeckId}`);
+        this.logger.debug(`File renamed from ${oldPath} to ${file.path}`);
+        this.logger.debug(`Updating deck ID from ${oldDeckId} to ${newDeckId}`);
 
         // Update deck with new ID, name, and filepath
         await this.db.renameDeck(

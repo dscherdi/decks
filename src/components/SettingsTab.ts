@@ -82,6 +82,24 @@ export class DecksSettingTab extends PluginSettingTab {
             await this.saveSettings();
           }),
       );
+
+    new Setting(containerEl)
+      .setName("Session Duration")
+      .setDesc(
+        "Maximum duration for flashcard review sessions in minutes (1-60)",
+      )
+      .addText((text) =>
+        text
+          .setPlaceholder("25")
+          .setValue(this.settings.review.sessionDuration.toString())
+          .onChange(async (value) => {
+            const num = parseInt(value);
+            if (!isNaN(num) && num >= 1 && num <= 60) {
+              this.settings.review.sessionDuration = num;
+              await this.saveSettings();
+            }
+          }),
+      );
   }
 
   private addParsingSettings(containerEl: HTMLElement): void {
