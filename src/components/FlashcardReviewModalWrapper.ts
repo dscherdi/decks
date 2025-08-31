@@ -128,9 +128,6 @@ export class FlashcardReviewModalWrapper extends Modal {
       }
       // Refresh the view to update stats
       await this.refreshStatsById(this.deck.id);
-
-      // Save db
-      await this.scheduler.save();
     });
 
     // Handle window resize for mobile adaptation

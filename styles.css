@@ -488,3 +488,8 @@
         min-width: 44px;
     }
 }
+
+/* Backup Settings Styles */
+.decks-backup-container {
+    margin-top: 10px;
+}

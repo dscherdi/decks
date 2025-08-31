@@ -691,3 +691,53 @@ export const SQL_QUERIES = {
     WHERE session_id = ? AND flashcard_id = ?
   `,
 };
+
+// Backup table creation SQL - matches main database schema exactly
+export const BACKUP_TABLES_SQL = `
+  CREATE TABLE review_logs (
+    id TEXT PRIMARY KEY,
+    flashcard_id TEXT NOT NULL,
+    session_id TEXT,
+    last_reviewed_at TEXT NOT NULL,
+    shown_at TEXT,
+    reviewed_at TEXT NOT NULL,
+    rating INTEGER NOT NULL CHECK (rating IN (1, 2, 3, 4)),
+    rating_label TEXT NOT NULL CHECK (rating_label IN ('again', 'hard', 'good', 'easy')),
+    time_elapsed_ms INTEGER,
+    old_state TEXT NOT NULL CHECK (old_state IN ('new', 'review')),
+    old_repetitions INTEGER NOT NULL DEFAULT 0,
+    old_lapses INTEGER NOT NULL DEFAULT 0,
+    old_stability REAL NOT NULL DEFAULT 0,
+    old_difficulty REAL NOT NULL DEFAULT 5.0,
+    new_state TEXT NOT NULL CHECK (new_state IN ('new', 'review')),
+    new_repetitions INTEGER NOT NULL DEFAULT 0,
+    new_lapses INTEGER NOT NULL DEFAULT 0,
+    new_stability REAL NOT NULL DEFAULT 2.5,
+    new_difficulty REAL NOT NULL DEFAULT 5.0,
+    old_interval_minutes INTEGER NOT NULL,
+    new_interval_minutes INTEGER NOT NULL,
+    old_due_at TEXT NOT NULL,
+    new_due_at TEXT NOT NULL,
+    elapsed_days REAL NOT NULL,
+    retrievability REAL NOT NULL,
+    request_retention REAL NOT NULL,
+    profile TEXT NOT NULL DEFAULT 'STANDARD' CHECK (profile IN ('INTENSIVE', 'STANDARD')),
+    maximum_interval_days INTEGER NOT NULL,
+    min_minutes INTEGER NOT NULL,
+    fsrs_weights_version TEXT NOT NULL,
+    scheduler_version TEXT NOT NULL,
+    note_model_id TEXT,
+    card_template_id TEXT,
+    content_hash TEXT,
+    client TEXT
+  );
+
+  CREATE TABLE review_sessions (
+    id TEXT PRIMARY KEY,
+    deck_id TEXT NOT NULL,
+    started_at TEXT NOT NULL,
+    ended_at TEXT,
+    goal_total INTEGER NOT NULL,
+    done_unique INTEGER NOT NULL DEFAULT 0
+  );
+`;

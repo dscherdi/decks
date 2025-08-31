@@ -4,6 +4,7 @@ import { DatabaseService } from "./database/DatabaseService";
 import { DeckManager } from "./services/DeckManager";
 import { DeckSynchronizer } from "./services/DeckSynchronizer";
 import { Scheduler } from "./services/Scheduler";
+import { BackupService } from "./services/BackupService";
 import { yieldToUI } from "./utils/ui";
 import { Logger, formatTime } from "./utils/logging";
 import { ProgressTracker } from "./utils/progress";
@@ -61,6 +62,7 @@ export default class DecksPlugin extends Plugin {
   public deckManager: DeckManager;
   private deckSynchronizer: DeckSynchronizer;
   private scheduler: Scheduler;
+  private backupService: BackupService;
   public view: DecksView | null = null;
   public settings: FlashcardsSettings;
   private logger: Logger;
@@ -118,12 +120,20 @@ export default class DecksPlugin extends Plugin {
         this.app.vault.configDir,
       );
 
+      // Initialize backup service
+      this.backupService = new BackupService(
+        this.app.vault.adapter,
+        this.app.vault.configDir,
+        this.logger.debug.bind(this),
+      );
+
       // Initialize scheduler
       this.scheduler = new Scheduler(
         this.db,
         this.settings,
         this.app.vault.adapter,
         this.app.vault.configDir,
+        this.backupService,
       );
 
       // Register the side panel view
@@ -197,7 +207,9 @@ export default class DecksPlugin extends Plugin {
           this.app,
           this,
           this.settings,
+          this.db,
           this.saveSettings.bind(this),
+          this.logger,
           () => this.view?.performSync(false) || Promise.resolve(),
           async () => {
             if (this.view) {
@@ -220,6 +232,7 @@ export default class DecksPlugin extends Plugin {
             }
           },
           this.db.purgeDatabase.bind(this.db),
+          this.backupService,
         ),
       );
 

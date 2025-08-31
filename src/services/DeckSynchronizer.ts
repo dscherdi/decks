@@ -178,7 +178,6 @@ export class DeckSynchronizer {
 
       const saveTime = performance.now() - saveStartTime;
 
-      this.debugLog("Database saved successfully");
       this.performanceLog(
         `Database saved in ${formatTime(saveTime)} after processing ${decks.length} decks`,
       );

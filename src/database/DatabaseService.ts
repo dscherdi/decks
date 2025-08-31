@@ -82,6 +82,7 @@ export class DatabaseService {
       }
 
       await this.adapter.writeBinary(this.dbPath, data);
+      this.debugLog("Database saved successfully!");
     } catch (error) {
       console.error("Failed to save database:", error);
       throw error;
@@ -97,13 +98,6 @@ export class DatabaseService {
     } finally {
       stmt.free();
     }
-  }
-
-  private executeStatementWithSave(
-    sql: string,
-    params: any[] = [],
-  ): Promise<void> {
-    return this.executeStatementWithCallback(sql, params, () => this.save());
   }
 
   private async executeStatementWithCallback(
@@ -1688,5 +1682,206 @@ export class DatabaseService {
       this.db.close();
       this.db = null;
     }
+  }
+
+  // Backup operations
+  async getAllReviewLogs(): Promise<ReviewLog[]> {
+    if (!this.db) throw new Error("Database not initialized");
+
+    const stmt = this.db.prepare(`
+      SELECT id, flashcard_id, session_id, last_reviewed_at, shown_at, reviewed_at,
+             rating, rating_label, time_elapsed_ms, old_state, old_repetitions,
+             old_lapses, old_stability, old_difficulty, new_state, new_repetitions,
+             new_lapses, new_stability, new_difficulty, old_interval_minutes,
+             new_interval_minutes, old_due_at, new_due_at, elapsed_days,
+             retrievability, request_retention, profile, maximum_interval_days,
+             min_minutes, fsrs_weights_version, scheduler_version, note_model_id,
+             card_template_id, content_hash, client
+      FROM review_logs
+      ORDER BY reviewed_at ASC
+    `);
+
+    const results: ReviewLog[] = [];
+    while (stmt.step()) {
+      const row = stmt.get();
+      results.push({
+        id: row[0] as string,
+        flashcardId: row[1] as string,
+        sessionId: row[2] as string | undefined,
+        lastReviewedAt: row[3] as string,
+        shownAt: row[4] as string | undefined,
+        reviewedAt: row[5] as string,
+        rating: row[6] as 1 | 2 | 3 | 4,
+        ratingLabel: row[7] as "again" | "hard" | "good" | "easy",
+        timeElapsedMs: row[8] as number | undefined,
+        oldState: row[9] as "new" | "review",
+        oldRepetitions: row[10] as number,
+        oldLapses: row[11] as number,
+        oldStability: row[12] as number,
+        oldDifficulty: row[13] as number,
+        newState: row[14] as "new" | "review",
+        newRepetitions: row[15] as number,
+        newLapses: row[16] as number,
+        newStability: row[17] as number,
+        newDifficulty: row[18] as number,
+        oldIntervalMinutes: row[19] as number,
+        newIntervalMinutes: row[20] as number,
+        oldDueAt: row[21] as string,
+        newDueAt: row[22] as string,
+        elapsedDays: row[23] as number,
+        retrievability: row[24] as number,
+        requestRetention: row[25] as number,
+        profile: row[26] as "INTENSIVE" | "STANDARD",
+        maximumIntervalDays: row[27] as number,
+        minMinutes: row[28] as number,
+        fsrsWeightsVersion: row[29] as string,
+        schedulerVersion: row[30] as string,
+        noteModelId: row[31] as string | undefined,
+        cardTemplateId: row[32] as string | undefined,
+        contentHash: row[33] as string | undefined,
+        client: row[34] as "web" | "desktop" | "mobile" | undefined,
+      });
+    }
+
+    stmt.free();
+    return results;
+  }
+
+  async getAllReviewSessions(): Promise<ReviewSession[]> {
+    if (!this.db) throw new Error("Database not initialized");
+
+    const stmt = this.db.prepare(`
+      SELECT id, deck_id, started_at, ended_at, goal_total, done_unique
+      FROM review_sessions
+      ORDER BY started_at ASC
+    `);
+
+    const results: ReviewSession[] = [];
+    while (stmt.step()) {
+      const row = stmt.get();
+      results.push({
+        id: row[0] as string,
+        deckId: row[1] as string,
+        startedAt: row[2] as string,
+        endedAt: row[3] as string | null,
+        goalTotal: row[4] as number,
+        doneUnique: row[5] as number,
+      });
+    }
+
+    stmt.free();
+    return results;
+  }
+
+  async reviewLogExists(id: string): Promise<boolean> {
+    if (!this.db) throw new Error("Database not initialized");
+
+    const stmt = this.db.prepare(`
+      SELECT COUNT(*) FROM review_logs WHERE id = ?
+    `);
+    stmt.bind([id]);
+
+    let exists = false;
+    if (stmt.step()) {
+      const row = stmt.get();
+      exists = (row[0] as number) > 0;
+    }
+
+    stmt.free();
+    return exists;
+  }
+
+  async reviewSessionExists(id: string): Promise<boolean> {
+    if (!this.db) throw new Error("Database not initialized");
+
+    const stmt = this.db.prepare(`
+      SELECT COUNT(*) FROM review_sessions WHERE id = ?
+    `);
+    stmt.bind([id]);
+
+    let exists = false;
+    if (stmt.step()) {
+      const row = stmt.get();
+      exists = (row[0] as number) > 0;
+    }
+
+    stmt.free();
+    return exists;
+  }
+
+  async insertReviewLog(log: ReviewLog): Promise<void> {
+    if (!this.db) throw new Error("Database not initialized");
+
+    this.executeStatement(
+      `
+      INSERT INTO review_logs (
+        id, flashcard_id, session_id, last_reviewed_at, shown_at, reviewed_at,
+        rating, rating_label, time_elapsed_ms, old_state, old_repetitions,
+        old_lapses, old_stability, old_difficulty, new_state, new_repetitions,
+        new_lapses, new_stability, new_difficulty, old_interval_minutes,
+        new_interval_minutes, old_due_at, new_due_at, elapsed_days,
+        retrievability, request_retention, profile, maximum_interval_days,
+        min_minutes, fsrs_weights_version, scheduler_version, note_model_id,
+        card_template_id, content_hash, client
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+    `,
+      [
+        log.id,
+        log.flashcardId,
+        log.sessionId,
+        log.lastReviewedAt,
+        log.shownAt,
+        log.reviewedAt,
+        log.rating,
+        log.ratingLabel,
+        log.timeElapsedMs,
+        log.oldState,
+        log.oldRepetitions,
+        log.oldLapses,
+        log.oldStability,
+        log.oldDifficulty,
+        log.newState,
+        log.newRepetitions,
+        log.newLapses,
+        log.newStability,
+        log.newDifficulty,
+        log.oldIntervalMinutes,
+        log.newIntervalMinutes,
+        log.oldDueAt,
+        log.newDueAt,
+        log.elapsedDays,
+        log.retrievability,
+        log.requestRetention,
+        log.profile,
+        log.maximumIntervalDays,
+        log.minMinutes,
+        log.fsrsWeightsVersion,
+        log.schedulerVersion,
+        log.noteModelId,
+        log.cardTemplateId,
+        log.contentHash,
+        log.client,
+      ],
+    );
+  }
+
+  async insertReviewSession(session: ReviewSession): Promise<void> {
+    if (!this.db) throw new Error("Database not initialized");
+
+    this.executeStatement(
+      `
+      INSERT INTO review_sessions (
+        id, deck_id, started_at, ended_at, goal_total, done_unique
+      ) VALUES (?, ?, ?, ?, ?, ?)
+    `,
+      [
+        session.id,
+        session.deckId,
+        session.startedAt,
+        session.endedAt,
+        session.goalTotal,
+        session.doneUnique,
+      ],
+    );
   }
 }

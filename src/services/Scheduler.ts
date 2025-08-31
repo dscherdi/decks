@@ -22,6 +22,7 @@ import { yieldToUI } from "../utils/ui";
 import { Logger } from "../utils/logging";
 import { FlashcardsSettings } from "../settings";
 import { DataAdapter } from "obsidian";
+import { BackupService } from "./BackupService";
 
 export interface SchedulerOptions {
   allowNew?: boolean;
@@ -50,16 +51,21 @@ export class Scheduler {
   private fsrs: FSRS;
   private currentSessionId: string | null = null;
   private logger: Logger;
+  private backupService: BackupService | null = null;
+  private settings: FlashcardsSettings;
 
   constructor(
     db: DatabaseService,
     settings: FlashcardsSettings,
     adapter: DataAdapter,
     configDir: string,
+    backupService?: BackupService,
   ) {
     this.db = db;
     this.fsrs = new FSRS();
     this.logger = new Logger(settings, adapter, configDir);
+    this.backupService = backupService || null;
+    this.settings = settings;
   }
 
   private debugLog(message: string, ...args: any[]): void {
@@ -163,6 +169,17 @@ export class Scheduler {
     now: Date = new Date(),
   ): Promise<void> {
     await this.db.endReviewSession(sessionId, now.toISOString());
+
+    // Save db
+    this.save();
+    // Trigger backup after session ends (if enabled in settings)
+    if (this.backupService && this.settings.backup.enableAutoBackup) {
+      try {
+        await this.backupService.createBackup(this.db);
+      } catch (error) {
+        this.debugLog("Failed to create backup after session end:", error);
+      }
+    }
   }
 
   /**
@@ -413,9 +430,9 @@ export class Scheduler {
    * Save all pending changes to disk
    */
   async save(): Promise<void> {
-    this.debugLog("Scheduler: Saving database to disk");
+    await yieldToUI();
     await this.db.save();
-    this.debugLog("Scheduler: Database save completed");
+    await yieldToUI();
   }
 
   /**

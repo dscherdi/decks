@@ -1,5 +1,16 @@
-import { App, PluginSettingTab, Setting, Notice, Modal } from "obsidian";
+import {
+  App,
+  PluginSettingTab,
+  Setting,
+  Notice,
+  Modal,
+  DropdownComponent,
+} from "obsidian";
 import { FlashcardsSettings } from "../settings";
+import { BackupService } from "../services/BackupService";
+import DecksPlugin from "@/main";
+import { DatabaseService } from "@/database/DatabaseService";
+import { Logger } from "@/utils/logging";
 
 export class DecksSettingTab extends PluginSettingTab {
   private settings: FlashcardsSettings;
@@ -10,21 +21,31 @@ export class DecksSettingTab extends PluginSettingTab {
   private startBackgroundRefresh: () => void;
   private stopBackgroundRefresh: () => void;
   private purgeDatabase: () => Promise<void>;
+  private backupService: BackupService;
+  private plugin: DecksPlugin;
+  private db: DatabaseService;
+  private logger: Logger;
 
   constructor(
     app: App,
-    plugin: any,
+    plugin: DecksPlugin,
     settings: FlashcardsSettings,
+    db: DatabaseService,
     saveSettings: () => Promise<void>,
+    logger: Logger,
     performSync: (force?: boolean) => Promise<void>,
     refreshViewStats: () => Promise<void>,
     restartBackgroundRefresh: () => void,
     startBackgroundRefresh: () => void,
     stopBackgroundRefresh: () => void,
     purgeDatabase: () => Promise<void>,
+    backupService: BackupService,
   ) {
     super(app, plugin);
+    this.plugin = plugin;
     this.settings = settings;
+    this.db = db;
+    this.logger = logger;
     this.saveSettings = saveSettings;
     this.performSync = performSync;
     this.refreshViewStats = refreshViewStats;
@@ -32,6 +53,7 @@ export class DecksSettingTab extends PluginSettingTab {
     this.startBackgroundRefresh = startBackgroundRefresh;
     this.stopBackgroundRefresh = stopBackgroundRefresh;
     this.purgeDatabase = purgeDatabase;
+    this.backupService = backupService;
   }
 
   display(): void {
@@ -48,6 +70,9 @@ export class DecksSettingTab extends PluginSettingTab {
 
     // UI Settings
     this.addUISettings(containerEl);
+
+    // Backup Settings
+    this.addBackupSettings(containerEl);
 
     // Debug Settings
     this.addDebugSettings(containerEl);
@@ -265,9 +290,167 @@ export class DecksSettingTab extends PluginSettingTab {
               this.purgeDatabase,
               this.performSync,
               this.refreshViewStats,
+              this.logger,
             ).open();
           }),
       );
+  }
+
+  private addBackupSettings(containerEl: HTMLElement): void {
+    containerEl.createEl("h3", { text: "Backup" });
+
+    new Setting(containerEl)
+      .setName("Enable Auto Backup")
+      .setDesc("Automatically backup review data after each session")
+      .addToggle((toggle) =>
+        toggle
+          .setValue(this.settings.backup.enableAutoBackup)
+          .onChange(async (value) => {
+            this.settings.backup.enableAutoBackup = value;
+            await this.saveSettings();
+          }),
+      );
+
+    new Setting(containerEl)
+      .setName("Max Backups")
+      .setDesc("Maximum number of backups to keep (3-10)")
+      .addSlider((slider) =>
+        slider
+          .setLimits(3, 10, 1)
+          .setValue(this.settings.backup.maxBackups)
+          .setDynamicTooltip()
+          .onChange(async (value) => {
+            this.settings.backup.maxBackups = value;
+            await this.saveSettings();
+          }),
+      );
+
+    // Backup restoration section
+    containerEl.createEl("h4", { text: "Restore Backup" });
+
+    let selectedBackup = "";
+    const backupSetting = new Setting(containerEl)
+      .setName("Available Backups")
+      .setDesc("Select a backup to restore")
+      .addDropdown((dropdown) => {
+        dropdown.addOption("", "Select backup...");
+        dropdown.onChange((value) => {
+          selectedBackup = value;
+        });
+      })
+      .addButton((button) =>
+        button
+          .setButtonText("Refresh")
+          .setTooltip("Refresh backup list")
+          .onClick(async () => {
+            await this.refreshBackupList(backupSetting);
+          }),
+      )
+      .addButton((button) =>
+        button
+          .setButtonText("Restore")
+          .setCta()
+          .onClick(async () => {
+            if (!selectedBackup) {
+              new Notice("Please select a backup to restore");
+              return;
+            }
+
+            await this.restoreBackup(selectedBackup);
+          }),
+      );
+
+    // Initial load of backup list
+    this.refreshBackupList(backupSetting);
+  }
+
+  private async refreshBackupList(setting: Setting): Promise<void> {
+    try {
+      this.logger.debug("Refreshing backup list...");
+      const backups = await this.backupService.getAvailableBackups();
+      this.logger.debug("Found backups:", backups);
+
+      // Get the dropdown component
+      const dropdown = setting.components.find(
+        (comp) => comp instanceof DropdownComponent,
+      ) as DropdownComponent;
+
+      if (!dropdown) {
+        this.logger.debug("Dropdown component not found");
+        new Notice("Dropdown not found", 3000);
+        return;
+      }
+
+      // Clear existing options by removing all children
+      while (dropdown.selectEl.firstChild) {
+        dropdown.selectEl.removeChild(dropdown.selectEl.firstChild);
+      }
+
+      // Add default option
+      const defaultOption = dropdown.selectEl.createEl("option");
+      defaultOption.value = "";
+      defaultOption.textContent = "Select backup...";
+
+      if (backups.length === 0) {
+        const noBackupsOption = dropdown.selectEl.createEl("option");
+        noBackupsOption.value = "";
+        noBackupsOption.textContent = "No backups found";
+        dropdown.setDisabled(true);
+        new Notice("No backups found", 3000);
+      } else {
+        dropdown.setDisabled(false);
+        for (const backup of backups) {
+          const option = dropdown.selectEl.createEl("option");
+          option.value = backup.filename;
+          option.textContent = `${BackupService.formatTimestamp(backup.timestamp)}`;
+        }
+        new Notice(`Found ${backups.length} backup(s)`, 3000);
+      }
+    } catch (error) {
+      this.logger.debug("Failed to load backup list:", error);
+      new Notice(`Failed to load backup list: ${error.message}`, 5000);
+    }
+  }
+
+  private async restoreBackup(filename: string): Promise<void> {
+    const progressNotice = new Notice("Restoring backup...", 0);
+
+    try {
+      // Get database service from plugin
+      if (!this.db) {
+        throw new Error("Database not available");
+      }
+
+      let current = 0;
+      let total = 0;
+
+      await this.backupService.restoreBackup(
+        filename,
+        this.db,
+        (currentCount: number, totalCount: number) => {
+          current = currentCount;
+          total = totalCount;
+          const progress = Math.round((current / total) * 100);
+          progressNotice.setMessage(
+            `Restoring backup: ${progress}% (${current}/${total})`,
+          );
+        },
+      );
+
+      progressNotice.hide();
+      new Notice(
+        `✅ Backup restored successfully! Processed ${current}/${total} records.`,
+        5000,
+      );
+
+      if (this.plugin.view) {
+        await this.plugin.view.refresh(true);
+      }
+    } catch (error) {
+      progressNotice.hide();
+      this.logger.debug("Backup restoration failed:", error);
+      new Notice(`❌ Backup restoration failed: ${error.message}`, 8000);
+    }
   }
 }
 
@@ -275,17 +458,20 @@ class DatabasePurgeModal extends Modal {
   private purgeDatabase: () => Promise<void>;
   private performSync: (force?: boolean) => Promise<void>;
   private refreshViewStats: () => Promise<void>;
+  private logger: Logger;
 
   constructor(
     app: App,
     purgeDatabase: () => Promise<void>,
     performSync: (force?: boolean) => Promise<void>,
     refreshViewStats: () => Promise<void>,
+    logger: Logger,
   ) {
     super(app);
     this.purgeDatabase = purgeDatabase;
     this.performSync = performSync;
     this.refreshViewStats = refreshViewStats;
+    this.logger = logger;
   }
 
   onOpen() {
@@ -355,7 +541,7 @@ class DatabasePurgeModal extends Modal {
           // Refresh the view
           await this.refreshViewStats();
         } catch (error) {
-          console.error("Failed to purge database:", error);
+          this.logger.debug("Failed to purge database:", error);
           new Notice(
             "❌ Failed to purge database. Check console for details.",
             5000,

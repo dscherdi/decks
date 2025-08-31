@@ -20,6 +20,12 @@ export interface FlashcardsSettings {
     enableNotices: boolean;
   };
 
+  // Backup Settings
+  backup: {
+    enableAutoBackup: boolean;
+    maxBackups: number;
+  };
+
   // Debug Settings
   debug: {
     enableLogging: boolean;
@@ -42,6 +48,11 @@ export const DEFAULT_SETTINGS: FlashcardsSettings = {
     enableBackgroundRefresh: true,
     backgroundRefreshInterval: 5,
     enableNotices: true,
+  },
+
+  backup: {
+    enableAutoBackup: true,
+    maxBackups: 5,
   },
 
   debug: {
