@@ -489,6 +489,11 @@
     }
 }
 
+/* Backup Settings Styles */
+.decks-backup-container {
+    margin-top: 10px;
+}
+
 
 /* Svelte Component Styles */
 /* fakecss:/Users/dscherd/Development/Misc/obsidian-flashcards-plugin/src/components/FlashcardReviewModal.esbuild-svelte-fake-css */

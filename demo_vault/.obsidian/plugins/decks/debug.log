@@ -271,3 +271,214 @@
 [2025-08-29T21:27:24.964Z] Updated deck stats for: deck_cr6nq3
 [2025-08-29T21:27:25.003Z] Scheduler: Saving database to disk
 [2025-08-29T21:27:25.020Z] Scheduler: Database save completed
+[2025-08-31T18:25:30.341Z] Loading Decks plugin
+[2025-08-31T18:25:30.362Z] Decks plugin loaded successfully
+[2025-08-31T18:25:32.567Z] File Flashcards/1200 Deutsche Redewendungen.md not modified since last sync, skipping
+[2025-08-31T18:25:32.677Z] File Flashcards/Spanish-Vocabulary.md not modified since last sync, skipping
+[2025-08-31T18:25:32.710Z] Saving database after processing all decks...
+[2025-08-31T18:25:32.765Z] File Flashcards/1200 Deutsche Redewendungen.md not modified since last sync, skipping
+[2025-08-31T18:25:32.861Z] File Flashcards/Programming-Concepts.md not modified since last sync, skipping
+[2025-08-31T18:25:32.910Z] Saving database after processing all decks...
+[2025-08-31T18:25:32.959Z] Refresh complete
+[2025-08-31T18:32:59.360Z] Loading Decks plugin
+[2025-08-31T18:32:59.683Z] Decks plugin loaded successfully
+[2025-08-31T18:33:01.889Z] Performing initial background sync...
+[2025-08-31T18:33:01.903Z] File Flashcards/1200 Deutsche Redewendungen.md not modified since last sync, skipping
+[2025-08-31T18:33:02.011Z] File Flashcards/Spanish-Vocabulary.md not modified since last sync, skipping
+[2025-08-31T18:33:02.042Z] Saving database after processing all decks...
+[2025-08-31T18:33:02.131Z] File Flashcards/1200 Deutsche Redewendungen.md not modified since last sync, skipping
+[2025-08-31T18:33:02.227Z] File Flashcards/Programming-Concepts.md not modified since last sync, skipping
+[2025-08-31T18:33:02.277Z] Saving database after processing all decks...
+[2025-08-31T18:33:02.337Z] Refresh complete
+[2025-08-31T18:33:19.015Z] Review session created: session_1756665199013_2wj513p0q, goal: 1128
+[2025-08-31T18:33:21.453Z] Updated deck stats for: deck_lp8v1m
+[2025-08-31T18:33:21.529Z] Updated deck stats for: deck_lp8v1m
+[2025-08-31T18:33:21.611Z] Found new card: card_394w52
+[2025-08-31T18:33:22.230Z] Updated deck stats for: deck_lp8v1m
+[2025-08-31T18:33:22.296Z] Updated deck stats for: deck_lp8v1m
+[2025-08-31T18:33:22.378Z] Found new card: card_wmhgfn
+[2025-08-31T18:33:22.888Z] Updated deck stats for: deck_lp8v1m
+[2025-08-31T18:33:22.962Z] Updated deck stats for: deck_lp8v1m
+[2025-08-31T18:33:23.044Z] Found new card: card_2ny9v1
+[2025-08-31T18:33:23.563Z] Updated deck stats for: deck_lp8v1m
+[2025-08-31T18:33:23.630Z] Updated deck stats for: deck_lp8v1m
+[2025-08-31T18:33:23.710Z] Found new card: card_w1d2ww
+[2025-08-31T18:33:24.194Z] Updated deck stats for: deck_lp8v1m
+[2025-08-31T18:33:24.263Z] Updated deck stats for: deck_lp8v1m
+[2025-08-31T18:33:24.345Z] Found new card: card_wxghn6
+[2025-08-31T18:33:24.781Z] Rating card card_wxghn6 with rating: easy
+[2025-08-31T18:33:24.790Z] Updated deck stats for: deck_lp8v1m
+[2025-08-31T18:33:24.863Z] Updated deck stats for: deck_lp8v1m
+[2025-08-31T18:33:24.945Z] Found new card: card_ukkf8r
+[2025-08-31T18:33:25.389Z] Updated deck stats for: deck_lp8v1m
+[2025-08-31T18:33:25.463Z] Updated deck stats for: deck_lp8v1m
+[2025-08-31T18:33:25.545Z] Found new card: card_ps7rub
+[2025-08-31T18:33:26.564Z] Updated deck stats for: deck_lp8v1m
+[2025-08-31T18:33:26.630Z] Updated deck stats for: deck_lp8v1m
+[2025-08-31T18:33:26.711Z] Found new card: card_u7cn8x
+[2025-08-31T18:33:27.320Z] Updated deck stats for: deck_lp8v1m
+[2025-08-31T18:33:27.379Z] Updated deck stats for: deck_lp8v1m
+[2025-08-31T18:33:27.461Z] Found new card: card_p5zvaj
+[2025-08-31T18:33:28.118Z] Updated deck stats for: deck_lp8v1m
+[2025-08-31T18:33:28.180Z] Updated deck stats for: deck_lp8v1m
+[2025-08-31T18:33:28.262Z] Found new card: card_4c4uoo
+[2025-08-31T18:33:28.921Z] Updated deck stats for: deck_lp8v1m
+[2025-08-31T18:33:28.997Z] Updated deck stats for: deck_lp8v1m
+[2025-08-31T18:33:29.078Z] Found new card: card_1p3m55
+[2025-08-31T18:33:29.738Z] Updated deck stats for: deck_lp8v1m
+[2025-08-31T18:33:29.812Z] Updated deck stats for: deck_lp8v1m
+[2025-08-31T18:33:29.894Z] Found new card: card_1nib3j
+[2025-08-31T18:33:30.522Z] Updated deck stats for: deck_lp8v1m
+[2025-08-31T18:33:30.608Z] Updated deck stats for: deck_lp8v1m
+[2025-08-31T18:33:30.660Z] Scheduler: Saving database to disk
+[2025-08-31T18:33:30.678Z] Scheduler: Database save completed
+[2025-08-31T18:34:04.342Z] File Flashcards/1200 Deutsche Redewendungen.md not modified since last sync, skipping
+[2025-08-31T18:34:04.360Z] Review session created: session_1756665244360_pnd95hwhh, goal: 1116
+[2025-08-31T18:34:05.690Z] Updated deck stats for: deck_lp8v1m
+[2025-08-31T18:34:05.763Z] Updated deck stats for: deck_lp8v1m
+[2025-08-31T18:34:05.845Z] Found new card: card_dfe8ic
+[2025-08-31T18:34:06.392Z] Updated deck stats for: deck_lp8v1m
+[2025-08-31T18:34:06.475Z] Updated deck stats for: deck_lp8v1m
+[2025-08-31T18:34:06.527Z] Scheduler: Saving database to disk
+[2025-08-31T18:34:06.544Z] Scheduler: Database save completed
+[2025-08-31T18:35:47.416Z] Loading Decks plugin
+[2025-08-31T18:35:47.445Z] Decks plugin loaded successfully
+[2025-08-31T18:35:49.658Z] Performing initial background sync...
+[2025-08-31T18:35:49.686Z] Found 8 decks after sync: ["1200 Deutsche Redewendungen","2000 German verbs","4200 German Adjectives","500 Nomen-Verb Verbindungen","Math-Basics","Programming-Concepts","Spanish-Vocabulary","test"]
+[2025-08-31T18:35:49.795Z] File Flashcards/Spanish-Vocabulary.md not modified since last sync, skipping
+[2025-08-31T18:35:49.827Z] Saving database after processing all decks...
+[2025-08-31T18:35:49.916Z] File Flashcards/1200 Deutsche Redewendungen.md not modified since last sync, skipping
+[2025-08-31T18:35:49.998Z] File Flashcards/Math-Basics.md not modified since last sync, skipping
+[2025-08-31T18:35:50.045Z] File Flashcards/test.md not modified since last sync, skipping
+[2025-08-31T18:35:50.063Z] Saving database after processing all decks...
+[2025-08-31T18:35:50.114Z] Refresh complete
+[2025-08-31T18:36:06.802Z] Review session created: session_1756665366801_96f7mrfl7, goal: 1115
+[2025-08-31T18:36:09.067Z] Updated deck stats for: deck_lp8v1m
+[2025-08-31T18:36:09.147Z] Updated deck stats for: deck_lp8v1m
+[2025-08-31T18:36:09.229Z] Found new card: card_asuze2
+[2025-08-31T18:36:09.792Z] Updated deck stats for: deck_lp8v1m
+[2025-08-31T18:36:09.864Z] Updated deck stats for: deck_lp8v1m
+[2025-08-31T18:36:09.946Z] Found new card: card_o62z9h
+[2025-08-31T18:36:10.422Z] Updated deck stats for: deck_lp8v1m
+[2025-08-31T18:36:10.482Z] Updated deck stats for: deck_lp8v1m
+[2025-08-31T18:36:10.564Z] Found new card: card_qar2sj
+[2025-08-31T18:36:11.056Z] Updated deck stats for: deck_lp8v1m
+[2025-08-31T18:36:11.131Z] Updated deck stats for: deck_lp8v1m
+[2025-08-31T18:36:11.212Z] Found new card: card_219q0e
+[2025-08-31T18:36:11.661Z] Rating card card_219q0e with rating: easy
+[2025-08-31T18:36:11.668Z] Updated deck stats for: deck_lp8v1m
+[2025-08-31T18:36:11.730Z] Updated deck stats for: deck_lp8v1m
+[2025-08-31T18:36:11.813Z] Found new card: card_5luurb
+[2025-08-31T18:36:12.285Z] Updated deck stats for: deck_lp8v1m
+[2025-08-31T18:36:12.347Z] Updated deck stats for: deck_lp8v1m
+[2025-08-31T18:36:12.429Z] Found new card: card_sy0kxw
+[2025-08-31T18:36:12.911Z] Updated deck stats for: deck_lp8v1m
+[2025-08-31T18:36:12.981Z] Updated deck stats for: deck_lp8v1m
+[2025-08-31T18:36:13.063Z] Found new card: card_9fh04s
+[2025-08-31T18:36:13.484Z] Updated deck stats for: deck_lp8v1m
+[2025-08-31T18:36:13.564Z] Updated deck stats for: deck_lp8v1m
+[2025-08-31T18:36:13.646Z] Found new card: card_8w9bco
+[2025-08-31T18:36:14.338Z] Updated deck stats for: deck_lp8v1m
+[2025-08-31T18:36:14.411Z] Updated deck stats for: deck_lp8v1m
+[2025-08-31T18:36:14.461Z] Scheduler: Saving database to disk
+[2025-08-31T18:36:14.479Z] Scheduler: Database save completed
+[2025-08-31T18:59:05.059Z] Loading Decks plugin
+[2025-08-31T18:59:05.296Z] Decks plugin loaded successfully
+[2025-08-31T18:59:07.515Z] Performing initial background sync...
+[2025-08-31T18:59:07.523Z] Syncing flashcards for deck ID: deck_lp8v1m
+[2025-08-31T18:59:07.616Z] File Flashcards/Programming-Concepts.md not modified since last sync, skipping
+[2025-08-31T18:59:07.665Z] Saving database after processing all decks...
+[2025-08-31T18:59:07.754Z] File Flashcards/1200 Deutsche Redewendungen.md not modified since last sync, skipping
+[2025-08-31T18:59:07.838Z] File Flashcards/Math-Basics.md not modified since last sync, skipping
+[2025-08-31T18:59:07.882Z] File Flashcards/test.md not modified since last sync, skipping
+[2025-08-31T18:59:07.898Z] Saving database after processing all decks...
+[2025-08-31T18:59:07.949Z] Refresh complete
+[2025-08-31T18:59:09.813Z] Refreshing backup list...
+[2025-08-31T18:59:09.825Z] Found backups: [{"filename":"backup-2025-08-31.db","timestamp":"2025-08-30T22:00:00.000Z"}]
+[2025-08-31T18:59:15.965Z] Existing card ID: card_nm2778, Front: "da steppt der Bär"
+[2025-08-31T18:59:16.419Z] Existing card ID: card_uhm64m, Front: "**modulieren**"
+[2025-08-31T18:59:17.877Z] Existing card ID: card_rxziyu, Front: "**kanonisch**"
+[2025-08-31T18:59:22.352Z] Existing card ID: card_q1az4y, Front: "Stil entwickeln"
+[2025-08-31T18:59:28.888Z] Existing card ID: card_v7q7si, Front: "What is the factorial of a number?"
+[2025-08-31T18:59:37.717Z] Existing card ID: card_css29, Front: "What is the difference between == and === in JavaScript?"
+[2025-08-31T18:59:44.368Z] Existing card ID: card_ue68zz, Front: "domingo"
+[2025-08-31T18:59:45.150Z] Existing card ID: card_fmvo52, Front: "Whats my note?"
+[2025-08-31T18:59:45.232Z] Saving database after processing all decks...
+[2025-08-31T18:59:45.449Z] Refresh complete
+[2025-08-31T19:05:41.502Z] Loading Decks plugin
+[2025-08-31T19:05:41.528Z] Decks plugin loaded successfully
+[2025-08-31T19:05:43.759Z] File Flashcards/1200 Deutsche Redewendungen.md not modified since last sync, skipping
+[2025-08-31T19:05:43.855Z] File Flashcards/Programming-Concepts.md not modified since last sync, skipping
+[2025-08-31T19:05:43.901Z] Saving database after processing all decks...
+[2025-08-31T19:05:44.052Z] File Flashcards/Programming-Concepts.md not modified since last sync, skipping
+[2025-08-31T19:05:44.069Z] File Flashcards/Spanish-Vocabulary.md not modified since last sync, skipping
+[2025-08-31T19:05:44.102Z] Saving database after processing all decks...
+[2025-08-31T19:05:44.162Z] Refresh complete
+[2025-08-31T19:05:47.675Z] Refreshing backup list...
+[2025-08-31T19:05:47.691Z] Found backups: [{"filename":"backup-2025-08-31.db","timestamp":"2025-08-30T22:00:00.000Z"}]
+[2025-08-31T19:06:04.403Z] Review session created: session_1756667164401_sjx69mqjc, goal: 1107
+[2025-08-31T19:06:06.363Z] Updated deck stats for: deck_lp8v1m
+[2025-08-31T19:06:06.438Z] Updated deck stats for: deck_lp8v1m
+[2025-08-31T19:06:06.519Z] Found new card: card_j24fqo
+[2025-08-31T19:06:07.122Z] Updated deck stats for: deck_lp8v1m
+[2025-08-31T19:06:07.188Z] Updated deck stats for: deck_lp8v1m
+[2025-08-31T19:06:07.269Z] Found new card: card_jfkjxi
+[2025-08-31T19:06:08.323Z] Updated deck stats for: deck_lp8v1m
+[2025-08-31T19:06:08.405Z] Updated deck stats for: deck_lp8v1m
+[2025-08-31T19:06:08.486Z] Found new card: card_4oi4z3
+[2025-08-31T19:06:09.243Z] Updated deck stats for: deck_lp8v1m
+[2025-08-31T19:06:09.321Z] Updated deck stats for: deck_lp8v1m
+[2025-08-31T19:06:09.402Z] Found new card: card_gum5ty
+[2025-08-31T19:06:10.211Z] Updated deck stats for: deck_lp8v1m
+[2025-08-31T19:06:10.287Z] Updated deck stats for: deck_lp8v1m
+[2025-08-31T19:06:10.369Z] Found new card: card_mnqsfb
+[2025-08-31T19:06:11.123Z] Updated deck stats for: deck_lp8v1m
+[2025-08-31T19:06:11.188Z] Updated deck stats for: deck_lp8v1m
+[2025-08-31T19:06:11.270Z] Found new card: card_enk5cr
+[2025-08-31T19:06:12.071Z] Updated deck stats for: deck_lp8v1m
+[2025-08-31T19:06:12.138Z] Updated deck stats for: deck_lp8v1m
+[2025-08-31T19:06:12.218Z] Found new card: card_qh121u
+[2025-08-31T19:06:12.878Z] Updated deck stats for: deck_lp8v1m
+[2025-08-31T19:06:12.954Z] Updated deck stats for: deck_lp8v1m
+[2025-08-31T19:06:13.036Z] Found new card: card_pr5jga
+[2025-08-31T19:06:13.687Z] Updated deck stats for: deck_lp8v1m
+[2025-08-31T19:06:13.805Z] Updated deck stats for: deck_lp8v1m
+[2025-08-31T19:07:57.025Z] Loading Decks plugin
+[2025-08-31T19:07:57.056Z] Decks plugin loaded successfully
+[2025-08-31T19:07:59.286Z] File Flashcards/1200 Deutsche Redewendungen.md not modified since last sync, skipping
+[2025-08-31T19:07:59.405Z] File Flashcards/Spanish-Vocabulary.md not modified since last sync, skipping
+[2025-08-31T19:07:59.435Z] Saving database after processing all decks...
+[2025-08-31T19:07:59.524Z] File Flashcards/1200 Deutsche Redewendungen.md not modified since last sync, skipping
+[2025-08-31T19:07:59.609Z] File Flashcards/Math-Basics.md not modified since last sync, skipping
+[2025-08-31T19:07:59.653Z] File Flashcards/test.md not modified since last sync, skipping
+[2025-08-31T19:07:59.669Z] Saving database after processing all decks...
+[2025-08-31T19:07:59.717Z] Refresh complete
+[2025-08-31T19:08:01.820Z] Review session created: session_1756667281819_fhkqm2xjs, goal: 1099
+[2025-08-31T19:08:03.256Z] Updated deck stats for: deck_lp8v1m
+[2025-08-31T19:08:03.322Z] Updated deck stats for: deck_lp8v1m
+[2025-08-31T19:08:03.404Z] Found new card: card_jkyhvg
+[2025-08-31T19:08:04.148Z] Updated deck stats for: deck_lp8v1m
+[2025-08-31T19:08:04.255Z] Updated deck stats for: deck_lp8v1m
+[2025-08-31T19:52:36.206Z] Loading Decks plugin
+[2025-08-31T19:52:36.450Z] Decks plugin loaded successfully
+[2025-08-31T19:52:38.662Z] File Flashcards/1200 Deutsche Redewendungen.md not modified since last sync, skipping
+[2025-08-31T19:52:38.772Z] File Flashcards/Spanish-Vocabulary.md not modified since last sync, skipping
+[2025-08-31T19:52:38.809Z] Saving database after processing all decks...
+[2025-08-31T19:52:38.906Z] Progress: 37.5% - 📄 Processing deck: 4200 German Adjectives (3/8)
+[2025-08-31T19:52:38.955Z] File Flashcards/Programming-Concepts.md not modified since last sync, skipping
+[2025-08-31T19:52:39.004Z] Saving database after processing all decks...
+[2025-08-31T19:52:39.055Z] Refresh complete
+[2025-08-31T19:52:42.902Z] Review session created: session_1756669962900_kczxe6ij5, goal: 1098
+[2025-08-31T19:52:44.929Z] Found card: alle Register ziehen... in deck: 1200 Deutsche Redewendungen
+[2025-08-31T19:52:44.945Z] Updated deck stats for: deck_lp8v1m
+[2025-08-31T19:52:45.024Z] Updated deck stats for: deck_lp8v1m
+[2025-08-31T19:52:45.106Z] Found new card: card_bhcrny
+[2025-08-31T19:52:45.955Z] Updated deck stats for: deck_lp8v1m
+[2025-08-31T19:52:46.060Z] Updated deck stats for: deck_lp8v1m
+[2025-08-31T19:52:51.556Z] Review session created: session_1756669971555_mq2sjigtl, goal: 1097
+[2025-08-31T19:52:54.993Z] Found card: jemandem das Rückgrat stärken... in deck: 1200 Deutsche Redewendungen
+[2025-08-31T19:52:55.008Z] Updated deck stats for: deck_lp8v1m
+[2025-08-31T19:52:55.074Z] Updated deck stats for: deck_lp8v1m
+[2025-08-31T19:52:55.156Z] Found new card: card_2yibw1
+[2025-08-31T19:52:56.119Z] Updated deck stats for: deck_lp8v1m
+[2025-08-31T19:52:56.212Z] Updated deck stats for: deck_lp8v1m
