@@ -534,7 +534,7 @@
         padding: 24px;
         min-height: 100px;
         width: 100%;
-        max-width: 600px;
+        max-width: 900px;
         box-sizing: border-box;
         word-wrap: break-word;
         overflow-wrap: break-word;

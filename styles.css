@@ -327,6 +327,8 @@
 
 /* Modal styles */
 .decks-modal {
+    width: 40vw;
+    max-width: 40vw;
     height: 85vh;
     max-height: 85vh;
 }
