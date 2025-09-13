@@ -1,23 +1,23 @@
 import { Scheduler } from "../services/Scheduler";
-import { DatabaseService } from "../database/DatabaseService";
+import { MainDatabaseService } from "../database/MainDatabaseService";
 import { Flashcard, Deck, FlashcardState } from "../database/types";
 
 // Mock DatabaseService
-jest.mock("../database/DatabaseService");
-const MockedDatabaseService = DatabaseService as jest.MockedClass<
-  typeof DatabaseService
+jest.mock("../database/MainDatabaseService");
+const MockedDatabaseService = MainDatabaseService as jest.MockedClass<
+  typeof MainDatabaseService
 >;
 
 describe("Scheduler", () => {
   let scheduler: Scheduler;
-  let mockDb: jest.Mocked<DatabaseService>;
+  let mockDb: jest.Mocked<MainDatabaseService>;
 
   beforeEach(() => {
     mockDb = new MockedDatabaseService(
       "",
       {} as any,
       jest.fn(),
-    ) as jest.Mocked<DatabaseService>;
+    ) as jest.Mocked<MainDatabaseService>;
     scheduler = new Scheduler(
       mockDb,
       { debug: { enableLogging: false, performanceLogs: false } } as any,
@@ -587,15 +587,11 @@ describe("Scheduler", () => {
         expect(sessionId2).toBe("session_123");
         expect(mockDb.endReviewSession).toHaveBeenCalledWith(
           "existing_session",
-          expect.any(String),
         );
 
         // Manual end session test
         await scheduler.endReviewSession(sessionId2);
-        expect(mockDb.endReviewSession).toHaveBeenCalledWith(
-          sessionId2,
-          expect.any(String),
-        );
+        expect(mockDb.endReviewSession).toHaveBeenCalledWith(sessionId2);
       });
     });
   });

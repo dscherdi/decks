@@ -32,6 +32,17 @@ console.log(
   `Building Decks plugin in ${prod ? "production" : "development"} mode...`,
 );
 
+// Worker build options
+const workerBuildOptions = {
+  entryPoints: [path.join(srcDir, "workers", "worker-entry.ts")],
+  bundle: true,
+  format: "iife",
+  target: "es2019",
+  platform: "browser",
+  minify: prod,
+  write: false, // Don't write to file, we'll embed it
+};
+
 // Build options
 const buildOptions = {
   banner: {
@@ -82,15 +93,28 @@ const buildOptions = {
           from: path.join(__dirname, "manifest.json"),
           to: path.join(outDir, "manifest.json"),
         },
+        {
+          from: path.join(__dirname, "node_modules/sql.js/dist/sql-wasm.wasm"),
+          to: path.join(outDir, "assets/sql-wasm.wasm"),
+        },
+        {
+          from: path.join(__dirname, "node_modules/sql.js/dist/sql-wasm.js"),
+          to: path.join(outDir, "assets/sql-wasm.js"),
+        },
       ],
     }),
   ],
 };
 
-// Build JavaScript first, then handle CSS merging
-esbuild
-  .build(buildOptions)
-  .then(() => {
+// Build worker first, then main bundle
+Promise.all([esbuild.build(workerBuildOptions), esbuild.build(buildOptions)])
+  .then(([workerResult]) => {
+    // Get worker code as string
+    const workerCode = workerResult.outputFiles[0].text;
+
+    // Create worker assets file
+    const workerAssetPath = path.join(outDir, "database-worker.js");
+    fs.writeFileSync(workerAssetPath, workerCode);
     // Merge component CSS with main styles.css
     const mainStyles = fs.readFileSync(
       path.join(__dirname, "styles.css"),
@@ -113,10 +137,13 @@ esbuild
     console.log(`✅ Build completed successfully!`);
     console.log(`📁 JS Output: ${buildOptions.outfile}`);
     console.log(`📁 CSS Output: ${path.join(outDir, "styles.css")}`);
+    console.log(`📁 Worker Output: ${workerAssetPath}`);
     const jsStats = fs.statSync(buildOptions.outfile);
     const cssStats = fs.statSync(path.join(outDir, "styles.css"));
+    const workerStats = fs.statSync(workerAssetPath);
     console.log(`📊 JS Size: ${(jsStats.size / 1024).toFixed(1)} KB`);
     console.log(`📊 CSS Size: ${(cssStats.size / 1024).toFixed(1)} KB`);
+    console.log(`📊 Worker Size: ${(workerStats.size / 1024).toFixed(1)} KB`);
   })
   .catch((err) => {
     console.error("❌ Build failed:");

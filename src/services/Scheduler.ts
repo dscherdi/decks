@@ -5,7 +5,7 @@ import {
   ReviewLog,
   ReviewSession,
 } from "../database/types";
-import { DatabaseService } from "../database/DatabaseService";
+import { DatabaseServiceInterface } from "../database/DatabaseFactory";
 import {
   FSRS,
   type RatingLabel,
@@ -47,7 +47,7 @@ export interface SessionProgress {
  * and atomic state updates with review logging.
  */
 export class Scheduler {
-  private db: DatabaseService;
+  private db: DatabaseServiceInterface;
   private fsrs: FSRS;
   private currentSessionId: string | null = null;
   private logger: Logger;
@@ -55,7 +55,7 @@ export class Scheduler {
   private settings: FlashcardsSettings;
 
   constructor(
-    db: DatabaseService,
+    db: DatabaseServiceInterface,
     settings: FlashcardsSettings,
     adapter: DataAdapter,
     configDir: string,
@@ -168,7 +168,7 @@ export class Scheduler {
     sessionId: string,
     now: Date = new Date(),
   ): Promise<void> {
-    await this.db.endReviewSession(sessionId, now.toISOString());
+    await this.db.endReviewSession(sessionId);
 
     // Save db
     this.save();
@@ -194,7 +194,7 @@ export class Scheduler {
     // TODO: End by taking the review time of last review log with session id of active session
     const activeSession = await this.db.getActiveReviewSession(deckId);
     if (activeSession) {
-      await this.db.endReviewSession(activeSession.id, now.toISOString());
+      await this.db.endReviewSession(activeSession.id);
     }
 
     // Start a new session

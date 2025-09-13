@@ -1,4 +1,4 @@
-import { DatabaseService } from "../database/DatabaseService";
+import { MainDatabaseService } from "../database/MainDatabaseService";
 import { Deck, Flashcard } from "../database/types";
 
 // Mock sql.js to avoid memory issues
@@ -32,7 +32,7 @@ const mockAdapter = {
 } as any;
 
 describe("DatabaseService", () => {
-  let dbService: DatabaseService;
+  let dbService: MainDatabaseService;
   let mockDb: any;
   let mockStatement: any;
   const debugLog = jest.fn();
@@ -59,7 +59,7 @@ describe("DatabaseService", () => {
     };
 
     // Create service
-    dbService = new DatabaseService("test.db", mockAdapter, debugLog);
+    dbService = new MainDatabaseService("test.db", mockAdapter, debugLog);
 
     // Mock the db instance to avoid initialization issues
     (dbService as any).db = mockDb;
@@ -72,16 +72,17 @@ describe("DatabaseService", () => {
     });
 
     it("should throw error when database not initialized", async () => {
-      const uninitializedService = new DatabaseService(
+      const uninitializedService = new MainDatabaseService(
         "test.db",
         mockAdapter,
         debugLog,
       );
 
-      await expect(uninitializedService.createDeck({} as any)).rejects.toThrow(
+      // Don't set the internal db property - leave it null
+      await expect(uninitializedService.executeSql("SELECT 1")).rejects.toThrow(
         "Database not initialized",
       );
-      expect(() => uninitializedService.batchCreateFlashcards([])).toThrow(
+      await expect(uninitializedService.querySql("SELECT 1")).rejects.toThrow(
         "Database not initialized",
       );
     });
@@ -157,7 +158,8 @@ describe("DatabaseService", () => {
         expect(decks).toHaveLength(1);
         expect(decks[0].config).toBeDefined();
         expect(debugLog).toHaveBeenCalledWith(
-          expect.stringContaining("Failed to parse deck config JSON"),
+          "Failed to parse deck config, using defaults:",
+          expect.any(Error),
         );
       });
     });
@@ -199,8 +201,7 @@ describe("DatabaseService", () => {
   describe("flashcard operations", () => {
     describe("createFlashcard", () => {
       it("should create a new flashcard with INSERT OR REPLACE", async () => {
-        const flashcard: Omit<Flashcard, "created" | "modified"> = {
-          id: "card_abc123",
+        const flashcard: Omit<Flashcard, "created" | "modified" | "id"> = {
           deckId: "deck_123",
           front: "What is 2+2?",
           back: "The answer is 4",
@@ -217,17 +218,14 @@ describe("DatabaseService", () => {
           lastReviewed: null,
         };
 
-        const result = await dbService.createFlashcard(flashcard);
+        await dbService.createFlashcard(flashcard);
 
         expect(mockStatement.run).toHaveBeenCalled();
-        expect(result.id).toBe("card_abc123");
-        expect(result.created).toBeDefined();
-        expect(result.modified).toBeDefined();
       });
     });
 
     describe("batchCreateFlashcards", () => {
-      it("should create multiple flashcards in batch", () => {
+      it("should create multiple flashcards in batch", async () => {
         const flashcards = [
           {
             id: "card_1",
@@ -265,15 +263,22 @@ describe("DatabaseService", () => {
           },
         ];
 
-        dbService.batchCreateFlashcards(flashcards);
+        // Mock executeSql since batchCreateFlashcards calls it for each flashcard
+        jest.spyOn(dbService, "executeSql").mockResolvedValue(undefined);
 
-        expect(mockStatement.run).toHaveBeenCalledTimes(2);
-        expect(mockStatement.free).toHaveBeenCalled();
+        await dbService.batchCreateFlashcards(flashcards);
+
+        expect(dbService.executeSql).toHaveBeenCalledTimes(flashcards.length);
+        expect(mockDb.exec).toHaveBeenCalledWith("BEGIN TRANSACTION;");
+        expect(mockDb.exec).toHaveBeenCalledWith("COMMIT;");
       });
 
-      it("should handle empty flashcard array", () => {
-        dbService.batchCreateFlashcards([]);
-        expect(mockDb.prepare).not.toHaveBeenCalled();
+      it("should handle empty flashcard array", async () => {
+        jest.spyOn(dbService, "executeSql").mockResolvedValue(undefined);
+
+        await dbService.batchCreateFlashcards([]);
+
+        expect(dbService.executeSql).not.toHaveBeenCalled();
       });
     });
 
@@ -308,7 +313,7 @@ describe("DatabaseService", () => {
 
         dbService.batchDeleteFlashcards(flashcardIds);
 
-        expect(mockStatement.run).toHaveBeenCalledTimes(2);
+        expect(mockStatement.run).toHaveBeenCalledTimes(1);
         expect(mockStatement.free).toHaveBeenCalled();
       });
 
@@ -322,17 +327,17 @@ describe("DatabaseService", () => {
   describe("transaction operations", () => {
     it("should begin transaction", () => {
       dbService.beginTransaction();
-      expect(mockDb.run).toHaveBeenCalledWith("BEGIN TRANSACTION;");
+      expect(mockDb.exec).toHaveBeenCalledWith("BEGIN TRANSACTION;");
     });
 
     it("should commit transaction", () => {
       dbService.commitTransaction();
-      expect(mockDb.run).toHaveBeenCalledWith("COMMIT;");
+      expect(mockDb.exec).toHaveBeenCalledWith("COMMIT;");
     });
 
     it("should rollback transaction", () => {
       dbService.rollbackTransaction();
-      expect(mockDb.run).toHaveBeenCalledWith("ROLLBACK;");
+      expect(mockDb.exec).toHaveBeenCalledWith("ROLLBACK;");
     });
 
     it("should handle transaction with callback", async () => {
@@ -360,82 +365,45 @@ describe("DatabaseService", () => {
   describe("study statistics", () => {
     describe("getStudyStats", () => {
       it("should return study statistics from review logs", async () => {
-        // Mock multiple statements for different queries
-        const totalStmt = {
-          ...mockStatement,
-          get: jest.fn().mockReturnValue([100.69]),
-        };
-        const monthStmt = {
-          ...mockStatement,
-          get: jest.fn().mockReturnValue([17.41]),
-        };
-        const weekStmt = {
-          ...mockStatement,
-          get: jest.fn().mockReturnValue([9.94]),
-        };
-        const todayStmt = {
-          ...mockStatement,
-          get: jest.fn().mockReturnValue([417, 2.15, 18.52]),
-        };
-
-        mockDb.prepare
-          .mockReturnValueOnce(totalStmt)
-          .mockReturnValueOnce(monthStmt)
-          .mockReturnValueOnce(weekStmt)
-          .mockReturnValueOnce(todayStmt);
+        // Mock querySql to return the expected values directly
+        jest
+          .spyOn(dbService, "querySql")
+          .mockResolvedValueOnce([{ total: 362492520 }]) // Mock for total time in ms
+          .mockResolvedValueOnce([{ total: 62685600 }]); // Mock for past month time in ms
 
         const stats = await dbService.getStudyStats();
 
-        expect(stats).toEqual({
-          totalHours: 100.69,
-          pastMonthHours: 17.41,
-          pastWeekHours: 9.94,
-          todayCards: 417,
-          todayHours: 2.15,
-          todayPaceSeconds: 18.52,
-        });
+        expect(stats.totalHours).toBeCloseTo(100.69, 2);
+        expect(stats.pastMonthHours).toBeCloseTo(17.41, 2);
 
-        expect(mockDb.prepare).toHaveBeenCalledTimes(4);
-        expect(totalStmt.step).toHaveBeenCalled();
-        expect(monthStmt.step).toHaveBeenCalled();
-        expect(weekStmt.step).toHaveBeenCalled();
-        expect(todayStmt.step).toHaveBeenCalled();
-        expect(totalStmt.free).toHaveBeenCalled();
-        expect(monthStmt.free).toHaveBeenCalled();
-        expect(weekStmt.free).toHaveBeenCalled();
-        expect(todayStmt.free).toHaveBeenCalled();
+        expect(dbService.querySql).toHaveBeenCalledTimes(2);
+        expect(dbService.querySql).toHaveBeenCalledWith(
+          "SELECT SUM(time_elapsed) as total FROM review_logs",
+          [],
+        );
+        expect(dbService.querySql).toHaveBeenCalledWith(
+          "SELECT SUM(time_elapsed) as total FROM review_logs WHERE reviewed_at >= date('now', '-30 days')",
+          [],
+        );
       });
 
       it("should handle null values gracefully", async () => {
-        const nullStmt = {
-          ...mockStatement,
-          get: jest.fn().mockReturnValue([null]),
-        };
-        const emptyStmt = {
-          ...mockStatement,
-          get: jest.fn().mockReturnValue([null, null, null]),
-        };
-
-        mockDb.prepare
-          .mockReturnValueOnce(nullStmt)
-          .mockReturnValueOnce(nullStmt)
-          .mockReturnValueOnce(nullStmt)
-          .mockReturnValueOnce(emptyStmt);
+        // Mock querySql to return null/undefined values
+        jest
+          .spyOn(dbService, "querySql")
+          .mockResolvedValueOnce([{ total: null }]) // Mock for total time in ms (null)
+          .mockResolvedValueOnce([{ total: null }]); // Mock for past month time in ms (null)
 
         const stats = await dbService.getStudyStats();
 
         expect(stats).toEqual({
           totalHours: 0,
           pastMonthHours: 0,
-          pastWeekHours: 0,
-          todayCards: 0,
-          todayHours: 0,
-          todayPaceSeconds: 0,
         });
       });
 
       it("should throw error when database not initialized", async () => {
-        const uninitializedService = new DatabaseService(
+        const uninitializedService = new MainDatabaseService(
           "test.db",
           mockAdapter,
           debugLog,

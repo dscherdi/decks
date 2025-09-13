@@ -3,9 +3,9 @@
     import { ButtonComponent, Setting } from "obsidian";
     import ReviewHeatmap from "./ReviewHeatmap.svelte";
     import type { Statistics } from "../database/types";
-    import type { DatabaseService } from "../database/DatabaseService";
+    import type { DatabaseServiceInterface } from "../database/DatabaseFactory";
 
-    export let db: DatabaseService;
+    export let db: DatabaseServiceInterface;
     export let deckFilter: string = "all";
 
     const dispatch = createEventDispatcher();

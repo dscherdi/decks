@@ -1,15 +1,19 @@
 import { Modal, Notice } from "obsidian";
 import type { Deck, AnkiExportConfig } from "../database/types";
-import type { DatabaseService } from "../database/DatabaseService";
+import type { DatabaseServiceInterface } from "../database/DatabaseFactory";
+import type {
+  AnkiExportComponent,
+  ExportEventDetail,
+} from "../types/svelte-components";
 import AnkiExportUI from "./AnkiExportUI.svelte";
 
 export class AnkiExportModal extends Modal {
   private deck: Deck;
-  private db: DatabaseService;
-  private component: AnkiExportUI | null = null;
+  private db: DatabaseServiceInterface;
+  private component: AnkiExportComponent | null = null;
   private resizeHandler?: () => void;
 
-  constructor(app: any, deck: Deck, db: DatabaseService) {
+  constructor(app: any, deck: Deck, db: DatabaseServiceInterface) {
     super(app);
     this.deck = deck;
     this.db = db;
@@ -39,11 +43,18 @@ export class AnkiExportModal extends Modal {
       props: {
         deck: this.deck,
       },
-    });
+    }) as AnkiExportComponent;
 
     // Listen to component events
-    this.component.$on("export", (event) => {
-      this.handleExport(event.detail);
+    this.component.$on("export", (event: any) => {
+      const detail = event.detail as ExportEventDetail;
+      const ankiConfig: AnkiExportConfig = {
+        noteType: detail.noteType,
+        tags: detail.tags,
+        ankiDeckName: detail.deckName,
+        separator: detail.separator,
+      };
+      this.handleExport(ankiConfig);
     });
 
     this.component.$on("cancel", () => {

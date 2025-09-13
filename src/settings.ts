@@ -31,6 +31,11 @@ export interface FlashcardsSettings {
     enableLogging: boolean;
     performanceLogs: boolean;
   };
+
+  // Experimental Settings
+  experimental: {
+    enableDatabaseWorker: boolean;
+  };
 }
 
 export const DEFAULT_SETTINGS: FlashcardsSettings = {
@@ -58,5 +63,9 @@ export const DEFAULT_SETTINGS: FlashcardsSettings = {
   debug: {
     enableLogging: false,
     performanceLogs: false,
+  },
+
+  experimental: {
+    enableDatabaseWorker: false,
   },
 };

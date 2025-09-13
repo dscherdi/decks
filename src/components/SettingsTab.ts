@@ -9,7 +9,7 @@ import {
 import { FlashcardsSettings } from "../settings";
 import { BackupService } from "../services/BackupService";
 import DecksPlugin from "@/main";
-import { DatabaseService } from "@/database/DatabaseService";
+import { DatabaseServiceInterface } from "@/database/DatabaseFactory";
 import { Logger } from "@/utils/logging";
 
 export class DecksSettingTab extends PluginSettingTab {
@@ -23,14 +23,14 @@ export class DecksSettingTab extends PluginSettingTab {
   private purgeDatabase: () => Promise<void>;
   private backupService: BackupService;
   private plugin: DecksPlugin;
-  private db: DatabaseService;
+  private db: DatabaseServiceInterface;
   private logger: Logger;
 
   constructor(
     app: App,
     plugin: DecksPlugin,
     settings: FlashcardsSettings,
-    db: DatabaseService,
+    db: DatabaseServiceInterface,
     saveSettings: () => Promise<void>,
     logger: Logger,
     performSync: (force?: boolean) => Promise<void>,
@@ -76,6 +76,9 @@ export class DecksSettingTab extends PluginSettingTab {
 
     // Debug Settings
     this.addDebugSettings(containerEl);
+
+    // Experimental Settings
+    this.addExperimentalSettings(containerEl);
 
     // Database Management Settings
     this.addDatabaseSettings(containerEl);
@@ -268,6 +271,39 @@ export class DecksSettingTab extends PluginSettingTab {
       );
   }
 
+  private addExperimentalSettings(containerEl: HTMLElement): void {
+    containerEl.createEl("h3", { text: "Experimental Features" });
+    containerEl.createEl("p", {
+      text: "⚠️ Experimental features may be unstable. Use with caution and backup your data.",
+      cls: "setting-item-description",
+    });
+
+    new Setting(containerEl)
+      .setName("Database Worker Thread")
+      .setDesc(
+        "Run database operations in a background worker thread to prevent UI freezing with large databases. Requires restart to take effect.",
+      )
+      .addToggle((toggle) =>
+        toggle
+          .setValue(this.settings.experimental?.enableDatabaseWorker || false)
+          .onChange(async (value) => {
+            if (!this.settings.experimental) {
+              this.settings.experimental = {
+                enableDatabaseWorker: false,
+              };
+            }
+            this.settings.experimental.enableDatabaseWorker = value;
+            await this.saveSettings();
+
+            new Notice(
+              value
+                ? "Database worker enabled. Restart Obsidian to activate."
+                : "Database worker disabled. Restart Obsidian to deactivate.",
+            );
+          }),
+      );
+  }
+
   private addDatabaseSettings(containerEl: HTMLElement): void {
     containerEl.createEl("h3", { text: "Database Management" });
     containerEl.createEl("p", {
@@ -402,7 +438,7 @@ export class DecksSettingTab extends PluginSettingTab {
         for (const backup of backups) {
           const option = dropdown.selectEl.createEl("option");
           option.value = backup.filename;
-          option.textContent = `${BackupService.formatTimestamp(backup.timestamp)}`;
+          option.textContent = `${backup.timestamp.toLocaleString()}`;
         }
         new Notice(`Found ${backups.length} backup(s)`, 3000);
       }
@@ -424,7 +460,7 @@ export class DecksSettingTab extends PluginSettingTab {
       let current = 0;
       let total = 0;
 
-      await this.backupService.restoreBackup(
+      await this.backupService.restoreFromBackup(
         filename,
         this.db,
         (currentCount: number, totalCount: number) => {
@@ -438,10 +474,6 @@ export class DecksSettingTab extends PluginSettingTab {
       );
 
       progressNotice.hide();
-      new Notice(
-        `✅ Backup restored successfully! Processed ${current}/${total} records.`,
-        5000,
-      );
 
       if (this.plugin.view) {
         await this.plugin.view.refresh(true);

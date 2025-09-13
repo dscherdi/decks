@@ -1,6 +1,9 @@
 import { Plugin, TFile, WorkspaceLeaf, Notice, TAbstractFile } from "obsidian";
 
-import { DatabaseService } from "./database/DatabaseService";
+import {
+  DatabaseFactory,
+  DatabaseServiceInterface,
+} from "./database/DatabaseFactory";
 import { DeckManager } from "./services/DeckManager";
 import { DeckSynchronizer } from "./services/DeckSynchronizer";
 import { Scheduler } from "./services/Scheduler";
@@ -58,7 +61,7 @@ function deepMergeIgnoreNull(target: any, source: any): any {
 }
 
 export default class DecksPlugin extends Plugin {
-  private db: DatabaseService;
+  private db: DatabaseServiceInterface;
   public deckManager: DeckManager;
   private deckSynchronizer: DeckSynchronizer;
   private scheduler: Scheduler;
@@ -93,14 +96,18 @@ export default class DecksPlugin extends Plugin {
 
       // FSRS instances are now created per-deck as needed
 
-      // Initialize database
+      // Initialize database with worker support
       const databasePath = `${this.app.vault.configDir}/plugins/decks/flashcards.db`;
-      this.db = new DatabaseService(
+
+      // Use experimental setting to control worker usage
+      const useWorker = this.settings.experimental.enableDatabaseWorker;
+
+      this.db = await DatabaseFactory.create(
         databasePath,
         adapter,
         this.logger.debug.bind(this),
+        { useWorker, workerEnabled: true, configDir: this.app.vault.configDir },
       );
-      await this.db.initialize();
 
       // Initialize deck manager with optimized main-thread approach
       this.deckManager = new DeckManager(
@@ -248,10 +255,8 @@ export default class DecksPlugin extends Plugin {
   async onunload() {
     this.logger.debug("Unloading Decks plugin");
 
-    // Close database connection
-    if (this.db) {
-      await this.db.close();
-    }
+    // Close database connection using factory singleton
+    await DatabaseFactory.close();
   }
 
   async loadSettings() {

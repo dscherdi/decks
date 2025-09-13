@@ -1,14 +1,15 @@
-import { Modal, App } from "obsidian";
-import { DatabaseService } from "../database/DatabaseService";
+import { Modal } from "obsidian";
+import type { DatabaseServiceInterface } from "../database/DatabaseFactory";
+import type { StatisticsComponent } from "../types/svelte-components";
 import StatisticsUI from "./StatisticsUI.svelte";
 
 export class StatisticsModal extends Modal {
-  private db: DatabaseService;
+  private db: DatabaseServiceInterface;
   private deckFilter?: string;
-  private component: StatisticsUI | null = null;
+  private component: StatisticsComponent | null = null;
   private resizeHandler?: () => void;
 
-  constructor(app: App, db: DatabaseService, deckFilter?: string) {
+  constructor(app: any, db: DatabaseServiceInterface, deckFilter?: string) {
     super(app);
     this.db = db;
     this.deckFilter = deckFilter;
@@ -33,17 +34,16 @@ export class StatisticsModal extends Modal {
     contentEl.addClass("decks-statistics-modal-content");
 
     // Mount Svelte component
-    // Create the Svelte component
     this.component = new StatisticsUI({
       target: contentEl,
       props: {
         db: this.db,
         deckFilter: this.deckFilter,
       },
-    });
+    }) as StatisticsComponent;
 
     // Listen to component events
-    this.component.$on("close", () => {
+    this.component.$on("close", (event: any) => {
       this.close();
     });
 

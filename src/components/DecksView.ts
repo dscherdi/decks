@@ -1,4 +1,4 @@
-import { DatabaseService } from "@/database/DatabaseService";
+import { DatabaseServiceInterface } from "@/database/DatabaseFactory";
 import {
   Deck,
   DeckStats,
@@ -21,15 +21,16 @@ import { StatisticsModal } from "./StatisticsModal";
 import { FSRS, type RatingLabel } from "@/algorithm/fsrs";
 import DeckListPanel from "./DeckListPanel.svelte";
 import { ProgressTracker } from "@/utils/progress";
+import type { DeckListPanelComponent } from "../types/svelte-components";
 
 export class DecksView extends ItemView {
-  private db: DatabaseService;
+  private db: DatabaseServiceInterface;
   private deckSynchronizer: DeckSynchronizer;
   private scheduler: Scheduler;
   private settings: FlashcardsSettings;
   private setViewReference: (view: DecksView | null) => void;
   private hasShownInitialProgress = false;
-  private component: DeckListPanel | null = null;
+  private component: DeckListPanelComponent | null = null;
   private markdownComponents: Component[] = [];
   private statsRefreshTimeout: NodeJS.Timeout | null = null;
   private backgroundRefreshInterval: NodeJS.Timeout | null = null;
@@ -38,7 +39,7 @@ export class DecksView extends ItemView {
 
   constructor(
     leaf: WorkspaceLeaf,
-    database: DatabaseService,
+    database: DatabaseServiceInterface,
     deckSynchronizer: DeckSynchronizer,
     scheduler: Scheduler,
     settings: FlashcardsSettings,
@@ -140,7 +141,7 @@ export class DecksView extends ItemView {
         },
         plugin: { app: this.app },
       },
-    });
+    }) as DeckListPanelComponent;
 
     // // Initial refresh
     // await this.refresh(false);
@@ -175,7 +176,10 @@ export class DecksView extends ItemView {
   }
 
   async update(updatedDecks: Deck[], deckStats: Map<string, DeckStats>) {
-    await this.component?.updateAll(updatedDecks, deckStats);
+    await this.component?.updateAll(
+      updatedDecks,
+      Array.from(deckStats.values()),
+    );
   }
 
   private async getAllDeckStatsMap(): Promise<Map<string, DeckStats>> {
@@ -256,7 +260,10 @@ export class DecksView extends ItemView {
 
       // Update component with new stats using unified function
       if (this.component) {
-        await this.component.updateAll(undefined, deckStats);
+        await this.component.updateAll(
+          undefined,
+          Array.from(deckStats.values()),
+        );
       }
     } catch (error) {
       console.error("Error refreshing stats:", error);

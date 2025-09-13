@@ -1,23 +1,24 @@
-import { Modal, Platform } from "obsidian";
+import { Modal, Notice } from "obsidian";
 import type { Deck, DeckConfig } from "../database/types";
-import type { DatabaseService } from "../database/DatabaseService";
+import type { DatabaseServiceInterface } from "../database/DatabaseFactory";
 import type { DeckSynchronizer } from "../services/DeckSynchronizer";
+import type { DeckConfigComponent } from "../types/svelte-components";
 import { yieldToUI } from "../utils/ui";
 import DeckConfigUI from "./DeckConfigUI.svelte";
 
 export class DeckConfigModal extends Modal {
   private deck: Deck;
-  private db: DatabaseService;
+  private db: DatabaseServiceInterface;
   private deckSynchronizer: DeckSynchronizer;
   private onRefreshStats: (deckId: string) => Promise<void>;
   private config: DeckConfig;
-  private component: DeckConfigUI | null = null;
+  private component: DeckConfigComponent | null = null;
   private resizeHandler?: () => void;
 
   constructor(
     app: any,
     deck: Deck,
-    db: DatabaseService,
+    db: DatabaseServiceInterface,
     deckSynchronizer: DeckSynchronizer,
     onRefreshStats: (deckId: string) => Promise<void>,
   ) {
@@ -54,19 +55,19 @@ export class DeckConfigModal extends Modal {
         deck: this.deck,
         config: this.config,
       },
-    });
+    }) as DeckConfigComponent;
 
     // Listen to component events
-    this.component.$on("save", (event) => {
-      this.handleSave(event.detail);
+    this.component.$on("save", (event: any) => {
+      this.handleSave(event.detail as DeckConfig);
     });
 
     this.component.$on("cancel", () => {
       this.close();
     });
 
-    this.component.$on("configChange", (event) => {
-      this.config = event.detail;
+    this.component.$on("configChange", (event: any) => {
+      this.config = event.detail as DeckConfig;
     });
 
     // Handle window resize for mobile adaptation

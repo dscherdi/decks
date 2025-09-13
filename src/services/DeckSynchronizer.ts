@@ -1,5 +1,5 @@
 import { Notice } from "obsidian";
-import { DatabaseService } from "../database/DatabaseService";
+import { DatabaseServiceInterface } from "../database/DatabaseFactory";
 import { DeckManager } from "./DeckManager";
 import { yieldToUI } from "../utils/ui";
 import { Logger, formatTime } from "../utils/logging";
@@ -27,13 +27,13 @@ export interface SyncResult {
 }
 
 export class DeckSynchronizer {
-  private db: DatabaseService;
+  private db: DatabaseServiceInterface;
   private deckManager: DeckManager;
   private isSyncing: boolean = false;
   private logger: Logger;
 
   constructor(
-    db: DatabaseService,
+    db: DatabaseServiceInterface,
     deckManager: DeckManager,
     settings: FlashcardsSettings,
     adapter: DataAdapter,

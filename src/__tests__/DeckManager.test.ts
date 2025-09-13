@@ -1,5 +1,5 @@
 import { DeckManager } from "../services/DeckManager";
-import { DatabaseService } from "../database/DatabaseService";
+import { MainDatabaseService } from "../database/MainDatabaseService";
 import {
   Vault,
   MetadataCache,
@@ -10,7 +10,7 @@ import {
 import { Deck, Flashcard, DEFAULT_DECK_CONFIG } from "../database/types";
 
 // Mock the database service
-jest.mock("../database/DatabaseService");
+jest.mock("../database/MainDatabaseService");
 
 // Mock types
 interface MockDataAdapter extends Partial<DataAdapter> {
@@ -43,7 +43,7 @@ interface MockPluginView {
 }
 
 interface MockPlugin {
-  db: jest.Mocked<DatabaseService>;
+  db: jest.Mocked<MainDatabaseService>;
   view: MockPluginView | null;
   updateDeckConfig: (deckId: string, config: any) => Promise<void>;
   settings?: {
@@ -90,18 +90,18 @@ describe("DeckManager", () => {
   let deckManager: DeckManager;
   let mockVault: MockVault;
   let mockMetadataCache: MockMetadataCache;
-  let mockDb: jest.Mocked<DatabaseService>;
+  let mockDb: jest.Mocked<MainDatabaseService>;
 
   beforeEach(() => {
     // Create mock instances
     mockVault = new Vault() as MockVault;
     mockMetadataCache = new MetadataCache() as MockMetadataCache;
 
-    mockDb = new DatabaseService(
+    mockDb = new MainDatabaseService(
       "test.db",
       mockAdapter as DataAdapter,
       () => {},
-    ) as jest.Mocked<DatabaseService>; // Empty debugLog for tests
+    ) as jest.Mocked<MainDatabaseService>; // Empty debugLog for tests
 
     // Reset mocks
     jest.clearAllMocks();
@@ -117,7 +117,7 @@ describe("DeckManager", () => {
     mockDb.deleteFlashcard = jest.fn();
     mockDb.getLatestReviewLogForFlashcard = jest.fn();
     mockDb.updateDeckTimestamp = jest.fn();
-    mockDb.updateDeckTimestampWithoutSave = jest.fn();
+
     mockDb.updateDeckHeaderLevel = jest.fn();
     mockDb.createDeck = jest.fn();
     // Add batch operation mocks
@@ -220,14 +220,7 @@ describe("DeckManager", () => {
     it("should create new decks that dont exist", async () => {
       // Mock existing decks
       mockDb.getAllDecks.mockResolvedValue([]);
-      mockDb.createDeck.mockImplementation(
-        async (deck) =>
-          ({
-            ...deck,
-            created: new Date().toISOString(),
-            modified: new Date().toISOString(),
-          }) as Deck,
-      );
+      mockDb.createDeck.mockImplementation(async (deck) => `deck_${deck.name}`);
 
       // Add file with deck
       mockVault._addFile("new-deck.md", "# Content");
@@ -295,14 +288,7 @@ describe("DeckManager", () => {
     it("should create separate decks for files with same tag", async () => {
       // Mock existing decks
       mockDb.getAllDecks.mockResolvedValue([]);
-      mockDb.createDeck.mockImplementation(
-        async (deck) =>
-          ({
-            ...deck,
-            created: new Date().toISOString(),
-            modified: new Date().toISOString(),
-          }) as Deck,
-      );
+      mockDb.createDeck.mockImplementation(async (deck) => `deck_${deck.name}`);
 
       // Add two files with same tag
       mockVault._addFile("math1.md", "# Math 1");
@@ -620,14 +606,7 @@ Answer 1`;
       mockDb.getFlashcardsByDeck.mockResolvedValue([]);
       mockDb.updateFlashcard.mockResolvedValue();
       mockDb.deleteFlashcard.mockResolvedValue();
-      mockDb.createFlashcard.mockImplementation(
-        async (card) =>
-          ({
-            ...card,
-            created: new Date().toISOString(),
-            modified: new Date().toISOString(),
-          }) as Flashcard,
-      );
+      mockDb.createFlashcard.mockImplementation(async (card) => {});
 
       // Add file
       mockVault._addFile("test.md", "## Question\n\nAnswer");
@@ -702,14 +681,7 @@ Answer 1`;
       mockDb.getFlashcardsByDeck.mockResolvedValue([]);
       mockDb.updateFlashcard.mockResolvedValue();
       mockDb.deleteFlashcard.mockResolvedValue();
-      mockDb.createFlashcard.mockImplementation(
-        async (card) =>
-          ({
-            ...card,
-            created: new Date().toISOString(),
-            modified: new Date().toISOString(),
-          }) as Flashcard,
-      );
+      mockDb.createFlashcard.mockImplementation(async (card) => {});
 
       // Add file
       mockVault._addFile("test.md", "## Question\n\nAnswer");
@@ -875,16 +847,7 @@ Answer 1`;
 
       // Mock that no deck exists yet
       mockDb.getDeckByFilepath.mockResolvedValue(null);
-      mockDb.createDeck.mockResolvedValue({
-        id: "test_deck",
-        name: "test",
-        filepath: filepath,
-        tag: tag,
-        lastReviewed: null,
-        config: DEFAULT_DECK_CONFIG,
-        created: new Date().toISOString(),
-        modified: new Date().toISOString(),
-      });
+      mockDb.createDeck.mockResolvedValue("test_deck");
 
       // Test creating deck for specific file
       await deckManager.createDeckForFile(filepath, tag);
@@ -1045,10 +1008,7 @@ Answer 1`;
 
       // Should process flashcards since file has changed
       expect(mockDb.getFlashcardsByDeck).toHaveBeenCalledWith("deck1");
-      expect(mockDb.updateDeckTimestampWithoutSave).toHaveBeenCalledWith(
-        "deck1",
-        expect.any(String),
-      );
+      expect(mockDb.updateDeckTimestamp).toHaveBeenCalledWith("deck1");
     });
   });
 

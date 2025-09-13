@@ -127,6 +127,8 @@ export interface DeckStats {
 }
 
 export interface AnkiExportConfig {
+  noteType: string;
+  tags: string[];
   ankiDeckName: string;
   separator: string;
 }

@@ -5,7 +5,7 @@ import {
   ReviewLog,
   DEFAULT_DECK_CONFIG,
 } from "../database/types";
-import { DatabaseService } from "../database/DatabaseService";
+import { DatabaseServiceInterface } from "../database/DatabaseFactory";
 import { yieldToUI, yieldEvery } from "../utils/ui";
 import { Logger, formatTime } from "../utils/logging";
 import { FileFilter } from "../utils/fileFilter";
@@ -23,7 +23,7 @@ export interface ParsedFlashcard {
 export class DeckManager {
   private vault: Vault;
   private metadataCache: MetadataCache;
-  private db: DatabaseService;
+  private db: DatabaseServiceInterface;
   private plugin?: DecksPlugin;
   private logger?: Logger;
   private fileFilter: FileFilter;
@@ -36,7 +36,7 @@ export class DeckManager {
   constructor(
     vault: Vault,
     metadataCache: MetadataCache,
-    db: DatabaseService,
+    db: DatabaseServiceInterface,
     plugin?: DecksPlugin,
     folderSearchPath?: string,
   ) {
@@ -737,10 +737,7 @@ export class DeckManager {
     const timestampStartTime = performance.now();
     try {
       this.debugLog(`Updating deck timestamp for: ${deck.name}`);
-      await this.db.updateDeckTimestampWithoutSave(
-        deck.id,
-        fileModifiedTime.toISOString(),
-      );
+      await this.db.updateDeckTimestamp(deck.id);
       this.debugLog(`Deck timestamp updated successfully`);
     } catch (error) {
       console.error(`Failed to update deck timestamp for ${deck.name}:`, error);

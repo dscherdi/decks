@@ -3,7 +3,11 @@ import type { Deck, Flashcard } from "../database/types";
 import type { RatingLabel } from "../algorithm/fsrs";
 import type { Scheduler } from "../services/Scheduler";
 import type { FlashcardsSettings } from "../settings";
-import type { DatabaseService } from "../database/DatabaseService";
+import type { DatabaseServiceInterface } from "../database/DatabaseFactory";
+import type {
+  FlashcardReviewComponent,
+  CompleteEventDetail,
+} from "../types/svelte-components";
 import FlashcardReviewModal from "./FlashcardReviewModal.svelte";
 
 export class FlashcardReviewModalWrapper extends Modal {
@@ -11,10 +15,10 @@ export class FlashcardReviewModalWrapper extends Modal {
   private initialCard: Flashcard | null;
   private scheduler: Scheduler;
   private settings: FlashcardsSettings;
-  private db: DatabaseService;
+  private db: DatabaseServiceInterface;
   private refreshStats: () => Promise<void>;
   private refreshStatsById: (deckId: string) => Promise<void>;
-  private component: FlashcardReviewModal | null = null;
+  private component: FlashcardReviewComponent | null = null;
   private markdownComponents: Component[] = [];
   private resizeHandler?: () => void;
 
@@ -36,7 +40,7 @@ export class FlashcardReviewModalWrapper extends Modal {
     flashcards: Flashcard[],
     scheduler: Scheduler,
     settings: FlashcardsSettings,
-    db: DatabaseService,
+    db: DatabaseServiceInterface,
     refreshStats: () => Promise<void>,
     refreshStatsById: (deckId: string) => Promise<void>,
   ) {
@@ -65,7 +69,10 @@ export class FlashcardReviewModalWrapper extends Modal {
     );
 
     // Update deck last reviewed
-    await this.db.updateDeckLastReviewed(flashcard.deckId);
+    await this.db.updateDeckLastReviewed(
+      flashcard.deckId,
+      new Date().toISOString(),
+    );
 
     // Refresh stats for this specific deck
     await this.refreshStatsById(flashcard.deckId);
@@ -116,11 +123,11 @@ export class FlashcardReviewModalWrapper extends Modal {
           }
         },
       },
-    });
+    }) as FlashcardReviewComponent;
 
-    this.component.$on("complete", async (event) => {
+    this.component.$on("complete", async (event: any) => {
       console.log("Review Complete");
-      const { reason, reviewed } = event.detail;
+      const { reason, reviewed } = event.detail as CompleteEventDetail;
       let message = `Review session complete for ${this.deck.name}!`;
 
       if (this.settings?.ui?.enableNotices !== false) {
