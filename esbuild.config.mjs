@@ -101,6 +101,14 @@ const buildOptions = {
           from: path.join(__dirname, "node_modules/sql.js/dist/sql-wasm.js"),
           to: path.join(outDir, "assets/sql-wasm.js"),
         },
+        {
+          from: path.join(__dirname, "README.md"),
+          to: path.join(outDir, "README.md"),
+        },
+        {
+          from: path.join(__dirname, "LICENSE"),
+          to: path.join(outDir, "LICENSE"),
+        },
       ],
     }),
   ],

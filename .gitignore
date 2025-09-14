@@ -21,3 +21,7 @@ data.json
 .DS_Store
 package-lock.json
 demo_vault/
+
+# Generated release notes (created by workflow)
+RELEASE_NOTES.md
+GITHUB_RELEASE_NOTES.md

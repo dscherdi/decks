@@ -7,8 +7,8 @@
   "scripts": {
     "build": "node esbuild.config.mjs production",
     "build:dev": "node esbuild.config.mjs",
-    "build:release": "npm run clean && npm run build && npm run package",
-    "package": "node scripts/package-release.mjs",
+    "clean": "rimraf dist",
+    "build:release": "npm run clean && npm run build",
     "release-notes": "node scripts/generate-release-notes.mjs",
     "version": "node version-bump.mjs",
     "check": "svelte-check --tsconfig ./tsconfig.json",
