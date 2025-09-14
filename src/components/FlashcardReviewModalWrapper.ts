@@ -59,6 +59,7 @@ export class FlashcardReviewModalWrapper extends Modal {
     flashcard: Flashcard,
     difficulty: "again" | "hard" | "good" | "easy",
     timeElapsed?: number,
+    shownAt?: Date,
   ): Promise<void> {
     // Use unified scheduler for rating
     await this.scheduler.rate(
@@ -66,6 +67,7 @@ export class FlashcardReviewModalWrapper extends Modal {
       difficulty,
       new Date(),
       timeElapsed,
+      shownAt,
     );
 
     // Update deck last reviewed
@@ -105,8 +107,15 @@ export class FlashcardReviewModalWrapper extends Modal {
           card: Flashcard,
           rating: RatingLabel,
           timeElapsed?: number,
+          shownAt?: Date,
         ) => {
-          await this.reviewFlashcard(this.deck, card, rating, timeElapsed);
+          await this.reviewFlashcard(
+            this.deck,
+            card,
+            rating,
+            timeElapsed,
+            shownAt,
+          );
         },
         renderMarkdown: (content: string, el: HTMLElement) => {
           const component = this.renderMarkdown(content, el);

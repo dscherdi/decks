@@ -5,12 +5,13 @@ import {
   buildMigrationSQL,
   CURRENT_SCHEMA_VERSION,
 } from "./schemas";
+import { InitSqlJsStatic, Database } from "sql.js";
 
 // Import SQL.js types
 declare const initSqlJs: any;
 
 export class MainDatabaseService extends BaseDatabaseService {
-  private db: any = null;
+  private db: Database | null = null;
   private SQL: any = null;
 
   constructor(
@@ -198,80 +199,29 @@ export class MainDatabaseService extends BaseDatabaseService {
     return this.db.export();
   }
 
-  async restoreFromBackupData(backupData: Uint8Array): Promise<void> {
-    if (!this.db) throw new Error("Database not initialized");
-
-    try {
-      // Create a new database from the backup
-      const SQL = await this.SQL({
-        locateFile: (file: string) => {
-          if (file.endsWith(".wasm")) {
-            return `https://sql.js.org/dist/${file}`;
-          }
-          return file;
-        },
-      });
-
-      const backupDb = new SQL.Database(backupData);
-
-      // Get all data from backup database
-      const reviewLogs = backupDb.exec("SELECT * FROM review_logs");
-      const reviewSessions = backupDb.exec("SELECT * FROM review_sessions");
-
-      // Insert data into current database, avoiding duplicates
-      if (reviewSessions.length > 0) {
-        const sessionData = reviewSessions[0];
-        for (const row of sessionData.values) {
-          const sessionId = row[0]; // Assuming id is first column
-
-          // Check if session already exists
-          const existsResult = this.db.exec(
-            "SELECT 1 FROM review_sessions WHERE id = ?",
-            [sessionId],
-          );
-
-          if (existsResult.length === 0) {
-            // Insert session if it doesn't exist
-            const columns = sessionData.columns.join(", ");
-            const placeholders = sessionData.columns.map(() => "?").join(", ");
-            this.db.exec(
-              `INSERT INTO review_sessions (${columns}) VALUES (${placeholders})`,
-              row,
-            );
-          }
+  async createBackupDatabaseInstance(backupData: Uint8Array): Promise<any> {
+    const SQL = await this.SQL({
+      locateFile: (file: string) => {
+        if (file.endsWith(".wasm")) {
+          return `https://sql.js.org/dist/${file}`;
         }
-      }
+        return file;
+      },
+    });
 
-      if (reviewLogs.length > 0) {
-        const logData = reviewLogs[0];
-        for (const row of logData.values) {
-          const logId = row[0]; // Assuming id is first column
+    return new SQL.Database(backupData);
+  }
 
-          // Check if log already exists
-          const existsResult = this.db.exec(
-            "SELECT 1 FROM review_logs WHERE id = ?",
-            [logId],
-          );
+  async queryBackupDatabase(backupDb: any, sql: string): Promise<any[]> {
+    const result = backupDb.exec(sql);
+    if (result.length === 0) return [];
 
-          if (existsResult.length === 0) {
-            // Insert log if it doesn't exist
-            const columns = logData.columns.join(", ");
-            const placeholders = logData.columns.map(() => "?").join(", ");
-            this.db.exec(
-              `INSERT INTO review_logs (${columns}) VALUES (${placeholders})`,
-              row,
-            );
-          }
-        }
-      }
+    // Convert SQL.js result format to array of row arrays
+    const resultData = result[0];
+    return resultData.values || [];
+  }
 
-      // Clean up backup database
-      backupDb.close();
-
-      this.debugLog("Database restored from backup data");
-    } catch (error) {
-      console.error("Failed to restore from backup data:", error);
-      throw error;
-    }
+  async closeBackupDatabaseInstance(backupDb: any): Promise<void> {
+    backupDb.close();
   }
 }

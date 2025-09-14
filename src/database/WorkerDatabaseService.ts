@@ -62,8 +62,8 @@ export class WorkerDatabaseService extends BaseDatabaseService {
           return;
         }
 
-        if (type === "initError") {
-          this.debugLog("Database worker init error:", error);
+        if (type === "error") {
+          this.debugLog("Database worker error:", error);
           return;
         }
 
@@ -76,11 +76,6 @@ export class WorkerDatabaseService extends BaseDatabaseService {
           if (event.data.success) {
             this.debugLog("Database migration completed successfully");
           }
-          return;
-        }
-
-        if (type === "migrationError") {
-          this.debugLog("Database migration error:", event.data.error);
           return;
         }
 
@@ -240,7 +235,9 @@ export class WorkerDatabaseService extends BaseDatabaseService {
         await this.adapter.mkdir(dir);
       }
 
-      await this.adapter.writeBinary(this.dbPath, new Uint8Array(data.buffer));
+      // data.buffer is a Uint8Array from worker.export()
+      // Obsidian's writeBinary expects a Uint8Array
+      await this.adapter.writeBinary(this.dbPath, data.buffer);
       this.debugLog("Database saved successfully!");
     } catch (error) {
       console.error("Failed to save database:", error);
@@ -286,19 +283,73 @@ export class WorkerDatabaseService extends BaseDatabaseService {
   // BACKUP OPERATIONS - Abstract method implementations
   async exportDatabaseToBuffer(): Promise<Uint8Array> {
     if (!this.worker) throw new Error("Worker not initialized");
-    return await this.sendMessage("exportDatabase");
+    const data = await this.sendMessage("export");
+    return data.buffer;
   }
 
-  async restoreFromBackupData(backupData: Uint8Array): Promise<void> {
+  async createBackupDatabaseInstance(backupData: Uint8Array): Promise<any> {
     if (!this.worker) throw new Error("Worker not initialized");
 
     try {
-      // Send backup data to worker for restoration
-      await this.sendMessage("restoreFromBackup", { backupData });
-
-      this.debugLog("Database restored from backup data");
+      const response = await this.sendMessage("createBackupDb", { backupData });
+      return response.backupDbId;
     } catch (error) {
-      console.error("Failed to restore from backup data:", error);
+      console.error("Failed to create backup database instance:", error);
+      throw error;
+    }
+  }
+
+  async queryBackupDatabase(backupDbId: any, sql: string): Promise<any[]> {
+    if (!this.worker) throw new Error("Worker not initialized");
+
+    try {
+      const response = await this.sendMessage("queryBackupDb", {
+        backupDbId,
+        sql,
+      });
+      return response.data || [];
+    } catch (error) {
+      console.error("Failed to query backup database:", error);
+      throw error;
+    }
+  }
+
+  async closeBackupDatabaseInstance(backupDbId: any): Promise<void> {
+    if (!this.worker) throw new Error("Worker not initialized");
+
+    try {
+      await this.sendMessage("closeBackupDb", { backupDbId });
+      this.debugLog("Backup database instance closed");
+    } catch (error) {
+      console.error("Failed to close backup database instance:", error);
+      throw error;
+    }
+  }
+
+  // Worker-specific operations
+  async syncFlashcardsForDeckWorker(data: {
+    deckId: string;
+    deckName: string;
+    deckFilepath: string;
+    deckConfig: any;
+    fileContent: string;
+    force: boolean;
+  }): Promise<{
+    success: boolean;
+    parsedCount: number;
+    operationsCount: number;
+  }> {
+    if (!this.worker) throw new Error("Worker not initialized");
+
+    try {
+      const result = await this.sendMessage("syncFlashcardsForDeck", data);
+      return {
+        success: result.success,
+        parsedCount: result.parsedCount,
+        operationsCount: result.operationsCount,
+      };
+    } catch (error) {
+      console.error("Worker sync failed:", error);
       throw error;
     }
   }

@@ -10,6 +10,7 @@ import {
   DEFAULT_DECK_CONFIG,
   DeckConfig,
 } from "./types";
+import { SQL_QUERIES } from "./schemas";
 
 export abstract class BaseDatabaseService implements IDatabaseService {
   protected dbPath: string;
@@ -550,32 +551,73 @@ export abstract class BaseDatabaseService implements IDatabaseService {
   }
 
   async insertReviewLog(reviewLog: ReviewLog): Promise<void> {
-    const sql = `INSERT INTO review_logs
-                 (id, flashcard_id, last_reviewed_at, reviewed_at, rating, time_elapsed_ms, old_state, new_state,
-                  old_interval_minutes, new_interval_minutes, old_repetitions, new_repetitions, old_lapses, new_lapses,
-                  old_difficulty, new_difficulty, new_stability, session_id)
-                 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`;
+    // Build dynamic SQL to only include defined values
+    this.debugLog("Inserting review log: ", reviewLog);
+    const columns: string[] = [];
+    const placeholders: string[] = [];
+    const params: any[] = [];
 
-    await this.executeSql(sql, [
-      reviewLog.id,
-      reviewLog.flashcardId,
-      reviewLog.lastReviewedAt,
-      reviewLog.reviewedAt,
-      reviewLog.rating,
-      reviewLog.timeElapsedMs,
-      reviewLog.oldState,
-      reviewLog.newState,
-      reviewLog.oldIntervalMinutes,
-      reviewLog.newIntervalMinutes,
-      reviewLog.oldRepetitions,
-      reviewLog.newRepetitions,
-      reviewLog.oldLapses,
-      reviewLog.newLapses,
-      reviewLog.oldDifficulty,
-      reviewLog.newDifficulty,
-      reviewLog.newStability,
-      reviewLog.sessionId,
-    ]);
+    // Required fields
+    const requiredFields = [
+      ["id", reviewLog.id],
+      ["flashcard_id", reviewLog.flashcardId],
+      ["last_reviewed_at", reviewLog.lastReviewedAt],
+      ["reviewed_at", reviewLog.reviewedAt],
+      ["rating", reviewLog.rating],
+      ["rating_label", reviewLog.ratingLabel],
+      ["old_state", reviewLog.oldState],
+      ["old_repetitions", reviewLog.oldRepetitions],
+      ["old_lapses", reviewLog.oldLapses],
+      ["old_stability", reviewLog.oldStability],
+      ["old_difficulty", reviewLog.oldDifficulty],
+      ["new_state", reviewLog.newState],
+      ["new_repetitions", reviewLog.newRepetitions],
+      ["new_lapses", reviewLog.newLapses],
+      ["new_stability", reviewLog.newStability],
+      ["new_difficulty", reviewLog.newDifficulty],
+      ["old_interval_minutes", reviewLog.oldIntervalMinutes],
+      ["new_interval_minutes", reviewLog.newIntervalMinutes],
+      ["old_due_at", reviewLog.oldDueAt],
+      ["new_due_at", reviewLog.newDueAt],
+      ["elapsed_days", reviewLog.elapsedDays],
+      ["retrievability", reviewLog.retrievability],
+      ["request_retention", reviewLog.requestRetention],
+      ["profile", reviewLog.profile],
+      ["maximum_interval_days", reviewLog.maximumIntervalDays],
+      ["min_minutes", reviewLog.minMinutes],
+      ["fsrs_weights_version", reviewLog.fsrsWeightsVersion],
+      ["scheduler_version", reviewLog.schedulerVersion],
+    ];
+
+    // Optional fields - only include if defined
+    const optionalFields = [
+      ["session_id", reviewLog.sessionId],
+      ["shown_at", reviewLog.shownAt],
+      ["time_elapsed_ms", reviewLog.timeElapsedMs],
+      ["note_model_id", reviewLog.noteModelId],
+      ["card_template_id", reviewLog.cardTemplateId],
+      ["content_hash", reviewLog.contentHash],
+      ["client", reviewLog.client],
+    ];
+
+    // Add all required fields
+    for (const [column, value] of requiredFields) {
+      columns.push(column);
+      placeholders.push("?");
+      params.push(value);
+    }
+
+    // Add optional fields if they have values
+    for (const [column, value] of optionalFields) {
+      if (value !== undefined) {
+        columns.push(column);
+        placeholders.push("?");
+        params.push(value);
+      }
+    }
+
+    const sql = `INSERT INTO review_logs (${columns.join(", ")}) VALUES (${placeholders.join(", ")})`;
+    await this.executeSql(sql, params);
   }
 
   async getLatestReviewLogForFlashcard(
@@ -735,28 +777,97 @@ export abstract class BaseDatabaseService implements IDatabaseService {
   }
 
   // STATISTICS OPERATIONS
-  async getDeckStats(deckId: string): Promise<DeckStats> {
+  async getDeckStats(
+    deckId: string,
+    respectDailyLimits: boolean = true,
+  ): Promise<DeckStats> {
     const now = this.getCurrentTimestamp();
 
-    const sql = `
-      SELECT
-        COUNT(*) as total,
-        SUM(CASE WHEN state = 'new' THEN 1 ELSE 0 END) as new_count,
-        SUM(CASE WHEN state = 'review' AND due_date <= ? THEN 1 ELSE 0 END) as due_count,
-        SUM(CASE WHEN state = 'review' AND interval > 30240 THEN 1 ELSE 0 END) as mature_count
-      FROM flashcards
-      WHERE deck_id = ?
-    `;
+    try {
+      // Original complex query with array/object compatibility
+      const sql = `
+        SELECT
+          COUNT(*) as total,
+          SUM(CASE WHEN state = 'new' THEN 1 ELSE 0 END) as new_count,
+          SUM(CASE WHEN state = 'review' AND due_date <= ? THEN 1 ELSE 0 END) as due_count,
+          SUM(CASE WHEN state = 'review' AND interval > 30240 THEN 1 ELSE 0 END) as mature_count
+        FROM flashcards
+        WHERE deck_id = ?
+      `;
 
-    const results = await this.querySql(sql, [now, deckId]);
-    const row = results[0] || {};
+      const results = await this.querySql(sql, [now, deckId]);
+      this.debugLog(`Complex query result:`, results);
 
-    return {
-      deckId,
-      newCount: row.new_count || 0,
-      dueCount: row.due_count || 0,
-      totalCount: row.total || 0,
-    };
+      // Handle both array and object result formats
+      const row = Array.isArray(results[0])
+        ? {
+            total: results[0][0],
+            new_count: results[0][1],
+            due_count: results[0][2],
+            mature_count: results[0][3],
+          }
+        : results[0] || {};
+
+      let newCount = row.new_count || 0;
+      let dueCount = row.due_count || 0;
+
+      // Apply daily limits if requested
+      if (respectDailyLimits) {
+        const deck = await this.getDeckById(deckId);
+        if (deck) {
+          const dailyCounts = await this.getDailyReviewCounts(deckId);
+
+          // Calculate remaining daily allowance for new cards
+          if (deck.config.hasNewCardsLimitEnabled) {
+            if (deck.config.newCardsPerDay === 0) {
+              newCount = 0; // No new cards allowed
+            } else {
+              const remainingNew = Math.max(
+                0,
+                deck.config.newCardsPerDay - dailyCounts.newCount,
+              );
+              newCount = Math.min(newCount, remainingNew);
+            }
+          }
+
+          // Calculate remaining daily allowance for review cards
+          if (deck.config.hasReviewCardsLimitEnabled) {
+            if (deck.config.reviewCardsPerDay === 0) {
+              dueCount = 0; // No review cards allowed
+            } else {
+              const remainingReview = Math.max(
+                0,
+                deck.config.reviewCardsPerDay - dailyCounts.reviewCount,
+              );
+              dueCount = Math.min(dueCount, remainingReview);
+            }
+          }
+        }
+      }
+
+      // Debug: Log actual values returned from query
+      this.debugLog(
+        `getDeckStats for ${deckId}: total=${row.total}, new_count=${row.new_count}, due_count=${row.due_count}, mature_count=${row.mature_count}`,
+      );
+
+      return {
+        deckId,
+        newCount,
+        dueCount,
+        totalCount: row.total || 0,
+        matureCount: row.mature_count || 0,
+      };
+    } catch (error) {
+      this.debugLog(`getDeckStats error for ${deckId}:`, error);
+      // Return empty stats on error
+      return {
+        deckId,
+        newCount: 0,
+        dueCount: 0,
+        totalCount: 0,
+        matureCount: 0,
+      };
+    }
   }
 
   async getAllDeckStats(): Promise<DeckStats[]> {
@@ -824,8 +935,8 @@ export abstract class BaseDatabaseService implements IDatabaseService {
     totalHours: number;
     pastMonthHours: number;
   }> {
-    const sql1 = `SELECT SUM(time_elapsed) as total FROM review_logs`;
-    const sql2 = `SELECT SUM(time_elapsed) as total FROM review_logs WHERE reviewed_at >= date('now', '-30 days')`;
+    const sql1 = `SELECT SUM(time_elapsed_ms) as total FROM review_logs`;
+    const sql2 = `SELECT SUM(time_elapsed_ms) as total FROM review_logs WHERE reviewed_at >= date('now', '-30 days')`;
 
     const totalResults = await this.querySql(sql1, []);
     const monthResults = await this.querySql(sql2, []);
@@ -913,7 +1024,111 @@ export abstract class BaseDatabaseService implements IDatabaseService {
     }
   }
 
+  async restoreFromBackupData(backupData: Uint8Array): Promise<void> {
+    try {
+      // Create a backup database instance to read data from
+      const backupDb = await this.createBackupDatabaseInstance(backupData);
+
+      // Get all data from backup database
+      const reviewLogs = await this.queryBackupDatabase(
+        backupDb,
+        "SELECT * FROM review_logs",
+      );
+      const reviewSessions = await this.queryBackupDatabase(
+        backupDb,
+        "SELECT * FROM review_sessions",
+      );
+
+      // Insert data into current database, avoiding duplicates
+      if (reviewSessions.length > 0) {
+        for (const session of reviewSessions) {
+          const sessionId = session[0]; // Assuming id is first column
+
+          // Check if session already exists
+          const existsResult = await this.querySql(
+            "SELECT 1 FROM review_sessions WHERE id = ?",
+            [sessionId],
+          );
+
+          if (existsResult.length === 0) {
+            // Insert session if it doesn't exist - need to map columns properly
+            const columns = [
+              "id",
+              "deck_id",
+              "started_at",
+              "ended_at",
+              "goal_total",
+              "done_unique",
+            ];
+            const placeholders = columns.map(() => "?").join(", ");
+            await this.executeSql(
+              `INSERT INTO review_sessions (${columns.join(", ")}) VALUES (${placeholders})`,
+              session,
+            );
+          }
+        }
+      }
+
+      if (reviewLogs.length > 0) {
+        for (const log of reviewLogs) {
+          const logId = log[0]; // Assuming id is first column
+
+          // Check if log already exists
+          const existsResult = await this.querySql(
+            "SELECT 1 FROM review_logs WHERE id = ?",
+            [logId],
+          );
+
+          if (existsResult.length === 0) {
+            // Insert log if it doesn't exist - need to map all columns
+            const columns = [
+              "id",
+              "flashcard_id",
+              "reviewed_at",
+              "rating",
+              "elapsed_days",
+              "new_state",
+              "new_due_date",
+              "new_stability",
+              "new_difficulty",
+              "new_interval",
+              "new_repetitions",
+              "new_lapses",
+              "old_state",
+              "old_due_date",
+              "old_stability",
+              "old_difficulty",
+              "old_interval",
+              "old_repetitions",
+              "old_lapses",
+              "request_retention",
+              "profile",
+              "weights_version",
+              "time_elapsed",
+              "session_id",
+            ];
+            const placeholders = columns.map(() => "?").join(", ");
+            await this.executeSql(
+              `INSERT INTO review_logs (${columns.join(", ")}) VALUES (${placeholders})`,
+              log,
+            );
+          }
+        }
+      }
+
+      // Clean up backup database
+      await this.closeBackupDatabaseInstance(backupDb);
+
+      this.debugLog("Database restored from backup data");
+    } catch (error) {
+      console.error("Failed to restore from backup data:", error);
+      throw error;
+    }
+  }
+
   // Abstract methods for database-specific operations
   abstract exportDatabaseToBuffer(): Promise<Uint8Array>;
-  abstract restoreFromBackupData(backupData: Uint8Array): Promise<void>;
+  abstract createBackupDatabaseInstance(backupData: Uint8Array): Promise<any>;
+  abstract queryBackupDatabase(backupDb: any, sql: string): Promise<any[]>;
+  abstract closeBackupDatabaseInstance(backupDb: any): Promise<void>;
 }

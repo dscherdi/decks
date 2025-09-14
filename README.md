@@ -175,3 +175,62 @@ Access deck settings to customize:
 - **Deck Management**: Organize flashcards by tags and configure review limits
 - **Review Heatmap**: Visualize your review activity over time
 - **Time Tracking**: Monitor your review pace and efficiency
+
+## 🛠️ Development
+
+### Building from Source
+
+```bash
+# Clone the repository
+git clone https://github.com/dscherdi/decks.git
+cd decks
+
+# Install dependencies
+npm install
+
+# Build for development
+npm run build:dev
+
+# Run tests
+npm test
+
+# Build for production
+npm run build
+
+# Build for release (includes README/LICENSE)
+npm run build:release
+
+
+```
+
+### Release Process
+
+This plugin uses automated GitHub Actions for releases:
+
+1. **Create a version tag**: `git tag v1.2.3 && git push origin v1.2.3`
+2. **GitHub Actions automatically**:
+   - Runs all tests
+   - Builds the plugin with all assets in `dist/`
+   - Generates release notes from PROGRESS.md
+   - Creates GitHub release with all `dist/` files
+   - Validates all files before release
+
+### Release Contents (dist/)
+
+Each release includes:
+- `main.js` (238 KB) - Core plugin code
+- `styles.css` (63 KB) - Plugin styling
+- `manifest.json` - Plugin manifest
+- `database-worker.js` (4 KB) - Database worker thread
+- `assets/sql-wasm.js` (48 KB) - SQL.js JavaScript
+- `assets/sql-wasm.wasm` (644 KB) - WebAssembly binary
+- `README.md` & `LICENSE` - Documentation
+
+Total release size: ~1MB
+
+### Architecture
+
+- **Frontend**: Svelte components with TypeScript
+- **Database**: SQLite via sql.js with optional worker thread
+- **Algorithm**: FSRS-4.5 spaced repetition
+- **Build**: esbuild with production optimizations

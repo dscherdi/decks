@@ -112,6 +112,9 @@ function createMockDatabase(): jest.Mocked<IDatabaseService> {
     exportDatabaseToBuffer: jest
       .fn()
       .mockResolvedValue(new Uint8Array([1, 2, 3])),
+    createBackupDatabaseInstance: jest.fn().mockResolvedValue("mockBackupDb"),
+    queryBackupDatabase: jest.fn().mockResolvedValue([]),
+    closeBackupDatabaseInstance: jest.fn().mockResolvedValue(undefined),
   } as jest.Mocked<IDatabaseService>;
 }
 

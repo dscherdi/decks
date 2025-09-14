@@ -309,6 +309,7 @@ export class Scheduler {
     rating: RatingLabel,
     now: Date = new Date(),
     timeElapsed?: number,
+    shownAt?: Date,
   ): Promise<Flashcard> {
     this.debugLog(`Rating card ${cardId} with rating: ${rating}`);
     const card = await this.db.getFlashcardById(cardId);
@@ -364,6 +365,11 @@ export class Scheduler {
       flashcardId: card.id,
       sessionId: this.currentSessionId || undefined,
       lastReviewedAt: oldCard.lastReviewed || oldCard.dueDate,
+      shownAt: shownAt
+        ? shownAt.toISOString()
+        : timeElapsed
+          ? new Date(now.getTime() - timeElapsed).toISOString()
+          : now.toISOString(),
       reviewedAt: now.toISOString(),
       rating: this.ratingToNumber(rating) as 1 | 2 | 3 | 4,
       ratingLabel: rating,

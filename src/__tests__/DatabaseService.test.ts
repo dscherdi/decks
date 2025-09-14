@@ -378,11 +378,11 @@ describe("DatabaseService", () => {
 
         expect(dbService.querySql).toHaveBeenCalledTimes(2);
         expect(dbService.querySql).toHaveBeenCalledWith(
-          "SELECT SUM(time_elapsed) as total FROM review_logs",
+          "SELECT SUM(time_elapsed_ms) as total FROM review_logs",
           [],
         );
         expect(dbService.querySql).toHaveBeenCalledWith(
-          "SELECT SUM(time_elapsed) as total FROM review_logs WHERE reviewed_at >= date('now', '-30 days')",
+          "SELECT SUM(time_elapsed_ms) as total FROM review_logs WHERE reviewed_at >= date('now', '-30 days')",
           [],
         );
       });

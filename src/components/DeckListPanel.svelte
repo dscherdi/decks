@@ -184,16 +184,24 @@
 
     async function loadStudyStats() {
         if (getStudyStats) {
-            studyStats = await getStudyStats();
+            const newStats = await getStudyStats();
+            studyStats = {
+                totalHours: newStats?.totalHours ?? 0,
+                pastMonthHours: newStats?.pastMonthHours ?? 0,
+                pastWeekHours: newStats?.pastWeekHours ?? 0,
+                todayCards: newStats?.todayCards ?? 0,
+                todayHours: newStats?.todayHours ?? 0,
+                todayPaceSeconds: newStats?.todayPaceSeconds ?? 0,
+            };
         }
     }
 
-    function formatHours(hours: number): string {
-        return hours.toFixed(2) + " hrs";
+    function formatHours(hours: number | undefined): string {
+        return (hours ?? 0).toFixed(2) + " hrs";
     }
 
-    function formatPace(seconds: number): string {
-        return seconds.toFixed(2) + "s/card";
+    function formatPace(seconds: number | undefined): string {
+        return (seconds ?? 0).toFixed(2) + "s/card";
     }
 
     /**
@@ -632,14 +640,7 @@
                                     >
                                 {/if}
                             </div>
-                            <div
-                                class="decks-col-stat"
-                                class:has-cards={false}
-                                class:updating={isUpdatingStats}
-                                style="display: none;"
-                            >
-                                0
-                            </div>
+
                             <div
                                 class="decks-col-stat"
                                 class:has-cards={stats.dueCount > 0}

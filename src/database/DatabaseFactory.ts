@@ -54,6 +54,20 @@ export interface IDatabaseService {
   deleteFlashcard(id: string): Promise<void>;
   deleteFlashcardsByFile(sourceFile: string): Promise<void>;
 
+  // Worker operations
+  syncFlashcardsForDeckWorker?(data: {
+    deckId: string;
+    deckName: string;
+    deckFilepath: string;
+    deckConfig: any;
+    fileContent: string;
+    force: boolean;
+  }): Promise<{
+    success: boolean;
+    parsedCount: number;
+    operationsCount: number;
+  }>;
+
   // Batch operations
   batchCreateFlashcards(
     flashcards: Array<Omit<Flashcard, "created" | "modified">>,
@@ -90,7 +104,10 @@ export interface IDatabaseService {
   ): Promise<boolean>;
 
   // Statistics operations
-  getDeckStats(deckId: string): Promise<DeckStats>;
+  getDeckStats(
+    deckId: string,
+    respectDailyLimits?: boolean,
+  ): Promise<DeckStats>;
   getAllDeckStats(): Promise<DeckStats[]>;
   getDailyReviewCounts(
     deckId: string,
@@ -125,6 +142,9 @@ export interface IDatabaseService {
   createBackupDatabase(backupPath: string): Promise<void>;
   restoreFromBackupDatabase(backupPath: string): Promise<void>;
   exportDatabaseToBuffer(): Promise<Uint8Array>;
+  createBackupDatabaseInstance(backupData: Uint8Array): Promise<any>;
+  queryBackupDatabase(backupDb: any, sql: string): Promise<any[]>;
+  closeBackupDatabaseInstance(backupDb: any): Promise<void>;
 
   // Transaction support
   beginTransaction(): void;

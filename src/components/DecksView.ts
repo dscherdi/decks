@@ -176,10 +176,7 @@ export class DecksView extends ItemView {
   }
 
   async update(updatedDecks: Deck[], deckStats: Map<string, DeckStats>) {
-    await this.component?.updateAll(
-      updatedDecks,
-      Array.from(deckStats.values()),
-    );
+    await this.component?.updateAll(updatedDecks, deckStats);
   }
 
   private async getAllDeckStatsMap(): Promise<Map<string, DeckStats>> {
@@ -260,10 +257,7 @@ export class DecksView extends ItemView {
 
       // Update component with new stats using unified function
       if (this.component) {
-        await this.component.updateAll(
-          undefined,
-          Array.from(deckStats.values()),
-        );
+        await this.component.updateAll(undefined, deckStats);
       }
     } catch (error) {
       console.error("Error refreshing stats:", error);

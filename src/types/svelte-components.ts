@@ -35,7 +35,7 @@ export interface DeckConfigComponent extends SvelteComponentInstance {
 export interface DeckListPanelComponent extends SvelteComponentInstance {
   updateAll(
     updatedDecks?: Deck[],
-    deckStats?: DeckStats[],
+    deckStats?: Map<string, DeckStats>,
     singleDeckId?: string,
     singleDeckStats?: DeckStats,
   ): Promise<void>;

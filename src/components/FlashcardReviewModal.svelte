@@ -16,6 +16,7 @@
         card: Flashcard,
         rating: RatingLabel,
         timeElapsed?: number,
+        shownAt?: Date,
     ) => Promise<void>;
     export let renderMarkdown: (content: string, el: HTMLElement) => void;
     export let settings: FlashcardsSettings;
@@ -125,7 +126,8 @@
         isLoading = true;
         try {
             const timeElapsed = Date.now() - cardStartTime;
-            await onReview(currentCard, rating, timeElapsed);
+            const shownAt = new Date(cardStartTime);
+            await onReview(currentCard, rating, timeElapsed, shownAt);
             reviewedCount++;
 
             // Update session progress after review

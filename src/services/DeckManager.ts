@@ -281,7 +281,7 @@ export class DeckManager {
   /**
    * Parse flashcards from content string (optimized single-pass parsing)
    */
-  private parseFlashcardsFromContent(
+  parseFlashcardsFromContent(
     content: string,
     headerLevel: number = 2,
   ): ParsedFlashcard[] {
@@ -510,7 +510,7 @@ export class DeckManager {
   }
 
   /**
-   * Sync flashcards for a specific deck
+   * Sync flashcards for a specific deck - now delegates to worker
    */
   async syncFlashcardsForDeck(
     deckId: string,
@@ -548,6 +548,90 @@ export class DeckManager {
       `File modified: ${fileModifiedTime.toISOString()}, last sync: ${deck.modified}`,
     );
 
+    // Read file content - this stays in DeckManager
+    const fileContent = await this.vault.read(file);
+
+    // Check if database supports worker operations
+    const dbHasWorkerMethod =
+      typeof (this.db as any).syncFlashcardsForDeckWorker === "function";
+
+    if (dbHasWorkerMethod) {
+      // Use worker for parsing and database operations
+      try {
+        const result = await (this.db as any).syncFlashcardsForDeckWorker({
+          deckId: deck.id,
+          deckName: deck.name,
+          deckFilepath: deck.filepath,
+          deckConfig: deck.config,
+          fileContent: fileContent,
+          force: force,
+        });
+
+        if (result.parsedCount > MAX_FLASHCARDS_PER_DECK) {
+          this.debugLog(
+            `⚠️ Deck "${deck.name}" exceeds flashcard limit. ${result.parsedCount - MAX_FLASHCARDS_PER_DECK} flashcards will be skipped.`,
+          );
+          if (this.plugin?.settings?.ui?.enableNotices) {
+            new Notice(
+              `⚠️ Deck "${deck.name}" has ${result.parsedCount} flashcards. Only processing first ${MAX_FLASHCARDS_PER_DECK} for performance.`,
+              8000,
+            );
+          }
+        }
+
+        const totalDeckSyncTime = performance.now() - deckSyncStartTime;
+        this.performanceLog(
+          `Worker sync completed for deck: ${deck.name} in ${formatTime(totalDeckSyncTime)} (${result.parsedCount} flashcards, ${result.operationsCount} operations)`,
+        );
+
+        // Check for duplicates after worker sync
+        try {
+          this.debugLog(`Checking for duplicates in deck: ${deck.name}`);
+          await this.checkForDuplicatesInDeck(deck.id);
+          this.debugLog(`Duplicate check completed for deck: ${deck.name}`);
+        } catch (error) {
+          console.error(`Failed to check duplicates for ${deck.name}:`, error);
+        }
+      } catch (error) {
+        console.error(
+          `Worker sync failed for ${deck.name}, falling back to main thread:`,
+          error,
+        );
+        // Fall back to main thread sync
+        await this.syncFlashcardsForDeckMainThread(
+          deckId,
+          deck,
+          file,
+          fileContent,
+          force,
+        );
+      }
+    } else {
+      // Fall back to main thread processing
+      await this.syncFlashcardsForDeckMainThread(
+        deckId,
+        deck,
+        file,
+        fileContent,
+        force,
+      );
+    }
+
+    yieldToUI();
+  }
+
+  /**
+   * Main thread fallback for flashcard syncing
+   */
+  private async syncFlashcardsForDeckMainThread(
+    deckId: string,
+    deck: any,
+    file: TFile,
+    fileContent: string,
+    force: boolean,
+  ): Promise<void> {
+    const deckSyncStartTime = performance.now();
+
     // Get existing flashcards for this deck to determine what changed
     const existingFlashcards = await this.db.getFlashcardsByDeck(deck.id);
     this.debugLog(
@@ -571,9 +655,9 @@ export class DeckManager {
       updates?: any;
     }> = [];
 
-    // Parse flashcards from the file using deck's header level configuration
-    const allParsedCards = await this.parseFlashcardsFromFile(
-      file,
+    // Parse flashcards from content using deck's header level configuration
+    const allParsedCards = this.parseFlashcardsFromContent(
+      fileContent,
       deck.config.headerLevel,
     );
 
@@ -757,9 +841,8 @@ export class DeckManager {
 
     const totalDeckSyncTime = performance.now() - deckSyncStartTime;
     this.performanceLog(
-      `Sync completed for deck: ${deck.name} in ${formatTime(totalDeckSyncTime)} (${parsedCards.length} flashcards, ${batchOperations.length} operations, cleanup: ${formatTime(timestampTime)}) - DB save deferred`,
+      `Main thread sync completed for deck: ${deck.name} in ${formatTime(totalDeckSyncTime)} (${parsedCards.length} flashcards, ${batchOperations.length} operations, cleanup: ${formatTime(timestampTime)}) - DB save deferred`,
     );
-    yieldToUI();
   }
 
   /**
