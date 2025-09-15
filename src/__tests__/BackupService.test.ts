@@ -27,6 +27,7 @@ function createMockDatabase(): jest.Mocked<IDatabaseService> {
     createFlashcard: jest.fn().mockResolvedValue(undefined),
     getFlashcardById: jest.fn().mockResolvedValue(null),
     getFlashcardsByDeck: jest.fn().mockResolvedValue([]),
+    getAllFlashcards: jest.fn().mockResolvedValue([]),
     getDueFlashcards: jest.fn().mockResolvedValue([]),
     getReviewableFlashcards: jest.fn().mockResolvedValue([]),
     getNewCardsForReview: jest.fn().mockResolvedValue([]),

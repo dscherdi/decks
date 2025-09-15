@@ -4,18 +4,28 @@
 // Worker environment type declarations
 declare var self: any;
 
-// SQL.js types for worker context
-declare var initSqlJs: any;
-declare var SQL: any;
+// Import SQL.js types only (not the runtime code)
+import type { Database, InitSqlJsStatic, SqlJsStatic } from "sql.js";
+
+// SQL.js runtime will be loaded dynamically
+declare var initSqlJs: InitSqlJsStatic;
+declare var SQL: SqlJsStatic;
 
 // Web Worker API declaration
 declare function importScripts(...urls: string[]): void;
 
-export interface ParsedFlashcard {
-  front: string;
-  back: string;
-  type: "header-paragraph" | "table";
-}
+import { FlashcardParser, ParsedFlashcard } from "../services/FlashcardParser";
+import {
+  FlashcardSynchronizer,
+  BatchOperation,
+  SyncResult,
+  SyncData,
+} from "../services/FlashcardSynchronizer";
+import {
+  CREATE_TABLES_SQL,
+  CURRENT_SCHEMA_VERSION,
+  buildMigrationSQL,
+} from "../database/schemas";
 
 export interface QueryConfig {
   asObject?: boolean;
@@ -27,8 +37,6 @@ export interface DatabaseWorkerMessage {
   data?: any;
   sqlJsCode?: string;
   wasmBytes?: ArrayBuffer;
-  createTablesSQL?: string;
-  currentSchemaVersion?: number;
 }
 
 export interface DatabaseWorkerResponse {
@@ -38,22 +46,11 @@ export interface DatabaseWorkerResponse {
   error?: string;
 }
 
-interface BatchOperation {
-  type: "create" | "update" | "delete";
-  flashcardId?: string;
-  flashcard?: any;
-  updates?: any;
-}
-
 class SimpleDatabaseWorker {
   private initialized = false;
-  public db: any = null;
-  private SQL: any = null;
-
-  // Pre-compiled regex patterns for better performance
-  private static readonly HEADER_REGEX = /^(#{1,6})\s+/;
-  private static readonly TABLE_ROW_REGEX = /^\|.*\|$/;
-  private static readonly TABLE_SEPARATOR_REGEX = /^\|[\s-]+\|[\s-]+\|$/;
+  public db: Database | null = null;
+  private SQL: SqlJsStatic | null = null;
+  private flashcardSynchronizer: FlashcardSynchronizer | null = null;
 
   async initialize(
     dbBuffer?: Uint8Array,
@@ -63,7 +60,7 @@ class SimpleDatabaseWorker {
     try {
       if (sqlJsCode && wasmBytes) {
         // Initialize from assets passed from main thread
-        // 1) Force browser path; kill Node detection in Electron workers
+        // Force browser path; kill Node detection in Electron workers
         self.window = self;
         try {
           delete self.process;
@@ -94,9 +91,9 @@ class SimpleDatabaseWorker {
           throw new Error(`SQL is undefined ${wasmUrl}`);
         }
         if (dbBuffer) {
-          this.db = new this.SQL.Database(new Uint8Array(dbBuffer));
+          this.db = new this.SQL!.Database(new Uint8Array(dbBuffer));
         } else {
-          this.db = new this.SQL.Database();
+          this.db = new this.SQL!.Database();
         }
 
         // Clean up blob URLs
@@ -106,6 +103,9 @@ class SimpleDatabaseWorker {
       }
 
       this.initialized = true;
+      if (this.db) {
+        this.flashcardSynchronizer = new FlashcardSynchronizer(this.db);
+      }
     } catch (error) {
       self.postMessage({ type: "error", error });
       throw new Error(
@@ -172,46 +172,14 @@ class SimpleDatabaseWorker {
     this.initialized = false;
   }
 
-  // Transaction support
-  beginTransaction(): void {
-    // Transactions disabled - no-op
-  }
-
-  commitTransaction(): void {
-    // Transactions disabled - no-op
-  }
-
-  rollbackTransaction(): void {
-    // Transactions disabled - no-op
-  }
-
-  // Database initialization method using passed SQL
-  createFreshDatabase(createTablesSQL: string): void {
+  // Database initialization method using imported SQL
+  createFreshDatabase(): void {
     if (!this.db) throw new Error("Database not initialized");
-    this.db.exec(createTablesSQL);
-  }
-
-  // Schema migration method using migration SQL from main thread
-  executeMigration(migrationSQL: string): void {
-    if (!this.db) throw new Error("Database not initialized");
-
-    try {
-      this.db.exec(migrationSQL);
-      self.postMessage({
-        type: "migrationComplete",
-        success: true,
-      });
-    } catch (error) {
-      self.postMessage({
-        type: "error",
-        error: (error as Error).message,
-      });
-      throw error;
-    }
+    this.db.exec(CREATE_TABLES_SQL);
   }
 
   // Backup database management
-  private backupDatabases = new Map<string, any>();
+  private backupDatabases = new Map<string, Database>();
   private nextBackupId = 1;
 
   createBackupDatabase(backupData: Uint8Array): string {
@@ -219,7 +187,7 @@ class SimpleDatabaseWorker {
 
     try {
       const backupDbId = `backup_${this.nextBackupId++}`;
-      const backupDb = new this.SQL.Database(backupData);
+      const backupDb = new this.SQL!.Database(backupData);
       this.backupDatabases.set(backupDbId, backupDb);
       return backupDbId;
     } catch (error) {
@@ -257,8 +225,8 @@ class SimpleDatabaseWorker {
     }
   }
 
-  // Check if migration is needed and request it from main thread
-  checkMigrationNeeded(currentSchemaVersion: number): void {
+  // Check if migration is needed and execute it directly
+  checkMigrationNeeded(): void {
     if (!this.db) throw new Error("Database not initialized");
 
     try {
@@ -266,13 +234,22 @@ class SimpleDatabaseWorker {
       const versionResult = this.db.exec("PRAGMA user_version");
       const currentVersion = Number(versionResult[0]?.values[0]?.[0]) || 0;
 
-      if (currentVersion < currentSchemaVersion) {
-        // Request migration SQL from main thread
-        self.postMessage({
-          type: "migrationNeeded",
-          currentVersion,
-          targetVersion: currentSchemaVersion,
-        });
+      if (currentVersion < CURRENT_SCHEMA_VERSION) {
+        // Execute migration directly
+        try {
+          const migrationSQL = buildMigrationSQL(this.db);
+          this.db.exec(migrationSQL);
+          self.postMessage({
+            type: "migrationComplete",
+            success: true,
+          });
+        } catch (error) {
+          self.postMessage({
+            type: "migrationError",
+            error: (error as Error).message,
+          });
+          throw error;
+        }
       } else {
         // No migration needed
         self.postMessage({
@@ -289,418 +266,36 @@ class SimpleDatabaseWorker {
   }
 
   /**
-   * Parse flashcards from content string (optimized single-pass parsing)
+   * Parse flashcards from content string (delegates to FlashcardParser)
    */
   parseFlashcardsFromContent(
     content: string,
     headerLevel: number = 2,
   ): ParsedFlashcard[] {
-    const lines = content.split("\n");
-    const flashcards: ParsedFlashcard[] = [];
-
-    // Single pass through lines for both table and header parsing
-    let inTable = false;
-    let headerSeen = false;
-    let currentHeader: { text: string; level: number } | null = null;
-    let currentContent: string[] = [];
-    let inFrontmatter = false;
-    let skipNextParagraph = false;
-
-    // Use pre-compiled regex patterns for better performance
-
-    for (let i = 0; i < lines.length; i++) {
-      const line = lines[i];
-      const trimmedLine = line.trim();
-
-      // Handle frontmatter
-      if (i === 0 && trimmedLine === "---") {
-        inFrontmatter = true;
-        continue;
-      }
-      if (inFrontmatter) {
-        if (trimmedLine === "---") {
-          inFrontmatter = false;
-        }
-        continue;
-      }
-
-      // Check for table rows
-      if (SimpleDatabaseWorker.TABLE_ROW_REGEX.test(trimmedLine)) {
-        if (!inTable) {
-          inTable = true;
-          headerSeen = false;
-        }
-
-        // Skip header and separator rows
-        if (!headerSeen) {
-          headerSeen = true;
-          continue;
-        }
-        if (SimpleDatabaseWorker.TABLE_SEPARATOR_REGEX.test(trimmedLine)) {
-          continue;
-        }
-
-        // Parse table row
-        const cells = trimmedLine
-          .slice(1, -1) // Remove leading/trailing pipes
-          .split("|")
-          .map((cell) => cell.trim());
-
-        if (cells.length >= 2 && cells[0] && cells[1]) {
-          flashcards.push({
-            front: cells[0],
-            back: cells[1],
-            type: "table",
-          });
-        }
-      } else {
-        // Not a table row, end table processing
-        if (inTable) {
-          inTable = false;
-        }
-
-        // Check for headers
-        const headerMatch = SimpleDatabaseWorker.HEADER_REGEX.exec(line);
-        if (headerMatch) {
-          const currentHeaderLevel = headerMatch[1].length;
-
-          // Check for title headers to skip
-          if (line.match(/^#\s+/) && line.toLowerCase().includes("flashcard")) {
-            skipNextParagraph = true;
-            this.finalizeCurrentHeader(
-              currentHeader,
-              currentContent,
-              flashcards,
-              headerLevel,
-            );
-            currentHeader = null;
-            currentContent = [];
-            continue;
-          }
-
-          // Finalize previous header
-          this.finalizeCurrentHeader(
-            currentHeader,
-            currentContent,
-            flashcards,
-            headerLevel,
-          );
-
-          // Start new header
-          currentHeader = {
-            text: line,
-            level: currentHeaderLevel,
-          };
-          currentContent = [];
-          skipNextParagraph = false;
-        } else if (skipNextParagraph) {
-          if (trimmedLine === "") {
-            skipNextParagraph = false;
-          }
-        } else if (currentHeader) {
-          // Skip empty lines at the beginning of content
-          if (trimmedLine === "" && currentContent.length === 0) {
-            continue;
-          }
-          currentContent.push(line);
-        }
-      }
-    }
-
-    // Finalize last header
-    this.finalizeCurrentHeader(
-      currentHeader,
-      currentContent,
-      flashcards,
-      headerLevel,
-    );
-
-    return flashcards;
+    return FlashcardParser.parseFlashcardsFromContent(content, headerLevel);
   }
 
   /**
-   * Helper to finalize current header flashcard
+   * Sync flashcards for a deck - delegates to DeckSynchronizer
    */
-  private finalizeCurrentHeader(
-    currentHeader: { text: string; level: number } | null,
-    currentContent: string[],
-    flashcards: ParsedFlashcard[],
-    targetHeaderLevel: number,
-  ): void {
-    if (
-      currentHeader &&
-      currentContent.length > 0 &&
-      currentHeader.level === targetHeaderLevel
-    ) {
-      flashcards.push({
-        front: currentHeader.text.replace(/^#{1,6}\s+/, ""),
-        back: currentContent.join("\n").trim(),
-        type: "header-paragraph",
+  syncFlashcardsForDeck(data: SyncData): SyncResult {
+    if (!this.flashcardSynchronizer) {
+      throw new Error("FlashcardSynchronizer not initialized");
+    }
+
+    // Create progress callback that sends messages to main thread
+    const progressCallback = (progress: number, message?: string) => {
+      self.postMessage({
+        type: "progress",
+        progress: progress,
+        message: message,
       });
-    }
-  }
+    };
 
-  /**
-   * Generate unique flashcard ID using hash of front text only
-   */
-  generateFlashcardId(frontText: string): string {
-    // Use only front text for ID generation to preserve progress across deck changes
-    let hash = 0;
-    for (let i = 0; i < frontText.length; i++) {
-      const char = frontText.charCodeAt(i);
-      hash = (hash << 5) - hash + char;
-      hash = hash & hash; // Convert to 32-bit integer
-    }
-    return `card_${Math.abs(hash).toString(36)}`;
-  }
-
-  /**
-   * Generate content hash for flashcard back content (front is used for ID)
-   */
-  generateContentHash(back: string): string {
-    let hash = 0;
-    for (let i = 0; i < back.length; i++) {
-      const char = back.charCodeAt(i);
-      hash = (hash << 5) - hash + char;
-      hash = hash & hash; // Convert to 32-bit integer
-    }
-    return Math.abs(hash).toString(16);
-  }
-
-  /**
-   * Execute batch database operations using transactions
-   */
-  executeBatchOperations(operations: BatchOperation[]): void {
-    if (!this.db) throw new Error("Database not initialized");
-
-    // Group operations by type for batch processing
-    const deleteOps = operations.filter(
-      (op) => op.type === "delete" && op.flashcardId,
+    return this.flashcardSynchronizer.syncFlashcardsForDeck(
+      data,
+      progressCallback,
     );
-    const createOps = operations.filter(
-      (op) => op.type === "create" && op.flashcard,
-    );
-    const updateOps = operations.filter(
-      (op) => op.type === "update" && op.flashcardId && op.updates,
-    );
-
-    // Execute DELETE operations
-    for (const op of deleteOps) {
-      const stmt = this.db.prepare("DELETE FROM flashcards WHERE id = ?");
-      stmt.run([op.flashcardId]);
-      stmt.free();
-    }
-
-    // Execute CREATE operations with INSERT OR REPLACE to handle duplicates
-    for (const op of createOps) {
-      const flashcard = op.flashcard;
-      const stmt = this.db.prepare(`
-        INSERT OR REPLACE INTO flashcards (
-          id, deck_id, front, back, type, source_file, content_hash,
-          state, due_date, interval, repetitions, difficulty, stability,
-          lapses, last_reviewed, created, modified
-        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, datetime('now'), datetime('now'))
-      `);
-      stmt.run([
-        flashcard.id,
-        flashcard.deckId,
-        flashcard.front,
-        flashcard.back,
-        flashcard.type,
-        flashcard.sourceFile,
-        flashcard.contentHash,
-        flashcard.state,
-        flashcard.dueDate,
-        flashcard.interval,
-        flashcard.repetitions,
-        flashcard.difficulty,
-        flashcard.stability,
-        flashcard.lapses,
-        flashcard.lastReviewed,
-      ]);
-      stmt.free();
-    }
-
-    // Execute UPDATE operations
-    for (const op of updateOps) {
-      const updates = op.updates;
-      const stmt = this.db.prepare(`
-        UPDATE flashcards SET
-          front = ?, back = ?, type = ?, content_hash = ?, modified = datetime('now')
-        WHERE id = ?
-      `);
-      stmt.run([
-        updates.front,
-        updates.back,
-        updates.type,
-        updates.contentHash,
-        op.flashcardId,
-      ]);
-      stmt.free();
-    }
-  }
-
-  /**
-   * Sync flashcards for a deck - main worker operation
-   */
-  syncFlashcardsForDeck(data: {
-    deckId: string;
-    deckName: string;
-    deckFilepath: string;
-    deckConfig: any;
-    fileContent: string;
-    force: boolean;
-  }): any {
-    try {
-      // Parse flashcards from content
-      const parsedCards = this.parseFlashcardsFromContent(
-        data.fileContent,
-        data.deckConfig.headerLevel || 2,
-      );
-
-      // Get existing flashcards
-      const existingFlashcardsStmt = this.db.prepare(
-        "SELECT * FROM flashcards WHERE deck_id = ?",
-      );
-      const existingFlashcardsResult = [];
-      existingFlashcardsStmt.bind([data.deckId]);
-      while (existingFlashcardsStmt.step()) {
-        existingFlashcardsResult.push(existingFlashcardsStmt.get());
-      }
-      existingFlashcardsStmt.free();
-
-      // Convert to map for easier lookup
-      const existingById = new Map();
-      existingFlashcardsResult.forEach((row: any[]) => {
-        const flashcard = {
-          id: row[0],
-          deckId: row[1],
-          front: row[2],
-          back: row[3],
-          type: row[4],
-          sourceFile: row[5],
-          contentHash: row[6],
-          state: row[7],
-          dueDate: row[8],
-          interval: row[9],
-          repetitions: row[10],
-          difficulty: row[11],
-          stability: row[12],
-          lapses: row[13],
-          lastReviewed: row[14],
-        };
-        existingById.set(flashcard.id, flashcard);
-      });
-
-      const processedIds = new Set<string>();
-      const batchOperations: BatchOperation[] = [];
-
-      // Process parsed cards
-      for (const parsed of parsedCards.slice(0, 50000)) {
-        // Limit to 50k cards
-        const flashcardId = this.generateFlashcardId(parsed.front);
-        const contentHash = this.generateContentHash(parsed.back);
-        const existingCard = existingById.get(flashcardId);
-
-        if (processedIds.has(flashcardId)) {
-          continue; // Skip duplicates
-        }
-
-        processedIds.add(flashcardId);
-
-        if (existingCard) {
-          // Update if content has changed
-          if (existingCard.contentHash !== contentHash) {
-            batchOperations.push({
-              type: "update",
-              flashcardId: existingCard.id,
-              updates: {
-                front: parsed.front,
-                back: parsed.back,
-                type: parsed.type,
-                contentHash: contentHash,
-              },
-            });
-          }
-        } else {
-          // Check for existing review logs to restore progress
-          const reviewLogStmt = this.db.prepare(`
-            SELECT new_state, new_interval_minutes, new_repetitions, new_difficulty,
-                   new_stability, new_lapses, reviewed_at
-            FROM review_logs
-            WHERE flashcard_id = ?
-            ORDER BY reviewed_at DESC
-            LIMIT 1
-          `);
-          reviewLogStmt.bind([flashcardId]);
-          const reviewLogRow = reviewLogStmt.step()
-            ? reviewLogStmt.get()
-            : null;
-          reviewLogStmt.free();
-
-          // Create new flashcard with restored progress if available
-          const flashcard = {
-            id: flashcardId,
-            deckId: data.deckId,
-            front: parsed.front,
-            back: parsed.back,
-            type: parsed.type,
-            sourceFile: data.deckFilepath,
-            contentHash: contentHash,
-
-            // Restore progress from review logs or use defaults
-            state: reviewLogRow ? reviewLogRow[0] : "new",
-            dueDate: reviewLogRow
-              ? new Date(
-                  new Date(reviewLogRow[6]).getTime() +
-                    reviewLogRow[1] * 60 * 1000,
-                ).toISOString()
-              : new Date().toISOString(),
-            interval: reviewLogRow ? reviewLogRow[1] : 0,
-            repetitions: reviewLogRow ? reviewLogRow[2] : 0,
-            difficulty: reviewLogRow ? reviewLogRow[3] : 5.0,
-            stability: reviewLogRow ? reviewLogRow[4] : 2.5,
-            lapses: reviewLogRow ? reviewLogRow[5] : 0,
-            lastReviewed: reviewLogRow ? reviewLogRow[6] : null,
-          };
-
-          batchOperations.push({
-            type: "create",
-            flashcard: flashcard,
-          });
-        }
-      }
-
-      // Delete flashcards that are no longer in the file
-      for (const [flashcardId, existingCard] of existingById) {
-        if (!processedIds.has(flashcardId)) {
-          batchOperations.push({
-            type: "delete",
-            flashcardId: existingCard.id,
-          });
-        }
-      }
-
-      // Execute all batch operations
-      if (batchOperations.length > 0) {
-        this.executeBatchOperations(batchOperations);
-      }
-
-      // Update deck's modified timestamp
-      const updateDeckStmt = this.db.prepare(
-        "UPDATE decks SET modified = datetime('now') WHERE id = ?",
-      );
-      updateDeckStmt.run([data.deckId]);
-      updateDeckStmt.free();
-
-      return {
-        success: true,
-        parsedCount: parsedCards.length,
-        operationsCount: batchOperations.length,
-      };
-    } catch (error) {
-      throw new Error(`Sync failed: ${(error as Error).message}`);
-    }
   }
 }
 
@@ -709,29 +304,21 @@ const worker = new SimpleDatabaseWorker();
 
 // Message handler
 self.onmessage = async (event: MessageEvent<DatabaseWorkerMessage>) => {
-  const {
-    id,
-    type,
-    data,
-    sqlJsCode,
-    wasmBytes,
-    createTablesSQL,
-    currentSchemaVersion,
-  } = event.data;
+  const { id, type, data, sqlJsCode, wasmBytes } = event.data;
 
   try {
     let result: any;
 
     switch (type) {
       case "init":
-        if (sqlJsCode && wasmBytes && createTablesSQL && currentSchemaVersion) {
+        if (sqlJsCode && wasmBytes) {
           await worker.initialize(data?.data, sqlJsCode, wasmBytes);
 
           // Handle fresh database creation or migration check
           if (!data?.data) {
-            worker.createFreshDatabase(createTablesSQL);
+            worker.createFreshDatabase();
           } else {
-            worker.checkMigrationNeeded(currentSchemaVersion);
+            worker.checkMigrationNeeded();
           }
           self.postMessage({ type: "ready" });
           return;
@@ -755,26 +342,6 @@ self.onmessage = async (event: MessageEvent<DatabaseWorkerMessage>) => {
       case "close":
         worker.close();
         result = { closed: true };
-        break;
-
-      case "beginTransaction":
-        worker.beginTransaction();
-        result = { success: true };
-        break;
-
-      case "commitTransaction":
-        worker.commitTransaction();
-        result = { success: true };
-        break;
-
-      case "rollbackTransaction":
-        worker.rollbackTransaction();
-        result = { success: true };
-        break;
-
-      case "executeMigration":
-        worker.executeMigration(data.migrationSQL);
-        result = { success: true };
         break;
 
       case "createBackupDb":
@@ -804,7 +371,7 @@ self.onmessage = async (event: MessageEvent<DatabaseWorkerMessage>) => {
 
       case "parseFlashcardsFromContent":
         result = {
-          flashcards: worker.parseFlashcardsFromContent(
+          flashcards: FlashcardParser.parseFlashcardsFromContent(
             data.content,
             data.headerLevel,
           ),

@@ -43,6 +43,7 @@ export interface IDatabaseService {
   ): Promise<void>;
   getFlashcardById(flashcardId: string): Promise<Flashcard | null>;
   getFlashcardsByDeck(deckId: string): Promise<Flashcard[]>;
+  getAllFlashcards(): Promise<Flashcard[]>;
   getDueFlashcards(deckId: string): Promise<Flashcard[]>;
   getReviewableFlashcards(deckId: string): Promise<Flashcard[]>;
   getNewCardsForReview(deckId: string, now: string): Promise<Flashcard[]>;

@@ -570,7 +570,7 @@ export const SQL_QUERIES = {
     SELECT
       DATE(reviewed_at) as date,
       COUNT(*) as reviews,
-      AVG(time_elapsed_ms / 1000.0) as avg_time_seconds,
+      SUM(time_elapsed_ms / 1000.0) as total_time_seconds,
       SUM(CASE WHEN old_repetitions = 0 THEN 1 ELSE 0 END) as new_cards,
       SUM(CASE WHEN old_repetitions > 0 AND old_repetitions < 3 THEN 1 ELSE 0 END) as learning_cards,
       SUM(CASE WHEN old_repetitions >= 3 THEN 1 ELSE 0 END) as review_cards,

@@ -4,11 +4,7 @@ import {
   DatabaseWorkerMessage,
   DatabaseWorkerResponse,
 } from "../workers/worker-entry";
-import {
-  CREATE_TABLES_SQL,
-  CURRENT_SCHEMA_VERSION,
-  buildMigrationSQL,
-} from "./schemas";
+import { ProgressTracker } from "../utils/progress";
 
 export class WorkerDatabaseService extends BaseDatabaseService {
   private worker: Worker | null = null;
@@ -18,6 +14,7 @@ export class WorkerDatabaseService extends BaseDatabaseService {
     string,
     { resolve: Function; reject: Function }
   >();
+  private progressTracker?: ProgressTracker;
 
   constructor(
     dbPath: string,
@@ -62,13 +59,19 @@ export class WorkerDatabaseService extends BaseDatabaseService {
           return;
         }
 
-        if (type === "error") {
-          this.debugLog("Database worker error:", error);
+        if (type === "progress") {
+          // Handle progress updates from worker
+          if (this.progressTracker) {
+            this.progressTracker.update(
+              event.data.message,
+              event.data.progress,
+            );
+          }
           return;
         }
 
-        if (type === "migrationNeeded") {
-          this.handleMigrationRequest(event.data);
+        if (type === "error") {
+          this.debugLog("Database worker error:", error);
           return;
         }
 
@@ -112,8 +115,6 @@ export class WorkerDatabaseService extends BaseDatabaseService {
           data: { data: buffer },
           sqlJsCode,
           wasmBytes,
-          createTablesSQL: CREATE_TABLES_SQL,
-          currentSchemaVersion: CURRENT_SCHEMA_VERSION,
         },
         [wasmBytes], // transfer for zero-copy
       );
@@ -144,49 +145,6 @@ export class WorkerDatabaseService extends BaseDatabaseService {
     } catch (error) {
       console.error("Failed to initialize WorkerDatabaseService:", error);
       throw error;
-    }
-  }
-
-  private async handleMigrationRequest(data: any): Promise<void> {
-    try {
-      this.debugLog(
-        `Migration needed from version ${data.currentVersion} to ${data.targetVersion}`,
-      );
-
-      // For complex migrations, fall back to main thread
-      // Export current database, migrate on main thread, then reload
-      const currentBuffer = await this.sendMessage("export", {});
-
-      if (!currentBuffer?.buffer) {
-        this.debugLog("No database buffer to migrate");
-        return;
-      }
-
-      // Initialize temporary SQL.js on main thread for migration
-      if (typeof window !== "undefined" && (window as any).initSqlJs) {
-        const SQL = await (window as any).initSqlJs({
-          locateFile: (file: string) => {
-            if (file.endsWith(".wasm")) {
-              return `https://sql.js.org/dist/${file}`;
-            }
-            return file;
-          },
-        });
-
-        const tempDb = new SQL.Database(currentBuffer.buffer);
-        const migrationSQL = buildMigrationSQL(tempDb);
-        tempDb.close();
-
-        // Send migration SQL to worker
-        if (this.worker) {
-          this.worker.postMessage({
-            type: "executeMigration",
-            data: { migrationSQL },
-          });
-        }
-      }
-    } catch (error) {
-      console.error("Failed to handle migration request:", error);
     }
   }
 
@@ -317,14 +275,17 @@ export class WorkerDatabaseService extends BaseDatabaseService {
   }
 
   // Worker-specific operations
-  async syncFlashcardsForDeckWorker(data: {
-    deckId: string;
-    deckName: string;
-    deckFilepath: string;
-    deckConfig: any;
-    fileContent: string;
-    force: boolean;
-  }): Promise<{
+  async syncFlashcardsForDeckWorker(
+    data: {
+      deckId: string;
+      deckName: string;
+      deckFilepath: string;
+      deckConfig: any;
+      fileContent: string;
+      force: boolean;
+    },
+    progressTracker?: ProgressTracker,
+  ): Promise<{
     success: boolean;
     parsedCount: number;
     operationsCount: number;
@@ -332,7 +293,14 @@ export class WorkerDatabaseService extends BaseDatabaseService {
     if (!this.worker) throw new Error("Worker not initialized");
 
     try {
+      // Set progress tracker for this operation
+      this.progressTracker = progressTracker;
+
       const result = await this.sendMessage("syncFlashcardsForDeck", data);
+
+      // Clear progress tracker after operation
+      this.progressTracker = undefined;
+
       return {
         success: result.success,
         parsedCount: result.parsedCount,

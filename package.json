@@ -25,6 +25,9 @@
   "author": "Xherdi Lika",
   "license": "MIT",
   "dependencies": {
+    "chart.js": "^4.5.0",
+    "chartjs-adapter-date-fns": "^3.0.0",
+    "date-fns": "^4.1.0",
     "sql.js": "^1.8.0",
     "svelte": "^3.59.1",
     "tslib": "^2.5.0"

@@ -9,16 +9,16 @@ import { DatabaseServiceInterface } from "../database/DatabaseFactory";
 import { yieldToUI, yieldEvery } from "../utils/ui";
 import { Logger, formatTime } from "../utils/logging";
 import { FileFilter } from "../utils/fileFilter";
+import { FlashcardParser, ParsedFlashcard } from "./FlashcardParser";
+import {
+  FlashcardSynchronizer,
+  SyncData,
+} from "../services/FlashcardSynchronizer";
+import { ProgressTracker } from "../utils/progress";
 import DecksPlugin from "@/main";
 
 // Maximum number of flashcards to process per deck for performance
 const MAX_FLASHCARDS_PER_DECK = 50000;
-
-export interface ParsedFlashcard {
-  front: string;
-  back: string;
-  type: "header-paragraph" | "table";
-}
 
 export class DeckManager {
   private vault: Vault;
@@ -27,11 +27,7 @@ export class DeckManager {
   private plugin?: DecksPlugin;
   private logger?: Logger;
   private fileFilter: FileFilter;
-
-  // Pre-compiled regex patterns for better performance
-  private static readonly HEADER_REGEX = /^(#{1,6})\s+/;
-  private static readonly TABLE_ROW_REGEX = /^\|.*\|$/;
-  private static readonly TABLE_SEPARATOR_REGEX = /^\|[\s-]+\|[\s-]+\|$/;
+  private flashcardSynchronizer: FlashcardSynchronizer;
 
   constructor(
     vault: Vault,
@@ -45,6 +41,7 @@ export class DeckManager {
     this.db = db;
     this.plugin = plugin;
     this.fileFilter = new FileFilter(folderSearchPath);
+    this.flashcardSynchronizer = new FlashcardSynchronizer(db as any);
     if (plugin?.settings && plugin?.app) {
       this.logger = new Logger(
         plugin.settings,
@@ -279,220 +276,13 @@ export class DeckManager {
   }
 
   /**
-   * Parse flashcards from content string (optimized single-pass parsing)
+   * Parse flashcards from content string (delegates to FlashcardParser)
    */
   parseFlashcardsFromContent(
     content: string,
     headerLevel: number = 2,
   ): ParsedFlashcard[] {
-    const lines = content.split("\n");
-    const flashcards: ParsedFlashcard[] = [];
-
-    // Single pass through lines for both table and header parsing
-    let inTable = false;
-    let headerSeen = false;
-    let currentHeader: { text: string; level: number } | null = null;
-    let currentContent: string[] = [];
-    let inFrontmatter = false;
-    let skipNextParagraph = false;
-
-    // Use pre-compiled regex patterns for better performance
-
-    for (let i = 0; i < lines.length; i++) {
-      const line = lines[i];
-      const trimmedLine = line.trim();
-
-      // Handle frontmatter
-      if (i === 0 && trimmedLine === "---") {
-        inFrontmatter = true;
-        continue;
-      }
-      if (inFrontmatter) {
-        if (trimmedLine === "---") {
-          inFrontmatter = false;
-        }
-        continue;
-      }
-
-      // Check for table rows
-      if (DeckManager.TABLE_ROW_REGEX.test(trimmedLine)) {
-        if (!inTable) {
-          inTable = true;
-          headerSeen = false;
-        }
-
-        // Skip header and separator rows
-        if (!headerSeen) {
-          headerSeen = true;
-          continue;
-        }
-        if (DeckManager.TABLE_SEPARATOR_REGEX.test(trimmedLine)) {
-          continue;
-        }
-
-        // Parse table row
-        const cells = trimmedLine
-          .slice(1, -1) // Remove leading/trailing pipes
-          .split("|")
-          .map((cell) => cell.trim());
-
-        if (cells.length >= 2 && cells[0] && cells[1]) {
-          flashcards.push({
-            front: cells[0], // TODO strip of unnecessary characters
-            back: cells[1],
-            type: "table",
-          });
-        }
-      } else {
-        // Not a table row, end table processing
-        if (inTable) {
-          inTable = false;
-        }
-
-        // Check for headers
-        const headerMatch = DeckManager.HEADER_REGEX.exec(line);
-        if (headerMatch) {
-          const currentHeaderLevel = headerMatch[1].length;
-
-          // Check for title headers to skip
-          if (line.match(/^#\s+/) && line.toLowerCase().includes("flashcard")) {
-            skipNextParagraph = true;
-            this.finalizeCurrentHeader(
-              currentHeader,
-              currentContent,
-              flashcards,
-              headerLevel,
-            );
-            currentHeader = null;
-            currentContent = [];
-            continue;
-          }
-
-          // Finalize previous header
-          this.finalizeCurrentHeader(
-            currentHeader,
-            currentContent,
-            flashcards,
-            headerLevel,
-          );
-
-          // Start new header
-          currentHeader = {
-            text: line,
-            level: currentHeaderLevel,
-          };
-          currentContent = [];
-          skipNextParagraph = false;
-        } else if (skipNextParagraph) {
-          if (trimmedLine === "") {
-            skipNextParagraph = false;
-          }
-        } else if (currentHeader) {
-          // Skip empty lines at the beginning of content
-          if (trimmedLine === "" && currentContent.length === 0) {
-            continue;
-          }
-          currentContent.push(line);
-        }
-      }
-    }
-
-    // Finalize last header
-    this.finalizeCurrentHeader(
-      currentHeader,
-      currentContent,
-      flashcards,
-      headerLevel,
-    );
-
-    return flashcards;
-  }
-
-  /**
-   * Helper to finalize current header flashcard
-   */
-  private finalizeCurrentHeader(
-    currentHeader: { text: string; level: number } | null,
-    currentContent: string[],
-    flashcards: ParsedFlashcard[],
-    targetHeaderLevel: number,
-  ): void {
-    if (
-      currentHeader &&
-      currentContent.length > 0 &&
-      currentHeader.level === targetHeaderLevel
-    ) {
-      flashcards.push({
-        front: currentHeader.text.replace(/^#{1,6}\s+/, ""),
-        back: currentContent.join("\n").trim(),
-        type: "header-paragraph",
-      });
-    }
-  }
-
-  /**
-   * Execute batch database operations using transactions with prepared statements for optimal performance
-   */
-  private async executeBatchOperations(
-    operations: Array<{
-      type: "create" | "update" | "delete";
-      flashcardId?: string;
-      flashcard?: Omit<Flashcard, "created" | "modified">;
-      updates?: any;
-    }>,
-  ): Promise<void> {
-    const batchStartTime = performance.now();
-    let createCount = 0;
-    let updateCount = 0;
-    let deleteCount = 0;
-
-    this.debugLog(`Starting transaction for ${operations.length} operations`);
-
-    try {
-      // Group operations by type for batch processing
-      const deleteOps = operations.filter(
-        (op) => op.type === "delete" && op.flashcardId,
-      );
-      const createOps = operations.filter(
-        (op) => op.type === "create" && op.flashcard,
-      );
-      const updateOps = operations.filter(
-        (op) => op.type === "update" && op.flashcardId && op.updates,
-      );
-
-      // Execute all DELETE operations with single prepared statement
-      if (deleteOps.length > 0) {
-        this.db.batchDeleteFlashcards(deleteOps.map((op) => op.flashcardId!));
-        deleteCount = deleteOps.length;
-        this.debugLog(`Batch deleted ${deleteCount} flashcards`);
-      }
-      // Execute all CREATE operations with single prepared statement
-      if (createOps.length > 0) {
-        this.db.batchCreateFlashcards(createOps.map((op) => op.flashcard!));
-        createCount = createOps.length;
-        this.debugLog(`Batch created ${createCount} flashcards`);
-      }
-      // Execute all UPDATE operations with single prepared statement
-      if (updateOps.length > 0) {
-        this.db.batchUpdateFlashcards(
-          updateOps.map((op) => ({
-            id: op.flashcardId!,
-            updates: op.updates!,
-          })),
-        );
-        updateCount = updateOps.length;
-        this.debugLog(`Batch updated ${updateCount} flashcards`);
-      }
-      await yieldToUI();
-
-      const totalBatchTime = performance.now() - batchStartTime;
-      this.performanceLog(
-        `Transaction completed in ${formatTime(totalBatchTime)} (${createCount} created, ${updateCount} updated, ${deleteCount} deleted)`,
-      );
-    } catch (error) {
-      console.error(`Critical error in batch operations:`, error);
-      throw error;
-    }
+    return FlashcardParser.parseFlashcardsFromContent(content, headerLevel);
   }
 
   /**
@@ -501,6 +291,7 @@ export class DeckManager {
   async syncFlashcardsForDeck(
     deckId: string,
     force: boolean = false,
+    progressTracker?: ProgressTracker,
   ): Promise<void> {
     const deckSyncStartTime = performance.now();
     this.debugLog(`Syncing flashcards for deck ID: ${deckId}`);
@@ -544,14 +335,17 @@ export class DeckManager {
     if (dbHasWorkerMethod) {
       // Use worker for parsing and database operations
       try {
-        const result = await (this.db as any).syncFlashcardsForDeckWorker({
-          deckId: deck.id,
-          deckName: deck.name,
-          deckFilepath: deck.filepath,
-          deckConfig: deck.config,
-          fileContent: fileContent,
-          force: force,
-        });
+        const result = await (this.db as any).syncFlashcardsForDeckWorker(
+          {
+            deckId: deck.id,
+            deckName: deck.name,
+            deckFilepath: deck.filepath,
+            deckConfig: deck.config,
+            fileContent: fileContent,
+            force: force,
+          },
+          progressTracker,
+        );
 
         if (result.parsedCount > MAX_FLASHCARDS_PER_DECK) {
           this.debugLog(
@@ -583,23 +377,25 @@ export class DeckManager {
           `Worker sync failed for ${deck.name}, falling back to main thread:`,
           error,
         );
-        // Fall back to main thread sync
+        // Fall back to main thread sync using DeckSynchronizer
         await this.syncFlashcardsForDeckMainThread(
           deckId,
           deck,
           file,
           fileContent,
           force,
+          progressTracker,
         );
       }
     } else {
-      // Fall back to main thread processing
+      // Fall back to main thread processing using DeckSynchronizer
       await this.syncFlashcardsForDeckMainThread(
         deckId,
         deck,
         file,
         fileContent,
         force,
+        progressTracker,
       );
     }
 
@@ -607,7 +403,7 @@ export class DeckManager {
   }
 
   /**
-   * Main thread fallback for flashcard syncing
+   * Main thread fallback for flashcard syncing using DeckSynchronizer
    */
   private async syncFlashcardsForDeckMainThread(
     deckId: string,
@@ -615,220 +411,52 @@ export class DeckManager {
     file: TFile,
     fileContent: string,
     force: boolean,
+    progressTracker?: ProgressTracker,
   ): Promise<void> {
     const deckSyncStartTime = performance.now();
 
-    // Get existing flashcards for this deck to determine what changed
-    const existingFlashcards = await this.db.getFlashcardsByDeck(deck.id);
-    this.debugLog(
-      `Found ${existingFlashcards.length} existing flashcards for deck ${deck.name}`,
-    );
-
-    const existingById = new Map<string, Flashcard>();
-    existingFlashcards.forEach((card) => {
-      existingById.set(card.id, card);
-      this.debugLog(`Existing card ID: ${card.id}, Front: "${card.front}"`);
-    });
-
-    const processedIds = new Set<string>();
-    const duplicateWarnings = new Set<string>(); // Track duplicates to warn only once per file
-
-    // Batch operations for better performance
-    const batchOperations: Array<{
-      type: "create" | "update" | "delete";
-      flashcardId?: string;
-      flashcard?: Omit<Flashcard, "created" | "modified">;
-      updates?: any;
-    }> = [];
-
-    // Parse flashcards from content using deck's header level configuration
-    const allParsedCards = this.parseFlashcardsFromContent(
-      fileContent,
-      deck.config.headerLevel,
-    );
-
-    // Limit to first 4000 flashcards per deck
-    const parsedCards = allParsedCards.slice(0, MAX_FLASHCARDS_PER_DECK);
-
-    this.debugLog(
-      `Parsed ${allParsedCards.length} flashcards from ${deck.filepath}, processing first ${parsedCards.length} (limit: ${MAX_FLASHCARDS_PER_DECK})`,
-    );
-
-    if (allParsedCards.length > MAX_FLASHCARDS_PER_DECK) {
-      this.debugLog(
-        `⚠️ Deck "${deck.name}" exceeds flashcard limit. ${allParsedCards.length - MAX_FLASHCARDS_PER_DECK} flashcards will be skipped.`,
-      );
-      if (this.plugin?.settings?.ui?.enableNotices) {
-        new Notice(
-          `⚠️ Deck "${deck.name}" has ${allParsedCards.length} flashcards. Only processing first ${MAX_FLASHCARDS_PER_DECK} for performance.`,
-          8000,
-        );
-      }
-    }
-
-    // Process flashcards in chunks to avoid blocking UI with large datasets
-    for (let i = 0; i < parsedCards.length; i++) {
-      // Yield control to UI every 50 flashcards to prevent blocking
-      const parsed = parsedCards[i];
-      const flashcardId = this.generateFlashcardId(parsed.front);
-      const contentHash = this.generateContentHash(parsed.back);
-      const existingCard = existingById.get(flashcardId);
-
-      // Check for duplicate front text within the same parsing session
-      if (processedIds.has(flashcardId)) {
-        const duplicateKey = `${deck.name}:${parsed.front}`;
-        if (!duplicateWarnings.has(duplicateKey)) {
-          if (this.plugin?.settings?.ui?.enableNotices) {
-            new Notice(
-              `⚠️ Duplicate flashcard detected in "${deck.name}": "${parsed.front.substring(0, 50)}${parsed.front.length > 50 ? "..." : ""}". Only the first occurrence will be used.`,
-              8000,
-            );
-          }
-          duplicateWarnings.add(duplicateKey);
-          this.debugLog(
-            `Duplicate flashcard detected: "${parsed.front}" in deck "${deck.name}"`,
-          );
-        }
-        continue; // Skip this duplicate
-      }
-
-      this.debugLog(
-        `Processing flashcard: "${parsed.front.substring(0, 50)}..."`,
-      );
-      this.debugLog(
-        `Generated ID: ${flashcardId} (from front: "${parsed.front.substring(0, 30)}..." + deck: ${deck.id})`,
-      );
-      this.debugLog(`Existing card found:`, existingCard ? "YES" : "NO");
-
-      if (existingCard) {
-        this.debugLog(
-          `Existing card - ID: ${existingCard.id}, Front: "${existingCard.front.substring(0, 30)}...", Hash: ${existingCard.contentHash}`,
-        );
-      }
-
-      processedIds.add(flashcardId);
-      await yieldEvery(i);
-      if (existingCard) {
-        // Update if content has changed
-        if (existingCard.contentHash !== contentHash) {
-          this.debugLog(
-            `Content changed, updating flashcard: ${parsed.front.substring(0, 30)}...`,
-          );
-          batchOperations.push({
-            type: "update",
-            flashcardId: existingCard.id,
-            updates: {
-              front: parsed.front,
-              back: parsed.back,
-              type: parsed.type,
-              contentHash: contentHash,
-            },
-          });
-        } else {
-          this.debugLog(
-            `No content change, skipping update: ${parsed.front.substring(0, 30)}...`,
-          );
-        }
-      } else {
-        // Check for existing review logs to restore progress
-        const previousProgress =
-          await this.db.getLatestReviewLogForFlashcard(flashcardId);
-
-        // Create new flashcard with restored progress if available
-        const flashcard: Omit<Flashcard, "created" | "modified"> = {
-          id: flashcardId,
-          deckId: deck.id,
-          front: parsed.front,
-          back: parsed.back,
-          type: parsed.type,
-          sourceFile: file.path,
-          contentHash: contentHash,
-
-          // Restore progress from review logs or use defaults
-          state: previousProgress?.newState || "new",
-          dueDate: previousProgress
-            ? new Date(
-                new Date(previousProgress.reviewedAt).getTime() +
-                  previousProgress.newIntervalMinutes * 60 * 1000,
-              ).toISOString()
-            : new Date().toISOString(),
-          interval: previousProgress?.newIntervalMinutes || 0,
-          repetitions: previousProgress?.newRepetitions || 0,
-          difficulty: previousProgress?.newDifficulty || 5.0, // FSRS initial difficulty
-          stability: previousProgress?.newStability || 2.5, // FSRS initial stability
-          lapses: previousProgress?.newLapses || 0,
-          lastReviewed: previousProgress?.reviewedAt || null,
-        };
-
-        if (previousProgress) {
-          this.debugLog(
-            `Restoring flashcard progress from review logs: ${flashcard.front} (state: ${previousProgress.newState}, interval: ${previousProgress.newIntervalMinutes})`,
-          );
-
-          // Notify user that progress was restored
-          if (this.plugin?.settings?.ui?.enableNotices) {
-            new Notice(
-              `✅ Progress restored for flashcard: "${parsed.front.substring(0, 40)}${parsed.front.length > 40 ? "..." : ""}" (${previousProgress.newState}, ${previousProgress.newRepetitions} reviews)`,
-              5000,
-            );
-          }
-        } else {
-          this.debugLog(`Creating new flashcard: ${flashcard.front}`);
-        }
-
-        batchOperations.push({
-          type: "create",
-          flashcard: flashcard,
-        });
-      }
-    }
-
-    // Delete flashcards that are no longer in the file
-    for (const [flashcardId, existingCard] of existingById) {
-      if (!processedIds.has(flashcardId)) {
-        this.debugLog(`Deleting flashcard: ${existingCard.front}`);
-        batchOperations.push({
-          type: "delete",
-          flashcardId: existingCard.id,
-        });
-      }
-    }
-
-    // Execute all batch operations
-    if (batchOperations.length > 0) {
-      this.debugLog(
-        `Executing ${batchOperations.length} batch database operations`,
-      );
-      await this.executeBatchOperations(batchOperations);
-      this.debugLog(`Batch operations completed successfully`);
-    }
-
-    // Update deck's modified timestamp to match file modification time (without save)
-    const timestampStartTime = performance.now();
     try {
-      this.debugLog(`Updating deck timestamp for: ${deck.name}`);
-      await this.db.updateDeckTimestamp(deck.id);
-      this.debugLog(`Deck timestamp updated successfully`);
+      const syncData: SyncData = {
+        deckId: deck.id,
+        deckName: deck.name,
+        deckFilepath: deck.filepath,
+        deckConfig: deck.config,
+        fileContent: fileContent,
+        force: force,
+      };
+
+      // Create progress callback from ProgressTracker
+      const progressCallback = progressTracker
+        ? (progress: number, message?: string) =>
+            progressTracker.update(message || "Processing...", progress)
+        : undefined;
+
+      const result = this.flashcardSynchronizer.syncFlashcardsForDeck(
+        syncData,
+        progressCallback,
+      );
+
+      this.debugLog(
+        `Synced ${result.parsedCount} flashcards for deck ${deck.name} with ${result.operationsCount} operations`,
+      );
+
+      const deckSyncTime = performance.now() - deckSyncStartTime;
+      this.debugLog(
+        `Deck sync completed in ${formatTime(deckSyncTime)} for deck: ${deck.name}`,
+      );
     } catch (error) {
-      console.error(`Failed to update deck timestamp for ${deck.name}:`, error);
+      this.debugLog(`Error syncing flashcards for deck ${deck.name}: ${error}`);
       throw error;
     }
 
-    try {
-      this.debugLog(`Checking for duplicates in deck: ${deck.name}`);
-      await this.checkForDuplicatesInDeck(deck.id);
-      this.debugLog(`Duplicate check completed for deck: ${deck.name}`);
-    } catch (error) {
-      console.error(`Failed to check duplicates for ${deck.name}:`, error);
-      throw error;
-    }
+    yieldToUI();
+  }
 
-    const timestampTime = performance.now() - timestampStartTime;
-
-    const totalDeckSyncTime = performance.now() - deckSyncStartTime;
-    this.performanceLog(
-      `Main thread sync completed for deck: ${deck.name} in ${formatTime(totalDeckSyncTime)} (${parsedCards.length} flashcards, ${batchOperations.length} operations, cleanup: ${formatTime(timestampTime)}) - DB save deferred`,
-    );
+  /**
+   * Generate content hash for flashcard back content (delegates to FlashcardSynchronizer)
+   */
+  private generateContentHash(back: string): string {
+    return this.flashcardSynchronizer.generateContentHash(back);
   }
 
   /**
@@ -865,19 +493,6 @@ export class DeckManager {
       );
       await this.db.createDeck(deck);
     }
-  }
-
-  /**
-   * Generate content hash for flashcard back content (front is used for ID)
-   */
-  private generateContentHash(back: string): string {
-    let hash = 0;
-    for (let i = 0; i < back.length; i++) {
-      const char = back.charCodeAt(i);
-      hash = (hash << 5) - hash + char;
-      hash = hash & hash; // Convert to 32-bit integer
-    }
-    return Math.abs(hash).toString(16);
   }
 
   /**
@@ -936,17 +551,10 @@ export class DeckManager {
   }
 
   /**
-   * Generate unique flashcard ID using hash of front text only
+   * Generate unique flashcard ID using hash of front text only (delegates to FlashcardSynchronizer)
    */
   public generateFlashcardId(frontText: string, deckId?: string): string {
-    // Use only front text for ID generation to preserve progress across deck changes
-    let hash = 0;
-    for (let i = 0; i < frontText.length; i++) {
-      const char = frontText.charCodeAt(i);
-      hash = (hash << 5) - hash + char;
-      hash = hash & hash; // Convert to 32-bit integer
-    }
-    return `card_${Math.abs(hash).toString(36)}`;
+    return this.flashcardSynchronizer.generateFlashcardId(frontText);
   }
 
   /**

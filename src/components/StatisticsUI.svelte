@@ -2,7 +2,17 @@
     import { onMount, createEventDispatcher, tick } from "svelte";
     import { ButtonComponent, Setting } from "obsidian";
     import ReviewHeatmap from "./ReviewHeatmap.svelte";
-    import type { Statistics } from "../database/types";
+    import ReviewsOverTimeChart from "./ReviewsOverTimeChart.svelte";
+    import CardCountsChart from "./CardCountsChart.svelte";
+    import ReviewIntervalsChart from "./ReviewIntervalsChart.svelte";
+    import CardStabilityChart from "./CardStabilityChart.svelte";
+    import CardDifficultyChart from "./CardDifficultyChart.svelte";
+    import HourlyBreakdownChart from "./HourlyBreakdownChart.svelte";
+    import CardsAddedChart from "./CardsAddedChart.svelte";
+    import CardRetrievabilityChart from "./CardRetrievabilityChart.svelte";
+    import TrueRetentionTable from "./TrueRetentionTable.svelte";
+    import ForecastChart from "./ForecastChart.svelte";
+    import type { Statistics, ReviewLog, Flashcard } from "../database/types";
     import type { DatabaseServiceInterface } from "../database/DatabaseFactory";
 
     export let db: DatabaseServiceInterface;
@@ -20,6 +30,10 @@
     let deckFilterContainer: HTMLElement;
     let timeframeFilterContainer: HTMLElement;
 
+    // Data for charts
+    let allReviewLogs: ReviewLog[] = [];
+    let allFlashcards: Flashcard[] = [];
+
     // Track last event to prevent double execution
     let lastEventTime = 0;
     let lastEventType = "";
@@ -34,6 +48,7 @@
         loading = true;
         await loadDecksAndTags();
         await loadStatistics();
+        await loadChartData();
 
         // Mount filter components after data is loaded
         tick().then(() => {
@@ -144,8 +159,56 @@
         }
     }
 
+    async function loadChartData() {
+        try {
+            // Load all review logs and flashcards for charts
+            allReviewLogs = await db.getAllReviewLogs();
+
+            // Filter by deck if specified
+            if (selectedDeckFilter !== "all") {
+                if (selectedDeckFilter.startsWith("deck:")) {
+                    const deckId = selectedDeckFilter.replace("deck:", "");
+                    allFlashcards = await db.getFlashcardsByDeck(deckId);
+                    allReviewLogs = allReviewLogs.filter((log) =>
+                        allFlashcards.some(
+                            (card) => card.id === log.flashcardId,
+                        ),
+                    );
+                } else if (selectedDeckFilter.startsWith("tag:")) {
+                    const tag = selectedDeckFilter.replace("tag:", "");
+                    const decks = availableDecks.filter(
+                        (deck) => deck.tag === tag,
+                    );
+                    const deckIds = decks.map((deck) => deck.id);
+
+                    allFlashcards = [];
+                    for (const deckId of deckIds) {
+                        const deckFlashcards =
+                            await db.getFlashcardsByDeck(deckId);
+                        allFlashcards.push(...deckFlashcards);
+                    }
+
+                    allReviewLogs = allReviewLogs.filter((log) =>
+                        allFlashcards.some(
+                            (card) => card.id === log.flashcardId,
+                        ),
+                    );
+                } else {
+                    allFlashcards = await db.getAllFlashcards();
+                }
+            } else {
+                allFlashcards = await db.getAllFlashcards();
+            }
+        } catch (error) {
+            console.error("Error loading chart data:", error);
+            allReviewLogs = [];
+            allFlashcards = [];
+        }
+    }
+
     async function handleFilterChange() {
         await loadStatistics();
+        await loadChartData();
     }
 
     function formatDate(dateString: string) {
@@ -295,15 +358,6 @@
             (day) => day.date === tomorrowStr,
         );
         return tomorrowForecast ? tomorrowForecast.dueCount : 0;
-    }
-
-    function calculateBarHeight(dueCount: number, maxDueCount: number): number {
-        const barHeight = 400; // Maximum height in pixels (leaving room in 150px container)
-
-        if (maxDueCount === 0) return 0;
-
-        const proportion = dueCount / maxDueCount;
-        return Math.max(proportion * barHeight - 80, 10);
     }
 
     function getMaturityRatio() {
@@ -722,58 +776,142 @@
 
             <!-- Forecast -->
             <div class="decks-stats-section">
-                <h3>Review Load Forecast</h3>
-                {#if statistics?.forecast && statistics.forecast.length > 0 && statistics.forecast.some((day) => day.dueCount > 0)}
-                    {@const filteredForecast = statistics.forecast
-                        .filter((day) => day.dueCount > 0)
-                        .slice(0, 20)}
-                    {@const maxDueCount = Math.max(
-                        ...filteredForecast.map((day) => day.dueCount),
-                    )}
-                    <div class="decks-forecast-chart">
-                        {#each filteredForecast as day, index}
-                            {@const originalIndex =
-                                statistics.forecast.indexOf(day)}
-                            <div
-                                class="decks-forecast-bar"
-                                title="{originalIndex === 0
-                                    ? 'Today'
-                                    : originalIndex === 1
-                                      ? 'Tomorrow'
-                                      : `Day ${originalIndex} (in ${originalIndex} days)`}: {day.dueCount} card{day.dueCount !==
-                                1
-                                    ? 's'
-                                    : ''} due"
-                            >
-                                <div
-                                    class="decks-bar"
-                                    style="height: {calculateBarHeight(
-                                        day.dueCount,
-                                        maxDueCount,
-                                    )}px"
-                                ></div>
-                                <div class="decks-bar-label">
-                                    {originalIndex}
-                                </div>
-                                <div class="decks-bar-value">
-                                    {day.dueCount}
-                                </div>
-                            </div>
-                        {/each}
-                    </div>
-                    <p class="decks-forecast-note">
-                        Showing days with scheduled reviews based on FSRS
-                        intervals.
-                    </p>
-                {:else}
-                    <div class="decks-no-data-message">
-                        <p>No upcoming reviews scheduled.</p>
-                        <p class="decks-help-text">
-                            Add flashcards to your decks to see future review
-                            forecasts.
-                        </p>
-                    </div>
-                {/if}
+                <ForecastChart {statistics} timeframe="3m" />
+            </div>
+
+            <!-- Reviews Over Time -->
+            <div class="decks-stats-section">
+                <h3>Reviews Over Time</h3>
+                <div class="decks-chart-controls">
+                    <label>
+                        Timeframe:
+                        <select
+                            bind:value={selectedTimeframe}
+                            on:change={handleFilterChange}
+                        >
+                            <option value="1m">1 Month</option>
+                            <option value="3m">3 Months</option>
+                            <option value="1y">1 Year</option>
+                            <option value="all">All Time</option>
+                        </select>
+                    </label>
+                </div>
+                <ReviewsOverTimeChart
+                    reviewLogs={allReviewLogs}
+                    timeframe={selectedTimeframe
+                        .replace("months", "m")
+                        .replace("all", "all")}
+                />
+            </div>
+
+            <!-- Card Counts -->
+            <div class="decks-stats-section">
+                <h3>Card Distribution</h3>
+                <CardCountsChart flashcards={allFlashcards} />
+            </div>
+
+            <!-- Review Intervals -->
+            <div class="decks-stats-section">
+                <h3>Review Intervals</h3>
+                <div class="decks-chart-controls">
+                    <label>
+                        Show percentiles:
+                        <select>
+                            <option value="50">50th percentile</option>
+                            <option value="95">95th percentile</option>
+                            <option value="all">All data</option>
+                        </select>
+                    </label>
+                </div>
+                <ReviewIntervalsChart flashcards={allFlashcards} />
+            </div>
+
+            <!-- Card Stability -->
+            <div class="decks-stats-section">
+                <h3>Card Stability Distribution</h3>
+                <p class="decks-chart-description">
+                    FSRS stability values show how well cards are retained in
+                    memory
+                </p>
+                <CardStabilityChart flashcards={allFlashcards} />
+            </div>
+
+            <!-- Card Difficulty -->
+            <div class="decks-stats-section">
+                <h3>Card Difficulty Distribution</h3>
+                <p class="decks-chart-description">
+                    FSRS difficulty values indicate how hard cards are to
+                    remember
+                </p>
+                <CardDifficultyChart flashcards={allFlashcards} />
+            </div>
+
+            <!-- Card Retrievability -->
+            <div class="decks-stats-section">
+                <h3>Card Retrievability Distribution</h3>
+                <p class="decks-chart-description">
+                    FSRS retrievability values show likelihood of recall today
+                    (0-100%)
+                </p>
+                <CardRetrievabilityChart reviewLogs={allReviewLogs} />
+            </div>
+
+            <!-- Hourly Breakdown -->
+            <div class="decks-stats-section">
+                <h3>Review Activity by Hour</h3>
+                <div class="decks-chart-controls">
+                    <label>
+                        Timeframe:
+                        <select
+                            bind:value={selectedTimeframe}
+                            on:change={handleFilterChange}
+                        >
+                            <option value="1m">1 Month</option>
+                            <option value="3m">3 Months</option>
+                            <option value="1y">1 Year</option>
+                            <option value="all">All Time</option>
+                        </select>
+                    </label>
+                </div>
+                <HourlyBreakdownChart
+                    reviewLogs={allReviewLogs}
+                    timeframe={selectedTimeframe
+                        .replace("months", "m")
+                        .replace("all", "all")}
+                />
+            </div>
+
+            <!-- Cards Added -->
+            <div class="decks-stats-section">
+                <h3>Cards Added Over Time</h3>
+                <div class="decks-chart-controls">
+                    <label>
+                        Timeframe:
+                        <select
+                            bind:value={selectedTimeframe}
+                            on:change={handleFilterChange}
+                        >
+                            <option value="1m">1 Month</option>
+                            <option value="3m">3 Months</option>
+                            <option value="1y">1 Year</option>
+                            <option value="all">All Time</option>
+                        </select>
+                    </label>
+                </div>
+                <CardsAddedChart
+                    reviewLogs={allReviewLogs}
+                    timeframe={selectedTimeframe
+                        .replace("months", "m")
+                        .replace("all", "all")}
+                />
+            </div>
+
+            <!-- True Retention -->
+            <div class="decks-stats-section">
+                <TrueRetentionTable
+                    reviewLogs={allReviewLogs}
+                    flashcards={allFlashcards}
+                />
             </div>
 
             <!-- Review Heatmap -->
@@ -955,55 +1093,6 @@
         line-height: 1.3;
     }
 
-    .decks-forecast-chart {
-        display: flex;
-        gap: 4px;
-        align-items: flex-end;
-        padding: 16px;
-        background: var(--background-secondary);
-        border-radius: 8px;
-        height: 400px;
-        overflow-x: auto;
-        overflow-y: hidden;
-        max-width: 100%;
-        box-sizing: border-box;
-    }
-
-    .decks-forecast-bar {
-        display: flex;
-        flex-direction: column;
-        align-items: center;
-        gap: 6px;
-        min-width: 40px;
-        flex-shrink: 0;
-    }
-
-    .decks-bar {
-        background: var(--text-accent);
-        width: 24px;
-        border-radius: 4px 4px 0 0;
-        transition: background 0.2s;
-    }
-
-    .decks-bar-label {
-        font-size: 12px;
-        color: var(--text-muted);
-        font-weight: 500;
-    }
-
-    .decks-bar-value {
-        font-size: 12px;
-        color: var(--text-normal);
-        font-weight: 600;
-    }
-
-    .decks-forecast-note {
-        margin-top: 8px;
-        font-size: 12px;
-        color: var(--text-muted);
-        text-align: center;
-    }
-
     .decks-button-stats {
         display: flex;
         flex-direction: column;
@@ -1084,16 +1173,6 @@
     .decks-close-button:hover,
     .decks-close-button:active {
         background: var(--interactive-accent-hover);
-    }
-
-    .decks-forecast-bar {
-        cursor: pointer;
-        position: relative;
-    }
-
-    .decks-forecast-bar:hover .decks-bar {
-        opacity: 0.8;
-        transition: opacity 0.2s ease;
     }
 
     .decks-no-data-message {
@@ -1182,24 +1261,6 @@
             font-size: 24px;
         }
 
-        .decks-forecast-chart {
-            height: 300px;
-            padding: 12px;
-        }
-
-        .decks-forecast-bar {
-            min-width: 32px;
-        }
-
-        .decks-bar {
-            width: 20px;
-        }
-
-        .decks-bar-label,
-        .decks-bar-value {
-            font-size: 11px;
-        }
-
         .decks-button-bar {
             padding: 10px 12px;
             flex-direction: column;
@@ -1260,29 +1321,62 @@
             font-size: 20px;
         }
 
-        .decks-forecast-chart {
-            height: 250px;
-            padding: 8px;
-        }
-
-        .decks-forecast-bar {
-            min-width: 28px;
-            gap: 4px;
-        }
-
-        .decks-bar {
-            width: 16px;
-        }
-
-        .decks-bar-label,
-        .decks-bar-value {
-            font-size: 10px;
-        }
-
         .decks-modal-actions {
             padding: 8px 12px;
             margin-left: -8px;
             margin-right: -8px;
+        }
+    }
+
+    /* Chart controls and descriptions */
+    .decks-chart-controls {
+        margin: 1rem 0;
+        display: flex;
+        gap: 1rem;
+        align-items: center;
+    }
+
+    .decks-chart-controls label {
+        display: flex;
+        align-items: center;
+        gap: 0.5rem;
+        font-size: 0.9rem;
+        color: var(--text-normal);
+    }
+
+    .decks-chart-controls select {
+        padding: 0.25rem 0.5rem;
+        border: 1px solid var(--background-modifier-border);
+        border-radius: 4px;
+        background: var(--background-primary);
+        color: var(--text-normal);
+        font-size: 0.9rem;
+        min-width: 120px;
+    }
+
+    .decks-chart-controls select:focus {
+        outline: none;
+        border-color: var(--interactive-accent);
+        box-shadow: 0 0 0 2px var(--interactive-accent-hover);
+    }
+
+    .decks-chart-description {
+        margin: 0.5rem 0 1rem 0;
+        font-size: 0.9rem;
+        color: var(--text-muted);
+        line-height: 1.4;
+    }
+
+    /* Mobile responsiveness for charts */
+    @media (max-width: 768px) {
+        .decks-chart-controls {
+            flex-direction: column;
+            align-items: flex-start;
+            gap: 0.5rem;
+        }
+
+        .decks-chart-controls select {
+            min-width: 100px;
         }
     }
 
@@ -1344,24 +1438,6 @@
             }
 
             .decks-metric-description {
-                font-size: 10px;
-            }
-
-            .decks-forecast-chart {
-                height: 300px;
-                padding: 12px;
-            }
-
-            .decks-forecast-bar {
-                min-width: 32px;
-            }
-
-            .decks-bar {
-                width: 20px;
-            }
-
-            .decks-bar-label,
-            .decks-bar-value {
                 font-size: 10px;
             }
 

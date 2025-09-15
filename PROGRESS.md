@@ -830,7 +830,7 @@ Then this path is taken and used to filter the markdown files that are scanned i
 - **Storage Management**: Backups stored in `/.obsidian/plugins/decks/backups/` with automatic directory creation
 
 **Settings Integration:**
-- **Auto Backup Toggle**: Enable/disable automatic backups after review sessions  
+- **Auto Backup Toggle**: Enable/disable automatic backups after review sessions
 - **Max Backups Slider**: Configure retention policy (3-10 backups)
 - **Backup List UI**: Dynamic list of available backups with timestamps and file sizes
 - **One-Click Restore**: Restore button for each backup with progress notifications
@@ -853,7 +853,7 @@ Then this path is taken and used to filter the markdown files that are scanned i
 
 **Data Safety:**
 - **SQLite Format**: Native database format for efficient storage and perfect data integrity
-- **Comprehensive Coverage**: All review log fields preserved including FSRS data, profiles, and metadata  
+- **Comprehensive Coverage**: All review log fields preserved including FSRS data, profiles, and metadata
 - **Non-Destructive Restore**: Appends data without deleting existing records
 - **Duplicate Detection**: Database-level checks prevent duplicate review log insertion
 
@@ -862,6 +862,150 @@ Then this path is taken and used to filter the markdown files that are scanned i
 - **205 Total Tests Passing**: All existing tests maintained, backup tests integrated
 - **Error Scenarios**: Tested backup creation failures, missing files, invalid formats
 - **Mock Integration**: Proper mocking of Obsidian DataAdapter for reliable testing
+
+
+### ✅ TODO 26: Statistics charts
+
+**COMPLETED** - Comprehensive FSRS-based Anki statistics dashboard with Chart.js integration.
+
+**Implementation Summary:**
+- **Chart.js Integration**: Added Chart.js with chartjs-adapter-date-fns for professional interactive charts
+- **10 New Chart Components**: Created individual Svelte components for each chart type
+- **Database Enhancement**: Added `getAllFlashcards()` method to support chart data requirements
+- **Smart Data Loading**: Efficient filtering by deck/tag with proper data aggregation
+- **Responsive Design**: Mobile-friendly charts with consistent styling using `decks-` CSS prefix
+
+**Chart Components Implemented:**
+1. **ReviewsOverTimeChart**: Stacked bar chart showing review activity by rating over time
+2. **CardCountsChart**: Pie chart displaying card distribution (New, Young, Mature)
+3. **ReviewIntervalsChart**: Histogram of card intervals with percentile overlays
+4. **CardStabilityChart**: FSRS stability distribution with bucketed ranges
+5. **CardDifficultyChart**: FSRS difficulty distribution with gradient coloring
+6. **CardRetrievabilityChart**: Retrievability histogram showing recall likelihood
+7. **HourlyBreakdownChart**: Mixed chart showing review count and success rate by hour
+8. **CardsAddedChart**: Bar chart tracking when cards were first reviewed
+9. **TrueRetentionTable**: Table component showing pass rates by card maturity (placeholder)
+
+**Technical Features:**
+- **Interactive Charts**: Hover tooltips, responsive scaling, and professional styling
+- **Timeframe Filtering**: 1 month, 3 months, 1 year, and all-time options for applicable charts
+- **Deck/Tag Filtering**: Charts respect deck and tag filters from statistics modal
+- **Color Coding**: Meaningful color schemes (red for difficulty, green for success, gradients for ranges)
+- **Performance Optimized**: Efficient data processing with proper chart lifecycle management
+
+**Integration Points:**
+- **StatisticsUI Enhancement**: All charts integrated into existing statistics modal
+- **Data Pipeline**: Uses `getAllReviewLogs()` and `getAllFlashcards()` for comprehensive data
+- **Filter Coordination**: Charts update automatically when timeframe or deck filters change
+- **CSS Consistency**: All styling follows established `decks-` prefix pattern
+
+Here is the original comprehensive feature description for reference:
+
+⸻
+
+✅ Feature: FSRS-Based Anki Statistics Dashboard for Obsidian Plugin
+
+Objective:
+Implement an Anki-style statistics dashboard within the Obsidian plugin that visualizes flashcard review performance based on the FSRS ReviewLog dataset. The dashboard will render interactive, filterable charts using Chart.js and provide users with detailed insights into their memory retention, scheduling behavior, and overall progress.
+
+⸻
+
+📊 Charts to Implement
+
+Each chart uses aggregated data from ReviewLog[] entries.
+	1.	Today Summary
+	•	Shows total studied cards, time spent, card types (new, review, relearn), rating distribution, average time per card.
+	2.	Future Due
+	•	Histogram of upcoming reviews grouped by days relative to today.
+	•	Filterable by time range (1m, 3m, 1y, all).
+	•	Overlays backlog curve (cumulative due load).
+	3.	Calendar Heatmap (reuse ReviewHeatmap component)
+	•	Grid showing activity per day.
+	•	Year switcher (< 2024 >) for navigation.
+	4.	Reviews Over Time
+	•	Stacked bar chart grouped by review rating.
+	•	Filterable by time range (1m, 3m, 1y).
+	5.	Card Counts
+	•	Pie chart of current flashcard states (New, Learning, Young, Mature).
+	•	Option to include/exclude suspended/buried cards.
+	6.	Review Intervals
+	•	Histogram of newIntervalMinutes converted to days.
+	•	Optional overlays: 50%, 95%, all percentiles.
+	7.	Card Stability
+	•	Histogram of newStability from latest log per flashcard.
+	•	Percentile overlays (50%, 95%, etc.) to visualize forgetting curve stability.
+	8.	Card Difficulty
+	•	Histogram of newDifficulty from latest log per flashcard (0–100%).
+	9.	Card Retrievability
+	•	Histogram of retrievability from latest log per flashcard.
+	•	Shows likelihood of recall today (0–100%).
+	10.	Hourly Breakdown
+	•	Success rate and volume per review hour (0–23h).
+	•	Filterable by time range (1m, 3m, 1y).
+	11.	Answer Buttons
+	•	Bar chart counting presses of each review button (Again, Hard, Good, Easy).
+	•	Filterable by time range (1m, 3m, 1y).
+	12.	Cards Added
+	•	Bar chart showing first review date of each card (inferred add date).
+	•	Filterable by time range.
+	13.	True Retention
+	•	Table of cards with interval > 1 day.
+	•	Shows pass rate (rating >= 3) split into Young (<21d stability), Mature (≥21d), All.
+
+⸻
+
+📁 Input Data Structure
+
+Based on ReviewLog[]:
+
+interface ReviewLog {
+  flashcardId: string;
+  reviewedAt: string; // ISO timestamp
+  rating: 1 | 2 | 3 | 4;
+  ratingLabel: "again" | "hard" | "good" | "easy";
+  timeElapsedMs?: number;
+  oldState: "new" | "review";
+  newState: "new" | "review";
+  newRepetitions: number;
+  newStability: number;
+  newDifficulty: number;
+  retrievability: number;
+  oldIntervalMinutes: number;
+  newIntervalMinutes: number;
+  oldDueAt: string;
+  newDueAt: string;
+  lastReviewedAt: string;
+}
+
+
+⸻
+
+🎛️ Filter Controls and Toggles
+
+Chart	Control Type	Options
+Future Due	Radio Buttons	1m, 3m, 1y, all
+Calendar	Year Switcher	Previous/Next Year
+Reviews Over Time	Radio Buttons	1m, 3m, 1y
+Card Counts	Checkbox	Show/hide suspended/buried
+Review Intervals	Radio Buttons	50%, 95%, all overlays
+Card Stability	Radio Buttons	50%, 95%, all overlays
+Hourly Breakdown	Radio Buttons	1m, 3m, 1y
+Answer Buttons	Radio Buttons	1m, 3m, 1y
+Cards Added	Radio Buttons	1m, 3m, 1y, all
+
+
+⸻
+
+🛠️ Tech Stack
+	•	Charting Library: Chart.js (w/ TypeScript bindings)
+
+
+  Notes:
+    - each chart is to be created as a svelte compoenent and embeded in the StatisticsUI.svelte component, charts should be stored in components/charts directory
+    - StatisticsUI.svelte will show each chart in a grid layout.
+
+⸻
+
 
 ## ✅ Database SQL Schema Consolidation
 
@@ -912,7 +1056,7 @@ The database consolidation provides a solid foundation for scalable plugin archi
 
 ### Architecture Implementation
 - **DeckManager Enhancement**: Added worker detection and delegation logic
-- **Worker-Entry Extension**: Complete flashcard parsing implementation in worker context  
+- **Worker-Entry Extension**: Complete flashcard parsing implementation in worker context
 - **WorkerDatabaseService Integration**: Added `syncFlashcardsForDeckWorker` method
 - **DatabaseFactory Support**: Dynamic worker capability detection
 - **Single-Pass Parsing**: Optimized parsing algorithm with pre-compiled regex patterns
@@ -1602,7 +1746,7 @@ This refactoring ensures the plugin can coexist cleanly with any other Obsidian 
 
 **Verification:**
 - ✅ Worker creation and message passing
-- ✅ Database operations execute without blocking main thread  
+- ✅ Database operations execute without blocking main thread
 - ✅ Batch processing of 1000+ flashcards tested
 - ✅ All existing tests pass (205/205)
 - ✅ Build successful with no errors
@@ -1633,8 +1777,8 @@ This experiment successfully demonstrates that running the database in a worker 
 
 ### ✅ Database Worker Asset Implementation Complete
 
-**Status:** ✅ Production-Ready Implementation  
-**Branch:** main  
+**Status:** ✅ Production-Ready Implementation
+**Branch:** main
 **Problem Solved:** Workers cannot access Obsidian's vault file system, preventing SQL.js asset loading
 
 **Pure Asset-Based Approach Implementation:**
@@ -1650,7 +1794,7 @@ This experiment successfully demonstrates that running the database in a worker 
 const sqlJsCode = await this.adapter.read(manifestDir + "/assets/sql-wasm.js");
 const wasmBytes = await this.adapter.readBinary(manifestDir + "/assets/sql-wasm.wasm");
 
-// 2) Start worker and transfer assets  
+// 2) Start worker and transfer assets
 const worker = new Worker(workerUrl);
 worker.postMessage(
   { type: "init", sqlJsCode, wasmBytes },
@@ -1671,7 +1815,7 @@ SQL = await initSqlJs({ locateFile: () => wasmUrl });
 
 **Key Achievements:**
 - ✅ **Asset Accessibility**: Workers can now access SQL.js without file system dependencies
-- ✅ **Zero-Copy Transfer**: WASM bytes transferred efficiently using Transferable Objects  
+- ✅ **Zero-Copy Transfer**: WASM bytes transferred efficiently using Transferable Objects
 - ✅ **Dynamic Loading**: SQL.js loaded at runtime in worker context via blob URLs
 - ✅ **Clean Architecture**: Pure asset-based approach with no embedded dependencies
 - ✅ **Build Integration**: esbuild automatically copies SQL.js assets to dist/assets/
@@ -1682,7 +1826,7 @@ SQL = await initSqlJs({ locateFile: () => wasmUrl });
 ```
 dist/
 ├── assets/
-│   ├── sql-wasm.js      # SQL.js JavaScript code  
+│   ├── sql-wasm.js      # SQL.js JavaScript code
 │   └── sql-wasm.wasm    # WebAssembly binary
 ├── database-worker.js   # Built worker implementation
 └── main.js             # Main plugin code
@@ -1699,13 +1843,13 @@ dist/
 **Benefits:**
 - **Platform Agnostic**: Works across all Obsidian environments (desktop, mobile)
 - **Memory Efficient**: Zero-copy transfer eliminates asset duplication
-- **Maintainable**: Clean separation between main thread and worker responsibilities  
+- **Maintainable**: Clean separation between main thread and worker responsibilities
 - **Lightweight**: 66% smaller worker bundle (27KB vs 79KB) with pure asset approach
 - **Future-Proof**: Asset-based approach supports SQL.js version updates
 
 **Current Status:**
 - **Default**: Disabled (stable main thread implementation)
-- **Experimental**: Can be enabled via Settings > Experimental Features  
+- **Experimental**: Can be enabled via Settings > Experimental Features
 - **Production Ready**: Core functionality complete with comprehensive testing
 - **Asset Documentation**: Complete implementation guide in DATABASE_WORKER_ASSETS.md
 

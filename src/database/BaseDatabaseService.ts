@@ -11,6 +11,7 @@ import {
   DeckConfig,
 } from "./types";
 import { SQL_QUERIES } from "./schemas";
+import { FlashcardSynchronizer } from "../services/FlashcardSynchronizer";
 
 export interface QueryConfig {
   asObject?: boolean;
@@ -20,6 +21,7 @@ export abstract class BaseDatabaseService implements IDatabaseService {
   protected dbPath: string;
   protected adapter: DataAdapter;
   protected debugLog: (message: string, ...args: any[]) => void;
+  protected flashcardSynchronizer: FlashcardSynchronizer;
 
   constructor(
     dbPath: string,
@@ -29,6 +31,8 @@ export abstract class BaseDatabaseService implements IDatabaseService {
     this.dbPath = dbPath;
     this.adapter = adapter;
     this.debugLog = debugLog;
+    // DeckSynchronizer will be initialized in subclasses after database is ready
+    this.flashcardSynchronizer = null as any;
   }
 
   // Abstract methods to be implemented by concrete classes
@@ -121,12 +125,10 @@ export abstract class BaseDatabaseService implements IDatabaseService {
 
   // Utility methods
   protected generateFlashcardId(frontText: string): string {
-    const crypto = require("crypto");
-    return crypto
-      .createHash("sha256")
-      .update(frontText)
-      .digest("hex")
-      .substring(0, 16);
+    return (
+      this.flashcardSynchronizer?.generateFlashcardId(frontText) ||
+      `card_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`
+    );
   }
 
   protected getCurrentTimestamp(): string {
@@ -346,6 +348,12 @@ export abstract class BaseDatabaseService implements IDatabaseService {
   async getFlashcardsByDeck(deckId: string): Promise<Flashcard[]> {
     const sql = `SELECT * FROM flashcards WHERE deck_id = ? ORDER BY created`;
     const results = await this.querySql(sql, [deckId]);
+    return results.map((row) => this.rowToFlashcard(row));
+  }
+
+  async getAllFlashcards(): Promise<Flashcard[]> {
+    const sql = `SELECT * FROM flashcards ORDER BY created`;
+    const results = await this.querySql(sql, []);
     return results.map((row) => this.rowToFlashcard(row));
   }
 
@@ -990,7 +998,7 @@ export abstract class BaseDatabaseService implements IDatabaseService {
       const dailyStats = dailyStatsResults.map((row: any) => ({
         date: row.date,
         reviews: row.reviews || 0,
-        timeSpent: row.avg_time_seconds || 0,
+        timeSpent: row.total_time_seconds || 0,
         newCards: row.new_cards || 0,
         learningCards: row.learning_cards || 0,
         reviewCards: row.review_cards || 0,

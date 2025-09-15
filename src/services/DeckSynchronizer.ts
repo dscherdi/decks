@@ -5,6 +5,7 @@ import { yieldToUI } from "../utils/ui";
 import { Logger, formatTime } from "../utils/logging";
 import { FlashcardsSettings } from "../settings";
 import { DataAdapter } from "obsidian";
+import { ProgressTracker } from "../utils/progress";
 
 export interface SyncProgress {
   message: string;
@@ -31,6 +32,7 @@ export class DeckSynchronizer {
   private deckManager: DeckManager;
   private isSyncing: boolean = false;
   private logger: Logger;
+  private progressTracker: ProgressTracker;
 
   constructor(
     db: DatabaseServiceInterface,
@@ -42,6 +44,7 @@ export class DeckSynchronizer {
     this.db = db;
     this.deckManager = deckManager;
     this.logger = new Logger(settings, adapter, configDir);
+    this.progressTracker = new ProgressTracker(settings);
   }
 
   private debugLog(message: string, ...args: any[]): void {
@@ -101,6 +104,11 @@ export class DeckSynchronizer {
         `Performing ${forceSync ? "forced " : ""}sync of decks and flashcards...`,
       );
 
+      // Show initial progress tracker
+      if (showProgress) {
+        this.progressTracker.show("🔍 Discovering decks...");
+      }
+
       // Step 1: Sync all decks
       if (showProgress && onProgress) {
         onProgress({ message: "🔍 Discovering decks...", percentage: 10 });
@@ -123,11 +131,14 @@ export class DeckSynchronizer {
         decks.map((d) => d.name),
       );
 
-      if (showProgress && onProgress) {
-        onProgress({
-          message: `📚 Processing ${decks.length} decks...`,
-          percentage: 20,
-        });
+      if (showProgress) {
+        this.progressTracker.update("📊 Loading decks...", 10);
+        if (onProgress) {
+          onProgress({
+            message: "📊 Loading decks...",
+            percentage: 10,
+          });
+        }
       }
 
       // Step 3: Sync flashcards for each deck
@@ -139,19 +150,29 @@ export class DeckSynchronizer {
         const deckStartTime = performance.now();
 
         // Update progress
-        if (showProgress && onProgress) {
+        if (showProgress) {
           const deckProgress = 20 + (i / decks.length) * 70;
-          onProgress({
-            message: `📄 Processing deck: ${deck.name} (${i + 1}/${decks.length})`,
-            percentage: deckProgress,
-          });
+          this.progressTracker.update(
+            `📄 Processing deck: ${deck.name} (${i + 1}/${decks.length})`,
+            deckProgress,
+          );
+          if (onProgress) {
+            onProgress({
+              message: `📄 Processing deck: ${deck.name} (${i + 1}/${decks.length})`,
+              percentage: deckProgress,
+            });
+          }
         }
 
         this.debugLog(
           `${forceSync ? "Force s" : "S"}yncing flashcards for deck: ${deck.name} (${deck.filepath})`,
         );
 
-        await this.deckManager.syncFlashcardsForDeck(deck.id, forceSync);
+        await this.deckManager.syncFlashcardsForDeck(
+          deck.id,
+          forceSync,
+          this.progressTracker,
+        );
         await yieldToUI();
 
         // Track performance metrics
@@ -201,11 +222,18 @@ export class DeckSynchronizer {
       }
 
       // Final progress update
-      if (showProgress && onProgress) {
-        onProgress({
-          message: `✅ Sync complete! Processed ${totalFlashcards} flashcards across ${decks.length} decks in ${formatTime(totalSyncTime)} (DB saved in ${formatTime(saveTime)})`,
-          percentage: 100,
-        });
+      if (showProgress) {
+        this.progressTracker.update(
+          `✅ Sync complete! Processed ${totalFlashcards} flashcards across ${decks.length} decks`,
+          100,
+        );
+        setTimeout(() => this.progressTracker.hide(), 2000); // Hide after 2 seconds
+        if (onProgress) {
+          onProgress({
+            message: `✅ Sync complete! Processed ${totalFlashcards} flashcards across ${decks.length} decks in ${formatTime(totalSyncTime)}`,
+            percentage: 100,
+          });
+        }
       }
 
       return {
@@ -218,11 +246,15 @@ export class DeckSynchronizer {
     } catch (error) {
       this.debugLog("Error during sync:", error);
 
-      if (showProgress && onProgress) {
-        onProgress({
-          message: `❌ Sync failed - check console for details, message: ${error.message}, stack ${error.stack}`,
-          percentage: 0,
-        });
+      if (showProgress) {
+        this.progressTracker.update(`❌ Sync failed: ${error.message}`, 0);
+        setTimeout(() => this.progressTracker.hide(), 3000); // Hide after 3 seconds
+        if (onProgress) {
+          onProgress({
+            message: `❌ Sync failed - check console for details`,
+            percentage: 0,
+          });
+        }
       }
 
       return {
@@ -265,7 +297,17 @@ export class DeckSynchronizer {
     }
 
     const startTime = performance.now();
-    await this.deckManager.syncFlashcardsForDeck(deckId, forceSync);
+    // Show initial progress notice
+    this.progressTracker.show("Starting deck synchronization...");
+
+    await this.deckManager.syncFlashcardsForDeck(
+      deckId,
+      forceSync,
+      this.progressTracker,
+    );
+
+    // Hide progress notice when done
+    this.progressTracker.hide();
     const duration = performance.now() - startTime;
 
     if (onProgress) {

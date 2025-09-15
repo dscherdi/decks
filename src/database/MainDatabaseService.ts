@@ -6,6 +6,7 @@ import {
   CURRENT_SCHEMA_VERSION,
 } from "./schemas";
 import { InitSqlJsStatic, Database } from "sql.js";
+import { FlashcardSynchronizer } from "../services/FlashcardSynchronizer";
 
 // Import SQL.js types
 declare const initSqlJs: any;
@@ -55,6 +56,11 @@ export class MainDatabaseService extends BaseDatabaseService {
         this.db = new SQL.Database();
         await this.createFreshDatabase();
         this.debugLog("Created new database");
+      }
+
+      // Initialize DeckSynchronizer after database is ready
+      if (this.db) {
+        this.flashcardSynchronizer = new FlashcardSynchronizer(this.db);
       }
 
       this.debugLog("MainDatabaseService initialized successfully");
