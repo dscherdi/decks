@@ -1,4 +1,5 @@
 import { DataAdapter } from "obsidian";
+import { QueryConfig } from "./BaseDatabaseService";
 import { MainDatabaseService } from "./MainDatabaseService";
 import { WorkerDatabaseService } from "./WorkerDatabaseService";
 import {
@@ -136,7 +137,7 @@ export interface IDatabaseService {
 
   // Utility operations
   purgeDatabase(): Promise<void>;
-  query(sql: string, params?: any[]): Promise<any[]>;
+  query(sql: string, params?: any[], config?: QueryConfig): Promise<any[]>;
 
   // Backup operations
   createBackupDatabase(backupPath: string): Promise<void>;
@@ -146,10 +147,7 @@ export interface IDatabaseService {
   queryBackupDatabase(backupDb: any, sql: string): Promise<any[]>;
   closeBackupDatabaseInstance(backupDb: any): Promise<void>;
 
-  // Transaction support
-  beginTransaction(): void;
-  commitTransaction(): void;
-  rollbackTransaction(): void;
+  // Transaction methods removed - no longer using transactions
 }
 
 export type DatabaseServiceInterface = IDatabaseService;

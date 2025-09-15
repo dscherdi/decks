@@ -1,5 +1,5 @@
 import { DataAdapter } from "obsidian";
-import { BaseDatabaseService } from "./BaseDatabaseService";
+import { BaseDatabaseService, QueryConfig } from "./BaseDatabaseService";
 import {
   DatabaseWorkerMessage,
   DatabaseWorkerResponse,
@@ -253,21 +253,7 @@ export class WorkerDatabaseService extends BaseDatabaseService {
     }
   }
 
-  // Transaction support - delegate to worker
-  beginTransaction(): void {
-    if (!this.worker) throw new Error("Worker not initialized");
-    this.sendMessage("beginTransaction");
-  }
-
-  commitTransaction(): void {
-    if (!this.worker) throw new Error("Worker not initialized");
-    this.sendMessage("commitTransaction");
-  }
-
-  rollbackTransaction(): void {
-    if (!this.worker) throw new Error("Worker not initialized");
-    this.sendMessage("rollbackTransaction");
-  }
+  // Transaction methods removed - no longer using transactions
 
   // Core SQL execution methods - delegate to worker
   async executeSql(sql: string, params: any[] = []): Promise<void> {
@@ -275,9 +261,13 @@ export class WorkerDatabaseService extends BaseDatabaseService {
     await this.sendMessage("executeSql", { sql, params });
   }
 
-  async querySql(sql: string, params: any[] = []): Promise<any[]> {
+  async querySql(
+    sql: string,
+    params: any[] = [],
+    config?: QueryConfig,
+  ): Promise<any[]> {
     if (!this.worker) throw new Error("Worker not initialized");
-    return await this.sendMessage("querySql", { sql, params });
+    return await this.sendMessage("querySql", { sql, params, config });
   }
 
   // BACKUP OPERATIONS - Abstract method implementations

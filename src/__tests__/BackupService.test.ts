@@ -101,10 +101,7 @@ function createMockDatabase(): jest.Mocked<IDatabaseService> {
     purgeDatabase: jest.fn().mockResolvedValue(undefined),
     query: jest.fn().mockResolvedValue([]),
 
-    // Transaction support
-    beginTransaction: jest.fn(),
-    commitTransaction: jest.fn(),
-    rollbackTransaction: jest.fn(),
+    // Transaction methods removed - no longer using transactions
 
     // Backup operations
     createBackupDatabase: jest.fn().mockResolvedValue(undefined),

@@ -1,5 +1,5 @@
 import { DataAdapter } from "obsidian";
-import { BaseDatabaseService } from "./BaseDatabaseService";
+import { BaseDatabaseService, QueryConfig } from "./BaseDatabaseService";
 import {
   CREATE_TABLES_SQL,
   buildMigrationSQL,
@@ -114,22 +114,6 @@ export class MainDatabaseService extends BaseDatabaseService {
     }
   }
 
-  // Transaction methods
-  beginTransaction(): void {
-    if (!this.db) throw new Error("Database not initialized");
-    this.db.exec("BEGIN TRANSACTION;");
-  }
-
-  commitTransaction(): void {
-    if (!this.db) throw new Error("Database not initialized");
-    this.db.exec("COMMIT;");
-  }
-
-  rollbackTransaction(): void {
-    if (!this.db) throw new Error("Database not initialized");
-    this.db.exec("ROLLBACK;");
-  }
-
   // Core SQL execution methods
   async executeSql(sql: string, params: any[] = []): Promise<void> {
     if (!this.db) throw new Error("Database not initialized");
@@ -142,7 +126,11 @@ export class MainDatabaseService extends BaseDatabaseService {
     }
   }
 
-  async querySql(sql: string, params: any[] = []): Promise<any[]> {
+  async querySql(
+    sql: string,
+    params: any[] = [],
+    config?: QueryConfig,
+  ): Promise<any[]> {
     if (!this.db) throw new Error("Database not initialized");
 
     const stmt = this.db.prepare(sql);
@@ -151,7 +139,11 @@ export class MainDatabaseService extends BaseDatabaseService {
     try {
       stmt.bind(params);
       while (stmt.step()) {
-        results.push(stmt.get());
+        if (config?.asObject) {
+          results.push(stmt.getAsObject());
+        } else {
+          results.push(stmt.get());
+        }
       }
     } finally {
       stmt.free();
@@ -174,7 +166,7 @@ export class MainDatabaseService extends BaseDatabaseService {
     try {
       // Check current schema version
       const versionResult = this.db.exec("PRAGMA user_version");
-      const currentVersion = versionResult[0]?.values[0]?.[0] || 0;
+      const currentVersion = Number(versionResult[0]?.values[0]?.[0]) || 0;
 
       if (currentVersion < CURRENT_SCHEMA_VERSION) {
         this.debugLog(

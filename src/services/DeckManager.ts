@@ -449,10 +449,6 @@ export class DeckManager {
     this.debugLog(`Starting transaction for ${operations.length} operations`);
 
     try {
-      // Begin transaction
-      this.db.beginTransaction();
-      this.debugLog(`Transaction started successfully`);
-
       // Group operations by type for batch processing
       const deleteOps = operations.filter(
         (op) => op.type === "delete" && op.flashcardId,
@@ -489,22 +485,12 @@ export class DeckManager {
       }
       await yieldToUI();
 
-      // Commit transaction
-      this.db.commitTransaction();
-      this.debugLog(`Transaction committed successfully`);
-
       const totalBatchTime = performance.now() - batchStartTime;
       this.performanceLog(
         `Transaction completed in ${formatTime(totalBatchTime)} (${createCount} created, ${updateCount} updated, ${deleteCount} deleted)`,
       );
     } catch (error) {
-      console.error(`Critical error in transaction:`, error);
-      try {
-        this.db.rollbackTransaction();
-        this.debugLog(`Transaction rolled back due to error`);
-      } catch (rollbackError) {
-        console.error(`Failed to rollback transaction:`, rollbackError);
-      }
+      console.error(`Critical error in batch operations:`, error);
       throw error;
     }
   }

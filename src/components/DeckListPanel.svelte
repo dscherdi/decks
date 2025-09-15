@@ -56,6 +56,7 @@
                 newCount: 0,
                 dueCount: 0,
                 totalCount: 0,
+                matureCount: 0,
             }
         );
     }

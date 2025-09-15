@@ -17,6 +17,10 @@ export interface ParsedFlashcard {
   type: "header-paragraph" | "table";
 }
 
+export interface QueryConfig {
+  asObject?: boolean;
+}
+
 export interface DatabaseWorkerMessage {
   id: string;
   type: string;
@@ -126,7 +130,7 @@ class SimpleDatabaseWorker {
     }
   }
 
-  querySql(sql: string, params: any[] = []): any[] {
+  querySql(sql: string, params: any[] = [], config?: QueryConfig): any[] {
     if (!this.db || !this.initialized) {
       throw new Error("Database not initialized");
     }
@@ -137,7 +141,11 @@ class SimpleDatabaseWorker {
     try {
       stmt.bind(params);
       while (stmt.step()) {
-        results.push(stmt.get());
+        if (config?.asObject) {
+          results.push(stmt.getAsObject());
+        } else {
+          results.push(stmt.get());
+        }
       }
     } catch (error) {
       self.postMessage({ type: "error", error });
@@ -166,18 +174,15 @@ class SimpleDatabaseWorker {
 
   // Transaction support
   beginTransaction(): void {
-    if (!this.db) throw new Error("Database not initialized");
-    this.db.exec("BEGIN TRANSACTION;");
+    // Transactions disabled - no-op
   }
 
   commitTransaction(): void {
-    if (!this.db) throw new Error("Database not initialized");
-    this.db.exec("COMMIT;");
+    // Transactions disabled - no-op
   }
 
   rollbackTransaction(): void {
-    if (!this.db) throw new Error("Database not initialized");
-    this.db.exec("ROLLBACK;");
+    // Transactions disabled - no-op
   }
 
   // Database initialization method using passed SQL
@@ -259,7 +264,7 @@ class SimpleDatabaseWorker {
     try {
       // Check current schema version
       const versionResult = this.db.exec("PRAGMA user_version");
-      const currentVersion = versionResult[0]?.values[0]?.[0] || 0;
+      const currentVersion = Number(versionResult[0]?.values[0]?.[0]) || 0;
 
       if (currentVersion < currentSchemaVersion) {
         // Request migration SQL from main thread
@@ -468,79 +473,70 @@ class SimpleDatabaseWorker {
   executeBatchOperations(operations: BatchOperation[]): void {
     if (!this.db) throw new Error("Database not initialized");
 
-    try {
-      this.beginTransaction();
+    // Group operations by type for batch processing
+    const deleteOps = operations.filter(
+      (op) => op.type === "delete" && op.flashcardId,
+    );
+    const createOps = operations.filter(
+      (op) => op.type === "create" && op.flashcard,
+    );
+    const updateOps = operations.filter(
+      (op) => op.type === "update" && op.flashcardId && op.updates,
+    );
 
-      // Group operations by type for batch processing
-      const deleteOps = operations.filter(
-        (op) => op.type === "delete" && op.flashcardId,
-      );
-      const createOps = operations.filter(
-        (op) => op.type === "create" && op.flashcard,
-      );
-      const updateOps = operations.filter(
-        (op) => op.type === "update" && op.flashcardId && op.updates,
-      );
+    // Execute DELETE operations
+    for (const op of deleteOps) {
+      const stmt = this.db.prepare("DELETE FROM flashcards WHERE id = ?");
+      stmt.run([op.flashcardId]);
+      stmt.free();
+    }
 
-      // Execute DELETE operations
-      for (const op of deleteOps) {
-        const stmt = this.db.prepare("DELETE FROM flashcards WHERE id = ?");
-        stmt.run([op.flashcardId]);
-        stmt.free();
-      }
+    // Execute CREATE operations with INSERT OR REPLACE to handle duplicates
+    for (const op of createOps) {
+      const flashcard = op.flashcard;
+      const stmt = this.db.prepare(`
+        INSERT OR REPLACE INTO flashcards (
+          id, deck_id, front, back, type, source_file, content_hash,
+          state, due_date, interval, repetitions, difficulty, stability,
+          lapses, last_reviewed, created, modified
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, datetime('now'), datetime('now'))
+      `);
+      stmt.run([
+        flashcard.id,
+        flashcard.deckId,
+        flashcard.front,
+        flashcard.back,
+        flashcard.type,
+        flashcard.sourceFile,
+        flashcard.contentHash,
+        flashcard.state,
+        flashcard.dueDate,
+        flashcard.interval,
+        flashcard.repetitions,
+        flashcard.difficulty,
+        flashcard.stability,
+        flashcard.lapses,
+        flashcard.lastReviewed,
+      ]);
+      stmt.free();
+    }
 
-      // Execute CREATE operations
-      for (const op of createOps) {
-        const flashcard = op.flashcard;
-        const stmt = this.db.prepare(`
-          INSERT INTO flashcards (
-            id, deck_id, front, back, type, source_file, content_hash,
-            state, due_date, interval, repetitions, difficulty, stability,
-            lapses, last_reviewed, created, modified
-          ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, datetime('now'), datetime('now'))
-        `);
-        stmt.run([
-          flashcard.id,
-          flashcard.deckId,
-          flashcard.front,
-          flashcard.back,
-          flashcard.type,
-          flashcard.sourceFile,
-          flashcard.contentHash,
-          flashcard.state,
-          flashcard.dueDate,
-          flashcard.interval,
-          flashcard.repetitions,
-          flashcard.difficulty,
-          flashcard.stability,
-          flashcard.lapses,
-          flashcard.lastReviewed,
-        ]);
-        stmt.free();
-      }
-
-      // Execute UPDATE operations
-      for (const op of updateOps) {
-        const updates = op.updates;
-        const stmt = this.db.prepare(`
-          UPDATE flashcards SET
-            front = ?, back = ?, type = ?, content_hash = ?, modified = datetime('now')
-          WHERE id = ?
-        `);
-        stmt.run([
-          updates.front,
-          updates.back,
-          updates.type,
-          updates.contentHash,
-          op.flashcardId,
-        ]);
-        stmt.free();
-      }
-
-      this.commitTransaction();
-    } catch (error) {
-      this.rollbackTransaction();
-      throw error;
+    // Execute UPDATE operations
+    for (const op of updateOps) {
+      const updates = op.updates;
+      const stmt = this.db.prepare(`
+        UPDATE flashcards SET
+          front = ?, back = ?, type = ?, content_hash = ?, modified = datetime('now')
+        WHERE id = ?
+      `);
+      stmt.run([
+        updates.front,
+        updates.back,
+        updates.type,
+        updates.contentHash,
+        op.flashcardId,
+      ]);
+      stmt.free();
     }
   }
 
@@ -749,7 +745,7 @@ self.onmessage = async (event: MessageEvent<DatabaseWorkerMessage>) => {
         break;
 
       case "querySql":
-        result = worker.querySql(data.sql, data.params);
+        result = worker.querySql(data.sql, data.params, data.config);
         break;
 
       case "export":

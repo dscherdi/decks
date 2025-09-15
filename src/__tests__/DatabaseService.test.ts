@@ -64,6 +64,9 @@ describe("DatabaseService", () => {
     // Mock the db instance to avoid initialization issues
     (dbService as any).db = mockDb;
     (dbService as any).SQL = { Database: jest.fn() };
+
+    // Spy on executeSql method
+    jest.spyOn(dbService, "executeSql").mockResolvedValue(undefined);
   });
 
   describe("initialization", () => {
@@ -113,8 +116,10 @@ describe("DatabaseService", () => {
 
         await dbService.createDeck(deck);
 
-        expect(mockDb.prepare).toHaveBeenCalled();
-        expect(mockStatement.run).toHaveBeenCalled();
+        expect(dbService.executeSql).toHaveBeenCalledWith(
+          expect.stringContaining("INSERT INTO decks"),
+          expect.any(Array),
+        );
       });
     });
 
@@ -184,7 +189,10 @@ describe("DatabaseService", () => {
 
         await dbService.updateDeck("deck_1", updates);
 
-        expect(mockStatement.run).toHaveBeenCalled();
+        expect(dbService.executeSql).toHaveBeenCalledWith(
+          expect.stringContaining("UPDATE decks"),
+          expect.any(Array),
+        );
       });
     });
 
@@ -192,8 +200,10 @@ describe("DatabaseService", () => {
       it("should delete deck and associated flashcards", async () => {
         await dbService.deleteDeck("deck_1");
 
-        expect(mockDb.prepare).toHaveBeenCalled();
-        expect(mockStatement.run).toHaveBeenCalled();
+        expect(dbService.executeSql).toHaveBeenCalledWith(
+          expect.stringContaining("DELETE FROM decks"),
+          expect.any(Array),
+        );
       });
     });
   });
@@ -220,70 +230,15 @@ describe("DatabaseService", () => {
 
         await dbService.createFlashcard(flashcard);
 
-        expect(mockStatement.run).toHaveBeenCalled();
-      });
-    });
-
-    describe("batchCreateFlashcards", () => {
-      it("should create multiple flashcards in batch", async () => {
-        const flashcards = [
-          {
-            id: "card_1",
-            deckId: "deck_123",
-            front: "Q1",
-            back: "A1",
-            type: "header-paragraph" as const,
-            sourceFile: "test.md",
-            contentHash: "hash1",
-            state: "new" as const,
-            dueDate: "2024-01-01T00:00:00.000Z",
-            interval: 1440,
-            repetitions: 0,
-            difficulty: 0,
-            stability: 0,
-            lapses: 0,
-            lastReviewed: null,
-          },
-          {
-            id: "card_2",
-            deckId: "deck_123",
-            front: "Q2",
-            back: "A2",
-            type: "header-paragraph" as const,
-            sourceFile: "test.md",
-            contentHash: "hash2",
-            state: "new" as const,
-            dueDate: "2024-01-01T00:00:00.000Z",
-            interval: 1440,
-            repetitions: 0,
-            difficulty: 0,
-            stability: 0,
-            lapses: 0,
-            lastReviewed: null,
-          },
-        ];
-
-        // Mock executeSql since batchCreateFlashcards calls it for each flashcard
-        jest.spyOn(dbService, "executeSql").mockResolvedValue(undefined);
-
-        await dbService.batchCreateFlashcards(flashcards);
-
-        expect(dbService.executeSql).toHaveBeenCalledTimes(flashcards.length);
-        expect(mockDb.exec).toHaveBeenCalledWith("BEGIN TRANSACTION;");
-        expect(mockDb.exec).toHaveBeenCalledWith("COMMIT;");
-      });
-
-      it("should handle empty flashcard array", async () => {
-        jest.spyOn(dbService, "executeSql").mockResolvedValue(undefined);
-
-        await dbService.batchCreateFlashcards([]);
-
-        expect(dbService.executeSql).not.toHaveBeenCalled();
+        expect(dbService.executeSql).toHaveBeenCalledWith(
+          expect.stringContaining("INSERT INTO flashcards"),
+          expect.any(Array),
+        );
       });
     });
 
     describe("batchUpdateFlashcards", () => {
-      it("should update multiple flashcards", () => {
+      it("should update multiple flashcards", async () => {
         const updates = [
           {
             id: "card_1",
@@ -294,71 +249,33 @@ describe("DatabaseService", () => {
           },
         ];
 
-        dbService.batchUpdateFlashcards(updates);
+        await dbService.batchUpdateFlashcards(updates);
 
-        expect(mockDb.prepare).toHaveBeenCalled();
-        expect(mockStatement.run).toHaveBeenCalled();
-        expect(mockStatement.free).toHaveBeenCalled();
+        expect(dbService.executeSql).toHaveBeenCalled();
       });
 
-      it("should handle empty updates array", () => {
-        dbService.batchUpdateFlashcards([]);
-        expect(mockDb.prepare).not.toHaveBeenCalled();
+      it("should handle empty updates array", async () => {
+        await dbService.batchUpdateFlashcards([]);
+        expect(dbService.executeSql).not.toHaveBeenCalled();
       });
     });
 
     describe("batchDeleteFlashcards", () => {
-      it("should delete multiple flashcards", () => {
+      it("should delete multiple flashcards", async () => {
         const flashcardIds = ["card_1", "card_2"];
 
-        dbService.batchDeleteFlashcards(flashcardIds);
+        await dbService.batchDeleteFlashcards(flashcardIds);
 
-        expect(mockStatement.run).toHaveBeenCalledTimes(1);
-        expect(mockStatement.free).toHaveBeenCalled();
+        expect(dbService.executeSql).toHaveBeenCalledWith(
+          expect.stringContaining("DELETE FROM flashcards"),
+          expect.any(Array),
+        );
       });
 
-      it("should handle empty ID array", () => {
-        dbService.batchDeleteFlashcards([]);
-        expect(mockDb.prepare).not.toHaveBeenCalled();
+      it("should handle empty ID array", async () => {
+        await dbService.batchDeleteFlashcards([]);
+        expect(dbService.executeSql).not.toHaveBeenCalled();
       });
-    });
-  });
-
-  describe("transaction operations", () => {
-    it("should begin transaction", () => {
-      dbService.beginTransaction();
-      expect(mockDb.exec).toHaveBeenCalledWith("BEGIN TRANSACTION;");
-    });
-
-    it("should commit transaction", () => {
-      dbService.commitTransaction();
-      expect(mockDb.exec).toHaveBeenCalledWith("COMMIT;");
-    });
-
-    it("should rollback transaction", () => {
-      dbService.rollbackTransaction();
-      expect(mockDb.exec).toHaveBeenCalledWith("ROLLBACK;");
-    });
-
-    it("should handle transaction with callback", async () => {
-      const callback = jest.fn().mockResolvedValue("success");
-
-      const result = await dbService.runInTransaction(callback);
-
-      expect(callback).toHaveBeenCalled();
-      expect(result).toBe("success");
-    });
-
-    it("should rollback transaction on error", async () => {
-      const callback = jest
-        .fn()
-        .mockRejectedValue(new Error("Transaction failed"));
-
-      await expect(dbService.runInTransaction(callback)).rejects.toThrow(
-        "Transaction failed",
-      );
-
-      expect(callback).toHaveBeenCalled();
     });
   });
 
@@ -380,10 +297,12 @@ describe("DatabaseService", () => {
         expect(dbService.querySql).toHaveBeenCalledWith(
           "SELECT SUM(time_elapsed_ms) as total FROM review_logs",
           [],
+          { asObject: true },
         );
         expect(dbService.querySql).toHaveBeenCalledWith(
           "SELECT SUM(time_elapsed_ms) as total FROM review_logs WHERE reviewed_at >= date('now', '-30 days')",
           [],
+          { asObject: true },
         );
       });
 

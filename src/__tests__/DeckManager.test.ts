@@ -120,10 +120,7 @@ describe("DeckManager", () => {
 
     mockDb.updateDeckHeaderLevel = jest.fn();
     mockDb.createDeck = jest.fn();
-    // Add batch operation mocks
-    mockDb.beginTransaction = jest.fn();
-    mockDb.commitTransaction = jest.fn();
-    mockDb.rollbackTransaction = jest.fn();
+    // Add batch operation mocks (transactions removed)
     mockDb.batchCreateFlashcards = jest.fn();
     mockDb.batchUpdateFlashcards = jest.fn();
     mockDb.batchDeleteFlashcards = jest.fn();
@@ -627,8 +624,7 @@ Answer 1`;
       // Verify existing flashcards were checked
       expect(mockDb.getFlashcardsByDeck).toHaveBeenCalledWith("deck_123");
 
-      // Verify batch operations were called
-      expect(mockDb.beginTransaction).toHaveBeenCalled();
+      // Verify batch operations were called (transactions removed)
       expect(mockDb.batchCreateFlashcards).toHaveBeenCalledWith([
         expect.objectContaining({
           deckId: "deck_123",
@@ -637,7 +633,6 @@ Answer 1`;
           contentHash: expect.any(String),
         }),
       ]);
-      expect(mockDb.commitTransaction).toHaveBeenCalled();
     });
   });
 

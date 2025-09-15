@@ -124,6 +124,7 @@ export interface DeckStats {
   newCount: number;
   dueCount: number;
   totalCount: number;
+  matureCount: number;
 }
 
 export interface AnkiExportConfig {

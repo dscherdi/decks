@@ -381,7 +381,7 @@ export function buildMigrationSQL(db: Database): string {
     SELECT ${reviewLogsSelect} FROM review_logs WHERE EXISTS (SELECT 1 FROM sqlite_master WHERE type='table' AND name='review_logs');
 
     INSERT OR IGNORE INTO review_sessions_new (id, deck_id, started_at, ended_at, goal_total, done_unique)
-    SELECT ${reviewSessionsSelect} FROM review_sessions WHERE EXISTS (SELECT 1 FROM sqlite_master WHERE type='table' AND name='review_logs');
+    SELECT ${reviewSessionsSelect} FROM review_sessions WHERE EXISTS (SELECT 1 FROM sqlite_master WHERE type='table' AND name='review_sessions');
 
     -- Drop old tables
     DROP TABLE IF EXISTS review_logs;

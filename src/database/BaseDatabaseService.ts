@@ -12,6 +12,10 @@ import {
 } from "./types";
 import { SQL_QUERIES } from "./schemas";
 
+export interface QueryConfig {
+  asObject?: boolean;
+}
+
 export abstract class BaseDatabaseService implements IDatabaseService {
   protected dbPath: string;
   protected adapter: DataAdapter;
@@ -31,24 +35,13 @@ export abstract class BaseDatabaseService implements IDatabaseService {
   abstract initialize(): Promise<void>;
   abstract close(): Promise<void>;
   abstract save(): Promise<void>;
-  abstract beginTransaction(): void;
-  abstract commitTransaction(): void;
-  abstract rollbackTransaction(): void;
+  // Transaction methods removed - no longer using transactions
   abstract executeSql(sql: string, params?: any[]): Promise<void>;
-  abstract querySql(sql: string, params?: any[]): Promise<any[]>;
-
-  // Template method for running transactions
-  async runInTransaction<T>(operations: () => Promise<T>): Promise<T> {
-    this.beginTransaction();
-    try {
-      const result = await operations();
-      this.commitTransaction();
-      return result;
-    } catch (error) {
-      this.rollbackTransaction();
-      throw error;
-    }
-  }
+  abstract querySql(
+    sql: string,
+    params?: any[],
+    config?: QueryConfig,
+  ): Promise<any[]>;
 
   // Shared business logic methods
   protected parseDeckRow(row: any[]): Deck {
@@ -273,29 +266,27 @@ export abstract class BaseDatabaseService implements IDatabaseService {
     newName: string,
     newFilepath: string,
   ): Promise<void> {
-    await this.runInTransaction(async () => {
-      // Update deck
-      const sql1 = `UPDATE decks SET id = ?, name = ?, filepath = ?, modified = ? WHERE id = ?`;
-      await this.executeSql(sql1, [
-        newDeckId,
-        newName,
-        newFilepath,
-        this.getCurrentTimestamp(),
-        oldDeckId,
-      ]);
+    // Update deck
+    const sql1 = `UPDATE decks SET id = ?, name = ?, filepath = ?, modified = ? WHERE id = ?`;
+    await this.executeSql(sql1, [
+      newDeckId,
+      newName,
+      newFilepath,
+      this.getCurrentTimestamp(),
+      oldDeckId,
+    ]);
 
-      // Update flashcards
-      const sql2 = `UPDATE flashcards SET deck_id = ? WHERE deck_id = ?`;
-      await this.executeSql(sql2, [newDeckId, oldDeckId]);
+    // Update flashcard deck_id references
+    const sql2 = `UPDATE flashcards SET deck_id = ? WHERE deck_id = ?`;
+    await this.executeSql(sql2, [newDeckId, oldDeckId]);
 
-      // Update review logs
-      const sql3 = `UPDATE review_logs SET deck_id = ? WHERE deck_id = ?`;
-      await this.executeSql(sql3, [newDeckId, oldDeckId]);
+    // Update review logs
+    const sql3 = `UPDATE review_logs SET deck_id = ? WHERE deck_id = ?`;
+    await this.executeSql(sql3, [newDeckId, oldDeckId]);
 
-      // Update review sessions
-      const sql4 = `UPDATE review_sessions SET deck_id = ? WHERE deck_id = ?`;
-      await this.executeSql(sql4, [newDeckId, oldDeckId]);
-    });
+    // Update review sessions
+    const sql4 = `UPDATE review_sessions SET deck_id = ? WHERE deck_id = ?`;
+    await this.executeSql(sql4, [newDeckId, oldDeckId]);
   }
 
   async deleteDeck(id: string): Promise<void> {
@@ -448,35 +439,33 @@ export abstract class BaseDatabaseService implements IDatabaseService {
   ): Promise<void> {
     if (flashcards.length === 0) return;
 
-    await this.runInTransaction(async () => {
-      const now = this.getCurrentTimestamp();
-      const sql = `INSERT INTO flashcards
-                   (id, deck_id, front, back, type, source_file, content_hash, state, due_date,
-                    interval, repetitions, difficulty, stability, lapses, last_reviewed, created, modified)
-                   VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`;
+    const now = this.getCurrentTimestamp();
+    const sql = `INSERT INTO flashcards
+                 (id, deck_id, front, back, type, source_file, content_hash, state, due_date,
+                  interval, repetitions, difficulty, stability, lapses, last_reviewed, created, modified)
+                 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`;
 
-      for (const flashcard of flashcards) {
-        await this.executeSql(sql, [
-          flashcard.id,
-          flashcard.deckId,
-          flashcard.front,
-          flashcard.back,
-          flashcard.type,
-          flashcard.sourceFile,
-          flashcard.contentHash,
-          flashcard.state,
-          flashcard.dueDate,
-          flashcard.interval,
-          flashcard.repetitions,
-          flashcard.difficulty,
-          flashcard.stability,
-          flashcard.lapses,
-          flashcard.lastReviewed,
-          now,
-          now,
-        ]);
-      }
-    });
+    for (const flashcard of flashcards) {
+      await this.executeSql(sql, [
+        flashcard.id,
+        flashcard.deckId,
+        flashcard.front,
+        flashcard.back,
+        flashcard.type,
+        flashcard.sourceFile,
+        flashcard.contentHash,
+        flashcard.state,
+        flashcard.dueDate,
+        flashcard.interval,
+        flashcard.repetitions,
+        flashcard.difficulty,
+        flashcard.stability,
+        flashcard.lapses,
+        flashcard.lastReviewed,
+        now,
+        now,
+      ]);
+    }
   }
 
   async batchUpdateFlashcards(
@@ -484,11 +473,9 @@ export abstract class BaseDatabaseService implements IDatabaseService {
   ): Promise<void> {
     if (updates.length === 0) return;
 
-    await this.runInTransaction(async () => {
-      for (const update of updates) {
-        await this.updateFlashcard(update.id, update.updates);
-      }
-    });
+    for (const update of updates) {
+      await this.updateFlashcard(update.id, update.updates);
+    }
   }
 
   async batchDeleteFlashcards(flashcardIds: string[]): Promise<void> {
@@ -502,19 +489,19 @@ export abstract class BaseDatabaseService implements IDatabaseService {
   // COUNT OPERATIONS
   async countNewCards(deckId: string, now: string): Promise<number> {
     const sql = `SELECT COUNT(*) as count FROM flashcards WHERE deck_id = ? AND state = 'new'`;
-    const results = await this.querySql(sql, [deckId]);
+    const results = await this.querySql(sql, [deckId], { asObject: true });
     return results[0]?.count || 0;
   }
 
   async countDueCards(deckId: string, now: string): Promise<number> {
     const sql = `SELECT COUNT(*) as count FROM flashcards WHERE deck_id = ? AND due_date <= ?`;
-    const results = await this.querySql(sql, [deckId, now]);
+    const results = await this.querySql(sql, [deckId, now], { asObject: true });
     return results[0]?.count || 0;
   }
 
   async countTotalCards(deckId: string): Promise<number> {
     const sql = `SELECT COUNT(*) as count FROM flashcards WHERE deck_id = ?`;
-    const results = await this.querySql(sql, [deckId]);
+    const results = await this.querySql(sql, [deckId], { asObject: true });
     return results[0]?.count || 0;
   }
 
@@ -527,7 +514,9 @@ export abstract class BaseDatabaseService implements IDatabaseService {
                  FROM review_logs r
                  JOIN flashcards f ON r.flashcard_id = f.id
                  WHERE f.deck_id = ? AND r.reviewed_at >= ? AND r.reviewed_at <= ? AND r.old_state = 'new'`;
-    const results = await this.querySql(sql, [deckId, startOfDay, endOfDay]);
+    const results = await this.querySql(sql, [deckId, startOfDay, endOfDay], {
+      asObject: true,
+    });
     return results[0]?.count || 0;
   }
 
@@ -540,7 +529,9 @@ export abstract class BaseDatabaseService implements IDatabaseService {
                  FROM review_logs r
                  JOIN flashcards f ON r.flashcard_id = f.id
                  WHERE f.deck_id = ? AND r.reviewed_at >= ? AND r.reviewed_at <= ? AND r.old_state = 'review'`;
-    const results = await this.querySql(sql, [deckId, startOfDay, endOfDay]);
+    const results = await this.querySql(sql, [deckId, startOfDay, endOfDay], {
+      asObject: true,
+    });
     return results[0]?.count || 0;
   }
 
@@ -558,7 +549,7 @@ export abstract class BaseDatabaseService implements IDatabaseService {
     const params: any[] = [];
 
     // Required fields
-    const requiredFields = [
+    const requiredFields: [string, any][] = [
       ["id", reviewLog.id],
       ["flashcard_id", reviewLog.flashcardId],
       ["last_reviewed_at", reviewLog.lastReviewedAt],
@@ -587,16 +578,16 @@ export abstract class BaseDatabaseService implements IDatabaseService {
       ["min_minutes", reviewLog.minMinutes],
       ["fsrs_weights_version", reviewLog.fsrsWeightsVersion],
       ["scheduler_version", reviewLog.schedulerVersion],
+      ["time_elapsed_ms", reviewLog.timeElapsedMs],
+      ["content_hash", reviewLog.contentHash],
     ];
 
-    // Optional fields - only include if defined
-    const optionalFields = [
+    // Optional fields - only include if defined and not null/undefined
+    const optionalFields: [string, any][] = [
       ["session_id", reviewLog.sessionId],
       ["shown_at", reviewLog.shownAt],
-      ["time_elapsed_ms", reviewLog.timeElapsedMs],
       ["note_model_id", reviewLog.noteModelId],
       ["card_template_id", reviewLog.cardTemplateId],
-      ["content_hash", reviewLog.contentHash],
       ["client", reviewLog.client],
     ];
 
@@ -607,9 +598,9 @@ export abstract class BaseDatabaseService implements IDatabaseService {
       params.push(value);
     }
 
-    // Add optional fields if they have values
+    // Add optional fields if they have values (not null or undefined)
     for (const [column, value] of optionalFields) {
-      if (value !== undefined) {
+      if (value !== undefined && value !== null) {
         columns.push(column);
         placeholders.push("?");
         params.push(value);
@@ -624,86 +615,86 @@ export abstract class BaseDatabaseService implements IDatabaseService {
     flashcardId: string,
   ): Promise<ReviewLog | null> {
     const sql = `SELECT * FROM review_logs WHERE flashcard_id = ? ORDER BY reviewed_at DESC LIMIT 1`;
-    const results = await this.querySql(sql, [flashcardId]);
+    const results = await this.querySql(sql, [flashcardId], { asObject: true });
 
     if (results.length === 0) return null;
 
     const row = results[0];
     return {
-      id: row[0],
-      flashcardId: row[1],
-      sessionId: row[17],
-      lastReviewedAt: row[2],
-      reviewedAt: row[3],
-      rating: row[4],
-      ratingLabel: this.getRatingLabel(row[4]),
-      timeElapsedMs: row[5],
-      oldState: row[6],
-      oldRepetitions: row[10],
-      oldLapses: row[12],
-      oldStability: row[16],
-      oldDifficulty: row[14],
-      newState: row[7],
-      newRepetitions: row[11],
-      newLapses: row[13],
-      newStability: row[16],
-      newDifficulty: row[15],
-      oldIntervalMinutes: row[8],
-      newIntervalMinutes: row[9],
-      oldDueAt: "",
-      newDueAt: "",
-      elapsedDays: 0,
-      retrievability: 0,
-      requestRetention: 0.9,
-      profile: "STANDARD",
-      maximumIntervalDays: 36500,
-      minMinutes: 1440,
-      fsrsWeightsVersion: "4.5",
-      schedulerVersion: "1.0",
+      id: row.id,
+      flashcardId: row.flashcard_id,
+      sessionId: row.session_id,
+      lastReviewedAt: row.last_reviewed_at,
+      reviewedAt: row.reviewed_at,
+      rating: row.rating,
+      ratingLabel: this.getRatingLabel(row.rating),
+      timeElapsedMs: row.time_elapsed_ms,
+      oldState: row.old_state,
+      oldRepetitions: row.old_repetitions,
+      oldLapses: row.old_lapses,
+      oldStability: row.old_stability,
+      oldDifficulty: row.old_difficulty,
+      newState: row.new_state,
+      newRepetitions: row.new_repetitions,
+      newLapses: row.new_lapses,
+      newStability: row.new_stability,
+      newDifficulty: row.new_difficulty,
+      oldIntervalMinutes: row.old_interval_minutes,
+      newIntervalMinutes: row.new_interval_minutes,
+      oldDueAt: row.old_due_at,
+      newDueAt: row.new_due_at,
+      elapsedDays: row.elapsed_days,
+      retrievability: row.retrievability,
+      requestRetention: row.request_retention,
+      profile: row.profile as "INTENSIVE" | "STANDARD",
+      maximumIntervalDays: row.maximum_interval_days,
+      minMinutes: row.min_minutes,
+      fsrsWeightsVersion: row.fsrs_weights_version,
+      schedulerVersion: row.scheduler_version,
     };
   }
 
   async getAllReviewLogs(): Promise<ReviewLog[]> {
     const sql = `SELECT * FROM review_logs ORDER BY reviewed_at DESC`;
-    const results = await this.querySql(sql, []);
+    const results = await this.querySql(sql, [], { asObject: true });
 
     return results.map((row) => ({
-      id: row[0],
-      flashcardId: row[1],
-      sessionId: row[17],
-      lastReviewedAt: row[2],
-      reviewedAt: row[3],
-      rating: row[4],
-      ratingLabel: this.getRatingLabel(row[4]),
-      timeElapsedMs: row[5],
-      oldState: row[6],
-      oldRepetitions: row[10],
-      oldLapses: row[12],
-      oldStability: row[16],
-      oldDifficulty: row[14],
-      newState: row[7],
-      newRepetitions: row[11],
-      newLapses: row[13],
-      newStability: row[16],
-      newDifficulty: row[15],
-      oldIntervalMinutes: row[8],
-      newIntervalMinutes: row[9],
-      oldDueAt: "",
-      newDueAt: "",
-      elapsedDays: 0,
-      retrievability: 0,
-      requestRetention: 0.9,
-      profile: "STANDARD",
-      maximumIntervalDays: 36500,
-      minMinutes: 1440,
-      fsrsWeightsVersion: "4.5",
-      schedulerVersion: "1.0",
+      id: row.id,
+      flashcardId: row.flashcard_id,
+      sessionId: row.session_id,
+      lastReviewedAt: row.last_reviewed_at,
+      reviewedAt: row.reviewed_at,
+      rating: row.rating,
+      ratingLabel: this.getRatingLabel(row.rating),
+      timeElapsedMs: row.time_elapsed_ms,
+      oldState: row.old_state,
+      oldRepetitions: row.old_repetitions,
+      oldLapses: row.old_lapses,
+      oldStability: row.old_stability,
+      oldDifficulty: row.old_difficulty,
+      newState: row.new_state,
+      newRepetitions: row.new_repetitions,
+      newLapses: row.new_lapses,
+      newStability: row.new_stability,
+      newDifficulty: row.new_difficulty,
+      oldIntervalMinutes: row.old_interval_minutes,
+      newIntervalMinutes: row.new_interval_minutes,
+      oldDueAt: row.old_due_at,
+      newDueAt: row.new_due_at,
+      elapsedDays: row.elapsed_days,
+      retrievability: row.retrievability,
+      requestRetention: row.request_retention,
+      profile: row.profile as "INTENSIVE" | "STANDARD",
+      maximumIntervalDays: row.maximum_interval_days,
+      minMinutes: row.min_minutes,
+      fsrsWeightsVersion: row.fsrs_weights_version,
+      schedulerVersion: row.scheduler_version,
     }));
   }
 
   async reviewLogExists(reviewLogId: string): Promise<boolean> {
-    const sql = `SELECT 1 FROM review_logs WHERE id = ? LIMIT 1`;
-    const results = await this.querySql(sql, [reviewLogId]);
+    const sql = `SELECT 1 as found FROM review_logs WHERE id = ? LIMIT 1`;
+    const results = await this.querySql(sql, [reviewLogId], { asObject: true });
     return results.length > 0;
   }
 
@@ -762,8 +753,8 @@ export abstract class BaseDatabaseService implements IDatabaseService {
   }
 
   async reviewSessionExists(sessionId: string): Promise<boolean> {
-    const sql = `SELECT 1 FROM review_sessions WHERE id = ? LIMIT 1`;
-    const results = await this.querySql(sql, [sessionId]);
+    const sql = `SELECT 1 as found FROM review_sessions WHERE id = ? LIMIT 1`;
+    const results = await this.querySql(sql, [sessionId], { asObject: true });
     return results.length > 0;
   }
 
@@ -771,8 +762,10 @@ export abstract class BaseDatabaseService implements IDatabaseService {
     sessionId: string,
     flashcardId: string,
   ): Promise<boolean> {
-    const sql = `SELECT 1 FROM review_logs WHERE session_id = ? AND flashcard_id = ? LIMIT 1`;
-    const results = await this.querySql(sql, [sessionId, flashcardId]);
+    const sql = `SELECT 1 as found FROM review_logs WHERE session_id = ? AND flashcard_id = ? LIMIT 1`;
+    const results = await this.querySql(sql, [sessionId, flashcardId], {
+      asObject: true,
+    });
     return results.length > 0;
   }
 
@@ -795,7 +788,9 @@ export abstract class BaseDatabaseService implements IDatabaseService {
         WHERE deck_id = ?
       `;
 
-      const results = await this.querySql(sql, [now, deckId]);
+      const results = await this.querySql(sql, [now, deckId], {
+        asObject: true,
+      });
       this.debugLog(`Complex query result:`, results);
 
       // Handle both array and object result formats
@@ -921,11 +916,11 @@ export abstract class BaseDatabaseService implements IDatabaseService {
       GROUP BY DATE(reviewed_at)
     `;
 
-    const results = await this.querySql(sql, []);
+    const results = await this.querySql(sql, [], { asObject: true });
     const countMap = new Map<string, number>();
 
     results.forEach((row) => {
-      countMap.set(row[0], row[1]);
+      countMap.set(row.date, row.count);
     });
 
     return countMap;
@@ -938,8 +933,8 @@ export abstract class BaseDatabaseService implements IDatabaseService {
     const sql1 = `SELECT SUM(time_elapsed_ms) as total FROM review_logs`;
     const sql2 = `SELECT SUM(time_elapsed_ms) as total FROM review_logs WHERE reviewed_at >= date('now', '-30 days')`;
 
-    const totalResults = await this.querySql(sql1, []);
-    const monthResults = await this.querySql(sql2, []);
+    const totalResults = await this.querySql(sql1, [], { asObject: true });
+    const monthResults = await this.querySql(sql2, [], { asObject: true });
 
     const totalMs = totalResults[0]?.total || 0;
     const monthMs = monthResults[0]?.total || 0;
@@ -954,35 +949,191 @@ export abstract class BaseDatabaseService implements IDatabaseService {
     deckFilter: string = "all",
     timeframe: string = "12months",
   ): Promise<Statistics> {
-    // Return basic statistics implementation matching the correct interface
-    return {
-      dailyStats: [],
-      cardStats: {
-        new: 0,
-        review: 0,
-        mature: 0,
-      },
-      answerButtons: { again: 0, hard: 0, good: 0, easy: 0 },
-      retentionRate: 0,
-      intervals: [],
-      forecast: [],
-      averagePace: 0,
-      totalReviewTime: 0,
-    };
+    try {
+      // Calculate timeframe dates
+      const now = new Date();
+      const daysAgo =
+        timeframe === "12months" ? 365 : timeframe === "3months" ? 90 : 30;
+      const startDate = new Date(
+        now.getTime() - daysAgo * 24 * 60 * 60 * 1000,
+      ).toISOString();
+      const endDate = now.toISOString();
+
+      this.debugLog(
+        `[Statistics Debug] Querying stats for timeframe: ${timeframe} (${daysAgo} days)`,
+      );
+      this.debugLog(
+        `[Statistics Debug] Date range: ${startDate} to ${endDate}`,
+      );
+
+      // Basic health check - count total records
+      const totalReviewLogs = await this.querySql(
+        "SELECT COUNT(*) as count FROM review_logs",
+        [],
+        { asObject: true },
+      );
+      const totalFlashcards = await this.querySql(
+        "SELECT COUNT(*) as count FROM flashcards",
+        [],
+        { asObject: true },
+      );
+      this.debugLog(
+        `[Statistics Debug] Database health: ${totalReviewLogs[0]?.count || 0} review logs, ${totalFlashcards[0]?.count || 0} flashcards`,
+      );
+
+      // Get daily stats
+      const dailyStatsResults = await this.querySql(
+        SQL_QUERIES.GET_DAILY_STATS,
+        [startDate, endDate],
+        { asObject: true },
+      );
+      const dailyStats = dailyStatsResults.map((row: any) => ({
+        date: row.date,
+        reviews: row.reviews || 0,
+        timeSpent: row.avg_time_seconds || 0,
+        newCards: row.new_cards || 0,
+        learningCards: row.learning_cards || 0,
+        reviewCards: row.review_cards || 0,
+        correctRate: row.correct_rate || 0,
+      }));
+      this.debugLog(
+        `[Statistics Debug] Daily stats found: ${dailyStatsResults.length} days`,
+      );
+
+      // Get card stats
+      const cardStatsResults = await this.querySql(
+        SQL_QUERIES.GET_CARD_STATS,
+        [],
+        { asObject: true },
+      );
+      const cardStats = { new: 0, review: 0, mature: 0 };
+      cardStatsResults.forEach((row: any) => {
+        if (row.card_type === "new") cardStats.new = row.count || 0;
+        else if (row.card_type === "review") cardStats.review = row.count || 0;
+        else if (row.card_type === "mature") cardStats.mature = row.count || 0;
+      });
+      this.debugLog(`[Statistics Debug] Card stats:`, cardStats);
+
+      // Get answer button stats
+      const answerButtonResults = await this.querySql(
+        SQL_QUERIES.GET_ANSWER_BUTTON_STATS,
+        [startDate, endDate],
+        { asObject: true },
+      );
+      const answerButtons = { again: 0, hard: 0, good: 0, easy: 0 };
+      answerButtonResults.forEach((row: any) => {
+        if (row.rating_label === "again") answerButtons.again = row.count || 0;
+        else if (row.rating_label === "hard")
+          answerButtons.hard = row.count || 0;
+        else if (row.rating_label === "good")
+          answerButtons.good = row.count || 0;
+        else if (row.rating_label === "easy")
+          answerButtons.easy = row.count || 0;
+      });
+      this.debugLog(`[Statistics Debug] Answer buttons:`, answerButtons);
+
+      // Calculate retention rate
+      const totalReviews =
+        answerButtons.again +
+        answerButtons.hard +
+        answerButtons.good +
+        answerButtons.easy;
+      const correctReviews =
+        answerButtons.hard + answerButtons.good + answerButtons.easy;
+      const retentionRate =
+        totalReviews > 0 ? (correctReviews / totalReviews) * 100 : 0;
+
+      // Get interval distribution
+      const intervalResults = await this.querySql(
+        SQL_QUERIES.GET_INTERVAL_DISTRIBUTION,
+        [],
+        { asObject: true },
+      );
+      const intervals = intervalResults.map((row: any) => ({
+        interval: row.interval_range || "",
+        count: row.count || 0,
+      }));
+
+      // Get pace stats
+      const paceResults = await this.querySql(
+        SQL_QUERIES.GET_PACE_STATS,
+        [startDate, endDate],
+        { asObject: true },
+      );
+      const averagePace = paceResults[0]?.avg_pace || 0;
+      const totalReviewTime = paceResults[0]?.total_time || 0;
+
+      // Generate forecast (next 30 days) - optimized with single query
+      const forecast30Days = new Date(now.getTime() + 30 * 24 * 60 * 60 * 1000);
+      const forecastEndDate = forecast30Days.toISOString();
+
+      const forecastResults = await this.querySql(
+        `SELECT DATE(due_date) as date, COUNT(*) as due_count
+         FROM flashcards
+         WHERE due_date >= ? AND due_date <= ?
+         GROUP BY DATE(due_date)
+         ORDER BY DATE(due_date)`,
+        [now.toISOString(), forecastEndDate],
+        { asObject: true },
+      );
+
+      const forecast = forecastResults.map((row: any) => ({
+        date: row.date,
+        dueCount: row.due_count || 0,
+      }));
+
+      const result = {
+        dailyStats,
+        cardStats,
+        answerButtons,
+        retentionRate,
+        intervals,
+        forecast,
+        averagePace,
+        totalReviewTime,
+      };
+
+      this.debugLog(`[Statistics Debug] Final statistics result:`, {
+        dailyStatsCount: dailyStats.length,
+        cardStats,
+        retentionRate,
+        intervalsCount: intervals.length,
+        forecastCount: forecast.length,
+        averagePace,
+        totalReviewTime,
+      });
+
+      return result;
+    } catch (error) {
+      console.error("Failed to get overall statistics:", error);
+      // Return empty stats on error
+      return {
+        dailyStats: [],
+        cardStats: { new: 0, review: 0, mature: 0 },
+        answerButtons: { again: 0, hard: 0, good: 0, easy: 0 },
+        retentionRate: 0,
+        intervals: [],
+        forecast: [],
+        averagePace: 0,
+        totalReviewTime: 0,
+      };
+    }
   }
 
   // UTILITY OPERATIONS
   async purgeDatabase(): Promise<void> {
-    await this.runInTransaction(async () => {
-      await this.executeSql("DELETE FROM review_logs");
-      await this.executeSql("DELETE FROM review_sessions");
-      await this.executeSql("DELETE FROM flashcards");
-      await this.executeSql("DELETE FROM decks");
-    });
+    await this.executeSql("DELETE FROM review_logs");
+    await this.executeSql("DELETE FROM review_sessions");
+    await this.executeSql("DELETE FROM flashcards");
+    await this.executeSql("DELETE FROM decks");
   }
 
-  async query(sql: string, params: any[] = []): Promise<any[]> {
-    return await this.querySql(sql, params);
+  async query(
+    sql: string,
+    params: any[] = [],
+    config?: QueryConfig,
+  ): Promise<any[]> {
+    return await this.querySql(sql, params, config);
   }
 
   // BACKUP OPERATIONS - Concrete implementations using abstract db methods
@@ -1046,8 +1197,9 @@ export abstract class BaseDatabaseService implements IDatabaseService {
 
           // Check if session already exists
           const existsResult = await this.querySql(
-            "SELECT 1 FROM review_sessions WHERE id = ?",
+            "SELECT 1 as found FROM review_sessions WHERE id = ?",
             [sessionId],
+            { asObject: true },
           );
 
           if (existsResult.length === 0) {
@@ -1075,8 +1227,9 @@ export abstract class BaseDatabaseService implements IDatabaseService {
 
           // Check if log already exists
           const existsResult = await this.querySql(
-            "SELECT 1 FROM review_logs WHERE id = ?",
+            "SELECT 1 as found FROM review_logs WHERE id = ?",
             [logId],
+            { asObject: true },
           );
 
           if (existsResult.length === 0) {
