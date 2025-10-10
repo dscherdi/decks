@@ -1,11 +1,11 @@
 import { Notice } from "obsidian";
-import { FlashcardsSettings } from "../settings";
+import { DecksSettings } from "../settings";
 
 export class ProgressTracker {
   private progressNotice: Notice | null = null;
-  private settings: FlashcardsSettings;
+  private settings: DecksSettings;
 
-  constructor(settings: FlashcardsSettings) {
+  constructor(settings: DecksSettings) {
     this.settings = settings;
   }
 

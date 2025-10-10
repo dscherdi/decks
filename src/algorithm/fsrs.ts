@@ -44,6 +44,11 @@ export interface SchedulingInfo {
   easy: SchedulingCard;
 }
 
+export interface FutureDueData {
+  date: string;
+  dueCount: number;
+}
+
 // Constants for exact calculations
 const MILLISECONDS_PER_DAY = 86400000;
 const MINUTES_PER_DAY = 1440;
@@ -581,6 +586,135 @@ export class FSRS {
       default:
         return 3;
     }
+  }
+
+  /**
+   * Simulate future due load for a collection of flashcards
+   * @param cards - Array of flashcards to simulate
+   * @param days - Number of days to simulate
+   * @param startDate - Starting date for simulation (defaults to now)
+   * @returns Array of daily due counts
+   */
+  public simulateFutureDueLoad(
+    cards: Flashcard[],
+    days: number,
+    startDate: Date = new Date(),
+  ): FutureDueData[] {
+    if (!cards || cards.length === 0 || days <= 0) {
+      return [];
+    }
+
+    const now = startDate;
+    const dailyLoad: number[] = new Array(days).fill(0);
+
+    // Filter to active cards only
+    const activeCards = cards.filter(
+      (card) => card.state === "new" || card.state === "review",
+    );
+
+    for (const card of activeCards) {
+      let currentCard = { ...card };
+
+      // If card has no due date, skip it
+      if (!currentCard.dueDate) {
+        continue;
+      }
+
+      // Start from the card's actual due date or today if overdue
+      let nextReviewDate = new Date(
+        Math.max(new Date(currentCard.dueDate).getTime(), now.getTime()),
+      );
+
+      // For mature cards with high stability, we need more reviews to cover long timeframes
+      const maxReviews = Math.max(15, Math.ceil(days / 30));
+
+      // Simulate reviews for this card over the timeframe
+      for (let reviewCount = 0; reviewCount < maxReviews; reviewCount++) {
+        const dayIndex = Math.floor(
+          (nextReviewDate.getTime() - now.getTime()) / (24 * 60 * 60 * 1000),
+        );
+
+        // If this review falls within our simulation window
+        if (dayIndex >= 0 && dayIndex < days) {
+          dailyLoad[dayIndex]++;
+        } else if (dayIndex >= days) {
+          // Beyond our simulation window, stop simulating this card
+          break;
+        }
+
+        // If the review is in the past (negative dayIndex), we still need to simulate
+        // it to get the next review date, but don't count it
+
+        try {
+          // Simulate different outcomes with weighted probabilities
+          const rating = this.simulateReviewRating(currentCard);
+
+          // Update the card using FSRS
+          const updatedCard = this.updateCard(currentCard, rating);
+          currentCard = updatedCard;
+          nextReviewDate = new Date(updatedCard.dueDate || now);
+
+          // Add some realistic scheduling variance (±6-12 hours for better distribution)
+          const variance = (Math.random() - 0.5) * 12 * 60 * 60 * 1000;
+          nextReviewDate = new Date(nextReviewDate.getTime() + variance);
+
+          // If next review is more than 2 years away, stop simulating this card
+          const maxFutureTime = now.getTime() + days * 24 * 60 * 60 * 1000;
+          if (nextReviewDate.getTime() > maxFutureTime * 2) {
+            break;
+          }
+        } catch (error) {
+          // If simulation fails, skip this card
+          break;
+        }
+      }
+    }
+
+    // Convert to forecast format
+    return dailyLoad.map((count, index) => ({
+      date: new Date(now.getTime() + index * 24 * 60 * 60 * 1000)
+        .toISOString()
+        .split("T")[0],
+      dueCount: Math.max(0, Math.round(count)),
+    }));
+  }
+
+  /**
+   * Simulate a review rating based on card maturity and realistic user behavior
+   * @param card - The flashcard being reviewed
+   * @returns Simulated rating
+   */
+  private simulateReviewRating(card: Flashcard): RatingLabel {
+    const random = Math.random();
+
+    // Weight ratings based on typical user behavior
+    // Base probabilities: Again=5%, Hard=10%, Good=70%, Easy=15%
+    let againThreshold = 0.05;
+    let hardThreshold = 0.15;
+    let goodThreshold = 0.85;
+
+    // Adjust based on card maturity
+    const maturityFactor = Math.min(card.repetitions / 5, 1);
+
+    // Mature cards are less likely to be "Again" and more likely to be "Easy"
+    if (maturityFactor > 0.5) {
+      againThreshold *= 0.3; // Significantly reduce again probability for mature cards
+      hardThreshold -= 0.03; // Reduce hard probability
+      goodThreshold -= 0.05; // Slightly reduce good to make room for easy
+      // Easy gets the remainder boost automatically
+    }
+
+    // New cards are more likely to be harder
+    if (card.state === "new") {
+      againThreshold *= 2.0; // Double again probability for new cards
+      hardThreshold += 0.08; // Increase hard probability
+      goodThreshold += 0.02; // Slightly increase good
+    }
+
+    if (random < againThreshold) return "again";
+    if (random < hardThreshold) return "hard";
+    if (random < goodThreshold) return "good";
+    return "easy";
   }
 
   /**

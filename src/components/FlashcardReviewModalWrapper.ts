@@ -2,7 +2,7 @@ import { Modal, Component, Notice, MarkdownRenderer } from "obsidian";
 import type { Deck, Flashcard } from "../database/types";
 import type { RatingLabel } from "../algorithm/fsrs";
 import type { Scheduler } from "../services/Scheduler";
-import type { FlashcardsSettings } from "../settings";
+import type { DecksSettings } from "../settings";
 import type { DatabaseServiceInterface } from "../database/DatabaseFactory";
 import type {
   FlashcardReviewComponent,
@@ -14,7 +14,7 @@ export class FlashcardReviewModalWrapper extends Modal {
   private deck: Deck;
   private initialCard: Flashcard | null;
   private scheduler: Scheduler;
-  private settings: FlashcardsSettings;
+  private settings: DecksSettings;
   private db: DatabaseServiceInterface;
   private refreshStats: () => Promise<void>;
   private refreshStatsById: (deckId: string) => Promise<void>;
@@ -39,7 +39,7 @@ export class FlashcardReviewModalWrapper extends Modal {
     deck: Deck,
     flashcards: Flashcard[],
     scheduler: Scheduler,
-    settings: FlashcardsSettings,
+    settings: DecksSettings,
     db: DatabaseServiceInterface,
     refreshStats: () => Promise<void>,
     refreshStatsById: (deckId: string) => Promise<void>,

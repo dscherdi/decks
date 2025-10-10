@@ -11,13 +11,14 @@ import {
 } from "@/database/types";
 import { VIEW_TYPE_DECKS } from "@/main";
 import { DeckSynchronizer } from "@/services/DeckSynchronizer";
-import { FlashcardsSettings } from "@/settings";
+import { DecksSettings } from "@/settings";
 import { yieldToUI } from "@/utils/ui";
 import { Logger, formatTime } from "@/utils/logging";
 import { ItemView, Component, WorkspaceLeaf, Notice } from "obsidian";
 import { Scheduler } from "@/services/Scheduler";
 import { FlashcardReviewModalWrapper } from "./FlashcardReviewModalWrapper";
 import { StatisticsModal } from "./StatisticsModal";
+import { StatisticsService } from "@/services/StatisticsService";
 import { FSRS, type RatingLabel } from "@/algorithm/fsrs";
 import DeckListPanel from "./DeckListPanel.svelte";
 import { ProgressTracker } from "@/utils/progress";
@@ -27,7 +28,8 @@ export class DecksView extends ItemView {
   private db: DatabaseServiceInterface;
   private deckSynchronizer: DeckSynchronizer;
   private scheduler: Scheduler;
-  private settings: FlashcardsSettings;
+  private statisticsService: StatisticsService;
+  private settings: DecksSettings;
   private setViewReference: (view: DecksView | null) => void;
   private hasShownInitialProgress = false;
   private component: DeckListPanelComponent | null = null;
@@ -42,7 +44,8 @@ export class DecksView extends ItemView {
     database: DatabaseServiceInterface,
     deckSynchronizer: DeckSynchronizer,
     scheduler: Scheduler,
-    settings: FlashcardsSettings,
+    statisticsService: StatisticsService,
+    settings: DecksSettings,
     progressTracker: ProgressTracker,
     logger: Logger,
     setViewReference: (view: DecksView | null) => void,
@@ -51,6 +54,7 @@ export class DecksView extends ItemView {
     this.db = database;
     this.deckSynchronizer = deckSynchronizer;
     this.scheduler = scheduler;
+    this.statisticsService = statisticsService;
     this.settings = settings;
     this.logger = logger;
 
@@ -125,10 +129,10 @@ export class DecksView extends ItemView {
           }
         },
         getReviewCounts: async (days: number) => {
-          return await this.db.getReviewCountsByDate(days);
+          return await this.statisticsService.getReviewCountsByDate(days);
         },
         getStudyStats: async () => {
-          return await this.db.getStudyStats();
+          return await this.statisticsService.getStudyStats();
         },
         onOpenStatistics: () => {
           this.openStatisticsModal();
@@ -180,7 +184,8 @@ export class DecksView extends ItemView {
   }
 
   private async getAllDeckStatsMap(): Promise<Map<string, DeckStats>> {
-    const stats = await this.db.getAllDeckStats();
+    const stats = await this.statisticsService.getAllDeckStats();
+    console.log(stats);
     const statsMap = new Map<string, DeckStats>();
     for (const stat of stats) {
       statsMap.set(stat.deckId, stat);
@@ -225,7 +230,12 @@ export class DecksView extends ItemView {
   }
 
   openStatisticsModal(deckFilter?: string): void {
-    new StatisticsModal(this.app, this.db, deckFilter).open();
+    new StatisticsModal(
+      this.app,
+      this.statisticsService,
+      this.settings,
+      deckFilter,
+    ).open();
   }
 
   async refresh(force: boolean = false) {
@@ -270,7 +280,7 @@ export class DecksView extends ItemView {
     );
     try {
       // Get stats for the specific deck
-      const deckStats = await this.db.getDeckStats(deckId);
+      const deckStats = await this.statisticsService.getDeckStats(deckId);
       this.logger.debug("Updated deck stats for:", deckId);
 
       // Update component using unified function

@@ -1,6 +1,6 @@
 import { DEFAULT_FSRS_PARAMETERS } from "./algorithm/fsrs-weights";
 
-export interface FlashcardsSettings {
+export interface DecksSettings {
   // Review Session Settings
   review: {
     showProgress: boolean;
@@ -38,7 +38,7 @@ export interface FlashcardsSettings {
   };
 }
 
-export const DEFAULT_SETTINGS: FlashcardsSettings = {
+export const DEFAULT_SETTINGS: DecksSettings = {
   review: {
     showProgress: true,
     enableKeyboardShortcuts: true,

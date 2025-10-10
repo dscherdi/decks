@@ -17,7 +17,7 @@ export interface QueryConfig {
   asObject?: boolean;
 }
 
-export abstract class BaseDatabaseService implements IDatabaseService {
+export abstract class BaseDatabaseService {
   protected dbPath: string;
   protected adapter: DataAdapter;
   protected debugLog: (message: string, ...args: any[]) => void;
@@ -39,7 +39,6 @@ export abstract class BaseDatabaseService implements IDatabaseService {
   abstract initialize(): Promise<void>;
   abstract close(): Promise<void>;
   abstract save(): Promise<void>;
-  // Transaction methods removed - no longer using transactions
   abstract executeSql(sql: string, params?: any[]): Promise<void>;
   abstract querySql(
     sql: string,
@@ -502,8 +501,9 @@ export abstract class BaseDatabaseService implements IDatabaseService {
   }
 
   async countDueCards(deckId: string, now: string): Promise<number> {
-    const sql = `SELECT COUNT(*) as count FROM flashcards WHERE deck_id = ? AND due_date <= ?`;
+    const sql = `SELECT COUNT(*) as count FROM flashcards WHERE deck_id = ? AND state = 'review' AND due_date <= ?`;
     const results = await this.querySql(sql, [deckId, now], { asObject: true });
+    console.log("countDueCards", results);
     return results[0]?.count || 0;
   }
 
@@ -511,6 +511,95 @@ export abstract class BaseDatabaseService implements IDatabaseService {
     const sql = `SELECT COUNT(*) as count FROM flashcards WHERE deck_id = ?`;
     const results = await this.querySql(sql, [deckId], { asObject: true });
     return results[0]?.count || 0;
+  }
+
+  // FORECAST OPERATIONS (optimized SQL)
+  async getScheduledDueByDay(
+    deckId: string,
+    startDate: string,
+    endDate: string,
+  ): Promise<{ day: string; count: number }[]> {
+    const results = await this.querySql(
+      SQL_QUERIES.GET_SCHEDULED_DUE_BY_DAY,
+      [deckId, startDate, endDate],
+      { asObject: true },
+    );
+    return results.map((row: any) => ({
+      day: row.day,
+      count: row.c || 0,
+    }));
+  }
+
+  async getScheduledDueByDayMulti(
+    deckIds: string[],
+    startDate: string,
+    endDate: string,
+  ): Promise<{ day: string; count: number }[]> {
+    if (deckIds.length === 0) return [];
+
+    // Generate dynamic IN clause
+    const placeholders = deckIds.map(() => "?").join(",");
+    const sql = `
+      SELECT substr(due_date,1,10) AS day, COUNT(*) AS c
+      FROM flashcards
+      WHERE deck_id IN (${placeholders}) AND state='review'
+        AND due_date >= ? AND due_date < ?
+      GROUP BY day
+      ORDER BY day
+    `;
+
+    const results = await this.querySql(sql, [...deckIds, startDate, endDate], {
+      asObject: true,
+    });
+    return results.map((row: any) => ({
+      day: row.day,
+      count: row.c || 0,
+    }));
+  }
+
+  async getCurrentBacklog(
+    deckId: string,
+    currentDate: string,
+  ): Promise<number> {
+    const results = await this.querySql(
+      SQL_QUERIES.GET_CURRENT_BACKLOG,
+      [deckId, currentDate],
+      { asObject: true },
+    );
+    return results[0]?.n || 0;
+  }
+
+  async getCurrentBacklogMulti(
+    deckIds: string[],
+    currentDate: string,
+  ): Promise<number> {
+    if (deckIds.length === 0) return 0;
+
+    // Generate dynamic IN clause
+    const placeholders = deckIds.map(() => "?").join(",");
+    const sql = `
+      SELECT COUNT(*) AS n
+      FROM flashcards
+      WHERE deck_id IN (${placeholders}) AND state='review' AND due_date < ?
+    `;
+
+    const results = await this.querySql(sql, [...deckIds, currentDate], {
+      asObject: true,
+    });
+    return results[0]?.n || 0;
+  }
+
+  async getDeckReviewCountRange(
+    deckId: string,
+    startDate: string,
+    endDate: string,
+  ): Promise<number> {
+    const results = await this.querySql(
+      SQL_QUERIES.GET_DECK_REVIEW_COUNT_RANGE,
+      [deckId, startDate, endDate],
+      { asObject: true },
+    );
+    return results[0]?.n || 0;
   }
 
   async countNewCardsToday(
@@ -706,6 +795,69 @@ export abstract class BaseDatabaseService implements IDatabaseService {
     return results.length > 0;
   }
 
+  // OPTIMIZED REVIEW LOG QUERIES FOR STATISTICS
+  async getReviewLogsByDeck(deckId: string): Promise<ReviewLog[]> {
+    const sql = `
+      SELECT rl.*
+      FROM review_logs rl
+      JOIN flashcards f ON rl.flashcard_id = f.id
+      WHERE f.deck_id = ?
+      ORDER BY rl.reviewed_at DESC
+    `;
+    const results = await this.querySql(sql, [deckId], { asObject: true });
+    return this.mapRowsToReviewLogs(results);
+  }
+
+  async getReviewLogsByDecks(deckIds: string[]): Promise<ReviewLog[]> {
+    if (deckIds.length === 0) return [];
+
+    const placeholders = deckIds.map(() => "?").join(",");
+    const sql = `
+      SELECT rl.*
+      FROM review_logs rl
+      JOIN flashcards f ON rl.flashcard_id = f.id
+      WHERE f.deck_id IN (${placeholders})
+      ORDER BY rl.reviewed_at DESC
+    `;
+    const results = await this.querySql(sql, deckIds, { asObject: true });
+    return this.mapRowsToReviewLogs(results);
+  }
+
+  private mapRowsToReviewLogs(results: any[]): ReviewLog[] {
+    return results.map((row) => ({
+      id: row.id,
+      flashcardId: row.flashcard_id,
+      sessionId: row.session_id,
+      lastReviewedAt: row.last_reviewed_at,
+      reviewedAt: row.reviewed_at,
+      rating: row.rating,
+      ratingLabel: this.getRatingLabel(row.rating),
+      timeElapsedMs: row.time_elapsed_ms,
+      oldState: row.old_state,
+      oldRepetitions: row.old_repetitions,
+      oldLapses: row.old_lapses,
+      oldStability: row.old_stability,
+      oldDifficulty: row.old_difficulty,
+      newState: row.new_state,
+      newRepetitions: row.new_repetitions,
+      newLapses: row.new_lapses,
+      newStability: row.new_stability,
+      newDifficulty: row.new_difficulty,
+      oldIntervalMinutes: row.old_interval_minutes,
+      newIntervalMinutes: row.new_interval_minutes,
+      oldDueAt: row.old_due_at,
+      newDueAt: row.new_due_at,
+      elapsedDays: row.elapsed_days,
+      retrievability: row.retrievability,
+      requestRetention: row.request_retention,
+      profile: row.profile as "INTENSIVE" | "STANDARD",
+      maximumIntervalDays: row.maximum_interval_days,
+      minMinutes: row.min_minutes,
+      fsrsWeightsVersion: row.fsrs_weights_version,
+      schedulerVersion: row.scheduler_version,
+    }));
+  }
+
   // REVIEW SESSION OPERATIONS
   async createReviewSession(
     session: Omit<ReviewSession, "id">,
@@ -777,114 +929,6 @@ export abstract class BaseDatabaseService implements IDatabaseService {
     return results.length > 0;
   }
 
-  // STATISTICS OPERATIONS
-  async getDeckStats(
-    deckId: string,
-    respectDailyLimits: boolean = true,
-  ): Promise<DeckStats> {
-    const now = this.getCurrentTimestamp();
-
-    try {
-      // Original complex query with array/object compatibility
-      const sql = `
-        SELECT
-          COUNT(*) as total,
-          SUM(CASE WHEN state = 'new' THEN 1 ELSE 0 END) as new_count,
-          SUM(CASE WHEN state = 'review' AND due_date <= ? THEN 1 ELSE 0 END) as due_count,
-          SUM(CASE WHEN state = 'review' AND interval > 30240 THEN 1 ELSE 0 END) as mature_count
-        FROM flashcards
-        WHERE deck_id = ?
-      `;
-
-      const results = await this.querySql(sql, [now, deckId], {
-        asObject: true,
-      });
-      this.debugLog(`Complex query result:`, results);
-
-      // Handle both array and object result formats
-      const row = Array.isArray(results[0])
-        ? {
-            total: results[0][0],
-            new_count: results[0][1],
-            due_count: results[0][2],
-            mature_count: results[0][3],
-          }
-        : results[0] || {};
-
-      let newCount = row.new_count || 0;
-      let dueCount = row.due_count || 0;
-
-      // Apply daily limits if requested
-      if (respectDailyLimits) {
-        const deck = await this.getDeckById(deckId);
-        if (deck) {
-          const dailyCounts = await this.getDailyReviewCounts(deckId);
-
-          // Calculate remaining daily allowance for new cards
-          if (deck.config.hasNewCardsLimitEnabled) {
-            if (deck.config.newCardsPerDay === 0) {
-              newCount = 0; // No new cards allowed
-            } else {
-              const remainingNew = Math.max(
-                0,
-                deck.config.newCardsPerDay - dailyCounts.newCount,
-              );
-              newCount = Math.min(newCount, remainingNew);
-            }
-          }
-
-          // Calculate remaining daily allowance for review cards
-          if (deck.config.hasReviewCardsLimitEnabled) {
-            if (deck.config.reviewCardsPerDay === 0) {
-              dueCount = 0; // No review cards allowed
-            } else {
-              const remainingReview = Math.max(
-                0,
-                deck.config.reviewCardsPerDay - dailyCounts.reviewCount,
-              );
-              dueCount = Math.min(dueCount, remainingReview);
-            }
-          }
-        }
-      }
-
-      // Debug: Log actual values returned from query
-      this.debugLog(
-        `getDeckStats for ${deckId}: total=${row.total}, new_count=${row.new_count}, due_count=${row.due_count}, mature_count=${row.mature_count}`,
-      );
-
-      return {
-        deckId,
-        newCount,
-        dueCount,
-        totalCount: row.total || 0,
-        matureCount: row.mature_count || 0,
-      };
-    } catch (error) {
-      this.debugLog(`getDeckStats error for ${deckId}:`, error);
-      // Return empty stats on error
-      return {
-        deckId,
-        newCount: 0,
-        dueCount: 0,
-        totalCount: 0,
-        matureCount: 0,
-      };
-    }
-  }
-
-  async getAllDeckStats(): Promise<DeckStats[]> {
-    const decks = await this.getAllDecks();
-    const stats = [];
-
-    for (const deck of decks) {
-      const deckStats = await this.getDeckStats(deck.id);
-      stats.push(deckStats);
-    }
-
-    return stats;
-  }
-
   async getDailyReviewCounts(
     deckId: string,
   ): Promise<{ newCount: number; reviewCount: number }> {
@@ -912,45 +956,6 @@ export abstract class BaseDatabaseService implements IDatabaseService {
     );
 
     return { newCount, reviewCount };
-  }
-
-  async getReviewCountsByDate(
-    days: number = 365,
-  ): Promise<Map<string, number>> {
-    const sql = `
-      SELECT DATE(reviewed_at) as date, COUNT(*) as count
-      FROM review_logs
-      WHERE reviewed_at >= date('now', '-${days} days')
-      GROUP BY DATE(reviewed_at)
-    `;
-
-    const results = await this.querySql(sql, [], { asObject: true });
-    const countMap = new Map<string, number>();
-
-    results.forEach((row) => {
-      countMap.set(row.date, row.count);
-    });
-
-    return countMap;
-  }
-
-  async getStudyStats(): Promise<{
-    totalHours: number;
-    pastMonthHours: number;
-  }> {
-    const sql1 = `SELECT SUM(time_elapsed_ms) as total FROM review_logs`;
-    const sql2 = `SELECT SUM(time_elapsed_ms) as total FROM review_logs WHERE reviewed_at >= date('now', '-30 days')`;
-
-    const totalResults = await this.querySql(sql1, [], { asObject: true });
-    const monthResults = await this.querySql(sql2, [], { asObject: true });
-
-    const totalMs = totalResults[0]?.total || 0;
-    const monthMs = monthResults[0]?.total || 0;
-
-    return {
-      totalHours: totalMs / (1000 * 60 * 60),
-      pastMonthHours: monthMs / (1000 * 60 * 60),
-    };
   }
 
   async getOverallStatistics(
@@ -1071,17 +1076,37 @@ export abstract class BaseDatabaseService implements IDatabaseService {
       const averagePace = paceResults[0]?.avg_pace || 0;
       const totalReviewTime = paceResults[0]?.total_time || 0;
 
-      // Generate forecast (next 30 days) - optimized with single query
+      // Generate forecast (next 30 days) with proper due card handling
+      const todayStart = new Date();
+      todayStart.setHours(0, 0, 0, 0);
+      const todayEnd = new Date();
+      todayEnd.setHours(23, 59, 59, 999);
       const forecast30Days = new Date(now.getTime() + 30 * 24 * 60 * 60 * 1000);
       const forecastEndDate = forecast30Days.toISOString();
 
+      this.debugLog(
+        `[Statistics Debug] Forecast query range: ${todayStart.toISOString()} to ${forecastEndDate}`,
+      );
+
+      // Get overdue cards (due before today)
+      const overdueResults = await this.querySql(
+        `SELECT COUNT(*) as overdue_count
+         FROM flashcards
+         WHERE due_date < ? AND state != 'new'`,
+        [todayStart.toISOString()],
+        { asObject: true },
+      );
+      const overdueCount = overdueResults[0]?.overdue_count || 0;
+      this.debugLog(`[Statistics Debug] Overdue cards: ${overdueCount}`);
+
+      // Get forecast for today and future days
       const forecastResults = await this.querySql(
         `SELECT DATE(due_date) as date, COUNT(*) as due_count
          FROM flashcards
          WHERE due_date >= ? AND due_date <= ?
          GROUP BY DATE(due_date)
          ORDER BY DATE(due_date)`,
-        [now.toISOString(), forecastEndDate],
+        [todayStart.toISOString(), forecastEndDate],
         { asObject: true },
       );
 
@@ -1089,6 +1114,23 @@ export abstract class BaseDatabaseService implements IDatabaseService {
         date: row.date,
         dueCount: row.due_count || 0,
       }));
+
+      // Add overdue cards to today's count if there are any
+      const todayStr = todayStart.toISOString().split("T")[0];
+      const todayForecast = forecast.find((day) => day.date === todayStr);
+      if (todayForecast && overdueCount > 0) {
+        todayForecast.dueCount += overdueCount;
+      } else if (overdueCount > 0 && !todayForecast) {
+        // If no cards naturally due today but there are overdue cards, create today entry
+        forecast.unshift({
+          date: todayStr,
+          dueCount: overdueCount,
+        });
+      }
+
+      this.debugLog(
+        `[Statistics Debug] Final forecast length: ${forecast.length}`,
+      );
 
       const result = {
         dailyStats,

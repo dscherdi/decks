@@ -6,14 +6,14 @@ import {
   Modal,
   DropdownComponent,
 } from "obsidian";
-import { FlashcardsSettings } from "../settings";
+import { DecksSettings } from "../settings";
 import { BackupService } from "../services/BackupService";
 import DecksPlugin from "@/main";
 import { DatabaseServiceInterface } from "@/database/DatabaseFactory";
 import { Logger } from "@/utils/logging";
 
 export class DecksSettingTab extends PluginSettingTab {
-  private settings: FlashcardsSettings;
+  private settings: DecksSettings;
   private saveSettings: () => Promise<void>;
   private performSync: (force?: boolean) => Promise<void>;
   private refreshViewStats: () => Promise<void>;
@@ -29,7 +29,7 @@ export class DecksSettingTab extends PluginSettingTab {
   constructor(
     app: App,
     plugin: DecksPlugin,
-    settings: FlashcardsSettings,
+    settings: DecksSettings,
     db: DatabaseServiceInterface,
     saveSettings: () => Promise<void>,
     logger: Logger,

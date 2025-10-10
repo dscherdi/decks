@@ -8,11 +8,12 @@ import { DeckManager } from "./services/DeckManager";
 import { DeckSynchronizer } from "./services/DeckSynchronizer";
 import { Scheduler } from "./services/Scheduler";
 import { BackupService } from "./services/BackupService";
+import { StatisticsService } from "./services/StatisticsService";
 import { yieldToUI } from "./utils/ui";
 import { Logger, formatTime } from "./utils/logging";
 import { ProgressTracker } from "./utils/progress";
 import { DeckStats } from "./database/types";
-import { FlashcardsSettings, DEFAULT_SETTINGS } from "./settings";
+import { DecksSettings, DEFAULT_SETTINGS } from "./settings";
 import { DecksSettingTab } from "./components/SettingsTab";
 
 import { DecksView } from "./components/DecksView";
@@ -66,8 +67,9 @@ export default class DecksPlugin extends Plugin {
   private deckSynchronizer: DeckSynchronizer;
   private scheduler: Scheduler;
   private backupService: BackupService;
+  private statisticsService: StatisticsService;
   public view: DecksView | null = null;
-  public settings: FlashcardsSettings;
+  public settings: DecksSettings;
   private logger: Logger;
   private progressTracker: ProgressTracker;
   private hasShownInitialProgress = false;
@@ -134,6 +136,9 @@ export default class DecksPlugin extends Plugin {
         this.logger.debug.bind(this),
       );
 
+      // Initialize statistics service
+      this.statisticsService = new StatisticsService(this.db, this.settings);
+
       // Initialize scheduler
       this.scheduler = new Scheduler(
         this.db,
@@ -141,6 +146,7 @@ export default class DecksPlugin extends Plugin {
         this.app.vault.adapter,
         this.app.vault.configDir,
         this.backupService,
+        this.statisticsService,
       );
 
       // Register the side panel view
@@ -152,6 +158,7 @@ export default class DecksPlugin extends Plugin {
             this.db,
             this.deckSynchronizer,
             this.scheduler,
+            this.statisticsService,
             this.settings,
             this.progressTracker,
             this.logger,
@@ -388,8 +395,8 @@ export default class DecksPlugin extends Plugin {
 
       // Delegate to view for domain logic
       if (this.view) {
-        await this.view.performSync(false);
-        await this.view.refresh(false);
+        await this.view.performSync(true);
+        await this.view.refresh(true);
       }
 
       await yieldToUI();

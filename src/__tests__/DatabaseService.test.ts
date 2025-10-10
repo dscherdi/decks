@@ -279,62 +279,6 @@ describe("DatabaseService", () => {
     });
   });
 
-  describe("study statistics", () => {
-    describe("getStudyStats", () => {
-      it("should return study statistics from review logs", async () => {
-        // Mock querySql to return the expected values directly
-        jest
-          .spyOn(dbService, "querySql")
-          .mockResolvedValueOnce([{ total: 362492520 }]) // Mock for total time in ms
-          .mockResolvedValueOnce([{ total: 62685600 }]); // Mock for past month time in ms
-
-        const stats = await dbService.getStudyStats();
-
-        expect(stats.totalHours).toBeCloseTo(100.69, 2);
-        expect(stats.pastMonthHours).toBeCloseTo(17.41, 2);
-
-        expect(dbService.querySql).toHaveBeenCalledTimes(2);
-        expect(dbService.querySql).toHaveBeenCalledWith(
-          "SELECT SUM(time_elapsed_ms) as total FROM review_logs",
-          [],
-          { asObject: true },
-        );
-        expect(dbService.querySql).toHaveBeenCalledWith(
-          "SELECT SUM(time_elapsed_ms) as total FROM review_logs WHERE reviewed_at >= date('now', '-30 days')",
-          [],
-          { asObject: true },
-        );
-      });
-
-      it("should handle null values gracefully", async () => {
-        // Mock querySql to return null/undefined values
-        jest
-          .spyOn(dbService, "querySql")
-          .mockResolvedValueOnce([{ total: null }]) // Mock for total time in ms (null)
-          .mockResolvedValueOnce([{ total: null }]); // Mock for past month time in ms (null)
-
-        const stats = await dbService.getStudyStats();
-
-        expect(stats).toEqual({
-          totalHours: 0,
-          pastMonthHours: 0,
-        });
-      });
-
-      it("should throw error when database not initialized", async () => {
-        const uninitializedService = new MainDatabaseService(
-          "test.db",
-          mockAdapter,
-          debugLog,
-        );
-
-        await expect(uninitializedService.getStudyStats()).rejects.toThrow(
-          "Database not initialized",
-        );
-      });
-    });
-  });
-
   describe("database persistence", () => {
     it("should save database to file", async () => {
       await dbService.save();

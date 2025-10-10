@@ -1,16 +1,22 @@
 import { Scheduler } from "../services/Scheduler";
 import { MainDatabaseService } from "../database/MainDatabaseService";
+import { StatisticsService } from "../services/StatisticsService";
 import { Flashcard, Deck, FlashcardState } from "../database/types";
 
-// Mock DatabaseService
+// Mock DatabaseService and StatisticsService
 jest.mock("../database/MainDatabaseService");
+jest.mock("../services/StatisticsService");
 const MockedDatabaseService = MainDatabaseService as jest.MockedClass<
   typeof MainDatabaseService
+>;
+const MockedStatisticsService = StatisticsService as jest.MockedClass<
+  typeof StatisticsService
 >;
 
 describe("Scheduler", () => {
   let scheduler: Scheduler;
   let mockDb: jest.Mocked<MainDatabaseService>;
+  let mockStatsService: jest.Mocked<StatisticsService>;
 
   beforeEach(() => {
     mockDb = new MockedDatabaseService(
@@ -18,11 +24,19 @@ describe("Scheduler", () => {
       {} as any,
       jest.fn(),
     ) as jest.Mocked<MainDatabaseService>;
+
+    mockStatsService = new MockedStatisticsService(
+      mockDb,
+      {} as any,
+    ) as jest.Mocked<StatisticsService>;
+
     scheduler = new Scheduler(
       mockDb,
       { debug: { enableLogging: false, performanceLogs: false } } as any,
       {} as any,
       "",
+      undefined,
+      mockStatsService,
     );
 
     // Add default mock methods for ReviewSession functionality

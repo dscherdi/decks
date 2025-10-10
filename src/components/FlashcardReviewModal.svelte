@@ -1,7 +1,7 @@
 <script lang="ts">
     import { createEventDispatcher, onMount, onDestroy, tick } from "svelte";
     import type { Deck, Flashcard } from "../database/types";
-    import type { FlashcardsSettings } from "../settings";
+    import type { DecksSettings } from "../settings";
     import { FSRS, type RatingLabel } from "../algorithm/fsrs";
     import type {
         Scheduler,
@@ -19,7 +19,7 @@
         shownAt?: Date,
     ) => Promise<void>;
     export let renderMarkdown: (content: string, el: HTMLElement) => void;
-    export let settings: FlashcardsSettings;
+    export let settings: DecksSettings;
     export let scheduler: Scheduler;
     export let onCardReviewed:
         | ((reviewedCard: Flashcard) => Promise<void>)

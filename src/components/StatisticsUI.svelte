@@ -11,12 +11,16 @@
     import CardsAddedChart from "./CardsAddedChart.svelte";
     import CardRetrievabilityChart from "./CardRetrievabilityChart.svelte";
     import TrueRetentionTable from "./TrueRetentionTable.svelte";
-    import ForecastChart from "./ForecastChart.svelte";
+    import FutureDueChart from "./FutureDueChart.svelte";
     import type { Statistics, ReviewLog, Flashcard } from "../database/types";
-    import type { DatabaseServiceInterface } from "../database/DatabaseFactory";
 
-    export let db: DatabaseServiceInterface;
+    import { StatisticsService } from "../services/StatisticsService";
+    import type { DecksSettings } from "../settings";
+    import { formatTime, formatPace } from "../utils/formatting";
+
+    export let statisticsService: StatisticsService;
     export let deckFilter: string = "all";
+    export const settings: DecksSettings = {} as DecksSettings;
 
     const dispatch = createEventDispatcher();
 
@@ -26,13 +30,15 @@
     let selectedTimeframe = "12months"; // "12months" or "all"
     let availableDecks: any[] = [];
     let availableTags: string[] = [];
+
+    // Computed deck IDs based on current filter
+    $: selectedDeckIds = getDeckIdsFromFilter(
+        selectedDeckFilter,
+        availableDecks,
+    );
     let heatmapComponent: ReviewHeatmap;
     let deckFilterContainer: HTMLElement;
     let timeframeFilterContainer: HTMLElement;
-
-    // Data for charts
-    let allReviewLogs: ReviewLog[] = [];
-    let allFlashcards: Flashcard[] = [];
 
     // Track last event to prevent double execution
     let lastEventTime = 0;
@@ -46,14 +52,26 @@
 
     onMount(async () => {
         loading = true;
-        await loadDecksAndTags();
-        await loadStatistics();
-        await loadChartData();
+        console.log("[StatisticsUI] Starting onMount");
 
-        // Mount filter components after data is loaded
-        tick().then(() => {
-            mountFilterComponents();
-        });
+        try {
+            console.log("[StatisticsUI] Loading decks and tags...");
+            await loadDecksAndTags();
+            console.log("[StatisticsUI] Decks and tags loaded");
+
+            console.log("[StatisticsUI] Loading statistics...");
+            await loadStatistics();
+            console.log("[StatisticsUI] Statistics loaded");
+
+            // Mount filter components after data is loaded
+            tick().then(() => {
+                console.log("[StatisticsUI] Mounting filter components");
+                mountFilterComponents();
+            });
+        } catch (error) {
+            console.error("[StatisticsUI] Error in onMount:", error);
+            loading = false;
+        }
     });
 
     function mountFilterComponents() {
@@ -100,12 +118,22 @@
 
     async function loadDecksAndTags() {
         try {
-            availableDecks = await db.getAllDecks();
-            availableTags = [
-                ...new Set(availableDecks.map((deck) => deck.tag)),
-            ];
+            console.log(
+                "[StatisticsUI] Getting available decks and tags from StatisticsService...",
+            );
+            const decksAndTags =
+                await statisticsService.getAvailableDecksAndTags();
+            availableDecks = decksAndTags.decks;
+            availableTags = decksAndTags.tags;
+            console.log(
+                `[StatisticsUI] Retrieved ${availableDecks.length} decks and ${availableTags.length} tags`,
+            );
         } catch (error) {
-            console.error("Error loading decks and tags:", error);
+            console.error(
+                "[StatisticsUI] Error loading decks and tags:",
+                error,
+            );
+            throw error;
         }
     }
 
@@ -126,18 +154,31 @@
 
     async function loadStatistics() {
         try {
-            statistics = await db.getOverallStatistics(
+            console.log(
+                `[StatisticsUI] Getting overall statistics (filter: ${selectedDeckFilter}, timeframe: ${selectedTimeframe})...`,
+            );
+
+            statistics = await statisticsService.getOverallStatistics(
                 selectedDeckFilter,
                 selectedTimeframe,
             );
 
+            console.log(
+                "[StatisticsUI] Statistics loaded successfully:",
+                statistics,
+            );
+            console.log("[StatisticsUI] Forecast data:", statistics?.forecast);
+            console.log("[StatisticsUI] Card stats:", statistics?.cardStats);
+
             // Compute derived statistics once data is loaded
-            todayStats = getTodayStats();
-            weekStats = getTimeframeStats(7);
-            monthStats = getTimeframeStats(30);
-            yearStats = getTimeframeStats(365);
+            console.log("[StatisticsUI] Computing derived statistics...");
+            todayStats = statisticsService.getTodayStats(statistics);
+            weekStats = statisticsService.getTimeframeStats(statistics, 7);
+            monthStats = statisticsService.getTimeframeStats(statistics, 30);
+            yearStats = statisticsService.getTimeframeStats(statistics, 365);
+            console.log("[StatisticsUI] Derived statistics computed");
         } catch (error) {
-            console.error("Error loading statistics:", error);
+            console.error("[StatisticsUI] Error loading statistics:", error);
             statistics = {
                 dailyStats: [],
                 cardStats: { new: 0, review: 0, mature: 0 },
@@ -155,60 +196,47 @@
             monthStats = null;
             yearStats = null;
         } finally {
+            console.log("[StatisticsUI] Setting loading to false");
             loading = false;
         }
     }
 
-    async function loadChartData() {
+    async function handleFilterChange() {
+        console.log("[StatisticsUI] Filter changed, reloading data...");
+        loading = true;
         try {
-            // Load all review logs and flashcards for charts
-            allReviewLogs = await db.getAllReviewLogs();
-
-            // Filter by deck if specified
-            if (selectedDeckFilter !== "all") {
-                if (selectedDeckFilter.startsWith("deck:")) {
-                    const deckId = selectedDeckFilter.replace("deck:", "");
-                    allFlashcards = await db.getFlashcardsByDeck(deckId);
-                    allReviewLogs = allReviewLogs.filter((log) =>
-                        allFlashcards.some(
-                            (card) => card.id === log.flashcardId,
-                        ),
-                    );
-                } else if (selectedDeckFilter.startsWith("tag:")) {
-                    const tag = selectedDeckFilter.replace("tag:", "");
-                    const decks = availableDecks.filter(
-                        (deck) => deck.tag === tag,
-                    );
-                    const deckIds = decks.map((deck) => deck.id);
-
-                    allFlashcards = [];
-                    for (const deckId of deckIds) {
-                        const deckFlashcards =
-                            await db.getFlashcardsByDeck(deckId);
-                        allFlashcards.push(...deckFlashcards);
-                    }
-
-                    allReviewLogs = allReviewLogs.filter((log) =>
-                        allFlashcards.some(
-                            (card) => card.id === log.flashcardId,
-                        ),
-                    );
-                } else {
-                    allFlashcards = await db.getAllFlashcards();
-                }
-            } else {
-                allFlashcards = await db.getAllFlashcards();
-            }
+            await loadStatistics();
         } catch (error) {
-            console.error("Error loading chart data:", error);
-            allReviewLogs = [];
-            allFlashcards = [];
+            console.error("[StatisticsUI] Error during filter change:", error);
+        } finally {
+            loading = false;
         }
     }
 
-    async function handleFilterChange() {
-        await loadStatistics();
-        await loadChartData();
+    async function retryLoading() {
+        console.log("[StatisticsUI] Retrying to load statistics...");
+        loading = true;
+        statistics = null;
+
+        try {
+            console.log("[StatisticsUI] Loading decks and tags...");
+            await loadDecksAndTags();
+            console.log("[StatisticsUI] Decks and tags loaded");
+
+            console.log("[StatisticsUI] Loading statistics...");
+            await loadStatistics();
+            console.log("[StatisticsUI] Statistics loaded");
+
+            // Mount filter components after data is loaded
+            tick().then(() => {
+                console.log("[StatisticsUI] Mounting filter components");
+                mountFilterComponents();
+            });
+        } catch (error) {
+            console.error("[StatisticsUI] Error in retry:", error);
+        } finally {
+            loading = false;
+        }
     }
 
     function formatDate(dateString: string) {
@@ -233,139 +261,48 @@
         return `${minutes}m ${remainingSeconds}s`;
     }
 
-    function getTodayStats() {
-        if (!statistics?.dailyStats || statistics.dailyStats.length === 0)
-            return null;
-        const today = new Date().toISOString().split("T")[0];
-        // First try to find today's stats, if not available use the most recent
-        return (
-            statistics.dailyStats.find((day) => day.date === today) ||
-            statistics.dailyStats[0] ||
-            null
-        );
-    }
-
-    function getTimeframeStats(days: number) {
-        if (!statistics?.dailyStats) {
-            return {
-                reviews: 0,
-                timeSpent: 0,
-                newCards: 0,
-                learningCards: 0,
-                reviewCards: 0,
-                correctRate: 0,
-            };
-        }
-        const cutoffDate = new Date();
-        cutoffDate.setDate(cutoffDate.getDate() - days);
-        const cutoffStr = cutoffDate.toISOString().split("T")[0];
-
-        const filteredStats = statistics.dailyStats.filter(
-            (day) => day.date >= cutoffStr,
-        );
-
-        if (filteredStats.length === 0) {
-            return {
-                reviews: 0,
-                timeSpent: 0,
-                newCards: 0,
-                learningCards: 0,
-                reviewCards: 0,
-                correctRate: 0,
-            };
-        }
-
-        return filteredStats.reduce(
-            (acc, day) => ({
-                reviews: acc.reviews + day.reviews,
-                timeSpent: acc.timeSpent + day.timeSpent,
-                newCards: acc.newCards + day.newCards,
-                learningCards: 0, // No learning cards in pure FSRS
-                reviewCards: acc.reviewCards + day.reviewCards,
-                correctRate:
-                    acc.reviews + day.reviews > 0
-                        ? (acc.correctRate * acc.reviews +
-                              day.correctRate * day.reviews) /
-                          (acc.reviews + day.reviews)
-                        : 0,
-            }),
-            {
-                reviews: 0,
-                timeSpent: 0,
-                newCards: 0,
-                learningCards: 0,
-                reviewCards: 0,
-                correctRate: 0,
-            },
-        );
-    }
-
     function calculateAverageEase() {
-        if (!statistics?.answerButtons) return "0.00";
-        const { again, hard, good, easy } = statistics.answerButtons;
-        const total = again + hard + good + easy;
-        if (total === 0) return "0.00";
-        // Map buttons to values: Again=1, Hard=2, Good=3, Easy=4
-        const weightedSum = again * 1 + hard * 2 + good * 3 + easy * 4;
-        return (weightedSum / total).toFixed(2);
+        return statisticsService.calculateAverageEase(statistics).toFixed(2);
     }
 
     function calculateAverageInterval() {
-        if (!statistics?.intervals || statistics.intervals.length === 0)
-            return 0;
-        let totalInterval = 0;
-        let totalCards = 0;
-
-        statistics.intervals.forEach((interval) => {
-            // Convert interval string to minutes
-            const intervalStr = interval.interval;
-            let minutes = 0;
-
-            if (intervalStr.endsWith("h")) {
-                minutes = parseInt(intervalStr) * 60;
-            } else if (intervalStr.endsWith("d")) {
-                minutes = parseInt(intervalStr) * 1440;
-            } else if (intervalStr.endsWith("m")) {
-                minutes = parseInt(intervalStr) * 43200; // months
-            }
-
-            totalInterval += minutes * interval.count;
-            totalCards += interval.count;
-        });
-
-        if (totalCards === 0) return 0;
-        const avgMinutes = totalInterval / totalCards;
-
-        // Convert back to days for display
-        return Math.round(avgMinutes / 1440);
+        return statisticsService.calculateAverageInterval(statistics) + "d";
     }
 
     function getDueToday() {
-        if (!statistics?.forecast || statistics.forecast.length === 0) return 0;
-        const today = new Date().toISOString().split("T")[0];
-        const todayForecast = statistics.forecast.find(
-            (day) => day.date === today,
+        const dueToday = statisticsService.getDueToday(statistics);
+        console.log(
+            `[StatisticsUI] Due today: ${dueToday}`,
+            statistics?.forecast,
         );
-        return todayForecast ? todayForecast.dueCount : 0;
+        return dueToday;
     }
 
     function getDueTomorrow() {
-        if (!statistics?.forecast || statistics.forecast.length === 0) return 0;
-        const tomorrow = new Date();
-        tomorrow.setDate(tomorrow.getDate() + 1);
-        const tomorrowStr = tomorrow.toISOString().split("T")[0];
-        const tomorrowForecast = statistics.forecast.find(
-            (day) => day.date === tomorrowStr,
+        const dueTomorrow = statisticsService.getDueTomorrow(statistics);
+        console.log(
+            `[StatisticsUI] Due tomorrow: ${dueTomorrow}`,
+            statistics?.forecast,
         );
-        return tomorrowForecast ? tomorrowForecast.dueCount : 0;
+        return dueTomorrow;
     }
 
     function getMaturityRatio() {
-        if (!statistics?.cardStats) return "0.0";
-        const { new: newCards, review, mature } = statistics.cardStats;
-        const total = newCards + (review || 0) + mature;
-        if (total === 0) return "0.0";
-        return ((mature / total) * 100).toFixed(1);
+        return statisticsService.getMaturityRatio(statistics).toFixed(1) + "%";
+    }
+
+    function getDeckIdsFromFilter(filter: string, decks: any[]): string[] {
+        if (filter === "all") {
+            return decks.map((deck) => deck.id);
+        } else if (filter.startsWith("deck:")) {
+            return [filter.replace("deck:", "")];
+        } else if (filter.startsWith("tag:")) {
+            const tag = filter.replace("tag:", "");
+            return decks
+                .filter((deck) => deck.tag === tag)
+                .map((deck) => deck.id);
+        }
+        return [];
     }
 </script>
 
@@ -375,13 +312,25 @@
         <div class="decks-loading">Loading statistics...</div>
     {:else if !statistics}
         <div class="decks-error">
-            <p>Failed to load statistics</p>
+            <h3>Failed to Load Statistics</h3>
+            <p>
+                There was an error loading your statistics. This might be due
+                to:
+            </p>
+            <ul>
+                <li>Database connection issues</li>
+                <li>Corrupted data</li>
+                <li>Large dataset taking too long to process</li>
+            </ul>
+            <p>
+                Check the browser console (F12) for detailed error information.
+            </p>
             <button
                 class="decks-retry-button"
-                on:click={(e) => handleTouchClick(loadStatistics, e)}
-                on:touchend={(e) => handleTouchClick(loadStatistics, e)}
+                on:click={(e) => handleTouchClick(retryLoading, e)}
+                on:touchend={(e) => handleTouchClick(retryLoading, e)}
             >
-                Retry
+                Retry Loading
             </button>
         </div>
     {:else}
@@ -611,7 +560,7 @@
                     </div>
                     <div class="decks-metric-card">
                         <div class="decks-metric-value">
-                            {calculateAverageInterval()}d
+                            {calculateAverageInterval()}
                         </div>
                         <div class="decks-metric-label">Avg Interval</div>
                         <div class="decks-metric-description">
@@ -648,7 +597,7 @@
                     </div>
                     <div class="decks-metric-card">
                         <div class="decks-metric-value">
-                            {getMaturityRatio()}%
+                            {getMaturityRatio()}
                         </div>
                         <div class="decks-metric-label">Maturity Ratio</div>
                         <div class="decks-metric-description">
@@ -657,9 +606,7 @@
                     </div>
                     <div class="decks-metric-card">
                         <div class="decks-metric-value">
-                            {(statistics?.cardStats?.new || 0) +
-                                (statistics?.cardStats?.review || 0) +
-                                (statistics?.cardStats?.mature || 0)}
+                            {statisticsService.getTotalCards(statistics)}
                         </div>
                         <div class="decks-metric-label">Total Cards</div>
                         <div class="decks-metric-description">
@@ -776,7 +723,7 @@
 
             <!-- Forecast -->
             <div class="decks-stats-section">
-                <ForecastChart {statistics} timeframe="3m" />
+                <FutureDueChart {statistics} {statisticsService} />
             </div>
 
             <!-- Reviews Over Time -->
@@ -797,7 +744,7 @@
                     </label>
                 </div>
                 <ReviewsOverTimeChart
-                    reviewLogs={allReviewLogs}
+                    reviewLogs={[]}
                     timeframe={selectedTimeframe
                         .replace("months", "m")
                         .replace("all", "all")}
@@ -807,7 +754,7 @@
             <!-- Card Counts -->
             <div class="decks-stats-section">
                 <h3>Card Distribution</h3>
-                <CardCountsChart flashcards={allFlashcards} />
+                <CardCountsChart flashcards={[]} />
             </div>
 
             <!-- Review Intervals -->
@@ -823,7 +770,7 @@
                         </select>
                     </label>
                 </div>
-                <ReviewIntervalsChart flashcards={allFlashcards} />
+                <ReviewIntervalsChart flashcards={[]} />
             </div>
 
             <!-- Card Stability -->
@@ -833,7 +780,7 @@
                     FSRS stability values show how well cards are retained in
                     memory
                 </p>
-                <CardStabilityChart flashcards={allFlashcards} />
+                <CardStabilityChart flashcards={[]} />
             </div>
 
             <!-- Card Difficulty -->
@@ -843,7 +790,7 @@
                     FSRS difficulty values indicate how hard cards are to
                     remember
                 </p>
-                <CardDifficultyChart flashcards={allFlashcards} />
+                <CardDifficultyChart flashcards={[]} />
             </div>
 
             <!-- Card Retrievability -->
@@ -853,7 +800,7 @@
                     FSRS retrievability values show likelihood of recall today
                     (0-100%)
                 </p>
-                <CardRetrievabilityChart reviewLogs={allReviewLogs} />
+                <CardRetrievabilityChart reviewLogs={[]} />
             </div>
 
             <!-- Hourly Breakdown -->
@@ -874,7 +821,7 @@
                     </label>
                 </div>
                 <HourlyBreakdownChart
-                    reviewLogs={allReviewLogs}
+                    reviewLogs={[]}
                     timeframe={selectedTimeframe
                         .replace("months", "m")
                         .replace("all", "all")}
@@ -899,7 +846,7 @@
                     </label>
                 </div>
                 <CardsAddedChart
-                    reviewLogs={allReviewLogs}
+                    reviewLogs={[]}
                     timeframe={selectedTimeframe
                         .replace("months", "m")
                         .replace("all", "all")}
@@ -908,10 +855,7 @@
 
             <!-- True Retention -->
             <div class="decks-stats-section">
-                <TrueRetentionTable
-                    reviewLogs={allReviewLogs}
-                    flashcards={allFlashcards}
-                />
+                <TrueRetentionTable reviewLogs={[]} flashcards={[]} />
             </div>
 
             <!-- Review Heatmap -->
@@ -921,7 +865,12 @@
                 <ReviewHeatmap
                     bind:this={heatmapComponent}
                     getReviewCounts={async (days) => {
-                        return await db.getReviewCountsByDate(days);
+                        const counts =
+                            await statisticsService.getReviewCountsByDate(
+                                days,
+                                selectedDeckIds,
+                            );
+                        return new Map(Object.entries(counts));
                     }}
                 />
             </div>
@@ -1194,26 +1143,50 @@
         margin: 0 !important;
     }
 
+    .decks-error {
+        text-align: left;
+        max-width: 600px;
+        margin: 0 auto;
+    }
+
+    .decks-error h3 {
+        color: var(--text-error);
+        margin-bottom: 16px;
+    }
+
+    .decks-error ul {
+        margin: 12px 0;
+        padding-left: 20px;
+    }
+
+    .decks-error li {
+        margin: 4px 0;
+        color: var(--text-muted);
+    }
+
     .decks-retry-button {
-        margin-top: 12px;
-        padding: 8px 16px;
+        margin-top: 16px;
+        padding: 12px 24px;
         background: var(--interactive-accent);
         color: var(--text-on-accent);
         border: none;
-        border-radius: 4px;
+        border-radius: 6px;
         cursor: pointer;
         transition: all 0.2s ease;
         min-height: 44px;
-        min-width: 80px;
+        min-width: 120px;
         touch-action: manipulation;
         -webkit-tap-highlight-color: transparent;
         -webkit-touch-callout: none;
         user-select: none;
+        font-size: 14px;
+        font-weight: 500;
     }
 
     .decks-retry-button:hover,
     .decks-retry-button:active {
         background: var(--interactive-accent-hover);
+        transform: translateY(-1px);
     }
 
     /* Mobile responsive styles */

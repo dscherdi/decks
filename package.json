@@ -13,7 +13,10 @@
     "version": "node version-bump.mjs",
     "check": "svelte-check --tsconfig ./tsconfig.json",
     "lint": "eslint --ext .ts,.svelte src/",
-    "test": "jest"
+    "test": "jest",
+    "test:unit": "jest --testPathIgnorePatterns=integration",
+    "test:integration": "jest --config jest.integration.config.js",
+    "test:all": "npm run test:unit && npm run test:integration"
   },
   "keywords": [
     "obsidian",
@@ -28,7 +31,6 @@
     "chart.js": "^4.5.0",
     "chartjs-adapter-date-fns": "^3.0.0",
     "date-fns": "^4.1.0",
-    "sql.js": "^1.8.0",
     "svelte": "^3.59.1",
     "tslib": "^2.5.0"
   },
@@ -58,6 +60,7 @@
     "rimraf": "^5.0.5",
     "rollup": "^3.21.7",
     "rollup-plugin-svelte": "^7.1.4",
+    "sql.js": "^1.13.0",
     "svelte-check": "^3.3.2",
     "svelte-preprocess": "^5.0.3",
     "ts-jest": "^29.4.1",

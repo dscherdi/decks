@@ -103,6 +103,10 @@ export const CREATE_TABLES_SQL = `
   CREATE INDEX IF NOT EXISTS idx_review_logs_session_id ON review_logs(session_id);
   CREATE INDEX IF NOT EXISTS idx_review_logs_reviewed_at ON review_logs(reviewed_at);
 
+  -- Forecast-optimized indexes
+  CREATE INDEX IF NOT EXISTS idx_flashcards_deck_due ON flashcards(deck_id, due_date);
+  CREATE INDEX IF NOT EXISTS idx_review_logs_join ON review_logs(flashcard_id, reviewed_at);
+
   -- Set schema version
   PRAGMA user_version = ${CURRENT_SCHEMA_VERSION};
 
@@ -549,6 +553,31 @@ export const SQL_QUERIES = {
 
   COUNT_TOTAL_CARDS: `
     SELECT COUNT(*) FROM flashcards WHERE deck_id = ?
+  `,
+
+  // Optimized forecast queries with index-friendly SQL
+  GET_SCHEDULED_DUE_BY_DAY: `
+    SELECT substr(due_date,1,10) AS day, COUNT(*) AS c
+    FROM flashcards
+    WHERE deck_id = ? AND state='review'
+      AND due_date >= ? AND due_date < ?
+    GROUP BY day
+    ORDER BY day
+  `,
+
+  GET_CURRENT_BACKLOG: `
+    SELECT COUNT(*) AS n
+    FROM flashcards
+    WHERE deck_id = ? AND state='review' AND due_date < ?
+  `,
+
+  GET_DECK_REVIEW_COUNT_RANGE: `
+    SELECT COUNT(*) AS n
+    FROM review_logs rl
+    JOIN flashcards f ON f.id = rl.flashcard_id
+    WHERE f.deck_id = ?
+      AND rl.reviewed_at >= ?
+      AND rl.reviewed_at < ?
   `,
 
   GET_REVIEW_COUNTS_BY_DATE: `

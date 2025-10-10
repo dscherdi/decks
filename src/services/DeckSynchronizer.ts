@@ -3,7 +3,7 @@ import { DatabaseServiceInterface } from "../database/DatabaseFactory";
 import { DeckManager } from "./DeckManager";
 import { yieldToUI } from "../utils/ui";
 import { Logger, formatTime } from "../utils/logging";
-import { FlashcardsSettings } from "../settings";
+import { DecksSettings } from "../settings";
 import { DataAdapter } from "obsidian";
 import { ProgressTracker } from "../utils/progress";
 
@@ -37,7 +37,7 @@ export class DeckSynchronizer {
   constructor(
     db: DatabaseServiceInterface,
     deckManager: DeckManager,
-    settings: FlashcardsSettings,
+    settings: DecksSettings,
     adapter: DataAdapter,
     configDir: string,
   ) {

@@ -6,6 +6,7 @@ import {
   ReviewSession,
 } from "../database/types";
 import { DatabaseServiceInterface } from "../database/DatabaseFactory";
+import { StatisticsService } from "./StatisticsService";
 import {
   FSRS,
   type RatingLabel,
@@ -20,7 +21,7 @@ import {
 } from "../algorithm/fsrs-weights";
 import { yieldToUI } from "../utils/ui";
 import { Logger } from "../utils/logging";
-import { FlashcardsSettings } from "../settings";
+import { DecksSettings } from "../settings";
 import { DataAdapter } from "obsidian";
 import { BackupService } from "./BackupService";
 
@@ -52,20 +53,23 @@ export class Scheduler {
   private currentSessionId: string | null = null;
   private logger: Logger;
   private backupService: BackupService | null = null;
-  private settings: FlashcardsSettings;
+  private settings: DecksSettings;
+  private statisticsService: StatisticsService;
 
   constructor(
     db: DatabaseServiceInterface,
-    settings: FlashcardsSettings,
+    settings: DecksSettings,
     adapter: DataAdapter,
     configDir: string,
-    backupService?: BackupService,
+    backupService: BackupService | undefined,
+    statisticsService: StatisticsService,
   ) {
     this.db = db;
     this.fsrs = new FSRS();
     this.logger = new Logger(settings, adapter, configDir);
     this.backupService = backupService || null;
     this.settings = settings;
+    this.statisticsService = statisticsService;
   }
 
   private debugLog(message: string, ...args: any[]): void {

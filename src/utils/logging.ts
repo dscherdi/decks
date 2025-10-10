@@ -1,9 +1,9 @@
-import { FlashcardsSettings } from "../settings";
+import { DecksSettings } from "../settings";
 import { DataAdapter } from "obsidian";
 
 export class Logger {
   constructor(
-    private settings: FlashcardsSettings,
+    private settings: DecksSettings,
     private adapter?: DataAdapter,
     private configDir?: string,
   ) {}

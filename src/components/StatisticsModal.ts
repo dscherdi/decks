@@ -1,17 +1,25 @@
 import { Modal } from "obsidian";
-import type { DatabaseServiceInterface } from "../database/DatabaseFactory";
+import type { StatisticsService } from "../services/StatisticsService";
 import type { StatisticsComponent } from "../types/svelte-components";
+import type { DecksSettings } from "../settings";
 import StatisticsUI from "./StatisticsUI.svelte";
 
 export class StatisticsModal extends Modal {
-  private db: DatabaseServiceInterface;
+  private statisticsService: StatisticsService;
+  private settings: DecksSettings;
   private deckFilter?: string;
   private component: StatisticsComponent | null = null;
   private resizeHandler?: () => void;
 
-  constructor(app: any, db: DatabaseServiceInterface, deckFilter?: string) {
+  constructor(
+    app: any,
+    statisticsService: StatisticsService,
+    settings: DecksSettings,
+    deckFilter?: string,
+  ) {
     super(app);
-    this.db = db;
+    this.statisticsService = statisticsService;
+    this.settings = settings;
     this.deckFilter = deckFilter;
   }
 
@@ -37,7 +45,8 @@ export class StatisticsModal extends Modal {
     this.component = new StatisticsUI({
       target: contentEl,
       props: {
-        db: this.db,
+        statisticsService: this.statisticsService,
+        settings: this.settings,
         deckFilter: this.deckFilter,
       },
     }) as StatisticsComponent;

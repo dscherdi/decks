@@ -88,6 +88,10 @@ export interface IDatabaseService {
   getAllReviewLogs(): Promise<ReviewLog[]>;
   reviewLogExists(reviewLogId: string): Promise<boolean>;
 
+  // Optimized review log queries for statistics
+  getReviewLogsByDeck(deckId: string): Promise<ReviewLog[]>;
+  getReviewLogsByDecks(deckIds: string[]): Promise<ReviewLog[]>;
+
   // Review session operations
   createReviewSession(session: Omit<ReviewSession, "id">): Promise<string>;
   getReviewSessionById(sessionId: string): Promise<ReviewSession | null>;
@@ -105,17 +109,10 @@ export interface IDatabaseService {
     flashcardId: string,
   ): Promise<boolean>;
 
-  // Statistics operations
-  getDeckStats(
-    deckId: string,
-    respectDailyLimits?: boolean,
-  ): Promise<DeckStats>;
-  getAllDeckStats(): Promise<DeckStats[]>;
+  // Statistics operations moved to StatisticsService
   getDailyReviewCounts(
     deckId: string,
   ): Promise<{ newCount: number; reviewCount: number }>;
-  getReviewCountsByDate(days?: number): Promise<Map<string, number>>;
-  getStudyStats(): Promise<{ totalHours: number; pastMonthHours: number }>;
   getOverallStatistics(
     deckFilter?: string,
     timeframe?: string,
@@ -125,6 +122,28 @@ export interface IDatabaseService {
   countNewCards(deckId: string, now: string): Promise<number>;
   countDueCards(deckId: string, now: string): Promise<number>;
   countTotalCards(deckId: string): Promise<number>;
+
+  // Forecast operations (optimized SQL)
+  getScheduledDueByDay(
+    deckId: string,
+    startDate: string,
+    endDate: string,
+  ): Promise<{ day: string; count: number }[]>;
+  getScheduledDueByDayMulti(
+    deckIds: string[],
+    startDate: string,
+    endDate: string,
+  ): Promise<{ day: string; count: number }[]>;
+  getCurrentBacklog(deckId: string, currentDate: string): Promise<number>;
+  getCurrentBacklogMulti(
+    deckIds: string[],
+    currentDate: string,
+  ): Promise<number>;
+  getDeckReviewCountRange(
+    deckId: string,
+    startDate: string,
+    endDate: string,
+  ): Promise<number>;
   countNewCardsToday(
     deckId: string,
     startOfDay: string,

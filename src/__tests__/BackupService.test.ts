@@ -2,7 +2,7 @@ import { BackupService } from "../services/BackupService";
 import { IDatabaseService } from "../database/DatabaseFactory";
 
 // Helper function to create a complete mock database
-function createMockDatabase(): jest.Mocked<IDatabaseService> {
+function createMockDatabase() {
   return {
     // Initialization methods
     initialize: jest.fn().mockResolvedValue(undefined),
@@ -60,22 +60,10 @@ function createMockDatabase(): jest.Mocked<IDatabaseService> {
     reviewSessionExists: jest.fn().mockResolvedValue(false),
     isCardReviewedInSession: jest.fn().mockResolvedValue(false),
 
-    // Statistics operations
-    getDeckStats: jest.fn().mockResolvedValue({
-      totalCards: 0,
-      newCards: 0,
-      dueCards: 0,
-      matureCards: 0,
-      avgSuccessRate: 0,
-    }),
-    getAllDeckStats: jest.fn().mockResolvedValue([]),
+    // Statistics operations moved to StatisticsService
     getDailyReviewCounts: jest
       .fn()
       .mockResolvedValue({ newCount: 0, reviewCount: 0 }),
-    getReviewCountsByDate: jest.fn().mockResolvedValue(new Map()),
-    getStudyStats: jest
-      .fn()
-      .mockResolvedValue({ totalHours: 0, pastMonthHours: 0 }),
     getOverallStatistics: jest.fn().mockResolvedValue({
       totalCards: 0,
       newCards: 0,
@@ -98,6 +86,17 @@ function createMockDatabase(): jest.Mocked<IDatabaseService> {
     countNewCardsToday: jest.fn().mockResolvedValue(0),
     countReviewCardsToday: jest.fn().mockResolvedValue(0),
 
+    // Forecast operations
+    getScheduledDueByDay: jest.fn().mockResolvedValue([]),
+    getScheduledDueByDayMulti: jest.fn().mockResolvedValue([]),
+    getCurrentBacklog: jest.fn().mockResolvedValue(0),
+    getCurrentBacklogMulti: jest.fn().mockResolvedValue(0),
+    getDeckReviewCountRange: jest.fn().mockResolvedValue(0),
+
+    // Optimized review log queries for statistics
+    getReviewLogsByDeck: jest.fn().mockResolvedValue([]),
+    getReviewLogsByDecks: jest.fn().mockResolvedValue([]),
+
     // Utility operations
     purgeDatabase: jest.fn().mockResolvedValue(undefined),
     query: jest.fn().mockResolvedValue([]),
@@ -113,7 +112,7 @@ function createMockDatabase(): jest.Mocked<IDatabaseService> {
     createBackupDatabaseInstance: jest.fn().mockResolvedValue("mockBackupDb"),
     queryBackupDatabase: jest.fn().mockResolvedValue([]),
     closeBackupDatabaseInstance: jest.fn().mockResolvedValue(undefined),
-  } as jest.Mocked<IDatabaseService>;
+  };
 }
 
 // Mock DataAdapter
@@ -139,7 +138,7 @@ jest.mock("@/utils/ui", () => ({
 
 describe("BackupService", () => {
   let backupService: BackupService;
-  let mockDb: jest.Mocked<IDatabaseService>;
+  let mockDb: ReturnType<typeof createMockDatabase>;
 
   beforeEach(() => {
     jest.clearAllMocks();
