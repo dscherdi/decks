@@ -16,10 +16,11 @@
 
     import { StatisticsService } from "../services/StatisticsService";
     import type { DecksSettings } from "../settings";
-    import { formatTime, formatPace } from "../utils/formatting";
+    import { Logger } from "@/utils/logging";
 
     export let statisticsService: StatisticsService;
     export let deckFilter: string = "all";
+    export let logger: Logger;
     export const settings: DecksSettings = {} as DecksSettings;
 
     const dispatch = createEventDispatcher();
@@ -34,7 +35,7 @@
     // Computed deck IDs based on current filter
     $: selectedDeckIds = getDeckIdsFromFilter(
         selectedDeckFilter,
-        availableDecks,
+        availableDecks
     );
     let heatmapComponent: ReviewHeatmap;
     let deckFilterContainer: HTMLElement;
@@ -52,24 +53,25 @@
 
     onMount(async () => {
         loading = true;
-        console.log("[StatisticsUI] Starting onMount");
+        logger.debug("[StatisticsUI] Starting onMount");
 
         try {
-            console.log("[StatisticsUI] Loading decks and tags...");
+            logger.debug("[StatisticsUI] Loading decks and tags...");
             await loadDecksAndTags();
-            console.log("[StatisticsUI] Decks and tags loaded");
+            logger.debug("[StatisticsUI] Decks and tags loaded");
 
-            console.log("[StatisticsUI] Loading statistics...");
+            logger.debug("[StatisticsUI] Loading statistics...");
             await loadStatistics();
-            console.log("[StatisticsUI] Statistics loaded");
+            logger.debug("[StatisticsUI] Statistics loaded");
 
             // Mount filter components after data is loaded
             tick().then(() => {
-                console.log("[StatisticsUI] Mounting filter components");
+                logger.debug("[StatisticsUI] Mounting filter components");
                 mountFilterComponents();
             });
         } catch (error) {
-            console.error("[StatisticsUI] Error in onMount:", error);
+            logger.error("[StatisticsUI] Error in onMount:", error);
+        } finally {
             loading = false;
         }
     });
@@ -111,28 +113,25 @@
                         .onChange((value: string) => {
                             selectedTimeframe = value;
                             handleFilterChange();
-                        }),
+                        })
                 );
         }
     }
 
     async function loadDecksAndTags() {
         try {
-            console.log(
-                "[StatisticsUI] Getting available decks and tags from StatisticsService...",
+            logger.debug(
+                "[StatisticsUI] Getting available decks and tags from StatisticsService..."
             );
             const decksAndTags =
                 await statisticsService.getAvailableDecksAndTags();
             availableDecks = decksAndTags.decks;
             availableTags = decksAndTags.tags;
-            console.log(
-                `[StatisticsUI] Retrieved ${availableDecks.length} decks and ${availableTags.length} tags`,
+            logger.debug(
+                `[StatisticsUI] Retrieved ${availableDecks.length} decks and ${availableTags.length} tags`
             );
         } catch (error) {
-            console.error(
-                "[StatisticsUI] Error loading decks and tags:",
-                error,
-            );
+            logger.error("[StatisticsUI] Error loading decks and tags:", error);
             throw error;
         }
     }
@@ -154,31 +153,31 @@
 
     async function loadStatistics() {
         try {
-            console.log(
-                `[StatisticsUI] Getting overall statistics (filter: ${selectedDeckFilter}, timeframe: ${selectedTimeframe})...`,
+            logger.debug(
+                `[StatisticsUI] Getting overall statistics (filter: ${selectedDeckFilter}, timeframe: ${selectedTimeframe})...`
             );
 
             statistics = await statisticsService.getOverallStatistics(
                 selectedDeckFilter,
-                selectedTimeframe,
+                selectedTimeframe
             );
 
-            console.log(
+            logger.debug(
                 "[StatisticsUI] Statistics loaded successfully:",
-                statistics,
+                statistics
             );
-            console.log("[StatisticsUI] Forecast data:", statistics?.forecast);
-            console.log("[StatisticsUI] Card stats:", statistics?.cardStats);
+            logger.debug("[StatisticsUI] Forecast data:", statistics?.forecast);
+            logger.debug("[StatisticsUI] Card stats:", statistics?.cardStats);
 
             // Compute derived statistics once data is loaded
-            console.log("[StatisticsUI] Computing derived statistics...");
+            logger.debug("[StatisticsUI] Computing derived statistics...");
             todayStats = statisticsService.getTodayStats(statistics);
             weekStats = statisticsService.getTimeframeStats(statistics, 7);
             monthStats = statisticsService.getTimeframeStats(statistics, 30);
             yearStats = statisticsService.getTimeframeStats(statistics, 365);
-            console.log("[StatisticsUI] Derived statistics computed");
+            logger.debug("[StatisticsUI] Derived statistics computed");
         } catch (error) {
-            console.error("[StatisticsUI] Error loading statistics:", error);
+            logger.error("[StatisticsUI] Error loading statistics:", error);
             statistics = {
                 dailyStats: [],
                 cardStats: { new: 0, review: 0, mature: 0 },
@@ -196,44 +195,44 @@
             monthStats = null;
             yearStats = null;
         } finally {
-            console.log("[StatisticsUI] Setting loading to false");
+            logger.debug("[StatisticsUI] Setting loading to false");
             loading = false;
         }
     }
 
     async function handleFilterChange() {
-        console.log("[StatisticsUI] Filter changed, reloading data...");
+        logger.debug("[StatisticsUI] Filter changed, reloading data...");
         loading = true;
         try {
             await loadStatistics();
         } catch (error) {
-            console.error("[StatisticsUI] Error during filter change:", error);
+            logger.error("[StatisticsUI] Error during filter change:", error);
         } finally {
             loading = false;
         }
     }
 
     async function retryLoading() {
-        console.log("[StatisticsUI] Retrying to load statistics...");
+        logger.debug("[StatisticsUI] Retrying to load statistics...");
         loading = true;
         statistics = null;
 
         try {
-            console.log("[StatisticsUI] Loading decks and tags...");
+            logger.debug("[StatisticsUI] Loading decks and tags...");
             await loadDecksAndTags();
-            console.log("[StatisticsUI] Decks and tags loaded");
+            logger.debug("[StatisticsUI] Decks and tags loaded");
 
-            console.log("[StatisticsUI] Loading statistics...");
+            logger.debug("[StatisticsUI] Loading statistics...");
             await loadStatistics();
-            console.log("[StatisticsUI] Statistics loaded");
+            logger.debug("[StatisticsUI] Statistics loaded");
 
             // Mount filter components after data is loaded
             tick().then(() => {
-                console.log("[StatisticsUI] Mounting filter components");
+                logger.debug("[StatisticsUI] Mounting filter components");
                 mountFilterComponents();
             });
         } catch (error) {
-            console.error("[StatisticsUI] Error in retry:", error);
+            logger.error("[StatisticsUI] Error in retry:", error);
         } finally {
             loading = false;
         }
@@ -271,18 +270,18 @@
 
     function getDueToday() {
         const dueToday = statisticsService.getDueToday(statistics);
-        console.log(
+        logger.debug(
             `[StatisticsUI] Due today: ${dueToday}`,
-            statistics?.forecast,
+            statistics?.forecast
         );
         return dueToday;
     }
 
     function getDueTomorrow() {
         const dueTomorrow = statisticsService.getDueTomorrow(statistics);
-        console.log(
+        logger.debug(
             `[StatisticsUI] Due tomorrow: ${dueTomorrow}`,
-            statistics?.forecast,
+            statistics?.forecast
         );
         return dueTomorrow;
     }
@@ -723,139 +722,88 @@
 
             <!-- Forecast -->
             <div class="decks-stats-section">
-                <FutureDueChart {statistics} {statisticsService} />
+                <FutureDueChart {logger} {statistics} {statisticsService} />
             </div>
 
             <!-- Reviews Over Time -->
             <div class="decks-stats-section">
-                <h3>Reviews Over Time</h3>
-                <div class="decks-chart-controls">
-                    <label>
-                        Timeframe:
-                        <select
-                            bind:value={selectedTimeframe}
-                            on:change={handleFilterChange}
-                        >
-                            <option value="1m">1 Month</option>
-                            <option value="3m">3 Months</option>
-                            <option value="1y">1 Year</option>
-                            <option value="all">All Time</option>
-                        </select>
-                    </label>
-                </div>
                 <ReviewsOverTimeChart
-                    reviewLogs={[]}
-                    timeframe={selectedTimeframe
-                        .replace("months", "m")
-                        .replace("all", "all")}
+                    {logger}
+                    {statisticsService}
+                    {selectedDeckIds}
                 />
             </div>
 
             <!-- Card Counts -->
             <div class="decks-stats-section">
-                <h3>Card Distribution</h3>
-                <CardCountsChart flashcards={[]} />
+                <CardCountsChart
+                    {logger}
+                    {statisticsService}
+                    {selectedDeckIds}
+                />
             </div>
 
             <!-- Review Intervals -->
             <div class="decks-stats-section">
-                <h3>Review Intervals</h3>
-                <div class="decks-chart-controls">
-                    <label>
-                        Show percentiles:
-                        <select>
-                            <option value="50">50th percentile</option>
-                            <option value="95">95th percentile</option>
-                            <option value="all">All data</option>
-                        </select>
-                    </label>
-                </div>
-                <ReviewIntervalsChart flashcards={[]} />
+                <ReviewIntervalsChart
+                    {logger}
+                    {statisticsService}
+                    {selectedDeckIds}
+                />
             </div>
 
             <!-- Card Stability -->
             <div class="decks-stats-section">
-                <h3>Card Stability Distribution</h3>
-                <p class="decks-chart-description">
-                    FSRS stability values show how well cards are retained in
-                    memory
-                </p>
-                <CardStabilityChart flashcards={[]} />
+                <CardStabilityChart
+                    {logger}
+                    {statisticsService}
+                    {selectedDeckIds}
+                />
             </div>
 
             <!-- Card Difficulty -->
             <div class="decks-stats-section">
-                <h3>Card Difficulty Distribution</h3>
-                <p class="decks-chart-description">
-                    FSRS difficulty values indicate how hard cards are to
-                    remember
-                </p>
-                <CardDifficultyChart flashcards={[]} />
+                <CardDifficultyChart
+                    {logger}
+                    {statisticsService}
+                    {selectedDeckIds}
+                />
             </div>
 
             <!-- Card Retrievability -->
             <div class="decks-stats-section">
-                <h3>Card Retrievability Distribution</h3>
-                <p class="decks-chart-description">
-                    FSRS retrievability values show likelihood of recall today
-                    (0-100%)
-                </p>
-                <CardRetrievabilityChart reviewLogs={[]} />
+                <CardRetrievabilityChart
+                    {logger}
+                    {statisticsService}
+                    {selectedDeckIds}
+                />
             </div>
 
             <!-- Hourly Breakdown -->
             <div class="decks-stats-section">
-                <h3>Review Activity by Hour</h3>
-                <div class="decks-chart-controls">
-                    <label>
-                        Timeframe:
-                        <select
-                            bind:value={selectedTimeframe}
-                            on:change={handleFilterChange}
-                        >
-                            <option value="1m">1 Month</option>
-                            <option value="3m">3 Months</option>
-                            <option value="1y">1 Year</option>
-                            <option value="all">All Time</option>
-                        </select>
-                    </label>
-                </div>
                 <HourlyBreakdownChart
-                    reviewLogs={[]}
-                    timeframe={selectedTimeframe
-                        .replace("months", "m")
-                        .replace("all", "all")}
+                    {logger}
+                    {statisticsService}
+                    {selectedDeckIds}
                 />
             </div>
 
             <!-- Cards Added -->
             <div class="decks-stats-section">
-                <h3>Cards Added Over Time</h3>
-                <div class="decks-chart-controls">
-                    <label>
-                        Timeframe:
-                        <select
-                            bind:value={selectedTimeframe}
-                            on:change={handleFilterChange}
-                        >
-                            <option value="1m">1 Month</option>
-                            <option value="3m">3 Months</option>
-                            <option value="1y">1 Year</option>
-                            <option value="all">All Time</option>
-                        </select>
-                    </label>
-                </div>
                 <CardsAddedChart
-                    reviewLogs={[]}
-                    timeframe={selectedTimeframe
-                        .replace("months", "m")
-                        .replace("all", "all")}
+                    {logger}
+                    {statisticsService}
+                    {selectedDeckIds}
                 />
             </div>
 
             <!-- True Retention -->
             <div class="decks-stats-section">
-                <TrueRetentionTable reviewLogs={[]} flashcards={[]} />
+                <TrueRetentionTable
+                    {logger}
+                    {statisticsService}
+                    {selectedDeckIds}
+                />
             </div>
 
             <!-- Review Heatmap -->
@@ -868,7 +816,7 @@
                         const counts =
                             await statisticsService.getReviewCountsByDate(
                                 days,
-                                selectedDeckIds,
+                                selectedDeckIds
                             );
                         return new Map(Object.entries(counts));
                     }}

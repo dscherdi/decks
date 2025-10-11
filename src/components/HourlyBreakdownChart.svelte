@@ -14,6 +14,8 @@
         Legend,
     } from "chart.js";
     import type { ReviewLog } from "../database/types";
+    import { StatisticsService } from "@/services/StatisticsService";
+    import { Logger } from "@/utils/logging";
 
     // Register Chart.js components
     Chart.register(
@@ -26,8 +28,12 @@
         PointElement,
         Title,
         Tooltip,
-        Legend,
+        Legend
     );
+
+    export let selectedDeckIds: string[] = [];
+    export let statisticsService: StatisticsService;
+    export let logger: Logger;
 
     export let reviewLogs: ReviewLog[] = [];
     export let timeframe: string = "1m"; // "1m", "3m", "1y", "all"
@@ -66,7 +72,7 @@
                 break;
             case "1y":
                 cutoffDate = new Date(
-                    now.getTime() - 365 * 24 * 60 * 60 * 1000,
+                    now.getTime() - 365 * 24 * 60 * 60 * 1000
                 );
                 break;
             default:
@@ -74,7 +80,7 @@
         }
 
         return reviewLogs.filter(
-            (log) => new Date(log.reviewedAt) >= cutoffDate,
+            (log) => new Date(log.reviewedAt) >= cutoffDate
         );
     }
 
@@ -134,11 +140,11 @@
         // Prepare chart data
         const labels = Array.from(
             { length: 24 },
-            (_, i) => `${i.toString().padStart(2, "0")}:00`,
+            (_, i) => `${i.toString().padStart(2, "0")}:00`
         );
         const reviewCounts = Array.from(
             { length: 24 },
-            (_, i) => hourlyData[i].total,
+            (_, i) => hourlyData[i].total
         );
         const successRates = Array.from({ length: 24 }, (_, i) => {
             const total = hourlyData[i].total;
@@ -253,7 +259,7 @@
                             },
                             afterBody: function (tooltipItems: any) {
                                 const hour = parseInt(
-                                    tooltipItems[0].label.split(":")[0],
+                                    tooltipItems[0].label.split(":")[0]
                                 );
                                 let timeDescription = "";
 
@@ -285,6 +291,18 @@
     }
 </script>
 
+<h3>Review Activity by Hour</h3>
+<div class="decks-chart-controls">
+    <label>
+        Timeframe:
+        <select bind:value={selectedTimeframe} on:change={handleFilterChange}>
+            <option value="1m">1 Month</option>
+            <option value="3m">3 Months</option>
+            <option value="1y">1 Year</option>
+            <option value="all">All Time</option>
+        </select>
+    </label>
+</div>
 <div class="decks-hourly-breakdown-chart">
     <canvas bind:this={canvas} height="300"></canvas>
 </div>

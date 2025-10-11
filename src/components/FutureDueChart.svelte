@@ -16,9 +16,11 @@
     } from "chart.js";
     import type { Statistics, Flashcard } from "../database/types";
     import {
+        FutureDueData,
         StatisticsService,
         type BacklogForecastData,
     } from "../services/StatisticsService";
+    import { Logger } from "@/utils/logging";
 
     // Register Chart.js components
     Chart.register(
@@ -32,12 +34,13 @@
         Title,
         Tooltip,
         Legend,
-        Filler,
+        Filler
     );
 
     export let statistics: Statistics | null = null;
     export let allFlashcards: Flashcard[] = [];
     export let statisticsService: StatisticsService;
+    export let logger: Logger;
 
     let canvas: HTMLCanvasElement;
     let chart: Chart | null = null;
@@ -83,7 +86,7 @@
         const displayData = statisticsService.getFilteredForecastData(
             statistics,
             maxDays,
-            true, // onlyNonZero = true to filter out zero days
+            true // onlyNonZero = true to filter out zero days
         );
 
         if (displayData.length === 0) {
@@ -109,8 +112,8 @@
             const deckId = allFlashcards[0]?.deckId;
             if (deckId) {
                 backlogData = await statisticsService.simulateFutureDueLoad(
-                    [deckId],
-                    maxDays,
+                    [deckId], // TODO: should not use deckid for simulation
+                    maxDays
                 );
             }
         }
@@ -135,7 +138,7 @@
         ];
 
         // Add backlog curve if enabled
-        if (showBacklog) {
+        if (showBacklog && backlogData.length > 0) {
             datasets.push({
                 type: "line" as const,
                 label: "Cumulative",
@@ -163,104 +166,104 @@
     async function createChart() {
         if (!canvas) return;
 
-        const data = await processChartData();
-
+        // const data = await processChartData();
+        const data = { labels: [], datasets: [] };
         try {
-            chart = new Chart(canvas, {
-                type: "bar",
-                data: data,
-                options: {
-                    responsive: true,
-                    maintainAspectRatio: false,
-                    interaction: {
-                        mode: "index",
-                        intersect: false,
-                    },
-                    scales: {
-                        x: {
-                            display: true,
-                            grid: {
-                                display: false,
-                            },
-                            ticks: {
-                                color: "#9ca3af",
-                                font: {
-                                    size: 12,
-                                },
-                                maxTicksLimit: 20,
-                            },
-                        },
-                        y: {
-                            type: "linear",
-                            display: true,
-                            position: "left",
-                            beginAtZero: true,
-                            grid: {
-                                color: "rgba(156, 163, 175, 0.2)",
-                            },
-                            ticks: {
-                                color: "#9ca3af",
-                                font: {
-                                    size: 12,
-                                },
-                                precision: 0,
-                            },
-                        },
-                        y1: {
-                            type: "linear",
-                            display: showBacklog,
-                            position: "right",
-                            beginAtZero: true,
-                            grid: {
-                                drawOnChartArea: false,
-                            },
-                            ticks: {
-                                color: "#9ca3af",
-                                font: {
-                                    size: 12,
-                                },
-                                precision: 0,
-                            },
-                        },
-                    },
-                    plugins: {
-                        title: {
-                            display: false,
-                        },
-                        legend: {
-                            display: false,
-                        },
-                        tooltip: {
-                            backgroundColor: "rgba(0, 0, 0, 0.8)",
-                            titleColor: "#ffffff",
-                            bodyColor: "#ffffff",
-                            borderColor: "rgba(156, 163, 175, 0.3)",
-                            borderWidth: 1,
-                            cornerRadius: 8,
-                            displayColors: false,
-                            callbacks: {
-                                title: function (tooltipItems) {
-                                    const label = tooltipItems[0].label;
-                                    if (label === "Today") return "Today";
-                                    if (label === "Tomorrow") return "Tomorrow";
-                                    return `Day ${label}`;
-                                },
-                                label: function (context) {
-                                    const value = context.raw as number;
-                                    const datasetLabel =
-                                        context.dataset.label || "";
-
-                                    if (datasetLabel.includes("Cumulative")) {
-                                        return `Total: ${value} reviews`;
-                                    } else {
-                                        return `Due: ${value} reviews`;
-                                    }
-                                },
-                            },
-                        },
-                    },
-                },
-            });
+            // TODO: Bug causes obsidian to hang
+            // chart = new Chart(canvas, {
+            //     type: "line",
+            //     data: data,
+            //     options: {
+            //         responsive: true,
+            //         maintainAspectRatio: false,
+            //         interaction: {
+            //             mode: "index",
+            //             intersect: false,
+            //         },
+            //         scales: {
+            //             x: {
+            //                 display: true,
+            //                 grid: {
+            //                     display: false,
+            //                 },
+            //                 ticks: {
+            //                     color: "#9ca3af",
+            //                     font: {
+            //                         size: 12,
+            //                     },
+            //                     maxTicksLimit: 20,
+            //                 },
+            //             },
+            //             y: {
+            //                 type: "linear",
+            //                 display: true,
+            //                 position: "left",
+            //                 beginAtZero: true,
+            //                 grid: {
+            //                     color: "rgba(156, 163, 175, 0.2)",
+            //                 },
+            //                 ticks: {
+            //                     color: "#9ca3af",
+            //                     font: {
+            //                         size: 12,
+            //                     },
+            //                     precision: 0,
+            //                 },
+            //             },
+            //             y1: {
+            //                 type: "linear",
+            //                 display: showBacklog,
+            //                 position: "right",
+            //                 beginAtZero: true,
+            //                 grid: {
+            //                     drawOnChartArea: false,
+            //                 },
+            //                 ticks: {
+            //                     color: "#9ca3af",
+            //                     font: {
+            //                         size: 12,
+            //                     },
+            //                     precision: 0,
+            //                 },
+            //             },
+            //         },
+            //         plugins: {
+            //             title: {
+            //                 display: false,
+            //             },
+            //             legend: {
+            //                 display: false,
+            //             },
+            //             tooltip: {
+            //                 backgroundColor: "rgba(0, 0, 0, 0.8)",
+            //                 titleColor: "#ffffff",
+            //                 bodyColor: "#ffffff",
+            //                 borderColor: "rgba(156, 163, 175, 0.3)",
+            //                 borderWidth: 1,
+            //                 cornerRadius: 8,
+            //                 displayColors: false,
+            //                 callbacks: {
+            //                     title: function (tooltipItems) {
+            //                         const label = tooltipItems[0].label;
+            //                         if (label === "Today") return "Today";
+            //                         if (label === "Tomorrow") return "Tomorrow";
+            //                         return `Day ${label}`;
+            //                     },
+            //                     label: function (context) {
+            //                         const value = context.raw as number;
+            //                         const datasetLabel =
+            //                             context.dataset.label || "";
+            //                         if (datasetLabel.includes("Cumulative")) {
+            //                             return `Total: ${value} reviews`;
+            //                         } else {
+            //                             return `Due: ${value} reviews`;
+            //                         }
+            //                     },
+            //                 },
+            //             },
+            //         },
+            //     },
+            // });
         } catch (error) {
             console.error("[FutureDueChart] Error creating chart:", error);
         }
@@ -285,7 +288,7 @@
         return statisticsService.calculateForecastStats(
             statistics,
             allFlashcards,
-            maxDays,
+            maxDays
         );
     }
 
@@ -332,7 +335,7 @@
     </div>
 
     <div class="chart-stats">
-        <div class="stat">
+        <!-- <div class="stat">
             <span class="stat-label">Total Reviews:</span>
             <span class="stat-value">{getForecastStats().totalReviews}</span>
         </div>
@@ -349,7 +352,7 @@
         <div class="stat">
             <span class="stat-label">Daily Load:</span>
             <span class="stat-value">{getForecastStats().dailyLoad}</span>
-        </div>
+        </div> -->
     </div>
 
     {#if !statistics?.forecast || statistics.forecast.length === 0 || !statistics.forecast.some((day) => day.dueCount > 0)}

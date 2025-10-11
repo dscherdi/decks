@@ -11,6 +11,8 @@
         Legend,
     } from "chart.js";
     import type { ReviewLog } from "../database/types";
+    import { StatisticsService } from "@/services/StatisticsService";
+    import { Logger } from "@/utils/logging";
 
     // Register Chart.js components
     Chart.register(
@@ -20,8 +22,12 @@
         BarController,
         Title,
         Tooltip,
-        Legend,
+        Legend
     );
+
+    export let selectedDeckIds: string[] = [];
+    export let statisticsService: StatisticsService;
+    export let logger: Logger;
 
     export let reviewLogs: ReviewLog[] = [];
     export const showPercentiles: string = "50"; // "50", "95", "all"
@@ -49,7 +55,7 @@
             (log) =>
                 log.retrievability !== undefined &&
                 log.retrievability !== null &&
-                log.retrievability >= 0,
+                log.retrievability >= 0
         );
 
         if (reviewsWithRetrievability.length === 0) {
@@ -69,7 +75,7 @@
 
         // Get retrievability values (0-1 range, convert to 0-100%)
         const retrievabilityValues = reviewsWithRetrievability.map(
-            (log) => log.retrievability * 100,
+            (log) => log.retrievability * 100
         );
 
         // Create histogram buckets for retrievability percentage
@@ -135,7 +141,7 @@
                     data,
                     backgroundColor: colors,
                     borderColor: colors.map((color) =>
-                        color.replace("rgb", "rgba").replace(")", ", 0.8)"),
+                        color.replace("rgb", "rgba").replace(")", ", 0.8)")
                     ),
                     borderWidth: 1,
                 },
@@ -192,7 +198,7 @@
                                 const total = dataset.data.reduce(
                                     (sum: number, val: any) =>
                                         sum + (val as number),
-                                    0,
+                                    0
                                 );
                                 const percentage =
                                     total > 0
@@ -220,6 +226,10 @@
     }
 </script>
 
+<h3>Card Retrievability Distribution</h3>
+<p class="decks-chart-description">
+    FSRS retrievability values show likelihood of recall today (0-100%)
+</p>
 <div class="decks-card-retrievability-chart">
     <canvas bind:this={canvas} height="300"></canvas>
 </div>

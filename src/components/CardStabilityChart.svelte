@@ -11,6 +11,8 @@
         Legend,
     } from "chart.js";
     import type { Flashcard } from "../database/types";
+    import { StatisticsService } from "@/services/StatisticsService";
+    import { Logger } from "@/utils/logging";
 
     // Register Chart.js components
     Chart.register(
@@ -20,8 +22,12 @@
         BarController,
         Title,
         Tooltip,
-        Legend,
+        Legend
     );
+
+    export let selectedDeckIds: string[] = [];
+    export let statisticsService: StatisticsService;
+    export let logger: Logger;
 
     export let flashcards: Flashcard[] = [];
     export const showPercentiles: string = "50"; // "50", "95", "all"
@@ -46,7 +52,7 @@
     function processChartData() {
         // Filter to cards that have stability values (reviewed cards)
         const cardsWithStability = flashcards.filter(
-            (card) => card.stability > 0 && card.state === "review",
+            (card) => card.stability > 0 && card.state === "review"
         );
 
         if (cardsWithStability.length === 0) {
@@ -66,7 +72,7 @@
 
         // Get stability values
         const stabilityValues = cardsWithStability.map(
-            (card) => card.stability,
+            (card) => card.stability
         );
         const maxStability = Math.max(...stabilityValues);
 
@@ -168,7 +174,7 @@
                                 const total = dataset.data.reduce(
                                     (sum: number, val: any) =>
                                         sum + (val as number),
-                                    0,
+                                    0
                                 );
                                 const percentage =
                                     total > 0
@@ -193,6 +199,10 @@
     }
 </script>
 
+<h3>Card Stability Distribution</h3>
+<p class="decks-chart-description">
+    FSRS stability values show how well cards are retained in memory
+</p>
 <div class="decks-card-stability-chart">
     <canvas bind:this={canvas} height="300"></canvas>
 </div>

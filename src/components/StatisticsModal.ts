@@ -3,91 +3,96 @@ import type { StatisticsService } from "../services/StatisticsService";
 import type { StatisticsComponent } from "../types/svelte-components";
 import type { DecksSettings } from "../settings";
 import StatisticsUI from "./StatisticsUI.svelte";
+import { Logger } from "@/utils/logging";
 
 export class StatisticsModal extends Modal {
-  private statisticsService: StatisticsService;
-  private settings: DecksSettings;
-  private deckFilter?: string;
-  private component: StatisticsComponent | null = null;
-  private resizeHandler?: () => void;
+    private statisticsService: StatisticsService;
+    private settings: DecksSettings;
+    private deckFilter?: string;
+    private component: StatisticsComponent | null = null;
+    private resizeHandler?: () => void;
+    private logger: Logger;
 
-  constructor(
-    app: any,
-    statisticsService: StatisticsService,
-    settings: DecksSettings,
-    deckFilter?: string,
-  ) {
-    super(app);
-    this.statisticsService = statisticsService;
-    this.settings = settings;
-    this.deckFilter = deckFilter;
-  }
-
-  onOpen() {
-    const { contentEl } = this;
-    contentEl.empty();
-
-    // Add CSS classes for styling
-    const modalEl = this.containerEl.querySelector(".modal");
-    if (modalEl instanceof HTMLElement) {
-      modalEl.addClass("decks-modal");
-      if (window.innerWidth <= 768) {
-        modalEl.addClass("decks-modal-mobile");
-      } else {
-        modalEl.removeClass("decks-modal-mobile");
-      }
+    constructor(
+        app: any,
+        statisticsService: StatisticsService,
+        settings: DecksSettings,
+        logger: Logger,
+        deckFilter?: string
+    ) {
+        super(app);
+        this.statisticsService = statisticsService;
+        this.settings = settings;
+        this.logger = logger;
+        this.deckFilter = deckFilter;
     }
 
-    this.containerEl.addClass("decks-statistics-modal-container");
-    contentEl.addClass("decks-statistics-modal-content");
+    onOpen() {
+        const { contentEl } = this;
+        contentEl.empty();
 
-    // Mount Svelte component
-    this.component = new StatisticsUI({
-      target: contentEl,
-      props: {
-        statisticsService: this.statisticsService,
-        settings: this.settings,
-        deckFilter: this.deckFilter,
-      },
-    }) as StatisticsComponent;
-
-    // Listen to component events
-    this.component.$on("close", (event: any) => {
-      this.close();
-    });
-
-    // Handle window resize for mobile adaptation
-    const handleResize = () => {
-      if (modalEl instanceof HTMLElement) {
-        if (window.innerWidth <= 768) {
-          modalEl.addClass("decks-modal-mobile");
-        } else {
-          modalEl.removeClass("decks-modal-mobile");
+        // Add CSS classes for styling
+        const modalEl = this.containerEl.querySelector(".modal");
+        if (modalEl instanceof HTMLElement) {
+            modalEl.addClass("decks-modal");
+            if (window.innerWidth <= 768) {
+                modalEl.addClass("decks-modal-mobile");
+            } else {
+                modalEl.removeClass("decks-modal-mobile");
+            }
         }
-      }
-    };
 
-    window.addEventListener("resize", handleResize);
+        this.containerEl.addClass("decks-statistics-modal-container");
+        contentEl.addClass("decks-statistics-modal-content");
 
-    // Store resize handler for cleanup
-    this.resizeHandler = handleResize;
-  }
+        // Mount Svelte component
+        this.component = new StatisticsUI({
+            target: contentEl,
+            props: {
+                statisticsService: this.statisticsService,
+                settings: this.settings,
+                logger: this.logger,
+                deckFilter: this.deckFilter,
+            },
+        }) as StatisticsComponent;
 
-  onClose() {
-    const { contentEl } = this;
+        // Listen to component events
+        this.component.$on("close", (event: any) => {
+            this.close();
+        });
 
-    // Clean up resize handler
-    if (this.resizeHandler) {
-      window.removeEventListener("resize", this.resizeHandler);
-      this.resizeHandler = undefined;
+        // Handle window resize for mobile adaptation
+        const handleResize = () => {
+            if (modalEl instanceof HTMLElement) {
+                if (window.innerWidth <= 768) {
+                    modalEl.addClass("decks-modal-mobile");
+                } else {
+                    modalEl.removeClass("decks-modal-mobile");
+                }
+            }
+        };
+
+        window.addEventListener("resize", handleResize);
+
+        // Store resize handler for cleanup
+        this.resizeHandler = handleResize;
     }
 
-    // Destroy Svelte component
-    if (this.component) {
-      this.component.$destroy();
-      this.component = null;
-    }
+    onClose() {
+        const { contentEl } = this;
 
-    contentEl.empty();
-  }
+        // Clean up resize handler
+        if (this.resizeHandler) {
+            window.removeEventListener("resize", this.resizeHandler);
+            this.resizeHandler = undefined;
+        }
+
+        // Destroy Svelte component
+        if (this.component) {
+            this.component.$destroy();
+            this.component = null;
+        }
+
+        contentEl.empty();
+    }
 }

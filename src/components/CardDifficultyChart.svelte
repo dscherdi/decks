@@ -11,6 +11,8 @@
         Legend,
     } from "chart.js";
     import type { Flashcard } from "../database/types";
+    import { StatisticsService } from "@/services/StatisticsService";
+    import { Logger } from "@/utils/logging";
 
     // Register Chart.js components
     Chart.register(
@@ -20,8 +22,12 @@
         BarController,
         Title,
         Tooltip,
-        Legend,
+        Legend
     );
+
+    export let selectedDeckIds: string[] = [];
+    export let statisticsService: StatisticsService;
+    export let logger: Logger;
 
     export let flashcards: Flashcard[] = [];
     export const showPercentiles: string = "50"; // "50", "95", "all"
@@ -46,7 +52,7 @@
     function processChartData() {
         // Filter to cards that have difficulty values (reviewed cards)
         const cardsWithDifficulty = flashcards.filter(
-            (card) => card.difficulty > 0 && card.state === "review",
+            (card) => card.difficulty > 0 && card.state === "review"
         );
 
         if (cardsWithDifficulty.length === 0) {
@@ -127,7 +133,7 @@
                     data,
                     backgroundColor: colors,
                     borderColor: colors.map((color) =>
-                        color.replace("rgb", "rgba").replace(")", ", 0.8)"),
+                        color.replace("rgb", "rgba").replace(")", ", 0.8)")
                     ),
                     borderWidth: 1,
                 },
@@ -184,7 +190,7 @@
                                 const total = dataset.data.reduce(
                                     (sum: number, val: any) =>
                                         sum + (val as number),
-                                    0,
+                                    0
                                 );
                                 const percentage =
                                     total > 0
@@ -212,6 +218,10 @@
     }
 </script>
 
+<h3>Card Difficulty Distribution</h3>
+<p class="decks-chart-description">
+    FSRS difficulty values indicate how hard cards are to remember
+</p>
 <div class="decks-card-difficulty-chart">
     <canvas bind:this={canvas} height="300"></canvas>
 </div>

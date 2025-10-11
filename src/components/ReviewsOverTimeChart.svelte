@@ -12,6 +12,8 @@
     } from "chart.js";
     import "chartjs-adapter-date-fns";
     import type { ReviewLog } from "../database/types";
+    import { Logger } from "@/utils/logging";
+    import { StatisticsService } from "@/services/StatisticsService";
 
     // Register Chart.js components
     Chart.register(
@@ -21,14 +23,18 @@
         BarController,
         Title,
         Tooltip,
-        Legend,
+        Legend
     );
 
-    export let reviewLogs: ReviewLog[] = [];
-    export let timeframe: string = "1m"; // "1m", "3m", "1y", "all"
+    export let selectedDeckIds: string[] = [];
+    export let statisticsService: StatisticsService;
+    export let logger: Logger;
 
     let canvas: HTMLCanvasElement;
     let chart: Chart | null = null;
+
+    let selectedTimeframe: string = "1m"; // "1m", "3m", "1y", "all"
+    let reviewLogs: ReviewLog[] = [];
 
     onMount(() => {
         createChart();
@@ -43,7 +49,7 @@
     $: if (chart && reviewLogs) {
         console.log(
             "[ReviewsOverTimeChart] Updating chart with reviewLogs:",
-            reviewLogs.length,
+            reviewLogs.length
         );
         updateChart();
     }
@@ -65,7 +71,7 @@
                 break;
             case "1y":
                 cutoffDate = new Date(
-                    now.getTime() - 365 * 24 * 60 * 60 * 1000,
+                    now.getTime() - 365 * 24 * 60 * 60 * 1000
                 );
                 break;
             default:
@@ -73,7 +79,7 @@
         }
 
         return reviewLogs.filter(
-            (log) => new Date(log.reviewedAt) >= cutoffDate,
+            (log) => new Date(log.reviewedAt) >= cutoffDate
         );
     }
 
@@ -118,7 +124,7 @@
                 {
                     label: "Again",
                     data: sortedDates.map(
-                        (date) => dateGroups.get(date)!.again,
+                        (date) => dateGroups.get(date)!.again
                     ),
                     backgroundColor: "#ef4444",
                     borderColor: "#dc2626",
@@ -234,7 +240,7 @@
     function updateChart() {
         if (!chart) {
             console.log(
-                "[ReviewsOverTimeChart] Chart not available for update",
+                "[ReviewsOverTimeChart] Chart not available for update"
             );
             return;
         }
@@ -244,8 +250,29 @@
         chart.data = data;
         chart.update();
     }
+
+    async function handleFilterChange() {
+        logger.debug("[StatisticsUI] Filter changed, reloading data...");
+        try {
+            updateChart();
+        } catch (error) {
+            logger.error("[StatisticsUI] Error during filter change:", error);
+        }
+    }
 </script>
 
+<h3>Reviews Over Time</h3>
+<div class="decks-chart-controls">
+    <label>
+        Timeframe:
+        <select bind:value={selectedTimeframe} on:change={handleFilterChange}>
+            <option value="1m">1 Month</option>
+            <option value="3m">3 Months</option>
+            <option value="1y">1 Year</option>
+            <option value="all">All Time</option>
+        </select>
+    </label>
+</div>
 <div class="decks-reviews-over-time-chart">
     <canvas bind:this={canvas} height="300"></canvas>
 </div>

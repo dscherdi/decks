@@ -11,6 +11,8 @@
     } from "chart.js";
     import type { Flashcard } from "../database/types";
     import { getCardMaturityType } from "../database/types";
+    import { StatisticsService } from "@/services/StatisticsService";
+    import { Logger } from "@/utils/logging";
 
     // Register Chart.js components with force re-registration
     try {
@@ -19,7 +21,7 @@
             DoughnutController,
             PieController,
             Tooltip,
-            Legend,
+            Legend
         );
     } catch (e) {
         console.log("[CardCountsChart] First registration, skip unregister");
@@ -30,8 +32,12 @@
         DoughnutController,
         PieController,
         Tooltip,
-        Legend,
+        Legend
     );
+
+    export let selectedDeckIds: string[] = [];
+    export let statisticsService: StatisticsService;
+    export let logger: Logger;
 
     export let flashcards: Flashcard[] = [];
     export let showSuspended: boolean = true;
@@ -157,7 +163,7 @@
                                     const total = context.dataset.data.reduce(
                                         (sum: number, val) =>
                                             sum + (val as number),
-                                        0,
+                                        0
                                     );
                                     const percentage = (
                                         (value / total) *
@@ -196,7 +202,7 @@
             } catch (fallbackError) {
                 console.error(
                     "[CardCountsChart] Doughnut fallback also failed:",
-                    fallbackError,
+                    fallbackError
                 );
             }
         }
@@ -213,6 +219,7 @@
     }
 </script>
 
+<h3>Card Distribution</h3>
 <div class="decks-card-counts-chart">
     <canvas bind:this={canvas} height="300"></canvas>
 </div>

@@ -1,5 +1,11 @@
 <script lang="ts">
+    import { StatisticsService } from "@/services/StatisticsService";
+    import { Logger } from "@/utils/logging";
     import type { ReviewLog, Flashcard } from "../database/types";
+
+    export let selectedDeckIds: string[] = [];
+    export let statisticsService: StatisticsService;
+    export let logger: Logger;
 
     export let reviewLogs: ReviewLog[] = [];
     export let flashcards: Flashcard[] = [];
@@ -12,7 +18,7 @@
 
     function calculateRetentionStats(
         logs: ReviewLog[] = reviewLogs,
-        cards: Flashcard[] = flashcards,
+        cards: Flashcard[] = flashcards
     ): RetentionStats {
         if (!logs || logs.length === 0) {
             return {

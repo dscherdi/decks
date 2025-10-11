@@ -11,6 +11,8 @@
         Legend,
     } from "chart.js";
     import type { Flashcard } from "../database/types";
+    import { StatisticsService } from "@/services/StatisticsService";
+    import { Logger } from "@/utils/logging";
 
     // Register Chart.js components
     Chart.register(
@@ -20,8 +22,12 @@
         BarController,
         Title,
         Tooltip,
-        Legend,
+        Legend
     );
+
+    export let selectedDeckIds: string[] = [];
+    export let statisticsService: StatisticsService;
+    export let logger: Logger;
 
     export let flashcards: Flashcard[] = [];
     export const showPercentiles: string = "50"; // "50", "95", "all"
@@ -46,7 +52,7 @@
     function processChartData() {
         // Filter to only review cards (new cards don't have meaningful intervals)
         const reviewCards = flashcards.filter(
-            (card) => card.state === "review" && card.interval > 0,
+            (card) => card.state === "review" && card.interval > 0
         );
 
         if (reviewCards.length === 0) {
@@ -66,7 +72,7 @@
 
         // Convert intervals from minutes to days for better readability
         const intervalDays = reviewCards.map((card) =>
-            Math.round(card.interval / (24 * 60)),
+            Math.round(card.interval / (24 * 60))
         );
 
         // Create histogram buckets
@@ -115,7 +121,7 @@
         if (showPercentiles !== "all") {
             const percentile = parseInt(showPercentiles);
             const percentileIndex = Math.floor(
-                (percentile / 100) * sortedIntervals.length,
+                (percentile / 100) * sortedIntervals.length
             );
             const percentileValue = sortedIntervals[percentileIndex];
 
@@ -200,7 +206,7 @@
                                 const total = dataset.data.reduce(
                                     (sum: number, val: any) =>
                                         sum + (val as number),
-                                    0,
+                                    0
                                 );
                                 const percentage =
                                     total > 0
@@ -225,6 +231,17 @@
     }
 </script>
 
+<h3>Review Intervals</h3>
+<div class="decks-chart-controls">
+    <label>
+        Show percentiles:
+        <select>
+            <option value="50">50th percentile</option>
+            <option value="95">95th percentile</option>
+            <option value="all">All data</option>
+        </select>
+    </label>
+</div>
 <div class="decks-review-intervals-chart">
     <canvas bind:this={canvas} height="300"></canvas>
 </div>
