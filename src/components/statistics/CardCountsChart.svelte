@@ -9,8 +9,8 @@
         Legend,
         type ChartConfiguration,
     } from "chart.js";
-    import type { Flashcard } from "../database/types";
-    import { getCardMaturityType } from "../database/types";
+    import type { Flashcard } from "../../database/types";
+    import { getCardMaturityType } from "../../database/types";
     import { StatisticsService } from "@/services/StatisticsService";
     import { Logger } from "@/utils/logging";
 

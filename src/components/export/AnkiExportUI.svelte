@@ -1,8 +1,7 @@
 <script lang="ts">
     import { createEventDispatcher, onMount } from "svelte";
     import { Setting } from "obsidian";
-    import type { Deck, AnkiExportConfig } from "../database/types";
-    import type DecksPlugin from "../main";
+    import type { Deck, AnkiExportConfig } from "../../database/types";
 
     export let deck: Deck;
 
@@ -74,7 +73,7 @@
             new Setting(deckNameContainer)
                 .setName("Anki Deck Name")
                 .setDesc(
-                    "Name of the deck in Anki where cards will be imported",
+                    "Name of the deck in Anki where cards will be imported"
                 )
                 .addText((text) =>
                     text
@@ -82,7 +81,7 @@
                         .setValue(ankiDeckName)
                         .onChange((value) => {
                             ankiDeckName = value;
-                        }),
+                        })
                 );
         }
     });

@@ -1,8 +1,8 @@
 import { Modal } from "obsidian";
-import type { StatisticsService } from "../services/StatisticsService";
-import type { StatisticsComponent } from "../types/svelte-components";
-import type { DecksSettings } from "../settings";
-import StatisticsUI from "./StatisticsUI.svelte";
+import type { StatisticsService } from "../../services/StatisticsService";
+import type { StatisticsComponent } from "../../types/svelte-components";
+import type { DecksSettings } from "../../settings";
+import StatisticsUI from "../statistics/StatisticsUI.svelte";
 import { Logger } from "@/utils/logging";
 
 export class StatisticsModal extends Modal {

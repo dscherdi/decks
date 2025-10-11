@@ -11,7 +11,7 @@
         Legend,
     } from "chart.js";
     import "chartjs-adapter-date-fns";
-    import type { ReviewLog } from "../database/types";
+    import type { ReviewLog } from "../../database/types";
     import { Logger } from "@/utils/logging";
     import { StatisticsService } from "@/services/StatisticsService";
 

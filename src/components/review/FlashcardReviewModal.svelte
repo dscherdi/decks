@@ -1,13 +1,13 @@
 <script lang="ts">
     import { createEventDispatcher, onMount, onDestroy, tick } from "svelte";
-    import type { Deck, Flashcard } from "../database/types";
-    import type { DecksSettings } from "../settings";
-    import { FSRS, type RatingLabel } from "../algorithm/fsrs";
+    import type { Deck, Flashcard } from "../../database/types";
+    import type { DecksSettings } from "../../settings";
+    import { FSRS, type RatingLabel } from "../../algorithm/fsrs";
     import type {
         Scheduler,
         SchedulingPreview,
         SessionProgress,
-    } from "../services/Scheduler";
+    } from "../../services/Scheduler";
     import { yieldToUI } from "@/utils/ui";
 
     export let deck: Deck;
@@ -16,7 +16,7 @@
         card: Flashcard,
         rating: RatingLabel,
         timeElapsed?: number,
-        shownAt?: Date,
+        shownAt?: Date
     ) => Promise<void>;
     export let renderMarkdown: (content: string, el: HTMLElement) => void;
     export let settings: DecksSettings;
@@ -56,7 +56,7 @@
         sessionId = await scheduler.startFreshSession(
             deck.id,
             new Date(),
-            settings.review.sessionDuration,
+            settings.review.sessionDuration
         );
         scheduler.setCurrentSession(sessionId);
         sessionProgress = await scheduler.getSessionProgress(sessionId);

@@ -10,7 +10,7 @@
         Tooltip,
         Legend,
     } from "chart.js";
-    import type { ReviewLog } from "../database/types";
+    import type { Flashcard } from "../../database/types";
     import { StatisticsService } from "@/services/StatisticsService";
     import { Logger } from "@/utils/logging";
 
@@ -29,7 +29,7 @@
     export let statisticsService: StatisticsService;
     export let logger: Logger;
 
-    export let reviewLogs: ReviewLog[] = [];
+    export let flashcards: Flashcard[] = [];
     export const showPercentiles: string = "50"; // "50", "95", "all"
 
     let canvas: HTMLCanvasElement;
@@ -45,25 +45,22 @@
         }
     });
 
-    $: if (chart && reviewLogs) {
+    $: if (chart && flashcards) {
         updateChart();
     }
 
     function processChartData() {
-        // Filter to reviews that have retrievability values
-        const reviewsWithRetrievability = reviewLogs.filter(
-            (log) =>
-                log.retrievability !== undefined &&
-                log.retrievability !== null &&
-                log.retrievability >= 0
+        // Filter to cards that have difficulty values (reviewed cards)
+        const cardsWithDifficulty = flashcards.filter(
+            (card) => card.difficulty > 0 && card.state === "review"
         );
 
-        if (reviewsWithRetrievability.length === 0) {
+        if (cardsWithDifficulty.length === 0) {
             return {
                 labels: ["No Data"],
                 datasets: [
                     {
-                        label: "Reviews",
+                        label: "Cards",
                         data: [0],
                         backgroundColor: "#6b7280",
                         borderColor: "#4b5563",
@@ -73,12 +70,13 @@
             };
         }
 
-        // Get retrievability values (0-1 range, convert to 0-100%)
-        const retrievabilityValues = reviewsWithRetrievability.map(
-            (log) => log.retrievability * 100
-        );
+        // Get difficulty values and convert to percentage (0-100%)
+        const difficultyValues = cardsWithDifficulty.map((card) => {
+            // FSRS difficulty is 1-10, convert to 0-100%
+            return ((card.difficulty - 1) / 9) * 100;
+        });
 
-        // Create histogram buckets for retrievability percentage
+        // Create histogram buckets for difficulty percentage
         const buckets: { [key: string]: number } = {};
         const bucketRanges = [
             { label: "0-10%", min: 0, max: 10 },
@@ -98,19 +96,13 @@
             buckets[bucket.label] = 0;
         });
 
-        // Count retrievability values in each bucket
-        retrievabilityValues.forEach((retrievability) => {
+        // Count difficulty values in each bucket
+        difficultyValues.forEach((difficulty) => {
             for (const bucket of bucketRanges) {
-                if (
-                    retrievability >= bucket.min &&
-                    retrievability < bucket.max
-                ) {
+                if (difficulty >= bucket.min && difficulty < bucket.max) {
                     buckets[bucket.label]++;
                     break;
-                } else if (
-                    retrievability === 100 &&
-                    bucket.label === "90-100%"
-                ) {
+                } else if (difficulty === 100 && bucket.label === "90-100%") {
                     // Include 100% in the last bucket
                     buckets[bucket.label]++;
                     break;
@@ -124,11 +116,11 @@
             .filter((label) => buckets[label] > 0);
         const data = labels.map((label) => buckets[label]);
 
-        // Create gradient colors from red (low retrievability) to green (high retrievability)
+        // Create gradient colors from green (easy) to red (difficult)
         const colors = labels.map((_, index) => {
             const ratio = index / Math.max(labels.length - 1, 1);
-            const r = Math.round(239 - (239 - 34) * ratio); // 239 (red) to 34 (green)
-            const g = Math.round(197 * ratio); // 0 (red) to 197 (green)
+            const r = Math.round(34 + (239 - 34) * ratio); // 34 (green) to 239 (red)
+            const g = Math.round(197 - 197 * ratio); // 197 (green) to 0 (red)
             const b = 94; // Keep blue constant
             return `rgb(${r}, ${g}, ${b})`;
         });
@@ -137,7 +129,7 @@
             labels,
             datasets: [
                 {
-                    label: "Number of Reviews",
+                    label: "Number of Cards",
                     data,
                     backgroundColor: colors,
                     borderColor: colors.map((color) =>
@@ -167,14 +159,14 @@
                     x: {
                         title: {
                             display: true,
-                            text: "Retrievability Range",
+                            text: "Difficulty Range",
                         },
                     },
                     y: {
                         beginAtZero: true,
                         title: {
                             display: true,
-                            text: "Number of Reviews",
+                            text: "Number of Cards",
                         },
                         ticks: {
                             precision: 0,
@@ -184,7 +176,7 @@
                 plugins: {
                     title: {
                         display: true,
-                        text: "Card Retrievability Distribution",
+                        text: "Card Difficulty Distribution",
                     },
                     legend: {
                         display: true,
@@ -204,10 +196,10 @@
                                     total > 0
                                         ? ((value / total) * 100).toFixed(1)
                                         : "0";
-                                return `${dataset.label}: ${value} reviews (${percentage}%)`;
+                                return `${dataset.label}: ${value} cards (${percentage}%)`;
                             },
                             afterLabel: function (context: any) {
-                                return "Higher retrievability = easier to recall";
+                                return "Higher difficulty = harder to remember";
                             },
                         },
                     },
@@ -226,22 +218,22 @@
     }
 </script>
 
-<h3>Card Retrievability Distribution</h3>
+<h3>Card Difficulty Distribution</h3>
 <p class="decks-chart-description">
-    FSRS retrievability values show likelihood of recall today (0-100%)
+    FSRS difficulty values indicate how hard cards are to remember
 </p>
-<div class="decks-card-retrievability-chart">
+<div class="decks-card-difficulty-chart">
     <canvas bind:this={canvas} height="300"></canvas>
 </div>
 
 <style>
-    .decks-card-retrievability-chart {
+    .decks-card-difficulty-chart {
         width: 100%;
         height: 300px;
         margin: 1rem 0;
     }
 
-    .decks-card-retrievability-chart canvas {
+    .decks-card-difficulty-chart canvas {
         max-width: 100%;
         max-height: 300px;
     }

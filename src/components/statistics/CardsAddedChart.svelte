@@ -10,7 +10,7 @@
         Tooltip,
         Legend,
     } from "chart.js";
-    import type { ReviewLog } from "../database/types";
+    import type { ReviewLog } from "../../database/types";
     import { StatisticsService } from "@/services/StatisticsService";
     import { Logger } from "@/utils/logging";
 

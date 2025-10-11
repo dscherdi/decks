@@ -1,8 +1,8 @@
 <script lang="ts">
     import { createEventDispatcher, onMount } from "svelte";
     import { Setting } from "obsidian";
-    import type { Deck, DeckConfig, ReviewOrder } from "../database/types";
-    import type { FSRSProfile } from "../algorithm/fsrs-weights";
+    import type { Deck, DeckConfig, ReviewOrder } from "../../database/types";
+    import type { FSRSProfile } from "../../algorithm/fsrs-weights";
 
     export let deck: Deck;
     export let config: DeckConfig;
@@ -102,12 +102,12 @@
             new Setting(enableNewCardsContainer)
                 .setName("Enable New Cards Limit")
                 .setDesc(
-                    "Limit how many new cards (never seen before) can be shown per day",
+                    "Limit how many new cards (never seen before) can be shown per day"
                 )
                 .addToggle((toggle) =>
                     toggle.setValue(enableNewCardsLimit).onChange((value) => {
                         enableNewCardsLimit = value;
-                    }),
+                    })
                 );
         }
 
@@ -125,7 +125,7 @@
                             if (!isNaN(num) && num >= 0) {
                                 newCardsLimit = num;
                             }
-                        }),
+                        })
                 );
         }
 
@@ -134,14 +134,14 @@
             new Setting(enableReviewCardsContainer)
                 .setName("Enable Review Cards Limit")
                 .setDesc(
-                    "Limit how many review cards (due for repetition) can be shown per day",
+                    "Limit how many review cards (due for repetition) can be shown per day"
                 )
                 .addToggle((toggle) =>
                     toggle
                         .setValue(enableReviewCardsLimit)
                         .onChange((value) => {
                             enableReviewCardsLimit = value;
-                        }),
+                        })
                 );
         }
 
@@ -159,7 +159,7 @@
                             if (!isNaN(num) && num >= 0) {
                                 reviewCardsLimit = num;
                             }
-                        }),
+                        })
                 );
         }
 
@@ -168,7 +168,7 @@
             new Setting(reviewOrderContainer)
                 .setName("Review Order")
                 .setDesc(
-                    "Order in which review cards are presented during study",
+                    "Order in which review cards are presented during study"
                 )
                 .addDropdown((dropdown) =>
                     dropdown
@@ -177,7 +177,7 @@
                         .setValue(reviewOrder)
                         .onChange((value: ReviewOrder) => {
                             reviewOrder = value;
-                        }),
+                        })
                 );
         }
 
@@ -186,7 +186,7 @@
             new Setting(headerLevelContainer)
                 .setName("Header Level for Flashcards")
                 .setDesc(
-                    "Which header level to use for header-paragraph flashcards",
+                    "Which header level to use for header-paragraph flashcards"
                 )
                 .addDropdown((dropdown) =>
                     dropdown
@@ -199,7 +199,7 @@
                         .setValue(headerLevel.toString())
                         .onChange((value) => {
                             headerLevel = parseInt(value);
-                        }),
+                        })
                 );
         }
 
@@ -215,7 +215,7 @@
                         .setDynamicTooltip()
                         .onChange((value) => {
                             requestRetention = value;
-                        }),
+                        })
                 );
         }
 
@@ -223,7 +223,7 @@
             new Setting(profileContainer)
                 .setName("FSRS Profile")
                 .setDesc(
-                    "INTENSIVE: Sub-day intervals (1m/5m/10m/1d). STANDARD: Day-based intervals (≥1 day minimum)",
+                    "INTENSIVE: Sub-day intervals (1m/5m/10m/1d). STANDARD: Day-based intervals (≥1 day minimum)"
                 )
                 .addDropdown((dropdown) =>
                     dropdown
@@ -234,7 +234,7 @@
                             if (value === "INTENSIVE" || value === "STANDARD") {
                                 profile = value;
                             }
-                        }),
+                        })
                 );
         }
 
@@ -247,7 +247,7 @@
                     button.setButtonText("Reset to Defaults").onClick(() => {
                         requestRetention = 0.9;
                         profile = "STANDARD";
-                    }),
+                    })
                 );
         }
     });

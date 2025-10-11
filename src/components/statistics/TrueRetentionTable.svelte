@@ -1,7 +1,7 @@
 <script lang="ts">
     import { StatisticsService } from "@/services/StatisticsService";
     import { Logger } from "@/utils/logging";
-    import type { ReviewLog, Flashcard } from "../database/types";
+    import type { ReviewLog, Flashcard } from "../../database/types";
 
     export let selectedDeckIds: string[] = [];
     export let statisticsService: StatisticsService;

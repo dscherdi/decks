@@ -13,7 +13,7 @@
         Tooltip,
         Legend,
     } from "chart.js";
-    import type { Statistics } from "../database/types";
+    import type { Statistics } from "../../database/types";
 
     // Register Chart.js components
     Chart.register(
@@ -26,7 +26,7 @@
         PointElement,
         Title,
         Tooltip,
-        Legend,
+        Legend
     );
 
     export let statistics: Statistics | null = null;

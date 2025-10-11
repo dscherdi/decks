@@ -10,7 +10,7 @@
         Tooltip,
         Legend,
     } from "chart.js";
-    import type { Flashcard } from "../database/types";
+    import type { Flashcard } from "../../database/types";
     import { StatisticsService } from "@/services/StatisticsService";
     import { Logger } from "@/utils/logging";
 
@@ -50,12 +50,12 @@
     }
 
     function processChartData() {
-        // Filter to cards that have stability values (reviewed cards)
-        const cardsWithStability = flashcards.filter(
-            (card) => card.stability > 0 && card.state === "review"
+        // Filter to only review cards (new cards don't have meaningful intervals)
+        const reviewCards = flashcards.filter(
+            (card) => card.state === "review" && card.interval > 0
         );
 
-        if (cardsWithStability.length === 0) {
+        if (reviewCards.length === 0) {
             return {
                 labels: ["No Data"],
                 datasets: [
@@ -70,24 +70,27 @@
             };
         }
 
-        // Get stability values
-        const stabilityValues = cardsWithStability.map(
-            (card) => card.stability
+        // Convert intervals from minutes to days for better readability
+        const intervalDays = reviewCards.map((card) =>
+            Math.round(card.interval / (24 * 60))
         );
-        const maxStability = Math.max(...stabilityValues);
 
-        // Create histogram buckets for stability
+        // Create histogram buckets
+        const maxInterval = Math.max(...intervalDays);
         const buckets: { [key: string]: number } = {};
+
+        // Define bucket ranges (in days)
         const bucketRanges = [
-            { label: "0-1d", min: 0, max: 1 },
-            { label: "1-3d", min: 1, max: 3 },
-            { label: "3-7d", min: 3, max: 7 },
-            { label: "1-2w", min: 7, max: 14 },
-            { label: "2-4w", min: 14, max: 28 },
-            { label: "1-3m", min: 28, max: 90 },
-            { label: "3-6m", min: 90, max: 180 },
-            { label: "6m-1y", min: 180, max: 365 },
-            { label: "1y+", min: 365, max: Infinity },
+            { label: "1d", min: 1, max: 1 },
+            { label: "2-3d", min: 2, max: 3 },
+            { label: "4-7d", min: 4, max: 7 },
+            { label: "1-2w", min: 8, max: 14 },
+            { label: "2-3w", min: 15, max: 21 },
+            { label: "1-2m", min: 22, max: 60 },
+            { label: "2-4m", min: 61, max: 120 },
+            { label: "4-6m", min: 121, max: 180 },
+            { label: "6m-1y", min: 181, max: 365 },
+            { label: "1y+", min: 366, max: Infinity },
         ];
 
         // Initialize buckets
@@ -95,10 +98,10 @@
             buckets[bucket.label] = 0;
         });
 
-        // Count stability values in each bucket
-        stabilityValues.forEach((stability) => {
+        // Count intervals in each bucket
+        intervalDays.forEach((days) => {
             for (const bucket of bucketRanges) {
-                if (stability >= bucket.min && stability < bucket.max) {
+                if (days >= bucket.min && days <= bucket.max) {
                     buckets[bucket.label]++;
                     break;
                 }
@@ -111,17 +114,46 @@
             .filter((label) => buckets[label] > 0);
         const data = labels.map((label) => buckets[label]);
 
+        // Calculate percentiles if requested
+        const sortedIntervals = intervalDays.sort((a, b) => a - b);
+        let annotations: any[] = [];
+
+        if (showPercentiles !== "all") {
+            const percentile = parseInt(showPercentiles);
+            const percentileIndex = Math.floor(
+                (percentile / 100) * sortedIntervals.length
+            );
+            const percentileValue = sortedIntervals[percentileIndex];
+
+            if (percentileValue !== undefined) {
+                annotations.push({
+                    type: "line",
+                    mode: "vertical",
+                    scaleID: "x",
+                    value: percentileValue,
+                    borderColor: "#ef4444",
+                    borderWidth: 2,
+                    label: {
+                        content: `${percentile}th percentile: ${percentileValue}d`,
+                        enabled: true,
+                        position: "top",
+                    },
+                });
+            }
+        }
+
         return {
             labels,
             datasets: [
                 {
                     label: "Number of Cards",
                     data,
-                    backgroundColor: "#8b5cf6",
-                    borderColor: "#7c3aed",
+                    backgroundColor: "#3b82f6",
+                    borderColor: "#2563eb",
                     borderWidth: 1,
                 },
             ],
+            annotations,
         };
     }
 
@@ -143,7 +175,7 @@
                     x: {
                         title: {
                             display: true,
-                            text: "Stability Range",
+                            text: "Interval Range",
                         },
                     },
                     y: {
@@ -160,7 +192,7 @@
                 plugins: {
                     title: {
                         display: true,
-                        text: "Card Stability Distribution",
+                        text: "Review Interval Distribution",
                     },
                     legend: {
                         display: true,
@@ -199,22 +231,29 @@
     }
 </script>
 
-<h3>Card Stability Distribution</h3>
-<p class="decks-chart-description">
-    FSRS stability values show how well cards are retained in memory
-</p>
-<div class="decks-card-stability-chart">
+<h3>Review Intervals</h3>
+<div class="decks-chart-controls">
+    <label>
+        Show percentiles:
+        <select>
+            <option value="50">50th percentile</option>
+            <option value="95">95th percentile</option>
+            <option value="all">All data</option>
+        </select>
+    </label>
+</div>
+<div class="decks-review-intervals-chart">
     <canvas bind:this={canvas} height="300"></canvas>
 </div>
 
 <style>
-    .decks-card-stability-chart {
+    .decks-review-intervals-chart {
         width: 100%;
         height: 300px;
         margin: 1rem 0;
     }
 
-    .decks-card-stability-chart canvas {
+    .decks-review-intervals-chart canvas {
         max-width: 100%;
         max-height: 300px;
     }

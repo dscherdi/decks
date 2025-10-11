@@ -10,7 +10,7 @@
         Tooltip,
         Legend,
     } from "chart.js";
-    import type { Flashcard } from "../database/types";
+    import type { Flashcard } from "../../database/types";
     import { StatisticsService } from "@/services/StatisticsService";
     import { Logger } from "@/utils/logging";
 
@@ -50,12 +50,12 @@
     }
 
     function processChartData() {
-        // Filter to cards that have difficulty values (reviewed cards)
-        const cardsWithDifficulty = flashcards.filter(
-            (card) => card.difficulty > 0 && card.state === "review"
+        // Filter to cards that have stability values (reviewed cards)
+        const cardsWithStability = flashcards.filter(
+            (card) => card.stability > 0 && card.state === "review"
         );
 
-        if (cardsWithDifficulty.length === 0) {
+        if (cardsWithStability.length === 0) {
             return {
                 labels: ["No Data"],
                 datasets: [
@@ -70,25 +70,24 @@
             };
         }
 
-        // Get difficulty values and convert to percentage (0-100%)
-        const difficultyValues = cardsWithDifficulty.map((card) => {
-            // FSRS difficulty is 1-10, convert to 0-100%
-            return ((card.difficulty - 1) / 9) * 100;
-        });
+        // Get stability values
+        const stabilityValues = cardsWithStability.map(
+            (card) => card.stability
+        );
+        const maxStability = Math.max(...stabilityValues);
 
-        // Create histogram buckets for difficulty percentage
+        // Create histogram buckets for stability
         const buckets: { [key: string]: number } = {};
         const bucketRanges = [
-            { label: "0-10%", min: 0, max: 10 },
-            { label: "10-20%", min: 10, max: 20 },
-            { label: "20-30%", min: 20, max: 30 },
-            { label: "30-40%", min: 30, max: 40 },
-            { label: "40-50%", min: 40, max: 50 },
-            { label: "50-60%", min: 50, max: 60 },
-            { label: "60-70%", min: 60, max: 70 },
-            { label: "70-80%", min: 70, max: 80 },
-            { label: "80-90%", min: 80, max: 90 },
-            { label: "90-100%", min: 90, max: 100 },
+            { label: "0-1d", min: 0, max: 1 },
+            { label: "1-3d", min: 1, max: 3 },
+            { label: "3-7d", min: 3, max: 7 },
+            { label: "1-2w", min: 7, max: 14 },
+            { label: "2-4w", min: 14, max: 28 },
+            { label: "1-3m", min: 28, max: 90 },
+            { label: "3-6m", min: 90, max: 180 },
+            { label: "6m-1y", min: 180, max: 365 },
+            { label: "1y+", min: 365, max: Infinity },
         ];
 
         // Initialize buckets
@@ -96,14 +95,10 @@
             buckets[bucket.label] = 0;
         });
 
-        // Count difficulty values in each bucket
-        difficultyValues.forEach((difficulty) => {
+        // Count stability values in each bucket
+        stabilityValues.forEach((stability) => {
             for (const bucket of bucketRanges) {
-                if (difficulty >= bucket.min && difficulty < bucket.max) {
-                    buckets[bucket.label]++;
-                    break;
-                } else if (difficulty === 100 && bucket.label === "90-100%") {
-                    // Include 100% in the last bucket
+                if (stability >= bucket.min && stability < bucket.max) {
                     buckets[bucket.label]++;
                     break;
                 }
@@ -116,25 +111,14 @@
             .filter((label) => buckets[label] > 0);
         const data = labels.map((label) => buckets[label]);
 
-        // Create gradient colors from green (easy) to red (difficult)
-        const colors = labels.map((_, index) => {
-            const ratio = index / Math.max(labels.length - 1, 1);
-            const r = Math.round(34 + (239 - 34) * ratio); // 34 (green) to 239 (red)
-            const g = Math.round(197 - 197 * ratio); // 197 (green) to 0 (red)
-            const b = 94; // Keep blue constant
-            return `rgb(${r}, ${g}, ${b})`;
-        });
-
         return {
             labels,
             datasets: [
                 {
                     label: "Number of Cards",
                     data,
-                    backgroundColor: colors,
-                    borderColor: colors.map((color) =>
-                        color.replace("rgb", "rgba").replace(")", ", 0.8)")
-                    ),
+                    backgroundColor: "#8b5cf6",
+                    borderColor: "#7c3aed",
                     borderWidth: 1,
                 },
             ],
@@ -159,7 +143,7 @@
                     x: {
                         title: {
                             display: true,
-                            text: "Difficulty Range",
+                            text: "Stability Range",
                         },
                     },
                     y: {
@@ -176,7 +160,7 @@
                 plugins: {
                     title: {
                         display: true,
-                        text: "Card Difficulty Distribution",
+                        text: "Card Stability Distribution",
                     },
                     legend: {
                         display: true,
@@ -198,9 +182,6 @@
                                         : "0";
                                 return `${dataset.label}: ${value} cards (${percentage}%)`;
                             },
-                            afterLabel: function (context: any) {
-                                return "Higher difficulty = harder to remember";
-                            },
                         },
                     },
                 },
@@ -218,22 +199,22 @@
     }
 </script>
 
-<h3>Card Difficulty Distribution</h3>
+<h3>Card Stability Distribution</h3>
 <p class="decks-chart-description">
-    FSRS difficulty values indicate how hard cards are to remember
+    FSRS stability values show how well cards are retained in memory
 </p>
-<div class="decks-card-difficulty-chart">
+<div class="decks-card-stability-chart">
     <canvas bind:this={canvas} height="300"></canvas>
 </div>
 
 <style>
-    .decks-card-difficulty-chart {
+    .decks-card-stability-chart {
         width: 100%;
         height: 300px;
         margin: 1rem 0;
     }
 
-    .decks-card-difficulty-chart canvas {
+    .decks-card-stability-chart canvas {
         max-width: 100%;
         max-height: 300px;
     }

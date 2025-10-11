@@ -12,10 +12,14 @@
     import CardRetrievabilityChart from "./CardRetrievabilityChart.svelte";
     import TrueRetentionTable from "./TrueRetentionTable.svelte";
     import FutureDueChart from "./FutureDueChart.svelte";
-    import type { Statistics, ReviewLog, Flashcard } from "../database/types";
+    import type {
+        Statistics,
+        ReviewLog,
+        Flashcard,
+    } from "../../database/types";
 
-    import { StatisticsService } from "../services/StatisticsService";
-    import type { DecksSettings } from "../settings";
+    import { StatisticsService } from "../../services/StatisticsService";
+    import type { DecksSettings } from "../../settings";
     import { Logger } from "@/utils/logging";
 
     export let statisticsService: StatisticsService;

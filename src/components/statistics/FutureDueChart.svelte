@@ -14,12 +14,12 @@
         Legend,
         Filler,
     } from "chart.js";
-    import type { Statistics, Flashcard } from "../database/types";
+    import type { Statistics, Flashcard } from "../../database/types";
     import {
         FutureDueData,
         StatisticsService,
         type BacklogForecastData,
-    } from "../services/StatisticsService";
+    } from "../../services/StatisticsService";
     import { Logger } from "@/utils/logging";
 
     // Register Chart.js components
