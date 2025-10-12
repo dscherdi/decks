@@ -53,7 +53,7 @@
 
     onDestroy(() => {
         if (chart) {
-            chart.destroy();
+            (chart as Chart).destroy();
         }
     });
 
@@ -335,7 +335,7 @@
     </div>
 
     <div class="chart-stats">
-        <!-- <div class="stat">
+        <div class="stat">
             <span class="stat-label">Total Reviews:</span>
             <span class="stat-value">{getForecastStats().totalReviews}</span>
         </div>
@@ -352,7 +352,7 @@
         <div class="stat">
             <span class="stat-label">Daily Load:</span>
             <span class="stat-value">{getForecastStats().dailyLoad}</span>
-        </div> -->
+        </div>
     </div>
 
     {#if !statistics?.forecast || statistics.forecast.length === 0 || !statistics.forecast.some((day) => day.dueCount > 0)}

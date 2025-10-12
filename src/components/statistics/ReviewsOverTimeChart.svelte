@@ -55,14 +55,14 @@
     }
 
     function getTimeframeData(): ReviewLog[] {
-        if (timeframe === "all") {
+        if (selectedTimeframe === "all") {
             return reviewLogs;
         }
 
         const now = new Date();
         let cutoffDate: Date;
 
-        switch (timeframe) {
+        switch (selectedTimeframe) {
             case "1m":
                 cutoffDate = new Date(now.getTime() - 30 * 24 * 60 * 60 * 1000);
                 break;

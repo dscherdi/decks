@@ -36,7 +36,7 @@
     export let logger: Logger;
 
     export let reviewLogs: ReviewLog[] = [];
-    export let timeframe: string = "1m"; // "1m", "3m", "1y", "all"
+    let selectedTimeframe: string = "1m"; // "1m", "3m", "1y", "all"
 
     let canvas: HTMLCanvasElement;
     let chart: Chart | null = null;
@@ -56,14 +56,14 @@
     }
 
     function getTimeframeData(): ReviewLog[] {
-        if (timeframe === "all") {
+        if (selectedTimeframe === "all") {
             return reviewLogs;
         }
 
         const now = new Date();
         let cutoffDate: Date;
 
-        switch (timeframe) {
+        switch (selectedTimeframe) {
             case "1m":
                 cutoffDate = new Date(now.getTime() - 30 * 24 * 60 * 60 * 1000);
                 break;
@@ -288,6 +288,15 @@
         const data = processChartData();
         chart.data = data;
         chart.update();
+    }
+
+    async function handleFilterChange() {
+        logger.debug("[StatisticsUI] Filter changed, reloading data...");
+        try {
+            await updateChart();
+        } catch (error) {
+            logger.error("[StatisticsUI] Error during filter change:", error);
+        }
     }
 </script>
 

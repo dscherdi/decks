@@ -1,4 +1,4 @@
-import { Modal, Component, Notice, MarkdownRenderer } from "obsidian";
+import { Modal, Component, Notice, MarkdownRenderer, App } from "obsidian";
 import type { Deck, Flashcard } from "../../database/types";
 import type { RatingLabel } from "../../algorithm/fsrs";
 import type { Scheduler } from "../../services/Scheduler";
@@ -25,7 +25,7 @@ export class FlashcardReviewModalWrapper extends Modal {
     private renderMarkdown(content: string, el: HTMLElement): Component | null {
         try {
             const component = new Component();
-            MarkdownRenderer.renderMarkdown(content, el, "", component);
+            MarkdownRenderer.render(this.app, content, el, "", component);
             return component;
         } catch (error) {
             console.error("Error rendering markdown:", error);
@@ -35,7 +35,7 @@ export class FlashcardReviewModalWrapper extends Modal {
     }
 
     constructor(
-        app: any,
+        app: App,
         deck: Deck,
         flashcards: Flashcard[],
         scheduler: Scheduler,

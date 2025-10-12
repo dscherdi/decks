@@ -219,13 +219,22 @@
         chart.data = data;
         chart.update();
     }
+
+    async function handleFilterChange() {
+        logger.debug("[StatisticsUI] Filter changed, reloading data...");
+        try {
+            await updateChart();
+        } catch (error) {
+            logger.error("[StatisticsUI] Error during filter change:", error);
+        }
+    }
 </script>
 
 <h3>Cards Added Over Time</h3>
 <div class="decks-chart-controls">
     <label>
         Timeframe:
-        <select bind:value={selectedTimeframe} on:change={handleFilterChange}>
+        <select bind:value={timeframe} on:change={handleFilterChange}>
             <option value="1m">1 Month</option>
             <option value="3m">3 Months</option>
             <option value="1y">1 Year</option>

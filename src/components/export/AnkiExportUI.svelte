@@ -37,6 +37,8 @@
         const config: AnkiExportConfig = {
             ankiDeckName: ankiDeckName.trim() || deck.name,
             separator: separatorMap[separator] || "\t",
+            noteType: "",
+            tags: [deck.tag],
         };
 
         dispatch("export", config);
