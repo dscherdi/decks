@@ -1,4 +1,4 @@
-import { Modal, Component, Notice, MarkdownRenderer } from "obsidian";
+import { Modal, Component, Notice, MarkdownRenderer, App } from "obsidian";
 import type { Deck, Flashcard } from "../database/types";
 import type { RatingLabel } from "../algorithm/fsrs";
 import type { Scheduler } from "../services/Scheduler";
@@ -18,10 +18,14 @@ export class FlashcardReviewModalWrapper extends Modal {
   private markdownComponents: Component[] = [];
   private resizeHandler?: () => void;
 
-  private renderMarkdown(content: string, el: HTMLElement): Component | null {
+  private renderMarkdown(
+    content: string,
+    el: HTMLElement,
+    deckFilePath: string,
+  ): Component | null {
     try {
       const component = new Component();
-      MarkdownRenderer.renderMarkdown(content, el, "", component);
+      MarkdownRenderer.render(this.app, content, el, deckFilePath, component);
       return component;
     } catch (error) {
       console.error("Error rendering markdown:", error);
@@ -31,7 +35,7 @@ export class FlashcardReviewModalWrapper extends Modal {
   }
 
   constructor(
-    app: any,
+    app: App,
     deck: Deck,
     flashcards: Flashcard[],
     scheduler: Scheduler,
@@ -101,8 +105,12 @@ export class FlashcardReviewModalWrapper extends Modal {
         ) => {
           await this.reviewFlashcard(this.deck, card, rating, timeElapsed);
         },
-        renderMarkdown: (content: string, el: HTMLElement) => {
-          const component = this.renderMarkdown(content, el);
+        renderMarkdown: (
+          content: string,
+          el: HTMLElement,
+          deckFilePath: string,
+        ) => {
+          const component = this.renderMarkdown(content, el, deckFilePath);
           if (component) {
             this.markdownComponents.push(component);
           }

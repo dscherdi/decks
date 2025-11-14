@@ -465,12 +465,14 @@ describe("Scheduler", () => {
         });
 
         // Start session
-        const sessionId = await scheduler.startReviewSession("deck_1");
-        expect(sessionId).toBe("session_123");
+        const newSession = await scheduler.startReviewSession("deck_1");
+        expect(newSession.sessionId).toBe("session_123");
         expect(mockDb.createReviewSession).toHaveBeenCalled();
 
         // Get progress
-        const progress = await scheduler.getSessionProgress(sessionId);
+        const progress = await scheduler.getSessionProgress(
+          newSession.sessionId,
+        );
         expect(progress).toEqual({
           doneUnique: 0,
           goalTotal: 5,
@@ -568,8 +570,8 @@ describe("Scheduler", () => {
         });
 
         // Should create new session when none exists
-        const sessionId1 = await scheduler.startFreshSession("deck_1");
-        expect(sessionId1).toBe("session_123");
+        const newSession1 = await scheduler.startFreshSession("deck_1");
+        expect(newSession1.sessionId).toBe("session_123");
         expect(scheduler.getCurrentSession()).toBe("session_123");
 
         // Mock an existing active session for the next test
@@ -583,17 +585,17 @@ describe("Scheduler", () => {
         });
 
         // Should end existing session and create new one
-        const sessionId2 = await scheduler.startFreshSession("deck_1");
-        expect(sessionId2).toBe("session_123");
+        const newSession2 = await scheduler.startFreshSession("deck_1");
+        expect(newSession2.sessionId).toBe("session_123");
         expect(mockDb.endReviewSession).toHaveBeenCalledWith(
           "existing_session",
           expect.any(String),
         );
 
         // Manual end session test
-        await scheduler.endReviewSession(sessionId2);
+        await scheduler.endReviewSession(newSession2.sessionId);
         expect(mockDb.endReviewSession).toHaveBeenCalledWith(
-          sessionId2,
+          newSession2.sessionId,
           expect.any(String),
         );
       });

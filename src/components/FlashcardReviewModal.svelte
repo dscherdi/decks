@@ -17,7 +17,11 @@
         rating: RatingLabel,
         timeElapsed?: number,
     ) => Promise<void>;
-    export let renderMarkdown: (content: string, el: HTMLElement) => void;
+    export let renderMarkdown: (
+        content: string,
+        el: HTMLElement,
+        deckFilePath: string,
+    ) => void;
     export let settings: FlashcardsSettings;
     export let scheduler: Scheduler;
     export let onCardReviewed:
@@ -36,6 +40,7 @@
     let cardStartTime: number = 0;
     let currentCard: Flashcard | null = initialCard;
     let sessionId: string | null = null;
+    let deckFilePath: string | null = null;
     let sessionProgress: SessionProgress | null = null;
 
     // Session timer variables
@@ -52,7 +57,7 @@
 
     onMount(async () => {
         // Initialize review session
-        sessionId = await scheduler.startFreshSession(
+        var { sessionId, deckFilePath } = await scheduler.startFreshSession(
             deck.id,
             new Date(),
             settings.review.sessionDuration,
@@ -103,7 +108,8 @@
         tick().then(() => {
             if (backEl && currentCard) {
                 backEl.empty();
-                renderMarkdown(currentCard.back, backEl);
+                console.log(currentCard.back);
+                renderMarkdown(currentCard.back, backEl, deckFilePath);
             }
         });
     }

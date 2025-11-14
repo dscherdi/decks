@@ -41,6 +41,11 @@ export interface SessionProgress {
   progress: number; // 0-100
 }
 
+export interface NewSession {
+  sessionId: string;
+  deckFilePath: string;
+}
+
 /**
  * Unified scheduler that consolidates all card selection and scheduling logic.
  * Handles deterministic card selection, FSRS-based interval calculation,
@@ -79,7 +84,7 @@ export class Scheduler {
     deckId: string,
     now: Date = new Date(),
     sessionDurationMinutes?: number,
-  ): Promise<string> {
+  ): Promise<NewSession> {
     this.debugLog(`Starting review session for deck: ${deckId}`);
     const deck = await this.db.getDeckById(deckId);
     if (!deck) {
@@ -139,7 +144,10 @@ export class Scheduler {
     this.debugLog(
       `Review session created: ${sessionId}, goal: ${finalGoalTotal}`,
     );
-    return sessionId;
+    return {
+      sessionId: sessionId,
+      deckFilePath: deck?.filepath,
+    };
   }
 
   /**
@@ -189,7 +197,7 @@ export class Scheduler {
     deckId: string,
     now: Date = new Date(),
     sessionDurationMinutes?: number,
-  ): Promise<string> {
+  ): Promise<NewSession> {
     // End any existing active session first
     // TODO: End by taking the review time of last review log with session id of active session
     const activeSession = await this.db.getActiveReviewSession(deckId);
@@ -198,12 +206,14 @@ export class Scheduler {
     }
 
     // Start a new session
-    this.currentSessionId = await this.startReviewSession(
+    var newSession = await this.startReviewSession(
       deckId,
       now,
       sessionDurationMinutes,
     );
-    return this.currentSessionId;
+    this.currentSessionId = newSession.sessionId;
+
+    return newSession;
   }
 
   /**

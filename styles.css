@@ -94,6 +94,11 @@
     transition: transform 0.1s ease;
 }
 
+.decks-card-side.decks-back > p > span > div.markdown-preview-view {
+    flex-direction: column !important;
+    justify-content: flex-start !important;
+}
+
 /* Ensure proper touch targets on mobile - scoped to plugin containers */
 @media (max-width: 768px) {
     .decks-view button,
