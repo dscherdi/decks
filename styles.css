@@ -101,6 +101,13 @@
     padding: inherit !important;
     margin: 0px !important;
 }
+.decks-card-side.decks-back
+    > p
+    > span
+    > div.markdown-preview-view
+    > *:first-child {
+    display: none;
+}
 
 .decks-card-side.decks-back > p {
     margin-block: 0px !important;
