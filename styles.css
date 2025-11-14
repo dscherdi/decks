@@ -95,8 +95,19 @@
 }
 
 .decks-card-side.decks-back > p > span > div.markdown-preview-view {
-    flex-direction: column !important;
-    justify-content: flex-start !important;
+    display: inherit !important;
+    width: inherit !important;
+    min-height: inherit !important;
+    padding: inherit !important;
+    margin: 0px !important;
+}
+
+.decks-card-side.decks-back > p {
+    margin-block: 0px !important;
+}
+
+.decks-card-side.decks-back > p > span {
+    border-inline-start: unset !important;
 }
 
 /* Ensure proper touch targets on mobile - scoped to plugin containers */
