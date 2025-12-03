@@ -530,6 +530,7 @@ export class DatabaseService {
     ]);
   }
 
+  // Deprecated
   async updateDeckHeaderLevel(
     deckId: string,
     headerLevel: number,
