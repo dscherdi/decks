@@ -20,7 +20,7 @@
     export let renderMarkdown: (
         content: string,
         el: HTMLElement,
-        deckFilePath: string,
+        deckFilePath: string | undefined,
     ) => void;
     export let settings: FlashcardsSettings;
     export let scheduler: Scheduler;
@@ -40,7 +40,7 @@
     let cardStartTime: number = 0;
     let currentCard: Flashcard | null = initialCard;
     let sessionId: string | null = null;
-    let deckFilePath: string | null = null;
+    let deckFilePath: string = "";
     let sessionProgress: SessionProgress | null = null;
 
     // Session timer variables
@@ -100,7 +100,7 @@
         // Render front side
         if (frontEl) {
             frontEl.empty();
-            renderMarkdown(currentCard.front, frontEl);
+            renderMarkdown(currentCard.front, frontEl, deckFilePath);
         }
 
         // Pre-render back side but keep it hidden
@@ -120,7 +120,7 @@
         tick().then(() => {
             if (backEl && currentCard) {
                 backEl.empty();
-                renderMarkdown(currentCard.back, backEl);
+                renderMarkdown(currentCard.back, backEl, deckFilePath);
             }
         });
     }

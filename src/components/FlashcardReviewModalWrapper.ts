@@ -1,4 +1,11 @@
-import { Modal, Component, Notice, MarkdownRenderer, App } from "obsidian";
+import {
+  Modal,
+  Component,
+  Notice,
+  MarkdownRenderer,
+  App,
+  Platform,
+} from "obsidian";
 import type { Deck, Flashcard } from "../database/types";
 import type { RatingLabel } from "../algorithm/fsrs";
 import type { Scheduler } from "../services/Scheduler";
@@ -21,11 +28,17 @@ export class FlashcardReviewModalWrapper extends Modal {
   private renderMarkdown(
     content: string,
     el: HTMLElement,
-    deckFilePath: string,
+    deckFilePath: string | undefined,
   ): Component | null {
     try {
       const component = new Component();
-      MarkdownRenderer.render(this.app, content, el, deckFilePath, component);
+      MarkdownRenderer.render(
+        this.app,
+        content,
+        el,
+        deckFilePath ?? "",
+        component,
+      );
       return component;
     } catch (error) {
       console.error("Error rendering markdown:", error);
@@ -84,10 +97,14 @@ export class FlashcardReviewModalWrapper extends Modal {
     if (modalEl instanceof HTMLElement) {
       modalEl.addClass("decks-modal");
 
-      if (window.innerWidth <= 768) {
+      if (
+        window.innerWidth <= 768 ||
+        Platform.isPhone ||
+        (Platform.isTablet && window.innerWidth < window.innerHeight)
+      ) {
         modalEl.addClass("decks-modal-mobile");
         modalEl.removeClass("decks-modal-tablet");
-      } else if (window.innerWidth <= 1080) {
+      } else if (window.innerWidth <= 1080 || Platform.isTablet) {
         modalEl.addClass("decks-modal-tablet");
         modalEl.removeClass("decks-modal-mobile");
       } else {
@@ -147,10 +164,14 @@ export class FlashcardReviewModalWrapper extends Modal {
     const handleResize = () => {
       const modalEl = this.containerEl.querySelector(".modal");
       if (modalEl instanceof HTMLElement) {
-        if (window.innerWidth <= 768) {
+        if (
+          window.innerWidth <= 768 ||
+          Platform.isPhone ||
+          (Platform.isTablet && window.innerWidth < window.innerHeight)
+        ) {
           modalEl.addClass("decks-modal-mobile");
           modalEl.removeClass("decks-modal-tablet");
-        } else if (window.innerWidth <= 1080) {
+        } else if (window.innerWidth <= 1080 || Platform.isTablet) {
           modalEl.addClass("decks-modal-tablet");
           modalEl.removeClass("decks-modal-mobile");
         } else {

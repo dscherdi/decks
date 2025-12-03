@@ -37,10 +37,14 @@ export class DeckConfigModal extends Modal {
     const modalEl = this.containerEl.querySelector(".modal");
     if (modalEl instanceof HTMLElement) {
       modalEl.addClass("decks-modal");
-      if (window.innerWidth <= 768) {
+      if (
+        window.innerWidth <= 768 ||
+        Platform.isPhone ||
+        (Platform.isTablet && window.innerWidth < window.innerHeight)
+      ) {
         modalEl.addClass("decks-modal-mobile");
         modalEl.removeClass("decks-modal-tablet");
-      } else if (window.innerWidth <= 1080) {
+      } else if (window.innerWidth <= 1080 || Platform.isTablet) {
         modalEl.addClass("decks-modal-tablet");
         modalEl.removeClass("decks-modal-mobile");
       } else {
@@ -78,10 +82,14 @@ export class DeckConfigModal extends Modal {
     const handleResize = () => {
       const modalEl = this.containerEl.querySelector(".modal");
       if (modalEl instanceof HTMLElement) {
-        if (window.innerWidth <= 768) {
+        if (
+          window.innerWidth <= 768 ||
+          Platform.isPhone ||
+          (Platform.isTablet && window.innerWidth < window.innerHeight)
+        ) {
           modalEl.addClass("decks-modal-mobile");
           modalEl.removeClass("decks-modal-tablet");
-        } else if (window.innerWidth <= 1080) {
+        } else if (window.innerWidth <= 1080 || Platform.isTablet) {
           modalEl.addClass("decks-modal-tablet");
           modalEl.removeClass("decks-modal-mobile");
         } else {

@@ -1,4 +1,4 @@
-import { Modal, App } from "obsidian";
+import { Modal, App, Platform } from "obsidian";
 import { DatabaseService } from "../database/DatabaseService";
 import StatisticsUI from "./StatisticsUI.svelte";
 
@@ -22,10 +22,14 @@ export class StatisticsModal extends Modal {
     const modalEl = this.containerEl.querySelector(".modal");
     if (modalEl instanceof HTMLElement) {
       modalEl.addClass("decks-modal");
-      if (window.innerWidth <= 768) {
+      if (
+        window.innerWidth <= 768 ||
+        Platform.isPhone ||
+        (Platform.isTablet && window.innerWidth < window.innerHeight)
+      ) {
         modalEl.addClass("decks-modal-mobile");
         modalEl.removeClass("decks-modal-tablet");
-      } else if (window.innerWidth <= 1080) {
+      } else if (window.innerWidth <= 1080 || Platform.isTablet) {
         modalEl.addClass("decks-modal-tablet");
         modalEl.removeClass("decks-modal-mobile");
       } else {
@@ -55,10 +59,14 @@ export class StatisticsModal extends Modal {
     // Handle window resize for mobile adaptation
     const handleResize = () => {
       if (modalEl instanceof HTMLElement) {
-        if (window.innerWidth <= 768) {
+        if (
+          window.innerWidth <= 768 ||
+          Platform.isPhone ||
+          (Platform.isTablet && window.innerWidth < window.innerHeight)
+        ) {
           modalEl.addClass("decks-modal-mobile");
           modalEl.removeClass("decks-modal-tablet");
-        } else if (window.innerWidth <= 1080) {
+        } else if (window.innerWidth <= 1080 || Platform.isTablet) {
           modalEl.addClass("decks-modal-tablet");
           modalEl.removeClass("decks-modal-mobile");
         } else {
