@@ -367,6 +367,11 @@
     padding-bottom: env(safe-area-inset-bottom);
 }
 
+.decks-modal-tablet {
+    width: 85vw !important;
+    max-width: 85vw !important;
+}
+
 .decks-modal-mobile .modal-close-button {
     z-index: 1000;
     position: absolute;

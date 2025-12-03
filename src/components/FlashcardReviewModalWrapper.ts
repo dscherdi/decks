@@ -86,7 +86,12 @@ export class FlashcardReviewModalWrapper extends Modal {
 
       if (window.innerWidth <= 768) {
         modalEl.addClass("decks-modal-mobile");
+        modalEl.removeClass("decks-modal-tablet");
+      } else if (window.innerWidth <= 1080) {
+        modalEl.addClass("decks-modal-tablet");
+        modalEl.removeClass("decks-modal-mobile");
       } else {
+        modalEl.removeClass("decks-modal-tablet");
         modalEl.removeClass("decks-modal-mobile");
       }
     }
@@ -144,7 +149,12 @@ export class FlashcardReviewModalWrapper extends Modal {
       if (modalEl instanceof HTMLElement) {
         if (window.innerWidth <= 768) {
           modalEl.addClass("decks-modal-mobile");
+          modalEl.removeClass("decks-modal-tablet");
+        } else if (window.innerWidth <= 1080) {
+          modalEl.addClass("decks-modal-tablet");
+          modalEl.removeClass("decks-modal-mobile");
         } else {
+          modalEl.removeClass("decks-modal-tablet");
           modalEl.removeClass("decks-modal-mobile");
         }
       }
