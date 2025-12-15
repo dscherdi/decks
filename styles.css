@@ -524,3 +524,10 @@
 .decks-backup-container {
     margin-top: 10px;
 }
+
+div.decks-card-content
+    > div.decks-answer-section
+    > div.decks-card-side.decks-back
+    > div.math-block {
+    overflow-x: scroll;
+}

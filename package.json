@@ -1,6 +1,6 @@
 {
   "name": "decks",
-  "version": "1.1.26",
+  "version": "1.1.27",
   "description": "Decks - Spaced repetition flashcards for Obsidian with FSRS algorithm",
   "main": "dist/main.js",
   "source": "src/main.ts",
@@ -13,6 +13,7 @@
     "version": "node version-bump.mjs",
     "check": "svelte-check --tsconfig ./tsconfig.json",
     "lint": "eslint --ext .ts,.svelte src/",
+    "lint:fix": "eslint --ext .ts,.svelte src/ --fix",
     "test": "jest"
   },
   "keywords": [
