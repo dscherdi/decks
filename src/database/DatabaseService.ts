@@ -3,7 +3,6 @@ import { DataAdapter } from "obsidian";
 import {
   Deck,
   DeckConfig,
-  ReviewOrder,
   Flashcard,
   ReviewLog,
   ReviewSession,
@@ -20,12 +19,12 @@ export class DatabaseService {
   private SQL: SqlJsStatic | null = null;
   private dbPath: string;
   private adapter: DataAdapter;
-  private debugLog: (message: string, ...args: any[]) => void;
+  private debugLog: (message: string, ...args: unknown[]) => void;
 
   constructor(
     dbPath: string,
     adapter: DataAdapter,
-    debugLog: (message: string, ...args: any[]) => void,
+    debugLog: (message: string, ...args: unknown[]) => void,
   ) {
     this.dbPath = dbPath;
     this.adapter = adapter;
@@ -51,7 +50,7 @@ export class DatabaseService {
         await this.createFreshDatabase();
       }
     } catch (error) {
-      console.error("Failed to initialize database:", error);
+      this.debugLog("Failed to initialize database:", error);
       throw error;
     }
   }
@@ -84,7 +83,7 @@ export class DatabaseService {
       await this.adapter.writeBinary(this.dbPath, data);
       this.debugLog("Database saved successfully!");
     } catch (error) {
-      console.error("Failed to save database:", error);
+      this.debugLog("Failed to save database:", error);
       throw error;
     }
   }
@@ -120,17 +119,17 @@ export class DatabaseService {
         try {
           stmt.free();
         } catch (freeError) {
-          console.error(`Failed to free statement:`, freeError);
+          this.debugLog(`Failed to free statement:`, freeError);
         }
       }
       throw error;
     }
   }
 
-  private queryAll<T>(
+  private queryMany<T>(
     sql: string,
     params: any[] = [],
-    parser: (row: any) => T,
+    parser: (row: unknown) => T,
   ): T[] {
     if (!this.db) throw new Error("Database not initialized");
     const stmt = this.db.prepare(sql);
@@ -151,9 +150,9 @@ export class DatabaseService {
   private queryOne<T>(
     sql: string,
     params: any[] = [],
-    parser: (row: any) => T,
+    parser: (row: unknown) => T,
   ): T | null {
-    const results = this.queryAll(sql, params, parser);
+    const results = this.queryMany(sql, params, parser);
     return results.length > 0 ? results[0] : null;
   }
 
@@ -271,7 +270,10 @@ export class DatabaseService {
       if (!updateGroups.has(fieldSignature)) {
         updateGroups.set(fieldSignature, []);
       }
-      updateGroups.get(fieldSignature)!.push({ id, values });
+      const group = updateGroups.get(fieldSignature);
+      if (group) {
+        group.push({ id, values });
+      }
     }
 
     // Execute grouped updates
@@ -321,7 +323,7 @@ export class DatabaseService {
   }
 
   // Helper method to parse deck rows
-  private parseDeckRow(row: any[]): Deck {
+  private parseDeckRow(row: unknown[]): Deck {
     let config = DEFAULT_DECK_CONFIG;
 
     if (row[5]) {
@@ -403,35 +405,32 @@ export class DatabaseService {
   }
 
   // Deck operations
-  async createDeck(deck: Omit<Deck, "created" | "modified">): Promise<Deck> {
+  createDeck(deck: Omit<Deck, "id" | "createdAt" | "updatedAt">): Deck {
     if (!this.db) throw new Error("Database not initialized");
 
     const now = new Date().toISOString();
     const fullDeck: Deck = {
       ...deck,
+      id: `deck_${Date.now()}_${Math.random().toString(36).substring(2, 11)}`,
       created: now,
       modified: now,
     };
 
-    try {
-      const stmt = this.db.prepare(SQL_QUERIES.INSERT_DECK);
+    const stmt = this.db.prepare(SQL_QUERIES.INSERT_DECK);
 
-      stmt.run([
-        fullDeck.id,
-        fullDeck.name,
-        fullDeck.filepath,
-        fullDeck.tag,
-        fullDeck.lastReviewed,
-        JSON.stringify(fullDeck.config),
-        fullDeck.created,
-        fullDeck.modified,
-      ]);
-      stmt.free();
+    stmt.run([
+      fullDeck.id,
+      fullDeck.name,
+      fullDeck.filepath,
+      fullDeck.tag,
+      fullDeck.lastReviewed,
+      JSON.stringify(fullDeck.config),
+      fullDeck.created,
+      fullDeck.modified,
+    ]);
+    stmt.free();
 
-      return fullDeck;
-    } catch (error) {
-      throw error;
-    }
+    return fullDeck;
   }
 
   async getDeckByTag(tag: string): Promise<Deck | null> {
@@ -458,10 +457,10 @@ export class DatabaseService {
     );
   }
 
-  async updateDeck(
+  updateDeck(
     deckId: string,
     updates: Partial<Pick<Deck, "name" | "tag" | "lastReviewed" | "config">>,
-  ): Promise<void> {
+  ): void {
     if (!this.db) throw new Error("Database not initialized");
 
     const now = new Date().toISOString();
@@ -501,20 +500,17 @@ export class DatabaseService {
     ]);
   }
 
-  async updateDeckTimestamp(deckId: string, timestamp: string): Promise<void> {
+  updateDeckTimestamp(deckId: string, timestamp: string): void {
     this.updateDeckTimestampCore(deckId, timestamp);
   }
 
   // Version without save for use in transactions
-  async updateDeckTimestampWithoutSave(
-    deckId: string,
-    timestamp: string,
-  ): Promise<void> {
+  updateDeckTimestampWithoutSave(deckId: string, timestamp: string): void {
     this.updateDeckTimestampCore(deckId, timestamp);
   }
 
-  async getAllDecks(): Promise<Deck[]> {
-    return this.queryAll(
+  getAllDecks(): Deck[] {
+    return this.queryMany(
       SQL_QUERIES.GET_ALL_DECKS,
       [],
       this.parseDeckRow.bind(this),
@@ -632,29 +628,29 @@ export class DatabaseService {
       stmt.free();
       return fullFlashcard;
     } catch (error) {
-      console.error(`Failed to create flashcard ${fullFlashcard.id}:`, error);
+      this.debugLog(`Failed to create flashcard ${fullFlashcard.id}:`, error);
       if (stmt) {
         try {
           stmt.free();
         } catch (freeError) {
-          console.error(`Failed to free statement:`, freeError);
+          this.debugLog(`Failed to free statement:`, freeError);
         }
       }
       throw error;
     }
   }
 
-  async createFlashcard(
+  createFlashcard(
     flashcard: Omit<Flashcard, "created" | "modified">,
-  ): Promise<Flashcard> {
+  ): Flashcard {
     const result = this.createFlashcardCore(flashcard);
     return result;
   }
 
   // Version without save for use in transactions
-  async createFlashcardWithoutSave(
+  createFlashcardWithoutSave(
     flashcard: Omit<Flashcard, "created" | "modified">,
-  ): Promise<Flashcard> {
+  ): Flashcard {
     return this.createFlashcardCore(flashcard);
   }
 
@@ -706,26 +702,23 @@ export class DatabaseService {
     this.executeStatement(sql, values);
   }
 
-  async updateFlashcard(
+  updateFlashcard(
     flashcardId: string,
     updates: Partial<
       Pick<
         Flashcard,
         | "front"
         | "back"
-        | "type"
-        | "contentHash"
         | "state"
-        | "dueDate"
-        | "interval"
         | "repetitions"
         | "difficulty"
         | "stability"
         | "lapses"
         | "lastReviewed"
+        | "dueDate"
       >
     >,
-  ): Promise<void> {
+  ): void {
     this.updateFlashcardCore(flashcardId, updates);
   }
 
@@ -733,36 +726,34 @@ export class DatabaseService {
     this.executeStatement(SQL_QUERIES.DELETE_FLASHCARD, [flashcardId]);
   }
 
-  async deleteFlashcard(flashcardId: string): Promise<void> {
+  deleteFlashcard(flashcardId: string): void {
     this.deleteFlashcardCore(flashcardId);
   }
 
   // Version without save for use in transactions
-  async deleteFlashcardWithoutSave(flashcardId: string): Promise<void> {
+  deleteFlashcardWithoutSave(flashcardId: string): void {
     this.deleteFlashcardCore(flashcardId);
   }
 
-  async updateFlashcardDeckIds(
-    oldDeckId: string,
-    newDeckId: string,
-  ): Promise<void> {
+  updateFlashcardDeckIds(oldDeckId: string, newDeckId: string): void {
+    if (!this.db) throw new Error("Database not initialized");
     this.executeStatement(SQL_QUERIES.UPDATE_FLASHCARD_DECK_IDS, [
       newDeckId,
       oldDeckId,
     ]);
   }
 
-  async getFlashcardsByDeck(deckId: string): Promise<Flashcard[]> {
-    return this.queryAll(
+  getFlashcardsByDeck(deckId: string): Flashcard[] {
+    return this.queryMany(
       SQL_QUERIES.GET_FLASHCARDS_BY_DECK,
       [deckId],
       this.rowToFlashcard.bind(this),
     );
   }
 
-  async getDueFlashcards(deckId: string): Promise<Flashcard[]> {
+  getDueFlashcards(deckId: string): Flashcard[] {
     const now = new Date().toISOString();
-    return this.queryAll(
+    return this.queryMany(
       SQL_QUERIES.GET_DUE_FLASHCARDS,
       [deckId, now],
       this.rowToFlashcard.bind(this),
@@ -780,7 +771,7 @@ export class DatabaseService {
     const newResult = this.queryOne(
       SQL_QUERIES.COUNT_NEW_CARDS_TODAY,
       [deckId, todayStart, todayEnd],
-      (row) => Number(row[0]),
+      (row) => Number((row as any[])[0]),
     );
     const newCount = newResult || 0;
 
@@ -788,7 +779,7 @@ export class DatabaseService {
     const reviewResult = this.queryOne(
       SQL_QUERIES.COUNT_REVIEW_CARDS_TODAY,
       [deckId, todayStart, todayEnd],
-      (row) => Number(row[0]),
+      (row) => Number((row as any[])[0]),
     );
     const reviewCount = reviewResult || 0;
 
@@ -881,9 +872,7 @@ export class DatabaseService {
     return flashcards;
   }
 
-  async getLatestReviewLogForFlashcard(
-    flashcardId: string,
-  ): Promise<ReviewLog | null> {
+  getLatestReviewLogForFlashcard(flashcardId: string): ReviewLog | null {
     if (!this.db) throw new Error("Database not initialized");
 
     const stmt = this.db.prepare(SQL_QUERIES.GET_LATEST_REVIEW_LOG);
@@ -891,7 +880,7 @@ export class DatabaseService {
     stmt.bind([flashcardId]);
 
     if (stmt.step()) {
-      const row = stmt.get();
+      const row = stmt.get() as any[];
       stmt.free();
 
       return {
@@ -938,15 +927,15 @@ export class DatabaseService {
     return null;
   }
 
-  async deleteFlashcardsByFile(sourceFile: string): Promise<void> {
-    this.executeStatement(SQL_QUERIES.DELETE_FLASHCARDS_BY_FILE, [sourceFile]);
+  deleteFlashcardsByFile(filepath: string): void {
+    this.executeStatement(SQL_QUERIES.DELETE_FLASHCARDS_BY_FILE, [filepath]);
   }
 
   // Review log operations
-  async createReviewLog(log: Omit<ReviewLog, "id">): Promise<void> {
+  createReviewLog(log: Omit<ReviewLog, "id">): void {
     if (!this.db) throw new Error("Database not initialized");
 
-    const id = `review_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
+    const id = `review_${Date.now()}_${Math.random().toString(36).substring(2, 11)}`;
 
     const stmt = this.db.prepare(SQL_QUERIES.INSERT_REVIEW_LOG);
 
@@ -991,12 +980,10 @@ export class DatabaseService {
   }
 
   // Review session operations
-  async createReviewSession(
-    session: Omit<ReviewSession, "id">,
-  ): Promise<string> {
+  createReviewSession(session: Omit<ReviewSession, "id">): string {
     if (!this.db) throw new Error("Database not initialized");
 
-    const id = `session_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
+    const id = `session_${Date.now()}_${Math.random().toString(36).substring(2, 11)}`;
 
     const stmt = this.db.prepare(SQL_QUERIES.INSERT_REVIEW_SESSION);
     stmt.run([
@@ -1012,7 +999,7 @@ export class DatabaseService {
     return id;
   }
 
-  async getReviewSessionById(sessionId: string): Promise<ReviewSession | null> {
+  getReviewSessionById(sessionId: string): ReviewSession | null {
     if (!this.db) throw new Error("Database not initialized");
 
     const stmt = this.db.prepare(SQL_QUERIES.GET_REVIEW_SESSION_BY_ID);
@@ -1028,7 +1015,7 @@ export class DatabaseService {
     return null;
   }
 
-  async getActiveReviewSession(deckId: string): Promise<ReviewSession | null> {
+  getActiveReviewSession(deckId: string): ReviewSession | null {
     if (!this.db) throw new Error("Database not initialized");
 
     const stmt = this.db.prepare(SQL_QUERIES.GET_ACTIVE_REVIEW_SESSION);
@@ -1044,27 +1031,21 @@ export class DatabaseService {
     return null;
   }
 
-  async updateReviewSessionDoneUnique(
-    sessionId: string,
-    doneUnique: number,
-  ): Promise<void> {
+  updateReviewSessionDoneUnique(sessionId: string, doneUnique: number): void {
     this.executeStatement(SQL_QUERIES.UPDATE_REVIEW_SESSION_DONE_UNIQUE, [
       doneUnique,
       sessionId,
     ]);
   }
 
-  async endReviewSession(sessionId: string, endedAt: string): Promise<void> {
+  endReviewSession(sessionId: string, endedAt: string): void {
     this.executeStatement(SQL_QUERIES.UPDATE_REVIEW_SESSION_END, [
       endedAt,
       sessionId,
     ]);
   }
 
-  async isCardReviewedInSession(
-    sessionId: string,
-    flashcardId: string,
-  ): Promise<boolean> {
+  isCardReviewedInSession(sessionId: string, flashcardId: string): boolean {
     if (!this.db) throw new Error("Database not initialized");
 
     const stmt = this.db.prepare(SQL_QUERIES.CHECK_CARD_REVIEWED_IN_SESSION);
@@ -1113,9 +1094,6 @@ export class DatabaseService {
       newCount = Math.min(totalNewCards, remainingNew);
     }
 
-    // No learning cards in pure FSRS
-    const learningCount = 0;
-
     // Count review cards (state = 'review' and due)
     const dueStmt = this.db.prepare(SQL_QUERIES.COUNT_DUE_CARDS);
     dueStmt.bind([deckId, now]);
@@ -1161,9 +1139,7 @@ export class DatabaseService {
     return stats;
   }
 
-  async getReviewCountsByDate(
-    days: number = 365,
-  ): Promise<Map<string, number>> {
+  getReviewCountsByDate(days = 365): Map<string, number> {
     if (!this.db) throw new Error("Database not initialized");
 
     const endDate = new Date();
@@ -1304,7 +1280,7 @@ export class DatabaseService {
     }
   }
   // Helper methods
-  private rowToFlashcard(row: any[]): Flashcard {
+  private rowToFlashcard(row: unknown[]): Flashcard {
     return {
       id: row[0] as string,
       deckId: row[1] as string,
@@ -1326,7 +1302,7 @@ export class DatabaseService {
     };
   }
 
-  private rowToReviewSession(row: any[]): ReviewSession {
+  private rowToReviewSession(row: unknown[]): ReviewSession {
     return {
       id: row[0] as string,
       deckId: row[1] as string,
@@ -1338,8 +1314,8 @@ export class DatabaseService {
   }
 
   async getOverallStatistics(
-    deckFilter: string = "all",
-    timeframe: string = "12months",
+    deckFilter = "all",
+    timeframe = "12months",
   ): Promise<Statistics> {
     if (!this.db) throw new Error("Database not initialized");
 
@@ -1355,7 +1331,7 @@ export class DatabaseService {
 
       // Build deck filter conditions
       let deckFilterCondition = "";
-      let deckFilterParams: string[] = [];
+      const deckFilterParams: string[] = [];
 
       if (deckFilter.startsWith("deck:")) {
         const deckId = deckFilter.substring(5);
@@ -1588,7 +1564,7 @@ export class DatabaseService {
         totalReviewTime,
       };
     } catch (error) {
-      console.error("Error in getOverallStatistics:", error);
+      this.debugLog("Error in getOverallStatistics:", error);
       // Return empty data structure instead of throwing
       return {
         dailyStats: [],
@@ -1624,7 +1600,7 @@ export class DatabaseService {
         this.debugLog("Database purged and recreated successfully");
       }
     } catch (error) {
-      console.error("Error purging database:", error);
+      this.debugLog("Error purging database:", error);
       throw error;
     }
   }
@@ -1654,7 +1630,7 @@ export class DatabaseService {
         this.db.exec("ROLLBACK");
       } catch (rollbackError) {
         // Ignore rollback errors - transaction may have already been rolled back
-        console.warn("Transaction rollback failed:", rollbackError);
+        this.debugLog("Transaction rollback failed:", rollbackError);
       }
       throw error;
     }
@@ -1663,13 +1639,13 @@ export class DatabaseService {
   /**
    * Execute a raw SQL query and return results
    */
-  async query(sql: string, params: any[] = []): Promise<any[]> {
+  query(sql: string, params: any[] = []): any[] {
     if (!this.db) throw new Error("Database not initialized");
 
     const stmt = this.db.prepare(sql);
     stmt.bind(params);
 
-    const results: any[] = [];
+    const results: unknown[] = [];
     while (stmt.step()) {
       results.push(stmt.get());
     }
@@ -1678,7 +1654,7 @@ export class DatabaseService {
     return results;
   }
 
-  async close(): Promise<void> {
+  close(): void {
     if (this.db) {
       this.db.close();
       this.db = null;
@@ -1686,7 +1662,7 @@ export class DatabaseService {
   }
 
   // Backup operations
-  async getAllReviewLogs(): Promise<ReviewLog[]> {
+  getAllReviewLogs(): ReviewLog[] {
     if (!this.db) throw new Error("Database not initialized");
 
     const stmt = this.db.prepare(`
@@ -1748,7 +1724,7 @@ export class DatabaseService {
     return results;
   }
 
-  async getAllReviewSessions(): Promise<ReviewSession[]> {
+  getAllReviewSessions(): ReviewSession[] {
     if (!this.db) throw new Error("Database not initialized");
 
     const stmt = this.db.prepare(`
@@ -1774,7 +1750,7 @@ export class DatabaseService {
     return results;
   }
 
-  async reviewLogExists(id: string): Promise<boolean> {
+  reviewLogExists(id: string): boolean {
     if (!this.db) throw new Error("Database not initialized");
 
     const stmt = this.db.prepare(`
@@ -1792,7 +1768,7 @@ export class DatabaseService {
     return exists;
   }
 
-  async reviewSessionExists(id: string): Promise<boolean> {
+  reviewSessionExists(id: string): boolean {
     if (!this.db) throw new Error("Database not initialized");
 
     const stmt = this.db.prepare(`
@@ -1810,7 +1786,7 @@ export class DatabaseService {
     return exists;
   }
 
-  async insertReviewLog(log: ReviewLog): Promise<void> {
+  insertReviewLog(reviewLog: ReviewLog): void {
     if (!this.db) throw new Error("Database not initialized");
 
     this.executeStatement(
@@ -1827,46 +1803,46 @@ export class DatabaseService {
       ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
     `,
       [
-        log.id,
-        log.flashcardId,
-        log.sessionId,
-        log.lastReviewedAt,
-        log.shownAt,
-        log.reviewedAt,
-        log.rating,
-        log.ratingLabel,
-        log.timeElapsedMs,
-        log.oldState,
-        log.oldRepetitions,
-        log.oldLapses,
-        log.oldStability,
-        log.oldDifficulty,
-        log.newState,
-        log.newRepetitions,
-        log.newLapses,
-        log.newStability,
-        log.newDifficulty,
-        log.oldIntervalMinutes,
-        log.newIntervalMinutes,
-        log.oldDueAt,
-        log.newDueAt,
-        log.elapsedDays,
-        log.retrievability,
-        log.requestRetention,
-        log.profile,
-        log.maximumIntervalDays,
-        log.minMinutes,
-        log.fsrsWeightsVersion,
-        log.schedulerVersion,
-        log.noteModelId,
-        log.cardTemplateId,
-        log.contentHash,
-        log.client,
+        reviewLog.id,
+        reviewLog.flashcardId,
+        reviewLog.sessionId,
+        reviewLog.lastReviewedAt,
+        reviewLog.shownAt,
+        reviewLog.reviewedAt,
+        reviewLog.rating,
+        reviewLog.ratingLabel,
+        reviewLog.timeElapsedMs,
+        reviewLog.oldState,
+        reviewLog.oldRepetitions,
+        reviewLog.oldLapses,
+        reviewLog.oldStability,
+        reviewLog.oldDifficulty,
+        reviewLog.newState,
+        reviewLog.newRepetitions,
+        reviewLog.newLapses,
+        reviewLog.newStability,
+        reviewLog.newDifficulty,
+        reviewLog.oldIntervalMinutes,
+        reviewLog.newIntervalMinutes,
+        reviewLog.oldDueAt,
+        reviewLog.newDueAt,
+        reviewLog.elapsedDays,
+        reviewLog.retrievability,
+        reviewLog.requestRetention,
+        reviewLog.profile,
+        reviewLog.maximumIntervalDays,
+        reviewLog.minMinutes,
+        reviewLog.fsrsWeightsVersion,
+        reviewLog.schedulerVersion,
+        reviewLog.noteModelId,
+        reviewLog.cardTemplateId,
+        reviewLog.contentHash,
+        reviewLog.client,
       ],
     );
   }
 
-  async insertReviewSession(session: ReviewSession): Promise<void> {
+  insertReviewSession(reviewSession: ReviewSession): void {
     if (!this.db) throw new Error("Database not initialized");
 
     this.executeStatement(
@@ -1876,12 +1852,12 @@ export class DatabaseService {
       ) VALUES (?, ?, ?, ?, ?, ?)
     `,
       [
-        session.id,
-        session.deckId,
-        session.startedAt,
-        session.endedAt,
-        session.goalTotal,
-        session.doneUnique,
+        reviewSession.id,
+        reviewSession.deckId,
+        reviewSession.startedAt,
+        reviewSession.endedAt,
+        reviewSession.goalTotal,
+        reviewSession.doneUnique,
       ],
     );
   }

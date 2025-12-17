@@ -1,12 +1,12 @@
 <script lang="ts">
     import { onMount, createEventDispatcher, tick } from "svelte";
-    import { ButtonComponent, Setting } from "obsidian";
+    import { Setting } from "obsidian";
     import ReviewHeatmap from "./ReviewHeatmap.svelte";
     import type { Statistics } from "../database/types";
     import type { DatabaseService } from "../database/DatabaseService";
 
     export let db: DatabaseService;
-    export let deckFilter: string = "all";
+    export let deckFilter = "all";
 
     const dispatch = createEventDispatcher();
 
@@ -146,10 +146,6 @@
 
     async function handleFilterChange() {
         await loadStatistics();
-    }
-
-    function formatDate(dateString: string) {
-        return new Date(dateString).toLocaleDateString();
     }
 
     function formatTime(seconds: number) {
@@ -731,7 +727,7 @@
                         ...filteredForecast.map((day) => day.dueCount),
                     )}
                     <div class="decks-forecast-chart">
-                        {#each filteredForecast as day, index}
+                        {#each filteredForecast as day, _index}
                             {@const originalIndex =
                                 statistics.forecast.indexOf(day)}
                             <div

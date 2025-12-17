@@ -8,22 +8,25 @@ export class Logger {
     private configDir?: string,
   ) {}
 
-  debug(message: string, ...args: any[]): void {
+  debug(message: string, ...args: unknown[]): void {
     if (this.settings?.debug?.enableLogging) {
-      console.log(`[Decks Debug] ${message}`, ...args);
+      console.debug(`[Decks Debug] ${message}`, ...args);
       if (this.adapter && this.configDir) {
         this.writeToLogFile(message, ...args);
       }
     }
   }
 
-  performance(message: string, ...args: any[]): void {
+  performance(message: string, ...args: unknown[]): void {
     if (this.settings?.debug?.performanceLogs) {
-      console.log(`[Decks Performance] ${message}`, ...args);
+      console.debug(`[Decks Performance] ${message}`, ...args);
     }
   }
 
-  private async writeToLogFile(message: string, ...args: any[]): Promise<void> {
+  private async writeToLogFile(
+    message: string,
+    ...args: unknown[]
+  ): Promise<void> {
     try {
       if (!this.adapter || !this.configDir) return;
 

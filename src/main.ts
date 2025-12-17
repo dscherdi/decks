@@ -8,7 +8,7 @@ import { BackupService } from "./services/BackupService";
 import { yieldToUI } from "./utils/ui";
 import { Logger, formatTime } from "./utils/logging";
 import { ProgressTracker } from "./utils/progress";
-import { DeckStats } from "./database/types";
+
 import { FlashcardsSettings, DEFAULT_SETTINGS } from "./settings";
 import { DecksSettingTab } from "./components/SettingsTab";
 
@@ -20,19 +20,22 @@ export const VIEW_TYPE_DECKS = "decks-view";
  * Deep merge utility that ignores null and undefined values
  * This prevents null values in loaded data from overriding valid defaults
  */
-function deepMergeIgnoreNull(target: any, source: any): any {
+function deepMergeIgnoreNull<T extends Record<string, unknown>>(
+  target: T,
+  source: Record<string, unknown>,
+): T {
   if (source === null || source === undefined) {
     return target;
   }
 
-  if (typeof source !== "object" || Array.isArray(source)) {
-    return source;
+  if (typeof target !== "object" || typeof source !== "object") {
+    return source as T;
   }
 
-  const result = { ...target };
+  const result = { ...target } as Record<string, unknown>;
 
   for (const key in source) {
-    if (source.hasOwnProperty(key)) {
+    if (Object.prototype.hasOwnProperty.call(source, key)) {
       const sourceValue = source[key];
 
       if (sourceValue === null || sourceValue === undefined) {
@@ -42,19 +45,24 @@ function deepMergeIgnoreNull(target: any, source: any): any {
 
       if (
         typeof sourceValue === "object" &&
+        sourceValue !== null &&
         !Array.isArray(sourceValue) &&
-        target[key]
+        typeof result[key] === "object" &&
+        result[key] !== null &&
+        !Array.isArray(result[key])
       ) {
         // Recursively merge objects
-        result[key] = deepMergeIgnoreNull(target[key], sourceValue);
+        result[key] = deepMergeIgnoreNull(
+          result[key] as Record<string, unknown>,
+          sourceValue as Record<string, unknown>,
+        );
       } else {
-        // Use source value for primitives and arrays
         result[key] = sourceValue;
       }
     }
   }
 
-  return result;
+  return result as T;
 }
 
 export default class DecksPlugin extends Plugin {
@@ -238,7 +246,7 @@ export default class DecksPlugin extends Plugin {
 
       this.logger.debug("Decks plugin loaded successfully");
     } catch (error) {
-      console.error("Error loading Decks plugin:", error);
+      this.logger?.debug("Error loading Decks plugin:", error);
       if (this.settings?.ui?.enableNotices !== false) {
         new Notice("Failed to load Decks plugin. Check console for details.");
       }
@@ -256,7 +264,10 @@ export default class DecksPlugin extends Plugin {
 
   async loadSettings() {
     const loadedData = await this.loadData();
-    this.settings = deepMergeIgnoreNull(DEFAULT_SETTINGS, loadedData);
+    this.settings = deepMergeIgnoreNull(
+      DEFAULT_SETTINGS as unknown as Record<string, unknown>,
+      (loadedData || {}) as Record<string, unknown>,
+    ) as unknown as FlashcardsSettings;
 
     // Deep merge ensures all properties have valid defaults
   }
@@ -394,7 +405,7 @@ export default class DecksPlugin extends Plugin {
         `Initial sync completed successfully in ${formatTime(totalTime)}`,
       );
     } catch (error) {
-      console.error("Error during initial sync:", error);
+      this.logger?.debug("Error during initial sync:", error);
       // Don't throw - let the app continue working even if initial sync fails
     }
   }

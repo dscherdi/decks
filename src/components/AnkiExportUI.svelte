@@ -2,7 +2,6 @@
     import { createEventDispatcher, onMount } from "svelte";
     import { Setting } from "obsidian";
     import type { Deck, AnkiExportConfig } from "../database/types";
-    import type DecksPlugin from "../main";
 
     export let deck: Deck;
 
@@ -12,7 +11,7 @@
     }>();
 
     let ankiDeckName = deck.name;
-    let separator = "tab";
+    const separator = "tab";
     let exporting = false;
 
     // Container references for Obsidian Settings

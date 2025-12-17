@@ -1,4 +1,4 @@
-import { Modal, Platform } from "obsidian";
+import { App, Modal, Notice, Platform } from "obsidian";
 import type { Deck, DeckConfig } from "../database/types";
 import type { DatabaseService } from "../database/DatabaseService";
 import type { DeckSynchronizer } from "../services/DeckSynchronizer";
@@ -15,7 +15,7 @@ export class DeckConfigModal extends Modal {
   private resizeHandler?: () => void;
 
   constructor(
-    app: any,
+    app: App,
     deck: Deck,
     db: DatabaseService,
     deckSynchronizer: DeckSynchronizer,
@@ -110,7 +110,8 @@ export class DeckConfigModal extends Modal {
       await this.updateDeckConfig(this.deck.id, config);
       this.close();
     } catch (error) {
-      console.error("Error saving deck configuration:", error);
+      // Use Notice for user-facing error since this component doesn't have debugLog
+      new Notice("Error saving deck configuration");
       // Could add a notice here if needed
     }
   }
@@ -165,8 +166,9 @@ export class DeckConfigModal extends Modal {
     if (headerLevelChanged) {
       const updatedDeck = await this.db.getDeckById(deckId);
       if (updatedDeck) {
-        console.log(
-          `Header level changed for deck ${updatedDeck.name}, forcing resync`,
+        // Use Notice for user feedback since this component doesn't have debugLog
+        new Notice(
+          `Resyncing deck "${updatedDeck.name}" due to header level change`,
         );
         await yieldToUI();
         await this.deckSynchronizer.syncDeck(updatedDeck.filepath, true);

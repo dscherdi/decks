@@ -1,10 +1,5 @@
-import { TFile, Vault, MetadataCache, CachedMetadata, Notice } from "obsidian";
-import {
-  Deck,
-  Flashcard,
-  ReviewLog,
-  DEFAULT_DECK_CONFIG,
-} from "../database/types";
+import { TFile, Vault, MetadataCache, Notice } from "obsidian";
+import { Deck, Flashcard, DEFAULT_DECK_CONFIG } from "../database/types";
 import { DatabaseService } from "../database/DatabaseService";
 import { yieldToUI, yieldEvery } from "../utils/ui";
 import { Logger, formatTime } from "../utils/logging";
@@ -61,18 +56,18 @@ export class DeckManager {
     this.fileFilter.updateFolderSearchPath(folderSearchPath);
   }
 
-  private debugLog(message: string, ...args: any[]): void {
+  private debugLog(message: string, ...args: unknown[]): void {
     this.logger?.debug(message, ...args);
   }
 
-  private performanceLog(message: string, ...args: any[]): void {
+  private performanceLog(message: string, ...args: unknown[]): void {
     this.logger?.performance(message, ...args);
   }
 
   /**
    * Scan vault for all decks (files with #flashcards tags)
    */
-  async scanVaultForDecks(): Promise<Map<string, TFile[]>> {
+  scanVaultForDecks(): Map<string, TFile[]> {
     const decksMap = new Map<string, TFile[]>();
     let files = this.vault.getMarkdownFiles();
 
@@ -131,7 +126,10 @@ export class DeckManager {
         if (!decksMap.has(tag)) {
           decksMap.set(tag, []);
         }
-        decksMap.get(tag)!.push(file);
+        const deckFiles = decksMap.get(tag);
+        if (deckFiles) {
+          deckFiles.push(file);
+        }
       }
     }
 
@@ -191,30 +189,19 @@ export class DeckManager {
             }
           } else {
             // Create new deck for this file
-            const file = this.vault.getAbstractFileByPath(filePath);
-            let deckModTime = new Date();
-
-            if (file instanceof TFile) {
-              const fileModTime = new Date(file.stat.mtime);
-              const fileCreateTime = new Date(file.stat.ctime);
-              // Use the earlier of file modification time or file creation time
-              deckModTime =
-                fileModTime < fileCreateTime ? fileModTime : fileCreateTime;
-            }
-
-            const deck: Omit<Deck, "created"> = {
-              id: this.generateDeckId(filePath),
+            const deck = {
               name: deckName, // Store clean file name
               filepath: filePath, // Store full file path separately
               tag: tag,
               lastReviewed: null,
               config: DEFAULT_DECK_CONFIG,
-              modified: deckModTime.toISOString(),
+              created: new Date().toISOString(),
+              modified: new Date().toISOString(),
             };
             this.debugLog(
-              `Creating new deck: "${deckName}" with ID: ${deck.id}, tag: ${tag}, filepath: ${filePath}`,
+              `Creating new deck: "${deckName}" with ID: ${this.generateDeckId(filePath)}, tag: ${tag}, filepath: ${filePath}`,
             );
-            await this.db.createDeck(deck);
+            this.db.createDeck(deck);
             newDecksCreated++;
           }
         }
@@ -222,7 +209,7 @@ export class DeckManager {
 
       // Clean up orphaned decks (decks whose files no longer exist)
       const allFiles = new Set<string>();
-      for (const [tag, files] of decksMap) {
+      for (const [, files] of decksMap) {
         for (const file of files) {
           allFiles.add(file.path);
         }
@@ -247,7 +234,7 @@ export class DeckManager {
         `Deck sync completed successfully in ${formatTime(syncDecksTime)} (${newDecksCreated} created, ${deletedDecks} deleted)`,
       );
     } catch (error) {
-      console.error("Error during deck sync:", error);
+      this.debugLog("Error during deck sync:", error);
       throw error; // Re-throw to let caller handle
     }
   }
@@ -257,7 +244,7 @@ export class DeckManager {
    */
   async parseFlashcardsFromFile(
     file: TFile,
-    headerLevel: number = 2,
+    headerLevel = 2,
   ): Promise<ParsedFlashcard[]> {
     const parseStartTime = performance.now();
 
@@ -283,7 +270,7 @@ export class DeckManager {
    */
   private parseFlashcardsFromContent(
     content: string,
-    headerLevel: number = 2,
+    headerLevel = 2,
   ): ParsedFlashcard[] {
     const lines = content.split("\n");
     const flashcards: ParsedFlashcard[] = [];
@@ -438,7 +425,7 @@ export class DeckManager {
       type: "create" | "update" | "delete";
       flashcardId?: string;
       flashcard?: Omit<Flashcard, "created" | "modified">;
-      updates?: any;
+      updates?: Record<string, unknown>;
     }>,
   ): Promise<void> {
     const batchStartTime = performance.now();
@@ -466,13 +453,22 @@ export class DeckManager {
 
       // Execute all DELETE operations with single prepared statement
       if (deleteOps.length > 0) {
-        this.db.batchDeleteFlashcards(deleteOps.map((op) => op.flashcardId!));
+        const ids = deleteOps
+          .map((op) => op.flashcardId)
+          .filter((id): id is string => id !== undefined);
+        this.db.batchDeleteFlashcards(ids);
         deleteCount = deleteOps.length;
         this.debugLog(`Batch deleted ${deleteCount} flashcards`);
       }
       // Execute all CREATE operations with single prepared statement
       if (createOps.length > 0) {
-        this.db.batchCreateFlashcards(createOps.map((op) => op.flashcard!));
+        const flashcards = createOps
+          .map((op) => op.flashcard)
+          .filter(
+            (fc): fc is Omit<Flashcard, "created" | "modified"> =>
+              fc !== undefined,
+          );
+        this.db.batchCreateFlashcards(flashcards);
         createCount = createOps.length;
         this.debugLog(`Batch created ${createCount} flashcards`);
       }
@@ -480,8 +476,8 @@ export class DeckManager {
       if (updateOps.length > 0) {
         this.db.batchUpdateFlashcards(
           updateOps.map((op) => ({
-            id: op.flashcardId!,
-            updates: op.updates!,
+            id: op.flashcardId as string,
+            updates: op.updates as Record<string, unknown>,
           })),
         );
         updateCount = updateOps.length;
@@ -498,12 +494,12 @@ export class DeckManager {
         `Transaction completed in ${formatTime(totalBatchTime)} (${createCount} created, ${updateCount} updated, ${deleteCount} deleted)`,
       );
     } catch (error) {
-      console.error(`Critical error in transaction:`, error);
+      this.debugLog(`Critical error in transaction:`, error);
       try {
         this.db.rollbackTransaction();
         this.debugLog(`Transaction rolled back due to error`);
       } catch (rollbackError) {
-        console.error(`Failed to rollback transaction:`, rollbackError);
+        this.debugLog(`Failed to rollback transaction:`, rollbackError);
       }
       throw error;
     }
@@ -512,10 +508,7 @@ export class DeckManager {
   /**
    * Sync flashcards for a specific deck
    */
-  async syncFlashcardsForDeck(
-    deckId: string,
-    force: boolean = false,
-  ): Promise<void> {
+  async syncFlashcardsForDeck(deckId: string, force = false): Promise<void> {
     const deckSyncStartTime = performance.now();
     this.debugLog(`Syncing flashcards for deck ID: ${deckId}`);
 
@@ -568,7 +561,7 @@ export class DeckManager {
       type: "create" | "update" | "delete";
       flashcardId?: string;
       flashcard?: Omit<Flashcard, "created" | "modified">;
-      updates?: any;
+      updates?: Record<string, unknown>;
     }> = [];
 
     // Parse flashcards from the file using deck's header level configuration
@@ -743,7 +736,7 @@ export class DeckManager {
       );
       this.debugLog(`Deck timestamp updated successfully`);
     } catch (error) {
-      console.error(`Failed to update deck timestamp for ${deck.name}:`, error);
+      this.debugLog(`Failed to update deck timestamp for ${deck.name}:`, error);
       throw error;
     }
 
@@ -752,7 +745,7 @@ export class DeckManager {
       await this.checkForDuplicatesInDeck(deck.id);
       this.debugLog(`Duplicate check completed for deck: ${deck.name}`);
     } catch (error) {
-      console.error(`Failed to check duplicates for ${deck.name}:`, error);
+      this.debugLog(`Failed to check duplicates for ${deck.name}:`, error);
       throw error;
     }
 
@@ -777,27 +770,20 @@ export class DeckManager {
 
     if (!existingDeck) {
       // Create new deck for this file
-      const fileModTime = new Date(file.stat.mtime);
-      const fileCreateTime = new Date(file.stat.ctime);
-
-      // Use the earlier of file modification time or file creation time
-      const deckModTime =
-        fileModTime < fileCreateTime ? fileModTime : fileCreateTime;
-
-      const deck: Omit<Deck, "created"> = {
-        id: this.generateDeckId(filePath),
+      const deck = {
         name: deckName,
         filepath: filePath,
         tag: tag,
         lastReviewed: null,
         config: DEFAULT_DECK_CONFIG,
-        modified: deckModTime.toISOString(),
+        created: new Date().toISOString(),
+        modified: new Date().toISOString(),
       };
 
       this.debugLog(
-        `Creating new deck: "${deckName}" with ID: ${deck.id}, tag: ${tag}, filepath: ${filePath}`,
+        `Creating new deck: "${deckName}" with ID: ${this.generateDeckId(filePath)}, tag: ${tag}, filepath: ${filePath}`,
       );
-      await this.db.createDeck(deck);
+      this.db.createDeck(deck);
     }
   }
 
@@ -866,13 +852,13 @@ export class DeckManager {
       return `deck_${Math.abs(hash).toString(36)}`;
     }
     // Fallback to timestamp-based ID for backward compatibility
-    return `deck_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
+    return `deck_${Date.now()}_${Math.random().toString(36).substring(2, 11)}`;
   }
 
   /**
    * Generate unique flashcard ID using hash of front text only
    */
-  public generateFlashcardId(frontText: string, deckId?: string): string {
+  public generateFlashcardId(frontText: string, _deckId?: string): string {
     // Use only front text for ID generation to preserve progress across deck changes
     let hash = 0;
     for (let i = 0; i < frontText.length; i++) {
@@ -896,14 +882,14 @@ export class DeckManager {
       if (!frontTextMap.has(normalizedFront)) {
         frontTextMap.set(normalizedFront, []);
       }
-      frontTextMap.get(normalizedFront)!.push(card);
+      frontTextMap.get(normalizedFront)?.push(card);
     }
 
     // Find and warn about duplicates
     const deck = await this.db.getDeckById(deckId);
     const deckName = deck?.name || "Unknown Deck";
 
-    for (const [frontText, cards] of frontTextMap) {
+    for (const [, cards] of frontTextMap) {
       if (cards.length > 1) {
         if (this.plugin?.settings?.ui?.enableNotices) {
           new Notice(

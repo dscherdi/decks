@@ -47,7 +47,6 @@ export interface SchedulingInfo {
 // Constants for exact calculations
 const MILLISECONDS_PER_DAY = 86400000;
 const MINUTES_PER_DAY = 1440;
-const SECONDS_PER_MINUTE = 60;
 const MILLISECONDS_PER_MINUTE = 60000;
 
 /**
@@ -75,6 +74,14 @@ export class FSRS {
   updateParameters(params: Partial<FSRSParameters>) {
     this.params = { ...this.params, ...params };
     this.validateParameters();
+  }
+
+  /**
+   * Debug logging method (no-op for now since FSRS doesn't have logger access)
+   */
+  private debugLog(_message: string, ..._args: unknown[]): void {
+    // No-op for now - FSRS class doesn't have access to logger
+    // Could be enhanced to accept logger in constructor if needed
   }
 
   /**
@@ -479,7 +486,7 @@ export class FSRS {
 
     // Validate stability
     if (!isFinite(stability) || stability <= 0) {
-      console.warn(`Invalid stability: ${stability}, using minMinutes`);
+      this.debugLog(`Invalid stability: ${stability}, using minMinutes`);
       return minInterval;
     }
 
@@ -489,7 +496,7 @@ export class FSRS {
       this.params.requestRetention <= 0 ||
       this.params.requestRetention >= 1
     ) {
-      console.warn(
+      this.debugLog(
         `Invalid requestRetention: ${this.params.requestRetention}, using minMinutes`,
       );
       return minInterval;
@@ -506,7 +513,7 @@ export class FSRS {
 
     // Validate calculation result
     if (!isFinite(intervalMinutes)) {
-      console.warn(
+      this.debugLog(
         `Invalid minutes calculation: stability=${stability}, k=${k}, using minMinutes`,
       );
       return minInterval;
@@ -521,7 +528,7 @@ export class FSRS {
 
     // Final validation to ensure result is finite
     if (!isFinite(result)) {
-      console.warn(`Invalid final result: ${result}, using minMinutes`);
+      this.debugLog(`Invalid final result: ${result}, using minMinutes`);
       return minInterval;
     }
 

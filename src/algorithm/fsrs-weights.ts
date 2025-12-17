@@ -107,10 +107,10 @@ export function roundForDisplay(value: number, decimals: number): string {
  * @returns FSRS weights array optimized for specified intervals
  */
 export function createSubDayWeights(
-  againMinutes: number = 1,
-  hardMinutes: number = 6,
-  goodMinutes: number = 10,
-  easyMinutes: number = 1440,
+  againMinutes = 1,
+  hardMinutes = 6,
+  goodMinutes = 10,
+  easyMinutes = 1440,
 ): number[] {
   return [
     againMinutes / 1440, // w[0] - Again stability

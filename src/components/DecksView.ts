@@ -2,23 +2,18 @@ import { DatabaseService } from "@/database/DatabaseService";
 import {
   Deck,
   DeckStats,
-  DeckConfig,
-  Flashcard,
   hasNewCardsLimit,
   hasReviewCardsLimit,
-  ReviewSession,
-  Statistics,
 } from "@/database/types";
 import { VIEW_TYPE_DECKS } from "@/main";
 import { DeckSynchronizer } from "@/services/DeckSynchronizer";
 import { FlashcardsSettings } from "@/settings";
 import { yieldToUI } from "@/utils/ui";
-import { Logger, formatTime } from "@/utils/logging";
+import { Logger } from "@/utils/logging";
 import { ItemView, Component, WorkspaceLeaf, Notice } from "obsidian";
 import { Scheduler } from "@/services/Scheduler";
 import { FlashcardReviewModalWrapper } from "./FlashcardReviewModalWrapper";
 import { StatisticsModal } from "./StatisticsModal";
-import { FSRS, type RatingLabel } from "@/algorithm/fsrs";
 import DeckListPanel from "./DeckListPanel.svelte";
 import { ProgressTracker } from "@/utils/progress";
 
@@ -187,7 +182,7 @@ export class DecksView extends ItemView {
     return statsMap;
   }
 
-  async performSync(forceSync: boolean = false): Promise<void> {
+  async performSync(forceSync = false): Promise<void> {
     const result = await this.deckSynchronizer.performSync({
       forceSync,
       showProgress: true,
@@ -227,7 +222,7 @@ export class DecksView extends ItemView {
     new StatisticsModal(this.app, this.db, deckFilter).open();
   }
 
-  async refresh(force: boolean = false) {
+  async refresh(force = false) {
     this.logger.debug("DecksView.refresh() called");
     try {
       // Perform sync with force parameter
@@ -240,7 +235,7 @@ export class DecksView extends ItemView {
 
       this.logger.debug("Refresh complete");
     } catch (error) {
-      console.error("Error refreshing decks:", error);
+      this.logger?.debug("Error refreshing decks:", error);
       if (this.settings?.ui?.enableNotices !== false) {
         new Notice("Error refreshing decks. Check console for details.");
       }
@@ -259,7 +254,7 @@ export class DecksView extends ItemView {
         await this.component.updateAll(undefined, deckStats);
       }
     } catch (error) {
-      console.error("Error refreshing stats:", error);
+      this.logger?.debug("Error refreshing stats:", error);
     }
   }
 
@@ -277,7 +272,7 @@ export class DecksView extends ItemView {
         await this.component.updateAll(undefined, undefined, deckId, deckStats);
       }
     } catch (error) {
-      console.error("Error refreshing stats by ID:", error);
+      this.logger?.debug("Error refreshing stats by ID:", error);
     }
   }
 
@@ -436,7 +431,7 @@ export class DecksView extends ItemView {
         this.refreshStatsById.bind(this),
       ).open();
     } catch (error) {
-      console.error("Error starting review:", error);
+      this.logger?.debug("Error starting review:", error);
       if (this.settings?.ui?.enableNotices !== false) {
         new Notice("Error starting review. Check console for details.");
       }

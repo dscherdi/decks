@@ -1,7 +1,6 @@
 <script lang="ts">
     import { onMount, onDestroy } from "svelte";
-    import { writable } from "svelte/store";
-    import type { Deck, DeckStats, DeckConfig } from "../database/types";
+    import type { Deck, DeckStats } from "../database/types";
 
     import ReviewHeatmap from "./ReviewHeatmap.svelte";
     import { DeckConfigModal } from "./DeckConfigModal";
@@ -628,8 +627,7 @@
                             >
                                 {stats.newCount}
                                 {#if deck.config.hasNewCardsLimitEnabled}
-                                    <span class="decks-limit-indicator">⚠</span
-                                    >
+                                    <span class="decks-limit-indicator">⚠</span>
                                 {/if}
                             </div>
                             <div

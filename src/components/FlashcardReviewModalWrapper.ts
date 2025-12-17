@@ -41,7 +41,7 @@ export class FlashcardReviewModalWrapper extends Modal {
       );
       return component;
     } catch (error) {
-      console.error("Error rendering markdown:", error);
+      // Fallback to plain text on markdown rendering error
       el.textContent = content;
       return null;
     }
@@ -148,10 +148,8 @@ export class FlashcardReviewModalWrapper extends Modal {
       },
     });
 
-    this.component.$on("complete", async (event) => {
-      console.log("Review Complete");
-      const { reason, reviewed } = event.detail;
-      let message = `Review session complete for ${this.deck.name}!`;
+    this.component.$on("complete", async (_event) => {
+      const message = `Review session complete for ${this.deck.name}!`;
 
       if (this.settings?.ui?.enableNotices !== false) {
         new Notice(message);

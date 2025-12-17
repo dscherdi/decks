@@ -2,7 +2,7 @@
     import { createEventDispatcher, onMount, onDestroy, tick } from "svelte";
     import type { Deck, Flashcard } from "../database/types";
     import type { FlashcardsSettings } from "../settings";
-    import { FSRS, type RatingLabel } from "../algorithm/fsrs";
+    import { type RatingLabel } from "../algorithm/fsrs";
     import type {
         Scheduler,
         SchedulingPreview,
@@ -37,16 +37,16 @@
     let backEl: HTMLElement;
     let schedulingInfo: SchedulingPreview | null = null;
     let reviewedCount = 0;
-    let cardStartTime: number = 0;
+    let cardStartTime = 0;
     let currentCard: Flashcard | null = initialCard;
-    let sessionId: string | null = null;
-    let deckFilePath: string = "";
+    const sessionId: string | null = null;
+    const deckFilePath = "";
     let sessionProgress: SessionProgress | null = null;
 
     // Session timer variables
-    let sessionStartTime: number = 0;
-    let sessionTimeRemaining: number = 0;
-    let sessionTimer: NodeJS.Timeout | null = null;
+    let sessionStartTime = 0;
+    let sessionTimeRemaining = 0;
+    let sessionTimer: ReturnType<typeof setInterval> | null = null;
 
     // Track last event to prevent double execution
     let lastEventTime = 0;
@@ -57,7 +57,7 @@
 
     onMount(async () => {
         // Initialize review session
-        var { sessionId, deckFilePath } = await scheduler.startFreshSession(
+        var { sessionId } = await scheduler.startFreshSession(
             deck.id,
             new Date(),
             settings.review.sessionDuration,

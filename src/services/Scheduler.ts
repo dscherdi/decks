@@ -1,19 +1,7 @@
-import {
-  Flashcard,
-  FlashcardState,
-  Deck,
-  ReviewLog,
-  ReviewSession,
-} from "../database/types";
+import { Flashcard, FlashcardState, Deck, ReviewLog } from "../database/types";
 import { DatabaseService } from "../database/DatabaseService";
+import { FSRS, type RatingLabel, type SchedulingCard } from "../algorithm/fsrs";
 import {
-  FSRS,
-  type RatingLabel,
-  type SchedulingInfo,
-  type SchedulingCard,
-} from "../algorithm/fsrs";
-import {
-  getWeightsForProfile,
   getMinMinutesForProfile,
   getMaxIntervalDaysForProfile,
   FSRSProfile,
@@ -206,7 +194,7 @@ export class Scheduler {
     }
 
     // Start a new session
-    var newSession = await this.startReviewSession(
+    const newSession = await this.startReviewSession(
       deckId,
       now,
       sessionDurationMinutes,
@@ -448,11 +436,7 @@ export class Scheduler {
   /**
    * Peek at the next N due cards without mutations
    */
-  async peekDue(
-    now: Date,
-    deckId: string,
-    limit: number = 10,
-  ): Promise<Flashcard[]> {
+  async peekDue(now: Date, deckId: string, limit = 10): Promise<Flashcard[]> {
     this.debugLog(`Peeking at due cards for deck: ${deckId}, limit: ${limit}`);
     const deck = await this.db.getDeckById(deckId);
     if (!deck) return [];
@@ -601,7 +585,7 @@ export class Scheduler {
   private async getDueCardCount(
     now: Date,
     deckId: string,
-    sessionDurationMinutes: number = 25,
+    sessionDurationMinutes = 25,
   ): Promise<number> {
     // Include cards due within the session duration for session goal calculation
     const sessionEndTime = new Date(

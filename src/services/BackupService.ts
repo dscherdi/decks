@@ -13,7 +13,7 @@ interface BackupMetadata {
 export class BackupService {
   private adapter: DataAdapter;
   private backupDir: string;
-  private maxBackups: number = 5;
+  private maxBackups = 5;
   private debugLog: (message: string, ...args: any[]) => void;
 
   constructor(

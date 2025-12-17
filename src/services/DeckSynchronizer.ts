@@ -1,4 +1,3 @@
-import { Notice } from "obsidian";
 import { DatabaseService } from "../database/DatabaseService";
 import { DeckManager } from "./DeckManager";
 import { yieldToUI } from "../utils/ui";
@@ -29,7 +28,7 @@ export interface SyncResult {
 export class DeckSynchronizer {
   private db: DatabaseService;
   private deckManager: DeckManager;
-  private isSyncing: boolean = false;
+  private isSyncing = false;
   private logger: Logger;
 
   constructor(
@@ -77,7 +76,7 @@ export class DeckSynchronizer {
 
       this.debugLog("Initial sync completed successfully");
     } catch (error) {
-      console.error("Initial sync failed:", error);
+      this.debugLog("Initial sync failed:", error);
       // Don't throw - let the app continue working even if initial sync fails
     }
   }
@@ -243,7 +242,7 @@ export class DeckSynchronizer {
    */
   async syncDeck(
     deckId: string,
-    forceSync: boolean = false,
+    forceSync = false,
     onProgress?: (progress: { message: string; percentage: number }) => void,
   ): Promise<void> {
     this.debugLog(`Syncing specific deck ID: ${deckId}`);

@@ -107,7 +107,7 @@ export class AnkiExportModal extends Modal {
       );
       this.close();
     } catch (error) {
-      console.error("Error exporting to Anki:", error);
+      // Show user-friendly error message
       new Notice("Failed to export deck to Anki format");
     }
   }
