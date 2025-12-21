@@ -108,68 +108,72 @@ export class FSRS {
   /**
    * Validate FSRS parameters
    */
-  private validateParameters() {
+  private validateParameters(): void {
     if (!validateProfile(this.params.profile)) {
-      throw new Error(
-        `Invalid profile: ${this.params.profile}, must be "INTENSIVE" or "STANDARD"`,
-      );
+      throw new Error(`Invalid profile: ${this.params.profile}`);
     }
+
     if (!validateRequestRetention(this.params.requestRetention)) {
       throw new Error(
         `requestRetention must be in range (0.5, 0.995), got ${this.params.requestRetention}`,
       );
     }
 
-    // Validate hardcoded weights for current profile
+    // Validate weights for the current profile
     const weights = this.getWeights();
     if (!validateFSRSWeights(weights)) {
       throw new Error(
-        `Invalid hardcoded weights for profile ${this.params.profile}`,
+        `Invalid FSRS weights for profile: ${this.params.profile}`,
       );
     }
   }
 
   /**
-   * Calculate the next scheduling info for a flashcard based on review difficulty
+   * Get scheduling info for all four ratings
    */
-  getSchedulingInfo(card: Flashcard): SchedulingInfo {
+  getSchedulingInfo(card: Flashcard, now: Date = new Date()): SchedulingInfo {
     const fsrsCard = this.flashcardToFSRS(card);
-    const now = new Date();
+    const nowTime = now;
 
     return {
-      again: this.calculateScheduleForRating(fsrsCard, 1, now),
-      hard: this.calculateScheduleForRating(fsrsCard, 2, now),
-      good: this.calculateScheduleForRating(fsrsCard, 3, now),
-      easy: this.calculateScheduleForRating(fsrsCard, 4, now),
+      again: this.calculateScheduleForRating(fsrsCard, 1, nowTime),
+      hard: this.calculateScheduleForRating(fsrsCard, 2, nowTime),
+      good: this.calculateScheduleForRating(fsrsCard, 3, nowTime),
+      easy: this.calculateScheduleForRating(fsrsCard, 4, nowTime),
     };
   }
 
   /**
-   * Update a flashcard based on the selected difficulty
+   * Update card with a rating and return the updated card
    */
-  updateCard(card: Flashcard, difficulty: RatingLabel): Flashcard {
-    const rating = this.difficultyToRating(difficulty);
+  updateCard(
+    card: Flashcard,
+    rating: RatingLabel,
+    now: Date = new Date(),
+  ): Flashcard {
+    const ratingNum = this.difficultyToRating(rating);
     const fsrsCard = this.flashcardToFSRS(card);
-    const now = new Date();
+    const nowTime = now;
 
-    // Calculate FSRS update once and reuse
     const updatedFsrsCard = this.calculateUpdatedFsrsCard(
       fsrsCard,
-      rating,
-      now,
+      ratingNum,
+      nowTime,
     );
+
     let intervalMinutes: number;
 
     // For "Again" rating (1), always use minimum interval regardless of stability
-    if (rating === 1) {
+    if (ratingNum === 1) {
       intervalMinutes = this.getMinMinutes();
     } else {
       intervalMinutes = this.nextIntervalMinutes(updatedFsrsCard.stability);
     }
+
     const schedule = this.createSchedulingCard(
-      intervalMinutes,
       updatedFsrsCard,
-      now,
+      intervalMinutes,
+      nowTime,
     );
 
     return {
@@ -181,8 +185,8 @@ export class FSRS {
       repetitions: schedule.repetitions,
       stability: schedule.stability, // Store stability with full precision
       lapses: updatedFsrsCard.lapses,
-      lastReviewed: now.toISOString(),
-      modified: now.toISOString(),
+      lastReviewed: nowTime.toISOString(),
+      modified: nowTime.toISOString(),
     };
   }
 
@@ -191,8 +195,8 @@ export class FSRS {
     rating: number,
     now: Date,
   ): FSRSCard {
-    if (card.state === "New" || card.stability === 0 || card.difficulty === 0) {
-      // Initialization
+    if (card.state === "New") {
+      // First review - transition to Review state
       return {
         ...card,
         stability: this.initStability(rating),
@@ -210,7 +214,7 @@ export class FSRS {
       newCard.reps += 1;
 
       if (rating === 1) {
-        // "Again" rating: Increase difficulty and reset stability to w[0]
+        // "Again" rating: Use Forgetting Stability formula (NOT w[0] reset)
         newCard.lapses += 1;
 
         // Validate current difficulty before using it
@@ -221,8 +225,18 @@ export class FSRS {
         // Calculate difficulty normally (this will increase it for "Again")
         newCard.difficulty = this.nextDifficulty(newCard.difficulty, rating);
 
-        // Reset stability
-        newCard.stability = this.initStability(rating);
+        // Calculate retrievability for forgetting stability formula
+        const retrievability = this.forgettingCurve(
+          newCard.elapsedDays,
+          newCard.stability,
+        );
+
+        // Apply Forgetting Stability formula: S_new = w[11] * D^(-w[12]) * ((S + 1)^w[13] - 1) * e^(w[14] * (1 - R))
+        newCard.stability = this.forgettingStability(
+          newCard.difficulty,
+          newCard.stability,
+          retrievability,
+        );
       } else {
         // For other ratings, calculate normally
 
@@ -250,9 +264,15 @@ export class FSRS {
         }
       }
 
-      newCard.lastReview = now;
-      newCard.state = "Review";
+      // Clamp difficulty to valid range
+      newCard.difficulty = Math.max(1, Math.min(10, newCard.difficulty));
 
+      // Ensure stability remains positive
+      if (!isFinite(newCard.stability) || newCard.stability <= 0) {
+        newCard.stability = 0.01;
+      }
+
+      newCard.lastReview = now;
       return newCard;
     }
   }
@@ -278,43 +298,42 @@ export class FSRS {
       intervalMinutes = this.nextIntervalMinutes(updatedCard.stability);
     }
 
-    return this.createSchedulingCard(intervalMinutes, updatedCard, now);
+    return this.createSchedulingCard(updatedCard, intervalMinutes, now);
   }
 
   private createSchedulingCard(
-    intervalMinutes: number,
     card: FSRSCard,
+    intervalMinutes: number,
     now: Date,
   ): SchedulingCard {
-    if (!isFinite(now.getTime())) {
-      throw new Error("Invalid date provided to createSchedulingCard");
+    // Validate inputs
+    if (!isFinite(intervalMinutes) || intervalMinutes <= 0) {
+      intervalMinutes = this.getMinMinutes();
     }
 
-    // Use exact millisecond calculation for maximum precision
     const intervalMilliseconds = intervalMinutes * MILLISECONDS_PER_MINUTE;
     const dueDate = new Date(now.getTime() + intervalMilliseconds);
 
-    // Validate the resulting date
-    if (!isFinite(dueDate.getTime())) {
-      throw new Error(
-        `Invalid due date calculated: intervalMinutes=${intervalMinutes}, now=${now.toISOString()}`,
-      );
+    // Ensure minimum interval for STANDARD profile
+    const minMinutes = this.getMinMinutes();
+    if (intervalMinutes < minMinutes) {
+      intervalMinutes = minMinutes;
     }
 
     return {
       dueDate: dueDate.toISOString(),
-      interval: intervalMinutes, // Store full precision interval
+      interval: intervalMinutes,
       repetitions: card.reps,
-      stability: card.stability, // Store full precision stability
-      difficulty: card.difficulty, // Store full precision difficulty
-      state: this.fsrsStateToFlashcardState(card.state),
+      stability: card.stability,
+      difficulty: card.difficulty,
+      state: "review",
     };
   }
 
   private initStability(rating: number): number {
     const weights = this.getWeights();
     const stability = weights[rating - 1];
-    const result = isFinite(stability) ? stability : 0.01; // Allow very small stabilities for sub-day intervals
+    const result = isFinite(stability) && stability > 0 ? stability : 0.01;
     return result;
   }
 
@@ -326,11 +345,52 @@ export class FSRS {
     const difficulty = w4 - w5 * ratingDiff;
 
     const validDifficulty = isFinite(difficulty) ? difficulty : 5.0;
+    return Math.max(1, Math.min(10, validDifficulty));
+  }
 
-    // Apply clamping only after all calculations
-    if (validDifficulty < 1) return 1;
-    if (validDifficulty > 10) return 10;
-    return validDifficulty;
+  /**
+   * Forgetting Stability formula for lapse handling (FSRS 4.5)
+   * S_new = w[11] * D^(-w[12]) * ((S + 1)^w[13] - 1) * e^(w[14] * (1 - R))
+   */
+  private forgettingStability(
+    difficulty: number,
+    stability: number,
+    retrievability: number,
+  ): number {
+    const weights = this.getWeights();
+    const w11 = weights[11];
+    const w12 = weights[12];
+    const w13 = weights[13];
+    const w14 = weights[14];
+
+    // Validate inputs
+    if (
+      !isFinite(difficulty) ||
+      !isFinite(stability) ||
+      !isFinite(retrievability) ||
+      stability <= 0
+    ) {
+      return this.initStability(1); // Fallback to w[0]
+    }
+
+    try {
+      // S_new = w[11] * D^(-w[12]) * ((S + 1)^w[13] - 1) * e^(w[14] * (1 - R))
+      const difficultyTerm = Math.pow(difficulty, -w12);
+      const stabilityTerm = Math.pow(stability + 1, w13) - 1;
+      const retrievabilityTerm = Math.exp(w14 * (1 - retrievability));
+
+      const result = w11 * difficultyTerm * stabilityTerm * retrievabilityTerm;
+
+      // Validate result
+      if (!isFinite(result) || result <= 0) {
+        return this.initStability(1); // Fallback to w[0]
+      }
+
+      return result;
+    } catch (error) {
+      // Math error (overflow, etc.)
+      return this.initStability(1); // Fallback to w[0]
+    }
   }
 
   /**
@@ -350,17 +410,14 @@ export class FSRS {
       return 0;
     }
 
-    // Calculate power term with full precision
+    // Apply power with validation
     const powerTerm = Math.pow(baseTerm, -1);
 
-    return isFinite(powerTerm) ? powerTerm : 0;
+    return isFinite(powerTerm) ? Math.max(0, Math.min(1, powerTerm)) : 0;
   }
 
   /**
-   * Calculate retrievability for a flashcard at review time
-   * @param card - The flashcard being reviewed
-   * @param reviewedAt - When the review is happening
-   * @returns Retrievability value (0-1)
+   * Get retrievability for a card at a specific review time
    */
   public getRetrievability(
     card: Flashcard,
@@ -384,16 +441,17 @@ export class FSRS {
    * Calculate next difficulty with maximum precision
    */
   private nextDifficulty(difficulty: number, rating: number): number {
-    if (!isFinite(difficulty) || !isFinite(rating)) {
+    if (!isFinite(difficulty)) {
       return 5.0;
     }
 
     const weights = this.getWeights();
     const w6 = weights[6];
     const ratingDiff = rating - 3;
-    const difficultyChange = w6 * ratingDiff;
-    const nextD = difficulty - difficultyChange;
+    const difficultyChange = -w6 * ratingDiff;
+    const nextD = difficulty + difficultyChange;
 
+    // Apply mean reversion
     const w4 = weights[4];
     const revertedD = this.meanReversion(w4, nextD);
 
@@ -502,35 +560,28 @@ export class FSRS {
       return minInterval;
     }
 
-    // Calculate with maximum precision using exact constants
+    // Calculate interval using I = S * k formula
     const retentionLog = Math.log(this.params.requestRetention);
     const baseLog = Math.log(0.9);
-    const k = retentionLog / baseLog; // positive for 0<requestRetention<1
+    const k = retentionLog / baseLog;
 
-    // Calculate interval using exact day-to-minute conversion
+    // Convert stability from days to minutes and apply k factor
     const intervalDays = stability * k;
     const intervalMinutes = intervalDays * MINUTES_PER_DAY;
 
-    // Validate calculation result
-    if (!isFinite(intervalMinutes)) {
+    // Validate calculation
+    if (!isFinite(intervalMinutes) || intervalMinutes <= 0) {
       this.debugLog(
-        `Invalid minutes calculation: stability=${stability}, k=${k}, using minMinutes`,
+        `Invalid interval calculation: ${intervalMinutes}, using minMinutes`,
       );
       return minInterval;
     }
 
-    // Apply bounds with exact conversion
+    // Apply maximum interval limit
     const maxInterval = this.getMaxIntervalDays() * MINUTES_PER_DAY;
 
-    let result = intervalMinutes;
-    if (result < minInterval) result = minInterval;
-    if (result > maxInterval) result = maxInterval;
-
-    // Final validation to ensure result is finite
-    if (!isFinite(result)) {
-      this.debugLog(`Invalid final result: ${result}, using minMinutes`);
-      return minInterval;
-    }
+    let result = Math.max(minInterval, intervalMinutes);
+    result = Math.min(result, maxInterval);
 
     return result;
   }
@@ -552,7 +603,8 @@ export class FSRS {
       ? new Date(card.lastReviewed)
       : new Date();
 
-    const difficulty = card.difficulty || 5.0; // Use difficulty field
+    // Validate numeric values with fallbacks
+    const difficulty = isFinite(card.difficulty) ? card.difficulty : 5.0;
 
     return {
       stability: card.stability || 0,
@@ -566,12 +618,10 @@ export class FSRS {
   }
 
   private flashcardStateToFSRSState(state: FlashcardState): FSRSState {
-    // Map all non-new states to Review for pure FSRS
     return state === "new" ? "New" : "Review";
   }
 
   private fsrsStateToFlashcardState(state: FSRSState): FlashcardState {
-    // Map FSRS states to flashcard states (only new and review for pure FSRS)
     return state === "New" ? "new" : "review";
   }
 
@@ -591,25 +641,29 @@ export class FSRS {
   }
 
   /**
-   * Get display text for intervals - UI formatting only
+   * Get display-friendly interval text (static utility method)
    */
   static getIntervalDisplay(minutes: number): string {
     if (minutes < 60) {
       return `${Math.round(minutes)}m`;
-    } else if (minutes < MINUTES_PER_DAY) {
-      const hours = Math.round(minutes / 60);
-      return `${hours}h`;
-    } else {
-      const days = Math.round(minutes / MINUTES_PER_DAY);
-      if (days < 30) {
-        return `${days}d`;
-      } else if (days < 365) {
-        const months = Math.round(days / 30);
-        return `${months}mo`;
-      } else {
-        const years = days / 365;
-        return `${roundForDisplay(years, 1)}y`;
-      }
     }
+
+    const hours = minutes / 60;
+    if (hours < 24) {
+      return `${Math.round(hours)}h`;
+    }
+
+    const days = hours / 24;
+    if (days < 30) {
+      return `${Math.round(days)}d`;
+    }
+
+    const months = days / 30;
+    if (months < 12) {
+      return `${Math.round(months)}mo`;
+    }
+
+    const years = months / 12;
+    return `${Math.round(years)}y`;
   }
 }
