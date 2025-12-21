@@ -46,8 +46,8 @@ export interface IDatabaseService {
   getAllFlashcards(): Promise<Flashcard[]>;
   getDueFlashcards(deckId: string): Promise<Flashcard[]>;
   getReviewableFlashcards(deckId: string): Promise<Flashcard[]>;
-  getNewCardsForReview(deckId: string, now: string): Promise<Flashcard[]>;
-  getReviewCardsForReview(deckId: string, now: string): Promise<Flashcard[]>;
+  getNewCardsForReview(deckId: string): Promise<Flashcard[]>;
+  getReviewCardsForReview(deckId: string): Promise<Flashcard[]>;
   updateFlashcard(
     flashcardId: string,
     updates: Partial<Flashcard>,
@@ -119,8 +119,8 @@ export interface IDatabaseService {
   ): Promise<Statistics>;
 
   // Count operations
-  countNewCards(deckId: string, now: string): Promise<number>;
-  countDueCards(deckId: string, now: string): Promise<number>;
+  countNewCards(deckId: string): Promise<number>;
+  countDueCards(deckId: string): Promise<number>;
   countTotalCards(deckId: string): Promise<number>;
 
   // Forecast operations (optimized SQL)

@@ -29,11 +29,12 @@ export class FlashcardParser {
 
     // Single pass through lines for both table and header parsing
     let inTable = false;
-    let headerSeen = false;
+    let tableRowCount = 0;
     let currentHeader: { text: string; level: number } | null = null;
     let currentContent: string[] = [];
     let inFrontmatter = false;
     let skipNextParagraph = false;
+    let hasNonTableContent = false;
 
     for (let i = 0; i < lines.length; i++) {
       const line = lines[i];
@@ -53,37 +54,56 @@ export class FlashcardParser {
 
       // Check for table rows
       if (FlashcardParser.TABLE_ROW_REGEX.test(trimmedLine)) {
-        if (!inTable) {
-          inTable = true;
-          headerSeen = false;
-        }
+        // Only parse table if we have a current header with the correct level AND no non-table content
+        if (
+          currentHeader &&
+          currentHeader.level === headerLevel &&
+          !hasNonTableContent
+        ) {
+          if (!inTable) {
+            inTable = true;
+            tableRowCount = 0;
+          }
 
-        // Skip header and separator rows
-        if (!headerSeen) {
-          headerSeen = true;
-          continue;
-        }
-        if (FlashcardParser.TABLE_SEPARATOR_REGEX.test(trimmedLine)) {
-          continue;
-        }
+          tableRowCount++;
 
-        // Parse table row
-        const cells = trimmedLine
-          .slice(1, -1) // Remove leading/trailing pipes
-          .split("|")
-          .map((cell) => cell.trim());
+          // Skip first row (header) and second row (separator)
+          if (tableRowCount <= 2) {
+            continue;
+          }
 
-        if (cells.length >= 2 && cells[0] && cells[1]) {
-          flashcards.push({
-            front: cells[0],
-            back: cells[1],
-            type: "table",
-          });
+          // Parse table row
+          const cells = trimmedLine
+            .slice(1, -1) // Remove leading/trailing pipes
+            .split("|")
+            .map((cell) => cell.trim());
+
+          if (cells.length >= 2 && cells[0] && cells[1]) {
+            flashcards.push({
+              front: cells[0],
+              back: cells[1],
+              type: "table",
+            });
+          }
+        } else {
+          // Table under wrong header level or has non-table content - treat as regular content
+          if (inTable) {
+            inTable = false;
+            tableRowCount = 0;
+          }
+          if (currentHeader) {
+            // Skip empty lines at the beginning of content
+            if (trimmedLine === "" && currentContent.length === 0) {
+              continue;
+            }
+            currentContent.push(line);
+          }
         }
       } else {
         // Not a table row, end table processing
         if (inTable) {
           inTable = false;
+          tableRowCount = 0;
         }
 
         // Check for headers
@@ -119,6 +139,7 @@ export class FlashcardParser {
             level: currentHeaderLevel,
           };
           currentContent = [];
+          hasNonTableContent = false;
           skipNextParagraph = false;
         } else if (skipNextParagraph) {
           if (trimmedLine === "") {
@@ -129,6 +150,8 @@ export class FlashcardParser {
           if (trimmedLine === "" && currentContent.length === 0) {
             continue;
           }
+          // Mark that we have non-table content under this header
+          hasNonTableContent = true;
           currentContent.push(line);
         }
       }

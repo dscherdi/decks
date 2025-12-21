@@ -343,10 +343,7 @@ describe("Database Integration Tests", () => {
       };
       await db.updateDeck(deck.id, updatedDeck);
 
-      const newCards = await db.getNewCardsForReview(
-        deck.id,
-        new Date().toISOString(),
-      );
+      const newCards = await db.getNewCardsForReview(deck.id);
       expect(newCards.length).toBeLessThanOrEqual(5);
     });
   });

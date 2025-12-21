@@ -527,8 +527,8 @@ export const SQL_QUERIES = {
     SELECT COUNT(*) as count FROM review_logs rl
     JOIN flashcards f ON rl.flashcard_id = f.id
     WHERE f.deck_id = ?
-      AND rl.reviewed_at >= ?
-      AND rl.reviewed_at <= ?
+      AND rl.reviewed_at >= datetime('now', 'start of day')
+      AND rl.reviewed_at < datetime('now', 'start of day', '+1 day')
       AND (rl.old_interval_minutes = 0 OR f.repetitions = 1)
   `,
 
@@ -536,7 +536,8 @@ export const SQL_QUERIES = {
     SELECT COUNT(*) as count FROM review_logs rl
     JOIN flashcards f ON rl.flashcard_id = f.id
     WHERE f.deck_id = ?
-      AND rl.reviewed_at >= ? AND rl.reviewed_at <= ?
+      AND rl.reviewed_at >= datetime('now', 'start of day')
+      AND rl.reviewed_at < datetime('now', 'start of day', '+1 day')
       AND rl.old_interval_minutes > 0
   `,
 

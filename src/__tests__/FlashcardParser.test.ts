@@ -4,7 +4,7 @@ describe("FlashcardParser", () => {
   describe("parseFlashcardsFromContent", () => {
     it("should parse table-based flashcards", () => {
       const content = `
-# Flashcards
+## Study Topics
 
 | Front | Back |
 |-------|------|
@@ -100,18 +100,14 @@ Cascading Style Sheets for styling web pages.
 
       const result = FlashcardParser.parseFlashcardsFromContent(content);
 
-      expect(result).toHaveLength(3);
-      expect(result[0]).toEqual({
-        front: "What is HTML?",
-        back: "HyperText Markup Language",
-        type: "table",
-      });
+      expect(result).toHaveLength(2);
+      expect(result[0].front).toBe("What is JavaScript?");
+      expect(result[0].back).toContain("JavaScript is a programming language.");
+      expect(result[0].back).toContain(
+        "| What is HTML? | HyperText Markup Language |",
+      );
+      expect(result[0].type).toBe("header-paragraph");
       expect(result[1]).toEqual({
-        front: "What is JavaScript?",
-        back: "JavaScript is a programming language.",
-        type: "header-paragraph",
-      });
-      expect(result[2]).toEqual({
         front: "What is CSS?",
         back: "Cascading Style Sheets for styling web pages.",
         type: "header-paragraph",
@@ -180,6 +176,8 @@ Some more content here.
 
     it("should ignore incomplete table rows", () => {
       const content = `
+## Test Table
+
 | Front | Back |
 |-------|------|
 | Complete question | Complete answer |
@@ -223,6 +221,8 @@ Key features:
 
     it("should trim whitespace from table cells", () => {
       const content = `
+## Whitespace Test
+
 | Front | Back |
 |-------|------|
 |   Whitespace question   |   Whitespace answer   |
@@ -276,6 +276,115 @@ H4 content
       const h4Result = FlashcardParser.parseFlashcardsFromContent(content, 4);
       expect(h4Result).toHaveLength(1);
       expect(h4Result[0].front).toBe("H4 Header");
+    });
+
+    it("should only parse tables under headers with correct level", () => {
+      const content = `
+# Main Title
+
+## Level 2 Header
+
+| Question | Answer |
+| --- | --- |
+| What is 2+2? | 4 |
+| What is 3+3? | 6 |
+
+### Level 3 Header
+
+| Another Question | Another Answer |
+| --- | --- |
+| What is 5+5? | 10 |
+
+#### Level 4 Header
+
+Some regular content here.
+
+| Ignored Question | Ignored Answer |
+| --- | --- |
+| This should be ignored | Because it's under H4 |
+      `;
+
+      // Test with headerLevel 2 - should only parse table under ## header
+      const h2Result = FlashcardParser.parseFlashcardsFromContent(content, 2);
+      expect(h2Result).toHaveLength(2);
+      expect(h2Result[0]).toEqual({
+        front: "What is 2+2?",
+        back: "4",
+        type: "table",
+      });
+      expect(h2Result[1]).toEqual({
+        front: "What is 3+3?",
+        back: "6",
+        type: "table",
+      });
+
+      // Test with headerLevel 3 - should only parse table under ### header
+      const h3Result = FlashcardParser.parseFlashcardsFromContent(content, 3);
+      expect(h3Result).toHaveLength(1);
+      expect(h3Result[0]).toEqual({
+        front: "What is 5+5?",
+        back: "10",
+        type: "table",
+      });
+
+      // Test with headerLevel 4 - table should be part of header-paragraph since there's other content
+      const h4Result = FlashcardParser.parseFlashcardsFromContent(content, 4);
+      expect(h4Result).toHaveLength(1);
+      expect(h4Result[0].front).toBe("Level 4 Header");
+      expect(h4Result[0].back).toContain("Some regular content here.");
+      expect(h4Result[0].back).toContain(
+        "| Ignored Question | Ignored Answer |",
+      );
+      expect(h4Result[0].back).toContain(
+        "| This should be ignored | Because it's under H4 |",
+      );
+      expect(h4Result[0].type).toBe("header-paragraph");
+
+      // Test with headerLevel 1 - should parse no flashcards
+      const h1Result = FlashcardParser.parseFlashcardsFromContent(content, 1);
+      expect(h1Result).toHaveLength(0);
+    });
+
+    it("should parse tables as separate flashcards when header has no paragraph content", () => {
+      const content = `
+## Pure Table Header
+
+| Question | Answer |
+| --- | --- |
+| What is 5+5? | 10 |
+| What is 6+6? | 12 |
+
+## Mixed Header
+
+Some paragraph content here.
+
+| Question | Answer |
+| --- | --- |
+| What is 7+7? | 14 |
+      `;
+
+      const result = FlashcardParser.parseFlashcardsFromContent(content, 2);
+
+      // Should have 3 flashcards: 2 table flashcards from pure table header, 1 header-paragraph from mixed
+      expect(result).toHaveLength(3);
+
+      // First two should be table flashcards
+      expect(result[0]).toEqual({
+        front: "What is 5+5?",
+        back: "10",
+        type: "table",
+      });
+      expect(result[1]).toEqual({
+        front: "What is 6+6?",
+        back: "12",
+        type: "table",
+      });
+
+      // Third should be header-paragraph with table content included
+      expect(result[2].front).toBe("Mixed Header");
+      expect(result[2].back).toContain("Some paragraph content here.");
+      expect(result[2].back).toContain("| What is 7+7? | 14 |");
+      expect(result[2].type).toBe("header-paragraph");
     });
   });
 });
