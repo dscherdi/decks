@@ -167,6 +167,9 @@ export interface IDatabaseService {
   queryBackupDatabase(backupDb: any, sql: string): Promise<any[]>;
   closeBackupDatabaseInstance(backupDb: any): Promise<void>;
 
+  // Synchronization operations
+  syncWithDisk(): Promise<void>;
+
   // Transaction methods removed - no longer using transactions
 }
 

@@ -16,7 +16,6 @@ describe("FSRS Numeric Precision Tests", () => {
       type: "header-paragraph",
       sourceFile: "test.md",
       contentHash: "hash123",
-      headerLevel: 2,
       state: "new",
       dueDate: new Date().toISOString(),
       interval: 0,

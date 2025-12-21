@@ -1,9 +1,6 @@
 import { DataAdapter } from "obsidian";
 import { BaseDatabaseService, QueryConfig } from "./BaseDatabaseService";
-import {
-  DatabaseWorkerMessage,
-  DatabaseWorkerResponse,
-} from "../workers/worker-entry";
+import { DatabaseWorkerMessage } from "../workers/worker-entry";
 import { ProgressTracker } from "../utils/progress";
 
 export class WorkerDatabaseService extends BaseDatabaseService {
@@ -12,7 +9,7 @@ export class WorkerDatabaseService extends BaseDatabaseService {
   private messageId = 0;
   private pendingRequests = new Map<
     string,
-    { resolve: Function; reject: Function }
+    { resolve: (value?: any) => void; reject: (reason?: any) => void }
   >();
   private progressTracker?: ProgressTracker;
 
@@ -126,20 +123,27 @@ export class WorkerDatabaseService extends BaseDatabaseService {
           10000,
         );
 
-        const originalHandler = this.worker!.onmessage;
-        this.worker!.onmessage = (event) => {
-          if (event.data.type === "ready") {
-            clearTimeout(timeout);
-            this.worker!.onmessage = originalHandler;
-            resolve(void 0);
-          } else if (event.data.type === "initError") {
-            clearTimeout(timeout);
-            reject(new Error(event.data.error));
-          } else if (originalHandler) {
-            originalHandler.call(this.worker, event);
-          }
-        };
+        const originalHandler = this.worker?.onmessage || null;
+        if (this.worker) {
+          this.worker.onmessage = (event) => {
+            if (event.data.type === "ready") {
+              clearTimeout(timeout);
+              if (this.worker) {
+                this.worker.onmessage = originalHandler;
+              }
+              resolve(void 0);
+            } else if (event.data.type === "initError") {
+              clearTimeout(timeout);
+              reject(new Error(event.data.error));
+            } else if (originalHandler) {
+              originalHandler.call(this.worker, event);
+            }
+          };
+        }
       });
+
+      // Initialize lastKnownModified
+      await this.updateLastKnownModified();
 
       this.debugLog("WorkerDatabaseService initialized successfully");
     } catch (error) {
@@ -161,7 +165,11 @@ export class WorkerDatabaseService extends BaseDatabaseService {
     }
   }
 
-  private sendMessage(type: string, data?: any): Promise<any> {
+  private sendMessage(
+    type: string,
+    data?: any,
+    transferables?: Transferable[],
+  ): Promise<any> {
     return new Promise((resolve, reject) => {
       if (!this.worker) {
         reject(new Error("Worker not initialized"));
@@ -177,7 +185,11 @@ export class WorkerDatabaseService extends BaseDatabaseService {
         data,
       };
 
-      this.worker.postMessage(message);
+      if (transferables) {
+        this.worker.postMessage(message, transferables);
+      } else {
+        this.worker.postMessage(message);
+      }
     });
   }
 
@@ -185,6 +197,9 @@ export class WorkerDatabaseService extends BaseDatabaseService {
     if (!this.worker) throw new Error("Worker not initialized");
 
     try {
+      // Sync with disk before saving
+      await this.syncWithDisk();
+
       const data = await this.sendMessage("export");
 
       // Ensure directory exists
@@ -196,6 +211,10 @@ export class WorkerDatabaseService extends BaseDatabaseService {
       // data.buffer is a Uint8Array from worker.export()
       // Obsidian's writeBinary expects a Uint8Array
       await this.adapter.writeBinary(this.dbPath, data.buffer);
+
+      // Update lastKnownModified after successful save
+      await this.updateLastKnownModified();
+
       this.debugLog("Database saved successfully!");
     } catch (error) {
       console.error("Failed to save database:", error);
@@ -270,6 +289,59 @@ export class WorkerDatabaseService extends BaseDatabaseService {
       this.debugLog("Backup database instance closed");
     } catch (error) {
       console.error("Failed to close backup database instance:", error);
+      throw error;
+    }
+  }
+
+  // Synchronization operations
+  private lastKnownModified = 0;
+
+  private async updateLastKnownModified(): Promise<void> {
+    try {
+      if (await this.adapter.exists(this.dbPath)) {
+        const stat = await this.adapter.stat(this.dbPath);
+        if (stat) {
+          this.lastKnownModified = stat.mtime;
+        }
+      }
+    } catch (error) {
+      this.debugLog("Failed to update lastKnownModified:", error);
+    }
+  }
+
+  async syncWithDisk(): Promise<void> {
+    if (!this.worker) throw new Error("Worker not initialized");
+
+    try {
+      // 1. Check if file exists
+      if (!(await this.adapter.exists(this.dbPath))) {
+        this.debugLog("No file on disk to sync with");
+        return;
+      }
+
+      // 2. Check timestamp
+      const stat = await this.adapter.stat(this.dbPath);
+      if (!stat || stat.mtime <= this.lastKnownModified) {
+        this.debugLog("Disk file is not newer, no sync needed");
+        return;
+      }
+
+      this.debugLog(
+        `Syncing with newer disk file on worker (${stat.mtime} > ${this.lastKnownModified})`,
+      );
+
+      // 3. Read file (Main Thread I/O)
+      const diskData = await this.adapter.readBinary(this.dbPath);
+
+      // 4. Send to Worker (Transferable for speed)
+      // We pass the ArrayBuffer in the transfer list to avoid copying
+      await this.sendMessage("syncWithDisk", { buffer: diskData }, [diskData]);
+
+      // 5. Update Timestamp
+      this.lastKnownModified = stat.mtime;
+      this.debugLog("Worker completed disk sync");
+    } catch (error) {
+      console.error("Failed to sync with disk in worker:", error);
       throw error;
     }
   }

@@ -5,15 +5,13 @@ import {
   buildMigrationSQL,
   CURRENT_SCHEMA_VERSION,
 } from "./schemas";
-import { InitSqlJsStatic, Database } from "sql.js";
+import { Database } from "sql.js";
 import { FlashcardSynchronizer } from "../services/FlashcardSynchronizer";
-
-// Import SQL.js types
-declare const initSqlJs: any;
 
 export class MainDatabaseService extends BaseDatabaseService {
   private db: Database | null = null;
   private SQL: any = null;
+  private lastKnownModified = 0;
 
   constructor(
     dbPath: string,
@@ -50,12 +48,16 @@ export class MainDatabaseService extends BaseDatabaseService {
         this.db = new SQL.Database(buffer);
         this.debugLog("Loaded existing database");
 
+        // Update lastKnownModified
+        await this.updateLastKnownModified();
+
         // Run migrations if needed
         await this.migrateSchemaIfNeeded();
       } else {
         this.db = new SQL.Database();
         await this.createFreshDatabase();
         this.debugLog("Created new database");
+        this.lastKnownModified = 0;
       }
 
       // Initialize DeckSynchronizer after database is ready
@@ -89,6 +91,9 @@ export class MainDatabaseService extends BaseDatabaseService {
     }
 
     try {
+      // Sync with disk before saving
+      await this.syncWithDisk();
+
       // Ensure directory exists
       const dir = this.dbPath.substring(0, this.dbPath.lastIndexOf("/"));
       if (!(await this.adapter.exists(dir))) {
@@ -98,6 +103,10 @@ export class MainDatabaseService extends BaseDatabaseService {
       // Export database and save
       const data = this.db.export();
       await this.adapter.writeBinary(this.dbPath, data);
+
+      // Update lastKnownModified after successful save
+      await this.updateLastKnownModified();
+
       this.debugLog("Database saved successfully");
     } catch (error) {
       console.error("Failed to save database:", error);
@@ -221,5 +230,255 @@ export class MainDatabaseService extends BaseDatabaseService {
 
   async closeBackupDatabaseInstance(backupDb: any): Promise<void> {
     backupDb.close();
+  }
+
+  private async updateLastKnownModified(): Promise<void> {
+    try {
+      if (await this.adapter.exists(this.dbPath)) {
+        const stat = await this.adapter.stat(this.dbPath);
+        if (stat) {
+          this.lastKnownModified = stat.mtime;
+        }
+      }
+    } catch (error) {
+      this.debugLog("Failed to update lastKnownModified:", error);
+    }
+  }
+
+  async syncWithDisk(): Promise<void> {
+    if (!this.db) {
+      throw new Error("Database not initialized");
+    }
+
+    try {
+      // Check if file exists on disk
+      if (!(await this.adapter.exists(this.dbPath))) {
+        this.debugLog("No file on disk to sync with");
+        return;
+      }
+
+      // Check if file is newer than our last known version
+      const stat = await this.adapter.stat(this.dbPath);
+      if (!stat || stat.mtime <= this.lastKnownModified) {
+        this.debugLog("Disk file is not newer, no sync needed");
+        return;
+      }
+
+      this.debugLog(
+        `Syncing with newer disk file (${stat.mtime} > ${this.lastKnownModified})`,
+      );
+
+      // Read the disk file
+      const diskData = await this.adapter.readBinary(this.dbPath);
+      const diskBuffer = new Uint8Array(diskData);
+
+      // Create temporary file path for mounting
+      const tempPath = `/tmp_remote_${Date.now()}.db`;
+
+      // Mount the disk database as a temporary file in sql.js filesystem
+      this.db.exec(`SELECT 1`); // Ensure database is active
+      const FS = (this.db as any).FS || (globalThis as any).FS;
+
+      if (FS && FS.createDataFile) {
+        // Create the temporary file in the virtual filesystem
+        FS.createDataFile(
+          "/",
+          tempPath.substring(1),
+          diskBuffer,
+          true,
+          true,
+          true,
+        );
+
+        try {
+          // Attach the remote database
+          this.db.exec(`ATTACH DATABASE '${tempPath}' AS remote`);
+
+          // Begin transaction for atomic merge
+          this.db.exec("BEGIN TRANSACTION");
+
+          try {
+            // Merge Review Sessions (INSERT OR IGNORE - never overwrite)
+            this.db.exec(`
+              INSERT OR IGNORE INTO review_sessions
+              SELECT * FROM remote.review_sessions
+            `);
+
+            // Merge Review Logs (INSERT OR IGNORE - never overwrite)
+            this.db.exec(`
+              INSERT OR IGNORE INTO review_logs
+              SELECT * FROM remote.review_logs
+            `);
+
+            // Merge Decks (REPLACE only if remote.modified > main.modified)
+            this.db.exec(`
+              INSERT OR REPLACE INTO decks
+              SELECT remote.* FROM remote.decks
+              LEFT JOIN decks AS main ON remote.id = main.id
+              WHERE main.id IS NULL OR remote.modified > main.modified
+            `);
+
+            // Merge Flashcards (REPLACE only if remote.modified > main.modified)
+            this.db.exec(`
+              INSERT OR REPLACE INTO flashcards
+              SELECT remote.* FROM remote.flashcards
+              LEFT JOIN flashcards AS main ON remote.id = main.id
+              WHERE main.id IS NULL OR remote.modified > main.modified
+            `);
+
+            // Commit the transaction
+            this.db.exec("COMMIT");
+            this.debugLog("Successfully merged data from disk");
+          } catch (error) {
+            // Rollback on error
+            this.db.exec("ROLLBACK");
+            throw error;
+          }
+
+          // Detach the remote database
+          this.db.exec("DETACH DATABASE remote");
+        } finally {
+          // Clean up the temporary file
+          if (FS.unlink) {
+            try {
+              FS.unlink(tempPath);
+            } catch (cleanupError) {
+              this.debugLog("Failed to cleanup temp file:", cleanupError);
+            }
+          }
+        }
+      } else {
+        // Fallback: Create a new database instance for merging
+        const SQL = await this.SQL({
+          locateFile: (file: string) => {
+            if (file.endsWith(".wasm")) {
+              return `https://sql.js.org/dist/${file}`;
+            }
+            return file;
+          },
+        });
+
+        const remoteDb = new SQL.Database(diskBuffer);
+
+        try {
+          // Begin transaction for atomic merge
+          this.db.exec("BEGIN TRANSACTION");
+
+          try {
+            // Get data from remote database
+            const remoteSessions = remoteDb.exec(
+              "SELECT * FROM review_sessions",
+            );
+            const remoteLogs = remoteDb.exec("SELECT * FROM review_logs");
+            const remoteDecks = remoteDb.exec("SELECT * FROM decks");
+            const remoteFlashcards = remoteDb.exec("SELECT * FROM flashcards");
+
+            // Merge sessions (INSERT OR IGNORE)
+            if (remoteSessions.length > 0) {
+              const sessionData = remoteSessions[0];
+              const sessionStmt = this.db.prepare(`
+                INSERT OR IGNORE INTO review_sessions
+                VALUES (${sessionData.columns.map(() => "?").join(",")})
+              `);
+
+              for (const row of sessionData.values) {
+                sessionStmt.run(row);
+              }
+              sessionStmt.free();
+            }
+
+            // Merge logs (INSERT OR IGNORE)
+            if (remoteLogs.length > 0) {
+              const logData = remoteLogs[0];
+              const logStmt = this.db.prepare(`
+                INSERT OR IGNORE INTO review_logs
+                VALUES (${logData.columns.map(() => "?").join(",")})
+              `);
+
+              for (const row of logData.values) {
+                logStmt.run(row);
+              }
+              logStmt.free();
+            }
+
+            // Merge decks (conditional replace)
+            if (remoteDecks.length > 0) {
+              const deckData = remoteDecks[0];
+              const modifiedIndex = deckData.columns.indexOf("modified");
+
+              for (const row of deckData.values) {
+                const deckId = row[0]; // Assuming id is first column
+                const remoteModified = row[modifiedIndex];
+
+                const existingDeck = this.db.exec(
+                  `SELECT modified FROM decks WHERE id = ?`,
+                  [deckId],
+                );
+                const shouldReplace =
+                  !existingDeck.length ||
+                  (existingDeck[0]?.values?.[0]?.[0] || 0) < remoteModified;
+
+                if (shouldReplace) {
+                  const deckStmt = this.db.prepare(`
+                    INSERT OR REPLACE INTO decks
+                    VALUES (${deckData.columns.map(() => "?").join(",")})
+                  `);
+                  deckStmt.run(row);
+                  deckStmt.free();
+                }
+              }
+            }
+
+            // Merge flashcards (conditional replace)
+            if (remoteFlashcards.length > 0) {
+              const cardData = remoteFlashcards[0];
+              const modifiedIndex = cardData.columns.indexOf("modified");
+
+              for (const row of cardData.values) {
+                const cardId = row[0]; // Assuming id is first column
+                const remoteModified = row[modifiedIndex];
+
+                const existingCard = this.db.exec(
+                  `SELECT modified FROM flashcards WHERE id = ?`,
+                  [cardId],
+                );
+                const shouldReplace =
+                  !existingCard.length ||
+                  (existingCard[0]?.values?.[0]?.[0] || 0) < remoteModified;
+
+                if (shouldReplace) {
+                  const cardStmt = this.db.prepare(`
+                    INSERT OR REPLACE INTO flashcards
+                    VALUES (${cardData.columns.map(() => "?").join(",")})
+                  `);
+                  cardStmt.run(row);
+                  cardStmt.free();
+                }
+              }
+            }
+
+            // Commit the transaction
+            this.db.exec("COMMIT");
+            this.debugLog(
+              "Successfully merged data from disk using fallback method",
+            );
+          } catch (error) {
+            // Rollback on error
+            this.db.exec("ROLLBACK");
+            throw error;
+          }
+        } finally {
+          remoteDb.close();
+        }
+      }
+
+      // Update our lastKnownModified to the disk file's timestamp
+      if (stat) {
+        this.lastKnownModified = stat.mtime;
+      }
+    } catch (error) {
+      console.error("Failed to sync with disk:", error);
+      throw error;
+    }
   }
 }

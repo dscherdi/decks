@@ -2,14 +2,13 @@
 // Handles only: init, close, executesql, export
 
 // Worker environment type declarations
-declare var self: any;
+declare const self: any;
 
 // Import SQL.js types only (not the runtime code)
 import type { Database, InitSqlJsStatic, SqlJsStatic } from "sql.js";
 
 // SQL.js runtime will be loaded dynamically
-declare var initSqlJs: InitSqlJsStatic;
-declare var SQL: SqlJsStatic;
+declare const initSqlJs: InitSqlJsStatic;
 
 // Web Worker API declaration
 declare function importScripts(...urls: string[]): void;
@@ -17,7 +16,6 @@ declare function importScripts(...urls: string[]): void;
 import { FlashcardParser, ParsedFlashcard } from "../services/FlashcardParser";
 import {
   FlashcardSynchronizer,
-  BatchOperation,
   SyncResult,
   SyncData,
 } from "../services/FlashcardSynchronizer";
@@ -64,7 +62,9 @@ class SimpleDatabaseWorker {
         self.window = self;
         try {
           delete self.process;
-        } catch {} // in case Electron injects it
+        } catch {
+          // in case Electron injects it
+        }
 
         const jsUrl = URL.createObjectURL(
           new Blob([sqlJsCode], { type: "application/javascript" }),
@@ -297,6 +297,133 @@ class SimpleDatabaseWorker {
       progressCallback,
     );
   }
+
+  /**
+   * Sync with disk file - performs merge entirely in worker
+   */
+  syncWithDisk(fileBuffer: Uint8Array): void {
+    if (!this.db || !this.initialized) {
+      throw new Error("Database not initialized");
+    }
+
+    let remoteDb: Database | null = null;
+
+    try {
+      // Create a temporary database connection for the disk file
+      if (!this.SQL) throw new Error("SQL.js not initialized");
+      remoteDb = new this.SQL.Database(fileBuffer);
+
+      // Begin Transaction on MAIN DB
+      this.db.exec("BEGIN TRANSACTION");
+
+      try {
+        // 1. Merge Review Sessions (INSERT OR IGNORE)
+        const sessionsResult = remoteDb.exec("SELECT * FROM review_sessions");
+        if (sessionsResult.length > 0) {
+          const columns = sessionsResult[0].columns;
+          const values = sessionsResult[0].values;
+          const placeholders = columns.map(() => "?").join(",");
+
+          const stmt = this.db.prepare(
+            `INSERT OR IGNORE INTO review_sessions VALUES (${placeholders})`,
+          );
+          for (const row of values) {
+            stmt.run(row);
+          }
+          stmt.free();
+        }
+
+        // 2. Merge Review Logs (INSERT OR IGNORE)
+        const logsResult = remoteDb.exec("SELECT * FROM review_logs");
+        if (logsResult.length > 0) {
+          const columns = logsResult[0].columns;
+          const values = logsResult[0].values;
+          const placeholders = columns.map(() => "?").join(",");
+
+          const stmt = this.db.prepare(
+            `INSERT OR IGNORE INTO review_logs VALUES (${placeholders})`,
+          );
+          for (const row of values) {
+            stmt.run(row);
+          }
+          stmt.free();
+        }
+
+        // 3. Merge Decks (Conditional Replace)
+        const decksResult = remoteDb.exec("SELECT * FROM decks");
+        if (decksResult.length > 0) {
+          const columns = decksResult[0].columns;
+          const values = decksResult[0].values;
+          const placeholders = columns.map(() => "?").join(",");
+          const modIndex = columns.indexOf("modified");
+          const idIndex = columns.indexOf("id");
+
+          const insertStmt = this.db.prepare(
+            `INSERT OR REPLACE INTO decks VALUES (${placeholders})`,
+          );
+
+          for (const row of values) {
+            const remoteMod = row[modIndex] as string;
+            const id = row[idIndex] as string;
+
+            // Check local
+            const localRes = this.db.exec(
+              "SELECT modified FROM decks WHERE id = ?",
+              [id],
+            );
+            const localMod = localRes.length
+              ? (localRes[0].values[0][0] as string)
+              : null;
+
+            if (!localMod || remoteMod > localMod) {
+              insertStmt.run(row);
+            }
+          }
+          insertStmt.free();
+        }
+
+        // 4. Merge Flashcards (Conditional Replace)
+        const cardsResult = remoteDb.exec("SELECT * FROM flashcards");
+        if (cardsResult.length > 0) {
+          const columns = cardsResult[0].columns;
+          const values = cardsResult[0].values;
+          const placeholders = columns.map(() => "?").join(",");
+          const modIndex = columns.indexOf("modified");
+          const idIndex = columns.indexOf("id");
+
+          const insertStmt = this.db.prepare(
+            `INSERT OR REPLACE INTO flashcards VALUES (${placeholders})`,
+          );
+
+          for (const row of values) {
+            const remoteMod = row[modIndex] as string;
+            const id = row[idIndex] as string;
+
+            const localRes = this.db.exec(
+              "SELECT modified FROM flashcards WHERE id = ?",
+              [id],
+            );
+            const localMod = localRes.length
+              ? (localRes[0].values[0][0] as string)
+              : null;
+
+            if (!localMod || remoteMod > localMod) {
+              insertStmt.run(row);
+            }
+          }
+          insertStmt.free();
+        }
+
+        this.db.exec("COMMIT");
+        self.postMessage({ type: "dbg", message: "Sync with disk completed" });
+      } catch (err) {
+        this.db.exec("ROLLBACK");
+        throw err;
+      }
+    } finally {
+      if (remoteDb) remoteDb.close();
+    }
+  }
 }
 
 // Worker instance
@@ -376,6 +503,11 @@ self.onmessage = async (event: MessageEvent<DatabaseWorkerMessage>) => {
             data.headerLevel,
           ),
         };
+        break;
+
+      case "syncWithDisk":
+        worker.syncWithDisk(new Uint8Array(data.buffer));
+        result = { success: true };
         break;
 
       default:
