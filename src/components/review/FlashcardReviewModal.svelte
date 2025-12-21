@@ -18,8 +18,12 @@
         timeElapsed?: number,
         shownAt?: Date
     ) => Promise<void>;
-    export let renderMarkdown: (content: string, el: HTMLElement) => void;
-    export let settings: DecksSettings;
+    export let renderMarkdown: (
+        content: string,
+        el: HTMLElement,
+        deckFilePath: string | undefined
+    ) => void;
+    export let settings: FlashcardsSettings;
     export let scheduler: Scheduler;
     export let onCardReviewed:
         | ((reviewedCard: Flashcard) => Promise<void>)
@@ -34,15 +38,16 @@
     let backEl: HTMLElement;
     let schedulingInfo: SchedulingPreview | null = null;
     let reviewedCount = 0;
-    let cardStartTime: number = 0;
+    let cardStartTime = 0;
     let currentCard: Flashcard | null = initialCard;
-    let sessionId: string | null = null;
+    const sessionId: string | null = null;
+    const deckFilePath = "";
     let sessionProgress: SessionProgress | null = null;
 
     // Session timer variables
-    let sessionStartTime: number = 0;
-    let sessionTimeRemaining: number = 0;
-    let sessionTimer: NodeJS.Timeout | null = null;
+    let sessionStartTime = 0;
+    let sessionTimeRemaining = 0;
+    let sessionTimer: ReturnType<typeof setInterval> | null = null;
 
     // Track last event to prevent double execution
     let lastEventTime = 0;
@@ -53,7 +58,7 @@
 
     onMount(async () => {
         // Initialize review session
-        sessionId = await scheduler.startFreshSession(
+        var { sessionId } = await scheduler.startFreshSession(
             deck.id,
             new Date(),
             settings.review.sessionDuration
@@ -96,7 +101,7 @@
         // Render front side
         if (frontEl) {
             frontEl.empty();
-            renderMarkdown(currentCard.front, frontEl);
+            renderMarkdown(currentCard.front, frontEl, deckFilePath);
         }
 
         // Pre-render back side but keep it hidden
@@ -104,7 +109,8 @@
         tick().then(() => {
             if (backEl && currentCard) {
                 backEl.empty();
-                renderMarkdown(currentCard.back, backEl);
+                console.log(currentCard.back);
+                renderMarkdown(currentCard.back, backEl, deckFilePath);
             }
         });
     }
@@ -115,7 +121,7 @@
         tick().then(() => {
             if (backEl && currentCard) {
                 backEl.empty();
-                renderMarkdown(currentCard.back, backEl);
+                renderMarkdown(currentCard.back, backEl, deckFilePath);
             }
         });
     }

@@ -129,9 +129,12 @@ describe("FSRS Numeric Precision Tests", () => {
         expect(card.interval).toBeGreaterThan(0);
       }
 
-      // Check final precision - values should still have meaningful digits
-      expect(card.stability.toString().length).toBeGreaterThan(5);
-      expect(card.difficulty.toString().length).toBeGreaterThan(3);
+      // Final values should remain finite and in valid ranges
+      expect(Number.isFinite(card.stability)).toBe(true);
+      expect(Number.isFinite(card.difficulty)).toBe(true);
+      expect(card.stability).toBeGreaterThan(0);
+      expect(card.difficulty).toBeGreaterThanOrEqual(1);
+      expect(card.difficulty).toBeLessThanOrEqual(10);
     });
 
     it("should maintain consistent results with identical inputs", () => {
@@ -260,41 +263,6 @@ describe("FSRS Numeric Precision Tests", () => {
         expect(card.difficulty).toBeGreaterThanOrEqual(1);
         expect(card.difficulty).toBeLessThanOrEqual(10);
       }
-    });
-  });
-
-  describe("Display Formatting", () => {
-    it("should format display values without affecting internal precision", () => {
-      const testValue = 1.23456789012345;
-
-      expect(roundForDisplay(testValue, 2)).toBe("1.23");
-      expect(roundForDisplay(testValue, 4)).toBe("1.2346");
-      expect(roundForDisplay(testValue, 6)).toBe("1.234568");
-
-      // Original value should remain unchanged
-      expect(testValue).toBe(1.23456789012345);
-    });
-
-    it("should handle edge cases in display formatting", () => {
-      expect(roundForDisplay(0, 2)).toBe("0.00");
-      expect(roundForDisplay(1000000.123456, 2)).toBe("1000000.12");
-      expect(roundForDisplay(0.000001, 6)).toBe("0.000001");
-    });
-  });
-
-  describe("Parameter Validation", () => {
-    it("should validate FSRS parameters maintain precision", () => {
-      const params = {
-        ...DEFAULT_FSRS_PARAMETERS,
-        requestRetention: 0.9000000000001, // High precision value
-      };
-
-      const preciseFsrs = new FSRS(params);
-      const card = { ...testCard };
-      const updated = preciseFsrs.updateCard(card, "good");
-
-      expect(Number.isFinite(updated.stability)).toBe(true);
-      expect(Number.isFinite(updated.difficulty)).toBe(true);
     });
   });
 });

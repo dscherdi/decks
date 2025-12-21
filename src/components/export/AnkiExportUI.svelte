@@ -11,7 +11,7 @@
     }>();
 
     let ankiDeckName = deck.name;
-    let separator = "tab";
+    const separator = "tab";
     let exporting = false;
 
     // Container references for Obsidian Settings

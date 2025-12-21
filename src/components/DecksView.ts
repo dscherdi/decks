@@ -13,7 +13,7 @@ import { VIEW_TYPE_DECKS } from "@/main";
 import { DeckSynchronizer } from "@/services/DeckSynchronizer";
 import { DecksSettings } from "@/settings";
 import { yieldToUI } from "@/utils/ui";
-import { Logger, formatTime } from "@/utils/logging";
+import { Logger } from "@/utils/logging";
 import { ItemView, Component, WorkspaceLeaf, Notice } from "obsidian";
 import { Scheduler } from "@/services/Scheduler";
 import { FlashcardReviewModalWrapper } from "./review/FlashcardReviewModalWrapper";
@@ -148,7 +148,7 @@ export class DecksView extends ItemView {
         ).open();
     }
 
-    async refresh(force: boolean = false) {
+    async refresh(force = false) {
         this.logger.debug("DecksView.refresh() called");
         try {
             // Perform sync with force parameter

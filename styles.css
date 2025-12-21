@@ -139,6 +139,29 @@
     transition: transform 0.1s ease;
 }
 
+.decks-card-side.decks-back > p > span > div.markdown-preview-view {
+    display: inherit !important;
+    width: inherit !important;
+    min-height: inherit !important;
+    padding: inherit !important;
+    margin: 0px !important;
+}
+.decks-card-side.decks-back
+    > p
+    > span
+    > div.markdown-preview-view
+    > :is(h1, h2, h3, h4, h5, h6):first-child {
+    display: none;
+}
+
+.decks-card-side.decks-back > p {
+    margin-block: 0px !important;
+}
+
+.decks-card-side.decks-back > p > span {
+    border-inline-start: unset !important;
+}
+
 /* Ensure proper touch targets on mobile - scoped to plugin containers */
 @media (max-width: 768px) {
     .decks-view button,
@@ -373,7 +396,8 @@
 /* Modal styles */
 .decks-modal {
     width: 40vw;
-    max-width: 40vw;
+    max-width: 60vw;
+    min-width: 600px;
     height: 85vh;
     max-height: 85vh;
 }
@@ -387,6 +411,11 @@
     padding-left: env(safe-area-inset-left);
     padding-right: env(safe-area-inset-right);
     padding-bottom: env(safe-area-inset-bottom);
+}
+
+.decks-modal-tablet {
+    width: 85vw !important;
+    max-width: 85vw !important;
 }
 
 .decks-modal-mobile .modal-close-button {
@@ -539,4 +568,11 @@
 /* Backup Settings Styles */
 .decks-backup-container {
     margin-top: 10px;
+}
+
+div.decks-card-content
+    > div.decks-answer-section
+    > div.decks-card-side.decks-back
+    > div.math-block {
+    overflow-x: scroll;
 }

@@ -23,7 +23,7 @@ export async function yieldToUI(): Promise<void> {
  */
 export async function yieldEvery(
   currentIndex: number,
-  yieldInterval: number = 100,
+  yieldInterval = 100,
 ): Promise<void> {
   if (currentIndex > 0 && currentIndex % yieldInterval === 0) {
     await yieldToUI();
@@ -39,7 +39,7 @@ export async function yieldEvery(
 export async function processWithYielding<T, R>(
   items: T[],
   processor: (item: T, index: number) => R | Promise<R>,
-  yieldInterval: number = 50,
+  yieldInterval = 50,
 ): Promise<R[]> {
   const results: R[] = [];
 

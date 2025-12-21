@@ -1,6 +1,6 @@
 <script lang="ts">
     import { onMount, createEventDispatcher, tick } from "svelte";
-    import { ButtonComponent, Setting } from "obsidian";
+    import { Setting } from "obsidian";
     import ReviewHeatmap from "./ReviewHeatmap.svelte";
     import ReviewsOverTimeChart from "./ReviewsOverTimeChart.svelte";
     import CardCountsChart from "./CardCountsChart.svelte";
@@ -23,7 +23,7 @@
     import { Logger } from "@/utils/logging";
 
     export let statisticsService: StatisticsService;
-    export let deckFilter: string = "all";
+    export let deckFilter = "all";
     export let logger: Logger;
     export const settings: DecksSettings = {} as DecksSettings;
 
@@ -240,10 +240,6 @@
         } finally {
             loading = false;
         }
-    }
-
-    function formatDate(dateString: string) {
-        return new Date(dateString).toLocaleDateString();
     }
 
     function formatTime(seconds: number) {

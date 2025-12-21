@@ -26,7 +26,6 @@
     let enableNewCardsContainer: HTMLElement;
     let reviewCardsLimitContainer: HTMLElement;
     let enableReviewCardsContainer: HTMLElement;
-    let enableReviewCardsLimitContainer: HTMLElement;
     let reviewOrderContainer: HTMLElement;
     let headerLevelContainer: HTMLElement;
     let requestRetentionContainer: HTMLElement;
