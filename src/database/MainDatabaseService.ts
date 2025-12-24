@@ -5,7 +5,7 @@ import {
   buildMigrationSQL,
   CURRENT_SCHEMA_VERSION,
 } from "./schemas";
-import { Database, InitSqlJsStatic } from "sql.js";
+import type { Database, InitSqlJsStatic } from "sql.js";
 import { FlashcardSynchronizer } from "../services/FlashcardSynchronizer";
 import { SqlJsValue } from "./sql-types";
 

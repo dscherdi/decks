@@ -1,4 +1,4 @@
-import { Database } from "sql.js";
+import type { Database } from "sql.js";
 import {
   CREATE_TABLES_SQL,
   CURRENT_SCHEMA_VERSION,

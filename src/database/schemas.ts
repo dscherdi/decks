@@ -1,4 +1,4 @@
-import { Database } from "sql.js";
+import type { Database } from "sql.js";
 
 // Current Schema Version
 export const CURRENT_SCHEMA_VERSION = 5;
