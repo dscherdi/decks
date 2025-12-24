@@ -2,7 +2,7 @@ import { Plugin, TFile, WorkspaceLeaf, Notice, TAbstractFile } from "obsidian";
 
 import {
   DatabaseFactory,
-  DatabaseServiceInterface,
+  IDatabaseService,
 } from "./database/DatabaseFactory";
 import { DeckManager } from "./services/DeckManager";
 import { DeckSynchronizer } from "./services/DeckSynchronizer";
@@ -70,7 +70,7 @@ function deepMergeIgnoreNull<T extends Record<string, unknown>>(
 }
 
 export default class DecksPlugin extends Plugin {
-  private db: DatabaseServiceInterface;
+  private db: IDatabaseService;
   public deckManager: DeckManager;
   private deckSynchronizer: DeckSynchronizer;
   private scheduler: Scheduler;
@@ -80,7 +80,6 @@ export default class DecksPlugin extends Plugin {
   public settings: DecksSettings;
   private logger: Logger;
   private progressTracker: ProgressTracker;
-  private hasShownInitialProgress = false;
   private databaseWatcherInterval: number | null = null;
   private lastKnownDatabaseMtime = 0;
   private focusListener: (() => Promise<void>) | null = null;

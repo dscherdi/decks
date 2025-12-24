@@ -9,6 +9,7 @@
         Title,
         Tooltip,
         Legend,
+        type TooltipItem,
     } from "chart.js";
     import "chartjs-adapter-date-fns";
     import type { ReviewLog } from "../../database/types";
@@ -33,8 +34,8 @@
     let canvas: HTMLCanvasElement;
     let chart: Chart | null = null;
 
-    let selectedTimeframe: string = "1m"; // "1m", "3m", "1y", "all"
-    let reviewLogs: ReviewLog[] = [];
+    let selectedTimeframe = "1m"; // "1m", "3m", "1y", "all"
+    const reviewLogs: ReviewLog[] = [];
 
     onMount(() => {
         createChart();
@@ -203,8 +204,7 @@
                         mode: "index",
                         intersect: false,
                         callbacks: {
-                            afterLabel: function (context) {
-                                const datasetIndex = context.datasetIndex;
+                            afterLabel: function (context: TooltipItem<"bar">) {
                                 const dataIndex = context.dataIndex;
                                 const data = context.chart.data;
 
@@ -219,7 +219,7 @@
                                 const percentage =
                                     total > 0
                                         ? (
-                                              ((context.raw as number) /
+                                              (context.parsed.y /
                                                   total) *
                                               100
                                           ).toFixed(1)

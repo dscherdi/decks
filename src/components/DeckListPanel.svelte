@@ -5,16 +5,16 @@
     import ReviewHeatmap from "./statistics/ReviewHeatmap.svelte";
     import { DeckConfigModal } from "./config/DeckConfigModal";
     import { AnkiExportModal } from "./export/AnkiExportModal";
-    import { StatisticsService } from "@/services/StatisticsService";
-    import { DeckSynchronizer } from "@/services/DeckSynchronizer";
-    import { IDatabaseService } from "@/database/DatabaseFactory";
-    import { App } from "obsidian";
+    import type { StatisticsService } from "@/services/StatisticsService";
+    import type { DeckSynchronizer } from "@/services/DeckSynchronizer";
+    import type { IDatabaseService } from "@/database/DatabaseFactory";
+    import type { App } from "obsidian";
 
     let decks: Deck[] = [];
     let allDecks: Deck[] = [];
     let stats = new Map<string, DeckStats>();
     let filterText = "";
-    let heatmapComponent: any;
+    let heatmapComponent: ReviewHeatmap;
     let showSuggestions = false;
     let availableTags: string[] = [];
     let filteredSuggestions: string[] = [];
@@ -33,27 +33,49 @@
 
     export let onDeckClick: (deck: Deck) => void;
 
-    export let app: App; // TODO: Refactor to pass specific functions instead of whole plugin
+    export let app: App;
 
-    let onRefresh = async () => await this.refresh(false);
-    let onForceRefreshDeck = async (deckId: string) => {
-        await this.deckSynchronizer.forceSyncDeck(deckId);
-        await this.refreshStats();
+    export let onRefresh: () => Promise<void>;
+    export let onForceRefreshDeck: (deckId: string) => Promise<void>;
+    export let openStatisticsModal: () => void;
+
+    const getReviewCounts = async (days: number) => {
+        if (!statisticsService) {
+            console.error("StatisticsService is not available");
+            return new Map();
+        }
+        return await statisticsService.getReviewCountsByDate(days);
     };
-    let getReviewCounts = async (days: number) => {
-        return await this.statisticsService.getReviewCountsByDate(days);
+    const getStudyStats = async () => {
+        if (!statisticsService) {
+            console.error("StatisticsService is not available");
+            return {
+                totalHours: 0,
+                pastMonthHours: 0,
+                pastWeekHours: 0,
+                todayCards: 0,
+                todayHours: 0,
+                todayPaceSeconds: 0,
+            };
+        }
+        const baseStats = await statisticsService.getStudyStats();
+        return {
+            totalHours: baseStats.totalHours,
+            pastMonthHours: baseStats.pastMonthHours,
+            pastWeekHours: 0,
+            todayCards: 0,
+            todayHours: 0,
+            todayPaceSeconds: 0,
+        };
     };
-    let getStudyStats = async () => {
-        return await this.statisticsService.getStudyStats();
+    const onOpenStatistics = () => {
+        openStatisticsModal();
     };
-    let onOpenStatistics = () => {
-        this.openStatisticsModal();
+    const getDatabase = () => {
+        return db;
     };
-    let getDatabase = () => {
-        return this.db;
-    };
-    let getDeckSynchronizer = () => {
-        return this.deckSynchronizer;
+    const getDeckSynchronizer = () => {
+        return deckSynchronizer;
     };
 
     let isRefreshing = false;
@@ -117,6 +139,7 @@
     export function updateStatsById(deckId: string, newStats: DeckStats) {
         isUpdatingStats = true;
         stats.set(deckId, newStats);
+        // eslint-disable-next-line no-self-assign
         decks = decks;
         loadStudyStats().catch(console.error);
         isUpdatingStats = false;
@@ -125,6 +148,7 @@
     export function updateStats(newStats: Map<string, DeckStats>) {
         isUpdatingStats = true;
         stats = newStats;
+        // eslint-disable-next-line no-self-assign
         decks = decks;
         isUpdatingStats = false;
     }
@@ -132,7 +156,7 @@
         allDecks = newDecks;
         // Extract unique tags
         availableTags = [...new Set(newDecks.map((deck) => deck.tag))].filter(
-            (tag) => tag
+            (tag) => tag,
         );
         applyFilter();
     }
@@ -145,7 +169,7 @@
             decks = allDecks.filter(
                 (deck) =>
                     deck.name.toLowerCase().includes(filter) ||
-                    deck.tag.toLowerCase().includes(filter)
+                    deck.tag.toLowerCase().includes(filter),
             );
         }
     }
@@ -167,7 +191,7 @@
         filteredSuggestions = availableTags.filter(
             (tag) =>
                 tag.toLowerCase().includes(filter) &&
-                tag.toLowerCase() !== filter
+                tag.toLowerCase() !== filter,
         );
         showSuggestions = filteredSuggestions.length > 0;
     }
@@ -206,16 +230,20 @@
     }
 
     async function loadStudyStats() {
-        if (getStudyStats) {
-            const newStats = await getStudyStats();
-            studyStats = {
-                totalHours: newStats?.totalHours ?? 0,
-                pastMonthHours: newStats?.pastMonthHours ?? 0,
-                pastWeekHours: newStats?.pastWeekHours ?? 0,
-                todayCards: newStats?.todayCards ?? 0,
-                todayHours: newStats?.todayHours ?? 0,
-                todayPaceSeconds: newStats?.todayPaceSeconds ?? 0,
-            };
+        if (getStudyStats && statisticsService) {
+            try {
+                const newStats = await getStudyStats();
+                studyStats = {
+                    totalHours: newStats?.totalHours ?? 0,
+                    pastMonthHours: newStats?.pastMonthHours ?? 0,
+                    pastWeekHours: newStats?.pastWeekHours ?? 0,
+                    todayCards: newStats?.todayCards ?? 0,
+                    todayHours: newStats?.todayHours ?? 0,
+                    todayPaceSeconds: newStats?.todayPaceSeconds ?? 0,
+                };
+            } catch (error) {
+                console.error("Error loading study stats:", error);
+            }
         }
     }
 
@@ -246,7 +274,7 @@
         newDecks?: Deck[],
         newStats?: Map<string, DeckStats>,
         singleDeckId?: string,
-        singleDeckStats?: DeckStats
+        singleDeckStats?: DeckStats,
     ) {
         if (newDecks) {
             updateDecks(newDecks);
@@ -364,20 +392,20 @@
             if (dropdownEventListeners.click) {
                 document.addEventListener(
                     "click",
-                    dropdownEventListeners.click
+                    dropdownEventListeners.click,
                 );
             }
             if (dropdownEventListeners.scroll) {
                 window.addEventListener(
                     "scroll",
                     dropdownEventListeners.scroll,
-                    true
+                    true,
                 );
             }
             if (dropdownEventListeners.resize) {
                 window.addEventListener(
                     "resize",
-                    dropdownEventListeners.resize
+                    dropdownEventListeners.resize,
                 );
             }
         }, 0);
@@ -393,20 +421,20 @@
             if (dropdownEventListeners.click) {
                 document.removeEventListener(
                     "click",
-                    dropdownEventListeners.click
+                    dropdownEventListeners.click,
                 );
             }
             if (dropdownEventListeners.scroll) {
                 window.removeEventListener(
                     "scroll",
                     dropdownEventListeners.scroll,
-                    true
+                    true,
                 );
             }
             if (dropdownEventListeners.resize) {
                 window.removeEventListener(
                     "resize",
-                    dropdownEventListeners.resize
+                    dropdownEventListeners.resize,
                 );
             }
 
@@ -431,11 +459,11 @@
                 // Update the local deck config
                 const updatedDecks = await db.getAllDecks();
                 const updatedDeck = updatedDecks.find(
-                    (d: Deck) => d.id === deckId
+                    (d: Deck) => d.id === deckId,
                 );
                 if (updatedDeck) {
                     const deckIndex = allDecks.findIndex(
-                        (d: Deck) => d.id === deckId
+                        (d: Deck) => d.id === deckId,
                     );
                     if (deckIndex !== -1) {
                         allDecks[deckIndex] = updatedDeck;
@@ -443,7 +471,7 @@
                         allDecks = [...allDecks];
                     }
                 }
-            }
+            },
         );
         modal.open();
     }
@@ -558,12 +586,12 @@
                                 on:click={(e) =>
                                     handleTouchClick(
                                         () => selectSuggestion(tag),
-                                        e
+                                        e,
                                     )}
                                 on:touchend={(e) =>
                                     handleTouchClick(
                                         () => selectSuggestion(tag),
-                                        e
+                                        e,
                                     )}
                             >
                                 {tag}
@@ -583,12 +611,12 @@
                                 on:click={(e) =>
                                     handleTouchClick(
                                         () => selectSuggestion(tag),
-                                        e
+                                        e,
                                     )}
                                 on:touchend={(e) =>
                                     handleTouchClick(
                                         () => selectSuggestion(tag),
-                                        e
+                                        e,
                                     )}
                             >
                                 {tag}
@@ -630,12 +658,12 @@
                                     on:click={(e) =>
                                         handleTouchClick(
                                             () => handleDeckClick(deck),
-                                            e
+                                            e,
                                         )}
                                     on:touchend={(e) =>
                                         handleTouchClick(
                                             () => handleDeckClick(deck),
-                                            e
+                                            e,
                                         )}
                                     on:keydown={(e) =>
                                         e.key === "Enter" &&
@@ -685,12 +713,12 @@
                                     on:click={(e) =>
                                         handleTouchClick(
                                             () => handleConfigClick(deck, e),
-                                            e
+                                            e,
                                         )}
                                     on:touchend={(e) =>
                                         handleTouchClick(
                                             () => handleConfigClick(deck, e),
-                                            e
+                                            e,
                                         )}
                                     title="Configure deck settings"
                                     aria-label="Configure {deck.name}"
@@ -728,7 +756,7 @@
         {#if studyStats.todayCards > 0}
             <div class="decks-today-summary">
                 Studied {studyStats.todayCards} cards in {formatHours(
-                    studyStats.todayHours
+                    studyStats.todayHours,
                 )} today ({formatPace(studyStats.todayPaceSeconds)})
             </div>
         {/if}

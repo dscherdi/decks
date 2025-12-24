@@ -12,20 +12,14 @@
     import CardRetrievabilityChart from "./CardRetrievabilityChart.svelte";
     import TrueRetentionTable from "./TrueRetentionTable.svelte";
     import FutureDueChart from "./FutureDueChart.svelte";
-    import type {
-        Statistics,
-        ReviewLog,
-        Flashcard,
-    } from "../../database/types";
+    import type { Statistics } from "../../database/types";
 
     import { StatisticsService } from "../../services/StatisticsService";
-    import type { DecksSettings } from "../../settings";
     import { Logger } from "@/utils/logging";
 
     export let statisticsService: StatisticsService;
     export let deckFilter = "all";
     export let logger: Logger;
-    export const settings: DecksSettings = {} as DecksSettings;
 
     const dispatch = createEventDispatcher();
 
@@ -33,13 +27,13 @@
     let statistics: Statistics | null = null;
     let selectedDeckFilter = deckFilter; // "all", "tag:tagname", or "deck:deckid"
     let selectedTimeframe = "12months"; // "12months" or "all"
-    let availableDecks: any[] = [];
+    let availableDecks: { id: string; name: string; tag: string }[] = [];
     let availableTags: string[] = [];
 
     // Computed deck IDs based on current filter
     $: selectedDeckIds = getDeckIdsFromFilter(
         selectedDeckFilter,
-        availableDecks
+        availableDecks,
     );
     let heatmapComponent: ReviewHeatmap;
     let deckFilterContainer: HTMLElement;
@@ -50,10 +44,36 @@
     let lastEventType = "";
 
     // Derived statistics - computed after loading
-    let todayStats: any = null;
-    let weekStats: any = null;
-    let monthStats: any = null;
-    let yearStats: any = null;
+    let todayStats: {
+        date: string;
+        reviews: number;
+        timeSpent: number;
+        newCards: number;
+        learningCards: number;
+        reviewCards: number;
+        correctRate: number;
+    } | null = null;
+    let weekStats: {
+        reviews: number;
+        timeSpent: number;
+        newCards: number;
+        reviewCards: number;
+        correctRate: number;
+    } | null = null;
+    let monthStats: {
+        reviews: number;
+        timeSpent: number;
+        newCards: number;
+        reviewCards: number;
+        correctRate: number;
+    } | null = null;
+    let yearStats: {
+        reviews: number;
+        timeSpent: number;
+        newCards: number;
+        reviewCards: number;
+        correctRate: number;
+    } | null = null;
 
     onMount(async () => {
         loading = true;
@@ -117,7 +137,7 @@
                         .onChange((value: string) => {
                             selectedTimeframe = value;
                             handleFilterChange();
-                        })
+                        }),
                 );
         }
     }
@@ -125,14 +145,14 @@
     async function loadDecksAndTags() {
         try {
             logger.debug(
-                "[StatisticsUI] Getting available decks and tags from StatisticsService..."
+                "[StatisticsUI] Getting available decks and tags from StatisticsService...",
             );
             const decksAndTags =
                 await statisticsService.getAvailableDecksAndTags();
             availableDecks = decksAndTags.decks;
             availableTags = decksAndTags.tags;
             logger.debug(
-                `[StatisticsUI] Retrieved ${availableDecks.length} decks and ${availableTags.length} tags`
+                `[StatisticsUI] Retrieved ${availableDecks.length} decks and ${availableTags.length} tags`,
             );
         } catch (error) {
             logger.error("[StatisticsUI] Error loading decks and tags:", error);
@@ -158,17 +178,17 @@
     async function loadStatistics() {
         try {
             logger.debug(
-                `[StatisticsUI] Getting overall statistics (filter: ${selectedDeckFilter}, timeframe: ${selectedTimeframe})...`
+                `[StatisticsUI] Getting overall statistics (filter: ${selectedDeckFilter}, timeframe: ${selectedTimeframe})...`,
             );
 
             statistics = await statisticsService.getOverallStatistics(
                 selectedDeckFilter,
-                selectedTimeframe
+                selectedTimeframe,
             );
 
             logger.debug(
                 "[StatisticsUI] Statistics loaded successfully:",
-                statistics
+                statistics,
             );
             logger.debug("[StatisticsUI] Forecast data:", statistics?.forecast);
             logger.debug("[StatisticsUI] Card stats:", statistics?.cardStats);
@@ -272,7 +292,7 @@
         const dueToday = statisticsService.getDueToday(statistics);
         logger.debug(
             `[StatisticsUI] Due today: ${dueToday}`,
-            statistics?.forecast
+            statistics?.forecast,
         );
         return dueToday;
     }
@@ -281,7 +301,7 @@
         const dueTomorrow = statisticsService.getDueTomorrow(statistics);
         logger.debug(
             `[StatisticsUI] Due tomorrow: ${dueTomorrow}`,
-            statistics?.forecast
+            statistics?.forecast,
         );
         return dueTomorrow;
     }
@@ -290,7 +310,10 @@
         return statisticsService.getMaturityRatio(statistics).toFixed(1) + "%";
     }
 
-    function getDeckIdsFromFilter(filter: string, decks: any[]): string[] {
+    function getDeckIdsFromFilter(
+        filter: string,
+        decks: { id: string; name: string; tag: string }[],
+    ): string[] {
         if (filter === "all") {
             return decks.map((deck) => deck.id);
         } else if (filter.startsWith("deck:")) {
@@ -813,12 +836,24 @@
                 <ReviewHeatmap
                     bind:this={heatmapComponent}
                     getReviewCounts={async (days) => {
-                        const counts =
-                            await statisticsService.getReviewCountsByDate(
-                                days,
-                                selectedDeckIds
+                        if (!statisticsService) {
+                            console.error("StatisticsService is not available");
+                            return new Map();
+                        }
+                        try {
+                            const counts =
+                                await statisticsService.getReviewCountsByDate(
+                                    days,
+                                    selectedDeckIds,
+                                );
+                            return new Map(Object.entries(counts));
+                        } catch (error) {
+                            console.error(
+                                "Error getting review counts:",
+                                error,
                             );
-                        return new Map(Object.entries(counts));
+                            return new Map();
+                        }
                     }}
                 />
             </div>
@@ -844,16 +879,6 @@
         </div>
     {/if}
 </div>
-{#if false}
-    <div
-        class="decks-deck-filter-container decks-timeframe-filter-container"
-    ></div>
-    <div class="decks-deck-filter-container">
-        <div class="decks-setting-item-control">
-            <div class="decks-dropdown"></div>
-        </div>
-    </div>
-{/if}
 
 <style>
     .decks-statistics-container {
@@ -1249,69 +1274,10 @@
         }
     }
 
-    /* Chart controls and descriptions */
-    .decks-chart-controls {
-        margin: 1rem 0;
-        display: flex;
-        gap: 1rem;
-        align-items: center;
-    }
+    /* Removed unused chart controls CSS selectors */
 
-    .decks-chart-controls label {
-        display: flex;
-        align-items: center;
-        gap: 0.5rem;
-        font-size: 0.9rem;
-        color: var(--text-normal);
-    }
-
-    .decks-chart-controls select {
-        padding: 0.25rem 0.5rem;
-        border: 1px solid var(--background-modifier-border);
-        border-radius: 4px;
-        background: var(--background-primary);
-        color: var(--text-normal);
-        font-size: 0.9rem;
-        min-width: 120px;
-    }
-
-    .decks-chart-controls select:focus {
-        outline: none;
-        border-color: var(--interactive-accent);
-        box-shadow: 0 0 0 2px var(--interactive-accent-hover);
-    }
-
-    .decks-chart-description {
-        margin: 0.5rem 0 1rem 0;
-        font-size: 0.9rem;
-        color: var(--text-muted);
-        line-height: 1.4;
-    }
-
-    /* Mobile responsiveness for charts */
+    /* Mobile responsive styles */
     @media (max-width: 768px) {
-        .decks-chart-controls {
-            flex-direction: column;
-            align-items: flex-start;
-            gap: 0.5rem;
-        }
-
-        .decks-chart-controls select {
-            min-width: 100px;
-        }
-    }
-
-    @media (max-width: 390px) {
-        .decks-timeframe-filter-container {
-            flex-direction: column;
-        }
-
-        .decks-deck-filter-container {
-            flex-direction: column;
-        }
-
-        /* Mobile responsive styles */
-        @media (max-width: 768px) {
             .decks-statistics-container {
                 padding: 12px;
             }
@@ -1391,6 +1357,5 @@
                 font-size: 16px;
                 min-height: 44px;
             }
-        }
     }
 </style>

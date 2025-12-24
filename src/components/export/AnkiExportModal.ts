@@ -1,185 +1,182 @@
-import { Modal, Notice } from "obsidian";
-import type { Deck, AnkiExportConfig } from "../../database/types";
-import type { DatabaseServiceInterface } from "../../database/DatabaseFactory";
+import { App, Modal, Notice } from "obsidian";
+import type { Deck, Flashcard, AnkiExportConfig } from "../../database/types";
+import type { IDatabaseService } from "../../database/DatabaseFactory";
 import type {
-    AnkiExportComponent,
-    ExportEventDetail,
+  AnkiExportComponent,
+  ExportEventDetail,
 } from "../../types/svelte-components";
 import AnkiExportUI from "./AnkiExportUI.svelte";
 
 export class AnkiExportModal extends Modal {
-    private deck: Deck;
-    private db: DatabaseServiceInterface;
-    private component: AnkiExportComponent | null = null;
-    private resizeHandler?: () => void;
+  private deck: Deck;
+  private db: IDatabaseService;
+  private component: AnkiExportComponent | null = null;
+  private resizeHandler?: () => void;
 
-    constructor(app: any, deck: Deck, db: DatabaseServiceInterface) {
-        super(app);
-        this.deck = deck;
-        this.db = db;
+  constructor(app: App, deck: Deck, db: IDatabaseService) {
+    super(app);
+    this.deck = deck;
+    this.db = db;
+  }
+
+  onOpen() {
+    const { contentEl } = this;
+    contentEl.empty();
+
+    // Add mobile-specific classes
+    const modalEl = this.containerEl.querySelector(".modal");
+    if (modalEl instanceof HTMLElement && window.innerWidth <= 768) {
+      modalEl.addClass("decks-modal");
+      if (window.innerWidth <= 768) {
+        modalEl.addClass("decks-modal-mobile");
+      } else {
+        modalEl.removeClass("decks-modal-mobile");
+      }
     }
 
-    onOpen() {
-        const { contentEl } = this;
-        contentEl.empty();
+    // Add CSS class for styling
+    contentEl.addClass("decks-anki-export-container");
 
-        // Add mobile-specific classes
-        const modalEl = this.containerEl.querySelector(".modal");
-        if (modalEl instanceof HTMLElement && window.innerWidth <= 768) {
-            modalEl.addClass("decks-modal");
-            if (window.innerWidth <= 768) {
-                modalEl.addClass("decks-modal-mobile");
-            } else {
-                modalEl.removeClass("decks-modal-mobile");
-            }
-        }
+    // Mount Svelte component
+    this.component = new AnkiExportUI({
+      target: contentEl,
+      props: {
+        deck: this.deck,
+      },
+    }) as AnkiExportComponent;
 
-        // Add CSS class for styling
-        contentEl.addClass("decks-anki-export-container");
+    // Listen to component events
+    this.component.$on("export", (event: CustomEvent<ExportEventDetail>) => {
+      const detail = event.detail;
+      const ankiConfig: AnkiExportConfig = {
+        noteType: detail.noteType,
+        tags: detail.tags,
+        ankiDeckName: detail.deckName,
+        separator: detail.separator,
+      };
+      this.handleExport(ankiConfig);
+    });
 
-        // Mount Svelte component
-        this.component = new AnkiExportUI({
-            target: contentEl,
-            props: {
-                deck: this.deck,
-            },
-        }) as AnkiExportComponent;
+    this.component.$on("cancel", () => {
+      this.close();
+    });
 
-        // Listen to component events
-        this.component.$on("export", (event: any) => {
-            const detail = event.detail as ExportEventDetail;
-            const ankiConfig: AnkiExportConfig = {
-                noteType: detail.noteType,
-                tags: detail.tags,
-                ankiDeckName: detail.deckName,
-                separator: detail.separator,
-            };
-            this.handleExport(ankiConfig);
-        });
-
-        this.component.$on("cancel", () => {
-            this.close();
-        });
-
-        // Handle window resize for mobile adaptation
-        const handleResize = () => {
-            const modalEl = this.containerEl.querySelector(".modal");
-            if (modalEl instanceof HTMLElement) {
-                if (window.innerWidth <= 768) {
-                    modalEl.addClass("decks-modal-mobile");
-                } else {
-                    modalEl.removeClass("decks-modal-mobile");
-                }
-            }
-        };
-
-        window.addEventListener("resize", handleResize);
-
-        // Store resize handler for cleanup
-        this.resizeHandler = handleResize;
-    }
-
-    private async handleExport(config: AnkiExportConfig) {
-        try {
-            // Get flashcards for this deck
-            const flashcards = await this.db.getFlashcardsByDeck(this.deck.id);
-
-            if (flashcards.length === 0) {
-                new Notice("No flashcards found in this deck to export");
-                return;
-            }
-
-            // Generate Anki package format
-            const ankiData = this.generateAnkiData(flashcards, config);
-
-            // Create and download file
-            await this.downloadAnkiFile(ankiData, config.ankiDeckName);
-
-            new Notice(
-                `Successfully exported ${flashcards.length} flashcards to Anki format`
-            );
-            this.close();
-        } catch (error) {
-            console.error("Error exporting to Anki:", error);
-            new Notice("Failed to export deck to Anki format");
-        }
-    }
-
-    private generateAnkiData(
-        flashcards: any[],
-        config: AnkiExportConfig
-    ): string {
-        // Create Anki-compatible format with configurable separators
-        const headers = ["Front", "Back"];
-        const rows = [headers.join(config.separator)];
-
-        flashcards.forEach((card) => {
-            const front = this.sanitizeForAnki(card.front, config.separator);
-            const back = this.sanitizeForAnki(card.back, config.separator);
-
-            rows.push([front, back].join(config.separator));
-        });
-
-        return rows.join("\n");
-    }
-
-    private sanitizeForAnki(text: string, separator: string): string {
-        // Remove markdown formatting and escape special characters
-        let sanitized = text
-            .replace(/\*\*(.*?)\*\*/g, "<b>$1</b>") // Bold
-            .replace(/\*(.*?)\*/g, "<i>$1</i>") // Italic
-            .replace(/`(.*?)`/g, "<code>$1</code>") // Code
-            .replace(/\n/g, "<br>") // Replace newlines with HTML breaks
-            .trim();
-
-        // Escape the field separator
-        if (separator === "\t") {
-            sanitized = sanitized.replace(/\t/g, " "); // Replace tabs with spaces
+    // Handle window resize for mobile adaptation
+    const handleResize = () => {
+      const modalEl = this.containerEl.querySelector(".modal");
+      if (modalEl instanceof HTMLElement) {
+        if (window.innerWidth <= 768) {
+          modalEl.addClass("decks-modal-mobile");
         } else {
-            sanitized = sanitized.replace(
-                new RegExp(`\\${separator}`, "g"),
-                `\\${separator}`
-            );
+          modalEl.removeClass("decks-modal-mobile");
         }
+      }
+    };
 
-        return sanitized;
+    window.addEventListener("resize", handleResize);
+
+    // Store resize handler for cleanup
+    this.resizeHandler = handleResize;
+  }
+
+  private async handleExport(config: AnkiExportConfig) {
+    try {
+      // Get flashcards for this deck
+      const flashcards = await this.db.getFlashcardsByDeck(this.deck.id);
+
+      if (flashcards.length === 0) {
+        new Notice("No flashcards found in this deck to export");
+        return;
+      }
+
+      // Generate Anki package format
+      const ankiData = this.generateAnkiData(flashcards, config);
+
+      // Create and download file
+      await this.downloadAnkiFile(ankiData, config.ankiDeckName);
+
+      new Notice(
+        `Successfully exported ${flashcards.length} flashcards to Anki format`,
+      );
+      this.close();
+    } catch (error) {
+      console.error("Error exporting to Anki:", error);
+      new Notice("Failed to export deck to Anki format");
+    }
+  }
+
+  private generateAnkiData(
+    flashcards: Flashcard[],
+    config: AnkiExportConfig,
+  ): string {
+    // Create Anki-compatible format with configurable separators
+    const headers = ["Front", "Back"];
+    const rows = [headers.join(config.separator)];
+
+    flashcards.forEach((card) => {
+      const front = this.sanitizeForAnki(card.front, config.separator);
+      const back = this.sanitizeForAnki(card.back, config.separator);
+
+      rows.push([front, back].join(config.separator));
+    });
+
+    return rows.join("\n");
+  }
+
+  private sanitizeForAnki(text: string, separator: string): string {
+    // Remove markdown formatting and escape special characters
+    let sanitized = text
+      .replace(/\*\*(.*?)\*\*/g, "<b>$1</b>") // Bold
+      .replace(/\*(.*?)\*/g, "<i>$1</i>") // Italic
+      .replace(/`(.*?)`/g, "<code>$1</code>") // Code
+      .replace(/\n/g, "<br>") // Replace newlines with HTML breaks
+      .trim();
+
+    // Escape the field separator
+    if (separator === "\t") {
+      sanitized = sanitized.replace(/\t/g, " "); // Replace tabs with spaces
+    } else {
+      sanitized = sanitized.replace(
+        new RegExp(`\\${separator}`, "g"),
+        `\\${separator}`,
+      );
     }
 
-    private async downloadAnkiFile(data: string, deckName: string) {
-        const fileName = `${deckName.replace(
-            /[^a-zA-Z0-9-_]/g,
-            "_"
-        )}_export.txt`;
+    return sanitized;
+  }
 
-        // Create blob and download
-        const blob = new Blob([data], { type: "text/plain;charset=utf-8" });
-        const url = URL.createObjectURL(blob);
+  private async downloadAnkiFile(data: string, deckName: string) {
+    const fileName = `${deckName.replace(/[^a-zA-Z0-9-_]/g, "_")}_export.txt`;
 
-        const link = document.createElement("a");
-        link.href = url;
-        link.download = fileName;
-        document.body.appendChild(link);
-        link.click();
-        document.body.removeChild(link);
+    // Create blob and download
+    const blob = new Blob([data], { type: "text/plain;charset=utf-8" });
+    const url = URL.createObjectURL(blob);
 
-        URL.revokeObjectURL(url);
+    const link = document.createElement("a");
+    link.href = url;
+    link.download = fileName;
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+
+    URL.revokeObjectURL(url);
+  }
+
+  onClose() {
+    const { contentEl } = this;
+
+    // Clean up resize handler
+    if (this.resizeHandler) {
+      window.removeEventListener("resize", this.resizeHandler);
+      this.resizeHandler = undefined;
     }
 
-    onClose() {
-        const { contentEl } = this;
-
-        // Clean up resize handler
-        if (this.resizeHandler) {
-            window.removeEventListener("resize", this.resizeHandler);
-            this.resizeHandler = undefined;
-        }
-
-        // Destroy Svelte component
-        if (this.component) {
-            this.component.$destroy();
-            this.component = null;
-        }
-
-        contentEl.empty();
+    // Destroy Svelte component
+    if (this.component) {
+      this.component.$destroy();
+      this.component = null;
     }
+
+    contentEl.empty();
+  }
 }

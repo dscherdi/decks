@@ -9,6 +9,7 @@
         Title,
         Tooltip,
         Legend,
+        type TooltipItem,
     } from "chart.js";
     import type { Flashcard } from "../../database/types";
     import { StatisticsService } from "@/services/StatisticsService";
@@ -30,7 +31,7 @@
     export let logger: Logger;
 
     export let flashcards: Flashcard[] = [];
-    export const showPercentiles: string = "50"; // "50", "95", "all"
+    export const showPercentiles = "50"; // "50", "95", "all"
 
     let canvas: HTMLCanvasElement;
     let chart: Chart | null = null;
@@ -76,7 +77,6 @@
         );
 
         // Create histogram buckets
-        const maxInterval = Math.max(...intervalDays);
         const buckets: { [key: string]: number } = {};
 
         // Define bucket ranges (in days)
@@ -116,7 +116,7 @@
 
         // Calculate percentiles if requested
         const sortedIntervals = intervalDays.sort((a, b) => a - b);
-        let annotations: any[] = [];
+        const annotations: any[] = []; // eslint-disable-line @typescript-eslint/no-explicit-any
 
         if (showPercentiles !== "all") {
             const percentile = parseInt(showPercentiles);
@@ -200,12 +200,12 @@
                     },
                     tooltip: {
                         callbacks: {
-                            label: function (context: any) {
-                                const value = context.raw as number;
+                            label: function (context: TooltipItem<"bar">) {
+                                const value = context.parsed.y;
                                 const dataset = context.dataset;
-                                const total = dataset.data.reduce(
-                                    (sum: number, val: any) =>
-                                        sum + (val as number),
+                                const total = (dataset.data as number[]).reduce(
+                                    (sum: number, val: number) =>
+                                        sum + val,
                                     0
                                 );
                                 const percentage =

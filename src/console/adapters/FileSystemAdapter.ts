@@ -130,7 +130,7 @@ export class NodeFileSystemAdapter implements IFileSystemAdapter {
  * Obsidian adapter wrapper for compatibility
  */
 export class ObsidianFileSystemAdapter implements IFileSystemAdapter {
-  constructor(private adapter: any) {}
+  constructor(private adapter: any) {} // eslint-disable-line @typescript-eslint/no-explicit-any
 
   async read(filePath: string): Promise<string> {
     return this.adapter.read(filePath);

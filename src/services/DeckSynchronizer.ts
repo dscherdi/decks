@@ -1,11 +1,10 @@
-import { Notice } from "obsidian";
-import { DatabaseServiceInterface } from "../database/DatabaseFactory";
 import { DeckManager } from "./DeckManager";
 import { yieldToUI } from "../utils/ui";
 import { Logger, formatTime } from "../utils/logging";
 import { DecksSettings } from "../settings";
 import { DataAdapter } from "obsidian";
 import { ProgressTracker } from "../utils/progress";
+import { IDatabaseService } from "../database/DatabaseFactory";
 
 export interface SyncProgress {
     message: string;
@@ -28,14 +27,14 @@ export interface SyncResult {
 }
 
 export class DeckSynchronizer {
-    private db: DatabaseServiceInterface;
+    private db: IDatabaseService;
     private deckManager: DeckManager;
-    private isSyncing: boolean = false;
+    private isSyncing = false;
     private logger: Logger;
     private progressTracker: ProgressTracker;
 
     constructor(
-        db: DatabaseServiceInterface,
+        db: IDatabaseService,
         deckManager: DeckManager,
         settings: DecksSettings,
         adapter: DataAdapter,
@@ -57,7 +56,7 @@ export class DeckSynchronizer {
     /**
      * Perform a sync with progress tracker
      */
-    async performSync(forceSync: boolean = false): Promise<void> {
+    async performSync(forceSync = false): Promise<void> {
         const result = await this.sync({
             forceSync,
             showProgress: true,
@@ -299,7 +298,7 @@ export class DeckSynchronizer {
      */
     async syncDeck(
         deckId: string,
-        forceSync: boolean = false,
+        forceSync = false,
         onProgress?: (progress: { message: string; percentage: number }) => void
     ): Promise<void> {
         this.logger.debug(`Syncing specific deck ID: ${deckId}`);

@@ -3,7 +3,7 @@
 import * as readline from "readline";
 import * as path from "path";
 import { ConsoleCore, ReviewSession } from "./core/ConsoleCore";
-import { Flashcard, Deck } from "../database/types";
+import { Deck } from "../database/types";
 
 export interface CLIOptions {
   vaultPath?: string;
@@ -262,7 +262,7 @@ export class FlashcardsCLI {
           console.log(`2. Hard  (${preview.hard.interval})`);
           console.log(`3. Good  (${preview.good.interval})`);
           console.log(`4. Easy  (${preview.easy.interval})`);
-        } catch (error) {
+        } catch {
           console.log("\n⏰ Review options: 1=Again, 2=Hard, 3=Good, 4=Easy");
         }
         console.log("q. Quit session");
@@ -276,9 +276,7 @@ export class FlashcardsCLI {
 
         const ratingNum = parseInt(rating);
         if (ratingNum >= 1 && ratingNum <= 4) {
-          const reviewStartTime = Date.now();
           await this.core.reviewCard(card.id, ratingNum as 1 | 2 | 3 | 4);
-          const reviewTime = Date.now() - reviewStartTime;
 
           const ratingLabels = ["", "Again", "Hard", "Good", "Easy"];
           console.log(`✅ Rated: ${ratingLabels[ratingNum]}`);

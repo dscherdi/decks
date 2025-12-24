@@ -7,7 +7,6 @@
         PieController,
         Tooltip,
         Legend,
-        type ChartConfiguration,
     } from "chart.js";
     import type { Flashcard } from "../../database/types";
     import { getCardMaturityType } from "../../database/types";
@@ -23,7 +22,8 @@
             Tooltip,
             Legend
         );
-    } catch (e) {
+    // eslint-disable-next-line @typescript-eslint/no-unused-vars
+    } catch (_e) {
         console.log("[CardCountsChart] First registration, skip unregister");
     }
 
@@ -40,7 +40,7 @@
     export let logger: Logger;
 
     export let flashcards: Flashcard[] = [];
-    export let showSuspended: boolean = true;
+    export let showSuspended = true;
 
     let canvas: HTMLCanvasElement;
     let chart: Chart | null = null;

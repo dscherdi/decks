@@ -1,5 +1,3 @@
-import { DEFAULT_FSRS_PARAMETERS } from "./algorithm/fsrs-weights";
-
 export interface DecksSettings {
   // Review Session Settings
   review: {

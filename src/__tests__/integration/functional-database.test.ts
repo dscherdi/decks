@@ -1,6 +1,7 @@
 import { MainDatabaseService } from "../../database/MainDatabaseService";
 import { DataAdapter } from "obsidian";
 import { Deck, Flashcard, ReviewLog } from "../../database/types";
+import { SqlJsValue } from "../../database/sql-types";
 import { FSRS } from "../../algorithm/fsrs";
 import { Scheduler } from "../../services/Scheduler";
 import { DEFAULT_FSRS_PARAMETERS } from "../../algorithm/fsrs-weights";
@@ -86,8 +87,8 @@ class RealTestAdapter {
 
 // Mock SQL.js with functional database operations
 const createMockDatabase = () => {
-  const tables: { [key: string]: any[] } = {};
-  const indices: { [key: string]: Map<any, any[]> } = {};
+  const tables: { [key: string]: SqlJsValue[][] } = {};
+  const indices: { [key: string]: Map<SqlJsValue, SqlJsValue[]> } = {};
 
   return {
     prepare: jest.fn((sql: string) => {
@@ -107,7 +108,7 @@ const createMockDatabase = () => {
           return [];
         }),
         free: jest.fn(),
-        run: jest.fn((params: any[]) => {
+        run: jest.fn((params: SqlJsValue[]) => {
           // Handle INSERT operations
           if (sql.includes("INSERT OR REPLACE INTO decks")) {
             if (!tables.decks) tables.decks = [];

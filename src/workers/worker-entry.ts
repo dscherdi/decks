@@ -2,10 +2,11 @@
 // Handles only: init, close, executesql, export
 
 // Worker environment type declarations
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
 declare const self: any;
 
 // Import SQL.js types only (not the runtime code)
-import type { Database, InitSqlJsStatic, SqlJsStatic } from "sql.js";
+import type { Database, InitSqlJsStatic, SqlJsStatic, SqlValue } from "sql.js";
 
 // SQL.js runtime will be loaded dynamically
 declare const initSqlJs: InitSqlJsStatic;
@@ -32,7 +33,7 @@ export interface QueryConfig {
 export interface DatabaseWorkerMessage {
   id: string;
   type: string;
-  data?: any;
+  data?: object;
   sqlJsCode?: string;
   wasmBytes?: ArrayBuffer;
 }
@@ -40,7 +41,7 @@ export interface DatabaseWorkerMessage {
 export interface DatabaseWorkerResponse {
   id: string;
   success: boolean;
-  data?: any;
+  data?: string | number | object;
   error?: string;
 }
 
@@ -81,7 +82,7 @@ class SimpleDatabaseWorker {
         self.postMessage({ type: "dbg", wasmLen: wasmBytes.byteLength });
 
         // Initialize with explicit wasm location
-        // eslint-disable-next-line no-undef
+         
         this.SQL = await initSqlJs({
           locateFile: () => wasmUrl,
         });
@@ -114,7 +115,7 @@ class SimpleDatabaseWorker {
     }
   }
 
-  executeSql(sql: string, params: any[] = []): void {
+  executeSql(sql: string, params: SqlValue[] = []): void {
     if (!this.db || !this.initialized) {
       throw new Error("Database not initialized");
     }
@@ -130,13 +131,13 @@ class SimpleDatabaseWorker {
     }
   }
 
-  querySql(sql: string, params: any[] = [], config?: QueryConfig): any[] {
+  querySql(sql: string, params: SqlValue[] = [], config?: QueryConfig): unknown[] {
     if (!this.db || !this.initialized) {
       throw new Error("Database not initialized");
     }
 
     const stmt = this.db.prepare(sql);
-    const results: any[] = [];
+    const results: unknown[] = [];
 
     try {
       stmt.bind(params);
@@ -197,7 +198,7 @@ class SimpleDatabaseWorker {
     }
   }
 
-  queryBackupDatabase(backupDbId: string, sql: string): any[] {
+  queryBackupDatabase(backupDbId: string, sql: string): unknown[] {
     const backupDb = this.backupDatabases.get(backupDbId);
     if (!backupDb) {
       throw new Error(`Backup database not found: ${backupDbId}`);
@@ -270,7 +271,7 @@ class SimpleDatabaseWorker {
    */
   parseFlashcardsFromContent(
     content: string,
-    headerLevel: number = 2,
+    headerLevel = 2,
   ): ParsedFlashcard[] {
     return FlashcardParser.parseFlashcardsFromContent(content, headerLevel);
   }
@@ -434,15 +435,19 @@ self.onmessage = async (event: MessageEvent<DatabaseWorkerMessage>) => {
   const { id, type, data, sqlJsCode, wasmBytes } = event.data;
 
   try {
-    let result: any;
+    let result: unknown;
 
     switch (type) {
       case "init":
         if (sqlJsCode && wasmBytes) {
-          await worker.initialize(data?.data, sqlJsCode, wasmBytes);
+          await worker.initialize(
+            (data as { data?: Uint8Array })?.data,
+            sqlJsCode,
+            wasmBytes,
+          );
 
           // Handle fresh database creation or migration check
-          if (!data?.data) {
+          if (!(data as { data?: Uint8Array })?.data) {
             worker.createFreshDatabase();
           } else {
             worker.checkMigrationNeeded();
@@ -454,12 +459,35 @@ self.onmessage = async (event: MessageEvent<DatabaseWorkerMessage>) => {
         }
 
       case "executeSql":
-        worker.executeSql(data.sql, data.params);
-        result = { executed: true };
+        if (
+          data &&
+          typeof data === "object" &&
+          "sql" in data &&
+          "params" in data
+        ) {
+          const execData = data as { sql: string; params?: SqlValue[] };
+          worker.executeSql(
+            execData.sql,
+            execData.params,
+          );
+          result = { executed: true };
+        }
         break;
 
       case "querySql":
-        result = worker.querySql(data.sql, data.params, data.config);
+        if (
+          data &&
+          typeof data === "object" &&
+          "sql" in data &&
+          "params" in data
+        ) {
+          const queryData = data as { sql: string; params?: SqlValue[]; config?: QueryConfig };
+          result = worker.querySql(
+            queryData.sql,
+            queryData.params,
+            queryData.config,
+          );
+        }
         break;
 
       case "export":
@@ -472,42 +500,76 @@ self.onmessage = async (event: MessageEvent<DatabaseWorkerMessage>) => {
         break;
 
       case "createBackupDb":
-        result = {
-          backupDbId: worker.createBackupDatabase(
-            data.backupData instanceof Uint8Array
-              ? data.backupData
-              : new Uint8Array(Object.values(data.backupData)),
-          ),
-        };
+        if (data && typeof data === "object" && "backupData" in data) {
+          const backupData = (
+            data as { backupData: Uint8Array | Record<string, number> }
+          ).backupData;
+          result = {
+            backupDbId: worker.createBackupDatabase(
+              backupData instanceof Uint8Array
+                ? backupData
+                : new Uint8Array(Object.values(backupData)),
+            ),
+          };
+        }
         break;
 
       case "queryBackupDb":
-        result = {
-          data: worker.queryBackupDatabase(data.backupDbId, data.sql),
-        };
+        if (
+          data &&
+          typeof data === "object" &&
+          "backupDbId" in data &&
+          "sql" in data
+        ) {
+          result = {
+            data: worker.queryBackupDatabase(
+              (data as { backupDbId: string }).backupDbId,
+              (data as { sql: string }).sql,
+            ),
+          };
+        }
         break;
 
       case "closeBackupDb":
-        worker.closeBackupDatabase(data.backupDbId);
-        result = { success: true };
+        if (data && typeof data === "object" && "backupDbId" in data) {
+          worker.closeBackupDatabase(
+            (data as { backupDbId: string }).backupDbId,
+          );
+          result = { success: true };
+        }
         break;
 
       case "syncFlashcardsForDeck":
-        result = worker.syncFlashcardsForDeck(data);
+        if (data && typeof data === "object") {
+          result = worker.syncFlashcardsForDeck(data as SyncData);
+        }
         break;
 
       case "parseFlashcardsFromContent":
-        result = {
-          flashcards: FlashcardParser.parseFlashcardsFromContent(
-            data.content,
-            data.headerLevel,
-          ),
-        };
+        if (
+          data &&
+          typeof data === "object" &&
+          "content" in data &&
+          "headerLevel" in data
+        ) {
+          result = {
+            flashcards: FlashcardParser.parseFlashcardsFromContent(
+              (data as { content: string }).content,
+              (data as { headerLevel: number }).headerLevel,
+            ),
+          };
+        }
         break;
 
       case "syncWithDisk":
-        worker.syncWithDisk(new Uint8Array(data.buffer));
-        result = { success: true };
+        if (data && typeof data === "object" && "buffer" in data) {
+          worker.syncWithDisk(
+            new Uint8Array(
+              (data as { buffer: ArrayBuffer | number[] }).buffer as number[],
+            ),
+          );
+          result = { success: true };
+        }
         break;
 
       default:
@@ -517,7 +579,7 @@ self.onmessage = async (event: MessageEvent<DatabaseWorkerMessage>) => {
     const response: DatabaseWorkerResponse = {
       id,
       success: true,
-      data: result,
+      data: result as string | number | object | undefined,
     };
 
     self.postMessage(response);

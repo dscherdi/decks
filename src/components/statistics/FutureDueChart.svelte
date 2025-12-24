@@ -16,7 +16,6 @@
     } from "chart.js";
     import type { Statistics, Flashcard } from "../../database/types";
     import {
-        FutureDueData,
         StatisticsService,
         type BacklogForecastData,
     } from "../../services/StatisticsService";
@@ -43,9 +42,9 @@
     export let logger: Logger;
 
     let canvas: HTMLCanvasElement;
-    let chart: Chart | null = null;
-    let showBacklog: boolean = true;
-    let timeframe: string = "3m"; // "1m", "3m", "1y", "all"
+    const chart: Chart | null = null;
+    let showBacklog = true;
+    let timeframe = "3m"; // "1m", "3m", "1y", "all"
 
     onMount(async () => {
         await createChart();
@@ -154,6 +153,7 @@
                 pointBorderColor: "#ffffff",
                 pointBorderWidth: 2,
                 yAxisID: "y1",
+                // eslint-disable-next-line @typescript-eslint/no-explicit-any
             } as any);
         }
 
@@ -167,7 +167,6 @@
         if (!canvas) return;
 
         // const data = await processChartData();
-        const data = { labels: [], datasets: [] };
         try {
             // TODO: Bug causes obsidian to hang
             // chart = new Chart(canvas, {
@@ -243,14 +242,14 @@
             //                 cornerRadius: 8,
             //                 displayColors: false,
             //                 callbacks: {
-            //                     title: function (tooltipItems) {
+            //                     title: function (tooltipItems: TooltipItem<"line">[]) {
             //                         const label = tooltipItems[0].label;
             //                         if (label === "Today") return "Today";
             //                         if (label === "Tomorrow") return "Tomorrow";
             //                         return `Day ${label}`;
             //                     },
-            //                     label: function (context) {
-            //                         const value = context.raw as number;
+            //                     label: function (context: TooltipItem<"line">) {
+            //                         const value = context.parsed.y;
             //                         const datasetLabel =
             //                             context.dataset.label || "";
             //                         if (datasetLabel.includes("Cumulative")) {

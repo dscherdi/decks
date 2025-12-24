@@ -18,7 +18,7 @@ export class ProgressTracker {
         }
     }
 
-    update(message: string, progress: number = 0): void {
+    update(message: string, progress = 0): void {
         if (this.progressNotice) {
             const progressBar = this.createProgressBar(progress);
             this.progressNotice.setMessage(`${message}\n${progressBar}`);

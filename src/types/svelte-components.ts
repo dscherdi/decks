@@ -1,12 +1,17 @@
 // Simplified Svelte component types that work with TypeScript
-import type { Deck, DeckConfig, DeckStats } from "../database/types";
-import type { Flashcard } from "../database/types";
-import type { RatingLabel } from "../algorithm/fsrs";
+import type { Deck, DeckStats } from "../database/types";
+import type { IDatabaseService } from "../database/DatabaseFactory";
+import type { StatisticsService } from "../services/StatisticsService";
+import type { DeckSynchronizer } from "../services/DeckSynchronizer";
+import type { App } from "obsidian";
 
 // Base Svelte component interface
 export interface SvelteComponentInstance {
-  $set(props: Record<string, any>): void;
-  $on(event: string, callback: (event: CustomEvent<any>) => void): () => void;
+  $set(props: Record<string, string | number | boolean | null>): void;
+  $on(
+    event: string,
+    callback: (event: CustomEvent<string | number | boolean | object>) => void,
+  ): () => void;
   $destroy(): void;
 }
 
@@ -23,13 +28,12 @@ export interface CompleteEventDetail {
   reviewed: number;
 }
 
-// Component-specific interfaces extending base
 export interface AnkiExportComponent extends SvelteComponentInstance {
-  // Typed event handlers
+  exportData(): void;
 }
 
 export interface DeckConfigComponent extends SvelteComponentInstance {
-  // Typed event handlers
+  saveConfig(): void;
 }
 
 export interface DeckListPanelComponent extends SvelteComponentInstance {
@@ -41,13 +45,27 @@ export interface DeckListPanelComponent extends SvelteComponentInstance {
   ): Promise<void>;
 }
 
+// Constructor interface for DeckListPanel
+export interface DeckListPanelConstructor {
+  new (options: {
+    target: Element;
+    props?: {
+      statisticsService: StatisticsService;
+      deckSynchronizer: DeckSynchronizer;
+      db: IDatabaseService;
+      app: App;
+      onDeckClick: (deck: Deck) => void;
+      onRefresh: () => Promise<void>;
+      onForceRefreshDeck: (deckId: string) => Promise<void>;
+      openStatisticsModal: () => void;
+    };
+  }): DeckListPanelComponent;
+}
+
 export interface FlashcardReviewComponent extends SvelteComponentInstance {
-  // Typed event handlers
+  completeReview(): void;
 }
 
 export interface StatisticsComponent extends SvelteComponentInstance {
-  // Typed event handlers
+  refreshData(): void;
 }
-
-// Component interfaces provide type safety without needing helper functions
-// Direct casting with 'as ComponentType' is simpler and more transparent

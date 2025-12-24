@@ -12,6 +12,7 @@
         Title,
         Tooltip,
         Legend,
+        type TooltipItem,
     } from "chart.js";
     import type { Statistics } from "../../database/types";
 
@@ -30,11 +31,11 @@
     );
 
     export let statistics: Statistics | null = null;
-    export let timeframe: string = "1m"; // "1m", "3m", "1y", "all"
+    export let timeframe = "1m"; // "1m", "3m", "1y", "all"
 
     let canvas: HTMLCanvasElement;
     let chart: Chart | null = null;
-    let showBacklogCurve: boolean = true;
+    let showBacklogCurve = true;
 
     onMount(() => {
         createChart();
@@ -103,7 +104,7 @@
             };
         }
 
-        const labels = forecastData.map((day, index) => {
+        const labels = forecastData.map((day, _index) => {
             const originalIndex = statistics!.forecast.indexOf(day);
             if (originalIndex === 0) return "Today";
             if (originalIndex === 1) return "Tomorrow";
@@ -149,6 +150,7 @@
                 pointBorderColor: "rgb(255, 255, 255)",
                 pointBorderWidth: 1,
                 yAxisID: "y1",
+                // eslint-disable-next-line @typescript-eslint/no-explicit-any
             } as any);
         }
 
@@ -221,8 +223,8 @@
                             mode: "index",
                             intersect: false,
                             callbacks: {
-                                label: function (context) {
-                                    const value = context.raw as number;
+                                label: function (context: TooltipItem<"bar" | "line">) {
+                                    const value = context.parsed.y;
                                     const datasetLabel =
                                         context.dataset.label || "";
 
@@ -236,7 +238,7 @@
                                         return `${datasetLabel}: ${value} ${plural} due`;
                                     }
                                 },
-                                title: function (tooltipItems) {
+                                title: function (tooltipItems: TooltipItem<"bar" | "line">[]) {
                                     const label = tooltipItems[0].label;
                                     if (label === "Today") return "Today";
                                     if (label === "Tomorrow") return "Tomorrow";

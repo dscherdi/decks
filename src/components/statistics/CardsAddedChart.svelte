@@ -9,6 +9,7 @@
         Title,
         Tooltip,
         Legend,
+        type TooltipItem,
     } from "chart.js";
     import type { ReviewLog } from "../../database/types";
     import { StatisticsService } from "@/services/StatisticsService";
@@ -30,7 +31,7 @@
     export let logger: Logger;
 
     export let reviewLogs: ReviewLog[] = [];
-    export let timeframe: string = "1m"; // "1m", "3m", "1y", "all"
+    export let timeframe = "1m"; // "1m", "3m", "1y", "all"
 
     let canvas: HTMLCanvasElement;
     let chart: Chart | null = null;
@@ -197,12 +198,12 @@
                     },
                     tooltip: {
                         callbacks: {
-                            label: function (context) {
-                                const value = context.raw as number;
+                            label: function (context: TooltipItem<"bar">) {
+                                const value = context.parsed.y;
                                 const plural = value === 1 ? "card" : "cards";
                                 return `${context.dataset.label}: ${value} ${plural}`;
                             },
-                            afterLabel: function (context) {
+                            afterLabel: function (_context: TooltipItem<"bar">) {
                                 return "Based on first review date";
                             },
                         },

@@ -6,10 +6,10 @@ import {
   Modal,
   DropdownComponent,
 } from "obsidian";
-import { DecksSettings } from "../settings";
-import { BackupService } from "../services/BackupService";
+import { DecksSettings } from "../../settings";
+import { BackupService } from "../../services/BackupService";
 import DecksPlugin from "@/main";
-import { DatabaseServiceInterface } from "@/database/DatabaseFactory";
+import { IDatabaseService } from "@/database/DatabaseFactory";
 import { Logger } from "@/utils/logging";
 
 export class DecksSettingTab extends PluginSettingTab {
@@ -23,14 +23,14 @@ export class DecksSettingTab extends PluginSettingTab {
   private purgeDatabase: () => Promise<void>;
   private backupService: BackupService;
   private plugin: DecksPlugin;
-  private db: DatabaseServiceInterface;
+  private db: IDatabaseService;
   private logger: Logger;
 
   constructor(
     app: App,
     plugin: DecksPlugin,
     settings: DecksSettings,
-    db: DatabaseServiceInterface,
+    db: IDatabaseService,
     saveSettings: () => Promise<void>,
     logger: Logger,
     performSync: (force?: boolean) => Promise<void>,

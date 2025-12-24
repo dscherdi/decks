@@ -12,12 +12,12 @@ export class BackupService {
   private adapter: DataAdapter;
   private backupDir: string;
   private maxBackups = 5;
-  private debugLog: (message: string, ...args: any[]) => void;
+  private debugLog: (message: string, ...args: unknown[]) => void;
 
   constructor(
     adapter: DataAdapter,
     vaultConfigDir: string,
-    debugLog: (message: string, ...args: any[]) => void,
+    debugLog: (message: string, ...args: unknown[]) => void,
   ) {
     this.adapter = adapter;
     this.backupDir = `${vaultConfigDir}/plugins/decks/backups`;

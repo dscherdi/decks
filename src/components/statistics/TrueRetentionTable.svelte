@@ -18,7 +18,7 @@
 
     function calculateRetentionStats(
         logs: ReviewLog[] = reviewLogs,
-        cards: Flashcard[] = flashcards
+        _cards: Flashcard[] = flashcards
     ): RetentionStats {
         if (!logs || logs.length === 0) {
             return {

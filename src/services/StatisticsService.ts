@@ -3,8 +3,6 @@ import type {
   Statistics,
   ReviewLog,
   Flashcard,
-  DailyStats,
-  Deck,
   DeckConfig,
   DeckStats,
 } from "../database/types";
@@ -45,10 +43,7 @@ export class StatisticsService {
   /**
    * Get overall statistics with deck and timeframe filters
    */
-  async getOverallStatistics(
-    deckFilter: string = "all",
-    timeframe: string = "12months",
-  ): Promise<Statistics> {
+  async getOverallStatistics(deckFilter?: string, timeframe = "12months"): Promise<Statistics> {
     return await this.db.getOverallStatistics(deckFilter, timeframe);
   }
 
@@ -57,7 +52,7 @@ export class StatisticsService {
    */
   getDeckIdsFromFilter(
     deckFilter: string,
-    availableDecks: any[] = [],
+    availableDecks: { id: string; name: string; tag: string }[] = [],
   ): string[] {
     if (deckFilter === "all") {
       return availableDecks.map((deck) => deck.id);
@@ -76,7 +71,7 @@ export class StatisticsService {
    * Get available decks and tags for filtering
    */
   async getAvailableDecksAndTags(): Promise<{
-    decks: any[];
+    decks: { id: string; name: string; tag: string }[];
     tags: string[];
   }> {
     console.log("[StatisticsService] Getting available decks and tags...");
@@ -99,7 +94,7 @@ export class StatisticsService {
     startDate.setDate(startDate.getDate() - days);
 
     let sql: string;
-    let params: any[];
+    let params: (string | number | null)[];
 
     if (deckIds.length === 0) {
       sql = `
@@ -121,14 +116,13 @@ export class StatisticsService {
       params = [...deckIds, startDate.toISOString()];
     }
 
-    const results: Array<{ date: string; count: number }> = await this.db.query(
-      sql,
-      params,
-    );
+    const results = await this.db.query(sql, params);
     const counts: Map<string, number> = new Map<string, number>();
 
-    results.forEach((row: { date: string; count: number }) => {
-      counts.set(row.date, row.count);
+    results.forEach((row: (string | number | null)[]) => {
+      const date = row[0] as string;
+      const count = row[1] as number;
+      counts.set(date, count);
     });
 
     return counts;
@@ -168,7 +162,15 @@ export class StatisticsService {
   /**
    * Get today's statistics from daily stats
    */
-  getTodayStats(statistics: Statistics | null): any {
+  getTodayStats(statistics: Statistics | null): {
+    date: string;
+    reviews: number;
+    timeSpent: number;
+    newCards: number;
+    learningCards: number;
+    reviewCards: number;
+    correctRate: number;
+  } | null {
     if (!statistics?.dailyStats || statistics.dailyStats.length === 0) {
       return null;
     }
@@ -528,10 +530,12 @@ export class StatisticsService {
     windowDays: number,
   ): Promise<number> {
     const deck = await this.db.getDeckById(deckId);
-    const deckConfig = deck?.config;
+    if (!deck) return 0;
+
+    const deckConfig = deck.config;
 
     if (
-      deckConfig?.hasReviewCardsLimitEnabled &&
+      deckConfig.hasReviewCardsLimitEnabled &&
       deckConfig.reviewCardsPerDay > 0
     ) {
       return deckConfig.reviewCardsPerDay;
@@ -553,10 +557,10 @@ export class StatisticsService {
    * FSRS-driven simulation to extend daily due counts beyond stored due dates
    */
   private async simulateFsrsDemand(
-    cards: any[],
+    cards: Flashcard[],
     startMs: number,
     endMs: number,
-    deckConfig: any,
+    deckConfig: DeckConfig,
   ): Promise<Map<string, number>> {
     const result = new Map<string, number>();
 
@@ -612,7 +616,8 @@ export class StatisticsService {
       // Sort heap by nextDue (simple approach)
       heap.sort((a, b) => a.nextDue - b.nextDue);
 
-      const node = heap.shift()!;
+      const node = heap.shift();
+      if (!node) break;
       if (node.nextDue >= endMs || node.events >= maxEventsPerCard) {
         continue;
       }
@@ -676,7 +681,7 @@ export class StatisticsService {
   getFilteredForecastData(
     statistics: Statistics | null,
     maxDays: number,
-    onlyNonZero: boolean = false,
+    onlyNonZero = false,
   ): FutureDueData[] {
     if (!statistics?.forecast || statistics.forecast.length === 0) {
       return [];
@@ -740,10 +745,8 @@ export class StatisticsService {
    */
   async getDeckStats(
     deckId: string,
-    respectDailyLimits: boolean = true,
+    respectDailyLimits = true,
   ): Promise<DeckStats> {
-    const now = new Date().toISOString();
-
     // Get basic deck stats
     const totalCards = await this.db.countTotalCards(deckId);
     const newCards = await this.db.countNewCards(deckId);

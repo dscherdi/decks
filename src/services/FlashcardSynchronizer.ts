@@ -1,6 +1,7 @@
-import { FlashcardParser, ParsedFlashcard } from "./FlashcardParser";
-import type { Database, Statement } from "sql.js";
+import { FlashcardParser } from "./FlashcardParser";
+import type { Statement } from "sql.js";
 import { Flashcard, DeckConfig } from "../database/types";
+import { SqlJsValue } from "../database/sql-types";
 
 export interface FlashcardUpdates {
   front: string;
@@ -168,7 +169,7 @@ export class FlashcardSynchronizer {
 
       // Convert to map
       const existingById = new Map();
-      existingFlashcardsResult.forEach((row: any[]) => {
+      existingFlashcardsResult.forEach((row: SqlJsValue[]) => {
         const flashcard = {
           id: row[0],
           deckId: row[1],

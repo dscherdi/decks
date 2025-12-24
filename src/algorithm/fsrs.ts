@@ -401,7 +401,7 @@ export class FSRS {
             }
 
             return result;
-        } catch (error) {
+        } catch {
             // Math error (overflow, etc.)
             return this.initStability(1); // Fallback to w[0]
         }

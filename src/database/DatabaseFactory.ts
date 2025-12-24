@@ -2,14 +2,8 @@ import { DataAdapter } from "obsidian";
 import { QueryConfig } from "./BaseDatabaseService";
 import { MainDatabaseService } from "./MainDatabaseService";
 import { WorkerDatabaseService } from "./WorkerDatabaseService";
-import {
-  Deck,
-  Flashcard,
-  ReviewLog,
-  ReviewSession,
-  DeckStats,
-  Statistics,
-} from "./types";
+import { Deck, Flashcard, ReviewLog, ReviewSession, Statistics } from "./types";
+import { SqlJsValue, SqlRecord, SqlRow } from "./sql-types";
 
 // Proper interface for all database operations
 export interface IDatabaseService {
@@ -61,7 +55,7 @@ export interface IDatabaseService {
     deckId: string;
     deckName: string;
     deckFilepath: string;
-    deckConfig: any;
+    deckConfig: object;
     fileContent: string;
     force: boolean;
   }): Promise<{
@@ -157,23 +151,40 @@ export interface IDatabaseService {
 
   // Utility operations
   purgeDatabase(): Promise<void>;
-  query(sql: string, params?: any[], config?: QueryConfig): Promise<any[]>;
 
+  querySql<T>(
+    sql: string,
+    params: SqlJsValue[],
+    config: { asObject: true },
+  ): Promise<T[]>;
+  querySql(
+    sql: string,
+    params?: SqlJsValue[],
+    config?: { asObject?: false },
+  ): Promise<SqlRow[]>;
+  querySql<T = SqlRecord>(
+    sql: string,
+    params?: SqlJsValue[],
+    config?: QueryConfig,
+  ): Promise<T[] | SqlJsValue[][]>;
   // Backup operations
   createBackupDatabase(backupPath: string): Promise<void>;
   restoreFromBackupDatabase(backupPath: string): Promise<void>;
   exportDatabaseToBuffer(): Promise<Uint8Array>;
-  createBackupDatabaseInstance(backupData: Uint8Array): Promise<any>;
-  queryBackupDatabase(backupDb: any, sql: string): Promise<any[]>;
-  closeBackupDatabaseInstance(backupDb: any): Promise<void>;
+  createBackupDatabaseInstance(
+    backupData: Uint8Array,
+  ): Promise<string | object>;
+  queryBackupDatabase(
+    backupDb: string | object,
+    sql: string,
+  ): Promise<SqlJsValue[][]>;
+  closeBackupDatabaseInstance(backupDb: string | object): Promise<void>;
 
   // Synchronization operations
   syncWithDisk(): Promise<void>;
 
   // Transaction methods removed - no longer using transactions
 }
-
-export type DatabaseServiceInterface = IDatabaseService;
 
 export interface DatabaseServiceOptions {
   useWorker?: boolean;
@@ -188,7 +199,7 @@ export class DatabaseFactory {
   static async create(
     dbPath: string,
     adapter: DataAdapter,
-    debugLog: (message: string, ...args: any[]) => void,
+    debugLog: (message: string, ...args: (string | number | object)[]) => void,
     options: DatabaseServiceOptions = {},
   ): Promise<IDatabaseService> {
     // Check if we already have an instance for this path

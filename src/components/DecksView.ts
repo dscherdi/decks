@@ -1,13 +1,8 @@
-import { DatabaseServiceInterface } from "@/database/DatabaseFactory";
 import {
     Deck,
     DeckStats,
-    DeckConfig,
-    Flashcard,
     hasNewCardsLimit,
     hasReviewCardsLimit,
-    ReviewSession,
-    Statistics,
 } from "@/database/types";
 import { VIEW_TYPE_DECKS } from "@/main";
 import { DeckSynchronizer } from "@/services/DeckSynchronizer";
@@ -19,13 +14,17 @@ import { Scheduler } from "@/services/Scheduler";
 import { FlashcardReviewModalWrapper } from "./review/FlashcardReviewModalWrapper";
 import { StatisticsModal } from "./settings/StatisticsModal";
 import { StatisticsService } from "@/services/StatisticsService";
-import { FSRS, type RatingLabel } from "@/algorithm/fsrs";
+
 import DeckListPanel from "./DeckListPanel.svelte";
 import { ProgressTracker } from "@/utils/progress";
-import type { DeckListPanelComponent } from "../types/svelte-components";
+import type {
+    DeckListPanelComponent,
+    DeckListPanelConstructor,
+} from "../types/svelte-components";
+import { IDatabaseService } from "../database/DatabaseFactory";
 
 export class DecksView extends ItemView {
-    private db: DatabaseServiceInterface;
+    private db: IDatabaseService;
     private deckSynchronizer: DeckSynchronizer;
     private scheduler: Scheduler;
     private statisticsService: StatisticsService;
@@ -40,7 +39,7 @@ export class DecksView extends ItemView {
 
     constructor(
         leaf: WorkspaceLeaf,
-        database: DatabaseServiceInterface,
+        database: IDatabaseService,
         deckSynchronizer: DeckSynchronizer,
         scheduler: Scheduler,
         statisticsService: StatisticsService,
@@ -82,16 +81,23 @@ export class DecksView extends ItemView {
         container.addClass("decks-view");
 
         // Create and mount Svelte component
-        this.deckListPanelComponent = new DeckListPanel({
-            target: container,
-            props: {
-                statisticsService: this.statisticsService,
-                db: this.db,
-                deckSynchronizer: this.deckSynchronizer,
-                app: this.app,
-                onDeckClick: (deck: Deck) => this.startReview(deck),
-            },
-        }) as DeckListPanelComponent;
+        this.deckListPanelComponent =
+            new (DeckListPanel as DeckListPanelConstructor)({
+                target: container,
+                props: {
+                    statisticsService: this.statisticsService,
+                    db: this.db,
+                    deckSynchronizer: this.deckSynchronizer,
+                    app: this.app,
+                    onDeckClick: (deck: Deck) => this.startReview(deck),
+                    onRefresh: () => this.refresh(false),
+                    onForceRefreshDeck: async (deckId: string) => {
+                        await this.deckSynchronizer.forceSyncDeck(deckId);
+                        await this.refreshStats();
+                    },
+                    openStatisticsModal: () => this.openStatisticsModal(),
+                },
+            });
 
         // Initial refresh
         await this.refresh(false);

@@ -38,7 +38,7 @@ export type { DecksSettings } from "../settings";
 // Console-specific types
 export interface ConsoleFlashcardsAPI {
   // Core initialization
-  initialize(vaultPath: string, dataPath?: string): Promise<any>;
+  initialize(vaultPath: string, dataPath?: string): Promise<any>; // eslint-disable-line @typescript-eslint/no-explicit-any
 
   // Quick operations
   createDeckFromFile(filePath: string, name?: string): Promise<string>;
@@ -61,7 +61,7 @@ export interface ConsoleFlashcardsAPI {
 export async function createFlashcardsConsole(
   vaultPath: string = process.cwd(),
   dataPath?: string,
-): Promise<any> {
+): Promise<any> { // eslint-disable-line @typescript-eslint/no-explicit-any
   const { ConsoleCore } = await import("./core/ConsoleCore");
 
   const resolvedDataPath = dataPath || `${vaultPath}/.flashcards`;

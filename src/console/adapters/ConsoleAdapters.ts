@@ -165,7 +165,7 @@ export class ConsoleVault implements MockVault {
 
   private getAllMarkdownFilesSync(): MockTFile[] {
     const files: MockTFile[] = [];
-    const vaultPath = (this.adapter as any).basePath;
+    const vaultPath = (this.adapter as any).basePath; // eslint-disable-line @typescript-eslint/no-explicit-any
 
     const walkSync = (dir: string): void => {
       try {
@@ -179,7 +179,7 @@ export class ConsoleVault implements MockVault {
             files.push(this.createMockTFile(relativePath));
           }
         }
-      } catch (error) {
+      } catch {
         // Skip directories we can't read
       }
     };
@@ -225,7 +225,7 @@ export class ConsoleMetadataCache implements MockMetadataCache {
     // Parse file synchronously for metadata
     try {
       const content = fs.readFileSync(
-        path.resolve((this.vault.adapter as any).basePath, file.path),
+        path.resolve((this.vault.adapter as any).basePath, file.path), // eslint-disable-line @typescript-eslint/no-explicit-any
         'utf-8'
       );
 
@@ -263,7 +263,7 @@ export class ConsoleMetadataCache implements MockMetadataCache {
     }
 
     // Parse inline tags
-    const inlineTags = content.match(/#[\w\-\/]+/g);
+    const inlineTags = content.match(/#[\w\-/]+/g);
     if (inlineTags) {
       metadata.tags = inlineTags.map(tag => ({ tag }));
     }
@@ -285,7 +285,7 @@ export class ConsoleMetadataCache implements MockMetadataCache {
  * Mock Notice for console (just console.log)
  */
 export class ConsoleNotice {
-  constructor(message: string, duration?: number) {
+  constructor(message: string, _duration?: number) {
     console.log(`📢 ${message}`);
   }
 }

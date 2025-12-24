@@ -1,4 +1,4 @@
-import { DEFAULT_SETTINGS, FlashcardsSettings } from "../settings";
+import { DEFAULT_SETTINGS, DecksSettings } from "../settings";
 
 describe("Settings", () => {
   describe("DEFAULT_SETTINGS", () => {
@@ -25,9 +25,9 @@ describe("Settings", () => {
     });
   });
 
-  describe("FlashcardsSettings interface compliance", () => {
+  describe("DecksSettings interface compliance", () => {
     it("should match the interface structure", () => {
-      const settings: FlashcardsSettings = DEFAULT_SETTINGS;
+      const settings: DecksSettings = DEFAULT_SETTINGS;
 
       // Verify the settings object conforms to the interface
       expect(settings.review).toBeDefined();

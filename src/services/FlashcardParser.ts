@@ -22,7 +22,7 @@ export class FlashcardParser {
    */
   static parseFlashcardsFromContent(
     content: string,
-    headerLevel: number = 2,
+    headerLevel = 2,
   ): ParsedFlashcard[] {
     const lines = content.split("\n");
     const flashcards: ParsedFlashcard[] = [];

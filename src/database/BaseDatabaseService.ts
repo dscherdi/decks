@@ -1,72 +1,87 @@
 import { DataAdapter } from "obsidian";
-import { IDatabaseService } from "./DatabaseFactory";
 import {
   Deck,
   Flashcard,
   ReviewLog,
   ReviewSession,
-  DeckStats,
   Statistics,
   DEFAULT_DECK_CONFIG,
-  DeckConfig,
 } from "./types";
 import { SQL_QUERIES } from "./schemas";
+import {
+  SqlJsValue,
+  ReviewLogRow,
+  CountResult,
+  DailyStatsRow,
+  CardStatsRow,
+  AnswerButtonStatsRow,
+  IntervalDistributionRow,
+  PaceStatsRow,
+  BacklogRow,
+  OverdueRow,
+  ForecastRow,
+  DateCountRow,
+  SqlRecord,
+  SqlRow,
+} from "./sql-types";
 import { FlashcardSynchronizer } from "../services/FlashcardSynchronizer";
+import { IDatabaseService } from "./DatabaseFactory";
 
 export interface QueryConfig {
   asObject?: boolean;
 }
 
-export abstract class BaseDatabaseService {
+export abstract class BaseDatabaseService implements IDatabaseService {
   protected dbPath: string;
   protected adapter: DataAdapter;
-  protected debugLog: (message: string, ...args: any[]) => void;
+  protected debugLog: (
+    message: string,
+    ...args: (string | number | object)[]
+  ) => void;
   protected flashcardSynchronizer: FlashcardSynchronizer;
 
   constructor(
     dbPath: string,
     adapter: DataAdapter,
-    debugLog: (message: string, ...args: any[]) => void,
+    debugLog: (message: string, ...args: (string | number | object)[]) => void,
   ) {
     this.dbPath = dbPath;
     this.adapter = adapter;
     this.debugLog = debugLog;
     // DeckSynchronizer will be initialized in subclasses after database is ready
-    this.flashcardSynchronizer = null as any;
+    this.flashcardSynchronizer = null as unknown as FlashcardSynchronizer;
   }
 
   // Abstract methods to be implemented by concrete classes
+  // Core abstract methods that must be implemented by subclasses
   abstract initialize(): Promise<void>;
   abstract close(): Promise<void>;
   abstract save(): Promise<void>;
-  abstract executeSql(sql: string, params?: any[]): Promise<void>;
-  abstract querySql(
-    sql: string,
-    params?: any[],
-    config?: QueryConfig,
-  ): Promise<any[]>;
+  abstract executeSql(sql: string, params?: SqlJsValue[]): Promise<void>;
 
   // Shared business logic methods
-  protected parseDeckRow(row: any[]): Deck {
+  protected parseDeckRow(row: (string | number | null)[]): Deck {
     let config = DEFAULT_DECK_CONFIG;
 
     if (row[5]) {
       try {
-        const parsedConfig = JSON.parse(row[5] as string);
+        const parsedConfig: Record<string, string | number | boolean> =
+          JSON.parse(row[5] as string);
 
         // Handle legacy config format
         if (typeof parsedConfig.newCardsEnabled === "boolean") {
-          const legacyConfig = parsedConfig as any;
+          const legacyConfig = parsedConfig as Record<string, unknown>;
           config = {
             ...DEFAULT_DECK_CONFIG,
             newCardsPerDay: legacyConfig.newCardsEnabled
-              ? legacyConfig.newCardsLimit || 20
+              ? (legacyConfig.newCardsLimit as number) || 20
               : 0,
             reviewCardsPerDay: legacyConfig.reviewCardsEnabled
-              ? legacyConfig.reviewCardsLimit || 100
+              ? (legacyConfig.reviewCardsLimit as number) || 100
               : 0,
-            reviewOrder: legacyConfig.reviewOrder || "oldest-first",
-            headerLevel: legacyConfig.headerLevel || 2,
+            reviewOrder:
+              (legacyConfig.reviewOrder as "due-date" | "random") || "due-date",
+            headerLevel: (legacyConfig.headerLevel as number) || 2,
           };
         } else {
           config = { ...DEFAULT_DECK_CONFIG, ...parsedConfig };
@@ -89,7 +104,7 @@ export abstract class BaseDatabaseService {
     };
   }
 
-  protected rowToFlashcard(row: any[]): Flashcard {
+  protected rowToFlashcard(row: (string | number | null)[]): Flashcard {
     return {
       id: row[0] as string,
       deckId: row[1] as string,
@@ -111,7 +126,7 @@ export abstract class BaseDatabaseService {
     };
   }
 
-  protected rowToReviewSession(row: any[]): ReviewSession {
+  protected rowToReviewSession(row: (string | number | null)[]): ReviewSession {
     return {
       id: row[0] as string,
       deckId: row[1] as string,
@@ -182,31 +197,47 @@ export abstract class BaseDatabaseService {
 
   async getDeckById(id: string): Promise<Deck | null> {
     const sql = `SELECT id, name, filepath, tag, last_reviewed, config, created, modified FROM decks WHERE id = ?`;
-    const results = await this.querySql(sql, [id]);
+    const results = (await this.querySql(sql, [id])) as (
+      | string
+      | number
+      | null
+    )[][];
     return results.length > 0 ? this.parseDeckRow(results[0]) : null;
   }
 
   async getDeckByFilepath(filepath: string): Promise<Deck | null> {
     const sql = `SELECT id, name, filepath, tag, last_reviewed, config, created, modified FROM decks WHERE filepath = ?`;
-    const results = await this.querySql(sql, [filepath]);
+    const results = (await this.querySql(sql, [filepath])) as (
+      | string
+      | number
+      | null
+    )[][];
     return results.length > 0 ? this.parseDeckRow(results[0]) : null;
   }
 
   async getDeckByTag(tag: string): Promise<Deck | null> {
     const sql = `SELECT id, name, filepath, tag, last_reviewed, config, created, modified FROM decks WHERE tag = ?`;
-    const results = await this.querySql(sql, [tag]);
+    const results = (await this.querySql(sql, [tag])) as (
+      | string
+      | number
+      | null
+    )[][];
     return results.length > 0 ? this.parseDeckRow(results[0]) : null;
   }
 
   async getAllDecks(): Promise<Deck[]> {
     const sql = `SELECT id, name, filepath, tag, last_reviewed, config, created, modified FROM decks ORDER BY name`;
-    const results = await this.querySql(sql, []);
+    const results = (await this.querySql(sql, [])) as (
+      | string
+      | number
+      | null
+    )[][];
     return results.map((row) => this.parseDeckRow(row));
   }
 
   async updateDeck(id: string, updates: Partial<Deck>): Promise<void> {
     const updateFields: string[] = [];
-    const params: any[] = [];
+    const params: (string | number | null)[] = [];
 
     if (updates.name !== undefined) {
       updateFields.push("name = ?");
@@ -222,7 +253,7 @@ export abstract class BaseDatabaseService {
     }
     if (updates.lastReviewed !== undefined) {
       updateFields.push("last_reviewed = ?");
-      params.push(updates.lastReviewed);
+      params.push(updates.lastReviewed || null);
     }
     if (updates.config !== undefined) {
       updateFields.push("config = ?");
@@ -340,47 +371,87 @@ export abstract class BaseDatabaseService {
 
   async getFlashcardById(flashcardId: string): Promise<Flashcard | null> {
     const sql = `SELECT * FROM flashcards WHERE id = ?`;
-    const results = await this.querySql(sql, [flashcardId]);
+    const results = (await this.querySql(sql, [flashcardId])) as (
+      | string
+      | number
+      | null
+    )[][];
     return results.length > 0 ? this.rowToFlashcard(results[0]) : null;
   }
 
   async getFlashcardsByDeck(deckId: string): Promise<Flashcard[]> {
     const sql = `SELECT * FROM flashcards WHERE deck_id = ? ORDER BY created`;
-    const results = await this.querySql(sql, [deckId]);
-    return results.map((row) => this.rowToFlashcard(row));
+    const results = (await this.querySql(sql, [deckId])) as (
+      | string
+      | number
+      | null
+    )[][];
+    return results.map((row: (string | number | null)[]) =>
+      this.rowToFlashcard(row),
+    );
   }
 
   async getAllFlashcards(): Promise<Flashcard[]> {
     const sql = `SELECT * FROM flashcards ORDER BY created`;
-    const results = await this.querySql(sql, []);
-    return results.map((row) => this.rowToFlashcard(row));
+    const results = (await this.querySql(sql, [])) as (
+      | string
+      | number
+      | null
+    )[][];
+    return results.map((row: (string | number | null)[]) =>
+      this.rowToFlashcard(row),
+    );
   }
 
   async getDueFlashcards(deckId: string): Promise<Flashcard[]> {
     const now = this.getCurrentTimestamp();
     const sql = `SELECT * FROM flashcards WHERE deck_id = ? AND due_date <= ? ORDER BY due_date`;
-    const results = await this.querySql(sql, [deckId, now]);
-    return results.map((row) => this.rowToFlashcard(row));
+    const results = (await this.querySql(sql, [deckId, now])) as (
+      | string
+      | number
+      | null
+    )[][];
+    return results.map((row: (string | number | null)[]) =>
+      this.rowToFlashcard(row),
+    );
   }
 
   async getReviewableFlashcards(deckId: string): Promise<Flashcard[]> {
     const now = this.getCurrentTimestamp();
     const sql = `SELECT * FROM flashcards WHERE deck_id = ? AND (state = 'new' OR due_date <= ?) ORDER BY due_date`;
-    const results = await this.querySql(sql, [deckId, now]);
-    return results.map((row) => this.rowToFlashcard(row));
+    const results = (await this.querySql(sql, [deckId, now])) as (
+      | string
+      | number
+      | null
+    )[][];
+    return results.map((row: (string | number | null)[]) =>
+      this.rowToFlashcard(row),
+    );
   }
 
   async getNewCardsForReview(deckId: string): Promise<Flashcard[]> {
     const sql = `SELECT * FROM flashcards WHERE deck_id = ? AND state = 'new' ORDER BY created LIMIT 100`;
-    const results = await this.querySql(sql, [deckId]);
-    return results.map((row) => this.rowToFlashcard(row));
+    const results = (await this.querySql(sql, [deckId])) as (
+      | string
+      | number
+      | null
+    )[][];
+    return results.map((row: (string | number | null)[]) =>
+      this.rowToFlashcard(row),
+    );
   }
 
   async getReviewCardsForReview(deckId: string): Promise<Flashcard[]> {
     const now = this.getCurrentTimestamp();
     const sql = `SELECT * FROM flashcards WHERE deck_id = ? AND state = 'review' AND due_date <= ? ORDER BY due_date LIMIT 100`;
-    const results = await this.querySql(sql, [deckId, now]);
-    return results.map((row) => this.rowToFlashcard(row));
+    const results = (await this.querySql(sql, [deckId, now])) as (
+      | string
+      | number
+      | null
+    )[][];
+    return results.map((row: (string | number | null)[]) =>
+      this.rowToFlashcard(row),
+    );
   }
 
   async updateFlashcard(
@@ -388,7 +459,7 @@ export abstract class BaseDatabaseService {
     updates: Partial<Flashcard>,
   ): Promise<void> {
     const updateFields: string[] = [];
-    const params: any[] = [];
+    const params: (string | number | null)[] = [];
 
     Object.keys(updates).forEach((key) => {
       if (updates[key as keyof Flashcard] !== undefined && key !== "id") {
@@ -405,7 +476,7 @@ export abstract class BaseDatabaseService {
         } else {
           updateFields.push(`${key} = ?`);
         }
-        params.push(updates[key as keyof Flashcard]);
+        params.push(updates[key as keyof Flashcard] ?? null);
       }
     });
 
@@ -490,24 +561,28 @@ export abstract class BaseDatabaseService {
 
   // COUNT OPERATIONS
   async countNewCards(deckId: string): Promise<number> {
-    const sql = `SELECT COUNT(*) as count FROM flashcards WHERE deck_id = ? AND state = 'new'`;
-    const results = await this.querySql(sql, [deckId], { asObject: true });
+    const sql =
+      "SELECT COUNT(*) as count FROM flashcards WHERE deck_id = ? AND state = 'new'";
+    const results = await this.querySql<CountResult>(sql, [deckId], {
+      asObject: true,
+    });
     return results[0]?.count || 0;
   }
 
   async countDueCards(deckId: string): Promise<number> {
     const now = this.getCurrentTimestamp();
     const sql = `SELECT COUNT(*) as count FROM flashcards WHERE deck_id = ? AND state = 'review' AND due_date <= ?`;
-    const results = await this.querySql(sql, [deckId, now], {
+    const results = await this.querySql<CountResult>(sql, [deckId, now], {
       asObject: true,
     });
-    console.log("countDueCards", results);
     return results[0]?.count || 0;
   }
 
   async countTotalCards(deckId: string): Promise<number> {
-    const sql = `SELECT COUNT(*) as count FROM flashcards WHERE deck_id = ?`;
-    const results = await this.querySql(sql, [deckId], { asObject: true });
+    const sql = "SELECT COUNT(*) as count FROM flashcards WHERE deck_id = ?";
+    const results = await this.querySql<CountResult>(sql, [deckId], {
+      asObject: true,
+    });
     return results[0]?.count || 0;
   }
 
@@ -517,14 +592,14 @@ export abstract class BaseDatabaseService {
     startDate: string,
     endDate: string,
   ): Promise<{ day: string; count: number }[]> {
-    const results = await this.querySql(
+    const results = await this.querySql<DateCountRow>(
       SQL_QUERIES.GET_SCHEDULED_DUE_BY_DAY,
       [deckId, startDate, endDate],
       { asObject: true },
     );
-    return results.map((row: any) => ({
-      day: row.day,
-      count: row.c || 0,
+    return results.map((row) => ({
+      day: row.date,
+      count: row.count,
     }));
   }
 
@@ -549,7 +624,7 @@ export abstract class BaseDatabaseService {
     const results = await this.querySql(sql, [...deckIds, startDate, endDate], {
       asObject: true,
     });
-    return results.map((row: any) => ({
+    return results.map((row: { day: string; c: number }) => ({
       day: row.day,
       count: row.c || 0,
     }));
@@ -559,7 +634,7 @@ export abstract class BaseDatabaseService {
     deckId: string,
     currentDate: string,
   ): Promise<number> {
-    const results = await this.querySql(
+    const results = await this.querySql<BacklogRow>(
       SQL_QUERIES.GET_CURRENT_BACKLOG,
       [deckId, currentDate],
       { asObject: true },
@@ -576,14 +651,18 @@ export abstract class BaseDatabaseService {
     // Generate dynamic IN clause
     const placeholders = deckIds.map(() => "?").join(",");
     const sql = `
-      SELECT COUNT(*) AS n
+      SELECT COUNT(*) as n
       FROM flashcards
       WHERE deck_id IN (${placeholders}) AND state='review' AND due_date < ?
     `;
 
-    const results = await this.querySql(sql, [...deckIds, currentDate], {
-      asObject: true,
-    });
+    const results = await this.querySql<BacklogRow>(
+      sql,
+      [...deckIds, currentDate],
+      {
+        asObject: true,
+      },
+    );
     return results[0]?.n || 0;
   }
 
@@ -592,7 +671,7 @@ export abstract class BaseDatabaseService {
     startDate: string,
     endDate: string,
   ): Promise<number> {
-    const results = await this.querySql(
+    const results = await this.querySql<BacklogRow>(
       SQL_QUERIES.GET_DECK_REVIEW_COUNT_RANGE,
       [deckId, startDate, endDate],
       { asObject: true },
@@ -608,7 +687,7 @@ export abstract class BaseDatabaseService {
                    AND r.reviewed_at >= datetime('now', 'start of day')
                    AND r.reviewed_at < datetime('now', 'start of day', '+1 day')
                    AND r.old_state = 'new'`;
-    const results = await this.querySql(sql, [deckId], {
+    const results = await this.querySql<CountResult>(sql, [deckId], {
       asObject: true,
     });
     return results[0]?.count || 0;
@@ -622,7 +701,7 @@ export abstract class BaseDatabaseService {
                    AND r.reviewed_at >= datetime('now', 'start of day')
                    AND r.reviewed_at < datetime('now', 'start of day', '+1 day')
                    AND r.old_state = 'review'`;
-    const results = await this.querySql(sql, [deckId], {
+    const results = await this.querySql<CountResult>(sql, [deckId], {
       asObject: true,
     });
     return results[0]?.count || 0;
@@ -641,16 +720,15 @@ export abstract class BaseDatabaseService {
     this.debugLog("Inserting review log: ", reviewLog);
     const columns: string[] = [];
     const placeholders: string[] = [];
-    const params: any[] = [];
+    const params: SqlJsValue[] = [];
 
     // Required fields
-    const requiredFields: [string, any][] = [
+    const requiredFields: [string, SqlJsValue][] = [
       ["id", reviewLog.id],
       ["flashcard_id", reviewLog.flashcardId],
       ["last_reviewed_at", reviewLog.lastReviewedAt],
       ["reviewed_at", reviewLog.reviewedAt],
       ["rating", reviewLog.rating],
-      ["rating_label", reviewLog.ratingLabel],
       ["old_state", reviewLog.oldState],
       ["old_repetitions", reviewLog.oldRepetitions],
       ["old_lapses", reviewLog.oldLapses],
@@ -673,17 +751,17 @@ export abstract class BaseDatabaseService {
       ["min_minutes", reviewLog.minMinutes],
       ["fsrs_weights_version", reviewLog.fsrsWeightsVersion],
       ["scheduler_version", reviewLog.schedulerVersion],
-      ["time_elapsed_ms", reviewLog.timeElapsedMs],
-      ["content_hash", reviewLog.contentHash],
     ];
 
     // Optional fields - only include if defined and not null/undefined
-    const optionalFields: [string, any][] = [
-      ["session_id", reviewLog.sessionId],
-      ["shown_at", reviewLog.shownAt],
-      ["note_model_id", reviewLog.noteModelId],
-      ["card_template_id", reviewLog.cardTemplateId],
-      ["client", reviewLog.client],
+    const optionalFields: [string, SqlJsValue][] = [
+      ["session_id", reviewLog.sessionId || null],
+      ["shown_at", reviewLog.shownAt || null],
+      ["time_elapsed_ms", reviewLog.timeElapsedMs || null],
+      ["note_model_id", reviewLog.noteModelId || null],
+      ["card_template_id", reviewLog.cardTemplateId || null],
+      ["content_hash", reviewLog.contentHash || null],
+      ["client", reviewLog.client || null],
     ];
 
     // Add all required fields
@@ -693,9 +771,9 @@ export abstract class BaseDatabaseService {
       params.push(value);
     }
 
-    // Add optional fields if they have values (not null or undefined)
+    // Add optional fields only if they have values
     for (const [column, value] of optionalFields) {
-      if (value !== undefined && value !== null) {
+      if (value !== null) {
         columns.push(column);
         placeholders.push("?");
         params.push(value);
@@ -705,14 +783,14 @@ export abstract class BaseDatabaseService {
     const sql = `INSERT INTO review_logs (${columns.join(
       ", ",
     )}) VALUES (${placeholders.join(", ")})`;
-    await this.executeSql(sql, params);
+    await this.querySql(sql, params as (string | number | null)[]);
   }
 
   async getLatestReviewLogForFlashcard(
     flashcardId: string,
   ): Promise<ReviewLog | null> {
     const sql = `SELECT * FROM review_logs WHERE flashcard_id = ? ORDER BY reviewed_at DESC LIMIT 1`;
-    const results = await this.querySql(sql, [flashcardId], {
+    const results = await this.querySql<ReviewLogRow>(sql, [flashcardId], {
       asObject: true,
     });
 
@@ -722,18 +800,18 @@ export abstract class BaseDatabaseService {
     return {
       id: row.id,
       flashcardId: row.flashcard_id,
-      sessionId: row.session_id,
+      sessionId: row.session_id || undefined,
       lastReviewedAt: row.last_reviewed_at,
       reviewedAt: row.reviewed_at,
-      rating: row.rating,
+      rating: row.rating as 1 | 2 | 3 | 4,
       ratingLabel: this.getRatingLabel(row.rating),
       timeElapsedMs: row.time_elapsed_ms,
-      oldState: row.old_state,
+      oldState: row.old_state as "new" | "review",
       oldRepetitions: row.old_repetitions,
       oldLapses: row.old_lapses,
       oldStability: row.old_stability,
       oldDifficulty: row.old_difficulty,
-      newState: row.new_state,
+      newState: row.new_state as "new" | "review",
       newRepetitions: row.new_repetitions,
       newLapses: row.new_lapses,
       newStability: row.new_stability,
@@ -755,23 +833,25 @@ export abstract class BaseDatabaseService {
 
   async getAllReviewLogs(): Promise<ReviewLog[]> {
     const sql = `SELECT * FROM review_logs ORDER BY reviewed_at DESC`;
-    const results = await this.querySql(sql, [], { asObject: true });
+    const results = await this.querySql<ReviewLogRow>(sql, [], {
+      asObject: true,
+    });
 
     return results.map((row) => ({
       id: row.id,
       flashcardId: row.flashcard_id,
-      sessionId: row.session_id,
+      sessionId: row.session_id || undefined,
       lastReviewedAt: row.last_reviewed_at,
       reviewedAt: row.reviewed_at,
-      rating: row.rating,
+      rating: row.rating as 1 | 2 | 3 | 4,
       ratingLabel: this.getRatingLabel(row.rating),
       timeElapsedMs: row.time_elapsed_ms,
-      oldState: row.old_state,
+      oldState: row.old_state as "new" | "review",
       oldRepetitions: row.old_repetitions,
       oldLapses: row.old_lapses,
       oldStability: row.old_stability,
       oldDifficulty: row.old_difficulty,
-      newState: row.new_state,
+      newState: row.new_state as "new" | "review",
       newRepetitions: row.new_repetitions,
       newLapses: row.new_lapses,
       newStability: row.new_stability,
@@ -809,7 +889,7 @@ export abstract class BaseDatabaseService {
       ORDER BY rl.reviewed_at DESC
     `;
     const results = await this.querySql(sql, [deckId], { asObject: true });
-    return this.mapRowsToReviewLogs(results);
+    return this.mapRowsToReviewLogs(results as ReviewLogRow[]);
   }
 
   async getReviewLogsByDecks(deckIds: string[]): Promise<ReviewLog[]> {
@@ -824,25 +904,25 @@ export abstract class BaseDatabaseService {
       ORDER BY rl.reviewed_at DESC
     `;
     const results = await this.querySql(sql, deckIds, { asObject: true });
-    return this.mapRowsToReviewLogs(results);
+    return this.mapRowsToReviewLogs(results as ReviewLogRow[]);
   }
 
-  private mapRowsToReviewLogs(results: any[]): ReviewLog[] {
+  private mapRowsToReviewLogs(results: ReviewLogRow[]): ReviewLog[] {
     return results.map((row) => ({
       id: row.id,
       flashcardId: row.flashcard_id,
-      sessionId: row.session_id,
+      sessionId: row.session_id || undefined,
       lastReviewedAt: row.last_reviewed_at,
       reviewedAt: row.reviewed_at,
-      rating: row.rating,
+      rating: row.rating as 1 | 2 | 3 | 4,
       ratingLabel: this.getRatingLabel(row.rating),
       timeElapsedMs: row.time_elapsed_ms,
-      oldState: row.old_state,
+      oldState: row.old_state as "new" | "review",
       oldRepetitions: row.old_repetitions,
       oldLapses: row.old_lapses,
       oldStability: row.old_stability,
       oldDifficulty: row.old_difficulty,
-      newState: row.new_state,
+      newState: row.new_state as "new" | "review",
       newRepetitions: row.new_repetitions,
       newLapses: row.new_lapses,
       newStability: row.new_stability,
@@ -875,20 +955,34 @@ export abstract class BaseDatabaseService {
 
   async getReviewSessionById(sessionId: string): Promise<ReviewSession | null> {
     const sql = `SELECT * FROM review_sessions WHERE id = ?`;
-    const results = await this.querySql(sql, [sessionId]);
+    const results = (await this.querySql(sql, [sessionId])) as (
+      | string
+      | number
+      | null
+    )[][];
     return results.length > 0 ? this.rowToReviewSession(results[0]) : null;
   }
 
   async getActiveReviewSession(deckId: string): Promise<ReviewSession | null> {
     const sql = `SELECT * FROM review_sessions WHERE deck_id = ? AND ended_at IS NULL ORDER BY started_at DESC LIMIT 1`;
-    const results = await this.querySql(sql, [deckId]);
+    const results = (await this.querySql(sql, [deckId])) as (
+      | string
+      | number
+      | null
+    )[][];
     return results.length > 0 ? this.rowToReviewSession(results[0]) : null;
   }
 
   async getAllReviewSessions(): Promise<ReviewSession[]> {
     const sql = `SELECT * FROM review_sessions ORDER BY started_at DESC`;
-    const results = await this.querySql(sql, []);
-    return results.map((row) => this.rowToReviewSession(row));
+    const results = (await this.querySql(sql, [])) as (
+      | string
+      | number
+      | null
+    )[][];
+    return results.map((row: (string | number | null)[]) =>
+      this.rowToReviewSession(row),
+    );
   }
 
   async updateReviewSessionDoneUnique(
@@ -946,10 +1040,7 @@ export abstract class BaseDatabaseService {
     return { newCount, reviewCount };
   }
 
-  async getOverallStatistics(
-    deckFilter: string = "all",
-    timeframe: string = "12months",
-  ): Promise<Statistics> {
+  async getOverallStatistics(timeframe = "12months"): Promise<Statistics> {
     try {
       // Calculate timeframe dates
       const now = new Date();
@@ -968,29 +1059,29 @@ export abstract class BaseDatabaseService {
       );
 
       // Basic health check - count total records
-      const totalReviewLogs = await this.querySql(
-        "SELECT COUNT(*) as count FROM review_logs",
-        [],
+      const totalReviewLogsResults = await this.querySql<CountResult>(
+        "SELECT COUNT(*) as count FROM review_logs WHERE reviewed_at >= ? AND reviewed_at <= ?",
+        [startDate, endDate],
         { asObject: true },
       );
-      const totalFlashcards = await this.querySql(
+      const totalFlashcardsResults = await this.querySql<CountResult>(
         "SELECT COUNT(*) as count FROM flashcards",
         [],
         { asObject: true },
       );
+      const totalReviewLogsCount = totalReviewLogsResults[0]?.count || 0;
+      const totalFlashcardsCount = totalFlashcardsResults[0]?.count || 0;
       this.debugLog(
-        `[Statistics Debug] Database health: ${
-          totalReviewLogs[0]?.count || 0
-        } review logs, ${totalFlashcards[0]?.count || 0} flashcards`,
+        `[Statistics Debug] Found ${totalReviewLogsCount} review logs, ${totalFlashcardsCount} flashcards`,
       );
 
       // Get daily stats
-      const dailyStatsResults = await this.querySql(
+      const dailyStatsResults = await this.querySql<DailyStatsRow>(
         SQL_QUERIES.GET_DAILY_STATS,
         [startDate, endDate],
         { asObject: true },
       );
-      const dailyStats = dailyStatsResults.map((row: any) => ({
+      const dailyStats = dailyStatsResults.map((row) => ({
         date: row.date,
         reviews: row.reviews || 0,
         timeSpent: row.total_time_seconds || 0,
@@ -1004,13 +1095,13 @@ export abstract class BaseDatabaseService {
       );
 
       // Get card stats
-      const cardStatsResults = await this.querySql(
+      const cardStatsResults = await this.querySql<CardStatsRow>(
         SQL_QUERIES.GET_CARD_STATS,
-        [],
+        [startDate, endDate],
         { asObject: true },
       );
       const cardStats = { new: 0, review: 0, mature: 0 };
-      cardStatsResults.forEach((row: any) => {
+      cardStatsResults.forEach((row) => {
         if (row.card_type === "new") cardStats.new = row.count || 0;
         else if (row.card_type === "review") cardStats.review = row.count || 0;
         else if (row.card_type === "mature") cardStats.mature = row.count || 0;
@@ -1018,13 +1109,13 @@ export abstract class BaseDatabaseService {
       this.debugLog(`[Statistics Debug] Card stats:`, cardStats);
 
       // Get answer button stats
-      const answerButtonResults = await this.querySql(
+      const answerButtonResults = await this.querySql<AnswerButtonStatsRow>(
         SQL_QUERIES.GET_ANSWER_BUTTON_STATS,
         [startDate, endDate],
         { asObject: true },
       );
       const answerButtons = { again: 0, hard: 0, good: 0, easy: 0 };
-      answerButtonResults.forEach((row: any) => {
+      answerButtonResults.forEach((row) => {
         if (row.rating_label === "again") answerButtons.again = row.count || 0;
         else if (row.rating_label === "hard")
           answerButtons.hard = row.count || 0;
@@ -1047,18 +1138,18 @@ export abstract class BaseDatabaseService {
         totalReviews > 0 ? (correctReviews / totalReviews) * 100 : 0;
 
       // Get interval distribution
-      const intervalResults = await this.querySql(
+      const intervalResults = await this.querySql<IntervalDistributionRow>(
         SQL_QUERIES.GET_INTERVAL_DISTRIBUTION,
         [],
         { asObject: true },
       );
-      const intervals = intervalResults.map((row: any) => ({
+      const intervals = intervalResults.map((row) => ({
         interval: row.interval_range || "",
         count: row.count || 0,
       }));
 
       // Get pace stats
-      const paceResults = await this.querySql(
+      const paceResults = await this.querySql<PaceStatsRow>(
         SQL_QUERIES.GET_PACE_STATS,
         [startDate, endDate],
         { asObject: true },
@@ -1079,7 +1170,7 @@ export abstract class BaseDatabaseService {
       );
 
       // Get overdue cards (due before today)
-      const overdueResults = await this.querySql(
+      const overdueResults = await this.querySql<OverdueRow>(
         `SELECT COUNT(*) as overdue_count
          FROM flashcards
          WHERE due_date < ? AND state != 'new'`,
@@ -1090,7 +1181,7 @@ export abstract class BaseDatabaseService {
       this.debugLog(`[Statistics Debug] Overdue cards: ${overdueCount}`);
 
       // Get forecast for today and future days
-      const forecastResults = await this.querySql(
+      const forecastResults = await this.querySql<ForecastRow>(
         `SELECT DATE(due_date) as date, COUNT(*) as due_count
          FROM flashcards
          WHERE due_date >= ? AND due_date <= ?
@@ -1100,7 +1191,7 @@ export abstract class BaseDatabaseService {
         { asObject: true },
       );
 
-      const forecast = forecastResults.map((row: any) => ({
+      const forecast = forecastResults.map((row) => ({
         date: row.date,
         dueCount: row.due_count || 0,
       }));
@@ -1109,7 +1200,7 @@ export abstract class BaseDatabaseService {
       const todayStr = todayStart.toISOString().split("T")[0];
       const todayForecast = forecast.find((day) => day.date === todayStr);
       if (todayForecast && overdueCount > 0) {
-        todayForecast.dueCount += overdueCount;
+        todayForecast.dueCount = todayForecast.dueCount + overdueCount;
       } else if (overdueCount > 0 && !todayForecast) {
         // If no cards naturally due today but there are overdue cards, create today entry
         forecast.unshift({
@@ -1123,12 +1214,26 @@ export abstract class BaseDatabaseService {
       );
 
       const result = {
-        dailyStats,
+        dailyStats: dailyStats.map((stat) => ({
+          date: stat.date,
+          reviews: stat.reviews,
+          timeSpent: stat.timeSpent,
+          newCards: stat.newCards,
+          learningCards: stat.learningCards,
+          reviewCards: stat.reviewCards,
+          correctRate: stat.correctRate,
+        })),
         cardStats,
         answerButtons,
         retentionRate,
-        intervals,
-        forecast,
+        intervals: intervals.map((interval) => ({
+          interval: interval.interval,
+          count: interval.count,
+        })),
+        forecast: forecast.map((f) => ({
+          date: f.date,
+          dueCount: f.dueCount,
+        })),
         averagePace,
         totalReviewTime,
       };
@@ -1170,10 +1275,14 @@ export abstract class BaseDatabaseService {
 
   async query(
     sql: string,
-    params: any[] = [],
+    params: SqlJsValue[] = [],
     config?: QueryConfig,
-  ): Promise<any[]> {
-    return await this.querySql(sql, params, config);
+  ): Promise<Record<string, SqlJsValue>[] | SqlJsValue[][]> {
+    return (await this.querySql(
+      sql,
+      params as (string | number | null)[],
+      config,
+    )) as Record<string, SqlJsValue>[] | SqlJsValue[][];
   }
 
   // BACKUP OPERATIONS - Concrete implementations using abstract db methods
@@ -1325,7 +1434,33 @@ export abstract class BaseDatabaseService {
 
   // Abstract methods for database-specific operations
   abstract exportDatabaseToBuffer(): Promise<Uint8Array>;
-  abstract createBackupDatabaseInstance(backupData: Uint8Array): Promise<any>;
-  abstract queryBackupDatabase(backupDb: any, sql: string): Promise<any[]>;
-  abstract closeBackupDatabaseInstance(backupDb: any): Promise<void>;
+  abstract createBackupDatabaseInstance(
+    backupData: Uint8Array,
+  ): Promise<string | object>;
+  abstract queryBackupDatabase(
+    backupDb: string | object,
+    sql: string,
+  ): Promise<SqlJsValue[][]>;
+  abstract closeBackupDatabaseInstance(
+    backupDb: string | object,
+  ): Promise<void>;
+
+  // Abstract querySql methods - implemented by concrete classes
+  abstract querySql<T>(
+    sql: string,
+    params: SqlJsValue[],
+    config: { asObject: true },
+  ): Promise<T[]>;
+  abstract querySql(
+    sql: string,
+    params?: SqlJsValue[],
+    config?: { asObject?: false },
+  ): Promise<SqlRow[]>;
+  abstract querySql<T = SqlRecord>(
+    sql: string,
+    params?: SqlJsValue[],
+    config?: QueryConfig,
+  ): Promise<T[] | SqlJsValue[][]>;
+
+  abstract syncWithDisk(): Promise<void>;
 }

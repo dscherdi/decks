@@ -1,9 +1,11 @@
+import { SqlJsValue } from "../database/sql-types";
+
 export interface Statement {
-  bind(values: any[]): void;
+  bind(values: SqlJsValue[]): void;
   step(): boolean;
-  get(): any[];
+  get(): SqlJsValue[];
   free(): void;
-  run(values?: any[]): void;
+  run(values?: SqlJsValue[]): void;
 }
 
 export interface Database {
@@ -19,21 +21,21 @@ export interface SqlJsStatic {
 
 class MockStatement implements Statement {
   private sql: string;
-  private results: any[][] = [];
+  private results: SqlJsValue[][] = [];
   private currentRow = 0;
-  private boundValues: any[] = [];
+  private boundValues: SqlJsValue[] = [];
 
-  constructor(sql: string, mockData: Map<string, any>) {
+  constructor(sql: string, mockData: Map<string, SqlJsValue[]>) {
     this.sql = sql;
     // Simple mock data handling
-    if (sql.includes('SELECT * FROM decks')) {
-      this.results = mockData.get('decks') || [];
-    } else if (sql.includes('SELECT * FROM flashcards')) {
-      this.results = mockData.get('flashcards') || [];
+    if (sql.includes("SELECT * FROM decks")) {
+      this.results = mockData.get("decks") || [];
+    } else if (sql.includes("SELECT * FROM flashcards")) {
+      this.results = mockData.get("flashcards") || [];
     }
   }
 
-  bind(values: any[]): void {
+  bind(values: SqlJsValue[]): void {
     this.boundValues = values;
     this.currentRow = 0;
   }
@@ -42,7 +44,7 @@ class MockStatement implements Statement {
     return this.currentRow < this.results.length;
   }
 
-  get(): any[] {
+  get(): SqlJsValue[] {
     if (this.currentRow < this.results.length) {
       return this.results[this.currentRow++];
     }
@@ -54,7 +56,7 @@ class MockStatement implements Statement {
     this.boundValues = [];
   }
 
-  run(values?: any[]): void {
+  run(values?: SqlJsValue[]): void {
     if (values) {
       this.boundValues = values;
     }
@@ -63,7 +65,7 @@ class MockStatement implements Statement {
 }
 
 class MockDatabase implements Database {
-  private mockData: Map<string, any> = new Map();
+  private mockData: Map<string, SqlJsValue[]> = new Map();
   private exported: Uint8Array = new Uint8Array();
 
   constructor(data?: Uint8Array) {
@@ -71,8 +73,8 @@ class MockDatabase implements Database {
       // Mock loading from data
     }
     // Initialize with empty tables
-    this.mockData.set('decks', []);
-    this.mockData.set('flashcards', []);
+    this.mockData.set("decks", []);
+    this.mockData.set("flashcards", []);
   }
 
   prepare(sql: string): Statement {
@@ -81,7 +83,7 @@ class MockDatabase implements Database {
 
   run(sql: string): void {
     // Mock running SQL
-    console.log('Mock SQL run:', sql);
+    console.log("Mock SQL run:", sql);
   }
 
   export(): Uint8Array {
@@ -93,11 +95,11 @@ class MockDatabase implements Database {
   }
 
   // Test helper methods
-  _setMockData(table: string, data: any[]): void {
+  _setMockData(table: string, data: SqlJsValue[]): void {
     this.mockData.set(table, data);
   }
 
-  _getMockData(table: string): any[] {
+  _getMockData(table: string): SqlJsValue[] {
     return this.mockData.get(table) || [];
   }
 }
@@ -106,6 +108,8 @@ const mockSqlJs: SqlJsStatic = {
   Database: MockDatabase as any,
 };
 
-export default async function initSqlJs(config?: any): Promise<SqlJsStatic> {
+export default async function initSqlJs(
+  config?: SqlJsValue,
+): Promise<SqlJsStatic> {
   return Promise.resolve(mockSqlJs);
 }

@@ -133,7 +133,6 @@ export function buildMigrationSQL(db: Database): string {
   const decksColumns = getColumnNames(db, "decks");
   const flashcardsColumns = getColumnNames(db, "flashcards");
   const reviewLogsColumns = getColumnNames(db, "review_logs");
-  const reviewSessionsColumns = getColumnNames(db, "review_sessions");
 
   // Build decks migration
   const decksSelect = [

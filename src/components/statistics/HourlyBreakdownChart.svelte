@@ -12,6 +12,7 @@
         Title,
         Tooltip,
         Legend,
+        type TooltipItem,
     } from "chart.js";
     import type { ReviewLog } from "../../database/types";
     import { StatisticsService } from "@/services/StatisticsService";
@@ -36,7 +37,7 @@
     export let logger: Logger;
 
     export let reviewLogs: ReviewLog[] = [];
-    let selectedTimeframe: string = "1m"; // "1m", "3m", "1y", "all"
+    let selectedTimeframe = "1m"; // "1m", "3m", "1y", "all"
 
     let canvas: HTMLCanvasElement;
     let chart: Chart | null = null;
@@ -229,7 +230,7 @@
                             drawOnChartArea: false,
                         },
                         ticks: {
-                            callback: function (value: any) {
+                            callback: function (value: string | number) {
                                 return value + "%";
                             },
                         },
@@ -246,10 +247,10 @@
                     },
                     tooltip: {
                         callbacks: {
-                            label: function (context: any) {
+                            label: function (context: TooltipItem<"bar" | "line">) {
                                 const datasetLabel =
                                     context.dataset.label || "";
-                                const value = context.raw as number;
+                                const value = context.parsed.y;
 
                                 if (datasetLabel.includes("Success Rate")) {
                                     return `${datasetLabel}: ${value}%`;
@@ -257,7 +258,7 @@
                                     return `${datasetLabel}: ${value} reviews`;
                                 }
                             },
-                            afterBody: function (tooltipItems: any) {
+                            afterBody: function (tooltipItems: TooltipItem<"bar" | "line">[]) {
                                 const hour = parseInt(
                                     tooltipItems[0].label.split(":")[0]
                                 );

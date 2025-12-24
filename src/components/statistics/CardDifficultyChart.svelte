@@ -9,6 +9,7 @@
         Title,
         Tooltip,
         Legend,
+        type TooltipItem,
     } from "chart.js";
     import type { Flashcard } from "../../database/types";
     import { StatisticsService } from "@/services/StatisticsService";
@@ -30,7 +31,7 @@
     export let logger: Logger;
 
     export let flashcards: Flashcard[] = [];
-    export const showPercentiles: string = "50"; // "50", "95", "all"
+    export const showPercentiles = "50"; // "50", "95", "all"
 
     let canvas: HTMLCanvasElement;
     let chart: Chart | null = null;
@@ -184,12 +185,12 @@
                     },
                     tooltip: {
                         callbacks: {
-                            label: function (context: any) {
-                                const value = context.raw as number;
+                            label: function (context: TooltipItem<'bar'>) {
+                                const value = context.parsed.y;
                                 const dataset = context.dataset;
-                                const total = dataset.data.reduce(
-                                    (sum: number, val: any) =>
-                                        sum + (val as number),
+                                const total = (dataset.data as number[]).reduce(
+                                    (sum: number, val: number) =>
+                                        sum + val,
                                     0
                                 );
                                 const percentage =
@@ -198,7 +199,7 @@
                                         : "0";
                                 return `${dataset.label}: ${value} cards (${percentage}%)`;
                             },
-                            afterLabel: function (context: any) {
+                            afterLabel: function (_context: TooltipItem<'bar'>) {
                                 return "Higher difficulty = harder to remember";
                             },
                         },

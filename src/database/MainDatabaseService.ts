@@ -5,18 +5,19 @@ import {
   buildMigrationSQL,
   CURRENT_SCHEMA_VERSION,
 } from "./schemas";
-import { Database } from "sql.js";
+import { Database, InitSqlJsStatic } from "sql.js";
 import { FlashcardSynchronizer } from "../services/FlashcardSynchronizer";
+import { SqlJsValue } from "./sql-types";
 
 export class MainDatabaseService extends BaseDatabaseService {
   private db: Database | null = null;
-  private SQL: any = null;
+  private SQL: InitSqlJsStatic | null = null;
   private lastKnownModified = 0;
 
   constructor(
     dbPath: string,
     adapter: DataAdapter,
-    debugLog: (message: string, ...args: any[]) => void,
+    debugLog: (message: string, ...args: (string | number | object)[]) => void,
   ) {
     super(dbPath, adapter, debugLog);
   }
@@ -24,8 +25,13 @@ export class MainDatabaseService extends BaseDatabaseService {
   async initialize(): Promise<void> {
     try {
       // Load SQL.js
-      if (typeof window !== "undefined" && (window as any).initSqlJs) {
-        this.SQL = (window as any).initSqlJs;
+      if (
+        typeof window !== "undefined" &&
+        (window as Window & { initSqlJs?: InitSqlJsStatic }).initSqlJs
+      ) {
+        this.SQL = (
+          window as Window & { initSqlJs: InitSqlJsStatic }
+        ).initSqlJs;
       } else {
         // For environments where SQL.js is not globally available
         const sqlJs = await import("sql.js");
@@ -33,6 +39,9 @@ export class MainDatabaseService extends BaseDatabaseService {
       }
 
       // Initialize SQL.js
+      if (!this.SQL) {
+        throw new Error("Failed to load SQL.js");
+      }
       const SQL = await this.SQL({
         locateFile: (file: string) => {
           if (file.endsWith(".wasm")) {
@@ -79,7 +88,7 @@ export class MainDatabaseService extends BaseDatabaseService {
         return new Uint8Array(data);
       }
       return null;
-    } catch (error) {
+    } catch {
       this.debugLog("Database file doesn't exist yet, will create new one");
       return null;
     }
@@ -130,7 +139,7 @@ export class MainDatabaseService extends BaseDatabaseService {
   }
 
   // Core SQL execution methods
-  async executeSql(sql: string, params: any[] = []): Promise<void> {
+  async executeSql(sql: string, params: SqlJsValue[] = []): Promise<void> {
     if (!this.db) throw new Error("Database not initialized");
 
     const stmt = this.db.prepare(sql);
@@ -141,30 +150,48 @@ export class MainDatabaseService extends BaseDatabaseService {
     }
   }
 
+  // Generic overload for object queries
+  async querySql<T>(
+    sql: string,
+    params: SqlJsValue[],
+    config: { asObject: true },
+  ): Promise<T[]>;
+
+  // Overload for array queries
   async querySql(
     sql: string,
-    params: any[] = [],
+    params?: SqlJsValue[],
+    config?: { asObject?: false },
+  ): Promise<SqlJsValue[][]>;
+
+  // Implementation
+  async querySql<T = Record<string, SqlJsValue>>(
+    sql: string,
+    params: SqlJsValue[] = [],
     config?: QueryConfig,
-  ): Promise<any[]> {
+  ): Promise<T[] | SqlJsValue[][]> {
     if (!this.db) throw new Error("Database not initialized");
 
     const stmt = this.db.prepare(sql);
-    const results: any[] = [];
 
     try {
       stmt.bind(params);
-      while (stmt.step()) {
-        if (config?.asObject) {
-          results.push(stmt.getAsObject());
-        } else {
-          results.push(stmt.get());
+      if (config?.asObject) {
+        const results: T[] = [];
+        while (stmt.step()) {
+          results.push(stmt.getAsObject() as T);
         }
+        return results;
+      } else {
+        const results: (string | number | null)[][] = [];
+        while (stmt.step()) {
+          results.push(stmt.get() as (string | number | null)[]);
+        }
+        return results;
       }
     } finally {
       stmt.free();
     }
-
-    return results;
   }
 
   // Database initialization and migration methods
@@ -206,7 +233,11 @@ export class MainDatabaseService extends BaseDatabaseService {
     return this.db.export();
   }
 
-  async createBackupDatabaseInstance(backupData: Uint8Array): Promise<any> {
+  async createBackupDatabaseInstance(
+    backupData: Uint8Array,
+  ): Promise<Database> {
+    if (!this.SQL) throw new Error("SQL.js not initialized");
+
     const SQL = await this.SQL({
       locateFile: (file: string) => {
         if (file.endsWith(".wasm")) {
@@ -219,16 +250,19 @@ export class MainDatabaseService extends BaseDatabaseService {
     return new SQL.Database(backupData);
   }
 
-  async queryBackupDatabase(backupDb: any, sql: string): Promise<any[]> {
+  async queryBackupDatabase(
+    backupDb: Database,
+    sql: string,
+  ): Promise<SqlJsValue[][]> {
     const result = backupDb.exec(sql);
     if (result.length === 0) return [];
 
     // Convert SQL.js result format to array of row arrays
     const resultData = result[0];
-    return resultData.values || [];
+    return (resultData.values || []) as (string | number | null)[][];
   }
 
-  async closeBackupDatabaseInstance(backupDb: any): Promise<void> {
+  async closeBackupDatabaseInstance(backupDb: Database): Promise<void> {
     backupDb.close();
   }
 
@@ -277,9 +311,39 @@ export class MainDatabaseService extends BaseDatabaseService {
 
       // Mount the disk database as a temporary file in sql.js filesystem
       this.db.exec(`SELECT 1`); // Ensure database is active
-      const FS = (this.db as any).FS || (globalThis as any).FS;
+      const FS =
+        (
+          this.db as Database & {
+            FS?: {
+              createDataFile?: (
+                parent: string,
+                name: string,
+                data: Uint8Array,
+                canRead: boolean,
+                canWrite: boolean,
+                canOwn: boolean,
+              ) => void;
+              unlink?: (path: string) => void;
+            };
+          }
+        ).FS ||
+        (
+          globalThis as typeof globalThis & {
+            FS?: {
+              createDataFile?: (
+                parent: string,
+                name: string,
+                data: Uint8Array,
+                canRead: boolean,
+                canWrite: boolean,
+                canOwn: boolean,
+              ) => void;
+              unlink?: (path: string) => void;
+            };
+          }
+        ).FS;
 
-      if (FS && FS.createDataFile) {
+      if (FS?.createDataFile) {
         // Create the temporary file in the virtual filesystem
         FS.createDataFile(
           "/",
@@ -339,7 +403,7 @@ export class MainDatabaseService extends BaseDatabaseService {
           this.db.exec("DETACH DATABASE remote");
         } finally {
           // Clean up the temporary file
-          if (FS.unlink) {
+          if (FS?.unlink) {
             try {
               FS.unlink(tempPath);
             } catch (cleanupError) {
@@ -349,6 +413,7 @@ export class MainDatabaseService extends BaseDatabaseService {
         }
       } else {
         // Fallback: Create a new database instance for merging
+        if (!this.SQL) throw new Error("SQL.js not initialized");
         const SQL = await this.SQL({
           locateFile: (file: string) => {
             if (file.endsWith(".wasm")) {
@@ -416,7 +481,8 @@ export class MainDatabaseService extends BaseDatabaseService {
                 );
                 const shouldReplace =
                   !existingDeck.length ||
-                  (existingDeck[0]?.values?.[0]?.[0] || 0) < remoteModified;
+                  (existingDeck[0]?.values?.[0]?.[0] || 0) <
+                    (remoteModified || 0);
 
                 if (shouldReplace) {
                   const deckStmt = this.db.prepare(`
@@ -444,7 +510,8 @@ export class MainDatabaseService extends BaseDatabaseService {
                 );
                 const shouldReplace =
                   !existingCard.length ||
-                  (existingCard[0]?.values?.[0]?.[0] || 0) < remoteModified;
+                  (existingCard[0]?.values?.[0]?.[0] || 0) <
+                    (remoteModified || 0);
 
                 if (shouldReplace) {
                   const cardStmt = this.db.prepare(`

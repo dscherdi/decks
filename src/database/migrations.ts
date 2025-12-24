@@ -16,7 +16,7 @@ export function getCurrentSchemaVersion(db: Database): number {
     }
     stmt.free();
     return version;
-  } catch (error) {
+  } catch {
     return 0;
   }
 }

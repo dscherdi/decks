@@ -3,7 +3,7 @@ import type { Deck, Flashcard } from "../../database/types";
 import type { RatingLabel } from "../../algorithm/fsrs";
 import type { Scheduler } from "../../services/Scheduler";
 import type { DecksSettings } from "../../settings";
-import type { DatabaseServiceInterface } from "../../database/DatabaseFactory";
+import type { IDatabaseService } from "../../database/DatabaseFactory";
 import type {
     FlashcardReviewComponent,
     CompleteEventDetail,
@@ -15,7 +15,7 @@ export class FlashcardReviewModalWrapper extends Modal {
     private initialCard: Flashcard | null;
     private scheduler: Scheduler;
     private settings: DecksSettings;
-    private db: DatabaseServiceInterface;
+    private db: IDatabaseService;
     private refreshStats: () => Promise<void>;
     private refreshStatsById: (deckId: string) => Promise<void>;
     private component: FlashcardReviewComponent | null = null;
@@ -40,7 +40,7 @@ export class FlashcardReviewModalWrapper extends Modal {
         flashcards: Flashcard[],
         scheduler: Scheduler,
         settings: DecksSettings,
-        db: DatabaseServiceInterface,
+        db: IDatabaseService,
         refreshStats: () => Promise<void>,
         refreshStatsById: (deckId: string) => Promise<void>
     ) {
@@ -134,10 +134,9 @@ export class FlashcardReviewModalWrapper extends Modal {
             },
         }) as FlashcardReviewComponent;
 
-        this.component.$on("complete", async (event: any) => {
+        this.component.$on("complete", async (_event: CustomEvent<CompleteEventDetail>) => {
             console.log("Review Complete");
-            const { reason, reviewed } = event.detail as CompleteEventDetail;
-            let message = `Review session complete for ${this.deck.name}!`;
+            const message = `Review session complete for ${this.deck.name}!`;
 
             if (this.settings?.ui?.enableNotices !== false) {
                 new Notice(message);

@@ -8,7 +8,7 @@ export class Logger {
         private configDir?: string
     ) {}
 
-    debug(message: string, ...args: any[]): void {
+    debug(message: string, ...args: unknown[]): void {
         if (this.settings?.debug?.enableLogging) {
             console.log(`[Decks Debug] ${message}`, ...args);
             if (this.adapter && this.configDir) {
@@ -17,7 +17,7 @@ export class Logger {
         }
     }
 
-    error(message: string, ...args: any[]): void {
+    error(message: string, ...args: unknown[]): void {
         if (this.settings?.debug?.enableLogging) {
             console.error(`[Decks Error] ${message}`, ...args);
             if (this.adapter && this.configDir) {
@@ -26,7 +26,7 @@ export class Logger {
         }
     }
 
-    performance(message: string, ...args: any[]): void {
+    performance(message: string, ...args: unknown[]): void {
         if (this.settings?.debug?.performanceLogs) {
             console.log(`[Decks Performance] ${message}`, ...args);
         }
@@ -34,7 +34,7 @@ export class Logger {
 
     private async writeToLogFile(
         message: string,
-        ...args: any[]
+        ...args: unknown[]
     ): Promise<void> {
         try {
             if (!this.adapter || !this.configDir) return;

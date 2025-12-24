@@ -1,5 +1,6 @@
 import { DataAdapter } from "obsidian";
 import { BaseDatabaseService, QueryConfig } from "./BaseDatabaseService";
+import { SqlJsValue } from "./sql-types";
 import { DatabaseWorkerMessage } from "../workers/worker-entry";
 import { ProgressTracker } from "../utils/progress";
 
@@ -9,7 +10,10 @@ export class WorkerDatabaseService extends BaseDatabaseService {
   private messageId = 0;
   private pendingRequests = new Map<
     string,
-    { resolve: (value?: any) => void; reject: (reason?: any) => void }
+    {
+      resolve: (value?: string | number | object) => void;
+      reject: (reason?: Error) => void;
+    }
   >();
   private progressTracker?: ProgressTracker;
 
@@ -17,7 +21,7 @@ export class WorkerDatabaseService extends BaseDatabaseService {
     dbPath: string,
     adapter: DataAdapter,
     configDir: string,
-    debugLog: (message: string, ...args: any[]) => void,
+    debugLog: (message: string, ...args: (string | number | object)[]) => void,
   ) {
     super(dbPath, adapter, debugLog);
     this.configDir = configDir;
@@ -159,7 +163,7 @@ export class WorkerDatabaseService extends BaseDatabaseService {
         return new Uint8Array(data);
       }
       return null;
-    } catch (error) {
+    } catch {
       this.debugLog("Database file doesn't exist yet, will create new one");
       return null;
     }
@@ -167,9 +171,9 @@ export class WorkerDatabaseService extends BaseDatabaseService {
 
   private sendMessage(
     type: string,
-    data?: any,
+    data?: object,
     transferables?: Transferable[],
-  ): Promise<any> {
+  ): Promise<string | number | object> {
     return new Promise((resolve, reject) => {
       if (!this.worker) {
         reject(new Error("Worker not initialized"));
@@ -181,7 +185,7 @@ export class WorkerDatabaseService extends BaseDatabaseService {
 
       const message: DatabaseWorkerMessage = {
         id,
-        type: type as any,
+        type,
         data,
       };
 
@@ -201,6 +205,7 @@ export class WorkerDatabaseService extends BaseDatabaseService {
       await this.syncWithDisk();
 
       const data = await this.sendMessage("export");
+      const exportData = data as { buffer: Uint8Array };
 
       // Ensure directory exists
       const dir = this.dbPath.substring(0, this.dbPath.lastIndexOf("/"));
@@ -210,7 +215,7 @@ export class WorkerDatabaseService extends BaseDatabaseService {
 
       // data.buffer is a Uint8Array from worker.export()
       // Obsidian's writeBinary expects a Uint8Array
-      await this.adapter.writeBinary(this.dbPath, data.buffer);
+      await this.adapter.writeBinary(this.dbPath, exportData.buffer);
 
       // Update lastKnownModified after successful save
       await this.updateLastKnownModified();
@@ -233,32 +238,51 @@ export class WorkerDatabaseService extends BaseDatabaseService {
   // Transaction methods removed - no longer using transactions
 
   // Core SQL execution methods - delegate to worker
-  async executeSql(sql: string, params: any[] = []): Promise<void> {
+  async executeSql(sql: string, params: SqlJsValue[] = []): Promise<void> {
     if (!this.worker) throw new Error("Worker not initialized");
     await this.sendMessage("executeSql", { sql, params });
   }
 
+  // Generic overload for object queries
+  async querySql<T>(
+    sql: string,
+    params: SqlJsValue[],
+    config: { asObject: true },
+  ): Promise<T[]>;
+
+  // Overload for array queries
   async querySql(
     sql: string,
-    params: any[] = [],
+    params?: SqlJsValue[],
+    config?: { asObject?: false },
+  ): Promise<SqlJsValue[][]>;
+
+  // Implementation
+  async querySql<T = Record<string, SqlJsValue>>(
+    sql: string,
+    params: SqlJsValue[] = [],
     config?: QueryConfig,
-  ): Promise<any[]> {
+  ): Promise<T[] | SqlJsValue[][]> {
     if (!this.worker) throw new Error("Worker not initialized");
-    return await this.sendMessage("querySql", { sql, params, config });
+    return (await this.sendMessage("querySql", { sql, params, config })) as
+      | T[]
+      | SqlJsValue[][];
   }
 
   // BACKUP OPERATIONS - Abstract method implementations
   async exportDatabaseToBuffer(): Promise<Uint8Array> {
     if (!this.worker) throw new Error("Worker not initialized");
     const data = await this.sendMessage("export");
-    return data.buffer;
+    return (data as { buffer: Uint8Array }).buffer;
   }
 
-  async createBackupDatabaseInstance(backupData: Uint8Array): Promise<any> {
+  async createBackupDatabaseInstance(backupData: Uint8Array): Promise<string> {
     if (!this.worker) throw new Error("Worker not initialized");
 
     try {
-      const response = await this.sendMessage("createBackupDb", { backupData });
+      const response = (await this.sendMessage("createBackupDb", {
+        backupData,
+      })) as { backupDbId: string };
       return response.backupDbId;
     } catch (error) {
       console.error("Failed to create backup database instance:", error);
@@ -266,14 +290,17 @@ export class WorkerDatabaseService extends BaseDatabaseService {
     }
   }
 
-  async queryBackupDatabase(backupDbId: any, sql: string): Promise<any[]> {
+  async queryBackupDatabase(
+    backupDbId: string,
+    sql: string,
+  ): Promise<SqlJsValue[][]> {
     if (!this.worker) throw new Error("Worker not initialized");
 
     try {
-      const response = await this.sendMessage("queryBackupDb", {
+      const response = (await this.sendMessage("queryBackupDb", {
         backupDbId,
         sql,
-      });
+      })) as { data: (string | number | null)[][] };
       return response.data || [];
     } catch (error) {
       console.error("Failed to query backup database:", error);
@@ -281,7 +308,7 @@ export class WorkerDatabaseService extends BaseDatabaseService {
     }
   }
 
-  async closeBackupDatabaseInstance(backupDbId: any): Promise<void> {
+  async closeBackupDatabaseInstance(backupDbId: string): Promise<void> {
     if (!this.worker) throw new Error("Worker not initialized");
 
     try {
@@ -352,7 +379,7 @@ export class WorkerDatabaseService extends BaseDatabaseService {
       deckId: string;
       deckName: string;
       deckFilepath: string;
-      deckConfig: any;
+      deckConfig: object;
       fileContent: string;
       force: boolean;
     },
@@ -373,10 +400,16 @@ export class WorkerDatabaseService extends BaseDatabaseService {
       // Clear progress tracker after operation
       this.progressTracker = undefined;
 
+      const typedResult = result as {
+        success: boolean;
+        parsedCount: number;
+        operationsCount: number;
+      };
+
       return {
-        success: result.success,
-        parsedCount: result.parsedCount,
-        operationsCount: result.operationsCount,
+        success: typedResult.success,
+        parsedCount: typedResult.parsedCount,
+        operationsCount: typedResult.operationsCount,
       };
     } catch (error) {
       console.error("Worker sync failed:", error);
