@@ -33,10 +33,10 @@ try {
 } catch (error) {
   // If no previous tags, get all commits
   try {
-    gitCommits = execSync(
-      'git log --oneline --pretty=format:"- %s"',
-      { encoding: "utf8", cwd: rootDir }
-    ).trim();
+    gitCommits = execSync('git log --oneline --pretty=format:"- %s"', {
+      encoding: "utf8",
+      cwd: rootDir,
+    }).trim();
   } catch (e) {
     gitCommits = "- Initial release";
   }
@@ -94,7 +94,7 @@ const releaseNotes = `# Decks v${version}
 
 ## 📦 Release Files
 
-- `main.js` - Plugin code (${(readFileSync(join(rootDir, "dist/main.js")).length / 1024).toFixed(1)} KB)
+- \`main.js\` - Plugin code (${(readFileSync(join(rootDir, "dist/main.js")).length / 1024).toFixed(1)} KB)
 - \`manifest.json\` - Plugin manifest
 - \`styles.css\` - Plugin styles
 
@@ -107,11 +107,15 @@ const releaseNotes = `# Decks v${version}
 - **Time Tracking**: Monitor your review pace and efficiency
 - **Anki-Style Reviews**: Familiar review interface with learning/review/new card ordering
 
-${recentFeatures ? `## 🆕 What's New in v${version}
+${
+  recentFeatures
+    ? `## 🆕 What's New in v${version}
 
 ${recentFeatures}
 
-` : ""}## 📋 Changes in This Release
+`
+    : ""
+}## 📋 Changes in This Release
 
 ${gitCommits || "- Initial release"}
 
@@ -131,7 +135,7 @@ MIT License - see [LICENSE](../../blob/main/LICENSE) for details.
 
 **Minimum Obsidian Version**: ${manifest.minAppVersion}
 **Plugin Version**: ${version}
-**Build Date**: ${new Date().toISOString().split('T')[0]}
+**Build Date**: ${new Date().toISOString().split("T")[0]}
 `;
 
 // Write release notes to file
@@ -162,7 +166,7 @@ const condensedNotes = `## Decks v${version}
 ${recentFeatures || "See commit history for changes"}
 
 ### Changes
-${gitCommits.split('\n').slice(0, 10).join('\n') || "- Initial release"}
+${gitCommits.split("\n").slice(0, 10).join("\n") || "- Initial release"}
 
 **Minimum Obsidian Version**: ${manifest.minAppVersion}`;
 
