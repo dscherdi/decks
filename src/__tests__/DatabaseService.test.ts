@@ -286,7 +286,7 @@ describe("DatabaseService", () => {
       expect(mockDb.export).toHaveBeenCalled();
       expect(mockAdapter.writeBinary).toHaveBeenCalledWith(
         "test.db",
-        expect.any(Uint8Array),
+        expect.any(ArrayBuffer),
       );
     });
 

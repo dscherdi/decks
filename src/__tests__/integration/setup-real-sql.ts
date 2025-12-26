@@ -4,25 +4,30 @@ import initSqlJs, { Database } from "sql.js";
 let SQL: any = null;
 
 export async function setupRealSqlJs(): Promise<void> {
-  if (!SQL) {
-    try {
-      // Initialize SQL.js with WASM
-      SQL = await initSqlJs({
-        // For Node.js environment, we need to provide the WASM file path
-        locateFile: (file: string) => {
-          // In Node.js test environment, sql.js will handle WASM loading
-          return `node_modules/sql.js/dist/${file}`;
-        },
-      });
+  try {
+    // Make initSqlJs available globally for MainDatabaseService
+    // MainDatabaseService expects a function that returns the SQL module when called
+    (global as any).initSqlJs = async (config?: any) => {
+      if (!SQL) {
+        // Initialize SQL.js with WASM
+        // Override locateFile to use local node_modules instead of web URLs
+        SQL = await initSqlJs({
+          ...config,
+          // For Node.js environment, we need to provide the WASM file path
+          // This MUST come after ...config to override MainDatabaseService's web URL
+          locateFile: (file: string) => {
+            // In Node.js test environment, sql.js will handle WASM loading from node_modules
+            return `node_modules/sql.js/dist/${file}`;
+          },
+        });
+      }
+      return SQL;
+    };
 
-      // Make it globally available for MainDatabaseService
-      (global as any).initSqlJs = () => Promise.resolve(SQL);
-
-      console.log("Real SQL.js initialized for integration tests");
-    } catch (error) {
-      console.error("Failed to initialize real SQL.js:", error);
-      throw error;
-    }
+    console.log("Real SQL.js initialized for integration tests");
+  } catch (error) {
+    console.error("Failed to initialize real SQL.js:", error);
+    throw error;
   }
 }
 

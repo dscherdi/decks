@@ -1,12 +1,14 @@
-import {
+import type {
     Deck,
     DeckStats,
+} from "@/database/types";
+import {
     hasNewCardsLimit,
     hasReviewCardsLimit,
 } from "@/database/types";
 import { VIEW_TYPE_DECKS } from "@/main";
 import { DeckSynchronizer } from "@/services/DeckSynchronizer";
-import { DecksSettings } from "@/settings";
+import type { DecksSettings } from "@/settings";
 import { yieldToUI } from "@/utils/ui";
 import { Logger } from "@/utils/logging";
 import { ItemView, Component, WorkspaceLeaf, Notice } from "obsidian";
@@ -16,12 +18,12 @@ import { StatisticsModal } from "./settings/StatisticsModal";
 import { StatisticsService } from "@/services/StatisticsService";
 
 import DeckListPanel from "./DeckListPanel.svelte";
+import { mount, unmount } from "svelte";
 import { ProgressTracker } from "@/utils/progress";
 import type {
     DeckListPanelComponent,
-    DeckListPanelConstructor,
 } from "../types/svelte-components";
-import { IDatabaseService } from "../database/DatabaseFactory";
+import type { IDatabaseService } from "../database/DatabaseFactory";
 
 export class DecksView extends ItemView {
     private db: IDatabaseService;
@@ -80,24 +82,23 @@ export class DecksView extends ItemView {
         container.empty();
         container.addClass("decks-view");
 
-        // Create and mount Svelte component
-        this.deckListPanelComponent =
-            new (DeckListPanel as DeckListPanelConstructor)({
-                target: container,
-                props: {
-                    statisticsService: this.statisticsService,
-                    db: this.db,
-                    deckSynchronizer: this.deckSynchronizer,
-                    app: this.app,
-                    onDeckClick: (deck: Deck) => this.startReview(deck),
-                    onRefresh: () => this.refresh(false),
-                    onForceRefreshDeck: async (deckId: string) => {
-                        await this.deckSynchronizer.forceSyncDeck(deckId);
-                        await this.refreshStats();
-                    },
-                    openStatisticsModal: () => this.openStatisticsModal(),
+        // Create and mount Svelte component using Svelte 5 API
+        this.deckListPanelComponent = mount(DeckListPanel, {
+            target: container as HTMLElement,
+            props: {
+                statisticsService: this.statisticsService,
+                db: this.db,
+                deckSynchronizer: this.deckSynchronizer,
+                app: this.app,
+                onDeckClick: (deck: Deck) => this.startReview(deck),
+                onRefresh: () => this.refresh(false),
+                onForceRefreshDeck: async (deckId: string) => {
+                    await this.deckSynchronizer.forceSyncDeck(deckId);
+                    await this.refreshStats();
                 },
-            });
+                openStatisticsModal: () => this.openStatisticsModal(),
+            },
+        }) as DeckListPanelComponent;
 
         // Initial refresh
         await this.refresh(false);
@@ -110,7 +111,12 @@ export class DecksView extends ItemView {
 
     async onClose() {
         if (this.deckListPanelComponent) {
-            this.deckListPanelComponent.$destroy();
+            // Svelte 5: explicitly unmount to trigger onDestroy and cleanup listeners
+            try {
+                unmount(this.deckListPanelComponent);
+            } catch (e) {
+                console.warn("Error unmounting deck list panel:", e);
+            }
             this.deckListPanelComponent = null;
         }
 
@@ -132,7 +138,7 @@ export class DecksView extends ItemView {
     }
 
     async update(updatedDecks: Deck[], deckStats: Map<string, DeckStats>) {
-        await this.deckListPanelComponent?.updateAll(updatedDecks, deckStats);
+        await this.deckListPanelComponent?.updateAll?.(updatedDecks, deckStats);
     }
 
     private async getAllDeckStatsMap(): Promise<Map<string, DeckStats>> {
@@ -185,7 +191,7 @@ export class DecksView extends ItemView {
 
             // Update component with new stats using unified function
             if (this.deckListPanelComponent) {
-                await this.deckListPanelComponent.updateAll(
+                await this.deckListPanelComponent.updateAll?.(
                     undefined,
                     deckStats
                 );
@@ -206,7 +212,7 @@ export class DecksView extends ItemView {
 
             // Update component using unified function
             if (this.deckListPanelComponent && deckStats) {
-                await this.deckListPanelComponent.updateAll(
+                await this.deckListPanelComponent.updateAll?.(
                     undefined,
                     undefined,
                     deckId,
@@ -253,7 +259,7 @@ export class DecksView extends ItemView {
     }
 
     async refreshHeatmap() {
-        await this.deckListPanelComponent?.updateAll();
+        await this.deckListPanelComponent?.updateAll?.();
     }
 
     // Test method to check if background job is running

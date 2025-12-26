@@ -4,6 +4,12 @@ import { setupRealSqlJs } from "./setup-real-sql";
 beforeAll(async () => {
   // Initialize real SQL.js for all integration tests
   await setupRealSqlJs();
+
+  // Add global error handler to catch unhandled rejections with stack traces
+  process.on('unhandledRejection', (reason, promise) => {
+    console.error('Unhandled Rejection at:', promise, 'reason:', reason);
+    throw reason;
+  });
 });
 
 // Clean up after all integration tests

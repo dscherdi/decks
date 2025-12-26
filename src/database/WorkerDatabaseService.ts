@@ -1,8 +1,10 @@
-import { DataAdapter } from "obsidian";
-import { BaseDatabaseService, QueryConfig } from "./BaseDatabaseService";
-import { SqlJsValue } from "./sql-types";
-import { DatabaseWorkerMessage } from "../workers/worker-entry";
+import type { DataAdapter } from "obsidian";
+import { BaseDatabaseService } from "./BaseDatabaseService";
+import type { QueryConfig } from "./BaseDatabaseService";
+import type { SqlJsValue } from "./sql-types";
+import type { DatabaseWorkerMessage } from "../workers/worker-entry";
 import { ProgressTracker } from "../utils/progress";
+import type { SyncData, SyncResult } from "../services/FlashcardSynchronizer";
 
 export class WorkerDatabaseService extends BaseDatabaseService {
   private worker: Worker | null = null;
@@ -214,8 +216,8 @@ export class WorkerDatabaseService extends BaseDatabaseService {
       }
 
       // data.buffer is a Uint8Array from worker.export()
-      // Obsidian's writeBinary expects a Uint8Array
-      await this.adapter.writeBinary(this.dbPath, exportData.buffer);
+      // Obsidian's writeBinary expects an ArrayBuffer
+      await this.adapter.writeBinary(this.dbPath, exportData.buffer.buffer.slice(0) as ArrayBuffer);
 
       // Update lastKnownModified after successful save
       await this.updateLastKnownModified();
@@ -373,22 +375,36 @@ export class WorkerDatabaseService extends BaseDatabaseService {
     }
   }
 
-  // Worker-specific operations
+  /**
+   * Unified sync method - runs in worker for WorkerDatabaseService
+   * Note: progressCallback is currently not used in worker mode (worker handles progress internally)
+   */
+  async syncFlashcardsForDeck(
+    data: SyncData,
+    _progressCallback?: (progress: number, message?: string) => void
+  ): Promise<SyncResult> {
+    if (!this.worker) throw new Error("Worker not initialized");
+
+    try {
+      const result = await this.sendMessage("syncFlashcardsForDeck", data);
+
+      const typedResult = result as SyncResult;
+
+      return {
+        success: typedResult.success,
+        parsedCount: typedResult.parsedCount,
+        operationsCount: typedResult.operationsCount,
+      };
+    } catch (error) {
+      throw error;
+    }
+  }
+
+  // Worker-specific operations (deprecated - use syncFlashcardsForDeck)
   async syncFlashcardsForDeckWorker(
-    data: {
-      deckId: string;
-      deckName: string;
-      deckFilepath: string;
-      deckConfig: object;
-      fileContent: string;
-      force: boolean;
-    },
+    data: SyncData,
     progressTracker?: ProgressTracker,
-  ): Promise<{
-    success: boolean;
-    parsedCount: number;
-    operationsCount: number;
-  }> {
+  ): Promise<SyncResult> {
     if (!this.worker) throw new Error("Worker not initialized");
 
     try {
@@ -400,11 +416,7 @@ export class WorkerDatabaseService extends BaseDatabaseService {
       // Clear progress tracker after operation
       this.progressTracker = undefined;
 
-      const typedResult = result as {
-        success: boolean;
-        parsedCount: number;
-        operationsCount: number;
-      };
+      const typedResult = result as SyncResult;
 
       return {
         success: typedResult.success,

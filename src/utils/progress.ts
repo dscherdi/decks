@@ -1,5 +1,5 @@
 import { Notice } from "obsidian";
-import { DecksSettings } from "../settings";
+import type { DecksSettings } from "../settings";
 
 export class ProgressTracker {
     private progressNotice: Notice | null = null;

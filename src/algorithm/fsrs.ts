@@ -1,6 +1,6 @@
-import { Flashcard, FlashcardState } from "../database/types";
+import type { Flashcard, FlashcardState } from "../database/types";
 import {
-    FSRSProfile,
+    type FSRSProfile,
     getWeightsForProfile,
     getMinMinutesForProfile,
     getMaxIntervalDaysForProfile,

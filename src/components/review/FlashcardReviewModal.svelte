@@ -28,8 +28,20 @@
     export let onCardReviewed:
         | ((reviewedCard: Flashcard) => Promise<void>)
         | undefined = undefined;
+    export let onComplete:
+        | ((event: { reason: string; reviewed: number }) => void | Promise<void>)
+        | undefined = undefined;
 
     const dispatch = createEventDispatcher();
+
+    // Helper function to handle complete action (supports both Svelte 4 and Svelte 5)
+    function handleComplete(detail: { reason: string; reviewed: number }) {
+        if (onComplete) {
+            onComplete(detail);
+        } else {
+            dispatch("complete", detail);
+        }
+    }
 
     let showAnswer = false;
     let isLoading = false;
@@ -264,7 +276,7 @@
             scheduler.setCurrentSession(null);
         }
 
-        dispatch("complete", {
+        handleComplete({
             reason: "end-review",
             reviewed: sessionProgress
                 ? sessionProgress.doneUnique

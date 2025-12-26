@@ -162,8 +162,8 @@ export class DatabaseTestUtils {
     deckId: string,
     overrides: Partial<Flashcard> = {},
   ): Flashcard {
-    const frontText = `Test Question ${Date.now()}`;
-    const backText = `Test Answer ${Date.now()}`;
+    const frontText = `Test Question ${Date.now()}_${Math.random()}`;
+    const backText = `Test Answer ${Date.now()}_${Math.random()}`;
 
     return {
       id: `${deckId}:${frontText}`,

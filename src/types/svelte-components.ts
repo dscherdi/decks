@@ -5,7 +5,7 @@ import type { StatisticsService } from "../services/StatisticsService";
 import type { DeckSynchronizer } from "../services/DeckSynchronizer";
 import type { App } from "obsidian";
 
-// Base Svelte component interface
+// Base Svelte component interface (Svelte 4 style)
 export interface SvelteComponentInstance {
   $set(props: Record<string, string | number | boolean | null>): void;
   $on(
@@ -14,6 +14,10 @@ export interface SvelteComponentInstance {
   ): () => void;
   $destroy(): void;
 }
+
+// Svelte 5 mount() returns a Record with exported functions as properties
+// Properties are accessed directly, no $destroy needed (automatic cleanup)
+export type Svelte5MountedComponent = Record<string, unknown>;
 
 // Event detail types
 export interface ExportEventDetail {
@@ -36,14 +40,15 @@ export interface DeckConfigComponent extends SvelteComponentInstance {
   saveConfig(): void;
 }
 
-export interface DeckListPanelComponent extends SvelteComponentInstance {
-  updateAll(
+// DeckListPanel component - supports both Svelte 4 and Svelte 5 APIs
+export type DeckListPanelComponent = (SvelteComponentInstance | Svelte5MountedComponent) & {
+  updateAll?(
     updatedDecks?: Deck[],
     deckStats?: Map<string, DeckStats>,
     singleDeckId?: string,
     singleDeckStats?: DeckStats,
   ): Promise<void>;
-}
+};
 
 // Constructor interface for DeckListPanel
 export interface DeckListPanelConstructor {

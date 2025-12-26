@@ -1,10 +1,10 @@
 import { DeckManager } from "./DeckManager";
 import { yieldToUI } from "../utils/ui";
 import { Logger, formatTime } from "../utils/logging";
-import { DecksSettings } from "../settings";
-import { DataAdapter } from "obsidian";
+import type { DecksSettings } from "../settings";
+import type { DataAdapter } from "obsidian";
 import { ProgressTracker } from "../utils/progress";
-import { IDatabaseService } from "../database/DatabaseFactory";
+import type { IDatabaseService } from "../database/DatabaseFactory";
 
 export interface SyncProgress {
     message: string;
@@ -386,19 +386,6 @@ export class DeckSynchronizer {
             `Creating deck for file: ${filePath} with tag: ${tag}`
         );
         await this.deckManager.createDeckForFile(filePath, tag);
-    }
-
-    /**
-     * Update flashcard deck IDs when a deck is renamed
-     */
-    async updateFlashcardDeckIds(
-        oldDeckId: string,
-        newDeckId: string
-    ): Promise<void> {
-        this.logger.debug(
-            `Updating flashcard deck IDs from ${oldDeckId} to ${newDeckId}`
-        );
-        await this.deckManager.updateFlashcardDeckIds(oldDeckId, newDeckId);
     }
 
     /**

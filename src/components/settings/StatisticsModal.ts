@@ -3,6 +3,7 @@ import type { StatisticsService } from "../../services/StatisticsService";
 import type { StatisticsComponent } from "../../types/svelte-components";
 import type { DecksSettings } from "../../settings";
 import StatisticsUI from "../statistics/StatisticsUI.svelte";
+import { mount, unmount } from "svelte";
 import { Logger } from "@/utils/logging";
 
 export class StatisticsModal extends Modal {
@@ -45,20 +46,18 @@ export class StatisticsModal extends Modal {
     this.containerEl.addClass("decks-statistics-modal-container");
     contentEl.addClass("decks-statistics-modal-content");
 
-    // Mount Svelte component
-    this.component = new StatisticsUI({
+    // Mount Svelte component using Svelte 5 API
+    this.component = mount(StatisticsUI, {
       target: contentEl,
       props: {
         statisticsService: this.statisticsService,
         logger: this.logger,
         deckFilter: this.deckFilter,
+        onClose: () => {
+          this.close();
+        },
       },
     }) as StatisticsComponent;
-
-    // Listen to component events
-    this.component.$on("close", () => {
-      this.close();
-    });
 
     // Handle window resize for mobile adaptation
     const handleResize = () => {
@@ -86,9 +85,13 @@ export class StatisticsModal extends Modal {
       this.resizeHandler = undefined;
     }
 
-    // Destroy Svelte component
+    // Clean up Svelte component
     if (this.component) {
-      this.component.$destroy();
+      try {
+        unmount(this.component);
+      } catch (e) {
+        console.warn("Error unmounting statistics component:", e);
+      }
       this.component = null;
     }
 

@@ -2,8 +2,8 @@
 
 import * as readline from "readline";
 import * as path from "path";
-import { ConsoleCore, ReviewSession } from "./core/ConsoleCore";
-import { Deck } from "../database/types";
+import { ConsoleCore, type ReviewSession } from "./core/ConsoleCore";
+import type { Deck } from "../database/types";
 
 export interface CLIOptions {
   vaultPath?: string;

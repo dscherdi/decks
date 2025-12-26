@@ -14,9 +14,10 @@ declare const initSqlJs: InitSqlJsStatic;
 // Web Worker API declaration
 declare function importScripts(...urls: string[]): void;
 
-import { FlashcardParser, ParsedFlashcard } from "../services/FlashcardParser";
-import {
-  FlashcardSynchronizer,
+import { FlashcardParser } from "../services/FlashcardParser";
+import type { ParsedFlashcard } from "../services/FlashcardParser";
+import { FlashcardSynchronizer } from "../services/FlashcardSynchronizer";
+import type {
   SyncResult,
   SyncData,
 } from "../services/FlashcardSynchronizer";

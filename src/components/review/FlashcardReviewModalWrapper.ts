@@ -9,6 +9,7 @@ import type {
     CompleteEventDetail,
 } from "../../types/svelte-components";
 import FlashcardReviewModal from "./FlashcardReviewModal.svelte";
+import { mount, unmount } from "svelte";
 
 export class FlashcardReviewModalWrapper extends Modal {
     private deck: Deck;
@@ -98,7 +99,7 @@ export class FlashcardReviewModalWrapper extends Modal {
 
         contentEl.addClass("decks-review-modal-container");
 
-        this.component = new FlashcardReviewModal({
+        this.component = mount(FlashcardReviewModal, {
             target: contentEl,
             props: {
                 initialCard: this.initialCard,
@@ -131,19 +132,18 @@ export class FlashcardReviewModalWrapper extends Modal {
                         await this.refreshStatsById(reviewedCard.deckId);
                     }
                 },
+                onComplete: async (_event: CompleteEventDetail) => {
+                    console.log("Review Complete");
+                    const message = `Review session complete for ${this.deck.name}!`;
+
+                    if (this.settings?.ui?.enableNotices !== false) {
+                        new Notice(message);
+                    }
+                    // Refresh the view to update stats
+                    await this.refreshStatsById(this.deck.id);
+                },
             },
         }) as FlashcardReviewComponent;
-
-        this.component.$on("complete", async (_event: CustomEvent<CompleteEventDetail>) => {
-            console.log("Review Complete");
-            const message = `Review session complete for ${this.deck.name}!`;
-
-            if (this.settings?.ui?.enableNotices !== false) {
-                new Notice(message);
-            }
-            // Refresh the view to update stats
-            await this.refreshStatsById(this.deck.id);
-        });
 
         // Handle window resize for mobile adaptation
         const handleResize = () => {
@@ -171,7 +171,12 @@ export class FlashcardReviewModalWrapper extends Modal {
         }
 
         if (this.component) {
-            this.component.$destroy();
+            // Svelte 5: explicitly unmount to trigger onDestroy and cleanup listeners
+            try {
+                unmount(this.component);
+            } catch (e) {
+                console.warn("Error unmounting flashcard review component:", e);
+            }
             this.component = null;
         }
 

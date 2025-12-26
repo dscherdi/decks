@@ -5,6 +5,8 @@ module.exports = {
   testMatch: ["**/__tests__/integration/**/*.ts"],
   setupFilesAfterEnv: ["<rootDir>/src/test-setup.ts"],
   testTimeout: 30000, // Longer timeout for integration tests
+  // Disable automatic mocking - use real implementations
+  automock: false,
   transform: {
     "^.+\\.ts$": [
       "ts-jest",
@@ -26,7 +28,7 @@ module.exports = {
   moduleNameMapper: {
     // Mock Obsidian API but allow real database operations
     "^obsidian$": "<rootDir>/src/__mocks__/obsidian.ts",
-    // Handle @ alias - no sql.js mock for integration tests
+    // Handle @ alias
     "^@/(.*)$": "<rootDir>/src/$1",
   },
   transformIgnorePatterns: ["node_modules/(?!(sql\\.js)/)"],

@@ -20,8 +20,18 @@
     export let statisticsService: StatisticsService;
     export let deckFilter = "all";
     export let logger: Logger;
+    export let onClose: (() => void) | undefined = undefined;
 
     const dispatch = createEventDispatcher();
+
+    // Helper function to handle close action (supports both Svelte 4 and Svelte 5)
+    function handleClose() {
+        if (onClose) {
+            onClose();
+        } else {
+            dispatch("close");
+        }
+    }
 
     let loading = true;
     let statistics: Statistics | null = null;
@@ -870,9 +880,9 @@
 
             <button
                 class="decks-close-button"
-                on:click={(e) => handleTouchClick(() => dispatch("close"), e)}
+                on:click={(e) => handleTouchClick(handleClose, e)}
                 on:touchend={(e) =>
-                    handleTouchClick(() => dispatch("close"), e)}
+                    handleTouchClick(handleClose, e)}
             >
                 Close
             </button>

@@ -1,5 +1,5 @@
-import { DecksSettings } from "../settings";
-import { DataAdapter } from "obsidian";
+import type { DecksSettings } from "../settings";
+import type { DataAdapter } from "obsidian";
 
 export class Logger {
     constructor(

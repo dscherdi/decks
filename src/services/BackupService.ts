@@ -1,5 +1,6 @@
-import { DataAdapter, Notice } from "obsidian";
-import { IDatabaseService } from "../database/DatabaseFactory";
+import type { DataAdapter } from "obsidian";
+import { Notice } from "obsidian";
+import type { IDatabaseService } from "../database/DatabaseFactory";
 import { yieldToUI } from "@/utils/ui";
 
 interface BackupMetadata {

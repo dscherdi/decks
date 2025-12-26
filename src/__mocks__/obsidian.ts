@@ -122,6 +122,21 @@ export class Plugin {
   }
 }
 
+export class PluginSettingTab {
+  app: any;
+  plugin: Plugin;
+  containerEl: HTMLElement;
+
+  constructor(app: any, plugin: Plugin) {
+    this.app = app;
+    this.plugin = plugin;
+    this.containerEl = document.createElement("div");
+  }
+
+  display(): void {}
+  hide(): void {}
+}
+
 export class Modal {
   app: any;
   contentEl: HTMLElement;

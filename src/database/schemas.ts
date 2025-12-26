@@ -1,7 +1,7 @@
 import type { Database } from "sql.js";
 
 // Current Schema Version
-export const CURRENT_SCHEMA_VERSION = 5;
+export const CURRENT_SCHEMA_VERSION = 6;
 
 // SQL Table Creation Schema - Used when database file doesn't exist
 export const CREATE_TABLES_SQL = `
@@ -40,7 +40,7 @@ export const CREATE_TABLES_SQL = `
     last_reviewed TEXT,
     created TEXT NOT NULL,
     modified TEXT NOT NULL,
-    FOREIGN KEY (deck_id) REFERENCES decks(id)
+    FOREIGN KEY (deck_id) REFERENCES decks(id) ON DELETE CASCADE
   );
 
   -- Review sessions table
@@ -50,8 +50,7 @@ export const CREATE_TABLES_SQL = `
     started_at TEXT NOT NULL,
     ended_at TEXT,
     goal_total INTEGER NOT NULL,
-    done_unique INTEGER NOT NULL DEFAULT 0,
-    FOREIGN KEY (deck_id) REFERENCES decks(id)
+    done_unique INTEGER NOT NULL DEFAULT 0
   );
 
   -- Review logs table
@@ -90,9 +89,7 @@ export const CREATE_TABLES_SQL = `
     note_model_id TEXT,
     card_template_id TEXT,
     content_hash TEXT,
-    client TEXT,
-    FOREIGN KEY (flashcard_id) REFERENCES flashcards(id),
-    FOREIGN KEY (session_id) REFERENCES review_sessions(id)
+    client TEXT
   );
 
   -- Create indexes
@@ -320,7 +317,7 @@ export function buildMigrationSQL(db: Database): string {
       last_reviewed TEXT,
       created TEXT NOT NULL,
       modified TEXT NOT NULL,
-      FOREIGN KEY (deck_id) REFERENCES decks(id)
+      FOREIGN KEY (deck_id) REFERENCES decks(id) ON DELETE CASCADE
     );
 
     CREATE TABLE review_sessions_new (
@@ -329,8 +326,7 @@ export function buildMigrationSQL(db: Database): string {
       started_at TEXT NOT NULL,
       ended_at TEXT,
       goal_total INTEGER NOT NULL,
-      done_unique INTEGER NOT NULL DEFAULT 0,
-      FOREIGN KEY (deck_id) REFERENCES decks_new(id)
+      done_unique INTEGER NOT NULL DEFAULT 0
     );
 
     CREATE TABLE review_logs_new (
@@ -368,9 +364,7 @@ export function buildMigrationSQL(db: Database): string {
       note_model_id TEXT,
       card_template_id TEXT,
       content_hash TEXT,
-      client TEXT,
-      FOREIGN KEY (flashcard_id) REFERENCES flashcards(id),
-      FOREIGN KEY (session_id) REFERENCES review_sessions(id)
+      client TEXT
     );
 
     -- Copy data with dynamic column mapping

@@ -1,5 +1,6 @@
-import { DataAdapter } from "obsidian";
-import { BaseDatabaseService, QueryConfig } from "./BaseDatabaseService";
+import type { DataAdapter } from "obsidian";
+import { BaseDatabaseService } from "./BaseDatabaseService";
+import type { QueryConfig } from "./BaseDatabaseService";
 import {
   CREATE_TABLES_SQL,
   buildMigrationSQL,
@@ -7,7 +8,8 @@ import {
 } from "./schemas";
 import type { Database, InitSqlJsStatic } from "sql.js";
 import { FlashcardSynchronizer } from "../services/FlashcardSynchronizer";
-import { SqlJsValue } from "./sql-types";
+import type { SyncData, SyncResult } from "../services/FlashcardSynchronizer";
+import type { SqlJsValue } from "./sql-types";
 
 export class MainDatabaseService extends BaseDatabaseService {
   private db: Database | null = null;
@@ -32,6 +34,14 @@ export class MainDatabaseService extends BaseDatabaseService {
         this.SQL = (
           window as Window & { initSqlJs: InitSqlJsStatic }
         ).initSqlJs;
+      } else if (
+        typeof global !== "undefined" &&
+        (global as typeof global & { initSqlJs?: InitSqlJsStatic }).initSqlJs
+      ) {
+        // For Node.js test environment with global initSqlJs
+        this.SQL = (
+          global as typeof global & { initSqlJs: InitSqlJsStatic }
+        ).initSqlJs;
       } else {
         // For environments where SQL.js is not globally available
         const sqlJs = await import("sql.js");
@@ -53,9 +63,10 @@ export class MainDatabaseService extends BaseDatabaseService {
 
       // Load existing database or create new one
       const buffer = await this.loadDatabaseFile();
+      console.log(`[DEBUG] Buffer exists: ${!!buffer}, SQL.Database type: ${typeof SQL.Database}`);
       if (buffer) {
         this.db = new SQL.Database(buffer);
-        this.debugLog("Loaded existing database");
+        console.log(`[DEBUG] Loaded existing database. Has exec: ${typeof this.db?.exec}`);
 
         // Update lastKnownModified
         await this.updateLastKnownModified();
@@ -64,15 +75,12 @@ export class MainDatabaseService extends BaseDatabaseService {
         await this.migrateSchemaIfNeeded();
       } else {
         this.db = new SQL.Database();
+        console.log(`[DEBUG] Created database instance. Has exec: ${typeof this.db?.exec}, Constructor: ${SQL.Database?.name}`);
         await this.createFreshDatabase();
         this.debugLog("Created new database");
         this.lastKnownModified = 0;
       }
 
-      // Initialize DeckSynchronizer after database is ready
-      if (this.db) {
-        this.flashcardSynchronizer = new FlashcardSynchronizer(this.db);
-      }
 
       this.debugLog("MainDatabaseService initialized successfully");
     } catch (error) {
@@ -111,7 +119,7 @@ export class MainDatabaseService extends BaseDatabaseService {
 
       // Export database and save
       const data = this.db.export();
-      await this.adapter.writeBinary(this.dbPath, data);
+      await this.adapter.writeBinary(this.dbPath, data.buffer.slice(0) as ArrayBuffer);
 
       // Update lastKnownModified after successful save
       await this.updateLastKnownModified();
@@ -208,7 +216,14 @@ export class MainDatabaseService extends BaseDatabaseService {
     try {
       // Check current schema version
       const versionResult = this.db.exec("PRAGMA user_version");
-      const currentVersion = Number(versionResult[0]?.values[0]?.[0]) || 0;
+      this.debugLog(
+        `PRAGMA user_version result: ${JSON.stringify(versionResult)}`,
+      );
+      // Handle both empty array (new database) and result with values
+      const currentVersion =
+        versionResult && versionResult.length > 0 && versionResult[0].values
+          ? Number(versionResult[0].values[0][0])
+          : 0;
 
       if (currentVersion < CURRENT_SCHEMA_VERSION) {
         this.debugLog(
@@ -547,5 +562,18 @@ export class MainDatabaseService extends BaseDatabaseService {
       console.error("Failed to sync with disk:", error);
       throw error;
     }
+  }
+
+  /**
+   * Unified sync method - runs in main thread for MainDatabaseService
+   */
+  async syncFlashcardsForDeck(
+    data: SyncData,
+    progressCallback?: (progress: number, message?: string) => void
+  ): Promise<SyncResult> {
+    if (!this.db) throw new Error("Database not initialized");
+
+    const synchronizer = new FlashcardSynchronizer(this.db);
+    return synchronizer.syncFlashcardsForDeck(data, progressCallback);
   }
 }

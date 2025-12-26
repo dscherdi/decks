@@ -1,22 +1,22 @@
 import { Scheduler } from "../services/Scheduler";
 import { MainDatabaseService } from "../database/MainDatabaseService";
-import { StatisticsService } from "../services/StatisticsService";
+import { BackupService } from "../services/BackupService";
 import { Flashcard, Deck, FlashcardState } from "../database/types";
 
-// Mock DatabaseService and StatisticsService
+// Mock DatabaseService and BackupService
 jest.mock("../database/MainDatabaseService");
-jest.mock("../services/StatisticsService");
+jest.mock("../services/BackupService");
 const MockedDatabaseService = MainDatabaseService as jest.MockedClass<
     typeof MainDatabaseService
 >;
-const MockedStatisticsService = StatisticsService as jest.MockedClass<
-    typeof StatisticsService
+const MockedBackupService = BackupService as jest.MockedClass<
+    typeof BackupService
 >;
 
 describe("Scheduler", () => {
     let scheduler: Scheduler;
     let mockDb: jest.Mocked<MainDatabaseService>;
-    let mockStatsService: jest.Mocked<StatisticsService>;
+    let mockBackupService: jest.Mocked<BackupService>;
 
     beforeEach(() => {
         mockDb = new MockedDatabaseService(
@@ -25,18 +25,19 @@ describe("Scheduler", () => {
             jest.fn()
         ) as jest.Mocked<MainDatabaseService>;
 
-        mockStatsService = new MockedStatisticsService(
-            mockDb,
-            {} as any
-        ) as jest.Mocked<StatisticsService>;
+        mockBackupService = new MockedBackupService(
+            {} as any,
+            {} as any,
+            jest.fn()
+        ) as jest.Mocked<BackupService>;
 
         scheduler = new Scheduler(
             mockDb,
-            { debug: { enableLogging: false, performanceLogs: false } } as any,
-            {} as any,
-            "",
-            undefined,
-            mockStatsService
+            {
+                debug: { enableLogging: false, performanceLogs: false },
+                backup: { enableAutoBackup: false, maxBackups: 3 }
+            } as any,
+            mockBackupService
         );
 
         // Add default mock methods for ReviewSession functionality
@@ -55,6 +56,16 @@ describe("Scheduler", () => {
             .mockResolvedValue(undefined);
         mockDb.endReviewSession = jest.fn().mockResolvedValue(undefined);
         mockDb.isCardReviewedInSession = jest.fn().mockResolvedValue(false);
+
+        // Add querySql mock for raw SQL queries
+        mockDb.querySqlSql = jest.fn().mockImplementation((sql: string, params?: any[], config?: any) => {
+            // Default empty results for count queries
+            if (sql.includes('COUNT(*)')) {
+                return Promise.resolve(config?.asObject ? [{ count: 0 }] : [[0]]);
+            }
+            // Default empty array for other queries
+            return Promise.resolve([]);
+        });
     });
 
     describe("getNext", () => {
@@ -110,7 +121,7 @@ describe("Scheduler", () => {
                 reviewCount: 0,
             });
 
-            mockDb.query.mockResolvedValueOnce([
+            mockDb.querySql.mockResolvedValueOnce([
                 [
                     "card_1",
                     "deck_1",
@@ -192,10 +203,10 @@ describe("Scheduler", () => {
             });
 
             // No due cards
-            mockDb.query.mockResolvedValueOnce([]);
+            mockDb.querySql.mockResolvedValueOnce([]);
 
             // Return new card
-            mockDb.query.mockResolvedValueOnce([
+            mockDb.querySql.mockResolvedValueOnce([
                 [
                     "card_new",
                     "deck_1",
@@ -259,7 +270,7 @@ describe("Scheduler", () => {
             });
 
             // No due cards
-            mockDb.query.mockResolvedValueOnce([]);
+            mockDb.querySql.mockResolvedValueOnce([]);
 
             // No new cards allowed
             const result = await scheduler.getNext(new Date(), "deck_1", {
@@ -397,8 +408,8 @@ describe("Scheduler", () => {
             const result = await scheduler.rate(
                 "card_1",
                 "good",
-                new Date(),
-                5000
+                5000,
+                new Date()
             );
 
             expect(result).toBeDefined();
@@ -419,7 +430,7 @@ describe("Scheduler", () => {
     describe("timeToNext", () => {
         it("should return milliseconds until next due card", async () => {
             const nextDueTime = new Date(Date.now() + 3600000).toISOString(); // 1 hour from now
-            mockDb.query.mockResolvedValueOnce([[nextDueTime]]);
+            mockDb.querySql.mockResolvedValueOnce([[nextDueTime]]);
 
             const result = await scheduler.timeToNext(new Date(), "deck_1");
 
@@ -428,7 +439,7 @@ describe("Scheduler", () => {
         });
 
         it("should return null when no future cards", async () => {
-            mockDb.query.mockResolvedValueOnce([]);
+            mockDb.querySql.mockResolvedValueOnce([]);
 
             const result = await scheduler.timeToNext(new Date(), "deck_1");
 
@@ -461,7 +472,7 @@ describe("Scheduler", () => {
                 mockDb.isCardReviewedInSession = jest
                     .fn()
                     .mockResolvedValue(false);
-                mockDb.query = jest.fn().mockResolvedValue([[5]]);
+                mockDb.querySql = jest.fn().mockResolvedValue([[5]]);
             });
 
             test("should start and track review session progress", async () => {
@@ -621,9 +632,8 @@ describe("Scheduler", () => {
 
                 // Manual end session test
                 await scheduler.endReviewSession(newSession2.sessionId);
-                expect(mockDb.endReviewSession).toHaveBeenCalledWith(
-                    newSession2.sessionId,
-                    expect.any(String)
+                expect(mockDb.endReviewSession).toHaveBeenLastCalledWith(
+                    newSession2.sessionId
                 );
             });
         });
@@ -661,7 +671,7 @@ describe("Scheduler", () => {
             });
 
             // No due cards
-            mockDb.query.mockResolvedValueOnce([]);
+            mockDb.querySql.mockResolvedValueOnce([]);
 
             const result = await scheduler.getNext(new Date(), "deck_1", {
                 allowNew: true,
@@ -701,7 +711,7 @@ describe("Scheduler", () => {
             });
 
             // Mock empty query result since review limit is reached
-            mockDb.query.mockResolvedValue([]);
+            mockDb.querySql.mockResolvedValue([]);
 
             // No due cards should be returned due to review limit
             const result = await scheduler.getNext(new Date(), "deck_1");
@@ -739,7 +749,7 @@ describe("Scheduler", () => {
             });
 
             // Mock a due card
-            mockDb.query.mockResolvedValueOnce([
+            mockDb.querySql.mockResolvedValueOnce([
                 [
                     "card_1",
                     "deck_1",
@@ -765,7 +775,7 @@ describe("Scheduler", () => {
             await scheduler.getNext(new Date(), "deck_1");
 
             // Verify the query was called with random ordering
-            expect(mockDb.query).toHaveBeenCalledWith(
+            expect(mockDb.querySql).toHaveBeenCalledWith(
                 expect.stringContaining("ORDER BY RANDOM()"),
                 expect.any(Array)
             );
@@ -881,7 +891,7 @@ describe("Scheduler", () => {
             };
 
             // Mock new card query (getNextNewCard)
-            mockDb.query.mockResolvedValueOnce([
+            mockDb.querySql.mockResolvedValueOnce([
                 [
                     mockNewCard.id,
                     mockNewCard.deckId,
@@ -981,7 +991,7 @@ describe("Scheduler", () => {
             mockDb.getDeckById.mockResolvedValue(unlimitedDeck);
 
             // Mock empty due cards query but available new card
-            mockDb.query.mockResolvedValueOnce([]); // No due cards
+            mockDb.querySql.mockResolvedValueOnce([]); // No due cards
 
             const mockNewCard: Flashcard = {
                 id: "card_unlimited",
@@ -1003,7 +1013,7 @@ describe("Scheduler", () => {
                 modified: new Date().toISOString(),
             };
 
-            mockDb.query.mockResolvedValueOnce([
+            mockDb.querySql.mockResolvedValueOnce([
                 [
                     mockNewCard.id,
                     mockNewCard.deckId,
@@ -1072,13 +1082,13 @@ describe("Scheduler", () => {
                 reviewCount: 0,
             });
 
-            // Mock db.query to simulate different due cards counts
+            // Mock db.querySql to simulate different due cards counts
             // When called with 10-minute session duration buffer, return 3 cards
             // When called for new cards, return 0
-            mockDb.query = jest
+            mockDb.querySql = jest
                 .fn()
-                .mockImplementationOnce(() => Promise.resolve([[3]])) // Due cards with session duration buffer
-                .mockImplementationOnce(() => Promise.resolve([[0]])); // New cards
+                .mockImplementationOnce(() => Promise.resolve([{ count: 3 }])) // Due cards with session duration buffer
+                .mockImplementationOnce(() => Promise.resolve([{ count: 0 }])); // New cards
 
             const sessionId = await scheduler.startReviewSession(
                 "deck_1",
@@ -1095,15 +1105,16 @@ describe("Scheduler", () => {
                 doneUnique: 0,
             });
 
-            // Verify db.query was called with 10-minute session duration buffer for due cards
+            // Verify db.querySql was called with 10-minute session duration buffer for due cards
             const expectedSessionEndTime = new Date(
                 now.getTime() + 10 * 60 * 1000
             );
-            expect(mockDb.query).toHaveBeenCalledWith(
+            expect(mockDb.querySql).toHaveBeenCalledWith(
                 expect.stringContaining(
                     "WHERE deck_id = ? AND due_date <= ? AND state = 'review'"
                 ),
-                ["deck_1", expectedSessionEndTime.toISOString()]
+                ["deck_1", expectedSessionEndTime.toISOString()],
+                { asObject: true }
             );
         });
 
@@ -1135,10 +1146,10 @@ describe("Scheduler", () => {
             });
 
             // Mock scenario: 1 card due now, 0 additional within 5 minutes session duration
-            mockDb.query = jest
+            mockDb.querySql = jest
                 .fn()
-                .mockImplementationOnce(() => Promise.resolve([[1]])) // Due cards with session duration buffer
-                .mockImplementationOnce(() => Promise.resolve([[0]])); // New cards
+                .mockImplementationOnce(() => Promise.resolve([{ count: 1 }])) // Due cards with session duration buffer
+                .mockImplementationOnce(() => Promise.resolve([{ count: 0 }])); // New cards
 
             await scheduler.startReviewSession("deck_1", now, 5);
 
@@ -1146,11 +1157,12 @@ describe("Scheduler", () => {
             const expectedSessionEndTime = new Date(
                 now.getTime() + 5 * 60 * 1000
             );
-            expect(mockDb.query).toHaveBeenCalledWith(
+            expect(mockDb.querySql).toHaveBeenCalledWith(
                 expect.stringContaining(
                     "WHERE deck_id = ? AND due_date <= ? AND state = 'review'"
                 ),
-                ["deck_1", expectedSessionEndTime.toISOString()]
+                ["deck_1", expectedSessionEndTime.toISOString()],
+                { asObject: true }
             );
         });
 
@@ -1183,10 +1195,10 @@ describe("Scheduler", () => {
 
             // Mock scenario: 0 cards due within 15 minutes, 0 new cards
             // Mock scenario: no cards due within 3 minutes session duration
-            mockDb.query = jest
+            mockDb.querySql = jest
                 .fn()
-                .mockImplementationOnce(() => Promise.resolve([[0]])) // Due cards with session duration buffer
-                .mockImplementationOnce(() => Promise.resolve([[0]])); // New cards
+                .mockImplementationOnce(() => Promise.resolve([{ count: 0 }])) // Due cards with session duration buffer
+                .mockImplementationOnce(() => Promise.resolve([{ count: 0 }])); // New cards
 
             await scheduler.startReviewSession("deck_1", now, 3);
 
@@ -1227,10 +1239,10 @@ describe("Scheduler", () => {
             });
 
             // Mock scenario: some due cards within 25 minutes
-            mockDb.query = jest
+            mockDb.querySql = jest
                 .fn()
-                .mockImplementationOnce(() => Promise.resolve([[2]])) // Due cards with 25min default buffer
-                .mockImplementationOnce(() => Promise.resolve([[0]])); // New cards
+                .mockImplementationOnce(() => Promise.resolve([{ count: 2 }])) // Due cards with 25min default buffer
+                .mockImplementationOnce(() => Promise.resolve([{ count: 0 }])); // New cards
 
             await scheduler.startReviewSession("deck_1", now);
 
@@ -1238,11 +1250,12 @@ describe("Scheduler", () => {
             const expectedSessionEndTime = new Date(
                 now.getTime() + 25 * 60 * 1000
             );
-            expect(mockDb.query).toHaveBeenCalledWith(
+            expect(mockDb.querySql).toHaveBeenCalledWith(
                 expect.stringContaining(
                     "WHERE deck_id = ? AND due_date <= ? AND state = 'review'"
                 ),
-                ["deck_1", expectedSessionEndTime.toISOString()]
+                ["deck_1", expectedSessionEndTime.toISOString()],
+                { asObject: true }
             );
         });
     });

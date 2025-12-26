@@ -6,10 +6,10 @@ import {
   Modal,
   DropdownComponent,
 } from "obsidian";
-import { DecksSettings } from "../../settings";
+import type { DecksSettings } from "../../settings";
 import { BackupService } from "../../services/BackupService";
 import DecksPlugin from "@/main";
-import { IDatabaseService } from "@/database/DatabaseFactory";
+import type { IDatabaseService } from "@/database/DatabaseFactory";
 import { Logger } from "@/utils/logging";
 
 export class DecksSettingTab extends PluginSettingTab {

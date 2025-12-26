@@ -1,19 +1,19 @@
 import {
   DatabaseFactory,
-  IDatabaseService,
+  type IDatabaseService,
 } from "../../database/DatabaseFactory";
 import { DeckManager } from "../../services/DeckManager";
 import { DeckSynchronizer } from "../../services/DeckSynchronizer";
 import { Scheduler } from "../../services/Scheduler";
 import { StatisticsService } from "../../services/StatisticsService";
 import { BackupService } from "../../services/BackupService";
-import { DecksSettings, DEFAULT_SETTINGS } from "../../settings";
-import { Deck, Flashcard, ReviewLog, DeckStats } from "../../database/types";
+import { type DecksSettings, DEFAULT_SETTINGS } from "../../settings";
+import type { Deck, Flashcard, ReviewLog, DeckStats } from "../../database/types";
 import {
   ConsoleVault,
   ConsoleMetadataCache,
-  MockVault,
-  MockMetadataCache,
+  type MockVault,
+  type MockMetadataCache,
 } from "../adapters/ConsoleAdapters";
 
 export interface ConsoleOptions {
@@ -122,10 +122,8 @@ export class ConsoleCore {
       this.scheduler = new Scheduler(
         this.db,
         this.settings,
-        this.vault.adapter as any, // eslint-disable-line @typescript-eslint/no-explicit-any
-        options.dataPath,
         this.backupService,
-        this.statisticsService,
+        this.logger,
       );
 
       this.initialized = true;
