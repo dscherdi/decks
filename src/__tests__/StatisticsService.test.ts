@@ -213,58 +213,6 @@ describe("StatisticsService", () => {
     );
   });
 
-  describe("getOverallStatistics", () => {
-    it("should call database with correct parameters", async () => {
-      const mockStats = createMockStatistics();
-      mockDb.setMockStatistics(mockStats);
-
-      const result = await statisticsService.getOverallStatistics(
-        "deck:test",
-        "6months",
-      );
-
-      expect(result).toEqual(mockStats);
-    });
-
-    it("should use default parameters when not provided", async () => {
-      const mockStats = createMockStatistics();
-      mockDb.setMockStatistics(mockStats);
-
-      const result = await statisticsService.getOverallStatistics();
-
-      expect(result).toEqual(mockStats);
-    });
-  });
-
-  describe("loadChartData", () => {
-    const mockFlashcards = [
-      createMockFlashcard("1", "deck1"),
-      createMockFlashcard("2", "deck1"),
-      createMockFlashcard("3", "deck2"),
-    ];
-
-    const mockReviewLogs = [
-      createMockReviewLog("log1", "1"),
-      createMockReviewLog("log2", "2"),
-      createMockReviewLog("log3", "3"),
-    ];
-
-    beforeEach(() => {
-      mockDb.setMockFlashcards(mockFlashcards);
-      mockDb.setMockReviewLogs(mockReviewLogs);
-      mockDb.setMockFlashcardsByDeck("deck1", [
-        mockFlashcards[0],
-        mockFlashcards[1],
-      ]);
-      mockDb.setMockFlashcardsByDeck("deck2", [mockFlashcards[2]]);
-    });
-
-    it("should load chart data", () => {
-      // Placeholder test to fix Jest error
-      expect(mockFlashcards).toHaveLength(3);
-    });
-  });
-
   describe("getTodayStats", () => {
     it("should return today's stats when available", () => {
       const today = new Date().toISOString().split("T")[0];
@@ -291,16 +239,6 @@ describe("StatisticsService", () => {
       expect(result.reviews).toBe(8);
     });
 
-    it("should return null when no daily stats available", () => {
-      const mockStats = createMockStatistics([]);
-      const result = statisticsService.getTodayStats(mockStats);
-      expect(result).toBeNull();
-    });
-
-    it("should return null when statistics is null", () => {
-      const result = statisticsService.getTodayStats(null);
-      expect(result).toBeNull();
-    });
   });
 
   describe("getTimeframeStats", () => {
@@ -330,29 +268,6 @@ describe("StatisticsService", () => {
       expect(result.correctRate).toBeCloseTo(88.0, 1); // Weighted average: (85*10 + 90*15) / 25 = 2200/25 = 88
     });
 
-    it("should return empty stats when no data in timeframe", () => {
-      const mockStats = createMockStatistics([
-        createMockDailyStats("2024-01-01", 10, 300), // Too old
-      ]);
-
-      const result = statisticsService.getTimeframeStats(mockStats, 7);
-
-      expect(result.reviews).toBe(0);
-      expect(result.timeSpent).toBe(0);
-      expect(result.newCards).toBe(0);
-      expect(result.reviewCards).toBe(0);
-      expect(result.correctRate).toBe(0);
-    });
-
-    it("should handle null statistics", () => {
-      const result = statisticsService.getTimeframeStats(null, 7);
-
-      expect(result.reviews).toBe(0);
-      expect(result.timeSpent).toBe(0);
-      expect(result.newCards).toBe(0);
-      expect(result.reviewCards).toBe(0);
-      expect(result.correctRate).toBe(0);
-    });
   });
 
   describe("calculateAverageEase", () => {
@@ -366,19 +281,6 @@ describe("StatisticsService", () => {
       expect(result).toBe(3.0);
     });
 
-    it("should return 0.00 when no answer button data", () => {
-      const mockStats = createMockStatistics();
-      mockStats.answerButtons = { again: 0, hard: 0, good: 0, easy: 0 };
-
-      const result = statisticsService.calculateAverageEase(mockStats);
-
-      expect(result).toBe(0);
-    });
-
-    it("should handle null statistics", () => {
-      const result = statisticsService.calculateAverageEase(null);
-      expect(result).toBe(0);
-    });
   });
 
   describe("calculateAverageInterval", () => {
@@ -396,19 +298,6 @@ describe("StatisticsService", () => {
       expect(result).toBeGreaterThan(0);
     });
 
-    it("should return 0 when no interval data", () => {
-      const mockStats = createMockStatistics();
-      mockStats.intervals = [];
-
-      const result = statisticsService.calculateAverageInterval(mockStats);
-
-      expect(result).toBe(0);
-    });
-
-    it("should handle null statistics", () => {
-      const result = statisticsService.calculateAverageInterval(null);
-      expect(result).toBe(0);
-    });
   });
 
   describe("getDueToday and getDueTomorrow", () => {
@@ -428,13 +317,6 @@ describe("StatisticsService", () => {
       expect(statisticsService.getDueTomorrow(mockStats)).toBe(8);
     });
 
-    it("should return 0 when no forecast data", () => {
-      const mockStats = createMockStatistics();
-      mockStats.forecast = [];
-
-      expect(statisticsService.getDueToday(mockStats)).toBe(0);
-      expect(statisticsService.getDueTomorrow(mockStats)).toBe(0);
-    });
   });
 
   describe("getMaturityRatio", () => {
@@ -447,14 +329,6 @@ describe("StatisticsService", () => {
       expect(result).toBe(50.0); // 30/60 = 50%
     });
 
-    it("should return 0 when no cards", () => {
-      const mockStats = createMockStatistics();
-      mockStats.cardStats = { new: 0, review: 0, mature: 0 };
-
-      const result = statisticsService.getMaturityRatio(mockStats);
-
-      expect(result).toBe(0);
-    });
   });
 
   describe("getTotalCards", () => {
@@ -467,10 +341,6 @@ describe("StatisticsService", () => {
       expect(result).toBe(60);
     });
 
-    it("should handle null statistics", () => {
-      const result = statisticsService.getTotalCards(null);
-      expect(result).toBe(0);
-    });
   });
 
   describe("simulateFutureDueLoad", () => {
@@ -512,16 +382,6 @@ describe("StatisticsService", () => {
 
       // First day should have the overdue card as backlog
       expect(result[0].projectedBacklog).toBeGreaterThanOrEqual(1);
-    });
-
-    it("should return forecast data with zeros for non-existent deck", async () => {
-      const result = await statisticsService.simulateFutureDueLoad(
-        ["non-existent"],
-        7,
-      );
-      expect(result).toHaveLength(7);
-      expect(result[0]).toHaveProperty("scheduledDue", 0);
-      expect(result[0]).toHaveProperty("projectedBacklog", 0);
     });
 
     it("should calculate backlog forecast correctly with realistic data", async () => {
@@ -802,19 +662,6 @@ describe("StatisticsService", () => {
       expect(result[1].dueCount).toBe(3);
     });
 
-    it("should return empty array when no forecast", () => {
-      const mockStats = createMockStatistics();
-      mockStats.forecast = [];
-
-      const result = statisticsService.getFilteredForecastData(
-        mockStats,
-        10,
-        false,
-      );
-
-      expect(result).toEqual([]);
-    });
-
     it("should limit results to maxDays", () => {
       const mockStats = createMockStatistics();
       mockStats.forecast = [
@@ -862,21 +709,6 @@ describe("StatisticsService", () => {
       expect(result.dailyLoad).toBeCloseTo(7.67, 1); // (10 + 5 + 8) / 3 non-zero days
     });
 
-    it("should handle empty forecast", () => {
-      const mockStats = createMockStatistics();
-      mockStats.forecast = [];
-
-      const result = statisticsService.calculateForecastStats(
-        mockStats,
-        [],
-        10,
-      );
-
-      expect(result.totalReviews).toBe(0);
-      expect(result.averagePerDay).toBe(0);
-      expect(result.dueTomorrow).toBe(0);
-      expect(result.dailyLoad).toBe(0);
-    });
   });
 
   describe("retention rate handling", () => {

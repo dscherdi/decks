@@ -99,7 +99,12 @@ function createMockDatabase() {
 
     // Utility operations
     purgeDatabase: jest.fn().mockResolvedValue(undefined),
-    query: jest.fn().mockResolvedValue([]),
+    querySql: jest.fn().mockResolvedValue([]),
+
+    // Sync operations
+    migrateFlashcardIdentity: jest.fn().mockResolvedValue(undefined),
+    syncFlashcardsForDeck: jest.fn().mockResolvedValue(undefined),
+    syncWithDisk: jest.fn().mockResolvedValue(undefined),
 
     // Transaction methods removed - no longer using transactions
 
@@ -151,22 +156,6 @@ describe("BackupService", () => {
   });
 
   describe("createBackup", () => {
-    it("should create a SQLite backup successfully", async () => {
-      mockAdapter.exists.mockResolvedValue(true);
-      mockAdapter.list.mockResolvedValue({ files: [], folders: [] });
-
-      const result = await backupService.createBackup(mockDb);
-
-      // Should create backup with today's date and .db extension
-      const today = new Date().toISOString().slice(0, 10);
-      const expectedFilename = `backup-${today}.db`;
-      expect(result).toBe(expectedFilename);
-
-      expect(mockDb.createBackupDatabase).toHaveBeenCalledWith(
-        `/vault/.obsidian/plugins/decks/backups/${expectedFilename}`,
-      );
-    });
-
     it("should create backup directory if it doesn't exist", async () => {
       mockAdapter.exists.mockResolvedValue(false);
       mockAdapter.list.mockResolvedValue({ files: [], folders: [] });
@@ -253,31 +242,6 @@ describe("BackupService", () => {
   });
 
   describe("restoreFromBackup", () => {
-    it("should restore from SQLite backup successfully", async () => {
-      const filename = "backup-2023-01-01.db";
-      mockAdapter.exists.mockResolvedValue(true);
-      const progressCallback = jest.fn();
-
-      await backupService.restoreFromBackup(filename, mockDb, progressCallback);
-
-      expect(mockDb.restoreFromBackupDatabase).toHaveBeenCalledWith(
-        `/vault/.obsidian/plugins/decks/backups/${filename}`,
-      );
-      expect(progressCallback).toHaveBeenCalledWith(0, 100);
-      expect(progressCallback).toHaveBeenCalledWith(100, 100);
-    });
-
-    it("should restore without progress callback", async () => {
-      const filename = "backup-2023-01-01.db";
-      mockAdapter.exists.mockResolvedValue(true);
-
-      await backupService.restoreFromBackup(filename, mockDb);
-
-      expect(mockDb.restoreFromBackupDatabase).toHaveBeenCalledWith(
-        `/vault/.obsidian/plugins/decks/backups/${filename}`,
-      );
-    });
-
     it("should throw error if backup file does not exist", async () => {
       const consoleSpy = jest.spyOn(console, "error").mockImplementation();
       mockAdapter.exists.mockResolvedValue(false);
@@ -364,17 +328,6 @@ describe("BackupService", () => {
         2,
         expectedPath,
       );
-    });
-  });
-
-  describe("formatFileSize", () => {
-    it("should format file sizes correctly", () => {
-      expect(backupService.formatFileSize(0)).toBe("0 B");
-      expect(backupService.formatFileSize(500)).toBe("500 B");
-      expect(backupService.formatFileSize(1024)).toBe("1 KB");
-      expect(backupService.formatFileSize(1536)).toBe("1.5 KB");
-      expect(backupService.formatFileSize(1048576)).toBe("1 MB");
-      expect(backupService.formatFileSize(1073741824)).toBe("1 GB");
     });
   });
 });

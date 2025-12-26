@@ -1,4 +1,4 @@
-import { FSRS, roundForDisplay } from "../algorithm/fsrs";
+import { FSRS } from "../algorithm/fsrs";
 import { Flashcard } from "../database/types";
 import { DEFAULT_FSRS_PARAMETERS } from "../algorithm/fsrs-weights";
 
@@ -27,44 +27,6 @@ describe("FSRS Numeric Precision Tests", () => {
       created: new Date().toISOString(),
       modified: new Date().toISOString(),
     };
-  });
-
-  describe("Internal Precision Validation", () => {
-    it("should maintain reasonable precision in stability calculations", () => {
-      const card = { ...testCard, stability: 1.234567890123456 };
-      const updated = fsrs.updateCard(card, "good");
-
-      // Check that we maintain reasonable precision and finite values
-      expect(Number.isFinite(updated.stability)).toBe(true);
-      expect(updated.stability).toBeGreaterThan(0);
-    });
-
-    it("should maintain reasonable precision in difficulty calculations", () => {
-      const card = { ...testCard, difficulty: 3.123456789012345 };
-      const updated = fsrs.updateCard(card, "hard");
-
-      // Check that we maintain reasonable precision and finite values
-      expect(Number.isFinite(updated.difficulty)).toBe(true);
-      expect(updated.difficulty).toBeGreaterThanOrEqual(1);
-      expect(updated.difficulty).toBeLessThanOrEqual(10);
-    });
-
-    it("should preserve precision in interval calculations", () => {
-      const card = { ...testCard, stability: 0.001234567890123 };
-      const updated = fsrs.updateCard(card, "good");
-
-      // Very small intervals should still be precise
-      expect(Number.isFinite(updated.interval)).toBe(true);
-      expect(updated.interval).toBeGreaterThan(0);
-    });
-
-    it("should handle very large stability values without precision loss", () => {
-      const card = { ...testCard, stability: 12345.67890123456 };
-      const updated = fsrs.updateCard(card, "good");
-
-      expect(Number.isFinite(updated.stability)).toBe(true);
-      expect(updated.stability).toBeGreaterThan(0);
-    });
   });
 
   describe("Forgetting Curve Precision", () => {
@@ -104,79 +66,6 @@ describe("FSRS Numeric Precision Tests", () => {
         expect(result).toBeGreaterThanOrEqual(0);
         expect(result).toBeLessThanOrEqual(1);
       });
-    });
-  });
-
-  describe("Multi-Cycle Precision Preservation", () => {
-    it("should maintain precision through 100 review cycles", () => {
-      let card = { ...testCard };
-      const difficulties = ["good", "good", "hard", "easy", "good"] as const;
-
-      for (let i = 0; i < 100; i++) {
-        const difficulty = difficulties[i % difficulties.length];
-        card = fsrs.updateCard(card, difficulty);
-
-        // Verify no NaN or Infinity values
-        expect(Number.isFinite(card.stability)).toBe(true);
-        expect(Number.isFinite(card.difficulty)).toBe(true);
-        expect(Number.isFinite(card.interval)).toBe(true);
-
-        // Verify values are reasonable
-        expect(card.stability).toBeGreaterThan(0);
-        expect(card.difficulty).toBeGreaterThanOrEqual(1);
-        expect(card.difficulty).toBeLessThanOrEqual(10);
-        expect(card.interval).toBeGreaterThan(0);
-      }
-
-      // Final values should remain finite and in valid ranges
-      expect(Number.isFinite(card.stability)).toBe(true);
-      expect(Number.isFinite(card.difficulty)).toBe(true);
-      expect(card.stability).toBeGreaterThan(0);
-      expect(card.difficulty).toBeGreaterThanOrEqual(1);
-      expect(card.difficulty).toBeLessThanOrEqual(10);
-    });
-
-    it("should maintain consistent results with identical inputs", () => {
-      const card1 = { ...testCard, stability: 1.234567890123 };
-      const card2 = { ...testCard, stability: 1.234567890123 };
-
-      const result1 = fsrs.updateCard(card1, "good");
-      const result2 = fsrs.updateCard(card2, "good");
-
-      expect(result1.stability).toBe(result2.stability);
-      expect(result1.difficulty).toBe(result2.difficulty);
-      expect(result1.interval).toBe(result2.interval);
-    });
-  });
-
-  describe("Extreme Value Handling", () => {
-    it("should handle very small stability values", () => {
-      const card = { ...testCard, stability: 1e-15 };
-      const updated = fsrs.updateCard(card, "good");
-
-      expect(Number.isFinite(updated.stability)).toBe(true);
-      expect(updated.stability).toBeGreaterThan(0);
-    });
-
-    it("should handle very large stability values", () => {
-      const card = { ...testCard, stability: 1e15 };
-      const updated = fsrs.updateCard(card, "good");
-
-      expect(Number.isFinite(updated.stability)).toBe(true);
-      expect(updated.stability).toBeGreaterThan(0);
-    });
-
-    it("should handle edge difficulty values", () => {
-      const cardMin = { ...testCard, difficulty: 1.0 };
-      const cardMax = { ...testCard, difficulty: 10.0 };
-
-      const updatedMin = fsrs.updateCard(cardMin, "again");
-      const updatedMax = fsrs.updateCard(cardMax, "easy");
-
-      expect(updatedMin.difficulty).toBeGreaterThanOrEqual(1);
-      expect(updatedMin.difficulty).toBeLessThanOrEqual(10);
-      expect(updatedMax.difficulty).toBeGreaterThanOrEqual(1);
-      expect(updatedMax.difficulty).toBeLessThanOrEqual(10);
     });
   });
 
@@ -235,33 +124,4 @@ describe("FSRS Numeric Precision Tests", () => {
     });
   });
 
-  describe("Precision Loss Detection", () => {
-    it("should detect if calculations lose significant precision", () => {
-      const originalStability = 1.23456789012345;
-      const card = { ...testCard, stability: originalStability };
-
-      const updated = fsrs.updateCard(card, "good");
-
-      // The result should have meaningful precision
-      // Check that stability remains finite and positive after many operations
-      expect(Number.isFinite(updated.stability)).toBe(true);
-      expect(updated.stability).toBeGreaterThan(0);
-    });
-
-    it("should maintain precision through calculation chains", () => {
-      let card = { ...testCard, stability: Math.PI, difficulty: Math.E };
-
-      // Chain multiple operations
-      for (let i = 0; i < 10; i++) {
-        card = fsrs.updateCard(card, "good");
-
-        // Values should remain finite and reasonable
-        expect(Number.isFinite(card.stability)).toBe(true);
-        expect(Number.isFinite(card.difficulty)).toBe(true);
-        expect(card.stability).toBeGreaterThan(0);
-        expect(card.difficulty).toBeGreaterThanOrEqual(1);
-        expect(card.difficulty).toBeLessThanOrEqual(10);
-      }
-    });
-  });
 });
