@@ -16,7 +16,7 @@ async function basicExample() {
     // Initialize with current directory as vault
     const flashcards = await createFlashcardsConsole(
       process.cwd(), // vault path
-      path.join(process.cwd(), ".flashcards-console"), // data path
+      path.join(process.cwd(), ".flashcards-console") // data path
     );
 
     console.log("✅ Flashcards console initialized");
@@ -25,7 +25,7 @@ async function basicExample() {
     console.log("\n🔍 Scanning for flashcard files...");
     const files = await flashcards.scanMarkdownFiles();
     const flashcardFiles = files.filter(
-      (f: { hasFlashcards: boolean }) => f.hasFlashcards,
+      (f: { hasFlashcards: boolean }) => f.hasFlashcards
     );
 
     console.log(`📄 Found ${files.length} markdown files`);
@@ -43,7 +43,7 @@ async function basicExample() {
 
       const deck = await flashcards.createDeckFromFile(
         firstFile.path,
-        path.basename(firstFile.path, ".md"),
+        path.basename(firstFile.path, ".md")
       );
 
       console.log(`✅ Created deck: ${deck.name} (${deck.id})`);
@@ -55,7 +55,7 @@ async function basicExample() {
       // Get deck statistics
       const stats = await flashcards.getDeckStats(deck.id);
       console.log(
-        `📊 Deck stats: ${stats.totalCount} total, ${stats.newCount} new, ${stats.dueCount} due`,
+        `📊 Deck stats: ${stats.totalCount} total, ${stats.newCount} new, ${stats.dueCount} due`
       );
 
       // Try a review session
@@ -87,7 +87,7 @@ async function basicExample() {
 
         await flashcards.endReviewSession();
         console.log(
-          `\n🎉 Mini session complete! Reviewed ${reviewCount} cards`,
+          `\n🎉 Mini session complete! Reviewed ${reviewCount} cards`
         );
       }
 
@@ -187,7 +187,7 @@ async function programmaticExample() {
     const finalStats = await flashcards.getOverallStats();
     console.log("\n📈 Final Statistics:");
     console.log(
-      `   📚 ${finalStats.totalDecks} decks, ${finalStats.totalCards} cards`,
+      `   📚 ${finalStats.totalDecks} decks, ${finalStats.totalCards} cards`
     );
     console.log(`   🎓 ${finalStats.matureCards} mature cards`);
 
@@ -222,7 +222,7 @@ async function main() {
       console.log("");
       console.log("Commands:");
       console.log(
-        "  basic    Run basic example with file scanning and deck creation",
+        "  basic    Run basic example with file scanning and deck creation"
       );
       console.log("  cli      Start interactive command-line interface");
       console.log("  auto     Run programmatic review session");

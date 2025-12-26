@@ -7,16 +7,16 @@
  * Uses a basic hash algorithm for deterministic ID generation
  */
 function simpleHash(text: string): number {
-    if (!text) {
-        return 0;
-    }
-    let hash = 0;
-    for (let i = 0; i < text.length; i++) {
-        const char = text.charCodeAt(i);
-        hash = (hash << 5) - hash + char;
-        hash = hash & hash; // Convert to 32bit integer
-    }
-    return Math.abs(hash);
+  if (!text) {
+    return 0;
+  }
+  let hash = 0;
+  for (let i = 0; i < text.length; i++) {
+    const char = text.charCodeAt(i);
+    hash = (hash << 5) - hash + char;
+    hash = hash & hash; // Convert to 32bit integer
+  }
+  return Math.abs(hash);
 }
 
 /**
@@ -25,7 +25,7 @@ function simpleHash(text: string): number {
  * @returns A deterministic ID in format "card_HASH"
  */
 export function generateFlashcardId(frontText: string): string {
-    return `card_${simpleHash(frontText).toString(36)}`;
+  return `card_${simpleHash(frontText).toString(36)}`;
 }
 
 /**
@@ -34,7 +34,7 @@ export function generateFlashcardId(frontText: string): string {
  * @returns A hex string hash
  */
 export function generateContentHash(backText: string): string {
-    return simpleHash(backText).toString(16);
+  return simpleHash(backText).toString(16);
 }
 
 /**
@@ -43,5 +43,5 @@ export function generateContentHash(backText: string): string {
  * @returns A deterministic ID in format "deck_HASH"
  */
 export function generateDeckId(filepath: string): string {
-    return `deck_${simpleHash(filepath).toString(36)}`;
+  return `deck_${simpleHash(filepath).toString(36)}`;
 }

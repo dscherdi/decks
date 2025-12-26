@@ -6,7 +6,7 @@ describe("Mature Cards (TODO 19)", () => {
   // Helper to create a test flashcard
   const createTestCard = (
     state: "new" | "review",
-    interval: number,
+    interval: number
   ): Flashcard => ({
     id: "test-card",
     deckId: "test-deck",

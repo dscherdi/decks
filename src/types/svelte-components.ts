@@ -10,7 +10,7 @@ export interface SvelteComponentInstance {
   $set(props: Record<string, string | number | boolean | null>): void;
   $on(
     event: string,
-    callback: (event: CustomEvent<string | number | boolean | object>) => void,
+    callback: (event: CustomEvent<string | number | boolean | object>) => void
   ): () => void;
   $destroy(): void;
 }
@@ -42,12 +42,15 @@ export type DeckConfigComponent = Svelte5MountedComponent & {
 };
 
 // DeckListPanel component - supports both Svelte 4 and Svelte 5 APIs
-export type DeckListPanelComponent = (SvelteComponentInstance | Svelte5MountedComponent) & {
+export type DeckListPanelComponent = (
+  | SvelteComponentInstance
+  | Svelte5MountedComponent
+) & {
   updateAll?(
     updatedDecks?: Deck[],
     deckStats?: Map<string, DeckStats>,
     singleDeckId?: string,
-    singleDeckStats?: DeckStats,
+    singleDeckStats?: DeckStats
   ): Promise<void>;
 };
 

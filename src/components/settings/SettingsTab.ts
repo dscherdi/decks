@@ -39,7 +39,7 @@ export class DecksSettingTab extends PluginSettingTab {
     startBackgroundRefresh: () => void,
     stopBackgroundRefresh: () => void,
     purgeDatabase: () => Promise<void>,
-    backupService: BackupService,
+    backupService: BackupService
   ) {
     super(app, plugin);
     this.plugin = plugin;
@@ -96,7 +96,7 @@ export class DecksSettingTab extends PluginSettingTab {
           .onChange(async (value) => {
             this.settings.review.showProgress = value;
             await this.saveSettings();
-          }),
+          })
       );
 
     new Setting(containerEl)
@@ -108,13 +108,13 @@ export class DecksSettingTab extends PluginSettingTab {
           .onChange(async (value) => {
             this.settings.review.enableKeyboardShortcuts = value;
             await this.saveSettings();
-          }),
+          })
       );
 
     new Setting(containerEl)
       .setName("Session Duration")
       .setDesc(
-        "Maximum duration for flashcard review sessions in minutes (1-60)",
+        "Maximum duration for flashcard review sessions in minutes (1-60)"
       )
       .addText((text) =>
         text
@@ -126,7 +126,7 @@ export class DecksSettingTab extends PluginSettingTab {
               this.settings.review.sessionDuration = num;
               await this.saveSettings();
             }
-          }),
+          })
       );
   }
 
@@ -145,7 +145,7 @@ export class DecksSettingTab extends PluginSettingTab {
     new Setting(containerEl)
       .setName("Folder Search Path")
       .setDesc(
-        "Limit scanning to a specific folder. Select 'Scan entire vault' to scan all files.",
+        "Limit scanning to a specific folder. Select 'Scan entire vault' to scan all files."
       )
       .addDropdown((dropdown) => {
         // Add options to dropdown
@@ -180,7 +180,7 @@ export class DecksSettingTab extends PluginSettingTab {
               // Restart background refresh with new interval
               this.restartBackgroundRefresh();
             }
-          }),
+          })
       );
 
     new Setting(containerEl)
@@ -202,13 +202,13 @@ export class DecksSettingTab extends PluginSettingTab {
             } else {
               this.stopBackgroundRefresh();
             }
-          }),
+          })
       );
 
     new Setting(containerEl)
       .setName("Enable Notices")
       .setDesc(
-        "Show notification messages for completed review sessions and sync operations",
+        "Show notification messages for completed review sessions and sync operations"
       )
       .addToggle((toggle) =>
         toggle
@@ -216,7 +216,7 @@ export class DecksSettingTab extends PluginSettingTab {
           .onChange(async (value) => {
             this.settings.ui.enableNotices = value;
             await this.saveSettings();
-          }),
+          })
       );
 
     // Set initial state of interval setting
@@ -233,7 +233,7 @@ export class DecksSettingTab extends PluginSettingTab {
     new Setting(containerEl)
       .setName("Enable Debug Logging")
       .setDesc(
-        "Show detailed logging in the console for sync operations and flashcard processing",
+        "Show detailed logging in the console for sync operations and flashcard processing"
       )
       .addToggle((toggle) =>
         toggle
@@ -247,13 +247,13 @@ export class DecksSettingTab extends PluginSettingTab {
             }
             this.settings.debug.enableLogging = value;
             await this.saveSettings();
-          }),
+          })
       );
 
     new Setting(containerEl)
       .setName("Enable Performance Logs")
       .setDesc(
-        "Show performance timing metrics in the console (sync times, parsing performance, etc.)",
+        "Show performance timing metrics in the console (sync times, parsing performance, etc.)"
       )
       .addToggle((toggle) =>
         toggle
@@ -267,7 +267,7 @@ export class DecksSettingTab extends PluginSettingTab {
             }
             this.settings.debug.performanceLogs = value;
             await this.saveSettings();
-          }),
+          })
       );
   }
 
@@ -281,7 +281,7 @@ export class DecksSettingTab extends PluginSettingTab {
     new Setting(containerEl)
       .setName("Database Worker Thread")
       .setDesc(
-        "Run database operations in a background worker thread to prevent UI freezing with large databases. Requires restart to take effect.",
+        "Run database operations in a background worker thread to prevent UI freezing with large databases. Requires restart to take effect."
       )
       .addToggle((toggle) =>
         toggle
@@ -298,9 +298,9 @@ export class DecksSettingTab extends PluginSettingTab {
             new Notice(
               value
                 ? "Database worker enabled. Restart Obsidian to activate."
-                : "Database worker disabled. Restart Obsidian to deactivate.",
+                : "Database worker disabled. Restart Obsidian to deactivate."
             );
-          }),
+          })
       );
   }
 
@@ -314,7 +314,7 @@ export class DecksSettingTab extends PluginSettingTab {
     new Setting(containerEl)
       .setName("Purge Database")
       .setDesc(
-        "⚠️ Permanently delete all flashcards, review history, and deck data. This will force a clean rebuild from your vault files. All progress will be lost!",
+        "⚠️ Permanently delete all flashcards, review history, and deck data. This will force a clean rebuild from your vault files. All progress will be lost!"
       )
       .addButton((button) =>
         button
@@ -326,9 +326,9 @@ export class DecksSettingTab extends PluginSettingTab {
               this.purgeDatabase,
               this.performSync,
               this.refreshViewStats,
-              this.logger,
+              this.logger
             ).open();
-          }),
+          })
       );
   }
 
@@ -344,7 +344,7 @@ export class DecksSettingTab extends PluginSettingTab {
           .onChange(async (value) => {
             this.settings.backup.enableAutoBackup = value;
             await this.saveSettings();
-          }),
+          })
       );
 
     new Setting(containerEl)
@@ -358,7 +358,7 @@ export class DecksSettingTab extends PluginSettingTab {
           .onChange(async (value) => {
             this.settings.backup.maxBackups = value;
             await this.saveSettings();
-          }),
+          })
       );
 
     // Backup restoration section
@@ -380,7 +380,7 @@ export class DecksSettingTab extends PluginSettingTab {
           .setTooltip("Refresh backup list")
           .onClick(async () => {
             await this.refreshBackupList(backupSetting);
-          }),
+          })
       )
       .addButton((button) =>
         button
@@ -393,7 +393,7 @@ export class DecksSettingTab extends PluginSettingTab {
             }
 
             await this.restoreBackup(selectedBackup);
-          }),
+          })
       );
 
     // Initial load of backup list
@@ -408,7 +408,7 @@ export class DecksSettingTab extends PluginSettingTab {
 
       // Get the dropdown component
       const dropdown = setting.components.find(
-        (comp) => comp instanceof DropdownComponent,
+        (comp) => comp instanceof DropdownComponent
       ) as DropdownComponent;
 
       if (!dropdown) {
@@ -468,9 +468,9 @@ export class DecksSettingTab extends PluginSettingTab {
           total = totalCount;
           const progress = Math.round((current / total) * 100);
           progressNotice.setMessage(
-            `Restoring backup: ${progress}% (${current}/${total})`,
+            `Restoring backup: ${progress}% (${current}/${total})`
           );
-        },
+        }
       );
 
       progressNotice.hide();
@@ -497,7 +497,7 @@ class DatabasePurgeModal extends Modal {
     purgeDatabase: () => Promise<void>,
     performSync: (force?: boolean) => Promise<void>,
     refreshViewStats: () => Promise<void>,
-    logger: Logger,
+    logger: Logger
   ) {
     super(app);
     this.purgeDatabase = purgeDatabase;
@@ -576,13 +576,13 @@ class DatabasePurgeModal extends Modal {
           this.logger.debug("Failed to purge database:", error);
           new Notice(
             "❌ Failed to purge database. Check console for details.",
-            5000,
+            5000
           );
         }
       } else {
         new Notice(
           "Confirmation text doesn't match. Database purge cancelled.",
-          3000,
+          3000
         );
       }
     };

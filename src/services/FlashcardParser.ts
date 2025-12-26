@@ -22,7 +22,7 @@ export class FlashcardParser {
    */
   static parseFlashcardsFromContent(
     content: string,
-    headerLevel = 2,
+    headerLevel = 2
   ): ParsedFlashcard[] {
     const lines = content.split("\n");
     const flashcards: ParsedFlashcard[] = [];
@@ -118,7 +118,7 @@ export class FlashcardParser {
               currentHeader,
               currentContent,
               flashcards,
-              headerLevel,
+              headerLevel
             );
             currentHeader = null;
             currentContent = [];
@@ -130,7 +130,7 @@ export class FlashcardParser {
             currentHeader,
             currentContent,
             flashcards,
-            headerLevel,
+            headerLevel
           );
 
           // Start new header
@@ -162,7 +162,7 @@ export class FlashcardParser {
       currentHeader,
       currentContent,
       flashcards,
-      headerLevel,
+      headerLevel
     );
 
     return flashcards;
@@ -179,7 +179,7 @@ export class FlashcardParser {
     currentHeader: { text: string; level: number } | null,
     currentContent: string[],
     flashcards: ParsedFlashcard[],
-    targetHeaderLevel: number,
+    targetHeaderLevel: number
   ): void {
     if (
       currentHeader &&

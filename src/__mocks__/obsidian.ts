@@ -198,7 +198,7 @@ export class MarkdownRenderer {
     content: string,
     el: HTMLElement,
     sourcePath: string,
-    component: Component,
+    component: Component
   ): void {
     el.textContent = content;
   }

@@ -178,7 +178,7 @@ export interface IntervalData {
 export interface ForecastData {
   date: string;
   dueCount: number;
-  count: number;  // Alias for dueCount for backwards compatibility
+  count: number; // Alias for dueCount for backwards compatibility
 }
 
 export interface Statistics {
@@ -231,7 +231,7 @@ export function isCardMature(flashcard: Flashcard): boolean {
  * Get the card maturity type for classification
  */
 export function getCardMaturityType(
-  flashcard: Flashcard,
+  flashcard: Flashcard
 ): "new" | "review" | "mature" {
   if (flashcard.state === "new") {
     return "new";

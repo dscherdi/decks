@@ -15,15 +15,15 @@ describe("DatabaseService Error Handling", () => {
     const uninitializedService = new MainDatabaseService(
       "test.db",
       mockAdapter,
-      debugLog,
+      debugLog
     );
 
     // Don't initialize the database - leave it uninitialized
     await expect(uninitializedService.executeSql("SELECT 1")).rejects.toThrow(
-      "Database not initialized",
+      "Database not initialized"
     );
     await expect(uninitializedService.querySql("SELECT 1")).rejects.toThrow(
-      "Database not initialized",
+      "Database not initialized"
     );
   });
 });

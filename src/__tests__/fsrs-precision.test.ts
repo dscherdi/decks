@@ -123,5 +123,4 @@ describe("FSRS Numeric Precision Tests", () => {
       });
     });
   });
-
 });

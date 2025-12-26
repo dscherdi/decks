@@ -1,5 +1,5 @@
-import * as fs from 'fs';
-import * as path from 'path';
+import * as fs from "fs";
+import * as path from "path";
 
 /**
  * File system adapter that provides consistent interface for both console and Obsidian usage
@@ -34,19 +34,22 @@ export class NodeFileSystemAdapter implements IFileSystemAdapter {
 
   async read(filePath: string): Promise<string> {
     const fullPath = this.resolvePath(filePath);
-    return fs.promises.readFile(fullPath, 'utf-8');
+    return fs.promises.readFile(fullPath, "utf-8");
   }
 
   async readBinary(filePath: string): Promise<ArrayBuffer> {
     const fullPath = this.resolvePath(filePath);
     const buffer = await fs.promises.readFile(fullPath);
-    return buffer.buffer.slice(buffer.byteOffset, buffer.byteOffset + buffer.byteLength);
+    return buffer.buffer.slice(
+      buffer.byteOffset,
+      buffer.byteOffset + buffer.byteLength
+    );
   }
 
   async write(filePath: string, content: string): Promise<void> {
     const fullPath = this.resolvePath(filePath);
     await fs.promises.mkdir(path.dirname(fullPath), { recursive: true });
-    await fs.promises.writeFile(fullPath, content, 'utf-8');
+    await fs.promises.writeFile(fullPath, content, "utf-8");
   }
 
   async writeBinary(filePath: string, data: ArrayBuffer): Promise<void> {
@@ -72,7 +75,9 @@ export class NodeFileSystemAdapter implements IFileSystemAdapter {
 
   async list(dirPath: string): Promise<{ files: string[]; folders: string[] }> {
     const fullPath = this.resolvePath(dirPath);
-    const entries = await fs.promises.readdir(fullPath, { withFileTypes: true });
+    const entries = await fs.promises.readdir(fullPath, {
+      withFileTypes: true,
+    });
 
     const files: string[] = [];
     const folders: string[] = [];
@@ -93,7 +98,7 @@ export class NodeFileSystemAdapter implements IFileSystemAdapter {
     const stats = await fs.promises.stat(fullPath);
     return {
       mtime: stats.mtime.getTime(),
-      size: stats.size
+      size: stats.size,
     };
   }
 
@@ -160,7 +165,7 @@ export class ObsidianFileSystemAdapter implements IFileSystemAdapter {
     const result = await this.adapter.list(dirPath);
     return {
       files: result.files || [],
-      folders: result.folders || []
+      folders: result.folders || [],
     };
   }
 
@@ -168,7 +173,7 @@ export class ObsidianFileSystemAdapter implements IFileSystemAdapter {
     const stat = await this.adapter.stat(filePath);
     return {
       mtime: stat.mtime,
-      size: stat.size
+      size: stat.size,
     };
   }
 

@@ -93,7 +93,7 @@ export class AnkiExportModal extends Modal {
       await this.downloadAnkiFile(ankiData, config.ankiDeckName);
 
       new Notice(
-        `Successfully exported ${flashcards.length} flashcards to Anki format`,
+        `Successfully exported ${flashcards.length} flashcards to Anki format`
       );
       this.close();
     } catch (error) {
@@ -104,7 +104,7 @@ export class AnkiExportModal extends Modal {
 
   private generateAnkiData(
     flashcards: Flashcard[],
-    config: AnkiExportConfig,
+    config: AnkiExportConfig
   ): string {
     // Create Anki-compatible format with configurable separators
     const headers = ["Front", "Back"];
@@ -135,7 +135,7 @@ export class AnkiExportModal extends Modal {
     } else {
       sanitized = sanitized.replace(
         new RegExp(`\\${separator}`, "g"),
-        `\\${separator}`,
+        `\\${separator}`
       );
     }
 

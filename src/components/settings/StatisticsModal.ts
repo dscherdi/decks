@@ -19,7 +19,7 @@ export class StatisticsModal extends Modal {
     statisticsService: StatisticsService,
     settings: DecksSettings,
     logger: Logger,
-    deckFilter?: string,
+    deckFilter?: string
   ) {
     super(app);
     this.statisticsService = statisticsService;

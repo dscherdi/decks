@@ -52,9 +52,9 @@ describe("FSRS Progression & Explosion Safety", () => {
       // If we review immediately (elapsed=0), FSRS treats it as "cramming" which alters growth.
       let reviewTime = new Date();
       if (card.lastReviewed) {
-         // Add previous interval to last reviewed time
-         const lastReviewTime = new Date(card.lastReviewed).getTime();
-         reviewTime = new Date(lastReviewTime + prevInterval * 60 * 1000);
+        // Add previous interval to last reviewed time
+        const lastReviewTime = new Date(card.lastReviewed).getTime();
+        reviewTime = new Date(lastReviewTime + prevInterval * 60 * 1000);
       }
 
       // Perform the update
@@ -66,27 +66,27 @@ describe("FSRS Progression & Explosion Safety", () => {
       let factor = 0;
 
       if (i > 1 && prevInterval > 0) {
-          factor = card.interval / prevInterval;
+        factor = card.interval / prevInterval;
       }
 
       history.push({
-          rep: i,
-          intervalDays: parseFloat(intervalDays.toFixed(2)),
-          factor: parseFloat(factor.toFixed(2))
+        rep: i,
+        intervalDays: parseFloat(intervalDays.toFixed(2)),
+        factor: parseFloat(factor.toFixed(2)),
       });
 
       // --- SAFETY ASSERTIONS ---
 
       if (i > 1) {
-          // 1. Explosion Check: Interval shouldn't grow more than 5x in a single step for "Good"
-          // Standard FSRS usually hovers between 2.0x and 3.0x
-          expect(factor).toBeLessThan(5.0);
+        // 1. Explosion Check: Interval shouldn't grow more than 5x in a single step for "Good"
+        // Standard FSRS usually hovers between 2.0x and 3.0x
+        expect(factor).toBeLessThan(5.0);
 
-          // 2. Stagnation Check: Interval should generally grow (factor > 1.0)
-          // (Unless max interval reached)
-          if (card.interval < 36500 * 1440) {
-             expect(factor).toBeGreaterThan(1.1);
-          }
+        // 2. Stagnation Check: Interval should generally grow (factor > 1.0)
+        // (Unless max interval reached)
+        if (card.interval < 36500 * 1440) {
+          expect(factor).toBeGreaterThan(1.1);
+        }
       }
 
       // 3. Finite Check: All values should remain finite
@@ -113,8 +113,8 @@ describe("FSRS Progression & Explosion Safety", () => {
 
       let reviewTime = new Date();
       if (card.lastReviewed) {
-         const lastReviewTime = new Date(card.lastReviewed).getTime();
-         reviewTime = new Date(lastReviewTime + prevInterval * 60 * 1000);
+        const lastReviewTime = new Date(card.lastReviewed).getTime();
+        reviewTime = new Date(lastReviewTime + prevInterval * 60 * 1000);
       }
 
       card = fsrs.updateCard(card, "easy", reviewTime);
@@ -123,21 +123,21 @@ describe("FSRS Progression & Explosion Safety", () => {
       let factor = 0;
 
       if (i > 1 && prevInterval > 0) {
-          factor = card.interval / prevInterval;
+        factor = card.interval / prevInterval;
       }
 
       history.push({
-          rep: i,
-          intervalDays: parseFloat(intervalDays.toFixed(2)),
-          factor: parseFloat(factor.toFixed(2))
+        rep: i,
+        intervalDays: parseFloat(intervalDays.toFixed(2)),
+        factor: parseFloat(factor.toFixed(2)),
       });
 
       if (i > 1) {
-          // Easy should grow faster than Good, but not explosively
-          expect(factor).toBeLessThan(8.0); // Allow higher growth for Easy
-          if (card.interval < 36500 * 1440) {
-             expect(factor).toBeGreaterThan(1.2);
-          }
+        // Easy should grow faster than Good, but not explosively
+        expect(factor).toBeLessThan(8.0); // Allow higher growth for Easy
+        if (card.interval < 36500 * 1440) {
+          expect(factor).toBeGreaterThan(1.2);
+        }
       }
 
       expect(Number.isFinite(card.interval)).toBe(true);
@@ -154,18 +154,22 @@ describe("FSRS Progression & Explosion Safety", () => {
     let card = createNewCard();
 
     // 1. Train to maturity (5 'Good' reviews)
-    for(let i = 0; i < 5; i++) {
-        const nextTime = card.lastReviewed
-            ? new Date(new Date(card.lastReviewed).getTime() + card.interval * 60000)
-            : new Date();
-        card = fsrs.updateCard(card, "good", nextTime);
+    for (let i = 0; i < 5; i++) {
+      const nextTime = card.lastReviewed
+        ? new Date(
+            new Date(card.lastReviewed).getTime() + card.interval * 60000
+          )
+        : new Date();
+      card = fsrs.updateCard(card, "good", nextTime);
     }
 
     const preLapseStability = card.stability;
     const preLapseInterval = card.interval;
 
     // 2. Lapse (Press 'Again')
-    const lapseTime = new Date(new Date(card.lastReviewed!).getTime() + card.interval * 60000);
+    const lapseTime = new Date(
+      new Date(card.lastReviewed!).getTime() + card.interval * 60000
+    );
     card = fsrs.updateCard(card, "again", lapseTime);
 
     // Check: Stability should drop significantly (using Forgetting Stability formula)
@@ -180,7 +184,9 @@ describe("FSRS Progression & Explosion Safety", () => {
 
     // 3. Re-learn (Press 'Good')
     // Ensure the post-lapse stability doesn't cause next interval to explode
-    const relearnTime = new Date(new Date(card.lastReviewed!).getTime() + card.interval * 60000);
+    const relearnTime = new Date(
+      new Date(card.lastReviewed!).getTime() + card.interval * 60000
+    );
     const preRelearnInterval = card.interval;
     card = fsrs.updateCard(card, "good", relearnTime);
 
@@ -198,17 +204,21 @@ describe("FSRS Progression & Explosion Safety", () => {
     let card = createNewCard();
 
     // Train card to maturity
-    for(let i = 0; i < 3; i++) {
-        const nextTime = card.lastReviewed
-            ? new Date(new Date(card.lastReviewed).getTime() + card.interval * 60000)
-            : new Date();
-        card = fsrs.updateCard(card, "good", nextTime);
+    for (let i = 0; i < 3; i++) {
+      const nextTime = card.lastReviewed
+        ? new Date(
+            new Date(card.lastReviewed).getTime() + card.interval * 60000
+          )
+        : new Date();
+      card = fsrs.updateCard(card, "good", nextTime);
     }
 
     // Multiple lapse cycle
-    for(let lapse = 1; lapse <= 3; lapse++) {
+    for (let lapse = 1; lapse <= 3; lapse++) {
       // Lapse
-      const lapseTime = new Date(new Date(card.lastReviewed!).getTime() + card.interval * 60000);
+      const lapseTime = new Date(
+        new Date(card.lastReviewed!).getTime() + card.interval * 60000
+      );
       card = fsrs.updateCard(card, "again", lapseTime);
 
       expect(card.lapses).toBe(lapse);
@@ -216,7 +226,9 @@ describe("FSRS Progression & Explosion Safety", () => {
       expect(card.stability).toBeGreaterThan(0);
 
       // Recover
-      const recoverTime = new Date(new Date(card.lastReviewed!).getTime() + card.interval * 60000);
+      const recoverTime = new Date(
+        new Date(card.lastReviewed!).getTime() + card.interval * 60000
+      );
       card = fsrs.updateCard(card, "good", recoverTime);
 
       expect(Number.isFinite(card.stability)).toBe(true);
@@ -227,16 +239,31 @@ describe("FSRS Progression & Explosion Safety", () => {
 
   it("should maintain sane growth with mixed ratings", () => {
     let card = createNewCard();
-    const ratings = ["good", "hard", "good", "easy", "again", "good", "good", "hard", "easy"] as const;
-    const history: { rep: number; rating: string; intervalDays: number; stability: number }[] = [];
+    const ratings = [
+      "good",
+      "hard",
+      "good",
+      "easy",
+      "again",
+      "good",
+      "good",
+      "hard",
+      "easy",
+    ] as const;
+    const history: {
+      rep: number;
+      rating: string;
+      intervalDays: number;
+      stability: number;
+    }[] = [];
 
     for (let i = 0; i < ratings.length; i++) {
       const rating = ratings[i];
 
       let reviewTime = new Date();
       if (card.lastReviewed) {
-         const lastReviewTime = new Date(card.lastReviewed).getTime();
-         reviewTime = new Date(lastReviewTime + card.interval * 60 * 1000);
+        const lastReviewTime = new Date(card.lastReviewed).getTime();
+        reviewTime = new Date(lastReviewTime + card.interval * 60 * 1000);
       }
 
       card = fsrs.updateCard(card, rating, reviewTime);
@@ -246,7 +273,7 @@ describe("FSRS Progression & Explosion Safety", () => {
         rep: i + 1,
         rating,
         intervalDays: parseFloat(intervalDays.toFixed(2)),
-        stability: parseFloat(card.stability.toFixed(3))
+        stability: parseFloat(card.stability.toFixed(3)),
       });
 
       // All values should remain finite and positive
@@ -264,7 +291,8 @@ describe("FSRS Progression & Explosion Safety", () => {
 
   it("should handle INTENSIVE profile progression without explosions", () => {
     let card = createNewCard();
-    const history: { rep: number; intervalMinutes: number; factor: number }[] = [];
+    const history: { rep: number; intervalMinutes: number; factor: number }[] =
+      [];
 
     const MAX_REVIEWS = 15;
 
@@ -273,29 +301,29 @@ describe("FSRS Progression & Explosion Safety", () => {
 
       let reviewTime = new Date();
       if (card.lastReviewed) {
-         const lastReviewTime = new Date(card.lastReviewed).getTime();
-         reviewTime = new Date(lastReviewTime + prevInterval * 60 * 1000);
+        const lastReviewTime = new Date(card.lastReviewed).getTime();
+        reviewTime = new Date(lastReviewTime + prevInterval * 60 * 1000);
       }
 
       card = intensiveFsrs.updateCard(card, "good", reviewTime);
 
       let factor = 0;
       if (i > 1 && prevInterval > 0) {
-          factor = card.interval / prevInterval;
+        factor = card.interval / prevInterval;
       }
 
       history.push({
-          rep: i,
-          intervalMinutes: parseFloat(card.interval.toFixed(2)),
-          factor: parseFloat(factor.toFixed(2))
+        rep: i,
+        intervalMinutes: parseFloat(card.interval.toFixed(2)),
+        factor: parseFloat(factor.toFixed(2)),
       });
 
       if (i > 1) {
-          // INTENSIVE allows sub-day intervals, so growth factors can be different
-          expect(factor).toBeLessThan(10.0); // Allow higher growth for small intervals
-          if (card.interval < 36500 * 1440) {
-             expect(factor).toBeGreaterThan(1.05);
-          }
+        // INTENSIVE allows sub-day intervals, so growth factors can be different
+        expect(factor).toBeLessThan(10.0); // Allow higher growth for small intervals
+        if (card.interval < 36500 * 1440) {
+          expect(factor).toBeGreaterThan(1.05);
+        }
       }
 
       expect(Number.isFinite(card.interval)).toBe(true);
@@ -310,33 +338,37 @@ describe("FSRS Progression & Explosion Safety", () => {
     let card = createNewCard();
 
     // Train card through several reviews
-    for(let i = 0; i < 10; i++) {
-        const nextTime = card.lastReviewed
-            ? new Date(new Date(card.lastReviewed).getTime() + card.interval * 60000)
-            : new Date();
-        card = fsrs.updateCard(card, "good", nextTime);
+    for (let i = 0; i < 10; i++) {
+      const nextTime = card.lastReviewed
+        ? new Date(
+            new Date(card.lastReviewed).getTime() + card.interval * 60000
+          )
+        : new Date();
+      card = fsrs.updateCard(card, "good", nextTime);
 
-        // Test retrievability at various time points
-        const currentTime = new Date(card.lastReviewed!);
-        const halfwayTime = new Date(currentTime.getTime() + (card.interval * 60000) / 2);
-        const dueTime = new Date(currentTime.getTime() + card.interval * 60000);
+      // Test retrievability at various time points
+      const currentTime = new Date(card.lastReviewed!);
+      const halfwayTime = new Date(
+        currentTime.getTime() + (card.interval * 60000) / 2
+      );
+      const dueTime = new Date(currentTime.getTime() + card.interval * 60000);
 
-        const retrievabilityNow = fsrs.getRetrievability(card, currentTime);
-        const retrievabilityHalfway = fsrs.getRetrievability(card, halfwayTime);
-        const retrievabilityDue = fsrs.getRetrievability(card, dueTime);
+      const retrievabilityNow = fsrs.getRetrievability(card, currentTime);
+      const retrievabilityHalfway = fsrs.getRetrievability(card, halfwayTime);
+      const retrievabilityDue = fsrs.getRetrievability(card, dueTime);
 
-        // Retrievability should decrease over time
-        expect(retrievabilityNow).toBeGreaterThanOrEqual(retrievabilityHalfway);
-        expect(retrievabilityHalfway).toBeGreaterThanOrEqual(retrievabilityDue);
+      // Retrievability should decrease over time
+      expect(retrievabilityNow).toBeGreaterThanOrEqual(retrievabilityHalfway);
+      expect(retrievabilityHalfway).toBeGreaterThanOrEqual(retrievabilityDue);
 
-        // All values should be finite and in [0,1] range
-        expect(Number.isFinite(retrievabilityNow)).toBe(true);
-        expect(Number.isFinite(retrievabilityHalfway)).toBe(true);
-        expect(Number.isFinite(retrievabilityDue)).toBe(true);
-        expect(retrievabilityNow).toBeGreaterThanOrEqual(0);
-        expect(retrievabilityNow).toBeLessThanOrEqual(1);
-        expect(retrievabilityDue).toBeGreaterThanOrEqual(0);
-        expect(retrievabilityDue).toBeLessThanOrEqual(1);
+      // All values should be finite and in [0,1] range
+      expect(Number.isFinite(retrievabilityNow)).toBe(true);
+      expect(Number.isFinite(retrievabilityHalfway)).toBe(true);
+      expect(Number.isFinite(retrievabilityDue)).toBe(true);
+      expect(retrievabilityNow).toBeGreaterThanOrEqual(0);
+      expect(retrievabilityNow).toBeLessThanOrEqual(1);
+      expect(retrievabilityDue).toBeGreaterThanOrEqual(0);
+      expect(retrievabilityDue).toBeLessThanOrEqual(1);
     }
   });
 
@@ -344,19 +376,21 @@ describe("FSRS Progression & Explosion Safety", () => {
     let card = createNewCard();
 
     // Simulate extreme difficulty scenario (many 'again' ratings)
-    for(let i = 0; i < 10; i++) {
-        const nextTime = card.lastReviewed
-            ? new Date(new Date(card.lastReviewed).getTime() + card.interval * 60000)
-            : new Date();
-        card = fsrs.updateCard(card, "again", nextTime);
+    for (let i = 0; i < 10; i++) {
+      const nextTime = card.lastReviewed
+        ? new Date(
+            new Date(card.lastReviewed).getTime() + card.interval * 60000
+          )
+        : new Date();
+      card = fsrs.updateCard(card, "again", nextTime);
 
-        // Difficulty should be clamped to [1, 10] range
-        expect(card.difficulty).toBeGreaterThanOrEqual(1);
-        expect(card.difficulty).toBeLessThanOrEqual(10);
-        expect(Number.isFinite(card.difficulty)).toBe(true);
+      // Difficulty should be clamped to [1, 10] range
+      expect(card.difficulty).toBeGreaterThanOrEqual(1);
+      expect(card.difficulty).toBeLessThanOrEqual(10);
+      expect(Number.isFinite(card.difficulty)).toBe(true);
 
-        // Lapses should increment properly
-        expect(card.lapses).toBe(i + 1);
+      // Lapses should increment properly
+      expect(card.lapses).toBe(i + 1);
     }
   });
 
@@ -364,11 +398,13 @@ describe("FSRS Progression & Explosion Safety", () => {
     let card = createNewCard();
 
     // Train card to moderate maturity
-    for(let i = 0; i < 3; i++) {
-        const nextTime = card.lastReviewed
-            ? new Date(new Date(card.lastReviewed).getTime() + card.interval * 60000)
-            : new Date();
-        card = fsrs.updateCard(card, "good", nextTime);
+    for (let i = 0; i < 3; i++) {
+      const nextTime = card.lastReviewed
+        ? new Date(
+            new Date(card.lastReviewed).getTime() + card.interval * 60000
+          )
+        : new Date();
+      card = fsrs.updateCard(card, "good", nextTime);
     }
 
     // Review the card way after it was due (10x the interval)
@@ -392,7 +428,7 @@ describe("FSRS Progression & Explosion Safety", () => {
     const retentionValues = [0.7, 0.8, 0.9, 0.95];
     const growthResults: { retention: number; avgFactor: number }[] = [];
 
-    retentionValues.forEach(retention => {
+    retentionValues.forEach((retention) => {
       const testFsrs = new FSRS({
         requestRetention: retention,
         profile: "STANDARD",

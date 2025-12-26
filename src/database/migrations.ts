@@ -30,7 +30,7 @@ export function needsMigration(db: Database): boolean {
  */
 export function createTables(
   db: Database,
-  debugLog?: (message: string) => void,
+  debugLog?: (message: string) => void
 ): void {
   const log = debugLog || (() => {});
 
@@ -46,7 +46,7 @@ export function createTables(
 
 export function migrate(
   db: Database,
-  debugLog?: (message: string) => void,
+  debugLog?: (message: string) => void
 ): void {
   const log = debugLog || (() => {});
   const currentVersion = getCurrentSchemaVersion(db);
@@ -57,7 +57,7 @@ export function migrate(
   }
 
   log(
-    `Migrating schema from version ${currentVersion} to ${CURRENT_SCHEMA_VERSION}`,
+    `Migrating schema from version ${currentVersion} to ${CURRENT_SCHEMA_VERSION}`
   );
 
   try {

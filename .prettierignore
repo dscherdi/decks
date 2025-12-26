@@ -1,0 +1,26 @@
+# Dependencies
+node_modules/
+package-lock.json
+
+# Build output
+dist/
+demo_vault/.obsidian/plugins/decks/
+
+# Generated files
+*.min.js
+*.bundle.js
+
+# Documentation
+docs/
+
+# Config files
+tsconfig.json
+jest.config.js
+jest.integration.config.js
+
+# Test data
+src/__tests__/integration/test-data/
+
+# Assets
+assets/
+*.wasm

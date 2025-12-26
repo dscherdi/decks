@@ -1,5 +1,5 @@
-import * as fs from 'fs';
-import * as path from 'path';
+import * as fs from "fs";
+import * as path from "path";
 
 /**
  * Console adapters to make existing services work without Obsidian dependencies
@@ -59,19 +59,22 @@ export class ConsoleDataAdapter implements MockDataAdapter {
 
   async read(filePath: string): Promise<string> {
     const fullPath = this.resolvePath(filePath);
-    return fs.promises.readFile(fullPath, 'utf-8');
+    return fs.promises.readFile(fullPath, "utf-8");
   }
 
   async readBinary(filePath: string): Promise<ArrayBuffer> {
     const fullPath = this.resolvePath(filePath);
     const buffer = await fs.promises.readFile(fullPath);
-    return buffer.buffer.slice(buffer.byteOffset, buffer.byteOffset + buffer.byteLength);
+    return buffer.buffer.slice(
+      buffer.byteOffset,
+      buffer.byteOffset + buffer.byteLength
+    );
   }
 
   async write(filePath: string, content: string): Promise<void> {
     const fullPath = this.resolvePath(filePath);
     await fs.promises.mkdir(path.dirname(fullPath), { recursive: true });
-    await fs.promises.writeFile(fullPath, content, 'utf-8');
+    await fs.promises.writeFile(fullPath, content, "utf-8");
   }
 
   async writeBinary(filePath: string, data: ArrayBuffer): Promise<void> {
@@ -97,7 +100,9 @@ export class ConsoleDataAdapter implements MockDataAdapter {
 
   async list(dirPath: string): Promise<{ files: string[]; folders: string[] }> {
     const fullPath = this.resolvePath(dirPath);
-    const entries = await fs.promises.readdir(fullPath, { withFileTypes: true });
+    const entries = await fs.promises.readdir(fullPath, {
+      withFileTypes: true,
+    });
 
     const files: string[] = [];
     const folders: string[] = [];
@@ -118,7 +123,7 @@ export class ConsoleDataAdapter implements MockDataAdapter {
     const stats = await fs.promises.stat(fullPath);
     return {
       mtime: stats.mtime.getTime(),
-      size: stats.size
+      size: stats.size,
     };
   }
 
@@ -156,7 +161,7 @@ export class ConsoleVault implements MockVault {
 
   constructor(vaultPath: string, configDir?: string) {
     this.adapter = new ConsoleDataAdapter(vaultPath);
-    this.configDir = configDir || path.join(vaultPath, '.obsidian');
+    this.configDir = configDir || path.join(vaultPath, ".obsidian");
   }
 
   getMarkdownFiles(): MockTFile[] {
@@ -174,7 +179,7 @@ export class ConsoleVault implements MockVault {
           const fullPath = path.join(dir, entry.name);
           if (entry.isDirectory()) {
             walkSync(fullPath);
-          } else if (entry.isFile() && entry.name.endsWith('.md')) {
+          } else if (entry.isFile() && entry.name.endsWith(".md")) {
             const relativePath = path.relative(vaultPath, fullPath);
             files.push(this.createMockTFile(relativePath));
           }
@@ -190,14 +195,14 @@ export class ConsoleVault implements MockVault {
 
   private createMockTFile(filePath: string): MockTFile {
     const name = path.basename(filePath);
-    const basename = path.basename(filePath, '.md');
-    const extension = 'md';
+    const basename = path.basename(filePath, ".md");
+    const extension = "md";
 
     return {
       path: filePath,
       basename,
       extension,
-      name
+      name,
     };
   }
 
@@ -226,7 +231,7 @@ export class ConsoleMetadataCache implements MockMetadataCache {
     try {
       const content = fs.readFileSync(
         path.resolve((this.vault.adapter as any).basePath, file.path), // eslint-disable-line @typescript-eslint/no-explicit-any
-        'utf-8'
+        "utf-8"
       );
 
       const metadata = this.parseMetadata(content);
@@ -247,7 +252,7 @@ export class ConsoleMetadataCache implements MockMetadataCache {
       const tagsMatch = frontmatter.match(/^tags:\s*(.+)$/m);
       if (tagsMatch) {
         const tagsStr = tagsMatch[1].trim();
-        if (tagsStr.startsWith('[') && tagsStr.endsWith(']')) {
+        if (tagsStr.startsWith("[") && tagsStr.endsWith("]")) {
           // Array format: [tag1, tag2]
           try {
             metadata.frontmatter = { tags: JSON.parse(tagsStr) };
@@ -265,7 +270,7 @@ export class ConsoleMetadataCache implements MockMetadataCache {
     // Parse inline tags
     const inlineTags = content.match(/#[\w\-/]+/g);
     if (inlineTags) {
-      metadata.tags = inlineTags.map(tag => ({ tag }));
+      metadata.tags = inlineTags.map((tag) => ({ tag }));
     }
 
     return metadata;

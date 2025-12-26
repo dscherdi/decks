@@ -167,7 +167,7 @@ export type ArrayQueryResult = SqlRow[];
 
 // Type guards for result discrimination
 export function isRecordArray(
-  result: QueryResult | ArrayQueryResult,
+  result: QueryResult | ArrayQueryResult
 ): result is QueryResult {
   return (
     Array.isArray(result) &&
@@ -178,7 +178,7 @@ export function isRecordArray(
 }
 
 export function isArrayResult(
-  result: QueryResult | ArrayQueryResult,
+  result: QueryResult | ArrayQueryResult
 ): result is ArrayQueryResult {
   return (
     Array.isArray(result) && (result.length === 0 || Array.isArray(result[0]))

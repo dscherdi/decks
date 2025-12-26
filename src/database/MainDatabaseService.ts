@@ -19,7 +19,7 @@ export class MainDatabaseService extends BaseDatabaseService {
   constructor(
     dbPath: string,
     adapter: DataAdapter,
-    debugLog: (message: string, ...args: (string | number | object)[]) => void,
+    debugLog: (message: string, ...args: (string | number | object)[]) => void
   ) {
     super(dbPath, adapter, debugLog);
   }
@@ -63,10 +63,14 @@ export class MainDatabaseService extends BaseDatabaseService {
 
       // Load existing database or create new one
       const buffer = await this.loadDatabaseFile();
-      console.log(`[DEBUG] Buffer exists: ${!!buffer}, SQL.Database type: ${typeof SQL.Database}`);
+      this.debugLog(
+        `[DEBUG] Buffer exists: ${!!buffer}, SQL.Database type: ${typeof SQL.Database}`
+      );
       if (buffer) {
         this.db = new SQL.Database(buffer);
-        console.log(`[DEBUG] Loaded existing database. Has exec: ${typeof this.db?.exec}`);
+        this.debugLog(
+          `[DEBUG] Loaded existing database. Has exec: ${typeof this.db?.exec}`
+        );
 
         // Update lastKnownModified
         await this.updateLastKnownModified();
@@ -75,12 +79,14 @@ export class MainDatabaseService extends BaseDatabaseService {
         await this.migrateSchemaIfNeeded();
       } else {
         this.db = new SQL.Database();
-        console.log(`[DEBUG] Created database instance. Has exec: ${typeof this.db?.exec}, Constructor: ${SQL.Database?.name}`);
+        this.debugLog(
+          `[DEBUG] Created database instance. Has exec: ${typeof this.db
+            ?.exec}, Constructor: ${SQL.Database?.name}`
+        );
         await this.createFreshDatabase();
         this.debugLog("Created new database");
         this.lastKnownModified = 0;
       }
-
 
       this.debugLog("MainDatabaseService initialized successfully");
     } catch (error) {
@@ -119,7 +125,10 @@ export class MainDatabaseService extends BaseDatabaseService {
 
       // Export database and save
       const data = this.db.export();
-      await this.adapter.writeBinary(this.dbPath, data.buffer.slice(0) as ArrayBuffer);
+      await this.adapter.writeBinary(
+        this.dbPath,
+        data.buffer.slice(0) as ArrayBuffer
+      );
 
       // Update lastKnownModified after successful save
       await this.updateLastKnownModified();
@@ -162,21 +171,21 @@ export class MainDatabaseService extends BaseDatabaseService {
   async querySql<T>(
     sql: string,
     params: SqlJsValue[],
-    config: { asObject: true },
+    config: { asObject: true }
   ): Promise<T[]>;
 
   // Overload for array queries
   async querySql(
     sql: string,
     params?: SqlJsValue[],
-    config?: { asObject?: false },
+    config?: { asObject?: false }
   ): Promise<SqlJsValue[][]>;
 
   // Implementation
   async querySql<T = Record<string, SqlJsValue>>(
     sql: string,
     params: SqlJsValue[] = [],
-    config?: QueryConfig,
+    config?: QueryConfig
   ): Promise<T[] | SqlJsValue[][]> {
     if (!this.db) throw new Error("Database not initialized");
 
@@ -217,7 +226,7 @@ export class MainDatabaseService extends BaseDatabaseService {
       // Check current schema version
       const versionResult = this.db.exec("PRAGMA user_version");
       this.debugLog(
-        `PRAGMA user_version result: ${JSON.stringify(versionResult)}`,
+        `PRAGMA user_version result: ${JSON.stringify(versionResult)}`
       );
       // Handle both empty array (new database) and result with values
       const currentVersion =
@@ -227,7 +236,7 @@ export class MainDatabaseService extends BaseDatabaseService {
 
       if (currentVersion < CURRENT_SCHEMA_VERSION) {
         this.debugLog(
-          `Migrating database from version ${currentVersion} to ${CURRENT_SCHEMA_VERSION}`,
+          `Migrating database from version ${currentVersion} to ${CURRENT_SCHEMA_VERSION}`
         );
 
         // Use centralized migration SQL
@@ -249,7 +258,7 @@ export class MainDatabaseService extends BaseDatabaseService {
   }
 
   async createBackupDatabaseInstance(
-    backupData: Uint8Array,
+    backupData: Uint8Array
   ): Promise<Database> {
     if (!this.SQL) throw new Error("SQL.js not initialized");
 
@@ -267,7 +276,7 @@ export class MainDatabaseService extends BaseDatabaseService {
 
   async queryBackupDatabase(
     backupDb: Database,
-    sql: string,
+    sql: string
   ): Promise<SqlJsValue[][]> {
     const result = backupDb.exec(sql);
     if (result.length === 0) return [];
@@ -314,7 +323,7 @@ export class MainDatabaseService extends BaseDatabaseService {
       }
 
       this.debugLog(
-        `Syncing with newer disk file (${stat.mtime} > ${this.lastKnownModified})`,
+        `Syncing with newer disk file (${stat.mtime} > ${this.lastKnownModified})`
       );
 
       // Read the disk file
@@ -336,7 +345,7 @@ export class MainDatabaseService extends BaseDatabaseService {
                 data: Uint8Array,
                 canRead: boolean,
                 canWrite: boolean,
-                canOwn: boolean,
+                canOwn: boolean
               ) => void;
               unlink?: (path: string) => void;
             };
@@ -351,7 +360,7 @@ export class MainDatabaseService extends BaseDatabaseService {
                 data: Uint8Array,
                 canRead: boolean,
                 canWrite: boolean,
-                canOwn: boolean,
+                canOwn: boolean
               ) => void;
               unlink?: (path: string) => void;
             };
@@ -366,7 +375,7 @@ export class MainDatabaseService extends BaseDatabaseService {
           diskBuffer,
           true,
           true,
-          true,
+          true
         );
 
         try {
@@ -447,7 +456,7 @@ export class MainDatabaseService extends BaseDatabaseService {
           try {
             // Get data from remote database
             const remoteSessions = remoteDb.exec(
-              "SELECT * FROM review_sessions",
+              "SELECT * FROM review_sessions"
             );
             const remoteLogs = remoteDb.exec("SELECT * FROM review_logs");
             const remoteDecks = remoteDb.exec("SELECT * FROM decks");
@@ -492,7 +501,7 @@ export class MainDatabaseService extends BaseDatabaseService {
 
                 const existingDeck = this.db.exec(
                   `SELECT modified FROM decks WHERE id = ?`,
-                  [deckId],
+                  [deckId]
                 );
                 const shouldReplace =
                   !existingDeck.length ||
@@ -521,7 +530,7 @@ export class MainDatabaseService extends BaseDatabaseService {
 
                 const existingCard = this.db.exec(
                   `SELECT modified FROM flashcards WHERE id = ?`,
-                  [cardId],
+                  [cardId]
                 );
                 const shouldReplace =
                   !existingCard.length ||
@@ -542,7 +551,7 @@ export class MainDatabaseService extends BaseDatabaseService {
             // Commit the transaction
             this.db.exec("COMMIT");
             this.debugLog(
-              "Successfully merged data from disk using fallback method",
+              "Successfully merged data from disk using fallback method"
             );
           } catch (error) {
             // Rollback on error

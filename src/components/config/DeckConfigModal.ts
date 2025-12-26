@@ -21,7 +21,7 @@ export class DeckConfigModal extends Modal {
     deck: Deck,
     db: IDatabaseService,
     deckSynchronizer: DeckSynchronizer,
-    onRefreshStats: (deckId: string) => Promise<void>,
+    onRefreshStats: (deckId: string) => Promise<void>
   ) {
     super(app);
     this.deck = deck;
@@ -97,7 +97,7 @@ export class DeckConfigModal extends Modal {
 
   private async updateDeckConfig(
     deckId: string,
-    config: Partial<DeckConfig>,
+    config: Partial<DeckConfig>
   ): Promise<void> {
     // Validate profile and requestRetention if provided
     if (
@@ -111,7 +111,7 @@ export class DeckConfigModal extends Modal {
       const rr = config.fsrs.requestRetention;
       if (rr <= 0.5 || rr >= 0.995) {
         throw new Error(
-          `requestRetention must be in range (0.5, 0.995), got ${rr}`,
+          `requestRetention must be in range (0.5, 0.995), got ${rr}`
         );
       }
     }
@@ -145,9 +145,9 @@ export class DeckConfigModal extends Modal {
     if (headerLevelChanged) {
       const updatedDeck = await this.db.getDeckById(deckId);
       if (updatedDeck) {
-        console.log(
-          `Header level changed for deck ${updatedDeck.name}, forcing resync`,
-        );
+        // console.log(
+        //     `Header level changed for deck ${updatedDeck.name}, forcing resync`
+        // );
         await yieldToUI();
         await this.deckSynchronizer.syncDeck(updatedDeck.filepath, true);
       }

@@ -44,7 +44,7 @@ class MockDatabaseService implements Partial<IDatabaseService> {
 
   async getOverallStatistics(
     deckFilter?: string,
-    timeframe?: string,
+    timeframe?: string
   ): Promise<Statistics> {
     return this.mockStatistics || this.createEmptyStatistics();
   }
@@ -78,7 +78,7 @@ class MockDatabaseService implements Partial<IDatabaseService> {
   async getScheduledDueByDay(
     deckId: string,
     startDate: string,
-    endDate: string,
+    endDate: string
   ): Promise<{ day: string; count: number }[]> {
     const cards = this.mockFlashcardsByDeck.get(deckId) || [];
     const reviewCards = cards.filter((card) => card.state === "review");
@@ -106,7 +106,7 @@ class MockDatabaseService implements Partial<IDatabaseService> {
   async getScheduledDueByDayMulti(
     deckIds: string[],
     startDate: string,
-    endDate: string,
+    endDate: string
   ): Promise<{ day: string; count: number }[]> {
     const results = new Map<string, number>();
 
@@ -114,7 +114,7 @@ class MockDatabaseService implements Partial<IDatabaseService> {
       const deckResults = await this.getScheduledDueByDay(
         deckId,
         startDate,
-        endDate,
+        endDate
       );
       for (const r of deckResults) {
         results.set(r.day, (results.get(r.day) || 0) + r.count);
@@ -128,7 +128,7 @@ class MockDatabaseService implements Partial<IDatabaseService> {
 
   async getCurrentBacklog(
     deckId: string,
-    currentDate: string,
+    currentDate: string
   ): Promise<number> {
     const cards = this.mockFlashcardsByDeck.get(deckId) || [];
     const current = new Date(currentDate);
@@ -141,7 +141,7 @@ class MockDatabaseService implements Partial<IDatabaseService> {
 
   async getCurrentBacklogMulti(
     deckIds: string[],
-    currentDate: string,
+    currentDate: string
   ): Promise<number> {
     let total = 0;
     for (const deckId of deckIds) {
@@ -153,7 +153,7 @@ class MockDatabaseService implements Partial<IDatabaseService> {
   async getDeckReviewCountRange(
     deckId: string,
     startDate: string,
-    endDate: string,
+    endDate: string
   ): Promise<number> {
     const cards = this.mockFlashcardsByDeck.get(deckId) || [];
     const cardIds = new Set(cards.map((card) => card.id));
@@ -209,7 +209,7 @@ describe("StatisticsService", () => {
     mockDb = new MockDatabaseService();
     statisticsService = new StatisticsService(
       mockDb as any,
-      mockSettings as any,
+      mockSettings as any
     );
   });
 
@@ -238,7 +238,6 @@ describe("StatisticsService", () => {
       expect(result.date).toBe("2024-01-02");
       expect(result.reviews).toBe(8);
     });
-
   });
 
   describe("getTimeframeStats", () => {
@@ -267,7 +266,6 @@ describe("StatisticsService", () => {
       expect(result.reviewCards).toBe(20); // 8 + 12
       expect(result.correctRate).toBeCloseTo(88.0, 1); // Weighted average: (85*10 + 90*15) / 25 = 2200/25 = 88
     });
-
   });
 
   describe("calculateAverageEase", () => {
@@ -280,7 +278,6 @@ describe("StatisticsService", () => {
       // (10*1 + 20*2 + 30*3 + 40*4) / 100 = 300/100 = 3.00
       expect(result).toBe(3.0);
     });
-
   });
 
   describe("calculateAverageInterval", () => {
@@ -297,7 +294,6 @@ describe("StatisticsService", () => {
       // (10*1440 + 5*4320 + 2*120) minutes / 17 cards = 36240/17 = ~2132 minutes = ~1.5 days
       expect(result).toBeGreaterThan(0);
     });
-
   });
 
   describe("getDueToday and getDueTomorrow", () => {
@@ -316,7 +312,6 @@ describe("StatisticsService", () => {
       expect(statisticsService.getDueToday(mockStats)).toBe(5);
       expect(statisticsService.getDueTomorrow(mockStats)).toBe(8);
     });
-
   });
 
   describe("getMaturityRatio", () => {
@@ -328,7 +323,6 @@ describe("StatisticsService", () => {
 
       expect(result).toBe(50.0); // 30/60 = 50%
     });
-
   });
 
   describe("getTotalCards", () => {
@@ -340,7 +334,6 @@ describe("StatisticsService", () => {
 
       expect(result).toBe(60);
     });
-
   });
 
   describe("simulateFutureDueLoad", () => {
@@ -357,7 +350,7 @@ describe("StatisticsService", () => {
           "2",
           deckId,
           "review",
-          new Date(baseDate.getTime() - 24 * 60 * 60 * 1000),
+          new Date(baseDate.getTime() - 24 * 60 * 60 * 1000)
         ), // overdue
       ];
 
@@ -394,25 +387,25 @@ describe("StatisticsService", () => {
           "overdue1",
           deckId,
           "review",
-          new Date(baseDate.getTime() - 24 * 60 * 60 * 1000),
+          new Date(baseDate.getTime() - 24 * 60 * 60 * 1000)
         ), // 1 day overdue
         createMockFlashcard(
           "overdue2",
           deckId,
           "review",
-          new Date(baseDate.getTime() - 48 * 60 * 60 * 1000),
+          new Date(baseDate.getTime() - 48 * 60 * 60 * 1000)
         ), // 2 days overdue
         createMockFlashcard(
           "due-day3",
           deckId,
           "review",
-          new Date(baseDate.getTime() + 3 * 24 * 60 * 60 * 1000),
+          new Date(baseDate.getTime() + 3 * 24 * 60 * 60 * 1000)
         ), // due in 3 days
         createMockFlashcard(
           "due-day5",
           deckId,
           "review",
-          new Date(baseDate.getTime() + 5 * 24 * 60 * 60 * 1000),
+          new Date(baseDate.getTime() + 5 * 24 * 60 * 60 * 1000)
         ), // due in 5 days
       ];
 
@@ -423,15 +416,15 @@ describe("StatisticsService", () => {
       for (let i = 0; i < 60; i++) {
         // 60 reviews over 30 days = 2/day average
         const reviewDate = new Date(
-          baseDate.getTime() - i * 12 * 60 * 60 * 1000,
+          baseDate.getTime() - i * 12 * 60 * 60 * 1000
         ); // spread over past 30 days
         reviewLogs.push(
           createMockReviewLog(
             `review-${i}`,
             flashcards[i % flashcards.length].id,
             reviewDate,
-            3,
-          ),
+            3
+          )
         );
       }
       mockDb.setReviewLogs(reviewLogs);
@@ -453,7 +446,7 @@ describe("StatisticsService", () => {
       // Backlog should generally decrease over time due to processing capacity
       // (2 reviews/day capacity vs cards becoming due)
       expect(result[6].projectedBacklog).toBeLessThanOrEqual(
-        result[0].projectedBacklog + 2,
+        result[0].projectedBacklog + 2
       );
     });
 
@@ -466,7 +459,7 @@ describe("StatisticsService", () => {
           "1",
           deckId,
           "review",
-          new Date(baseDate.getTime() + 24 * 60 * 60 * 1000),
+          new Date(baseDate.getTime() + 24 * 60 * 60 * 1000)
         ),
       ];
 
@@ -480,7 +473,7 @@ describe("StatisticsService", () => {
       // With no review history, avgReviewsPerDay should be 0
       // So backlog should accumulate all due cards
       expect(result[1].projectedBacklog).toBeGreaterThanOrEqual(
-        result[0].projectedBacklog,
+        result[0].projectedBacklog
       );
     });
 
@@ -493,10 +486,10 @@ describe("StatisticsService", () => {
       for (let i = 0; i < 50; i++) {
         const daysOffset = Math.floor(Math.random() * 365); // Random due dates over the year
         const dueDate = new Date(
-          baseDate.getTime() + daysOffset * 24 * 60 * 60 * 1000,
+          baseDate.getTime() + daysOffset * 24 * 60 * 60 * 1000
         );
         flashcards.push(
-          createMockFlashcard(`card-${i}`, deckId, "review", dueDate),
+          createMockFlashcard(`card-${i}`, deckId, "review", dueDate)
         );
       }
 
@@ -504,10 +497,10 @@ describe("StatisticsService", () => {
       for (let i = 0; i < 10; i++) {
         const overdueDays = Math.floor(Math.random() * 30) + 1;
         const overdueDate = new Date(
-          baseDate.getTime() - overdueDays * 24 * 60 * 60 * 1000,
+          baseDate.getTime() - overdueDays * 24 * 60 * 60 * 1000
         );
         flashcards.push(
-          createMockFlashcard(`overdue-${i}`, deckId, "review", overdueDate),
+          createMockFlashcard(`overdue-${i}`, deckId, "review", overdueDate)
         );
       }
 
@@ -518,22 +511,22 @@ describe("StatisticsService", () => {
       for (let i = 0; i < 300; i++) {
         // 300 reviews over 30 days = 10/day
         const reviewDate = new Date(
-          baseDate.getTime() - i * 3.456 * 60 * 60 * 1000,
+          baseDate.getTime() - i * 3.456 * 60 * 60 * 1000
         ); // spread over 30 days
         reviewLogs.push(
           createMockReviewLog(
             `review-${i}`,
             flashcards[i % flashcards.length].id,
             reviewDate,
-            3,
-          ),
+            3
+          )
         );
       }
       mockDb.setReviewLogs(reviewLogs);
 
       const result = await statisticsService.simulateFutureDueLoad(
         [deckId],
-        365,
+        365
       );
 
       expect(result).toHaveLength(365);
@@ -552,10 +545,10 @@ describe("StatisticsService", () => {
       // Total scheduled due should equal number of future cards
       const totalScheduled = result.reduce(
         (sum, day) => sum + day.scheduledDue,
-        0,
+        0
       );
       const futureDueCards = flashcards.filter(
-        (card) => new Date(card.dueDate) >= baseDate,
+        (card) => new Date(card.dueDate) >= baseDate
       );
       // FSRS simulation generates additional future reviews beyond original schedule
       expect(totalScheduled).toBeGreaterThanOrEqual(futureDueCards.length);
@@ -570,10 +563,10 @@ describe("StatisticsService", () => {
       for (let i = 0; i < 100; i++) {
         const daysOffset = Math.floor(Math.random() * 365) + 1; // Due throughout the year
         const dueDate = new Date(
-          baseDate.getTime() + daysOffset * 24 * 60 * 60 * 1000,
+          baseDate.getTime() + daysOffset * 24 * 60 * 60 * 1000
         );
         flashcards.push(
-          createMockFlashcard(`card-${i}`, deckId, "review", dueDate),
+          createMockFlashcard(`card-${i}`, deckId, "review", dueDate)
         );
       }
 
@@ -584,15 +577,15 @@ describe("StatisticsService", () => {
       for (let i = 0; i < 450; i++) {
         // 15 reviews/day average
         const reviewDate = new Date(
-          baseDate.getTime() - i * 1.6 * 60 * 60 * 1000,
+          baseDate.getTime() - i * 1.6 * 60 * 60 * 1000
         ); // 30 days
         reviewLogs.push(
           createMockReviewLog(
             `review-${i}`,
             flashcards[i % flashcards.length].id,
             reviewDate,
-            3,
-          ),
+            3
+          )
         );
       }
       mockDb.setReviewLogs(reviewLogs);
@@ -600,7 +593,7 @@ describe("StatisticsService", () => {
       const startTime = Date.now();
       const result = await statisticsService.simulateFutureDueLoad(
         [deckId],
-        365,
+        365
       );
       const endTime = Date.now();
       const duration = endTime - startTime;
@@ -635,7 +628,7 @@ describe("StatisticsService", () => {
       const result = statisticsService.getFilteredForecastData(
         mockStats,
         10,
-        false,
+        false
       );
 
       expect(result).toHaveLength(4);
@@ -654,7 +647,7 @@ describe("StatisticsService", () => {
       const result = statisticsService.getFilteredForecastData(
         mockStats,
         10,
-        true,
+        true
       );
 
       expect(result).toHaveLength(2);
@@ -675,7 +668,7 @@ describe("StatisticsService", () => {
       const result = statisticsService.getFilteredForecastData(
         mockStats,
         3,
-        false,
+        false
       );
 
       expect(result).toHaveLength(3);
@@ -700,7 +693,7 @@ describe("StatisticsService", () => {
       const result = statisticsService.calculateForecastStats(
         mockStats,
         [],
-        10,
+        10
       );
 
       expect(result.totalReviews).toBe(23); // 10 + 5 + 0 + 8
@@ -708,7 +701,6 @@ describe("StatisticsService", () => {
       expect(result.dueTomorrow).toBe(5);
       expect(result.dailyLoad).toBeCloseTo(7.67, 1); // (10 + 5 + 8) / 3 non-zero days
     });
-
   });
 
   describe("retention rate handling", () => {
@@ -732,7 +724,7 @@ describe("StatisticsService", () => {
 
       const customStatisticsService = new StatisticsService(
         customRetentionDb as any,
-        mockSettings as any,
+        mockSettings as any
       );
 
       // Test with deck that has custom config
@@ -743,7 +735,7 @@ describe("StatisticsService", () => {
 
       const result = await customStatisticsService.simulateFutureDueLoad(
         [deckId],
-        30,
+        30
       );
 
       expect(result).toHaveLength(30);
@@ -796,7 +788,7 @@ describe("StatisticsService", () => {
 
       const result = await statisticsService.simulateFutureDueLoad(
         [deckId1, deckId2],
-        7,
+        7
       );
 
       expect(Array.isArray(result)).toBe(true);
@@ -857,8 +849,8 @@ describe("StatisticsService", () => {
               Math.floor(Math.random() * 1800) + 300,
               Math.floor(Math.random() * 5),
               Math.floor(Math.random() * 45) + 5,
-              80 + Math.random() * 20,
-            ),
+              80 + Math.random() * 20
+            )
           );
         }
 
@@ -884,7 +876,7 @@ describe("StatisticsService", () => {
             3599999,
             99999,
             899999,
-            99.999,
+            99.999
           ),
           createMockDailyStats(
             "2024-06-13",
@@ -892,7 +884,7 @@ describe("StatisticsService", () => {
             3199999,
             88888,
             799999,
-            88.888,
+            88.888
           ),
         ];
 
@@ -983,7 +975,7 @@ describe("StatisticsService", () => {
             expectedAvg: Math.round(
               (10 * 30 * 43200 + 5 * 12 * 60 + 2 * 7 * 1440) /
                 (10 + 5 + 2) /
-                1440,
+                1440
             ),
           },
         ];
@@ -1052,7 +1044,7 @@ describe("StatisticsService", () => {
 
         const result = await statisticsService.simulateFutureDueLoad(
           [deckId],
-          10,
+          10
         );
 
         // Should return array of forecast data
@@ -1089,7 +1081,7 @@ describe("StatisticsService", () => {
           const forecastData = statisticsService.getFilteredForecastData(
             mockStats,
             30,
-            false,
+            false
           );
           expect(forecastData).toHaveLength(1);
           expect(forecastData[0].date).toBe(dateStr);
@@ -1098,7 +1090,7 @@ describe("StatisticsService", () => {
           const stats = statisticsService.calculateForecastStats(
             mockStats,
             [],
-            30,
+            30
           );
           expect(stats.totalReviews).toBe(5);
         });
@@ -1173,8 +1165,8 @@ describe("StatisticsService", () => {
               Math.floor(Math.random() * 3600) + 60,
               Math.floor(Math.random() * 10),
               Math.floor(Math.random() * 90) + 10,
-              75 + Math.random() * 25,
-            ),
+              75 + Math.random() * 25
+            )
           );
         }
 
@@ -1232,12 +1224,12 @@ describe("StatisticsService", () => {
         const filtered = statisticsService.getFilteredForecastData(
           mockStats,
           365,
-          false,
+          false
         );
         const stats = statisticsService.calculateForecastStats(
           mockStats,
           [],
-          365,
+          365
         );
         const dueToday = statisticsService.getDueToday(mockStats);
         const dueTomorrow = statisticsService.getDueTomorrow(mockStats);
@@ -1277,7 +1269,7 @@ describe("StatisticsService", () => {
             const total = statisticsService.getTotalCards(mockStats);
 
             return { timeframe, ease, interval, total, index: i };
-          }),
+          })
         );
 
         const results = await Promise.all(promises);
@@ -1304,7 +1296,7 @@ describe("StatisticsService", () => {
             3600000,
             100000,
             900000,
-            99.99999,
+            99.99999
           ),
           createMockDailyStats(
             "2024-06-13",
@@ -1312,7 +1304,7 @@ describe("StatisticsService", () => {
             3600000,
             100000,
             900000,
-            99.99998,
+            99.99998
           ),
         ]);
 
@@ -1336,10 +1328,10 @@ describe("StatisticsService", () => {
 
         // All calculations should return 0 without crashing
         expect(statisticsService.calculateAverageEase(zeroDivisionStats)).toBe(
-          0,
+          0
         );
         expect(
-          statisticsService.calculateAverageInterval(zeroDivisionStats),
+          statisticsService.calculateAverageInterval(zeroDivisionStats)
         ).toBe(0);
         expect(statisticsService.getTotalCards(zeroDivisionStats)).toBe(0);
         expect(statisticsService.getMaturityRatio(zeroDivisionStats)).toBe(0);
@@ -1405,7 +1397,7 @@ describe("StatisticsService", () => {
             60,
             0,
             1,
-            100.0,
+            100.0
           ), // Perfect but tiny
           createMockDailyStats(
             yesterday.toISOString().split("T")[0],
@@ -1413,7 +1405,7 @@ describe("StatisticsService", () => {
             360000,
             1000,
             9000,
-            75.0,
+            75.0
           ), // Huge volume
           createMockDailyStats(
             dayBefore.toISOString().split("T")[0],
@@ -1421,7 +1413,7 @@ describe("StatisticsService", () => {
             60,
             0,
             1,
-            0.0,
+            0.0
           ), // Perfect failure
         ]);
 
@@ -1466,7 +1458,7 @@ describe("StatisticsService", () => {
             3600,
             10,
             90,
-            90.0,
+            90.0
           ),
         ]);
 
@@ -1537,7 +1529,7 @@ function createMockDailyStats(
   timeSpent: number = 0,
   newCards: number = 0,
   reviewCards: number = 0,
-  correctRate: number = 0,
+  correctRate: number = 0
 ): DailyStats {
   return {
     date,
@@ -1554,7 +1546,7 @@ function createMockFlashcard(
   id: string,
   deckId: string,
   state: "new" | "review" = "review",
-  dueDate: Date = new Date(),
+  dueDate: Date = new Date()
 ): Flashcard {
   return {
     id,
@@ -1581,7 +1573,7 @@ function createMockReviewLog(
   id: string,
   flashcardId: string,
   reviewedAt: Date = new Date(),
-  rating: 1 | 2 | 3 | 4 = 3,
+  rating: 1 | 2 | 3 | 4 = 3
 ): ReviewLog {
   const ratingLabels = ["again", "hard", "good", "easy"] as const;
   return {
@@ -1610,7 +1602,7 @@ function createMockReviewLog(
     newDueAt: reviewedAt.toISOString(),
     elapsedDays:
       Math.floor(
-        (reviewedAt.getTime() - (reviewedAt.getTime() - 60000)) / 86400000,
+        (reviewedAt.getTime() - (reviewedAt.getTime() - 60000)) / 86400000
       ) || 1,
     retrievability: 0.9,
     requestRetention: 0.9,

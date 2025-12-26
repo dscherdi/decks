@@ -1,5 +1,4 @@
 describe("Worker Binary Data Handling", () => {
-
   describe("Binary data handling", () => {
     it("should handle Uint8Array data correctly for backup operations", () => {
       // Test data that would come from database export

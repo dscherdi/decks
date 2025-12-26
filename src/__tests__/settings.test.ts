@@ -17,10 +17,10 @@ describe("Settings", () => {
 
     it("should have valid types for UI settings", () => {
       expect(typeof DEFAULT_SETTINGS.ui.enableBackgroundRefresh).toBe(
-        "boolean",
+        "boolean"
       );
       expect(typeof DEFAULT_SETTINGS.ui.backgroundRefreshInterval).toBe(
-        "number",
+        "number"
       );
     });
   });

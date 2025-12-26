@@ -160,7 +160,7 @@ export class DatabaseTestUtils {
   // Helper to create test flashcard
   static createTestFlashcard(
     deckId: string,
-    overrides: Partial<Flashcard> = {},
+    overrides: Partial<Flashcard> = {}
   ): Flashcard {
     const frontText = `Test Question ${Date.now()}_${Math.random()}`;
     const backText = `Test Answer ${Date.now()}_${Math.random()}`;
@@ -190,7 +190,7 @@ export class DatabaseTestUtils {
   // Helper to create test review log
   static createTestReviewLog(
     flashcardId: string,
-    overrides: Partial<ReviewLog> = {},
+    overrides: Partial<ReviewLog> = {}
   ): ReviewLog {
     return {
       id: DatabaseTestUtils.generateId(),
@@ -245,7 +245,7 @@ export class DatabaseTestUtils {
   // Helper to create deck with flashcards
   static async createDeckWithFlashcards(
     db: MainDatabaseService,
-    flashcardCount: number = 5,
+    flashcardCount: number = 5
   ): Promise<{ deck: Deck; flashcards: Flashcard[] }> {
     const deck = this.createTestDeck();
     await db.createDeck(deck);
@@ -267,7 +267,7 @@ export class DatabaseTestUtils {
   static async verifyDatabaseState(
     db: MainDatabaseService,
     expectedDecks: number,
-    expectedFlashcards: number,
+    expectedFlashcards: number
   ): Promise<void> {
     const decks = await db.getAllDecks();
     const flashcards = await db.getAllFlashcards();
@@ -276,7 +276,7 @@ export class DatabaseTestUtils {
     expect(decks).toHaveLength(expectedDecks);
     expect(flashcards).toHaveLength(expectedFlashcards);
     expect(
-      stats.cardStats.new + stats.cardStats.review + stats.cardStats.mature,
+      stats.cardStats.new + stats.cardStats.review + stats.cardStats.mature
     ).toBe(expectedFlashcards);
   }
 
@@ -294,7 +294,7 @@ export class DatabaseTestUtils {
   static expectDateWithinRange(
     actualDate: string,
     expectedDate: Date,
-    toleranceMs: number = 1000,
+    toleranceMs: number = 1000
   ): void {
     const actual = new Date(actualDate).getTime();
     const expected = expectedDate.getTime();

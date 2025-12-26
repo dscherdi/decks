@@ -117,12 +117,12 @@ export class FlashcardsCLI {
         console.log(`   📁 ${deck.filepath}`);
         console.log(`   🏷️  ${deck.tag}`);
         console.log(
-          `   📊 ${stats.totalCount} cards (${stats.newCount} new, ${stats.dueCount} due, ${stats.matureCount} mature)`,
+          `   📊 ${stats.totalCount} cards (${stats.newCount} new, ${stats.dueCount} due, ${stats.matureCount} mature)`
         );
         if (deck.lastReviewed) {
           const lastReviewed = new Date(deck.lastReviewed);
           console.log(
-            `   📅 Last reviewed: ${lastReviewed.toLocaleDateString()}`,
+            `   📅 Last reviewed: ${lastReviewed.toLocaleDateString()}`
           );
         }
         console.log("");
@@ -141,7 +141,7 @@ export class FlashcardsCLI {
 
       console.log(`\n📄 Found ${files.length} markdown files`);
       console.log(
-        `⚡ ${flashcardFiles.length} potentially contain flashcards:\n`,
+        `⚡ ${flashcardFiles.length} potentially contain flashcards:\n`
       );
 
       flashcardFiles.forEach((file, i) => {
@@ -164,7 +164,7 @@ export class FlashcardsCLI {
       const filePath = await this.prompt("\n📁 Enter markdown file path: ");
       const name =
         (await this.prompt(
-          "📝 Enter deck name (or press Enter for filename): ",
+          "📝 Enter deck name (or press Enter for filename): "
         )) || path.basename(filePath, ".md");
       const tag =
         (await this.prompt("🏷️  Enter tag (default: #flashcards): ")) ||
@@ -178,7 +178,7 @@ export class FlashcardsCLI {
 
       const stats = await this.core.getDeckStats(deck.id);
       console.log(
-        `\n✅ Created deck "${deck.name}" with ${stats.totalCount} flashcards!`,
+        `\n✅ Created deck "${deck.name}" with ${stats.totalCount} flashcards!`
       );
     } catch (error) {
       console.error("❌ Error creating deck:", error);
@@ -190,7 +190,7 @@ export class FlashcardsCLI {
       console.log("\n🔄 Syncing all decks...");
       const result = await this.core.syncAllDecks();
       console.log(
-        `✅ Synced ${result.totalDecks} decks with ${result.totalFlashcards} total flashcards`,
+        `✅ Synced ${result.totalDecks} decks with ${result.totalFlashcards} total flashcards`
       );
     } catch (error) {
       console.error("❌ Error syncing decks:", error);
@@ -211,7 +211,7 @@ export class FlashcardsCLI {
         const deck = decks[i];
         const stats = await this.core.getDeckStats(deck.id);
         console.log(
-          `${i + 1}. ${deck.name} (${stats.dueCount} due, ${stats.newCount} new)`,
+          `${i + 1}. ${deck.name} (${stats.dueCount} due, ${stats.newCount} new)`
         );
       }
 
@@ -316,7 +316,7 @@ export class FlashcardsCLI {
         console.log(`\n📚 ${deck.name}`);
         console.log(`   Total Cards: ${stats.totalCount}`);
         console.log(
-          `   New: ${stats.newCount} | Due: ${stats.dueCount} | Mature: ${stats.matureCount}`,
+          `   New: ${stats.newCount} | Due: ${stats.dueCount} | Mature: ${stats.matureCount}`
         );
         console.log(`   Recent Reviews: ${recentHistory.length}`);
 
@@ -355,7 +355,7 @@ export class FlashcardsCLI {
 
       if (recentHistory.length > 0) {
         const correctReviews = recentHistory.filter(
-          (r) => r.rating >= 3,
+          (r) => r.rating >= 3
         ).length;
         const accuracy = (
           (correctReviews / recentHistory.length) *
@@ -419,7 +419,7 @@ export class FlashcardsCLI {
       backups.forEach((backup, i) => {
         const size = (backup.size / 1024).toFixed(1);
         console.log(
-          `${i + 1}. ${backup.filename} (${size} KB) - ${backup.created.toLocaleDateString()}`,
+          `${i + 1}. ${backup.filename} (${size} KB) - ${backup.created.toLocaleDateString()}`
         );
       });
     } catch (error) {
@@ -439,7 +439,7 @@ export class FlashcardsCLI {
       console.log("\n💾 Select backup to restore:");
       backups.forEach((backup, i) => {
         console.log(
-          `${i + 1}. ${backup.filename} - ${backup.created.toLocaleDateString()}`,
+          `${i + 1}. ${backup.filename} - ${backup.created.toLocaleDateString()}`
         );
       });
 
@@ -452,7 +452,7 @@ export class FlashcardsCLI {
       }
 
       const confirm = await this.prompt(
-        "\n⚠️  This will restore data from backup. Continue? (y/N): ",
+        "\n⚠️  This will restore data from backup. Continue? (y/N): "
       );
       if (confirm.toLowerCase() !== "y") {
         console.log("❌ Restore cancelled");
@@ -509,10 +509,10 @@ if (require.main === module) {
       case "-h":
         console.log("Flashcards CLI Usage:");
         console.log(
-          "  --vault, -v <path>   Vault directory (default: current)",
+          "  --vault, -v <path>   Vault directory (default: current)"
         );
         console.log(
-          "  --data, -d <path>    Data directory (default: .flashcards)",
+          "  --data, -d <path>    Data directory (default: .flashcards)"
         );
         console.log("  --debug              Enable debug logging");
         console.log("  --help, -h           Show this help");

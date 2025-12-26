@@ -18,7 +18,7 @@ export class BackupService {
   constructor(
     adapter: DataAdapter,
     vaultConfigDir: string,
-    debugLog: (message: string, ...args: unknown[]) => void,
+    debugLog: (message: string, ...args: unknown[]) => void
   ) {
     this.adapter = adapter;
     this.backupDir = `${vaultConfigDir}/plugins/decks/backups`;
@@ -88,7 +88,7 @@ export class BackupService {
 
       // Sort by timestamp descending (newest first)
       return backups.sort(
-        (a, b) => b.timestamp.getTime() - a.timestamp.getTime(),
+        (a, b) => b.timestamp.getTime() - a.timestamp.getTime()
       );
     } catch (error) {
       console.error("Failed to get available backups:", error);
@@ -102,7 +102,7 @@ export class BackupService {
   async restoreFromBackup(
     filename: string,
     db: IDatabaseService,
-    onProgress?: (progress: number, total: number) => void,
+    onProgress?: (progress: number, total: number) => void
   ): Promise<void> {
     try {
       const backupPath = `${this.backupDir}/${filename}`;

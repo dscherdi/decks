@@ -104,7 +104,7 @@ Cascading Style Sheets for styling web pages.
       expect(result[0].front).toBe("What is JavaScript?");
       expect(result[0].back).toContain("JavaScript is a programming language.");
       expect(result[0].back).toContain(
-        "| What is HTML? | HyperText Markup Language |",
+        "| What is HTML? | HyperText Markup Language |"
       );
       expect(result[0].type).toBe("header-paragraph");
       expect(result[1]).toEqual({
@@ -333,10 +333,10 @@ Some regular content here.
       expect(h4Result[0].front).toBe("Level 4 Header");
       expect(h4Result[0].back).toContain("Some regular content here.");
       expect(h4Result[0].back).toContain(
-        "| Ignored Question | Ignored Answer |",
+        "| Ignored Question | Ignored Answer |"
       );
       expect(h4Result[0].back).toContain(
-        "| This should be ignored | Because it's under H4 |",
+        "| This should be ignored | Because it's under H4 |"
       );
       expect(h4Result[0].type).toBe("header-paragraph");
 

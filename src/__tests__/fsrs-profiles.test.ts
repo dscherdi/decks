@@ -48,19 +48,19 @@ describe("FSRS Profiles", () => {
 
       // Hard should be ~5 minutes
       expect(scheduling.hard.interval).toBeGreaterThan(
-        scheduling.again.interval,
+        scheduling.again.interval
       );
       expect(scheduling.hard.interval).toBeLessThan(30);
 
       // Good should be ~10 minutes
       expect(scheduling.good.interval).toBeGreaterThan(
-        scheduling.hard.interval,
+        scheduling.hard.interval
       );
       expect(scheduling.good.interval).toBeLessThan(60);
 
       // Easy should be ~1 day
       expect(scheduling.easy.interval).toBeGreaterThan(
-        scheduling.good.interval,
+        scheduling.good.interval
       );
       expect(scheduling.easy.interval).toBeLessThanOrEqual(1440);
     });
@@ -117,7 +117,7 @@ describe("FSRS Profiles", () => {
 
       // Lower retention should produce longer intervals
       expect(scheduling80.good.interval).toBeGreaterThan(
-        scheduling90.good.interval,
+        scheduling90.good.interval
       );
 
       // Scaling factor should be ln(0.8)/ln(0.9) ≈ 2.1
@@ -154,7 +154,7 @@ describe("FSRS Profiles", () => {
         const scheduling = fsrs.getSchedulingInfo(testCard);
 
         expect(scheduling.again.interval).toBeLessThan(
-          scheduling.hard.interval,
+          scheduling.hard.interval
         );
         expect(scheduling.hard.interval).toBeLessThan(scheduling.good.interval);
         expect(scheduling.good.interval).toBeLessThan(scheduling.easy.interval);
@@ -174,18 +174,18 @@ describe("FSRS Profiles", () => {
         // Allow for edge cases where intervals might be equal due to algorithm constraints
         // Use toBeCloseTo for floating-point comparisons to handle precision
         expect(scheduling.again.interval).toBeLessThanOrEqual(
-          scheduling.hard.interval + 0.01,
+          scheduling.hard.interval + 0.01
         );
         expect(scheduling.hard.interval).toBeLessThanOrEqual(
-          scheduling.good.interval + 0.01,
+          scheduling.good.interval + 0.01
         );
         expect(scheduling.good.interval).toBeLessThanOrEqual(
-          scheduling.easy.interval + 0.01,
+          scheduling.easy.interval + 0.01
         );
 
         // Ensure at least some differentiation exists
         expect(scheduling.again.interval).toBeLessThanOrEqual(
-          scheduling.easy.interval,
+          scheduling.easy.interval
         );
       }
     });
@@ -217,5 +217,4 @@ describe("FSRS Profiles", () => {
       }
     });
   });
-
 });

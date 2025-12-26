@@ -101,13 +101,13 @@ describe("FSRS Algorithm - Pure Implementation", () => {
 
       // Verify button order: Again < Hard < Good < Easy
       expect(schedulingInfo.again.interval).toBeLessThan(
-        schedulingInfo.hard.interval,
+        schedulingInfo.hard.interval
       );
       expect(schedulingInfo.hard.interval).toBeLessThan(
-        schedulingInfo.good.interval,
+        schedulingInfo.good.interval
       );
       expect(schedulingInfo.good.interval).toBeLessThan(
-        schedulingInfo.easy.interval,
+        schedulingInfo.easy.interval
       );
     });
   });
@@ -162,7 +162,7 @@ describe("FSRS Algorithm - Pure Implementation", () => {
 
       // After "Again", difficulty should increase (become harder)
       expect(updatedCard.difficulty).toBeGreaterThan(
-        experiencedCard.difficulty,
+        experiencedCard.difficulty
       );
 
       // Stability should be reduced but calculated via forgetting formula (not reset to w[0])
@@ -197,13 +197,13 @@ describe("FSRS Algorithm - Pure Implementation", () => {
       expect(updatedCard.stability).not.toBe(w0);
       expect(updatedCard.stability).toBeGreaterThan(0);
       expect(updatedCard.stability).toBeLessThan(
-        cardWithHighStability.stability,
+        cardWithHighStability.stability
       ); // Should be lower than before
       expect(Number.isFinite(updatedCard.stability)).toBe(true);
 
       // Verify other Again rating behaviors
       expect(updatedCard.difficulty).toBeGreaterThan(
-        cardWithHighStability.difficulty,
+        cardWithHighStability.difficulty
       );
       expect(updatedCard.lapses).toBe(1);
       expect(updatedCard.repetitions).toBe(6);
@@ -223,7 +223,7 @@ describe("FSRS Algorithm - Pure Implementation", () => {
 
       expect(schedulingInfo.good.interval).toBeGreaterThan(reviewCard.interval);
       expect(schedulingInfo.easy.interval).toBeGreaterThan(
-        schedulingInfo.good.interval,
+        schedulingInfo.good.interval
       );
     });
 
@@ -248,7 +248,7 @@ describe("FSRS Algorithm - Pure Implementation", () => {
       // Should be capped at maximum interval (36500 days = ~100 years)
       const maxIntervalMinutes = 36500 * 1440;
       expect(schedulingInfo.easy.interval).toBeLessThanOrEqual(
-        maxIntervalMinutes,
+        maxIntervalMinutes
       );
     });
   });
@@ -301,7 +301,7 @@ describe("FSRS Algorithm - Pure Implementation", () => {
         stability: 5.0,
         lapses: 0,
         lastReviewed: new Date(
-          Date.now() - 2 * 24 * 60 * 60 * 1000,
+          Date.now() - 2 * 24 * 60 * 60 * 1000
         ).toISOString(),
         created: new Date().toISOString(),
         modified: new Date().toISOString(),
@@ -554,13 +554,13 @@ describe("FSRS Algorithm - Pure Implementation", () => {
 
       // Verify button order: Again < Hard < Good < Easy
       expect(schedulingInfo.again.interval).toBeLessThan(
-        schedulingInfo.hard.interval,
+        schedulingInfo.hard.interval
       );
       expect(schedulingInfo.hard.interval).toBeLessThan(
-        schedulingInfo.good.interval,
+        schedulingInfo.good.interval
       );
       expect(schedulingInfo.good.interval).toBeLessThan(
-        schedulingInfo.easy.interval,
+        schedulingInfo.easy.interval
       );
 
       // All should be >= minMinutes
@@ -595,10 +595,10 @@ describe("FSRS Algorithm - Pure Implementation", () => {
 
       // Hard < Good < Easy intervals
       expect(schedulingInfo.hard.interval).toBeLessThan(
-        schedulingInfo.good.interval,
+        schedulingInfo.good.interval
       );
       expect(schedulingInfo.good.interval).toBeLessThan(
-        schedulingInfo.easy.interval,
+        schedulingInfo.easy.interval
       );
     });
 
@@ -745,7 +745,7 @@ describe("FSRS Algorithm - Pure Implementation", () => {
         stability: 2.0,
         lapses: 0,
         lastReviewed: new Date(
-          Date.now() - 3 * 24 * 60 * 60 * 1000,
+          Date.now() - 3 * 24 * 60 * 60 * 1000
         ).toISOString(), // 3 days ago
         created: new Date().toISOString(),
         modified: new Date().toISOString(),
@@ -833,7 +833,7 @@ describe("FSRS Algorithm - Pure Implementation", () => {
           stability: 3.0,
           lapses: 1,
           lastReviewed: new Date(
-            Date.now() - 24 * 60 * 60 * 1000,
+            Date.now() - 24 * 60 * 60 * 1000
           ).toISOString(),
           created: new Date().toISOString(),
           modified: new Date().toISOString(),
@@ -917,7 +917,7 @@ describe("FSRS Algorithm - Pure Implementation", () => {
           stability: 3.0,
           lapses: 0,
           lastReviewed: new Date(
-            Date.now() - 3 * 24 * 60 * 60 * 1000,
+            Date.now() - 3 * 24 * 60 * 60 * 1000
           ).toISOString(), // 3 days ago
           created: new Date().toISOString(),
           modified: new Date().toISOString(),
@@ -973,7 +973,7 @@ describe("FSRS Algorithm - Pure Implementation", () => {
           stability: 0, // Invalid stability
           lapses: 0,
           lastReviewed: new Date(
-            Date.now() - 24 * 60 * 60 * 1000,
+            Date.now() - 24 * 60 * 60 * 1000
           ).toISOString(),
           created: new Date().toISOString(),
           modified: new Date().toISOString(),
@@ -1007,7 +1007,7 @@ describe("FSRS Algorithm - Pure Implementation", () => {
           stability: 10.0, // High stability
           lapses: 2,
           lastReviewed: new Date(
-            Date.now() - 24 * 60 * 60 * 1000,
+            Date.now() - 24 * 60 * 60 * 1000
           ).toISOString(),
           created: new Date().toISOString(),
           modified: new Date().toISOString(),
@@ -1043,7 +1043,7 @@ describe("FSRS Algorithm - Pure Implementation", () => {
           stability: 30.0, // Very high stability
           lapses: 0,
           lastReviewed: new Date(
-            Date.now() - 24 * 60 * 60 * 1000,
+            Date.now() - 24 * 60 * 60 * 1000
           ).toISOString(),
           created: new Date().toISOString(),
           modified: new Date().toISOString(),
@@ -1079,7 +1079,7 @@ describe("FSRS Algorithm - Pure Implementation", () => {
           stability: 2.0,
           lapses: 0,
           lastReviewed: new Date(
-            Date.now() - 24 * 60 * 60 * 1000,
+            Date.now() - 24 * 60 * 60 * 1000
           ).toISOString(),
           created: new Date().toISOString(),
           modified: new Date().toISOString(),
@@ -1115,7 +1115,7 @@ describe("FSRS Algorithm - Pure Implementation", () => {
           stability: 15.0, // High stability
           lapses: 1,
           lastReviewed: new Date(
-            Date.now() - 24 * 60 * 60 * 1000,
+            Date.now() - 24 * 60 * 60 * 1000
           ).toISOString(),
           created: new Date().toISOString(),
           modified: new Date().toISOString(),
@@ -1154,7 +1154,7 @@ describe("FSRS Algorithm - Pure Implementation", () => {
           stability: 25.0, // Very high stability
           lapses: 0,
           lastReviewed: new Date(
-            Date.now() - 24 * 60 * 60 * 1000,
+            Date.now() - 24 * 60 * 60 * 1000
           ).toISOString(),
           created: new Date().toISOString(),
           modified: new Date().toISOString(),

@@ -151,7 +151,7 @@ describe("BackupService", () => {
     backupService = new BackupService(
       mockAdapter as any,
       "/vault/.obsidian",
-      jest.fn(),
+      jest.fn()
     );
   });
 
@@ -163,18 +163,18 @@ describe("BackupService", () => {
       await backupService.createBackup(mockDb);
 
       expect(mockAdapter.mkdir).toHaveBeenCalledWith(
-        "/vault/.obsidian/plugins/decks/backups",
+        "/vault/.obsidian/plugins/decks/backups"
       );
     });
 
     it("should handle database backup errors", async () => {
       const consoleSpy = jest.spyOn(console, "error").mockImplementation();
       mockDb.createBackupDatabase.mockRejectedValue(
-        new Error("Database backup failed"),
+        new Error("Database backup failed")
       );
 
       await expect(backupService.createBackup(mockDb)).rejects.toThrow(
-        "Database backup failed",
+        "Database backup failed"
       );
 
       consoleSpy.mockRestore();
@@ -247,7 +247,7 @@ describe("BackupService", () => {
       mockAdapter.exists.mockResolvedValue(false);
 
       await expect(
-        backupService.restoreFromBackup("nonexistent.db", mockDb),
+        backupService.restoreFromBackup("nonexistent.db", mockDb)
       ).rejects.toThrow("Backup file not found: nonexistent.db");
 
       consoleSpy.mockRestore();
@@ -258,11 +258,11 @@ describe("BackupService", () => {
       const filename = "backup-2023-01-01.db";
       mockAdapter.exists.mockResolvedValue(true);
       mockDb.restoreFromBackupDatabase.mockRejectedValue(
-        new Error("Database restore failed"),
+        new Error("Database restore failed")
       );
 
       await expect(
-        backupService.restoreFromBackup(filename, mockDb),
+        backupService.restoreFromBackup(filename, mockDb)
       ).rejects.toThrow("Database restore failed");
 
       consoleSpy.mockRestore();
@@ -299,10 +299,10 @@ describe("BackupService", () => {
       // Should remove 2 oldest backups (keep newest 3)
       expect(mockAdapter.remove).toHaveBeenCalledTimes(2);
       expect(mockAdapter.remove).toHaveBeenCalledWith(
-        "/vault/.obsidian/plugins/decks/backups/backup-2023-01-01.db",
+        "/vault/.obsidian/plugins/decks/backups/backup-2023-01-01.db"
       );
       expect(mockAdapter.remove).toHaveBeenCalledWith(
-        "/vault/.obsidian/plugins/decks/backups/backup-2023-01-02.db",
+        "/vault/.obsidian/plugins/decks/backups/backup-2023-01-02.db"
       );
     });
 
@@ -322,11 +322,11 @@ describe("BackupService", () => {
       const expectedPath = `/vault/.obsidian/plugins/decks/backups/backup-${today}.db`;
       expect(mockDb.createBackupDatabase).toHaveBeenNthCalledWith(
         1,
-        expectedPath,
+        expectedPath
       );
       expect(mockDb.createBackupDatabase).toHaveBeenNthCalledWith(
         2,
-        expectedPath,
+        expectedPath
       );
     });
   });

@@ -8,7 +8,12 @@ import { Scheduler } from "../../services/Scheduler";
 import { StatisticsService } from "../../services/StatisticsService";
 import { BackupService } from "../../services/BackupService";
 import { type DecksSettings, DEFAULT_SETTINGS } from "../../settings";
-import type { Deck, Flashcard, ReviewLog, DeckStats } from "../../database/types";
+import type {
+  Deck,
+  Flashcard,
+  ReviewLog,
+  DeckStats,
+} from "../../database/types";
 import {
   ConsoleVault,
   ConsoleMetadataCache,
@@ -63,7 +68,7 @@ export class ConsoleCore {
 
   private mergeSettings(
     defaults: DecksSettings,
-    overrides?: Partial<DecksSettings>,
+    overrides?: Partial<DecksSettings>
   ): DecksSettings {
     if (!overrides) return defaults;
 
@@ -91,7 +96,7 @@ export class ConsoleCore {
         databasePath,
         this.vault.adapter as any, // eslint-disable-line @typescript-eslint/no-explicit-any
         this.logger.debug,
-        { useWorker: false, workerEnabled: false, configDir: options.dataPath },
+        { useWorker: false, workerEnabled: false, configDir: options.dataPath }
       );
 
       // Initialize existing services with console adapters
@@ -100,7 +105,7 @@ export class ConsoleCore {
         this.metadataCache as any, // eslint-disable-line @typescript-eslint/no-explicit-any
         this.db,
         undefined, // No plugin reference for console
-        this.settings.parsing.folderSearchPath,
+        this.settings.parsing.folderSearchPath
       );
 
       this.deckSynchronizer = new DeckSynchronizer(
@@ -108,13 +113,13 @@ export class ConsoleCore {
         this.deckManager,
         this.settings,
         this.vault.adapter as any, // eslint-disable-line @typescript-eslint/no-explicit-any
-        options.dataPath,
+        options.dataPath
       );
 
       this.backupService = new BackupService(
         this.vault.adapter as any, // eslint-disable-line @typescript-eslint/no-explicit-any
         options.dataPath,
-        this.logger.debug,
+        this.logger.debug
       );
 
       this.statisticsService = new StatisticsService(this.db, this.settings);
@@ -123,7 +128,7 @@ export class ConsoleCore {
         this.db,
         this.settings,
         this.backupService,
-        this.logger,
+        this.logger
       );
 
       this.initialized = true;
@@ -171,7 +176,7 @@ export class ConsoleCore {
   async createDeckFromFile(
     filePath: string,
     name?: string,
-    tag = "#flashcards",
+    tag = "#flashcards"
   ): Promise<Deck> {
     this.ensureInitialized();
 
@@ -227,7 +232,7 @@ export class ConsoleCore {
 
   async startReviewSession(
     deckId: string,
-    sessionDurationMinutes?: number,
+    sessionDurationMinutes?: number
   ): Promise<ReviewSession> {
     this.ensureInitialized();
 
@@ -239,7 +244,7 @@ export class ConsoleCore {
     await this.scheduler.startReviewSession(
       deckId,
       new Date(),
-      sessionDurationMinutes,
+      sessionDurationMinutes
     );
     const nextCard = await this.scheduler.getNext(new Date(), deckId);
 
@@ -261,7 +266,7 @@ export class ConsoleCore {
   async reviewCard(
     flashcardId: string,
     rating: 1 | 2 | 3 | 4,
-    timeElapsedMs?: number,
+    timeElapsedMs?: number
   ): Promise<Flashcard> {
     this.ensureInitialized();
 
@@ -273,7 +278,7 @@ export class ConsoleCore {
       flashcardId,
       ratingLabel,
       new Date(),
-      timeElapsedMs,
+      timeElapsedMs
     );
 
     const ratingNames = ["", "Again", "Hard", "Good", "Easy"];
@@ -355,7 +360,7 @@ export class ConsoleCore {
 
   async getReviewHistory(
     deckId?: string,
-    _limit?: number,
+    _limit?: number
   ): Promise<ReviewLog[]> {
     this.ensureInitialized();
     if (deckId) {
@@ -394,7 +399,7 @@ export class ConsoleCore {
   // === FILE SCANNING ===
 
   async scanMarkdownFiles(
-    directory?: string,
+    directory?: string
   ): Promise<Array<{ path: string; hasFlashcards: boolean }>> {
     this.ensureInitialized();
 
@@ -422,14 +427,15 @@ export class ConsoleCore {
     return results;
   }
 
-  private hasFlashcardContent(content: string, metadata: any): boolean { // eslint-disable-line @typescript-eslint/no-explicit-any
+  private hasFlashcardContent(content: string, metadata: any): boolean {
+    // eslint-disable-line @typescript-eslint/no-explicit-any
     // Check for flashcards tag
     const hasTags =
       metadata?.tags?.some((t: any) => t.tag.startsWith("#flashcards")) || // eslint-disable-line @typescript-eslint/no-explicit-any
       (metadata?.frontmatter?.tags &&
         (Array.isArray(metadata.frontmatter.tags)
           ? metadata.frontmatter.tags.some((tag: string) =>
-              tag.includes("flashcards"),
+              tag.includes("flashcards")
             )
           : metadata.frontmatter.tags.includes("flashcards")));
 

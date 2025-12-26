@@ -11,7 +11,7 @@ global.cancelAnimationFrame = (handle: number): void => {
 };
 
 // Mock performance.now if not available
-if (typeof global.performance === 'undefined') {
+if (typeof global.performance === "undefined") {
   global.performance = {
     now: () => Date.now(),
   } as Performance;

@@ -17,10 +17,7 @@ declare function importScripts(...urls: string[]): void;
 import { FlashcardParser } from "../services/FlashcardParser";
 import type { ParsedFlashcard } from "../services/FlashcardParser";
 import { FlashcardSynchronizer } from "../services/FlashcardSynchronizer";
-import type {
-  SyncResult,
-  SyncData,
-} from "../services/FlashcardSynchronizer";
+import type { SyncResult, SyncData } from "../services/FlashcardSynchronizer";
 import {
   CREATE_TABLES_SQL,
   CURRENT_SCHEMA_VERSION,
@@ -55,7 +52,7 @@ class SimpleDatabaseWorker {
   async initialize(
     dbBuffer?: Uint8Array,
     sqlJsCode?: string,
-    wasmBytes?: ArrayBuffer,
+    wasmBytes?: ArrayBuffer
   ): Promise<void> {
     try {
       if (sqlJsCode && wasmBytes) {
@@ -69,10 +66,10 @@ class SimpleDatabaseWorker {
         }
 
         const jsUrl = URL.createObjectURL(
-          new Blob([sqlJsCode], { type: "application/javascript" }),
+          new Blob([sqlJsCode], { type: "application/javascript" })
         );
         const wasmUrl = URL.createObjectURL(
-          new Blob([wasmBytes], { type: "application/wasm" }),
+          new Blob([wasmBytes], { type: "application/wasm" })
         );
 
         // Load sql.js into the worker
@@ -83,7 +80,7 @@ class SimpleDatabaseWorker {
         self.postMessage({ type: "dbg", wasmLen: wasmBytes.byteLength });
 
         // Initialize with explicit wasm location
-         
+
         this.SQL = await initSqlJs({
           locateFile: () => wasmUrl,
         });
@@ -111,7 +108,7 @@ class SimpleDatabaseWorker {
     } catch (error) {
       self.postMessage({ type: "error", error });
       throw new Error(
-        `Failed to initialize database: ${(error as Error).message}`,
+        `Failed to initialize database: ${(error as Error).message}`
       );
     }
   }
@@ -132,7 +129,11 @@ class SimpleDatabaseWorker {
     }
   }
 
-  querySql(sql: string, params: SqlValue[] = [], config?: QueryConfig): unknown[] {
+  querySql(
+    sql: string,
+    params: SqlValue[] = [],
+    config?: QueryConfig
+  ): unknown[] {
     if (!this.db || !this.initialized) {
       throw new Error("Database not initialized");
     }
@@ -194,7 +195,7 @@ class SimpleDatabaseWorker {
       return backupDbId;
     } catch (error) {
       throw new Error(
-        `Failed to create backup database: ${(error as Error).message}`,
+        `Failed to create backup database: ${(error as Error).message}`
       );
     }
   }
@@ -214,7 +215,7 @@ class SimpleDatabaseWorker {
       return resultData.values || [];
     } catch (error) {
       throw new Error(
-        `Failed to query backup database: ${(error as Error).message}`,
+        `Failed to query backup database: ${(error as Error).message}`
       );
     }
   }
@@ -272,7 +273,7 @@ class SimpleDatabaseWorker {
    */
   parseFlashcardsFromContent(
     content: string,
-    headerLevel = 2,
+    headerLevel = 2
   ): ParsedFlashcard[] {
     return FlashcardParser.parseFlashcardsFromContent(content, headerLevel);
   }
@@ -296,7 +297,7 @@ class SimpleDatabaseWorker {
 
     return this.flashcardSynchronizer.syncFlashcardsForDeck(
       data,
-      progressCallback,
+      progressCallback
     );
   }
 
@@ -327,7 +328,7 @@ class SimpleDatabaseWorker {
           const placeholders = columns.map(() => "?").join(",");
 
           const stmt = this.db.prepare(
-            `INSERT OR IGNORE INTO review_sessions VALUES (${placeholders})`,
+            `INSERT OR IGNORE INTO review_sessions VALUES (${placeholders})`
           );
           for (const row of values) {
             stmt.run(row);
@@ -343,7 +344,7 @@ class SimpleDatabaseWorker {
           const placeholders = columns.map(() => "?").join(",");
 
           const stmt = this.db.prepare(
-            `INSERT OR IGNORE INTO review_logs VALUES (${placeholders})`,
+            `INSERT OR IGNORE INTO review_logs VALUES (${placeholders})`
           );
           for (const row of values) {
             stmt.run(row);
@@ -361,7 +362,7 @@ class SimpleDatabaseWorker {
           const idIndex = columns.indexOf("id");
 
           const insertStmt = this.db.prepare(
-            `INSERT OR REPLACE INTO decks VALUES (${placeholders})`,
+            `INSERT OR REPLACE INTO decks VALUES (${placeholders})`
           );
 
           for (const row of values) {
@@ -371,7 +372,7 @@ class SimpleDatabaseWorker {
             // Check local
             const localRes = this.db.exec(
               "SELECT modified FROM decks WHERE id = ?",
-              [id],
+              [id]
             );
             const localMod = localRes.length
               ? (localRes[0].values[0][0] as string)
@@ -394,7 +395,7 @@ class SimpleDatabaseWorker {
           const idIndex = columns.indexOf("id");
 
           const insertStmt = this.db.prepare(
-            `INSERT OR REPLACE INTO flashcards VALUES (${placeholders})`,
+            `INSERT OR REPLACE INTO flashcards VALUES (${placeholders})`
           );
 
           for (const row of values) {
@@ -403,7 +404,7 @@ class SimpleDatabaseWorker {
 
             const localRes = this.db.exec(
               "SELECT modified FROM flashcards WHERE id = ?",
-              [id],
+              [id]
             );
             const localMod = localRes.length
               ? (localRes[0].values[0][0] as string)
@@ -444,7 +445,7 @@ self.onmessage = async (event: MessageEvent<DatabaseWorkerMessage>) => {
           await worker.initialize(
             (data as { data?: Uint8Array })?.data,
             sqlJsCode,
-            wasmBytes,
+            wasmBytes
           );
 
           // Handle fresh database creation or migration check
@@ -467,10 +468,7 @@ self.onmessage = async (event: MessageEvent<DatabaseWorkerMessage>) => {
           "params" in data
         ) {
           const execData = data as { sql: string; params?: SqlValue[] };
-          worker.executeSql(
-            execData.sql,
-            execData.params,
-          );
+          worker.executeSql(execData.sql, execData.params);
           result = { executed: true };
         }
         break;
@@ -482,11 +480,15 @@ self.onmessage = async (event: MessageEvent<DatabaseWorkerMessage>) => {
           "sql" in data &&
           "params" in data
         ) {
-          const queryData = data as { sql: string; params?: SqlValue[]; config?: QueryConfig };
+          const queryData = data as {
+            sql: string;
+            params?: SqlValue[];
+            config?: QueryConfig;
+          };
           result = worker.querySql(
             queryData.sql,
             queryData.params,
-            queryData.config,
+            queryData.config
           );
         }
         break;
@@ -509,7 +511,7 @@ self.onmessage = async (event: MessageEvent<DatabaseWorkerMessage>) => {
             backupDbId: worker.createBackupDatabase(
               backupData instanceof Uint8Array
                 ? backupData
-                : new Uint8Array(Object.values(backupData)),
+                : new Uint8Array(Object.values(backupData))
             ),
           };
         }
@@ -525,7 +527,7 @@ self.onmessage = async (event: MessageEvent<DatabaseWorkerMessage>) => {
           result = {
             data: worker.queryBackupDatabase(
               (data as { backupDbId: string }).backupDbId,
-              (data as { sql: string }).sql,
+              (data as { sql: string }).sql
             ),
           };
         }
@@ -534,7 +536,7 @@ self.onmessage = async (event: MessageEvent<DatabaseWorkerMessage>) => {
       case "closeBackupDb":
         if (data && typeof data === "object" && "backupDbId" in data) {
           worker.closeBackupDatabase(
-            (data as { backupDbId: string }).backupDbId,
+            (data as { backupDbId: string }).backupDbId
           );
           result = { success: true };
         }
@@ -556,7 +558,7 @@ self.onmessage = async (event: MessageEvent<DatabaseWorkerMessage>) => {
           result = {
             flashcards: FlashcardParser.parseFlashcardsFromContent(
               (data as { content: string }).content,
-              (data as { headerLevel: number }).headerLevel,
+              (data as { headerLevel: number }).headerLevel
             ),
           };
         }
@@ -566,8 +568,8 @@ self.onmessage = async (event: MessageEvent<DatabaseWorkerMessage>) => {
         if (data && typeof data === "object" && "buffer" in data) {
           worker.syncWithDisk(
             new Uint8Array(
-              (data as { buffer: ArrayBuffer | number[] }).buffer as number[],
-            ),
+              (data as { buffer: ArrayBuffer | number[] }).buffer as number[]
+            )
           );
           result = { success: true };
         }
