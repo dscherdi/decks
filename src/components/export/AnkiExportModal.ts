@@ -6,6 +6,7 @@ import type {
   ExportEventDetail,
 } from "../../types/svelte-components";
 import AnkiExportUI from "./AnkiExportUI.svelte";
+import { mount, unmount } from "svelte";
 
 export class AnkiExportModal extends Modal {
   private deck: Deck;
@@ -37,29 +38,25 @@ export class AnkiExportModal extends Modal {
     // Add CSS class for styling
     contentEl.addClass("decks-anki-export-container");
 
-    // Mount Svelte component
-    this.component = new AnkiExportUI({
+    // Mount Svelte component using Svelte 5 API
+    this.component = mount(AnkiExportUI, {
       target: contentEl,
       props: {
         deck: this.deck,
+        onexport: (detail: ExportEventDetail) => {
+          const ankiConfig: AnkiExportConfig = {
+            noteType: detail.noteType,
+            tags: detail.tags,
+            ankiDeckName: detail.deckName,
+            separator: detail.separator,
+          };
+          this.handleExport(ankiConfig);
+        },
+        oncancel: () => {
+          this.close();
+        },
       },
     }) as AnkiExportComponent;
-
-    // Listen to component events
-    this.component.$on("export", (event: CustomEvent<ExportEventDetail>) => {
-      const detail = event.detail;
-      const ankiConfig: AnkiExportConfig = {
-        noteType: detail.noteType,
-        tags: detail.tags,
-        ankiDeckName: detail.deckName,
-        separator: detail.separator,
-      };
-      this.handleExport(ankiConfig);
-    });
-
-    this.component.$on("cancel", () => {
-      this.close();
-    });
 
     // Handle window resize for mobile adaptation
     const handleResize = () => {
@@ -171,9 +168,9 @@ export class AnkiExportModal extends Modal {
       this.resizeHandler = undefined;
     }
 
-    // Destroy Svelte component
+    // Unmount Svelte component using Svelte 5 API
     if (this.component) {
-      this.component.$destroy();
+      unmount(this.component);
       this.component = null;
     }
 

@@ -32,13 +32,14 @@ export interface CompleteEventDetail {
   reviewed: number;
 }
 
-export interface AnkiExportComponent extends SvelteComponentInstance {
-  exportData(): void;
-}
+// Svelte 5 compatible types
+export type AnkiExportComponent = Svelte5MountedComponent & {
+  exportData?(): void;
+};
 
-export interface DeckConfigComponent extends SvelteComponentInstance {
-  saveConfig(): void;
-}
+export type DeckConfigComponent = Svelte5MountedComponent & {
+  saveConfig?(): void;
+};
 
 // DeckListPanel component - supports both Svelte 4 and Svelte 5 APIs
 export type DeckListPanelComponent = (SvelteComponentInstance | Svelte5MountedComponent) & {

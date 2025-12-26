@@ -80,7 +80,7 @@ export class FlashcardSynchronizer {
             } else if (op.type === "create" && op.flashcard) {
                 const card = op.flashcard;
                 const stmt = this.db.prepare(`
-                    INSERT INTO flashcards (
+                    INSERT OR IGNORE INTO flashcards (
                         id, deck_id, front, back, type, source_file, content_hash,
                         state, due_date, interval, repetitions, difficulty, stability,
                         lapses, last_reviewed, created, modified

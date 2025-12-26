@@ -4,6 +4,8 @@
     import type { Deck, AnkiExportConfig } from "../../database/types";
 
     export let deck: Deck;
+    export let onexport: ((config: AnkiExportConfig) => void) | undefined = undefined;
+    export let oncancel: (() => void) | undefined = undefined;
 
     const dispatch = createEventDispatcher<{
         export: AnkiExportConfig;
@@ -41,7 +43,11 @@
             tags: [deck.tag],
         };
 
-        dispatch("export", config);
+        if (onexport) {
+            onexport(config);
+        } else {
+            dispatch("export", config);
+        }
     }
 
     function handleTouchClick(callback: () => void, event: Event) {
@@ -60,7 +66,11 @@
     }
 
     function handleCancel() {
-        dispatch("cancel");
+        if (oncancel) {
+            oncancel();
+        } else {
+            dispatch("cancel");
+        }
     }
 
     function handleKeydown(event: KeyboardEvent) {

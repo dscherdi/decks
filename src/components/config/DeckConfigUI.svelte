@@ -6,6 +6,9 @@
 
     export let deck: Deck;
     export let config: DeckConfig;
+    export let onsave: ((config: DeckConfig) => void) | undefined = undefined;
+    export let oncancel: (() => void) | undefined = undefined;
+    export let onconfigChange: ((config: DeckConfig) => void) | undefined = undefined;
 
     const dispatch = createEventDispatcher<{
         save: DeckConfig;
@@ -50,7 +53,11 @@
                 profile: profile,
             },
         };
-        dispatch("configChange", newConfig);
+        if (onconfigChange) {
+            onconfigChange(newConfig);
+        } else {
+            dispatch("configChange", newConfig);
+        }
     }
 
     function handleSave() {
@@ -67,7 +74,11 @@
                 profile: profile,
             },
         };
-        dispatch("save", finalConfig);
+        if (onsave) {
+            onsave(finalConfig);
+        } else {
+            dispatch("save", finalConfig);
+        }
     }
 
     function handleTouchClick(callback: () => void, event: Event) {
@@ -86,7 +97,11 @@
     }
 
     function handleCancel() {
-        dispatch("cancel");
+        if (oncancel) {
+            oncancel();
+        } else {
+            dispatch("cancel");
+        }
     }
 
     function handleKeydown(event: KeyboardEvent) {

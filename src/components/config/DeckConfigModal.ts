@@ -5,6 +5,7 @@ import type { DeckSynchronizer } from "../../services/DeckSynchronizer";
 import type { DeckConfigComponent } from "../../types/svelte-components";
 import { yieldToUI } from "../../utils/ui";
 import DeckConfigUI from "./DeckConfigUI.svelte";
+import { mount, unmount } from "svelte";
 
 export class DeckConfigModal extends Modal {
   private deck: Deck;
@@ -48,27 +49,23 @@ export class DeckConfigModal extends Modal {
     // Modal title
     contentEl.addClass("decks-deck-config-container");
 
-    // Mount Svelte component
-    this.component = new DeckConfigUI({
+    // Mount Svelte component using Svelte 5 API
+    this.component = mount(DeckConfigUI, {
       target: contentEl,
       props: {
         deck: this.deck,
         config: this.config,
+        onsave: (detail: DeckConfig) => {
+          this.handleSave(detail);
+        },
+        oncancel: () => {
+          this.close();
+        },
+        onconfigChange: (detail: DeckConfig) => {
+          this.config = detail;
+        },
       },
     }) as DeckConfigComponent;
-
-    // Listen to component events
-    this.component.$on("save", (event: CustomEvent<DeckConfig>) => {
-      this.handleSave(event.detail);
-    });
-
-    this.component.$on("cancel", () => {
-      this.close();
-    });
-
-    this.component.$on("configChange", (event: CustomEvent<DeckConfig>) => {
-      this.config = event.detail;
-    });
 
     // Handle window resize for mobile adaptation
     const handleResize = () => {
@@ -169,9 +166,9 @@ export class DeckConfigModal extends Modal {
       this.resizeHandler = undefined;
     }
 
-    // Destroy Svelte component
+    // Unmount Svelte component using Svelte 5 API
     if (this.component) {
-      this.component.$destroy();
+      unmount(this.component);
       this.component = null;
     }
 
