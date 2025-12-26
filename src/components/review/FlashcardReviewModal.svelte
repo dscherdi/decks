@@ -52,7 +52,7 @@
   let reviewedCount = 0;
   let cardStartTime = 0;
   let currentCard: Flashcard | null = initialCard;
-  const sessionId: string | null = null;
+  let sessionId: string | null = null;
   const deckFilePath = "";
   let sessionProgress: SessionProgress | null = null;
 
@@ -67,14 +67,21 @@
 
   $: progress = sessionProgress ? sessionProgress.progress : 0;
   $: timeRemainingDisplay = formatTimeRemaining(sessionTimeRemaining);
+  $: cardsRemaining = sessionProgress
+    ? sessionProgress.goalTotal - sessionProgress.doneUnique
+    : 0;
+  $: reviewedCountDisplay = sessionProgress
+    ? sessionProgress.doneUnique
+    : reviewedCount;
 
   onMount(async () => {
     // Initialize review session
-    var { sessionId } = await scheduler.startFreshSession(
+    const session = await scheduler.startFreshSession(
       deck.id,
       new Date(),
       settings.review.sessionDuration
     );
+    sessionId = session.sessionId;
     scheduler.setCurrentSession(sessionId);
     sessionProgress = await scheduler.getSessionProgress(sessionId);
 
@@ -316,14 +323,10 @@
     <h3>Review Session - {deck.name}</h3>
     <div class="decks-header-stats">
       <div class="decks-progress-info">
-        <span
-          >Reviewed: {sessionProgress
-            ? sessionProgress.doneUnique
-            : reviewedCount}</span
-        >
+        <span>Reviewed: {reviewedCountDisplay}</span>
         <span class="decks-remaining"
           >({sessionProgress
-            ? `${sessionProgress.goalTotal - sessionProgress.doneUnique} remaining`
+            ? `${cardsRemaining} remaining`
             : currentCard
               ? "More cards available"
               : "Session complete"})</span

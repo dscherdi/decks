@@ -141,6 +141,9 @@ export class DeckConfigModal extends Modal {
 
     await this.db.updateDeck(deckId, { config: updatedConfig });
 
+    // Save database to disk to persist config changes
+    await this.db.save();
+
     // If header level changed, force resync the deck to clean up old flashcards
     if (headerLevelChanged) {
       const updatedDeck = await this.db.getDeckById(deckId);
