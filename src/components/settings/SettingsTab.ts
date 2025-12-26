@@ -357,7 +357,29 @@ export class DecksSettingTab extends PluginSettingTab {
           .setDynamicTooltip()
           .onChange(async (value) => {
             this.settings.backup.maxBackups = value;
+            this.backupService.setMaxBackups(value);
             await this.saveSettings();
+          })
+      );
+
+    new Setting(containerEl)
+      .setName("Create Backup Now")
+      .setDesc("Create a manual backup of your flashcard database")
+      .addButton((button) =>
+        button
+          .setButtonText("Create Backup")
+          .setCta()
+          .onClick(async () => {
+            const notice = new Notice("Creating backup...", 0);
+            try {
+              const filename = await this.backupService.createBackup(this.db);
+              notice.hide();
+              new Notice(`✅ Backup created: ${filename}`, 5000);
+            } catch (error) {
+              notice.hide();
+              new Notice(`❌ Failed to create backup: ${error.message}`, 8000);
+              this.logger.debug("Backup creation failed:", error);
+            }
           })
       );
 
@@ -397,7 +419,9 @@ export class DecksSettingTab extends PluginSettingTab {
       );
 
     // Initial load of backup list
-    this.refreshBackupList(backupSetting);
+    this.refreshBackupList(backupSetting).catch((error) => {
+      this.logger.debug("Failed to load initial backup list:", error);
+    });
   }
 
   private async refreshBackupList(setting: Setting): Promise<void> {

@@ -61,30 +61,46 @@ export class BackupService {
    */
   async getAvailableBackups(): Promise<BackupMetadata[]> {
     try {
+      this.debugLog(`Checking backup directory: ${this.backupDir}`);
+
       if (!(await this.adapter.exists(this.backupDir))) {
+        this.debugLog("Backup directory does not exist");
         return [];
       }
 
       const files = await this.adapter.list(this.backupDir);
+      this.debugLog(`Found ${files.files.length} files in backup directory:`, files.files);
+
       const backups: BackupMetadata[] = [];
 
       for (const file of files.files) {
-        if (file.endsWith(".db") && file.startsWith("backup-")) {
-          const filepath = `${this.backupDir}/${file}`;
+        this.debugLog(`Checking file: ${file}`);
+
+        // Extract just the filename from the path
+        const filename = file.split('/').pop() || file;
+        this.debugLog(`Extracted filename: ${filename}`);
+
+        if (filename.endsWith(".db") && filename.startsWith("backup-")) {
+          const filepath = file; // Use the full path from list()
           try {
             const stat = await this.adapter.stat(filepath);
             const timestamp = stat?.mtime ? new Date(stat.mtime) : new Date();
 
             backups.push({
-              filename: file,
+              filename: filename, // Store just the filename
               timestamp,
               size: stat?.size || 0,
             });
+            this.debugLog(`Added backup: ${filename}, size: ${stat?.size}, mtime: ${timestamp}`);
           } catch (error) {
             this.debugLog(`Failed to stat backup file ${file}:`, error);
           }
+        } else {
+          this.debugLog(`Skipped file (doesn't match pattern): ${filename}`);
         }
       }
+
+      this.debugLog(`Total backups found: ${backups.length}`);
 
       // Sort by timestamp descending (newest first)
       return backups.sort(
@@ -92,6 +108,7 @@ export class BackupService {
       );
     } catch (error) {
       console.error("Failed to get available backups:", error);
+      this.debugLog("Error details:", error);
       return [];
     }
   }
