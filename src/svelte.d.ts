@@ -1,5 +1,5 @@
 declare module "*.svelte" {
-  import type { ComponentType } from "svelte";
-  const component: ComponentType<any>;
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const component: any;
   export default component;
 }

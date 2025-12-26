@@ -21,15 +21,59 @@ jobs:
       - name: Install dependencies
         run: npm install
 
-      - name: Build plugin
-        run: npm run build
+      - name: Run tests
+        run: npm test
+
+      - name: Build and package release
+        run: npm run build:release
+
+      - name: Generate release notes
+        run: npm run release-notes
+
+      - name: Validate release files
+        run: |
+          echo "🔍 Validating release files..."
+          required_files=(
+            "./dist/main.js"
+            "./dist/styles.css"
+            "./dist/manifest.json"
+            "./dist/database-worker.js"
+            "./dist/assets/sql-wasm.js"
+            "./dist/assets/sql-wasm.wasm"
+            "./dist/README.md"
+            "./dist/LICENSE"
+            "./GITHUB_RELEASE_NOTES.md"
+          )
+
+          missing_files=()
+          for file in "${required_files[@]}"; do
+            if [[ ! -f "$file" ]]; then
+              missing_files+=("$file")
+            else
+              echo "✅ Found: $file"
+            fi
+          done
+
+          if [[ ${#missing_files[@]} -gt 0 ]]; then
+            echo "❌ Missing files:"
+            printf '  - %s\n' "${missing_files[@]}"
+            exit 1
+          fi
+
+          echo "✅ All release files validated successfully!"
 
       - name: Create Release
         uses: softprops/action-gh-release@v1
         with:
+          body_path: ./GITHUB_RELEASE_NOTES.md
           files: |
             ./dist/main.js
             ./dist/styles.css
             ./dist/manifest.json
+            ./dist/database-worker.js
+            ./dist/assets/sql-wasm.js
+            ./dist/assets/sql-wasm.wasm
+            ./dist/README.md
+            ./dist/LICENSE
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

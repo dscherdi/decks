@@ -124,9 +124,12 @@ export interface DeckStats {
   newCount: number;
   dueCount: number;
   totalCount: number;
+  matureCount: number;
 }
 
 export interface AnkiExportConfig {
+  noteType: string;
+  tags: string[];
   ankiDeckName: string;
   separator: string;
 }
@@ -152,6 +155,12 @@ export interface CardStats {
   new: number;
   review: number;
   mature: number;
+  total: number;
+}
+
+export interface ReviewStats {
+  totalReviews: number;
+  totalTimeMs: number;
 }
 
 export interface AnswerButtons {
@@ -169,11 +178,13 @@ export interface IntervalData {
 export interface ForecastData {
   date: string;
   dueCount: number;
+  count: number; // Alias for dueCount for backwards compatibility
 }
 
 export interface Statistics {
   dailyStats: DailyStats[];
   cardStats: CardStats;
+  reviewStats: ReviewStats;
   answerButtons: AnswerButtons;
   retentionRate: number;
   intervals: IntervalData[];
@@ -220,7 +231,7 @@ export function isCardMature(flashcard: Flashcard): boolean {
  * Get the card maturity type for classification
  */
 export function getCardMaturityType(
-  flashcard: Flashcard,
+  flashcard: Flashcard
 ): "new" | "review" | "mature" {
   if (flashcard.state === "new") {
     return "new";

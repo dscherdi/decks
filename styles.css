@@ -10,6 +10,51 @@
     user-select: none;
 }
 
+/* Chart controls and descriptions */
+.decks-chart-controls {
+    margin: 1rem 0;
+    display: flex;
+    gap: 1rem;
+    align-items: center;
+}
+
+.decks-chart-controls label {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    font-size: 0.9rem;
+    color: var(--text-normal);
+}
+
+.decks-chart-controls select {
+    padding: 0.25rem 0.5rem;
+    border: 1px solid var(--background-modifier-border);
+    border-radius: 4px;
+    background: var(--background-primary);
+    color: var(--text-normal);
+    font-size: 0.9rem;
+    min-width: 120px;
+}
+
+.decks-chart-controls select:focus {
+    outline: none;
+    border-color: var(--interactive-accent);
+    box-shadow: 0 0 0 2px var(--interactive-accent-hover);
+}
+
+/* Mobile responsiveness for charts */
+@media (max-width: 768px) {
+    .decks-chart-controls {
+        flex-direction: column;
+        align-items: flex-start;
+        gap: 0.5rem;
+    }
+
+    .decks-chart-controls select {
+        min-width: 100px;
+    }
+}
+
 /* Scoped touch support for interactive elements within plugin containers */
 .decks-view button,
 .decks-deck-list-panel button,

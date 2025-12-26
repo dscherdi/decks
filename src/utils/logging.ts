@@ -1,16 +1,25 @@
-import { FlashcardsSettings } from "../settings";
-import { DataAdapter } from "obsidian";
+import type { DecksSettings } from "../settings";
+import type { DataAdapter } from "obsidian";
 
 export class Logger {
   constructor(
-    private settings: FlashcardsSettings,
+    private settings: DecksSettings,
     private adapter?: DataAdapter,
-    private configDir?: string,
+    private configDir?: string
   ) {}
 
   debug(message: string, ...args: unknown[]): void {
     if (this.settings?.debug?.enableLogging) {
-      console.debug(`[Decks Debug] ${message}`, ...args);
+      console.log(`[Decks Debug] ${message}`, ...args);
+      if (this.adapter && this.configDir) {
+        this.writeToLogFile(message, ...args);
+      }
+    }
+  }
+
+  error(message: string, ...args: unknown[]): void {
+    if (this.settings?.debug?.enableLogging) {
+      console.error(`[Decks Error] ${message}`, ...args);
       if (this.adapter && this.configDir) {
         this.writeToLogFile(message, ...args);
       }
@@ -19,7 +28,7 @@ export class Logger {
 
   performance(message: string, ...args: unknown[]): void {
     if (this.settings?.debug?.performanceLogs) {
-      console.debug(`[Decks Performance] ${message}`, ...args);
+      console.log(`[Decks Performance] ${message}`, ...args);
     }
   }
 
@@ -37,7 +46,7 @@ export class Logger {
         args.length > 0
           ? ` ${args
               .map((arg) =>
-                typeof arg === "object" ? JSON.stringify(arg) : String(arg),
+                typeof arg === "object" ? JSON.stringify(arg) : String(arg)
               )
               .join(" ")}`
           : "";

@@ -1,16 +1,21 @@
 import { Plugin, TFile, WorkspaceLeaf, Notice, TAbstractFile } from "obsidian";
 
-import { DatabaseService } from "./database/DatabaseService";
+import {
+  DatabaseFactory,
+  type IDatabaseService,
+} from "./database/DatabaseFactory";
 import { DeckManager } from "./services/DeckManager";
 import { DeckSynchronizer } from "./services/DeckSynchronizer";
 import { Scheduler } from "./services/Scheduler";
 import { BackupService } from "./services/BackupService";
+import { StatisticsService } from "./services/StatisticsService";
 import { yieldToUI } from "./utils/ui";
 import { Logger, formatTime } from "./utils/logging";
 import { ProgressTracker } from "./utils/progress";
+import { generateDeckId } from "./utils/hash";
 
-import { FlashcardsSettings, DEFAULT_SETTINGS } from "./settings";
-import { DecksSettingTab } from "./components/SettingsTab";
+import { type DecksSettings, DEFAULT_SETTINGS } from "./settings";
+import { DecksSettingTab } from "./components/settings/SettingsTab";
 
 import { DecksView } from "./components/DecksView";
 
@@ -22,7 +27,7 @@ export const VIEW_TYPE_DECKS = "decks-view";
  */
 function deepMergeIgnoreNull<T extends Record<string, unknown>>(
   target: T,
-  source: Record<string, unknown>,
+  source: Record<string, unknown>
 ): T {
   if (source === null || source === undefined) {
     return target;
@@ -54,7 +59,7 @@ function deepMergeIgnoreNull<T extends Record<string, unknown>>(
         // Recursively merge objects
         result[key] = deepMergeIgnoreNull(
           result[key] as Record<string, unknown>,
-          sourceValue as Record<string, unknown>,
+          sourceValue as Record<string, unknown>
         );
       } else {
         result[key] = sourceValue;
@@ -66,16 +71,19 @@ function deepMergeIgnoreNull<T extends Record<string, unknown>>(
 }
 
 export default class DecksPlugin extends Plugin {
-  private db: DatabaseService;
+  private db: IDatabaseService;
   public deckManager: DeckManager;
   private deckSynchronizer: DeckSynchronizer;
   private scheduler: Scheduler;
   private backupService: BackupService;
+  private statisticsService: StatisticsService;
   public view: DecksView | null = null;
-  public settings: FlashcardsSettings;
+  public settings: DecksSettings;
   private logger: Logger;
   private progressTracker: ProgressTracker;
-  private hasShownInitialProgress = false;
+  private databaseWatcherInterval: number | null = null;
+  private lastKnownDatabaseMtime = 0;
+  private focusListener: (() => Promise<void>) | null = null;
 
   async onload() {
     // Load settings first
@@ -85,7 +93,7 @@ export default class DecksPlugin extends Plugin {
     this.logger = new Logger(
       this.settings,
       this.app.vault.adapter,
-      this.app.vault.configDir,
+      this.app.vault.configDir
     );
     this.progressTracker = new ProgressTracker(this.settings);
 
@@ -101,14 +109,22 @@ export default class DecksPlugin extends Plugin {
 
       // FSRS instances are now created per-deck as needed
 
-      // Initialize database
+      // Initialize database with worker support
       const databasePath = `${this.app.vault.configDir}/plugins/decks/flashcards.db`;
-      this.db = new DatabaseService(
+
+      // Use experimental setting to control worker usage
+      const useWorker = this.settings.experimental.enableDatabaseWorker;
+
+      this.db = await DatabaseFactory.create(
         databasePath,
         adapter,
         this.logger.debug.bind(this),
+        {
+          useWorker,
+          workerEnabled: true,
+          configDir: this.app.vault.configDir,
+        }
       );
-      await this.db.initialize();
 
       // Initialize deck manager with optimized main-thread approach
       this.deckManager = new DeckManager(
@@ -116,7 +132,7 @@ export default class DecksPlugin extends Plugin {
         this.app.metadataCache,
         this.db,
         this,
-        this.settings.parsing.folderSearchPath,
+        this.settings.parsing.folderSearchPath
       );
 
       // Initialize deck synchronizer
@@ -125,23 +141,25 @@ export default class DecksPlugin extends Plugin {
         this.deckManager,
         this.settings,
         this.app.vault.adapter,
-        this.app.vault.configDir,
+        this.app.vault.configDir
       );
 
       // Initialize backup service
       this.backupService = new BackupService(
         this.app.vault.adapter,
         this.app.vault.configDir,
-        this.logger.debug.bind(this),
+        this.logger.debug.bind(this)
       );
+
+      // Initialize statistics service
+      this.statisticsService = new StatisticsService(this.db, this.settings);
 
       // Initialize scheduler
       this.scheduler = new Scheduler(
         this.db,
         this.settings,
-        this.app.vault.adapter,
-        this.app.vault.configDir,
         this.backupService,
+        this.logger
       );
 
       // Register the side panel view
@@ -153,13 +171,14 @@ export default class DecksPlugin extends Plugin {
             this.db,
             this.deckSynchronizer,
             this.scheduler,
+            this.statisticsService,
             this.settings,
             this.progressTracker,
             this.logger,
             (view: DecksView | null) => {
               this.view = view;
-            },
-          ),
+            }
+          )
       );
 
       // Schedule initial sync after workspace is ready
@@ -190,7 +209,7 @@ export default class DecksPlugin extends Plugin {
           if (file instanceof TFile && file.extension === "md") {
             await this.handleFileChange(file);
           }
-        }),
+        })
       );
 
       this.registerEvent(
@@ -198,7 +217,7 @@ export default class DecksPlugin extends Plugin {
           if (file instanceof TFile && file.extension === "md") {
             await this.handleFileDelete(file);
           }
-        }),
+        })
       );
 
       this.registerEvent(
@@ -206,7 +225,7 @@ export default class DecksPlugin extends Plugin {
           if (file instanceof TFile && file.extension === "md") {
             await this.handleFileRename(file, oldPath);
           }
-        }),
+        })
       );
 
       // Add settings tab
@@ -218,7 +237,7 @@ export default class DecksPlugin extends Plugin {
           this.db,
           this.saveSettings.bind(this),
           this.logger,
-          () => this.view?.performSync(false) || Promise.resolve(),
+          () => this.view?.refresh(false) || Promise.resolve(),
           async () => {
             if (this.view) {
               await this.view.refreshStats();
@@ -240,13 +259,16 @@ export default class DecksPlugin extends Plugin {
             }
           },
           this.db.purgeDatabase.bind(this.db),
-          this.backupService,
-        ),
+          this.backupService
+        )
       );
+
+      // Setup database file watcher
+      this.setupDatabaseWatcher();
 
       this.logger.debug("Decks plugin loaded successfully");
     } catch (error) {
-      this.logger?.debug("Error loading Decks plugin:", error);
+      console.error("Error loading Decks plugin:", error);
       if (this.settings?.ui?.enableNotices !== false) {
         new Notice("Failed to load Decks plugin. Check console for details.");
       }
@@ -256,18 +278,19 @@ export default class DecksPlugin extends Plugin {
   async onunload() {
     this.logger.debug("Unloading Decks plugin");
 
-    // Close database connection
-    if (this.db) {
-      await this.db.close();
-    }
+    // Stop database watcher
+    this.stopDatabaseWatcher();
+
+    // Close database connection using factory singleton
+    await DatabaseFactory.close();
   }
 
   async loadSettings() {
     const loadedData = await this.loadData();
     this.settings = deepMergeIgnoreNull(
       DEFAULT_SETTINGS as unknown as Record<string, unknown>,
-      (loadedData || {}) as Record<string, unknown>,
-    ) as unknown as FlashcardsSettings;
+      (loadedData || {}) as Record<string, unknown>
+    ) as unknown as DecksSettings;
 
     // Deep merge ensures all properties have valid defaults
   }
@@ -279,7 +302,7 @@ export default class DecksPlugin extends Plugin {
     // Update DeckManager folder search path if it exists
     if (this.deckManager) {
       this.deckManager.updateFolderSearchPath(
-        this.settings.parsing.folderSearchPath,
+        this.settings.parsing.folderSearchPath
       );
     }
   }
@@ -326,19 +349,17 @@ export default class DecksPlugin extends Plugin {
         ? metadata.frontmatter.tags
         : [metadata.frontmatter.tags];
       allTags.push(
-        ...frontmatterTags.map((tag) =>
-          tag.startsWith("#") ? tag : `#${tag}`,
-        ),
+        ...frontmatterTags.map((tag) => (tag.startsWith("#") ? tag : `#${tag}`))
       );
     }
 
     const hasFlashcardsTag = allTags.some((tag) =>
-      tag.startsWith("#flashcards"),
+      tag.startsWith("#flashcards")
     );
 
     this.logger.debug(
       `File ${file.path} has flashcards tag:`,
-      hasFlashcardsTag,
+      hasFlashcardsTag
     );
 
     if (hasFlashcardsTag) {
@@ -350,7 +371,7 @@ export default class DecksPlugin extends Plugin {
           allTags.find((tag) => tag.startsWith("#flashcards")) || "#flashcards";
         if (existingDeck.tag !== newTag) {
           this.logger.debug(
-            `Updating deck tag from ${existingDeck.tag} to ${newTag}`,
+            `Updating deck tag from ${existingDeck.tag} to ${newTag}`
           );
           await this.db.updateDeck(existingDeck.id, { tag: newTag });
         }
@@ -394,18 +415,17 @@ export default class DecksPlugin extends Plugin {
 
       // Delegate to view for domain logic
       if (this.view) {
-        await this.view.performSync(false);
-        await this.view.refresh(false);
+        await this.view.refresh(true);
       }
 
       await yieldToUI();
 
       const totalTime = performance.now() - startTime;
       this.logger.performance(
-        `Initial sync completed successfully in ${formatTime(totalTime)}`,
+        `Initial sync completed successfully in ${formatTime(totalTime)}`
       );
     } catch (error) {
-      this.logger?.debug("Error during initial sync:", error);
+      console.error("Error during initial sync:", error);
       // Don't throw - let the app continue working even if initial sync fails
     }
   }
@@ -426,7 +446,7 @@ export default class DecksPlugin extends Plugin {
       const oldDeck = await this.db.getDeckByFilepath(oldPath);
       if (oldDeck) {
         const oldDeckId = oldDeck.id;
-        const newDeckId = this.deckManager.generateDeckId(file.path);
+        const newDeckId = generateDeckId(file.path);
 
         this.logger.debug(`File renamed from ${oldPath} to ${file.path}`);
         this.logger.debug(`Updating deck ID from ${oldDeckId} to ${newDeckId}`);
@@ -436,14 +456,11 @@ export default class DecksPlugin extends Plugin {
           oldDeckId,
           newDeckId,
           file.basename,
-          file.path,
+          file.path
         );
 
         // Update all flashcard deck IDs
-        await this.deckSynchronizer.updateFlashcardDeckIds(
-          oldDeckId,
-          newDeckId,
-        );
+        await this.deckManager.updateFlashcardDeckIds(oldDeckId, newDeckId);
 
         await yieldToUI();
 
@@ -453,6 +470,82 @@ export default class DecksPlugin extends Plugin {
           await this.view.refreshStats();
         }
       }
+    }
+  }
+
+  private setupDatabaseWatcher(): void {
+    const databasePath = `${this.app.vault.configDir}/plugins/decks/flashcards.db`;
+
+    // Initialize lastKnownDatabaseMtime
+    this.updateLastKnownDatabaseMtime(databasePath);
+
+    // Polling every 2 seconds
+    this.databaseWatcherInterval = window.setInterval(async () => {
+      await this.checkForDatabaseChanges(databasePath);
+    }, 2000);
+
+    // Watch for window focus events
+    this.focusListener = async () => {
+      await this.checkForDatabaseChanges(databasePath);
+    };
+    window.addEventListener("focus", this.focusListener);
+
+    this.logger.debug("Database watcher setup complete");
+  }
+
+  private stopDatabaseWatcher(): void {
+    if (this.databaseWatcherInterval) {
+      clearInterval(this.databaseWatcherInterval);
+      this.databaseWatcherInterval = null;
+    }
+
+    // Remove focus event listener
+    if (this.focusListener) {
+      window.removeEventListener("focus", this.focusListener);
+      this.focusListener = null;
+    }
+  }
+
+  private async updateLastKnownDatabaseMtime(
+    databasePath: string
+  ): Promise<void> {
+    try {
+      if (await this.app.vault.adapter.exists(databasePath)) {
+        const stat = await this.app.vault.adapter.stat(databasePath);
+        if (stat) {
+          this.lastKnownDatabaseMtime = stat.mtime;
+        }
+      }
+    } catch (error) {
+      this.logger.debug("Failed to update lastKnownDatabaseMtime:", error);
+    }
+  }
+
+  private async checkForDatabaseChanges(databasePath: string): Promise<void> {
+    try {
+      if (!(await this.app.vault.adapter.exists(databasePath))) {
+        return;
+      }
+
+      const stat = await this.app.vault.adapter.stat(databasePath);
+      if (stat && stat.mtime > this.lastKnownDatabaseMtime) {
+        this.logger.debug(
+          `Database file changed (${stat.mtime} > ${this.lastKnownDatabaseMtime}), triggering sync`
+        );
+
+        // Trigger sync with disk
+        await this.db.syncWithDisk();
+
+        // Update our known mtime
+        this.lastKnownDatabaseMtime = stat.mtime;
+
+        // Refresh the view if available
+        if (this.view) {
+          await this.view.refreshStats();
+        }
+      }
+    } catch (error) {
+      this.logger.debug("Error checking for database changes:", error);
     }
   }
 }

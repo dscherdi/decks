@@ -1,16 +1,16 @@
 import { Notice } from "obsidian";
-import { FlashcardsSettings } from "../settings";
+import type { DecksSettings } from "../settings";
 
 export class ProgressTracker {
   private progressNotice: Notice | null = null;
-  private settings: FlashcardsSettings;
+  private settings: DecksSettings;
 
-  constructor(settings: FlashcardsSettings) {
+  constructor(settings: DecksSettings) {
     this.settings = settings;
   }
 
   show(message: string): void {
-    if (this.settings?.ui?.enableNotices !== false) {
+    if (!this.progressNotice && this.settings?.ui?.enableNotices !== false) {
       this.progressNotice = new Notice(message, 0);
     }
   }
@@ -28,6 +28,8 @@ export class ProgressTracker {
       this.progressNotice = null;
     }
   }
+
+  isVisible = (): boolean => this.progressNotice != null;
 
   private createProgressBar(progress: number): string {
     const width = 25;

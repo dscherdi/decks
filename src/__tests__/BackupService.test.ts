@@ -1,148 +1,196 @@
 import { BackupService } from "../services/BackupService";
-import { DatabaseService } from "../database/DatabaseService";
-import { ReviewLog, ReviewSession } from "../database/types";
+import { IDatabaseService } from "../database/DatabaseFactory";
 
-// Mock sql.js module
-jest.mock("sql.js", () => ({
-  __esModule: true,
-  default: jest.fn(() =>
-    Promise.resolve({
-      Database: jest.fn().mockImplementation(() => ({
-        exec: jest.fn(),
-        prepare: jest.fn(() => ({
-          run: jest.fn(),
-          step: jest.fn(() => false),
-          get: jest.fn(() => []),
-          free: jest.fn(),
-        })),
-        export: jest.fn(() => new Uint8Array([1, 2, 3, 4])),
-        close: jest.fn(),
-      })),
+// Helper function to create a complete mock database
+function createMockDatabase() {
+  return {
+    // Initialization methods
+    initialize: jest.fn().mockResolvedValue(undefined),
+    close: jest.fn().mockResolvedValue(undefined),
+    save: jest.fn().mockResolvedValue(undefined),
+
+    // Deck operations
+    createDeck: jest.fn().mockResolvedValue("deck-id"),
+    getDeckById: jest.fn().mockResolvedValue(null),
+    getDeckByFilepath: jest.fn().mockResolvedValue(null),
+    getDeckByTag: jest.fn().mockResolvedValue(null),
+    getAllDecks: jest.fn().mockResolvedValue([]),
+    updateDeck: jest.fn().mockResolvedValue(undefined),
+    updateDeckTimestamp: jest.fn().mockResolvedValue(undefined),
+    updateDeckLastReviewed: jest.fn().mockResolvedValue(undefined),
+    updateDeckHeaderLevel: jest.fn().mockResolvedValue(undefined),
+    renameDeck: jest.fn().mockResolvedValue(undefined),
+    deleteDeck: jest.fn().mockResolvedValue(undefined),
+    deleteDeckByFilepath: jest.fn().mockResolvedValue(undefined),
+
+    // Flashcard operations
+    createFlashcard: jest.fn().mockResolvedValue(undefined),
+    getFlashcardById: jest.fn().mockResolvedValue(null),
+    getFlashcardsByDeck: jest.fn().mockResolvedValue([]),
+    getAllFlashcards: jest.fn().mockResolvedValue([]),
+    getDueFlashcards: jest.fn().mockResolvedValue([]),
+    getReviewableFlashcards: jest.fn().mockResolvedValue([]),
+    getNewCardsForReview: jest.fn().mockResolvedValue([]),
+    getReviewCardsForReview: jest.fn().mockResolvedValue([]),
+    updateFlashcard: jest.fn().mockResolvedValue(undefined),
+    updateFlashcardDeckIds: jest.fn().mockResolvedValue(undefined),
+    deleteFlashcard: jest.fn().mockResolvedValue(undefined),
+    deleteFlashcardsByFile: jest.fn().mockResolvedValue(undefined),
+
+    // Batch operations
+    batchCreateFlashcards: jest.fn().mockResolvedValue(undefined),
+    batchUpdateFlashcards: jest.fn().mockResolvedValue(undefined),
+    batchDeleteFlashcards: jest.fn().mockResolvedValue(undefined),
+
+    // Review log operations
+    createReviewLog: jest.fn().mockResolvedValue(undefined),
+    insertReviewLog: jest.fn().mockResolvedValue(undefined),
+    getLatestReviewLogForFlashcard: jest.fn().mockResolvedValue(null),
+    getAllReviewLogs: jest.fn().mockResolvedValue([]),
+    reviewLogExists: jest.fn().mockResolvedValue(false),
+
+    // Review session operations
+    createReviewSession: jest.fn().mockResolvedValue("session-id"),
+    getReviewSessionById: jest.fn().mockResolvedValue(null),
+    getActiveReviewSession: jest.fn().mockResolvedValue(null),
+    getAllReviewSessions: jest.fn().mockResolvedValue([]),
+    updateReviewSessionDoneUnique: jest.fn().mockResolvedValue(undefined),
+    endReviewSession: jest.fn().mockResolvedValue(undefined),
+    insertReviewSession: jest.fn().mockResolvedValue(undefined),
+    reviewSessionExists: jest.fn().mockResolvedValue(false),
+    isCardReviewedInSession: jest.fn().mockResolvedValue(false),
+
+    // Statistics operations moved to StatisticsService
+    getDailyReviewCounts: jest
+      .fn()
+      .mockResolvedValue({ newCount: 0, reviewCount: 0 }),
+    getOverallStatistics: jest.fn().mockResolvedValue({
+      totalCards: 0,
+      newCards: 0,
+      reviewCards: 0,
+      matureCards: 0,
+      dueToday: 0,
+      dueTomorrow: 0,
+      learningCards: 0,
+      avgSuccessRate: 0,
+      avgInterval: 0,
+      totalReviews: 0,
+      reviewsToday: 0,
+      timeSpentToday: 0,
     }),
-  ),
-}));
 
-// Mock Obsidian's DataAdapter
+    // Count operations
+    countNewCards: jest.fn().mockResolvedValue(0),
+    countDueCards: jest.fn().mockResolvedValue(0),
+    countTotalCards: jest.fn().mockResolvedValue(0),
+    countNewCardsToday: jest.fn().mockResolvedValue(0),
+    countReviewCardsToday: jest.fn().mockResolvedValue(0),
+
+    // Forecast operations
+    getScheduledDueByDay: jest.fn().mockResolvedValue([]),
+    getScheduledDueByDayMulti: jest.fn().mockResolvedValue([]),
+    getCurrentBacklog: jest.fn().mockResolvedValue(0),
+    getCurrentBacklogMulti: jest.fn().mockResolvedValue(0),
+    getDeckReviewCountRange: jest.fn().mockResolvedValue(0),
+
+    // Optimized review log queries for statistics
+    getReviewLogsByDeck: jest.fn().mockResolvedValue([]),
+    getReviewLogsByDecks: jest.fn().mockResolvedValue([]),
+
+    // Utility operations
+    purgeDatabase: jest.fn().mockResolvedValue(undefined),
+    querySql: jest.fn().mockResolvedValue([]),
+
+    // Sync operations
+    migrateFlashcardIdentity: jest.fn().mockResolvedValue(undefined),
+    syncFlashcardsForDeck: jest.fn().mockResolvedValue(undefined),
+    syncWithDisk: jest.fn().mockResolvedValue(undefined),
+
+    // Transaction methods removed - no longer using transactions
+
+    // Backup operations
+    createBackupDatabase: jest.fn().mockResolvedValue(undefined),
+    restoreFromBackupDatabase: jest.fn().mockResolvedValue(undefined),
+    exportDatabaseToBuffer: jest
+      .fn()
+      .mockResolvedValue(new Uint8Array([1, 2, 3])),
+    createBackupDatabaseInstance: jest.fn().mockResolvedValue("mockBackupDb"),
+    queryBackupDatabase: jest.fn().mockResolvedValue([]),
+    closeBackupDatabaseInstance: jest.fn().mockResolvedValue(undefined),
+  };
+}
+
+// Mock DataAdapter
 const mockAdapter = {
   exists: jest.fn(),
   mkdir: jest.fn(),
-  write: jest.fn(),
   writeBinary: jest.fn(),
-  read: jest.fn(),
   readBinary: jest.fn(),
-  remove: jest.fn(),
   list: jest.fn(),
   stat: jest.fn(),
+  remove: jest.fn(),
 };
 
-// Create a mock DatabaseService with properly typed mock functions
-const createMockDb = () => ({
-  getAllReviewLogs: jest.fn(),
-  getAllReviewSessions: jest.fn(),
-  reviewLogExists: jest.fn(),
-  reviewSessionExists: jest.fn(),
-  insertReviewLog: jest.fn(),
-  insertReviewSession: jest.fn(),
-});
+// Mock Notice
+jest.mock("obsidian", () => ({
+  Notice: jest.fn(),
+}));
 
-const mockDb = createMockDb();
-
-const mockDebugLog = jest.fn();
+// Mock yieldToUI
+jest.mock("@/utils/ui", () => ({
+  yieldToUI: jest.fn().mockResolvedValue(undefined),
+}));
 
 describe("BackupService", () => {
   let backupService: BackupService;
-  const configDir = "/mock/config";
+  let mockDb: ReturnType<typeof createMockDatabase>;
 
   beforeEach(() => {
     jest.clearAllMocks();
+    mockDb = createMockDatabase();
     backupService = new BackupService(
       mockAdapter as any,
-      configDir,
-      mockDebugLog,
+      "/vault/.obsidian",
+      jest.fn()
     );
   });
 
   describe("createBackup", () => {
-    it("should create a backup with review data", async () => {
-      // Setup mock data
-      const mockReviewLogs: ReviewLog[] = [
-        {
-          id: "log1",
-          flashcardId: "card1",
-          sessionId: "session1",
-          lastReviewedAt: "2023-01-01T10:00:00Z",
-          reviewedAt: "2023-01-01T10:05:00Z",
-          rating: 3,
-          ratingLabel: "good",
-          oldState: "new",
-          newState: "review",
-          oldRepetitions: 0,
-          newRepetitions: 1,
-          oldLapses: 0,
-          newLapses: 0,
-          oldStability: 2.5,
-          newStability: 5.0,
-          oldDifficulty: 5.0,
-          newDifficulty: 5.2,
-          oldIntervalMinutes: 0,
-          newIntervalMinutes: 1440,
-          oldDueAt: "2023-01-01T10:00:00Z",
-          newDueAt: "2023-01-02T10:00:00Z",
-          elapsedDays: 0,
-          retrievability: 1.0,
-          requestRetention: 0.9,
-          profile: "STANDARD",
-          maximumIntervalDays: 36500,
-          minMinutes: 1440,
-          fsrsWeightsVersion: "4.5",
-          schedulerVersion: "1.0",
-        },
-      ];
-
-      const mockReviewSessions: ReviewSession[] = [
-        {
-          id: "session1",
-          deckId: "deck1",
-          startedAt: "2023-01-01T10:00:00Z",
-          endedAt: "2023-01-01T10:30:00Z",
-          goalTotal: 10,
-          doneUnique: 5,
-        },
-      ];
-
-      mockDb.getAllReviewLogs.mockResolvedValue(mockReviewLogs);
-      mockDb.getAllReviewSessions.mockResolvedValue(mockReviewSessions);
-      mockAdapter.exists.mockResolvedValue(true);
+    it("should create backup directory if it doesn't exist", async () => {
+      mockAdapter.exists.mockResolvedValue(false);
       mockAdapter.list.mockResolvedValue({ files: [], folders: [] });
 
-      await backupService.createBackup(mockDb as any);
+      await backupService.createBackup(mockDb);
 
-      expect(mockDb.getAllReviewLogs).toHaveBeenCalled();
-      expect(mockDb.getAllReviewSessions).toHaveBeenCalled();
-      expect(mockAdapter.writeBinary).toHaveBeenCalledWith(
-        expect.stringMatching(
-          new RegExp(
-            `${configDir}/plugins/decks/backups/backup-\\d{4}-\\d{2}-\\d{2}\\.db`,
-          ),
-        ),
-        expect.any(Uint8Array),
+      expect(mockAdapter.mkdir).toHaveBeenCalledWith(
+        "/vault/.obsidian/plugins/decks/backups"
       );
     });
 
-    it("should handle backup creation errors gracefully", async () => {
-      mockDb.getAllReviewLogs.mockRejectedValue(new Error("Database error"));
-
-      await backupService.createBackup(mockDb as any);
-
-      expect(mockDebugLog).toHaveBeenCalledWith(
-        "Failed to create backup:",
-        expect.any(Error),
+    it("should handle database backup errors", async () => {
+      const consoleSpy = jest.spyOn(console, "error").mockImplementation();
+      mockDb.createBackupDatabase.mockRejectedValue(
+        new Error("Database backup failed")
       );
+
+      await expect(backupService.createBackup(mockDb)).rejects.toThrow(
+        "Database backup failed"
+      );
+
+      consoleSpy.mockRestore();
     });
   });
 
   describe("getAvailableBackups", () => {
-    it("should return sorted list of available backups", async () => {
+    it("should return empty array when backup directory doesn't exist", async () => {
+      mockAdapter.exists.mockResolvedValue(false);
+
+      const result = await backupService.getAvailableBackups();
+
+      expect(result).toEqual([]);
+    });
+
+    it("should return list of available SQLite backups", async () => {
       mockAdapter.exists.mockResolvedValue(true);
       mockAdapter.list.mockResolvedValue({
         files: [
@@ -152,161 +200,134 @@ describe("BackupService", () => {
         ],
         folders: [],
       });
+      mockAdapter.stat.mockImplementation((path) => {
+        if (path.includes("backup-2023-01-01.db")) {
+          return Promise.resolve({ mtime: 1672531200000, size: 1024 });
+        }
+        if (path.includes("backup-2023-01-02.db")) {
+          return Promise.resolve({ mtime: 1672617600000, size: 2048 });
+        }
+        return Promise.resolve(null);
+      });
 
-      const backups = await backupService.getAvailableBackups();
+      const result = await backupService.getAvailableBackups();
 
-      expect(backups).toHaveLength(2);
-      expect(backups[0].filename).toBe("backup-2023-01-02.db");
-      expect(backups[1].filename).toBe("backup-2023-01-01.db");
+      expect(result).toHaveLength(2);
+      expect(result[0].filename).toBe("backup-2023-01-02.db");
+      expect(result[1].filename).toBe("backup-2023-01-01.db");
+      expect(result[0].size).toBe(2048);
     });
 
-    it("should return empty array when no backups exist", async () => {
+    it("should filter only .db backup files", async () => {
       mockAdapter.exists.mockResolvedValue(true);
-      mockAdapter.list.mockResolvedValue({ files: [], folders: [] });
+      mockAdapter.list.mockResolvedValue({
+        files: [
+          "backup-2023-01-01.db",
+          "backup-2023-01-02.json",
+          "not-backup.db",
+          "backup-2023-01-03.db",
+        ],
+        folders: [],
+      });
+      mockAdapter.stat.mockResolvedValue({ mtime: Date.now(), size: 1024 });
 
-      const backups = await backupService.getAvailableBackups();
+      const result = await backupService.getAvailableBackups();
 
-      expect(backups).toEqual([]);
-    });
-
-    it("should handle errors when listing backups", async () => {
-      mockAdapter.exists.mockRejectedValue(new Error("Access denied"));
-
-      const backups = await backupService.getAvailableBackups();
-
-      expect(backups).toEqual([]);
-      expect(mockDebugLog).toHaveBeenCalledWith(
-        "Failed to list backups:",
-        expect.any(Error),
-      );
+      expect(result).toHaveLength(2);
+      expect(result.map((b) => b.filename)).toEqual([
+        "backup-2023-01-01.db",
+        "backup-2023-01-03.db",
+      ]);
     });
   });
 
-  describe("restoreBackup", () => {
-    it("should restore backup data without duplicates", async () => {
-      // Mock a SQLite database buffer
-      const mockDbBuffer = new ArrayBuffer(1024);
-
-      mockAdapter.exists.mockResolvedValue(true);
-      mockAdapter.readBinary.mockResolvedValue(mockDbBuffer);
-      mockDb.reviewLogExists.mockResolvedValue(false);
-      mockDb.reviewSessionExists.mockResolvedValue(false);
-      mockDb.insertReviewLog.mockResolvedValue(undefined);
-      mockDb.insertReviewSession.mockResolvedValue(undefined);
-
-      const progressCallback = jest.fn();
-
-      await backupService.restoreBackup(
-        "backup-2023-01-01.db",
-        mockDb as any,
-        progressCallback,
-      );
-
-      // Since we mocked sql.js to return empty results, no inserts should happen
-      // This tests the interface and error handling paths
-      expect(mockAdapter.exists).toHaveBeenCalledWith(
-        expect.stringContaining("backup-2023-01-01.db"),
-      );
-      expect(mockAdapter.readBinary).toHaveBeenCalled();
-    });
-
-    it("should skip duplicate records during restore", async () => {
-      const mockDbBuffer = new ArrayBuffer(1024);
-
-      mockAdapter.exists.mockResolvedValue(true);
-      mockAdapter.readBinary.mockResolvedValue(mockDbBuffer);
-      mockDb.reviewLogExists.mockResolvedValue(true); // Already exists
-      mockDb.reviewSessionExists.mockResolvedValue(true); // Already exists
-
-      await backupService.restoreBackup("backup-2023-01-01.db", mockDb as any);
-
-      // Verify file operations happened
-      expect(mockAdapter.readBinary).toHaveBeenCalled();
-    });
-
+  describe("restoreFromBackup", () => {
     it("should throw error if backup file does not exist", async () => {
+      const consoleSpy = jest.spyOn(console, "error").mockImplementation();
       mockAdapter.exists.mockResolvedValue(false);
 
       await expect(
-        backupService.restoreBackup("nonexistent.db", mockDb as any),
+        backupService.restoreFromBackup("nonexistent.db", mockDb)
       ).rejects.toThrow("Backup file not found: nonexistent.db");
+
+      consoleSpy.mockRestore();
     });
 
-    it("should handle invalid backup format gracefully", async () => {
+    it("should handle database restore errors", async () => {
+      const consoleSpy = jest.spyOn(console, "error").mockImplementation();
+      const filename = "backup-2023-01-01.db";
       mockAdapter.exists.mockResolvedValue(true);
-      mockAdapter.readBinary.mockResolvedValue(new ArrayBuffer(0)); // Empty/invalid DB
+      mockDb.restoreFromBackupDatabase.mockRejectedValue(
+        new Error("Database restore failed")
+      );
 
-      // With mocked sql.js, this won't actually throw but will complete gracefully
-      await backupService.restoreBackup("invalid.db", mockDb as any);
+      await expect(
+        backupService.restoreFromBackup(filename, mockDb)
+      ).rejects.toThrow("Database restore failed");
 
-      // Verify file operations happened
-      expect(mockAdapter.exists).toHaveBeenCalled();
-      expect(mockAdapter.readBinary).toHaveBeenCalled();
+      consoleSpy.mockRestore();
     });
   });
 
-  describe("daily backup behavior", () => {
-    it("should overwrite existing backup for same day", async () => {
-      const mockReviewLogs: ReviewLog[] = [
-        {
-          id: "log1",
-          flashcardId: "card1",
-          sessionId: "session1",
-          lastReviewedAt: "2023-01-01T10:00:00Z",
-          reviewedAt: "2023-01-01T10:05:00Z",
-          rating: 3,
-          ratingLabel: "good",
-          oldState: "new",
-          newState: "review",
-          oldRepetitions: 0,
-          newRepetitions: 1,
-          oldLapses: 0,
-          newLapses: 0,
-          oldStability: 2.5,
-          newStability: 5.0,
-          oldDifficulty: 5.0,
-          newDifficulty: 5.2,
-          oldIntervalMinutes: 0,
-          newIntervalMinutes: 1440,
-          oldDueAt: "2023-01-01T10:00:00Z",
-          newDueAt: "2023-01-02T10:00:00Z",
-          elapsedDays: 0,
-          retrievability: 1.0,
-          requestRetention: 0.9,
-          profile: "STANDARD",
-          maximumIntervalDays: 36500,
-          minMinutes: 1440,
-          fsrsWeightsVersion: "4.5",
-          schedulerVersion: "1.0",
-        },
-      ];
+  describe("backup management", () => {
+    it("should clean up old backups when max exceeded", async () => {
+      backupService.setMaxBackups(3);
+      mockAdapter.exists.mockResolvedValue(true);
+      mockAdapter.list.mockResolvedValue({
+        files: [
+          "backup-2023-01-01.db",
+          "backup-2023-01-02.db",
+          "backup-2023-01-03.db",
+          "backup-2023-01-04.db",
+          "backup-2023-01-05.db",
+        ],
+        folders: [],
+      });
 
-      mockDb.getAllReviewLogs.mockResolvedValue(mockReviewLogs);
-      mockDb.getAllReviewSessions.mockResolvedValue([]);
+      mockAdapter.stat.mockImplementation((path) => {
+        const filename = path.split("/").pop();
+        const dateMatch = filename?.match(/backup-(\d{4}-\d{2}-\d{2})\.db/);
+        if (dateMatch) {
+          const date = new Date(dateMatch[1]);
+          return Promise.resolve({ mtime: date.getTime(), size: 1024 });
+        }
+        return Promise.resolve({ mtime: Date.now(), size: 1024 });
+      });
+
+      await backupService.createBackup(mockDb);
+
+      // Should remove 2 oldest backups (keep newest 3)
+      expect(mockAdapter.remove).toHaveBeenCalledTimes(2);
+      expect(mockAdapter.remove).toHaveBeenCalledWith(
+        "/vault/.obsidian/plugins/decks/backups/backup-2023-01-01.db"
+      );
+      expect(mockAdapter.remove).toHaveBeenCalledWith(
+        "/vault/.obsidian/plugins/decks/backups/backup-2023-01-02.db"
+      );
+    });
+
+    it("should overwrite backup from same day", async () => {
       mockAdapter.exists.mockResolvedValue(true);
       mockAdapter.list.mockResolvedValue({ files: [], folders: [] });
 
       // Create first backup
-      await backupService.createBackup(mockDb as any);
+      await backupService.createBackup(mockDb);
 
       // Create second backup on same day (should overwrite)
-      await backupService.createBackup(mockDb as any);
+      await backupService.createBackup(mockDb);
 
       // Should have been called twice with same filename (overwrite)
-      expect(mockAdapter.writeBinary).toHaveBeenCalledTimes(2);
-      const calls = (mockAdapter.writeBinary as jest.Mock).mock.calls;
-      expect(calls[0][0]).toBe(calls[1][0]); // Same filename both times
-    });
-  });
-
-  describe("static utility methods", () => {
-    describe("formatTimestamp", () => {
-      it("should format timestamps as locale strings", () => {
-        const date = new Date("2023-01-01T10:30:00Z");
-        const formatted = BackupService.formatTimestamp(date);
-        expect(typeof formatted).toBe("string");
-        expect(formatted.length).toBeGreaterThan(0);
-      });
+      expect(mockDb.createBackupDatabase).toHaveBeenCalledTimes(2);
+      const today = new Date().toISOString().slice(0, 10);
+      const expectedPath = `/vault/.obsidian/plugins/decks/backups/backup-${today}.db`;
+      expect(mockDb.createBackupDatabase).toHaveBeenNthCalledWith(
+        1,
+        expectedPath
+      );
+      expect(mockDb.createBackupDatabase).toHaveBeenNthCalledWith(
+        2,
+        expectedPath
+      );
     });
   });
 });

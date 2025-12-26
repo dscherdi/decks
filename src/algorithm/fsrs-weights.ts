@@ -110,7 +110,7 @@ export function createSubDayWeights(
   againMinutes = 1,
   hardMinutes = 6,
   goodMinutes = 10,
-  easyMinutes = 1440,
+  easyMinutes = 1440
 ): number[] {
   return [
     againMinutes / 1440, // w[0] - Again stability

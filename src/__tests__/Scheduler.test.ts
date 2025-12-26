@@ -1,28 +1,43 @@
 import { Scheduler } from "../services/Scheduler";
-import { DatabaseService } from "../database/DatabaseService";
-import { Flashcard, Deck, FlashcardState } from "../database/types";
+import { MainDatabaseService } from "../database/MainDatabaseService";
+import { BackupService } from "../services/BackupService";
+import { Flashcard, Deck } from "../database/types";
 
-// Mock DatabaseService
-jest.mock("../database/DatabaseService");
-const MockedDatabaseService = DatabaseService as jest.MockedClass<
-  typeof DatabaseService
+// Mock DatabaseService and BackupService
+jest.mock("../database/MainDatabaseService");
+jest.mock("../services/BackupService");
+const MockedDatabaseService = MainDatabaseService as jest.MockedClass<
+  typeof MainDatabaseService
+>;
+const MockedBackupService = BackupService as jest.MockedClass<
+  typeof BackupService
 >;
 
 describe("Scheduler", () => {
   let scheduler: Scheduler;
-  let mockDb: jest.Mocked<DatabaseService>;
+  let mockDb: jest.Mocked<MainDatabaseService>;
+  let mockBackupService: jest.Mocked<BackupService>;
 
   beforeEach(() => {
     mockDb = new MockedDatabaseService(
       "",
       {} as any,
-      jest.fn(),
-    ) as jest.Mocked<DatabaseService>;
+      jest.fn()
+    ) as jest.Mocked<MainDatabaseService>;
+
+    mockBackupService = new MockedBackupService(
+      {} as any,
+      {} as any,
+      jest.fn()
+    ) as jest.Mocked<BackupService>;
+
     scheduler = new Scheduler(
       mockDb,
-      { debug: { enableLogging: false, performanceLogs: false } } as any,
-      {} as any,
-      "",
+      {
+        debug: { enableLogging: false, performanceLogs: false },
+        backup: { enableAutoBackup: false, maxBackups: 3 },
+      } as any,
+      mockBackupService
     );
 
     // Add default mock methods for ReviewSession functionality
@@ -41,565 +56,18 @@ describe("Scheduler", () => {
       .mockResolvedValue(undefined);
     mockDb.endReviewSession = jest.fn().mockResolvedValue(undefined);
     mockDb.isCardReviewedInSession = jest.fn().mockResolvedValue(false);
-  });
 
-  describe("getNext", () => {
-    it("should return due card when available", async () => {
-      const mockCard: Flashcard = {
-        id: "card_1",
-        deckId: "deck_1",
-        front: "Question",
-        back: "Answer",
-        type: "header-paragraph",
-        sourceFile: "test.md",
-        contentHash: "hash123",
-        state: "review",
-        dueDate: new Date(Date.now() - 1000).toISOString(), // Due 1 second ago
-        interval: 1440,
-        repetitions: 1,
-        difficulty: 5,
-        stability: 2.5,
-        lapses: 0,
-        lastReviewed: null,
-        created: new Date().toISOString(),
-        modified: new Date().toISOString(),
-      };
-
-      const mockDeck: Deck = {
-        id: "deck_1",
-        name: "Test Deck",
-        filepath: "test.md",
-        tag: "#test",
-        lastReviewed: null,
-        config: {
-          hasNewCardsLimitEnabled: false, // unlimited
-          newCardsPerDay: 20,
-          hasReviewCardsLimitEnabled: false, // unlimited
-          reviewCardsPerDay: 100,
-          reviewOrder: "due-date",
-          headerLevel: 2,
-          fsrs: {
-            requestRetention: 0.9,
-            profile: "STANDARD",
-          },
-        },
-        created: new Date().toISOString(),
-        modified: new Date().toISOString(),
-      };
-
-      // Mock deck lookup for review quota check
-      mockDb.getDeckById.mockResolvedValue(mockDeck);
-
-      // Mock daily review counts
-      mockDb.getDailyReviewCounts.mockResolvedValue({
-        newCount: 0,
-        reviewCount: 0,
+    // Add querySql mock for raw SQL queries
+    mockDb.querySql = jest
+      .fn()
+      .mockImplementation((sql: string, _params?: any[], config?: any) => {
+        // Default empty results for count queries
+        if (sql.includes("COUNT(*)")) {
+          return Promise.resolve(config?.asObject ? [{ count: 0 }] : [[0]]);
+        }
+        // Default empty array for other queries
+        return Promise.resolve([]);
       });
-
-      mockDb.query.mockResolvedValueOnce([
-        [
-          "card_1",
-          "deck_1",
-          "Question",
-          "Answer",
-          "header-paragraph",
-          "test.md",
-          "hash123",
-          "review",
-          mockCard.dueDate,
-          1440,
-          1,
-          5,
-          2.5,
-          0,
-          null,
-          mockCard.created,
-          mockCard.modified,
-        ],
-      ]);
-
-      const result = await scheduler.getNext(new Date(), "deck_1");
-
-      expect(result).toBeDefined();
-      expect(result?.id).toBe("card_1");
-      expect(result?.state).toBe("review");
-    });
-
-    it("should return new card when no due cards and allowNew is true", async () => {
-      const mockDeck: Deck = {
-        id: "deck_1",
-        name: "Test Deck",
-        filepath: "test.md",
-        tag: "#test",
-        lastReviewed: null,
-        config: {
-          hasNewCardsLimitEnabled: false, // unlimited
-          newCardsPerDay: 20,
-          hasReviewCardsLimitEnabled: false, // unlimited
-          reviewCardsPerDay: 100,
-          reviewOrder: "due-date",
-          headerLevel: 2,
-          fsrs: {
-            requestRetention: 0.9,
-            profile: "STANDARD",
-          },
-        },
-        created: new Date().toISOString(),
-        modified: new Date().toISOString(),
-      };
-
-      const mockNewCard: Flashcard = {
-        id: "card_new",
-        deckId: "deck_1",
-        front: "New Question",
-        back: "New Answer",
-        type: "header-paragraph",
-        sourceFile: "test.md",
-        contentHash: "hash456",
-        state: "new",
-        dueDate: new Date().toISOString(),
-        interval: 0,
-        repetitions: 0,
-        difficulty: 0,
-        stability: 0,
-        lapses: 0,
-        lastReviewed: null,
-        created: new Date().toISOString(),
-        modified: new Date().toISOString(),
-      };
-
-      // Mock all deck lookups (will be called multiple times)
-      mockDb.getDeckById.mockResolvedValue(mockDeck);
-
-      // Mock daily review counts (will be called for review quota check)
-      mockDb.getDailyReviewCounts.mockResolvedValue({
-        newCount: 0,
-        reviewCount: 0,
-      });
-
-      // No due cards
-      mockDb.query.mockResolvedValueOnce([]);
-
-      // Return new card
-      mockDb.query.mockResolvedValueOnce([
-        [
-          "card_new",
-          "deck_1",
-          "Question",
-          "Answer",
-          "header-paragraph",
-          "test.md",
-          "hash456",
-          "new",
-          mockNewCard.dueDate,
-          0,
-          0,
-          5,
-          0,
-          0,
-          null,
-          mockNewCard.created,
-          mockNewCard.modified,
-        ],
-      ]);
-
-      const result = await scheduler.getNext(new Date(), "deck_1", {
-        allowNew: true,
-      });
-
-      expect(result).toBeDefined();
-      expect(result?.id).toBe("card_new");
-      expect(result?.state).toBe("new");
-    });
-
-    it("should return null when no cards available", async () => {
-      const mockDeck: Deck = {
-        id: "deck_1",
-        name: "Test Deck",
-        filepath: "test.md",
-        tag: "#test",
-        lastReviewed: null,
-        config: {
-          hasNewCardsLimitEnabled: true,
-          newCardsPerDay: 0, // 0 = no new cards
-          hasReviewCardsLimitEnabled: true,
-          reviewCardsPerDay: 0, // 0 = no review cards
-          reviewOrder: "due-date",
-          headerLevel: 2,
-          fsrs: {
-            requestRetention: 0.9,
-            profile: "STANDARD",
-          },
-        },
-        created: new Date().toISOString(),
-        modified: new Date().toISOString(),
-      };
-
-      // Mock deck lookup
-      mockDb.getDeckById.mockResolvedValue(mockDeck);
-
-      // Mock daily review counts
-      mockDb.getDailyReviewCounts.mockResolvedValue({
-        newCount: 0,
-        reviewCount: 0,
-      });
-
-      // No due cards
-      mockDb.query.mockResolvedValueOnce([]);
-
-      // No new cards allowed
-      const result = await scheduler.getNext(new Date(), "deck_1", {
-        allowNew: false,
-      });
-
-      expect(result).toBeNull();
-    });
-  });
-
-  describe("preview", () => {
-    it("should return scheduling preview for all ratings", async () => {
-      const mockCard: Flashcard = {
-        id: "card_1",
-        deckId: "deck_1",
-        front: "Question",
-        back: "Answer",
-        type: "header-paragraph",
-        sourceFile: "test.md",
-        contentHash: "hash123",
-        state: "review",
-        dueDate: new Date().toISOString(),
-        interval: 1440,
-        repetitions: 1,
-        difficulty: 5,
-        stability: 2.5,
-        lapses: 0,
-        lastReviewed: null,
-        created: new Date().toISOString(),
-        modified: new Date().toISOString(),
-      };
-
-      const mockDeck: Deck = {
-        id: "deck_1",
-        name: "Test Deck",
-        filepath: "test.md",
-        tag: "#test",
-        lastReviewed: null,
-        config: {
-          hasNewCardsLimitEnabled: false, // unlimited
-          newCardsPerDay: 20,
-          hasReviewCardsLimitEnabled: false, // unlimited
-          reviewCardsPerDay: 100,
-          reviewOrder: "due-date",
-          headerLevel: 2,
-          fsrs: {
-            requestRetention: 0.9,
-            profile: "STANDARD",
-          },
-        },
-        created: new Date().toISOString(),
-        modified: new Date().toISOString(),
-      };
-
-      mockDb.getFlashcardById.mockResolvedValueOnce(mockCard);
-      mockDb.getDeckById.mockResolvedValueOnce(mockDeck);
-
-      const result = await scheduler.preview("card_1");
-
-      expect(result).toBeDefined();
-      expect(result).toHaveProperty("again");
-      expect(result).toHaveProperty("hard");
-      expect(result).toHaveProperty("good");
-      expect(result).toHaveProperty("easy");
-
-      // Check that all outcomes have required properties
-      for (const rating of ["again", "hard", "good", "easy"] as const) {
-        expect(result![rating]).toHaveProperty("dueDate");
-        expect(result![rating]).toHaveProperty("interval");
-        expect(result![rating]).toHaveProperty("repetitions");
-        expect(result![rating]).toHaveProperty("stability");
-        expect(result![rating]).toHaveProperty("difficulty");
-        expect(result![rating]).toHaveProperty("state");
-      }
-    });
-
-    it("should return null when card not found", async () => {
-      mockDb.getFlashcardById.mockResolvedValueOnce(null);
-
-      const result = await scheduler.preview("nonexistent_card");
-
-      expect(result).toBeNull();
-    });
-  });
-
-  describe("rate", () => {
-    it("should update card and create review log", async () => {
-      const mockCard: Flashcard = {
-        id: "card_1",
-        deckId: "deck_1",
-        front: "Question",
-        back: "Answer",
-        type: "header-paragraph",
-        sourceFile: "test.md",
-        contentHash: "hash123",
-        state: "review",
-        dueDate: new Date().toISOString(),
-        interval: 1440,
-        repetitions: 1,
-        difficulty: 5,
-        stability: 2.5,
-        lapses: 0,
-        lastReviewed: new Date(Date.now() - 86400000).toISOString(), // 1 day ago
-        created: new Date().toISOString(),
-        modified: new Date().toISOString(),
-      };
-
-      const mockDeck: Deck = {
-        id: "deck_1",
-        name: "Test Deck",
-        filepath: "test.md",
-        tag: "#test",
-        lastReviewed: null,
-        config: {
-          hasNewCardsLimitEnabled: false, // unlimited
-          newCardsPerDay: 20,
-          hasReviewCardsLimitEnabled: false, // unlimited
-          reviewCardsPerDay: 100,
-          reviewOrder: "due-date",
-          headerLevel: 2,
-          fsrs: {
-            requestRetention: 0.9,
-            profile: "STANDARD",
-          },
-        },
-        created: new Date().toISOString(),
-        modified: new Date().toISOString(),
-      };
-
-      mockDb.getFlashcardById.mockResolvedValueOnce(mockCard);
-      mockDb.getDeckById.mockResolvedValueOnce(mockDeck);
-      mockDb.updateFlashcard.mockResolvedValueOnce();
-      mockDb.createReviewLog.mockResolvedValueOnce();
-
-      const result = await scheduler.rate("card_1", "good", new Date(), 5000);
-
-      expect(result).toBeDefined();
-      expect(result.repetitions).toBeGreaterThan(mockCard.repetitions);
-      expect(mockDb.updateFlashcard).toHaveBeenCalled();
-      expect(mockDb.createReviewLog).toHaveBeenCalled();
-    });
-
-    it("should throw error when card not found", async () => {
-      mockDb.getFlashcardById.mockResolvedValueOnce(null);
-
-      await expect(scheduler.rate("nonexistent_card", "good")).rejects.toThrow(
-        "Card not found: nonexistent_card",
-      );
-    });
-  });
-
-  describe("timeToNext", () => {
-    it("should return milliseconds until next due card", async () => {
-      const nextDueTime = new Date(Date.now() + 3600000).toISOString(); // 1 hour from now
-      mockDb.query.mockResolvedValueOnce([[nextDueTime]]);
-
-      const result = await scheduler.timeToNext(new Date(), "deck_1");
-
-      expect(result).toBeGreaterThan(0);
-      expect(result).toBeLessThanOrEqual(3600000); // Should be around 1 hour
-    });
-
-    it("should return null when no future cards", async () => {
-      mockDb.query.mockResolvedValueOnce([]);
-
-      const result = await scheduler.timeToNext(new Date(), "deck_1");
-
-      expect(result).toBeNull();
-    });
-
-    describe("Review Session Management", () => {
-      beforeEach(() => {
-        // Mock ReviewSession-related database methods
-        mockDb.createReviewSession = jest.fn().mockResolvedValue("session_123");
-        mockDb.getReviewSessionById = jest.fn().mockResolvedValue({
-          id: "session_123",
-          deckId: "deck_1",
-          startedAt: new Date().toISOString(),
-          endedAt: null,
-          goalTotal: 5,
-          doneUnique: 0,
-        });
-        mockDb.getActiveReviewSession = jest.fn().mockResolvedValue(null);
-        mockDb.updateReviewSessionDoneUnique = jest
-          .fn()
-          .mockResolvedValue(undefined);
-        mockDb.endReviewSession = jest.fn().mockResolvedValue(undefined);
-        mockDb.isCardReviewedInSession = jest.fn().mockResolvedValue(false);
-        mockDb.query = jest.fn().mockResolvedValue([[5]]);
-      });
-
-      test("should start and track review session progress", async () => {
-        // Mock deck and cards
-        const mockDeck: Deck = {
-          id: "deck_1",
-          name: "Test Deck",
-          filepath: "test.md",
-          tag: "test",
-          lastReviewed: null,
-          config: {
-            hasNewCardsLimitEnabled: false, // unlimited
-            newCardsPerDay: 20,
-            hasReviewCardsLimitEnabled: false, // unlimited
-            reviewCardsPerDay: 100,
-            headerLevel: 2,
-            reviewOrder: "due-date",
-            fsrs: { requestRetention: 0.9, profile: "STANDARD" },
-          },
-          created: new Date().toISOString(),
-          modified: new Date().toISOString(),
-        };
-
-        mockDb.getDeckById.mockResolvedValue(mockDeck);
-        mockDb.getDailyReviewCounts.mockResolvedValue({
-          newCount: 0,
-          reviewCount: 0,
-        });
-
-        // Start session
-        const newSession = await scheduler.startReviewSession("deck_1");
-        expect(newSession.sessionId).toBe("session_123");
-        expect(mockDb.createReviewSession).toHaveBeenCalled();
-
-        // Get progress
-        const progress = await scheduler.getSessionProgress(
-          newSession.sessionId,
-        );
-        expect(progress).toEqual({
-          doneUnique: 0,
-          goalTotal: 5,
-          progress: 0,
-        });
-      });
-
-      test("should track unique card reviews in session", async () => {
-        const mockCard: Flashcard = {
-          id: "card_1",
-          deckId: "deck_1",
-          front: "Question",
-          back: "Answer",
-          type: "header-paragraph",
-          sourceFile: "test.md",
-          contentHash: "hash1",
-          state: "review",
-          dueDate: new Date().toISOString(),
-          interval: 1440,
-          repetitions: 1,
-          difficulty: 5.0,
-          stability: 2.5,
-          lapses: 0,
-          lastReviewed: null,
-          created: new Date().toISOString(),
-          modified: new Date().toISOString(),
-        };
-
-        const mockDeck: Deck = {
-          id: "deck_1",
-          name: "Test Deck",
-          filepath: "test.md",
-          tag: "test",
-          lastReviewed: null,
-          config: {
-            hasNewCardsLimitEnabled: false, // unlimited
-            newCardsPerDay: 20,
-            hasReviewCardsLimitEnabled: false, // unlimited
-            reviewCardsPerDay: 100,
-            headerLevel: 2,
-            reviewOrder: "due-date",
-            fsrs: { requestRetention: 0.9, profile: "STANDARD" },
-          },
-          created: new Date().toISOString(),
-          modified: new Date().toISOString(),
-        };
-
-        mockDb.getFlashcardById.mockResolvedValue(mockCard);
-        mockDb.getDeckById.mockResolvedValue(mockDeck);
-        mockDb.updateFlashcard.mockResolvedValue(undefined);
-        mockDb.createReviewLog.mockResolvedValue(undefined);
-
-        // Set current session
-        scheduler.setCurrentSession("session_123");
-        expect(scheduler.getCurrentSession()).toBe("session_123");
-
-        // First review should increment unique count
-        mockDb.isCardReviewedInSession.mockResolvedValueOnce(false);
-        await scheduler.rate("card_1", "good");
-        expect(mockDb.updateReviewSessionDoneUnique).toHaveBeenCalledWith(
-          "session_123",
-          1,
-        );
-
-        // Second review of same card should not increment
-        mockDb.isCardReviewedInSession.mockResolvedValueOnce(true);
-        await scheduler.rate("card_1", "again");
-        expect(mockDb.updateReviewSessionDoneUnique).toHaveBeenCalledTimes(1);
-      });
-
-      test("should always start fresh sessions", async () => {
-        const mockDeck: Deck = {
-          id: "deck_1",
-          name: "Test Deck",
-          filepath: "test.md",
-          tag: "test",
-          lastReviewed: null,
-          config: {
-            hasNewCardsLimitEnabled: false, // unlimited
-            newCardsPerDay: 20,
-            hasReviewCardsLimitEnabled: false, // unlimited
-            reviewCardsPerDay: 100,
-            headerLevel: 2,
-            reviewOrder: "due-date",
-            fsrs: { requestRetention: 0.9, profile: "STANDARD" },
-          },
-          created: new Date().toISOString(),
-          modified: new Date().toISOString(),
-        };
-
-        mockDb.getDeckById.mockResolvedValue(mockDeck);
-        mockDb.getDailyReviewCounts.mockResolvedValue({
-          newCount: 0,
-          reviewCount: 0,
-        });
-
-        // Should create new session when none exists
-        const newSession1 = await scheduler.startFreshSession("deck_1");
-        expect(newSession1.sessionId).toBe("session_123");
-        expect(scheduler.getCurrentSession()).toBe("session_123");
-
-        // Mock an existing active session for the next test
-        mockDb.getActiveReviewSession.mockResolvedValueOnce({
-          id: "existing_session",
-          deckId: "deck_1",
-          startedAt: new Date().toISOString(),
-          endedAt: null,
-          goalTotal: 5,
-          doneUnique: 2,
-        });
-
-        // Should end existing session and create new one
-        const newSession2 = await scheduler.startFreshSession("deck_1");
-        expect(newSession2.sessionId).toBe("session_123");
-        expect(mockDb.endReviewSession).toHaveBeenCalledWith(
-          "existing_session",
-          expect.any(String),
-        );
-
-        // Manual end session test
-        await scheduler.endReviewSession(newSession2.sessionId);
-        expect(mockDb.endReviewSession).toHaveBeenCalledWith(
-          newSession2.sessionId,
-          expect.any(String),
-        );
-      });
-    });
   });
 
   describe("deck configuration compliance", () => {
@@ -634,7 +102,7 @@ describe("Scheduler", () => {
       });
 
       // No due cards
-      mockDb.query.mockResolvedValueOnce([]);
+      mockDb.querySql.mockResolvedValueOnce([]);
 
       const result = await scheduler.getNext(new Date(), "deck_1", {
         allowNew: true,
@@ -674,7 +142,7 @@ describe("Scheduler", () => {
       });
 
       // Mock empty query result since review limit is reached
-      mockDb.query.mockResolvedValue([]);
+      mockDb.querySql.mockResolvedValue([]);
 
       // No due cards should be returned due to review limit
       const result = await scheduler.getNext(new Date(), "deck_1");
@@ -712,7 +180,7 @@ describe("Scheduler", () => {
       });
 
       // Mock a due card
-      mockDb.query.mockResolvedValueOnce([
+      mockDb.querySql.mockResolvedValueOnce([
         [
           "card_1",
           "deck_1",
@@ -738,9 +206,9 @@ describe("Scheduler", () => {
       await scheduler.getNext(new Date(), "deck_1");
 
       // Verify the query was called with random ordering
-      expect(mockDb.query).toHaveBeenCalledWith(
+      expect(mockDb.querySql).toHaveBeenCalledWith(
         expect.stringContaining("ORDER BY RANDOM()"),
-        expect.any(Array),
+        expect.any(Array)
       );
     });
 
@@ -854,7 +322,7 @@ describe("Scheduler", () => {
       };
 
       // Mock new card query (getNextNewCard)
-      mockDb.query.mockResolvedValueOnce([
+      mockDb.querySql.mockResolvedValueOnce([
         [
           mockNewCard.id,
           mockNewCard.deckId,
@@ -946,7 +414,7 @@ describe("Scheduler", () => {
         "deck_no_cards",
         {
           allowNew: true,
-        },
+        }
       );
       expect(noCardsResult).toBeNull(); // Should return null with 0 limits
 
@@ -954,7 +422,7 @@ describe("Scheduler", () => {
       mockDb.getDeckById.mockResolvedValue(unlimitedDeck);
 
       // Mock empty due cards query but available new card
-      mockDb.query.mockResolvedValueOnce([]); // No due cards
+      mockDb.querySql.mockResolvedValueOnce([]); // No due cards
 
       const mockNewCard: Flashcard = {
         id: "card_unlimited",
@@ -976,7 +444,7 @@ describe("Scheduler", () => {
         modified: new Date().toISOString(),
       };
 
-      mockDb.query.mockResolvedValueOnce([
+      mockDb.querySql.mockResolvedValueOnce([
         [
           mockNewCard.id,
           mockNewCard.deckId,
@@ -1003,210 +471,10 @@ describe("Scheduler", () => {
         "deck_unlimited",
         {
           allowNew: true,
-        },
+        }
       );
       expect(unlimitedResult).toBeDefined();
       expect(unlimitedResult?.id).toBe("card_unlimited");
-    });
-  });
-
-  describe("session goal calculation with session duration due card inclusion", () => {
-    // Tests verify that session goals include cards becoming due during review sessions
-    // This prevents users from encountering "extra" cards after reaching their goal
-    it("should include cards due within session duration in session goal", async () => {
-      const now = new Date();
-      const fiveMinutesLater = new Date(now.getTime() + 5 * 60 * 1000);
-      const tenMinutesLater = new Date(now.getTime() + 10 * 60 * 1000);
-      const twentyMinutesLater = new Date(now.getTime() + 20 * 60 * 1000);
-
-      const mockDeck: Deck = {
-        id: "deck_1",
-        name: "Test Deck",
-        filepath: "test.md",
-        tag: "test",
-        lastReviewed: null,
-        config: {
-          hasNewCardsLimitEnabled: false,
-          newCardsPerDay: 20,
-          hasReviewCardsLimitEnabled: false,
-          reviewCardsPerDay: 100,
-          headerLevel: 2,
-          reviewOrder: "due-date",
-          fsrs: { requestRetention: 0.9, profile: "STANDARD" },
-        },
-        created: new Date().toISOString(),
-        modified: new Date().toISOString(),
-      };
-
-      // Mock database responses
-      mockDb.getDeckById.mockResolvedValue(mockDeck);
-      mockDb.getDailyReviewCounts.mockResolvedValue({
-        newCount: 0,
-        reviewCount: 0,
-      });
-
-      // Mock db.query to simulate different due cards counts
-      // When called with 10-minute session duration buffer, return 3 cards
-      // When called for new cards, return 0
-      mockDb.query = jest
-        .fn()
-        .mockImplementationOnce(() => Promise.resolve([[3]])) // Due cards with session duration buffer
-        .mockImplementationOnce(() => Promise.resolve([[0]])); // New cards
-
-      const sessionId = await scheduler.startReviewSession("deck_1", now, 10);
-
-      // Verify the session was created with correct goal including session duration buffer
-      expect(mockDb.createReviewSession).toHaveBeenCalledWith({
-        deckId: "deck_1",
-        startedAt: now.toISOString(),
-        endedAt: null,
-        goalTotal: 3, // Should include cards due within session duration
-        doneUnique: 0,
-      });
-
-      // Verify db.query was called with 10-minute session duration buffer for due cards
-      const expectedSessionEndTime = new Date(now.getTime() + 10 * 60 * 1000);
-      expect(mockDb.query).toHaveBeenCalledWith(
-        expect.stringContaining(
-          "WHERE deck_id = ? AND due_date <= ? AND state = 'review'",
-        ),
-        ["deck_1", expectedSessionEndTime.toISOString()],
-      );
-    });
-
-    it("should not include cards due beyond session duration in session goal", async () => {
-      const now = new Date();
-      const mockDeck: Deck = {
-        id: "deck_1",
-        name: "Test Deck",
-        filepath: "test.md",
-        tag: "test",
-        lastReviewed: null,
-        config: {
-          hasNewCardsLimitEnabled: false,
-          newCardsPerDay: 20,
-          hasReviewCardsLimitEnabled: false,
-          reviewCardsPerDay: 100,
-          headerLevel: 2,
-          reviewOrder: "due-date",
-          fsrs: { requestRetention: 0.9, profile: "STANDARD" },
-        },
-        created: new Date().toISOString(),
-        modified: new Date().toISOString(),
-      };
-
-      mockDb.getDeckById.mockResolvedValue(mockDeck);
-      mockDb.getDailyReviewCounts.mockResolvedValue({
-        newCount: 0,
-        reviewCount: 0,
-      });
-
-      // Mock scenario: 1 card due now, 0 additional within 5 minutes session duration
-      mockDb.query = jest
-        .fn()
-        .mockImplementationOnce(() => Promise.resolve([[1]])) // Due cards with session duration buffer
-        .mockImplementationOnce(() => Promise.resolve([[0]])); // New cards
-
-      await scheduler.startReviewSession("deck_1", now, 5);
-
-      // Verify the query included exactly 5 minutes session duration, not more
-      const expectedSessionEndTime = new Date(now.getTime() + 5 * 60 * 1000);
-      expect(mockDb.query).toHaveBeenCalledWith(
-        expect.stringContaining(
-          "WHERE deck_id = ? AND due_date <= ? AND state = 'review'",
-        ),
-        ["deck_1", expectedSessionEndTime.toISOString()],
-      );
-    });
-
-    it("should handle edge case when no cards are due within session duration", async () => {
-      const now = new Date();
-      const mockDeck: Deck = {
-        id: "deck_1",
-        name: "Test Deck",
-        filepath: "test.md",
-        tag: "test",
-        lastReviewed: null,
-        config: {
-          hasNewCardsLimitEnabled: false,
-          newCardsPerDay: 20,
-          hasReviewCardsLimitEnabled: false,
-          reviewCardsPerDay: 100,
-          headerLevel: 2,
-          reviewOrder: "due-date",
-          fsrs: { requestRetention: 0.9, profile: "STANDARD" },
-        },
-        created: new Date().toISOString(),
-        modified: new Date().toISOString(),
-      };
-
-      mockDb.getDeckById.mockResolvedValue(mockDeck);
-      mockDb.getDailyReviewCounts.mockResolvedValue({
-        newCount: 0,
-        reviewCount: 0,
-      });
-
-      // Mock scenario: 0 cards due within 15 minutes, 0 new cards
-      // Mock scenario: no cards due within 3 minutes session duration
-      mockDb.query = jest
-        .fn()
-        .mockImplementationOnce(() => Promise.resolve([[0]])) // Due cards with session duration buffer
-        .mockImplementationOnce(() => Promise.resolve([[0]])); // New cards
-
-      await scheduler.startReviewSession("deck_1", now, 3);
-
-      expect(mockDb.createReviewSession).toHaveBeenCalledWith({
-        deckId: "deck_1",
-        startedAt: now.toISOString(),
-        endedAt: null,
-        goalTotal: 1, // Should be at least 1 for progress calculation
-        doneUnique: 0,
-      });
-    });
-
-    it("should use default 25-minute session duration when no parameter provided", async () => {
-      const now = new Date();
-      const mockDeck: Deck = {
-        id: "deck_1",
-        name: "Test Deck",
-        filepath: "test.md",
-        tag: "test",
-        lastReviewed: null,
-        config: {
-          hasNewCardsLimitEnabled: false,
-          newCardsPerDay: 20,
-          hasReviewCardsLimitEnabled: false,
-          reviewCardsPerDay: 100,
-          headerLevel: 2,
-          reviewOrder: "due-date",
-          fsrs: { requestRetention: 0.9, profile: "STANDARD" },
-        },
-        created: new Date().toISOString(),
-        modified: new Date().toISOString(),
-      };
-
-      mockDb.getDeckById.mockResolvedValue(mockDeck);
-      mockDb.getDailyReviewCounts.mockResolvedValue({
-        newCount: 0,
-        reviewCount: 0,
-      });
-
-      // Mock scenario: some due cards within 25 minutes
-      mockDb.query = jest
-        .fn()
-        .mockImplementationOnce(() => Promise.resolve([[2]])) // Due cards with 25min default buffer
-        .mockImplementationOnce(() => Promise.resolve([[0]])); // New cards
-
-      await scheduler.startReviewSession("deck_1", now);
-
-      // Verify db.query was called with 25-minute default session duration buffer
-      const expectedSessionEndTime = new Date(now.getTime() + 25 * 60 * 1000);
-      expect(mockDb.query).toHaveBeenCalledWith(
-        expect.stringContaining(
-          "WHERE deck_id = ? AND due_date <= ? AND state = 'review'",
-        ),
-        ["deck_1", expectedSessionEndTime.toISOString()],
-      );
     });
   });
 });

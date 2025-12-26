@@ -1,30 +1,30 @@
-import { DatabaseService } from "@/database/DatabaseService";
-import {
-  Deck,
-  DeckStats,
-  hasNewCardsLimit,
-  hasReviewCardsLimit,
-} from "@/database/types";
+import type { Deck, DeckStats } from "@/database/types";
+import { hasNewCardsLimit, hasReviewCardsLimit } from "@/database/types";
 import { VIEW_TYPE_DECKS } from "@/main";
 import { DeckSynchronizer } from "@/services/DeckSynchronizer";
-import { FlashcardsSettings } from "@/settings";
+import type { DecksSettings } from "@/settings";
 import { yieldToUI } from "@/utils/ui";
 import { Logger } from "@/utils/logging";
 import { ItemView, Component, WorkspaceLeaf, Notice } from "obsidian";
 import { Scheduler } from "@/services/Scheduler";
-import { FlashcardReviewModalWrapper } from "./FlashcardReviewModalWrapper";
-import { StatisticsModal } from "./StatisticsModal";
+import { FlashcardReviewModalWrapper } from "./review/FlashcardReviewModalWrapper";
+import { StatisticsModal } from "./settings/StatisticsModal";
+import { StatisticsService } from "@/services/StatisticsService";
+
 import DeckListPanel from "./DeckListPanel.svelte";
+import { mount, unmount } from "svelte";
 import { ProgressTracker } from "@/utils/progress";
+import type { DeckListPanelComponent } from "../types/svelte-components";
+import type { IDatabaseService } from "../database/DatabaseFactory";
 
 export class DecksView extends ItemView {
-  private db: DatabaseService;
+  private db: IDatabaseService;
   private deckSynchronizer: DeckSynchronizer;
   private scheduler: Scheduler;
-  private settings: FlashcardsSettings;
+  private statisticsService: StatisticsService;
+  private settings: DecksSettings;
   private setViewReference: (view: DecksView | null) => void;
-  private hasShownInitialProgress = false;
-  private component: DeckListPanel | null = null;
+  private deckListPanelComponent: DeckListPanelComponent | null = null;
   private markdownComponents: Component[] = [];
   private statsRefreshTimeout: NodeJS.Timeout | null = null;
   private backgroundRefreshInterval: NodeJS.Timeout | null = null;
@@ -33,18 +33,20 @@ export class DecksView extends ItemView {
 
   constructor(
     leaf: WorkspaceLeaf,
-    database: DatabaseService,
+    database: IDatabaseService,
     deckSynchronizer: DeckSynchronizer,
     scheduler: Scheduler,
-    settings: FlashcardsSettings,
+    statisticsService: StatisticsService,
+    settings: DecksSettings,
     progressTracker: ProgressTracker,
     logger: Logger,
-    setViewReference: (view: DecksView | null) => void,
+    setViewReference: (view: DecksView | null) => void
   ) {
     super(leaf);
     this.db = database;
     this.deckSynchronizer = deckSynchronizer;
     this.scheduler = scheduler;
+    this.statisticsService = statisticsService;
     this.settings = settings;
     this.logger = logger;
 
@@ -72,73 +74,26 @@ export class DecksView extends ItemView {
     container.empty();
     container.addClass("decks-view");
 
-    // Create and mount Svelte component
-    this.component = new DeckListPanel({
-      target: container,
+    // Create and mount Svelte component using Svelte 5 API
+    this.deckListPanelComponent = mount(DeckListPanel, {
+      target: container as HTMLElement,
       props: {
+        statisticsService: this.statisticsService,
+        db: this.db,
+        deckSynchronizer: this.deckSynchronizer,
+        app: this.app,
         onDeckClick: (deck: Deck) => this.startReview(deck),
-        onRefresh: async () => {
-          this.logger.debug("onRefresh callback invoked");
-          await this.refresh(false);
-        },
+        onRefresh: () => this.refresh(false),
         onForceRefreshDeck: async (deckId: string) => {
-          this.logger.debug(
-            "onForceRefreshDeck callback invoked for deck:",
-            deckId,
-          );
-
-          // Get deck to extract display name
-          const deck = await this.db.getDeckById(deckId);
-          const deckDisplayName = deck ? deck.name : deckId;
-
-          this.progressTracker.show(
-            `🔄 Force refreshing deck: ${deckDisplayName}...`,
-          );
-
-          try {
-            await this.deckSynchronizer.syncDeck(deckId, true, (progress) => {
-              this.progressTracker.update(
-                progress.message,
-                progress.percentage,
-              );
-
-              if (progress.percentage === 100) {
-                setTimeout(() => this.progressTracker.hide(), 2000);
-              }
-            });
-
-            // Refresh stats after force refresh
-            await this.refreshStats();
-          } catch (error) {
-            this.progressTracker.update(
-              "❌ Deck refresh failed - check console for details",
-              0,
-            );
-            setTimeout(() => this.progressTracker.hide(), 3000);
-            throw error;
-          }
+          await this.deckSynchronizer.forceSyncDeck(deckId);
+          await this.refreshStats();
         },
-        getReviewCounts: async (days: number) => {
-          return await this.db.getReviewCountsByDate(days);
-        },
-        getStudyStats: async () => {
-          return await this.db.getStudyStats();
-        },
-        onOpenStatistics: () => {
-          this.openStatisticsModal();
-        },
-        getDatabase: () => {
-          return this.db;
-        },
-        getDeckSynchronizer: () => {
-          return this.deckSynchronizer;
-        },
-        plugin: { app: this.app },
+        openStatisticsModal: () => this.openStatisticsModal(),
       },
-    });
+    }) as DeckListPanelComponent;
 
-    // // Initial refresh
-    // await this.refresh(false);
+    // Initial refresh
+    await this.refresh(false);
 
     // Start background refresh job if enabled
     if (this.settings.ui.enableBackgroundRefresh) {
@@ -147,9 +102,14 @@ export class DecksView extends ItemView {
   }
 
   async onClose() {
-    if (this.component) {
-      this.component.$destroy();
-      this.component = null;
+    if (this.deckListPanelComponent) {
+      // Svelte 5: explicitly unmount to trigger onDestroy and cleanup listeners
+      try {
+        unmount(this.deckListPanelComponent);
+      } catch (e) {
+        console.warn("Error unmounting deck list panel:", e);
+      }
+      this.deckListPanelComponent = null;
     }
 
     // Clean up timeouts
@@ -170,11 +130,11 @@ export class DecksView extends ItemView {
   }
 
   async update(updatedDecks: Deck[], deckStats: Map<string, DeckStats>) {
-    await this.component?.updateAll(updatedDecks, deckStats);
+    await this.deckListPanelComponent?.updateAll?.(updatedDecks, deckStats);
   }
 
   private async getAllDeckStatsMap(): Promise<Map<string, DeckStats>> {
-    const stats = await this.db.getAllDeckStats();
+    const stats = await this.statisticsService.getAllDeckStats();
     const statsMap = new Map<string, DeckStats>();
     for (const stat of stats) {
       statsMap.set(stat.deckId, stat);
@@ -182,51 +142,21 @@ export class DecksView extends ItemView {
     return statsMap;
   }
 
-  async performSync(forceSync = false): Promise<void> {
-    const result = await this.deckSynchronizer.performSync({
-      forceSync,
-      showProgress: true,
-      onProgress: (progress) => {
-        this.logger.debug(
-          `Progress: ${progress.percentage}% - ${progress.message}`,
-        );
-        if (!this.hasShownInitialProgress) {
-          const message = forceSync
-            ? "🔄 Force refreshing flashcards..."
-            : "🔄 Syncing flashcards...";
-          this.logger.debug(`Showing initial progress notice: ${message}`);
-          this.progressTracker.show(message);
-          this.hasShownInitialProgress = true;
-        }
-        this.progressTracker.update(progress.message, progress.percentage);
-        if (progress.percentage === 100) {
-          this.logger.debug("Sync complete, hiding progress notice");
-          this.hasShownInitialProgress = false;
-          setTimeout(() => this.progressTracker.hide(), 3000);
-        }
-      },
-    });
-
-    if (!result.success && result.error) {
-      this.progressTracker.update(
-        "❌ Sync failed - check console for details",
-        0,
-      );
-      this.hasShownInitialProgress = false;
-      setTimeout(() => this.progressTracker.hide(), 5000);
-      throw result.error;
-    }
-  }
-
   openStatisticsModal(deckFilter?: string): void {
-    new StatisticsModal(this.app, this.db, deckFilter).open();
+    new StatisticsModal(
+      this.app,
+      this.statisticsService,
+      this.settings,
+      this.logger,
+      deckFilter
+    ).open();
   }
 
   async refresh(force = false) {
     this.logger.debug("DecksView.refresh() called");
     try {
       // Perform sync with force parameter
-      await this.performSync(force);
+      await this.deckSynchronizer.performSync(force);
 
       // Update the view with refreshed data
       const updatedDecks = await this.db.getAllDecks();
@@ -235,7 +165,7 @@ export class DecksView extends ItemView {
 
       this.logger.debug("Refresh complete");
     } catch (error) {
-      this.logger?.debug("Error refreshing decks:", error);
+      this.logger.error("Error refreshing decks:", error);
       if (this.settings?.ui?.enableNotices !== false) {
         new Notice("Error refreshing decks. Check console for details.");
       }
@@ -250,29 +180,34 @@ export class DecksView extends ItemView {
       this.logger.debug("Updated deck stats:", deckStats);
 
       // Update component with new stats using unified function
-      if (this.component) {
-        await this.component.updateAll(undefined, deckStats);
+      if (this.deckListPanelComponent) {
+        await this.deckListPanelComponent.updateAll?.(undefined, deckStats);
       }
     } catch (error) {
-      this.logger?.debug("Error refreshing stats:", error);
+      console.error("Error refreshing stats:", error);
     }
   }
 
   async refreshStatsById(deckId: string) {
     this.logger.debug(
-      `DecksView.refreshStatsById() executing for deck: ${deckId}`,
+      `DecksView.refreshStatsById() executing for deck: ${deckId}`
     );
     try {
       // Get stats for the specific deck
-      const deckStats = await this.db.getDeckStats(deckId);
+      const deckStats = await this.statisticsService.getDeckStats(deckId);
       this.logger.debug("Updated deck stats for:", deckId);
 
       // Update component using unified function
-      if (this.component && deckStats) {
-        await this.component.updateAll(undefined, undefined, deckId, deckStats);
+      if (this.deckListPanelComponent && deckStats) {
+        await this.deckListPanelComponent.updateAll?.(
+          undefined,
+          undefined,
+          deckId,
+          deckStats
+        );
       }
     } catch (error) {
-      this.logger?.debug("Error refreshing stats by ID:", error);
+      console.error("Error refreshing stats by ID:", error);
     }
   }
 
@@ -286,7 +221,7 @@ export class DecksView extends ItemView {
     this.stopBackgroundRefresh();
 
     this.logger.debug(
-      `Starting background refresh job (every ${this.settings.ui.backgroundRefreshInterval} seconds)`,
+      `Starting background refresh job (every ${this.settings.ui.backgroundRefreshInterval} seconds)`
     );
 
     this.backgroundRefreshInterval = setInterval(async () => {
@@ -311,7 +246,7 @@ export class DecksView extends ItemView {
   }
 
   async refreshHeatmap() {
-    await this.component?.updateAll();
+    await this.deckListPanelComponent?.updateAll?.();
   }
 
   // Test method to check if background job is running
@@ -319,7 +254,7 @@ export class DecksView extends ItemView {
     this.logger.debug("Background job status:", {
       isRunning: !!this.backgroundRefreshInterval,
       intervalId: this.backgroundRefreshInterval,
-      componentExists: !!this.component,
+      componentExists: !!this.deckListPanelComponent,
       refreshInterval: this.settings.ui.backgroundRefreshInterval,
     });
   }
@@ -428,10 +363,10 @@ export class DecksView extends ItemView {
         this.settings,
         this.db,
         this.refresh.bind(this),
-        this.refreshStatsById.bind(this),
+        this.refreshStatsById.bind(this)
       ).open();
     } catch (error) {
-      this.logger?.debug("Error starting review:", error);
+      console.error("Error starting review:", error);
       if (this.settings?.ui?.enableNotices !== false) {
         new Notice("Error starting review. Check console for details.");
       }

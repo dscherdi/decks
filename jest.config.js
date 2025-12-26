@@ -2,8 +2,17 @@ module.exports = {
   preset: "ts-jest",
   testEnvironment: "node",
   roots: ["<rootDir>/src"],
-  testMatch: ["**/__tests__/**/*.ts", "**/*.test.ts", "**/*.spec.ts"],
+  testMatch: [
+    "**/__tests__/**/*.test.ts",
+    "**/__tests__/**/*.spec.ts",
+    "!**/__tests__/**/setup-*.ts",
+    "!**/__tests__/**/test-db-utils.ts",
+    "!**/__tests__/integration/**", // Exclude integration tests - run with npm run test:integration
+  ],
   setupFilesAfterEnv: ["<rootDir>/src/test-setup.ts"],
+  testTimeout: 10000, // Increased timeout for integration tests
+  // Disable automatic mocking - use real implementations
+  automock: false,
   transform: {
     "^.+\\.ts$": [
       "ts-jest",
@@ -23,11 +32,12 @@ module.exports = {
   coverageDirectory: "coverage",
   coverageReporters: ["text", "lcov", "html"],
   moduleNameMapper: {
-    // Mock Obsidian API
+    // Mock Obsidian API for unit tests only
     "^obsidian$": "<rootDir>/src/__mocks__/obsidian.ts",
-    // Mock sql.js
-    "^sql\\.js$": "<rootDir>/src/__mocks__/sql.js.ts",
-    // Handle @ alias
+    // Mock Svelte runtime and components
+    "^svelte$": "<rootDir>/src/__mocks__/svelte.ts",
+    "\\.svelte$": "<rootDir>/src/__mocks__/svelte-component.ts",
+    // Handle @ alias - DO NOT mock sql.js, use real implementation
     "^@/(.*)$": "<rootDir>/src/$1",
   },
   transformIgnorePatterns: ["node_modules/(?!(sql\\.js)/)"],

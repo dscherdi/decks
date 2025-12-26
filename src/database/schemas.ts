@@ -1,7 +1,7 @@
-import { Database } from "sql.js";
+import type { Database } from "sql.js";
 
 // Current Schema Version
-export const CURRENT_SCHEMA_VERSION = 5;
+export const CURRENT_SCHEMA_VERSION = 6;
 
 // SQL Table Creation Schema - Used when database file doesn't exist
 export const CREATE_TABLES_SQL = `
@@ -40,7 +40,7 @@ export const CREATE_TABLES_SQL = `
     last_reviewed TEXT,
     created TEXT NOT NULL,
     modified TEXT NOT NULL,
-    FOREIGN KEY (deck_id) REFERENCES decks(id)
+    FOREIGN KEY (deck_id) REFERENCES decks(id) ON DELETE CASCADE
   );
 
   -- Review sessions table
@@ -50,8 +50,7 @@ export const CREATE_TABLES_SQL = `
     started_at TEXT NOT NULL,
     ended_at TEXT,
     goal_total INTEGER NOT NULL,
-    done_unique INTEGER NOT NULL DEFAULT 0,
-    FOREIGN KEY (deck_id) REFERENCES decks(id)
+    done_unique INTEGER NOT NULL DEFAULT 0
   );
 
   -- Review logs table
@@ -90,9 +89,7 @@ export const CREATE_TABLES_SQL = `
     note_model_id TEXT,
     card_template_id TEXT,
     content_hash TEXT,
-    client TEXT,
-    FOREIGN KEY (flashcard_id) REFERENCES flashcards(id),
-    FOREIGN KEY (session_id) REFERENCES review_sessions(id)
+    client TEXT
   );
 
   -- Create indexes
@@ -102,6 +99,10 @@ export const CREATE_TABLES_SQL = `
   CREATE INDEX IF NOT EXISTS idx_review_logs_flashcard_id ON review_logs(flashcard_id);
   CREATE INDEX IF NOT EXISTS idx_review_logs_session_id ON review_logs(session_id);
   CREATE INDEX IF NOT EXISTS idx_review_logs_reviewed_at ON review_logs(reviewed_at);
+
+  -- Forecast-optimized indexes
+  CREATE INDEX IF NOT EXISTS idx_flashcards_deck_due ON flashcards(deck_id, due_date);
+  CREATE INDEX IF NOT EXISTS idx_review_logs_join ON review_logs(flashcard_id, reviewed_at);
 
   -- Set schema version
   PRAGMA user_version = ${CURRENT_SCHEMA_VERSION};
@@ -129,7 +130,6 @@ export function buildMigrationSQL(db: Database): string {
   const decksColumns = getColumnNames(db, "decks");
   const flashcardsColumns = getColumnNames(db, "flashcards");
   const reviewLogsColumns = getColumnNames(db, "review_logs");
-  const reviewSessionsColumns = getColumnNames(db, "review_sessions");
 
   // Build decks migration
   const decksSelect = [
@@ -317,7 +317,7 @@ export function buildMigrationSQL(db: Database): string {
       last_reviewed TEXT,
       created TEXT NOT NULL,
       modified TEXT NOT NULL,
-      FOREIGN KEY (deck_id) REFERENCES decks(id)
+      FOREIGN KEY (deck_id) REFERENCES decks(id) ON DELETE CASCADE
     );
 
     CREATE TABLE review_sessions_new (
@@ -326,8 +326,7 @@ export function buildMigrationSQL(db: Database): string {
       started_at TEXT NOT NULL,
       ended_at TEXT,
       goal_total INTEGER NOT NULL,
-      done_unique INTEGER NOT NULL DEFAULT 0,
-      FOREIGN KEY (deck_id) REFERENCES decks_new(id)
+      done_unique INTEGER NOT NULL DEFAULT 0
     );
 
     CREATE TABLE review_logs_new (
@@ -365,9 +364,7 @@ export function buildMigrationSQL(db: Database): string {
       note_model_id TEXT,
       card_template_id TEXT,
       content_hash TEXT,
-      client TEXT,
-      FOREIGN KEY (flashcard_id) REFERENCES flashcards(id),
-      FOREIGN KEY (session_id) REFERENCES review_sessions(id)
+      client TEXT
     );
 
     -- Copy data with dynamic column mapping
@@ -381,7 +378,7 @@ export function buildMigrationSQL(db: Database): string {
     SELECT ${reviewLogsSelect} FROM review_logs WHERE EXISTS (SELECT 1 FROM sqlite_master WHERE type='table' AND name='review_logs');
 
     INSERT OR IGNORE INTO review_sessions_new (id, deck_id, started_at, ended_at, goal_total, done_unique)
-    SELECT ${reviewSessionsSelect} FROM review_sessions WHERE EXISTS (SELECT 1 FROM sqlite_master WHERE type='table' AND name='review_logs');
+    SELECT ${reviewSessionsSelect} FROM review_sessions WHERE EXISTS (SELECT 1 FROM sqlite_master WHERE type='table' AND name='review_sessions');
 
     -- Drop old tables
     DROP TABLE IF EXISTS review_logs;
@@ -523,8 +520,8 @@ export const SQL_QUERIES = {
     SELECT COUNT(*) as count FROM review_logs rl
     JOIN flashcards f ON rl.flashcard_id = f.id
     WHERE f.deck_id = ?
-      AND rl.reviewed_at >= ?
-      AND rl.reviewed_at <= ?
+      AND rl.reviewed_at >= datetime('now', 'start of day')
+      AND rl.reviewed_at < datetime('now', 'start of day', '+1 day')
       AND (rl.old_interval_minutes = 0 OR f.repetitions = 1)
   `,
 
@@ -532,7 +529,8 @@ export const SQL_QUERIES = {
     SELECT COUNT(*) as count FROM review_logs rl
     JOIN flashcards f ON rl.flashcard_id = f.id
     WHERE f.deck_id = ?
-      AND rl.reviewed_at >= ? AND rl.reviewed_at <= ?
+      AND rl.reviewed_at >= datetime('now', 'start of day')
+      AND rl.reviewed_at < datetime('now', 'start of day', '+1 day')
       AND rl.old_interval_minutes > 0
   `,
 
@@ -549,6 +547,31 @@ export const SQL_QUERIES = {
 
   COUNT_TOTAL_CARDS: `
     SELECT COUNT(*) FROM flashcards WHERE deck_id = ?
+  `,
+
+  // Optimized forecast queries with index-friendly SQL
+  GET_SCHEDULED_DUE_BY_DAY: `
+    SELECT substr(due_date,1,10) AS day, COUNT(*) AS c
+    FROM flashcards
+    WHERE deck_id = ? AND state='review'
+      AND due_date >= ? AND due_date < ?
+    GROUP BY day
+    ORDER BY day
+  `,
+
+  GET_CURRENT_BACKLOG: `
+    SELECT COUNT(*) AS n
+    FROM flashcards
+    WHERE deck_id = ? AND state='review' AND due_date < ?
+  `,
+
+  GET_DECK_REVIEW_COUNT_RANGE: `
+    SELECT COUNT(*) AS n
+    FROM review_logs rl
+    JOIN flashcards f ON f.id = rl.flashcard_id
+    WHERE f.deck_id = ?
+      AND rl.reviewed_at >= ?
+      AND rl.reviewed_at < ?
   `,
 
   GET_REVIEW_COUNTS_BY_DATE: `
@@ -570,7 +593,7 @@ export const SQL_QUERIES = {
     SELECT
       DATE(reviewed_at) as date,
       COUNT(*) as reviews,
-      AVG(time_elapsed_ms / 1000.0) as avg_time_seconds,
+      SUM(time_elapsed_ms / 1000.0) as total_time_seconds,
       SUM(CASE WHEN old_repetitions = 0 THEN 1 ELSE 0 END) as new_cards,
       SUM(CASE WHEN old_repetitions > 0 AND old_repetitions < 3 THEN 1 ELSE 0 END) as learning_cards,
       SUM(CASE WHEN old_repetitions >= 3 THEN 1 ELSE 0 END) as review_cards,

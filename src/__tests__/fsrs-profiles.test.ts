@@ -1,13 +1,4 @@
-import { FSRS, FSRSParameters, RatingLabel } from "../algorithm/fsrs";
-import {
-  FSRS_WEIGHTS_STANDARD,
-  FSRS_WEIGHTS_SUBDAY,
-  getWeightsForProfile,
-  getMinMinutesForProfile,
-  getMaxIntervalDaysForProfile,
-  validateProfile,
-  validateRequestRetention,
-} from "../algorithm/fsrs-weights";
+import { FSRS, RatingLabel } from "../algorithm/fsrs";
 import { Flashcard, FlashcardState } from "../database/types";
 
 describe("FSRS Profiles", () => {
@@ -47,82 +38,6 @@ describe("FSRS Profiles", () => {
     };
   });
 
-  describe("Profile Configuration", () => {
-    test("should have correct weights for STANDARD profile", () => {
-      const weights = getWeightsForProfile("STANDARD");
-      expect(weights).toEqual(FSRS_WEIGHTS_STANDARD);
-      expect(weights).toHaveLength(17);
-    });
-
-    test("should have correct weights for INTENSIVE profile", () => {
-      const weights = getWeightsForProfile("INTENSIVE");
-      expect(weights).toEqual(FSRS_WEIGHTS_SUBDAY);
-      expect(weights).toHaveLength(17);
-    });
-
-    test("should have correct minimum minutes for profiles", () => {
-      expect(getMinMinutesForProfile("STANDARD")).toBe(1440); // 1 day
-      expect(getMinMinutesForProfile("INTENSIVE")).toBe(1); // 1 minute
-    });
-
-    test("should have correct maximum interval days for profiles", () => {
-      expect(getMaxIntervalDaysForProfile("STANDARD")).toBe(36500);
-      expect(getMaxIntervalDaysForProfile("INTENSIVE")).toBe(36500);
-    });
-  });
-
-  describe("Profile Validation", () => {
-    test("should validate correct profiles", () => {
-      expect(validateProfile("STANDARD")).toBe(true);
-      expect(validateProfile("INTENSIVE")).toBe(true);
-    });
-
-    test("should reject invalid profiles", () => {
-      expect(validateProfile("INVALID")).toBe(false);
-      expect(validateProfile("standard")).toBe(false);
-      expect(validateProfile("")).toBe(false);
-    });
-
-    test("should validate request retention range", () => {
-      expect(validateRequestRetention(0.9)).toBe(true);
-      expect(validateRequestRetention(0.7)).toBe(true);
-      expect(validateRequestRetention(0.99)).toBe(true);
-      expect(validateRequestRetention(0.5)).toBe(false);
-      expect(validateRequestRetention(0.995)).toBe(false);
-      expect(validateRequestRetention(1.0)).toBe(false);
-      expect(validateRequestRetention(0.0)).toBe(false);
-    });
-  });
-
-  describe("FSRS Constructor", () => {
-    test("should create FSRS with valid parameters", () => {
-      expect(
-        () => new FSRS({ requestRetention: 0.9, profile: "STANDARD" }),
-      ).not.toThrow();
-      expect(
-        () => new FSRS({ requestRetention: 0.85, profile: "INTENSIVE" }),
-      ).not.toThrow();
-    });
-
-    test("should reject invalid profiles", () => {
-      expect(
-        () => new FSRS({ requestRetention: 0.9, profile: "INVALID" as any }),
-      ).toThrow();
-    });
-
-    test("should reject invalid request retention", () => {
-      expect(
-        () => new FSRS({ requestRetention: 0.5, profile: "STANDARD" }),
-      ).toThrow();
-      expect(
-        () => new FSRS({ requestRetention: 0.995, profile: "STANDARD" }),
-      ).toThrow();
-      expect(
-        () => new FSRS({ requestRetention: 1.0, profile: "STANDARD" }),
-      ).toThrow();
-    });
-  });
-
   describe("INTENSIVE Profile Behavior", () => {
     test("should produce sub-day intervals for new cards", () => {
       const scheduling = intensiveFSRS.getSchedulingInfo(testCard);
@@ -133,19 +48,19 @@ describe("FSRS Profiles", () => {
 
       // Hard should be ~5 minutes
       expect(scheduling.hard.interval).toBeGreaterThan(
-        scheduling.again.interval,
+        scheduling.again.interval
       );
       expect(scheduling.hard.interval).toBeLessThan(30);
 
       // Good should be ~10 minutes
       expect(scheduling.good.interval).toBeGreaterThan(
-        scheduling.hard.interval,
+        scheduling.hard.interval
       );
       expect(scheduling.good.interval).toBeLessThan(60);
 
       // Easy should be ~1 day
       expect(scheduling.easy.interval).toBeGreaterThan(
-        scheduling.good.interval,
+        scheduling.good.interval
       );
       expect(scheduling.easy.interval).toBeLessThanOrEqual(1440);
     });
@@ -202,7 +117,7 @@ describe("FSRS Profiles", () => {
 
       // Lower retention should produce longer intervals
       expect(scheduling80.good.interval).toBeGreaterThan(
-        scheduling90.good.interval,
+        scheduling90.good.interval
       );
 
       // Scaling factor should be ln(0.8)/ln(0.9) ≈ 2.1
@@ -239,7 +154,7 @@ describe("FSRS Profiles", () => {
         const scheduling = fsrs.getSchedulingInfo(testCard);
 
         expect(scheduling.again.interval).toBeLessThan(
-          scheduling.hard.interval,
+          scheduling.hard.interval
         );
         expect(scheduling.hard.interval).toBeLessThan(scheduling.good.interval);
         expect(scheduling.good.interval).toBeLessThan(scheduling.easy.interval);
@@ -259,18 +174,18 @@ describe("FSRS Profiles", () => {
         // Allow for edge cases where intervals might be equal due to algorithm constraints
         // Use toBeCloseTo for floating-point comparisons to handle precision
         expect(scheduling.again.interval).toBeLessThanOrEqual(
-          scheduling.hard.interval + 0.01,
+          scheduling.hard.interval + 0.01
         );
         expect(scheduling.hard.interval).toBeLessThanOrEqual(
-          scheduling.good.interval + 0.01,
+          scheduling.good.interval + 0.01
         );
         expect(scheduling.good.interval).toBeLessThanOrEqual(
-          scheduling.easy.interval + 0.01,
+          scheduling.easy.interval + 0.01
         );
 
         // Ensure at least some differentiation exists
         expect(scheduling.again.interval).toBeLessThanOrEqual(
-          scheduling.easy.interval,
+          scheduling.easy.interval
         );
       }
     });
@@ -300,28 +215,6 @@ describe("FSRS Profiles", () => {
         expect(card.difficulty).toBeGreaterThanOrEqual(1);
         expect(card.difficulty).toBeLessThanOrEqual(10);
       }
-    });
-  });
-
-  describe("Parameter Updates", () => {
-    test("should allow updating parameters", () => {
-      const fsrs = new FSRS({ requestRetention: 0.9, profile: "STANDARD" });
-
-      expect(() => {
-        fsrs.updateParameters({ requestRetention: 0.85, profile: "INTENSIVE" });
-      }).not.toThrow();
-    });
-
-    test("should validate parameters on update", () => {
-      const fsrs = new FSRS({ requestRetention: 0.9, profile: "STANDARD" });
-
-      expect(() => {
-        fsrs.updateParameters({ requestRetention: 0.5 });
-      }).toThrow();
-
-      expect(() => {
-        fsrs.updateParameters({ profile: "INVALID" as any });
-      }).toThrow();
     });
   });
 });

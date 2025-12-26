@@ -1,15 +1,19 @@
-import { Flashcard, FlashcardState, Deck, ReviewLog } from "../database/types";
-import { DatabaseService } from "../database/DatabaseService";
+import type {
+  Flashcard,
+  FlashcardState,
+  Deck,
+  ReviewLog,
+} from "../database/types";
+import type { IDatabaseService } from "../database/DatabaseFactory";
 import { FSRS, type RatingLabel, type SchedulingCard } from "../algorithm/fsrs";
 import {
   getMinMinutesForProfile,
   getMaxIntervalDaysForProfile,
-  FSRSProfile,
+  type FSRSProfile,
 } from "../algorithm/fsrs-weights";
 import { yieldToUI } from "../utils/ui";
-import { Logger } from "../utils/logging";
-import { FlashcardsSettings } from "../settings";
-import { DataAdapter } from "obsidian";
+import type { Logger } from "../utils/logging";
+import type { DecksSettings } from "../settings";
 import { BackupService } from "./BackupService";
 
 export interface SchedulerOptions {
@@ -40,29 +44,28 @@ export interface NewSession {
  * and atomic state updates with review logging.
  */
 export class Scheduler {
-  private db: DatabaseService;
+  private db: IDatabaseService;
   private fsrs: FSRS;
   private currentSessionId: string | null = null;
-  private logger: Logger;
-  private backupService: BackupService | null = null;
-  private settings: FlashcardsSettings;
+  private logger?: Logger;
+  private backupService: BackupService;
+  private settings: DecksSettings;
 
   constructor(
-    db: DatabaseService,
-    settings: FlashcardsSettings,
-    adapter: DataAdapter,
-    configDir: string,
-    backupService?: BackupService,
+    db: IDatabaseService,
+    settings: DecksSettings,
+    backupService: BackupService,
+    logger?: Logger
   ) {
     this.db = db;
     this.fsrs = new FSRS();
-    this.logger = new Logger(settings, adapter, configDir);
-    this.backupService = backupService || null;
+    this.logger = logger;
+    this.backupService = backupService;
     this.settings = settings;
   }
 
-  private debugLog(message: string, ...args: any[]): void {
-    this.logger.debug(message, ...args);
+  private debugLog(message: string, data?: unknown): void {
+    this.logger?.debug(message, data);
   }
 
   /**
@@ -71,7 +74,7 @@ export class Scheduler {
   async startReviewSession(
     deckId: string,
     now: Date = new Date(),
-    sessionDurationMinutes?: number,
+    sessionDurationMinutes?: number
   ): Promise<NewSession> {
     this.debugLog(`Starting review session for deck: ${deckId}`);
     const deck = await this.db.getDeckById(deckId);
@@ -88,7 +91,7 @@ export class Scheduler {
     const dueCardCount = await this.getDueCardCount(
       now,
       deckId,
-      sessionDurationMinutes,
+      sessionDurationMinutes
     );
     const newCardCount = await this.getNewCardCount(deckId);
 
@@ -98,7 +101,7 @@ export class Scheduler {
     if (deck.config.hasReviewCardsLimitEnabled) {
       const remainingReviewQuota = Math.max(
         0,
-        deck.config.reviewCardsPerDay - dailyCounts.reviewCount,
+        deck.config.reviewCardsPerDay - dailyCounts.reviewCount
       );
       goalTotal += Math.min(dueCardCount, remainingReviewQuota);
     } else {
@@ -110,7 +113,7 @@ export class Scheduler {
     if (deck.config.hasNewCardsLimitEnabled) {
       const remainingNewQuota = Math.max(
         0,
-        deck.config.newCardsPerDay - dailyCounts.newCount,
+        deck.config.newCardsPerDay - dailyCounts.newCount
       );
       goalTotal += Math.min(newCardCount, remainingNewQuota);
     } else {
@@ -130,7 +133,7 @@ export class Scheduler {
     });
 
     this.debugLog(
-      `Review session created: ${sessionId}, goal: ${finalGoalTotal}`,
+      `Review session created: ${sessionId}, goal: ${finalGoalTotal}`
     );
     return {
       sessionId: sessionId,
@@ -160,16 +163,13 @@ export class Scheduler {
   /**
    * End a review session
    */
-  async endReviewSession(
-    sessionId: string,
-    now: Date = new Date(),
-  ): Promise<void> {
-    await this.db.endReviewSession(sessionId, now.toISOString());
+  async endReviewSession(sessionId: string): Promise<void> {
+    await this.db.endReviewSession(sessionId);
 
     // Save db
-    this.save();
+    await this.save();
     // Trigger backup after session ends (if enabled in settings)
-    if (this.backupService && this.settings.backup.enableAutoBackup) {
+    if (this.settings.backup.enableAutoBackup) {
       try {
         await this.backupService.createBackup(this.db);
       } catch (error) {
@@ -184,20 +184,19 @@ export class Scheduler {
   async startFreshSession(
     deckId: string,
     now: Date = new Date(),
-    sessionDurationMinutes?: number,
+    sessionDurationMinutes?: number
   ): Promise<NewSession> {
     // End any existing active session first
-    // TODO: End by taking the review time of last review log with session id of active session
     const activeSession = await this.db.getActiveReviewSession(deckId);
     if (activeSession) {
-      await this.db.endReviewSession(activeSession.id, now.toISOString());
+      await this.db.endReviewSession(activeSession.id);
     }
 
     // Start a new session
     const newSession = await this.startReviewSession(
       deckId,
       now,
-      sessionDurationMinutes,
+      sessionDurationMinutes
     );
     this.currentSessionId = newSession.sessionId;
 
@@ -224,10 +223,10 @@ export class Scheduler {
   async getNext(
     now: Date,
     deckId: string,
-    options: { allowNew?: boolean } = {},
+    options: { allowNew?: boolean } = {}
   ): Promise<Flashcard | null> {
     this.debugLog(
-      `Getting next card for deck: ${deckId}, allowNew: ${options.allowNew}`,
+      `Getting next card for deck: ${deckId}, allowNew: ${options.allowNew}`
     );
 
     const { allowNew = true } = options;
@@ -269,10 +268,7 @@ export class Scheduler {
   /**
    * Preview scheduling outcomes for all four ratings without mutations
    */
-  async preview(
-    cardId: string,
-    now: Date = new Date(),
-  ): Promise<SchedulingPreview | null> {
+  async preview(cardId: string): Promise<SchedulingPreview | null> {
     const card = await this.db.getFlashcardById(cardId);
     if (!card) return null;
 
@@ -305,9 +301,10 @@ export class Scheduler {
   async rate(
     cardId: string,
     rating: RatingLabel,
-    now: Date = new Date(),
     timeElapsed?: number,
+    shownAt?: Date
   ): Promise<Flashcard> {
+    const now = new Date();
     this.debugLog(`Rating card ${cardId} with rating: ${rating}`);
     const card = await this.db.getFlashcardById(cardId);
     if (!card) {
@@ -322,7 +319,7 @@ export class Scheduler {
     }
 
     this.debugLog(
-      `Found card: ${card.front.substring(0, 50)}... in deck: ${deck.name}`,
+      `Found card: ${card.front.substring(0, 50)}... in deck: ${deck.name}`
     );
     this.updateFSRSForDeck(deck);
 
@@ -339,19 +336,19 @@ export class Scheduler {
     if (this.currentSessionId) {
       isFirstReviewInSession = !(await this.db.isCardReviewedInSession(
         this.currentSessionId,
-        card.id,
+        card.id
       ));
 
       // Update session progress if first review
       if (isFirstReviewInSession) {
         const session = await this.db.getReviewSessionById(
-          this.currentSessionId,
+          this.currentSessionId
         );
         if (session) {
           const newDoneUnique = session.doneUnique + 1;
           await this.db.updateReviewSessionDoneUnique(
             this.currentSessionId,
-            newDoneUnique,
+            newDoneUnique
           );
         }
       }
@@ -362,6 +359,11 @@ export class Scheduler {
       flashcardId: card.id,
       sessionId: this.currentSessionId || undefined,
       lastReviewedAt: oldCard.lastReviewed || oldCard.dueDate,
+      shownAt: shownAt
+        ? shownAt.toISOString()
+        : timeElapsed
+          ? new Date(now.getTime() - timeElapsed).toISOString()
+          : now.toISOString(),
       reviewedAt: now.toISOString(),
       rating: this.ratingToNumber(rating) as 1 | 2 | 3 | 4,
       ratingLabel: rating,
@@ -395,7 +397,7 @@ export class Scheduler {
       requestRetention: deck.config.fsrs.requestRetention,
       profile: deck.config.fsrs.profile,
       maximumIntervalDays: getMaxIntervalDaysForProfile(
-        deck.config.fsrs.profile,
+        deck.config.fsrs.profile
       ),
       minMinutes: getMinMinutesForProfile(deck.config.fsrs.profile),
       fsrsWeightsVersion: this.getWeightsHash(deck.config.fsrs.profile),
@@ -456,7 +458,8 @@ export class Scheduler {
     }
     params.push(limit.toString());
 
-    const dueCards = await this.queryFlashcards(query, params);
+    const results = await this.db.querySql(query, params);
+    const dueCards = results.map((row) => this.rowToFlashcard(row));
     this.debugLog(`Found ${dueCards.length} due cards for deck: ${deckId}`);
     return dueCards;
   }
@@ -473,14 +476,14 @@ export class Scheduler {
       LIMIT 1
     `;
 
-    const results = await this.queryRaw(query, [deckId, now.toISOString()]);
+    const results = await this.db.querySql(query, [deckId, now.toISOString()]);
     const nextDue = results.length > 0 ? results[0][0] : null;
 
     if (!nextDue) {
       return null;
     }
 
-    const nextDueDate = new Date(nextDue);
+    const nextDueDate = new Date(nextDue as string);
     return Math.max(0, nextDueDate.getTime() - now.getTime());
   }
 
@@ -488,7 +491,7 @@ export class Scheduler {
 
   private async getNextDueCard(
     now: Date,
-    deckId: string,
+    deckId: string
   ): Promise<Flashcard | null> {
     const deck = await this.db.getDeckById(deckId);
     if (!deck) return null;
@@ -507,21 +510,22 @@ export class Scheduler {
       query += " ORDER BY due_date ASC, last_reviewed ASC LIMIT 1";
     }
 
-    const results = await this.queryFlashcards(query, params);
-    return results.length > 0 ? results[0] : null;
+    const results = await this.db.querySql(query, params);
+    const flashcards = results.map((row) => this.rowToFlashcard(row));
+    return flashcards.length > 0 ? flashcards[0] : null;
   }
 
   private async getNextNewCard(deckId: string): Promise<Flashcard | null> {
-    let query = `
+    const query = `
       SELECT * FROM flashcards
       WHERE deck_id = ? AND state = 'new'
+       ORDER BY due_date ASC LIMIT 1
     `;
     const params = [deckId];
 
-    query += " ORDER BY due_date ASC LIMIT 1";
-
-    const results = await this.queryFlashcards(query, params);
-    return results.length > 0 ? results[0] : null;
+    const results = await this.db.querySql(query, params);
+    const flashcards = results.map((row) => this.rowToFlashcard(row));
+    return flashcards.length > 0 ? flashcards[0] : null;
   }
 
   private async hasNewCardQuota(deckId: string): Promise<boolean> {
@@ -560,7 +564,7 @@ export class Scheduler {
 
   private calculateRetrievability(
     card: Flashcard,
-    elapsedDays: number,
+    elapsedDays: number
   ): number {
     if (!card.stability || card.state === "new") return 1;
 
@@ -585,22 +589,23 @@ export class Scheduler {
   private async getDueCardCount(
     now: Date,
     deckId: string,
-    sessionDurationMinutes = 25,
+    sessionDurationMinutes = 25
   ): Promise<number> {
     // Include cards due within the session duration for session goal calculation
     const sessionEndTime = new Date(
-      now.getTime() + sessionDurationMinutes * 60 * 1000,
+      now.getTime() + sessionDurationMinutes * 60 * 1000
     );
     const query = `
     SELECT COUNT(*) as count
     FROM flashcards
     WHERE deck_id = ? AND due_date <= ? AND state = 'review'
   `;
-    const results = await this.queryRaw(query, [
-      deckId,
-      sessionEndTime.toISOString(),
-    ]);
-    return results.length > 0 ? (results[0][0] as number) : 0;
+    const results = await this.db.querySql<{ count: number }>(
+      query,
+      [deckId, sessionEndTime.toISOString()],
+      { asObject: true }
+    );
+    return results[0]?.count || 0;
   }
 
   private async getNewCardCount(deckId: string): Promise<number> {
@@ -609,32 +614,16 @@ export class Scheduler {
     FROM flashcards
     WHERE deck_id = ? AND state = 'new'
   `;
-    const results = await this.queryRaw(query, [deckId]);
-    return results.length > 0 ? (results[0][0] as number) : 0;
-  }
-
-  /**
-   * Helper method to query flashcards and convert rows to Flashcard objects
-   */
-  private async queryFlashcards(
-    query: string,
-    params: any[],
-  ): Promise<Flashcard[]> {
-    const results = await this.queryRaw(query, params);
-    return results.map((row) => this.rowToFlashcard(row));
-  }
-
-  /**
-   * Execute raw SQL query and return results
-   */
-  private async queryRaw(query: string, params: any[]): Promise<any[][]> {
-    return await this.db.query(query, params);
+    const results = await this.db.querySql<{ count: number }>(query, [deckId], {
+      asObject: true,
+    });
+    return results[0]?.count || 0;
   }
 
   /**
    * Convert database row to Flashcard object (same logic as DatabaseService)
    */
-  private rowToFlashcard(row: any[]): Flashcard {
+  private rowToFlashcard(row: unknown[]): Flashcard {
     return {
       id: row[0] as string,
       deckId: row[1] as string,
