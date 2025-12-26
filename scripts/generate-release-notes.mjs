@@ -94,7 +94,7 @@ const releaseNotes = `# Decks v${version}
 
 ## 📦 Release Files
 
-- \`main.js\` - Plugin code (${(readFileSync(join(rootDir, "demo_vault/.obsidian/plugins/decks/main.js")).length / 1024).toFixed(1)} KB)
+- `main.js` - Plugin code (${(readFileSync(join(rootDir, "dist/main.js")).length / 1024).toFixed(1)} KB)
 - \`manifest.json\` - Plugin manifest
 - \`styles.css\` - Plugin styles
 
