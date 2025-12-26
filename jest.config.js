@@ -29,6 +29,7 @@ module.exports = {
     "!src/**/__tests__/**",
     "!src/components/**", // Exclude Svelte components from coverage
   ],
+  maxWorkers: 1,
   coverageDirectory: "coverage",
   coverageReporters: ["text", "lcov", "html"],
   moduleNameMapper: {
