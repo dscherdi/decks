@@ -23,7 +23,7 @@ export type Svelte5MountedComponent = Record<string, unknown>;
 export interface ExportEventDetail {
   noteType: string;
   tags: string[];
-  deckName: string;
+  ankiDeckName: string;
   separator: string;
 }
 

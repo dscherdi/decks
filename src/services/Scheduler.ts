@@ -167,7 +167,7 @@ export class Scheduler {
     await this.db.endReviewSession(sessionId);
 
     // Save db
-    this.save();
+    await this.save();
     // Trigger backup after session ends (if enabled in settings)
     if (this.settings.backup.enableAutoBackup) {
       try {

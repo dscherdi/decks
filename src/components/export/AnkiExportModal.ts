@@ -47,7 +47,7 @@ export class AnkiExportModal extends Modal {
           const ankiConfig: AnkiExportConfig = {
             noteType: detail.noteType,
             tags: detail.tags,
-            ankiDeckName: detail.deckName,
+            ankiDeckName: detail.ankiDeckName,
             separator: detail.separator,
           };
           this.handleExport(ankiConfig);
