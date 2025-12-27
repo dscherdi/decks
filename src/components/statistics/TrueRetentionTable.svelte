@@ -1,14 +1,11 @@
 <script lang="ts">
+  import { onMount } from "svelte";
   import { StatisticsService } from "@/services/StatisticsService";
   import { Logger } from "@/utils/logging";
-  import type { ReviewLog, Flashcard } from "../../database/types";
 
   export let selectedDeckIds: string[] = [];
   export let statisticsService: StatisticsService;
   export let logger: Logger;
-
-  export let reviewLogs: ReviewLog[] = [];
-  export let flashcards: Flashcard[] = [];
 
   interface RetentionStats {
     young: { passed: number; total: number; rate: number };
@@ -16,76 +13,33 @@
     all: { passed: number; total: number; rate: number };
   }
 
-  function calculateRetentionStats(
-    logs: ReviewLog[] = reviewLogs,
-    _cards: Flashcard[] = flashcards
-  ): RetentionStats {
-    if (!logs || logs.length === 0) {
-      return {
-        young: { passed: 0, total: 0, rate: 0 },
-        mature: { passed: 0, total: 0, rate: 0 },
-        all: { passed: 0, total: 0, rate: 0 },
-      };
-    }
+  let retentionStats: RetentionStats = {
+    young: { passed: 0, total: 0, rate: 0 },
+    mature: { passed: 0, total: 0, rate: 0 },
+    all: { passed: 0, total: 0, rate: 0 },
+  };
 
-    // Filter for cards with interval > 1 day (1440 minutes)
-    // Include review cards that had long intervals OR newly promoted cards with long intervals
-    const validLogs = logs.filter((log) => {
-      const hadLongInterval = log.oldIntervalMinutes > 1440;
-      const newlyPromotedWithLongInterval =
-        log.oldState === "new" &&
-        log.newState === "review" &&
-        log.newIntervalMinutes > 1440;
+  onMount(async () => {
+    await loadData();
+  });
 
-      return hadLongInterval || newlyPromotedWithLongInterval;
-    });
-
-    if (validLogs.length === 0) {
-      return {
-        young: { passed: 0, total: 0, rate: 0 },
-        mature: { passed: 0, total: 0, rate: 0 },
-        all: { passed: 0, total: 0, rate: 0 },
-      };
-    }
-
-    const youngLogs = validLogs.filter((log) => {
-      // Use the interval that existed before this review
-      const intervalToCheck =
-        log.oldIntervalMinutes > 0
-          ? log.oldIntervalMinutes
-          : log.newIntervalMinutes;
-      return intervalToCheck <= 30240; // <= 21 days
-    });
-
-    const matureLogs = validLogs.filter((log) => {
-      // Use the interval that existed before this review
-      const intervalToCheck =
-        log.oldIntervalMinutes > 0
-          ? log.oldIntervalMinutes
-          : log.newIntervalMinutes;
-      return intervalToCheck > 30240; // > 21 days
-    });
-
-    const calculateRate = (logs: ReviewLog[]) => {
-      if (logs.length === 0) return { passed: 0, total: 0, rate: 0 };
-      const passed = logs.filter((log) => log.rating >= 3).length; // Good/Easy = passed
-      const total = logs.length;
-      const rate = total > 0 ? (passed / total) * 100 : 0;
-      return { passed, total, rate };
-    };
-
-    const youngStats = calculateRate(youngLogs);
-    const matureStats = calculateRate(matureLogs);
-    const allStats = calculateRate(validLogs);
-
-    return {
-      young: youngStats,
-      mature: matureStats,
-      all: allStats,
-    };
+  $: if (selectedDeckIds) {
+    loadData();
   }
 
-  $: retentionStats = calculateRetentionStats(reviewLogs, flashcards);
+  async function loadData() {
+    try {
+      retentionStats = await statisticsService.getTrueRetentionStats(selectedDeckIds);
+      logger.debug("[TrueRetentionTable] Loaded retention stats:", retentionStats);
+    } catch (error) {
+      logger.error("[TrueRetentionTable] Error loading retention stats:", error);
+      retentionStats = {
+        young: { passed: 0, total: 0, rate: 0 },
+        mature: { passed: 0, total: 0, rate: 0 },
+        all: { passed: 0, total: 0, rate: 0 },
+      };
+    }
+  }
 
   function formatRate(rate: number): string {
     return rate.toFixed(1) + "%";

@@ -11,7 +11,6 @@
     Legend,
     type TooltipItem,
   } from "chart.js";
-  import type { ReviewLog } from "../../database/types";
   import { StatisticsService } from "@/services/StatisticsService";
   import { Logger } from "@/utils/logging";
 
@@ -30,13 +29,14 @@
   export let statisticsService: StatisticsService;
   export let logger: Logger;
 
-  export let reviewLogs: ReviewLog[] = [];
   export const showPercentiles = "50"; // "50", "95", "all"
 
   let canvas: HTMLCanvasElement;
   let chart: Chart | null = null;
+  let retrievabilityData: Map<string, number> | null = null;
 
-  onMount(() => {
+  onMount(async () => {
+    await loadData();
     createChart();
   });
 
@@ -46,20 +46,22 @@
     }
   });
 
-  $: if (chart && reviewLogs) {
-    updateChart();
+  $: if (selectedDeckIds) {
+    loadData().then(() => updateChart());
+  }
+
+  async function loadData() {
+    try {
+      retrievabilityData = await statisticsService.getRetrievabilityDistribution(selectedDeckIds);
+      logger.debug("[CardRetrievabilityChart] Loaded retrievability data:", retrievabilityData.size);
+    } catch (error) {
+      logger.error("[CardRetrievabilityChart] Error loading retrievability data:", error);
+      retrievabilityData = new Map();
+    }
   }
 
   function processChartData() {
-    // Filter to reviews that have retrievability values
-    const reviewsWithRetrievability = reviewLogs.filter(
-      (log) =>
-        log.retrievability !== undefined &&
-        log.retrievability !== null &&
-        log.retrievability >= 0
-    );
-
-    if (reviewsWithRetrievability.length === 0) {
+    if (!retrievabilityData || retrievabilityData.size === 0) {
       return {
         labels: ["No Data"],
         datasets: [
@@ -74,50 +76,31 @@
       };
     }
 
-    // Get retrievability values (0-1 range, convert to 0-100%)
-    const retrievabilityValues = reviewsWithRetrievability.map(
-      (log) => log.retrievability * 100
-    );
-
-    // Create histogram buckets for retrievability percentage
-    const buckets: { [key: string]: number } = {};
+    // Define bucket ranges to match database aggregation
     const bucketRanges = [
-      { label: "0-10%", min: 0, max: 10 },
-      { label: "10-20%", min: 10, max: 20 },
-      { label: "20-30%", min: 20, max: 30 },
-      { label: "30-40%", min: 30, max: 40 },
-      { label: "40-50%", min: 40, max: 50 },
-      { label: "50-60%", min: 50, max: 60 },
-      { label: "60-70%", min: 60, max: 70 },
-      { label: "70-80%", min: 70, max: 80 },
-      { label: "80-90%", min: 80, max: 90 },
-      { label: "90-100%", min: 90, max: 100 },
+      "0-10%",
+      "10-20%",
+      "20-30%",
+      "30-40%",
+      "40-50%",
+      "50-60%",
+      "60-70%",
+      "70-80%",
+      "80-90%",
+      "90-100%",
     ];
 
-    // Initialize buckets
-    bucketRanges.forEach((bucket) => {
-      buckets[bucket.label] = 0;
-    });
+    // Filter out empty buckets and get data
+    const labels: string[] = [];
+    const data: number[] = [];
 
-    // Count retrievability values in each bucket
-    retrievabilityValues.forEach((retrievability) => {
-      for (const bucket of bucketRanges) {
-        if (retrievability >= bucket.min && retrievability < bucket.max) {
-          buckets[bucket.label]++;
-          break;
-        } else if (retrievability === 100 && bucket.label === "90-100%") {
-          // Include 100% in the last bucket
-          buckets[bucket.label]++;
-          break;
-        }
+    bucketRanges.forEach((label) => {
+      const count = retrievabilityData.get(label) || 0;
+      if (count > 0) {
+        labels.push(label);
+        data.push(count);
       }
     });
-
-    // Filter out empty buckets
-    const labels = bucketRanges
-      .map((b) => b.label)
-      .filter((label) => buckets[label] > 0);
-    const data = labels.map((label) => buckets[label]);
 
     // Create gradient colors from red (low retrievability) to green (high retrievability)
     const colors = labels.map((_, index) => {

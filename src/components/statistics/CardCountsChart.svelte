@@ -8,8 +8,6 @@
     Tooltip,
     Legend,
   } from "chart.js";
-  import type { Flashcard } from "../../database/types";
-  import { getCardMaturityType } from "../../database/types";
   import { StatisticsService } from "@/services/StatisticsService";
   import { Logger } from "@/utils/logging";
 
@@ -17,8 +15,8 @@
   export let statisticsService: StatisticsService;
   export let logger: Logger;
 
-  export let flashcards: Flashcard[] = [];
   export let showSuspended = true;
+  let counts: { new: number; young: number; mature: number } | null = null;
   // Register Chart.js components with force re-registration
   try {
     Chart.unregister(
@@ -44,7 +42,8 @@
   let canvas: HTMLCanvasElement;
   let chart: Chart | null = null;
 
-  onMount(() => {
+  onMount(async () => {
+    await loadData();
     createChart();
   });
 
@@ -54,32 +53,27 @@
     }
   });
 
-  $: if (chart && flashcards) {
-    updateChart();
+  $: if (selectedDeckIds) {
+    loadData().then(() => updateChart());
+  }
+
+  async function loadData() {
+    try {
+      counts = await statisticsService.getCardCountsByMaturity(selectedDeckIds);
+      logger.debug("[CardCountsChart] Loaded counts:", counts);
+    } catch (error) {
+      logger.error("[CardCountsChart] Error loading counts:", error);
+      counts = { new: 0, young: 0, mature: 0 };
+    }
   }
 
   function processChartData() {
-    const counts = {
-      new: 0,
-      young: 0, // Review cards with interval <= 21 days
-      mature: 0, // Review cards with interval > 21 days
-      suspended: 0, // Could be added later if suspension feature is implemented
-    };
-
-    flashcards.forEach((card) => {
-      const maturityType = getCardMaturityType(card);
-      switch (maturityType) {
-        case "new":
-          counts.new++;
-          break;
-        case "review":
-          counts.young++;
-          break;
-        case "mature":
-          counts.mature++;
-          break;
-      }
-    });
+    if (!counts) {
+      return {
+        labels: [],
+        datasets: [{ data: [], backgroundColor: [], borderColor: [], borderWidth: 1 }],
+      };
+    }
 
     const data = [];
     const labels = [];
@@ -105,13 +99,6 @@
       labels.push("Mature");
       backgroundColor.push("#22c55e");
       borderColor.push("#16a34a");
-    }
-
-    if (showSuspended && counts.suspended > 0) {
-      data.push(counts.suspended);
-      labels.push("Suspended");
-      backgroundColor.push("#6b7280");
-      borderColor.push("#4b5563");
     }
 
     return {

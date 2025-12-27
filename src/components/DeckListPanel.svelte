@@ -62,7 +62,7 @@
     return {
       totalHours: baseStats.totalHours,
       pastMonthHours: baseStats.pastMonthHours,
-      pastWeekHours: 0,
+      pastWeekHours: baseStats.pastWeekHours,
       todayCards: 0,
       todayHours: 0,
       todayPaceSeconds: 0,

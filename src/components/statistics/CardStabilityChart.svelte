@@ -11,7 +11,6 @@
     Legend,
     type TooltipItem,
   } from "chart.js";
-  import type { Flashcard } from "../../database/types";
   import { StatisticsService } from "@/services/StatisticsService";
   import { Logger } from "@/utils/logging";
 
@@ -30,13 +29,14 @@
   export let statisticsService: StatisticsService;
   export let logger: Logger;
 
-  export let flashcards: Flashcard[] = [];
   export const showPercentiles = "50"; // "50", "95", "all"
 
   let canvas: HTMLCanvasElement;
   let chart: Chart | null = null;
+  let stabilityData: Map<string, number> | null = null;
 
-  onMount(() => {
+  onMount(async () => {
+    await loadData();
     createChart();
   });
 
@@ -46,17 +46,22 @@
     }
   });
 
-  $: if (chart && flashcards) {
-    updateChart();
+  $: if (selectedDeckIds) {
+    loadData().then(() => updateChart());
+  }
+
+  async function loadData() {
+    try {
+      stabilityData = await statisticsService.getStabilityDistribution(selectedDeckIds);
+      logger.debug("[CardStabilityChart] Loaded stability data:", stabilityData.size);
+    } catch (error) {
+      logger.error("[CardStabilityChart] Error loading stability data:", error);
+      stabilityData = new Map();
+    }
   }
 
   function processChartData() {
-    // Filter to cards that have stability values (reviewed cards)
-    const cardsWithStability = flashcards.filter(
-      (card) => card.stability > 0 && card.state === "review"
-    );
-
-    if (cardsWithStability.length === 0) {
+    if (!stabilityData || stabilityData.size === 0) {
       return {
         labels: ["No Data"],
         datasets: [
@@ -71,43 +76,30 @@
       };
     }
 
-    // Get stability values
-    const stabilityValues = cardsWithStability.map((card) => card.stability);
-
-    // Create histogram buckets for stability
-    const buckets: { [key: string]: number } = {};
+    // Define bucket ranges to match database aggregation
     const bucketRanges = [
-      { label: "0-1d", min: 0, max: 1 },
-      { label: "1-3d", min: 1, max: 3 },
-      { label: "3-7d", min: 3, max: 7 },
-      { label: "1-2w", min: 7, max: 14 },
-      { label: "2-4w", min: 14, max: 28 },
-      { label: "1-3m", min: 28, max: 90 },
-      { label: "3-6m", min: 90, max: 180 },
-      { label: "6m-1y", min: 180, max: 365 },
-      { label: "1y+", min: 365, max: Infinity },
+      "0-1d",
+      "1-3d",
+      "3-7d",
+      "1-2w",
+      "2-4w",
+      "1-3m",
+      "3-6m",
+      "6m-1y",
+      "1y+",
     ];
 
-    // Initialize buckets
-    bucketRanges.forEach((bucket) => {
-      buckets[bucket.label] = 0;
-    });
+    // Filter out empty buckets and get data
+    const labels: string[] = [];
+    const data: number[] = [];
 
-    // Count stability values in each bucket
-    stabilityValues.forEach((stability) => {
-      for (const bucket of bucketRanges) {
-        if (stability >= bucket.min && stability < bucket.max) {
-          buckets[bucket.label]++;
-          break;
-        }
+    bucketRanges.forEach((label) => {
+      const count = stabilityData.get(label) || 0;
+      if (count > 0) {
+        labels.push(label);
+        data.push(count);
       }
     });
-
-    // Filter out empty buckets
-    const labels = bucketRanges
-      .map((b) => b.label)
-      .filter((label) => buckets[label] > 0);
-    const data = labels.map((label) => buckets[label]);
 
     return {
       labels,

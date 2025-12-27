@@ -11,7 +11,6 @@
     Legend,
     type TooltipItem,
   } from "chart.js";
-  import type { Flashcard } from "../../database/types";
   import { StatisticsService } from "@/services/StatisticsService";
   import { Logger } from "@/utils/logging";
 
@@ -30,13 +29,14 @@
   export let statisticsService: StatisticsService;
   export let logger: Logger;
 
-  export let flashcards: Flashcard[] = [];
   export const showPercentiles = "50"; // "50", "95", "all"
 
   let canvas: HTMLCanvasElement;
   let chart: Chart | null = null;
+  let intervalData: Map<string, number> | null = null;
 
-  onMount(() => {
+  onMount(async () => {
+    await loadData();
     createChart();
   });
 
@@ -46,17 +46,22 @@
     }
   });
 
-  $: if (chart && flashcards) {
-    updateChart();
+  $: if (selectedDeckIds) {
+    loadData().then(() => updateChart());
+  }
+
+  async function loadData() {
+    try {
+      intervalData = await statisticsService.getIntervalDistribution(selectedDeckIds);
+      logger.debug("[ReviewIntervalsChart] Loaded interval data:", intervalData.size);
+    } catch (error) {
+      logger.error("[ReviewIntervalsChart] Error loading interval data:", error);
+      intervalData = new Map();
+    }
   }
 
   function processChartData() {
-    // Filter to only review cards (new cards don't have meaningful intervals)
-    const reviewCards = flashcards.filter(
-      (card) => card.state === "review" && card.interval > 0
-    );
-
-    if (reviewCards.length === 0) {
+    if (!intervalData || intervalData.size === 0) {
       return {
         labels: ["No Data"],
         datasets: [
@@ -71,76 +76,31 @@
       };
     }
 
-    // Convert intervals from minutes to days for better readability
-    const intervalDays = reviewCards.map((card) =>
-      Math.round(card.interval / (24 * 60))
-    );
-
-    // Create histogram buckets
-    const buckets: { [key: string]: number } = {};
-
-    // Define bucket ranges (in days)
+    // Define bucket ranges to match database aggregation
     const bucketRanges = [
-      { label: "1d", min: 1, max: 1 },
-      { label: "2-3d", min: 2, max: 3 },
-      { label: "4-7d", min: 4, max: 7 },
-      { label: "1-2w", min: 8, max: 14 },
-      { label: "2-3w", min: 15, max: 21 },
-      { label: "1-2m", min: 22, max: 60 },
-      { label: "2-4m", min: 61, max: 120 },
-      { label: "4-6m", min: 121, max: 180 },
-      { label: "6m-1y", min: 181, max: 365 },
-      { label: "1y+", min: 366, max: Infinity },
+      "1d",
+      "2-3d",
+      "4-7d",
+      "1-2w",
+      "2-3w",
+      "1-2m",
+      "2-4m",
+      "4-6m",
+      "6m-1y",
+      "1y+",
     ];
 
-    // Initialize buckets
-    bucketRanges.forEach((bucket) => {
-      buckets[bucket.label] = 0;
-    });
+    // Filter out empty buckets and get data
+    const labels: string[] = [];
+    const data: number[] = [];
 
-    // Count intervals in each bucket
-    intervalDays.forEach((days) => {
-      for (const bucket of bucketRanges) {
-        if (days >= bucket.min && days <= bucket.max) {
-          buckets[bucket.label]++;
-          break;
-        }
+    bucketRanges.forEach((label) => {
+      const count = intervalData.get(label) || 0;
+      if (count > 0) {
+        labels.push(label);
+        data.push(count);
       }
     });
-
-    // Filter out empty buckets
-    const labels = bucketRanges
-      .map((b) => b.label)
-      .filter((label) => buckets[label] > 0);
-    const data = labels.map((label) => buckets[label]);
-
-    // Calculate percentiles if requested
-    const sortedIntervals = intervalDays.sort((a, b) => a - b);
-    const annotations: any[] = []; // eslint-disable-line @typescript-eslint/no-explicit-any
-
-    if (showPercentiles !== "all") {
-      const percentile = parseInt(showPercentiles);
-      const percentileIndex = Math.floor(
-        (percentile / 100) * sortedIntervals.length
-      );
-      const percentileValue = sortedIntervals[percentileIndex];
-
-      if (percentileValue !== undefined) {
-        annotations.push({
-          type: "line",
-          mode: "vertical",
-          scaleID: "x",
-          value: percentileValue,
-          borderColor: "#ef4444",
-          borderWidth: 2,
-          label: {
-            content: `${percentile}th percentile: ${percentileValue}d`,
-            enabled: true,
-            position: "top",
-          },
-        });
-      }
-    }
 
     return {
       labels,
@@ -153,7 +113,6 @@
           borderWidth: 1,
         },
       ],
-      annotations,
     };
   }
 
@@ -229,16 +188,9 @@
 </script>
 
 <h3>Review Intervals</h3>
-<div class="decks-chart-controls">
-  <label>
-    Show percentiles:
-    <select>
-      <option value="50">50th percentile</option>
-      <option value="95">95th percentile</option>
-      <option value="all">All data</option>
-    </select>
-  </label>
-</div>
+<p class="decks-chart-description">
+  Distribution of current review intervals for cards
+</p>
 <div class="decks-review-intervals-chart">
   <canvas bind:this={canvas} height="300"></canvas>
 </div>

@@ -7,7 +7,6 @@ import type {
   Flashcard,
   ReviewLog,
   ReviewSession,
-  Statistics,
 } from "./types";
 import type { SqlJsValue, SqlRecord, SqlRow } from "./sql-types";
 import type { SyncData, SyncResult } from "../services/FlashcardSynchronizer";
@@ -118,10 +117,6 @@ export interface IDatabaseService {
   getDailyReviewCounts(
     deckId: string
   ): Promise<{ newCount: number; reviewCount: number }>;
-  getOverallStatistics(
-    deckFilter?: string,
-    timeframe?: string
-  ): Promise<Statistics>;
 
   // Count operations
   countNewCards(deckId: string): Promise<number>;

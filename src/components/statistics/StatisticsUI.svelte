@@ -12,6 +12,7 @@
   import CardRetrievabilityChart from "./CardRetrievabilityChart.svelte";
   import TrueRetentionTable from "./TrueRetentionTable.svelte";
   import FutureDueChart from "./FutureDueChart.svelte";
+  import MaturityProgressionChart from "./MaturityProgressionChart.svelte";
   import type { Statistics } from "../../database/types";
 
   import { StatisticsService } from "../../services/StatisticsService";
@@ -110,6 +111,9 @@
   function mountFilterComponents() {
     // Deck filter dropdown
     if (deckFilterContainer) {
+      // Clear existing content to avoid duplicates
+      deckFilterContainer.empty();
+
       new Setting(deckFilterContainer)
         .setName("Select Deck(s):")
         .setClass("decks-deck-filter-container")
@@ -133,6 +137,9 @@
 
     // Timeframe filter dropdown
     if (timeframeFilterContainer) {
+      // Clear existing content to avoid duplicates
+      timeframeFilterContainer.empty();
+
       new Setting(timeframeFilterContainer)
         .setName("Timeframe:")
         .setClass("decks-timeframe-filter-container")
@@ -187,8 +194,11 @@
         `[StatisticsUI] Getting overall statistics (filter: ${selectedDeckFilter}, timeframe: ${selectedTimeframe})...`
       );
 
+      // Get deck IDs directly to avoid reactive timing issues
+      const deckIds = getDeckIdsFromFilter(selectedDeckFilter, availableDecks);
+
       statistics = await statisticsService.getOverallStatistics(
-        selectedDeckFilter,
+        deckIds,
         selectedTimeframe
       );
 
@@ -239,6 +249,11 @@
       logger.error("[StatisticsUI] Error during filter change:", error);
     } finally {
       loading = false;
+      // Remount filter components after DOM is recreated
+      tick().then(() => {
+        logger.debug("[StatisticsUI] Remounting filter components after filter change");
+        mountFilterComponents();
+      });
     }
   }
 
@@ -727,6 +742,11 @@
         <FutureDueChart {logger} {statistics} {statisticsService} />
       </div>
 
+      <!-- Maturity Progression -->
+      <div class="decks-stats-section">
+        <MaturityProgressionChart {logger} {statisticsService} {selectedDeckIds} />
+      </div>
+
       <!-- Reviews Over Time -->
       <div class="decks-stats-section">
         <ReviewsOverTimeChart {logger} {statisticsService} {selectedDeckIds} />
@@ -792,7 +812,7 @@
                 days,
                 selectedDeckIds
               );
-              return new Map(Object.entries(counts));
+              return counts; // Already a Map, no need to convert
             } catch (error) {
               console.error("Error getting review counts:", error);
               return new Map();
