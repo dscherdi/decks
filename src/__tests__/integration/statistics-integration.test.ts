@@ -206,7 +206,9 @@ describe("StatisticsService Integration Tests", () => {
       });
       await db.createReviewLog(logHard);
 
-      const reviewData = await statsService.getReviewsByDateAndRating(7, [testDeck.id]);
+      const reviewData = await statsService.getReviewsByDateAndRating(7, [
+        testDeck.id,
+      ]);
 
       // Check today's data
       const todayKey = toLocalDateString(today);
@@ -300,7 +302,9 @@ describe("StatisticsService Integration Tests", () => {
         await db.createReviewLog(log);
       }
 
-      const successRates = await statsService.getSuccessRatesByHour([testDeck.id]);
+      const successRates = await statsService.getSuccessRatesByHour([
+        testDeck.id,
+      ]);
 
       // 9 AM: 2 passed out of 3 = 66.67%
       expect(successRates.get(9)).toBeCloseTo(66.67, 1);
@@ -325,11 +329,16 @@ describe("StatisticsService Integration Tests", () => {
         await db.createFlashcard(card);
       }
 
-      const distribution = await statsService.getStabilityDistribution([testDeck.id]);
+      const distribution = await statsService.getStabilityDistribution([
+        testDeck.id,
+      ]);
 
       expect(distribution.size).toBeGreaterThan(0);
       // Verify some cards are bucketed
-      const totalCards = Array.from(distribution.values()).reduce((sum, count) => sum + count, 0);
+      const totalCards = Array.from(distribution.values()).reduce(
+        (sum, count) => sum + count,
+        0
+      );
       expect(totalCards).toBe(stabilityValues.length);
     });
   });
@@ -348,11 +357,16 @@ describe("StatisticsService Integration Tests", () => {
         await db.createFlashcard(card);
       }
 
-      const distribution = await statsService.getDifficultyDistribution([testDeck.id]);
+      const distribution = await statsService.getDifficultyDistribution([
+        testDeck.id,
+      ]);
 
       expect(distribution.size).toBeGreaterThan(0);
       // Each difficulty value should be bucketed
-      const totalCards = Array.from(distribution.values()).reduce((sum, count) => sum + count, 0);
+      const totalCards = Array.from(distribution.values()).reduce(
+        (sum, count) => sum + count,
+        0
+      );
       expect(totalCards).toBe(difficultyValues.length);
     });
   });
@@ -372,10 +386,15 @@ describe("StatisticsService Integration Tests", () => {
         await db.createFlashcard(card);
       }
 
-      const distribution = await statsService.getIntervalDistribution([testDeck.id]);
+      const distribution = await statsService.getIntervalDistribution([
+        testDeck.id,
+      ]);
 
       expect(distribution.size).toBeGreaterThan(0);
-      const totalCards = Array.from(distribution.values()).reduce((sum, count) => sum + count, 0);
+      const totalCards = Array.from(distribution.values()).reduce(
+        (sum, count) => sum + count,
+        0
+      );
       expect(totalCards).toBe(intervals.length);
     });
   });
@@ -407,7 +426,9 @@ describe("StatisticsService Integration Tests", () => {
         await insertFlashcardWithTimestamp(card);
       }
 
-      const cardsAdded = await statsService.getCardsAddedByDate(7, [testDeck.id]);
+      const cardsAdded = await statsService.getCardsAddedByDate(7, [
+        testDeck.id,
+      ]);
 
       const todayKey = toLocalDateString(today);
       const yesterdayKey = toLocalDateString(yesterday);
@@ -436,7 +457,9 @@ describe("StatisticsService Integration Tests", () => {
         await db.createReviewLog(log);
       }
 
-      const distribution = await statsService.getRetrievabilityDistribution([testDeck.id]);
+      const distribution = await statsService.getRetrievabilityDistribution([
+        testDeck.id,
+      ]);
 
       // Should have reviews in buckets: 0-10%, 10-20%, 30-40%, 50-60%, 70-80%, 90-100%
       expect(distribution.get("0-10%")).toBe(1);
@@ -590,20 +613,29 @@ describe("StatisticsService Integration Tests", () => {
         await db.createFlashcard(card);
       }
 
-      const progression = await statsService.simulateMaturityProgression([testDeck.id], 90);
+      const progression = await statsService.simulateMaturityProgression(
+        [testDeck.id],
+        90
+      );
 
-      expect(progression.length).toBeGreaterThan(0);
+      expect(progression.dailySnapshots.length).toBeGreaterThan(0);
 
       // First day should have all cards
-      const firstDay = progression[0];
-      expect(firstDay.newCards + firstDay.learningCards + firstDay.matureCards).toBe(10);
+      const firstDay = progression.dailySnapshots[0];
+      expect(
+        firstDay.newCards + firstDay.learningCards + firstDay.matureCards
+      ).toBe(10);
 
       // As days progress, new cards should decrease
       let previousNewCount = firstDay.newCards;
       let foundProgression = false;
 
-      for (let i = 1; i < Math.min(progression.length, 30); i++) {
-        const day = progression[i];
+      for (
+        let i = 1;
+        i < Math.min(progression.dailySnapshots.length, 30);
+        i++
+      ) {
+        const day = progression.dailySnapshots[i];
         // Total should remain constant
         expect(day.newCards + day.learningCards + day.matureCards).toBe(10);
 
@@ -620,35 +652,47 @@ describe("StatisticsService Integration Tests", () => {
     });
 
     it("should stop early when all cards are mature", async () => {
-      // Create only mature cards
+      // Create only mature cards with due dates far in the future
+      const futureDate = new Date(
+        Date.now() + 365 * 2 * 24 * 60 * 60 * 1000
+      ).toISOString(); // 2 years in future
+
       for (let i = 0; i < 3; i++) {
         const card = DatabaseTestUtils.createTestFlashcard(testDeck.id, {
           id: `card-mature-${i}`,
           front: `Mature Card ${i}`,
           state: "review",
           interval: 100000, // Very long interval
-          stability: 200,
+          stability: 200, // > 21 days = mature
           difficulty: 3,
           repetitions: 10,
+          dueDate: futureDate, // No reviews needed during simulation
         });
         await db.createFlashcard(card);
       }
 
-      const progression = await statsService.simulateMaturityProgression([testDeck.id], 365);
+      const progression = await statsService.simulateMaturityProgression(
+        [testDeck.id],
+        365
+      );
 
-      // Should stop immediately since all cards are already mature
-      expect(progression.length).toBeLessThan(10);
+      // Should stop early after 7+ idle days (all mature, no activity)
+      expect(progression.dailySnapshots.length).toBeLessThan(10);
 
-      const lastDay = progression[progression.length - 1];
+      const lastDay =
+        progression.dailySnapshots[progression.dailySnapshots.length - 1];
       expect(lastDay.newCards).toBe(0);
       expect(lastDay.learningCards).toBe(0);
       expect(lastDay.matureCards).toBe(3);
     });
 
     it("should return empty array for empty deck", async () => {
-      const progression = await statsService.simulateMaturityProgression([testDeck.id], 90);
+      const progression = await statsService.simulateMaturityProgression(
+        [testDeck.id],
+        90
+      );
 
-      expect(progression.length).toBe(0);
+      expect(progression.dailySnapshots.length).toBe(0);
     });
 
     describe("FSRS Fidelity and Accuracy", () => {
@@ -667,7 +711,8 @@ describe("StatisticsService Integration Tests", () => {
             repetitions: i < 5 ? 0 : i - 4,
             lapses: 0,
             dueDate: now.toISOString(),
-            lastReviewed: i < 5 ? null : new Date(now.getTime() - 86400000).toISOString(),
+            lastReviewed:
+              i < 5 ? null : new Date(now.getTime() - 86400000).toISOString(),
           });
           cards.push(card);
           await db.createFlashcard(card);
@@ -689,22 +734,27 @@ describe("StatisticsService Integration Tests", () => {
         );
 
         // Verify simulation produces expected behavior
-        expect(progression.length).toBeGreaterThan(0);
-        expect(progression.length).toBeLessThanOrEqual(30);
+        expect(progression.dailySnapshots.length).toBeGreaterThan(0);
+        expect(progression.dailySnapshots.length).toBeLessThanOrEqual(30);
 
         // First day should have all 10 cards
-        const firstDay = progression[0];
-        expect(firstDay.newCards + firstDay.learningCards + firstDay.matureCards).toBe(10);
+        const firstDay = progression.dailySnapshots[0];
+        expect(
+          firstDay.newCards + firstDay.learningCards + firstDay.matureCards
+        ).toBe(10);
 
         // Total should remain constant throughout
-        progression.forEach((day) => {
+        progression.dailySnapshots.forEach((day) => {
           expect(day.newCards + day.learningCards + day.matureCards).toBe(10);
         });
 
         // New cards should decrease over time (as they get processed)
         let foundDecreaseInNewCards = false;
-        for (let i = 1; i < progression.length; i++) {
-          if (progression[i].newCards < progression[i - 1].newCards) {
+        for (let i = 1; i < progression.dailySnapshots.length; i++) {
+          if (
+            progression.dailySnapshots[i].newCards <
+            progression.dailySnapshots[i - 1].newCards
+          ) {
             foundDecreaseInNewCards = true;
             break;
           }
@@ -712,8 +762,11 @@ describe("StatisticsService Integration Tests", () => {
         expect(foundDecreaseInNewCards).toBe(true);
 
         // Mature cards should increase over time
-        const lastDay = progression[progression.length - 1];
-        expect(lastDay.matureCards).toBeGreaterThanOrEqual(firstDay.matureCards);
+        const lastDay =
+          progression.dailySnapshots[progression.dailySnapshots.length - 1];
+        expect(lastDay.matureCards).toBeGreaterThanOrEqual(
+          firstDay.matureCards
+        );
       });
 
       it("should use stability-based maturity classification (not interval)", async () => {
@@ -751,11 +804,11 @@ describe("StatisticsService Integration Tests", () => {
           1
         );
 
-        expect(progression).toHaveLength(1);
+        expect(progression.dailySnapshots).toHaveLength(1);
         // Card 1 (stability=25) should be mature (≥21 days)
         // Card 2 (stability=10) should be learning (<21 days)
-        expect(progression[0].matureCards).toBe(1);
-        expect(progression[0].learningCards).toBe(1);
+        expect(progression.dailySnapshots[0].matureCards).toBe(1);
+        expect(progression.dailySnapshots[0].learningCards).toBe(1);
       });
 
       it("should enforce daily new card limits correctly", async () => {
@@ -785,10 +838,10 @@ describe("StatisticsService Integration Tests", () => {
         );
 
         // Day 1: Should have 90 new cards remaining (100 - 10)
-        expect(progression[0].newCards).toBe(90);
+        expect(progression.dailySnapshots[0].newCards).toBe(90);
 
         // By day 10, all 100 cards should be processed (100 / 10 = 10 days)
-        const day10 = progression[9];
+        const day10 = progression.dailySnapshots[9];
         expect(day10.newCards).toBe(0);
         expect(day10.learningCards + day10.matureCards).toBe(100);
       });
@@ -825,7 +878,7 @@ describe("StatisticsService Integration Tests", () => {
         );
 
         // Simulation should take approximately 10 days to process 50 cards at 5/day
-        expect(progression.length).toBeGreaterThanOrEqual(10);
+        expect(progression.dailySnapshots.length).toBeGreaterThanOrEqual(10);
       });
 
       it("should handle unlimited daily limits (Infinity)", async () => {
@@ -855,8 +908,11 @@ describe("StatisticsService Integration Tests", () => {
 
         // With unlimited, cards should be processed quickly (within FSRS scheduling constraints)
         // Day 1 should process many cards (not artificially limited)
-        expect(progression[0].newCards).toBeLessThan(200);
-        expect(progression[0].learningCards + progression[0].matureCards).toBeGreaterThan(0);
+        expect(progression.dailySnapshots[0].newCards).toBeLessThan(200);
+        expect(
+          progression.dailySnapshots[0].learningCards +
+            progression.dailySnapshots[0].matureCards
+        ).toBeGreaterThan(0);
       });
 
       it("should verify maturity boundary at 21 days stability", async () => {
@@ -874,15 +930,18 @@ describe("StatisticsService Integration Tests", () => {
         });
 
         // Card exactly at threshold
-        const cardBoundary = DatabaseTestUtils.createTestFlashcard(testDeck.id, {
-          id: "card-21.0",
-          front: "At Threshold",
-          state: "review",
-          stability: 21.0,
-          difficulty: 5,
-          repetitions: 3,
-          dueDate: new Date(now.getTime() + 100000000).toISOString(),
-        });
+        const cardBoundary = DatabaseTestUtils.createTestFlashcard(
+          testDeck.id,
+          {
+            id: "card-21.0",
+            front: "At Threshold",
+            state: "review",
+            stability: 21.0,
+            difficulty: 5,
+            repetitions: 3,
+            dueDate: new Date(now.getTime() + 100000000).toISOString(),
+          }
+        );
 
         // Card above threshold
         const cardAbove = DatabaseTestUtils.createTestFlashcard(testDeck.id, {
@@ -904,11 +963,11 @@ describe("StatisticsService Integration Tests", () => {
           1
         );
 
-        expect(progression).toHaveLength(1);
+        expect(progression.dailySnapshots).toHaveLength(1);
         // 20.9 < 21 → learning
-        expect(progression[0].learningCards).toBe(1);
+        expect(progression.dailySnapshots[0].learningCards).toBe(1);
         // 21.0 ≥ 21 and 21.1 ≥ 21 → mature (boundary is inclusive)
-        expect(progression[0].matureCards).toBe(2);
+        expect(progression.dailySnapshots[0].matureCards).toBe(2);
       });
 
       it("should exit early when all cards mature with 7 idle days", async () => {
@@ -937,12 +996,13 @@ describe("StatisticsService Integration Tests", () => {
 
         // Should exit early (way before 100 days) due to idle threshold
         // No cards are due during the simulation, so should exit after MAX_IDLE_DAYS (7 days)
-        expect(progression.length).toBeLessThan(100);
+        expect(progression.dailySnapshots.length).toBeLessThan(100);
         // Should exit after approximately 7 idle days (MAX_IDLE_DAYS) + 1 for initial snapshot
-        expect(progression.length).toBeLessThan(20);
+        expect(progression.dailySnapshots.length).toBeLessThan(20);
 
         // All days should show all cards as mature
-        const finalDay = progression[progression.length - 1];
+        const finalDay =
+          progression.dailySnapshots[progression.dailySnapshots.length - 1];
         expect(finalDay.newCards).toBe(0);
         expect(finalDay.learningCards).toBe(0);
         expect(finalDay.matureCards).toBe(5);
@@ -972,15 +1032,18 @@ describe("StatisticsService Integration Tests", () => {
           dueDate: now.toISOString(),
         });
 
-        const cardTomorrow = DatabaseTestUtils.createTestFlashcard(testDeck.id, {
-          id: "card-tomorrow",
-          front: "Due Tomorrow",
-          state: "review",
-          stability: 5,
-          difficulty: 5,
-          repetitions: 1,
-          dueDate: new Date(now.getTime() + 86400000).toISOString(),
-        });
+        const cardTomorrow = DatabaseTestUtils.createTestFlashcard(
+          testDeck.id,
+          {
+            id: "card-tomorrow",
+            front: "Due Tomorrow",
+            state: "review",
+            stability: 5,
+            difficulty: 5,
+            repetitions: 1,
+            dueDate: new Date(now.getTime() + 86400000).toISOString(),
+          }
+        );
 
         const cardFuture = DatabaseTestUtils.createTestFlashcard(testDeck.id, {
           id: "card-future",
@@ -1013,7 +1076,7 @@ describe("StatisticsService Integration Tests", () => {
 
         // Verify simulation processes cards (priority queue is working)
         expect(progression).toBeDefined();
-        expect(progression.length).toBeGreaterThan(0);
+        expect(progression.dailySnapshots.length).toBeGreaterThan(0);
 
         // Cards should be processed in due date order (implicit in sorting logic)
         // The past due cards should be handled first
@@ -1021,12 +1084,15 @@ describe("StatisticsService Integration Tests", () => {
 
       it("should handle invalid stability values gracefully", async () => {
         // Create cards with edge case stability values
-        const cardNegative = DatabaseTestUtils.createTestFlashcard(testDeck.id, {
-          id: "card-negative",
-          front: "Negative Stability",
-          state: "new",
-          stability: -5,
-        });
+        const cardNegative = DatabaseTestUtils.createTestFlashcard(
+          testDeck.id,
+          {
+            id: "card-negative",
+            front: "Negative Stability",
+            state: "new",
+            stability: -5,
+          }
+        );
 
         const cardZero = DatabaseTestUtils.createTestFlashcard(testDeck.id, {
           id: "card-zero",
@@ -1046,11 +1112,13 @@ describe("StatisticsService Integration Tests", () => {
 
         // Verify simulation completes without crashing
         expect(progression).toBeDefined();
-        expect(progression.length).toBeGreaterThan(0);
+        expect(progression.dailySnapshots.length).toBeGreaterThan(0);
 
         // Cards should be handled with default stability (1)
-        const firstDay = progression[0];
-        expect(firstDay.newCards + firstDay.learningCards + firstDay.matureCards).toBe(2);
+        const firstDay = progression.dailySnapshots[0];
+        expect(
+          firstDay.newCards + firstDay.learningCards + firstDay.matureCards
+        ).toBe(2);
       });
     });
 
@@ -1085,8 +1153,8 @@ describe("StatisticsService Integration Tests", () => {
 
         // Should complete in reasonable time (<5 seconds for 1000 cards)
         expect(elapsedTime).toBeLessThan(5000);
-        expect(progression.length).toBeGreaterThan(0);
-        expect(progression.length).toBeLessThanOrEqual(90);
+        expect(progression.dailySnapshots.length).toBeGreaterThan(0);
+        expect(progression.dailySnapshots.length).toBeLessThanOrEqual(90);
       });
 
       it("should handle multi-deck aggregation efficiently", async () => {
@@ -1131,11 +1199,13 @@ describe("StatisticsService Integration Tests", () => {
 
         // Should complete efficiently (<3 seconds for 600 cards)
         expect(elapsedTime).toBeLessThan(3000);
-        expect(progression.length).toBeGreaterThan(0);
+        expect(progression.dailySnapshots.length).toBeGreaterThan(0);
 
         // Should aggregate all 600 cards
-        const firstDay = progression[0];
-        expect(firstDay.newCards + firstDay.learningCards + firstDay.matureCards).toBe(600);
+        const firstDay = progression.dailySnapshots[0];
+        expect(
+          firstDay.newCards + firstDay.learningCards + firstDay.matureCards
+        ).toBe(600);
       });
     });
   });
@@ -1202,14 +1272,20 @@ describe("StatisticsService Integration Tests", () => {
       );
 
       // Test filtering to deck 1
-      const deck1Stats = await statsService.getOverallStatistics([testDeck1.id], "all");
+      const deck1Stats = await statsService.getOverallStatistics(
+        [testDeck1.id],
+        "all"
+      );
       expect(deck1Stats.cardStats.new).toBe(3);
       expect(deck1Stats.cardStats.review).toBe(2);
       expect(deck1Stats.cardStats.mature).toBe(0);
       expect(deck1Stats.cardStats.total).toBe(5);
 
       // Test filtering to deck 2
-      const deck2Stats = await statsService.getOverallStatistics([testDeck2.id], "all");
+      const deck2Stats = await statsService.getOverallStatistics(
+        [testDeck2.id],
+        "all"
+      );
       expect(deck2Stats.cardStats.new).toBe(5);
       expect(deck2Stats.cardStats.review).toBe(0);
       expect(deck2Stats.cardStats.mature).toBe(1);
@@ -1281,14 +1357,20 @@ describe("StatisticsService Integration Tests", () => {
       );
 
       // Test deck 1 filtering
-      const deck1Stats = await statsService.getOverallStatistics([testDeck1.id], "all");
+      const deck1Stats = await statsService.getOverallStatistics(
+        [testDeck1.id],
+        "all"
+      );
       expect(deck1Stats.answerButtons.again).toBe(1);
       expect(deck1Stats.answerButtons.hard).toBe(0);
       expect(deck1Stats.answerButtons.good).toBe(2);
       expect(deck1Stats.answerButtons.easy).toBe(0);
 
       // Test deck 2 filtering
-      const deck2Stats = await statsService.getOverallStatistics([testDeck2.id], "all");
+      const deck2Stats = await statsService.getOverallStatistics(
+        [testDeck2.id],
+        "all"
+      );
       expect(deck2Stats.answerButtons.again).toBe(0);
       expect(deck2Stats.answerButtons.hard).toBe(1);
       expect(deck2Stats.answerButtons.good).toBe(0);
@@ -1334,21 +1416,35 @@ describe("StatisticsService Integration Tests", () => {
       }
 
       // Test deck 1 filtering
-      const deck1Stats = await statsService.getOverallStatistics([testDeck1.id], "all");
+      const deck1Stats = await statsService.getOverallStatistics(
+        [testDeck1.id],
+        "all"
+      );
       const tomorrowStr = toLocalDateString(tomorrow);
-      const deck1TomorrowForecast = deck1Stats.forecast.find((f) => f.date === tomorrowStr);
+      const deck1TomorrowForecast = deck1Stats.forecast.find(
+        (f) => f.date === tomorrowStr
+      );
       expect(deck1TomorrowForecast?.dueCount).toBe(2);
 
       // Test deck 2 filtering
-      const deck2Stats = await statsService.getOverallStatistics([testDeck2.id], "all");
+      const deck2Stats = await statsService.getOverallStatistics(
+        [testDeck2.id],
+        "all"
+      );
       const nextWeekStr = toLocalDateString(nextWeek);
-      const deck2NextWeekForecast = deck2Stats.forecast.find((f) => f.date === nextWeekStr);
+      const deck2NextWeekForecast = deck2Stats.forecast.find(
+        (f) => f.date === nextWeekStr
+      );
       expect(deck2NextWeekForecast?.dueCount).toBe(3);
 
       // Test all decks
       const allStats = await statsService.getOverallStatistics([], "all");
-      const allTomorrowForecast = allStats.forecast.find((f) => f.date === tomorrowStr);
-      const allNextWeekForecast = allStats.forecast.find((f) => f.date === nextWeekStr);
+      const allTomorrowForecast = allStats.forecast.find(
+        (f) => f.date === tomorrowStr
+      );
+      const allNextWeekForecast = allStats.forecast.find(
+        (f) => f.date === nextWeekStr
+      );
       expect(allTomorrowForecast?.dueCount).toBe(2);
       expect(allNextWeekForecast?.dueCount).toBe(3);
     });
