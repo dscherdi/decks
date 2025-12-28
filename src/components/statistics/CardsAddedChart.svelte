@@ -35,9 +35,13 @@
   let chart: Chart | null = null;
   let cardsAddedData: Map<string, number> | null = null;
 
+
   onMount(async () => {
-    await loadData();
     createChart();
+    if (selectedDeckIds.length > 0) {
+      await loadData();
+      updateChart();
+    }
   });
 
   onDestroy(() => {
@@ -46,9 +50,6 @@
     }
   });
 
-  $: if (selectedDeckIds) {
-    loadData().then(() => updateChart());
-  }
 
   async function loadData() {
     try {
@@ -187,17 +188,24 @@
 </script>
 
 <h3>Cards Added Over Time</h3>
-<div class="decks-chart-controls">
-  <label>
-    Timeframe:
-    <select bind:value={timeframe} on:change={handleFilterChange}>
-      <option value="1m">1 Month</option>
-      <option value="3m">3 Months</option>
-      <option value="1y">1 Year</option>
-      <option value="all">All Time</option>
-    </select>
-  </label>
-</div>
+<p class="decks-chart-subtitle">
+  {#if selectedDeckIds.length === 0}
+    <span class="decks-loading-indicator">Select a deck to view cards added over time.</span>
+  {/if}
+</p>
+{#if selectedDeckIds.length > 0}
+  <div class="decks-chart-controls">
+    <label>
+      Timeframe:
+      <select bind:value={timeframe} on:change={handleFilterChange}>
+        <option value="1m">1 Month</option>
+        <option value="3m">3 Months</option>
+        <option value="1y">1 Year</option>
+        <option value="all">All Time</option>
+      </select>
+    </label>
+  </div>
+{/if}
 <div class="decks-cards-added-chart">
   <canvas bind:this={canvas} height="300"></canvas>
 </div>
@@ -212,5 +220,17 @@
   .decks-cards-added-chart canvas {
     max-width: 100%;
     max-height: 300px;
+  }
+
+  .decks-chart-subtitle {
+    margin: 0 0 1rem 0;
+    color: var(--text-muted);
+    font-size: 14px;
+    line-height: 1.5;
+  }
+
+  .decks-loading-indicator {
+    color: var(--text-muted);
+    font-style: italic;
   }
 </style>

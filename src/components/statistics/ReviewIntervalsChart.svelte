@@ -36,8 +36,11 @@
   let intervalData: Map<string, number> | null = null;
 
   onMount(async () => {
-    await loadData();
     createChart();
+    if (selectedDeckIds.length > 0) {
+      await loadData();
+      updateChart();
+    }
   });
 
   onDestroy(() => {
@@ -45,10 +48,6 @@
       chart.destroy();
     }
   });
-
-  $: if (selectedDeckIds) {
-    loadData().then(() => updateChart());
-  }
 
   async function loadData() {
     try {
@@ -188,8 +187,14 @@
 </script>
 
 <h3>Review Intervals</h3>
-<p class="decks-chart-description">
-  Distribution of current review intervals for cards
+<p class="decks-chart-subtitle">
+  {#if selectedDeckIds.length === 0}
+    <span class="decks-loading-indicator">Select a deck to view review interval distribution.</span>
+  {:else}
+    <span class="decks-chart-description">
+      Distribution of current review intervals for cards
+    </span>
+  {/if}
 </p>
 <div class="decks-review-intervals-chart">
   <canvas bind:this={canvas} height="300"></canvas>
@@ -205,5 +210,17 @@
   .decks-review-intervals-chart canvas {
     max-width: 100%;
     max-height: 300px;
+  }
+
+  .decks-chart-subtitle {
+    margin: 0 0 1rem 0;
+    color: var(--text-muted);
+    font-size: 14px;
+    line-height: 1.5;
+  }
+
+  .decks-loading-indicator {
+    color: var(--text-muted);
+    font-style: italic;
   }
 </style>

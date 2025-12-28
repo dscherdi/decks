@@ -41,9 +41,13 @@
   let canvas: HTMLCanvasElement;
   let chart: Chart | null = null;
 
+
   onMount(async () => {
-    await loadData();
     createChart();
+    if (selectedDeckIds.length > 0) {
+      await loadData();
+      updateChart();
+    }
   });
 
   onDestroy(() => {
@@ -52,9 +56,6 @@
     }
   });
 
-  $: if (selectedDeckIds) {
-    loadData().then(() => updateChart());
-  }
 
   async function loadData() {
     try {
@@ -224,6 +225,11 @@
 </script>
 
 <h3>Review Activity by Hour</h3>
+<p class="decks-chart-subtitle">
+  {#if selectedDeckIds.length === 0}
+    <span class="decks-loading-indicator">Select a deck to view review activity by hour.</span>
+  {/if}
+</p>
 <div class="decks-hourly-breakdown-chart">
   <canvas bind:this={canvas} height="300"></canvas>
 </div>
@@ -238,5 +244,17 @@
   .decks-hourly-breakdown-chart canvas {
     max-width: 100%;
     max-height: 300px;
+  }
+
+  .decks-chart-subtitle {
+    margin: 0 0 1rem 0;
+    color: var(--text-muted);
+    font-size: 14px;
+    line-height: 1.5;
+  }
+
+  .decks-loading-indicator {
+    color: var(--text-muted);
+    font-style: italic;
   }
 </style>

@@ -17,6 +17,7 @@ describe("Scheduler Integration Tests", () => {
 
     // Create minimal dependencies for Scheduler
     const mockSettings = {
+      review: { nextDayStartsAt: 4, showProgress: true, enableKeyboardShortcuts: true, sessionDuration: 25 },
       backup: { enableAutoBackup: false, maxBackups: 3 },
       debug: { enableLogging: false, performanceLogs: false },
     } as any;

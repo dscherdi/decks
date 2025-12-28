@@ -14,6 +14,7 @@ export type RatingLabel = "again" | "hard" | "good" | "easy";
 export interface FSRSParameters {
   requestRetention: number; // target retention rate (0,1)
   profile: FSRSProfile; // "INTENSIVE" | "STANDARD"
+  nextDayStartsAt?: number; // Hour (0-23) when study day rolls over (default 4)
 }
 
 export interface FSRSCard {
@@ -316,23 +317,56 @@ export class FSRS {
       intervalMinutes = this.getMinMinutes();
     }
 
-    const intervalMilliseconds = intervalMinutes * MILLISECONDS_PER_MINUTE;
-    const dueDate = new Date(now.getTime() + intervalMilliseconds);
-
     // Ensure minimum interval for STANDARD profile
     const minMinutes = this.getMinMinutes();
     if (intervalMinutes < minMinutes) {
       intervalMinutes = minMinutes;
     }
 
+    // Calculate due date aligned to Study Day boundaries
+    const nextDayStartsAt = this.params.nextDayStartsAt ?? 4;
+    const intervalDays = Math.ceil(intervalMinutes / MINUTES_PER_DAY);
+    const dueDate = this.getStudyDayStartAfterDays(now, intervalDays, nextDayStartsAt);
+
     return {
-      dueDate: dueDate.toISOString(),
+      dueDate: dueDate,
       interval: intervalMinutes,
       repetitions: card.reps,
       stability: card.stability,
       difficulty: card.difficulty,
       state: "review",
     };
+  }
+
+  /**
+   * Calculates the start of the current Study Day in UTC
+   */
+  private getStudyDayStart(now: Date, nextDayStartsAt: number): string {
+    const localMidnight = new Date(now);
+    localMidnight.setHours(0, 0, 0, 0);
+
+    const studyDayStart = new Date(localMidnight);
+    studyDayStart.setHours(nextDayStartsAt, 0, 0, 0);
+
+    // If current time is before the study day rollover, use previous day
+    if (now < studyDayStart) {
+      studyDayStart.setDate(studyDayStart.getDate() - 1);
+    }
+
+    return studyDayStart.toISOString();
+  }
+
+  /**
+   * Calculates the start of a future Study Day (N days from now)
+   */
+  private getStudyDayStartAfterDays(
+    now: Date,
+    daysFromNow: number,
+    nextDayStartsAt: number
+  ): string {
+    const currentStart = new Date(this.getStudyDayStart(now, nextDayStartsAt));
+    currentStart.setDate(currentStart.getDate() + daysFromNow);
+    return currentStart.toISOString();
   }
 
   private initStability(rating: number): number {

@@ -115,7 +115,8 @@ export interface IDatabaseService {
 
   // Statistics operations moved to StatisticsService
   getDailyReviewCounts(
-    deckId: string
+    deckId: string,
+    nextDayStartsAt?: number
   ): Promise<{ newCount: number; reviewCount: number }>;
 
   // Count operations
@@ -146,13 +147,11 @@ export interface IDatabaseService {
   ): Promise<number>;
   countNewCardsToday(
     deckId: string,
-    startOfDay: string,
-    endOfDay: string
+    nextDayStartsAt?: number
   ): Promise<number>;
   countReviewCardsToday(
     deckId: string,
-    startOfDay: string,
-    endOfDay: string
+    nextDayStartsAt?: number
   ): Promise<number>;
 
   // Utility operations

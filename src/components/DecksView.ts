@@ -266,7 +266,7 @@ export class DecksView extends ItemView {
       await this.deckSynchronizer.syncDeck(deck.id);
       await yieldToUI();
       // Get daily review counts to show remaining allowance
-      const dailyCounts = await this.db.getDailyReviewCounts(deck.id);
+      const dailyCounts = await this.db.getDailyReviewCounts(deck.id, this.settings.review.nextDayStartsAt);
 
       // Calculate remaining daily allowance
       const config = deck.config;

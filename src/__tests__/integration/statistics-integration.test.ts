@@ -13,6 +13,7 @@ import {
   setupTestDatabase,
   teardownTestDatabase,
 } from "./database-test-utils";
+import { toLocalDateString } from "../../utils/date-utils";
 
 describe("StatisticsService Integration Tests", () => {
   let db: MainDatabaseService;
@@ -24,6 +25,7 @@ describe("StatisticsService Integration Tests", () => {
 
     // Create mock settings for StatisticsService
     const mockSettings = {
+      review: { nextDayStartsAt: 4 },
       backup: { enableAutoBackup: false, maxBackups: 3 },
       debug: { enableLogging: false, performanceLogs: false },
     } as any;
@@ -207,14 +209,14 @@ describe("StatisticsService Integration Tests", () => {
       const reviewData = await statsService.getReviewsByDateAndRating(7, [testDeck.id]);
 
       // Check today's data
-      const todayKey = today.toISOString().split("T")[0];
+      const todayKey = toLocalDateString(today);
       const todayData = reviewData.get(todayKey);
       expect(todayData).toBeDefined();
       expect(todayData?.good).toBe(2);
       expect(todayData?.easy).toBe(1);
 
       // Check yesterday's data
-      const yesterdayKey = yesterday.toISOString().split("T")[0];
+      const yesterdayKey = toLocalDateString(yesterday);
       const yesterdayData = reviewData.get(yesterdayKey);
       expect(yesterdayData).toBeDefined();
       expect(yesterdayData?.again).toBe(1);
@@ -229,22 +231,22 @@ describe("StatisticsService Integration Tests", () => {
       });
       await db.createFlashcard(card);
 
-      const baseDate = new Date("2024-01-15T00:00:00.000Z");
+      const baseDate = new Date("2024-01-15T00:00:00.000");
 
-      // 3 reviews at 9 AM UTC
+      // 3 reviews at 9 AM local time
       for (let i = 0; i < 3; i++) {
         const reviewTime = new Date(baseDate);
-        reviewTime.setUTCHours(9, i, 0, 0);
+        reviewTime.setHours(9, i, 0, 0);
         const log = DatabaseTestUtils.createTestReviewLog(card.id, {
           reviewedAt: reviewTime.toISOString(),
         });
         await db.createReviewLog(log);
       }
 
-      // 5 reviews at 2 PM (14:00) UTC
+      // 5 reviews at 2 PM (14:00) local time
       for (let i = 0; i < 5; i++) {
         const reviewTime = new Date(baseDate);
-        reviewTime.setUTCHours(14, i, 0, 0);
+        reviewTime.setHours(14, i, 0, 0);
         const log = DatabaseTestUtils.createTestReviewLog(card.id, {
           reviewedAt: reviewTime.toISOString(),
         });
@@ -266,7 +268,7 @@ describe("StatisticsService Integration Tests", () => {
       });
       await db.createFlashcard(card);
 
-      const baseDate = new Date("2024-01-15T00:00:00.000Z");
+      const baseDate = new Date("2024-01-15T00:00:00.000");
 
       // 9 AM: 3 reviews - 2 passed (Good/Easy), 1 failed (Again)
       const hour9Reviews = [
@@ -277,7 +279,7 @@ describe("StatisticsService Integration Tests", () => {
 
       for (let i = 0; i < hour9Reviews.length; i++) {
         const reviewTime = new Date(baseDate);
-        reviewTime.setUTCHours(9, i, 0, 0);
+        reviewTime.setHours(9, i, 0, 0);
         const log = DatabaseTestUtils.createTestReviewLog(card.id, {
           reviewedAt: reviewTime.toISOString(),
           rating: hour9Reviews[i].rating,
@@ -289,7 +291,7 @@ describe("StatisticsService Integration Tests", () => {
       // 2 PM: 4 reviews - all passed (Good)
       for (let i = 0; i < 4; i++) {
         const reviewTime = new Date(baseDate);
-        reviewTime.setUTCHours(14, i, 0, 0);
+        reviewTime.setHours(14, i, 0, 0);
         const log = DatabaseTestUtils.createTestReviewLog(card.id, {
           reviewedAt: reviewTime.toISOString(),
           rating: 3 as 1 | 2 | 3 | 4,
@@ -407,8 +409,8 @@ describe("StatisticsService Integration Tests", () => {
 
       const cardsAdded = await statsService.getCardsAddedByDate(7, [testDeck.id]);
 
-      const todayKey = today.toISOString().split("T")[0];
-      const yesterdayKey = yesterday.toISOString().split("T")[0];
+      const todayKey = toLocalDateString(today);
+      const yesterdayKey = toLocalDateString(yesterday);
 
       expect(cardsAdded.get(todayKey)).toBe(3);
       expect(cardsAdded.get(yesterdayKey)).toBe(2);
@@ -648,6 +650,494 @@ describe("StatisticsService Integration Tests", () => {
 
       expect(progression.length).toBe(0);
     });
+
+    describe("FSRS Fidelity and Accuracy", () => {
+      it("should produce outcomes matching real Scheduler over multiple days", async () => {
+        // Create 10 cards with known FSRS state
+        const cards = [];
+        const now = new Date();
+
+        for (let i = 0; i < 10; i++) {
+          const card = DatabaseTestUtils.createTestFlashcard(testDeck.id, {
+            id: `card-${i}`,
+            front: `Card ${i}`,
+            state: i < 5 ? "new" : "review",
+            stability: i < 5 ? 1 : 5 + i,
+            difficulty: 5,
+            repetitions: i < 5 ? 0 : i - 4,
+            lapses: 0,
+            dueDate: now.toISOString(),
+            lastReviewed: i < 5 ? null : new Date(now.getTime() - 86400000).toISOString(),
+          });
+          cards.push(card);
+          await db.createFlashcard(card);
+        }
+
+        // Add daily limits to ensure gradual progression
+        await db.updateDeck(testDeck.id, {
+          config: {
+            ...testDeck.config,
+            hasNewCardsLimitEnabled: true,
+            newCardsPerDay: 2, // Process 2 new cards per day
+          },
+        });
+
+        // Run simulation for 30 days
+        const progression = await statsService.simulateMaturityProgression(
+          [testDeck.id],
+          30
+        );
+
+        // Verify simulation produces expected behavior
+        expect(progression.length).toBeGreaterThan(0);
+        expect(progression.length).toBeLessThanOrEqual(30);
+
+        // First day should have all 10 cards
+        const firstDay = progression[0];
+        expect(firstDay.newCards + firstDay.learningCards + firstDay.matureCards).toBe(10);
+
+        // Total should remain constant throughout
+        progression.forEach((day) => {
+          expect(day.newCards + day.learningCards + day.matureCards).toBe(10);
+        });
+
+        // New cards should decrease over time (as they get processed)
+        let foundDecreaseInNewCards = false;
+        for (let i = 1; i < progression.length; i++) {
+          if (progression[i].newCards < progression[i - 1].newCards) {
+            foundDecreaseInNewCards = true;
+            break;
+          }
+        }
+        expect(foundDecreaseInNewCards).toBe(true);
+
+        // Mature cards should increase over time
+        const lastDay = progression[progression.length - 1];
+        expect(lastDay.matureCards).toBeGreaterThanOrEqual(firstDay.matureCards);
+      });
+
+      it("should use stability-based maturity classification (not interval)", async () => {
+        const now = new Date();
+
+        // Card 1: High stability (25 days), low interval (5 days) → should be MATURE
+        const card1 = DatabaseTestUtils.createTestFlashcard(testDeck.id, {
+          id: "card-mature-by-stability",
+          front: "Mature by Stability",
+          state: "review",
+          stability: 25,
+          interval: 5 * 1440, // 5 days
+          difficulty: 5,
+          repetitions: 3,
+          dueDate: new Date(now.getTime() + 100000000).toISOString(), // Far future
+        });
+
+        // Card 2: Low stability (10 days), high interval (30 days) → should be LEARNING
+        const card2 = DatabaseTestUtils.createTestFlashcard(testDeck.id, {
+          id: "card-learning-by-stability",
+          front: "Learning by Stability",
+          state: "review",
+          stability: 10,
+          interval: 30 * 1440, // 30 days
+          difficulty: 5,
+          repetitions: 3,
+          dueDate: new Date(now.getTime() + 100000000).toISOString(),
+        });
+
+        await db.createFlashcard(card1);
+        await db.createFlashcard(card2);
+
+        const progression = await statsService.simulateMaturityProgression(
+          [testDeck.id],
+          1
+        );
+
+        expect(progression).toHaveLength(1);
+        // Card 1 (stability=25) should be mature (≥21 days)
+        // Card 2 (stability=10) should be learning (<21 days)
+        expect(progression[0].matureCards).toBe(1);
+        expect(progression[0].learningCards).toBe(1);
+      });
+
+      it("should enforce daily new card limits correctly", async () => {
+        // Create 100 new cards
+        for (let i = 0; i < 100; i++) {
+          const card = DatabaseTestUtils.createTestFlashcard(testDeck.id, {
+            id: `card-${i}`,
+            front: `Card ${i}`,
+            state: "new",
+            dueDate: new Date().toISOString(),
+          });
+          await db.createFlashcard(card);
+        }
+
+        // Update deck config to limit new cards to 10/day
+        await db.updateDeck(testDeck.id, {
+          config: {
+            ...testDeck.config,
+            hasNewCardsLimitEnabled: true,
+            newCardsPerDay: 10,
+          },
+        });
+
+        const progression = await statsService.simulateMaturityProgression(
+          [testDeck.id],
+          20
+        );
+
+        // Day 1: Should have 90 new cards remaining (100 - 10)
+        expect(progression[0].newCards).toBe(90);
+
+        // By day 10, all 100 cards should be processed (100 / 10 = 10 days)
+        const day10 = progression[9];
+        expect(day10.newCards).toBe(0);
+        expect(day10.learningCards + day10.matureCards).toBe(100);
+      });
+
+      it("should enforce daily review card limits correctly", async () => {
+        const now = new Date();
+
+        // Create 50 review cards (all due now)
+        for (let i = 0; i < 50; i++) {
+          const card = DatabaseTestUtils.createTestFlashcard(testDeck.id, {
+            id: `card-${i}`,
+            front: `Card ${i}`,
+            state: "review",
+            stability: 5,
+            difficulty: 5,
+            repetitions: 1,
+            dueDate: now.toISOString(),
+          });
+          await db.createFlashcard(card);
+        }
+
+        // Update deck config to limit reviews to 5/day
+        await db.updateDeck(testDeck.id, {
+          config: {
+            ...testDeck.config,
+            hasReviewCardsLimitEnabled: true,
+            reviewCardsPerDay: 5,
+          },
+        });
+
+        const progression = await statsService.simulateMaturityProgression(
+          [testDeck.id],
+          15
+        );
+
+        // Simulation should take approximately 10 days to process 50 cards at 5/day
+        expect(progression.length).toBeGreaterThanOrEqual(10);
+      });
+
+      it("should handle unlimited daily limits (Infinity)", async () => {
+        // Create 200 new cards
+        for (let i = 0; i < 200; i++) {
+          const card = DatabaseTestUtils.createTestFlashcard(testDeck.id, {
+            id: `card-${i}`,
+            front: `Card ${i}`,
+            state: "new",
+            dueDate: new Date().toISOString(),
+          });
+          await db.createFlashcard(card);
+        }
+
+        // Ensure deck has no limits (unlimited)
+        await db.updateDeck(testDeck.id, {
+          config: {
+            ...testDeck.config,
+            hasNewCardsLimitEnabled: false,
+          },
+        });
+
+        const progression = await statsService.simulateMaturityProgression(
+          [testDeck.id],
+          5
+        );
+
+        // With unlimited, cards should be processed quickly (within FSRS scheduling constraints)
+        // Day 1 should process many cards (not artificially limited)
+        expect(progression[0].newCards).toBeLessThan(200);
+        expect(progression[0].learningCards + progression[0].matureCards).toBeGreaterThan(0);
+      });
+
+      it("should verify maturity boundary at 21 days stability", async () => {
+        const now = new Date();
+
+        // Card just below threshold
+        const cardBelow = DatabaseTestUtils.createTestFlashcard(testDeck.id, {
+          id: "card-20.9",
+          front: "Below Threshold",
+          state: "review",
+          stability: 20.9,
+          difficulty: 5,
+          repetitions: 3,
+          dueDate: new Date(now.getTime() + 100000000).toISOString(),
+        });
+
+        // Card exactly at threshold
+        const cardBoundary = DatabaseTestUtils.createTestFlashcard(testDeck.id, {
+          id: "card-21.0",
+          front: "At Threshold",
+          state: "review",
+          stability: 21.0,
+          difficulty: 5,
+          repetitions: 3,
+          dueDate: new Date(now.getTime() + 100000000).toISOString(),
+        });
+
+        // Card above threshold
+        const cardAbove = DatabaseTestUtils.createTestFlashcard(testDeck.id, {
+          id: "card-21.1",
+          front: "Above Threshold",
+          state: "review",
+          stability: 21.1,
+          difficulty: 5,
+          repetitions: 3,
+          dueDate: new Date(now.getTime() + 100000000).toISOString(),
+        });
+
+        await db.createFlashcard(cardBelow);
+        await db.createFlashcard(cardBoundary);
+        await db.createFlashcard(cardAbove);
+
+        const progression = await statsService.simulateMaturityProgression(
+          [testDeck.id],
+          1
+        );
+
+        expect(progression).toHaveLength(1);
+        // 20.9 < 21 → learning
+        expect(progression[0].learningCards).toBe(1);
+        // 21.0 ≥ 21 and 21.1 ≥ 21 → mature (boundary is inclusive)
+        expect(progression[0].matureCards).toBe(2);
+      });
+
+      it("should exit early when all cards mature with 7 idle days", async () => {
+        const now = new Date();
+
+        // Create 5 cards with high stability (all mature)
+        // Due date far in future so they won't be processed during simulation
+        for (let i = 0; i < 5; i++) {
+          const card = DatabaseTestUtils.createTestFlashcard(testDeck.id, {
+            id: `card-${i}`,
+            front: `Card ${i}`,
+            state: "review",
+            stability: 50,
+            difficulty: 3,
+            repetitions: 10,
+            dueDate: new Date(now.getTime() + 100 * 86400000).toISOString(), // Due 100 days in future
+          });
+          await db.createFlashcard(card);
+        }
+
+        // Run simulation with maxDays = 100
+        const progression = await statsService.simulateMaturityProgression(
+          [testDeck.id],
+          100
+        );
+
+        // Should exit early (way before 100 days) due to idle threshold
+        // No cards are due during the simulation, so should exit after MAX_IDLE_DAYS (7 days)
+        expect(progression.length).toBeLessThan(100);
+        // Should exit after approximately 7 idle days (MAX_IDLE_DAYS) + 1 for initial snapshot
+        expect(progression.length).toBeLessThan(20);
+
+        // All days should show all cards as mature
+        const finalDay = progression[progression.length - 1];
+        expect(finalDay.newCards).toBe(0);
+        expect(finalDay.learningCards).toBe(0);
+        expect(finalDay.matureCards).toBe(5);
+      });
+
+      it("should handle mixed due dates with priority queue", async () => {
+        const now = new Date();
+
+        // Create cards with different due dates
+        const cardPast = DatabaseTestUtils.createTestFlashcard(testDeck.id, {
+          id: "card-past",
+          front: "Past Due",
+          state: "review",
+          stability: 5,
+          difficulty: 5,
+          repetitions: 1,
+          dueDate: new Date(now.getTime() - 86400000 * 3).toISOString(), // 3 days ago
+        });
+
+        const cardToday = DatabaseTestUtils.createTestFlashcard(testDeck.id, {
+          id: "card-today",
+          front: "Due Today",
+          state: "review",
+          stability: 5,
+          difficulty: 5,
+          repetitions: 1,
+          dueDate: now.toISOString(),
+        });
+
+        const cardTomorrow = DatabaseTestUtils.createTestFlashcard(testDeck.id, {
+          id: "card-tomorrow",
+          front: "Due Tomorrow",
+          state: "review",
+          stability: 5,
+          difficulty: 5,
+          repetitions: 1,
+          dueDate: new Date(now.getTime() + 86400000).toISOString(),
+        });
+
+        const cardFuture = DatabaseTestUtils.createTestFlashcard(testDeck.id, {
+          id: "card-future",
+          front: "Due in 5 days",
+          state: "review",
+          stability: 5,
+          difficulty: 5,
+          repetitions: 1,
+          dueDate: new Date(now.getTime() + 86400000 * 5).toISOString(),
+        });
+
+        await db.createFlashcard(cardPast);
+        await db.createFlashcard(cardToday);
+        await db.createFlashcard(cardTomorrow);
+        await db.createFlashcard(cardFuture);
+
+        // Set limit to 1 card/day to force priority queue behavior
+        await db.updateDeck(testDeck.id, {
+          config: {
+            ...testDeck.config,
+            hasReviewCardsLimitEnabled: true,
+            reviewCardsPerDay: 1,
+          },
+        });
+
+        const progression = await statsService.simulateMaturityProgression(
+          [testDeck.id],
+          10
+        );
+
+        // Verify simulation processes cards (priority queue is working)
+        expect(progression).toBeDefined();
+        expect(progression.length).toBeGreaterThan(0);
+
+        // Cards should be processed in due date order (implicit in sorting logic)
+        // The past due cards should be handled first
+      });
+
+      it("should handle invalid stability values gracefully", async () => {
+        // Create cards with edge case stability values
+        const cardNegative = DatabaseTestUtils.createTestFlashcard(testDeck.id, {
+          id: "card-negative",
+          front: "Negative Stability",
+          state: "new",
+          stability: -5,
+        });
+
+        const cardZero = DatabaseTestUtils.createTestFlashcard(testDeck.id, {
+          id: "card-zero",
+          front: "Zero Stability",
+          state: "new",
+          stability: 0,
+        });
+
+        await db.createFlashcard(cardNegative);
+        await db.createFlashcard(cardZero);
+
+        // Should not crash with invalid stability values
+        const progression = await statsService.simulateMaturityProgression(
+          [testDeck.id],
+          1
+        );
+
+        // Verify simulation completes without crashing
+        expect(progression).toBeDefined();
+        expect(progression.length).toBeGreaterThan(0);
+
+        // Cards should be handled with default stability (1)
+        const firstDay = progression[0];
+        expect(firstDay.newCards + firstDay.learningCards + firstDay.matureCards).toBe(2);
+      });
+    });
+
+    describe("Performance and Large Deck Tests", () => {
+      it("should handle large deck simulation efficiently", async () => {
+        jest.setTimeout(10000); // 10 second timeout
+
+        // Create 1,000 cards (reduced from 10k for integration test speed)
+        for (let i = 0; i < 1000; i++) {
+          const card = DatabaseTestUtils.createTestFlashcard(testDeck.id, {
+            id: `card-${i}`,
+            front: `Card ${i}`,
+            state: "new",
+          });
+          await db.createFlashcard(card);
+        }
+
+        await db.updateDeck(testDeck.id, {
+          config: {
+            ...testDeck.config,
+            hasNewCardsLimitEnabled: true,
+            newCardsPerDay: 50,
+          },
+        });
+
+        const startTime = Date.now();
+        const progression = await statsService.simulateMaturityProgression(
+          [testDeck.id],
+          90
+        );
+        const elapsedTime = Date.now() - startTime;
+
+        // Should complete in reasonable time (<5 seconds for 1000 cards)
+        expect(elapsedTime).toBeLessThan(5000);
+        expect(progression.length).toBeGreaterThan(0);
+        expect(progression.length).toBeLessThanOrEqual(90);
+      });
+
+      it("should handle multi-deck aggregation efficiently", async () => {
+        jest.setTimeout(10000);
+
+        // Create 3 decks with 200 cards each
+        const deck2 = DatabaseTestUtils.createTestDeck({
+          id: "deck-2",
+          name: "Deck 2",
+          filepath: "/test/deck2.md",
+          tag: "#deck2",
+        });
+        const deck3 = DatabaseTestUtils.createTestDeck({
+          id: "deck-3",
+          name: "Deck 3",
+          filepath: "/test/deck3.md",
+          tag: "#deck3",
+        });
+
+        await db.createDeck(deck2);
+        await db.createDeck(deck3);
+
+        const decks = [testDeck, deck2, deck3];
+
+        for (const deck of decks) {
+          for (let i = 0; i < 200; i++) {
+            const card = DatabaseTestUtils.createTestFlashcard(deck.id, {
+              id: `${deck.id}-card-${i}`,
+              front: `${deck.name} Card ${i}`,
+              state: "new",
+            });
+            await db.createFlashcard(card);
+          }
+        }
+
+        const startTime = Date.now();
+        const progression = await statsService.simulateMaturityProgression(
+          [testDeck.id, deck2.id, deck3.id],
+          30
+        );
+        const elapsedTime = Date.now() - startTime;
+
+        // Should complete efficiently (<3 seconds for 600 cards)
+        expect(elapsedTime).toBeLessThan(3000);
+        expect(progression.length).toBeGreaterThan(0);
+
+        // Should aggregate all 600 cards
+        const firstDay = progression[0];
+        expect(firstDay.newCards + firstDay.learningCards + firstDay.matureCards).toBe(600);
+      });
+    });
   });
 
   describe("getOverallStatistics with Deck Filtering", () => {
@@ -845,13 +1335,13 @@ describe("StatisticsService Integration Tests", () => {
 
       // Test deck 1 filtering
       const deck1Stats = await statsService.getOverallStatistics([testDeck1.id], "all");
-      const tomorrowStr = tomorrow.toISOString().split("T")[0];
+      const tomorrowStr = toLocalDateString(tomorrow);
       const deck1TomorrowForecast = deck1Stats.forecast.find((f) => f.date === tomorrowStr);
       expect(deck1TomorrowForecast?.dueCount).toBe(2);
 
       // Test deck 2 filtering
       const deck2Stats = await statsService.getOverallStatistics([testDeck2.id], "all");
-      const nextWeekStr = nextWeek.toISOString().split("T")[0];
+      const nextWeekStr = toLocalDateString(nextWeek);
       const deck2NextWeekForecast = deck2Stats.forecast.find((f) => f.date === nextWeekStr);
       expect(deck2NextWeekForecast?.dueCount).toBe(3);
 

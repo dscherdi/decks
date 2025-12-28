@@ -85,7 +85,7 @@ export class Scheduler {
     this.debugLog(`Found deck: ${deck.name} (${deck.id})`);
 
     // Calculate goal total more accurately
-    const dailyCounts = await this.db.getDailyReviewCounts(deckId);
+    const dailyCounts = await this.db.getDailyReviewCounts(deckId, this.settings.review.nextDayStartsAt);
     // Include cards due within session duration for session goal calculation
     // This ensures cards that become due during the review session count towards the goal
     const dueCardCount = await this.getDueCardCount(
@@ -534,7 +534,7 @@ export class Scheduler {
 
     if (!deck.config.hasNewCardsLimitEnabled) return true; // unlimited
 
-    const dailyCounts = await this.db.getDailyReviewCounts(deckId);
+    const dailyCounts = await this.db.getDailyReviewCounts(deckId, this.settings.review.nextDayStartsAt);
     return dailyCounts.newCount < deck.config.newCardsPerDay;
   }
 
@@ -544,7 +544,7 @@ export class Scheduler {
 
     if (!deck.config.hasReviewCardsLimitEnabled) return true; // unlimited
 
-    const dailyCounts = await this.db.getDailyReviewCounts(deckId);
+    const dailyCounts = await this.db.getDailyReviewCounts(deckId, this.settings.review.nextDayStartsAt);
     return dailyCounts.reviewCount < deck.config.reviewCardsPerDay;
   }
 
@@ -552,6 +552,7 @@ export class Scheduler {
     this.fsrs.updateParameters({
       requestRetention: deck.config.fsrs.requestRetention,
       profile: deck.config.fsrs.profile,
+      nextDayStartsAt: this.settings.review.nextDayStartsAt,
     });
   }
 
@@ -643,5 +644,71 @@ export class Scheduler {
       created: row[15] as string,
       modified: row[16] as string,
     };
+  }
+
+  /**
+   * Calculates the start of the current Study Day in UTC
+   *
+   * A "Study Day" begins at local midnight + nextDayStartsAt hours.
+   * This allows late-night sessions (e.g., 2 AM) to count toward the previous day.
+   *
+   * @param now - Current time
+   * @param nextDayStartsAt - Hour offset (0-23) when study day rolls over
+   * @returns ISO string of Study Day start in UTC
+   *
+   * @example
+   * // If nextDayStartsAt = 4 and local time is 2025-01-15 03:30:00
+   * // Returns 2025-01-14 04:00:00 in local time converted to UTC
+   * // If local time is 2025-01-15 05:00:00
+   * // Returns 2025-01-15 04:00:00 in local time converted to UTC
+   */
+  private getStudyDayStart(now: Date, nextDayStartsAt: number): string {
+    const localMidnight = new Date(now);
+    localMidnight.setHours(0, 0, 0, 0);
+
+    const studyDayStart = new Date(localMidnight);
+    studyDayStart.setHours(nextDayStartsAt, 0, 0, 0);
+
+    // If current time is before the study day rollover, use previous day
+    if (now < studyDayStart) {
+      studyDayStart.setDate(studyDayStart.getDate() - 1);
+    }
+
+    return studyDayStart.toISOString();
+  }
+
+  /**
+   * Calculates the end of the current Study Day in UTC
+   *
+   * @param now - Current time
+   * @param nextDayStartsAt - Hour offset (0-23) when study day rolls over
+   * @returns ISO string of Study Day end in UTC
+   */
+  private getStudyDayEnd(now: Date, nextDayStartsAt: number): string {
+    const start = new Date(this.getStudyDayStart(now, nextDayStartsAt));
+    start.setHours(start.getHours() + 24);
+    return start.toISOString();
+  }
+
+  /**
+   * Calculates the start of a future Study Day (N days from now)
+   *
+   * @param now - Current time
+   * @param daysFromNow - Number of days to add
+   * @param nextDayStartsAt - Hour offset when study day rolls over
+   * @returns ISO string of target Study Day start in UTC
+   *
+   * @example
+   * // Calculate study day 7 days from now
+   * const futureStudyDay = this.getStudyDayStartAfterDays(new Date(), 7, 4);
+   */
+  private getStudyDayStartAfterDays(
+    now: Date,
+    daysFromNow: number,
+    nextDayStartsAt: number
+  ): string {
+    const currentStart = new Date(this.getStudyDayStart(now, nextDayStartsAt));
+    currentStart.setDate(currentStart.getDate() + daysFromNow);
+    return currentStart.toISOString();
   }
 }

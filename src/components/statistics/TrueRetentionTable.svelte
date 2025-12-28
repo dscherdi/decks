@@ -20,12 +20,10 @@
   };
 
   onMount(async () => {
-    await loadData();
+    if (selectedDeckIds.length > 0) {
+      await loadData();
+    }
   });
-
-  $: if (selectedDeckIds) {
-    loadData();
-  }
 
   async function loadData() {
     try {
@@ -48,51 +46,57 @@
 
 <div class="decks-true-retention-table">
   <h4>True Retention</h4>
-  <div class="decks-retention-description">
-    Pass rates for review cards (rating ≥ Good). Cards with intervals > 1 day
-    only.
-  </div>
+  {#if selectedDeckIds.length === 0}
+    <p class="decks-chart-subtitle">
+      <span class="decks-loading-indicator">Select a deck to view retention statistics.</span>
+    </p>
+  {:else}
+    <div class="decks-retention-description">
+      Pass rates for review cards (rating ≥ Good). Cards with intervals > 1 day
+      only.
+    </div>
+  {/if}
 
   <div class="decks-retention-table-container">
     <table class="decks-retention-table">
-      <thead>
-        <tr>
-          <th>Card Type</th>
-          <th>Passed</th>
-          <th>Total</th>
-          <th>Pass Rate</th>
-        </tr>
-      </thead>
-      <tbody>
-        <tr>
-          <td class="decks-card-type young">Young (&lt; 21 days)</td>
-          <td class="decks-count">{retentionStats.young.passed}</td>
-          <td class="decks-count">{retentionStats.young.total}</td>
-          <td class="decks-rate young-rate"
-            >{formatRate(retentionStats.young.rate)}</td
-          >
-        </tr>
-        <tr>
-          <td class="decks-card-type mature">Mature (≥ 21 days)</td>
-          <td class="decks-count">{retentionStats.mature.passed}</td>
-          <td class="decks-count">{retentionStats.mature.total}</td>
-          <td class="decks-rate mature-rate"
-            >{formatRate(retentionStats.mature.rate)}</td
-          >
-        </tr>
-        <tr class="decks-total-row">
-          <td class="decks-card-type all">All Cards</td>
-          <td class="decks-count">{retentionStats.all.passed}</td>
-          <td class="decks-count">{retentionStats.all.total}</td>
-          <td class="decks-rate all-rate"
-            >{formatRate(retentionStats.all.rate)}</td
-          >
-        </tr>
-      </tbody>
+    <thead>
+      <tr>
+        <th>Card Type</th>
+        <th>Passed</th>
+        <th>Total</th>
+        <th>Pass Rate</th>
+      </tr>
+    </thead>
+    <tbody>
+      <tr>
+        <td class="decks-card-type young">Young (&lt; 21 days)</td>
+        <td class="decks-count">{retentionStats.young.passed}</td>
+        <td class="decks-count">{retentionStats.young.total}</td>
+        <td class="decks-rate young-rate"
+          >{formatRate(retentionStats.young.rate)}</td
+        >
+      </tr>
+      <tr>
+        <td class="decks-card-type mature">Mature (≥ 21 days)</td>
+        <td class="decks-count">{retentionStats.mature.passed}</td>
+        <td class="decks-count">{retentionStats.mature.total}</td>
+        <td class="decks-rate mature-rate"
+          >{formatRate(retentionStats.mature.rate)}</td
+        >
+      </tr>
+      <tr class="decks-total-row">
+        <td class="decks-card-type all">All Cards</td>
+        <td class="decks-count">{retentionStats.all.passed}</td>
+        <td class="decks-count">{retentionStats.all.total}</td>
+        <td class="decks-rate all-rate"
+          >{formatRate(retentionStats.all.rate)}</td
+        >
+      </tr>
+    </tbody>
     </table>
   </div>
 
-  {#if retentionStats.all.total === 0}
+  {#if selectedDeckIds.length > 0 && retentionStats.all.total === 0}
     <div class="decks-no-data">
       No review data available yet. Complete some reviews to see retention
       statistics.
@@ -101,6 +105,18 @@
 </div>
 
 <style>
+  .decks-chart-subtitle {
+    margin: 0 0 1rem 0;
+    color: var(--text-muted);
+    font-size: 14px;
+    line-height: 1.5;
+  }
+
+  .decks-loading-indicator {
+    color: var(--text-muted);
+    font-style: italic;
+  }
+
   .decks-true-retention-table {
     margin: 1rem 0;
     padding: 1rem;

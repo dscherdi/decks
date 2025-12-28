@@ -1,5 +1,6 @@
 <script lang="ts">
   import { onMount } from "svelte";
+  import { toLocalDateString } from "@/utils/date-utils";
 
   export let getReviewCounts: (days: number) => Promise<Map<string, number>>;
 
@@ -57,7 +58,7 @@
 
     // Generate complete weeks but only include days within the selected year
     while (current <= endDate) {
-      const dateStr = current.toISOString().split("T")[0];
+      const dateStr = toLocalDateString(current);
       const currentDateYear = current.getFullYear();
 
       // Only include days that belong to the selected year
@@ -111,7 +112,7 @@
   }
 
   function isToday(dateStr: string): boolean {
-    const today = new Date().toISOString().split("T")[0];
+    const today = toLocalDateString(new Date());
     return dateStr === today;
   }
 

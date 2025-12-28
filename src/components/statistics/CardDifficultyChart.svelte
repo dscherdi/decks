@@ -35,9 +35,13 @@
   let chart: Chart | null = null;
   let difficultyData: Map<string, number> | null = null;
 
+
   onMount(async () => {
-    await loadData();
     createChart();
+    if (selectedDeckIds.length > 0) {
+      await loadData();
+      updateChart();
+    }
   });
 
   onDestroy(() => {
@@ -46,9 +50,6 @@
     }
   });
 
-  $: if (selectedDeckIds) {
-    loadData().then(() => updateChart());
-  }
 
   async function loadData() {
     try {
@@ -202,8 +203,14 @@
 </script>
 
 <h3>Card Difficulty Distribution</h3>
-<p class="decks-chart-description">
-  FSRS difficulty values indicate how hard cards are to remember
+<p class="decks-chart-subtitle">
+  {#if selectedDeckIds.length === 0}
+    <span class="decks-loading-indicator">Select a deck to view card difficulty distribution.</span>
+  {:else}
+    <span class="decks-chart-description">
+      FSRS difficulty values indicate how hard cards are to remember
+    </span>
+  {/if}
 </p>
 <div class="decks-card-difficulty-chart">
   <canvas bind:this={canvas} height="300"></canvas>
@@ -219,5 +226,17 @@
   .decks-card-difficulty-chart canvas {
     max-width: 100%;
     max-height: 300px;
+  }
+
+  .decks-chart-subtitle {
+    margin: 0 0 1rem 0;
+    color: var(--text-muted);
+    font-size: 14px;
+    line-height: 1.5;
+  }
+
+  .decks-loading-indicator {
+    color: var(--text-muted);
+    font-style: italic;
   }
 </style>

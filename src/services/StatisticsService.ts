@@ -3,19 +3,28 @@ import {
   type Statistics,
   type ReviewLog,
   type Flashcard,
+  type FlashcardState,
   type DeckConfig,
   type DeckStats,
   DEFAULT_DECK_CONFIG,
+  type SimulatedCardState,
+  type MaturityProgressionResult,
 } from "../database/types";
 import type { DecksSettings } from "../settings";
-import { FSRS } from "../algorithm/fsrs";
+import { FSRS, type RatingLabel } from "../algorithm/fsrs";
 import { Logger } from "../utils/logging";
+import { MinHeap } from "../utils/min-heap";
+import {
+  toLocalDateString,
+  getLocalDateSQL,
+  getLocalHourSQL,
+} from "../utils/date-utils";
+import { yieldToUI } from "../utils/ui";
 import type {
   DailyStatsRow,
   AnswerButtonStatsRow,
   PaceStatsRow,
   ForecastRow,
-  OverdueRow,
   CountResult,
 } from "../database/sql-types";
 
@@ -93,7 +102,11 @@ export class StatisticsService {
       const intervalData = await this.getIntervalDistribution(deckIds);
 
       // Get pace stats
-      const paceData = await this.getPaceStatsForPeriod(startDate, endDate, deckIds);
+      const paceData = await this.getPaceStatsForPeriod(
+        startDate,
+        endDate,
+        deckIds
+      );
 
       // Get forecast data (next 30 days)
       const forecastData = await this.getForecastDueCards(30, deckIds);
@@ -109,12 +122,15 @@ export class StatisticsService {
         answerButtonStats.good +
         answerButtonStats.easy;
       const retentionRate =
-        totalReviewsInPeriod > 0 ? (correctReviews / totalReviewsInPeriod) * 100 : 0;
+        totalReviewsInPeriod > 0
+          ? (correctReviews / totalReviewsInPeriod) * 100
+          : 0;
 
       // Get total review count and time (all time, not just period)
-      const allReviewLogs = deckIds.length > 0
-        ? await this.getReviewLogsForChart(deckIds)
-        : await this.db.getAllReviewLogs();
+      const allReviewLogs =
+        deckIds.length > 0
+          ? await this.getReviewLogsForChart(deckIds)
+          : await this.db.getAllReviewLogs();
       const totalReviewsAllTime = allReviewLogs.length;
       const totalTimeMs = allReviewLogs.reduce(
         (sum: number, log: ReviewLog) => sum + (log.timeElapsedMs || 0),
@@ -122,15 +138,17 @@ export class StatisticsService {
       );
 
       return {
-        dailyStats: Array.from(dailyStatsData.entries()).map(([date, stats]) => ({
-          date,
-          reviews: stats.count,
-          timeSpent: stats.totalTimeSeconds,
-          newCards: stats.newCards,
-          learningCards: stats.learningCards,
-          reviewCards: stats.reviewCards,
-          correctRate: stats.correctRate,
-        })),
+        dailyStats: Array.from(dailyStatsData.entries()).map(
+          ([date, stats]) => ({
+            date,
+            reviews: stats.count,
+            timeSpent: stats.totalTimeSeconds,
+            newCards: stats.newCards,
+            learningCards: stats.learningCards,
+            reviewCards: stats.reviewCards,
+            correctRate: stats.correctRate,
+          })
+        ),
         cardStats: {
           new: cardCounts.new,
           review: cardCounts.young,
@@ -143,10 +161,12 @@ export class StatisticsService {
         },
         answerButtons: answerButtonStats,
         retentionRate,
-        intervals: Array.from(intervalData.entries()).map(([interval, count]) => ({
-          interval,
-          count,
-        })),
+        intervals: Array.from(intervalData.entries()).map(
+          ([interval, count]) => ({
+            interval,
+            count,
+          })
+        ),
         forecast: forecastData,
         averagePace: paceData.averagePace,
         totalReviewTime: paceData.totalTime,
@@ -174,14 +194,19 @@ export class StatisticsService {
   private async getReviewsByDateDetailed(
     days: number,
     deckIds: string[] = []
-  ): Promise<Map<string, {
-    count: number;
-    totalTimeSeconds: number;
-    newCards: number;
-    learningCards: number;
-    reviewCards: number;
-    correctRate: number;
-  }>> {
+  ): Promise<
+    Map<
+      string,
+      {
+        count: number;
+        totalTimeSeconds: number;
+        newCards: number;
+        learningCards: number;
+        reviewCards: number;
+        correctRate: number;
+      }
+    >
+  > {
     const startDate = new Date();
     startDate.setDate(startDate.getDate() - days);
 
@@ -191,7 +216,7 @@ export class StatisticsService {
     if (deckIds.length === 0) {
       sql = `
         SELECT
-          DATE(rl.reviewed_at) as date,
+          ${getLocalDateSQL("rl.reviewed_at")} as date,
           COUNT(*) as reviews,
           SUM(rl.time_elapsed_ms / 1000.0) as total_time_seconds,
           SUM(CASE WHEN rl.old_repetitions = 0 THEN 1 ELSE 0 END) as new_cards,
@@ -200,7 +225,7 @@ export class StatisticsService {
           AVG(CASE WHEN rl.rating >= 3 THEN 1.0 ELSE 0.0 END) as correct_rate
         FROM review_logs rl
         WHERE rl.reviewed_at >= ?
-        GROUP BY DATE(rl.reviewed_at)
+        GROUP BY ${getLocalDateSQL("rl.reviewed_at")}
         ORDER BY date
       `;
       params = [startDate.toISOString()];
@@ -208,7 +233,7 @@ export class StatisticsService {
       const placeholders = deckIds.map(() => "?").join(",");
       sql = `
         SELECT
-          DATE(rl.reviewed_at) as date,
+          ${getLocalDateSQL("rl.reviewed_at")} as date,
           COUNT(*) as reviews,
           SUM(rl.time_elapsed_ms / 1000.0) as total_time_seconds,
           SUM(CASE WHEN rl.old_repetitions = 0 THEN 1 ELSE 0 END) as new_cards,
@@ -218,13 +243,15 @@ export class StatisticsService {
         FROM review_logs rl
         JOIN flashcards f ON rl.flashcard_id = f.id
         WHERE f.deck_id IN (${placeholders}) AND rl.reviewed_at >= ?
-        GROUP BY DATE(rl.reviewed_at)
+        GROUP BY ${getLocalDateSQL("rl.reviewed_at")}
         ORDER BY date
       `;
       params = [...deckIds, startDate.toISOString()];
     }
 
-    const results = await this.db.querySql<DailyStatsRow>(sql, params, { asObject: true });
+    const results = await this.db.querySql<DailyStatsRow>(sql, params, {
+      asObject: true,
+    });
     const stats = new Map();
 
     results.forEach((row) => {
@@ -272,7 +299,9 @@ export class StatisticsService {
       params = [startDate, endDate, ...deckIds];
     }
 
-    const results = await this.db.querySql<AnswerButtonStatsRow>(sql, params, { asObject: true });
+    const results = await this.db.querySql<AnswerButtonStatsRow>(sql, params, {
+      asObject: true,
+    });
     const answerButtons = { again: 0, hard: 0, good: 0, easy: 0 };
 
     results.forEach((row) => {
@@ -323,7 +352,9 @@ export class StatisticsService {
       params = [startDate, endDate, ...deckIds];
     }
 
-    const results = await this.db.querySql<PaceStatsRow>(sql, params, { asObject: true });
+    const results = await this.db.querySql<PaceStatsRow>(sql, params, {
+      asObject: true,
+    });
     const firstRow = results[0];
     return {
       averagePace: firstRow?.avg_pace || 0,
@@ -340,30 +371,36 @@ export class StatisticsService {
   ): Promise<Array<{ date: string; dueCount: number; count: number }>> {
     const todayStart = new Date();
     todayStart.setHours(0, 0, 0, 0);
-    const forecastEnd = new Date(todayStart.getTime() + days * 24 * 60 * 60 * 1000);
+    const forecastEnd = new Date(
+      todayStart.getTime() + days * 24 * 60 * 60 * 1000
+    );
 
     let sql: string;
     let params: (string | number | null)[];
 
     if (deckIds.length === 0) {
       sql = `
-        SELECT DATE(due_date) as date, COUNT(*) as due_count
+        SELECT ${getLocalDateSQL("due_date")} as date, COUNT(*) as due_count
         FROM flashcards
         WHERE due_date >= ? AND due_date <= ?
-        GROUP BY DATE(due_date)
-        ORDER BY DATE(due_date)
+        GROUP BY ${getLocalDateSQL("due_date")}
+        ORDER BY ${getLocalDateSQL("due_date")}
       `;
       params = [todayStart.toISOString(), forecastEnd.toISOString()];
     } else {
       const placeholders = deckIds.map(() => "?").join(",");
       sql = `
-        SELECT DATE(due_date) as date, COUNT(*) as due_count
+        SELECT ${getLocalDateSQL("due_date")} as date, COUNT(*) as due_count
         FROM flashcards
         WHERE due_date >= ? AND due_date <= ? AND deck_id IN (${placeholders})
-        GROUP BY DATE(due_date)
-        ORDER BY DATE(due_date)
+        GROUP BY ${getLocalDateSQL("due_date")}
+        ORDER BY ${getLocalDateSQL("due_date")}
       `;
-      params = [todayStart.toISOString(), forecastEnd.toISOString(), ...deckIds];
+      params = [
+        todayStart.toISOString(),
+        forecastEnd.toISOString(),
+        ...deckIds,
+      ];
     }
 
     // Get overdue cards
@@ -381,7 +418,9 @@ export class StatisticsService {
 
     const [results, overdueResults] = await Promise.all([
       this.db.querySql<ForecastRow>(sql, params, { asObject: true }),
-      this.db.querySql<CountResult>(overdueSql, overdueParams, { asObject: true }),
+      this.db.querySql<CountResult>(overdueSql, overdueParams, {
+        asObject: true,
+      }),
     ]);
 
     const overdueCount = overdueResults[0]?.count || 0;
@@ -393,7 +432,7 @@ export class StatisticsService {
 
     // Add overdue cards to today's count
     if (overdueCount > 0) {
-      const todayStr = todayStart.toISOString().split("T")[0];
+      const todayStr = toLocalDateString(todayStart);
       const todayForecast = forecast.find((f) => f.date === todayStr);
       if (todayForecast) {
         todayForecast.dueCount += overdueCount;
@@ -461,20 +500,20 @@ export class StatisticsService {
 
     if (deckIds.length === 0) {
       sql = `
-        SELECT DATE(reviewed_at) as date, COUNT(*) as count
+        SELECT ${getLocalDateSQL("reviewed_at")} as date, COUNT(*) as count
         FROM review_logs
         WHERE reviewed_at >= ?
-        GROUP BY DATE(reviewed_at)
+        GROUP BY ${getLocalDateSQL("reviewed_at")}
       `;
       params = [startDate.toISOString()];
     } else {
       const placeholders = deckIds.map(() => "?").join(",");
       sql = `
-        SELECT DATE(rl.reviewed_at) as date, COUNT(*) as count
+        SELECT ${getLocalDateSQL("rl.reviewed_at")} as date, COUNT(*) as count
         FROM review_logs rl
         JOIN flashcards f ON rl.flashcard_id = f.id
         WHERE f.deck_id IN (${placeholders}) AND rl.reviewed_at >= ?
-        GROUP BY DATE(rl.reviewed_at)
+        GROUP BY ${getLocalDateSQL("rl.reviewed_at")}
       `;
       params = [...deckIds, startDate.toISOString()];
     }
@@ -568,25 +607,25 @@ export class StatisticsService {
     if (deckIds.length === 0) {
       sql = `
         SELECT
-          DATE(reviewed_at) as date,
+          ${getLocalDateSQL("reviewed_at")} as date,
           rating,
           COUNT(*) as count
         FROM review_logs
         WHERE reviewed_at >= ?
-        GROUP BY DATE(reviewed_at), rating
+        GROUP BY ${getLocalDateSQL("reviewed_at")}, rating
       `;
       params = [startDate.toISOString()];
     } else {
       const placeholders = deckIds.map(() => "?").join(",");
       sql = `
         SELECT
-          DATE(rl.reviewed_at) as date,
+          ${getLocalDateSQL("rl.reviewed_at")} as date,
           rl.rating,
           COUNT(*) as count
         FROM review_logs rl
         JOIN flashcards f ON rl.flashcard_id = f.id
         WHERE f.deck_id IN (${placeholders}) AND rl.reviewed_at >= ?
-        GROUP BY DATE(rl.reviewed_at), rl.rating
+        GROUP BY ${getLocalDateSQL("rl.reviewed_at")}, rl.rating
       `;
       params = [...deckIds, startDate.toISOString()];
     }
@@ -636,7 +675,7 @@ export class StatisticsService {
     if (deckIds.length === 0) {
       sql = `
         SELECT
-          CAST(strftime('%H', reviewed_at) AS INTEGER) as hour,
+          ${getLocalHourSQL("reviewed_at")} as hour,
           COUNT(*) as count
         FROM review_logs
         GROUP BY hour
@@ -646,7 +685,7 @@ export class StatisticsService {
       const placeholders = deckIds.map(() => "?").join(",");
       sql = `
         SELECT
-          CAST(strftime('%H', rl.reviewed_at) AS INTEGER) as hour,
+          ${getLocalHourSQL("rl.reviewed_at")} as hour,
           COUNT(*) as count
         FROM review_logs rl
         JOIN flashcards f ON rl.flashcard_id = f.id
@@ -681,7 +720,7 @@ export class StatisticsService {
     if (deckIds.length === 0) {
       sql = `
         SELECT
-          CAST(strftime('%H', reviewed_at) AS INTEGER) as hour,
+          ${getLocalHourSQL("reviewed_at")} as hour,
           COUNT(*) as total,
           SUM(CASE WHEN rating >= 3 THEN 1 ELSE 0 END) as passed
         FROM review_logs
@@ -692,7 +731,7 @@ export class StatisticsService {
       const placeholders = deckIds.map(() => "?").join(",");
       sql = `
         SELECT
-          CAST(strftime('%H', rl.reviewed_at) AS INTEGER) as hour,
+          ${getLocalHourSQL("rl.reviewed_at")} as hour,
           COUNT(*) as total,
           SUM(CASE WHEN rl.rating >= 3 THEN 1 ELSE 0 END) as passed
         FROM review_logs rl
@@ -745,6 +784,7 @@ export class StatisticsService {
         FROM flashcards
         WHERE state = 'review'
         GROUP BY bucket
+        ORDER BY bucket
       `;
       params = [];
     } else {
@@ -766,6 +806,7 @@ export class StatisticsService {
         FROM flashcards
         WHERE state = 'review' AND deck_id IN (${placeholders})
         GROUP BY bucket
+        ORDER BY bucket
       `;
       params = [...deckIds];
     }
@@ -812,6 +853,7 @@ export class StatisticsService {
         FROM flashcards
         WHERE state = 'review'
         GROUP BY bucket
+        ORDER BY bucket
       `;
       params = [];
     } else {
@@ -834,6 +876,7 @@ export class StatisticsService {
         FROM flashcards
         WHERE state = 'review' AND deck_id IN (${placeholders})
         GROUP BY bucket
+        ORDER BY bucket
       `;
       params = [...deckIds];
     }
@@ -879,6 +922,7 @@ export class StatisticsService {
         FROM flashcards
         WHERE state != 'new'
         GROUP BY bucket
+        ORDER BY bucket
       `;
       params = [];
     } else {
@@ -902,6 +946,7 @@ export class StatisticsService {
         WHERE deck_id IN (${placeholders})
           AND state != 'new'
         GROUP BY bucket
+        ORDER BY bucket
       `;
       params = [...deckIds];
     }
@@ -934,22 +979,22 @@ export class StatisticsService {
     if (deckIds.length === 0) {
       sql = `
         SELECT
-          DATE(created) as date,
+          ${getLocalDateSQL("created")} as date,
           COUNT(*) as count
         FROM flashcards
         WHERE created >= ?
-        GROUP BY DATE(created)
+        GROUP BY ${getLocalDateSQL("created")}
       `;
       params = [startDate.toISOString()];
     } else {
       const placeholders = deckIds.map(() => "?").join(",");
       sql = `
         SELECT
-          DATE(created) as date,
+          ${getLocalDateSQL("created")} as date,
           COUNT(*) as count
         FROM flashcards
         WHERE deck_id IN (${placeholders}) AND created >= ?
-        GROUP BY DATE(created)
+        GROUP BY ${getLocalDateSQL("created")}
       `;
       params = [...deckIds, startDate.toISOString()];
     }
@@ -1163,7 +1208,7 @@ export class StatisticsService {
     if (!statistics?.dailyStats || statistics.dailyStats.length === 0) {
       return null;
     }
-    const today = new Date().toISOString().split("T")[0];
+    const today = toLocalDateString(new Date());
     return (
       statistics.dailyStats.find((day) => day.date === today) ||
       statistics.dailyStats[0] ||
@@ -1191,7 +1236,7 @@ export class StatisticsService {
 
     const cutoffDate = new Date();
     cutoffDate.setDate(cutoffDate.getDate() - days);
-    const cutoffStr = cutoffDate.toISOString().split("T")[0];
+    const cutoffStr = toLocalDateString(cutoffDate);
 
     const filteredStats = statistics.dailyStats.filter(
       (day) => day.date >= cutoffStr
@@ -1247,6 +1292,10 @@ export class StatisticsService {
 
   /**
    * Calculate average interval from intervals data
+   *
+   * NOTE: This method parses bucket labels from getIntervalDistribution() which returns
+   * strings like "1d", "2-3d", "1-2w", "1-2m", "6m-1y", "1y+", etc.
+   * For multi-value buckets (e.g., "2-3d"), we use the midpoint for averaging.
    */
   calculateAverageInterval(statistics: Statistics | null): number {
     if (!statistics?.intervals || statistics.intervals.length === 0) {
@@ -1260,12 +1309,44 @@ export class StatisticsService {
       const intervalStr = interval.interval;
       let minutes = 0;
 
-      if (intervalStr.endsWith("h")) {
-        minutes = parseInt(intervalStr) * 60;
-      } else if (intervalStr.endsWith("d")) {
-        minutes = parseInt(intervalStr) * 1440;
-      } else if (intervalStr.endsWith("m")) {
-        minutes = parseInt(intervalStr) * 43200; // months
+      // Parse bucket labels to extract midpoint values
+      // Examples: "1d" -> 1 day, "2-3d" -> 2.5 days, "1-2m" -> 1.5 months
+      if (intervalStr === "1y+") {
+        minutes = 525600; // 1 year in minutes
+      } else if (intervalStr.includes("-")) {
+        // Range bucket like "2-3d", "1-2w", "1-2m", "6m-1y"
+        const [start, endWithUnit] = intervalStr.split("-");
+        const startNum = parseInt(start);
+        const endNum = parseInt(endWithUnit);
+        const unit = endWithUnit.slice(-1);
+
+        const midpoint = (startNum + endNum) / 2;
+
+        if (unit === "d") {
+          minutes = midpoint * 1440;
+        } else if (unit === "w") {
+          minutes = midpoint * 10080; // weeks to minutes
+        } else if (unit === "m") {
+          minutes = midpoint * 43200; // months (30 days) to minutes
+        } else if (unit === "y") {
+          minutes = midpoint * 525600; // years to minutes
+        }
+      } else {
+        // Single value bucket like "1d"
+        const num = parseInt(intervalStr);
+        const unit = intervalStr.slice(-1);
+
+        if (unit === "h") {
+          minutes = num * 60;
+        } else if (unit === "d") {
+          minutes = num * 1440;
+        } else if (unit === "w") {
+          minutes = num * 10080;
+        } else if (unit === "m") {
+          minutes = num * 43200; // months (30 days)
+        } else if (unit === "y") {
+          minutes = num * 525600;
+        }
       }
 
       totalInterval += minutes * interval.count;
@@ -1282,7 +1363,7 @@ export class StatisticsService {
    */
   getDueToday(statistics: Statistics | null): number {
     if (!statistics?.forecast || statistics.forecast.length === 0) return 0;
-    const today = new Date().toISOString().split("T")[0];
+    const today = toLocalDateString(new Date());
     const todayForecast = statistics.forecast.find((day) => day.date === today);
     return todayForecast ? todayForecast.dueCount : 0;
   }
@@ -1294,7 +1375,7 @@ export class StatisticsService {
     if (!statistics?.forecast || statistics.forecast.length === 0) return 0;
     const tomorrow = new Date();
     tomorrow.setDate(tomorrow.getDate() + 1);
-    const tomorrowStr = tomorrow.toISOString().split("T")[0];
+    const tomorrowStr = toLocalDateString(tomorrow);
     const tomorrowForecast = statistics.forecast.find(
       (day) => day.date === tomorrowStr
     );
@@ -1400,24 +1481,204 @@ export class StatisticsService {
   }
 
   /**
-   * Simulate maturity progression - show how cards progress to maturity over time
+   * Extract empirical performance profile from user's review history
+   * Analyzes last 1000 review logs to determine:
+   * - Button distribution (Again/Hard/Good/Easy percentages)
+   * - Stability growth ratios by rating (for validation only - FSRS class handles actual calculations)
+   */
+  private async calculateEmpiricalPerformanceProfile(
+    deckIds: string[]
+  ): Promise<{
+    buttonDistribution: {
+      again: number;
+      hard: number;
+      good: number;
+      easy: number;
+    };
+    stabilityGrowthByRating: {
+      1: number;
+      2: number;
+      3: number;
+      4: number;
+    };
+    sampleSize: number;
+    hasSufficientData: boolean;
+  }> {
+    const SAMPLE_SIZE = 1000;
+    const MIN_SAMPLE_SIZE = 50;
+
+    // Sort deckIds for deterministic query results
+    const sortedDeckIds = [...deckIds].sort();
+
+    // Query last 1000 review logs with stability data
+    let sql: string;
+    let params: (string | number | null)[];
+
+    if (sortedDeckIds.length === 0) {
+      sql = `
+        SELECT
+          rating,
+          old_stability,
+          new_stability
+        FROM review_logs
+        WHERE old_stability > 0
+          AND new_stability > 0
+          AND old_stability IS NOT NULL
+          AND new_stability IS NOT NULL
+        ORDER BY reviewed_at DESC
+        LIMIT ?
+      `;
+      params = [SAMPLE_SIZE];
+    } else {
+      const placeholders = sortedDeckIds.map(() => "?").join(",");
+      sql = `
+        SELECT
+          rl.rating,
+          rl.old_stability,
+          rl.new_stability
+        FROM review_logs rl
+        JOIN flashcards f ON rl.flashcard_id = f.id
+        WHERE f.deck_id IN (${placeholders})
+          AND rl.old_stability > 0
+          AND rl.new_stability > 0
+          AND rl.old_stability IS NOT NULL
+          AND rl.new_stability IS NOT NULL
+        ORDER BY rl.reviewed_at DESC, rl.flashcard_id ASC
+        LIMIT ?
+      `;
+      params = [...sortedDeckIds, SAMPLE_SIZE];
+    }
+
+    const results = await this.db.querySql(sql, params);
+
+    // Default fallback for users with little data
+    const defaultProfile = {
+      buttonDistribution: {
+        again: 0.05,
+        hard: 0.1,
+        good: 0.75,
+        easy: 0.1,
+      },
+      stabilityGrowthByRating: {
+        1: 0.5, // Forgetting - stability drops ~50%
+        2: 1.2, // Hard - modest growth
+        3: 1.6, // Good - typical growth
+        4: 2.2, // Easy - strong growth
+      },
+      sampleSize: 0,
+      hasSufficientData: false,
+    };
+
+    if (results.length < MIN_SAMPLE_SIZE) {
+      this.logger.debug(
+        `[StatisticsService] Insufficient review data (${results.length} reviews), using default performance profile`
+      );
+      return defaultProfile;
+    }
+
+    // Calculate button distribution
+    const buttonCounts: { [key: number]: number } = { 1: 0, 2: 0, 3: 0, 4: 0 };
+    const stabilityRatios: { [key: number]: number[] } = {
+      1: [],
+      2: [],
+      3: [],
+      4: [],
+    };
+
+    results.forEach((row: (string | number | null)[]) => {
+      const rating = row[0] as number;
+      const oldStability = row[1] as number;
+      const newStability = row[2] as number;
+
+      if (rating >= 1 && rating <= 4) {
+        buttonCounts[rating]++;
+
+        // Calculate stability ratio
+        if (
+          oldStability > 0 &&
+          newStability > 0 &&
+          isFinite(newStability / oldStability)
+        ) {
+          const ratio = newStability / oldStability;
+          // Filter outliers (ratio between 0.1 and 10.0)
+          if (ratio >= 0.1 && ratio <= 10.0) {
+            stabilityRatios[rating].push(ratio);
+          }
+        }
+      }
+    });
+
+    const totalReviews = results.length;
+
+    // Calculate percentages
+    const buttonDistribution = {
+      again: buttonCounts[1] / totalReviews,
+      hard: buttonCounts[2] / totalReviews,
+      good: buttonCounts[3] / totalReviews,
+      easy: buttonCounts[4] / totalReviews,
+    };
+
+    // Calculate average stability growth by rating
+    const stabilityGrowthByRating = {
+      1: 0,
+      2: 0,
+      3: 0,
+      4: 0,
+    };
+    for (const rating of [1, 2, 3, 4] as const) {
+      const ratios = stabilityRatios[rating];
+      if (ratios.length >= 5) {
+        const average = ratios.reduce((sum, r) => sum + r, 0) / ratios.length;
+        stabilityGrowthByRating[rating] = average;
+      } else {
+        // Fallback to defaults
+        stabilityGrowthByRating[rating] =
+          defaultProfile.stabilityGrowthByRating[rating];
+      }
+    }
+
+    this.logger.debug(
+      `[StatisticsService] Calculated empirical performance profile from ${totalReviews} reviews:`,
+      { buttonDistribution, stabilityGrowthByRating }
+    );
+
+    return {
+      buttonDistribution,
+      stabilityGrowthByRating,
+      sampleSize: totalReviews,
+      hasSufficientData: true,
+    };
+  }
+
+  /**
+   * Simulate maturity progression using high-fidelity FSRS-based simulation
+   * - Uses empirical button distribution from review history
+   * - Respects daily limits (newCardsPerDay, reviewCardsPerDay)
+   * - Delegates all FSRS calculations to FSRS class (perfect algorithm fidelity)
+   * - Defines maturity by stability (S >= 21 days), not interval
    */
   async simulateMaturityProgression(
     deckIds: string[],
     maxDays = 365
-  ): Promise<
-    Array<{
-      date: string;
-      newCards: number;
-      learningCards: number;
-      matureCards: number;
-    }>
-  > {
-    const MATURITY_THRESHOLD_MINUTES = 30240; // 21 days
+  ): Promise<MaturityProgressionResult> {
+    // Reset rating counter for deterministic results
+    this.ratingCounter = 0;
+
+    const MATURITY_THRESHOLD_DAYS = 21; // Stability threshold (not interval)
 
     if (!deckIds || deckIds.length === 0) {
-      return [];
+      return {
+        dailySnapshots: [],
+        maintenanceLevel: null,
+        equilibriumDetectedAt: null,
+        totalCards: 0,
+        empiricalLapseRate: 0,
+        theoreticalMaintenanceLevel: null,
+      };
     }
+
+    // Yield immediately to allow UI to show loading state
+    await yieldToUI();
 
     // Get all flashcards for the selected decks
     const allCards = [];
@@ -1426,25 +1687,187 @@ export class StatisticsService {
       allCards.push(...cards);
     }
 
+    // Sort by card ID to ensure deterministic order
+    allCards.sort((a, b) => a.id.localeCompare(b.id));
+
     if (allCards.length === 0) {
-      return [];
+      return {
+        dailySnapshots: [],
+        maintenanceLevel: null,
+        equilibriumDetectedAt: null,
+        totalCards: 0,
+        empiricalLapseRate: 0,
+        theoreticalMaintenanceLevel: null,
+      };
     }
 
-    // Calculate user's actual behavior based on review history
-    const userBehavior = await this.calculateUserBehavior(deckIds);
+    // Yield after database queries complete
+    await yieldToUI();
+
+    // Get deck configs for daily limits and FSRS settings
+    let totalNewCardsPerDay = 0;
+    let totalReviewCardsPerDay = 0;
+    let avgRequestRetention = 0;
+    let deckCount = 0;
+
+    for (const deckId of deckIds) {
+      const deck = await this.db.getDeckById(deckId);
+      if (deck) {
+        const config = deck.config || DEFAULT_DECK_CONFIG;
+
+        // Aggregate daily limits
+        if (config.hasNewCardsLimitEnabled && config.newCardsPerDay > 0) {
+          totalNewCardsPerDay += config.newCardsPerDay;
+        } else {
+          totalNewCardsPerDay = Infinity; // Unlimited
+        }
+
+        if (config.hasReviewCardsLimitEnabled && config.reviewCardsPerDay > 0) {
+          totalReviewCardsPerDay += config.reviewCardsPerDay;
+        } else {
+          totalReviewCardsPerDay = Infinity; // Unlimited
+        }
+
+        avgRequestRetention += config.fsrs.requestRetention || 0.9;
+        deckCount++;
+      }
+    }
+
+    const requestRetention =
+      deckCount > 0
+        ? Math.round((avgRequestRetention / deckCount) * 10000) / 10000
+        : 0.9;
+
+    // If limits are infinite, infer realistic limits from review history
+    if (
+      totalNewCardsPerDay === Infinity ||
+      totalReviewCardsPerDay === Infinity
+    ) {
+      // Query review history to calculate average reviews per day
+      // Join with flashcards to filter by deck_id
+      const sql = `
+        SELECT COUNT(*) as total_reviews,
+               MIN(DATE(rl.reviewed_at)) as first_review,
+               MAX(DATE(rl.reviewed_at)) as last_review
+        FROM review_logs rl
+        INNER JOIN flashcards f ON rl.flashcard_id = f.id
+        WHERE f.deck_id IN (${deckIds.map(() => "?").join(",")})
+      `;
+
+      const results = await this.db.querySql<{
+        total_reviews: number;
+        first_review: string | null;
+        last_review: string | null;
+      }>(sql, deckIds, { asObject: true });
+
+      if (
+        results.length > 0 &&
+        results[0].first_review &&
+        results[0].last_review
+      ) {
+        const totalReviews = results[0].total_reviews;
+        const firstDate = new Date(results[0].first_review);
+        const lastDate = new Date(results[0].last_review);
+        const daysDiff = Math.max(
+          1,
+          (lastDate.getTime() - firstDate.getTime()) / 86400000
+        );
+        const avgReviewsPerDay = Math.round(totalReviews / daysDiff);
+
+        // Only use inferred limits if there's meaningful review history (at least 7 days)
+        if (daysDiff >= 7 && avgReviewsPerDay > 0) {
+          // Use total historical pace as daily review pool (no arbitrary split)
+          const dailyReviewPool = avgReviewsPerDay;
+
+          // If deck limits are enabled and lower, respect them
+          if (totalNewCardsPerDay === Infinity) {
+            totalNewCardsPerDay = dailyReviewPool; // Can process up to full pool as new cards
+          }
+          if (totalReviewCardsPerDay === Infinity) {
+            totalReviewCardsPerDay = dailyReviewPool; // Can process up to full pool as reviews
+          }
+
+          this.logger.debug(
+            "[StatisticsService] Using historical daily pace as review pool:",
+            {
+              dailyReviewPool,
+              avgReviewsPerDay,
+              daysDiff,
+              totalReviews,
+            }
+          );
+        } else {
+          // No meaningful review history - use conservative defaults to show realistic forecast
+          // Default to 20 new cards/day and 200 review cards/day (typical user behavior)
+          if (totalNewCardsPerDay === Infinity) {
+            totalNewCardsPerDay = 20;
+          }
+          if (totalReviewCardsPerDay === Infinity) {
+            totalReviewCardsPerDay = 200;
+          }
+
+          this.logger.debug(
+            "[StatisticsService] No review history, using default limits:",
+            {
+              totalNewCardsPerDay,
+              totalReviewCardsPerDay,
+            }
+          );
+        }
+      } else {
+        // No review history at all - use conservative defaults
+        if (totalNewCardsPerDay === Infinity) {
+          totalNewCardsPerDay = 20;
+        }
+        if (totalReviewCardsPerDay === Infinity) {
+          totalReviewCardsPerDay = 200;
+        }
+
+        this.logger.debug(
+          "[StatisticsService] No review history, using default limits:",
+          {
+            totalNewCardsPerDay,
+            totalReviewCardsPerDay,
+          }
+        );
+      }
+    }
+
+    // Calculate empirical performance profile
+    const performanceProfile =
+      await this.calculateEmpiricalPerformanceProfile(deckIds);
+
+    // Yield after profile calculation
+    await yieldToUI();
+
+    // Get total cards and empirical lapse rate
+    const totalCards = allCards.length;
+    const empiricalLapseRate = performanceProfile.buttonDistribution.again;
+
+    // Get nextDayStartsAt from settings
+    const nextDayStartsAt = this.settings.review.nextDayStartsAt || 4;
 
     const now = new Date();
     const nowMs = now.getTime();
 
-    // Track each card's state over time
-    const cardStates = allCards.map((card) => ({
-      id: card.id,
-      state: card.state,
-      interval: card.interval || 0,
-      dueDate: new Date(card.dueDate).getTime(),
-      stability: card.stability || 1,
-      difficulty: card.difficulty || 5,
-    }));
+    const cardStates: SimulatedCardState[] = allCards.map((card) => {
+      const dueMs = new Date(card.dueDate).getTime();
+      const lastReviewedMs = card.lastReviewed
+        ? new Date(card.lastReviewed).getTime()
+        : dueMs - 86400000; // Default to 1 day before due if never reviewed
+
+      return {
+        id: card.id,
+        deckId: card.deckId,
+        state: card.state,
+        stability: card.stability || 1,
+        difficulty: card.difficulty || 5,
+        dueDate: dueMs,
+        lastReviewedDate: lastReviewedMs,
+        repetitions: card.repetitions || 0,
+        lapses: card.lapses || 0,
+      };
+    });
 
     const result: Array<{
       date: string;
@@ -1453,48 +1876,201 @@ export class StatisticsService {
       matureCards: number;
     }> = [];
 
-    // For each day in the future, calculate card distribution
+    // Track consecutive days without activity to detect true completion
+    let consecutiveDaysWithoutActivity = 0;
+    const MAX_IDLE_DAYS = 7;
+
+    // Equilibrium detection variables
+    const EQUILIBRIUM_WINDOW_DAYS = 14; // Rolling window for variance check
+    const EQUILIBRIUM_VARIANCE_THRESHOLD = 0.01; // 1% of total cards
+    let equilibriumDetected = false;
+    let equilibriumDay: number | null = null;
+    let equilibriumMaintenanceLevel: number | null = null;
+    const learningCountWindow: number[] = []; // Sliding window of last 14 days' learning counts
+    let consecutiveDaysStable = 0; // Count of days variance is below threshold
+
+    // Create FSRS instance (use first deck's config or average settings)
+    const firstDeck = await this.db.getDeckById(deckIds[0]);
+    const firstConfig = firstDeck?.config || DEFAULT_DECK_CONFIG;
+
+    const fsrs = new FSRS({
+      requestRetention,
+      profile: firstConfig.fsrs.profile || "STANDARD",
+      nextDayStartsAt,
+    });
+
+    // Yield before starting the main simulation loop
+    await yieldToUI();
+
+    // For each day in the future, simulate reviews
     for (let day = 0; day < maxDays; day++) {
       const currentDayMs = nowMs + day * 86400000;
-      const dateKey = new Date(currentDayMs).toISOString().split("T")[0];
+      const currentDate = new Date(currentDayMs);
+      const dateKey = toLocalDateString(currentDate);
 
+      // Separate new cards from review cards
+      const newCardsDue = cardStates.filter(
+        (card) => card.state === "new" && card.dueDate <= currentDayMs
+      );
+      const reviewCardsDue = cardStates.filter(
+        (card) => card.state === "review" && card.dueDate <= currentDayMs
+      );
+
+      // Sort by due date (earliest first) with card ID as stable tiebreaker
+      newCardsDue.sort((a, b) => {
+        const dateDiff = a.dueDate - b.dueDate;
+        return dateDiff !== 0 ? dateDiff : a.id.localeCompare(b.id);
+      });
+      reviewCardsDue.sort((a, b) => {
+        const dateDiff = a.dueDate - b.dueDate;
+        return dateDiff !== 0 ? dateDiff : a.id.localeCompare(b.id);
+      });
+
+      // Calculate daily capacity
+      let remainingCapacity = totalReviewCardsPerDay; // This is now dailyReviewPool from Fix 5
+
+      // Priority 1: Process due review cards (sorted by earliest due first)
+      const reviewCardsToProcess =
+        remainingCapacity === Infinity
+          ? reviewCardsDue
+          : reviewCardsDue.slice(
+              0,
+              Math.min(reviewCardsDue.length, remainingCapacity)
+            );
+
+      // Deduct processed reviews from capacity
+      if (remainingCapacity !== Infinity) {
+        remainingCapacity -= reviewCardsToProcess.length;
+      }
+
+      // Priority 2: Process new cards with remaining capacity
+      const newCardsToProcess =
+        remainingCapacity === Infinity || totalNewCardsPerDay === Infinity
+          ? newCardsDue.slice(
+              0,
+              Math.min(
+                newCardsDue.length,
+                totalNewCardsPerDay === Infinity
+                  ? Infinity
+                  : totalNewCardsPerDay
+              )
+            )
+          : newCardsDue.slice(
+              0,
+              Math.min(
+                newCardsDue.length,
+                Math.min(remainingCapacity, totalNewCardsPerDay)
+              )
+            );
+
+      let processedCards = 0;
+
+      // Process review cards FIRST (priority)
+      for (const cardState of reviewCardsToProcess) {
+        processedCards++;
+
+        // Simulate a rating based on empirical distribution
+        const ratingNum = this.selectRatingFromDistribution(
+          performanceProfile.buttonDistribution
+        );
+        const ratingLabel = this.ratingNumberToLabel(ratingNum);
+
+        // Convert SimulatedCardState to Flashcard-like object for FSRS
+        const cardAsFlashcard: Partial<Flashcard> = {
+          id: cardState.id,
+          deckId: cardState.deckId,
+          state: "review" as FlashcardState,
+          stability: cardState.stability,
+          difficulty: cardState.difficulty,
+          repetitions: cardState.repetitions,
+          lapses: cardState.lapses,
+          lastReviewed: new Date(cardState.lastReviewedDate).toISOString(),
+          dueDate: new Date(cardState.dueDate).toISOString(),
+          interval: 0,
+          // Other fields not used by FSRS
+          front: "",
+          back: "",
+          created: "",
+          modified: "",
+        };
+
+        // Use FSRS to calculate the outcome for this rating
+        const schedulingInfo = fsrs.getSchedulingInfo(
+          cardAsFlashcard as Flashcard,
+          currentDate
+        );
+        const outcome = schedulingInfo[ratingLabel];
+
+        // Update card state from FSRS outcome
+        cardState.stability = outcome.stability;
+        cardState.difficulty = outcome.difficulty;
+        cardState.repetitions = outcome.repetitions;
+        cardState.dueDate = new Date(outcome.dueDate).getTime();
+        cardState.lastReviewedDate = currentDayMs;
+
+        if (ratingNum === 1) {
+          cardState.lapses++;
+        }
+      }
+
+      // Process new cards SECOND (with remaining capacity)
+      for (const cardState of newCardsToProcess) {
+        processedCards++;
+
+        // Simulate a rating based on empirical distribution
+        const ratingNum = this.selectRatingFromDistribution(
+          performanceProfile.buttonDistribution
+        );
+        const ratingLabel = this.ratingNumberToLabel(ratingNum);
+
+        // Convert SimulatedCardState to Flashcard-like object for FSRS
+        const cardAsFlashcard: Partial<Flashcard> = {
+          id: cardState.id,
+          deckId: cardState.deckId,
+          state: "new" as FlashcardState,
+          stability: cardState.stability,
+          difficulty: cardState.difficulty,
+          repetitions: cardState.repetitions,
+          lapses: cardState.lapses,
+          lastReviewed: new Date(cardState.lastReviewedDate).toISOString(),
+          dueDate: new Date(cardState.dueDate).toISOString(),
+          interval: 0,
+          // Other fields not used by FSRS
+          front: "",
+          back: "",
+          created: "",
+          modified: "",
+        };
+
+        // Use FSRS to calculate the outcome for this rating
+        const schedulingInfo = fsrs.getSchedulingInfo(
+          cardAsFlashcard as Flashcard,
+          currentDate
+        );
+        const outcome = schedulingInfo[ratingLabel];
+
+        // Update card state from FSRS outcome
+        cardState.state = "review";
+        cardState.stability = outcome.stability;
+        cardState.difficulty = outcome.difficulty;
+        cardState.repetitions = outcome.repetitions;
+        cardState.dueDate = new Date(outcome.dueDate).getTime();
+        cardState.lastReviewedDate = currentDayMs;
+
+        if (ratingNum === 1) {
+          cardState.lapses++;
+        }
+      }
+
+      // Classify cards by stability (not interval)
       let newCount = 0;
       let learningCount = 0;
       let matureCount = 0;
 
-      // Update card states based on reviews
       for (const cardState of cardStates) {
-        // Check if card is due for review today
-        if (cardState.state !== "new" && cardState.dueDate <= currentDayMs) {
-          // Use user's actual interval multiplier based on their history
-          // This accounts for their real performance (mix of Again/Hard/Good/Easy)
-          const intervalMultiplier = userBehavior.intervalMultiplier;
-
-          cardState.interval = Math.min(
-            cardState.interval * intervalMultiplier,
-            365 * 1440 // Cap at 1 year
-          );
-
-          // Update due date to next review
-          cardState.dueDate = currentDayMs + cardState.interval * 60000; // Convert minutes to ms
-
-          // Update stability (grows with interval)
-          cardState.stability = cardState.interval / 1440; // Rough approximation
-        }
-
-        // Handle new cards becoming learning cards
-        if (cardState.state === "new" && cardState.dueDate <= currentDayMs) {
-          cardState.state = "review";
-          // Use user's average first interval for new cards
-          cardState.interval = userBehavior.firstReviewInterval;
-          cardState.dueDate = currentDayMs + cardState.interval * 60000;
-          cardState.stability = 1;
-        }
-
-        // Categorize current state
         if (cardState.state === "new") {
           newCount++;
-        } else if (cardState.interval < MATURITY_THRESHOLD_MINUTES) {
+        } else if (cardState.stability < MATURITY_THRESHOLD_DAYS) {
           learningCount++;
         } else {
           matureCount++;
@@ -1508,130 +2084,200 @@ export class StatisticsService {
         matureCards: matureCount,
       });
 
-      // Early exit if all cards are mature
-      if (newCount === 0 && learningCount === 0) {
-        break;
-      }
-    }
+      // Equilibrium detection (only start after all new cards are introduced)
+      if (newCount === 0 && !equilibriumDetected) {
+        // Add current learning count to window
+        learningCountWindow.push(learningCount);
 
-    return result;
-  }
+        // Keep only last EQUILIBRIUM_WINDOW_DAYS values
+        if (learningCountWindow.length > EQUILIBRIUM_WINDOW_DAYS) {
+          learningCountWindow.shift();
+        }
 
-  /**
-   * Calculate user's actual review behavior based on historical data
-   * Returns interval multiplier and first review interval
-   */
-  private async calculateUserBehavior(deckIds: string[]): Promise<{
-    intervalMultiplier: number;
-    firstReviewInterval: number;
-  }> {
-    // Get review logs to analyze user behavior
-    let sql: string;
-    let params: (string | number | null)[];
+        // Check if we have a full window
+        if (learningCountWindow.length === EQUILIBRIUM_WINDOW_DAYS) {
+          // Calculate variance of learning count over window
+          const mean =
+            learningCountWindow.reduce((sum, val) => sum + val, 0) /
+            EQUILIBRIUM_WINDOW_DAYS;
+          const variance =
+            learningCountWindow.reduce(
+              (sum, val) => sum + Math.pow(val - mean, 2),
+              0
+            ) / EQUILIBRIUM_WINDOW_DAYS;
+          const stdDev = Math.sqrt(variance);
 
-    if (deckIds.length === 0) {
-      sql = `
-        SELECT
-          old_interval_minutes,
-          new_interval_minutes,
-          rating,
-          old_state,
-          new_state
-        FROM review_logs
-        WHERE old_interval_minutes > 0 AND new_interval_minutes > 0
-        ORDER BY reviewed_at DESC
-        LIMIT 500
-      `;
-      params = [];
-    } else {
-      const placeholders = deckIds.map(() => "?").join(",");
-      sql = `
-        SELECT
-          rl.old_interval_minutes,
-          rl.new_interval_minutes,
-          rl.rating,
-          rl.old_state,
-          rl.new_state
-        FROM review_logs rl
-        JOIN flashcards f ON rl.flashcard_id = f.id
-        WHERE f.deck_id IN (${placeholders})
-          AND rl.old_interval_minutes > 0
-          AND rl.new_interval_minutes > 0
-        ORDER BY rl.reviewed_at DESC
-        LIMIT 500
-      `;
-      params = [...deckIds];
-    }
+          // Check if variance is below threshold (1% of total cards)
+          const varianceThreshold = totalCards * EQUILIBRIUM_VARIANCE_THRESHOLD;
 
-    const logs = await this.db.querySql(sql, params);
+          if (stdDev < varianceThreshold) {
+            consecutiveDaysStable++;
 
-    if (logs.length === 0) {
-      // No history - use conservative defaults
-      return {
-        intervalMultiplier: 2.0, // Conservative growth
-        firstReviewInterval: 1440, // 1 day
-      };
-    }
+            // Detect equilibrium after 14 consecutive stable days
+            if (
+              consecutiveDaysStable >= EQUILIBRIUM_WINDOW_DAYS &&
+              !equilibriumDetected
+            ) {
+              equilibriumDetected = true;
+              equilibriumDay = day;
+              equilibriumMaintenanceLevel = (mean / totalCards) * 100; // Convert to percentage
 
-    // Calculate actual interval multiplier from user's history
-    const multipliers: number[] = [];
-    const firstIntervals: number[] = [];
-
-    logs.forEach((row: (string | number | null)[]) => {
-      const oldInterval = row[0] as number;
-      const newInterval = row[1] as number;
-      const rating = row[2] as number;
-      const oldState = row[3] as string;
-      const newState = row[4] as string;
-
-      // Track interval growth for review cards
-      if (oldInterval > 0 && newInterval > oldInterval && rating >= 2) {
-        const multiplier = newInterval / oldInterval;
-        // Filter outliers (multipliers between 0.5x and 10x are reasonable)
-        if (multiplier >= 0.5 && multiplier <= 10) {
-          multipliers.push(multiplier);
+              this.logger.debug(
+                `[simulateMaturityProgression] Equilibrium detected at day ${day}: ` +
+                  `Maintenance level = ${equilibriumMaintenanceLevel.toFixed(2)}% ` +
+                  `(~${Math.round(mean)} cards, stdDev=${stdDev.toFixed(1)})`
+              );
+            }
+          } else {
+            // Variance exceeded threshold, reset stable counter
+            consecutiveDaysStable = 0;
+            learningCountWindow.length = 0;
+          }
         }
       }
 
-      // Track first review intervals (new -> review transitions)
-      if (oldState === "new" && newState === "review" && newInterval > 0) {
-        firstIntervals.push(newInterval);
+      // Debug logging every 30 days to track progress
+      if (day % 30 === 0) {
+        this.logger.debug(
+          `[simulateMaturityProgression] Day ${day}: ${newCount} new, ${learningCount} learning, ${matureCount} mature. ` +
+            `Processed: ${processedCards} cards (${reviewCardsToProcess.length} review, ${newCardsToProcess.length} new). ` +
+            `Capacity: ${remainingCapacity === Infinity ? "unlimited" : remainingCapacity} remaining`
+        );
+
+        // Log stability distribution for learning cards
+        const learningCards = cardStates.filter(
+          (c) => c.state !== "new" && c.stability < MATURITY_THRESHOLD_DAYS
+        );
+        if (learningCards.length > 0) {
+          const stabilities = learningCards
+            .map((c) => c.stability)
+            .sort((a, b) => a - b);
+          const median = stabilities[Math.floor(stabilities.length / 2)];
+          const min = stabilities[0];
+          const max = stabilities[stabilities.length - 1];
+
+          // NEW: Also log elapsed time distribution to verify Fix 3 is working
+          const elapsedTimes = learningCards.map(
+            (c) => (currentDayMs - c.lastReviewedDate) / 86400000
+          );
+          const avgElapsed =
+            elapsedTimes.reduce((sum, e) => sum + e, 0) / elapsedTimes.length;
+
+          this.logger.debug(
+            `  Learning cards stability: min=${min.toFixed(1)}, median=${median.toFixed(1)}, max=${max.toFixed(1)}. ` +
+              `Avg elapsed: ${avgElapsed.toFixed(1)} days`
+          );
+
+          // Log how many learning cards are due in the next 7 days
+          const upcomingDueCounts: number[] = [];
+          for (let futureDay = 0; futureDay < 7; futureDay++) {
+            const futureDayMs = currentDayMs + futureDay * 86400000;
+            const dueCount = learningCards.filter(
+              (c) => c.dueDate <= futureDayMs
+            ).length;
+            upcomingDueCounts.push(dueCount);
+          }
+          this.logger.debug(
+            `  Learning cards due next 7 days: [${upcomingDueCounts.join(", ")}]`
+          );
+        }
       }
-    });
 
-    // Calculate weighted average multiplier (recent reviews weighted more)
-    let avgMultiplier = 2.3; // Default fallback
-    if (multipliers.length > 0) {
-      // Weight recent reviews more heavily (exponential decay)
-      let totalWeight = 0;
-      let weightedSum = 0;
+      // Track activity for early exit logic
+      if (processedCards > 0) {
+        consecutiveDaysWithoutActivity = 0;
+      } else {
+        consecutiveDaysWithoutActivity++;
+      }
 
-      multipliers.forEach((mult, index) => {
-        const weight = Math.exp(-index / 100); // Decay factor
-        weightedSum += mult * weight;
-        totalWeight += weight;
-      });
+      // Early exit conditions:
+      // 1. Original: All cards mature and 7+ idle days
+      // 2. New: Equilibrium detected and 14 days have passed since detection
+      if (
+        (newCount === 0 &&
+          learningCount === 0 &&
+          consecutiveDaysWithoutActivity > MAX_IDLE_DAYS) ||
+        (equilibriumDetected &&
+          equilibriumDay !== null &&
+          day - equilibriumDay >= EQUILIBRIUM_WINDOW_DAYS)
+      ) {
+        if (equilibriumDetected) {
+          this.logger.debug(
+            `[simulateMaturityProgression] Early exit after equilibrium: day ${day} ` +
+              `(${day - equilibriumDay!} days after detection at day ${equilibriumDay})`
+          );
+        }
+        break;
+      }
 
-      avgMultiplier = weightedSum / totalWeight;
-
-      // Clamp to reasonable range
-      avgMultiplier = Math.max(1.5, Math.min(3.0, avgMultiplier));
+      // Yield to UI every 5 days to prevent blocking the main thread
+      // This is critical for long simulations (up to 1825 days for 5 year forecasts)
+      if (day > 0 && day % 5 === 0) {
+        await yieldToUI();
+      }
     }
 
-    // Calculate average first interval
-    let avgFirstInterval = 1440; // Default 1 day
-    if (firstIntervals.length > 0) {
-      const sum = firstIntervals.reduce((a, b) => a + b, 0);
-      avgFirstInterval = sum / firstIntervals.length;
+    // Define Stable Target Constants for a 90% Retention User
+    const TARGET_LAPSE_RATE = 0.1; // 90% Retention target
+    const IDEAL_RESIDENCY = 24; // Days to reach S >= 21
+    const MATURE_DECK_INTERVAL = 30; // Target average interval for a healthy deck
 
-      // Clamp to reasonable range (10 minutes to 7 days)
-      avgFirstInterval = Math.max(10, Math.min(10080, avgFirstInterval));
-    }
+    // Calculate the Steady-State Population Floor for a Mature Deck
+    // Logic: (Daily Influx * Residency) / Total Cards
+    const theoreticalStandardCardFloor =
+      ((TARGET_LAPSE_RATE * IDEAL_RESIDENCY) / MATURE_DECK_INTERVAL) * 100;
 
+    // Return enhanced result structure
     return {
-      intervalMultiplier: avgMultiplier,
-      firstReviewInterval: avgFirstInterval,
+      dailySnapshots: result,
+      maintenanceLevel: equilibriumMaintenanceLevel,
+      equilibriumDetectedAt: equilibriumDay,
+      totalCards: cardStates.length,
+      empiricalLapseRate,
+      theoreticalMaintenanceLevel: theoreticalStandardCardFloor,
     };
+  }
+
+  private ratingCounter = 0; // Counter for deterministic rating selection
+
+  /**
+   * Select a rating based on empirical button distribution (deterministic)
+   * Uses round-robin distribution based on percentages
+   */
+  private selectRatingFromDistribution(distribution: {
+    again: number;
+    hard: number;
+    good: number;
+    easy: number;
+  }): number {
+    // Convert percentages to integer counts out of 100
+    // This gives us deterministic round-robin behavior
+    const againCount = Math.round(distribution.again * 100);
+    const hardCount = Math.round(distribution.hard * 100);
+    const goodCount = Math.round(distribution.good * 100);
+    // Easy gets the remainder to ensure total = 100
+
+    const position = this.ratingCounter % 100;
+    this.ratingCounter++;
+
+    let cumulative = 0;
+    if (position < (cumulative += againCount)) return 1;
+    if (position < (cumulative += hardCount)) return 2;
+    if (position < (cumulative += goodCount)) return 3;
+    return 4; // Easy
+  }
+
+  /**
+   * Convert rating number (1-4) to rating label for FSRS
+   */
+  private ratingNumberToLabel(rating: number): RatingLabel {
+    const labelMap: { [key: number]: RatingLabel } = {
+      1: "again",
+      2: "hard",
+      3: "good",
+      4: "easy",
+    };
+    return labelMap[rating] || "good";
   }
 
   /**
@@ -1802,7 +2448,7 @@ export class StatisticsService {
     const maxEventsPerCard = 200;
     const maxEventsPerDayIntensive = 6;
 
-    // Min-heap simulation using simple array (will be sorted by nextDue)
+    // SimNode interface for heap elements
     interface SimNode {
       cardId: string;
       stability: number;
@@ -1812,7 +2458,8 @@ export class StatisticsService {
       events: number;
     }
 
-    const heap: SimNode[] = [];
+    // Use min-heap for O(log n) operations instead of sorting
+    const heap = new MinHeap<SimNode>((a, b) => a.nextDue - b.nextDue);
 
     // Seed heap with cards
     for (const card of cards) {
@@ -1836,11 +2483,8 @@ export class StatisticsService {
     // Simulation loop
     const dailyEventCounts = new Map<string, number>();
 
-    while (heap.length > 0) {
-      // Sort heap by nextDue (simple approach)
-      heap.sort((a, b) => a.nextDue - b.nextDue);
-
-      const node = heap.shift();
+    while (heap.size() > 0) {
+      const node = heap.pop();
       if (!node) break;
       if (node.nextDue >= endMs || node.events >= maxEventsPerCard) {
         continue;

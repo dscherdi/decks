@@ -10,6 +10,7 @@ import type {
   Flashcard,
   DailyStats,
 } from "../database/types";
+import { toLocalDateString } from "../utils/date-utils";
 
 // Mock implementations
 class MockDatabaseService implements Partial<IDatabaseService> {
@@ -215,7 +216,7 @@ describe("StatisticsService", () => {
 
   describe("getTodayStats", () => {
     it("should return today's stats when available", () => {
-      const today = new Date().toISOString().split("T")[0];
+      const today = toLocalDateString(new Date());
       const mockStats = createMockStatistics([
         createMockDailyStats(today, 10, 300),
         createMockDailyStats("2024-01-01", 5, 150),
@@ -298,10 +299,10 @@ describe("StatisticsService", () => {
 
   describe("getDueToday and getDueTomorrow", () => {
     it("should return correct due counts", () => {
-      const today = new Date().toISOString().split("T")[0];
+      const today = toLocalDateString(new Date());
       const tomorrow = new Date();
       tomorrow.setDate(tomorrow.getDate() + 1);
-      const tomorrowStr = tomorrow.toISOString().split("T")[0];
+      const tomorrowStr = toLocalDateString(tomorrow);
 
       const mockStats = createMockStatistics();
       mockStats.forecast = [
@@ -681,7 +682,7 @@ describe("StatisticsService", () => {
       const mockStats = createMockStatistics();
       const tomorrow = new Date();
       tomorrow.setDate(tomorrow.getDate() + 1);
-      const tomorrowStr = tomorrow.toISOString().split("T")[0];
+      const tomorrowStr = toLocalDateString(tomorrow);
 
       mockStats.forecast = [
         { date: "2024-01-01", dueCount: 10 },
@@ -844,7 +845,7 @@ describe("StatisticsService", () => {
           date.setDate(date.getDate() - i);
           dailyStats.push(
             createMockDailyStats(
-              date.toISOString().split("T")[0],
+              toLocalDateString(date),
               Math.floor(Math.random() * 50) + 1,
               Math.floor(Math.random() * 1800) + 300,
               Math.floor(Math.random() * 5),
@@ -1013,10 +1014,10 @@ describe("StatisticsService", () => {
 
     describe("Forecast Calculation Integrity", () => {
       it("should validate forecast data consistency", async () => {
-        const today = new Date().toISOString().split("T")[0];
+        const today = toLocalDateString(new Date());
         const tomorrow = new Date();
         tomorrow.setDate(tomorrow.getDate() + 1);
-        const tomorrowStr = tomorrow.toISOString().split("T")[0];
+        const tomorrowStr = toLocalDateString(tomorrow);
 
         // Test with overlapping actual and predicted data
         const mockStats = createMockStatistics();
@@ -1160,7 +1161,7 @@ describe("StatisticsService", () => {
           date.setDate(currentDate.getDate() - i);
           largeDailyStats.push(
             createMockDailyStats(
-              date.toISOString().split("T")[0],
+              toLocalDateString(date),
               Math.floor(Math.random() * 100) + 1,
               Math.floor(Math.random() * 3600) + 60,
               Math.floor(Math.random() * 10),
@@ -1211,7 +1212,7 @@ describe("StatisticsService", () => {
           const date = new Date("2024-06-15");
           date.setDate(date.getDate() + i);
           massiveForecast.push({
-            date: date.toISOString().split("T")[0],
+            date: toLocalDateString(date),
             dueCount: Math.floor(Math.random() * 50) + (i < 100 ? 10 : 1), // Front-load some data
           });
         }
@@ -1392,7 +1393,7 @@ describe("StatisticsService", () => {
 
         const skewedStats = createMockStatistics([
           createMockDailyStats(
-            currentDate.toISOString().split("T")[0],
+            toLocalDateString(currentDate),
             1,
             60,
             0,
@@ -1400,7 +1401,7 @@ describe("StatisticsService", () => {
             100.0
           ), // Perfect but tiny
           createMockDailyStats(
-            yesterday.toISOString().split("T")[0],
+            toLocalDateString(yesterday),
             10000,
             360000,
             1000,
@@ -1408,7 +1409,7 @@ describe("StatisticsService", () => {
             75.0
           ), // Huge volume
           createMockDailyStats(
-            dayBefore.toISOString().split("T")[0],
+            toLocalDateString(dayBefore),
             1,
             60,
             0,
@@ -1453,7 +1454,7 @@ describe("StatisticsService", () => {
         const currentDate = new Date();
         const baseStats = createMockStatistics([
           createMockDailyStats(
-            currentDate.toISOString().split("T")[0],
+            toLocalDateString(currentDate),
             100,
             3600,
             10,

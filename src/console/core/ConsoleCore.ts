@@ -428,7 +428,7 @@ export class ConsoleCore {
   }
 
   private hasFlashcardContent(content: string, metadata: any): boolean {
-    // eslint-disable-line @typescript-eslint/no-explicit-any
+     
     // Check for flashcards tag
     const hasTags =
       metadata?.tags?.some((t: any) => t.tag.startsWith("#flashcards")) || // eslint-disable-line @typescript-eslint/no-explicit-any

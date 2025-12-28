@@ -685,32 +685,67 @@ export abstract class BaseDatabaseService implements IDatabaseService {
     return results[0]?.n || 0;
   }
 
-  async countNewCardsToday(deckId: string): Promise<number> {
+  async countNewCardsToday(deckId: string, nextDayStartsAt = 4): Promise<number> {
+    const now = new Date();
+    const studyDayStart = this.getStudyDayStart(now, nextDayStartsAt);
+    const studyDayEnd = this.getStudyDayEnd(now, nextDayStartsAt);
+
     const sql = `SELECT COUNT(DISTINCT r.flashcard_id) as count
                  FROM review_logs r
                  JOIN flashcards f ON r.flashcard_id = f.id
                  WHERE f.deck_id = ?
-                   AND r.reviewed_at >= datetime('now', 'start of day')
-                   AND r.reviewed_at < datetime('now', 'start of day', '+1 day')
+                   AND r.reviewed_at >= ?
+                   AND r.reviewed_at < ?
                    AND r.old_state = 'new'`;
-    const results = await this.querySql<CountResult>(sql, [deckId], {
+    const results = await this.querySql<CountResult>(sql, [deckId, studyDayStart, studyDayEnd], {
       asObject: true,
     });
     return results[0]?.count || 0;
   }
 
-  async countReviewCardsToday(deckId: string): Promise<number> {
+  async countReviewCardsToday(deckId: string, nextDayStartsAt = 4): Promise<number> {
+    const now = new Date();
+    const studyDayStart = this.getStudyDayStart(now, nextDayStartsAt);
+    const studyDayEnd = this.getStudyDayEnd(now, nextDayStartsAt);
+
     const sql = `SELECT COUNT(DISTINCT r.flashcard_id) as count
                  FROM review_logs r
                  JOIN flashcards f ON r.flashcard_id = f.id
                  WHERE f.deck_id = ?
-                   AND r.reviewed_at >= datetime('now', 'start of day')
-                   AND r.reviewed_at < datetime('now', 'start of day', '+1 day')
+                   AND r.reviewed_at >= ?
+                   AND r.reviewed_at < ?
                    AND r.old_state = 'review'`;
-    const results = await this.querySql<CountResult>(sql, [deckId], {
+    const results = await this.querySql<CountResult>(sql, [deckId, studyDayStart, studyDayEnd], {
       asObject: true,
     });
     return results[0]?.count || 0;
+  }
+
+  /**
+   * Calculates the start of the current Study Day in UTC
+   */
+  private getStudyDayStart(now: Date, nextDayStartsAt: number): string {
+    const localMidnight = new Date(now);
+    localMidnight.setHours(0, 0, 0, 0);
+
+    const studyDayStart = new Date(localMidnight);
+    studyDayStart.setHours(nextDayStartsAt, 0, 0, 0);
+
+    // If current time is before the study day rollover, use previous day
+    if (now < studyDayStart) {
+      studyDayStart.setDate(studyDayStart.getDate() - 1);
+    }
+
+    return studyDayStart.toISOString();
+  }
+
+  /**
+   * Calculates the end of the current Study Day in UTC
+   */
+  private getStudyDayEnd(now: Date, nextDayStartsAt: number): string {
+    const start = new Date(this.getStudyDayStart(now, nextDayStartsAt));
+    start.setHours(start.getHours() + 24);
+    return start.toISOString();
   }
 
   // REVIEW LOG OPERATIONS
@@ -1048,10 +1083,11 @@ export abstract class BaseDatabaseService implements IDatabaseService {
   }
 
   async getDailyReviewCounts(
-    deckId: string
+    deckId: string,
+    nextDayStartsAt = 4
   ): Promise<{ newCount: number; reviewCount: number }> {
-    const newCount = await this.countNewCardsToday(deckId);
-    const reviewCount = await this.countReviewCardsToday(deckId);
+    const newCount = await this.countNewCardsToday(deckId, nextDayStartsAt);
+    const reviewCount = await this.countReviewCardsToday(deckId, nextDayStartsAt);
 
     return { newCount, reviewCount };
   }

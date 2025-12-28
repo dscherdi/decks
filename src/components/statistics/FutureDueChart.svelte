@@ -13,13 +13,15 @@
     Tooltip,
     Legend,
     Filler,
+    type TooltipItem,
   } from "chart.js";
-  import type { Statistics, Flashcard } from "../../database/types";
+  import type { Statistics } from "../../database/types";
   import {
     StatisticsService,
     type BacklogForecastData,
   } from "../../services/StatisticsService";
   import { Logger } from "@/utils/logging";
+  import { toLocalDateString } from "@/utils/date-utils";
 
   // Register Chart.js components
   Chart.register(
@@ -36,28 +38,68 @@
     Filler
   );
 
+  export let selectedDeckIds: string[] = [];
   export let statistics: Statistics | null = null;
-  export let allFlashcards: Flashcard[] = [];
   export let statisticsService: StatisticsService;
   export let logger: Logger;
 
   let canvas: HTMLCanvasElement;
-  const chart: Chart | null = null;
-  let showBacklog = true;
+  let chart: Chart | null = null;
+  let showBacklog = false; // Disabled by default to prevent hanging
   let timeframe = "3m"; // "1m", "3m", "1y", "all"
+  let isUpdating = false; // Prevent concurrent updates
+  let updateTimeout: number | null = null; // Debounce timeout
+
+  // Track previous values for internal state changes only
+  let prevTimeframe = "";
+  let prevShowBacklog = false;
 
   onMount(async () => {
-    await createChart();
+    // Only create chart if decks are selected
+    if (selectedDeckIds.length > 0) {
+      await createChart();
+    }
+    // Initialize tracking variables after first render
+    prevTimeframe = timeframe;
+    prevShowBacklog = showBacklog;
   });
 
   onDestroy(() => {
     if (chart) {
-      (chart as Chart).destroy();
+      chart.destroy();
+    }
+    if (updateTimeout !== null) {
+      clearTimeout(updateTimeout);
     }
   });
 
-  $: if (chart && (statistics || showBacklog !== undefined || timeframe)) {
-    updateChart();
+  // Debounced reactive update for internal state changes only (selectedDeckIds handled by parent {#key} block)
+  $: {
+    // Clear chart if no decks selected
+    if (selectedDeckIds.length === 0) {
+      if (chart) {
+        chart.data = { labels: [], datasets: [] };
+        chart.update();
+      }
+    } else {
+      const hasChanges =
+        chart &&
+        statistics &&
+        (timeframe !== prevTimeframe || showBacklog !== prevShowBacklog);
+
+      if (hasChanges) {
+        prevTimeframe = timeframe;
+        prevShowBacklog = showBacklog;
+
+        if (updateTimeout !== null) {
+          clearTimeout(updateTimeout);
+        }
+        updateTimeout = window.setTimeout(() => {
+          void updateChart();
+          updateTimeout = null;
+        }, 150); // 150ms debounce
+      }
+    }
   }
 
   function getTimeframeDays(): number {
@@ -95,25 +137,43 @@
       };
     }
 
-    // Create chart labels
-    const labels = displayData.map((_, index) => {
-      if (index === 0) return "Today";
-      if (index === 1) return "Tomorrow";
-      return index.toString();
+    // Create chart labels based on actual dates, not array indices
+    const today = new Date();
+    today.setHours(0, 0, 0, 0); // Normalize to start of day
+    const todayStr = toLocalDateString(today);
+    const tomorrow = new Date(today);
+    tomorrow.setDate(tomorrow.getDate() + 1);
+    const tomorrowStr = toLocalDateString(tomorrow);
+
+    const labels = displayData.map((day) => {
+      if (day.date === todayStr) return "Today";
+      if (day.date === tomorrowStr) return "Tomorrow";
+
+      // Calculate days from today
+      const dayDate = new Date(day.date);
+      const diffTime = dayDate.getTime() - today.getTime();
+      const diffDays = Math.round(diffTime / (1000 * 60 * 60 * 24));
+
+      return diffDays.toString();
     });
 
     const barData = displayData.map((day) => day.dueCount);
 
     // Calculate backlog forecast data if needed
     let backlogData: BacklogForecastData[] = [];
-    if (showBacklog && allFlashcards.length > 0) {
-      // Get the deck ID from the first flashcard
-      const deckId = allFlashcards[0]?.deckId;
-      if (deckId) {
+    if (showBacklog && selectedDeckIds.length > 0) {
+      try {
         backlogData = await statisticsService.simulateFutureDueLoad(
-          [deckId], // TODO: should not use deckid for simulation
+          selectedDeckIds,
           maxDays
         );
+        logger.debug(
+          "[FutureDueChart] Simulated backlog data:",
+          backlogData.length
+        );
+      } catch (error) {
+        logger.error("[FutureDueChart] Error simulating backlog:", error);
+        backlogData = [];
       }
     }
 
@@ -121,18 +181,20 @@
       .slice(0, displayData.length)
       .map((day) => day.projectedBacklog);
 
-    // Create chart datasets
+    // Create chart datasets - using bar chart with fill
     const datasets = [
       {
-        type: "bar" as const,
+        type: "line" as const,
         label: "Due Cards",
         data: barData,
-        backgroundColor: "#22c55e",
-        borderColor: "#22c55e",
-        borderWidth: 0,
+        backgroundColor: "rgba(34, 197, 94, 0.3)",
+        borderColor: "rgb(34, 197, 94)",
+        borderWidth: 2,
+        fill: true,
+        tension: 0.4,
+        pointRadius: 2,
+        pointHoverRadius: 5,
         yAxisID: "y",
-        barPercentage: 0.9,
-        categoryPercentage: 0.9,
       },
     ];
 
@@ -166,199 +228,212 @@
   async function createChart() {
     if (!canvas) return;
 
-    // const data = await processChartData();
+    const data = await processChartData();
+
     try {
-      // TODO: Bug causes obsidian to hang
-      // chart = new Chart(canvas, {
-      //     type: "line",
-      //     data: data,
-      //     options: {
-      //         responsive: true,
-      //         maintainAspectRatio: false,
-      //         interaction: {
-      //             mode: "index",
-      //             intersect: false,
-      //         },
-      //         scales: {
-      //             x: {
-      //                 display: true,
-      //                 grid: {
-      //                     display: false,
-      //                 },
-      //                 ticks: {
-      //                     color: "#9ca3af",
-      //                     font: {
-      //                         size: 12,
-      //                     },
-      //                     maxTicksLimit: 20,
-      //                 },
-      //             },
-      //             y: {
-      //                 type: "linear",
-      //                 display: true,
-      //                 position: "left",
-      //                 beginAtZero: true,
-      //                 grid: {
-      //                     color: "rgba(156, 163, 175, 0.2)",
-      //                 },
-      //                 ticks: {
-      //                     color: "#9ca3af",
-      //                     font: {
-      //                         size: 12,
-      //                     },
-      //                     precision: 0,
-      //                 },
-      //             },
-      //             y1: {
-      //                 type: "linear",
-      //                 display: showBacklog,
-      //                 position: "right",
-      //                 beginAtZero: true,
-      //                 grid: {
-      //                     drawOnChartArea: false,
-      //                 },
-      //                 ticks: {
-      //                     color: "#9ca3af",
-      //                     font: {
-      //                         size: 12,
-      //                     },
-      //                     precision: 0,
-      //                 },
-      //             },
-      //         },
-      //         plugins: {
-      //             title: {
-      //                 display: false,
-      //             },
-      //             legend: {
-      //                 display: false,
-      //             },
-      //             tooltip: {
-      //                 backgroundColor: "rgba(0, 0, 0, 0.8)",
-      //                 titleColor: "#ffffff",
-      //                 bodyColor: "#ffffff",
-      //                 borderColor: "rgba(156, 163, 175, 0.3)",
-      //                 borderWidth: 1,
-      //                 cornerRadius: 8,
-      //                 displayColors: false,
-      //                 callbacks: {
-      //                     title: function (tooltipItems: TooltipItem<"line">[]) {
-      //                         const label = tooltipItems[0].label;
-      //                         if (label === "Today") return "Today";
-      //                         if (label === "Tomorrow") return "Tomorrow";
-      //                         return `Day ${label}`;
-      //                     },
-      //                     label: function (context: TooltipItem<"line">) {
-      //                         const value = context.parsed.y;
-      //                         const datasetLabel =
-      //                             context.dataset.label || "";
-      //                         if (datasetLabel.includes("Cumulative")) {
-      //                             return `Total: ${value} reviews`;
-      //                         } else {
-      //                             return `Due: ${value} reviews`;
-      //                         }
-      //                     },
-      //                 },
-      //             },
-      //         },
-      //     },
-      // });
+      chart = new Chart(canvas, {
+        type: "line",
+        data: data,
+        options: {
+          responsive: true,
+          maintainAspectRatio: false,
+          interaction: {
+            mode: "index",
+            intersect: false,
+          },
+          scales: {
+            x: {
+              display: true,
+              grid: {
+                display: false,
+              },
+              ticks: {
+                maxTicksLimit: 20,
+              },
+            },
+            y: {
+              type: "linear",
+              display: true,
+              position: "left",
+              beginAtZero: true,
+              title: {
+                display: true,
+                text: "Due Cards",
+              },
+              ticks: {
+                precision: 0,
+              },
+            },
+            y1: {
+              type: "linear",
+              display: showBacklog,
+              position: "right",
+              beginAtZero: true,
+              title: {
+                display: true,
+                text: "Cumulative Backlog",
+              },
+              grid: {
+                drawOnChartArea: false,
+              },
+              ticks: {
+                precision: 0,
+              },
+            },
+          },
+          plugins: {
+            title: {
+              display: false,
+            },
+            legend: {
+              display: true,
+              position: "bottom",
+            },
+            tooltip: {
+              callbacks: {
+                title: function (tooltipItems: TooltipItem<"bar" | "line">[]) {
+                  const label = tooltipItems[0].label;
+                  if (label === "Today") return "Today";
+                  if (label === "Tomorrow") return "Tomorrow";
+                  return `Day ${label}`;
+                },
+                label: function (context: TooltipItem<"bar" | "line">) {
+                  const value = context.parsed.y;
+                  const datasetLabel = context.dataset.label || "";
+                  if (datasetLabel.includes("Cumulative")) {
+                    return `Total backlog: ${value} reviews`;
+                  } else {
+                    return `Due: ${value} cards`;
+                  }
+                },
+              },
+            },
+          },
+        },
+      });
+      logger.debug("[FutureDueChart] Chart created successfully");
     } catch (error) {
-      console.error("[FutureDueChart] Error creating chart:", error);
+      logger.error("[FutureDueChart] Error creating chart:", error);
     }
   }
 
   async function updateChart() {
-    if (!chart) return;
+    if (!chart || isUpdating) return;
 
-    const data = await processChartData();
-    chart.data = data;
+    try {
+      isUpdating = true;
+      const data = await processChartData();
 
-    // Update scale visibility
-    if (chart.options.scales?.y1) {
-      chart.options.scales.y1.display = showBacklog;
+      if (!chart) return; // Chart might have been destroyed while processing
+
+      chart.data = data;
+
+      // Update scale visibility
+      if (chart.options.scales?.y1) {
+        chart.options.scales.y1.display = showBacklog;
+      }
+
+      chart.update();
+    } catch (error) {
+      logger.error("[FutureDueChart] Error updating chart:", error);
+    } finally {
+      isUpdating = false;
     }
-
-    chart.update();
   }
 
-  function getForecastStats() {
+  // Reactive calculation - only recomputes when dependencies change
+  $: forecastStats = (() => {
     const maxDays = getTimeframeDays();
-    return statisticsService.calculateForecastStats(
-      statistics,
-      allFlashcards,
-      maxDays
-    );
-  }
-
-  // Reactive updates when data changes
-  $: if (statistics || allFlashcards || showBacklog || timeframe) {
-    if (chart) {
-      updateChart();
+    if (!statistics || !statistics.forecast) {
+      return {
+        totalReviews: 0,
+        averagePerDay: 0,
+        dueTomorrow: 0,
+      };
     }
-  }
+
+    const forecast = statistics.forecast.slice(0, maxDays);
+    const totalReviews = forecast.reduce((sum, day) => sum + day.dueCount, 0);
+    const averagePerDay =
+      forecast.length > 0 ? Math.round(totalReviews / forecast.length) : 0;
+    const dueTomorrow = forecast.length > 1 ? forecast[1].dueCount : 0;
+
+    return {
+      totalReviews,
+      averagePerDay,
+      dueTomorrow,
+    };
+  })();
 </script>
 
 <div class="future-due-chart-container">
   <h3>Future Due</h3>
-  <p class="chart-subtitle">The number of reviews due in the future.</p>
+  <p class="decks-chart-subtitle">
+    {#if selectedDeckIds.length === 0}
+      <span class="decks-loading-indicator"
+        >Select a deck to view future due reviews.</span
+      >
+    {:else}
+      The number of reviews due in the future.
+    {/if}
+  </p>
 
-  <div class="chart-controls">
-    <label class="backlog-control">
-      <input type="checkbox" bind:checked={showBacklog} />
-      Backlog
-    </label>
+  {#if selectedDeckIds.length > 0}
+    <div class="chart-controls">
+      <label class="backlog-control">
+        <input type="checkbox" bind:checked={showBacklog} />
+        Backlog
+      </label>
 
-    <div class="timeframe-controls">
-      <label>
-        <input type="radio" bind:group={timeframe} value="1m" />
-        1 month
-      </label>
-      <label>
-        <input type="radio" bind:group={timeframe} value="3m" />
-        3 months
-      </label>
-      <label>
-        <input type="radio" bind:group={timeframe} value="1y" />
-        1 year
-      </label>
-      <label>
-        <input type="radio" bind:group={timeframe} value="all" />
-        all
-      </label>
+      <div class="timeframe-controls">
+        <label>
+          <input type="radio" bind:group={timeframe} value="1m" />
+          1 month
+        </label>
+        <label>
+          <input type="radio" bind:group={timeframe} value="3m" />
+          3 months
+        </label>
+        <label>
+          <input type="radio" bind:group={timeframe} value="1y" />
+          1 year
+        </label>
+        <label>
+          <input type="radio" bind:group={timeframe} value="all" />
+          all
+        </label>
+      </div>
     </div>
-  </div>
+  {/if}
 
   <div class="chart-wrapper">
     <canvas bind:this={canvas} height="300"></canvas>
   </div>
 
-  <div class="chart-stats">
-    <div class="stat">
-      <span class="stat-label">Total Reviews:</span>
-      <span class="stat-value">{getForecastStats().totalReviews}</span>
+  {#if selectedDeckIds.length > 0}
+    <div class="chart-stats">
+      <div class="stat">
+        <span class="stat-label">Total Reviews:</span>
+        <span class="stat-value">{forecastStats.totalReviews}</span>
+      </div>
+      <div class="stat">
+        <span class="stat-label">Avg/Day:</span>
+        <span class="stat-value">{forecastStats.averagePerDay}</span>
+      </div>
+      <div class="stat">
+        <span class="stat-label">Due Tomorrow: </span>
+        <span class="stat-value" style="color: #f97316;"
+          >{forecastStats.dueTomorrow}</span
+        >
+      </div>
     </div>
-    <div class="stat">
-      <span class="stat-label">Avg/Day:</span>
-      <span class="stat-value">{getForecastStats().averagePerDay}</span>
-    </div>
-    <div class="stat">
-      <span class="stat-label">Due Tomorrow: </span>
-      <span class="stat-value" style="color: #f97316;"
-        >{getForecastStats().dueTomorrow}</span
-      >
-    </div>
-    <div class="stat">
-      <span class="stat-label">Daily Load:</span>
-      <span class="stat-value">{getForecastStats().dailyLoad}</span>
-    </div>
-  </div>
 
-  {#if !statistics?.forecast || statistics.forecast.length === 0 || !statistics.forecast.some((day) => day.dueCount > 0)}
-    <div class="no-data">
-      No upcoming reviews scheduled. Add flashcards to your decks to see
-      forecast.
-    </div>
+    {#if !statistics?.forecast || statistics.forecast.length === 0 || !statistics.forecast.some((day) => day.dueCount > 0)}
+      <div class="no-data">
+        No upcoming reviews scheduled. Add flashcards to your decks to see
+        forecast.
+      </div>
+    {/if}
   {/if}
 </div>
 

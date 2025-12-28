@@ -36,9 +36,15 @@
   let selectedTimeframe = "1m"; // "1m", "3m", "1y", "all"
   let reviewData: Map<string, { again: number; hard: number; good: number; easy: number }> | null = null;
 
+  let prevTimeframe = "";
+
   onMount(async () => {
-    await loadData();
     createChart();
+    if (selectedDeckIds.length > 0) {
+      await loadData();
+      updateChart();
+    }
+    prevTimeframe = selectedTimeframe;
   });
 
   onDestroy(() => {
@@ -47,8 +53,21 @@
     }
   });
 
-  $: if (selectedDeckIds || selectedTimeframe) {
-    loadData().then(() => updateChart());
+  // Only track internal timeframe changes (selectedDeckIds handled by parent {#key} block)
+  $: {
+    if (selectedTimeframe !== prevTimeframe) {
+      prevTimeframe = selectedTimeframe;
+
+      if (selectedDeckIds.length > 0) {
+        loadData().then(() => updateChart());
+      } else {
+        reviewData = null;
+        if (chart) {
+          chart.data = { labels: [], datasets: [] };
+          chart.update();
+        }
+      }
+    }
   }
 
   function getTimeframeDays(): number {
@@ -220,22 +239,41 @@
 </script>
 
 <h3>Reviews Over Time</h3>
-<div class="decks-chart-controls">
-  <label>
-    Timeframe:
-    <select bind:value={selectedTimeframe} on:change={handleFilterChange}>
-      <option value="1m">1 Month</option>
-      <option value="3m">3 Months</option>
-      <option value="1y">1 Year</option>
-      <option value="all">All Time</option>
-    </select>
-  </label>
-</div>
+<p class="decks-chart-subtitle">
+  {#if selectedDeckIds.length === 0}
+    <span class="decks-loading-indicator">Select a deck to view review history.</span>
+  {/if}
+</p>
+{#if selectedDeckIds.length > 0}
+  <div class="decks-chart-controls">
+    <label>
+      Timeframe:
+      <select bind:value={selectedTimeframe} on:change={handleFilterChange}>
+        <option value="1m">1 Month</option>
+        <option value="3m">3 Months</option>
+        <option value="1y">1 Year</option>
+        <option value="all">All Time</option>
+      </select>
+    </label>
+  </div>
+{/if}
 <div class="decks-reviews-over-time-chart">
   <canvas bind:this={canvas} height="300"></canvas>
 </div>
 
 <style>
+  .decks-chart-subtitle {
+    margin: 0 0 1rem 0;
+    color: var(--text-muted);
+    font-size: 14px;
+    line-height: 1.5;
+  }
+
+  .decks-loading-indicator {
+    color: var(--text-muted);
+    font-style: italic;
+  }
+
   .decks-reviews-over-time-chart {
     width: 100%;
     height: 300px;

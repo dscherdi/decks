@@ -15,7 +15,6 @@
   export let statisticsService: StatisticsService;
   export let logger: Logger;
 
-  export let showSuspended = true;
   let counts: { new: number; young: number; mature: number } | null = null;
   // Register Chart.js components with force re-registration
   try {
@@ -43,8 +42,10 @@
   let chart: Chart | null = null;
 
   onMount(async () => {
-    await loadData();
-    createChart();
+    if (selectedDeckIds.length > 0) {
+      await loadData();
+      createChart();
+    }
   });
 
   onDestroy(() => {
@@ -53,12 +54,11 @@
     }
   });
 
-  $: if (selectedDeckIds) {
-    loadData().then(() => updateChart());
-  }
-
   async function loadData() {
     try {
+      logger.debug(
+        `[CardCountsChart] loadData() called with selectedDeckIds: [${selectedDeckIds.join(",")}]`
+      );
       counts = await statisticsService.getCardCountsByMaturity(selectedDeckIds);
       logger.debug("[CardCountsChart] Loaded counts:", counts);
     } catch (error) {
@@ -71,7 +71,9 @@
     if (!counts) {
       return {
         labels: [],
-        datasets: [{ data: [], backgroundColor: [], borderColor: [], borderWidth: 1 }],
+        datasets: [
+          { data: [], backgroundColor: [], borderColor: [], borderWidth: 1 },
+        ],
       };
     }
 
@@ -202,11 +204,30 @@
 </script>
 
 <h3>Card Distribution</h3>
+<p class="decks-chart-subtitle">
+  {#if selectedDeckIds.length === 0}
+    <span class="decks-loading-indicator"
+      >Select a deck to view card distribution.</span
+    >
+  {/if}
+</p>
 <div class="decks-card-counts-chart">
   <canvas bind:this={canvas} height="300"></canvas>
 </div>
 
 <style>
+  .decks-chart-subtitle {
+    margin: 0 0 1rem 0;
+    color: var(--text-muted);
+    font-size: 14px;
+    line-height: 1.5;
+  }
+
+  .decks-loading-indicator {
+    color: var(--text-muted);
+    font-style: italic;
+  }
+
   .decks-card-counts-chart {
     width: 100%;
     height: 300px;
