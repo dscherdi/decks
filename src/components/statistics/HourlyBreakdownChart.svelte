@@ -14,7 +14,6 @@
     Legend,
     type TooltipItem,
   } from "chart.js";
-  import type { ReviewLog } from "../../database/types";
   import { StatisticsService } from "@/services/StatisticsService";
   import { Logger } from "@/utils/logging";
 
@@ -36,14 +35,19 @@
   export let statisticsService: StatisticsService;
   export let logger: Logger;
 
-  export let reviewLogs: ReviewLog[] = [];
-  let selectedTimeframe = "1m"; // "1m", "3m", "1y", "all"
+  let hourlyData: Map<number, number> | null = null;
+  let successRatesData: Map<number, number> | null = null;
 
   let canvas: HTMLCanvasElement;
   let chart: Chart | null = null;
 
-  onMount(() => {
+
+  onMount(async () => {
     createChart();
+    if (selectedDeckIds.length > 0) {
+      await loadData();
+      updateChart();
+    }
   });
 
   onDestroy(() => {
@@ -52,103 +56,36 @@
     }
   });
 
-  $: if (chart && reviewLogs) {
-    updateChart();
-  }
 
-  function getTimeframeData(): ReviewLog[] {
-    if (selectedTimeframe === "all") {
-      return reviewLogs;
+  async function loadData() {
+    try {
+      hourlyData = await statisticsService.getReviewsByHour(selectedDeckIds);
+      successRatesData = await statisticsService.getSuccessRatesByHour(selectedDeckIds);
+      logger.debug("[HourlyBreakdownChart] Loaded hourly data:", hourlyData.size);
+      logger.debug("[HourlyBreakdownChart] Loaded success rates:", successRatesData.size);
+    } catch (error) {
+      logger.error("[HourlyBreakdownChart] Error loading hourly data:", error);
+      hourlyData = new Map();
+      successRatesData = new Map();
     }
-
-    const now = new Date();
-    let cutoffDate: Date;
-
-    switch (selectedTimeframe) {
-      case "1m":
-        cutoffDate = new Date(now.getTime() - 30 * 24 * 60 * 60 * 1000);
-        break;
-      case "3m":
-        cutoffDate = new Date(now.getTime() - 90 * 24 * 60 * 60 * 1000);
-        break;
-      case "1y":
-        cutoffDate = new Date(now.getTime() - 365 * 24 * 60 * 60 * 1000);
-        break;
-      default:
-        return reviewLogs;
-    }
-
-    return reviewLogs.filter((log) => new Date(log.reviewedAt) >= cutoffDate);
   }
 
   function processChartData() {
-    const filteredLogs = getTimeframeData();
+    // Create array of counts for each hour (0-23)
+    const hourlyCounts = hourlyData
+      ? Array.from({ length: 24 }, (_, hour) => hourlyData.get(hour) || 0)
+      : new Array(24).fill(0);
 
-    if (filteredLogs.length === 0) {
-      return {
-        labels: Array.from({ length: 24 }, (_, i) => `${i}:00`),
-        datasets: [
-          {
-            type: "bar" as const,
-            label: "Review Count",
-            data: new Array(24).fill(0),
-            backgroundColor: "rgba(59, 130, 246, 0.7)",
-            borderColor: "rgb(59, 130, 246)",
-            borderWidth: 1,
-            yAxisID: "y",
-          },
-          {
-            type: "line" as const,
-            label: "Success Rate (%)",
-            data: new Array(24).fill(0),
-            backgroundColor: "rgba(34, 197, 94, 0.7)",
-            borderColor: "rgb(34, 197, 94)",
-            borderWidth: 2,
-            fill: false,
-            yAxisID: "y1",
-          },
-        ],
-      };
-    }
-
-    // Group reviews by hour of day
-    const hourlyData: {
-      [hour: number]: { total: number; successful: number };
-    } = {};
-
-    // Initialize all hours
-    for (let hour = 0; hour < 24; hour++) {
-      hourlyData[hour] = { total: 0, successful: 0 };
-    }
-
-    // Count reviews and success rates by hour
-    filteredLogs.forEach((log) => {
-      const reviewDate = new Date(log.reviewedAt);
-      const hour = reviewDate.getHours();
-
-      hourlyData[hour].total++;
-
-      // Rating 3 (Good) and 4 (Easy) are considered successful
-      if (log.rating >= 3) {
-        hourlyData[hour].successful++;
-      }
-    });
+    // Create array of success rates for each hour (0-23)
+    const successRates = successRatesData
+      ? Array.from({ length: 24 }, (_, hour) => successRatesData.get(hour) || 0)
+      : new Array(24).fill(0);
 
     // Prepare chart data
     const labels = Array.from(
       { length: 24 },
       (_, i) => `${i.toString().padStart(2, "0")}:00`
     );
-    const reviewCounts = Array.from(
-      { length: 24 },
-      (_, i) => hourlyData[i].total
-    );
-    const successRates = Array.from({ length: 24 }, (_, i) => {
-      const total = hourlyData[i].total;
-      return total > 0
-        ? Math.round((hourlyData[i].successful / total) * 100)
-        : 0;
-    });
 
     return {
       labels,
@@ -156,7 +93,7 @@
         {
           type: "bar" as const,
           label: "Review Count",
-          data: reviewCounts,
+          data: hourlyCounts,
           backgroundColor: "rgba(59, 130, 246, 0.7)",
           borderColor: "rgb(59, 130, 246)",
           borderWidth: 1,
@@ -285,29 +222,14 @@
     chart.data = data;
     chart.update();
   }
-
-  async function handleFilterChange() {
-    logger.debug("[StatisticsUI] Filter changed, reloading data...");
-    try {
-      await updateChart();
-    } catch (error) {
-      logger.error("[StatisticsUI] Error during filter change:", error);
-    }
-  }
 </script>
 
 <h3>Review Activity by Hour</h3>
-<div class="decks-chart-controls">
-  <label>
-    Timeframe:
-    <select bind:value={selectedTimeframe} on:change={handleFilterChange}>
-      <option value="1m">1 Month</option>
-      <option value="3m">3 Months</option>
-      <option value="1y">1 Year</option>
-      <option value="all">All Time</option>
-    </select>
-  </label>
-</div>
+<p class="decks-chart-subtitle">
+  {#if selectedDeckIds.length === 0}
+    <span class="decks-loading-indicator">Select a deck to view review activity by hour.</span>
+  {/if}
+</p>
 <div class="decks-hourly-breakdown-chart">
   <canvas bind:this={canvas} height="300"></canvas>
 </div>
@@ -322,5 +244,17 @@
   .decks-hourly-breakdown-chart canvas {
     max-width: 100%;
     max-height: 300px;
+  }
+
+  .decks-chart-subtitle {
+    margin: 0 0 1rem 0;
+    color: var(--text-muted);
+    font-size: 14px;
+    line-height: 1.5;
+  }
+
+  .decks-loading-indicator {
+    color: var(--text-muted);
+    font-style: italic;
   }
 </style>

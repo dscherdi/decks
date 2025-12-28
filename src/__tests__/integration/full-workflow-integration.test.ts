@@ -34,6 +34,7 @@ const createMockSettings = (): DecksSettings => ({
     showProgress: true,
     enableKeyboardShortcuts: true,
     sessionDuration: 25,
+    nextDayStartsAt: 4,
   },
   parsing: {
     folderSearchPath: "",
@@ -348,7 +349,7 @@ describe("Full Workflow Integration Tests", () => {
     });
 
     it("should report overall statistics correctly", async () => {
-      const stats = await db.getOverallStatistics();
+      const stats = await statisticsService.getOverallStatistics([], "all");
 
       expect(stats.cardStats.new).toBeGreaterThan(0);
       expect(
@@ -668,7 +669,7 @@ describe("Full Workflow Integration Tests", () => {
     });
 
     it("should report overall statistics across all decks", async () => {
-      const overallStats = await db.getOverallStatistics();
+      const overallStats = await statisticsService.getOverallStatistics([], "all");
 
       expect(overallStats.cardStats.total).toBeGreaterThan(0);
       expect(overallStats.reviewStats.totalReviews).toBeGreaterThanOrEqual(10);

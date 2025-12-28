@@ -4,6 +4,7 @@ export interface DecksSettings {
     showProgress: boolean;
     enableKeyboardShortcuts: boolean;
     sessionDuration: number; // Session duration in minutes (1-60, default 25)
+    nextDayStartsAt: number; // Hour (0-23) when study day rolls over (default 4 AM)
   };
 
   // Parsing Settings
@@ -41,6 +42,7 @@ export const DEFAULT_SETTINGS: DecksSettings = {
     showProgress: true,
     enableKeyboardShortcuts: true,
     sessionDuration: 25,
+    nextDayStartsAt: 4,
   },
 
   parsing: {

@@ -1,5 +1,6 @@
 import { BackupService } from "../services/BackupService";
 import { IDatabaseService } from "../database/DatabaseFactory";
+import { toLocalDateString } from "../utils/date-utils";
 
 // Helper function to create a complete mock database
 function createMockDatabase() {
@@ -318,7 +319,7 @@ describe("BackupService", () => {
 
       // Should have been called twice with same filename (overwrite)
       expect(mockDb.createBackupDatabase).toHaveBeenCalledTimes(2);
-      const today = new Date().toISOString().slice(0, 10);
+      const today = toLocalDateString(new Date());
       const expectedPath = `/vault/.obsidian/plugins/decks/backups/backup-${today}.db`;
       expect(mockDb.createBackupDatabase).toHaveBeenNthCalledWith(
         1,

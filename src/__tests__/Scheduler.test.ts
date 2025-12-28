@@ -34,6 +34,7 @@ describe("Scheduler", () => {
     scheduler = new Scheduler(
       mockDb,
       {
+        review: { nextDayStartsAt: 4, showProgress: true, enableKeyboardShortcuts: true, sessionDuration: 25 },
         debug: { enableLogging: false, performanceLogs: false },
         backup: { enableAutoBackup: false, maxBackups: 3 },
       } as any,

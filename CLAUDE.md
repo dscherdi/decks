@@ -52,8 +52,10 @@ npm run check
 
 ### Code Rules
 
--   Avoid using "any" or "unknown" as types, use available types or create if necessary.
--   Avoid casting if possible but when it's needed use proper defined types instead of defining the casting type on the spot.
+- Avoid using "any" or "unknown" as types, use available types or create if necessary.
+- Avoid casting if possible but when it's needed use proper defined types instead of defining the casting type on the spot.
+- Css classes need to have the prefix decks-
+- No excessive unnecessary comments. No comments that mention any prompt or plan. Minimal comments explaining functionality allowed.
 
 ### Releasing
 
@@ -64,10 +66,10 @@ git tag v1.2.3 && git push origin v1.2.3
 
 GitHub Actions will automatically:
 
--   Run all tests
--   Build the plugin
--   Generate release notes from `docs/PROGRESS.md`
--   Create GitHub release with all dist/ files
+- Run all tests
+- Build the plugin
+- Generate release notes from `docs/PROGRESS.md`
+- Create GitHub release with all dist/ files
 
 ## Architecture Overview
 
@@ -99,14 +101,14 @@ Storage Layer (Obsidian Vault)
 
 The database layer has two implementations that share the same business logic:
 
--   **MainDatabaseService**: Runs SQL.js in main thread, direct database manipulation
--   **WorkerDatabaseService**: Communicates with Web Worker via message passing, main thread handles I/O (loading db file, SQL.js assets), worker handles SQL execution
+- **MainDatabaseService**: Runs SQL.js in main thread, direct database manipulation
+- **WorkerDatabaseService**: Communicates with Web Worker via message passing, main thread handles I/O (loading db file, SQL.js assets), worker handles SQL execution
 
 **Key Design Decision**: `BaseDatabaseService` contains ALL business logic (queries, row parsing, batch operations). Concrete implementations only provide:
 
--   `executeSql()` / `querySql()` - execute SQL statements
--   `initialize()` / `close()` / `save()` - lifecycle management
--   `exportDatabaseToBuffer()` / `syncWithDisk()` - persistence
+- `executeSql()` / `querySql()` - execute SQL statements
+- `initialize()` / `close()` / `save()` - lifecycle management
+- `exportDatabaseToBuffer()` / `syncWithDisk()` - persistence
 
 ### Merge-Before-Save Synchronization
 
@@ -123,10 +125,10 @@ This enables users to sync via Dropbox/iCloud without losing data from either de
 
 ### Schema Management
 
--   Current schema version: **v5** (tracked in `PRAGMA user_version`)
--   Migration strategy: `CREATE TABLE *_new` → `INSERT SELECT` → `DROP/RENAME`
--   Dynamic column detection via `PRAGMA table_info()` to handle missing columns
--   Schema definitions in `src/database/schemas.ts`
+- Current schema version: **v5** (tracked in `PRAGMA user_version`)
+- Migration strategy: `CREATE TABLE *_new` → `INSERT SELECT` → `DROP/RENAME`
+- Dynamic column detection via `PRAGMA table_info()` to handle missing columns
+- Schema definitions in `src/database/schemas.ts`
 
 ### Database Tables
 
@@ -145,9 +147,9 @@ review_sessions -- Session tracking with goal/progress
 
 **Key Methods**:
 
--   `scanVaultForDecks()`: Traverses vault to find files with `#flashcards` tags
--   `syncFlashcardsForDeck()`: **Routing logic** - delegates to worker or main thread based on database type
--   `generateDeckId()`: Deterministic ID generation based on filepath hash (ensures same deck = same ID across devices)
+- `scanVaultForDecks()`: Traverses vault to find files with `#flashcards` tags
+- `syncFlashcardsForDeck()`: **Routing logic** - delegates to worker or main thread based on database type
+- `generateDeckId()`: Deterministic ID generation based on filepath hash (ensures same deck = same ID across devices)
 
 **Performance**: Checks file `mtime` vs `deck.modified` to skip unchanged files. Calls `yieldToUI()` to prevent blocking the main thread.
 
@@ -202,8 +204,8 @@ review_sessions -- Session tracking with goal/progress
 
 **Profile System**: Two hardcoded profiles (NOT user-editable):
 
--   **STANDARD**: Default weights, max 36500 days interval
--   **INTENSIVE**: Aggressive weights, shorter max intervals for intensive learning
+- **STANDARD**: Default weights, max 36500 days interval
+- **INTENSIVE**: Aggressive weights, shorter max intervals for intensive learning
 
 Weights loaded from `src/algorithm/fsrs-weights.ts` (19 weights per profile).
 
@@ -296,24 +298,24 @@ Components load data in `onMount()` and use reactive assignments to trigger re-r
 
 ### Test Organization
 
--   **Unit tests**: `src/__tests__/**/*.test.ts` (excludes `integration/`)
--   **Integration tests**: `src/__tests__/integration/**/*.test.ts`
+- **Unit tests**: `src/__tests__/**/*.test.ts` (excludes `integration/`)
+- **Integration tests**: `src/__tests__/integration/**/*.test.ts`
 
 ### Mocking Strategy
 
 **Unit Tests** (`jest.config.js`):
 
--   Mock Obsidian API: `src/__mocks__/obsidian.ts`
--   Mock SQL.js: `src/__mocks__/sql.js.ts` (in-memory fake implementation)
--   Timeout: 10s
+- Mock Obsidian API: `src/__mocks__/obsidian.ts`
+- Mock SQL.js: `src/__mocks__/sql.js.ts` (in-memory fake implementation)
+- Timeout: 10s
 
 **Integration Tests** (`jest.integration.config.js`):
 
--   Mock Obsidian API (still needed for vault operations)
--   Use **real SQL.js** (no mock) for database operations
--   Timeout: 30s
--   Run serially (`maxWorkers: 1`) to avoid database conflicts
--   Disabled cache for fresh state
+- Mock Obsidian API (still needed for vault operations)
+- Use **real SQL.js** (no mock) for database operations
+- Timeout: 30s
+- Run serially (`maxWorkers: 1`) to avoid database conflicts
+- Disabled cache for fresh state
 
 ### Running Individual Tests
 
@@ -346,9 +348,9 @@ generateFlashcardId(frontText) → `card_${hash.toString(36)}`
 
 **ISO 8601 strings everywhere**: All timestamps (`created`, `modified`, `lastReviewed`, `dueDate`) use ISO strings for:
 
--   Consistent SQL sorting: `ORDER BY due_date ASC`
--   Easy parsing: `new Date(isoString)`
--   No timezone confusion
+- Consistent SQL sorting: `ORDER BY due_date ASC`
+- Easy parsing: `new Date(isoString)`
+- No timezone confusion
 
 ```typescript
 getCurrentTimestamp(): string {
@@ -384,10 +386,10 @@ Deck config includes daily limits, review order, header level, and FSRS settings
 
 ### Type Safety
 
--   Strict TypeScript with `strictNullChecks` enabled
--   Interfaces for all data structures (`Deck`, `Flashcard`, `ReviewLog`, `ReviewSession`)
--   Type guards for union types
--   Generic database query functions: `querySql<T>(sql, params, {asObject: true}): Promise<T[]>`
+- Strict TypeScript with `strictNullChecks` enabled
+- Interfaces for all data structures (`Deck`, `Flashcard`, `ReviewLog`, `ReviewSession`)
+- Type guards for union types
+- Generic database query functions: `querySql<T>(sql, params, {asObject: true}): Promise<T[]>`
 
 ## Build System
 
@@ -400,32 +402,32 @@ Deck config includes daily limits, review order, header level, and FSRS settings
 
 **Development vs Production**:
 
--   **Development**: Output to `demo_vault/.obsidian/plugins/decks` with inline sourcemaps
--   **Production**: Output to `dist/` with minification, no sourcemaps
+- **Development**: Output to `demo_vault/.obsidian/plugins/decks` with inline sourcemaps
+- **Production**: Output to `dist/` with minification, no sourcemaps
 
 **Assets Copied**:
 
--   `manifest.json`
--   `sql-wasm.wasm` and `sql-wasm.js` (to `assets/`)
--   `README.md` and `LICENSE`
+- `manifest.json`
+- `sql-wasm.wasm` and `sql-wasm.js` (to `assets/`)
+- `README.md` and `LICENSE`
 
 **Svelte Integration**:
 
--   Uses `esbuild-svelte` with `svelte-preprocess` for TypeScript support
--   CSS extracted to `main.css`, then merged with `styles.css`
--   Development mode enables Svelte dev mode features
+- Uses `esbuild-svelte` with `svelte-preprocess` for TypeScript support
+- CSS extracted to `main.css`, then merged with `styles.css`
+- Development mode enables Svelte dev mode features
 
 ### Release Contents
 
 Each GitHub release includes:
 
--   `main.js` (~238 KB) - bundled plugin code
--   `styles.css` (~63 KB) - merged styles
--   `manifest.json` - plugin manifest
--   `database-worker.js` (~4 KB) - worker thread bundle
--   `assets/sql-wasm.js` (~48 KB) - SQL.js JavaScript
--   `assets/sql-wasm.wasm` (~644 KB) - WebAssembly binary
--   `README.md` & `LICENSE`
+- `main.js` (~238 KB) - bundled plugin code
+- `styles.css` (~63 KB) - merged styles
+- `manifest.json` - plugin manifest
+- `database-worker.js` (~4 KB) - worker thread bundle
+- `assets/sql-wasm.js` (~48 KB) - SQL.js JavaScript
+- `assets/sql-wasm.wasm` (~644 KB) - WebAssembly binary
+- `README.md` & `LICENSE`
 
 **Total release size: ~1 MB**
 

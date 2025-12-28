@@ -1,14 +1,11 @@
 <script lang="ts">
+  import { onMount } from "svelte";
   import { StatisticsService } from "@/services/StatisticsService";
   import { Logger } from "@/utils/logging";
-  import type { ReviewLog, Flashcard } from "../../database/types";
 
   export let selectedDeckIds: string[] = [];
   export let statisticsService: StatisticsService;
   export let logger: Logger;
-
-  export let reviewLogs: ReviewLog[] = [];
-  export let flashcards: Flashcard[] = [];
 
   interface RetentionStats {
     young: { passed: number; total: number; rate: number };
@@ -16,76 +13,31 @@
     all: { passed: number; total: number; rate: number };
   }
 
-  function calculateRetentionStats(
-    logs: ReviewLog[] = reviewLogs,
-    _cards: Flashcard[] = flashcards
-  ): RetentionStats {
-    if (!logs || logs.length === 0) {
-      return {
+  let retentionStats: RetentionStats = {
+    young: { passed: 0, total: 0, rate: 0 },
+    mature: { passed: 0, total: 0, rate: 0 },
+    all: { passed: 0, total: 0, rate: 0 },
+  };
+
+  onMount(async () => {
+    if (selectedDeckIds.length > 0) {
+      await loadData();
+    }
+  });
+
+  async function loadData() {
+    try {
+      retentionStats = await statisticsService.getTrueRetentionStats(selectedDeckIds);
+      logger.debug("[TrueRetentionTable] Loaded retention stats:", retentionStats);
+    } catch (error) {
+      logger.error("[TrueRetentionTable] Error loading retention stats:", error);
+      retentionStats = {
         young: { passed: 0, total: 0, rate: 0 },
         mature: { passed: 0, total: 0, rate: 0 },
         all: { passed: 0, total: 0, rate: 0 },
       };
     }
-
-    // Filter for cards with interval > 1 day (1440 minutes)
-    // Include review cards that had long intervals OR newly promoted cards with long intervals
-    const validLogs = logs.filter((log) => {
-      const hadLongInterval = log.oldIntervalMinutes > 1440;
-      const newlyPromotedWithLongInterval =
-        log.oldState === "new" &&
-        log.newState === "review" &&
-        log.newIntervalMinutes > 1440;
-
-      return hadLongInterval || newlyPromotedWithLongInterval;
-    });
-
-    if (validLogs.length === 0) {
-      return {
-        young: { passed: 0, total: 0, rate: 0 },
-        mature: { passed: 0, total: 0, rate: 0 },
-        all: { passed: 0, total: 0, rate: 0 },
-      };
-    }
-
-    const youngLogs = validLogs.filter((log) => {
-      // Use the interval that existed before this review
-      const intervalToCheck =
-        log.oldIntervalMinutes > 0
-          ? log.oldIntervalMinutes
-          : log.newIntervalMinutes;
-      return intervalToCheck <= 30240; // <= 21 days
-    });
-
-    const matureLogs = validLogs.filter((log) => {
-      // Use the interval that existed before this review
-      const intervalToCheck =
-        log.oldIntervalMinutes > 0
-          ? log.oldIntervalMinutes
-          : log.newIntervalMinutes;
-      return intervalToCheck > 30240; // > 21 days
-    });
-
-    const calculateRate = (logs: ReviewLog[]) => {
-      if (logs.length === 0) return { passed: 0, total: 0, rate: 0 };
-      const passed = logs.filter((log) => log.rating >= 3).length; // Good/Easy = passed
-      const total = logs.length;
-      const rate = total > 0 ? (passed / total) * 100 : 0;
-      return { passed, total, rate };
-    };
-
-    const youngStats = calculateRate(youngLogs);
-    const matureStats = calculateRate(matureLogs);
-    const allStats = calculateRate(validLogs);
-
-    return {
-      young: youngStats,
-      mature: matureStats,
-      all: allStats,
-    };
   }
-
-  $: retentionStats = calculateRetentionStats(reviewLogs, flashcards);
 
   function formatRate(rate: number): string {
     return rate.toFixed(1) + "%";
@@ -94,51 +46,57 @@
 
 <div class="decks-true-retention-table">
   <h4>True Retention</h4>
-  <div class="decks-retention-description">
-    Pass rates for review cards (rating ≥ Good). Cards with intervals > 1 day
-    only.
-  </div>
+  {#if selectedDeckIds.length === 0}
+    <p class="decks-chart-subtitle">
+      <span class="decks-loading-indicator">Select a deck to view retention statistics.</span>
+    </p>
+  {:else}
+    <div class="decks-retention-description">
+      Pass rates for review cards (rating ≥ Good). Cards with intervals > 1 day
+      only.
+    </div>
+  {/if}
 
   <div class="decks-retention-table-container">
     <table class="decks-retention-table">
-      <thead>
-        <tr>
-          <th>Card Type</th>
-          <th>Passed</th>
-          <th>Total</th>
-          <th>Pass Rate</th>
-        </tr>
-      </thead>
-      <tbody>
-        <tr>
-          <td class="decks-card-type young">Young (&lt; 21 days)</td>
-          <td class="decks-count">{retentionStats.young.passed}</td>
-          <td class="decks-count">{retentionStats.young.total}</td>
-          <td class="decks-rate young-rate"
-            >{formatRate(retentionStats.young.rate)}</td
-          >
-        </tr>
-        <tr>
-          <td class="decks-card-type mature">Mature (≥ 21 days)</td>
-          <td class="decks-count">{retentionStats.mature.passed}</td>
-          <td class="decks-count">{retentionStats.mature.total}</td>
-          <td class="decks-rate mature-rate"
-            >{formatRate(retentionStats.mature.rate)}</td
-          >
-        </tr>
-        <tr class="decks-total-row">
-          <td class="decks-card-type all">All Cards</td>
-          <td class="decks-count">{retentionStats.all.passed}</td>
-          <td class="decks-count">{retentionStats.all.total}</td>
-          <td class="decks-rate all-rate"
-            >{formatRate(retentionStats.all.rate)}</td
-          >
-        </tr>
-      </tbody>
+    <thead>
+      <tr>
+        <th>Card Type</th>
+        <th>Passed</th>
+        <th>Total</th>
+        <th>Pass Rate</th>
+      </tr>
+    </thead>
+    <tbody>
+      <tr>
+        <td class="decks-card-type young">Young (&lt; 21 days)</td>
+        <td class="decks-count">{retentionStats.young.passed}</td>
+        <td class="decks-count">{retentionStats.young.total}</td>
+        <td class="decks-rate young-rate"
+          >{formatRate(retentionStats.young.rate)}</td
+        >
+      </tr>
+      <tr>
+        <td class="decks-card-type mature">Mature (≥ 21 days)</td>
+        <td class="decks-count">{retentionStats.mature.passed}</td>
+        <td class="decks-count">{retentionStats.mature.total}</td>
+        <td class="decks-rate mature-rate"
+          >{formatRate(retentionStats.mature.rate)}</td
+        >
+      </tr>
+      <tr class="decks-total-row">
+        <td class="decks-card-type all">All Cards</td>
+        <td class="decks-count">{retentionStats.all.passed}</td>
+        <td class="decks-count">{retentionStats.all.total}</td>
+        <td class="decks-rate all-rate"
+          >{formatRate(retentionStats.all.rate)}</td
+        >
+      </tr>
+    </tbody>
     </table>
   </div>
 
-  {#if retentionStats.all.total === 0}
+  {#if selectedDeckIds.length > 0 && retentionStats.all.total === 0}
     <div class="decks-no-data">
       No review data available yet. Complete some reviews to see retention
       statistics.
@@ -147,6 +105,18 @@
 </div>
 
 <style>
+  .decks-chart-subtitle {
+    margin: 0 0 1rem 0;
+    color: var(--text-muted);
+    font-size: 14px;
+    line-height: 1.5;
+  }
+
+  .decks-loading-indicator {
+    color: var(--text-muted);
+    font-style: italic;
+  }
+
   .decks-true-retention-table {
     margin: 1rem 0;
     padding: 1rem;

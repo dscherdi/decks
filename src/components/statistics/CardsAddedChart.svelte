@@ -11,7 +11,6 @@
     Legend,
     type TooltipItem,
   } from "chart.js";
-  import type { ReviewLog } from "../../database/types";
   import { StatisticsService } from "@/services/StatisticsService";
   import { Logger } from "@/utils/logging";
 
@@ -30,14 +29,19 @@
   export let statisticsService: StatisticsService;
   export let logger: Logger;
 
-  export let reviewLogs: ReviewLog[] = [];
   export let timeframe = "1m"; // "1m", "3m", "1y", "all"
 
   let canvas: HTMLCanvasElement;
   let chart: Chart | null = null;
+  let cardsAddedData: Map<string, number> | null = null;
 
-  onMount(() => {
+
+  onMount(async () => {
     createChart();
+    if (selectedDeckIds.length > 0) {
+      await loadData();
+      updateChart();
+    }
   });
 
   onDestroy(() => {
@@ -46,75 +50,30 @@
     }
   });
 
-  $: if (chart && reviewLogs) {
-    updateChart();
+
+  async function loadData() {
+    try {
+      const days = getTimeframeDays();
+      cardsAddedData = await statisticsService.getCardsAddedByDate(days, selectedDeckIds);
+      logger.debug("[CardsAddedChart] Loaded cards added data:", cardsAddedData.size);
+    } catch (error) {
+      logger.error("[CardsAddedChart] Error loading cards added data:", error);
+      cardsAddedData = new Map();
+    }
   }
 
-  function getTimeframeData(): ReviewLog[] {
-    if (timeframe === "all") {
-      return reviewLogs;
-    }
-
-    const now = new Date();
-    let cutoffDate: Date;
-
+  function getTimeframeDays(): number {
     switch (timeframe) {
-      case "1m":
-        cutoffDate = new Date(now.getTime() - 30 * 24 * 60 * 60 * 1000);
-        break;
-      case "3m":
-        cutoffDate = new Date(now.getTime() - 90 * 24 * 60 * 60 * 1000);
-        break;
-      case "1y":
-        cutoffDate = new Date(now.getTime() - 365 * 24 * 60 * 60 * 1000);
-        break;
-      default:
-        return reviewLogs;
+      case "1m": return 30;
+      case "3m": return 90;
+      case "1y": return 365;
+      case "all": return 3650; // 10 years
+      default: return 30;
     }
-
-    return reviewLogs.filter((log) => new Date(log.reviewedAt) >= cutoffDate);
   }
 
   function processChartData() {
-    const filteredLogs = getTimeframeData();
-
-    if (filteredLogs.length === 0) {
-      return {
-        labels: ["No Data"],
-        datasets: [
-          {
-            label: "Cards Added",
-            data: [0],
-            backgroundColor: "#6b7280",
-            borderColor: "#4b5563",
-            borderWidth: 1,
-          },
-        ],
-      };
-    }
-
-    // Find first review for each card (when it was "added" to the system)
-    const firstReviews = new Map<string, ReviewLog>();
-
-    filteredLogs.forEach((log) => {
-      if (
-        !firstReviews.has(log.flashcardId) ||
-        new Date(log.reviewedAt) <
-          new Date(firstReviews.get(log.flashcardId)!.reviewedAt)
-      ) {
-        firstReviews.set(log.flashcardId, log);
-      }
-    });
-
-    // Group first reviews by date
-    const dateGroups = new Map<string, number>();
-
-    firstReviews.forEach((log) => {
-      const dateKey = log.reviewedAt.split("T")[0];
-      dateGroups.set(dateKey, (dateGroups.get(dateKey) || 0) + 1);
-    });
-
-    if (dateGroups.size === 0) {
+    if (!cardsAddedData || cardsAddedData.size === 0) {
       return {
         labels: ["No Data"],
         datasets: [
@@ -130,7 +89,7 @@
     }
 
     // Sort dates and prepare chart data
-    const sortedDates = Array.from(dateGroups.keys()).sort();
+    const sortedDates = Array.from(cardsAddedData.keys()).sort();
     const labels = sortedDates.map((date) => {
       const d = new Date(date);
       return d.toLocaleDateString("en-US", {
@@ -138,7 +97,7 @@
         day: "numeric",
       });
     });
-    const data = sortedDates.map((date) => dateGroups.get(date) || 0);
+    const data = sortedDates.map((date) => cardsAddedData.get(date) || 0);
 
     return {
       labels,
@@ -218,27 +177,35 @@
   }
 
   async function handleFilterChange() {
-    logger.debug("[StatisticsUI] Filter changed, reloading data...");
+    logger.debug("[CardsAddedChart] Timeframe changed, reloading data...");
     try {
-      await updateChart();
+      await loadData();
+      updateChart();
     } catch (error) {
-      logger.error("[StatisticsUI] Error during filter change:", error);
+      logger.error("[CardsAddedChart] Error during filter change:", error);
     }
   }
 </script>
 
 <h3>Cards Added Over Time</h3>
-<div class="decks-chart-controls">
-  <label>
-    Timeframe:
-    <select bind:value={timeframe} on:change={handleFilterChange}>
-      <option value="1m">1 Month</option>
-      <option value="3m">3 Months</option>
-      <option value="1y">1 Year</option>
-      <option value="all">All Time</option>
-    </select>
-  </label>
-</div>
+<p class="decks-chart-subtitle">
+  {#if selectedDeckIds.length === 0}
+    <span class="decks-loading-indicator">Select a deck to view cards added over time.</span>
+  {/if}
+</p>
+{#if selectedDeckIds.length > 0}
+  <div class="decks-chart-controls">
+    <label>
+      Timeframe:
+      <select bind:value={timeframe} on:change={handleFilterChange}>
+        <option value="1m">1 Month</option>
+        <option value="3m">3 Months</option>
+        <option value="1y">1 Year</option>
+        <option value="all">All Time</option>
+      </select>
+    </label>
+  </div>
+{/if}
 <div class="decks-cards-added-chart">
   <canvas bind:this={canvas} height="300"></canvas>
 </div>
@@ -253,5 +220,17 @@
   .decks-cards-added-chart canvas {
     max-width: 100%;
     max-height: 300px;
+  }
+
+  .decks-chart-subtitle {
+    margin: 0 0 1rem 0;
+    color: var(--text-muted);
+    font-size: 14px;
+    line-height: 1.5;
+  }
+
+  .decks-loading-indicator {
+    color: var(--text-muted);
+    font-style: italic;
   }
 </style>

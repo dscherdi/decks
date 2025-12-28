@@ -62,7 +62,7 @@ export async function createFlashcardsConsole(
   vaultPath: string = process.cwd(),
   dataPath?: string
 ): Promise<any> {
-  // eslint-disable-line @typescript-eslint/no-explicit-any
+   
   const { ConsoleCore } = await import("./core/ConsoleCore");
 
   const resolvedDataPath = dataPath || `${vaultPath}/.flashcards`;

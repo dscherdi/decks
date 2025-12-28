@@ -574,48 +574,10 @@ export const SQL_QUERIES = {
       AND rl.reviewed_at < ?
   `,
 
-  GET_REVIEW_COUNTS_BY_DATE: `
-    SELECT DATE(reviewed_at) as review_date, COUNT(*) as count
-    FROM review_logs
-    WHERE reviewed_at >= ? AND reviewed_at <= ?
-    GROUP BY DATE(reviewed_at)
-    ORDER BY review_date
-  `,
-
   // Migration helpers
   CHECK_EXISTING_TABLES: `
     SELECT name FROM sqlite_master
     WHERE type='table' AND name IN ('decks', 'flashcards', 'review_logs')
-  `,
-
-  // Statistics queries for overall stats
-  GET_DAILY_STATS: `
-    SELECT
-      DATE(reviewed_at) as date,
-      COUNT(*) as reviews,
-      SUM(time_elapsed_ms / 1000.0) as total_time_seconds,
-      SUM(CASE WHEN old_repetitions = 0 THEN 1 ELSE 0 END) as new_cards,
-      SUM(CASE WHEN old_repetitions > 0 AND old_repetitions < 3 THEN 1 ELSE 0 END) as learning_cards,
-      SUM(CASE WHEN old_repetitions >= 3 THEN 1 ELSE 0 END) as review_cards,
-      AVG(CASE WHEN rating >= 3 THEN 1.0 ELSE 0.0 END) as correct_rate
-    FROM review_logs rl
-    WHERE rl.reviewed_at >= ? AND rl.reviewed_at <= ?
-    GROUP BY DATE(reviewed_at)
-    ORDER BY date
-  `,
-
-  GET_DAILY_STATS_OVERALL: `
-    SELECT
-      DATE(reviewed_at) as date,
-      COUNT(*) as reviews,
-      COUNT(CASE WHEN rating_label != 'again' THEN 1 END) as correct,
-      COUNT(CASE WHEN f.state = 'new' THEN 1 END) as new_cards,
-      COUNT(CASE WHEN f.state = 'review' THEN 1 END) as review_cards
-    FROM review_logs rl
-    JOIN flashcards f ON rl.flashcard_id = f.id
-    WHERE DATE(reviewed_at) >= DATE(?)
-    GROUP BY DATE(reviewed_at)
-    ORDER BY date DESC
   `,
 
   GET_CARD_STATS: `
@@ -662,12 +624,6 @@ export const SQL_QUERIES = {
         WHEN '3-12m' THEN 5
         WHEN '>1y' THEN 6
       END
-  `,
-
-  GET_FORECAST_DUE_COUNT: `
-    SELECT COUNT(*) as due_count
-    FROM flashcards f
-    WHERE DATE(f.due_date) = DATE(?)
   `,
 
   GET_PACE_STATS: `

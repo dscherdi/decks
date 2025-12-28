@@ -12,7 +12,6 @@
     type TooltipItem,
   } from "chart.js";
   import "chartjs-adapter-date-fns";
-  import type { ReviewLog } from "../../database/types";
   import { Logger } from "@/utils/logging";
   import { StatisticsService } from "@/services/StatisticsService";
 
@@ -35,10 +34,17 @@
   let chart: Chart | null = null;
 
   let selectedTimeframe = "1m"; // "1m", "3m", "1y", "all"
-  const reviewLogs: ReviewLog[] = [];
+  let reviewData: Map<string, { again: number; hard: number; good: number; easy: number }> | null = null;
 
-  onMount(() => {
+  let prevTimeframe = "";
+
+  onMount(async () => {
     createChart();
+    if (selectedDeckIds.length > 0) {
+      await loadData();
+      updateChart();
+    }
+    prevTimeframe = selectedTimeframe;
   });
 
   onDestroy(() => {
@@ -47,101 +53,87 @@
     }
   });
 
-  $: if (chart && reviewLogs) {
-    logger.debug(
-      "[ReviewsOverTimeChart] Updating chart with reviewLogs:",
-      reviewLogs.length
-    );
-    updateChart();
+  // Only track internal timeframe changes (selectedDeckIds handled by parent {#key} block)
+  $: {
+    if (selectedTimeframe !== prevTimeframe) {
+      prevTimeframe = selectedTimeframe;
+
+      if (selectedDeckIds.length > 0) {
+        loadData().then(() => updateChart());
+      } else {
+        reviewData = null;
+        if (chart) {
+          chart.data = { labels: [], datasets: [] };
+          chart.update();
+        }
+      }
+    }
   }
 
-  function getTimeframeData(): ReviewLog[] {
-    if (selectedTimeframe === "all") {
-      return reviewLogs;
-    }
-
-    const now = new Date();
-    let cutoffDate: Date;
-
+  function getTimeframeDays(): number {
     switch (selectedTimeframe) {
       case "1m":
-        cutoffDate = new Date(now.getTime() - 30 * 24 * 60 * 60 * 1000);
-        break;
+        return 30;
       case "3m":
-        cutoffDate = new Date(now.getTime() - 90 * 24 * 60 * 60 * 1000);
-        break;
+        return 90;
       case "1y":
-        cutoffDate = new Date(now.getTime() - 365 * 24 * 60 * 60 * 1000);
-        break;
+        return 365;
+      case "all":
+        return 3650; // 10 years
       default:
-        return reviewLogs;
+        return 30;
     }
+  }
 
-    return reviewLogs.filter((log) => new Date(log.reviewedAt) >= cutoffDate);
+  async function loadData() {
+    try {
+      const days = getTimeframeDays();
+      reviewData = await statisticsService.getReviewsByDateAndRating(days, selectedDeckIds);
+      logger.debug("[ReviewsOverTimeChart] Loaded review data:", reviewData.size);
+    } catch (error) {
+      logger.error("[ReviewsOverTimeChart] Error loading review data:", error);
+      reviewData = new Map();
+    }
   }
 
   function processChartData() {
-    const filteredLogs = getTimeframeData();
-
-    // Group by date and rating
-    const dateGroups = new Map<
-      string,
-      { again: number; hard: number; good: number; easy: number }
-    >();
-
-    filteredLogs.forEach((log) => {
-      const date = new Date(log.reviewedAt).toISOString().split("T")[0];
-      if (!dateGroups.has(date)) {
-        dateGroups.set(date, { again: 0, hard: 0, good: 0, easy: 0 });
-      }
-
-      const group = dateGroups.get(date)!;
-      switch (log.rating) {
-        case 1:
-          group.again++;
-          break;
-        case 2:
-          group.hard++;
-          break;
-        case 3:
-          group.good++;
-          break;
-        case 4:
-          group.easy++;
-          break;
-      }
-    });
+    if (!reviewData) {
+      return {
+        labels: [],
+        datasets: [],
+      };
+    }
 
     // Sort dates and prepare data
-    const sortedDates = Array.from(dateGroups.keys()).sort();
+    const sortedDates = Array.from(reviewData.keys()).sort();
 
     return {
       labels: sortedDates,
       datasets: [
         {
           label: "Again",
-          data: sortedDates.map((date) => dateGroups.get(date)!.again),
+          data: sortedDates.map((date) => reviewData.get(date)!.again),
           backgroundColor: "#ef4444",
           borderColor: "#dc2626",
           borderWidth: 1,
         },
         {
           label: "Hard",
-          data: sortedDates.map((date) => dateGroups.get(date)!.hard),
+          data: sortedDates.map((date) => reviewData.get(date)!.hard),
           backgroundColor: "#f97316",
           borderColor: "#ea580c",
           borderWidth: 1,
         },
         {
           label: "Good",
-          data: sortedDates.map((date) => dateGroups.get(date)!.good),
+          data: sortedDates.map((date) => reviewData.get(date)!.good),
           backgroundColor: "#22c55e",
           borderColor: "#16a34a",
           borderWidth: 1,
         },
         {
           label: "Easy",
-          data: sortedDates.map((date) => dateGroups.get(date)!.easy),
+          data: sortedDates.map((date) => reviewData.get(date)!.easy),
           backgroundColor: "#3b82f6",
           borderColor: "#2563eb",
           borderWidth: 1,
@@ -247,22 +239,41 @@
 </script>
 
 <h3>Reviews Over Time</h3>
-<div class="decks-chart-controls">
-  <label>
-    Timeframe:
-    <select bind:value={selectedTimeframe} on:change={handleFilterChange}>
-      <option value="1m">1 Month</option>
-      <option value="3m">3 Months</option>
-      <option value="1y">1 Year</option>
-      <option value="all">All Time</option>
-    </select>
-  </label>
-</div>
+<p class="decks-chart-subtitle">
+  {#if selectedDeckIds.length === 0}
+    <span class="decks-loading-indicator">Select a deck to view review history.</span>
+  {/if}
+</p>
+{#if selectedDeckIds.length > 0}
+  <div class="decks-chart-controls">
+    <label>
+      Timeframe:
+      <select bind:value={selectedTimeframe} on:change={handleFilterChange}>
+        <option value="1m">1 Month</option>
+        <option value="3m">3 Months</option>
+        <option value="1y">1 Year</option>
+        <option value="all">All Time</option>
+      </select>
+    </label>
+  </div>
+{/if}
 <div class="decks-reviews-over-time-chart">
   <canvas bind:this={canvas} height="300"></canvas>
 </div>
 
 <style>
+  .decks-chart-subtitle {
+    margin: 0 0 1rem 0;
+    color: var(--text-muted);
+    font-size: 14px;
+    line-height: 1.5;
+  }
+
+  .decks-loading-indicator {
+    color: var(--text-muted);
+    font-style: italic;
+  }
+
   .decks-reviews-over-time-chart {
     width: 100%;
     height: 300px;

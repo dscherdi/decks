@@ -30,6 +30,7 @@ const createMockSettings = (): DecksSettings => ({
     showProgress: true,
     enableKeyboardShortcuts: true,
     sessionDuration: 25,
+    nextDayStartsAt: 4,
   },
   parsing: {
     folderSearchPath: "",
@@ -302,7 +303,7 @@ describe("Large Deck Integration Tests", () => {
       expect(allDecks.length).toBe(largeFiles.length);
 
       // Verify total card count
-      const overallStats = await db.getOverallStatistics();
+      const overallStats = await statisticsService.getOverallStatistics([], "all");
       expect(overallStats.cardStats.total).toBe(totalCards);
       expect(overallStats.cardStats.new).toBe(totalCards);
 

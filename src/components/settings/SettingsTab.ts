@@ -128,6 +128,22 @@ export class DecksSettingTab extends PluginSettingTab {
             }
           })
       );
+
+    new Setting(containerEl)
+      .setName("Study Day Starts At")
+      .setDesc(
+        "Hour (0-23) when the study day rolls over. Default is 4 (4 AM). Reviews done before this hour count toward the previous day's statistics and daily limits. Example: With 4 AM cutoff, a review at 2 AM counts as part of yesterday's study session."
+      )
+      .addSlider((slider) =>
+        slider
+          .setLimits(0, 23, 1)
+          .setValue(this.settings.review.nextDayStartsAt)
+          .setDynamicTooltip()
+          .onChange(async (value) => {
+            this.settings.review.nextDayStartsAt = value;
+            await this.saveSettings();
+          })
+      );
   }
 
   private addParsingSettings(containerEl: HTMLElement): void {

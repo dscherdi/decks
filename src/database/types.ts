@@ -193,6 +193,35 @@ export interface Statistics {
   totalReviewTime: number; // Total time spent reviewing in seconds
 }
 
+export interface SimulatedCardState {
+  id: string;
+  deckId: string;
+  state: "new" | "review";
+  stability: number;
+  difficulty: number;
+  dueDate: number; // milliseconds - when card becomes due
+  lastReviewedDate: number; // milliseconds - when card was last reviewed (for elapsed time calculation)
+  repetitions: number;
+  lapses: number;
+}
+
+/**
+ * Result of maturity progression simulation with equilibrium detection
+ */
+export interface MaturityProgressionResult {
+  dailySnapshots: Array<{
+    date: string;
+    newCards: number;
+    learningCards: number;
+    matureCards: number;
+  }>;
+  maintenanceLevel: number | null; // Percentage (0-100) of total cards in perpetual learning phase
+  equilibriumDetectedAt: number | null; // Day index when equilibrium was first detected
+  totalCards: number; // Total card count for context
+  empiricalLapseRate: number; // Actual lapse rate from button distribution (0-1)
+  theoreticalMaintenanceLevel: number | null; // Calculated from lapse rate for validation
+}
+
 export const DEFAULT_DECK_CONFIG: DeckConfig = {
   hasNewCardsLimitEnabled: false, // unlimited by default
   newCardsPerDay: 20, // default limit when enabled

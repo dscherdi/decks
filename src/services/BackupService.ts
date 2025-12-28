@@ -2,6 +2,7 @@ import type { DataAdapter } from "obsidian";
 import { Notice } from "obsidian";
 import type { IDatabaseService } from "../database/DatabaseFactory";
 import { yieldToUI } from "@/utils/ui";
+import { toLocalDateString } from "@/utils/date-utils";
 
 interface BackupMetadata {
   filename: string;
@@ -35,7 +36,7 @@ export class BackupService {
       await this.ensureBackupDir();
 
       // Generate filename with today's date (one backup per day)
-      const today = new Date().toISOString().slice(0, 10);
+      const today = toLocalDateString(new Date());
       const filename = `backup-${today}.db`;
       const backupPath = `${this.backupDir}/${filename}`;
 
