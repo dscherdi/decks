@@ -1,5 +1,5 @@
 import { FlashcardParser } from "./FlashcardParser";
-import type { Flashcard, DeckConfig } from "../database/types";
+import type { Flashcard, DeckProfile } from "../database/types";
 import type { SqlJsValue } from "../database/sql-types";
 import type { Database } from "sql.js";
 import { generateFlashcardId, generateContentHash } from "../utils/hash";
@@ -31,7 +31,7 @@ export interface SyncData {
   deckId: string;
   deckName: string;
   deckFilepath: string;
-  deckConfig: DeckConfig;
+  deckConfig: DeckProfile;
   fileContent: string;
   force: boolean;
 }

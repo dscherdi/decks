@@ -4,6 +4,9 @@ import { MainDatabaseService } from "./MainDatabaseService";
 import { WorkerDatabaseService } from "./WorkerDatabaseService";
 import type {
   Deck,
+  DeckProfile,
+  DeckWithProfile,
+  ProfileTagMapping,
   Flashcard,
   ReviewLog,
   ReviewSession,
@@ -20,7 +23,7 @@ export interface IDatabaseService {
 
   // Deck operations
   createDeck(
-    deck: Omit<Deck, "created" | "modified"> & { id?: string }
+    deck: Omit<Deck, "created" | "modified" | "profileId"> & { id?: string; profileId?: string }
   ): Promise<string>;
   getDeckById(id: string): Promise<Deck | null>;
   getDeckByFilepath(filepath: string): Promise<Deck | null>;
@@ -29,7 +32,6 @@ export interface IDatabaseService {
   updateDeck(id: string, updates: Partial<Deck>): Promise<void>;
   updateDeckTimestamp(deckId: string): Promise<void>;
   updateDeckLastReviewed(deckId: string, timestamp: string): Promise<void>;
-  updateDeckHeaderLevel(deckId: string, headerLevel: number): Promise<void>;
   renameDeck(
     oldDeckId: string,
     newDeckId: string,
@@ -38,6 +40,29 @@ export interface IDatabaseService {
   ): Promise<void>;
   deleteDeck(id: string): Promise<void>;
   deleteDeckByFilepath(filepath: string): Promise<void>;
+  getDecksByTag(tag: string): Promise<Deck[]>;
+
+  // Profile operations
+  createProfile(profile: Omit<DeckProfile, 'created' | 'modified'>): Promise<string>;
+  getProfileById(id: string): Promise<DeckProfile | null>;
+  getProfileByName(name: string): Promise<DeckProfile | null>;
+  getAllProfiles(): Promise<DeckProfile[]>;
+  getDefaultProfile(): Promise<DeckProfile>;
+  updateProfile(id: string, updates: Partial<Omit<DeckProfile, 'id' | 'created' | 'modified' | 'isDefault'>>): Promise<void>;
+  deleteProfile(id: string): Promise<void>;
+  getDeckCountForProfile(profileId: string): Promise<number>;
+  getDecksByProfile(profileId: string): Promise<Deck[]>;
+
+  // Profile tag mapping operations
+  createTagMapping(profileId: string, tag: string): Promise<string>;
+  getTagMappingsForProfile(profileId: string): Promise<ProfileTagMapping[]>;
+  getProfileIdForTag(tag: string): Promise<string | null>;
+  deleteTagMapping(id: string): Promise<void>;
+  applyProfileToTag(profileId: string, tag: string): Promise<number>;
+
+  // Helper methods for backward compatibility
+  getDeckWithProfile(deckId: string): Promise<DeckWithProfile | null>;
+  getAllDecksWithProfiles(): Promise<DeckWithProfile[]>;
 
   // Flashcard operations
   createFlashcard(

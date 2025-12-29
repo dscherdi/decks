@@ -1,7 +1,7 @@
 import type {
   Flashcard,
   FlashcardState,
-  Deck,
+  DeckWithProfile,
   ReviewLog,
 } from "../database/types";
 import type { IDatabaseService } from "../database/DatabaseFactory";
@@ -77,7 +77,7 @@ export class Scheduler {
     sessionDurationMinutes?: number
   ): Promise<NewSession> {
     this.debugLog(`Starting review session for deck: ${deckId}`);
-    const deck = await this.db.getDeckById(deckId);
+    const deck = await this.db.getDeckWithProfile(deckId);
     if (!deck) {
       this.debugLog(`Error: Deck not found: ${deckId}`);
       throw new Error(`Deck not found: ${deckId}`);
@@ -98,10 +98,10 @@ export class Scheduler {
     let goalTotal = 0;
 
     // Add due review cards (applying daily limits if configured)
-    if (deck.config.hasReviewCardsLimitEnabled) {
+    if (deck.profile.hasReviewCardsLimitEnabled) {
       const remainingReviewQuota = Math.max(
         0,
-        deck.config.reviewCardsPerDay - dailyCounts.reviewCount
+        deck.profile.reviewCardsPerDay - dailyCounts.reviewCount
       );
       goalTotal += Math.min(dueCardCount, remainingReviewQuota);
     } else {
@@ -110,10 +110,10 @@ export class Scheduler {
     }
 
     // Add new cards (applying daily limits if configured)
-    if (deck.config.hasNewCardsLimitEnabled) {
+    if (deck.profile.hasNewCardsLimitEnabled) {
       const remainingNewQuota = Math.max(
         0,
-        deck.config.newCardsPerDay - dailyCounts.newCount
+        deck.profile.newCardsPerDay - dailyCounts.newCount
       );
       goalTotal += Math.min(newCardCount, remainingNewQuota);
     } else {
@@ -272,7 +272,7 @@ export class Scheduler {
     const card = await this.db.getFlashcardById(cardId);
     if (!card) return null;
 
-    const deck = await this.db.getDeckById(card.deckId);
+    const deck = await this.db.getDeckWithProfile(card.deckId);
     if (!deck) return null;
 
     this.updateFSRSForDeck(deck);
@@ -312,7 +312,7 @@ export class Scheduler {
       throw new Error(`Card not found: ${cardId}`);
     }
 
-    const deck = await this.db.getDeckById(card.deckId);
+    const deck = await this.db.getDeckWithProfile(card.deckId);
     if (!deck) {
       this.debugLog(`Error: Deck not found: ${card.deckId}`);
       throw new Error(`Deck not found: ${card.deckId}`);
@@ -394,13 +394,13 @@ export class Scheduler {
       retrievability,
 
       // Configuration context
-      requestRetention: deck.config.fsrs.requestRetention,
-      profile: deck.config.fsrs.profile,
+      requestRetention: deck.profile.fsrs.requestRetention,
+      profile: deck.profile.fsrs.profile,
       maximumIntervalDays: getMaxIntervalDaysForProfile(
-        deck.config.fsrs.profile
+        deck.profile.fsrs.profile
       ),
-      minMinutes: getMinMinutesForProfile(deck.config.fsrs.profile),
-      fsrsWeightsVersion: this.getWeightsHash(deck.config.fsrs.profile),
+      minMinutes: getMinMinutesForProfile(deck.profile.fsrs.profile),
+      fsrsWeightsVersion: this.getWeightsHash(deck.profile.fsrs.profile),
       schedulerVersion: "1.0",
 
       // Content context
@@ -440,7 +440,7 @@ export class Scheduler {
    */
   async peekDue(now: Date, deckId: string, limit = 10): Promise<Flashcard[]> {
     this.debugLog(`Peeking at due cards for deck: ${deckId}, limit: ${limit}`);
-    const deck = await this.db.getDeckById(deckId);
+    const deck = await this.db.getDeckWithProfile(deckId);
     if (!deck) return [];
 
     let query = `
@@ -450,7 +450,7 @@ export class Scheduler {
     const params = [deckId, now.toISOString()];
 
     // Apply review order from deck configuration
-    if (deck.config.reviewOrder === "random") {
+    if (deck.profile.reviewOrder === "random") {
       query += " ORDER BY RANDOM() LIMIT ?";
     } else {
       // Default: due-date order (oldest due first)
@@ -493,7 +493,7 @@ export class Scheduler {
     now: Date,
     deckId: string
   ): Promise<Flashcard | null> {
-    const deck = await this.db.getDeckById(deckId);
+    const deck = await this.db.getDeckWithProfile(deckId);
     if (!deck) return null;
 
     let query = `
@@ -503,7 +503,7 @@ export class Scheduler {
     const params = [deckId, now.toISOString()];
 
     // Apply review order from deck configuration
-    if (deck.config.reviewOrder === "random") {
+    if (deck.profile.reviewOrder === "random") {
       query += " ORDER BY RANDOM() LIMIT 1";
     } else {
       // Default: due-date order (oldest due first)
@@ -529,29 +529,29 @@ export class Scheduler {
   }
 
   private async hasNewCardQuota(deckId: string): Promise<boolean> {
-    const deck = await this.db.getDeckById(deckId);
+    const deck = await this.db.getDeckWithProfile(deckId);
     if (!deck) return false;
 
-    if (!deck.config.hasNewCardsLimitEnabled) return true; // unlimited
+    if (!deck.profile.hasNewCardsLimitEnabled) return true; // unlimited
 
     const dailyCounts = await this.db.getDailyReviewCounts(deckId, this.settings.review.nextDayStartsAt);
-    return dailyCounts.newCount < deck.config.newCardsPerDay;
+    return dailyCounts.newCount < deck.profile.newCardsPerDay;
   }
 
   private async hasReviewCardQuota(deckId: string): Promise<boolean> {
-    const deck = await this.db.getDeckById(deckId);
+    const deck = await this.db.getDeckWithProfile(deckId);
     if (!deck) return false;
 
-    if (!deck.config.hasReviewCardsLimitEnabled) return true; // unlimited
+    if (!deck.profile.hasReviewCardsLimitEnabled) return true; // unlimited
 
     const dailyCounts = await this.db.getDailyReviewCounts(deckId, this.settings.review.nextDayStartsAt);
-    return dailyCounts.reviewCount < deck.config.reviewCardsPerDay;
+    return dailyCounts.reviewCount < deck.profile.reviewCardsPerDay;
   }
 
-  private updateFSRSForDeck(deck: Deck): void {
+  private updateFSRSForDeck(deck: DeckWithProfile): void {
     this.fsrs.updateParameters({
-      requestRetention: deck.config.fsrs.requestRetention,
-      profile: deck.config.fsrs.profile,
+      requestRetention: deck.profile.fsrs.requestRetention,
+      profile: deck.profile.fsrs.profile,
       nextDayStartsAt: this.settings.review.nextDayStartsAt,
     });
   }

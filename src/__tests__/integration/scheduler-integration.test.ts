@@ -32,18 +32,6 @@ describe("Scheduler Integration Tests", () => {
       name: "Scheduler Test Deck",
       filepath: "scheduler-test.md",
       tag: "#scheduler-test",
-      config: {
-        hasNewCardsLimitEnabled: false,
-        newCardsPerDay: 20,
-        hasReviewCardsLimitEnabled: false,
-        reviewCardsPerDay: 100,
-        reviewOrder: "due-date",
-        headerLevel: 2,
-        fsrs: {
-          requestRetention: 0.9,
-          profile: "STANDARD",
-        },
-      },
     });
 
     await db.createDeck(testDeck);
@@ -176,14 +164,16 @@ describe("Scheduler Integration Tests", () => {
 
   describe("Daily Limits Enforcement with Real Counts", () => {
     beforeEach(async () => {
-      // Update deck with daily limits
-      testDeck.config.hasNewCardsLimitEnabled = true;
-      testDeck.config.newCardsPerDay = 2;
-      testDeck.config.hasReviewCardsLimitEnabled = true;
-      testDeck.config.reviewCardsPerDay = 3;
-      await db.updateDeck(testDeck.id, {
-        config: testDeck.config,
-      });
+      // Update deck's profile with daily limits
+      const profile = await db.getDefaultProfile();
+      if (profile) {
+        await db.updateProfile(profile.id, {
+          hasNewCardsLimitEnabled: true,
+          newCardsPerDay: 2,
+          hasReviewCardsLimitEnabled: true,
+          reviewCardsPerDay: 3,
+        });
+      }
     });
 
     it("should enforce new card daily limit", async () => {
@@ -294,11 +284,13 @@ describe("Scheduler Integration Tests", () => {
 
   describe("Review Order Configuration", () => {
     it("should respect random review order setting", async () => {
-      // Update deck to use random order
-      testDeck.config.reviewOrder = "random";
-      await db.updateDeck(testDeck.id, {
-        config: testDeck.config,
-      });
+      // Update deck's profile to use random order
+      const profile = await db.getDefaultProfile();
+      if (profile) {
+        await db.updateProfile(profile.id, {
+          reviewOrder: "random",
+        });
+      }
 
       // Create multiple due cards
       for (let i = 0; i < 10; i++) {

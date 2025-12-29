@@ -2,24 +2,51 @@ import { DEFAULT_FSRS_PARAMETERS } from "../algorithm/fsrs-weights";
 
 export type ReviewOrder = "due-date" | "random";
 
-export interface DeckConfig {
-  // Daily limits
-  hasNewCardsLimitEnabled: boolean; // false = unlimited new cards
-  newCardsPerDay: number; // daily limit when hasNewCardsLimitEnabled is true
-  hasReviewCardsLimitEnabled: boolean; // false = unlimited review cards
-  reviewCardsPerDay: number; // daily limit when hasReviewCardsLimitEnabled is true
+export interface DeckProfile {
+  id: string;
+  name: string;
 
-  // Content parsing
-  headerLevel: number; // 1-6, which header level to parse for header-paragraph flashcards
+  hasNewCardsLimitEnabled: boolean;
+  newCardsPerDay: number;
+  hasReviewCardsLimitEnabled: boolean;
+  reviewCardsPerDay: number;
 
-  // Review behavior
-  reviewOrder: ReviewOrder; // Order for review cards: oldest due first or random
+  headerLevel: number;
 
-  // FSRS algorithm settings
+  reviewOrder: ReviewOrder;
+
   fsrs: {
     requestRetention: number;
     profile: "INTENSIVE" | "STANDARD";
   };
+
+  isDefault: boolean;
+  created: string;
+  modified: string;
+}
+
+export const DEFAULT_PROFILE_ID = 'profile_default';
+
+export const DEFAULT_DECK_PROFILE: Omit<DeckProfile, 'id' | 'created' | 'modified'> = {
+  name: 'DEFAULT',
+  hasNewCardsLimitEnabled: false,
+  newCardsPerDay: 20,
+  hasReviewCardsLimitEnabled: false,
+  reviewCardsPerDay: 100,
+  headerLevel: 2,
+  reviewOrder: "due-date",
+  fsrs: {
+    requestRetention: DEFAULT_FSRS_PARAMETERS.requestRetention,
+    profile: "STANDARD",
+  },
+  isDefault: true,
+};
+
+export interface ProfileTagMapping {
+  id: string;
+  profileId: string;
+  tag: string;
+  created: string;
 }
 
 export interface Deck {
@@ -28,9 +55,20 @@ export interface Deck {
   filepath: string;
   tag: string;
   lastReviewed: string | null;
-  config: DeckConfig;
+  profileId: string;
   created: string;
   modified: string;
+}
+
+export interface DeckWithProfile extends Deck {
+  profile: DeckProfile;
+}
+
+export function deckWithProfile(deck: Deck, profile: DeckProfile): DeckWithProfile {
+  return {
+    ...deck,
+    profile,
+  };
 }
 
 export type FlashcardState = "new" | "review";
@@ -136,6 +174,8 @@ export interface AnkiExportConfig {
 
 export interface DatabaseSchema {
   decks: Deck;
+  deckprofiles: DeckProfile;
+  profile_tag_mappings: ProfileTagMapping;
   flashcards: Flashcard;
   review_logs: ReviewLog;
   review_sessions: ReviewSession;
@@ -222,27 +262,6 @@ export interface MaturityProgressionResult {
   theoreticalMaintenanceLevel: number | null; // Calculated from lapse rate for validation
 }
 
-export const DEFAULT_DECK_CONFIG: DeckConfig = {
-  hasNewCardsLimitEnabled: false, // unlimited by default
-  newCardsPerDay: 20, // default limit when enabled
-  hasReviewCardsLimitEnabled: false, // unlimited by default
-  reviewCardsPerDay: 100, // default limit when enabled
-  headerLevel: 2, // Default to H2 headers
-  reviewOrder: "due-date",
-  fsrs: {
-    requestRetention: DEFAULT_FSRS_PARAMETERS.requestRetention,
-    profile: "STANDARD",
-  },
-};
-
-// Utility functions for daily limits
-export function hasNewCardsLimit(config: DeckConfig): boolean {
-  return config.hasNewCardsLimitEnabled;
-}
-
-export function hasReviewCardsLimit(config: DeckConfig): boolean {
-  return config.hasReviewCardsLimitEnabled;
-}
 
 /**
  * Determine if a flashcard is mature (interval > 21 days)

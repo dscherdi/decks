@@ -1,17 +1,16 @@
 <script lang="ts">
   import { onMount, onDestroy } from "svelte";
-  import type { Deck, DeckStats } from "../database/types";
+  import type { Deck, DeckWithProfile, DeckStats } from "../database/types";
 
   import ReviewHeatmap from "./statistics/ReviewHeatmap.svelte";
-  import { DeckConfigModal } from "./config/DeckConfigModal";
   import { AnkiExportModal } from "./export/AnkiExportModal";
   import type { StatisticsService } from "@/services/StatisticsService";
   import type { DeckSynchronizer } from "@/services/DeckSynchronizer";
   import type { IDatabaseService } from "@/database/DatabaseFactory";
   import type { App } from "obsidian";
 
-  let decks: Deck[] = [];
-  let allDecks: Deck[] = [];
+  let decks: DeckWithProfile[] = [];
+  let allDecks: DeckWithProfile[] = [];
   let stats = new Map<string, DeckStats>();
   let filterText = "";
   let heatmapComponent: ReviewHeatmap;
@@ -31,13 +30,15 @@
   export let deckSynchronizer: DeckSynchronizer;
   export let db: IDatabaseService;
 
-  export let onDeckClick: (deck: Deck) => void;
+  export let onDeckClick: (deck: DeckWithProfile) => void;
 
   export let app: App;
 
   export let onRefresh: () => Promise<void>;
   export let onForceRefreshDeck: (deckId: string) => Promise<void>;
   export let openStatisticsModal: () => void;
+  export let openProfilesManagerModal: () => void;
+  export let openDeckConfigModal: (deck: DeckWithProfile) => void;
 
   const getReviewCounts = async (days: number) => {
     if (!statisticsService) {
@@ -70,6 +71,14 @@
   };
   const onOpenStatistics = () => {
     openStatisticsModal();
+  };
+  const onOpenProfilesManager = () => {
+    openProfilesManagerModal();
+  };
+  const onOpenDeckConfig = () => {
+    if (allDecks.length > 0) {
+      openDeckConfigModal(allDecks[0]);
+    }
   };
   const getDatabase = () => {
     return db;
@@ -105,7 +114,7 @@
     );
   }
 
-  function formatDeckName(deck: Deck): string {
+  function formatDeckName(deck: DeckWithProfile): string {
     // deck.name now contains the clean filename without extension
     return deck.name;
   }
@@ -123,7 +132,7 @@
     }
   }
 
-  async function handleForceRefreshDeck(deck: Deck) {
+  async function handleForceRefreshDeck(deck: DeckWithProfile) {
     isRefreshing = true;
     try {
       await onForceRefreshDeck(deck.id);
@@ -152,7 +161,7 @@
     decks = decks;
     isUpdatingStats = false;
   }
-  export function updateDecks(newDecks: Deck[]) {
+  export function updateDecks(newDecks: DeckWithProfile[]) {
     allDecks = newDecks;
     // Extract unique tags
     availableTags = [...new Set(newDecks.map((deck) => deck.tag))].filter(
@@ -218,7 +227,7 @@
     }, 200);
   }
 
-  function handleDeckClick(deck: Deck) {
+  function handleDeckClick(deck: DeckWithProfile) {
     onDeckClick(deck);
   }
 
@@ -270,7 +279,7 @@
    * - Study statistics (always)
    */
   export async function updateAll(
-    newDecks?: Deck[],
+    newDecks?: DeckWithProfile[],
     newStats?: Map<string, DeckStats>,
     singleDeckId?: string,
     singleDeckStats?: DeckStats
@@ -293,7 +302,7 @@
     loadStudyStats();
   });
 
-  function handleConfigClick(deck: Deck, event: Event) {
+  function handleConfigClick(deck: DeckWithProfile, event: Event) {
     event.stopPropagation();
 
     // If clicking the same cog, close the dropdown
@@ -308,14 +317,6 @@
     // Create dropdown menu
     const dropdown = document.createElement("div");
     dropdown.className = "decks-deck-config-dropdown";
-
-    const configOption = document.createElement("div");
-    configOption.className = "decks-dropdown-option";
-    configOption.textContent = "Configure deck";
-    configOption.onclick = () => {
-      closeActiveDropdown();
-      openDeckConfig(deck);
-    };
 
     const forceRefreshOption = document.createElement("div");
     forceRefreshOption.className = "decks-dropdown-option";
@@ -333,7 +334,6 @@
       openAnkiExport(deck);
     };
 
-    dropdown.appendChild(configOption);
     dropdown.appendChild(forceRefreshOption);
     dropdown.appendChild(exportOption);
 
@@ -430,32 +430,7 @@
     closeActiveDropdown();
   });
 
-  function openDeckConfig(deck: Deck) {
-    const modal = new DeckConfigModal(
-      app,
-      deck,
-      getDatabase(),
-      getDeckSynchronizer(),
-      async (deckId: string) => {
-        // Refresh stats after deck config change
-        await onForceRefreshDeck(deckId);
-        // Update the local deck config
-        const updatedDecks = await db.getAllDecks();
-        const updatedDeck = updatedDecks.find((d: Deck) => d.id === deckId);
-        if (updatedDeck) {
-          const deckIndex = allDecks.findIndex((d: Deck) => d.id === deckId);
-          if (deckIndex !== -1) {
-            allDecks[deckIndex] = updatedDeck;
-            // Force reactivity
-            allDecks = [...allDecks];
-          }
-        }
-      }
-    );
-    modal.open();
-  }
-
-  function openAnkiExport(deck: Deck) {
+  function openAnkiExport(deck: DeckWithProfile) {
     if (!app) {
       console.warn("Plugin not available for Anki export");
       return;
@@ -489,6 +464,49 @@
   <div class="decks-panel-header">
     <h3 class="decks-panel-title">Flashcard Decks</h3>
     <div class="decks-header-buttons">
+      <button
+        class="decks-deck-config-button"
+        on:click={(e) => handleTouchClick(onOpenDeckConfig, e)}
+        on:touchend={(e) => handleTouchClick(onOpenDeckConfig, e)}
+        title="Configure Deck"
+        disabled={allDecks.length === 0}
+      >
+        <svg
+          xmlns="http://www.w3.org/2000/svg"
+          width="14"
+          height="14"
+          viewBox="0 0 24 24"
+          fill="none"
+          stroke="currentColor"
+          stroke-width="2"
+          stroke-linecap="round"
+          stroke-linejoin="round"
+        >
+          <path d="M12 20h9"></path>
+          <path d="M16.5 3.5a2.121 2.121 0 0 1 3 3L7 19l-4 1 1-4L16.5 3.5z"></path>
+        </svg>
+      </button>
+      <button
+        class="decks-profiles-button"
+        on:click={(e) => handleTouchClick(onOpenProfilesManager, e)}
+        on:touchend={(e) => handleTouchClick(onOpenProfilesManager, e)}
+        title="Manage Profiles"
+      >
+        <svg
+          xmlns="http://www.w3.org/2000/svg"
+          width="14"
+          height="14"
+          viewBox="0 0 24 24"
+          fill="none"
+          stroke="currentColor"
+          stroke-width="2"
+          stroke-linecap="round"
+          stroke-linejoin="round"
+        >
+          <path d="M12.22 2h-.44a2 2 0 0 0-2 2v.18a2 2 0 0 1-1 1.73l-.43.25a2 2 0 0 1-2 0l-.15-.08a2 2 0 0 0-2.73.73l-.22.38a2 2 0 0 0 .73 2.73l.15.1a2 2 0 0 1 1 1.72v.51a2 2 0 0 1-1 1.74l-.15.09a2 2 0 0 0-.73 2.73l.22.38a2 2 0 0 0 2.73.73l.15-.08a2 2 0 0 1 2 0l.43.25a2 2 0 0 1 1 1.73V20a2 2 0 0 0 2 2h.44a2 2 0 0 0 2-2v-.18a2 2 0 0 1 1-1.73l.43-.25a2 2 0 0 1 2 0l.15.08a2 2 0 0 0 2.73-.73l.22-.39a2 2 0 0 0-.73-2.73l-.15-.08a2 2 0 0 1-1-1.74v-.5a2 2 0 0 1 1-1.74l.15-.09a2 2 0 0 0 .73-2.73l-.22-.38a2 2 0 0 0-2.73-.73l-.15.08a2 2 0 0 1-2 0l-.43-.25a2 2 0 0 1-1-1.73V4a2 2 0 0 0-2-2z"></path>
+          <circle cx="12" cy="12" r="3"></circle>
+        </svg>
+      </button>
       <button
         class="decks-stats-button"
         on:click={(e) => handleTouchClick(onOpenStatistics, e)}
@@ -634,13 +652,13 @@
                 class="decks-col-stat"
                 class:has-cards={stats.newCount > 0}
                 class:updating={isUpdatingStats}
-                class:has-limit={deck.config.hasNewCardsLimitEnabled}
-                title={deck.config.hasNewCardsLimitEnabled
-                  ? `${stats.newCount} new cards available today (limit: ${deck.config.newCardsPerDay})`
+                class:has-limit={deck.profile.hasNewCardsLimitEnabled}
+                title={deck.profile.hasNewCardsLimitEnabled
+                  ? `${stats.newCount} new cards available today (limit: ${deck.profile.newCardsPerDay})`
                   : `${stats.newCount} new cards due`}
               >
                 {stats.newCount}
-                {#if deck.config.hasNewCardsLimitEnabled}
+                {#if deck.profile.hasNewCardsLimitEnabled}
                   <span class="decks-limit-indicator">⚠</span>
                 {/if}
               </div>
@@ -649,13 +667,13 @@
                 class="decks-col-stat"
                 class:has-cards={stats.dueCount > 0}
                 class:updating={isUpdatingStats}
-                class:has-limit={deck.config.hasReviewCardsLimitEnabled}
-                title={deck.config.hasReviewCardsLimitEnabled
-                  ? `${stats.dueCount} review cards available today (limit: ${deck.config.reviewCardsPerDay})`
+                class:has-limit={deck.profile.hasReviewCardsLimitEnabled}
+                title={deck.profile.hasReviewCardsLimitEnabled
+                  ? `${stats.dueCount} review cards available today (limit: ${deck.profile.reviewCardsPerDay})`
                   : `${stats.dueCount} review cards due`}
               >
                 {stats.dueCount}
-                {#if deck.config.hasReviewCardsLimitEnabled}
+                {#if deck.profile.hasReviewCardsLimitEnabled}
                   <span class="decks-limit-indicator">📅</span>
                 {/if}
               </div>
@@ -859,6 +877,8 @@
     font-weight: 600;
   }
 
+  .decks-deck-config-button,
+  .decks-profiles-button,
   .decks-stats-button {
     padding: 6px;
     background: var(--interactive-normal);
@@ -873,6 +893,15 @@
     user-select: none;
   }
 
+  .decks-deck-config-button:disabled {
+    opacity: 0.3;
+    cursor: not-allowed;
+  }
+
+  .decks-deck-config-button:hover,
+  .decks-deck-config-button:active,
+  .decks-profiles-button:hover,
+  .decks-profiles-button:active,
   .decks-stats-button:hover,
   .decks-stats-button:active {
     background: var(--interactive-hover);
@@ -1125,6 +1154,8 @@
       gap: 6px;
     }
 
+    .decks-deck-config-button,
+    .decks-profiles-button,
     .decks-stats-button,
     .decks-refresh-button {
       padding: 8px;

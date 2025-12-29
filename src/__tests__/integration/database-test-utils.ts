@@ -1,6 +1,6 @@
 import { DataAdapter } from "obsidian";
 import { MainDatabaseService } from "../../database/MainDatabaseService";
-import { Deck, Flashcard, ReviewLog, DeckConfig } from "../../database/types";
+import { Deck, Flashcard, ReviewLog, DEFAULT_PROFILE_ID } from "../../database/types";
 import { setupRealSqlJs, teardownRealSqlJs } from "./setup-real-sql";
 
 // Mock DataAdapter for in-memory testing
@@ -138,20 +138,9 @@ export class DatabaseTestUtils {
       filepath: "/test/deck.md",
       tag: "test",
       lastReviewed: null,
+      profileId: "profile_default",
       created: new Date().toISOString(),
       modified: new Date().toISOString(),
-      config: {
-        hasNewCardsLimitEnabled: false,
-        newCardsPerDay: 20,
-        hasReviewCardsLimitEnabled: false,
-        reviewCardsPerDay: 100,
-        reviewOrder: "due-date",
-        headerLevel: 2,
-        fsrs: {
-          requestRetention: 0.9,
-          profile: "STANDARD",
-        },
-      },
       ...overrides,
     };
     return deck;

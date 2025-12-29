@@ -4,9 +4,9 @@ import {
   type ReviewLog,
   type Flashcard,
   type FlashcardState,
-  type DeckConfig,
+  type DeckProfile,
   type DeckStats,
-  DEFAULT_DECK_CONFIG,
+  DEFAULT_DECK_PROFILE,
   type SimulatedCardState,
   type MaturityProgressionResult,
 } from "../database/types";
@@ -1436,8 +1436,8 @@ export class StatisticsService {
     const reviewCards = cards.filter((card) => card.state === "review");
 
     // Get deck config for FSRS params
-    const deck = await this.db.getDeckById(deckId);
-    const deckConfig = deck?.config ?? DEFAULT_DECK_CONFIG;
+    const deck = await this.db.getDeckWithProfile(deckId);
+    const deckConfig = deck?.profile ?? DEFAULT_DECK_PROFILE;
 
     // FSRS extension to simulate future demand
     const ext = await this.simulateFsrsDemand(
@@ -1711,9 +1711,9 @@ export class StatisticsService {
     let deckCount = 0;
 
     for (const deckId of deckIds) {
-      const deck = await this.db.getDeckById(deckId);
+      const deck = await this.db.getDeckWithProfile(deckId);
       if (deck) {
-        const config = deck.config || DEFAULT_DECK_CONFIG;
+        const config = deck.profile || DEFAULT_DECK_PROFILE;
 
         // Aggregate daily limits
         if (config.hasNewCardsLimitEnabled && config.newCardsPerDay > 0) {
@@ -1890,8 +1890,8 @@ export class StatisticsService {
     let consecutiveDaysStable = 0; // Count of days variance is below threshold
 
     // Create FSRS instance (use first deck's config or average settings)
-    const firstDeck = await this.db.getDeckById(deckIds[0]);
-    const firstConfig = firstDeck?.config || DEFAULT_DECK_CONFIG;
+    const firstDeck = await this.db.getDeckWithProfile(deckIds[0]);
+    const firstConfig = firstDeck?.profile || DEFAULT_DECK_PROFILE;
 
     const fsrs = new FSRS({
       requestRetention,
@@ -2326,8 +2326,8 @@ export class StatisticsService {
       const reviewCards = cards.filter((card) => card.state === "review");
       allCards.push(...reviewCards);
 
-      const deck = await this.db.getDeckById(deckId);
-      deckConfigs.set(deckId, deck?.config);
+      const deck = await this.db.getDeckWithProfile(deckId);
+      deckConfigs.set(deckId, deck?.profile);
     }
 
     // FSRS extension using aggregated cards (use first deck's config for global params)
@@ -2399,10 +2399,10 @@ export class StatisticsService {
     startStr: string,
     windowDays: number
   ): Promise<number> {
-    const deck = await this.db.getDeckById(deckId);
+    const deck = await this.db.getDeckWithProfile(deckId);
     if (!deck) return 0;
 
-    const deckConfig = deck.config;
+    const deckConfig = deck.profile;
 
     if (
       deckConfig.hasReviewCardsLimitEnabled &&
@@ -2430,7 +2430,7 @@ export class StatisticsService {
     cards: Flashcard[],
     startMs: number,
     endMs: number,
-    deckConfig: DeckConfig
+    deckConfig: Omit<DeckProfile, 'id' | 'created' | 'modified' | 'name' | 'isDefault'>
   ): Promise<Map<string, number>> {
     const result = new Map<string, number>();
 
@@ -2629,21 +2629,21 @@ export class StatisticsService {
 
     // Apply daily limits if requested
     if (respectDailyLimits) {
-      const deck = await this.db.getDeckById(deckId);
+      const deck = await this.db.getDeckWithProfile(deckId);
       if (deck) {
         const dailyCounts = await this.db.getDailyReviewCounts(deckId);
 
         // Apply new card limits
         if (
-          deck.config.hasNewCardsLimitEnabled &&
-          deck.config.newCardsPerDay >= 0
+          deck.profile.hasNewCardsLimitEnabled &&
+          deck.profile.newCardsPerDay >= 0
         ) {
-          if (deck.config.newCardsPerDay === 0) {
+          if (deck.profile.newCardsPerDay === 0) {
             finalNewCount = 0;
           } else {
             const remainingNew = Math.max(
               0,
-              deck.config.newCardsPerDay - dailyCounts.newCount
+              deck.profile.newCardsPerDay - dailyCounts.newCount
             );
             finalNewCount = Math.min(newCards, remainingNew);
           }
@@ -2651,15 +2651,15 @@ export class StatisticsService {
 
         // Apply review card limits
         if (
-          deck.config.hasReviewCardsLimitEnabled &&
-          deck.config.reviewCardsPerDay >= 0
+          deck.profile.hasReviewCardsLimitEnabled &&
+          deck.profile.reviewCardsPerDay >= 0
         ) {
-          if (deck.config.reviewCardsPerDay === 0) {
+          if (deck.profile.reviewCardsPerDay === 0) {
             finalDueCount = 0;
           } else {
             const remainingReview = Math.max(
               0,
-              deck.config.reviewCardsPerDay - dailyCounts.reviewCount
+              deck.profile.reviewCardsPerDay - dailyCounts.reviewCount
             );
             finalDueCount = Math.min(dueCards, remainingReview);
           }

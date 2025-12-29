@@ -41,6 +41,10 @@ export type DeckConfigComponent = Svelte5MountedComponent & {
   saveConfig?(): void;
 };
 
+export type ProfilesManagerComponent = Svelte5MountedComponent & {
+  loadProfiles?(): Promise<void>;
+};
+
 // DeckListPanel component - supports both Svelte 4 and Svelte 5 APIs
 export type DeckListPanelComponent = (
   | SvelteComponentInstance

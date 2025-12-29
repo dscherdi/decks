@@ -1,5 +1,5 @@
 import { App, Modal } from "obsidian";
-import type { Deck, DeckConfig } from "../../database/types";
+import type { Deck, DeckProfile } from "../../database/types";
 import type { IDatabaseService } from "../../database/DatabaseFactory";
 import type { DeckSynchronizer } from "../../services/DeckSynchronizer";
 import type { DeckConfigComponent } from "../../types/svelte-components";
@@ -12,7 +12,7 @@ export class DeckConfigModal extends Modal {
   private db: IDatabaseService;
   private deckSynchronizer: DeckSynchronizer;
   private onRefreshStats: (deckId: string) => Promise<void>;
-  private config: DeckConfig;
+  private profiles: DeckProfile[] = [];
   private component: DeckConfigComponent | null = null;
   private resizeHandler?: () => void;
 
@@ -28,10 +28,9 @@ export class DeckConfigModal extends Modal {
     this.db = db;
     this.deckSynchronizer = deckSynchronizer;
     this.onRefreshStats = onRefreshStats;
-    this.config = { ...deck.config };
   }
 
-  onOpen() {
+  async onOpen() {
     const { contentEl } = this;
     contentEl.empty();
 
@@ -49,20 +48,25 @@ export class DeckConfigModal extends Modal {
     // Modal title
     contentEl.addClass("decks-deck-config-container");
 
+    // Load all profiles
+    this.profiles = await this.db.getAllProfiles();
+
+    // Load all decks for deck selector
+    const allDecks = await this.db.getAllDecks();
+
     // Mount Svelte component using Svelte 5 API
     this.component = mount(DeckConfigUI, {
       target: contentEl,
       props: {
-        deck: this.deck,
-        config: this.config,
-        onsave: (detail: DeckConfig) => {
-          this.handleSave(detail);
+        db: this.db,
+        initialDeck: this.deck,
+        initialProfiles: this.profiles,
+        allDecks: allDecks,
+        onsave: (data: { profileId: string; profileUpdates: Partial<DeckProfile> }) => {
+          this.handleSave(data);
         },
         oncancel: () => {
           this.close();
-        },
-        onconfigChange: (detail: DeckConfig) => {
-          this.config = detail;
         },
       },
     }) as DeckConfigComponent;
@@ -85,80 +89,93 @@ export class DeckConfigModal extends Modal {
     this.resizeHandler = handleResize;
   }
 
-  private async handleSave(config: DeckConfig) {
+  private async handleSave(data: {
+    profileId: string;
+    profileUpdates: Partial<DeckProfile>;
+  }) {
     try {
-      await this.updateDeckConfig(this.deck.id, config);
+      const { profileId, profileUpdates } = data;
+
+      // Get old profile to check if headerLevel changed
+      const oldProfile = this.profiles.find((p) => p.id === this.deck.profileId);
+      let selectedProfile = this.profiles.find((p) => p.id === profileId);
+
+      // Check if this is a new profile (doesn't exist in database yet)
+      const existingProfile = await this.db.getProfileById(profileId);
+
+      if (!existingProfile && Object.keys(profileUpdates).length > 0) {
+        // New profile - create it with all required fields from profileUpdates
+        const newProfile: DeckProfile = {
+          id: profileId,
+          name: profileUpdates.name!,
+          hasNewCardsLimitEnabled: profileUpdates.hasNewCardsLimitEnabled!,
+          newCardsPerDay: profileUpdates.newCardsPerDay!,
+          hasReviewCardsLimitEnabled: profileUpdates.hasReviewCardsLimitEnabled!,
+          reviewCardsPerDay: profileUpdates.reviewCardsPerDay!,
+          headerLevel: profileUpdates.headerLevel!,
+          reviewOrder: profileUpdates.reviewOrder!,
+          fsrs: profileUpdates.fsrs!,
+          isDefault: false,
+          created: new Date().toISOString(),
+          modified: new Date().toISOString(),
+        };
+        await this.db.createProfile(newProfile);
+
+        // Fetch back from database to get proper timestamps
+        const fetchedProfile = await this.db.getProfileById(profileId);
+        if (fetchedProfile) {
+          selectedProfile = fetchedProfile;
+        }
+      } else if (existingProfile && Object.keys(profileUpdates).length > 0) {
+        // Existing profile - update it
+        await this.db.updateProfile(profileId, profileUpdates);
+
+        // Fetch updated profile
+        const fetchedProfile = await this.db.getProfileById(profileId);
+        if (fetchedProfile) {
+          selectedProfile = fetchedProfile;
+        }
+      }
+
+      // Save the database after profile create/update but before deck update
+      // This ensures the profile exists before we try to reference it
+      await this.db.save();
+
+      // Check if headerLevel changed (either from profile switch or profile edit)
+      const newHeaderLevel =
+        profileUpdates.headerLevel !== undefined
+          ? profileUpdates.headerLevel
+          : selectedProfile?.headerLevel;
+
+      const headerLevelChanged =
+        oldProfile &&
+        newHeaderLevel !== undefined &&
+        oldProfile.headerLevel !== newHeaderLevel;
+
+      // Update deck with new profileId if changed
+      if (this.deck.profileId !== profileId) {
+        await this.db.updateDeck(this.deck.id, { profileId });
+        await this.db.save(); // Save again after deck update
+      }
+
+      // If header level changed, force resync the deck
+      if (headerLevelChanged) {
+        const updatedDeck = await this.db.getDeckById(this.deck.id);
+        if (updatedDeck) {
+          await yieldToUI();
+          await this.deckSynchronizer.syncDeck(updatedDeck.filepath, true);
+        }
+      }
+
+      // Refresh stats for this deck
+      await this.onRefreshStats(this.deck.id);
+
       this.close();
     } catch (error) {
       console.error("Error saving deck configuration:", error);
-      // Could add a notice here if needed
     }
   }
 
-  private async updateDeckConfig(
-    deckId: string,
-    config: Partial<DeckConfig>
-  ): Promise<void> {
-    // Validate profile and requestRetention if provided
-    if (
-      config.fsrs?.profile &&
-      !["INTENSIVE", "STANDARD"].includes(config.fsrs.profile)
-    ) {
-      throw new Error(`Invalid profile: ${config.fsrs.profile}`);
-    }
-
-    if (config.fsrs?.requestRetention !== undefined) {
-      const rr = config.fsrs.requestRetention;
-      if (rr <= 0.5 || rr >= 0.995) {
-        throw new Error(
-          `requestRetention must be in range (0.5, 0.995), got ${rr}`
-        );
-      }
-    }
-
-    // Get current config and merge with updates
-    const decks = await this.db.getAllDecks();
-    const deck = decks.find((d: Deck) => d.id === deckId);
-    if (!deck) {
-      throw new Error(`Deck not found: ${deckId}`);
-    }
-
-    const currentConfig = deck.config;
-
-    // Check if header level is changing
-    const headerLevelChanged =
-      config.headerLevel !== undefined &&
-      config.headerLevel !== currentConfig.headerLevel;
-
-    const updatedConfig = {
-      ...currentConfig,
-      ...config,
-      fsrs: {
-        ...currentConfig.fsrs,
-        ...config.fsrs,
-      },
-    };
-
-    await this.db.updateDeck(deckId, { config: updatedConfig });
-
-    // Save database to disk to persist config changes
-    await this.db.save();
-
-    // If header level changed, force resync the deck to clean up old flashcards
-    if (headerLevelChanged) {
-      const updatedDeck = await this.db.getDeckById(deckId);
-      if (updatedDeck) {
-        // console.log(
-        //     `Header level changed for deck ${updatedDeck.name}, forcing resync`
-        // );
-        await yieldToUI();
-        await this.deckSynchronizer.syncDeck(updatedDeck.filepath, true);
-      }
-    }
-
-    // Refresh stats for this deck since config changes can affect displayed stats
-    await this.onRefreshStats(deckId);
-  }
 
   onClose() {
     const { contentEl } = this;

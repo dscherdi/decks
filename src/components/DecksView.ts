@@ -1,5 +1,4 @@
-import type { Deck, DeckStats } from "@/database/types";
-import { hasNewCardsLimit, hasReviewCardsLimit } from "@/database/types";
+import type { Deck, DeckWithProfile, DeckStats } from "@/database/types";
 import { VIEW_TYPE_DECKS } from "@/main";
 import { DeckSynchronizer } from "@/services/DeckSynchronizer";
 import type { DecksSettings } from "@/settings";
@@ -9,6 +8,8 @@ import { ItemView, Component, WorkspaceLeaf, Notice } from "obsidian";
 import { Scheduler } from "@/services/Scheduler";
 import { FlashcardReviewModalWrapper } from "./review/FlashcardReviewModalWrapper";
 import { StatisticsModal } from "./settings/StatisticsModal";
+import { ProfilesManagerModal } from "./config/ProfilesManagerModal";
+import { DeckConfigModal } from "./config/DeckConfigModal";
 import { StatisticsService } from "@/services/StatisticsService";
 
 import DeckListPanel from "./DeckListPanel.svelte";
@@ -82,13 +83,15 @@ export class DecksView extends ItemView {
         db: this.db,
         deckSynchronizer: this.deckSynchronizer,
         app: this.app,
-        onDeckClick: (deck: Deck) => this.startReview(deck),
+        onDeckClick: (deck: DeckWithProfile) => this.startReview(deck),
         onRefresh: () => this.refresh(false),
         onForceRefreshDeck: async (deckId: string) => {
           await this.deckSynchronizer.forceSyncDeck(deckId);
           await this.refreshStats();
         },
         openStatisticsModal: () => this.openStatisticsModal(),
+        openProfilesManagerModal: () => this.openProfilesManagerModal(),
+        openDeckConfigModal: (deck: DeckWithProfile) => this.openDeckConfigModal(deck),
       },
     }) as DeckListPanelComponent;
 
@@ -129,7 +132,7 @@ export class DecksView extends ItemView {
     this.setViewReference(null);
   }
 
-  async update(updatedDecks: Deck[], deckStats: Map<string, DeckStats>) {
+  async update(updatedDecks: DeckWithProfile[], deckStats: Map<string, DeckStats>) {
     await this.deckListPanelComponent?.updateAll?.(updatedDecks, deckStats);
   }
 
@@ -152,6 +155,30 @@ export class DecksView extends ItemView {
     ).open();
   }
 
+  openProfilesManagerModal(): void {
+    new ProfilesManagerModal(
+      this.app,
+      this.db,
+      async () => {
+        // Refresh decks after profiles changed
+        await this.refresh(false);
+      }
+    ).open();
+  }
+
+  openDeckConfigModal(deck: DeckWithProfile): void {
+    new DeckConfigModal(
+      this.app,
+      deck,
+      this.db,
+      this.deckSynchronizer,
+      async (deckId: string) => {
+        // Refresh stats for this deck after config changes
+        await this.refreshStatsById(deckId);
+      }
+    ).open();
+  }
+
   async refresh(force = false) {
     this.logger.debug("DecksView.refresh() called");
     try {
@@ -159,7 +186,7 @@ export class DecksView extends ItemView {
       await this.deckSynchronizer.performSync(force);
 
       // Update the view with refreshed data
-      const updatedDecks = await this.db.getAllDecks();
+      const updatedDecks = await this.db.getAllDecksWithProfiles();
       const deckStats = await this.getAllDeckStatsMap();
       this.update(updatedDecks, deckStats);
 
@@ -269,16 +296,20 @@ export class DecksView extends ItemView {
       const dailyCounts = await this.db.getDailyReviewCounts(deck.id, this.settings.review.nextDayStartsAt);
 
       // Calculate remaining daily allowance
-      const config = deck.config;
-      const remainingNew = hasNewCardsLimit(config)
-        ? config.newCardsPerDay === 0
+      const deckWithProfile = await this.db.getDeckWithProfile(deck.id);
+      if (!deckWithProfile) {
+        throw new Error(`Deck not found: ${deck.id}`);
+      }
+      const profile = deckWithProfile.profile;
+      const remainingNew = profile.hasNewCardsLimitEnabled
+        ? profile.newCardsPerDay === 0
           ? "none"
-          : Math.max(0, config.newCardsPerDay - dailyCounts.newCount)
+          : Math.max(0, profile.newCardsPerDay - dailyCounts.newCount)
         : "unlimited";
-      const remainingReview = hasReviewCardsLimit(config)
-        ? config.reviewCardsPerDay === 0
+      const remainingReview = profile.hasReviewCardsLimitEnabled
+        ? profile.reviewCardsPerDay === 0
           ? "none"
-          : Math.max(0, config.reviewCardsPerDay - dailyCounts.reviewCount)
+          : Math.max(0, profile.reviewCardsPerDay - dailyCounts.reviewCount)
         : "unlimited";
 
       // Check if there are any cards available using the scheduler
@@ -291,20 +322,20 @@ export class DecksView extends ItemView {
 
         // Check if limits are the reason no cards are available
         const newLimitReached =
-          hasNewCardsLimit(config) &&
+          profile.hasNewCardsLimitEnabled &&
           (remainingNew === 0 || remainingNew === "none");
         const reviewLimitReached =
-          hasReviewCardsLimit(config) &&
+          profile.hasReviewCardsLimitEnabled &&
           (remainingReview === 0 || remainingReview === "none");
 
         if (newLimitReached && reviewLimitReached) {
           message += `\n\nDaily limits reached:`;
-          message += `\nNew cards: ${config.newCardsPerDay}/${config.newCardsPerDay}`;
-          message += `\nReview cards: ${config.reviewCardsPerDay}/${config.reviewCardsPerDay}`;
+          message += `\nNew cards: ${profile.newCardsPerDay}/${profile.newCardsPerDay}`;
+          message += `\nReview cards: ${profile.reviewCardsPerDay}/${profile.reviewCardsPerDay}`;
         } else if (newLimitReached) {
-          message += `\n\nDaily new cards limit reached: ${config.newCardsPerDay}/${config.newCardsPerDay}`;
+          message += `\n\nDaily new cards limit reached: ${profile.newCardsPerDay}/${profile.newCardsPerDay}`;
         } else if (reviewLimitReached) {
-          message += `\n\nDaily review cards limit reached: ${config.reviewCardsPerDay}/${config.reviewCardsPerDay}`;
+          message += `\n\nDaily review cards limit reached: ${profile.reviewCardsPerDay}/${profile.reviewCardsPerDay}`;
         }
 
         if (this.settings?.ui?.enableNotices !== false) {
@@ -314,36 +345,36 @@ export class DecksView extends ItemView {
       }
 
       // Show daily limit info before starting review if limits are active
-      if (hasNewCardsLimit(config) || hasReviewCardsLimit(config)) {
+      if (profile.hasNewCardsLimitEnabled || profile.hasReviewCardsLimitEnabled) {
         let limitInfo = `Daily progress for ${deck.name}:\n`;
-        if (hasNewCardsLimit(config)) {
-          if (config.newCardsPerDay === 0) {
+        if (profile.hasNewCardsLimitEnabled) {
+          if (profile.newCardsPerDay === 0) {
             limitInfo += `New cards: DISABLED (0 allowed per day)\n`;
-          } else if (dailyCounts.newCount >= config.newCardsPerDay) {
-            limitInfo += `New cards: ${dailyCounts.newCount}/${config.newCardsPerDay} (LIMIT EXCEEDED)\n`;
+          } else if (dailyCounts.newCount >= profile.newCardsPerDay) {
+            limitInfo += `New cards: ${dailyCounts.newCount}/${profile.newCardsPerDay} (LIMIT EXCEEDED)\n`;
           } else {
-            limitInfo += `New cards: ${dailyCounts.newCount}/${config.newCardsPerDay} (${remainingNew} remaining)\n`;
+            limitInfo += `New cards: ${dailyCounts.newCount}/${profile.newCardsPerDay} (${remainingNew} remaining)\n`;
           }
         }
-        if (hasReviewCardsLimit(config)) {
-          if (config.reviewCardsPerDay === 0) {
+        if (profile.hasReviewCardsLimitEnabled) {
+          if (profile.reviewCardsPerDay === 0) {
             limitInfo += `Review cards: DISABLED (0 allowed per day)\n`;
-          } else if (dailyCounts.reviewCount >= config.reviewCardsPerDay) {
-            limitInfo += `Review cards: ${dailyCounts.reviewCount}/${config.reviewCardsPerDay} (LIMIT EXCEEDED)\n`;
+          } else if (dailyCounts.reviewCount >= profile.reviewCardsPerDay) {
+            limitInfo += `Review cards: ${dailyCounts.reviewCount}/${profile.reviewCardsPerDay} (LIMIT EXCEEDED)\n`;
           } else {
-            limitInfo += `Review cards: ${dailyCounts.reviewCount}/${config.reviewCardsPerDay} (${remainingReview} remaining)\n`;
+            limitInfo += `Review cards: ${dailyCounts.reviewCount}/${profile.reviewCardsPerDay} (${remainingReview} remaining)\n`;
           }
         }
 
         // Add explanation when limits are exceeded but learning cards are available
         const newLimitExceeded =
-          hasNewCardsLimit(config) &&
-          (config.newCardsPerDay === 0 ||
-            dailyCounts.newCount >= config.newCardsPerDay);
+          profile.hasNewCardsLimitEnabled &&
+          (profile.newCardsPerDay === 0 ||
+            dailyCounts.newCount >= profile.newCardsPerDay);
         const reviewLimitExceeded =
-          hasReviewCardsLimit(config) &&
-          (config.reviewCardsPerDay === 0 ||
-            dailyCounts.reviewCount >= config.reviewCardsPerDay);
+          profile.hasReviewCardsLimitEnabled &&
+          (profile.reviewCardsPerDay === 0 ||
+            dailyCounts.reviewCount >= profile.reviewCardsPerDay);
 
         if (newLimitExceeded || reviewLimitExceeded) {
           limitInfo += `\n\nNote: Only learning cards will be shown (limits exceeded)`;

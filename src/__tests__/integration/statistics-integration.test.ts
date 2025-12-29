@@ -719,13 +719,13 @@ describe("StatisticsService Integration Tests", () => {
         }
 
         // Add daily limits to ensure gradual progression
-        await db.updateDeck(testDeck.id, {
-          config: {
-            ...testDeck.config,
+        const profile = await db.getDefaultProfile();
+        if (profile) {
+          await db.updateProfile(profile.id, {
             hasNewCardsLimitEnabled: true,
             newCardsPerDay: 2, // Process 2 new cards per day
-          },
-        });
+          });
+        }
 
         // Run simulation for 30 days
         const progression = await statsService.simulateMaturityProgression(
@@ -823,14 +823,14 @@ describe("StatisticsService Integration Tests", () => {
           await db.createFlashcard(card);
         }
 
-        // Update deck config to limit new cards to 10/day
-        await db.updateDeck(testDeck.id, {
-          config: {
-            ...testDeck.config,
+        // Update profile to limit new cards to 10/day
+        const profile = await db.getDefaultProfile();
+        if (profile) {
+          await db.updateProfile(profile.id, {
             hasNewCardsLimitEnabled: true,
             newCardsPerDay: 10,
-          },
-        });
+          });
+        }
 
         const progression = await statsService.simulateMaturityProgression(
           [testDeck.id],
@@ -863,14 +863,14 @@ describe("StatisticsService Integration Tests", () => {
           await db.createFlashcard(card);
         }
 
-        // Update deck config to limit reviews to 5/day
-        await db.updateDeck(testDeck.id, {
-          config: {
-            ...testDeck.config,
+        // Update profile to limit reviews to 5/day
+        const profile = await db.getDefaultProfile();
+        if (profile) {
+          await db.updateProfile(profile.id, {
             hasReviewCardsLimitEnabled: true,
             reviewCardsPerDay: 5,
-          },
-        });
+          });
+        }
 
         const progression = await statsService.simulateMaturityProgression(
           [testDeck.id],
@@ -893,13 +893,13 @@ describe("StatisticsService Integration Tests", () => {
           await db.createFlashcard(card);
         }
 
-        // Ensure deck has no limits (unlimited)
-        await db.updateDeck(testDeck.id, {
-          config: {
-            ...testDeck.config,
+        // Ensure profile has no limits (unlimited)
+        const profile = await db.getDefaultProfile();
+        if (profile) {
+          await db.updateProfile(profile.id, {
             hasNewCardsLimitEnabled: false,
-          },
-        });
+          });
+        }
 
         const progression = await statsService.simulateMaturityProgression(
           [testDeck.id],
@@ -1061,13 +1061,13 @@ describe("StatisticsService Integration Tests", () => {
         await db.createFlashcard(cardFuture);
 
         // Set limit to 1 card/day to force priority queue behavior
-        await db.updateDeck(testDeck.id, {
-          config: {
-            ...testDeck.config,
+        const profile = await db.getDefaultProfile();
+        if (profile) {
+          await db.updateProfile(profile.id, {
             hasReviewCardsLimitEnabled: true,
             reviewCardsPerDay: 1,
-          },
-        });
+          });
+        }
 
         const progression = await statsService.simulateMaturityProgression(
           [testDeck.id],
@@ -1136,13 +1136,13 @@ describe("StatisticsService Integration Tests", () => {
           await db.createFlashcard(card);
         }
 
-        await db.updateDeck(testDeck.id, {
-          config: {
-            ...testDeck.config,
+        const profile = await db.getDefaultProfile();
+        if (profile) {
+          await db.updateProfile(profile.id, {
             hasNewCardsLimitEnabled: true,
             newCardsPerDay: 50,
-          },
-        });
+          });
+        }
 
         const startTime = Date.now();
         const progression = await statsService.simulateMaturityProgression(
