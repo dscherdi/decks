@@ -37,9 +37,6 @@ jobs:
             "./dist/main.js"
             "./dist/styles.css"
             "./dist/manifest.json"
-            "./dist/database-worker.js"
-            "./dist/assets/sql-wasm.js"
-            "./dist/assets/sql-wasm.wasm"
             "./dist/README.md"
             "./dist/LICENSE"
             "./GITHUB_RELEASE_NOTES.md"
@@ -61,6 +58,7 @@ jobs:
           fi
 
           echo "✅ All release files validated successfully!"
+          echo "📦 main.js includes embedded worker and SQL.js assets for BRAT compatibility"
 
       - name: Create Release
         uses: softprops/action-gh-release@v1
@@ -70,9 +68,6 @@ jobs:
             ./dist/main.js
             ./dist/styles.css
             ./dist/manifest.json
-            ./dist/database-worker.js
-            ./dist/assets/sql-wasm.js
-            ./dist/assets/sql-wasm.wasm
             ./dist/README.md
             ./dist/LICENSE
         env:

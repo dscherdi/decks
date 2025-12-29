@@ -90,28 +90,12 @@ const buildOptions = {
       },
       filterWarnings: () => false,
     }),
-    // CONSOLIDATED COPY PLUGIN (Removed the duplicate block)
+    // Copy only manifest, README, and LICENSE (SQL.js assets are now embedded)
     copy({
       assets: [
         {
           from: [toPosix(path.join(__dirname, "manifest.json"))],
           to: [toPosix(outDir)],
-        },
-        {
-          from: [
-            toPosix(
-              path.join(__dirname, "node_modules/sql.js/dist/sql-wasm.wasm"),
-            ),
-          ],
-          to: [toPosix(path.join(outDir, "assets"))],
-        },
-        {
-          from: [
-            toPosix(
-              path.join(__dirname, "node_modules/sql.js/dist/sql-wasm.js"),
-            ),
-          ],
-          to: [toPosix(path.join(outDir, "assets"))],
         },
         {
           from: [toPosix(path.join(__dirname, "README.md"))],
@@ -134,9 +118,52 @@ Promise.all([esbuild.build(workerBuildOptions), esbuild.build(buildOptions)])
     // Get worker code as string
     const workerCode = workerResult.outputFiles[0].text;
 
-    // Create worker assets file
-    const workerAssetPath = path.join(outDir, "database-worker.js");
-    fs.writeFileSync(workerAssetPath, workerCode);
+    // Read SQL.js assets
+    const sqlWasmPath = path.join(
+      __dirname,
+      "node_modules/sql.js/dist/sql-wasm.wasm"
+    );
+    const sqlJsPath = path.join(
+      __dirname,
+      "node_modules/sql.js/dist/sql-wasm.js"
+    );
+    const sqlWasmBuffer = fs.readFileSync(sqlWasmPath);
+    const sqlJsCode = fs.readFileSync(sqlJsPath, "utf8");
+
+    // Convert WASM to base64
+    const sqlWasmBase64 = sqlWasmBuffer.toString("base64");
+
+    // Read the built main.js
+    const mainJsPath = path.join(outDir, "main.js");
+    let mainJsContent = fs.readFileSync(mainJsPath, "utf8");
+
+    // Inject embedded assets initialization at the top of the file
+    // This works for both dev and production builds
+    const embeddedAssetsCode = `
+// Embedded assets for BRAT compatibility
+(function() {
+  const WORKER_CODE = ${JSON.stringify(workerCode)};
+  const SQL_WASM_BASE64 = ${JSON.stringify(sqlWasmBase64)};
+  const SQL_JS_CODE = ${JSON.stringify(sqlJsCode)};
+
+  // Store in global scope for access by database services
+  if (typeof window !== 'undefined') {
+    window.__DECKS_EMBEDDED_ASSETS__ = {
+      workerCode: WORKER_CODE,
+      sqlWasmBase64: SQL_WASM_BASE64,
+      sqlJsCode: SQL_JS_CODE
+    };
+  }
+})();
+`;
+
+    // Prepend embedded assets to main.js
+    mainJsContent = embeddedAssetsCode + mainJsContent;
+    fs.writeFileSync(mainJsPath, mainJsContent);
+
+    console.log(
+      `✅ Injected embedded assets into main.js for ${prod ? "production" : "development"} build`
+    );
     // Merge component CSS with main styles.css
     const mainStyles = fs.readFileSync(
       path.join(__dirname, "styles.css"),
@@ -159,13 +186,10 @@ Promise.all([esbuild.build(workerBuildOptions), esbuild.build(buildOptions)])
     console.log(`✅ Build completed successfully!`);
     console.log(`📁 JS Output: ${buildOptions.outfile}`);
     console.log(`📁 CSS Output: ${path.join(outDir, "styles.css")}`);
-    console.log(`📁 Worker Output: ${workerAssetPath}`);
     const jsStats = fs.statSync(buildOptions.outfile);
     const cssStats = fs.statSync(path.join(outDir, "styles.css"));
-    const workerStats = fs.statSync(workerAssetPath);
-    console.log(`📊 JS Size: ${(jsStats.size / 1024).toFixed(1)} KB`);
+    console.log(`📊 JS Size: ${(jsStats.size / 1024).toFixed(1)} KB (includes embedded worker + SQL.js)`);
     console.log(`📊 CSS Size: ${(cssStats.size / 1024).toFixed(1)} KB`);
-    console.log(`📊 Worker Size: ${(workerStats.size / 1024).toFixed(1)} KB`);
   })
   .catch((err) => {
     console.error("❌ Build failed:");

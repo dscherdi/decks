@@ -5,6 +5,7 @@ import type { SqlJsValue } from "./sql-types";
 import type { DatabaseWorkerMessage } from "../workers/worker-entry";
 import { ProgressTracker } from "../utils/progress";
 import type { SyncData, SyncResult } from "../services/FlashcardSynchronizer";
+import { getEmbeddedAssets } from "./embedded-assets";
 
 export class WorkerDatabaseService extends BaseDatabaseService {
   private worker: Worker | null = null;
@@ -31,19 +32,30 @@ export class WorkerDatabaseService extends BaseDatabaseService {
 
   async initialize(): Promise<void> {
     try {
-      // 1) Read assets on main thread (worker can't access vault)
-      const manifestDir = `${this.configDir}/plugins/decks`;
-      const sqlJsCode = await this.adapter.read(
-        manifestDir + "/assets/sql-wasm.js"
-      ); // text
-      const wasmBytes = await this.adapter.readBinary(
-        manifestDir + "/assets/sql-wasm.wasm"
-      ); // ArrayBuffer
+      // Get embedded assets (all assets are now embedded in main.js)
+      const embeddedAssets = getEmbeddedAssets();
 
-      // 2) Start worker using the built database worker
-      const workerScript = await this.adapter.read(
-        manifestDir + "/database-worker.js"
-      );
+      if (!embeddedAssets) {
+        throw new Error(
+          "Embedded assets not found. This should not happen - please report this issue."
+        );
+      }
+
+      this.debugLog("Using embedded assets for worker initialization");
+
+      // Extract worker code and SQL.js assets
+      const workerScript = embeddedAssets.workerCode;
+      const sqlJsCode = embeddedAssets.sqlJsCode;
+
+      // Convert base64 WASM to ArrayBuffer
+      const binaryString = atob(embeddedAssets.sqlWasmBase64);
+      const bytes = new Uint8Array(binaryString.length);
+      for (let i = 0; i < binaryString.length; i++) {
+        bytes[i] = binaryString.charCodeAt(i);
+      }
+      const wasmBytes = bytes.buffer;
+
+      // Start worker using the embedded worker script
       const workerBlob = new Blob([workerScript], {
         type: "application/javascript",
       });
