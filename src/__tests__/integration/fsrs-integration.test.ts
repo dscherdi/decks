@@ -269,41 +269,52 @@ describe("FSRS Algorithm Integration Tests", () => {
 
   describe("FSRS Parameter Compliance", () => {
     it("should respect request retention in interval calculation", async () => {
-      // Create two decks with different retention targets
+      // Create two profiles with different retention targets
+      const highRetentionProfileId = await db.createProfile({
+        id: "profile_high_retention",
+        name: "High Retention Profile",
+        hasNewCardsLimitEnabled: false,
+        newCardsPerDay: 20,
+        hasReviewCardsLimitEnabled: false,
+        reviewCardsPerDay: 100,
+        reviewOrder: "due-date",
+        headerLevel: 2,
+        fsrs: {
+          requestRetention: 0.95,
+          profile: "STANDARD",
+        },
+        isDefault: false,
+      });
+
+      const lowRetentionProfileId = await db.createProfile({
+        id: "profile_low_retention",
+        name: "Low Retention Profile",
+        hasNewCardsLimitEnabled: false,
+        newCardsPerDay: 20,
+        hasReviewCardsLimitEnabled: false,
+        reviewCardsPerDay: 100,
+        reviewOrder: "due-date",
+        headerLevel: 2,
+        fsrs: {
+          requestRetention: 0.8,
+          profile: "STANDARD",
+        },
+        isDefault: false,
+      });
+
+      // Create two decks using different profiles
       const highRetentionDeck = DatabaseTestUtils.createTestDeck({
         name: "High Retention Deck",
         filepath: "/high-retention.md",
         tag: "high-retention",
-        config: {
-          hasNewCardsLimitEnabled: false,
-          newCardsPerDay: 20,
-          hasReviewCardsLimitEnabled: false,
-          reviewCardsPerDay: 100,
-          reviewOrder: "due-date",
-          headerLevel: 2,
-          fsrs: {
-            requestRetention: 0.95,
-            profile: "STANDARD",
-          },
-        },
+        profileId: highRetentionProfileId,
       });
 
       const lowRetentionDeck = DatabaseTestUtils.createTestDeck({
         name: "Low Retention Deck",
         filepath: "/low-retention.md",
         tag: "low-retention",
-        config: {
-          hasNewCardsLimitEnabled: false,
-          newCardsPerDay: 20,
-          hasReviewCardsLimitEnabled: false,
-          reviewCardsPerDay: 100,
-          reviewOrder: "due-date",
-          headerLevel: 2,
-          fsrs: {
-            requestRetention: 0.8,
-            profile: "STANDARD",
-          },
-        },
+        profileId: lowRetentionProfileId,
       });
 
       await db.createDeck(highRetentionDeck);

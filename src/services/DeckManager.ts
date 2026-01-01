@@ -1,8 +1,8 @@
 import { TFile, Vault, MetadataCache, Notice } from "obsidian";
 import {
   type Deck,
+  type DeckWithProfile,
   type Flashcard,
-  DEFAULT_DECK_CONFIG,
 } from "../database/types";
 import type { IDatabaseService } from "../database/DatabaseFactory";
 import { yieldToUI } from "../utils/ui";
@@ -185,15 +185,13 @@ export class DeckManager {
             }
           } else {
             // Create new deck for this file
+            // Note: profileId will be auto-assigned by createDeck based on tag mapping
             const deck = {
               id: generateDeckId(filePath),
               name: deckName, // Store clean file name
               filepath: filePath, // Store full file path separately
               tag: tag,
               lastReviewed: null,
-              config: DEFAULT_DECK_CONFIG,
-              created: new Date().toISOString(),
-              modified: new Date().toISOString(),
             };
             this.debugLog(
               `Creating new deck: "${deckName}" with ID: ${generateDeckId(
@@ -291,7 +289,7 @@ export class DeckManager {
     const deckSyncStartTime = performance.now();
     this.debugLog(`Syncing flashcards for deck ID: ${deckId}`);
 
-    const deck = await this.db.getDeckById(deckId);
+    const deck = await this.db.getDeckWithProfile(deckId);
     if (!deck) {
       this.debugLog(`No deck found for ID: ${deckId}`);
       return;
@@ -338,7 +336,7 @@ export class DeckManager {
           deckId: deck.id,
           deckName: deck.name,
           deckFilepath: deck.filepath,
-          deckConfig: deck.config,
+          deckConfig: deck.profile,
           fileContent: fileContent,
           force: force,
         },
@@ -396,15 +394,13 @@ export class DeckManager {
 
     if (!existingDeck) {
       // Create new deck for this file
+      // Note: profileId will be auto-assigned by createDeck based on tag mapping
       const deck = {
         id: generateDeckId(filePath),
         name: deckName,
         filepath: filePath,
         tag: tag,
         lastReviewed: null,
-        config: DEFAULT_DECK_CONFIG,
-        created: new Date().toISOString(),
-        modified: new Date().toISOString(),
       };
 
       this.debugLog(

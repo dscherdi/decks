@@ -1,12 +1,38 @@
 import type { Database } from "sql.js";
 
 // Current Schema Version
-export const CURRENT_SCHEMA_VERSION = 6;
+export const CURRENT_SCHEMA_VERSION = 7;
 
 // SQL Table Creation Schema - Used when database file doesn't exist
 export const CREATE_TABLES_SQL = `
   PRAGMA foreign_keys = OFF;
   BEGIN;
+
+  -- Deck profiles table
+  CREATE TABLE IF NOT EXISTS deckprofiles (
+    id TEXT PRIMARY KEY,
+    name TEXT NOT NULL UNIQUE,
+    has_new_cards_limit_enabled INTEGER NOT NULL DEFAULT 0,
+    new_cards_per_day INTEGER NOT NULL DEFAULT 20,
+    has_review_cards_limit_enabled INTEGER NOT NULL DEFAULT 0,
+    review_cards_per_day INTEGER NOT NULL DEFAULT 100,
+    header_level INTEGER NOT NULL DEFAULT 2,
+    review_order TEXT NOT NULL DEFAULT 'due-date' CHECK (review_order IN ('due-date', 'random')),
+    fsrs_request_retention REAL NOT NULL DEFAULT 0.9,
+    fsrs_profile TEXT NOT NULL DEFAULT 'STANDARD' CHECK (fsrs_profile IN ('INTENSIVE', 'STANDARD')),
+    is_default INTEGER NOT NULL DEFAULT 0,
+    created TEXT NOT NULL,
+    modified TEXT NOT NULL
+  );
+
+  -- Profile tag mappings table
+  CREATE TABLE IF NOT EXISTS profile_tag_mappings (
+    id TEXT PRIMARY KEY,
+    profile_id TEXT NOT NULL,
+    tag TEXT NOT NULL,
+    created TEXT NOT NULL,
+    UNIQUE(profile_id, tag)
+  );
 
   -- Decks table
   CREATE TABLE IF NOT EXISTS decks (
@@ -15,7 +41,7 @@ export const CREATE_TABLES_SQL = `
     filepath TEXT NOT NULL UNIQUE,
     tag TEXT NOT NULL,
     last_reviewed TEXT,
-    config TEXT NOT NULL DEFAULT '{"hasNewCardsLimitEnabled":false,"newCardsPerDay":20,"hasReviewCardsLimitEnabled":false,"reviewCardsPerDay":100,"headerLevel":2,"reviewOrder":"due-date","fsrs":{"requestRetention":0.9,"profile":"STANDARD"}}',
+    profile_id TEXT NOT NULL,
     created TEXT NOT NULL,
     modified TEXT NOT NULL
   );
@@ -92,7 +118,33 @@ export const CREATE_TABLES_SQL = `
     client TEXT
   );
 
+  -- Insert DEFAULT profile
+  INSERT OR IGNORE INTO deckprofiles (
+    id, name,
+    has_new_cards_limit_enabled, new_cards_per_day,
+    has_review_cards_limit_enabled, review_cards_per_day,
+    header_level, review_order,
+    fsrs_request_retention, fsrs_profile,
+    is_default, created, modified
+  ) VALUES (
+    'profile_default',
+    'DEFAULT',
+    0, 20,
+    0, 100,
+    2, 'due-date',
+    0.9, 'STANDARD',
+    1,
+    datetime('now'),
+    datetime('now')
+  );
+
   -- Create indexes
+  CREATE INDEX IF NOT EXISTS idx_deckprofiles_name ON deckprofiles(name);
+  CREATE INDEX IF NOT EXISTS idx_deckprofiles_is_default ON deckprofiles(is_default);
+  CREATE INDEX IF NOT EXISTS idx_profile_tag_mappings_profile ON profile_tag_mappings(profile_id);
+  CREATE INDEX IF NOT EXISTS idx_profile_tag_mappings_tag ON profile_tag_mappings(tag);
+  CREATE INDEX IF NOT EXISTS idx_decks_profile_id ON decks(profile_id);
+  CREATE INDEX IF NOT EXISTS idx_decks_tag ON decks(tag);
   CREATE INDEX IF NOT EXISTS idx_flashcards_deck_id ON flashcards(deck_id);
   CREATE INDEX IF NOT EXISTS idx_flashcards_due_date ON flashcards(due_date);
   CREATE INDEX IF NOT EXISTS idx_review_sessions_deck_id ON review_sessions(deck_id);
@@ -131,16 +183,14 @@ export function buildMigrationSQL(db: Database): string {
   const flashcardsColumns = getColumnNames(db, "flashcards");
   const reviewLogsColumns = getColumnNames(db, "review_logs");
 
-  // Build decks migration
+  // Build decks migration - now with profile_id instead of config
   const decksSelect = [
     "id",
     "name",
     decksColumns.includes("filepath") ? "filepath" : `'' as filepath`,
     "tag",
     "last_reviewed",
-    decksColumns.includes("config")
-      ? "config"
-      : `'{"hasNewCardsLimitEnabled":false,"newCardsPerDay":20,"hasReviewCardsLimitEnabled":false,"reviewCardsPerDay":100,"headerLevel":2,"reviewOrder":"due-date","fsrs":{"requestRetention":0.9,"profile":"STANDARD"}}' as config`,
+    `'profile_default' as profile_id`, // All decks use DEFAULT profile after migration
     decksColumns.includes("created") ? "created" : `datetime('now') as created`,
     decksColumns.includes("modified")
       ? "modified"
@@ -286,6 +336,51 @@ export function buildMigrationSQL(db: Database): string {
     PRAGMA foreign_keys = OFF;
     BEGIN;
 
+    -- Create DEFAULT profile
+    CREATE TABLE IF NOT EXISTS deckprofiles (
+      id TEXT PRIMARY KEY,
+      name TEXT NOT NULL UNIQUE,
+      has_new_cards_limit_enabled INTEGER NOT NULL DEFAULT 0,
+      new_cards_per_day INTEGER NOT NULL DEFAULT 20,
+      has_review_cards_limit_enabled INTEGER NOT NULL DEFAULT 0,
+      review_cards_per_day INTEGER NOT NULL DEFAULT 100,
+      header_level INTEGER NOT NULL DEFAULT 2,
+      review_order TEXT NOT NULL DEFAULT 'due-date' CHECK (review_order IN ('due-date', 'random')),
+      fsrs_request_retention REAL NOT NULL DEFAULT 0.9,
+      fsrs_profile TEXT NOT NULL DEFAULT 'STANDARD' CHECK (fsrs_profile IN ('INTENSIVE', 'STANDARD')),
+      is_default INTEGER NOT NULL DEFAULT 0,
+      created TEXT NOT NULL,
+      modified TEXT NOT NULL
+    );
+
+    INSERT OR IGNORE INTO deckprofiles (
+      id, name,
+      has_new_cards_limit_enabled, new_cards_per_day,
+      has_review_cards_limit_enabled, review_cards_per_day,
+      header_level, review_order,
+      fsrs_request_retention, fsrs_profile,
+      is_default, created, modified
+    ) VALUES (
+      'profile_default',
+      'DEFAULT',
+      0, 20,
+      0, 100,
+      2, 'due-date',
+      0.9, 'STANDARD',
+      1,
+      datetime('now'),
+      datetime('now')
+    );
+
+    -- Create profile tag mappings table
+    CREATE TABLE IF NOT EXISTS profile_tag_mappings (
+      id TEXT PRIMARY KEY,
+      profile_id TEXT NOT NULL,
+      tag TEXT NOT NULL,
+      created TEXT NOT NULL,
+      UNIQUE(profile_id, tag)
+    );
+
     -- Create new tables
     CREATE TABLE decks_new (
       id TEXT PRIMARY KEY,
@@ -293,7 +388,7 @@ export function buildMigrationSQL(db: Database): string {
       filepath TEXT NOT NULL UNIQUE,
       tag TEXT NOT NULL,
       last_reviewed TEXT,
-      config TEXT NOT NULL DEFAULT '{"hasNewCardsLimitEnabled":false,"newCardsPerDay":20,"hasReviewCardsLimitEnabled":false,"reviewCardsPerDay":100,"headerLevel":2,"reviewOrder":"due-date","fsrs":{"requestRetention":0.9,"profile":"STANDARD"}}',
+      profile_id TEXT NOT NULL,
       created TEXT NOT NULL,
       modified TEXT NOT NULL
     );
@@ -368,7 +463,7 @@ export function buildMigrationSQL(db: Database): string {
     );
 
     -- Copy data with dynamic column mapping
-    INSERT OR IGNORE INTO decks_new (id, name, filepath, tag, last_reviewed, config, created, modified)
+    INSERT OR IGNORE INTO decks_new (id, name, filepath, tag, last_reviewed, profile_id, created, modified)
     SELECT ${decksSelect} FROM decks WHERE EXISTS (SELECT 1 FROM sqlite_master WHERE type='table' AND name='decks');
 
     INSERT OR IGNORE INTO flashcards_new (id, deck_id, front, back, type, source_file, content_hash, state, due_date, interval, repetitions, difficulty, stability, lapses, last_reviewed, created, modified)
@@ -393,12 +488,20 @@ export function buildMigrationSQL(db: Database): string {
     ALTER TABLE review_logs_new RENAME TO review_logs;
 
     -- Create indexes
+    CREATE INDEX IF NOT EXISTS idx_deckprofiles_name ON deckprofiles(name);
+    CREATE INDEX IF NOT EXISTS idx_deckprofiles_is_default ON deckprofiles(is_default);
+    CREATE INDEX IF NOT EXISTS idx_profile_tag_mappings_profile ON profile_tag_mappings(profile_id);
+    CREATE INDEX IF NOT EXISTS idx_profile_tag_mappings_tag ON profile_tag_mappings(tag);
+    CREATE INDEX IF NOT EXISTS idx_decks_profile_id ON decks(profile_id);
+    CREATE INDEX IF NOT EXISTS idx_decks_tag ON decks(tag);
     CREATE INDEX IF NOT EXISTS idx_flashcards_deck_id ON flashcards(deck_id);
     CREATE INDEX IF NOT EXISTS idx_flashcards_due_date ON flashcards(due_date);
     CREATE INDEX IF NOT EXISTS idx_review_sessions_deck_id ON review_sessions(deck_id);
     CREATE INDEX IF NOT EXISTS idx_review_logs_flashcard_id ON review_logs(flashcard_id);
     CREATE INDEX IF NOT EXISTS idx_review_logs_session_id ON review_logs(session_id);
     CREATE INDEX IF NOT EXISTS idx_review_logs_reviewed_at ON review_logs(reviewed_at);
+    CREATE INDEX IF NOT EXISTS idx_flashcards_deck_due ON flashcards(deck_id, due_date);
+    CREATE INDEX IF NOT EXISTS idx_review_logs_join ON review_logs(flashcard_id, reviewed_at);
 
     -- Set schema version
     PRAGMA user_version = ${CURRENT_SCHEMA_VERSION};
@@ -415,7 +518,7 @@ export const SQL_QUERIES = {
   // Deck operations
   INSERT_DECK: `
     INSERT OR REPLACE INTO decks (
-      id, name, filepath, tag, last_reviewed, config, created, modified
+      id, name, filepath, tag, last_reviewed, profile_id, created, modified
     ) VALUES (?, ?, ?, ?, ?, ?, ?, ?)
   `,
 
@@ -448,6 +551,82 @@ export const SQL_QUERIES = {
   DELETE_DECK_BY_FILEPATH: `DELETE FROM decks WHERE filepath = ?`,
 
   DELETE_DECK: `DELETE FROM decks WHERE id = ?`,
+
+  GET_DECKS_BY_TAG: `SELECT * FROM decks WHERE tag = ? ORDER BY name`,
+
+  // Profile operations
+  INSERT_PROFILE: `
+    INSERT INTO deckprofiles (
+      id, name,
+      has_new_cards_limit_enabled, new_cards_per_day,
+      has_review_cards_limit_enabled, review_cards_per_day,
+      header_level, review_order,
+      fsrs_request_retention, fsrs_profile,
+      is_default, created, modified
+    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+  `,
+
+  GET_PROFILE_BY_ID: `SELECT * FROM deckprofiles WHERE id = ?`,
+
+  GET_PROFILE_BY_NAME: `SELECT * FROM deckprofiles WHERE name = ?`,
+
+  GET_ALL_PROFILES: `
+    SELECT * FROM deckprofiles
+    ORDER BY CASE WHEN is_default = 1 THEN 0 ELSE 1 END, name
+  `,
+
+  GET_DEFAULT_PROFILE: `SELECT * FROM deckprofiles WHERE is_default = 1 LIMIT 1`,
+
+  UPDATE_PROFILE: `
+    UPDATE deckprofiles SET
+      name = ?,
+      has_new_cards_limit_enabled = ?, new_cards_per_day = ?,
+      has_review_cards_limit_enabled = ?, review_cards_per_day = ?,
+      header_level = ?, review_order = ?,
+      fsrs_request_retention = ?, fsrs_profile = ?,
+      modified = ?
+    WHERE id = ?
+  `,
+
+  DELETE_PROFILE: `DELETE FROM deckprofiles WHERE id = ? AND is_default = 0`,
+
+  COUNT_DECKS_USING_PROFILE: `
+    SELECT COUNT(*) as count FROM decks WHERE profile_id = ?
+  `,
+
+  RESET_DECKS_TO_DEFAULT_PROFILE: `
+    UPDATE decks SET profile_id = ?, modified = ? WHERE profile_id = ?
+  `,
+
+  GET_DECKS_BY_PROFILE: `
+    SELECT * FROM decks WHERE profile_id = ? ORDER BY name
+  `,
+
+  // Profile tag mapping operations
+  INSERT_PROFILE_TAG_MAPPING: `
+    INSERT OR REPLACE INTO profile_tag_mappings (id, profile_id, tag, created)
+    VALUES (?, ?, ?, ?)
+  `,
+
+  GET_TAG_MAPPINGS_FOR_PROFILE: `
+    SELECT * FROM profile_tag_mappings WHERE profile_id = ?
+  `,
+
+  GET_ALL_TAG_MAPPINGS: `
+    SELECT * FROM profile_tag_mappings
+  `,
+
+  GET_PROFILE_FOR_TAG: `
+    SELECT * FROM profile_tag_mappings WHERE tag = ?
+  `,
+
+  DELETE_TAG_MAPPING: `
+    DELETE FROM profile_tag_mappings WHERE id = ?
+  `,
+
+  DELETE_TAG_MAPPINGS_FOR_PROFILE: `
+    DELETE FROM profile_tag_mappings WHERE profile_id = ?
+  `,
 
   // Flashcard operations
   INSERT_FLASHCARD: `

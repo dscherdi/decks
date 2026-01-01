@@ -63,14 +63,34 @@ class MockDatabaseService implements Partial<IDatabaseService> {
   }
 
   async getDeckById(deckId: string): Promise<any> {
-    // Mock implementation returning a deck with default config
+    // Mock implementation returning a deck with profileId
     return {
       id: deckId,
-      config: {
+      profileId: "profile_default",
+    };
+  }
+
+  async getDeckWithProfile(deckId: string): Promise<any> {
+    // Mock implementation returning a deck with profile
+    return {
+      id: deckId,
+      profileId: "profile_default",
+      profile: {
+        id: "profile_default",
+        name: "DEFAULT",
+        hasNewCardsLimitEnabled: false,
+        newCardsPerDay: 20,
+        hasReviewCardsLimitEnabled: false,
+        reviewCardsPerDay: 100,
+        headerLevel: 2,
+        reviewOrder: "due-date",
         fsrs: {
           requestRetention: 0.9,
           profile: "STANDARD",
         },
+        isDefault: true,
+        created: new Date().toISOString(),
+        modified: new Date().toISOString(),
       },
     };
   }

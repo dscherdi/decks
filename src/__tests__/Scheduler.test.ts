@@ -1,7 +1,7 @@
 import { Scheduler } from "../services/Scheduler";
 import { MainDatabaseService } from "../database/MainDatabaseService";
 import { BackupService } from "../services/BackupService";
-import { Flashcard, Deck } from "../database/types";
+import { Flashcard, Deck, DeckWithProfile, DeckProfile } from "../database/types";
 
 // Mock DatabaseService and BackupService
 jest.mock("../database/MainDatabaseService");
@@ -12,6 +12,51 @@ const MockedDatabaseService = MainDatabaseService as jest.MockedClass<
 const MockedBackupService = BackupService as jest.MockedClass<
   typeof BackupService
 >;
+
+// Helper function to create a deck with profile
+function createMockDeckWithProfile(
+  deckId: string,
+  profileConfig: Partial<DeckProfile> = {}
+): DeckWithProfile {
+  const defaultProfile: DeckProfile = {
+    id: "profile_default",
+    name: "DEFAULT",
+    hasNewCardsLimitEnabled: false,
+    newCardsPerDay: 20,
+    hasReviewCardsLimitEnabled: false,
+    reviewCardsPerDay: 100,
+    headerLevel: 2,
+    reviewOrder: "due-date",
+    fsrs: {
+      requestRetention: 0.9,
+      profile: "STANDARD",
+    },
+    isDefault: true,
+    created: new Date().toISOString(),
+    modified: new Date().toISOString(),
+  };
+
+  const profile: DeckProfile = {
+    ...defaultProfile,
+    ...profileConfig,
+    fsrs: {
+      ...defaultProfile.fsrs,
+      ...(profileConfig.fsrs || {}),
+    },
+  };
+
+  return {
+    id: deckId,
+    name: "Test Deck",
+    filepath: "test.md",
+    tag: "#test",
+    lastReviewed: null,
+    profileId: profile.id,
+    created: new Date().toISOString(),
+    modified: new Date().toISOString(),
+    profile,
+  };
+}
 
 describe("Scheduler", () => {
   let scheduler: Scheduler;
@@ -152,29 +197,11 @@ describe("Scheduler", () => {
     });
 
     it("should respect review order configuration", async () => {
-      const mockDeck: Deck = {
-        id: "deck_1",
-        name: "Test Deck",
-        filepath: "test.md",
-        tag: "#test",
-        lastReviewed: null,
-        config: {
-          hasNewCardsLimitEnabled: false, // unlimited
-          newCardsPerDay: 20,
-          hasReviewCardsLimitEnabled: false, // unlimited
-          reviewCardsPerDay: 100,
-          reviewOrder: "random",
-          headerLevel: 2,
-          fsrs: {
-            requestRetention: 0.9,
-            profile: "STANDARD",
-          },
-        },
-        created: new Date().toISOString(),
-        modified: new Date().toISOString(),
-      };
+      const mockDeck = createMockDeckWithProfile("deck_1", {
+        reviewOrder: "random",
+      });
 
-      mockDb.getDeckById.mockResolvedValue(mockDeck);
+      mockDb.getDeckWithProfile = jest.fn().mockResolvedValue(mockDeck);
       mockDb.getDailyReviewCounts.mockResolvedValue({
         newCount: 0,
         reviewCount: 0,
@@ -234,30 +261,15 @@ describe("Scheduler", () => {
         modified: new Date().toISOString(),
       };
 
-      const mockDeckIntensive: Deck = {
-        id: "deck_1",
-        name: "Test Deck",
-        filepath: "test.md",
-        tag: "#test",
-        lastReviewed: null,
-        config: {
-          hasNewCardsLimitEnabled: false, // unlimited
-          newCardsPerDay: 20,
-          hasReviewCardsLimitEnabled: false, // unlimited
-          reviewCardsPerDay: 100,
-          reviewOrder: "due-date",
-          headerLevel: 2,
-          fsrs: {
-            requestRetention: 0.8,
-            profile: "INTENSIVE",
-          },
+      const mockDeckIntensive = createMockDeckWithProfile("deck_1", {
+        fsrs: {
+          requestRetention: 0.8,
+          profile: "INTENSIVE",
         },
-        created: new Date().toISOString(),
-        modified: new Date().toISOString(),
-      };
+      });
 
       mockDb.getFlashcardById.mockResolvedValueOnce(mockCard);
-      mockDb.getDeckById.mockResolvedValueOnce(mockDeckIntensive);
+      mockDb.getDeckWithProfile = jest.fn().mockResolvedValueOnce(mockDeckIntensive);
 
       const preview = await scheduler.preview("card_1");
 
@@ -268,30 +280,15 @@ describe("Scheduler", () => {
     });
 
     it("should check review quota before due cards and new quota before new cards", async () => {
-      const mockDeck: Deck = {
-        id: "deck_1",
-        name: "Test Deck",
-        filepath: "test.md",
-        tag: "#test",
-        lastReviewed: null,
-        config: {
-          hasNewCardsLimitEnabled: true,
-          newCardsPerDay: 1,
-          hasReviewCardsLimitEnabled: true,
-          reviewCardsPerDay: 1,
-          reviewOrder: "due-date",
-          headerLevel: 2,
-          fsrs: {
-            requestRetention: 0.9,
-            profile: "STANDARD",
-          },
-        },
-        created: new Date().toISOString(),
-        modified: new Date().toISOString(),
-      };
+      const mockDeck = createMockDeckWithProfile("deck_1", {
+        hasNewCardsLimitEnabled: true,
+        newCardsPerDay: 1,
+        hasReviewCardsLimitEnabled: true,
+        reviewCardsPerDay: 1,
+      });
 
       // Mock deck lookup - called multiple times for quota checks
-      mockDb.getDeckById.mockResolvedValue(mockDeck);
+      mockDb.getDeckWithProfile = jest.fn().mockResolvedValue(mockDeck);
 
       // Mock that review quota is exhausted but new quota is available
       mockDb.getDailyReviewCounts.mockResolvedValue({
@@ -357,50 +354,18 @@ describe("Scheduler", () => {
 
     it("should treat 0 as no cards and -1 as unlimited", async () => {
       // Test deck with 0 for both limits (no cards allowed)
-      const noDeck: Deck = {
-        id: "deck_no_cards",
-        name: "No Cards Deck",
-        filepath: "no.md",
-        tag: "#no",
-        lastReviewed: null,
-        config: {
-          hasNewCardsLimitEnabled: true,
-          newCardsPerDay: 0, // 0 = no new cards
-          hasReviewCardsLimitEnabled: true,
-          reviewCardsPerDay: 0, // 0 = no review cards
-          reviewOrder: "due-date",
-          headerLevel: 2,
-          fsrs: {
-            requestRetention: 0.9,
-            profile: "STANDARD",
-          },
-        },
-        created: new Date().toISOString(),
-        modified: new Date().toISOString(),
-      };
+      const noDeck = createMockDeckWithProfile("deck_no_cards", {
+        hasNewCardsLimitEnabled: true,
+        newCardsPerDay: 0, // 0 = no new cards
+        hasReviewCardsLimitEnabled: true,
+        reviewCardsPerDay: 0, // 0 = no review cards
+      });
 
-      // Test deck with -1 for both limits (unlimited)
-      const unlimitedDeck: Deck = {
-        id: "deck_unlimited",
-        name: "Unlimited Deck",
-        filepath: "unlimited.md",
-        tag: "#unlimited",
-        lastReviewed: null,
-        config: {
-          hasNewCardsLimitEnabled: false, // unlimited
-          newCardsPerDay: 20,
-          hasReviewCardsLimitEnabled: false, // unlimited
-          reviewCardsPerDay: 100,
-          reviewOrder: "due-date",
-          headerLevel: 2,
-          fsrs: {
-            requestRetention: 0.9,
-            profile: "STANDARD",
-          },
-        },
-        created: new Date().toISOString(),
-        modified: new Date().toISOString(),
-      };
+      // Test deck with unlimited (disabled limits)
+      const unlimitedDeck = createMockDeckWithProfile("deck_unlimited", {
+        hasNewCardsLimitEnabled: false, // unlimited
+        hasReviewCardsLimitEnabled: false, // unlimited
+      });
 
       // Mock daily counts showing no usage
       mockDb.getDailyReviewCounts.mockResolvedValue({
@@ -409,7 +374,7 @@ describe("Scheduler", () => {
       });
 
       // Test 0 = no cards behavior
-      mockDb.getDeckById.mockResolvedValueOnce(noDeck);
+      mockDb.getDeckWithProfile = jest.fn().mockResolvedValueOnce(noDeck);
       const noCardsResult = await scheduler.getNext(
         new Date(),
         "deck_no_cards",
@@ -419,8 +384,8 @@ describe("Scheduler", () => {
       );
       expect(noCardsResult).toBeNull(); // Should return null with 0 limits
 
-      // Test -1 = unlimited behavior
-      mockDb.getDeckById.mockResolvedValue(unlimitedDeck);
+      // Test unlimited behavior
+      mockDb.getDeckWithProfile = jest.fn().mockResolvedValue(unlimitedDeck);
 
       // Mock empty due cards query but available new card
       mockDb.querySql.mockResolvedValueOnce([]); // No due cards

@@ -1,11 +1,14 @@
 import type { DataAdapter } from "obsidian";
 import type {
   Deck,
+  DeckProfile,
+  DeckWithProfile,
+  ProfileTagMapping,
   Flashcard,
   ReviewLog,
   ReviewSession,
 } from "./types";
-import { DEFAULT_DECK_CONFIG } from "./types";
+import { DEFAULT_PROFILE_ID, deckWithProfile } from "./types";
 import { SQL_QUERIES } from "./schemas";
 import type { SyncData, SyncResult } from "../services/FlashcardSynchronizer";
 import type {
@@ -55,46 +58,44 @@ export abstract class BaseDatabaseService implements IDatabaseService {
 
   // Shared business logic methods
   protected parseDeckRow(row: (string | number | null)[]): Deck {
-    let config = DEFAULT_DECK_CONFIG;
-
-    if (row[5]) {
-      try {
-        const parsedConfig: Record<string, string | number | boolean> =
-          JSON.parse(row[5] as string);
-
-        // Handle legacy config format
-        if (typeof parsedConfig.newCardsEnabled === "boolean") {
-          const legacyConfig = parsedConfig as Record<string, unknown>;
-          config = {
-            ...DEFAULT_DECK_CONFIG,
-            newCardsPerDay: legacyConfig.newCardsEnabled
-              ? (legacyConfig.newCardsLimit as number) || 20
-              : 0,
-            reviewCardsPerDay: legacyConfig.reviewCardsEnabled
-              ? (legacyConfig.reviewCardsLimit as number) || 100
-              : 0,
-            reviewOrder:
-              (legacyConfig.reviewOrder as "due-date" | "random") || "due-date",
-            headerLevel: (legacyConfig.headerLevel as number) || 2,
-          };
-        } else {
-          config = { ...DEFAULT_DECK_CONFIG, ...parsedConfig };
-        }
-      } catch (error) {
-        this.debugLog("Failed to parse deck config, using defaults:", error);
-        config = DEFAULT_DECK_CONFIG;
-      }
-    }
-
     return {
       id: row[0] as string,
       name: row[1] as string,
       filepath: row[2] as string,
       tag: row[3] as string,
       lastReviewed: row[4] as string | null,
-      config,
+      profileId: row[5] as string,
       created: row[6] as string,
       modified: row[7] as string,
+    };
+  }
+
+  protected parseProfileRow(row: (string | number | null)[]): DeckProfile {
+    return {
+      id: row[0] as string,
+      name: row[1] as string,
+      hasNewCardsLimitEnabled: Boolean(row[2]),
+      newCardsPerDay: row[3] as number,
+      hasReviewCardsLimitEnabled: Boolean(row[4]),
+      reviewCardsPerDay: row[5] as number,
+      headerLevel: row[6] as number,
+      reviewOrder: row[7] as "due-date" | "random",
+      fsrs: {
+        requestRetention: row[8] as number,
+        profile: row[9] as "INTENSIVE" | "STANDARD",
+      },
+      isDefault: Boolean(row[10]),
+      created: row[11] as string,
+      modified: row[12] as string,
+    };
+  }
+
+  protected parseTagMappingRow(row: (string | number | null)[]): ProfileTagMapping {
+    return {
+      id: row[0] as string,
+      profileId: row[1] as string,
+      tag: row[2] as string,
+      created: row[3] as string,
     };
   }
 
@@ -152,25 +153,30 @@ export abstract class BaseDatabaseService implements IDatabaseService {
   }
 
   // DECK OPERATIONS - Implemented using abstract SQL methods
-  async createDeck(deck: Omit<Deck, "created" | "modified">): Promise<string> {
+  async createDeck(deck: Omit<Deck, "created" | "modified" | "profileId"> & { id?: string; profileId?: string }): Promise<string> {
     const now = this.getCurrentTimestamp();
+
+    // If no profileId provided, check for tag mapping, else use DEFAULT
+    let profileId = deck.profileId;
+    if (!profileId) {
+      const tagProfileId = await this.getProfileIdForTag(deck.tag);
+      profileId = tagProfileId || DEFAULT_PROFILE_ID;
+    }
 
     const fullDeck: Deck = {
       ...deck,
+      profileId,
       created: now,
       modified: now,
     };
 
-    const sql = `INSERT INTO decks (id, name, filepath, tag, last_reviewed, config, created, modified)
-                 VALUES (?, ?, ?, ?, ?, ?, ?, ?)`;
-
-    await this.executeSql(sql, [
+    await this.executeSql(SQL_QUERIES.INSERT_DECK, [
       fullDeck.id,
       fullDeck.name,
       fullDeck.filepath,
       fullDeck.tag,
       fullDeck.lastReviewed,
-      JSON.stringify(fullDeck.config),
+      fullDeck.profileId,
       fullDeck.created,
       fullDeck.modified,
     ]);
@@ -179,8 +185,7 @@ export abstract class BaseDatabaseService implements IDatabaseService {
   }
 
   async getDeckById(id: string): Promise<Deck | null> {
-    const sql = `SELECT id, name, filepath, tag, last_reviewed, config, created, modified FROM decks WHERE id = ?`;
-    const results = (await this.querySql(sql, [id])) as (
+    const results = (await this.querySql(SQL_QUERIES.GET_DECK_BY_ID, [id])) as (
       | string
       | number
       | null
@@ -189,8 +194,7 @@ export abstract class BaseDatabaseService implements IDatabaseService {
   }
 
   async getDeckByFilepath(filepath: string): Promise<Deck | null> {
-    const sql = `SELECT id, name, filepath, tag, last_reviewed, config, created, modified FROM decks WHERE filepath = ?`;
-    const results = (await this.querySql(sql, [filepath])) as (
+    const results = (await this.querySql(SQL_QUERIES.GET_DECK_BY_FILEPATH, [filepath])) as (
       | string
       | number
       | null
@@ -199,8 +203,7 @@ export abstract class BaseDatabaseService implements IDatabaseService {
   }
 
   async getDeckByTag(tag: string): Promise<Deck | null> {
-    const sql = `SELECT id, name, filepath, tag, last_reviewed, config, created, modified FROM decks WHERE tag = ?`;
-    const results = (await this.querySql(sql, [tag])) as (
+    const results = (await this.querySql(SQL_QUERIES.GET_DECK_BY_TAG, [tag])) as (
       | string
       | number
       | null
@@ -209,8 +212,7 @@ export abstract class BaseDatabaseService implements IDatabaseService {
   }
 
   async getAllDecks(): Promise<Deck[]> {
-    const sql = `SELECT id, name, filepath, tag, last_reviewed, config, created, modified FROM decks ORDER BY name`;
-    const results = (await this.querySql(sql, [])) as (
+    const results = (await this.querySql(SQL_QUERIES.GET_ALL_DECKS, [])) as (
       | string
       | number
       | null
@@ -238,9 +240,9 @@ export abstract class BaseDatabaseService implements IDatabaseService {
       updateFields.push("last_reviewed = ?");
       params.push(updates.lastReviewed || null);
     }
-    if (updates.config !== undefined) {
-      updateFields.push("config = ?");
-      params.push(JSON.stringify(updates.config));
+    if (updates.profileId !== undefined) {
+      updateFields.push("profile_id = ?");
+      params.push(updates.profileId);
     }
 
     updateFields.push("modified = ?");
@@ -264,16 +266,8 @@ export abstract class BaseDatabaseService implements IDatabaseService {
     await this.executeSql(sql, [timestamp, this.getCurrentTimestamp(), deckId]);
   }
 
-  async updateDeckHeaderLevel(
-    deckId: string,
-    headerLevel: number
-  ): Promise<void> {
-    const deck = await this.getDeckById(deckId);
-    if (deck) {
-      const updatedConfig = { ...deck.config, headerLevel };
-      await this.updateDeck(deckId, { config: updatedConfig });
-    }
-  }
+  // Header level is now in the profile, not the deck
+  // This method is deprecated - modify the profile instead
 
   async renameDeck(
     oldDeckId: string,
@@ -312,6 +306,299 @@ export abstract class BaseDatabaseService implements IDatabaseService {
   async deleteDeckByFilepath(filepath: string): Promise<void> {
     const sql = `DELETE FROM decks WHERE filepath = ?`;
     await this.executeSql(sql, [filepath]);
+  }
+
+  async getDecksByTag(tag: string): Promise<Deck[]> {
+    const results = (await this.querySql(SQL_QUERIES.GET_DECKS_BY_TAG, [tag])) as (
+      | string
+      | number
+      | null
+    )[][];
+    return results.map((row) => this.parseDeckRow(row));
+  }
+
+  // PROFILE OPERATIONS
+  async createProfile(profile: Omit<DeckProfile, 'created' | 'modified'>): Promise<string> {
+    const now = this.getCurrentTimestamp();
+
+    // Prevent creating additional DEFAULT profiles
+    if (profile.isDefault) {
+      const existing = await this.getDefaultProfile();
+      if (existing) {
+        throw new Error('A DEFAULT profile already exists');
+      }
+    }
+
+    // Check for duplicate names
+    const existing = await this.getProfileByName(profile.name);
+    if (existing) {
+      throw new Error(`Profile with name "${profile.name}" already exists`);
+    }
+
+    await this.executeSql(SQL_QUERIES.INSERT_PROFILE, [
+      profile.id,
+      profile.name,
+      profile.hasNewCardsLimitEnabled ? 1 : 0,
+      profile.newCardsPerDay,
+      profile.hasReviewCardsLimitEnabled ? 1 : 0,
+      profile.reviewCardsPerDay,
+      profile.headerLevel,
+      profile.reviewOrder,
+      profile.fsrs.requestRetention,
+      profile.fsrs.profile,
+      profile.isDefault ? 1 : 0,
+      now,
+      now,
+    ]);
+
+    return profile.id;
+  }
+
+  async getProfileById(id: string): Promise<DeckProfile | null> {
+    const results = (await this.querySql(SQL_QUERIES.GET_PROFILE_BY_ID, [id])) as (
+      | string
+      | number
+      | null
+    )[][];
+    return results.length > 0 ? this.parseProfileRow(results[0]) : null;
+  }
+
+  async getProfileByName(name: string): Promise<DeckProfile | null> {
+    const results = (await this.querySql(SQL_QUERIES.GET_PROFILE_BY_NAME, [name])) as (
+      | string
+      | number
+      | null
+    )[][];
+    return results.length > 0 ? this.parseProfileRow(results[0]) : null;
+  }
+
+  async getAllProfiles(): Promise<DeckProfile[]> {
+    const results = (await this.querySql(SQL_QUERIES.GET_ALL_PROFILES, [])) as (
+      | string
+      | number
+      | null
+    )[][];
+    return results.map((row) => this.parseProfileRow(row));
+  }
+
+  async getDefaultProfile(): Promise<DeckProfile> {
+    const results = (await this.querySql(SQL_QUERIES.GET_DEFAULT_PROFILE, [])) as (
+      | string
+      | number
+      | null
+    )[][];
+    if (results.length === 0) {
+      throw new Error('DEFAULT profile not found in database');
+    }
+    return this.parseProfileRow(results[0]);
+  }
+
+  async updateProfile(id: string, updates: Partial<Omit<DeckProfile, 'id' | 'created' | 'modified' | 'isDefault'>>): Promise<void> {
+    const current = await this.getProfileById(id);
+    if (!current) {
+      throw new Error(`Profile not found: ${id}`);
+    }
+
+    // Cannot modify DEFAULT profile name
+    if (current.isDefault && updates.name && updates.name !== 'DEFAULT') {
+      throw new Error('Cannot rename DEFAULT profile');
+    }
+
+    // Check for duplicate names
+    if (updates.name && updates.name !== current.name) {
+      const existing = await this.getProfileByName(updates.name);
+      if (existing) {
+        throw new Error(`Profile with name "${updates.name}" already exists`);
+      }
+    }
+
+    const updated: DeckProfile = {
+      ...current,
+      ...updates,
+      fsrs: updates.fsrs ? { ...current.fsrs, ...updates.fsrs } : current.fsrs,
+    };
+
+    await this.executeSql(SQL_QUERIES.UPDATE_PROFILE, [
+      updated.name,
+      updated.hasNewCardsLimitEnabled ? 1 : 0,
+      updated.newCardsPerDay,
+      updated.hasReviewCardsLimitEnabled ? 1 : 0,
+      updated.reviewCardsPerDay,
+      updated.headerLevel,
+      updated.reviewOrder,
+      updated.fsrs.requestRetention,
+      updated.fsrs.profile,
+      this.getCurrentTimestamp(),
+      id,
+    ]);
+  }
+
+  async deleteProfile(id: string): Promise<void> {
+    const profile = await this.getProfileById(id);
+    if (!profile) {
+      throw new Error(`Profile not found: ${id}`);
+    }
+
+    if (profile.isDefault) {
+      return;
+    }
+
+    // Get DEFAULT profile ID
+    const defaultProfile = await this.getDefaultProfile();
+
+    // Reset all decks using this profile to DEFAULT
+    const now = this.getCurrentTimestamp();
+    await this.executeSql(SQL_QUERIES.RESET_DECKS_TO_DEFAULT_PROFILE, [
+      defaultProfile.id,
+      now,
+      id,
+    ]);
+
+    // Delete tag mappings
+    await this.executeSql(SQL_QUERIES.DELETE_TAG_MAPPINGS_FOR_PROFILE, [id]);
+
+    // Delete profile
+    await this.executeSql(SQL_QUERIES.DELETE_PROFILE, [id]);
+  }
+
+  async getDeckCountForProfile(profileId: string): Promise<number> {
+    const results = (await this.querySql(SQL_QUERIES.COUNT_DECKS_USING_PROFILE, [profileId])) as (
+      | string
+      | number
+      | null
+    )[][];
+    if (results.length === 0) return 0;
+    return (results[0][0] as number) || 0;
+  }
+
+  async getDecksByProfile(profileId: string): Promise<Deck[]> {
+    const results = (await this.querySql(SQL_QUERIES.GET_DECKS_BY_PROFILE, [profileId])) as (
+      | string
+      | number
+      | null
+    )[][];
+    return results.map((row) => this.parseDeckRow(row));
+  }
+
+  // PROFILE TAG MAPPING OPERATIONS
+  async createTagMapping(profileId: string, tag: string): Promise<string> {
+    const id = `mapping_${Date.now()}_${Math.random().toString(36).substring(2, 9)}`;
+    const now = this.getCurrentTimestamp();
+
+    await this.executeSql(SQL_QUERIES.INSERT_PROFILE_TAG_MAPPING, [
+      id,
+      profileId,
+      tag,
+      now,
+    ]);
+
+    return id;
+  }
+
+  async getTagMappingsForProfile(profileId: string): Promise<ProfileTagMapping[]> {
+    const results = (await this.querySql(SQL_QUERIES.GET_TAG_MAPPINGS_FOR_PROFILE, [profileId])) as (
+      | string
+      | number
+      | null
+    )[][];
+    return results.map((row) => this.parseTagMappingRow(row));
+  }
+
+  async getProfileIdForTag(tag: string): Promise<string | null> {
+    // Get all tag mappings
+    const allMappings = await this.querySql(SQL_QUERIES.GET_ALL_TAG_MAPPINGS) as (
+      | string
+      | number
+      | null
+    )[][];
+
+    if (allMappings.length === 0) return null;
+
+    // Find all mappings that match this tag (either exact match or parent tag)
+    const matchingMappings: { profileId: string; tag: string }[] = [];
+
+    for (const row of allMappings) {
+      const mapping = this.parseTagMappingRow(row);
+
+      // Check if the mapping tag matches the deck tag
+      // Match if: exact match OR mapping tag is a parent of deck tag
+      // Example: deck tag "#flashcards/math", mapping tag "#flashcards" -> matches
+      // Example: deck tag "#flashcards/math", mapping tag "#flashcards/math" -> matches
+      // Example: deck tag "#flashcards", mapping tag "#flashcards/math" -> does NOT match
+
+      if (tag === mapping.tag || tag.startsWith(mapping.tag + '/')) {
+        matchingMappings.push({ profileId: mapping.profileId, tag: mapping.tag });
+      }
+    }
+
+    if (matchingMappings.length === 0) return null;
+
+    // Return the most specific tag (longest tag path)
+    // Sort by tag length descending, then return the first one
+    matchingMappings.sort((a, b) => b.tag.length - a.tag.length);
+
+    return matchingMappings[0].profileId;
+  }
+
+  async deleteTagMapping(id: string): Promise<void> {
+    await this.executeSql(SQL_QUERIES.DELETE_TAG_MAPPING, [id]);
+  }
+
+  async applyProfileToTag(profileId: string, tag: string): Promise<number> {
+    const decks = await this.getDecksByTag(tag);
+
+    let count = 0;
+    for (const deck of decks) {
+      await this.updateDeck(deck.id, { profileId });
+      count++;
+    }
+
+    // Create/update tag mapping
+    await this.createTagMapping(profileId, tag);
+
+    return count;
+  }
+
+  // HELPER METHODS FOR BACKWARD COMPATIBILITY
+  async getDeckWithProfile(deckId: string): Promise<DeckWithProfile | null> {
+    const deck = await this.getDeckById(deckId);
+    if (!deck) return null;
+
+    let profile = await this.getProfileById(deck.profileId);
+    if (!profile) {
+      // Profile not found - fall back to DEFAULT profile
+      console.warn(`Profile ${deck.profileId} not found for deck ${deck.id}. Reverting to DEFAULT profile.`);
+      profile = await this.getDefaultProfile();
+
+      // Update deck to use DEFAULT profile
+      await this.updateDeck(deck.id, { profileId: profile.id });
+      deck.profileId = profile.id;
+    }
+
+    return deckWithProfile(deck, profile);
+  }
+
+  async getAllDecksWithProfiles(): Promise<DeckWithProfile[]> {
+    const decks = await this.getAllDecks();
+    const profiles = await this.getAllProfiles();
+    const profileMap = new Map(profiles.map(p => [p.id, p]));
+    const defaultProfile = await this.getDefaultProfile();
+
+    const result: DeckWithProfile[] = [];
+    for (const deck of decks) {
+      let profile = profileMap.get(deck.profileId);
+      if (!profile) {
+        // Profile not found - fall back to DEFAULT profile
+        console.warn(`Profile ${deck.profileId} not found for deck ${deck.id}. Reverting to DEFAULT profile.`);
+        profile = defaultProfile;
+
+        // Update deck to use DEFAULT profile
+        await this.updateDeck(deck.id, { profileId: profile.id });
+        deck.profileId = profile.id;
+      }
+      result.push(deckWithProfile(deck, profile));
+    }
+    return result;
   }
 
   // FLASHCARD OPERATIONS

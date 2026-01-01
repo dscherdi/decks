@@ -23,7 +23,7 @@ import {
   InMemoryAdapter,
 } from "./database-test-utils";
 import { generateDeckId } from "../../utils/hash";
-import type { Flashcard, Deck } from "../../database/types";
+import type { Flashcard, Deck, DeckProfile } from "../../database/types";
 import type { DecksSettings } from "../../settings";
 import { promises as fs } from "fs";
 import path from "path";
@@ -105,6 +105,9 @@ describe("Full Workflow Integration Tests", () => {
       const testDataPath = path.join(__dirname, "test-data", "Math-Basics.md");
       const fileContent = await fs.readFile(testDataPath, "utf-8");
 
+      // Get default profile
+      const defaultProfile = await db.getDefaultProfile();
+
       // Create deck for the file
       const deckId = generateDeckId(testDataPath);
       const deck: Deck = {
@@ -113,20 +116,9 @@ describe("Full Workflow Integration Tests", () => {
         filepath: testDataPath,
         tag: "flashcards/math",
         lastReviewed: null,
+        profileId: defaultProfile.id,
         created: new Date().toISOString(),
         modified: new Date().toISOString(),
-        config: {
-          hasNewCardsLimitEnabled: false,
-          newCardsPerDay: 20,
-          hasReviewCardsLimitEnabled: false,
-          reviewCardsPerDay: 100,
-          reviewOrder: "due-date",
-          headerLevel: 2,
-          fsrs: {
-            requestRetention: 0.9,
-            profile: "STANDARD",
-          },
-        },
       };
 
       await db.createDeck(deck);
@@ -136,7 +128,7 @@ describe("Full Workflow Integration Tests", () => {
         deckId: deck.id,
         deckName: deck.name,
         deckFilepath: deck.filepath,
-        deckConfig: deck.config,
+        deckConfig: defaultProfile,
         fileContent,
         force: false,
       });
@@ -165,6 +157,9 @@ describe("Full Workflow Integration Tests", () => {
       );
       const fileContent = await fs.readFile(testDataPath, "utf-8");
 
+      // Get default profile
+      const defaultProfile = await db.getDefaultProfile();
+
       const deckId = generateDeckId(testDataPath);
       const deck: Deck = {
         id: deckId,
@@ -172,20 +167,9 @@ describe("Full Workflow Integration Tests", () => {
         filepath: testDataPath,
         tag: "flashcards/programming",
         lastReviewed: null,
+        profileId: defaultProfile.id,
         created: new Date().toISOString(),
         modified: new Date().toISOString(),
-        config: {
-          hasNewCardsLimitEnabled: false,
-          newCardsPerDay: 30,
-          hasReviewCardsLimitEnabled: false,
-          reviewCardsPerDay: 150,
-          reviewOrder: "due-date",
-          headerLevel: 2,
-          fsrs: {
-            requestRetention: 0.9,
-            profile: "STANDARD",
-          },
-        },
       };
 
       await db.createDeck(deck);
@@ -194,7 +178,7 @@ describe("Full Workflow Integration Tests", () => {
         deckId: deck.id,
         deckName: deck.name,
         deckFilepath: deck.filepath,
-        deckConfig: deck.config,
+        deckConfig: defaultProfile,
         fileContent,
         force: false,
       });
@@ -213,6 +197,9 @@ describe("Full Workflow Integration Tests", () => {
         "Spanish-Vocabulary.md",
       ];
 
+      // Get default profile once
+      const defaultProfile = await db.getDefaultProfile();
+
       const syncedDecks: Deck[] = [];
 
       for (const filename of testFiles) {
@@ -226,20 +213,9 @@ describe("Full Workflow Integration Tests", () => {
           filepath: testDataPath,
           tag: `flashcards/${filename.toLowerCase()}`,
           lastReviewed: null,
+          profileId: defaultProfile.id,
           created: new Date().toISOString(),
           modified: new Date().toISOString(),
-          config: {
-            hasNewCardsLimitEnabled: false,
-            newCardsPerDay: 20,
-            hasReviewCardsLimitEnabled: false,
-            reviewCardsPerDay: 100,
-            reviewOrder: "due-date",
-            headerLevel: 2,
-            fsrs: {
-              requestRetention: 0.9,
-              profile: "STANDARD",
-            },
-          },
         };
 
         await db.createDeck(deck);
@@ -249,7 +225,7 @@ describe("Full Workflow Integration Tests", () => {
           deckId: deck.id,
           deckName: deck.name,
           deckFilepath: deck.filepath,
-          deckConfig: deck.config,
+          deckConfig: defaultProfile,
           fileContent,
           force: false,
         });
@@ -277,6 +253,9 @@ describe("Full Workflow Integration Tests", () => {
       const testDataPath = path.join(__dirname, "test-data", "Math-Basics.md");
       const fileContent = await fs.readFile(testDataPath, "utf-8");
 
+      // Get default profile
+      const defaultProfile = await db.getDefaultProfile();
+
       const deckId = generateDeckId(testDataPath);
       testDeck = {
         id: deckId,
@@ -284,20 +263,9 @@ describe("Full Workflow Integration Tests", () => {
         filepath: testDataPath,
         tag: "flashcards/math",
         lastReviewed: null,
+        profileId: defaultProfile.id,
         created: new Date().toISOString(),
         modified: new Date().toISOString(),
-        config: {
-          hasNewCardsLimitEnabled: false,
-          newCardsPerDay: 20,
-          hasReviewCardsLimitEnabled: false,
-          reviewCardsPerDay: 100,
-          reviewOrder: "due-date",
-          headerLevel: 2,
-          fsrs: {
-            requestRetention: 0.9,
-            profile: "STANDARD",
-          },
-        },
       };
 
       await db.createDeck(testDeck);
@@ -305,7 +273,7 @@ describe("Full Workflow Integration Tests", () => {
         deckId: testDeck.id,
         deckName: testDeck.name,
         deckFilepath: testDeck.filepath,
-        deckConfig: testDeck.config,
+        deckConfig: defaultProfile,
         fileContent,
         force: false,
       });
@@ -689,6 +657,9 @@ describe("Full Workflow Integration Tests", () => {
       const fileContent = await fs.readFile(testDataPath, "utf-8");
 
       // 3. Create and sync deck
+      // Get default profile
+      const defaultProfile = await db.getDefaultProfile();
+
       const deckId = generateDeckId(testDataPath);
       const deck: Deck = {
         id: deckId,
@@ -696,20 +667,9 @@ describe("Full Workflow Integration Tests", () => {
         filepath: testDataPath,
         tag: "flashcards/test",
         lastReviewed: null,
+        profileId: defaultProfile.id,
         created: new Date().toISOString(),
         modified: new Date().toISOString(),
-        config: {
-          hasNewCardsLimitEnabled: false,
-          newCardsPerDay: 10,
-          hasReviewCardsLimitEnabled: false,
-          reviewCardsPerDay: 50,
-          reviewOrder: "due-date",
-          headerLevel: 2,
-          fsrs: {
-            requestRetention: 0.9,
-            profile: "STANDARD",
-          },
-        },
       };
 
       await db.createDeck(deck);
@@ -717,7 +677,7 @@ describe("Full Workflow Integration Tests", () => {
         deckId: deck.id,
         deckName: deck.name,
         deckFilepath: deck.filepath,
-        deckConfig: deck.config,
+        deckConfig: defaultProfile,
         fileContent,
         force: false,
       });

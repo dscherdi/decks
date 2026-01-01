@@ -95,30 +95,28 @@ describe("Large Deck Integration Tests", () => {
         filepath: testDataPath,
         tag: "flashcards/german",
         lastReviewed: null,
+        profileId: "profile_default",
         created: new Date().toISOString(),
         modified: new Date().toISOString(),
-        config: {
-          hasNewCardsLimitEnabled: false,
-          newCardsPerDay: 50,
-          hasReviewCardsLimitEnabled: false,
-          reviewCardsPerDay: 200,
-          reviewOrder: "due-date",
-          headerLevel: 1, // German files use # header (level 1)
-          fsrs: {
-            requestRetention: 0.9,
-            profile: "STANDARD",
-          },
-        },
       };
 
       await db.createDeck(deck);
 
+      // Update profile for this specific test
+      const profile = await db.getDefaultProfile();
+      if (profile) {
+        await db.updateProfile(profile.id, {
+          headerLevel: 1,
+        });
+      }
+
+      const deckWithProfile = await db.getDeckWithProfile(deck.id);
       const startTime = Date.now();
       const syncResult = await db.syncFlashcardsForDeck({
         deckId: deck.id,
         deckName: deck.name,
         deckFilepath: deck.filepath,
-        deckConfig: deck.config,
+        deckConfig: deckWithProfile!.profile,
         fileContent,
         force: false,
       });
@@ -159,9 +157,17 @@ describe("Large Deck Integration Tests", () => {
         filepath: testDataPath,
         tag: "flashcards/german",
         lastReviewed: null,
+        profileId: "profile_default",
         created: new Date().toISOString(),
         modified: new Date().toISOString(),
-        config: {
+      };
+
+      await db.createDeck(deck);
+
+      // Update profile for this specific test
+      const profile = await db.getDefaultProfile();
+      if (profile) {
+        await db.updateProfile(profile.id, {
           hasNewCardsLimitEnabled: false,
           newCardsPerDay: 30,
           hasReviewCardsLimitEnabled: false,
@@ -172,16 +178,15 @@ describe("Large Deck Integration Tests", () => {
             requestRetention: 0.85,
             profile: "INTENSIVE",
           },
-        },
-      };
+        });
+      }
 
-      await db.createDeck(deck);
-
+      const deckWithProfile = await db.getDeckWithProfile(deck.id);
       const syncResult = await db.syncFlashcardsForDeck({
         deckId: deck.id,
         deckName: deck.name,
         deckFilepath: deck.filepath,
-        deckConfig: deck.config,
+        deckConfig: deckWithProfile!.profile,
         fileContent,
         force: false,
       });
@@ -208,9 +213,17 @@ describe("Large Deck Integration Tests", () => {
         filepath: testDataPath,
         tag: "flashcards/german",
         lastReviewed: null,
+        profileId: "profile_default",
         created: new Date().toISOString(),
         modified: new Date().toISOString(),
-        config: {
+      };
+
+      await db.createDeck(deck);
+
+      // Update profile for this specific test
+      const profile = await db.getDefaultProfile();
+      if (profile) {
+        await db.updateProfile(profile.id, {
           hasNewCardsLimitEnabled: false,
           newCardsPerDay: 25,
           hasReviewCardsLimitEnabled: false,
@@ -221,16 +234,15 @@ describe("Large Deck Integration Tests", () => {
             requestRetention: 0.9,
             profile: "STANDARD",
           },
-        },
-      };
+        });
+      }
 
-      await db.createDeck(deck);
-
+      const deckWithProfile = await db.getDeckWithProfile(deck.id);
       const syncResult = await db.syncFlashcardsForDeck({
         deckId: deck.id,
         deckName: deck.name,
         deckFilepath: deck.filepath,
-        deckConfig: deck.config,
+        deckConfig: deckWithProfile!.profile,
         fileContent,
         force: false,
       });
@@ -255,6 +267,23 @@ describe("Large Deck Integration Tests", () => {
       const deckIds: string[] = [];
       let totalCards = 0;
 
+      // Update profile once for all decks
+      const profile = await db.getDefaultProfile();
+      if (profile) {
+        await db.updateProfile(profile.id, {
+          hasNewCardsLimitEnabled: false,
+          newCardsPerDay: 20,
+          hasReviewCardsLimitEnabled: false,
+          reviewCardsPerDay: 100,
+          reviewOrder: "due-date",
+          headerLevel: 1, // German files use # header (level 1)
+          fsrs: {
+            requestRetention: 0.9,
+            profile: "STANDARD",
+          },
+        });
+      }
+
       for (const filename of largeFiles) {
         const testDataPath = path.join(__dirname, "test-data", filename);
         const fileContent = await fs.readFile(testDataPath, "utf-8");
@@ -266,29 +295,19 @@ describe("Large Deck Integration Tests", () => {
           filepath: testDataPath,
           tag: `flashcards/german/${filename}`,
           lastReviewed: null,
+          profileId: "profile_default",
           created: new Date().toISOString(),
           modified: new Date().toISOString(),
-          config: {
-            hasNewCardsLimitEnabled: false,
-            newCardsPerDay: 20,
-            hasReviewCardsLimitEnabled: false,
-            reviewCardsPerDay: 100,
-            reviewOrder: "due-date",
-            headerLevel: 1, // German files use # header (level 1)
-            fsrs: {
-              requestRetention: 0.9,
-              profile: "STANDARD",
-            },
-          },
         };
 
         await db.createDeck(deck);
 
+        const deckWithProfile = await db.getDeckWithProfile(deck.id);
         const syncResult = await db.syncFlashcardsForDeck({
           deckId: deck.id,
           deckName: deck.name,
           deckFilepath: deck.filepath,
-          deckConfig: deck.config,
+          deckConfig: deckWithProfile!.profile,
           fileContent,
           force: false,
         });
@@ -332,9 +351,17 @@ describe("Large Deck Integration Tests", () => {
         filepath: testDataPath,
         tag: "flashcards/test",
         lastReviewed: null,
+        profileId: "profile_default",
         created: new Date().toISOString(),
         modified: new Date().toISOString(),
-        config: {
+      };
+
+      await db.createDeck(largeDeck);
+
+      // Update profile for this test
+      const profile = await db.getDefaultProfile();
+      if (profile) {
+        await db.updateProfile(profile.id, {
           hasNewCardsLimitEnabled: false,
           newCardsPerDay: 50,
           hasReviewCardsLimitEnabled: false,
@@ -345,15 +372,15 @@ describe("Large Deck Integration Tests", () => {
             requestRetention: 0.9,
             profile: "STANDARD",
           },
-        },
-      };
+        });
+      }
 
-      await db.createDeck(largeDeck);
+      const deckWithProfile = await db.getDeckWithProfile(largeDeck.id);
       await db.syncFlashcardsForDeck({
         deckId: largeDeck.id,
         deckName: largeDeck.name,
         deckFilepath: largeDeck.filepath,
-        deckConfig: largeDeck.config,
+        deckConfig: deckWithProfile!.profile,
         fileContent,
         force: false,
       });
@@ -438,28 +465,31 @@ describe("Large Deck Integration Tests", () => {
         filepath: testDataPath,
         tag: "flashcards/test",
         lastReviewed: null,
+        profileId: "profile_default",
         created: new Date().toISOString(),
         modified: new Date().toISOString(),
-        config: {
+      };
+
+      await db.createDeck(largeDeck);
+
+      // Update the default profile with limits for this test
+      const profile = await db.getDefaultProfile();
+      if (profile) {
+        await db.updateProfile(profile.id, {
           hasNewCardsLimitEnabled: true,
           newCardsPerDay: 50,
           hasReviewCardsLimitEnabled: true,
           reviewCardsPerDay: 200,
-          reviewOrder: "due-date",
           headerLevel: 1, // German files use # header (level 1)
-          fsrs: {
-            requestRetention: 0.9,
-            profile: "STANDARD",
-          },
-        },
-      };
+        });
+      }
 
-      await db.createDeck(largeDeck);
+      const deckWithProfile = await db.getDeckWithProfile(largeDeck.id);
       await db.syncFlashcardsForDeck({
         deckId: largeDeck.id,
         deckName: largeDeck.name,
         deckFilepath: largeDeck.filepath,
-        deckConfig: largeDeck.config,
+        deckConfig: deckWithProfile!.profile,
         fileContent,
         force: false,
       });
@@ -519,9 +549,17 @@ describe("Large Deck Integration Tests", () => {
         filepath: testDataPath,
         tag: "flashcards/test",
         lastReviewed: null,
+        profileId: "profile_default",
         created: new Date().toISOString(),
         modified: new Date().toISOString(),
-        config: {
+      };
+
+      await db.createDeck(deck);
+
+      // Update profile for this test
+      const profile = await db.getDefaultProfile();
+      if (profile) {
+        await db.updateProfile(profile.id, {
           hasNewCardsLimitEnabled: false,
           newCardsPerDay: 30,
           hasReviewCardsLimitEnabled: false,
@@ -532,15 +570,15 @@ describe("Large Deck Integration Tests", () => {
             requestRetention: 0.9,
             profile: "STANDARD",
           },
-        },
-      };
+        });
+      }
 
-      await db.createDeck(deck);
+      const deckWithProfile = await db.getDeckWithProfile(deck.id);
       await db.syncFlashcardsForDeck({
         deckId: deck.id,
         deckName: deck.name,
         deckFilepath: deck.filepath,
-        deckConfig: deck.config,
+        deckConfig: deckWithProfile!.profile,
         fileContent,
         force: false,
       });
@@ -602,9 +640,17 @@ describe("Large Deck Integration Tests", () => {
         filepath: testDataPath,
         tag: "flashcards/test",
         lastReviewed: null,
+        profileId: "profile_default",
         created: new Date().toISOString(),
         modified: new Date().toISOString(),
-        config: {
+      };
+
+      await db.createDeck(deck);
+
+      // Update profile for this test
+      const profile = await db.getDefaultProfile();
+      if (profile) {
+        await db.updateProfile(profile.id, {
           hasNewCardsLimitEnabled: false,
           newCardsPerDay: 20,
           hasReviewCardsLimitEnabled: false,
@@ -615,17 +661,17 @@ describe("Large Deck Integration Tests", () => {
             requestRetention: 0.9,
             profile: "STANDARD",
           },
-        },
-      };
+        });
+      }
 
-      await db.createDeck(deck);
+      const deckWithProfile = await db.getDeckWithProfile(deck.id);
 
       // First sync
       const firstSync = await db.syncFlashcardsForDeck({
         deckId: deck.id,
         deckName: deck.name,
         deckFilepath: deck.filepath,
-        deckConfig: deck.config,
+        deckConfig: deckWithProfile!.profile,
         fileContent,
         force: false,
       });
@@ -638,7 +684,7 @@ describe("Large Deck Integration Tests", () => {
         deckId: deck.id,
         deckName: deck.name,
         deckFilepath: deck.filepath,
-        deckConfig: deck.config,
+        deckConfig: deckWithProfile!.profile,
         fileContent,
         force: false,
       });
@@ -655,7 +701,7 @@ describe("Large Deck Integration Tests", () => {
         deckId: deck.id,
         deckName: deck.name,
         deckFilepath: deck.filepath,
-        deckConfig: deck.config,
+        deckConfig: deckWithProfile!.profile,
         fileContent,
         force: true,
       });
