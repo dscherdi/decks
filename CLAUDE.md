@@ -57,6 +57,21 @@ npm run check
 - Css classes need to have the prefix decks-
 - No excessive unnecessary comments. No comments that mention any prompt or plan. Minimal comments explaining functionality allowed.
 
+### Obsidian Plugin Store Linting Rules
+
+- **Logging**:
+  - Prefer using the `Logger` class methods (`logger.debug()`, `logger.error()`) for unified logging across the plugin
+  - When Logger is not available, only use `console.debug()`, `console.warn()`, and `console.error()`
+  - Never use `console.log()` or `console.info()` - they are not allowed by Obsidian plugin store linter
+- **Async Modal methods**: Modal and ItemView lifecycle methods (`onOpen()`, `onClose()`) must NOT be async. Wrap async operations in separate methods called from lifecycle methods with `.catch(console.error)`.
+- **DOM manipulation**: Never use `innerHTML` or `outerHTML`. Use Obsidian's `createEl()`, `createDiv()`, `appendText()`, etc.
+- **Style properties**: Never set `element.style.*` directly. Use CSS classes with `decks-` prefix and `addClass()`/`removeClass()`, or use `element.setCssProps()` for dynamic positioning.
+- **UI headings**: Use `new Setting(containerEl).setName("...").setHeading()` instead of `containerEl.createEl("h2"|"h3", ...)`.
+- **Deprecated methods**: Use `substring()` or `slice()` instead of deprecated `substr()`.
+- **eslint-disable**: Never disable `@typescript-eslint/no-explicit-any` rule. Fix the underlying type issue instead.
+- **Sentence case**: All UI text must use sentence case, not title case (e.g., "Review sessions" not "Review Sessions").
+- **Node.js imports**: In test files, use `node:` protocol (e.g., `import from "node:fs"` not `import from "fs"`).
+
 ### Releasing
 
 ```bash

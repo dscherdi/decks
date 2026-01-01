@@ -19,13 +19,13 @@
     | undefined = undefined;
   export let oncancel: (() => void) | undefined = undefined;
 
-  let profiles = initialProfiles;
+  const profiles = initialProfiles;
   let selectedDeckId = initialDeck.id;
   let selectedProfileId = initialDeck.profileId;
   let selectedProfile: DeckProfile | null = null;
   let allTags: string[] = [];
   let selectionMode: "deck" | "tag" = "deck";
-  let selectedTag: string = "";
+  let selectedTag = "";
 
   let deckSelectorContainer: HTMLElement;
   let profileSelectorContainer: HTMLElement;
@@ -229,9 +229,11 @@
 
     // Note about editing
     const noteEl = profileDetailsContainer.createDiv("decks-config-note");
-    noteEl.innerHTML = `
-      <p><strong>Note:</strong> To edit profile settings, use the "Manage Profiles" button in the main Decks panel.</p>
-    `;
+    const p = noteEl.createEl("p");
+    p.createEl("strong", { text: "Note:" });
+    p.appendText(
+      ' To edit profile settings, use the "Manage Profiles" button in the main Decks panel.'
+    );
   }
 
   onMount(async () => {

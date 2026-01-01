@@ -343,11 +343,9 @@
     const viewportWidth = window.innerWidth;
     const viewportHeight = window.innerHeight;
 
-    dropdown.style.position = "fixed";
-    dropdown.style.zIndex = "1000";
+    dropdown.addClass("decks-context-menu");
 
     // Temporarily append to measure dimensions
-    dropdown.style.visibility = "hidden";
     document.body.appendChild(dropdown);
     const dropdownRect = dropdown.getBoundingClientRect();
 
@@ -369,9 +367,12 @@
     top = Math.max(10, top);
     left = Math.max(10, left);
 
-    dropdown.style.top = `${top}px`;
-    dropdown.style.left = `${left}px`;
-    dropdown.style.visibility = "visible";
+    dropdown.setCssProps({
+      top: `${top}px`,
+      left: `${left}px`,
+    });
+    dropdown.removeClass("decks-context-menu");
+    dropdown.addClass("decks-context-menu-visible");
 
     // Store active dropdown reference
     activeDropdown = dropdown;

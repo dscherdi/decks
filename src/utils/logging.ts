@@ -10,7 +10,7 @@ export class Logger {
 
   debug(message: string, ...args: unknown[]): void {
     if (this.settings?.debug?.enableLogging) {
-      console.log(`[Decks Debug] ${message}`, ...args);
+      console.debug(`[Decks Debug] ${message}`, ...args);
       if (this.adapter && this.configDir) {
         this.writeToLogFile(message, ...args);
       }
@@ -28,7 +28,7 @@ export class Logger {
 
   performance(message: string, ...args: unknown[]): void {
     if (this.settings?.debug?.performanceLogs) {
-      console.log(`[Decks Performance] ${message}`, ...args);
+      console.debug(`[Decks Performance] ${message}`, ...args);
     }
   }
 

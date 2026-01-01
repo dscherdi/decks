@@ -11,10 +11,10 @@
   export let onclose: () => void;
 
   let profiles: DeckProfile[] = initialProfiles;
-  let selectedProfileId: string = "";
+  let selectedProfileId = "";
   let selectedProfile: DeckProfile | null = null;
   let tagMappings: ProfileTagMapping[] = [];
-  let deckCount: number = 0;
+  let deckCount = 0;
 
   let profileSelectorContainer: HTMLElement;
   let profileNameContainer: HTMLElement;
@@ -32,14 +32,14 @@
   let saving = false;
 
   // Form fields
-  let profileName: string = "";
-  let newCardsLimit: number = 20;
-  let reviewCardsLimit: number = 100;
-  let enableNewCardsLimit: boolean = false;
-  let enableReviewCardsLimit: boolean = false;
+  let profileName = "";
+  let newCardsLimit = 20;
+  let reviewCardsLimit = 100;
+  let enableNewCardsLimit = false;
+  let enableReviewCardsLimit = false;
   let reviewOrder: ReviewOrder = "due-date";
-  let headerLevel: number = 2;
-  let requestRetention: number = 0.9;
+  let headerLevel = 2;
+  let requestRetention = 0.9;
   let fsrsProfile: FSRSProfile = "STANDARD";
 
   // Track last event to prevent double execution
@@ -383,11 +383,10 @@
     if (tagMappingsContainer) {
       tagMappingsContainer.empty();
       if (tagMappings.length > 0) {
-        const heading = tagMappingsContainer.createEl("h4", {
+        tagMappingsContainer.createEl("h4", {
           text: "Tag Assignments",
+          cls: "decks-button-container",
         });
-        heading.style.marginTop = "20px";
-        heading.style.marginBottom = "10px";
 
         const mappingsDiv = tagMappingsContainer.createDiv(
           "decks-tag-mappings"

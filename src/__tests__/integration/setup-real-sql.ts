@@ -24,7 +24,7 @@ export async function setupRealSqlJs(): Promise<void> {
       return SQL;
     };
 
-    console.log("Real SQL.js initialized for integration tests");
+    console.debug("Real SQL.js initialized for integration tests");
   } catch (error) {
     console.error("Failed to initialize real SQL.js:", error);
     throw error;

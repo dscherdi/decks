@@ -555,17 +555,24 @@ class DatabasePurgeModal extends Modal {
     const warning = contentEl.createEl("div", {
       cls: "setting-item-description",
     });
-    warning.innerHTML = `
-      <p><strong>This will permanently delete ALL flashcard data including:</strong></p>
-      <ul>
-        <li>All flashcards and their content</li>
-        <li>Complete review history and progress</li>
-        <li>All deck information</li>
-        <li>Statistical data</li>
-      </ul>
-      <p><strong>This action cannot be undone!</strong></p>
-      <p>The database will be rebuilt from your current vault files, but all progress will be lost.</p>
-    `;
+
+    const p1 = warning.createEl("p");
+    p1.createEl("strong", {
+      text: "This will permanently delete ALL flashcard data including:",
+    });
+
+    const ul = warning.createEl("ul");
+    ul.createEl("li", { text: "All flashcards and their content" });
+    ul.createEl("li", { text: "Complete review history and progress" });
+    ul.createEl("li", { text: "All deck information" });
+    ul.createEl("li", { text: "Statistical data" });
+
+    const p2 = warning.createEl("p");
+    p2.createEl("strong", { text: "This action cannot be undone!" });
+
+    warning.createEl("p", {
+      text: "The database will be rebuilt from your current vault files, but all progress will be lost.",
+    });
 
     contentEl.createEl("p", {
       text: 'Type "DELETE ALL DATA" to confirm:',
@@ -575,14 +582,12 @@ class DatabasePurgeModal extends Modal {
     const input = contentEl.createEl("input", {
       type: "text",
       placeholder: "DELETE ALL DATA",
+      cls: "decks-dialog-width decks-dialog-margin-bottom",
     });
-    input.style.width = "100%";
-    input.style.marginBottom = "1rem";
 
-    const buttonContainer = contentEl.createEl("div");
-    buttonContainer.style.display = "flex";
-    buttonContainer.style.gap = "0.5rem";
-    buttonContainer.style.justifyContent = "flex-end";
+    const buttonContainer = contentEl.createEl("div", {
+      cls: "decks-flex-container decks-flex-gap decks-flex-justify-end",
+    });
 
     const cancelButton = buttonContainer.createEl("button", { text: "Cancel" });
     cancelButton.onclick = () => this.close();

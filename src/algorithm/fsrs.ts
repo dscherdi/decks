@@ -53,7 +53,6 @@ export interface FutureDueData {
 // Constants for exact calculations
 const MILLISECONDS_PER_DAY = 86400000;
 const MINUTES_PER_DAY = 1440;
-const MILLISECONDS_PER_MINUTE = 60000;
 
 /**
  * Helper function for UI-only formatting - never use in calculations

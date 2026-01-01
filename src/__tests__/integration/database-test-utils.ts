@@ -217,7 +217,7 @@ export class DatabaseTestUtils {
 
   // Helper to generate ID
   private static generateId(): string {
-    return Date.now() + "-" + Math.random().toString(36).substr(2, 9);
+    return Date.now() + "-" + Math.random().toString(36).substring(2, 11);
   }
 
   // Helper to generate content hash (simplified)

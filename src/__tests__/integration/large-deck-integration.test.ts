@@ -21,8 +21,8 @@ import { setupTestDatabase, teardownTestDatabase } from "./database-test-utils";
 import { generateDeckId } from "../../utils/hash";
 import type { Deck } from "../../database/types";
 import type { DecksSettings } from "../../settings";
-import { promises as fs } from "fs";
-import path from "path";
+import { promises as fs } from "node:fs";
+import path from "node:path";
 
 // Mock settings for testing
 const createMockSettings = (): DecksSettings => ({
@@ -129,7 +129,7 @@ describe("Large Deck Integration Tests", () => {
       // Performance check: Should complete in reasonable time (< 5 seconds)
       expect(syncDuration).toBeLessThan(5000);
 
-      console.log(
+      console.debug(
         `Synced ${syncResult.parsedCount} cards in ${syncDuration}ms`
       );
 
@@ -326,7 +326,7 @@ describe("Large Deck Integration Tests", () => {
       expect(overallStats.cardStats.total).toBe(totalCards);
       expect(overallStats.cardStats.new).toBe(totalCards);
 
-      console.log(
+      console.debug(
         `Total cards across ${largeFiles.length} decks: ${totalCards}`
       );
     }, 30000);
@@ -394,7 +394,7 @@ describe("Large Deck Integration Tests", () => {
       expect(newCards.length).toBe(100); // getNewCardsForReview has LIMIT 100
       expect(queryDuration).toBeLessThan(1000); // Should complete in < 1 second
 
-      console.log(`Queried ${newCards.length} new cards in ${queryDuration}ms`);
+      console.debug(`Queried ${newCards.length} new cards in ${queryDuration}ms`);
     });
 
     it("should efficiently get next card from large deck", async () => {
@@ -413,7 +413,7 @@ describe("Large Deck Integration Tests", () => {
 
       expect(avgDuration).toBeLessThan(50); // Should average < 50ms per query
 
-      console.log(
+      console.debug(
         `Average getNext() duration: ${avgDuration.toFixed(2)}ms over ${iterations} iterations`
       );
     });
@@ -437,7 +437,7 @@ describe("Large Deck Integration Tests", () => {
 
       expect(avgDuration).toBeLessThan(100); // Should average < 100ms per rate
 
-      console.log(
+      console.debug(
         `Average rate() duration: ${avgDuration.toFixed(2)}ms over ${cardsToReview} reviews`
       );
 
@@ -507,7 +507,7 @@ describe("Large Deck Integration Tests", () => {
       expect(progress!.goalTotal).toBeGreaterThan(0);
       expect(progress!.goalTotal).toBeLessThanOrEqual(50);
 
-      console.log(`Session goal for large deck: ${progress!.goalTotal} cards`);
+      console.debug(`Session goal for large deck: ${progress!.goalTotal} cards`);
     });
 
     it("should track progress correctly during large review session", async () => {
@@ -617,8 +617,8 @@ describe("Large Deck Integration Tests", () => {
       // Statistics queries should be fast even with large deck
       expect(statsDuration).toBeLessThan(1000);
 
-      console.log(`Generated statistics in ${statsDuration}ms`);
-      console.log(
+      console.debug(`Generated statistics in ${statsDuration}ms`);
+      console.debug(
         `Deck: ${deckStats.totalCount} cards, ${overallStats.reviewStats.totalReviews} reviews`
       );
     }, 30000);

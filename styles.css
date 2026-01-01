@@ -576,3 +576,39 @@ div.decks-card-content
     > div.math-block {
     overflow-x: scroll;
 }
+
+/* Utility classes for Obsidian linter compliance (no inline styles) */
+.decks-dialog-width {
+    width: 400px;
+}
+
+.decks-dialog-margin-bottom {
+    margin-bottom: 12px;
+}
+
+.decks-flex-container {
+    display: flex;
+}
+
+.decks-flex-gap {
+    gap: 8px;
+}
+
+.decks-flex-justify-end {
+    justify-content: flex-end;
+}
+
+.decks-context-menu {
+    position: fixed;
+    z-index: 1000;
+    visibility: hidden;
+}
+
+.decks-context-menu-visible {
+    visibility: visible;
+}
+
+.decks-button-container {
+    margin-top: 16px;
+    margin-bottom: 16px;
+}

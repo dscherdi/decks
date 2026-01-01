@@ -1039,7 +1039,7 @@ export abstract class BaseDatabaseService implements IDatabaseService {
   async createReviewLog(log: Omit<ReviewLog, "id">): Promise<void> {
     const logId = `log_${Date.now()}_${Math.random()
       .toString(36)
-      .substr(2, 9)}`;
+      .substring(2, 11)}`;
     await this.insertReviewLog({ ...log, id: logId });
   }
 
@@ -1286,7 +1286,7 @@ export abstract class BaseDatabaseService implements IDatabaseService {
   ): Promise<string> {
     const sessionId = `session_${Date.now()}_${Math.random()
       .toString(36)
-      .substr(2, 9)}`;
+      .substring(2, 11)}`;
     await this.insertReviewSession({ ...session, id: sessionId });
     return sessionId;
   }

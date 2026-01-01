@@ -75,7 +75,7 @@ export class FlashcardReviewModalWrapper extends Modal {
     await this.refreshStatsById(flashcard.deckId);
   }
 
-  async onOpen() {
+  onOpen() {
     const { contentEl } = this;
     contentEl.empty();
 
@@ -156,7 +156,7 @@ export class FlashcardReviewModalWrapper extends Modal {
     this.resizeHandler = handleResize;
   }
 
-  async onClose() {
+  onClose() {
     // Clean up resize handler
     if (this.resizeHandler) {
       window.removeEventListener("resize", this.resizeHandler);
@@ -178,6 +178,6 @@ export class FlashcardReviewModalWrapper extends Modal {
     this.markdownComponents = [];
 
     // Refresh view when closing
-    this.refreshStatsById(this.deck.id);
+    this.refreshStatsById(this.deck.id).catch(console.error);
   }
 }

@@ -25,8 +25,8 @@ import {
 import { generateDeckId } from "../../utils/hash";
 import type { Flashcard, Deck, DeckProfile } from "../../database/types";
 import type { DecksSettings } from "../../settings";
-import { promises as fs } from "fs";
-import path from "path";
+import { promises as fs } from "node:fs";
+import path from "node:path";
 
 // Mock settings for testing
 const createMockSettings = (): DecksSettings => ({
@@ -686,7 +686,7 @@ describe("Full Workflow Integration Tests", () => {
 
       // 4. Report initial state
       const initialStats = await statisticsService.getDeckStats(deck.id);
-      console.log("Initial State:", {
+      console.debug("Initial State:", {
         totalCards: initialStats.totalCount,
         newCards: initialStats.newCount,
         dueCards: initialStats.dueCount,
@@ -711,7 +711,7 @@ describe("Full Workflow Integration Tests", () => {
       // 6. Report final state
       const finalStats = await statisticsService.getDeckStats(deck.id);
       const overallStats = await statisticsService.getOverallStatistics();
-      console.log("Final State:", {
+      console.debug("Final State:", {
         totalCards: finalStats.totalCount,
         newCards: finalStats.newCount,
         dueCards: finalStats.dueCount,
