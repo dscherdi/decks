@@ -1,9 +1,5 @@
 import { TFile, Vault, MetadataCache, Notice } from "obsidian";
-import {
-  type Deck,
-  type DeckWithProfile,
-  type Flashcard,
-} from "../database/types";
+import { type Deck, type Flashcard } from "../database/types";
 import type { IDatabaseService } from "../database/DatabaseFactory";
 import { yieldToUI } from "../utils/ui";
 import { Logger, formatTime } from "../utils/logging";

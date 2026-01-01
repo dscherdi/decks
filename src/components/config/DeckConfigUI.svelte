@@ -37,8 +37,6 @@
   let lastEventTime = 0;
   let lastEventType = "";
 
-  $: selectedDeck = allDecks.find((d) => d.id === selectedDeckId);
-
   function loadProfileSettings(profile: DeckProfile) {
     selectedProfile = profile;
   }

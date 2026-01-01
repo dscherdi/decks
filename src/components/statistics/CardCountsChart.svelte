@@ -191,16 +191,6 @@
       }
     }
   }
-
-  function updateChart() {
-    if (!chart) {
-      return;
-    }
-
-    const data = processChartData();
-    chart.data = data;
-    chart.update();
-  }
 </script>
 
 <h3>Card Distribution</h3>

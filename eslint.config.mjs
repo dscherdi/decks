@@ -3,6 +3,7 @@ import tsPlugin from "@typescript-eslint/eslint-plugin";
 import tsParser from "@typescript-eslint/parser";
 import sveltePlugin from "eslint-plugin-svelte";
 import svelteParser from "svelte-eslint-parser";
+import obsidianPlugin from "eslint-plugin-obsidianmd";
 import globals from "globals";
 
 export default [
@@ -48,6 +49,7 @@ export default [
     },
     plugins: {
       "@typescript-eslint": tsPlugin,
+      obsidianmd: obsidianPlugin,
     },
     rules: {
       ...tsPlugin.configs.recommended.rules,
@@ -59,6 +61,10 @@ export default [
       "@typescript-eslint/no-explicit-any": "warn",
       "@typescript-eslint/no-inferrable-types": "error",
       "prefer-const": "error",
+      // Obsidian plugin rules
+      "obsidianmd/hardcoded-config-path": "error",
+      "obsidianmd/no-forbidden-elements": "error",
+      "obsidianmd/no-static-styles-assignment": "error",
     },
   },
 
@@ -82,6 +88,7 @@ export default [
     plugins: {
       svelte: sveltePlugin,
       "@typescript-eslint": tsPlugin,
+      obsidianmd: obsidianPlugin,
     },
     rules: {
       ...sveltePlugin.configs.recommended.rules,
@@ -94,6 +101,10 @@ export default [
       "@typescript-eslint/no-explicit-any": "warn",
       "@typescript-eslint/no-inferrable-types": "error",
       "prefer-const": "error",
+      // Obsidian plugin rules
+      "obsidianmd/hardcoded-config-path": "error",
+      "obsidianmd/no-forbidden-elements": "error",
+      "obsidianmd/no-static-styles-assignment": "error",
     },
   },
 

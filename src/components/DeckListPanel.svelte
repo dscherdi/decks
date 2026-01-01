@@ -1,6 +1,6 @@
 <script lang="ts">
   import { onMount, onDestroy } from "svelte";
-  import type { Deck, DeckWithProfile, DeckStats } from "../database/types";
+  import type { DeckWithProfile, DeckStats } from "../database/types";
 
   import ReviewHeatmap from "./statistics/ReviewHeatmap.svelte";
   import { AnkiExportModal } from "./export/AnkiExportModal";
@@ -79,12 +79,6 @@
     if (allDecks.length > 0) {
       openDeckConfigModal(allDecks[0]);
     }
-  };
-  const getDatabase = () => {
-    return db;
-  };
-  const getDeckSynchronizer = () => {
-    return deckSynchronizer;
   };
 
   let isRefreshing = false;
