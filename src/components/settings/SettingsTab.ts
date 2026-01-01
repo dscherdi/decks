@@ -60,7 +60,7 @@ export class DecksSettingTab extends PluginSettingTab {
     const { containerEl } = this;
     containerEl.empty();
 
-    containerEl.createEl("h2", { text: "Decks Plugin Settings" });
+    ;
 
     // Review Session Settings
     this.addReviewSettings(containerEl);
@@ -85,10 +85,10 @@ export class DecksSettingTab extends PluginSettingTab {
   }
 
   private addReviewSettings(containerEl: HTMLElement): void {
-    containerEl.createEl("h3", { text: "Review Sessions" });
+    new Setting(containerEl).setName("Review sessions").setHeading();
 
     new Setting(containerEl)
-      .setName("Show Progress")
+      .setName("Show progress")
       .setDesc("Display progress bar during review sessions")
       .addToggle((toggle) =>
         toggle
@@ -100,7 +100,7 @@ export class DecksSettingTab extends PluginSettingTab {
       );
 
     new Setting(containerEl)
-      .setName("Keyboard Shortcuts")
+      .setName("Keyboard shortcuts")
       .setDesc("Enable keyboard shortcuts in review modal (1-4 for difficulty)")
       .addToggle((toggle) =>
         toggle
@@ -112,7 +112,7 @@ export class DecksSettingTab extends PluginSettingTab {
       );
 
     new Setting(containerEl)
-      .setName("Session Duration")
+      .setName("Session duration")
       .setDesc(
         "Maximum duration for flashcard review sessions in minutes (1-60)"
       )
@@ -130,9 +130,9 @@ export class DecksSettingTab extends PluginSettingTab {
       );
 
     new Setting(containerEl)
-      .setName("Study Day Starts At")
+      .setName("Study day starts at")
       .setDesc(
-        "Hour (0-23) when the study day rolls over. Default is 4 (4 AM). Reviews done before this hour count toward the previous day's statistics and daily limits. Example: With 4 AM cutoff, a review at 2 AM counts as part of yesterday's study session."
+        "Hour when the study day rolls over (0-23, default is 4). Reviews done before this hour count toward the previous day's statistics and daily limits."
       )
       .addSlider((slider) =>
         slider
@@ -147,7 +147,7 @@ export class DecksSettingTab extends PluginSettingTab {
   }
 
   private addParsingSettings(containerEl: HTMLElement): void {
-    containerEl.createEl("h3", { text: "Parsing" });
+    new Setting(containerEl).setName("Parsing").setHeading();
 
     // Get all folders for dropdown options
     const folderOptions: Record<string, string> = {
@@ -159,9 +159,9 @@ export class DecksSettingTab extends PluginSettingTab {
     });
 
     new Setting(containerEl)
-      .setName("Folder Search Path")
+      .setName("Folder search path")
       .setDesc(
-        "Limit scanning to a specific folder. Select 'Scan entire vault' to scan all files."
+        "Limit scanning to a specific folder. Select 'scan entire vault' to scan all files."
       )
       .addDropdown((dropdown) => {
         // Add options to dropdown
@@ -179,10 +179,10 @@ export class DecksSettingTab extends PluginSettingTab {
   }
 
   private addUISettings(containerEl: HTMLElement): void {
-    containerEl.createEl("h3", { text: "User Interface" });
+    new Setting(containerEl).setName("User interface").setHeading();
 
     const intervalSetting = new Setting(containerEl)
-      .setName("Background Refresh Interval")
+      .setName("Background refresh interval")
       .setDesc("How often to refresh deck stats in the side panel (in seconds)")
       .addText((text) =>
         text
@@ -200,7 +200,7 @@ export class DecksSettingTab extends PluginSettingTab {
       );
 
     new Setting(containerEl)
-      .setName("Enable Background Refresh")
+      .setName("Enable background refresh")
       .setDesc("Automatically refresh deck stats in the side panel")
       .addToggle((toggle) =>
         toggle
@@ -222,7 +222,7 @@ export class DecksSettingTab extends PluginSettingTab {
       );
 
     new Setting(containerEl)
-      .setName("Enable Notices")
+      .setName("Enable notices")
       .setDesc(
         "Show notification messages for completed review sessions and sync operations"
       )
@@ -240,14 +240,14 @@ export class DecksSettingTab extends PluginSettingTab {
   }
 
   private addDebugSettings(containerEl: HTMLElement): void {
-    containerEl.createEl("h3", { text: "Debug" });
+    new Setting(containerEl).setName("Debug").setHeading();
     containerEl.createEl("p", {
       text: "Debug settings for troubleshooting and development.",
       cls: "setting-item-description",
     });
 
     new Setting(containerEl)
-      .setName("Enable Debug Logging")
+      .setName("Enable debug logging")
       .setDesc(
         "Show detailed logging in the console for sync operations and flashcard processing"
       )
@@ -267,7 +267,7 @@ export class DecksSettingTab extends PluginSettingTab {
       );
 
     new Setting(containerEl)
-      .setName("Enable Performance Logs")
+      .setName("Enable performance logs")
       .setDesc(
         "Show performance timing metrics in the console (sync times, parsing performance, etc.)"
       )
@@ -288,14 +288,14 @@ export class DecksSettingTab extends PluginSettingTab {
   }
 
   private addExperimentalSettings(containerEl: HTMLElement): void {
-    containerEl.createEl("h3", { text: "Experimental Features" });
+    new Setting(containerEl).setName("Experimental features").setHeading();
     containerEl.createEl("p", {
-      text: "⚠️ Experimental features may be unstable. Use with caution and backup your data.",
+      text: "Experimental features may be unstable. Use with caution and back up your data.",
       cls: "setting-item-description",
     });
 
     new Setting(containerEl)
-      .setName("Database Worker Thread")
+      .setName("Database worker thread")
       .setDesc(
         "Run database operations in a background worker thread to prevent UI freezing with large databases. Requires restart to take effect."
       )
@@ -321,20 +321,20 @@ export class DecksSettingTab extends PluginSettingTab {
   }
 
   private addDatabaseSettings(containerEl: HTMLElement): void {
-    containerEl.createEl("h3", { text: "Database Management" });
+    new Setting(containerEl).setName("Database management").setHeading();
     containerEl.createEl("p", {
       text: "Manage your flashcard database. Use with caution - these actions cannot be undone.",
       cls: "setting-item-description",
     });
 
     new Setting(containerEl)
-      .setName("Purge Database")
+      .setName("Purge database")
       .setDesc(
-        "⚠️ Permanently delete all flashcards, review history, and deck data. This will force a clean rebuild from your vault files. All progress will be lost!"
+        "Permanently delete all flashcards, review history, and deck data. This will force a clean rebuild from your vault files. All progress will be lost!"
       )
       .addButton((button) =>
         button
-          .setButtonText("Purge Database")
+          .setButtonText("Purge database")
           .setWarning()
           .onClick(() => {
             new DatabasePurgeModal(
@@ -349,10 +349,10 @@ export class DecksSettingTab extends PluginSettingTab {
   }
 
   private addBackupSettings(containerEl: HTMLElement): void {
-    containerEl.createEl("h3", { text: "Backup" });
+    new Setting(containerEl).setName("Backup").setHeading();
 
     new Setting(containerEl)
-      .setName("Enable Auto Backup")
+      .setName("Enable auto backup")
       .setDesc("Automatically backup review data after each session")
       .addToggle((toggle) =>
         toggle
@@ -364,7 +364,7 @@ export class DecksSettingTab extends PluginSettingTab {
       );
 
     new Setting(containerEl)
-      .setName("Max Backups")
+      .setName("Max backups")
       .setDesc("Maximum number of backups to keep (3-10)")
       .addSlider((slider) =>
         slider
@@ -379,11 +379,11 @@ export class DecksSettingTab extends PluginSettingTab {
       );
 
     new Setting(containerEl)
-      .setName("Create Backup Now")
+      .setName("Create backup now")
       .setDesc("Create a manual backup of your flashcard database")
       .addButton((button) =>
         button
-          .setButtonText("Create Backup")
+          .setButtonText("Create backup")
           .setCta()
           .onClick(async () => {
             const notice = new Notice("Creating backup...", 0);
@@ -400,11 +400,11 @@ export class DecksSettingTab extends PluginSettingTab {
       );
 
     // Backup restoration section
-    containerEl.createEl("h4", { text: "Restore Backup" });
+    new Setting(containerEl).setName("Restore backup").setHeading();
 
     let selectedBackup = "";
     const backupSetting = new Setting(containerEl)
-      .setName("Available Backups")
+      .setName("Available backups")
       .setDesc("Select a backup to restore")
       .addDropdown((dropdown) => {
         dropdown.addOption("", "Select backup...");
@@ -550,7 +550,7 @@ class DatabasePurgeModal extends Modal {
     const { contentEl } = this;
     contentEl.empty();
 
-    contentEl.createEl("h2", { text: "⚠️ Purge Database" });
+    contentEl.createEl("h2", { text: "Purge database" });
 
     const warning = contentEl.createEl("div", {
       cls: "setting-item-description",
@@ -558,7 +558,7 @@ class DatabasePurgeModal extends Modal {
 
     const p1 = warning.createEl("p");
     p1.createEl("strong", {
-      text: "This will permanently delete ALL flashcard data including:",
+      text: "This will permanently delete all flashcard data including:",
     });
 
     const ul = warning.createEl("ul");
@@ -575,7 +575,7 @@ class DatabasePurgeModal extends Modal {
     });
 
     contentEl.createEl("p", {
-      text: 'Type "DELETE ALL DATA" to confirm:',
+      text: "To confirm this action, type the text shown in the placeholder below",
       cls: "setting-item-description",
     });
 
@@ -593,7 +593,7 @@ class DatabasePurgeModal extends Modal {
     cancelButton.onclick = () => this.close();
 
     const confirmButton = buttonContainer.createEl("button", {
-      text: "Purge Database",
+      text: "Purge database",
       cls: "mod-warning",
     });
 
@@ -620,7 +620,7 @@ class DatabasePurgeModal extends Modal {
         } catch (error) {
           this.logger.debug("Failed to purge database:", error);
           new Notice(
-            "❌ Failed to purge database. Check console for details.",
+            "Failed to purge database. Check the console for details.",
             5000
           );
         }

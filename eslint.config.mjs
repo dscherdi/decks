@@ -34,10 +34,7 @@ export default [
     files: ["**/*.ts"],
     languageOptions: {
       parser: tsParser,
-      parserOptions: {
-        ecmaVersion: 2020,
-        sourceType: "module",
-      },
+      parserOptions: { project: "./tsconfig.json" },
       globals: {
         ...globals.browser,
         ...globals.es2020,
@@ -53,6 +50,7 @@ export default [
     },
     rules: {
       ...tsPlugin.configs.recommended.rules,
+      ...obsidianPlugin.configs.recommended,
       "@typescript-eslint/no-unused-vars": [
         "error",
         { argsIgnorePattern: "^_" },

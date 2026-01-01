@@ -197,7 +197,7 @@ export default class DecksPlugin extends Plugin {
       // Add command to show flashcards panel
       this.addCommand({
         id: "show-flashcards-panel",
-        name: "Show Flashcards Panel",
+        name: "Show flashcards panel",
         callback: () => {
           this.activateView();
         },
@@ -270,7 +270,7 @@ export default class DecksPlugin extends Plugin {
     } catch (error) {
       console.error("Error loading Decks plugin:", error);
       if (this.settings?.ui?.enableNotices !== false) {
-        new Notice("Failed to load Decks plugin. Check console for details.");
+        new Notice("Failed to load decks plugin. Check the console for details.");
       }
     }
   }
