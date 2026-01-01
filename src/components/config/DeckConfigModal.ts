@@ -92,83 +92,99 @@ export class DeckConfigModal extends Modal {
   private async handleSave(data: {
     profileId: string;
     profileUpdates: Partial<DeckProfile>;
+    selectionMode: "deck" | "tag";
+    selectedDeckId?: string;
+    selectedTag?: string;
   }) {
     try {
-      const { profileId, profileUpdates } = data;
+      const { profileId, profileUpdates, selectionMode, selectedDeckId, selectedTag } =
+        data;
 
-      // Get old profile to check if headerLevel changed
-      const oldProfile = this.profiles.find((p) => p.id === this.deck.profileId);
-      let selectedProfile = this.profiles.find((p) => p.id === profileId);
+      if (selectionMode === "tag" && selectedTag) {
+        // Apply profile to all decks with this tag
+        await this.db.applyProfileToTag(profileId, selectedTag);
+        await this.db.save();
 
-      // Check if this is a new profile (doesn't exist in database yet)
-      const existingProfile = await this.db.getProfileById(profileId);
-
-      if (!existingProfile && Object.keys(profileUpdates).length > 0) {
-        // New profile - create it with all required fields from profileUpdates
-        const newProfile: DeckProfile = {
-          id: profileId,
-          name: profileUpdates.name!,
-          hasNewCardsLimitEnabled: profileUpdates.hasNewCardsLimitEnabled!,
-          newCardsPerDay: profileUpdates.newCardsPerDay!,
-          hasReviewCardsLimitEnabled: profileUpdates.hasReviewCardsLimitEnabled!,
-          reviewCardsPerDay: profileUpdates.reviewCardsPerDay!,
-          headerLevel: profileUpdates.headerLevel!,
-          reviewOrder: profileUpdates.reviewOrder!,
-          fsrs: profileUpdates.fsrs!,
-          isDefault: false,
-          created: new Date().toISOString(),
-          modified: new Date().toISOString(),
-        };
-        await this.db.createProfile(newProfile);
-
-        // Fetch back from database to get proper timestamps
-        const fetchedProfile = await this.db.getProfileById(profileId);
-        if (fetchedProfile) {
-          selectedProfile = fetchedProfile;
+        // Get all affected decks and refresh their stats
+        const affectedDecks = await this.db.getDecksByTag(selectedTag);
+        for (const deck of affectedDecks) {
+          await this.onRefreshStats(deck.id);
         }
-      } else if (existingProfile && Object.keys(profileUpdates).length > 0) {
-        // Existing profile - update it
-        await this.db.updateProfile(profileId, profileUpdates);
+      } else if (selectionMode === "deck" && selectedDeckId) {
+        // Get old profile to check if headerLevel changed
+        const oldProfile = this.profiles.find((p) => p.id === this.deck.profileId);
+        let selectedProfile = this.profiles.find((p) => p.id === profileId);
 
-        // Fetch updated profile
-        const fetchedProfile = await this.db.getProfileById(profileId);
-        if (fetchedProfile) {
-          selectedProfile = fetchedProfile;
+        // Check if this is a new profile (doesn't exist in database yet)
+        const existingProfile = await this.db.getProfileById(profileId);
+
+        if (!existingProfile && Object.keys(profileUpdates).length > 0) {
+          // New profile - create it with all required fields from profileUpdates
+          const newProfile: DeckProfile = {
+            id: profileId,
+            name: profileUpdates.name!,
+            hasNewCardsLimitEnabled: profileUpdates.hasNewCardsLimitEnabled!,
+            newCardsPerDay: profileUpdates.newCardsPerDay!,
+            hasReviewCardsLimitEnabled: profileUpdates.hasReviewCardsLimitEnabled!,
+            reviewCardsPerDay: profileUpdates.reviewCardsPerDay!,
+            headerLevel: profileUpdates.headerLevel!,
+            reviewOrder: profileUpdates.reviewOrder!,
+            fsrs: profileUpdates.fsrs!,
+            isDefault: false,
+            created: new Date().toISOString(),
+            modified: new Date().toISOString(),
+          };
+          await this.db.createProfile(newProfile);
+
+          // Fetch back from database to get proper timestamps
+          const fetchedProfile = await this.db.getProfileById(profileId);
+          if (fetchedProfile) {
+            selectedProfile = fetchedProfile;
+          }
+        } else if (existingProfile && Object.keys(profileUpdates).length > 0) {
+          // Existing profile - update it
+          await this.db.updateProfile(profileId, profileUpdates);
+
+          // Fetch updated profile
+          const fetchedProfile = await this.db.getProfileById(profileId);
+          if (fetchedProfile) {
+            selectedProfile = fetchedProfile;
+          }
         }
-      }
 
-      // Save the database after profile create/update but before deck update
-      // This ensures the profile exists before we try to reference it
-      await this.db.save();
+        // Save the database after profile create/update but before deck update
+        // This ensures the profile exists before we try to reference it
+        await this.db.save();
 
-      // Check if headerLevel changed (either from profile switch or profile edit)
-      const newHeaderLevel =
-        profileUpdates.headerLevel !== undefined
-          ? profileUpdates.headerLevel
-          : selectedProfile?.headerLevel;
+        // Check if headerLevel changed (either from profile switch or profile edit)
+        const newHeaderLevel =
+          profileUpdates.headerLevel !== undefined
+            ? profileUpdates.headerLevel
+            : selectedProfile?.headerLevel;
 
-      const headerLevelChanged =
-        oldProfile &&
-        newHeaderLevel !== undefined &&
-        oldProfile.headerLevel !== newHeaderLevel;
+        const headerLevelChanged =
+          oldProfile &&
+          newHeaderLevel !== undefined &&
+          oldProfile.headerLevel !== newHeaderLevel;
 
-      // Update deck with new profileId if changed
-      if (this.deck.profileId !== profileId) {
-        await this.db.updateDeck(this.deck.id, { profileId });
-        await this.db.save(); // Save again after deck update
-      }
-
-      // If header level changed, force resync the deck
-      if (headerLevelChanged) {
-        const updatedDeck = await this.db.getDeckById(this.deck.id);
-        if (updatedDeck) {
-          await yieldToUI();
-          await this.deckSynchronizer.syncDeck(updatedDeck.filepath, true);
+        // Update deck with new profileId if changed
+        if (this.deck.profileId !== profileId) {
+          await this.db.updateDeck(selectedDeckId, { profileId });
+          await this.db.save(); // Save again after deck update
         }
-      }
 
-      // Refresh stats for this deck
-      await this.onRefreshStats(this.deck.id);
+        // If header level changed, force resync the deck
+        if (headerLevelChanged) {
+          const updatedDeck = await this.db.getDeckById(selectedDeckId);
+          if (updatedDeck) {
+            await yieldToUI();
+            await this.deckSynchronizer.syncDeck(updatedDeck.filepath, true);
+          }
+        }
+
+        // Refresh stats for this deck
+        await this.onRefreshStats(selectedDeckId);
+      }
 
       this.close();
     } catch (error) {

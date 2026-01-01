@@ -9,7 +9,13 @@
   export let initialProfiles: DeckProfile[];
   export let allDecks: Deck[];
   export let onsave:
-    | ((data: { profileId: string; profileUpdates: Partial<DeckProfile> }) => void)
+    | ((data: {
+        profileId: string;
+        profileUpdates: Partial<DeckProfile>;
+        selectionMode: "deck" | "tag";
+        selectedDeckId?: string;
+        selectedTag?: string;
+      }) => void)
     | undefined = undefined;
   export let oncancel: (() => void) | undefined = undefined;
 
@@ -42,22 +48,13 @@
     saving = true;
 
     try {
-      if (selectionMode === "tag" && selectedTag) {
-        // Apply profile to all decks with this tag
-        await db.applyProfileToTag(selectedProfileId, selectedTag);
-        await db.save();
-        new Notice(`Applied profile to all decks with tag ${selectedTag}`);
-      } else if (selectionMode === "deck" && selectedDeckId) {
-        // Apply profile to single deck
-        await db.updateDeck(selectedDeckId, { profileId: selectedProfileId });
-        await db.save();
-        new Notice("Profile updated for deck");
-      }
-
       if (onsave) {
         onsave({
           profileId: selectedProfileId,
           profileUpdates: {},
+          selectionMode,
+          selectedDeckId: selectionMode === "deck" ? selectedDeckId : undefined,
+          selectedTag: selectionMode === "tag" ? selectedTag : undefined,
         });
       }
     } catch (error) {
