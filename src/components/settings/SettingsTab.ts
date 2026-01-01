@@ -393,7 +393,7 @@ export class DecksSettingTab extends PluginSettingTab {
               new Notice(`✅ Backup created: ${filename}`, 5000);
             } catch (error) {
               notice.hide();
-              new Notice(`❌ Failed to create backup: ${error.message}`, 8000);
+              new Notice(`❌ Failed to create backup: ${(error as Error).message}`, 8000);
               this.logger.debug("Backup creation failed:", error);
             }
           })
@@ -449,7 +449,7 @@ export class DecksSettingTab extends PluginSettingTab {
       // Get the dropdown component
       const dropdown = setting.components.find(
         (comp) => comp instanceof DropdownComponent
-      ) as DropdownComponent | undefined;
+      );
 
       if (dropdown === undefined) {
         this.logger.debug("Dropdown component not found");
@@ -484,7 +484,7 @@ export class DecksSettingTab extends PluginSettingTab {
       }
     } catch (error) {
       this.logger.debug("Failed to load backup list:", error);
-      new Notice(`Failed to load backup list: ${error.message}`, 5000);
+      new Notice(`Failed to load backup list: ${(error as Error).message}`, 5000);
     }
   }
 
@@ -521,7 +521,7 @@ export class DecksSettingTab extends PluginSettingTab {
     } catch (error) {
       progressNotice.hide();
       this.logger.debug("Backup restoration failed:", error);
-      new Notice(`❌ Backup restoration failed: ${error.message}`, 8000);
+      new Notice(`❌ Backup restoration failed: ${(error as Error).message}`, 8000);
     }
   }
 }

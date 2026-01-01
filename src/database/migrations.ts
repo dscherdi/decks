@@ -39,8 +39,8 @@ export function createTables(
     db.run(CREATE_TABLES_SQL);
     log(`✅ Database schema created successfully`);
   } catch (error) {
-    log(`❌ Schema creation failed: ${error}`);
-    throw new Error(`Schema creation failed: ${error}`);
+    log(`❌ Schema creation failed: ${String(error)}`);
+    throw new Error(`Schema creation failed: ${String(error)}`);
   }
 }
 
@@ -67,6 +67,6 @@ export function migrate(
     db.run(migrationSQL);
     log(`✅ Migration completed successfully`);
   } catch (error) {
-    log(`❌ Migration failed: ${error}`);
+    log(`❌ Migration failed: ${String(error)}`);
   }
 }

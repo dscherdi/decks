@@ -147,7 +147,7 @@ export class BackupService {
       new Notice(`✅ Backup restored successfully from ${filename}!`, 5000);
     } catch (error) {
       console.error("Failed to restore from backup:", error);
-      new Notice(`❌ Restore failed: ${error.message}`, 8000);
+      new Notice(`❌ Restore failed: ${(error as Error).message}`, 8000);
       throw error;
     }
   }

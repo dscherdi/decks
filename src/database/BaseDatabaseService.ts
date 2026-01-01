@@ -1396,7 +1396,7 @@ export abstract class BaseDatabaseService implements IDatabaseService {
       sql,
       params as (string | number | null)[],
       config
-    )) as Record<string, SqlJsValue>[] | SqlJsValue[][];
+    ));
   }
 
   // BACKUP OPERATIONS - Concrete implementations using abstract db methods

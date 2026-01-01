@@ -39,6 +39,7 @@
   },
   "devDependencies": {
     "@esbuild-plugins/node-modules-polyfill": "^0.2.2",
+    "@eslint-community/eslint-plugin-eslint-comments": "^4.5.0",
     "@eslint/config-array": "^0.23.0",
     "@eslint/object-schema": "^3.0.0",
     "@rollup/plugin-commonjs": "^29.0.0",

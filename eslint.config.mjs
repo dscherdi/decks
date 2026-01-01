@@ -4,6 +4,7 @@ import tsParser from "@typescript-eslint/parser";
 import sveltePlugin from "eslint-plugin-svelte";
 import svelteParser from "svelte-eslint-parser";
 import obsidianPlugin from "eslint-plugin-obsidianmd";
+import eslintCommentsPlugin from "@eslint-community/eslint-plugin-eslint-comments";
 import globals from "globals";
 
 export default [
@@ -47,6 +48,7 @@ export default [
     plugins: {
       "@typescript-eslint": tsPlugin,
       obsidianmd: obsidianPlugin,
+      "@eslint-community/eslint-comments": eslintCommentsPlugin,
     },
     rules: {
       ...tsPlugin.configs.recommended.rules,
@@ -58,6 +60,7 @@ export default [
       "@typescript-eslint/explicit-function-return-type": "off",
       "@typescript-eslint/no-explicit-any": "warn",
       "@typescript-eslint/no-inferrable-types": "error",
+      "@typescript-eslint/no-unnecessary-type-assertion": "error",
       "prefer-const": "error",
       // Promise/async rules
       "@typescript-eslint/no-floating-promises": "error",
@@ -70,10 +73,26 @@ export default [
         {
           allowNumber: true,
           allowBoolean: true,
-          allowAny: true,
+          allowAny: false,
           allowNullish: true,
           allowRegExp: false,
         },
+      ],
+      // ESLint comment rules - prevent disabling no-explicit-any
+      "@eslint-community/eslint-comments/no-use": [
+        "error",
+        {
+          allow: [
+            "eslint-disable-next-line",
+            "eslint-disable",
+            "eslint-enable",
+            "global",
+          ],
+        },
+      ],
+      "@eslint-community/eslint-comments/no-restricted-disable": [
+        "error",
+        "@typescript-eslint/no-explicit-any",
       ],
       // Obsidian plugin rules
       "obsidianmd/hardcoded-config-path": "error",
@@ -103,6 +122,7 @@ export default [
       svelte: sveltePlugin,
       "@typescript-eslint": tsPlugin,
       obsidianmd: obsidianPlugin,
+      "@eslint-community/eslint-comments": eslintCommentsPlugin,
     },
     rules: {
       ...sveltePlugin.configs.recommended.rules,
@@ -117,6 +137,22 @@ export default [
       "prefer-const": "error",
       // Promise/async rules - disabled for Svelte due to parser limitations
       // These should be checked manually in Svelte files
+      // ESLint comment rules - prevent disabling no-explicit-any
+      "@eslint-community/eslint-comments/no-use": [
+        "error",
+        {
+          allow: [
+            "eslint-disable-next-line",
+            "eslint-disable",
+            "eslint-enable",
+            "global",
+          ],
+        },
+      ],
+      "@eslint-community/eslint-comments/no-restricted-disable": [
+        "error",
+        "@typescript-eslint/no-explicit-any",
+      ],
       // Obsidian plugin rules
       "obsidianmd/hardcoded-config-path": "error",
       "obsidianmd/no-forbidden-elements": "error",

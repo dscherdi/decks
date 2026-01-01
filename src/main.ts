@@ -349,7 +349,7 @@ export default class DecksPlugin extends Plugin {
         ? metadata.frontmatter.tags
         : [metadata.frontmatter.tags];
       allTags.push(
-        ...frontmatterTags.map((tag) => (tag.startsWith("#") ? tag : `#${tag}`))
+        ...frontmatterTags.map((tag) => (String(tag).startsWith("#") ? String(tag) : `#${String(tag)}`))
       );
     }
 

@@ -95,9 +95,9 @@ class SimpleDatabaseWorker {
           throw new Error(`SQL is undefined ${wasmUrl}`);
         }
         if (dbBuffer) {
-          this.db = new this.SQL!.Database(new Uint8Array(dbBuffer));
+          this.db = new this.SQL.Database(new Uint8Array(dbBuffer));
         } else {
-          this.db = new this.SQL!.Database();
+          this.db = new this.SQL.Database();
         }
 
         // Clean up blob URLs
@@ -195,7 +195,7 @@ class SimpleDatabaseWorker {
 
     try {
       const backupDbId = `backup_${this.nextBackupId++}`;
-      const backupDb = new this.SQL!.Database(backupData);
+      const backupDb = new this.SQL.Database(backupData);
       this.backupDatabases.set(backupDbId, backupDb);
       return backupDbId;
     } catch (error) {
