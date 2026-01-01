@@ -59,6 +59,22 @@ export default [
       "@typescript-eslint/no-explicit-any": "warn",
       "@typescript-eslint/no-inferrable-types": "error",
       "prefer-const": "error",
+      // Promise/async rules
+      "@typescript-eslint/no-floating-promises": "error",
+      "@typescript-eslint/await-thenable": "error",
+      "@typescript-eslint/no-misused-promises": "error",
+      "@typescript-eslint/require-await": "warn",
+      // Template literal rules
+      "@typescript-eslint/restrict-template-expressions": [
+        "error",
+        {
+          allowNumber: true,
+          allowBoolean: true,
+          allowAny: true,
+          allowNullish: true,
+          allowRegExp: false,
+        },
+      ],
       // Obsidian plugin rules
       "obsidianmd/hardcoded-config-path": "error",
       "obsidianmd/no-forbidden-elements": "error",
@@ -99,6 +115,8 @@ export default [
       "@typescript-eslint/no-explicit-any": "warn",
       "@typescript-eslint/no-inferrable-types": "error",
       "prefer-const": "error",
+      // Promise/async rules - disabled for Svelte due to parser limitations
+      // These should be checked manually in Svelte files
       // Obsidian plugin rules
       "obsidianmd/hardcoded-config-path": "error",
       "obsidianmd/no-forbidden-elements": "error",

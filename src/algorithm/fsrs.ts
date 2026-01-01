@@ -115,12 +115,12 @@ export class FSRS {
    */
   private validateParameters(): void {
     if (!validateProfile(this.params.profile)) {
-      throw new Error(`Invalid profile: ${this.params.profile}`);
+      throw new Error(`Invalid profile: ${String(this.params.profile)}`);
     }
 
     if (!validateRequestRetention(this.params.requestRetention)) {
       throw new Error(
-        `requestRetention must be in range (0.5, 0.995), got ${this.params.requestRetention}`
+        `requestRetention must be in range (0.5, 0.995), got ${String(this.params.requestRetention)}`
       );
     }
 
@@ -128,7 +128,7 @@ export class FSRS {
     const weights = this.getWeights();
     if (!validateFSRSWeights(weights)) {
       throw new Error(
-        `Invalid FSRS weights for profile: ${this.params.profile}`
+        `Invalid FSRS weights for profile: ${String(this.params.profile)}`
       );
     }
   }

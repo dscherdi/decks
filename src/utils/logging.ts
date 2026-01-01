@@ -12,7 +12,7 @@ export class Logger {
     if (this.settings?.debug?.enableLogging) {
       console.debug(`[Decks Debug] ${message}`, ...args);
       if (this.adapter && this.configDir) {
-        this.writeToLogFile(message, ...args);
+        void this.writeToLogFile(message, ...args);
       }
     }
   }
@@ -21,7 +21,7 @@ export class Logger {
     if (this.settings?.debug?.enableLogging) {
       console.error(`[Decks Error] ${message}`, ...args);
       if (this.adapter && this.configDir) {
-        this.writeToLogFile(message, ...args);
+        void this.writeToLogFile(message, ...args);
       }
     }
   }

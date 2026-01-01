@@ -449,9 +449,9 @@ export class DecksSettingTab extends PluginSettingTab {
       // Get the dropdown component
       const dropdown = setting.components.find(
         (comp) => comp instanceof DropdownComponent
-      ) as DropdownComponent;
+      ) as DropdownComponent | undefined;
 
-      if (!dropdown) {
+      if (dropdown === undefined) {
         this.logger.debug("Dropdown component not found");
         new Notice("Dropdown not found", 3000);
         return;

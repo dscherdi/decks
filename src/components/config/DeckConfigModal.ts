@@ -63,7 +63,7 @@ export class DeckConfigModal extends Modal {
         initialProfiles: this.profiles,
         allDecks: allDecks,
         onsave: (data: { profileId: string; profileUpdates: Partial<DeckProfile> }) => {
-          this.handleSave(data);
+          void this.handleSave(data);
         },
         oncancel: () => {
           this.close();
@@ -204,7 +204,7 @@ export class DeckConfigModal extends Modal {
 
     // Unmount Svelte component using Svelte 5 API
     if (this.component) {
-      unmount(this.component);
+      void unmount(this.component);
       this.component = null;
     }
 

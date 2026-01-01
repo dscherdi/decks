@@ -10,6 +10,7 @@ import type { Database, InitSqlJsStatic } from "sql.js";
 import { FlashcardSynchronizer } from "../services/FlashcardSynchronizer";
 import type { SyncData, SyncResult } from "../services/FlashcardSynchronizer";
 import type { SqlJsValue } from "./sql-types";
+import { yieldToUI } from "../utils/ui";
 
 export class MainDatabaseService extends BaseDatabaseService {
   private db: Database | null = null;
@@ -157,6 +158,7 @@ export class MainDatabaseService extends BaseDatabaseService {
 
   // Core SQL execution methods
   async executeSql(sql: string, params: SqlJsValue[] = []): Promise<void> {
+    await yieldToUI();
     if (!this.db) throw new Error("Database not initialized");
 
     const stmt = this.db.prepare(sql);
@@ -187,6 +189,7 @@ export class MainDatabaseService extends BaseDatabaseService {
     params: SqlJsValue[] = [],
     config?: QueryConfig
   ): Promise<T[] | SqlJsValue[][]> {
+    await yieldToUI();
     if (!this.db) throw new Error("Database not initialized");
 
     const stmt = this.db.prepare(sql);
@@ -213,6 +216,7 @@ export class MainDatabaseService extends BaseDatabaseService {
 
   // Database initialization and migration methods
   private async createFreshDatabase(): Promise<void> {
+    await yieldToUI();
     if (!this.db) throw new Error("Database not initialized");
 
     this.db.exec(CREATE_TABLES_SQL);
@@ -220,6 +224,7 @@ export class MainDatabaseService extends BaseDatabaseService {
   }
 
   private async migrateSchemaIfNeeded(): Promise<void> {
+    await yieldToUI();
     if (!this.db) throw new Error("Database not initialized");
 
     try {
@@ -253,6 +258,7 @@ export class MainDatabaseService extends BaseDatabaseService {
 
   // BACKUP OPERATIONS - Abstract method implementations
   async exportDatabaseToBuffer(): Promise<Uint8Array> {
+    await yieldToUI();
     if (!this.db) throw new Error("Database not initialized");
     return this.db.export();
   }
@@ -278,6 +284,7 @@ export class MainDatabaseService extends BaseDatabaseService {
     backupDb: Database,
     sql: string
   ): Promise<SqlJsValue[][]> {
+    await yieldToUI();
     const result = backupDb.exec(sql);
     if (result.length === 0) return [];
 
@@ -287,6 +294,7 @@ export class MainDatabaseService extends BaseDatabaseService {
   }
 
   async closeBackupDatabaseInstance(backupDb: Database): Promise<void> {
+    await yieldToUI();
     backupDb.close();
   }
 
@@ -580,6 +588,7 @@ export class MainDatabaseService extends BaseDatabaseService {
     data: SyncData,
     progressCallback?: (progress: number, message?: string) => void
   ): Promise<SyncResult> {
+    await yieldToUI();
     if (!this.db) throw new Error("Database not initialized");
 
     const synchronizer = new FlashcardSynchronizer(this.db);

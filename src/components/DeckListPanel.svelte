@@ -116,7 +116,7 @@
   async function handleRefresh() {
     isRefreshing = true;
     try {
-      onRefresh();
+      await onRefresh();
       refreshHeatmap();
       await loadStudyStats();
     } catch (error) {
@@ -293,7 +293,7 @@
 
   // Load study stats on component mount
   onMount(() => {
-    loadStudyStats();
+    void loadStudyStats();
   });
 
   function handleConfigClick(deck: DeckWithProfile, event: Event) {
@@ -317,7 +317,7 @@
     forceRefreshOption.textContent = "Force refresh";
     forceRefreshOption.onclick = () => {
       closeActiveDropdown();
-      handleForceRefreshDeck(deck);
+      void handleForceRefreshDeck(deck);
     };
 
     const exportOption = document.createElement("div");
@@ -528,8 +528,8 @@
       <button
         class="decks-refresh-button"
         class:refreshing={isRefreshing}
-        on:click={(e) => handleTouchClick(handleRefresh, e)}
-        on:touchend={(e) => handleTouchClick(handleRefresh, e)}
+        on:click={(e) => handleTouchClick(() => void handleRefresh(), e)}
+        on:touchend={(e) => handleTouchClick(() => void handleRefresh(), e)}
         disabled={isRefreshing}
       >
         <svg

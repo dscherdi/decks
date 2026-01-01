@@ -88,7 +88,7 @@ export class StatisticsModal extends Modal {
     // Clean up Svelte component
     if (this.component) {
       try {
-        unmount(this.component);
+        void unmount(this.component);
       } catch (e) {
         console.warn("Error unmounting statistics component:", e);
       }

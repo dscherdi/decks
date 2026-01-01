@@ -57,13 +57,13 @@ export class ProfilesManagerModal extends Modal {
 
     // Unmount Svelte component
     if (this.component) {
-      unmount(this.component);
+      void unmount(this.component);
       this.component = null;
     }
 
     contentEl.empty();
 
     // Notify parent that profiles may have changed
-    this.onProfilesChanged();
+    void this.onProfilesChanged();
   }
 }

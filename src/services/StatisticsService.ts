@@ -1440,7 +1440,7 @@ export class StatisticsService {
     const deckConfig = deck?.profile ?? DEFAULT_DECK_PROFILE;
 
     // FSRS extension to simulate future demand
-    const ext = await this.simulateFsrsDemand(
+    const ext = this.simulateFsrsDemand(
       reviewCards,
       startMs,
       endMs,
@@ -2332,7 +2332,7 @@ export class StatisticsService {
 
     // FSRS extension using aggregated cards (use first deck's config for global params)
     const firstConfig = deckConfigs.values().next().value;
-    const ext = await this.simulateFsrsDemand(
+    const ext = this.simulateFsrsDemand(
       allCards,
       startMs,
       endMs,
@@ -2426,12 +2426,12 @@ export class StatisticsService {
   /**
    * FSRS-driven simulation to extend daily due counts beyond stored due dates
    */
-  private async simulateFsrsDemand(
+  private simulateFsrsDemand(
     cards: Flashcard[],
     startMs: number,
     endMs: number,
     deckConfig: Omit<DeckProfile, 'id' | 'created' | 'modified' | 'name' | 'isDefault'>
-  ): Promise<Map<string, number>> {
+  ): Map<string, number> {
     const result = new Map<string, number>();
 
     if (!cards || cards.length === 0) {

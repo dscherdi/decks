@@ -92,7 +92,7 @@ export class BackupService {
               timestamp,
               size: stat?.size || 0,
             });
-            this.debugLog(`Added backup: ${filename}, size: ${stat?.size}, mtime: ${timestamp}`);
+            this.debugLog(`Added backup: ${filename}, size: ${stat?.size}, mtime: ${timestamp.toISOString()}`);
           } catch (error) {
             this.debugLog(`Failed to stat backup file ${file}:`, error);
           }

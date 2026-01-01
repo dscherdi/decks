@@ -136,7 +136,7 @@ export class DeckManager {
     const syncDecksStartTime = performance.now();
     try {
       this.debugLog("Starting deck sync...");
-      const decksMap = await this.scanVaultForDecks();
+      const decksMap = this.scanVaultForDecks();
       this.debugLog("Decks found in vault:", decksMap);
       const existingDecks = await this.db.getAllDecks();
       this.debugLog("Existing decks in database:", existingDecks);
@@ -194,7 +194,7 @@ export class DeckManager {
                 filePath
               )}, tag: ${tag}, filepath: ${filePath}`
             );
-            this.db.createDeck(deck);
+            await this.db.createDeck(deck);
             newDecksCreated++;
           }
         }
@@ -375,7 +375,7 @@ export class DeckManager {
       throw error;
     }
 
-    yieldToUI();
+    await yieldToUI();
   }
 
   /**
@@ -404,7 +404,7 @@ export class DeckManager {
           filePath
         )}, tag: ${tag}, filepath: ${filePath}`
       );
-      this.db.createDeck(deck);
+      await this.db.createDeck(deck);
     }
   }
 

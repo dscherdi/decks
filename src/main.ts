@@ -83,7 +83,7 @@ export default class DecksPlugin extends Plugin {
   private progressTracker: ProgressTracker;
   private databaseWatcherInterval: number | null = null;
   private lastKnownDatabaseMtime = 0;
-  private focusListener: (() => Promise<void>) | null = null;
+  private focusListener: (() => void) | null = null;
 
   async onload() {
     // Load settings first
@@ -185,13 +185,13 @@ export default class DecksPlugin extends Plugin {
       this.app.workspace.onLayoutReady(() => {
         // Additional delay to ensure metadata cache is fully populated and app is responsive
         setTimeout(() => {
-          this.performInitialSync();
+          void this.performInitialSync();
         }, 2000);
       });
 
       // Add ribbon icon
       this.addRibbonIcon("brain", "Flashcards", () => {
-        this.activateView();
+        void this.activateView();
       });
 
       // Add command to show flashcards panel
@@ -199,7 +199,7 @@ export default class DecksPlugin extends Plugin {
         id: "show-flashcards-panel",
         name: "Show flashcards panel",
         callback: () => {
-          this.activateView();
+          void this.activateView();
         },
       });
 
@@ -275,14 +275,14 @@ export default class DecksPlugin extends Plugin {
     }
   }
 
-  async onunload() {
+  onunload() {
     this.logger.debug("Unloading Decks plugin");
 
     // Stop database watcher
     this.stopDatabaseWatcher();
 
     // Close database connection using factory singleton
-    await DatabaseFactory.close();
+    void DatabaseFactory.close();
   }
 
   async loadSettings() {
@@ -328,7 +328,7 @@ export default class DecksPlugin extends Plugin {
     }
 
     if (leaf) {
-      workspace.revealLeaf(leaf);
+      await workspace.revealLeaf(leaf);
     }
   }
 
@@ -477,16 +477,16 @@ export default class DecksPlugin extends Plugin {
     const databasePath = `${this.app.vault.configDir}/plugins/decks/flashcards.db`;
 
     // Initialize lastKnownDatabaseMtime
-    this.updateLastKnownDatabaseMtime(databasePath);
+    void this.updateLastKnownDatabaseMtime(databasePath);
 
     // Polling every 2 seconds
-    this.databaseWatcherInterval = window.setInterval(async () => {
-      await this.checkForDatabaseChanges(databasePath);
+    this.databaseWatcherInterval = window.setInterval(() => {
+      void this.checkForDatabaseChanges(databasePath);
     }, 2000);
 
     // Watch for window focus events
-    this.focusListener = async () => {
-      await this.checkForDatabaseChanges(databasePath);
+    this.focusListener = () => {
+      void this.checkForDatabaseChanges(databasePath);
     };
     window.addEventListener("focus", this.focusListener);
 

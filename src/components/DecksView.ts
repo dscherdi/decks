@@ -108,7 +108,7 @@ export class DecksView extends ItemView {
     if (this.deckListPanelComponent) {
       // Svelte 5: explicitly unmount to trigger onDestroy and cleanup listeners
       try {
-        unmount(this.deckListPanelComponent);
+        await unmount(this.deckListPanelComponent);
       } catch (e) {
         console.warn("Error unmounting deck list panel:", e);
       }
@@ -188,7 +188,7 @@ export class DecksView extends ItemView {
       // Update the view with refreshed data
       const updatedDecks = await this.db.getAllDecksWithProfiles();
       const deckStats = await this.getAllDeckStatsMap();
-      this.update(updatedDecks, deckStats);
+      await this.update(updatedDecks, deckStats);
 
       this.logger.debug("Refresh complete");
     } catch (error) {
@@ -251,9 +251,9 @@ export class DecksView extends ItemView {
       `Starting background refresh job (every ${this.settings.ui.backgroundRefreshInterval} seconds)`
     );
 
-    this.backgroundRefreshInterval = setInterval(async () => {
+    this.backgroundRefreshInterval = setInterval(() => {
       this.logger.debug("Background refresh tick");
-      this.refresh();
+      void this.refresh();
     }, this.settings.ui.backgroundRefreshInterval * 1000);
   }
 

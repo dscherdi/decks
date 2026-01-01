@@ -43,14 +43,14 @@ export class AnkiExportModal extends Modal {
       target: contentEl,
       props: {
         deck: this.deck,
-        onexport: (detail: ExportEventDetail) => {
+        onexport: async (detail: ExportEventDetail) => {
           const ankiConfig: AnkiExportConfig = {
             noteType: detail.noteType,
             tags: detail.tags,
             ankiDeckName: detail.ankiDeckName,
             separator: detail.separator,
           };
-          this.handleExport(ankiConfig);
+          await this.handleExport(ankiConfig);
         },
         oncancel: () => {
           this.close();
@@ -90,7 +90,7 @@ export class AnkiExportModal extends Modal {
       const ankiData = this.generateAnkiData(flashcards, config);
 
       // Create and download file
-      await this.downloadAnkiFile(ankiData, config.ankiDeckName);
+      this.downloadAnkiFile(ankiData, config.ankiDeckName);
 
       new Notice(
         `Successfully exported ${flashcards.length} flashcards to Anki format`
@@ -142,7 +142,7 @@ export class AnkiExportModal extends Modal {
     return sanitized;
   }
 
-  private async downloadAnkiFile(data: string, deckName: string) {
+  private downloadAnkiFile(data: string, deckName: string) {
     const fileName = `${deckName.replace(/[^a-zA-Z0-9-_]/g, "_")}_export.txt`;
 
     // Create blob and download
@@ -170,7 +170,7 @@ export class AnkiExportModal extends Modal {
 
     // Unmount Svelte component using Svelte 5 API
     if (this.component) {
-      unmount(this.component);
+      void unmount(this.component);
       this.component = null;
     }
 

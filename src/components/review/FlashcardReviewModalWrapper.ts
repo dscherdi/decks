@@ -26,7 +26,7 @@ export class FlashcardReviewModalWrapper extends Modal {
   private renderMarkdown(content: string, el: HTMLElement): Component | null {
     try {
       const component = new Component();
-      MarkdownRenderer.render(this.app, content, el, "", component);
+      void MarkdownRenderer.render(this.app, content, el, "", component);
       return component;
     } catch (error) {
       console.error("Error rendering markdown:", error);
@@ -166,7 +166,7 @@ export class FlashcardReviewModalWrapper extends Modal {
     if (this.component) {
       // Svelte 5: explicitly unmount to trigger onDestroy and cleanup listeners
       try {
-        unmount(this.component);
+        void unmount(this.component);
       } catch (e) {
         console.warn("Error unmounting flashcard review component:", e);
       }
