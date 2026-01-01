@@ -2,8 +2,13 @@
 // Handles only: init, close, executesql, export
 
 // Worker environment type declarations
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-declare const self: any;
+interface CustomWorkerGlobalScope {
+  window?: CustomWorkerGlobalScope;
+  process?: NodeJS.Process;
+  postMessage(message: unknown): void;
+  onmessage: ((event: MessageEvent) => void | Promise<void>) | null;
+}
+declare const self: CustomWorkerGlobalScope;
 
 // Import SQL.js types only (not the runtime code)
 import type { Database, InitSqlJsStatic, SqlJsStatic, SqlValue } from "sql.js";

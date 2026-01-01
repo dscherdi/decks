@@ -215,8 +215,7 @@
         pointBorderColor: "#ffffff",
         pointBorderWidth: 2,
         yAxisID: "y1",
-        // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      } as any);
+      });
     }
 
     return {
