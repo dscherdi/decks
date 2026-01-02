@@ -45,9 +45,12 @@ export class Logger {
       const argsStr =
         args.length > 0
           ? ` ${args
-              .map((arg) =>
-                typeof arg === "object" ? JSON.stringify(arg) : String(arg)
-              )
+              .map((arg) => {
+                if (typeof arg === "string" || typeof arg === "number" || typeof arg === "boolean") {
+                  return String(arg);
+                }
+                return JSON.stringify(arg);
+              })
               .join(" ")}`
           : "";
       const logEntry = `[${timestamp}] ${message}${argsStr}\n`;
