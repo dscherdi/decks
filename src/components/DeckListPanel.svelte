@@ -1493,6 +1493,21 @@
     min-width: 140px;
   }
 
+  :global(.decks-context-menu) {
+    position: fixed;
+    z-index: 1000;
+    opacity: 0;
+    visibility: hidden;
+    transition: opacity 0.15s ease, visibility 0.15s ease;
+  }
+
+  :global(.decks-context-menu-visible) {
+    position: fixed;
+    z-index: 1000;
+    opacity: 1;
+    visibility: visible;
+  }
+
   :global(.decks-dropdown-option) {
     padding: 8px 12px;
     cursor: pointer;
