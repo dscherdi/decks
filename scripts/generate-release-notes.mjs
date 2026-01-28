@@ -42,37 +42,6 @@ try {
   }
 }
 
-// Parse PROGRESS.md for recent enhancements
-let recentFeatures = "";
-try {
-  const progressContent = readFileSync(join(rootDir, "PROGRESS.md"), "utf8");
-  const lines = progressContent.split("\n");
-
-  let inRecentSection = false;
-  let featuresList = [];
-
-  for (const line of lines) {
-    if (line.includes("## ✅ Recent Enhancements")) {
-      inRecentSection = true;
-      continue;
-    }
-
-    if (inRecentSection && line.startsWith("## ")) {
-      break; // End of recent enhancements section
-    }
-
-    if (inRecentSection && line.startsWith("### ✅")) {
-      const feature = line.replace("### ✅", "").trim();
-      featuresList.push(`- **${feature}**`);
-    }
-  }
-
-  if (featuresList.length > 0) {
-    recentFeatures = featuresList.slice(0, 10).join("\n"); // Limit to last 10 features
-  }
-} catch (error) {
-  console.warn("⚠️  Could not read PROGRESS.md for feature extraction");
-}
 
 // Generate release notes
 const releaseNotes = `# Decks v${version}
@@ -107,15 +76,7 @@ const releaseNotes = `# Decks v${version}
 - **Time Tracking**: Monitor your review pace and efficiency
 - **Anki-Style Reviews**: Familiar review interface with learning/review/new card ordering
 
-${
-  recentFeatures
-    ? `## 🆕 What's New in v${version}
-
-${recentFeatures}
-
-`
-    : ""
-}## 📋 Changes in This Release
+## 📋 Changes in This Release
 
 ${gitCommits || "- Initial release"}
 
@@ -162,11 +123,8 @@ const condensedNotes = `## Decks v${version}
 2. Extract to \`.obsidian/plugins/decks/\`
 3. Enable in Obsidian settings
 
-### What's New
-${recentFeatures || "See commit history for changes"}
-
 ### Changes
-${gitCommits.split("\n").slice(0, 10).join("\n") || "- Initial release"}
+${gitCommits || "- Initial release"}
 
 **Minimum Obsidian Version**: ${manifest.minAppVersion}`;
 
