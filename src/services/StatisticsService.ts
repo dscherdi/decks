@@ -6,6 +6,7 @@ import {
   type FlashcardState,
   type DeckProfile,
   type DeckStats,
+  type DeckGroup,
   DEFAULT_DECK_PROFILE,
   type SimulatedCardState,
   type MaturityProgressionResult,
@@ -2673,6 +2674,33 @@ export class StatisticsService {
       dueCount: finalDueCount,
       totalCount: totalCards,
       matureCount,
+    };
+  }
+
+  /**
+   * Get statistics for a deck group (aggregates stats from all decks in the group)
+   */
+  async getDeckGroupStats(deckGroup: DeckGroup): Promise<DeckStats> {
+    let totalNew = 0;
+    let totalDue = 0;
+    let totalCount = 0;
+    let totalMature = 0;
+
+    for (const deckId of deckGroup.deckIds) {
+      const stats = await this.getDeckStats(deckId);
+      totalNew += stats.newCount;
+      totalDue += stats.dueCount;
+      totalCount += stats.totalCount;
+      totalMature += stats.matureCount;
+    }
+
+    const { generateDeckGroupId } = await import("../utils/hash");
+    return {
+      deckId: generateDeckGroupId(deckGroup.tag),
+      newCount: totalNew,
+      dueCount: totalDue,
+      totalCount: totalCount,
+      matureCount: totalMature,
     };
   }
 

@@ -137,28 +137,18 @@ Promise.all([esbuild.build(workerBuildOptions), esbuild.build(buildOptions)])
     const mainJsPath = path.join(outDir, "main.js");
     let mainJsContent = fs.readFileSync(mainJsPath, "utf8");
 
-    // Inject embedded assets initialization at the top of the file
-    // This works for both dev and production builds
-    const embeddedAssetsCode = `
-// Embedded assets for BRAT compatibility
-(function() {
-  const WORKER_CODE = ${JSON.stringify(workerCode)};
-  const SQL_WASM_BASE64 = ${JSON.stringify(sqlWasmBase64)};
-  const SQL_JS_CODE = ${JSON.stringify(sqlJsCode)};
+    // Replace the placeholder with actual embedded assets data
+    const embeddedAssetsJson = JSON.stringify({
+      workerCode: workerCode,
+      sqlWasmBase64: sqlWasmBase64,
+      sqlJsCode: sqlJsCode
+    });
 
-  // Store in global scope for access by database services
-  if (typeof window !== 'undefined') {
-    window.__DECKS_EMBEDDED_ASSETS__ = {
-      workerCode: WORKER_CODE,
-      sqlWasmBase64: SQL_WASM_BASE64,
-      sqlJsCode: SQL_JS_CODE
-    };
-  }
-})();
-`;
-
-    // Prepend embedded assets to main.js
-    mainJsContent = embeddedAssetsCode + mainJsContent;
+    // Replace the placeholder string in the bundled code
+    mainJsContent = mainJsContent.replace(
+      /"__DECKS_EMBEDDED_ASSETS_PLACEHOLDER__"/g,
+      embeddedAssetsJson
+    );
     fs.writeFileSync(mainJsPath, mainJsContent);
 
     console.log(

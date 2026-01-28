@@ -71,6 +71,31 @@ export function deckWithProfile(deck: Deck, profile: DeckProfile): DeckWithProfi
   };
 }
 
+export interface DeckGroup {
+  type: 'group';
+  tag: string;
+  name: string;
+  deckIds: string[];
+  profile: DeckProfile;
+  lastReviewed: string | null;
+  created: string;
+  modified: string;
+}
+
+export interface FileDeck extends DeckWithProfile {
+  type: 'file';
+}
+
+export type DeckOrGroup = FileDeck | DeckGroup;
+
+export function isDeckGroup(item: DeckOrGroup): item is DeckGroup {
+  return item.type === 'group';
+}
+
+export function isFileDeck(item: DeckOrGroup): item is FileDeck {
+  return item.type === 'file';
+}
+
 export type FlashcardState = "new" | "review";
 
 export interface Flashcard {

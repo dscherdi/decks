@@ -1,6 +1,7 @@
-import type { Deck, DeckWithProfile, DeckStats } from "@/database/types";
+import type { Deck, DeckWithProfile, DeckStats, DeckGroup } from "@/database/types";
 import { VIEW_TYPE_DECKS } from "@/main";
 import { DeckSynchronizer } from "@/services/DeckSynchronizer";
+import { DeckManager } from "@/services/DeckManager";
 import type { DecksSettings } from "@/settings";
 import { yieldToUI } from "@/utils/ui";
 import { Logger } from "@/utils/logging";
@@ -11,6 +12,7 @@ import { StatisticsModal } from "./settings/StatisticsModal";
 import { ProfilesManagerModal } from "./config/ProfilesManagerModal";
 import { DeckConfigModal } from "./config/DeckConfigModal";
 import { StatisticsService } from "@/services/StatisticsService";
+import { TagGroupService } from "@/services/TagGroupService";
 
 import DeckListPanel from "./DeckListPanel.svelte";
 import { mount, unmount } from "svelte";
@@ -21,8 +23,10 @@ import type { IDatabaseService } from "../database/DatabaseFactory";
 export class DecksView extends ItemView {
   private db: IDatabaseService;
   private deckSynchronizer: DeckSynchronizer;
+  private deckManager: DeckManager;
   private scheduler: Scheduler;
   private statisticsService: StatisticsService;
+  private tagGroupService: TagGroupService;
   private settings: DecksSettings;
   private setViewReference: (view: DecksView | null) => void;
   private deckListPanelComponent: DeckListPanelComponent | null = null;
@@ -36,6 +40,7 @@ export class DecksView extends ItemView {
     leaf: WorkspaceLeaf,
     database: IDatabaseService,
     deckSynchronizer: DeckSynchronizer,
+    deckManager: DeckManager,
     scheduler: Scheduler,
     statisticsService: StatisticsService,
     settings: DecksSettings,
@@ -46,8 +51,10 @@ export class DecksView extends ItemView {
     super(leaf);
     this.db = database;
     this.deckSynchronizer = deckSynchronizer;
+    this.deckManager = deckManager;
     this.scheduler = scheduler;
     this.statisticsService = statisticsService;
+    this.tagGroupService = new TagGroupService(database);
     this.settings = settings;
     this.logger = logger;
 
@@ -82,8 +89,10 @@ export class DecksView extends ItemView {
         statisticsService: this.statisticsService,
         db: this.db,
         deckSynchronizer: this.deckSynchronizer,
+        tagGroupService: this.tagGroupService,
         app: this.app,
         onDeckClick: (deck: DeckWithProfile) => this.startReview(deck),
+        onDeckGroupClick: (deckGroup: DeckGroup) => this.startReviewForDeckGroup(deckGroup),
         onRefresh: () => this.refresh(false),
         onForceRefreshDeck: async (deckId: string) => {
           await this.deckSynchronizer.forceSyncDeck(deckId);
@@ -137,12 +146,7 @@ export class DecksView extends ItemView {
   }
 
   private async getAllDeckStatsMap(): Promise<Map<string, DeckStats>> {
-    const stats = await this.statisticsService.getAllDeckStats();
-    const statsMap = new Map<string, DeckStats>();
-    for (const stat of stats) {
-      statsMap.set(stat.deckId, stat);
-    }
-    return statsMap;
+    return await this.deckManager.getAllDeckStatsMap();
   }
 
   openStatisticsModal(deckFilter?: string): void {
@@ -221,7 +225,7 @@ export class DecksView extends ItemView {
     );
     try {
       // Get stats for the specific deck
-      const deckStats = await this.statisticsService.getDeckStats(deckId);
+      const deckStats = await this.deckManager.getDeckStats(deckId);
       this.logger.debug("Updated deck stats for:", deckId);
 
       // Update component using unified function
@@ -398,6 +402,51 @@ export class DecksView extends ItemView {
       ).open();
     } catch (error) {
       console.error("Error starting review:", error);
+      if (this.settings?.ui?.enableNotices !== false) {
+        new Notice("Error starting review. Check console for details.");
+      }
+    }
+  }
+
+  async startReviewForDeckGroup(deckGroup: DeckGroup) {
+    try {
+      this.logger.debug(`Starting review for deck group: ${deckGroup.name}`);
+
+      // Sync all decks in the group
+      for (const deckId of deckGroup.deckIds) {
+        await this.deckSynchronizer.syncDeck(deckId);
+        await yieldToUI();
+      }
+
+      // Check for available cards
+      const nextCard = await this.scheduler.getNextForDeckGroup(
+        new Date(),
+        deckGroup,
+        { allowNew: true }
+      );
+
+      if (!nextCard) {
+        if (this.settings?.ui?.enableNotices !== false) {
+          new Notice(
+            `No cards due in "${deckGroup.name}" (${deckGroup.deckIds.length} files)`
+          );
+        }
+        return;
+      }
+
+      // Open review modal with deck group
+      new FlashcardReviewModalWrapper(
+        this.app,
+        deckGroup,
+        [nextCard],
+        this.scheduler,
+        this.settings,
+        this.db,
+        this.refresh.bind(this),
+        this.refreshStatsById.bind(this)
+      ).open();
+    } catch (error) {
+      console.error("Error starting deck group review:", error);
       if (this.settings?.ui?.enableNotices !== false) {
         new Notice("Error starting review. Check console for details.");
       }

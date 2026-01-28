@@ -3,6 +3,7 @@ import type {
   FlashcardState,
   DeckWithProfile,
   ReviewLog,
+  DeckGroup,
 } from "../database/types";
 import type { IDatabaseService } from "../database/DatabaseFactory";
 import { FSRS, type RatingLabel, type SchedulingCard } from "../algorithm/fsrs";
@@ -711,4 +712,189 @@ export class Scheduler {
     currentStart.setDate(currentStart.getDate() + daysFromNow);
     return currentStart.toISOString();
   }
+
+  async startReviewSessionForDeckGroup(
+    deckGroup: DeckGroup,
+    now: Date = new Date(),
+    sessionDurationMinutes?: number
+  ): Promise<NewSession> {
+    this.debugLog(`Starting review session for deck group: ${deckGroup.name}`);
+
+    const dailyCounts = await this.getAggregateDailyReviewCounts(
+      deckGroup.deckIds,
+      this.settings.review.nextDayStartsAt
+    );
+
+    const dueCardCount = await this.getDueCardCountForDeckGroup(
+      now,
+      deckGroup.deckIds,
+      sessionDurationMinutes
+    );
+    const newCardCount = await this.getNewCardCountForDeckGroup(deckGroup.deckIds);
+
+    let goalTotal = 0;
+
+    if (deckGroup.profile.hasReviewCardsLimitEnabled) {
+      const remainingReviewQuota = Math.max(
+        0,
+        deckGroup.profile.reviewCardsPerDay - dailyCounts.reviewCount
+      );
+      goalTotal += Math.min(dueCardCount, remainingReviewQuota);
+    } else {
+      goalTotal += dueCardCount;
+    }
+
+    if (deckGroup.profile.hasNewCardsLimitEnabled) {
+      const remainingNewQuota = Math.max(
+        0,
+        deckGroup.profile.newCardsPerDay - dailyCounts.newCount
+      );
+      goalTotal += Math.min(newCardCount, remainingNewQuota);
+    } else {
+      goalTotal += newCardCount;
+    }
+
+    const finalGoalTotal = Math.max(1, goalTotal);
+
+    const sessionId = await this.db.createReviewSession({
+      deckId: deckGroup.deckIds[0],
+      startedAt: now.toISOString(),
+      endedAt: null,
+      goalTotal: finalGoalTotal,
+      doneUnique: 0,
+    });
+
+    this.debugLog(
+      `Review session created for deck group: ${sessionId}, goal: ${finalGoalTotal}`
+    );
+    return {
+      sessionId: sessionId,
+      deckFilePath: '',
+    };
+  }
+
+  async getNextForDeckGroup(
+    now: Date,
+    deckGroup: DeckGroup,
+    options: { allowNew?: boolean } = {}
+  ): Promise<Flashcard | null> {
+    const { allowNew = true } = options;
+
+    if (await this.hasReviewCardQuotaForDeckGroup(deckGroup)) {
+      const dueCard = await this.getNextDueCardForDeckGroup(now, deckGroup);
+      if (dueCard) return dueCard;
+    }
+
+    if (allowNew && (await this.hasNewCardQuotaForDeckGroup(deckGroup))) {
+      return await this.getNextNewCardForDeckGroup(deckGroup);
+    }
+
+    return null;
+  }
+
+  private async getAggregateDailyReviewCounts(
+    deckIds: string[],
+    nextDayStartsAt: number
+  ): Promise<{ newCount: number; reviewCount: number }> {
+    let totalNew = 0;
+    let totalReview = 0;
+    for (const deckId of deckIds) {
+      const counts = await this.db.getDailyReviewCounts(deckId, nextDayStartsAt);
+      totalNew += counts.newCount;
+      totalReview += counts.reviewCount;
+    }
+    return { newCount: totalNew, reviewCount: totalReview };
+  }
+
+  private async getDueCardCountForDeckGroup(
+    now: Date,
+    deckIds: string[],
+    sessionDurationMinutes = 25
+  ): Promise<number> {
+    const sessionEndTime = new Date(
+      now.getTime() + sessionDurationMinutes * 60 * 1000
+    );
+    const placeholders = deckIds.map(() => '?').join(',');
+    const query = `
+      SELECT COUNT(*) as count FROM flashcards
+      WHERE deck_id IN (${placeholders})
+        AND due_date <= ?
+        AND state = 'review'
+    `;
+    const results = await this.db.querySql<{ count: number }>(
+      query,
+      [...deckIds, sessionEndTime.toISOString()],
+      { asObject: true }
+    );
+    return results[0]?.count || 0;
+  }
+
+  private async getNewCardCountForDeckGroup(deckIds: string[]): Promise<number> {
+    const placeholders = deckIds.map(() => '?').join(',');
+    const query = `
+      SELECT COUNT(*) as count FROM flashcards
+      WHERE deck_id IN (${placeholders}) AND state = 'new'
+    `;
+    const results = await this.db.querySql<{ count: number }>(
+      query,
+      deckIds,
+      { asObject: true }
+    );
+    return results[0]?.count || 0;
+  }
+
+  private async getNextDueCardForDeckGroup(
+    now: Date,
+    deckGroup: DeckGroup
+  ): Promise<Flashcard | null> {
+    const placeholders = deckGroup.deckIds.map(() => '?').join(',');
+    let query = `
+      SELECT * FROM flashcards
+      WHERE deck_id IN (${placeholders})
+        AND due_date <= ?
+        AND state = 'review'
+    `;
+    const params = [...deckGroup.deckIds, now.toISOString()];
+
+    if (deckGroup.profile.reviewOrder === "random") {
+      query += " ORDER BY RANDOM() LIMIT 1";
+    } else {
+      query += " ORDER BY due_date ASC, last_reviewed ASC LIMIT 1";
+    }
+
+    const results = await this.db.querySql(query, params);
+    return results.length > 0 ? this.rowToFlashcard(results[0]) : null;
+  }
+
+  private async getNextNewCardForDeckGroup(
+    deckGroup: DeckGroup
+  ): Promise<Flashcard | null> {
+    const placeholders = deckGroup.deckIds.map(() => '?').join(',');
+    const query = `
+      SELECT * FROM flashcards
+      WHERE deck_id IN (${placeholders}) AND state = 'new'
+      ORDER BY due_date ASC LIMIT 1
+    `;
+    const results = await this.db.querySql(query, deckGroup.deckIds);
+    return results.length > 0 ? this.rowToFlashcard(results[0]) : null;
+  }
+
+  private async hasNewCardQuotaForDeckGroup(deckGroup: DeckGroup): Promise<boolean> {
+    if (!deckGroup.profile.hasNewCardsLimitEnabled) return true;
+    const counts = await this.getAggregateDailyReviewCounts(
+      deckGroup.deckIds,
+      this.settings.review.nextDayStartsAt
+    );
+    return counts.newCount < deckGroup.profile.newCardsPerDay;
+  }
+
+  private async hasReviewCardQuotaForDeckGroup(deckGroup: DeckGroup): Promise<boolean> {
+    if (!deckGroup.profile.hasReviewCardsLimitEnabled) return true;
+    const counts = await this.getAggregateDailyReviewCounts(
+      deckGroup.deckIds,
+      this.settings.review.nextDayStartsAt
+    );
+    return counts.reviewCount < deckGroup.profile.reviewCardsPerDay;
+  }
+
 }

@@ -5,6 +5,7 @@ import {
   Notice,
   Modal,
   DropdownComponent,
+  normalizePath,
 } from "obsidian";
 import type { DecksSettings } from "../../settings";
 import { BackupService } from "../../services/BackupService";
@@ -170,9 +171,9 @@ export class DecksSettingTab extends PluginSettingTab {
         });
 
         dropdown
-          .setValue(this.settings.parsing.folderSearchPath)
+          .setValue(normalizePath(this.settings.parsing.folderSearchPath))
           .onChange(async (value) => {
-            this.settings.parsing.folderSearchPath = value;
+            this.settings.parsing.folderSearchPath = normalizePath(value);
             await this.saveSettings();
           });
       });

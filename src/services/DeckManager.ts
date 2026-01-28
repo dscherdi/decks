@@ -1,22 +1,28 @@
 import { TFile, Vault, MetadataCache, Notice } from "obsidian";
-import { type Deck, type Flashcard } from "../database/types";
+import { type Deck, type Flashcard, type DeckStats, type DeckGroup } from "../database/types";
 import type { IDatabaseService } from "../database/DatabaseFactory";
 import { yieldToUI } from "../utils/ui";
 import { Logger, formatTime } from "../utils/logging";
 import { FileFilter } from "../utils/fileFilter";
 import { FlashcardParser, type ParsedFlashcard } from "./FlashcardParser";
 import { ProgressTracker } from "../utils/progress";
-import { generateDeckId } from "../utils/hash";
-import DecksPlugin from "@/main";
+import { generateDeckId, generateDeckGroupId } from "../utils/hash";
+import { TagGroupService } from "./TagGroupService";
+import type { DecksSettings } from "../settings";
 
 // Maximum number of flashcards to process per deck for performance
 const MAX_FLASHCARDS_PER_DECK = 50000;
+
+export interface DeckManagerOptions {
+  settings?: DecksSettings;
+  configDir?: string;
+}
 
 export class DeckManager {
   private vault: Vault;
   private metadataCache: MetadataCache;
   private db: IDatabaseService;
-  private plugin?: DecksPlugin;
+  private settings?: DecksSettings;
   private logger?: Logger;
   private fileFilter: FileFilter;
 
@@ -24,19 +30,19 @@ export class DeckManager {
     vault: Vault,
     metadataCache: MetadataCache,
     db: IDatabaseService,
-    plugin?: DecksPlugin,
+    options?: DeckManagerOptions,
     folderSearchPath?: string
   ) {
     this.vault = vault;
     this.metadataCache = metadataCache;
     this.db = db;
-    this.plugin = plugin;
+    this.settings = options?.settings;
     this.fileFilter = new FileFilter(folderSearchPath);
-    if (plugin?.settings && plugin?.app) {
+    if (options?.settings && options?.configDir) {
       this.logger = new Logger(
-        plugin.settings,
+        options.settings,
         this.vault.adapter,
-        plugin.app.vault.configDir
+        options.configDir
       );
     }
   }
@@ -345,7 +351,7 @@ export class DeckManager {
             result.parsedCount - MAX_FLASHCARDS_PER_DECK
           } flashcards will be skipped.`
         );
-        if (this.plugin?.settings?.ui?.enableNotices) {
+        if (this.settings?.ui?.enableNotices) {
           new Notice(
             `⚠️ Deck "${deck.name}" has ${result.parsedCount} flashcards. Only processing first ${MAX_FLASHCARDS_PER_DECK} for performance.`,
             8000
@@ -443,7 +449,7 @@ export class DeckManager {
 
     for (const [, cards] of frontTextMap) {
       if (cards.length > 1) {
-        if (this.plugin?.settings?.ui?.enableNotices) {
+        if (this.settings?.ui?.enableNotices) {
           new Notice(
             `⚠️ Found ${
               cards.length
@@ -474,5 +480,126 @@ export class DeckManager {
       `Updating flashcard deck IDs from ${oldDeckId} to ${newDeckId}`
     );
     await this.db.updateFlashcardDeckIds(oldDeckId, newDeckId);
+  }
+
+  /**
+   * Get statistics for a single deck
+   */
+  async getDeckStats(
+    deckId: string,
+    respectDailyLimits = true
+  ): Promise<DeckStats> {
+    // Get basic deck stats
+    const totalCards = await this.db.countTotalCards(deckId);
+    const newCards = await this.db.countNewCards(deckId);
+    const dueCards = await this.db.countDueCards(deckId);
+    const matureCards = await this.db.getFlashcardsByDeck(deckId);
+    const matureCount = matureCards.filter(
+      (card) => card.state === "review" && card.interval > 30240
+    ).length;
+
+    let finalNewCount = newCards;
+    let finalDueCount = dueCards;
+
+    // Apply daily limits if requested
+    if (respectDailyLimits) {
+      const deck = await this.db.getDeckWithProfile(deckId);
+      if (deck) {
+        const dailyCounts = await this.db.getDailyReviewCounts(deckId);
+
+        // Apply new card limits
+        if (
+          deck.profile.hasNewCardsLimitEnabled &&
+          deck.profile.newCardsPerDay >= 0
+        ) {
+          if (deck.profile.newCardsPerDay === 0) {
+            finalNewCount = 0;
+          } else {
+            const remainingNew = Math.max(
+              0,
+              deck.profile.newCardsPerDay - dailyCounts.newCount
+            );
+            finalNewCount = Math.min(newCards, remainingNew);
+          }
+        }
+
+        // Apply review card limits
+        if (
+          deck.profile.hasReviewCardsLimitEnabled &&
+          deck.profile.reviewCardsPerDay >= 0
+        ) {
+          if (deck.profile.reviewCardsPerDay === 0) {
+            finalDueCount = 0;
+          } else {
+            const remainingReview = Math.max(
+              0,
+              deck.profile.reviewCardsPerDay - dailyCounts.reviewCount
+            );
+            finalDueCount = Math.min(dueCards, remainingReview);
+          }
+        }
+      }
+    }
+
+    return {
+      deckId,
+      newCount: finalNewCount,
+      dueCount: finalDueCount,
+      totalCount: totalCards,
+      matureCount,
+    };
+  }
+
+  /**
+   * Get statistics for a deck group (aggregates stats from all decks in the group)
+   */
+  async getDeckGroupStats(deckGroup: DeckGroup): Promise<DeckStats> {
+    let totalNew = 0;
+    let totalDue = 0;
+    let totalCount = 0;
+    let totalMature = 0;
+
+    for (const deckId of deckGroup.deckIds) {
+      const stats = await this.getDeckStats(deckId);
+      totalNew += stats.newCount;
+      totalDue += stats.dueCount;
+      totalCount += stats.totalCount;
+      totalMature += stats.matureCount;
+    }
+
+    return {
+      deckId: generateDeckGroupId(deckGroup.tag),
+      newCount: totalNew,
+      dueCount: totalDue,
+      totalCount: totalCount,
+      matureCount: totalMature,
+    };
+  }
+
+  /**
+   * Get all deck stats (file decks + tag groups) as a Map
+   * This is the unified method to get all statistics for the UI
+   */
+  async getAllDeckStatsMap(): Promise<Map<string, DeckStats>> {
+    const tagGroupService = new TagGroupService(this.db);
+    const statsMap = new Map<string, DeckStats>();
+
+    // Get stats for all file-based decks
+    const decks = await this.db.getAllDecks();
+    for (const deck of decks) {
+      const deckStats = await this.getDeckStats(deck.id);
+      statsMap.set(deckStats.deckId, deckStats);
+    }
+
+    // Get stats for all tag groups
+    const decksWithProfiles = await this.db.getAllDecksWithProfiles();
+    const tagGroups = await tagGroupService.aggregateByTag(decksWithProfiles);
+
+    for (const group of tagGroups) {
+      const groupStats = await this.getDeckGroupStats(group);
+      statsMap.set(groupStats.deckId, groupStats);
+    }
+
+    return statsMap;
   }
 }

@@ -1,6 +1,7 @@
 <script lang="ts">
   import { createEventDispatcher, onMount, onDestroy, tick } from "svelte";
-  import type { Deck, Flashcard } from "../../database/types";
+  import type { Flashcard, DeckOrGroup } from "../../database/types";
+  import { isDeckGroup } from "../../database/types";
   import type { DecksSettings } from "../../settings";
   import { type RatingLabel } from "../../algorithm/fsrs";
   import type {
@@ -10,7 +11,7 @@
   } from "../../services/Scheduler";
   import { yieldToUI } from "@/utils/ui";
 
-  export let deck: Deck;
+  export let deckOrGroup: DeckOrGroup;
   export let initialCard: Flashcard | null = null;
   export let onReview: (
     card: Flashcard,
@@ -76,11 +77,21 @@
 
   onMount(async () => {
     // Initialize review session
-    const session = await scheduler.startFreshSession(
-      deck.id,
-      new Date(),
-      settings.review.sessionDuration
-    );
+    let session;
+    if (isDeckGroup(deckOrGroup)) {
+      session = await scheduler.startReviewSessionForDeckGroup(
+        deckOrGroup,
+        new Date(),
+        settings.review.sessionDuration
+      );
+    } else {
+      session = await scheduler.startFreshSession(
+        deckOrGroup.id,
+        new Date(),
+        settings.review.sessionDuration
+      );
+    }
+
     sessionId = session.sessionId;
     scheduler.setCurrentSession(sessionId);
     sessionProgress = await scheduler.getSessionProgress(sessionId);
@@ -90,9 +101,15 @@
 
     // If no initial card provided, get the first card from scheduler
     if (!currentCard) {
-      currentCard = await scheduler.getNext(new Date(), deck.id, {
-        allowNew: true,
-      });
+      if (isDeckGroup(deckOrGroup)) {
+        currentCard = await scheduler.getNextForDeckGroup(new Date(), deckOrGroup, {
+          allowNew: true,
+        });
+      } else {
+        currentCard = await scheduler.getNext(new Date(), deckOrGroup.id, {
+          allowNew: true,
+        });
+      }
     }
 
     if (currentCard) {
@@ -166,9 +183,15 @@
       }
 
       // Get the next card from the scheduler
-      currentCard = await scheduler.getNext(new Date(), deck.id, {
-        allowNew: true,
-      });
+      if (isDeckGroup(deckOrGroup)) {
+        currentCard = await scheduler.getNextForDeckGroup(new Date(), deckOrGroup, {
+          allowNew: true,
+        });
+      } else {
+        currentCard = await scheduler.getNext(new Date(), deckOrGroup.id, {
+          allowNew: true,
+        });
+      }
       await yieldToUI();
 
       if (currentCard) {
@@ -320,7 +343,7 @@
 
 <div class="decks-review-modal">
   <div class="decks-modal-header">
-    <h3>Review Session - {deck.name}</h3>
+    <h3>Review Session - {deckOrGroup.name}</h3>
     <div class="decks-header-stats">
       <div class="decks-progress-info">
         <span>Reviewed: {reviewedCountDisplay}</span>

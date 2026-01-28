@@ -1,30 +1,13 @@
-declare global {
-  interface Window {
-    __DECKS_EMBEDDED_ASSETS__?: {
-      workerCode: string;
-      sqlWasmBase64: string;
-      sqlJsCode: string;
-    };
-  }
-}
+import EmbeddedAssetsSingleton from "./EmbeddedAssetsSingleton";
 
 export function getEmbeddedAssets():
   | { workerCode: string; sqlWasmBase64: string; sqlJsCode: string }
   | null {
-  if (
-    typeof window !== "undefined" &&
-    window.__DECKS_EMBEDDED_ASSETS__ &&
-    window.__DECKS_EMBEDDED_ASSETS__.workerCode &&
-    window.__DECKS_EMBEDDED_ASSETS__.sqlWasmBase64 &&
-    window.__DECKS_EMBEDDED_ASSETS__.sqlJsCode
-  ) {
-    return window.__DECKS_EMBEDDED_ASSETS__;
-  }
-  return null;
+  return EmbeddedAssetsSingleton.getInstance();
 }
 
 export function hasEmbeddedAssets(): boolean {
-  return getEmbeddedAssets() !== null;
+  return EmbeddedAssetsSingleton.isAvailable();
 }
 
 export function createBlobUrlFromBase64(

@@ -152,6 +152,7 @@ describe("BackupService", () => {
     backupService = new BackupService(
       mockAdapter as any,
       "/vault/.obsidian",
+      "decks",
       jest.fn()
     );
   });

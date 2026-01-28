@@ -19,10 +19,11 @@ export class BackupService {
   constructor(
     adapter: DataAdapter,
     vaultConfigDir: string,
+    manifestDir: string,
     debugLog: (message: string, ...args: unknown[]) => void
   ) {
     this.adapter = adapter;
-    this.backupDir = `${vaultConfigDir}/plugins/decks/backups`;
+    this.backupDir = `${vaultConfigDir}/plugins/${manifestDir}/backups`;
     this.debugLog = debugLog;
   }
 

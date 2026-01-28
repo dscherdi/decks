@@ -5,7 +5,8 @@ export class Logger {
   constructor(
     private settings: DecksSettings,
     private adapter?: DataAdapter,
-    private configDir?: string
+    private configDir?: string,
+    private manifestDir?: string
   ) {}
 
   debug(message: string, ...args: unknown[]): void {
@@ -37,9 +38,9 @@ export class Logger {
     ...args: unknown[]
   ): Promise<void> {
     try {
-      if (!this.adapter || !this.configDir) return;
+      if (!this.adapter || !this.configDir || !this.manifestDir) return;
 
-      const logPath = `${this.configDir}/plugins/decks/debug.log`;
+      const logPath = `${this.configDir}/plugins/${this.manifestDir}/debug.log`;
 
       const timestamp = new Date().toISOString();
       const argsStr =

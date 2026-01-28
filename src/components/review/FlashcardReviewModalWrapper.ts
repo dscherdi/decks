@@ -1,5 +1,5 @@
 import { Modal, Component, Notice, MarkdownRenderer, App } from "obsidian";
-import type { Deck, Flashcard } from "../../database/types";
+import type { Flashcard, DeckOrGroup } from "../../database/types";
 import type { RatingLabel } from "../../algorithm/fsrs";
 import type { Scheduler } from "../../services/Scheduler";
 import type { DecksSettings } from "../../settings";
@@ -12,7 +12,7 @@ import FlashcardReviewModal from "./FlashcardReviewModal.svelte";
 import { mount, unmount } from "svelte";
 
 export class FlashcardReviewModalWrapper extends Modal {
-  private deck: Deck;
+  private deckOrGroup: DeckOrGroup;
   private initialCard: Flashcard | null;
   private scheduler: Scheduler;
   private settings: DecksSettings;
@@ -37,7 +37,7 @@ export class FlashcardReviewModalWrapper extends Modal {
 
   constructor(
     app: App,
-    deck: Deck,
+    deckOrGroup: DeckOrGroup,
     flashcards: Flashcard[],
     scheduler: Scheduler,
     settings: DecksSettings,
@@ -46,7 +46,7 @@ export class FlashcardReviewModalWrapper extends Modal {
     refreshStatsById: (deckId: string) => Promise<void>
   ) {
     super(app);
-    this.deck = deck;
+    this.deckOrGroup = deckOrGroup;
     this.initialCard = flashcards.length > 0 ? flashcards[0] : null;
     this.scheduler = scheduler;
     this.settings = settings;
@@ -56,7 +56,7 @@ export class FlashcardReviewModalWrapper extends Modal {
   }
 
   private async reviewFlashcard(
-    deck: Deck,
+    deckOrGroup: DeckOrGroup,
     flashcard: Flashcard,
     difficulty: "again" | "hard" | "good" | "easy",
     timeElapsed?: number,
@@ -97,7 +97,7 @@ export class FlashcardReviewModalWrapper extends Modal {
       target: contentEl,
       props: {
         initialCard: this.initialCard,
-        deck: this.deck,
+        deckOrGroup: this.deckOrGroup,
         onReview: async (
           card: Flashcard,
           rating: RatingLabel,
@@ -105,7 +105,7 @@ export class FlashcardReviewModalWrapper extends Modal {
           shownAt?: Date
         ) => {
           await this.reviewFlashcard(
-            this.deck,
+            this.deckOrGroup,
             card,
             rating,
             timeElapsed,
@@ -127,13 +127,13 @@ export class FlashcardReviewModalWrapper extends Modal {
           }
         },
         onComplete: async (_event: CompleteEventDetail) => {
-          const message = `Review session complete for ${this.deck.name}!`;
+          const message = `Review session complete for ${this.deckOrGroup.name}!`;
 
           if (this.settings?.ui?.enableNotices !== false) {
             new Notice(message);
           }
           // Refresh the view to update stats
-          await this.refreshStatsById(this.deck.id);
+          await this.refreshStats();
         },
       },
     }) as FlashcardReviewComponent;
@@ -178,6 +178,7 @@ export class FlashcardReviewModalWrapper extends Modal {
     this.markdownComponents = [];
 
     // Refresh view when closing
-    this.refreshStatsById(this.deck.id).catch(console.error);
+    const deckId = this.deckOrGroup.type === 'file' ? this.deckOrGroup.id : this.deckOrGroup.tag;
+    this.refreshStatsById(deckId).catch(console.error);
   }
 }

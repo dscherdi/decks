@@ -13,6 +13,8 @@ export class AnkiExportModal extends Modal {
   private db: IDatabaseService;
   private component: AnkiExportComponent | null = null;
   private resizeHandler?: () => void;
+  public deckIds?: string[]; // For deck group exports
+  public isGroupExport?: boolean;
 
   constructor(app: App, deck: Deck, db: IDatabaseService) {
     super(app);
@@ -78,8 +80,21 @@ export class AnkiExportModal extends Modal {
 
   private async handleExport(config: AnkiExportConfig) {
     try {
-      // Get flashcards for this deck
-      const flashcards = await this.db.getFlashcardsByDeck(this.deck.id);
+      let flashcards: Flashcard[];
+
+      // Check if this is a deck group export
+      if (this.isGroupExport && this.deckIds && this.deckIds.length > 0) {
+        // Get flashcards from all decks in the group
+        const allFlashcards: Flashcard[] = [];
+        for (const deckId of this.deckIds) {
+          const deckCards = await this.db.getFlashcardsByDeck(deckId);
+          allFlashcards.push(...deckCards);
+        }
+        flashcards = allFlashcards;
+      } else {
+        // Get flashcards for single deck
+        flashcards = await this.db.getFlashcardsByDeck(this.deck.id);
+      }
 
       if (flashcards.length === 0) {
         new Notice("No flashcards found in this deck to export");
@@ -92,8 +107,9 @@ export class AnkiExportModal extends Modal {
       // Create and download file
       this.downloadAnkiFile(ankiData, config.ankiDeckName);
 
+      const exportType = this.isGroupExport ? "tag group" : "deck";
       new Notice(
-        `Successfully exported ${flashcards.length} flashcards to Anki format`
+        `Successfully exported ${flashcards.length} flashcards from ${exportType} to Anki format`
       );
       this.close();
     } catch (error) {

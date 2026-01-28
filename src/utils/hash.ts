@@ -45,3 +45,12 @@ export function generateContentHash(backText: string): string {
 export function generateDeckId(filepath: string): string {
   return `deck_${simpleHash(filepath).toString(36)}`;
 }
+
+/**
+ * Generate deck group ID using hash of tag
+ * @param tag The tag of the deck group
+ * @returns A deterministic ID in format "deckgroup_HASH"
+ */
+export function generateDeckGroupId(tag: string): string {
+  return `deckgroup_${simpleHash(tag).toString(36)}`;
+}

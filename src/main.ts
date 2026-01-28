@@ -81,9 +81,7 @@ export default class DecksPlugin extends Plugin {
   public settings: DecksSettings;
   private logger: Logger;
   private progressTracker: ProgressTracker;
-  private databaseWatcherInterval: number | null = null;
   private lastKnownDatabaseMtime = 0;
-  private focusListener: (() => void) | null = null;
 
   async onload() {
     // Load settings first
@@ -93,7 +91,8 @@ export default class DecksPlugin extends Plugin {
     this.logger = new Logger(
       this.settings,
       this.app.vault.adapter,
-      this.app.vault.configDir
+      this.app.vault.configDir,
+      this.manifest.dir || 'decks'
     );
     this.progressTracker = new ProgressTracker(this.settings);
 
@@ -102,7 +101,8 @@ export default class DecksPlugin extends Plugin {
     try {
       // Ensure plugin directory exists
       const adapter = this.app.vault.adapter;
-      const pluginDir = `${this.app.vault.configDir}/plugins/decks`;
+      const manifestDir = this.manifest.dir || 'decks';
+      const pluginDir = `${this.app.vault.configDir}/plugins/${manifestDir}`;
       if (!(await adapter.exists(pluginDir))) {
         await adapter.mkdir(pluginDir);
       }
@@ -110,7 +110,7 @@ export default class DecksPlugin extends Plugin {
       // FSRS instances are now created per-deck as needed
 
       // Initialize database with worker support
-      const databasePath = `${this.app.vault.configDir}/plugins/decks/flashcards.db`;
+      const databasePath = `${this.app.vault.configDir}/plugins/${manifestDir}/flashcards.db`;
 
       // Use experimental setting to control worker usage
       const useWorker = this.settings.experimental.enableDatabaseWorker;
@@ -131,7 +131,10 @@ export default class DecksPlugin extends Plugin {
         this.app.vault,
         this.app.metadataCache,
         this.db,
-        this,
+        {
+          settings: this.settings,
+          configDir: this.app.vault.configDir,
+        },
         this.settings.parsing.folderSearchPath
       );
 
@@ -148,7 +151,8 @@ export default class DecksPlugin extends Plugin {
       this.backupService = new BackupService(
         this.app.vault.adapter,
         this.app.vault.configDir,
-        this.logger.debug.bind(this)
+        this.manifest.dir || 'decks',
+        this.logger.debug.bind(this.logger)
       );
 
       // Initialize statistics service
@@ -170,6 +174,7 @@ export default class DecksPlugin extends Plugin {
             leaf,
             this.db,
             this.deckSynchronizer,
+            this.deckManager,
             this.scheduler,
             this.statisticsService,
             this.settings,
@@ -277,9 +282,6 @@ export default class DecksPlugin extends Plugin {
 
   onunload() {
     this.logger.debug("Unloading Decks plugin");
-
-    // Stop database watcher
-    this.stopDatabaseWatcher();
 
     // Close database connection using factory singleton
     void DatabaseFactory.close();
@@ -474,36 +476,25 @@ export default class DecksPlugin extends Plugin {
   }
 
   private setupDatabaseWatcher(): void {
-    const databasePath = `${this.app.vault.configDir}/plugins/decks/flashcards.db`;
+    const manifestDir = this.manifest.dir || 'decks';
+    const databasePath = `${this.app.vault.configDir}/plugins/${manifestDir}/flashcards.db`;
 
     // Initialize lastKnownDatabaseMtime
     void this.updateLastKnownDatabaseMtime(databasePath);
 
-    // Polling every 2 seconds
-    this.databaseWatcherInterval = window.setInterval(() => {
-      void this.checkForDatabaseChanges(databasePath);
-    }, 2000);
+    // Polling every 2 seconds using Obsidian's registerInterval
+    this.registerInterval(
+      window.setInterval(() => {
+        void this.checkForDatabaseChanges(databasePath);
+      }, 2000)
+    );
 
-    // Watch for window focus events
-    this.focusListener = () => {
+    // Watch for window focus events using registerDomEvent
+    this.registerDomEvent(window, "focus", () => {
       void this.checkForDatabaseChanges(databasePath);
-    };
-    window.addEventListener("focus", this.focusListener);
+    });
 
     this.logger.debug("Database watcher setup complete");
-  }
-
-  private stopDatabaseWatcher(): void {
-    if (this.databaseWatcherInterval) {
-      clearInterval(this.databaseWatcherInterval);
-      this.databaseWatcherInterval = null;
-    }
-
-    // Remove focus event listener
-    if (this.focusListener) {
-      window.removeEventListener("focus", this.focusListener);
-      this.focusListener = null;
-    }
   }
 
   private async updateLastKnownDatabaseMtime(

@@ -1,12 +1,15 @@
 <script lang="ts">
   import { onMount, onDestroy } from "svelte";
-  import type { DeckWithProfile, DeckStats } from "../database/types";
+  import type { DeckWithProfile, DeckStats, DeckGroup, DeckOrGroup } from "../database/types";
+  import { isDeckGroup, isFileDeck } from "../database/types";
+  import { generateDeckGroupId } from "../utils/hash";
 
   import ReviewHeatmap from "./statistics/ReviewHeatmap.svelte";
   import { AnkiExportModal } from "./export/AnkiExportModal";
   import type { StatisticsService } from "@/services/StatisticsService";
   import type { DeckSynchronizer } from "@/services/DeckSynchronizer";
   import type { IDatabaseService } from "@/database/DatabaseFactory";
+  import type { TagGroupService } from "@/services/TagGroupService";
   import type { App } from "obsidian";
 
   let decks: DeckWithProfile[] = [];
@@ -26,11 +29,17 @@
     resize?: () => void;
   } = {};
 
+  let viewMode: 'files' | 'tags' = 'files';
+  let deckGroups: DeckGroup[] = [];
+  let currentItems: DeckOrGroup[] = [];
+
   export let statisticsService: StatisticsService;
   export let deckSynchronizer: DeckSynchronizer;
   export let db: IDatabaseService;
+  export let tagGroupService: TagGroupService;
 
   export let onDeckClick: (deck: DeckWithProfile) => void;
+  export let onDeckGroupClick: (deckGroup: DeckGroup) => void;
 
   export let app: App;
 
@@ -96,6 +105,13 @@
   let lastEventTime = 0;
   let lastEventType = "";
 
+  function getItemId(item: DeckOrGroup): string {
+    if (isDeckGroup(item)) {
+      return generateDeckGroupId(item.tag);
+    }
+    return item.id;
+  }
+
   function getDeckStats(deckId: string): DeckStats {
     return (
       stats.get(deckId) ?? {
@@ -108,10 +124,6 @@
     );
   }
 
-  function formatDeckName(deck: DeckWithProfile): string {
-    // deck.name now contains the clean filename without extension
-    return deck.name;
-  }
 
   async function handleRefresh() {
     isRefreshing = true;
@@ -155,12 +167,35 @@
     decks = decks;
     isUpdatingStats = false;
   }
+  $: currentItems = viewMode === 'files'
+    ? allDecks.map(d => ({ ...d, type: 'file' as const }))
+    : deckGroups;
+
+  $: filteredItems = filterItems(currentItems, filterText);
+
+  function filterItems(items: DeckOrGroup[], filter: string): DeckOrGroup[] {
+    if (!filter.trim()) return items;
+    const filterLower = filter.toLowerCase();
+    return items.filter(item =>
+      item.name.toLowerCase().includes(filterLower) ||
+      item.tag.toLowerCase().includes(filterLower)
+    );
+  }
+
   export function updateDecks(newDecks: DeckWithProfile[]) {
     allDecks = newDecks;
     // Extract unique tags
     availableTags = [...new Set(newDecks.map((deck) => deck.tag))].filter(
       (tag) => tag
     );
+
+    // Generate deck groups asynchronously
+    tagGroupService.aggregateByTag(newDecks)
+      .then(groups => {
+        deckGroups = groups;
+      })
+      .catch(console.error);
+
     applyFilter();
   }
 
@@ -221,8 +256,12 @@
     }, 200);
   }
 
-  function handleDeckClick(deck: DeckWithProfile) {
-    onDeckClick(deck);
+  function handleItemClick(item: DeckOrGroup) {
+    if (isDeckGroup(item)) {
+      onDeckGroupClick(item);
+    } else {
+      onDeckClick(item);
+    }
   }
 
   export function refreshHeatmap() {
@@ -295,6 +334,11 @@
   onMount(() => {
     void loadStudyStats();
   });
+
+  function handleGroupConfigClick(group: DeckGroup, event: Event) {
+    event.stopPropagation();
+    openAnkiExportForGroup(group);
+  }
 
   function handleConfigClick(deck: DeckWithProfile, event: Event) {
     event.stopPropagation();
@@ -434,6 +478,46 @@
     modal.open();
   }
 
+  async function openAnkiExportForGroup(group: DeckGroup) {
+    if (!app) {
+      console.warn("Plugin not available for Anki export");
+      return;
+    }
+
+    // For deck groups, we'll create a virtual deck that represents all decks in the group
+    // The AnkiExportModal will need to query all flashcards from all deckIds
+    // We'll use the first deck as a template but with the group's tag
+    try {
+      const firstDeck = await db.getDeckById(group.deckIds[0]);
+      if (!firstDeck) {
+        console.error("Cannot export: no decks found in group");
+        return;
+      }
+
+      // Create a virtual deck object for the export modal
+      const virtualDeck = {
+        ...firstDeck,
+        id: generateDeckGroupId(group.tag),
+        name: group.name,
+        tag: group.tag,
+        // Store the deck IDs in a way the export modal can access them
+        filepath: `[Tag Group: ${group.tag}]`,
+      };
+
+      // Pass the virtual deck with the group's deck IDs
+      // The export modal will need to be updated to handle this case
+      const modal = new AnkiExportModal(app, virtualDeck, db);
+
+      // Store deck IDs on the modal instance so it can query all flashcards
+      modal.deckIds = group.deckIds;
+      modal.isGroupExport = true;
+
+      modal.open();
+    } catch (error) {
+      console.error("Error opening Anki export for group:", error);
+    }
+  }
+
   function handleTouchClick(callback: () => void, event: Event) {
     const now = Date.now();
     const eventType = event.type;
@@ -554,6 +638,23 @@
   </div>
 
   <div class="decks-deck-content">
+    <div class="decks-tab-switcher">
+      <button
+        class="decks-tab-button"
+        class:active={viewMode === 'files'}
+        on:click={() => viewMode = 'files'}
+      >
+        Files ({allDecks.length})
+      </button>
+      <button
+        class="decks-tab-button"
+        class:active={viewMode === 'tags'}
+        on:click={() => viewMode = 'tags'}
+      >
+        Tags ({deckGroups.length})
+      </button>
+    </div>
+
     <div class="decks-filter-section">
       <div class="decks-filter-container">
         <input
@@ -618,70 +719,103 @@
     {:else}
       <div class="decks-deck-table">
         <div class="decks-table-header">
-          <div class="decks-col-deck">Deck</div>
+          <div class="decks-col-deck">{viewMode === 'files' ? 'Deck' : 'Tag Group'}</div>
           <div class="decks-col-stat">New</div>
           <div class="decks-col-stat">Due</div>
           <div class="decks-col-config"></div>
         </div>
 
         <div class="decks-table-body">
-          {#each decks as deck}
-            {@const stats = getDeckStats(deck.id)}
+          {#each filteredItems as item}
+            {@const itemStats = getDeckStats(getItemId(item))}
             <div class="decks-deck-row">
               <div class="decks-col-deck">
                 <span
                   class="decks-deck-name-link"
                   on:click={(e) =>
-                    handleTouchClick(() => handleDeckClick(deck), e)}
+                    handleTouchClick(() => handleItemClick(item), e)}
                   on:touchend={(e) =>
-                    handleTouchClick(() => handleDeckClick(deck), e)}
-                  on:keydown={(e) => e.key === "Enter" && handleDeckClick(deck)}
+                    handleTouchClick(() => handleItemClick(item), e)}
+                  on:keydown={(e) => e.key === "Enter" && handleItemClick(item)}
                   role="button"
                   tabindex="0"
-                  title="Click to review {deck.name}"
+                  title="Click to review {item.name}"
                 >
-                  {formatDeckName(deck)}
+                  {#if isDeckGroup(item)}
+                    <span class="decks-tag-group-icon">🏷️</span>
+                  {/if}
+                  {item.name}
+                  {#if isDeckGroup(item)}
+                    <span class="decks-tag-group-count">({item.deckIds.length} files)</span>
+                  {/if}
                 </span>
               </div>
               <div
                 class="decks-col-stat"
-                class:has-cards={stats.newCount > 0}
+                class:has-cards={itemStats.newCount > 0}
                 class:updating={isUpdatingStats}
-                class:has-limit={deck.profile.hasNewCardsLimitEnabled}
-                title={deck.profile.hasNewCardsLimitEnabled
-                  ? `${stats.newCount} new cards available today (limit: ${deck.profile.newCardsPerDay})`
-                  : `${stats.newCount} new cards due`}
+                class:has-limit={item.profile.hasNewCardsLimitEnabled}
+                title={item.profile.hasNewCardsLimitEnabled
+                  ? `${itemStats.newCount} new cards available today (limit: ${item.profile.newCardsPerDay})`
+                  : `${itemStats.newCount} new cards due`}
               >
-                {stats.newCount}
-                {#if deck.profile.hasNewCardsLimitEnabled}
+                {itemStats.newCount}
+                {#if item.profile.hasNewCardsLimitEnabled}
                   <span class="decks-limit-indicator">⚠</span>
                 {/if}
               </div>
 
               <div
                 class="decks-col-stat"
-                class:has-cards={stats.dueCount > 0}
+                class:has-cards={itemStats.dueCount > 0}
                 class:updating={isUpdatingStats}
-                class:has-limit={deck.profile.hasReviewCardsLimitEnabled}
-                title={deck.profile.hasReviewCardsLimitEnabled
-                  ? `${stats.dueCount} review cards available today (limit: ${deck.profile.reviewCardsPerDay})`
-                  : `${stats.dueCount} review cards due`}
+                class:has-limit={item.profile.hasReviewCardsLimitEnabled}
+                title={item.profile.hasReviewCardsLimitEnabled
+                  ? `${itemStats.dueCount} review cards available today (limit: ${item.profile.reviewCardsPerDay})`
+                  : `${itemStats.dueCount} review cards due`}
               >
-                {stats.dueCount}
-                {#if deck.profile.hasReviewCardsLimitEnabled}
+                {itemStats.dueCount}
+                {#if item.profile.hasReviewCardsLimitEnabled}
                   <span class="decks-limit-indicator">📅</span>
                 {/if}
               </div>
               <div class="decks-col-config">
-                <button
-                  class="decks-deck-config-button"
-                  on:click={(e) =>
-                    handleTouchClick(() => handleConfigClick(deck, e), e)}
-                  on:touchend={(e) =>
-                    handleTouchClick(() => handleConfigClick(deck, e), e)}
-                  title="Configure deck settings"
-                  aria-label="Configure {deck.name}"
-                >
+                {#if isDeckGroup(item)}
+                  <button
+                    class="decks-deck-config-button"
+                    on:click={(e) =>
+                      handleTouchClick(() => handleGroupConfigClick(item, e), e)}
+                    on:touchend={(e) =>
+                      handleTouchClick(() => handleGroupConfigClick(item, e), e)}
+                    title="Export tag group to Anki"
+                    aria-label="Export {item.name} to Anki"
+                  >
+                  <svg
+                    xmlns="http://www.w3.org/2000/svg"
+                    width="16"
+                    height="16"
+                    viewBox="0 0 24 24"
+                    fill="none"
+                    stroke="currentColor"
+                    stroke-width="2"
+                    stroke-linecap="round"
+                    stroke-linejoin="round"
+                  >
+                    <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path>
+                    <polyline points="7 10 12 15 17 10"></polyline>
+                    <line x1="12" y1="15" x2="12" y2="3"></line>
+                  </svg>
+                  </button>
+                {:else if isFileDeck(item)}
+                  <button
+                    class="decks-deck-config-button"
+                    on:click={(e) =>
+                      handleTouchClick(() => handleConfigClick(item, e), e)}
+                    on:touchend={(e) =>
+                      handleTouchClick(() => handleConfigClick(item, e), e)}
+                    title="Configure deck settings"
+                    aria-label="Configure {item.name}"
+                  >
                   <svg
                     xmlns="http://www.w3.org/2000/svg"
                     width="16"
@@ -699,6 +833,7 @@
                     ></path>
                   </svg>
                 </button>
+                {/if}
               </div>
             </div>
           {/each}
@@ -769,6 +904,52 @@
     flex-direction: column;
     overflow: hidden;
     min-height: 0;
+  }
+
+  .decks-tab-switcher {
+    display: flex;
+    gap: 4px;
+    padding: 8px 12px 0 12px;
+    border-bottom: 1px solid var(--background-modifier-border);
+    background: var(--background-secondary);
+  }
+
+  .decks-tab-button {
+    flex: 1;
+    padding: 8px 16px;
+    border: 1px solid var(--background-modifier-border);
+    border-radius: 4px 4px 0 0;
+    background: var(--background-primary);
+    color: var(--text-muted);
+    cursor: pointer;
+    transition: all 0.2s ease;
+    font-size: 13px;
+    font-weight: 500;
+  }
+
+  .decks-tab-button:hover {
+    background: var(--background-modifier-hover);
+    color: var(--text-normal);
+  }
+
+  .decks-tab-button.active {
+    background: var(--interactive-accent);
+    color: var(--text-on-accent);
+    border-color: var(--interactive-accent);
+    font-weight: 600;
+  }
+
+  .decks-tag-group-icon {
+    margin-right: 4px;
+    font-size: 12px;
+    opacity: 0.8;
+  }
+
+  .decks-tag-group-count {
+    margin-left: 8px;
+    font-size: 11px;
+    color: var(--text-muted);
+    font-weight: normal;
   }
 
   .decks-heatmap-section {

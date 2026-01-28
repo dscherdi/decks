@@ -1,58 +1,58 @@
 /* Custom styles for decks plugin */
 .decks-view {
-    padding: 0;
-    overflow: hidden;
-    width: 100%;
-    min-width: unset;
-    touch-action: manipulation;
-    -webkit-touch-callout: none;
-    -webkit-user-select: none;
-    user-select: none;
+  padding: 0;
+  overflow: hidden;
+  width: 100%;
+  min-width: unset;
+  touch-action: manipulation;
+  -webkit-touch-callout: none;
+  -webkit-user-select: none;
+  user-select: none;
 }
 
 /* Chart controls and descriptions */
 .decks-chart-controls {
-    margin: 1rem 0;
-    display: flex;
-    gap: 1rem;
-    align-items: center;
+  margin: 1rem 0;
+  display: flex;
+  gap: 1rem;
+  align-items: center;
 }
 
 .decks-chart-controls label {
-    display: flex;
-    align-items: center;
-    gap: 0.5rem;
-    font-size: 0.9rem;
-    color: var(--text-normal);
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  font-size: 0.9rem;
+  color: var(--text-normal);
 }
 
 .decks-chart-controls select {
-    padding: 0.25rem 0.5rem;
-    border: 1px solid var(--background-modifier-border);
-    border-radius: 4px;
-    background: var(--background-primary);
-    color: var(--text-normal);
-    font-size: 0.9rem;
-    min-width: 120px;
+  padding: 0.25rem 0.5rem;
+  border: 1px solid var(--background-modifier-border);
+  border-radius: 4px;
+  background: var(--background-primary);
+  color: var(--text-normal);
+  font-size: 0.9rem;
+  min-width: 120px;
 }
 
 .decks-chart-controls select:focus {
-    outline: none;
-    border-color: var(--interactive-accent);
-    box-shadow: 0 0 0 2px var(--interactive-accent-hover);
+  outline: none;
+  border-color: var(--interactive-accent);
+  box-shadow: 0 0 0 2px var(--interactive-accent-hover);
 }
 
 /* Mobile responsiveness for charts */
 @media (max-width: 768px) {
-    .decks-chart-controls {
-        flex-direction: column;
-        align-items: flex-start;
-        gap: 0.5rem;
-    }
+  .decks-chart-controls {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 0.5rem;
+  }
 
-    .decks-chart-controls select {
-        min-width: 100px;
-    }
+  .decks-chart-controls select {
+    min-width: 100px;
+  }
 }
 
 /* Scoped touch support for interactive elements within plugin containers */
@@ -77,13 +77,13 @@
 .decks-anki-export-ui .decks-clickable,
 .decks-deck-config-ui .decks-clickable,
 .decks-heatmap-container .decks-clickable {
-    touch-action: manipulation;
-    -webkit-tap-highlight-color: transparent;
-    -webkit-touch-callout: none;
-    user-select: none;
-    min-height: 44px;
-    min-width: 44px;
-    transition: all 0.2s ease;
+  touch-action: manipulation;
+  -webkit-tap-highlight-color: transparent;
+  -webkit-touch-callout: none;
+  user-select: none;
+  min-height: 44px;
+  min-width: 44px;
+  transition: all 0.2s ease;
 }
 
 /* Enhanced focus states for accessibility - scoped to plugin containers */
@@ -108,9 +108,9 @@
 .decks-anki-export-ui .decks-clickable:focus,
 .decks-deck-config-ui .decks-clickable:focus,
 .decks-heatmap-container .decks-clickable:focus {
-    outline: 2px solid var(--interactive-accent);
-    outline-offset: 2px;
-    z-index: 10;
+  outline: 2px solid var(--interactive-accent);
+  outline-offset: 2px;
+  z-index: 10;
 }
 
 /* Active states for touch feedback - scoped to plugin containers */
@@ -135,112 +135,116 @@
 .decks-anki-export-ui .decks-clickable:active,
 .decks-deck-config-ui .decks-clickable:active,
 .decks-heatmap-container .decks-clickable:active {
-    transform: scale(0.95);
-    transition: transform 0.1s ease;
+  transform: scale(0.95);
+  transition: transform 0.1s ease;
 }
 
 .decks-card-side.decks-back > p > span > div.markdown-preview-view {
-    display: inherit !important;
-    width: inherit !important;
-    min-height: inherit !important;
-    padding: inherit !important;
-    margin: 0px !important;
+  display: inherit !important;
+  width: inherit !important;
+  min-height: inherit !important;
+  padding: inherit !important;
+  margin: 0px !important;
 }
 .decks-card-side.decks-back
-    > p
-    > span
-    > div.markdown-preview-view
-    > :is(h1, h2, h3, h4, h5, h6):first-child {
-    display: none;
+  > p
+  > span
+  > div.markdown-preview-view
+  > :is(h1, h2, h3, h4, h5, h6):first-child {
+  display: none;
 }
 
 .decks-card-side.decks-back > p {
-    margin-block: 0px !important;
+  margin-block: 0px !important;
 }
 
 .decks-card-side.decks-back > p > span {
-    border-inline-start: unset !important;
+  border-inline-start: unset !important;
+}
+
+.decks-card-side.decks-back .MathJax {
+  overflow-x: auto !important;
 }
 
 /* Ensure proper touch targets on mobile - scoped to plugin containers */
 @media (max-width: 768px) {
-    .decks-view button,
-    .decks-deck-list-panel button,
-    .decks-review-modal button,
-    .decks-statistics-container button,
-    .decks-anki-export-ui button,
-    .decks-deck-config-ui button,
-    .decks-heatmap-container button,
-    .decks-view [role="button"],
-    .decks-deck-list-panel [role="button"],
-    .decks-review-modal [role="button"],
-    .decks-statistics-container [role="button"],
-    .decks-anki-export-ui [role="button"],
-    .decks-deck-config-ui [role="button"],
-    .decks-heatmap-container [role="button"],
-    .decks-view .decks-clickable,
-    .decks-deck-list-panel .decks-clickable,
-    .decks-review-modal .decks-clickable,
-    .decks-statistics-container .decks-clickable,
-    .decks-anki-export-ui .decks-clickable,
-    .decks-deck-config-ui .decks-clickable,
-    .decks-heatmap-container .decks-clickable {
-        min-height: 44px;
-        min-width: 44px;
-    }
+  .decks-view button,
+  .decks-deck-list-panel button,
+  .decks-review-modal button,
+  .decks-statistics-container button,
+  .decks-anki-export-ui button,
+  .decks-deck-config-ui button,
+  .decks-heatmap-container button,
+  .decks-view [role="button"],
+  .decks-deck-list-panel [role="button"],
+  .decks-review-modal [role="button"],
+  .decks-statistics-container [role="button"],
+  .decks-anki-export-ui [role="button"],
+  .decks-deck-config-ui [role="button"],
+  .decks-heatmap-container [role="button"],
+  .decks-view .decks-clickable,
+  .decks-deck-list-panel .decks-clickable,
+  .decks-review-modal .decks-clickable,
+  .decks-statistics-container .decks-clickable,
+  .decks-anki-export-ui .decks-clickable,
+  .decks-deck-config-ui .decks-clickable,
+  .decks-heatmap-container .decks-clickable {
+    min-height: 44px;
+    min-width: 44px;
+  }
 
-    /* Enhanced touch feedback on mobile - scoped to plugin containers */
-    .decks-view button:active,
-    .decks-deck-list-panel button:active,
-    .decks-review-modal button:active,
-    .decks-statistics-container button:active,
-    .decks-anki-export-ui button:active,
-    .decks-deck-config-ui button:active,
-    .decks-heatmap-container button:active,
-    .decks-view [role="button"]:active,
-    .decks-deck-list-panel [role="button"]:active,
-    .decks-review-modal [role="button"]:active,
-    .decks-statistics-container [role="button"]:active,
-    .decks-anki-export-ui [role="button"]:active,
-    .decks-deck-config-ui [role="button"]:active,
-    .decks-heatmap-container [role="button"]:active,
-    .decks-view .decks-clickable:active,
-    .decks-deck-list-panel .decks-clickable:active,
-    .decks-review-modal .decks-clickable:active,
-    .decks-statistics-container .decks-clickable:active,
-    .decks-anki-export-ui .decks-clickable:active,
-    .decks-deck-config-ui .decks-clickable:active,
-    .decks-heatmap-container .decks-clickable:active {
-        transform: scale(0.98);
-        background: var(--background-modifier-active-hover);
-    }
+  /* Enhanced touch feedback on mobile - scoped to plugin containers */
+  .decks-view button:active,
+  .decks-deck-list-panel button:active,
+  .decks-review-modal button:active,
+  .decks-statistics-container button:active,
+  .decks-anki-export-ui button:active,
+  .decks-deck-config-ui button:active,
+  .decks-heatmap-container button:active,
+  .decks-view [role="button"]:active,
+  .decks-deck-list-panel [role="button"]:active,
+  .decks-review-modal [role="button"]:active,
+  .decks-statistics-container [role="button"]:active,
+  .decks-anki-export-ui [role="button"]:active,
+  .decks-deck-config-ui [role="button"]:active,
+  .decks-heatmap-container [role="button"]:active,
+  .decks-view .decks-clickable:active,
+  .decks-deck-list-panel .decks-clickable:active,
+  .decks-review-modal .decks-clickable:active,
+  .decks-statistics-container .decks-clickable:active,
+  .decks-anki-export-ui .decks-clickable:active,
+  .decks-deck-config-ui .decks-clickable:active,
+  .decks-heatmap-container .decks-clickable:active {
+    transform: scale(0.98);
+    background: var(--background-modifier-active-hover);
+  }
 }
 
 @media (max-width: 480px) {
-    .decks-view button,
-    .decks-deck-list-panel button,
-    .decks-review-modal button,
-    .decks-statistics-container button,
-    .decks-anki-export-ui button,
-    .decks-deck-config-ui button,
-    .decks-heatmap-container button,
-    .decks-view [role="button"],
-    .decks-deck-list-panel [role="button"],
-    .decks-review-modal [role="button"],
-    .decks-statistics-container [role="button"],
-    .decks-anki-export-ui [role="button"],
-    .decks-deck-config-ui [role="button"],
-    .decks-heatmap-container [role="button"],
-    .decks-view .decks-clickable,
-    .decks-deck-list-panel .decks-clickable,
-    .decks-review-modal .decks-clickable,
-    .decks-statistics-container .decks-clickable,
-    .decks-anki-export-ui .decks-clickable,
-    .decks-deck-config-ui .decks-clickable,
-    .decks-heatmap-container .decks-clickable {
-        min-height: 40px;
-        min-width: 40px;
-    }
+  .decks-view button,
+  .decks-deck-list-panel button,
+  .decks-review-modal button,
+  .decks-statistics-container button,
+  .decks-anki-export-ui button,
+  .decks-deck-config-ui button,
+  .decks-heatmap-container button,
+  .decks-view [role="button"],
+  .decks-deck-list-panel [role="button"],
+  .decks-review-modal [role="button"],
+  .decks-statistics-container [role="button"],
+  .decks-anki-export-ui [role="button"],
+  .decks-deck-config-ui [role="button"],
+  .decks-heatmap-container [role="button"],
+  .decks-view .decks-clickable,
+  .decks-deck-list-panel .decks-clickable,
+  .decks-review-modal .decks-clickable,
+  .decks-statistics-container .decks-clickable,
+  .decks-anki-export-ui .decks-clickable,
+  .decks-deck-config-ui .decks-clickable,
+  .decks-heatmap-container .decks-clickable {
+    min-height: 40px;
+    min-width: 40px;
+  }
 }
 
 /* Remove tap delay on iOS - scoped to plugin containers */
@@ -279,10 +283,10 @@
 .decks-anki-export-ui select,
 .decks-deck-config-ui select,
 .decks-heatmap-container select {
-    -webkit-tap-highlight-color: transparent;
-    touch-action: manipulation;
-    -webkit-user-drag: none;
-    -webkit-touch-callout: none;
+  -webkit-tap-highlight-color: transparent;
+  touch-action: manipulation;
+  -webkit-user-drag: none;
+  -webkit-touch-callout: none;
 }
 
 /* Prevent text selection on interactive elements - scoped to plugin containers */
@@ -328,11 +332,11 @@
 .decks-anki-export-ui .decks-deck-config-button,
 .decks-deck-config-ui .decks-deck-config-button,
 .decks-heatmap-container .decks-deck-config-button {
-    -webkit-user-select: none;
-    -moz-user-select: none;
-    -ms-user-select: none;
-    user-select: none;
-    -webkit-touch-callout: none;
+  -webkit-user-select: none;
+  -moz-user-select: none;
+  -ms-user-select: none;
+  user-select: none;
+  -webkit-touch-callout: none;
 }
 
 /* Fast click for iOS Safari - scoped to plugin containers */
@@ -385,96 +389,96 @@
 .decks-anki-export-ui button,
 .decks-deck-config-ui button,
 .decks-heatmap-container button {
-    cursor: pointer;
-    -webkit-tap-highlight-color: rgba(0, 0, 0, 0);
+  cursor: pointer;
+  -webkit-tap-highlight-color: rgba(0, 0, 0, 0);
 }
 
 .decks-review-modal-container {
-    height: 98%;
+  height: 98%;
 }
 
 /* Modal styles */
 .decks-modal {
-    width: 40vw;
-    max-width: 60vw;
-    min-width: 600px;
-    height: 85vh;
-    max-height: 85vh;
+  width: 40vw;
+  max-width: 60vw;
+  min-width: 600px;
+  height: 85vh;
+  max-height: 85vh;
 }
 
 .decks-modal-mobile {
-    height: 100% !important;
-    max-height: 100vh !important;
-    width: 100% !important;
-    max-width: 100vw !important;
-    padding-top: env(safe-area-inset-top);
-    padding-left: env(safe-area-inset-left);
-    padding-right: env(safe-area-inset-right);
-    padding-bottom: env(safe-area-inset-bottom);
+  height: 100% !important;
+  max-height: 100vh !important;
+  width: 100% !important;
+  max-width: 100vw !important;
+  padding-top: env(safe-area-inset-top);
+  padding-left: env(safe-area-inset-left);
+  padding-right: env(safe-area-inset-right);
+  padding-bottom: env(safe-area-inset-bottom);
 }
 
 .decks-modal-tablet {
-    width: 85vw !important;
-    max-width: 85vw !important;
+  width: 85vw !important;
+  max-width: 85vw !important;
 }
 
 .decks-modal-mobile .modal-close-button {
-    z-index: 1000;
-    position: absolute;
-    transform: translateY(env(safe-area-inset-top));
+  z-index: 1000;
+  position: absolute;
+  transform: translateY(env(safe-area-inset-top));
 }
 
 .decks-modal-mobile .modal-header {
-    padding-top: translateY(env(safe-area-inset-top));
+  padding-top: translateY(env(safe-area-inset-top));
 }
 
 .decks-deck-review-modal .modal-content {
-    display: flex;
-    flex-direction: column;
-    height: 100%;
-    overflow: hidden;
-    padding: 0;
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  overflow: hidden;
+  padding: 0;
 }
 
 .decks-deck-review-modal .modal {
-    height: 100%;
-    display: flex;
-    flex-direction: column;
+  height: 100%;
+  display: flex;
+  flex-direction: column;
 }
 
 .decks-deck-review-modal .modal-container {
-    overflow: hidden;
-    width: 100%;
-    height: 100%;
+  overflow: hidden;
+  width: 100%;
+  height: 100%;
 }
 
 .decks-statistics-modal .modal {
-    width: 100%;
-    max-width: 85vw;
-    height: 100%;
-    max-height: 85vh;
-    margin: auto;
-    position: fixed;
-    top: 50%;
-    left: 50%;
-    transform: translate(-50%, -50%);
+  width: 100%;
+  max-width: 85vw;
+  height: 100%;
+  max-height: 85vh;
+  margin: auto;
+  position: fixed;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
 }
 
 .decks-statistics-modal-container {
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    position: fixed;
-    top: 0;
-    left: 0;
-    width: 100vw;
-    height: 100vh;
-    z-index: 1000;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  position: fixed;
+  top: 0;
+  left: 0;
+  width: 100vw;
+  height: 100vh;
+  z-index: 1000;
 }
 
 .decks-statistics-modal-content {
-    overflow: hidden;
-    height: 100%;
+  overflow: hidden;
+  height: 100%;
 }
 
 /* Extra small screen protection */
@@ -483,28 +487,28 @@
 .decks-statistics-modal .modal,
 .decks-statistics-modal-mobile,
 .decks-deck-config-modal-mobile {
-    min-width: 280px !important;
-    min-height: 400px !important;
+  min-width: 280px !important;
+  min-height: 400px !important;
 }
 
 .decks-statistics-modal-title {
-    font-size: 16px;
-    margin: 0 0 12px 0;
-    padding: 0 16px;
+  font-size: 16px;
+  margin: 0 0 12px 0;
+  padding: 0 16px;
 }
 
 .decks-statistics-modal-component-container {
-    padding: 0;
-    margin: 0;
-    height: calc(80vh - 60px);
-    width: 100%;
-    overflow-y: auto;
-    overflow-x: hidden;
+  padding: 0;
+  margin: 0;
+  height: calc(80vh - 60px);
+  width: 100%;
+  overflow-y: auto;
+  overflow-x: hidden;
 }
 
 .decks-deck-config-container {
-    padding: 0;
-    margin: 0;
+  padding: 0;
+  margin: 0;
 }
 /*
 .workspace-leaf-content[data-type="decks-view"] {
@@ -518,97 +522,97 @@
 
 /* Touch-friendly button sizes for all mobile devices - scoped to plugin containers */
 @media (hover: none) and (pointer: coarse) {
-    .decks-view button,
-    .decks-deck-list-panel button,
-    .decks-review-modal button,
-    .decks-statistics-container button,
-    .decks-anki-export-ui button,
-    .decks-deck-config-ui button,
-    .decks-heatmap-container button {
-        min-height: 44px;
-        min-width: 44px;
-    }
+  .decks-view button,
+  .decks-deck-list-panel button,
+  .decks-review-modal button,
+  .decks-statistics-container button,
+  .decks-anki-export-ui button,
+  .decks-deck-config-ui button,
+  .decks-heatmap-container button {
+    min-height: 44px;
+    min-width: 44px;
+  }
 
-    .decks-view .decks-difficulty-button,
-    .decks-deck-list-panel .decks-difficulty-button,
-    .decks-review-modal .decks-difficulty-button,
-    .decks-statistics-container .decks-difficulty-button,
-    .decks-anki-export-ui .decks-difficulty-button,
-    .decks-deck-config-ui .decks-difficulty-button,
-    .decks-heatmap-container .decks-difficulty-button {
-        min-height: 48px;
-    }
+  .decks-view .decks-difficulty-button,
+  .decks-deck-list-panel .decks-difficulty-button,
+  .decks-review-modal .decks-difficulty-button,
+  .decks-statistics-container .decks-difficulty-button,
+  .decks-anki-export-ui .decks-difficulty-button,
+  .decks-deck-config-ui .decks-difficulty-button,
+  .decks-heatmap-container .decks-difficulty-button {
+    min-height: 48px;
+  }
 
-    .decks-view .decks-deck-config-button,
-    .decks-deck-list-panel .decks-deck-config-button,
-    .decks-review-modal .decks-deck-config-button,
-    .decks-statistics-container .decks-deck-config-button,
-    .decks-anki-export-ui .decks-deck-config-button,
-    .decks-deck-config-ui .decks-deck-config-button,
-    .decks-heatmap-container .decks-deck-config-button,
-    .decks-view .decks-stats-button,
-    .decks-deck-list-panel .decks-stats-button,
-    .decks-review-modal .decks-stats-button,
-    .decks-statistics-container .decks-stats-button,
-    .decks-anki-export-ui .decks-stats-button,
-    .decks-deck-config-ui .decks-stats-button,
-    .decks-heatmap-container .decks-stats-button,
-    .decks-view .decks-refresh-button,
-    .decks-deck-list-panel .decks-refresh-button,
-    .decks-review-modal .decks-refresh-button,
-    .decks-statistics-container .decks-refresh-button,
-    .decks-anki-export-ui .decks-refresh-button,
-    .decks-deck-config-ui .decks-refresh-button,
-    .decks-heatmap-container .decks-refresh-button {
-        min-height: 44px;
-        min-width: 44px;
-    }
+  .decks-view .decks-deck-config-button,
+  .decks-deck-list-panel .decks-deck-config-button,
+  .decks-review-modal .decks-deck-config-button,
+  .decks-statistics-container .decks-deck-config-button,
+  .decks-anki-export-ui .decks-deck-config-button,
+  .decks-deck-config-ui .decks-deck-config-button,
+  .decks-heatmap-container .decks-deck-config-button,
+  .decks-view .decks-stats-button,
+  .decks-deck-list-panel .decks-stats-button,
+  .decks-review-modal .decks-stats-button,
+  .decks-statistics-container .decks-stats-button,
+  .decks-anki-export-ui .decks-stats-button,
+  .decks-deck-config-ui .decks-stats-button,
+  .decks-heatmap-container .decks-stats-button,
+  .decks-view .decks-refresh-button,
+  .decks-deck-list-panel .decks-refresh-button,
+  .decks-review-modal .decks-refresh-button,
+  .decks-statistics-container .decks-refresh-button,
+  .decks-anki-export-ui .decks-refresh-button,
+  .decks-deck-config-ui .decks-refresh-button,
+  .decks-heatmap-container .decks-refresh-button {
+    min-height: 44px;
+    min-width: 44px;
+  }
 }
 
 /* Backup Settings Styles */
 .decks-backup-container {
-    margin-top: 10px;
+  margin-top: 10px;
 }
 
 div.decks-card-content
-    > div.decks-answer-section
-    > div.decks-card-side.decks-back
-    > div.math-block {
-    overflow-x: scroll;
+  > div.decks-answer-section
+  > div.decks-card-side.decks-back
+  > div.math-block {
+  overflow-x: scroll;
 }
 
 /* Utility classes for Obsidian linter compliance (no inline styles) */
 .decks-dialog-width {
-    width: 400px;
+  width: 400px;
 }
 
 .decks-dialog-margin-bottom {
-    margin-bottom: 12px;
+  margin-bottom: 12px;
 }
 
 .decks-flex-container {
-    display: flex;
+  display: flex;
 }
 
 .decks-flex-gap {
-    gap: 8px;
+  gap: 8px;
 }
 
 .decks-flex-justify-end {
-    justify-content: flex-end;
+  justify-content: flex-end;
 }
 
 .decks-context-menu {
-    position: fixed;
-    z-index: 1000;
-    visibility: hidden;
+  position: fixed;
+  z-index: 1000;
+  visibility: hidden;
 }
 
 .decks-context-menu-visible {
-    visibility: visible;
+  visibility: visible;
 }
 
 .decks-button-container {
-    margin-top: 16px;
-    margin-bottom: 16px;
+  margin-top: 16px;
+  margin-bottom: 16px;
 }
