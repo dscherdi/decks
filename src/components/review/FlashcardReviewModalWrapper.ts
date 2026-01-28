@@ -122,29 +122,18 @@ export class FlashcardReviewModalWrapper extends Modal {
       leaf = this.app.workspace.getLeaf("tab");
     }
 
-    await leaf.openFile(file);
+    await leaf.openFile(file, { eState: { line: lineNumber } });
     this.app.workspace.setActiveLeaf(leaf, { focus: true });
-
-    // Scroll to the line after a short delay to ensure the editor is ready
-    const targetLine = lineNumber;
-    const targetLeaf = leaf;
 
     this.close();
 
+    // Use setEphemeralState for reliable line scrolling
     setTimeout(() => {
-      const view = targetLeaf.view;
-      if (view && "editor" in view) {
-        const editor = (view as { editor: { setCursor: (pos: { line: number; ch: number }) => void; scrollIntoView: (range: { from: { line: number; ch: number }; to: { line: number; ch: number } }, center: boolean) => void; focus: () => void } }).editor;
-        if (editor) {
-          editor.focus();
-          editor.setCursor({ line: targetLine, ch: 0 });
-          editor.scrollIntoView(
-            { from: { line: targetLine, ch: 0 }, to: { line: targetLine, ch: 0 } },
-            true
-          );
-        }
+      const view = leaf.view;
+      if (view && "setEphemeralState" in view) {
+        (view as { setEphemeralState: (state: { line: number }) => void }).setEphemeralState({ line: lineNumber });
       }
-    }, 200);
+    }, 100);
   }
 
   onOpen() {
