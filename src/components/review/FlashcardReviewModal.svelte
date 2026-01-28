@@ -32,8 +32,23 @@
   export let onComplete:
     | ((event: { reason: string; reviewed: number }) => void | Promise<void>)
     | undefined = undefined;
+  export let onNavigateToSource:
+    | ((card: Flashcard) => Promise<void>)
+    | undefined = undefined;
 
   const dispatch = createEventDispatcher();
+
+  function handleNavigateToSource() {
+    if (currentCard && onNavigateToSource) {
+      onNavigateToSource(currentCard).catch(console.error);
+    }
+  }
+
+  function handleCopyBack() {
+    if (currentCard) {
+      navigator.clipboard.writeText(currentCard.back).catch(console.error);
+    }
+  }
 
   // Helper function to handle complete action (supports both Svelte 4 and Svelte 5)
   function handleComplete(detail: { reason: string; reviewed: number }) {
@@ -376,12 +391,43 @@
   {#if currentCard}
     <div class="decks-card-content">
       <div class="decks-question-section">
-        <div class="decks-card-side decks-front" bind:this={frontEl}></div>
+        <div class="decks-front-wrapper">
+          {#if onNavigateToSource && currentCard}
+            <button
+              class="decks-go-to-file-button"
+              on:click={handleNavigateToSource}
+              title="Open source file"
+              type="button"
+            >
+              <svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                <path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"></path>
+                <polyline points="15 3 21 3 21 9"></polyline>
+                <line x1="10" y1="14" x2="21" y2="3"></line>
+              </svg>
+            </button>
+          {/if}
+          <div class="decks-card-side decks-front" bind:this={frontEl}></div>
+        </div>
       </div>
 
       <div class="decks-answer-section" class:hidden={!showAnswer}>
         <div class="decks-separator"></div>
-        <div class="decks-card-side decks-back" bind:this={backEl}></div>
+        <div class="decks-back-wrapper">
+          {#if currentCard}
+            <button
+              class="decks-copy-button"
+              on:click={handleCopyBack}
+              title="Copy content"
+              type="button"
+            >
+              <svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                <rect x="9" y="9" width="13" height="13" rx="2" ry="2"></rect>
+                <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"></path>
+              </svg>
+            </button>
+          {/if}
+          <div class="decks-card-side decks-back" bind:this={backEl}></div>
+        </div>
       </div>
     </div>
 
@@ -577,6 +623,13 @@
     overflow-wrap: break-word;
   }
 
+  .decks-front-wrapper,
+  .decks-back-wrapper {
+    position: relative;
+    width: 100%;
+    max-width: 900px;
+  }
+
   .decks-card-side.decks-front {
     text-align: center;
     font-size: 20px;
@@ -586,6 +639,40 @@
   .decks-card-side.decks-back {
     font-size: 16px;
     line-height: 1.6;
+  }
+
+  .decks-go-to-file-button,
+  .decks-copy-button {
+    position: absolute;
+    top: 4px;
+    right: 4px;
+    background: var(--background-secondary);
+    border: 1px solid var(--background-modifier-border);
+    border-radius: 3px;
+    padding: 3px;
+    cursor: pointer;
+    color: var(--text-muted);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    transition: all 0.15s ease;
+    z-index: 10;
+    min-height: unset !important;
+    min-width: unset !important;
+    height: auto;
+    width: auto;
+  }
+
+  .decks-go-to-file-button:hover,
+  .decks-copy-button:hover {
+    background: var(--background-modifier-hover);
+    color: var(--text-normal);
+    border-color: var(--interactive-accent);
+  }
+
+  .decks-go-to-file-button:active,
+  .decks-copy-button:active {
+    transform: scale(0.95);
   }
 
   .decks-answer-section {

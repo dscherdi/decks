@@ -166,6 +166,25 @@
   overflow-x: auto !important;
 }
 
+/* Enable text selection for flashcard content */
+.decks-card-side.decks-front,
+.decks-card-side.decks-back {
+  -webkit-user-select: text;
+  -moz-user-select: text;
+  -ms-user-select: text;
+  user-select: text;
+  cursor: text;
+}
+
+/* Ensure rendered markdown content is also selectable */
+.decks-card-side.decks-front *,
+.decks-card-side.decks-back * {
+  -webkit-user-select: text;
+  -moz-user-select: text;
+  -ms-user-select: text;
+  user-select: text;
+}
+
 /* Ensure proper touch targets on mobile - scoped to plugin containers */
 @media (max-width: 768px) {
   .decks-view button,

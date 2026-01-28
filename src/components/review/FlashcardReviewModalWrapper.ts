@@ -1,4 +1,4 @@
-import { Modal, Component, Notice, MarkdownRenderer, App } from "obsidian";
+import { Modal, Component, Notice, MarkdownRenderer, App, TFile } from "obsidian";
 import type { Flashcard, DeckOrGroup } from "../../database/types";
 import type { RatingLabel } from "../../algorithm/fsrs";
 import type { Scheduler } from "../../services/Scheduler";
@@ -75,6 +75,78 @@ export class FlashcardReviewModalWrapper extends Modal {
     await this.refreshStatsById(flashcard.deckId);
   }
 
+  private async navigateToFlashcardSource(flashcard: Flashcard): Promise<void> {
+    const file = this.app.vault.getAbstractFileByPath(flashcard.sourceFile);
+    if (!(file instanceof TFile)) {
+      new Notice(`File not found: ${flashcard.sourceFile}`);
+      return;
+    }
+
+    const content = await this.app.vault.read(file);
+    const lines = content.split("\n");
+    let lineNumber = 0;
+
+    if (flashcard.type === "header-paragraph") {
+      for (let i = 0; i < lines.length; i++) {
+        const headerMatch = lines[i].match(/^(#{1,6})\s+(.+)$/);
+        if (headerMatch && headerMatch[2].trim() === flashcard.front.trim()) {
+          lineNumber = i;
+          break;
+        }
+      }
+    } else if (flashcard.type === "table") {
+      for (let i = 0; i < lines.length; i++) {
+        const trimmedLine = lines[i].trim();
+        // Check if it's a table row (starts and ends with |)
+        if (/^\|.*\|$/.test(trimmedLine)) {
+          // Parse the same way FlashcardParser does
+          const cells = trimmedLine
+            .slice(1, -1)
+            .split("|")
+            .map((cell) => cell.trim());
+          if (cells.length >= 1 && cells[0] === flashcard.front) {
+            lineNumber = i;
+            break;
+          }
+        }
+      }
+    }
+
+    // Check if file is already open in an existing leaf
+    let leaf = this.app.workspace.getLeavesOfType("markdown").find((l) => {
+      const viewState = l.getViewState();
+      return viewState.state?.file === flashcard.sourceFile;
+    });
+
+    if (!leaf) {
+      leaf = this.app.workspace.getLeaf("tab");
+    }
+
+    await leaf.openFile(file);
+    this.app.workspace.setActiveLeaf(leaf, { focus: true });
+
+    // Scroll to the line after a short delay to ensure the editor is ready
+    const targetLine = lineNumber;
+    const targetLeaf = leaf;
+
+    this.close();
+
+    setTimeout(() => {
+      const view = targetLeaf.view;
+      if (view && "editor" in view) {
+        const editor = (view as { editor: { setCursor: (pos: { line: number; ch: number }) => void; scrollIntoView: (range: { from: { line: number; ch: number }; to: { line: number; ch: number } }, center: boolean) => void; focus: () => void } }).editor;
+        if (editor) {
+          editor.focus();
+          editor.setCursor({ line: targetLine, ch: 0 });
+          editor.scrollIntoView(
+            { from: { line: targetLine, ch: 0 }, to: { line: targetLine, ch: 0 } },
+            true
+          );
+        }
+      }
+    }, 200);
+  }
+
   onOpen() {
     const { contentEl } = this;
     contentEl.empty();
@@ -134,6 +206,9 @@ export class FlashcardReviewModalWrapper extends Modal {
           }
           // Refresh the view to update stats
           await this.refreshStats();
+        },
+        onNavigateToSource: async (card: Flashcard) => {
+          await this.navigateToFlashcardSource(card);
         },
       },
     }) as FlashcardReviewComponent;
