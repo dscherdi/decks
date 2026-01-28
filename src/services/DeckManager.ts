@@ -1,4 +1,4 @@
-import { TFile, Vault, MetadataCache, Notice } from "obsidian";
+import { TFile, Vault, MetadataCache, Notice, getAllTags } from "obsidian";
 import { type Deck, type Flashcard, type DeckStats, type DeckGroup } from "../database/types";
 import type { IDatabaseService } from "../database/DatabaseFactory";
 import { yieldToUI } from "../utils/ui";
@@ -83,31 +83,9 @@ export class DeckManager {
       }
       this.debugLog(`Checking file: ${file.path}`);
 
-      const allTags: string[] = [];
-
-      // Check inline tags
-      if (metadata.tags) {
-        const inlineTags = metadata.tags.map((t) => t.tag);
-        allTags.push(...inlineTags);
-        this.debugLog(`File ${file.path} has inline tags:`, inlineTags);
-      }
-
-      // Check frontmatter tags
-      if (metadata.frontmatter && metadata.frontmatter.tags) {
-        const frontmatterTags = Array.isArray(metadata.frontmatter.tags)
-          ? metadata.frontmatter.tags
-          : [metadata.frontmatter.tags];
-
-        // Add # prefix if not present
-        const normalizedTags = frontmatterTags.map((tag: string) =>
-          tag.startsWith("#") ? tag : `#${tag}`
-        );
-        allTags.push(...normalizedTags);
-        this.debugLog(
-          `File ${file.path} has frontmatter tags:`,
-          normalizedTags
-        );
-      }
+      // Get all tags using Obsidian's API (includes inline and frontmatter tags)
+      const allTags = getAllTags(metadata) || [];
+      this.debugLog(`File ${file.path} has tags:`, allTags);
 
       if (allTags.length === 0) {
         continue;

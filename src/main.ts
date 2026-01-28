@@ -1,4 +1,4 @@
-import { Plugin, TFile, WorkspaceLeaf, Notice, TAbstractFile } from "obsidian";
+import { Plugin, TFile, WorkspaceLeaf, Notice, TAbstractFile, getAllTags } from "obsidian";
 
 import {
   DatabaseFactory,
@@ -77,7 +77,6 @@ export default class DecksPlugin extends Plugin {
   private scheduler: Scheduler;
   private backupService: BackupService;
   private statisticsService: StatisticsService;
-  public view: DecksView | null = null;
   public settings: DecksSettings;
   private logger: Logger;
   private progressTracker: ProgressTracker;
@@ -179,10 +178,7 @@ export default class DecksPlugin extends Plugin {
             this.statisticsService,
             this.settings,
             this.progressTracker,
-            this.logger,
-            (view: DecksView | null) => {
-              this.view = view;
-            }
+            this.logger
           )
       );
 
@@ -242,26 +238,18 @@ export default class DecksPlugin extends Plugin {
           this.db,
           this.saveSettings.bind(this),
           this.logger,
-          () => this.view?.refresh(false) || Promise.resolve(),
+          () => this.getDecksView()?.refresh(false) || Promise.resolve(),
           async () => {
-            if (this.view) {
-              await this.view.refreshStats();
-            }
+            await this.getDecksView()?.refreshStats();
           },
           () => {
-            if (this.view) {
-              this.view.restartBackgroundRefresh();
-            }
+            this.getDecksView()?.restartBackgroundRefresh();
           },
           () => {
-            if (this.view) {
-              this.view.startBackgroundRefresh();
-            }
+            this.getDecksView()?.startBackgroundRefresh();
           },
           () => {
-            if (this.view) {
-              this.view.stopBackgroundRefresh();
-            }
+            this.getDecksView()?.stopBackgroundRefresh();
           },
           this.db.purgeDatabase.bind(this.db),
           this.backupService
@@ -341,19 +329,8 @@ export default class DecksPlugin extends Plugin {
 
     if (!metadata) return;
 
-    // Check both inline tags and frontmatter tags
-    const allTags: string[] = [];
-    if (metadata.tags) {
-      allTags.push(...metadata.tags.map((t) => t.tag));
-    }
-    if (metadata.frontmatter && metadata.frontmatter.tags) {
-      const frontmatterTags = Array.isArray(metadata.frontmatter.tags)
-        ? metadata.frontmatter.tags
-        : [metadata.frontmatter.tags];
-      allTags.push(
-        ...frontmatterTags.map((tag) => (String(tag).startsWith("#") ? String(tag) : `#${String(tag)}`))
-      );
-    }
+    // Get all tags using Obsidian's API (includes inline and frontmatter tags)
+    const allTags = getAllTags(metadata) || [];
 
     const hasFlashcardsTag = allTags.some((tag) =>
       tag.startsWith("#flashcards")
@@ -383,9 +360,7 @@ export default class DecksPlugin extends Plugin {
         await this.deckSynchronizer.syncDeck(existingDeck.id);
 
         // Refresh only this specific deck's stats (fastest option)
-        if (this.view) {
-          await this.view.refreshStatsById(existingDeck.id);
-        }
+        await this.getDecksView()?.refreshStatsById(existingDeck.id);
       } else {
         // New file with flashcards tag - create deck for this file only
         const newTag =
@@ -400,9 +375,7 @@ export default class DecksPlugin extends Plugin {
         }
 
         // For new decks, refresh all stats to show the new deck
-        if (this.view) {
-          await this.view.refreshStats();
-        }
+        await this.getDecksView()?.refreshStats();
       }
     }
   }
@@ -416,9 +389,7 @@ export default class DecksPlugin extends Plugin {
       await yieldToUI();
 
       // Delegate to view for domain logic
-      if (this.view) {
-        await this.view.refresh(true);
-      }
+      await this.getDecksView()?.refresh(true);
 
       await yieldToUI();
 
@@ -436,10 +407,8 @@ export default class DecksPlugin extends Plugin {
     // Remove the deck and all associated flashcards/review logs
     await this.db.deleteDeckByFilepath(file.path);
 
-    if (this.view) {
-      // Just refresh stats to remove deleted deck from UI (much faster than full sync)
-      await this.view.refreshStats();
-    }
+    // Just refresh stats to remove deleted deck from UI (much faster than full sync)
+    await this.getDecksView()?.refreshStats();
   }
 
   async handleFileRename(file: TAbstractFile, oldPath: string): Promise<void> {
@@ -468,9 +437,7 @@ export default class DecksPlugin extends Plugin {
 
         await this.db.save();
         // Refresh view if available
-        if (this.view) {
-          await this.view.refreshStats();
-        }
+        await this.getDecksView()?.refreshStats();
       }
     }
   }
@@ -512,6 +479,14 @@ export default class DecksPlugin extends Plugin {
     }
   }
 
+  private getDecksView(): DecksView | null {
+    const leaves = this.app.workspace.getLeavesOfType(VIEW_TYPE_DECKS);
+    if (leaves.length > 0) {
+      return leaves[0].view as DecksView;
+    }
+    return null;
+  }
+
   private async checkForDatabaseChanges(databasePath: string): Promise<void> {
     try {
       if (!(await this.app.vault.adapter.exists(databasePath))) {
@@ -531,9 +506,7 @@ export default class DecksPlugin extends Plugin {
         this.lastKnownDatabaseMtime = stat.mtime;
 
         // Refresh the view if available
-        if (this.view) {
-          await this.view.refreshStats();
-        }
+        await this.getDecksView()?.refreshStats();
       }
     } catch (error) {
       this.logger.debug("Error checking for database changes:", error);

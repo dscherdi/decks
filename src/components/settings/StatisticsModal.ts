@@ -11,8 +11,8 @@ export class StatisticsModal extends Modal {
   private settings: DecksSettings;
   private deckFilter?: string;
   private component: StatisticsComponent | null = null;
-  private resizeHandler?: () => void;
   private logger: Logger;
+  private resizeHandler?: () => void;
 
   constructor(
     app: App,
@@ -71,8 +71,6 @@ export class StatisticsModal extends Modal {
     };
 
     window.addEventListener("resize", handleResize);
-
-    // Store resize handler for cleanup
     this.resizeHandler = handleResize;
   }
 

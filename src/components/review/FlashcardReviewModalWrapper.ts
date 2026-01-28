@@ -23,15 +23,15 @@ export class FlashcardReviewModalWrapper extends Modal {
   private markdownComponents: Component[] = [];
   private resizeHandler?: () => void;
 
-  private renderMarkdown(content: string, el: HTMLElement): Component | null {
+  private renderMarkdown(content: string, el: HTMLElement): void {
     try {
       const component = new Component();
+      component.load();
+      this.markdownComponents.push(component);
       void MarkdownRenderer.render(this.app, content, el, "", component);
-      return component;
     } catch (error) {
       console.error("Error rendering markdown:", error);
       el.textContent = content;
-      return null;
     }
   }
 
@@ -174,10 +174,7 @@ export class FlashcardReviewModalWrapper extends Modal {
           );
         },
         renderMarkdown: (content: string, el: HTMLElement) => {
-          const component = this.renderMarkdown(content, el);
-          if (component) {
-            this.markdownComponents.push(component);
-          }
+          this.renderMarkdown(content, el);
         },
         settings: this.settings,
         scheduler: this.scheduler,
@@ -215,8 +212,6 @@ export class FlashcardReviewModalWrapper extends Modal {
     };
 
     window.addEventListener("resize", handleResize);
-
-    // Store resize handler for cleanup
     this.resizeHandler = handleResize;
   }
 

@@ -5,7 +5,7 @@ import { DeckManager } from "@/services/DeckManager";
 import type { DecksSettings } from "@/settings";
 import { yieldToUI } from "@/utils/ui";
 import { Logger } from "@/utils/logging";
-import { ItemView, Component, WorkspaceLeaf, Notice } from "obsidian";
+import { ItemView, WorkspaceLeaf, Notice } from "obsidian";
 import { Scheduler } from "@/services/Scheduler";
 import { FlashcardReviewModalWrapper } from "./review/FlashcardReviewModalWrapper";
 import { StatisticsModal } from "./settings/StatisticsModal";
@@ -28,11 +28,8 @@ export class DecksView extends ItemView {
   private statisticsService: StatisticsService;
   private tagGroupService: TagGroupService;
   private settings: DecksSettings;
-  private setViewReference: (view: DecksView | null) => void;
   private deckListPanelComponent: DeckListPanelComponent | null = null;
-  private markdownComponents: Component[] = [];
-  private statsRefreshTimeout: NodeJS.Timeout | null = null;
-  private backgroundRefreshInterval: NodeJS.Timeout | null = null;
+  private backgroundRefreshInterval: number | null = null;
   private progressTracker: ProgressTracker;
   private logger: Logger;
 
@@ -45,8 +42,7 @@ export class DecksView extends ItemView {
     statisticsService: StatisticsService,
     settings: DecksSettings,
     progressTracker: ProgressTracker,
-    logger: Logger,
-    setViewReference: (view: DecksView | null) => void
+    logger: Logger
   ) {
     super(leaf);
     this.db = database;
@@ -59,10 +55,6 @@ export class DecksView extends ItemView {
     this.logger = logger;
 
     this.progressTracker = progressTracker;
-
-    this.setViewReference = setViewReference;
-    // Set reference in plugin so we can access this view instance
-    this.setViewReference(this);
   }
 
   getViewType(): string {
@@ -124,21 +116,8 @@ export class DecksView extends ItemView {
       this.deckListPanelComponent = null;
     }
 
-    // Clean up timeouts
-    if (this.statsRefreshTimeout) {
-      clearTimeout(this.statsRefreshTimeout);
-      this.statsRefreshTimeout = null;
-    }
-
     // Clean up background refresh
     this.stopBackgroundRefresh();
-
-    // Clean up markdown components
-    this.markdownComponents.forEach((comp) => comp.unload());
-    this.markdownComponents = [];
-
-    // Clear reference in plugin
-    this.setViewReference(null);
   }
 
   async update(updatedDecks: DeckWithProfile[], deckStats: Map<string, DeckStats>) {
@@ -255,10 +234,12 @@ export class DecksView extends ItemView {
       `Starting background refresh job (every ${this.settings.ui.backgroundRefreshInterval} seconds)`
     );
 
-    this.backgroundRefreshInterval = setInterval(() => {
-      this.logger.debug("Background refresh tick");
-      void this.refresh();
-    }, this.settings.ui.backgroundRefreshInterval * 1000);
+    this.backgroundRefreshInterval = this.registerInterval(
+      window.setInterval(() => {
+        this.logger.debug("Background refresh tick");
+        void this.refresh();
+      }, this.settings.ui.backgroundRefreshInterval * 1000)
+    );
   }
 
   stopBackgroundRefresh() {

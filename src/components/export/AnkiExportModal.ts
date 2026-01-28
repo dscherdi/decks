@@ -73,8 +73,6 @@ export class AnkiExportModal extends Modal {
     };
 
     window.addEventListener("resize", handleResize);
-
-    // Store resize handler for cleanup
     this.resizeHandler = handleResize;
   }
 
