@@ -35,6 +35,8 @@
   export let onNavigateToSource:
     | ((card: Flashcard) => Promise<void>)
     | undefined = undefined;
+  export let browseMode = false;
+  export let allCards: Flashcard[] = [];
 
   const dispatch = createEventDispatcher();
 
@@ -72,6 +74,10 @@
   const deckFilePath = "";
   let sessionProgress: SessionProgress | null = null;
 
+  // Browse mode variables
+  let browseCardIndex = 0;
+  let browseCards: Flashcard[] = [];
+
   // Session timer variables
   let sessionStartTime = 0;
   let sessionTimeRemaining = 0;
@@ -91,46 +97,58 @@
     : reviewedCount;
 
   onMount(async () => {
-    // Initialize review session
-    let session;
-    if (isDeckGroup(deckOrGroup)) {
-      session = await scheduler.startReviewSessionForDeckGroup(
-        deckOrGroup,
-        new Date(),
-        settings.review.sessionDuration
-      );
-    } else {
-      session = await scheduler.startFreshSession(
-        deckOrGroup.id,
-        new Date(),
-        settings.review.sessionDuration
-      );
-    }
-
-    sessionId = session.sessionId;
-    scheduler.setCurrentSession(sessionId);
-    sessionProgress = await scheduler.getSessionProgress(sessionId);
-
-    // Initialize session timer
-    startSessionTimer();
-
-    // If no initial card provided, get the first card from scheduler
-    if (!currentCard) {
-      if (isDeckGroup(deckOrGroup)) {
-        currentCard = await scheduler.getNextForDeckGroup(new Date(), deckOrGroup, {
-          allowNew: true,
-        });
+    if (browseMode) {
+      // Browse mode: load all cards, no session
+      browseCards = allCards;
+      if (browseCards.length > 0) {
+        currentCard = browseCards[0];
+        browseCardIndex = 0;
+        await loadCard();
       } else {
-        currentCard = await scheduler.getNext(new Date(), deckOrGroup.id, {
-          allowNew: true,
-        });
+        reviewFinished = true;
       }
-    }
-
-    if (currentCard) {
-      await loadCard();
     } else {
-      await endReview();
+      // Standard mode: initialize review session
+      let session;
+      if (isDeckGroup(deckOrGroup)) {
+        session = await scheduler.startReviewSessionForDeckGroup(
+          deckOrGroup,
+          new Date(),
+          settings.review.sessionDuration
+        );
+      } else {
+        session = await scheduler.startFreshSession(
+          deckOrGroup.id,
+          new Date(),
+          settings.review.sessionDuration
+        );
+      }
+
+      sessionId = session.sessionId;
+      scheduler.setCurrentSession(sessionId);
+      sessionProgress = await scheduler.getSessionProgress(sessionId);
+
+      // Initialize session timer
+      startSessionTimer();
+
+      // If no initial card provided, get the first card from scheduler
+      if (!currentCard) {
+        if (isDeckGroup(deckOrGroup)) {
+          currentCard = await scheduler.getNextForDeckGroup(new Date(), deckOrGroup, {
+            allowNew: true,
+          });
+        } else {
+          currentCard = await scheduler.getNext(new Date(), deckOrGroup.id, {
+            allowNew: true,
+          });
+        }
+      }
+
+      if (currentCard) {
+        await loadCard();
+      } else {
+        await endReview();
+      }
     }
 
     // Add keydown event listener
@@ -244,6 +262,29 @@
       return;
     }
 
+    if (browseMode) {
+      // Browse mode: Space shows answer, then advances
+      if (!showAnswer && event.key === " ") {
+        event.preventDefault();
+        lastEventTime = now;
+        lastEventType = eventType;
+        revealAnswer();
+      } else if (showAnswer) {
+        lastEventTime = now;
+        lastEventType = eventType;
+
+        if (event.key === " " || event.key === "Enter" || event.key === "ArrowRight") {
+          event.preventDefault();
+          handleBrowseNext();
+        } else if (event.key === "ArrowLeft") {
+          event.preventDefault();
+          handleBrowsePrevious();
+        }
+      }
+      return;
+    }
+
+    // Standard mode
     if (!showAnswer && event.key === " ") {
       event.preventDefault();
       lastEventTime = now;
@@ -291,19 +332,55 @@
     await yieldToUI();
   };
 
+  // Browse mode navigation
+  async function handleBrowseNext() {
+    if (!browseMode || isLoading) return;
+
+    browseCardIndex++;
+    if (browseCardIndex < browseCards.length) {
+      currentCard = browseCards[browseCardIndex];
+      await loadCard();
+    } else {
+      handleComplete({ reason: "browse-complete", reviewed: browseCardIndex });
+      reviewFinished = true;
+    }
+  }
+
+  async function handleBrowsePrevious() {
+    if (!browseMode || isLoading || browseCardIndex <= 0) return;
+
+    browseCardIndex--;
+    currentCard = browseCards[browseCardIndex];
+    await loadCard();
+  }
+
   onDestroy(async () => {
     // Clean up keydown event listener
     window.removeEventListener("keydown", handleKeydown);
 
-    // Clean up session timer
+    // Clean up session timer (standard mode only)
     if (sessionTimer) {
       clearInterval(sessionTimer);
       sessionTimer = null;
     }
 
-    // Review session complete
-    await endReview();
+    // End review/browse session
+    if (browseMode) {
+      await endBrowse();
+    } else {
+      await endReview();
+    }
   });
+
+  const endBrowse = async () => {
+    if (reviewFinished) return;
+
+    handleComplete({
+      reason: "browse-complete",
+      reviewed: browseCardIndex + 1,
+    });
+    reviewFinished = true;
+  };
 
   const endReview = async () => {
     if (reviewFinished) return;
@@ -358,31 +435,37 @@
 
 <div class="decks-review-modal">
   <div class="decks-modal-header">
-    <h3>Review Session - {deckOrGroup.name}</h3>
+    <h3>{browseMode ? "Browse" : "Review Session"} - {deckOrGroup.name}</h3>
     <div class="decks-header-stats">
-      <div class="decks-progress-info">
-        <span>Reviewed: {reviewedCountDisplay}</span>
-        <span class="decks-remaining"
-          >({sessionProgress
-            ? `${cardsRemaining} remaining`
-            : currentCard
-              ? "More cards available"
-              : "Session complete"})</span
-        >
-      </div>
-      <div class="decks-timer-display">
-        <span class="decks-timer-label">Time Remaining:</span>
-        <span
-          class="decks-timer-value"
-          class:decks-timer-warning={sessionTimeRemaining < 60000}
-        >
-          {timeRemainingDisplay}
-        </span>
-      </div>
+      {#if browseMode}
+        <div class="decks-progress-info">
+          <span>Card {browseCardIndex + 1} of {browseCards.length}</span>
+        </div>
+      {:else}
+        <div class="decks-progress-info">
+          <span>Reviewed: {reviewedCountDisplay}</span>
+          <span class="decks-remaining"
+            >({sessionProgress
+              ? `${cardsRemaining} remaining`
+              : currentCard
+                ? "More cards available"
+                : "Session complete"})</span
+          >
+        </div>
+        <div class="decks-timer-display">
+          <span class="decks-timer-label">Time Remaining:</span>
+          <span
+            class="decks-timer-value"
+            class:decks-timer-warning={sessionTimeRemaining < 60000}
+          >
+            {timeRemainingDisplay}
+          </span>
+        </div>
+      {/if}
     </div>
   </div>
 
-  {#if settings?.review?.showProgress !== false}
+  {#if !browseMode && settings?.review?.showProgress !== false}
     <div class="decks-review-progress-bar">
       <div class="decks-progress-fill" style="width: {progress}%"></div>
     </div>
@@ -445,7 +528,30 @@
         </button>
       {/if}
 
-      {#if showAnswer && schedulingInfo}
+      {#if showAnswer && browseMode}
+        <div class="decks-browse-buttons">
+          <button
+            class="decks-browse-button decks-prev"
+            disabled={browseCardIndex <= 0 || isLoading}
+            on:pointerup={handleBrowsePrevious}
+            style="touch-action: manipulation;"
+            type="button"
+          >
+            <span>Previous</span>
+            <span class="decks-shortcut">&larr;</span>
+          </button>
+          <button
+            class="decks-browse-button decks-next"
+            disabled={isLoading}
+            on:pointerup={handleBrowseNext}
+            style="touch-action: manipulation;"
+            type="button"
+          >
+            <span>{browseCardIndex >= browseCards.length - 1 ? 'Finish' : 'Next'}</span>
+            <span class="decks-shortcut">Space</span>
+          </button>
+        </div>
+      {:else if showAnswer && schedulingInfo}
         <div class="decks-difficulty-buttons">
           <button
             class="decks-difficulty-button decks-again decks-rate-btn"
@@ -866,6 +972,54 @@
     background: var(--background-modifier-border);
     border-radius: 2px;
     opacity: 0.7;
+  }
+
+  .decks-browse-buttons {
+    display: flex;
+    gap: 12px;
+    justify-content: center;
+    max-width: 500px;
+    margin: 0 auto;
+  }
+
+  .decks-browse-button {
+    flex: 1;
+    padding: 12px 24px;
+    font-size: 16px;
+    font-weight: 500;
+    background: var(--interactive-accent);
+    color: var(--text-on-accent);
+    border: none;
+    border-radius: 6px;
+    cursor: pointer;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    min-height: 48px;
+    touch-action: manipulation;
+    -webkit-tap-highlight-color: transparent;
+    transition: all 0.2s ease;
+  }
+
+  .decks-browse-button.decks-prev {
+    background: var(--background-secondary);
+    color: var(--text-normal);
+    border: 1px solid var(--background-modifier-border);
+  }
+
+  .decks-browse-button:hover {
+    transform: translateY(-1px);
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+  }
+
+  .decks-browse-button.decks-prev:hover {
+    background: var(--background-modifier-hover);
+  }
+
+  .decks-browse-button:disabled {
+    opacity: 0.5;
+    cursor: not-allowed;
+    transform: none;
   }
 
   .decks-empty-state {

@@ -14,11 +14,13 @@ import { mount, unmount } from "svelte";
 export class FlashcardReviewModalWrapper extends Modal {
   private deckOrGroup: DeckOrGroup;
   private initialCard: Flashcard | null;
+  private allCards: Flashcard[];
   private scheduler: Scheduler;
   private settings: DecksSettings;
   private db: IDatabaseService;
   private refreshStats: () => Promise<void>;
   private refreshStatsById: (deckId: string) => Promise<void>;
+  private browseMode: boolean;
   private component: FlashcardReviewComponent | null = null;
   private markdownComponents: Component[] = [];
   private resizeHandler?: () => void;
@@ -43,16 +45,19 @@ export class FlashcardReviewModalWrapper extends Modal {
     settings: DecksSettings,
     db: IDatabaseService,
     refreshStats: () => Promise<void>,
-    refreshStatsById: (deckId: string) => Promise<void>
+    refreshStatsById: (deckId: string) => Promise<void>,
+    browseMode = false
   ) {
     super(app);
     this.deckOrGroup = deckOrGroup;
     this.initialCard = flashcards.length > 0 ? flashcards[0] : null;
+    this.allCards = flashcards;
     this.scheduler = scheduler;
     this.settings = settings;
     this.db = db;
     this.refreshStats = refreshStats;
     this.refreshStatsById = refreshStatsById;
+    this.browseMode = browseMode;
   }
 
   private async reviewFlashcard(
@@ -159,6 +164,8 @@ export class FlashcardReviewModalWrapper extends Modal {
       props: {
         initialCard: this.initialCard,
         deckOrGroup: this.deckOrGroup,
+        browseMode: this.browseMode,
+        allCards: this.allCards,
         onReview: async (
           card: Flashcard,
           rating: RatingLabel,
@@ -185,7 +192,9 @@ export class FlashcardReviewModalWrapper extends Modal {
           }
         },
         onComplete: async (_event: CompleteEventDetail) => {
-          const message = `Review session complete for ${this.deckOrGroup.name}!`;
+          const message = this.browseMode
+            ? `Browse complete for ${this.deckOrGroup.name}!`
+            : `Review session complete for ${this.deckOrGroup.name}!`;
 
           if (this.settings?.ui?.enableNotices !== false) {
             new Notice(message);

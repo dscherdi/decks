@@ -40,6 +40,8 @@
 
   export let onDeckClick: (deck: DeckWithProfile) => void;
   export let onDeckGroupClick: (deckGroup: DeckGroup) => void;
+  export let onBrowseDeck: (deck: DeckWithProfile) => void;
+  export let onBrowseDeckGroup: (deckGroup: DeckGroup) => void;
 
   export let app: App;
 
@@ -337,7 +339,103 @@
 
   function handleGroupConfigClick(group: DeckGroup, event: Event) {
     event.stopPropagation();
-    openAnkiExportForGroup(group);
+
+    const groupId = generateDeckGroupId(group.tag);
+
+    // If clicking the same cog, close the dropdown
+    if (activeDropdown && activeDropdownDeckId === groupId) {
+      closeActiveDropdown();
+      return;
+    }
+
+    // Close any existing dropdown
+    closeActiveDropdown();
+
+    // Create dropdown menu
+    const dropdown = document.createElement("div");
+    dropdown.className = "decks-deck-config-dropdown";
+
+    const browseOption = document.createElement("div");
+    browseOption.className = "decks-dropdown-option";
+    browseOption.textContent = "Browse all cards";
+    browseOption.onclick = () => {
+      closeActiveDropdown();
+      onBrowseDeckGroup(group);
+    };
+
+    const exportOption = document.createElement("div");
+    exportOption.className = "decks-dropdown-option";
+    exportOption.textContent = "Export to Anki";
+    exportOption.onclick = () => {
+      closeActiveDropdown();
+      openAnkiExportForGroup(group);
+    };
+
+    dropdown.appendChild(browseOption);
+    dropdown.appendChild(exportOption);
+
+    // Position dropdown with viewport bounds checking
+    const button = event.target as HTMLElement;
+    const rect = button.getBoundingClientRect();
+    const viewportWidth = window.innerWidth;
+    const viewportHeight = window.innerHeight;
+
+    dropdown.addClass("decks-context-menu");
+
+    // Temporarily append to measure dimensions
+    document.body.appendChild(dropdown);
+    const dropdownRect = dropdown.getBoundingClientRect();
+
+    // Calculate optimal position
+    let top = rect.bottom + 5;
+    let left = rect.left;
+
+    // Adjust if dropdown would go below viewport
+    if (top + dropdownRect.height > viewportHeight - 10) {
+      top = rect.top - dropdownRect.height - 5;
+    }
+
+    // Adjust if dropdown would go right of viewport
+    if (left + dropdownRect.width > viewportWidth - 10) {
+      left = viewportWidth - dropdownRect.width - 10;
+    }
+
+    // Ensure it doesn't go above or left of viewport
+    top = Math.max(10, top);
+    left = Math.max(10, left);
+
+    dropdown.setCssProps({
+      top: `${top}px`,
+      left: `${left}px`,
+    });
+    dropdown.removeClass("decks-context-menu");
+    dropdown.addClass("decks-context-menu-visible");
+
+    // Store active dropdown reference
+    activeDropdown = dropdown;
+    activeDropdownDeckId = groupId;
+
+    // Store event listener functions for cleanup
+    dropdownEventListeners.click = (e: Event) => {
+      if (!dropdown.contains(e.target as Node)) {
+        closeActiveDropdown();
+      }
+    };
+    dropdownEventListeners.scroll = closeActiveDropdown;
+    dropdownEventListeners.resize = closeActiveDropdown;
+
+    // Add event listeners with slight delay to prevent immediate closure
+    setTimeout(() => {
+      if (dropdownEventListeners.click) {
+        document.addEventListener("click", dropdownEventListeners.click);
+      }
+      if (dropdownEventListeners.scroll) {
+        window.addEventListener("scroll", dropdownEventListeners.scroll, true);
+      }
+      if (dropdownEventListeners.resize) {
+        window.addEventListener("resize", dropdownEventListeners.resize);
+      }
+    }, 0);
   }
 
   function handleConfigClick(deck: DeckWithProfile, event: Event) {
@@ -356,6 +454,14 @@
     const dropdown = document.createElement("div");
     dropdown.className = "decks-deck-config-dropdown";
 
+    const browseOption = document.createElement("div");
+    browseOption.className = "decks-dropdown-option";
+    browseOption.textContent = "Browse all cards";
+    browseOption.onclick = () => {
+      closeActiveDropdown();
+      onBrowseDeck(deck);
+    };
+
     const forceRefreshOption = document.createElement("div");
     forceRefreshOption.className = "decks-dropdown-option";
     forceRefreshOption.textContent = "Force refresh";
@@ -372,6 +478,7 @@
       openAnkiExport(deck);
     };
 
+    dropdown.appendChild(browseOption);
     dropdown.appendChild(forceRefreshOption);
     dropdown.appendChild(exportOption);
 
@@ -787,8 +894,8 @@
                       handleTouchClick(() => handleGroupConfigClick(item, e), e)}
                     on:touchend={(e) =>
                       handleTouchClick(() => handleGroupConfigClick(item, e), e)}
-                    title="Export tag group to Anki"
-                    aria-label="Export {item.name} to Anki"
+                    title="Tag group options"
+                    aria-label="Options for {item.name}"
                   >
                   <svg
                     xmlns="http://www.w3.org/2000/svg"
@@ -801,9 +908,10 @@
                     stroke-linecap="round"
                     stroke-linejoin="round"
                   >
-                    <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path>
-                    <polyline points="7 10 12 15 17 10"></polyline>
-                    <line x1="12" y1="15" x2="12" y2="3"></line>
+                    <circle cx="12" cy="12" r="3"></circle>
+                    <path
+                      d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1 1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z"
+                    ></path>
                   </svg>
                   </button>
                 {:else if isFileDeck(item)}

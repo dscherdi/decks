@@ -1,4 +1,4 @@
-import type { Deck, DeckWithProfile, DeckStats, DeckGroup } from "@/database/types";
+import type { Deck, DeckWithProfile, DeckStats, DeckGroup, Flashcard } from "@/database/types";
 import { VIEW_TYPE_DECKS } from "@/main";
 import { DeckSynchronizer } from "@/services/DeckSynchronizer";
 import { DeckManager } from "@/services/DeckManager";
@@ -85,6 +85,8 @@ export class DecksView extends ItemView {
         app: this.app,
         onDeckClick: (deck: DeckWithProfile) => this.startReview(deck),
         onDeckGroupClick: (deckGroup: DeckGroup) => this.startReviewForDeckGroup(deckGroup),
+        onBrowseDeck: (deck: DeckWithProfile) => this.startBrowse(deck),
+        onBrowseDeckGroup: (deckGroup: DeckGroup) => this.startBrowseForDeckGroup(deckGroup),
         onRefresh: () => this.refresh(false),
         onForceRefreshDeck: async (deckId: string) => {
           await this.deckSynchronizer.forceSyncDeck(deckId);
@@ -430,6 +432,81 @@ export class DecksView extends ItemView {
       console.error("Error starting deck group review:", error);
       if (this.settings?.ui?.enableNotices !== false) {
         new Notice("Error starting review. Check console for details.");
+      }
+    }
+  }
+
+  async startBrowse(deck: Deck) {
+    try {
+      this.logger.debug(`Starting browse mode for deck: ${deck.name}`);
+      await this.deckSynchronizer.syncDeck(deck.id);
+      await yieldToUI();
+
+      const allCards = await this.db.getFlashcardsByDeck(deck.id);
+
+      if (allCards.length === 0) {
+        if (this.settings?.ui?.enableNotices !== false) {
+          new Notice(`No cards found in ${deck.name}`);
+        }
+        return;
+      }
+
+      new FlashcardReviewModalWrapper(
+        this.app,
+        deck,
+        allCards,
+        this.scheduler,
+        this.settings,
+        this.db,
+        this.refresh.bind(this),
+        this.refreshStatsById.bind(this),
+        true
+      ).open();
+    } catch (error) {
+      console.error("Error starting browse:", error);
+      if (this.settings?.ui?.enableNotices !== false) {
+        new Notice("Error starting browse. Check console for details.");
+      }
+    }
+  }
+
+  async startBrowseForDeckGroup(deckGroup: DeckGroup) {
+    try {
+      this.logger.debug(`Starting browse mode for deck group: ${deckGroup.name}`);
+
+      for (const deckId of deckGroup.deckIds) {
+        await this.deckSynchronizer.syncDeck(deckId);
+        await yieldToUI();
+      }
+
+      const allCards: Flashcard[] = [];
+      for (const deckId of deckGroup.deckIds) {
+        const deckCards = await this.db.getFlashcardsByDeck(deckId);
+        allCards.push(...deckCards);
+      }
+
+      if (allCards.length === 0) {
+        if (this.settings?.ui?.enableNotices !== false) {
+          new Notice(`No cards found in "${deckGroup.name}"`);
+        }
+        return;
+      }
+
+      new FlashcardReviewModalWrapper(
+        this.app,
+        deckGroup,
+        allCards,
+        this.scheduler,
+        this.settings,
+        this.db,
+        this.refresh.bind(this),
+        this.refreshStatsById.bind(this),
+        true
+      ).open();
+    } catch (error) {
+      console.error("Error starting deck group browse:", error);
+      if (this.settings?.ui?.enableNotices !== false) {
+        new Notice("Error starting browse. Check console for details.");
       }
     }
   }
