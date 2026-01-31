@@ -47,13 +47,13 @@ React is a JavaScript library for building user interfaces.
         front: "What is TypeScript?",
         back: "TypeScript is a typed superset of JavaScript that compiles to plain JavaScript.",
         type: "header-paragraph",
-        breadcrumb: "What is TypeScript?",
+        breadcrumb: "",
       });
       expect(result[1]).toEqual({
         front: "What is React?",
         back: "React is a JavaScript library for building user interfaces.",
         type: "header-paragraph",
-        breadcrumb: "What is React?",
+        breadcrumb: "",
       });
     });
 
@@ -79,13 +79,13 @@ This content should be ignored since we're targeting H3.
         front: "Question 1",
         back: "Answer 1",
         type: "header-paragraph",
-        breadcrumb: "Question 1",
+        breadcrumb: "",
       });
       expect(result[1]).toEqual({
         front: "Question 2",
         back: "Answer 2",
         type: "header-paragraph",
-        breadcrumb: "Question 2",
+        breadcrumb: "",
       });
     });
 
@@ -117,7 +117,7 @@ Cascading Style Sheets for styling web pages.
         front: "What is CSS?",
         back: "Cascading Style Sheets for styling web pages.",
         type: "header-paragraph",
-        breadcrumb: "What is CSS?",
+        breadcrumb: "",
       });
     });
 
@@ -139,7 +139,7 @@ Answer
         front: "Question",
         back: "Answer",
         type: "header-paragraph",
-        breadcrumb: "Question",
+        breadcrumb: "",
       });
     });
 
@@ -161,7 +161,7 @@ Real answer.
         front: "Real Question",
         back: "Real answer.",
         type: "header-paragraph",
-        breadcrumb: "Flashcards Section > Real Question",
+        breadcrumb: "Flashcards Section",
       });
     });
 
@@ -401,7 +401,7 @@ Some paragraph content here.
       expect(result[2].back).toContain("Some paragraph content here.");
       expect(result[2].back).toContain("| What is 7+7? | 14 |");
       expect(result[2].type).toBe("header-paragraph");
-      expect(result[2].breadcrumb).toBe("Mixed Header");
+      expect(result[2].breadcrumb).toBe("");
     });
   });
 
@@ -418,7 +418,7 @@ This is the answer.
       const result = FlashcardParser.parseFlashcardsFromContent(content, 3);
 
       expect(result).toHaveLength(1);
-      expect(result[0].breadcrumb).toBe("Chapter 1 > Section 1.1");
+      expect(result[0].breadcrumb).toBe("Chapter 1");
     });
 
     it("should track deep header hierarchy", () => {
@@ -435,7 +435,7 @@ Deep content here.
       const result = FlashcardParser.parseFlashcardsFromContent(content, 4);
 
       expect(result).toHaveLength(1);
-      expect(result[0].breadcrumb).toBe("Level 2 > Level 3 > Level 4");
+      expect(result[0].breadcrumb).toBe("Level 2 > Level 3");
     });
 
     it("should reset breadcrumb when same-level header encountered", () => {
@@ -456,8 +456,8 @@ Answer B1
       const result = FlashcardParser.parseFlashcardsFromContent(content, 3);
 
       expect(result).toHaveLength(2);
-      expect(result[0].breadcrumb).toBe("Section A > Question A1");
-      expect(result[1].breadcrumb).toBe("Section B > Question B1");
+      expect(result[0].breadcrumb).toBe("Section A");
+      expect(result[1].breadcrumb).toBe("Section B");
     });
 
     it("should include breadcrumb for table-based flashcards under nested headers", () => {
@@ -489,7 +489,7 @@ The answer is here.
       const result = FlashcardParser.parseFlashcardsFromContent(content, 2);
 
       expect(result).toHaveLength(1);
-      expect(result[0].breadcrumb).toBe("Standalone Question");
+      expect(result[0].breadcrumb).toBe("");
     });
 
     it("should maintain correct hierarchy when headers jump levels", () => {
@@ -504,7 +504,7 @@ This is content under an H4 directly after H2.
       const result = FlashcardParser.parseFlashcardsFromContent(content, 4);
 
       expect(result).toHaveLength(1);
-      expect(result[0].breadcrumb).toBe("Chapter 1 > Deep Section");
+      expect(result[0].breadcrumb).toBe("Chapter 1");
     });
   });
 });

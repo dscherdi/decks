@@ -122,8 +122,11 @@ export class FlashcardParser {
           // Check for title headers to skip
           if (line.match(/^#\s+/) && line.toLowerCase().includes("flashcard")) {
             skipNextParagraph = true;
-            // Build breadcrumb before finalizing
-            const breadcrumb = headerStack.map((h) => h.text).join(" > ");
+            // Build breadcrumb excluding the card's own header (last stack item)
+            const breadcrumb = headerStack
+              .slice(0, -1)
+              .map((h) => h.text)
+              .join(" > ");
             FlashcardParser.finalizeCurrentHeader(
               currentHeader,
               currentContent,
@@ -144,8 +147,11 @@ export class FlashcardParser {
             continue;
           }
 
-          // Build breadcrumb before finalizing previous header
-          const breadcrumb = headerStack.map((h) => h.text).join(" > ");
+          // Build breadcrumb excluding the card's own header (last stack item)
+          const breadcrumb = headerStack
+            .slice(0, -1)
+            .map((h) => h.text)
+            .join(" > ");
 
           // Finalize previous header
           FlashcardParser.finalizeCurrentHeader(
@@ -190,8 +196,11 @@ export class FlashcardParser {
       }
     }
 
-    // Finalize last header
-    const finalBreadcrumb = headerStack.map((h) => h.text).join(" > ");
+    // Finalize last header (exclude card's own header from breadcrumb)
+    const finalBreadcrumb = headerStack
+      .slice(0, -1)
+      .map((h) => h.text)
+      .join(" > ");
     FlashcardParser.finalizeCurrentHeader(
       currentHeader,
       currentContent,
