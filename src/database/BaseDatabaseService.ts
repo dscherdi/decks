@@ -108,16 +108,17 @@ export abstract class BaseDatabaseService implements IDatabaseService {
       type: row[4] as "header-paragraph" | "table",
       sourceFile: row[5] as string,
       contentHash: row[6] as string,
-      state: row[7] as "new" | "review",
-      dueDate: row[8] as string,
-      interval: row[9] as number,
-      repetitions: row[10] as number,
-      difficulty: row[11] as number,
-      stability: row[12] as number,
-      lapses: row[13] as number,
-      lastReviewed: row[14] as string | null,
-      created: row[15] as string,
-      modified: row[16] as string,
+      breadcrumb: row[7] as string,
+      state: row[8] as "new" | "review",
+      dueDate: row[9] as string,
+      interval: row[10] as number,
+      repetitions: row[11] as number,
+      difficulty: row[12] as number,
+      stability: row[13] as number,
+      lapses: row[14] as number,
+      lastReviewed: row[15] as string | null,
+      created: row[16] as string,
+      modified: row[17] as string,
     };
   }
 
@@ -616,9 +617,9 @@ export abstract class BaseDatabaseService implements IDatabaseService {
     };
 
     const sql = `INSERT INTO flashcards
-                 (id, deck_id, front, back, type, source_file, content_hash, state, due_date,
+                 (id, deck_id, front, back, type, source_file, content_hash, breadcrumb, state, due_date,
                   interval, repetitions, difficulty, stability, lapses, last_reviewed, created, modified)
-                 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`;
+                 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`;
 
     await this.executeSql(sql, [
       flashcardWithId.id,
@@ -628,6 +629,7 @@ export abstract class BaseDatabaseService implements IDatabaseService {
       flashcardWithId.type,
       flashcardWithId.sourceFile,
       flashcardWithId.contentHash,
+      flashcardWithId.breadcrumb || "",
       flashcardWithId.state,
       flashcardWithId.dueDate,
       flashcardWithId.interval,

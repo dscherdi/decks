@@ -106,6 +106,7 @@ export interface Flashcard {
   type: "header-paragraph" | "table";
   sourceFile: string;
   contentHash: string; // Hash of back content only (front is used for ID)
+  breadcrumb: string; // Header hierarchy context (e.g., "Chapter 1 > Section 2")
 
   state: FlashcardState;
   dueDate: string;

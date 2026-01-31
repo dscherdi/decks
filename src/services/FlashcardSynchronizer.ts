@@ -10,6 +10,7 @@ export interface FlashcardUpdates {
   back: string;
   type: string;
   contentHash: string;
+  breadcrumb: string;
 }
 
 export interface BatchOperation {
@@ -53,7 +54,7 @@ export class FlashcardSynchronizer {
         const card = op.flashcard;
         const updateStmt = this.db.prepare(`
                     UPDATE flashcards
-                    SET id = ?, front = ?, back = ?, content_hash = ?, modified = datetime('now')
+                    SET id = ?, front = ?, back = ?, content_hash = ?, breadcrumb = ?, modified = datetime('now')
                     WHERE id = ?
                 `);
         updateStmt.run([
@@ -61,6 +62,7 @@ export class FlashcardSynchronizer {
           card.front,
           card.back,
           card.contentHash,
+          card.breadcrumb || "",
           op.oldId,
         ]);
         updateStmt.free();
@@ -79,10 +81,10 @@ export class FlashcardSynchronizer {
         const card = op.flashcard;
         const stmt = this.db.prepare(`
                     INSERT OR IGNORE INTO flashcards (
-                        id, deck_id, front, back, type, source_file, content_hash,
+                        id, deck_id, front, back, type, source_file, content_hash, breadcrumb,
                         state, due_date, interval, repetitions, difficulty, stability,
                         lapses, last_reviewed, created, modified
-                    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, datetime('now'), datetime('now'))
+                    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, datetime('now'), datetime('now'))
                 `);
         stmt.run([
           card.id,
@@ -92,6 +94,7 @@ export class FlashcardSynchronizer {
           card.type,
           card.sourceFile,
           card.contentHash,
+          card.breadcrumb || "",
           card.state,
           card.dueDate,
           card.interval,
@@ -105,7 +108,7 @@ export class FlashcardSynchronizer {
       } else if (op.type === "update" && op.flashcardId && op.updates) {
         const stmt = this.db.prepare(`
                     UPDATE flashcards
-                    SET front = ?, back = ?, type = ?, content_hash = ?, modified = datetime('now')
+                    SET front = ?, back = ?, type = ?, content_hash = ?, breadcrumb = ?, modified = datetime('now')
                     WHERE id = ?
                 `);
         stmt.run([
@@ -113,6 +116,7 @@ export class FlashcardSynchronizer {
           op.updates.back,
           op.updates.type,
           op.updates.contentHash,
+          op.updates.breadcrumb || "",
           op.flashcardId,
         ]);
         stmt.free();
@@ -152,6 +156,7 @@ export class FlashcardSynchronizer {
           type: row.type as "header-paragraph" | "table",
           sourceFile: row.source_file as string,
           contentHash: row.content_hash as string,
+          breadcrumb: (row.breadcrumb as string) || "",
           state: row.state as "new" | "review",
           dueDate: row.due_date as string,
           interval: row.interval as number,
@@ -181,6 +186,7 @@ export class FlashcardSynchronizer {
           front: string;
           back: string;
           type: "header-paragraph" | "table";
+          breadcrumb: string;
         };
         flashcardId: string;
         contentHash: string;
@@ -217,8 +223,11 @@ export class FlashcardSynchronizer {
         processedIds.add(flashcardId);
 
         if (existingCard) {
-          // Update if content changed
-          if (existingCard.contentHash !== contentHash) {
+          // Update if content or breadcrumb changed
+          if (
+            existingCard.contentHash !== contentHash ||
+            existingCard.breadcrumb !== parsed.breadcrumb
+          ) {
             batchOperations.push({
               type: "update",
               flashcardId: existingCard.id,
@@ -227,6 +236,7 @@ export class FlashcardSynchronizer {
                 back: parsed.back,
                 type: parsed.type,
                 contentHash: contentHash,
+                breadcrumb: parsed.breadcrumb,
               },
             });
           }
@@ -284,6 +294,7 @@ export class FlashcardSynchronizer {
                 type: newCardData.parsed.type,
                 sourceFile: data.deckFilepath,
                 contentHash: newCardData.contentHash,
+                breadcrumb: newCardData.parsed.breadcrumb,
                 state: oldCard.state,
                 dueDate: oldCard.dueDate,
                 interval: oldCard.interval,
@@ -331,6 +342,7 @@ export class FlashcardSynchronizer {
           type: newCardData.parsed.type,
           sourceFile: data.deckFilepath,
           contentHash: newCardData.contentHash,
+          breadcrumb: newCardData.parsed.breadcrumb,
           state: reviewLogRow ? (reviewLogRow[0] as "new" | "review") : "new",
           dueDate:
             reviewLogRow && reviewLogRow[6] && reviewLogRow[1]

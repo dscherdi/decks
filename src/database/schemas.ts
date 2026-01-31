@@ -1,7 +1,7 @@
 import type { Database } from "sql.js";
 
 // Current Schema Version
-export const CURRENT_SCHEMA_VERSION = 7;
+export const CURRENT_SCHEMA_VERSION = 8;
 
 // SQL Table Creation Schema - Used when database file doesn't exist
 export const CREATE_TABLES_SQL = `
@@ -55,6 +55,7 @@ export const CREATE_TABLES_SQL = `
     type TEXT NOT NULL CHECK (type IN ('header-paragraph', 'table')),
     source_file TEXT NOT NULL,
     content_hash TEXT NOT NULL,
+    breadcrumb TEXT NOT NULL DEFAULT '',
 
     state TEXT NOT NULL CHECK (state IN ('new', 'review')),
     due_date TEXT NOT NULL,
@@ -210,6 +211,9 @@ export function buildMigrationSQL(db: Database): string {
     flashcardsColumns.includes("content_hash")
       ? "content_hash"
       : `'' as content_hash`,
+    flashcardsColumns.includes("breadcrumb")
+      ? "breadcrumb"
+      : `'' as breadcrumb`,
 
     flashcardsColumns.includes("state") ? "state" : `'new' as state`,
     flashcardsColumns.includes("due_date")
@@ -401,6 +405,7 @@ export function buildMigrationSQL(db: Database): string {
       type TEXT NOT NULL CHECK (type IN ('header-paragraph', 'table')),
       source_file TEXT NOT NULL,
       content_hash TEXT NOT NULL,
+      breadcrumb TEXT NOT NULL DEFAULT '',
 
       state TEXT NOT NULL CHECK (state IN ('new', 'review')),
       due_date TEXT NOT NULL,
@@ -466,7 +471,7 @@ export function buildMigrationSQL(db: Database): string {
     INSERT OR IGNORE INTO decks_new (id, name, filepath, tag, last_reviewed, profile_id, created, modified)
     SELECT ${decksSelect} FROM decks WHERE EXISTS (SELECT 1 FROM sqlite_master WHERE type='table' AND name='decks');
 
-    INSERT OR IGNORE INTO flashcards_new (id, deck_id, front, back, type, source_file, content_hash, state, due_date, interval, repetitions, difficulty, stability, lapses, last_reviewed, created, modified)
+    INSERT OR IGNORE INTO flashcards_new (id, deck_id, front, back, type, source_file, content_hash, breadcrumb, state, due_date, interval, repetitions, difficulty, stability, lapses, last_reviewed, created, modified)
     SELECT ${flashcardsSelect} FROM flashcards WHERE EXISTS (SELECT 1 FROM sqlite_master WHERE type='table' AND name='flashcards');
 
     INSERT OR IGNORE INTO review_logs_new (id, flashcard_id, session_id, last_reviewed_at, shown_at, reviewed_at, rating, rating_label, time_elapsed_ms, old_state, old_repetitions, old_lapses, old_stability, old_difficulty, new_state, new_repetitions, new_lapses, new_stability, new_difficulty, old_interval_minutes, new_interval_minutes, old_due_at, new_due_at, elapsed_days, retrievability, request_retention, profile, maximum_interval_days, min_minutes, fsrs_weights_version, scheduler_version, note_model_id, card_template_id, content_hash, client)
@@ -631,11 +636,10 @@ export const SQL_QUERIES = {
   // Flashcard operations
   INSERT_FLASHCARD: `
     INSERT OR REPLACE INTO flashcards (
-      id, deck_id, front, back, type, source_file, content_hash,
+      id, deck_id, front, back, type, source_file, content_hash, breadcrumb,
       state, due_date, interval, repetitions,
       difficulty, stability, lapses, last_reviewed, created, modified
-    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-
+    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
   `,
 
   DELETE_FLASHCARD: `DELETE FROM flashcards WHERE id = ?`,

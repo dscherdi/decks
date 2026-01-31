@@ -52,6 +52,19 @@
     }
   }
 
+  function getBreadcrumbDisplay(card: Flashcard): string {
+    // Get filename without extension from sourceFile
+    const filename = card.sourceFile
+      ? card.sourceFile.replace(/\.md$/, "").split("/").pop() || ""
+      : "";
+
+    if (!card.breadcrumb) {
+      return filename;
+    }
+
+    return filename ? `${filename} > ${card.breadcrumb}` : card.breadcrumb;
+  }
+
   // Helper function to handle complete action (supports both Svelte 4 and Svelte 5)
   function handleComplete(detail: { reason: string; reviewed: number }) {
     if (onComplete) {
@@ -77,6 +90,10 @@
   // Browse mode variables
   let browseCardIndex = 0;
   let browseCards: Flashcard[] = [];
+
+  // Swipe tracking for mobile browse navigation
+  let touchStartX = 0;
+  let touchStartY = 0;
 
   // Session timer variables
   let sessionStartTime = 0;
@@ -354,6 +371,35 @@
     await loadCard();
   }
 
+  async function handleSliderNavigation() {
+    if (browseCardIndex >= 0 && browseCardIndex < browseCards.length) {
+      currentCard = browseCards[browseCardIndex];
+      showAnswer = false;
+      await loadCard();
+    }
+  }
+
+  function handleTouchStart(event: TouchEvent) {
+    if (!browseMode || event.touches.length !== 1) return;
+    touchStartX = event.touches[0].clientX;
+    touchStartY = event.touches[0].clientY;
+  }
+
+  function handleTouchEnd(event: TouchEvent) {
+    if (!browseMode || event.changedTouches.length !== 1) return;
+    const deltaX = event.changedTouches[0].clientX - touchStartX;
+    const deltaY = event.changedTouches[0].clientY - touchStartY;
+
+    // Require minimum 50px horizontal movement and more horizontal than vertical
+    if (Math.abs(deltaX) < 50 || Math.abs(deltaX) < Math.abs(deltaY)) return;
+
+    if (deltaX > 0) {
+      handleBrowseNext();
+    } else {
+      handleBrowsePrevious();
+    }
+  }
+
   onDestroy(async () => {
     // Clean up keydown event listener
     window.removeEventListener("keydown", handleKeydown);
@@ -436,11 +482,30 @@
 <div class="decks-review-modal">
   <div class="decks-modal-header">
     <h3>{browseMode ? "Browse" : "Review Session"} - {deckOrGroup.name}</h3>
+    {#if currentCard && getBreadcrumbDisplay(currentCard)}
+      <div class="decks-breadcrumb">{getBreadcrumbDisplay(currentCard)}</div>
+    {/if}
     <div class="decks-header-stats">
       {#if browseMode}
-        <div class="decks-progress-info">
-          <span>Card {browseCardIndex + 1} of {browseCards.length}</span>
-        </div>
+        {#if browseCards.length > 1}
+          <div class="decks-browse-slider">
+            <input
+              type="range"
+              class="decks-browse-range"
+              min="0"
+              max={browseCards.length - 1}
+              bind:value={browseCardIndex}
+              on:input={handleSliderNavigation}
+            />
+            <span class="decks-browse-slider-label">
+              Card {browseCardIndex + 1} / {browseCards.length}
+            </span>
+          </div>
+        {:else}
+          <div class="decks-progress-info">
+            <span>Card {browseCardIndex + 1} of {browseCards.length}</span>
+          </div>
+        {/if}
       {:else}
         <div class="decks-progress-info">
           <span>Reviewed: {reviewedCountDisplay}</span>
@@ -472,7 +537,11 @@
   {/if}
 
   {#if currentCard}
-    <div class="decks-card-content">
+    <div
+      class="decks-card-content"
+      on:touchstart={handleTouchStart}
+      on:touchend={handleTouchEnd}
+    >
       <div class="decks-question-section">
         <div class="decks-front-wrapper">
           {#if onNavigateToSource && currentCard}
@@ -627,6 +696,14 @@
     width: 100%;
     margin-top: 15px;
     justify-content: space-between;
+  }
+
+  .decks-breadcrumb {
+    font-size: 11px;
+    color: var(--text-faint);
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
   }
 
   .decks-modal-header {
@@ -974,6 +1051,28 @@
     opacity: 0.7;
   }
 
+  .decks-browse-slider {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    width: 100%;
+  }
+
+  .decks-browse-range {
+    flex: 1;
+    height: 6px;
+    cursor: pointer;
+    accent-color: var(--interactive-accent);
+  }
+
+  .decks-browse-slider-label {
+    font-size: 13px;
+    color: var(--text-muted);
+    white-space: nowrap;
+    min-width: 90px;
+    text-align: right;
+  }
+
   .decks-browse-buttons {
     display: flex;
     gap: 12px;
@@ -1130,6 +1229,11 @@
       padding: 14px 24px;
       font-size: 16px;
       min-height: 44px;
+    }
+
+    .decks-browse-slider-label {
+      font-size: 12px;
+      min-width: 80px;
     }
 
     .decks-difficulty-buttons {

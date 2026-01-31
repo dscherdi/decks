@@ -2,6 +2,7 @@ export interface ParsedFlashcard {
   front: string;
   back: string;
   type: "header-paragraph" | "table";
+  breadcrumb: string;
 }
 
 /**
@@ -35,6 +36,9 @@ export class FlashcardParser {
     let inFrontmatter = false;
     let skipNextParagraph = false;
     let hasNonTableContent = false;
+
+    // Header stack for breadcrumb tracking
+    const headerStack: Array<{ text: string; level: number }> = [];
 
     for (let i = 0; i < lines.length; i++) {
       const line = lines[i];
@@ -79,10 +83,13 @@ export class FlashcardParser {
             .map((cell) => cell.trim());
 
           if (cells.length >= 2 && cells[0] && cells[1]) {
+            // Build breadcrumb from header stack (excluding the current header since it's the table container)
+            const breadcrumb = headerStack.map((h) => h.text).join(" > ");
             flashcards.push({
               front: cells[0],
               back: cells[1],
               type: "table",
+              breadcrumb,
             });
           }
         } else {
@@ -110,28 +117,54 @@ export class FlashcardParser {
         const headerMatch = FlashcardParser.HEADER_REGEX.exec(line);
         if (headerMatch) {
           const currentHeaderLevel = headerMatch[1].length;
+          const headerText = line.replace(/^#{1,6}\s+/, "");
 
           // Check for title headers to skip
           if (line.match(/^#\s+/) && line.toLowerCase().includes("flashcard")) {
             skipNextParagraph = true;
+            // Build breadcrumb before finalizing
+            const breadcrumb = headerStack.map((h) => h.text).join(" > ");
             FlashcardParser.finalizeCurrentHeader(
               currentHeader,
               currentContent,
               flashcards,
-              headerLevel
+              headerLevel,
+              breadcrumb
             );
             currentHeader = null;
             currentContent = [];
+            // Update header stack for H1 flashcard title
+            while (
+              headerStack.length > 0 &&
+              headerStack[headerStack.length - 1].level >= currentHeaderLevel
+            ) {
+              headerStack.pop();
+            }
+            headerStack.push({ text: headerText, level: currentHeaderLevel });
             continue;
           }
+
+          // Build breadcrumb before finalizing previous header
+          const breadcrumb = headerStack.map((h) => h.text).join(" > ");
 
           // Finalize previous header
           FlashcardParser.finalizeCurrentHeader(
             currentHeader,
             currentContent,
             flashcards,
-            headerLevel
+            headerLevel,
+            breadcrumb
           );
+
+          // Update header stack: pop all headers at same or deeper level
+          while (
+            headerStack.length > 0 &&
+            headerStack[headerStack.length - 1].level >= currentHeaderLevel
+          ) {
+            headerStack.pop();
+          }
+          // Push current header onto stack
+          headerStack.push({ text: headerText, level: currentHeaderLevel });
 
           // Start new header
           currentHeader = {
@@ -158,11 +191,13 @@ export class FlashcardParser {
     }
 
     // Finalize last header
+    const finalBreadcrumb = headerStack.map((h) => h.text).join(" > ");
     FlashcardParser.finalizeCurrentHeader(
       currentHeader,
       currentContent,
       flashcards,
-      headerLevel
+      headerLevel,
+      finalBreadcrumb
     );
 
     return flashcards;
@@ -174,12 +209,14 @@ export class FlashcardParser {
    * @param currentContent - Content lines for the header
    * @param flashcards - Array to add completed flashcard to
    * @param targetHeaderLevel - Target header level to match
+   * @param breadcrumb - Header hierarchy breadcrumb
    */
   private static finalizeCurrentHeader(
     currentHeader: { text: string; level: number } | null,
     currentContent: string[],
     flashcards: ParsedFlashcard[],
-    targetHeaderLevel: number
+    targetHeaderLevel: number,
+    breadcrumb: string
   ): void {
     if (
       currentHeader &&
@@ -190,6 +227,7 @@ export class FlashcardParser {
         front: currentHeader.text.replace(/^#{1,6}\s+/, ""),
         back: currentContent.join("\n").trim(),
         type: "header-paragraph",
+        breadcrumb,
       });
     }
   }

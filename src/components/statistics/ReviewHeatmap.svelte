@@ -14,6 +14,7 @@
   let maxWeeks = 52; // Default to full year
   let containerWidth = 0;
   let currentYear = new Date().getFullYear();
+  let collapsed = false;
 
   // Track last event to prevent double execution
   let lastEventTime = 0;
@@ -247,9 +248,28 @@
 </script>
 
 <div class="decks-heatmap-container" bind:this={containerElement}>
-  <div class="decks-heatmap-header">
+  <div
+    class="decks-heatmap-header"
+    class:decks-heatmap-header-clickable={true}
+    on:click={() => collapsed = !collapsed}
+    on:keydown={(e) => e.key === "Enter" && (collapsed = !collapsed)}
+    role="button"
+    tabindex="0"
+  >
     <div class="decks-header-left">
-      <h4>Review Activity</h4>
+      <div class="decks-header-title-row">
+        <svg
+          class="decks-collapse-chevron"
+          class:decks-collapsed={collapsed}
+          width="12"
+          height="12"
+          viewBox="0 0 24 24"
+          fill="currentColor"
+        >
+          <path d="M7.41 8.59L12 13.17l4.59-4.58L18 10l-6 6-6-6z" />
+        </svg>
+        <h4>Review activity</h4>
+      </div>
       {#if !isLoading}
         <span class="decks-total-reviews">
           {Array.from(reviewCounts.values()).reduce(
@@ -259,68 +279,72 @@
         </span>
       {/if}
     </div>
-    <div class="decks-year-navigation">
-      <button
-        class="decks-nav-button"
-        on:click={(e) => handleTouchClick(() => navigateYear("prev"), e)}
-        on:touchend={(e) => handleTouchClick(() => navigateYear("prev"), e)}
-      >
-        <svg width="12" height="12" viewBox="0 0 24 24" fill="currentColor">
-          <path d="M15.41 7.41L14 6l-6 6 6 6 1.41-1.41L10.83 12z" />
-        </svg>
-      </button>
-      <span class="decks-current-year">{currentYear}</span>
-      <button
-        class="decks-nav-button"
-        on:click={(e) => handleTouchClick(() => navigateYear("next"), e)}
-        on:touchend={(e) => handleTouchClick(() => navigateYear("next"), e)}
-      >
-        <svg width="12" height="12" viewBox="0 0 24 24" fill="currentColor">
-          <path d="M10 6L8.59 7.41 13.17 12l-4.58 4.59L10 18l6-6z" />
-        </svg>
-      </button>
-    </div>
+    {#if !collapsed}
+      <div class="decks-year-navigation" on:click|stopPropagation on:keydown|stopPropagation>
+        <button
+          class="decks-nav-button"
+          on:click={(e) => handleTouchClick(() => navigateYear("prev"), e)}
+          on:touchend={(e) => handleTouchClick(() => navigateYear("prev"), e)}
+        >
+          <svg width="12" height="12" viewBox="0 0 24 24" fill="currentColor">
+            <path d="M15.41 7.41L14 6l-6 6 6 6 1.41-1.41L10.83 12z" />
+          </svg>
+        </button>
+        <span class="decks-current-year">{currentYear}</span>
+        <button
+          class="decks-nav-button"
+          on:click={(e) => handleTouchClick(() => navigateYear("next"), e)}
+          on:touchend={(e) => handleTouchClick(() => navigateYear("next"), e)}
+        >
+          <svg width="12" height="12" viewBox="0 0 24 24" fill="currentColor">
+            <path d="M10 6L8.59 7.41 13.17 12l-4.58 4.59L10 18l6-6z" />
+          </svg>
+        </button>
+      </div>
+    {/if}
   </div>
 
-  {#if isLoading}
-    <div class="decks-loading">Loading...</div>
-  {:else}
-    <div class="decks-heatmap">
-      <div class="decks-months-container">
-        {#each getMonthsData() as { month, weeks: monthWeeks }}
-          <div class="decks-month-container">
-            <div class="decks-month-label">{month}</div>
-            <div class="decks-month-grid">
-              {#each monthWeeks as week}
-                <div class="decks-week">
-                  {#each week as day}
-                    {@const dayYear = new Date(day.date).getFullYear()}
-                    <div
-                      class="decks-day {getIntensityClass(day.count)}"
-                      class:decks-today={isToday(day.date)}
-                      class:outside-year={dayYear !== currentYear}
-                      title="{day.count} reviews on {formatDate(day.date)}"
-                    ></div>
-                  {/each}
-                </div>
-              {/each}
+  {#if !collapsed}
+    {#if isLoading}
+      <div class="decks-loading">Loading...</div>
+    {:else}
+      <div class="decks-heatmap">
+        <div class="decks-months-container">
+          {#each getMonthsData() as { month, weeks: monthWeeks }}
+            <div class="decks-month-container">
+              <div class="decks-month-label">{month}</div>
+              <div class="decks-month-grid">
+                {#each monthWeeks as week}
+                  <div class="decks-week">
+                    {#each week as day}
+                      {@const dayYear = new Date(day.date).getFullYear()}
+                      <div
+                        class="decks-day {getIntensityClass(day.count)}"
+                        class:decks-today={isToday(day.date)}
+                        class:outside-year={dayYear !== currentYear}
+                        title="{day.count} reviews on {formatDate(day.date)}"
+                      ></div>
+                    {/each}
+                  </div>
+                {/each}
+              </div>
             </div>
-          </div>
-        {/each}
+          {/each}
+        </div>
       </div>
-    </div>
 
-    <div class="decks-legend">
-      <span class="decks-legend-label">Less</span>
-      <div class="decks-legend-colors">
-        <div class="decks-legend-square decks-intensity-0"></div>
-        <div class="decks-legend-square decks-intensity-1"></div>
-        <div class="decks-legend-square decks-intensity-2"></div>
-        <div class="decks-legend-square decks-intensity-3"></div>
-        <div class="decks-legend-square decks-intensity-4"></div>
+      <div class="decks-legend">
+        <span class="decks-legend-label">Less</span>
+        <div class="decks-legend-colors">
+          <div class="decks-legend-square decks-intensity-0"></div>
+          <div class="decks-legend-square decks-intensity-1"></div>
+          <div class="decks-legend-square decks-intensity-2"></div>
+          <div class="decks-legend-square decks-intensity-3"></div>
+          <div class="decks-legend-square decks-intensity-4"></div>
+        </div>
+        <span class="decks-legend-label">More</span>
       </div>
-      <span class="decks-legend-label">More</span>
-    </div>
+    {/if}
   {/if}
 </div>
 
@@ -394,6 +418,26 @@
     color: var(--text-normal);
     min-width: 40px;
     text-align: center;
+  }
+
+  .decks-heatmap-header-clickable {
+    cursor: pointer;
+  }
+
+  .decks-header-title-row {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+  }
+
+  .decks-collapse-chevron {
+    transition: transform 0.2s ease;
+    color: var(--text-muted);
+    flex-shrink: 0;
+  }
+
+  .decks-collapse-chevron.decks-collapsed {
+    transform: rotate(-90deg);
   }
 
   .decks-heatmap-header h4 {

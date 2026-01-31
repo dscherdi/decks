@@ -19,11 +19,13 @@ describe("FlashcardParser", () => {
         front: "What is 2+2?",
         back: "4",
         type: "table",
+        breadcrumb: "Study Topics",
       });
       expect(result[1]).toEqual({
         front: "Capital of France",
         back: "Paris",
         type: "table",
+        breadcrumb: "Study Topics",
       });
     });
 
@@ -45,11 +47,13 @@ React is a JavaScript library for building user interfaces.
         front: "What is TypeScript?",
         back: "TypeScript is a typed superset of JavaScript that compiles to plain JavaScript.",
         type: "header-paragraph",
+        breadcrumb: "What is TypeScript?",
       });
       expect(result[1]).toEqual({
         front: "What is React?",
         back: "React is a JavaScript library for building user interfaces.",
         type: "header-paragraph",
+        breadcrumb: "What is React?",
       });
     });
 
@@ -75,11 +79,13 @@ This content should be ignored since we're targeting H3.
         front: "Question 1",
         back: "Answer 1",
         type: "header-paragraph",
+        breadcrumb: "Question 1",
       });
       expect(result[1]).toEqual({
         front: "Question 2",
         back: "Answer 2",
         type: "header-paragraph",
+        breadcrumb: "Question 2",
       });
     });
 
@@ -111,6 +117,7 @@ Cascading Style Sheets for styling web pages.
         front: "What is CSS?",
         back: "Cascading Style Sheets for styling web pages.",
         type: "header-paragraph",
+        breadcrumb: "What is CSS?",
       });
     });
 
@@ -132,6 +139,7 @@ Answer
         front: "Question",
         back: "Answer",
         type: "header-paragraph",
+        breadcrumb: "Question",
       });
     });
 
@@ -153,6 +161,7 @@ Real answer.
         front: "Real Question",
         back: "Real answer.",
         type: "header-paragraph",
+        breadcrumb: "Flashcards Section > Real Question",
       });
     });
 
@@ -192,6 +201,7 @@ Some more content here.
         front: "Complete question",
         back: "Complete answer",
         type: "table",
+        breadcrumb: "Test Table",
       });
     });
 
@@ -235,6 +245,7 @@ Key features:
         front: "Whitespace question",
         back: "Whitespace answer",
         type: "table",
+        breadcrumb: "Whitespace Test",
       });
     });
 
@@ -311,11 +322,13 @@ Some regular content here.
         front: "What is 2+2?",
         back: "4",
         type: "table",
+        breadcrumb: "Main Title > Level 2 Header",
       });
       expect(h2Result[1]).toEqual({
         front: "What is 3+3?",
         back: "6",
         type: "table",
+        breadcrumb: "Main Title > Level 2 Header",
       });
 
       // Test with headerLevel 3 - should only parse table under ### header
@@ -325,6 +338,7 @@ Some regular content here.
         front: "What is 5+5?",
         back: "10",
         type: "table",
+        breadcrumb: "Main Title > Level 2 Header > Level 3 Header",
       });
 
       // Test with headerLevel 4 - table should be part of header-paragraph since there's other content
@@ -373,11 +387,13 @@ Some paragraph content here.
         front: "What is 5+5?",
         back: "10",
         type: "table",
+        breadcrumb: "Pure Table Header",
       });
       expect(result[1]).toEqual({
         front: "What is 6+6?",
         back: "12",
         type: "table",
+        breadcrumb: "Pure Table Header",
       });
 
       // Third should be header-paragraph with table content included
@@ -385,6 +401,110 @@ Some paragraph content here.
       expect(result[2].back).toContain("Some paragraph content here.");
       expect(result[2].back).toContain("| What is 7+7? | 14 |");
       expect(result[2].type).toBe("header-paragraph");
+      expect(result[2].breadcrumb).toBe("Mixed Header");
+    });
+  });
+
+  describe("breadcrumb tracking", () => {
+    it("should include parent header in breadcrumb for nested headers", () => {
+      const content = `
+## Chapter 1
+
+### Section 1.1
+
+This is the answer.
+      `;
+
+      const result = FlashcardParser.parseFlashcardsFromContent(content, 3);
+
+      expect(result).toHaveLength(1);
+      expect(result[0].breadcrumb).toBe("Chapter 1 > Section 1.1");
+    });
+
+    it("should track deep header hierarchy", () => {
+      const content = `
+## Level 2
+
+### Level 3
+
+#### Level 4
+
+Deep content here.
+      `;
+
+      const result = FlashcardParser.parseFlashcardsFromContent(content, 4);
+
+      expect(result).toHaveLength(1);
+      expect(result[0].breadcrumb).toBe("Level 2 > Level 3 > Level 4");
+    });
+
+    it("should reset breadcrumb when same-level header encountered", () => {
+      const content = `
+## Section A
+
+### Question A1
+
+Answer A1
+
+## Section B
+
+### Question B1
+
+Answer B1
+      `;
+
+      const result = FlashcardParser.parseFlashcardsFromContent(content, 3);
+
+      expect(result).toHaveLength(2);
+      expect(result[0].breadcrumb).toBe("Section A > Question A1");
+      expect(result[1].breadcrumb).toBe("Section B > Question B1");
+    });
+
+    it("should include breadcrumb for table-based flashcards under nested headers", () => {
+      const content = `
+## Chapter
+
+### Vocabulary
+
+| Front | Back |
+|-------|------|
+| Hello | Bonjour |
+| Goodbye | Au revoir |
+      `;
+
+      const result = FlashcardParser.parseFlashcardsFromContent(content, 3);
+
+      expect(result).toHaveLength(2);
+      expect(result[0].breadcrumb).toBe("Chapter > Vocabulary");
+      expect(result[1].breadcrumb).toBe("Chapter > Vocabulary");
+    });
+
+    it("should have single header in breadcrumb for top-level flashcards", () => {
+      const content = `
+## Standalone Question
+
+The answer is here.
+      `;
+
+      const result = FlashcardParser.parseFlashcardsFromContent(content, 2);
+
+      expect(result).toHaveLength(1);
+      expect(result[0].breadcrumb).toBe("Standalone Question");
+    });
+
+    it("should maintain correct hierarchy when headers jump levels", () => {
+      const content = `
+## Chapter 1
+
+#### Deep Section
+
+This is content under an H4 directly after H2.
+      `;
+
+      const result = FlashcardParser.parseFlashcardsFromContent(content, 4);
+
+      expect(result).toHaveLength(1);
+      expect(result[0].breadcrumb).toBe("Chapter 1 > Deep Section");
     });
   });
 });
