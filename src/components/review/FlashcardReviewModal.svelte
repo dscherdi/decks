@@ -481,7 +481,7 @@
 
 <div class="decks-review-modal">
   <div class="decks-modal-header">
-    <h3>{browseMode ? "Browse" : "Review Session"} - {deckOrGroup.name}</h3>
+    <h3>{browseMode ? "Browse" : "Review session"} - {deckOrGroup.name}</h3>
     {#if currentCard && getBreadcrumbDisplay(currentCard)}
       <div class="decks-breadcrumb">{getBreadcrumbDisplay(currentCard)}</div>
     {/if}

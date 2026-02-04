@@ -103,7 +103,7 @@
       labels,
       datasets: [
         {
-          label: "Cards Added",
+          label: "Cards added",
           data,
           backgroundColor: "#10b981",
           borderColor: "#059669",

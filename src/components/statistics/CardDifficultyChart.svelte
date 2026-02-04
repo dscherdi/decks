@@ -116,7 +116,7 @@
       labels,
       datasets: [
         {
-          label: "Number of Cards",
+          label: "Number of cards",
           data,
           backgroundColor: colors,
           borderColor: colors.map((color) =>

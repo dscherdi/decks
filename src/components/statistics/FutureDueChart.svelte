@@ -185,7 +185,7 @@
     const datasets = [
       {
         type: "line" as const,
-        label: "Due Cards",
+        label: "Due cards",
         data: barData,
         backgroundColor: "rgba(34, 197, 94, 0.3)",
         borderColor: "rgb(34, 197, 94)",
@@ -257,7 +257,7 @@
               beginAtZero: true,
               title: {
                 display: true,
-                text: "Due Cards",
+                text: "Due cards",
               },
               ticks: {
                 precision: 0,

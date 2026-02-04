@@ -68,7 +68,7 @@
         <div class="decks-stat-value">
           {statistics?.cardStats?.new || 0}
         </div>
-        <div class="decks-stat-label">New Cards</div>
+        <div class="decks-stat-label">New cards</div>
       </div>
       <div class="decks-stat-card">
         <div class="decks-stat-value" style="display: none;">0</div>

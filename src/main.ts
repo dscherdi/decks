@@ -1,4 +1,11 @@
-import { Plugin, TFile, WorkspaceLeaf, Notice, TAbstractFile, getAllTags } from "obsidian";
+import {
+  Plugin,
+  TFile,
+  WorkspaceLeaf,
+  Notice,
+  TAbstractFile,
+  getAllTags,
+} from "obsidian";
 
 import {
   DatabaseFactory,
@@ -87,11 +94,12 @@ export default class DecksPlugin extends Plugin {
     await this.loadSettings();
 
     // Initialize utilities
+    const pluginFolderName = this.manifest.dir?.split('/').pop() || this.manifest.id;
     this.logger = new Logger(
       this.settings,
       this.app.vault.adapter,
       this.app.vault.configDir,
-      this.manifest.dir || 'decks'
+      pluginFolderName
     );
     this.progressTracker = new ProgressTracker(this.settings);
 
@@ -100,8 +108,7 @@ export default class DecksPlugin extends Plugin {
     try {
       // Ensure plugin directory exists
       const adapter = this.app.vault.adapter;
-      const manifestDir = this.manifest.dir || 'decks';
-      const pluginDir = `${this.app.vault.configDir}/plugins/${manifestDir}`;
+      const pluginDir = this.manifest.dir || `${this.app.vault.configDir}/plugins/${this.manifest.id}`;
       if (!(await adapter.exists(pluginDir))) {
         await adapter.mkdir(pluginDir);
       }
@@ -109,7 +116,7 @@ export default class DecksPlugin extends Plugin {
       // FSRS instances are now created per-deck as needed
 
       // Initialize database with worker support
-      const databasePath = `${this.app.vault.configDir}/plugins/${manifestDir}/flashcards.db`;
+      const databasePath = `${pluginDir}/flashcards.db`;
 
       // Use experimental setting to control worker usage
       const useWorker = this.settings.experimental.enableDatabaseWorker;
@@ -147,10 +154,11 @@ export default class DecksPlugin extends Plugin {
       );
 
       // Initialize backup service
+      const backupFolderName = this.manifest.dir?.split('/').pop() || this.manifest.id;
       this.backupService = new BackupService(
         this.app.vault.adapter,
         this.app.vault.configDir,
-        this.manifest.dir || 'decks',
+        backupFolderName,
         this.logger.debug.bind(this.logger)
       );
 
@@ -263,7 +271,9 @@ export default class DecksPlugin extends Plugin {
     } catch (error) {
       console.error("Error loading Decks plugin:", error);
       if (this.settings?.ui?.enableNotices !== false) {
-        new Notice("Failed to load decks plugin. Check the console for details.");
+        new Notice(
+          "Failed to load decks plugin. Check the console for details."
+        );
       }
     }
   }
@@ -443,8 +453,8 @@ export default class DecksPlugin extends Plugin {
   }
 
   private setupDatabaseWatcher(): void {
-    const manifestDir = this.manifest.dir || 'decks';
-    const databasePath = `${this.app.vault.configDir}/plugins/${manifestDir}/flashcards.db`;
+    const pluginDir = this.manifest.dir || `${this.app.vault.configDir}/plugins/${this.manifest.id}`;
+    const databasePath = `${pluginDir}/flashcards.db`;
 
     // Initialize lastKnownDatabaseMtime
     void this.updateLastKnownDatabaseMtime(databasePath);
@@ -482,7 +492,10 @@ export default class DecksPlugin extends Plugin {
   private getDecksView(): DecksView | null {
     const leaves = this.app.workspace.getLeavesOfType(VIEW_TYPE_DECKS);
     if (leaves.length > 0) {
-      return leaves[0].view as DecksView;
+      const view = leaves[0].view;
+      if (view instanceof DecksView) {
+        return view;
+      }
     }
     return null;
   }

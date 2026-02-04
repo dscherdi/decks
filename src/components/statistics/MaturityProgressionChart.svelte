@@ -235,7 +235,7 @@
 
     const baseDatasets = [
       {
-        label: "New Cards",
+        label: "New cards",
         data: newCards,
         backgroundColor: "rgba(59, 130, 246, 0.5)",
         borderColor: "rgb(59, 130, 246)",
@@ -246,7 +246,7 @@
         order: 2,
       },
       {
-        label: "Learning Cards",
+        label: "Learning cards",
         data: learningCards,
         backgroundColor: "rgba(245, 158, 11, 0.5)",
         borderColor: "rgb(245, 158, 11)",
@@ -257,7 +257,7 @@
         order: 2,
       },
       {
-        label: "Mature Cards",
+        label: "Mature cards",
         data: matureCards,
         backgroundColor: "rgba(34, 197, 94, 0.5)",
         borderColor: "rgb(34, 197, 94)",
@@ -279,7 +279,7 @@
       );
 
       baseDatasets.push({
-        label: `Standard Maintenance Level (${Math.round(theoreticalMaintenanceLevel)}%)`,
+        label: `Standard maintenance level (${Math.round(theoreticalMaintenanceLevel)}%)`,
         data: standardMaintenanceLine,
         borderColor: "rgba(168, 85, 247, 1)", // Bright purple for better visibility
         borderWidth: 3, // Same thickness as user's line
@@ -303,7 +303,7 @@
       );
 
       baseDatasets.push({
-        label: `Your Maintenance Level (${Math.round(maintenanceLevel)}%)`,
+        label: `Your maintenance level (${Math.round(maintenanceLevel)}%)`,
         data: maintenanceLine,
         borderColor: "rgba(239, 68, 68, 1)", // Fully opaque red dashed line
         borderWidth: 3, // Thicker line to be more visible

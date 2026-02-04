@@ -309,7 +309,7 @@
     if (headerLevelContainer) {
       headerLevelContainer.empty();
       new Setting(headerLevelContainer)
-        .setName("Header Level")
+        .setName("Header level")
         .setDesc("Header level for flashcard parsing")
         .addDropdown((dropdown) => {
           for (let i = 1; i <= 6; i++) {
@@ -325,7 +325,7 @@
     if (reviewOrderContainer) {
       reviewOrderContainer.empty();
       new Setting(reviewOrderContainer)
-        .setName("Review Order")
+        .setName("Review order")
         .setDesc("Order in which cards are reviewed")
         .addDropdown((dropdown) => {
           dropdown.addOption("due-date", "Oldest Due First");
@@ -340,7 +340,7 @@
     if (requestRetentionContainer) {
       requestRetentionContainer.empty();
       new Setting(requestRetentionContainer)
-        .setName("Request Retention")
+        .setName("Request retention")
         .setDesc("Target retention rate (0.5 - 0.995)")
         .addText((text) => {
           text
@@ -359,7 +359,7 @@
     if (fsrsProfileContainer) {
       fsrsProfileContainer.empty();
       new Setting(fsrsProfileContainer)
-        .setName("FSRS Profile")
+        .setName("FSRS profile")
         .setDesc("Learning intensity profile")
         .addDropdown((dropdown) => {
           dropdown.addOption("STANDARD", "Standard");
@@ -427,7 +427,7 @@
       <div bind:this={profileNameContainer}></div>
 
       <div class="decks-settings-section">
-        <h4>Daily Limits</h4>
+        <h4>Daily limits</h4>
         <div bind:this={enableNewCardsContainer}></div>
         <div bind:this={newCardsLimitContainer}></div>
         <div bind:this={enableReviewCardsContainer}></div>

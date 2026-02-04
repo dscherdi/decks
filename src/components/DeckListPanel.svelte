@@ -826,7 +826,7 @@
     {:else}
       <div class="decks-deck-table">
         <div class="decks-table-header">
-          <div class="decks-col-deck">{viewMode === 'files' ? 'Deck' : 'Tag Group'}</div>
+          <div class="decks-col-deck">{viewMode === 'files' ? 'Deck' : 'Tag group'}</div>
           <div class="decks-col-stat">New</div>
           <div class="decks-col-stat">Due</div>
           <div class="decks-col-config"></div>

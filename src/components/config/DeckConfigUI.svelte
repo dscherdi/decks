@@ -183,7 +183,7 @@
       ? `${selectedProfile.newCardsPerDay} per day`
       : "Unlimited";
     new Setting(profileDetailsContainer)
-      .setName("New Cards Limit")
+      .setName("New cards limit")
       .setDesc(newCardsDesc)
       .setClass("decks-config-readonly");
 
@@ -197,7 +197,7 @@
 
     // Header level
     new Setting(profileDetailsContainer)
-      .setName("Header Level")
+      .setName("Header level")
       .setDesc(`H${selectedProfile.headerLevel}`)
       .setClass("decks-config-readonly");
 
@@ -205,7 +205,7 @@
     const reviewOrderLabel =
       selectedProfile.reviewOrder === "due-date" ? "Oldest Due First" : "Random";
     new Setting(profileDetailsContainer)
-      .setName("Review Order")
+      .setName("Review order")
       .setDesc(reviewOrderLabel)
       .setClass("decks-config-readonly");
 

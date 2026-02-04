@@ -105,7 +105,7 @@
       labels,
       datasets: [
         {
-          label: "Number of Cards",
+          label: "Number of cards",
           data,
           backgroundColor: "#3b82f6",
           borderColor: "#2563eb",
