@@ -1,8 +1,3 @@
----
-name: release
-description: Prepare and publish a new version of the Decks plugin
----
-
 # Release Checklist
 
 Prepare a release for the Decks Obsidian plugin. If a version is provided as `$ARGUMENTS`, use that version. Otherwise read the current version from `manifest.json`.

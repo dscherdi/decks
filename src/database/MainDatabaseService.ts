@@ -11,11 +11,13 @@ import { FlashcardSynchronizer } from "../services/FlashcardSynchronizer";
 import type { SyncData, SyncResult } from "../services/FlashcardSynchronizer";
 import type { SqlJsValue } from "./sql-types";
 import { yieldToUI } from "../utils/ui";
+import { getEmbeddedAssets } from "./embedded-assets";
 
 export class MainDatabaseService extends BaseDatabaseService {
   private db: Database | null = null;
   private SQL: InitSqlJsStatic | null = null;
   private lastKnownModified = 0;
+  private wasmBlobUrl: string | null = null;
 
   constructor(
     dbPath: string,
@@ -23,6 +25,30 @@ export class MainDatabaseService extends BaseDatabaseService {
     debugLog: (message: string, ...args: (string | number | object)[]) => void
   ) {
     super(dbPath, adapter, debugLog);
+  }
+
+  private getWasmUrl(): string | null {
+    if (this.wasmBlobUrl) return this.wasmBlobUrl;
+
+    const assets = getEmbeddedAssets();
+    if (!assets?.sqlWasmBase64) return null;
+
+    const binaryString = atob(assets.sqlWasmBase64);
+    const bytes = new Uint8Array(binaryString.length);
+    for (let i = 0; i < binaryString.length; i++) {
+      bytes[i] = binaryString.charCodeAt(i);
+    }
+    const blob = new Blob([bytes], { type: "application/wasm" });
+    this.wasmBlobUrl = URL.createObjectURL(blob);
+    return this.wasmBlobUrl;
+  }
+
+  private locateWasmFile(file: string): string {
+    if (file.endsWith(".wasm")) {
+      const wasmUrl = this.getWasmUrl();
+      if (wasmUrl) return wasmUrl;
+    }
+    return file;
   }
 
   async initialize(): Promise<void> {
@@ -54,12 +80,7 @@ export class MainDatabaseService extends BaseDatabaseService {
         throw new Error("Failed to load SQL.js");
       }
       const SQL = await this.SQL({
-        locateFile: (file: string) => {
-          if (file.endsWith(".wasm")) {
-            return `https://sql.js.org/dist/${file}`;
-          }
-          return file;
-        },
+        locateFile: (file: string) => this.locateWasmFile(file),
       });
 
       // Load existing database or create new one
