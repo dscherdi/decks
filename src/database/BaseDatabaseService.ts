@@ -555,16 +555,22 @@ export abstract class BaseDatabaseService implements IDatabaseService {
   }
 
   async applyProfileToTag(profileId: string, tag: string): Promise<number> {
-    const decks = await this.getDecksByTag(tag);
-
-    let count = 0;
-    for (const deck of decks) {
-      await this.updateDeck(deck.id, { profileId });
-      count++;
-    }
-
-    // Create/update tag mapping
+    // createTagMapping upserts via UNIQUE(tag) — replaces any existing mapping for this tag
     await this.createTagMapping(profileId, tag);
+
+    // Get all decks and update those matching this tag or child tags
+    const allDecks = await this.getAllDecks();
+    let count = 0;
+
+    for (const deck of allDecks) {
+      if (deck.tag === tag || deck.tag.startsWith(tag + '/')) {
+        const resolvedProfileId = await this.getProfileIdForTag(deck.tag) || DEFAULT_PROFILE_ID;
+        if (deck.profileId !== resolvedProfileId) {
+          await this.updateDeck(deck.id, { profileId: resolvedProfileId });
+          count++;
+        }
+      }
+    }
 
     return count;
   }

@@ -225,19 +225,21 @@
 </script>
 
 <div class="decks-deck-config-modal">
-  <div class="decks-config-section">
-    <h3>Tag selection</h3>
-    <div bind:this={deckSelectorContainer}></div>
-  </div>
+  <div class="decks-config-content">
+    <div class="decks-config-section">
+      <h3>Tag selection</h3>
+      <div bind:this={deckSelectorContainer}></div>
+    </div>
 
-  <div class="decks-config-section">
-    <h3>Profile selection</h3>
-    <div bind:this={profileSelectorContainer}></div>
-  </div>
+    <div class="decks-config-section">
+      <h3>Profile selection</h3>
+      <div bind:this={profileSelectorContainer}></div>
+    </div>
 
-  <div class="decks-config-section">
-    <h3>Current profile settings</h3>
-    <div bind:this={profileDetailsContainer}></div>
+    <div class="decks-config-section">
+      <h3>Current profile settings</h3>
+      <div bind:this={profileDetailsContainer}></div>
+    </div>
   </div>
 
   <div class="decks-config-actions">
@@ -256,7 +258,17 @@
 
 <style>
   .decks-deck-config-modal {
+    display: flex;
+    flex-direction: column;
+    height: 100%;
+  }
+
+  .decks-config-content {
+    flex: 1;
+    overflow-y: auto;
+    overflow-x: hidden;
     padding: 20px;
+    min-height: 0;
     display: flex;
     flex-direction: column;
     gap: 20px;
@@ -278,8 +290,8 @@
     display: flex;
     justify-content: flex-end;
     gap: 10px;
-    margin-top: 20px;
-    padding-top: 20px;
+    flex-shrink: 0;
+    padding: 15px 20px;
     border-top: 1px solid var(--background-modifier-border);
   }
 
@@ -348,12 +360,13 @@
   }
 
   @media (max-width: 768px) {
-    .decks-deck-config-modal {
+    .decks-config-content {
       padding: 15px;
     }
 
     .decks-config-actions {
       flex-direction: column-reverse;
+      padding: 15px;
     }
 
     .decks-btn-primary,

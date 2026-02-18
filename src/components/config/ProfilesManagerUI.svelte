@@ -418,44 +418,51 @@
 </script>
 
 <div class="decks-profiles-manager">
-  <div bind:this={profileSelectorContainer}></div>
+  <div class="decks-profiles-content">
+    <div bind:this={profileSelectorContainer}></div>
 
-  {#if selectedProfile}
-    <div class="decks-profile-settings">
-      <h3>Profile Settings</h3>
+    {#if selectedProfile}
+      <div class="decks-profile-settings">
+        <h3>Profile Settings</h3>
 
-      <div bind:this={profileNameContainer}></div>
+        <div bind:this={profileNameContainer}></div>
 
-      <div class="decks-settings-section">
-        <h4>Daily limits</h4>
-        <div bind:this={enableNewCardsContainer}></div>
-        <div bind:this={newCardsLimitContainer}></div>
-        <div bind:this={enableReviewCardsContainer}></div>
-        <div bind:this={reviewCardsLimitContainer}></div>
+        <div class="decks-settings-section">
+          <h4>Daily limits</h4>
+          <div bind:this={enableNewCardsContainer}></div>
+          <div bind:this={newCardsLimitContainer}></div>
+          <div bind:this={enableReviewCardsContainer}></div>
+          <div bind:this={reviewCardsLimitContainer}></div>
+        </div>
+
+        <div class="decks-settings-section">
+          <h4>Card Parsing</h4>
+          <div bind:this={headerLevelContainer}></div>
+        </div>
+
+        <div class="decks-settings-section">
+          <h4>Review Settings</h4>
+          <div bind:this={reviewOrderContainer}></div>
+        </div>
+
+        <div class="decks-settings-section">
+          <h4>FSRS Algorithm</h4>
+          <div bind:this={requestRetentionContainer}></div>
+          <div bind:this={fsrsProfileContainer}></div>
+        </div>
+
+        <div class="decks-settings-section">
+          <h4>Profile Info</h4>
+          <div bind:this={deckCountContainer}></div>
+          <div bind:this={tagMappingsContainer}></div>
+        </div>
+
       </div>
+    {/if}
+  </div>
 
-      <div class="decks-settings-section">
-        <h4>Card Parsing</h4>
-        <div bind:this={headerLevelContainer}></div>
-      </div>
-
-      <div class="decks-settings-section">
-        <h4>Review Settings</h4>
-        <div bind:this={reviewOrderContainer}></div>
-      </div>
-
-      <div class="decks-settings-section">
-        <h4>FSRS Algorithm</h4>
-        <div bind:this={requestRetentionContainer}></div>
-        <div bind:this={fsrsProfileContainer}></div>
-      </div>
-
-      <div class="decks-settings-section">
-        <h4>Profile Info</h4>
-        <div bind:this={deckCountContainer}></div>
-        <div bind:this={tagMappingsContainer}></div>
-      </div>
-
+  <div class="decks-modal-footer">
+    {#if selectedProfile}
       <div class="decks-profile-actions">
         <button
           class="decks-btn-save"
@@ -470,21 +477,27 @@
           </button>
         {/if}
       </div>
-    </div>
-  {/if}
-</div>
-
-<div class="decks-modal-footer">
-  <button on:click={onclose}>Close</button>
+    {/if}
+    <button on:click={onclose}>Close</button>
+  </div>
 </div>
 
 <style>
   .decks-profiles-manager {
+    display: flex;
+    flex-direction: column;
+    height: 100%;
+  }
+
+  .decks-profiles-content {
+    flex: 1;
+    overflow-y: auto;
+    overflow-x: hidden;
     padding: 20px;
+    min-height: 0;
     display: flex;
     flex-direction: column;
     gap: 20px;
-    min-height: 500px;
   }
 
   .decks-profile-settings {
@@ -516,9 +529,7 @@
   .decks-profile-actions {
     display: flex;
     gap: 10px;
-    margin-top: 20px;
-    padding-top: 20px;
-    border-top: 1px solid var(--background-modifier-border);
+    flex: 1;
   }
 
   .decks-btn-save {
@@ -594,9 +605,10 @@
 
   .decks-modal-footer {
     display: flex;
-    justify-content: flex-end;
-    margin-top: 20px;
-    padding-top: 20px;
+    align-items: center;
+    gap: 10px;
+    flex-shrink: 0;
+    padding: 15px 20px;
     border-top: 1px solid var(--background-modifier-border);
   }
 
@@ -613,7 +625,7 @@
   }
 
   @media (max-width: 768px) {
-    .decks-profiles-manager {
+    .decks-profiles-content {
       padding: 15px;
     }
 

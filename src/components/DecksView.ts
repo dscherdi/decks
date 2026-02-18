@@ -141,8 +141,7 @@ export class DecksView extends ItemView {
       this.app,
       this.db,
       async () => {
-        // Refresh decks after profiles changed
-        await this.refresh();
+        await this.refreshDecksAndStats();
       }
     ).open();
   }
@@ -152,10 +151,8 @@ export class DecksView extends ItemView {
       this.app,
       deck,
       this.db,
-      this.deckSynchronizer,
-      async (deckId: string) => {
-        // Refresh stats for this deck after config changes
-        await this.refreshStatsById(deckId);
+      async () => {
+        await this.refreshDecksAndStats();
       }
     ).open();
   }
@@ -176,6 +173,17 @@ export class DecksView extends ItemView {
       if (this.settings?.ui?.enableNotices !== false) {
         new Notice("Error refreshing decks. Check console for details.");
       }
+    }
+  }
+
+  async refreshDecksAndStats() {
+    this.logger.debug("DecksView.refreshDecksAndStats() called");
+    try {
+      const updatedDecks = await this.db.getAllDecksWithProfiles();
+      const deckStats = await this.getAllDeckStatsMap();
+      await this.update(updatedDecks, deckStats);
+    } catch (error) {
+      console.error("Error refreshing decks and stats:", error);
     }
   }
 
@@ -375,7 +383,7 @@ export class DecksView extends ItemView {
         this.scheduler,
         this.settings,
         this.db,
-        this.refresh.bind(this),
+        this.refreshDecksAndStats.bind(this),
         this.refreshStatsById.bind(this)
       ).open();
     } catch (error) {
@@ -420,7 +428,7 @@ export class DecksView extends ItemView {
         this.scheduler,
         this.settings,
         this.db,
-        this.refresh.bind(this),
+        this.refreshDecksAndStats.bind(this),
         this.refreshStatsById.bind(this)
       ).open();
     } catch (error) {
@@ -453,7 +461,7 @@ export class DecksView extends ItemView {
         this.scheduler,
         this.settings,
         this.db,
-        this.refresh.bind(this),
+        this.refreshDecksAndStats.bind(this),
         this.refreshStatsById.bind(this),
         true
       ).open();
@@ -494,7 +502,7 @@ export class DecksView extends ItemView {
         this.scheduler,
         this.settings,
         this.db,
-        this.refresh.bind(this),
+        this.refreshDecksAndStats.bind(this),
         this.refreshStatsById.bind(this),
         true
       ).open();

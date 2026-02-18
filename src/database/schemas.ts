@@ -1,7 +1,7 @@
 import type { Database } from "sql.js";
 
 // Current Schema Version
-export const CURRENT_SCHEMA_VERSION = 8;
+export const CURRENT_SCHEMA_VERSION = 9;
 
 // SQL Table Creation Schema - Used when database file doesn't exist
 export const CREATE_TABLES_SQL = `
@@ -31,7 +31,7 @@ export const CREATE_TABLES_SQL = `
     profile_id TEXT NOT NULL,
     tag TEXT NOT NULL,
     created TEXT NOT NULL,
-    UNIQUE(profile_id, tag)
+    UNIQUE(tag)
   );
 
   -- Decks table
@@ -376,14 +376,31 @@ export function buildMigrationSQL(db: Database): string {
       datetime('now')
     );
 
-    -- Create profile tag mappings table
+    -- Ensure profile_tag_mappings exists for migration (might not exist in old schemas)
     CREATE TABLE IF NOT EXISTS profile_tag_mappings (
       id TEXT PRIMARY KEY,
       profile_id TEXT NOT NULL,
       tag TEXT NOT NULL,
-      created TEXT NOT NULL,
-      UNIQUE(profile_id, tag)
+      created TEXT NOT NULL
     );
+
+    -- Recreate with UNIQUE(tag) constraint (was UNIQUE(profile_id, tag))
+    CREATE TABLE profile_tag_mappings_new (
+      id TEXT PRIMARY KEY,
+      profile_id TEXT NOT NULL,
+      tag TEXT NOT NULL,
+      created TEXT NOT NULL,
+      UNIQUE(tag)
+    );
+
+    -- Deduplicate: INSERT OR IGNORE keeps first row per tag (ordered by latest created)
+    INSERT OR IGNORE INTO profile_tag_mappings_new (id, profile_id, tag, created)
+    SELECT id, profile_id, tag, created
+    FROM profile_tag_mappings
+    ORDER BY created DESC;
+
+    DROP TABLE profile_tag_mappings;
+    ALTER TABLE profile_tag_mappings_new RENAME TO profile_tag_mappings;
 
     -- Create new tables
     CREATE TABLE decks_new (

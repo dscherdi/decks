@@ -1186,6 +1186,8 @@
   /* Mobile responsive styles */
   @media (max-width: 768px) {
     .decks-review-modal {
+      height: 100%;
+      margin-top: 0;
       box-sizing: border-box;
       overflow-x: hidden;
     }

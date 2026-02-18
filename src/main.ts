@@ -190,14 +190,6 @@ export default class DecksPlugin extends Plugin {
           )
       );
 
-      // Schedule initial sync after workspace is ready
-      this.app.workspace.onLayoutReady(() => {
-        // Additional delay to ensure metadata cache is fully populated and app is responsive
-        setTimeout(() => {
-          void this.performInitialSync();
-        }, 2000);
-      });
-
       // Add ribbon icon
       this.addRibbonIcon("brain", "Flashcards", () => {
         void this.activateView();

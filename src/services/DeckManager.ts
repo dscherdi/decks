@@ -1,5 +1,5 @@
 import { TFile, Vault, MetadataCache, Notice, getAllTags } from "obsidian";
-import { type Deck, type Flashcard, type DeckStats, type DeckGroup } from "../database/types";
+import { type Deck, type Flashcard, type DeckStats, type DeckGroup, DEFAULT_PROFILE_ID } from "../database/types";
 import type { IDatabaseService } from "../database/DatabaseFactory";
 import { yieldToUI } from "../utils/ui";
 import { Logger, formatTime } from "../utils/logging";
@@ -150,17 +150,22 @@ export class DeckManager {
           );
 
           if (existingDeck) {
-            // Update existing deck if tag changed
-            if (existingDeck.tag !== tag) {
+            // Re-resolve profileId from tag mapping to ensure it's current
+            const resolvedProfileId = await this.db.getProfileIdForTag(tag) || DEFAULT_PROFILE_ID;
+            const needsTagUpdate = existingDeck.tag !== tag;
+            const needsProfileUpdate = existingDeck.profileId !== resolvedProfileId;
+
+            if (needsTagUpdate || needsProfileUpdate) {
               this.debugLog(
-                `Updating deck "${deckName}" tag from ${existingDeck.tag} to ${tag}`
+                `Updating deck "${deckName}"${needsTagUpdate ? ` tag: ${existingDeck.tag} → ${tag}` : ""}${needsProfileUpdate ? ` profileId: ${existingDeck.profileId} → ${resolvedProfileId}` : ""}`
               );
               await this.db.updateDeck(existingDeck.id, {
-                tag: tag,
+                ...(needsTagUpdate && { tag }),
+                ...(needsProfileUpdate && { profileId: resolvedProfileId }),
               });
             } else {
               this.debugLog(
-                `Deck "${deckName}" already exists with correct tag, no update needed`
+                `Deck "${deckName}" already exists with correct tag and profile, no update needed`
               );
             }
           } else {

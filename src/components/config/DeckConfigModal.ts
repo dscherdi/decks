@@ -1,7 +1,6 @@
 import { App, Modal } from "obsidian";
 import type { Deck, DeckProfile } from "../../database/types";
 import type { IDatabaseService } from "../../database/DatabaseFactory";
-import type { DeckSynchronizer } from "../../services/DeckSynchronizer";
 import type { DeckConfigComponent } from "../../types/svelte-components";
 import DeckConfigUI from "./DeckConfigUI.svelte";
 import { mount, unmount } from "svelte";
@@ -9,8 +8,7 @@ import { mount, unmount } from "svelte";
 export class DeckConfigModal extends Modal {
   private deck: Deck;
   private db: IDatabaseService;
-  private deckSynchronizer: DeckSynchronizer;
-  private onRefreshStats: (deckId: string) => Promise<void>;
+  private onRefreshDecksAndStats: () => Promise<void>;
   private profiles: DeckProfile[] = [];
   private component: DeckConfigComponent | null = null;
   private resizeHandler?: () => void;
@@ -19,14 +17,12 @@ export class DeckConfigModal extends Modal {
     app: App,
     deck: Deck,
     db: IDatabaseService,
-    deckSynchronizer: DeckSynchronizer,
-    onRefreshStats: (deckId: string) => Promise<void>
+    onRefreshDecksAndStats: () => Promise<void>
   ) {
     super(app);
     this.deck = deck;
     this.db = db;
-    this.deckSynchronizer = deckSynchronizer;
-    this.onRefreshStats = onRefreshStats;
+    this.onRefreshDecksAndStats = onRefreshDecksAndStats;
   }
 
   async onOpen() {
@@ -97,20 +93,15 @@ export class DeckConfigModal extends Modal {
       await this.db.applyProfileToTag(profileId, selectedTag);
       await this.db.save();
 
-      // Get all affected decks and refresh their stats
-      const affectedDecks = await this.db.getDecksByTag(selectedTag);
-      for (const affectedDeck of affectedDecks) {
-        // Resync deck in case headerLevel changed with the new profile
-        await this.deckSynchronizer.syncDeck(affectedDeck.id);
-        await this.onRefreshStats(affectedDeck.id);
-      }
-
       this.close();
+
+      setTimeout(() => {
+        void this.onRefreshDecksAndStats();
+      }, 0);
     } catch (error) {
       console.error("Error saving deck configuration:", error);
     }
   }
-
 
   onClose() {
     const { contentEl } = this;

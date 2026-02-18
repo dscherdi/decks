@@ -441,6 +441,10 @@
   max-width: 85vw !important;
 }
 
+.decks-modal-mobile .decks-review-modal-container {
+  height: 100%;
+}
+
 .decks-modal-mobile .modal-close-button {
   z-index: 1000;
   position: absolute;
@@ -451,24 +455,12 @@
   padding-top: translateY(env(safe-area-inset-top));
 }
 
-.decks-deck-review-modal .modal-content {
+.decks-modal > .modal-content {
   display: flex;
   flex-direction: column;
   height: 100%;
   overflow: hidden;
   padding: 0;
-}
-
-.decks-deck-review-modal .modal {
-  height: 100%;
-  display: flex;
-  flex-direction: column;
-}
-
-.decks-deck-review-modal .modal-container {
-  overflow: hidden;
-  width: 100%;
-  height: 100%;
 }
 
 .decks-statistics-modal .modal {
@@ -526,6 +518,19 @@
 }
 
 .decks-deck-config-container {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  overflow: hidden;
+  padding: 0;
+  margin: 0;
+}
+
+.decks-profiles-manager-container {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  overflow: hidden;
   padding: 0;
   margin: 0;
 }

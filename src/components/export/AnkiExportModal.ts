@@ -28,7 +28,7 @@ export class AnkiExportModal extends Modal {
 
     // Add mobile-specific classes
     const modalEl = this.containerEl.querySelector(".modal");
-    if (modalEl instanceof HTMLElement && window.innerWidth <= 768) {
+    if (modalEl instanceof HTMLElement) {
       modalEl.addClass("decks-modal");
       if (window.innerWidth <= 768) {
         modalEl.addClass("decks-modal-mobile");

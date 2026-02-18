@@ -8,7 +8,9 @@
 import { MainDatabaseService } from "../../database/MainDatabaseService";
 import type { DeckProfile } from "../../database/types";
 import { DEFAULT_PROFILE_ID } from "../../database/types";
+import { Scheduler } from "../../services/Scheduler";
 import {
+  DatabaseTestUtils,
   setupTestDatabase,
   teardownTestDatabase,
 } from "./database-test-utils";
@@ -1125,6 +1127,408 @@ describe("Profiles Integration Tests", () => {
 
       const generalDeck = await db.getDeckById(generalDeckId);
       expect(generalDeck?.profileId).toBe("profile_general_create");
+    });
+  });
+
+  describe("Profile re-resolution during sync", () => {
+    it("should update deck profileId when tag mapping is created after deck", async () => {
+      // Step 1: Create deck with no tag mapping → gets DEFAULT profile
+      await db.createDeck({
+        id: "deck_stale",
+        name: "Stale Deck",
+        filepath: "stale.md",
+        tag: "#flashcards/history",
+        lastReviewed: null,
+      });
+      await db.save();
+
+      const deckBefore = await db.getDeckById("deck_stale");
+      expect(deckBefore?.profileId).toBe(DEFAULT_PROFILE_ID);
+
+      // Step 2: Create a profile and map it to the tag
+      const profile: Omit<DeckProfile, "created" | "modified"> = {
+        id: "profile_history",
+        name: "History Profile",
+        hasNewCardsLimitEnabled: false,
+        newCardsPerDay: 20,
+        hasReviewCardsLimitEnabled: false,
+        reviewCardsPerDay: 100,
+        headerLevel: 3,
+        reviewOrder: "due-date",
+        fsrs: { requestRetention: 0.9, profile: "STANDARD" },
+        isDefault: false,
+      };
+      await db.createProfile(profile);
+      await db.createTagMapping("profile_history", "#flashcards/history");
+      await db.save();
+
+      // Step 3: Simulate what syncDecks() now does: re-resolve profileId
+      const resolvedProfileId = await db.getProfileIdForTag("#flashcards/history") || DEFAULT_PROFILE_ID;
+      expect(resolvedProfileId).toBe("profile_history");
+
+      await db.updateDeck("deck_stale", { profileId: resolvedProfileId });
+      await db.save();
+
+      // Step 4: Verify deck now has the correct profile
+      const deckAfter = await db.getDeckById("deck_stale");
+      expect(deckAfter?.profileId).toBe("profile_history");
+
+      // Step 5: Verify getDeckWithProfile returns correct headerLevel
+      const deckWithProfile = await db.getDeckWithProfile("deck_stale");
+      expect(deckWithProfile?.profile.headerLevel).toBe(3);
+    });
+
+    it("should update child-tag deck when parent tag mapping exists", async () => {
+      // Create parent profile with headerLevel=4
+      const profile: Omit<DeckProfile, "created" | "modified"> = {
+        id: "profile_parent",
+        name: "Parent Profile",
+        hasNewCardsLimitEnabled: false,
+        newCardsPerDay: 20,
+        hasReviewCardsLimitEnabled: false,
+        reviewCardsPerDay: 100,
+        headerLevel: 4,
+        reviewOrder: "due-date",
+        fsrs: { requestRetention: 0.9, profile: "STANDARD" },
+        isDefault: false,
+      };
+      await db.createProfile(profile);
+      await db.createTagMapping("profile_parent", "#flashcards");
+      await db.save();
+
+      // Create deck with child tag → gets DEFAULT since applyProfileToTag uses exact match
+      await db.createDeck({
+        id: "deck_child",
+        name: "Child Deck",
+        filepath: "child.md",
+        tag: "#flashcards/physics",
+        lastReviewed: null,
+      });
+      await db.save();
+
+      // createDeck resolves via getProfileIdForTag which supports hierarchy
+      const deck = await db.getDeckById("deck_child");
+      expect(deck?.profileId).toBe("profile_parent");
+
+      // Verify the profile's headerLevel is accessible
+      const deckWithProfile = await db.getDeckWithProfile("deck_child");
+      expect(deckWithProfile?.profile.headerLevel).toBe(4);
+    });
+
+    it("should update deck when tag mapping changes to different profile", async () => {
+      // Create two profiles with different headerLevels
+      const profileA: Omit<DeckProfile, "created" | "modified"> = {
+        id: "profile_a_swap",
+        name: "Profile A",
+        hasNewCardsLimitEnabled: false,
+        newCardsPerDay: 20,
+        hasReviewCardsLimitEnabled: false,
+        reviewCardsPerDay: 100,
+        headerLevel: 2,
+        reviewOrder: "due-date",
+        fsrs: { requestRetention: 0.9, profile: "STANDARD" },
+        isDefault: false,
+      };
+
+      const profileB: Omit<DeckProfile, "created" | "modified"> = {
+        id: "profile_b_swap",
+        name: "Profile B",
+        hasNewCardsLimitEnabled: false,
+        newCardsPerDay: 20,
+        hasReviewCardsLimitEnabled: false,
+        reviewCardsPerDay: 100,
+        headerLevel: 5,
+        reviewOrder: "due-date",
+        fsrs: { requestRetention: 0.9, profile: "STANDARD" },
+        isDefault: false,
+      };
+
+      await db.createProfile(profileA);
+      await db.createProfile(profileB);
+      await db.createTagMapping("profile_a_swap", "#flashcards/swap");
+      await db.save();
+
+      // Create deck → assigned profile A via tag mapping
+      await db.createDeck({
+        id: "deck_swap",
+        name: "Swap Deck",
+        filepath: "swap.md",
+        tag: "#flashcards/swap",
+        lastReviewed: null,
+      });
+      await db.save();
+
+      const deckBefore = await db.getDeckById("deck_swap");
+      expect(deckBefore?.profileId).toBe("profile_a_swap");
+
+      // Change tag mapping to profile B via applyProfileToTag (upserts via UNIQUE(tag))
+      await db.applyProfileToTag("profile_b_swap", "#flashcards/swap");
+      await db.save();
+
+      // Verify updated
+      const deckAfter = await db.getDeckWithProfile("deck_swap");
+      expect(deckAfter?.profileId).toBe("profile_b_swap");
+      expect(deckAfter?.profile.headerLevel).toBe(5);
+    });
+
+    it("should fall back to DEFAULT when tag mapping is removed", async () => {
+      const profile: Omit<DeckProfile, "created" | "modified"> = {
+        id: "profile_remove",
+        name: "Remove Profile",
+        hasNewCardsLimitEnabled: false,
+        newCardsPerDay: 20,
+        hasReviewCardsLimitEnabled: false,
+        reviewCardsPerDay: 100,
+        headerLevel: 3,
+        reviewOrder: "due-date",
+        fsrs: { requestRetention: 0.9, profile: "STANDARD" },
+        isDefault: false,
+      };
+
+      await db.createProfile(profile);
+      await db.createTagMapping("profile_remove", "#flashcards/remove");
+      await db.save();
+
+      // Create deck with mapped tag
+      await db.createDeck({
+        id: "deck_remove",
+        name: "Remove Deck",
+        filepath: "remove.md",
+        tag: "#flashcards/remove",
+        lastReviewed: null,
+      });
+      await db.save();
+
+      expect((await db.getDeckById("deck_remove"))?.profileId).toBe("profile_remove");
+
+      // Delete profile (which deletes its tag mappings too)
+      await db.deleteProfile("profile_remove");
+      await db.save();
+
+      // Simulate syncDecks re-resolution → no mapping → DEFAULT
+      const resolvedProfileId = await db.getProfileIdForTag("#flashcards/remove") || DEFAULT_PROFILE_ID;
+      expect(resolvedProfileId).toBe(DEFAULT_PROFILE_ID);
+
+      await db.updateDeck("deck_remove", { profileId: resolvedProfileId });
+      await db.save();
+
+      const deckAfter = await db.getDeckWithProfile("deck_remove");
+      expect(deckAfter?.profileId).toBe(DEFAULT_PROFILE_ID);
+      expect(deckAfter?.profile.headerLevel).toBe(2); // DEFAULT headerLevel
+    });
+
+    it("should re-resolve child-tag decks when parent tag mapping is added later", async () => {
+      // Step 1: Create decks with child tags, no tag mappings yet → DEFAULT profile
+      await db.createDeck({
+        id: "deck_math",
+        name: "Math Deck",
+        filepath: "math.md",
+        tag: "#flashcards/math",
+        lastReviewed: null,
+      });
+      await db.createDeck({
+        id: "deck_algebra",
+        name: "Algebra Deck",
+        filepath: "algebra.md",
+        tag: "#flashcards/math/algebra",
+        lastReviewed: null,
+      });
+      await db.createDeck({
+        id: "deck_science",
+        name: "Science Deck",
+        filepath: "science.md",
+        tag: "#flashcards/science",
+        lastReviewed: null,
+      });
+      await db.save();
+
+      // All should have DEFAULT profile
+      expect((await db.getDeckById("deck_math"))?.profileId).toBe(DEFAULT_PROFILE_ID);
+      expect((await db.getDeckById("deck_algebra"))?.profileId).toBe(DEFAULT_PROFILE_ID);
+      expect((await db.getDeckById("deck_science"))?.profileId).toBe(DEFAULT_PROFILE_ID);
+
+      // Step 2: Create profile and map to parent tag #flashcards
+      const profile: Omit<DeckProfile, "created" | "modified"> = {
+        id: "profile_fc",
+        name: "Flashcards Profile",
+        hasNewCardsLimitEnabled: false,
+        newCardsPerDay: 20,
+        hasReviewCardsLimitEnabled: false,
+        reviewCardsPerDay: 100,
+        headerLevel: 4,
+        reviewOrder: "due-date",
+        fsrs: { requestRetention: 0.9, profile: "STANDARD" },
+        isDefault: false,
+      };
+      await db.createProfile(profile);
+      await db.createTagMapping("profile_fc", "#flashcards");
+      await db.save();
+
+      // applyProfileToTag now updates child tags too
+      await db.applyProfileToTag("profile_fc", "#flashcards");
+      await db.save();
+
+      // All child decks should now have the parent profile
+      const mathDeck = await db.getDeckWithProfile("deck_math");
+      const algebraDeck = await db.getDeckWithProfile("deck_algebra");
+      const scienceDeck = await db.getDeckWithProfile("deck_science");
+
+      expect(mathDeck?.profileId).toBe("profile_fc");
+      expect(mathDeck?.profile.headerLevel).toBe(4);
+
+      expect(algebraDeck?.profileId).toBe("profile_fc");
+      expect(algebraDeck?.profile.headerLevel).toBe(4);
+
+      expect(scienceDeck?.profileId).toBe("profile_fc");
+      expect(scienceDeck?.profile.headerLevel).toBe(4);
+    });
+  });
+
+  describe("Profile switching with limits", () => {
+    it("should apply and switch profile limits on tag decks and scheduler respects them", async () => {
+      const mockSettings = {
+        review: { nextDayStartsAt: 4, showProgress: true, enableKeyboardShortcuts: true, sessionDuration: 25 },
+        backup: { enableAutoBackup: false, maxBackups: 3 },
+        debug: { enableLogging: false, performanceLogs: false },
+      } as Parameters<typeof Scheduler.prototype.constructor>[1];
+      const mockBackupService = { createBackup: jest.fn() } as Parameters<typeof Scheduler.prototype.constructor>[2];
+      const scheduler = new Scheduler(db, mockSettings, mockBackupService);
+
+      const unlimitedProfile: Omit<DeckProfile, "created" | "modified"> = {
+        id: "profile_unlimited",
+        name: "Unlimited",
+        hasNewCardsLimitEnabled: false,
+        newCardsPerDay: 20,
+        hasReviewCardsLimitEnabled: false,
+        reviewCardsPerDay: 100,
+        headerLevel: 2,
+        reviewOrder: "due-date",
+        fsrs: { requestRetention: 0.9, profile: "STANDARD" },
+        isDefault: false,
+      };
+
+      const limitedProfile: Omit<DeckProfile, "created" | "modified"> = {
+        id: "profile_limited",
+        name: "Limited",
+        hasNewCardsLimitEnabled: true,
+        newCardsPerDay: 3,
+        hasReviewCardsLimitEnabled: true,
+        reviewCardsPerDay: 2,
+        headerLevel: 3,
+        reviewOrder: "random",
+        fsrs: { requestRetention: 0.85, profile: "INTENSIVE" },
+        isDefault: false,
+      };
+
+      await db.createProfile(unlimitedProfile);
+      await db.createProfile(limitedProfile);
+
+      await db.createDeck({
+        id: "deck_lang",
+        name: "Language",
+        filepath: "language.md",
+        tag: "#study",
+        lastReviewed: null,
+      });
+      await db.createDeck({
+        id: "deck_vocab",
+        name: "Vocabulary",
+        filepath: "vocab.md",
+        tag: "#study/vocab",
+        lastReviewed: null,
+      });
+
+      // Create 10 new cards in deck_lang
+      for (let i = 0; i < 10; i++) {
+        const card = DatabaseTestUtils.createTestFlashcard("deck_lang", {
+          id: `card_lang_${i}`,
+          front: `Lang Q${i}`,
+          back: `Lang A${i}`,
+          state: "new",
+          dueDate: new Date().toISOString(),
+        });
+        await db.createFlashcard(card);
+      }
+
+      // Create 10 new cards in deck_vocab
+      for (let i = 0; i < 10; i++) {
+        const card = DatabaseTestUtils.createTestFlashcard("deck_vocab", {
+          id: `card_vocab_${i}`,
+          front: `Vocab Q${i}`,
+          back: `Vocab A${i}`,
+          state: "new",
+          dueDate: new Date().toISOString(),
+        });
+        await db.createFlashcard(card);
+      }
+      await db.save();
+
+      const now = new Date();
+
+      // Helper: get and rate cards until scheduler returns null
+      async function drainCards(deckId: string): Promise<number> {
+        let count = 0;
+        let card = await scheduler.getNext(now, deckId);
+        while (card) {
+          await scheduler.rate(card.id, "good");
+          count++;
+          if (count > 20) break;
+          card = await scheduler.getNext(now, deckId);
+        }
+        return count;
+      }
+
+      // Step 1: Apply unlimited profile — scheduler should serve all cards
+      await db.applyProfileToTag("profile_unlimited", "#study");
+      await db.save();
+
+      const langCardsServed = await drainCards("deck_lang");
+      expect(langCardsServed).toBe(10);
+
+      // Step 2: Switch to limited profile (3 new cards/day, 2 review cards/day)
+      await db.applyProfileToTag("profile_limited", "#study");
+      await db.save();
+
+      // Verify profile applied to both decks
+      const langDeck2 = await db.getDeckWithProfile("deck_lang");
+      expect(langDeck2?.profileId).toBe("profile_limited");
+      expect(langDeck2?.profile.hasNewCardsLimitEnabled).toBe(true);
+      expect(langDeck2?.profile.newCardsPerDay).toBe(3);
+
+      const vocabDeck2 = await db.getDeckWithProfile("deck_vocab");
+      expect(vocabDeck2?.profileId).toBe("profile_limited");
+
+      // Scheduler should respect the 3 new cards/day limit for deck_vocab
+      const vocabCardsServed = await drainCards("deck_vocab");
+      expect(vocabCardsServed).toBe(3);
+
+      // Verify no more cards after limit
+      const noMoreVocab = await scheduler.getNext(now, "deck_vocab");
+      expect(noMoreVocab).toBeNull();
+
+      // Verify only one mapping exists (no duplicates)
+      const mappings = await db.getAllTagMappings();
+      const studyMappings = mappings.filter((m) => m.tag === "#study");
+      expect(studyMappings.length).toBe(1);
+      expect(studyMappings[0].profileId).toBe("profile_limited");
+
+      // Step 3: Switch back to unlimited — scheduler should serve remaining cards
+      await db.applyProfileToTag("profile_unlimited", "#study");
+      await db.save();
+
+      const vocabDeck3 = await db.getDeckWithProfile("deck_vocab");
+      expect(vocabDeck3?.profileId).toBe("profile_unlimited");
+      expect(vocabDeck3?.profile.hasNewCardsLimitEnabled).toBe(false);
+
+      // Scheduler should now serve remaining 7 new cards without limit
+      const vocabRemainingServed = await drainCards("deck_vocab");
+      expect(vocabRemainingServed).toBe(7);
+
+      // Verify mapping was replaced, not duplicated
+      const finalMappings = await db.getAllTagMappings();
+      const finalStudyMappings = finalMappings.filter((m) => m.tag === "#study");
+      expect(finalStudyMappings.length).toBe(1);
+      expect(finalStudyMappings[0].profileId).toBe("profile_unlimited");
     });
   });
 
