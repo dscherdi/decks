@@ -46,7 +46,6 @@
   export let app: App;
 
   export let onRefresh: () => Promise<void>;
-  export let onForceRefreshDeck: (deckId: string) => Promise<void>;
   export let openStatisticsModal: () => void;
   export let openProfilesManagerModal: () => void;
   export let openDeckConfigModal: (deck: DeckWithProfile) => void;
@@ -135,19 +134,6 @@
       await loadStudyStats();
     } catch (error) {
       console.error("Error during refresh:", error);
-    } finally {
-      isRefreshing = false;
-    }
-  }
-
-  async function handleForceRefreshDeck(deck: DeckWithProfile) {
-    isRefreshing = true;
-    try {
-      await onForceRefreshDeck(deck.id);
-      refreshHeatmap();
-      await loadStudyStats();
-    } catch (error) {
-      console.error("Error during deck force refresh:", error);
     } finally {
       isRefreshing = false;
     }
@@ -371,8 +357,20 @@
       openAnkiExportForGroup(group);
     };
 
+    const configOption = document.createElement("div");
+    configOption.className = "decks-dropdown-option";
+    configOption.textContent = "Configure profile";
+    configOption.onclick = () => {
+      closeActiveDropdown();
+      const deckForGroup = allDecks.find(d => group.deckIds.includes(d.id));
+      if (deckForGroup) {
+        openDeckConfigModal(deckForGroup);
+      }
+    };
+
     dropdown.appendChild(browseOption);
     dropdown.appendChild(exportOption);
+    dropdown.appendChild(configOption);
 
     // Position dropdown with viewport bounds checking
     const button = event.target as HTMLElement;
@@ -462,14 +460,6 @@
       onBrowseDeck(deck);
     };
 
-    const forceRefreshOption = document.createElement("div");
-    forceRefreshOption.className = "decks-dropdown-option";
-    forceRefreshOption.textContent = "Force refresh";
-    forceRefreshOption.onclick = () => {
-      closeActiveDropdown();
-      void handleForceRefreshDeck(deck);
-    };
-
     const exportOption = document.createElement("div");
     exportOption.className = "decks-dropdown-option";
     exportOption.textContent = "Export to Anki";
@@ -478,9 +468,17 @@
       openAnkiExport(deck);
     };
 
+    const configOption = document.createElement("div");
+    configOption.className = "decks-dropdown-option";
+    configOption.textContent = "Configure profile";
+    configOption.onclick = () => {
+      closeActiveDropdown();
+      openDeckConfigModal(deck);
+    };
+
     dropdown.appendChild(browseOption);
-    dropdown.appendChild(forceRefreshOption);
     dropdown.appendChild(exportOption);
+    dropdown.appendChild(configOption);
 
     // Position dropdown with viewport bounds checking
     const button = event.target as HTMLElement;
@@ -863,7 +861,9 @@
                 class:updating={isUpdatingStats}
                 class:has-limit={item.profile.hasNewCardsLimitEnabled}
                 title={item.profile.hasNewCardsLimitEnabled
-                  ? `${itemStats.newCount} new cards available today (limit: ${item.profile.newCardsPerDay})`
+                  ? isDeckGroup(item)
+                    ? `${itemStats.newCount} new cards available today (limit: ${item.profile.newCardsPerDay} per deck)`
+                    : `${itemStats.newCount} new cards available today (limit: ${item.profile.newCardsPerDay})`
                   : `${itemStats.newCount} new cards due`}
               >
                 {itemStats.newCount}
@@ -878,7 +878,9 @@
                 class:updating={isUpdatingStats}
                 class:has-limit={item.profile.hasReviewCardsLimitEnabled}
                 title={item.profile.hasReviewCardsLimitEnabled
-                  ? `${itemStats.dueCount} review cards available today (limit: ${item.profile.reviewCardsPerDay})`
+                  ? isDeckGroup(item)
+                    ? `${itemStats.dueCount} review cards available today (limit: ${item.profile.reviewCardsPerDay} per deck)`
+                    : `${itemStats.dueCount} review cards available today (limit: ${item.profile.reviewCardsPerDay})`
                   : `${itemStats.dueCount} review cards due`}
               >
                 {itemStats.dueCount}

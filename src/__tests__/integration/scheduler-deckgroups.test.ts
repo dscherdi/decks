@@ -458,4 +458,200 @@ describe("Scheduler Deck Group Integration Tests", () => {
       expect(hasQuota).toBe(true);
     });
   });
+
+  describe("per-deck daily limits", () => {
+    async function createLimitedDeckGroup(
+      profileOverrides: {
+        hasNewCardsLimitEnabled?: boolean;
+        newCardsPerDay?: number;
+        hasReviewCardsLimitEnabled?: boolean;
+        reviewCardsPerDay?: number;
+      }
+    ): Promise<DeckGroup> {
+      const profileId = await db.createProfile({
+        id: `profile_perdeck_${Date.now()}`,
+        name: "Per-deck Limit Profile",
+        hasNewCardsLimitEnabled: false,
+        newCardsPerDay: 20,
+        hasReviewCardsLimitEnabled: false,
+        reviewCardsPerDay: 100,
+        headerLevel: 2,
+        reviewOrder: "due-date",
+        fsrs: { requestRetention: 0.9, profile: "STANDARD" },
+        isDefault: false,
+        ...profileOverrides,
+      });
+
+      await db.applyProfileToTag(profileId, "#flashcards/math");
+
+      const decks = await Promise.all(
+        deckGroup.deckIds.map((id) => db.getDeckById(id))
+      );
+      const profile = (await db.getProfileById(profileId))!;
+      const decksWithProfile = decks.map((d) => ({ ...d!, profile }));
+      const groups = await tagGroupService.aggregateByTag(decksWithProfile);
+      return groups[0];
+    }
+
+    function createReviewLogForCard(
+      flashcardId: string,
+      oldState: "new" | "review"
+    ) {
+      return {
+        flashcardId,
+        lastReviewedAt: new Date(Date.now() - 60000).toISOString(),
+        reviewedAt: new Date().toISOString(),
+        rating: 3,
+        ratingLabel: "good" as const,
+        timeElapsedMs: 3000,
+        oldState,
+        newState: "review" as const,
+        oldIntervalMinutes: 0,
+        newIntervalMinutes: 1440,
+        oldRepetitions: 0,
+        newRepetitions: 1,
+        oldLapses: 0,
+        newLapses: 0,
+        oldStability: 0,
+        newStability: 2.5,
+        oldDifficulty: 5.0,
+        newDifficulty: 5.0,
+        oldDueAt: new Date(Date.now() - 60000).toISOString(),
+        newDueAt: new Date(Date.now() + 86400000).toISOString(),
+        elapsedDays: 1,
+        retrievability: 1.0,
+        requestRetention: 0.9,
+        profile: "STANDARD" as const,
+        maximumIntervalDays: 36500,
+        minMinutes: 1,
+        fsrsWeightsVersion: "4.5",
+        schedulerVersion: "1.0",
+      };
+    }
+
+    it("should still serve new cards from other decks after one deck's quota is exhausted", async () => {
+      const group = await createLimitedDeckGroup({
+        hasNewCardsLimitEnabled: true,
+        newCardsPerDay: 2,
+      });
+
+      // Add 3 new cards to each deck (9 total)
+      const cardsByDeck: Flashcard[][] = [];
+      for (const deckId of group.deckIds) {
+        const cards: Flashcard[] = [];
+        for (let i = 0; i < 3; i++) {
+          const card = DatabaseTestUtils.createTestFlashcard(deckId, {
+            front: `New Q${i} for ${deckId}`,
+            back: `New A${i} for ${deckId}`,
+            state: "new",
+          });
+          await db.createFlashcard(card);
+          cards.push(card);
+        }
+        cardsByDeck.push(cards);
+      }
+
+      // Exhaust deck1's new card quota by creating 2 review logs
+      for (let i = 0; i < 2; i++) {
+        await db.createReviewLog(
+          createReviewLogForCard(cardsByDeck[0][i].id, "new")
+        );
+      }
+
+      // Scheduler should still serve new cards from deck2 and deck3
+      const now = new Date();
+      const nextCard = await scheduler.getNextForDeckGroup(now, group, {
+        allowNew: true,
+      });
+
+      expect(nextCard).not.toBeNull();
+      // Card should NOT be from deck1 (exhausted)
+      expect(nextCard!.deckId).not.toBe(group.deckIds[0]);
+      expect([group.deckIds[1], group.deckIds[2]]).toContain(nextCard!.deckId);
+    });
+
+    it("should calculate session goal by summing per-deck remaining quotas", async () => {
+      const group = await createLimitedDeckGroup({
+        hasNewCardsLimitEnabled: true,
+        newCardsPerDay: 3,
+      });
+
+      // Add 5 new cards to each deck (15 total)
+      for (const deckId of group.deckIds) {
+        for (let i = 0; i < 5; i++) {
+          const card = DatabaseTestUtils.createTestFlashcard(deckId, {
+            front: `New Q${i} for ${deckId}`,
+            back: `New A${i} for ${deckId}`,
+            state: "new",
+          });
+          await db.createFlashcard(card);
+        }
+      }
+
+      const now = new Date();
+      const session = await scheduler.startReviewSessionForDeckGroup(
+        group,
+        now
+      );
+
+      // Goal should be 3 per deck * 3 decks = 9, not just 3
+      const sessionData = await db.getReviewSessionById(session.sessionId);
+      expect(sessionData).not.toBeNull();
+      expect(sessionData!.goalTotal).toBe(9);
+    });
+
+    it("should enforce per-deck review card limits across the group", async () => {
+      const group = await createLimitedDeckGroup({
+        hasReviewCardsLimitEnabled: true,
+        reviewCardsPerDay: 1,
+      });
+
+      const dueDate = new Date(Date.now() - 1000).toISOString();
+
+      // Add 2 due cards to each deck (6 total)
+      const cardsByDeck: Flashcard[][] = [];
+      for (const deckId of group.deckIds) {
+        const cards: Flashcard[] = [];
+        for (let i = 0; i < 2; i++) {
+          const card = DatabaseTestUtils.createTestFlashcard(deckId, {
+            front: `Due Q${i} for ${deckId}`,
+            back: `Due A${i} for ${deckId}`,
+            state: "review",
+            dueDate,
+            interval: 1440,
+            stability: 1.5,
+            difficulty: 5.0,
+          });
+          await db.createFlashcard(card);
+          cards.push(card);
+        }
+        cardsByDeck.push(cards);
+      }
+
+      const now = new Date();
+      const servedCards: Flashcard[] = [];
+      const servedDeckIds = new Set<string>();
+
+      // Keep getting cards until no more are available
+      for (let attempt = 0; attempt < 10; attempt++) {
+        const card = await scheduler.getNextForDeckGroup(now, group, {
+          allowNew: false,
+        });
+        if (!card) break;
+
+        servedCards.push(card);
+        servedDeckIds.add(card.deckId);
+
+        // Simulate reviewing the card by creating a review log
+        await db.createReviewLog(
+          createReviewLogForCard(card.id, "review")
+        );
+      }
+
+      // Should serve exactly 3 cards (1 per deck * 3 decks)
+      expect(servedCards).toHaveLength(3);
+      // Should have served from all 3 decks
+      expect(servedDeckIds.size).toBe(3);
+    });
+  });
 });

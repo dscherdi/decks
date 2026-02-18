@@ -539,8 +539,8 @@
   {#if currentCard}
     <div
       class="decks-card-content"
-      on:touchstart={handleTouchStart}
-      on:touchend={handleTouchEnd}
+      on:touchstart|passive={handleTouchStart}
+      on:touchend|passive={handleTouchEnd}
     >
       <div class="decks-question-section">
         <div class="decks-front-wrapper">
@@ -1186,13 +1186,7 @@
   /* Mobile responsive styles */
   @media (max-width: 768px) {
     .decks-review-modal {
-      padding-bottom: env(safe-area-inset-bottom);
-      padding-left: env(safe-area-inset-left);
-      padding-right: env(safe-area-inset-right);
-      padding-top: env(safe-area-inset-top);
       box-sizing: border-box;
-      /*width: 90vw;*/
-      /*height: 90vh;*/
       overflow-x: hidden;
     }
     .decks-modal-header {
@@ -1222,7 +1216,7 @@
     }
 
     .decks-action-buttons {
-      padding: 16px;
+      padding: 8px 16px;
     }
 
     .decks-show-answer-button {

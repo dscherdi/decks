@@ -87,11 +87,7 @@ export class DecksView extends ItemView {
         onDeckGroupClick: (deckGroup: DeckGroup) => this.startReviewForDeckGroup(deckGroup),
         onBrowseDeck: (deck: DeckWithProfile) => this.startBrowse(deck),
         onBrowseDeckGroup: (deckGroup: DeckGroup) => this.startBrowseForDeckGroup(deckGroup),
-        onRefresh: () => this.refresh(false),
-        onForceRefreshDeck: async (deckId: string) => {
-          await this.deckSynchronizer.forceSyncDeck(deckId);
-          await this.refreshStats();
-        },
+        onRefresh: () => this.refresh(),
         openStatisticsModal: () => this.openStatisticsModal(),
         openProfilesManagerModal: () => this.openProfilesManagerModal(),
         openDeckConfigModal: (deck: DeckWithProfile) => this.openDeckConfigModal(deck),
@@ -99,7 +95,7 @@ export class DecksView extends ItemView {
     }) as DeckListPanelComponent;
 
     // Initial refresh
-    await this.refresh(false);
+    await this.refresh();
 
     // Start background refresh job if enabled
     if (this.settings.ui.enableBackgroundRefresh) {
@@ -146,7 +142,7 @@ export class DecksView extends ItemView {
       this.db,
       async () => {
         // Refresh decks after profiles changed
-        await this.refresh(false);
+        await this.refresh();
       }
     ).open();
   }
@@ -164,11 +160,10 @@ export class DecksView extends ItemView {
     ).open();
   }
 
-  async refresh(force = false) {
+  async refresh() {
     this.logger.debug("DecksView.refresh() called");
     try {
-      // Perform sync with force parameter
-      await this.deckSynchronizer.performSync(force);
+      await this.deckSynchronizer.performSync();
 
       // Update the view with refreshed data
       const updatedDecks = await this.db.getAllDecksWithProfiles();

@@ -12,7 +12,6 @@ export interface SyncProgress {
 }
 
 export interface SyncOptions {
-  forceSync?: boolean;
   showProgress?: boolean;
   onProgress?: (progress: SyncProgress) => void;
 }
@@ -56,20 +55,16 @@ export class DeckSynchronizer {
   /**
    * Perform a sync with progress tracker
    */
-  async performSync(forceSync = false): Promise<void> {
+  async performSync(): Promise<void> {
     const result = await this.sync({
-      forceSync,
       showProgress: true,
       onProgress: (progress) => {
         this.logger.debug(
           `Progress: ${progress.percentage}% - ${progress.message}`
         );
         if (!this.progressTracker.isVisible()) {
-          const message = forceSync
-            ? "🔄 Force refreshing flashcards..."
-            : "🔄 Syncing flashcards...";
-          this.logger.debug(`Showing initial progress notice: ${message}`);
-          this.progressTracker.show(message);
+          this.logger.debug("Showing initial progress notice");
+          this.progressTracker.show("Syncing flashcards...");
         }
         this.progressTracker.update(progress.message, progress.percentage);
         if (progress.percentage === 100) {
@@ -112,7 +107,7 @@ export class DeckSynchronizer {
    * Main sync operation - coordinates deck discovery and flashcard synchronization
    */
   async sync(options: SyncOptions = {}): Promise<SyncResult> {
-    const { forceSync = false, showProgress = false, onProgress } = options;
+    const { showProgress = false, onProgress } = options;
 
     if (this.isSyncing) {
       this.logger.debug("Sync already in progress, skipping...");
@@ -123,11 +118,7 @@ export class DeckSynchronizer {
     const syncStartTime = performance.now();
 
     try {
-      this.logger.debug(
-        `Performing ${
-          forceSync ? "forced " : ""
-        }sync of decks and flashcards...`
-      );
+      this.logger.debug("Performing sync of decks and flashcards...");
 
       // Step 1: Sync all decks
       if (showProgress && onProgress) {
@@ -147,7 +138,6 @@ export class DeckSynchronizer {
       );
 
       // Step 2: Get all decks and prepare for flashcard sync
-      // await yieldToUI();
       const decks = await this.db.getAllDecks();
       this.logger.debug(
         `Found ${decks.length} decks after sync:`,
@@ -181,14 +171,11 @@ export class DeckSynchronizer {
         }
 
         this.logger.debug(
-          `${
-            forceSync ? "Force s" : "S"
-          }yncing flashcards for deck: ${deck.name} (${deck.filepath})`
+          `Syncing flashcards for deck: ${deck.name} (${deck.filepath})`
         );
 
         await this.deckManager.syncFlashcardsForDeck(
           deck.id,
-          forceSync,
           this.progressTracker
         );
         await yieldToUI();
@@ -286,80 +273,19 @@ export class DeckSynchronizer {
   /**
    * Sync flashcards for a specific deck
    */
-  async syncDeck(
-    deckId: string,
-    forceSync = false,
-    onProgress?: (progress: { message: string; percentage: number }) => void
-  ): Promise<void> {
+  async syncDeck(deckId: string): Promise<void> {
     this.logger.debug(`Syncing specific deck ID: ${deckId}`);
 
-    // Get deck to extract display name
     const deck = await this.db.getDeckById(deckId);
     if (!deck) {
       this.logger.debug(`No deck found for ID: ${deckId}`);
       return;
     }
 
-    const deckDisplayName = deck.name;
-
-    if (onProgress) {
-      onProgress({
-        message: `🔄 Force refreshing deck: ${deckDisplayName}...`,
-        percentage: 20,
-      });
-    }
-
-    const startTime = performance.now();
-
     await this.deckManager.syncFlashcardsForDeck(
       deckId,
-      forceSync,
       this.progressTracker
     );
-
-    const duration = performance.now() - startTime;
-
-    if (onProgress) {
-      onProgress({
-        message: `✅ Force refresh complete: ${deckDisplayName} (${Math.round(
-          duration
-        )}ms)`,
-        percentage: 100,
-      });
-    }
-  }
-
-  async forceSyncDeck(deckId: string): Promise<void> {
-    this.logger.debug("onForceRefreshDeck callback invoked for deck:", deckId);
-
-    // Get deck to extract display name
-    const deck = await this.db.getDeckById(deckId);
-    const deckDisplayName = deck ? deck.name : deckId;
-
-    try {
-      await this.syncDeck(deckId, true, (progress) => {
-        if (progress.percentage === 0) {
-          this.progressTracker.show(
-            `Starting deck ${deckDisplayName} synchronization...`
-          );
-        }
-
-        this.progressTracker.update(progress.message, progress.percentage);
-
-        if (progress.percentage === 100) {
-          setTimeout(() => this.progressTracker.hide(), 2000);
-        }
-      });
-
-      // Refresh stats after force refresh
-    } catch (error) {
-      this.progressTracker.update(
-        "❌ Deck refresh failed - check console for details",
-        0
-      );
-      setTimeout(() => this.progressTracker.hide(), 3000);
-      throw error;
-    }
   }
 
   /**

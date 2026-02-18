@@ -20,7 +20,7 @@ export class TagGroupService {
 
     const deckGroups: DeckGroup[] = [];
     for (const [tag, groupDecks] of tagMap) {
-      const profile = await this.resolveProfileForTag(tag);
+      const profile = await this.resolveProfileForTag(tag, groupDecks);
       deckGroups.push({
         type: 'group',
         tag,
@@ -42,11 +42,15 @@ export class TagGroupService {
     return lastPart.charAt(0).toUpperCase() + lastPart.slice(1);
   }
 
-  private async resolveProfileForTag(tag: string): Promise<DeckProfile> {
+  private async resolveProfileForTag(tag: string, groupDecks: DeckWithProfile[]): Promise<DeckProfile> {
     const profileId = await this.db.getProfileIdForTag(tag);
     if (profileId) {
       const profile = await this.db.getProfileById(profileId);
       if (profile) return profile;
+    }
+
+    if (groupDecks.length > 0) {
+      return groupDecks[0].profile;
     }
 
     const defaultProfile = await this.db.getProfileById('profile_default');

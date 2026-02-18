@@ -721,38 +721,36 @@ export class Scheduler {
   ): Promise<NewSession> {
     this.debugLog(`Starting review session for deck group: ${deckGroup.name}`);
 
-    const dailyCounts = await this.getAggregateDailyReviewCounts(
-      deckGroup.deckIds,
-      this.settings.review.nextDayStartsAt
-    );
-
-    const dueCardCount = await this.getDueCardCountForDeckGroup(
-      now,
-      deckGroup.deckIds,
-      sessionDurationMinutes
-    );
-    const newCardCount = await this.getNewCardCountForDeckGroup(deckGroup.deckIds);
-
     let goalTotal = 0;
 
-    if (deckGroup.profile.hasReviewCardsLimitEnabled) {
-      const remainingReviewQuota = Math.max(
-        0,
-        deckGroup.profile.reviewCardsPerDay - dailyCounts.reviewCount
-      );
-      goalTotal += Math.min(dueCardCount, remainingReviewQuota);
-    } else {
-      goalTotal += dueCardCount;
-    }
+    for (const deckId of deckGroup.deckIds) {
+      const deckWithProfile = await this.db.getDeckWithProfile(deckId);
+      if (!deckWithProfile) continue;
+      const profile = deckWithProfile.profile;
 
-    if (deckGroup.profile.hasNewCardsLimitEnabled) {
-      const remainingNewQuota = Math.max(
-        0,
-        deckGroup.profile.newCardsPerDay - dailyCounts.newCount
-      );
-      goalTotal += Math.min(newCardCount, remainingNewQuota);
-    } else {
-      goalTotal += newCardCount;
+      const dailyCounts = await this.db.getDailyReviewCounts(deckId, this.settings.review.nextDayStartsAt);
+      const dueCardCount = await this.getDueCardCount(now, deckId, sessionDurationMinutes);
+      const newCardCount = await this.getNewCardCount(deckId);
+
+      if (profile.hasReviewCardsLimitEnabled) {
+        const remainingReviewQuota = Math.max(
+          0,
+          profile.reviewCardsPerDay - dailyCounts.reviewCount
+        );
+        goalTotal += Math.min(dueCardCount, remainingReviewQuota);
+      } else {
+        goalTotal += dueCardCount;
+      }
+
+      if (profile.hasNewCardsLimitEnabled) {
+        const remainingNewQuota = Math.max(
+          0,
+          profile.newCardsPerDay - dailyCounts.newCount
+        );
+        goalTotal += Math.min(newCardCount, remainingNewQuota);
+      } else {
+        goalTotal += newCardCount;
+      }
     }
 
     const finalGoalTotal = Math.max(1, goalTotal);
@@ -793,18 +791,28 @@ export class Scheduler {
     return null;
   }
 
-  private async getAggregateDailyReviewCounts(
-    deckIds: string[],
-    nextDayStartsAt: number
-  ): Promise<{ newCount: number; reviewCount: number }> {
-    let totalNew = 0;
-    let totalReview = 0;
-    for (const deckId of deckIds) {
-      const counts = await this.db.getDailyReviewCounts(deckId, nextDayStartsAt);
-      totalNew += counts.newCount;
-      totalReview += counts.reviewCount;
+  private async getDeckIdsWithNewQuota(deckGroup: DeckGroup): Promise<string[]> {
+    if (!deckGroup.profile.hasNewCardsLimitEnabled) return [...deckGroup.deckIds];
+    const eligible: string[] = [];
+    for (const deckId of deckGroup.deckIds) {
+      const counts = await this.db.getDailyReviewCounts(deckId, this.settings.review.nextDayStartsAt);
+      if (counts.newCount < deckGroup.profile.newCardsPerDay) {
+        eligible.push(deckId);
+      }
     }
-    return { newCount: totalNew, reviewCount: totalReview };
+    return eligible;
+  }
+
+  private async getDeckIdsWithReviewQuota(deckGroup: DeckGroup): Promise<string[]> {
+    if (!deckGroup.profile.hasReviewCardsLimitEnabled) return [...deckGroup.deckIds];
+    const eligible: string[] = [];
+    for (const deckId of deckGroup.deckIds) {
+      const counts = await this.db.getDailyReviewCounts(deckId, this.settings.review.nextDayStartsAt);
+      if (counts.reviewCount < deckGroup.profile.reviewCardsPerDay) {
+        eligible.push(deckId);
+      }
+    }
+    return eligible;
   }
 
   private async getDueCardCountForDeckGroup(
@@ -848,14 +856,17 @@ export class Scheduler {
     now: Date,
     deckGroup: DeckGroup
   ): Promise<Flashcard | null> {
-    const placeholders = deckGroup.deckIds.map(() => '?').join(',');
+    const eligibleDeckIds = await this.getDeckIdsWithReviewQuota(deckGroup);
+    if (eligibleDeckIds.length === 0) return null;
+
+    const placeholders = eligibleDeckIds.map(() => '?').join(',');
     let query = `
       SELECT * FROM flashcards
       WHERE deck_id IN (${placeholders})
         AND due_date <= ?
         AND state = 'review'
     `;
-    const params = [...deckGroup.deckIds, now.toISOString()];
+    const params = [...eligibleDeckIds, now.toISOString()];
 
     if (deckGroup.profile.reviewOrder === "random") {
       query += " ORDER BY RANDOM() LIMIT 1";
@@ -870,32 +881,27 @@ export class Scheduler {
   private async getNextNewCardForDeckGroup(
     deckGroup: DeckGroup
   ): Promise<Flashcard | null> {
-    const placeholders = deckGroup.deckIds.map(() => '?').join(',');
+    const eligibleDeckIds = await this.getDeckIdsWithNewQuota(deckGroup);
+    if (eligibleDeckIds.length === 0) return null;
+
+    const placeholders = eligibleDeckIds.map(() => '?').join(',');
     const query = `
       SELECT * FROM flashcards
       WHERE deck_id IN (${placeholders}) AND state = 'new'
       ORDER BY due_date ASC LIMIT 1
     `;
-    const results = await this.db.querySql(query, deckGroup.deckIds);
+    const results = await this.db.querySql(query, eligibleDeckIds);
     return results.length > 0 ? this.rowToFlashcard(results[0]) : null;
   }
 
   private async hasNewCardQuotaForDeckGroup(deckGroup: DeckGroup): Promise<boolean> {
-    if (!deckGroup.profile.hasNewCardsLimitEnabled) return true;
-    const counts = await this.getAggregateDailyReviewCounts(
-      deckGroup.deckIds,
-      this.settings.review.nextDayStartsAt
-    );
-    return counts.newCount < deckGroup.profile.newCardsPerDay;
+    const eligible = await this.getDeckIdsWithNewQuota(deckGroup);
+    return eligible.length > 0;
   }
 
   private async hasReviewCardQuotaForDeckGroup(deckGroup: DeckGroup): Promise<boolean> {
-    if (!deckGroup.profile.hasReviewCardsLimitEnabled) return true;
-    const counts = await this.getAggregateDailyReviewCounts(
-      deckGroup.deckIds,
-      this.settings.review.nextDayStartsAt
-    );
-    return counts.reviewCount < deckGroup.profile.reviewCardsPerDay;
+    const eligible = await this.getDeckIdsWithReviewQuota(deckGroup);
+    return eligible.length > 0;
   }
 
 }

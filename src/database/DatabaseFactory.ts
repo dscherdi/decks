@@ -56,6 +56,7 @@ export interface IDatabaseService {
   // Profile tag mapping operations
   createTagMapping(profileId: string, tag: string): Promise<string>;
   getTagMappingsForProfile(profileId: string): Promise<ProfileTagMapping[]>;
+  getAllTagMappings(): Promise<ProfileTagMapping[]>;
   getProfileIdForTag(tag: string): Promise<string | null>;
   deleteTagMapping(id: string): Promise<void>;
   applyProfileToTag(profileId: string, tag: string): Promise<number>;

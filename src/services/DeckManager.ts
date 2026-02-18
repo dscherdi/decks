@@ -263,7 +263,6 @@ export class DeckManager {
    */
   async syncFlashcardsForDeck(
     deckId: string,
-    force = false,
     progressTracker?: ProgressTracker
   ): Promise<void> {
     const deckSyncStartTime = performance.now();
@@ -284,15 +283,13 @@ export class DeckManager {
     // Get file modification time
     const fileModifiedTime = new Date(file.stat.mtime);
 
-    // Check if file has been modified since last deck update (unless forced)
-    if (!force) {
-      const deckModifiedTime = new Date(deck.modified);
-      if (fileModifiedTime <= deckModifiedTime) {
-        this.debugLog(
-          `File ${deck.filepath} not modified since last sync, skipping`
-        );
-        return;
-      }
+    // Check if file has been modified since last deck update
+    const deckModifiedTime = new Date(deck.modified);
+    if (fileModifiedTime <= deckModifiedTime) {
+      this.debugLog(
+        `File ${deck.filepath} not modified since last sync, skipping`
+      );
+      return;
     }
     this.debugLog(
       `File modified: ${fileModifiedTime.toISOString()}, last sync: ${
@@ -318,7 +315,6 @@ export class DeckManager {
           deckFilepath: deck.filepath,
           deckConfig: deck.profile,
           fileContent: fileContent,
-          force: force,
         },
         progressCallback
       );

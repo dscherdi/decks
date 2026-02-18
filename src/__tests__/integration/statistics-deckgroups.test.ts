@@ -329,5 +329,54 @@ describe("DeckManager Deck Group Stats Integration Tests", () => {
       expect(stats.newCount).toBe(15);
       expect(stats.totalCount).toBe(15);
     });
+
+    it("should respect per-deck new card limits when calculating stats", async () => {
+      // Create a profile with newCardsPerDay=3
+      const limitProfileId = await db.createProfile({
+        id: "profile_stats_limit",
+        name: "Stats Limit Profile",
+        hasNewCardsLimitEnabled: true,
+        newCardsPerDay: 3,
+        hasReviewCardsLimitEnabled: false,
+        reviewCardsPerDay: 100,
+        headerLevel: 2,
+        reviewOrder: "due-date",
+        fsrs: { requestRetention: 0.9, profile: "STANDARD" },
+        isDefault: false,
+      });
+
+      await db.applyProfileToTag(limitProfileId, "#flashcards/math");
+
+      // Add 5 new cards to each deck (15 total)
+      for (const deckId of deckGroup.deckIds) {
+        for (let i = 0; i < 5; i++) {
+          const card = DatabaseTestUtils.createTestFlashcard(deckId, {
+            front: `Q ${i} for ${deckId}`,
+            back: `A ${i} for ${deckId}`,
+            state: "new",
+          });
+          await db.createFlashcard(card);
+        }
+      }
+
+      // Rebuild deck group with limit profile
+      const decks = await Promise.all(
+        deckGroup.deckIds.map((id) => db.getDeckById(id))
+      );
+      const limitProfile = (await db.getProfileById(limitProfileId))!;
+      const decksWithProfile: DeckWithProfile[] = decks.map((d) => ({
+        ...d!,
+        profile: limitProfile,
+      }));
+      const groups = await tagGroupService.aggregateByTag(decksWithProfile);
+      const groupWithLimit = groups[0];
+
+      const stats = await deckManager.getDeckGroupStats(groupWithLimit);
+
+      // newCount should be capped: min(5,3) per deck * 3 decks = 9
+      expect(stats.newCount).toBe(9);
+      // totalCount is the raw total (not limited)
+      expect(stats.totalCount).toBe(15);
+    });
   });
 });

@@ -217,4 +217,119 @@ describe("FSRS Profiles", () => {
       }
     });
   });
+
+  describe("Due date calculation", () => {
+    test("should set sub-day dueDate relative to review time for INTENSIVE profile", () => {
+      const now = new Date("2025-06-15T10:00:00.000Z");
+      const fsrs = new FSRS({
+        requestRetention: 0.9,
+        profile: "INTENSIVE",
+        nextDayStartsAt: 4,
+      });
+
+      const scheduling = fsrs.getSchedulingInfo(testCard, now);
+
+      const subDayRatings = ["again", "hard", "good"] as const;
+      for (const rating of subDayRatings) {
+        const due = new Date(scheduling[rating].dueDate);
+        const diffMinutes = (due.getTime() - now.getTime()) / (60 * 1000);
+
+        expect(scheduling[rating].interval).toBeLessThan(1440);
+        expect(diffMinutes).toBeCloseTo(scheduling[rating].interval, 0);
+      }
+    });
+
+    test("should align day-based dueDate to study day boundary for INTENSIVE Easy rating", () => {
+      const now = new Date("2025-06-15T10:00:00.000Z");
+      const fsrs = new FSRS({
+        requestRetention: 0.9,
+        profile: "INTENSIVE",
+        nextDayStartsAt: 4,
+      });
+
+      const scheduling = fsrs.getSchedulingInfo(testCard, now);
+
+      expect(scheduling.easy.interval).toBeGreaterThanOrEqual(1440);
+
+      const easyDue = new Date(scheduling.easy.dueDate);
+      expect(easyDue.getMinutes()).toBe(0);
+      expect(easyDue.getSeconds()).toBe(0);
+    });
+
+    test("should always align dueDate to study day boundary for STANDARD profile", () => {
+      const now = new Date("2025-06-15T10:00:00.000Z");
+      const fsrs = new FSRS({
+        requestRetention: 0.9,
+        profile: "STANDARD",
+        nextDayStartsAt: 4,
+      });
+
+      const scheduling = fsrs.getSchedulingInfo(testCard, now);
+
+      const ratings = ["again", "hard", "good", "easy"] as const;
+      for (const rating of ratings) {
+        expect(scheduling[rating].interval).toBeGreaterThanOrEqual(1440);
+
+        const due = new Date(scheduling[rating].dueDate);
+        expect(due.getMinutes()).toBe(0);
+        expect(due.getSeconds()).toBe(0);
+      }
+    });
+
+    test("should set correct sub-day dueDate via updateCard for INTENSIVE profile", () => {
+      const now = new Date("2025-06-15T10:00:00.000Z");
+      const fsrs = new FSRS({
+        requestRetention: 0.9,
+        profile: "INTENSIVE",
+        nextDayStartsAt: 4,
+      });
+
+      const updatedCard = fsrs.updateCard(testCard, "good", now);
+
+      const dueDate = new Date(updatedCard.dueDate);
+      const diffMinutes = (dueDate.getTime() - now.getTime()) / (60 * 1000);
+
+      expect(updatedCard.interval).toBeLessThan(1440);
+      expect(diffMinutes).toBeCloseTo(updatedCard.interval, 0);
+    });
+
+    test("should transition from sub-day to study-day-aligned dueDate as intervals grow", () => {
+      const fsrs = new FSRS({
+        requestRetention: 0.9,
+        profile: "INTENSIVE",
+        nextDayStartsAt: 4,
+      });
+
+      let card = { ...testCard };
+      let hadSubDayInterval = false;
+      let hadDayBasedInterval = false;
+
+      for (let i = 0; i < 20; i++) {
+        const reviewTime = card.lastReviewed
+          ? new Date(
+              new Date(card.lastReviewed).getTime() +
+                card.interval * 60 * 1000
+            )
+          : new Date("2025-06-15T10:00:00.000Z");
+
+        card = fsrs.updateCard(card, "good", reviewTime);
+
+        const dueDate = new Date(card.dueDate);
+        const diffMinutes =
+          (dueDate.getTime() - reviewTime.getTime()) / (60 * 1000);
+
+        if (card.interval < 1440) {
+          hadSubDayInterval = true;
+          expect(diffMinutes).toBeCloseTo(card.interval, 0);
+        } else {
+          hadDayBasedInterval = true;
+          expect(dueDate.getMinutes()).toBe(0);
+          expect(dueDate.getSeconds()).toBe(0);
+        }
+      }
+
+      expect(hadSubDayInterval).toBe(true);
+      expect(hadDayBasedInterval).toBe(true);
+    });
+  });
 });

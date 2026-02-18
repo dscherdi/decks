@@ -118,7 +118,6 @@ describe("Large Deck Integration Tests", () => {
         deckFilepath: deck.filepath,
         deckConfig: deckWithProfile!.profile,
         fileContent,
-        force: false,
       });
       const syncDuration = Date.now() - startTime;
 
@@ -188,7 +187,6 @@ describe("Large Deck Integration Tests", () => {
         deckFilepath: deck.filepath,
         deckConfig: deckWithProfile!.profile,
         fileContent,
-        force: false,
       });
 
       expect(syncResult.success).toBe(true);
@@ -244,7 +242,6 @@ describe("Large Deck Integration Tests", () => {
         deckFilepath: deck.filepath,
         deckConfig: deckWithProfile!.profile,
         fileContent,
-        force: false,
       });
 
       expect(syncResult.success).toBe(true);
@@ -309,7 +306,6 @@ describe("Large Deck Integration Tests", () => {
           deckFilepath: deck.filepath,
           deckConfig: deckWithProfile!.profile,
           fileContent,
-          force: false,
         });
 
         expect(syncResult.success).toBe(true);
@@ -382,7 +378,6 @@ describe("Large Deck Integration Tests", () => {
         deckFilepath: largeDeck.filepath,
         deckConfig: deckWithProfile!.profile,
         fileContent,
-        force: false,
       });
     }, 30000);
 
@@ -491,7 +486,6 @@ describe("Large Deck Integration Tests", () => {
         deckFilepath: largeDeck.filepath,
         deckConfig: deckWithProfile!.profile,
         fileContent,
-        force: false,
       });
     }, 30000);
 
@@ -580,7 +574,6 @@ describe("Large Deck Integration Tests", () => {
         deckFilepath: deck.filepath,
         deckConfig: deckWithProfile!.profile,
         fileContent,
-        force: false,
       });
 
       // Perform some reviews
@@ -673,7 +666,6 @@ describe("Large Deck Integration Tests", () => {
         deckFilepath: deck.filepath,
         deckConfig: deckWithProfile!.profile,
         fileContent,
-        force: false,
       });
 
       expect(firstSync.success).toBe(true);
@@ -686,7 +678,6 @@ describe("Large Deck Integration Tests", () => {
         deckFilepath: deck.filepath,
         deckConfig: deckWithProfile!.profile,
         fileContent,
-        force: false,
       });
 
       expect(secondSync.success).toBe(true);
@@ -696,17 +687,16 @@ describe("Large Deck Integration Tests", () => {
       const allCards = await db.getFlashcardsByDeck(deck.id);
       expect(allCards.length).toBe(firstCount);
 
-      // Force re-sync (should still not create duplicates)
-      const forceSync = await db.syncFlashcardsForDeck({
+      // Re-sync (should still not create duplicates)
+      const reSync = await db.syncFlashcardsForDeck({
         deckId: deck.id,
         deckName: deck.name,
         deckFilepath: deck.filepath,
         deckConfig: deckWithProfile!.profile,
         fileContent,
-        force: true,
       });
 
-      expect(forceSync.success).toBe(true);
+      expect(reSync.success).toBe(true);
 
       const finalCards = await db.getFlashcardsByDeck(deck.id);
       expect(finalCards.length).toBe(firstCount); // No duplicates

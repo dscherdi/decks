@@ -27,19 +27,29 @@ jobs:
       - name: Build and package release
         run: npm run build:release
 
-      - name: Generate release notes
-        run: npm run release-notes
+      - name: Resolve release notes file
+        id: release-notes
+        run: |
+          VERSION=$(node -p "require('./manifest.json').version")
+          FILENAME=$(echo "$VERSION" | tr '.' '-').md
+          FILEPATH="release-notes/$FILENAME"
+          if [[ -f "$FILEPATH" ]]; then
+            echo "path=$FILEPATH" >> "$GITHUB_OUTPUT"
+            echo "Found release notes: $FILEPATH"
+          else
+            echo "No release notes file found at $FILEPATH"
+            exit 1
+          fi
 
       - name: Validate release files
         run: |
-          echo "🔍 Validating release files..."
+          echo "Validating release files..."
           required_files=(
             "./dist/main.js"
             "./dist/styles.css"
             "./dist/manifest.json"
             "./dist/README.md"
             "./dist/LICENSE"
-            "./GITHUB_RELEASE_NOTES.md"
           )
 
           missing_files=()
@@ -47,23 +57,22 @@ jobs:
             if [[ ! -f "$file" ]]; then
               missing_files+=("$file")
             else
-              echo "✅ Found: $file"
+              echo "Found: $file"
             fi
           done
 
           if [[ ${#missing_files[@]} -gt 0 ]]; then
-            echo "❌ Missing files:"
+            echo "Missing files:"
             printf '  - %s\n' "${missing_files[@]}"
             exit 1
           fi
 
-          echo "✅ All release files validated successfully!"
-          echo "📦 main.js includes embedded worker and SQL.js assets for BRAT compatibility"
+          echo "All release files validated successfully!"
 
       - name: Create Release
         uses: softprops/action-gh-release@v1
         with:
-          body_path: ./GITHUB_RELEASE_NOTES.md
+          body_path: ${{ steps.release-notes.outputs.path }}
           files: |
             ./dist/main.js
             ./dist/styles.css

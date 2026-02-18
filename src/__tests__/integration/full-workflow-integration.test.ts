@@ -130,7 +130,6 @@ describe("Full Workflow Integration Tests", () => {
         deckFilepath: deck.filepath,
         deckConfig: defaultProfile,
         fileContent,
-        force: false,
       });
 
       // Verify sync results
@@ -180,7 +179,6 @@ describe("Full Workflow Integration Tests", () => {
         deckFilepath: deck.filepath,
         deckConfig: defaultProfile,
         fileContent,
-        force: false,
       });
 
       expect(syncResult.success).toBe(true);
@@ -227,7 +225,6 @@ describe("Full Workflow Integration Tests", () => {
           deckFilepath: deck.filepath,
           deckConfig: defaultProfile,
           fileContent,
-          force: false,
         });
 
         expect(syncResult.success).toBe(true);
@@ -275,7 +272,6 @@ describe("Full Workflow Integration Tests", () => {
         deckFilepath: testDeck.filepath,
         deckConfig: defaultProfile,
         fileContent,
-        force: false,
       });
     });
 
@@ -377,7 +373,6 @@ describe("Full Workflow Integration Tests", () => {
         deckFilepath: testDeck.filepath,
         deckConfig: testDeck.config,
         fileContent,
-        force: false,
       });
 
       testCards = await db.getFlashcardsByDeck(testDeck.id);
@@ -528,7 +523,6 @@ describe("Full Workflow Integration Tests", () => {
         deckFilepath: testDeck.filepath,
         deckConfig: testDeck.config,
         fileContent,
-        force: false,
       });
 
       // Perform some reviews
@@ -679,7 +673,6 @@ describe("Full Workflow Integration Tests", () => {
         deckFilepath: deck.filepath,
         deckConfig: defaultProfile,
         fileContent,
-        force: false,
       });
 
       expect(syncResult.success).toBe(true);

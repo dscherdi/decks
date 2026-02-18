@@ -505,6 +505,15 @@ export abstract class BaseDatabaseService implements IDatabaseService {
     return results.map((row) => this.parseTagMappingRow(row));
   }
 
+  async getAllTagMappings(): Promise<ProfileTagMapping[]> {
+    const results = (await this.querySql(SQL_QUERIES.GET_ALL_TAG_MAPPINGS)) as (
+      | string
+      | number
+      | null
+    )[][];
+    return results.map((row) => this.parseTagMappingRow(row));
+  }
+
   async getProfileIdForTag(tag: string): Promise<string | null> {
     // Get all tag mappings
     const allMappings = await this.querySql(SQL_QUERIES.GET_ALL_TAG_MAPPINGS) as (

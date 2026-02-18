@@ -1127,4 +1127,50 @@ describe("Profiles Integration Tests", () => {
       expect(generalDeck?.profileId).toBe("profile_general_create");
     });
   });
+
+  describe("getAllTagMappings", () => {
+    it("should return all tag mappings", async () => {
+      const profileA: Omit<DeckProfile, "created" | "modified"> = {
+        id: "profile_a",
+        name: "Profile A",
+        hasNewCardsLimitEnabled: false,
+        newCardsPerDay: 20,
+        hasReviewCardsLimitEnabled: false,
+        reviewCardsPerDay: 100,
+        headerLevel: 2,
+        reviewOrder: "due-date",
+        fsrs: { requestRetention: 0.9, profile: "STANDARD" },
+        isDefault: false,
+      };
+
+      const profileB: Omit<DeckProfile, "created" | "modified"> = {
+        id: "profile_b",
+        name: "Profile B",
+        hasNewCardsLimitEnabled: false,
+        newCardsPerDay: 10,
+        hasReviewCardsLimitEnabled: false,
+        reviewCardsPerDay: 50,
+        headerLevel: 3,
+        reviewOrder: "random",
+        fsrs: { requestRetention: 0.95, profile: "INTENSIVE" },
+        isDefault: false,
+      };
+
+      await db.createProfile(profileA);
+      await db.createProfile(profileB);
+      await db.createTagMapping("profile_a", "#flashcards");
+      await db.createTagMapping("profile_b", "#flashcards/math");
+      await db.save();
+
+      const mappings = await db.getAllTagMappings();
+      expect(mappings.length).toBe(2);
+      expect(mappings.some((m) => m.profileId === "profile_a" && m.tag === "#flashcards")).toBe(true);
+      expect(mappings.some((m) => m.profileId === "profile_b" && m.tag === "#flashcards/math")).toBe(true);
+    });
+
+    it("should return empty array when no mappings exist", async () => {
+      const mappings = await db.getAllTagMappings();
+      expect(mappings.length).toBe(0);
+    });
+  });
 });

@@ -1,26 +1,26 @@
-# Decks [![Release](https://github.com/dscherdi/decks/actions/workflows/release.yml/badge.svg)](https://github.com/dscherdi/decks/actions/workflows/release.yml)
+# Decks
 
-Decks is a powerful spaced repetition flashcard plugin for Obsidian that helps you learn and memorize information efficiently using the FSRS algorithm, built with TypeScript and Svelte for a reactive and type-safe UI.
+Decks is a spaced repetition flashcard plugin for Obsidian that helps you learn and memorize information using the FSRS algorithm.
 
 If you like this plugin, consider buying me a coffee and I will add more features.
 <a href="https://www.buymeacoffee.com/dscherdil0">
-  <img src="https://cdn.buymeacoffee.com/buttons/v2/default-yellow.png" alt="Buy Me A Coffee" height="40">
+<img src="https://cdn.buymeacoffee.com/buttons/v2/default-yellow.png" alt="Buy Me A Coffee" height="40">
 </a>
 
 ## Demo
 
 ![Watch the demo](./decks_showcase.gif)
 
-## Quick Start
+## Quick start
 
-1. **Install the Plugin**: Download and enable Decks in your Obsidian plugins
-2. **Open the Panel**: Click the brain icon in the ribbon or use the command palette
-3. **Create Your First Deck**: Follow the guide below to create flashcards
-4. **Start Learning**: Click on any deck to begin reviewing flashcards
+1. **Install the plugin**: Download and enable Decks in your Obsidian plugins
+2. **Open the panel**: Click the brain icon in the ribbon or use the command palette
+3. **Create your first deck**: Follow the guide below to create flashcards
+4. **Start learning**: Click on any deck to begin reviewing flashcards
 
-## Creating Flashcards
+## Creating flashcards
 
-### 📝 Method 1: Header + Paragraph Format
+### Header + paragraph format
 
 Create a markdown file and tag it with `#flashcards`:
 
@@ -30,22 +30,24 @@ tags: [flashcards/spanish-basics]
 ---
 
 # What does "Hola" mean in English?
+
 Hello
 
 # How do you say "Thank you" in Spanish?
+
 Gracias
 
 # What is the Spanish word for "water"?
+
 Agua
 ```
 
-**How it works:**
 - Each header becomes the **front** of a flashcard
 - All content until the next header becomes the **back**
 - The filename becomes your deck name
 - Cards are automatically extracted and synced
 
-### 📊 Method 2: Table Format
+### Table format
 
 Create flashcards using a two-column table:
 
@@ -54,183 +56,132 @@ Create flashcards using a two-column table:
 tags: [flashcards/vocabulary]
 ---
 
-| Question | Answer |
-|----------|---------|
+## Concepts
+
+| Question                | Answer                                                   |
+| ----------------------- | -------------------------------------------------------- |
 | What is photosynthesis? | The process by which plants convert sunlight into energy |
-| Define gravity | The force that attracts objects toward each other |
-| What is DNA? | Deoxyribonucleic acid - carries genetic information |
+| Define gravity          | The force that attracts objects toward each other        |
+| What is DNA?            | Deoxyribonucleic acid - carries genetic information      |
 ```
 
-**How it works:**
 - First column = **front** of flashcard
 - Second column = **back** of flashcard
 - Header row is ignored
-- Perfect for structured Q&A format
+- Tables need to be inside a header with header level specified in the settings to be parsed.
+- There should not be any other paragraphs in the header together with the table, because then it will be parsed as a Header+Paragraph Block
 
-### 🎯 Best Practices
+### Tips
 
 - **Use descriptive tags**: `#flashcards/spanish-verbs` instead of `#flashcards/deck1`
 - **Keep cards atomic**: One concept per card
 - **Use images and formatting**: Markdown formatting is fully supported
 - **Organize by topic**: Group related concepts in the same deck
 
-## Key Concepts
+## Key concepts
 
-### 🧠 Learning States
+### Learning states
 
-**New Cards** 🆕
-- Cards you've never seen before
-- Shown first in each review session
-- Default limit: 20 new cards per day
+- **New**: Cards you have never seen before
+- **Learning**: Cards in short-term review cycle with short intervals
+- **Due**: Cards scheduled for long-term spaced repetition review
+- **Mature**: Cards with an interval of 21 days or more
 
-**Learning Cards** 📚
-- Cards in short-term review cycle
-- Use fixed intervals: 1min → 10min → 1 day
-- Help reinforce new information while fresh
+### FSRS algorithm
 
-**Due Cards** ⏰
-- Part of long-term spaced repetition
-- Scheduled based on your performance
-- Intervals grow with successful reviews
+Decks uses the Free Spaced Repetition Scheduler (FSRS), a modern algorithm that adapts to your performance, optimizes retention, and predicts when you are about to forget. Two built-in profiles are available:
 
-### ⚡ FSRS Algorithm
+- **Standard**: Balanced scheduling for everyday learning
+- **Intensive**: Shorter intervals for aggressive memorization
 
-Decks uses the **Free Spaced Repetition Scheduler (FSRS)**, a modern algorithm that:
+### Review ratings
 
-- **Adapts to your performance**: Cards you struggle with appear more frequently
-- **Optimizes retention**: Maximizes what you remember with minimal reviews
-- **Predicts forgetting**: Schedules reviews just before you'd forget
-- **Learns your patterns**: Improves scheduling based on your review history
+When reviewing flashcards you rate each card:
 
-### 🎮 Review Process
+- **Again**: I don't remember this at all. Resets the card to learning state.
+- **Hard**: I struggled but got it eventually. Shorter than normal spacing.
+- **Good**: I remembered it correctly. Normal interval increase.
+- **Easy**: Too easy, I know this well. Longer interval increase.
 
-When reviewing flashcards, you have four difficulty options:
+## Features
 
-**Again** 🔄 (Red)
-- "I don't remember this at all"
-- Resets the card to learning state
-- Shows the card again soon
+### Deck profiles
 
-**Hard** 😅 (Orange)
-- "I struggled but got it eventually"
-- Increases interval slightly
-- Shorter than normal spacing
+Create custom profiles with configurable daily limits for new and review cards, retention targets, and FSRS algorithm selection. Profiles are assigned to tags so all decks under a tag share the same settings. Each deck in a tag group enforces its own daily quota.
 
-**Good** ✅ (Green)
-- "I remembered it correctly"
-- Normal interval increase
-- Default choice for successful recall
+### Browse mode
 
-**Easy** 🚀 (Blue)
-- "Too easy, I know this well"
-- Longer interval increase
-- Use sparingly for very familiar content
+Browse all cards in a deck or tag group without affecting their scheduling state. Navigate forward and backward through the full card list.
 
-### 📊 Understanding Your Stats
+### Review sessions
 
-**Daily Progress**
-- Track new cards learned
-- Monitor review accuracy
-- See time spent studying
+Timed review sessions with a configurable duration (default 25 minutes). A progress bar tracks how many cards you have reviewed toward the session goal, which respects your daily limits.
 
-**Forecast**
-- Predict future review workload
-- Plan your study schedule
-- Understand long-term commitments
+### Keyboard shortcuts
 
-**Retention Rate**
-- Measure how well you're remembering
-- Identify problematic topics
-- Adjust study strategies
+During review:
 
-## How to Use
+- **Space**: Show answer or move to next card
+- **1**: Again
+- **2**: Hard
+- **3**: Good
+- **4**: Easy
 
-### 🚀 Getting Started
+### Statistics
 
-1. **Create a deck**: Make a markdown file with `#flashcards` tag
-2. **Add flashcards**: Use headers+paragraphs or table format
-3. **Open Decks panel**: Click the brain icon in the sidebar
-4. **Start reviewing**: Click on any deck to begin
+Track your learning with detailed analytics:
 
-### 📈 Daily Workflow
+- Study time (today, this week, this month, all time)
+- Card state breakdown (new, learning, review, mature)
+- Review heatmap calendar
+- Charts: reviews over time, stability distribution, future due forecast, maturity progression, hourly breakdown, answer button stats
+- Per-deck and overall statistics
 
-1. **Check your dashboard**: See what's due today
-2. **Review due cards**: Handle spaced repetition reviews first
-3. **Learn new cards**: Add new knowledge within daily limits
-4. **Check progress**: Monitor your learning statistics
+### Anki export
 
-### ⚙️ Configuration
+Export flashcards to Anki-compatible format with configurable deck names and note types.
 
-Access deck settings to customize:
-- Daily new card limits
-- Review order preferences
-- Deck-specific configurations
-- FSRS algorithm parameters
+### Multi-device sync
 
-### Features
+Works with Dropbox, iCloud, or any file sync service. When the database is modified on multiple devices, Decks merges the changes automatically — review history is preserved from both sides and cards use the most recently modified version.
 
-- **Smart Parsing**: Automatically extracts flashcards from markdown headers and paragraphs
-- **FSRS Algorithm**: Uses the latest Free Spaced Repetition Scheduler for optimal learning
-- **Rich Statistics**: Track your learning progress with detailed analytics
-- **Deck Management**: Organize flashcards by tags and configure review limits
-- **Review Heatmap**: Visualize your review activity over time
-- **Time Tracking**: Monitor your review pace and efficiency
+### Mobile support
 
-## 🛠️ Development
+Fully responsive design for Obsidian mobile with touch-friendly buttons and safe-area handling.
 
-### Building from Source
+## Configuration
 
-```bash
-# Clone the repository
-git clone https://github.com/dscherdi/decks.git
-cd decks
+Access settings from Obsidian Settings > Decks.
 
-# Install dependencies
-npm install
+### Profiles
 
-# Build for development
-npm run build:dev
+Open the Profiles Manager from the deck list panel to create and edit profiles. Each profile controls:
 
-# Run tests
-npm test
+- **New cards per day**: Limit how many new cards are introduced daily (per deck)
+- **Review cards per day**: Limit how many review cards are shown daily (per deck)
+- **Retention target**: How well you want to remember cards (default 90%)
+- **FSRS profile**: Standard or Intensive algorithm weights
+- **Header level**: Which header level to use for parsing flashcards
+- **Review order**: Oldest due first or random
 
-# Build for production
-npm run build
+Assign a profile to a tag from the gear icon on any deck or tag group in the deck list.
 
-# Build for release (includes README/LICENSE)
-npm run build:release
+### Review settings
 
+- **Session duration**: How long each review session lasts (1-60 minutes)
+- **Next day starts at**: When the study day rolls over (default 4:00 AM)
+- **Keyboard shortcuts**: Enable or disable keyboard shortcuts during review
 
-```
+### Parsing settings
 
-### Release Process
+- **Search path**: Scan the entire vault or restrict to a specific folder
 
-This plugin uses automated GitHub Actions for releases:
+### Other settings
 
-1. **Create a version tag**: `git tag v1.2.3 && git push origin v1.2.3`
-2. **GitHub Actions automatically**:
-   - Runs all tests
-   - Builds the plugin with all assets in `dist/`
-   - Generates release notes from PROGRESS.md
-   - Creates GitHub release with all `dist/` files
-   - Validates all files before release
+- **Background refresh**: Automatically refresh the deck list on an interval
+- **Automatic backups**: Keep up to N database backups
+- **Debug logging**: Enable detailed logging for troubleshooting
 
-### Release Contents (dist/)
+## Release notes
 
-Each release includes:
-- `main.js` (238 KB) - Core plugin code
-- `styles.css` (63 KB) - Plugin styling
-- `manifest.json` - Plugin manifest
-- `database-worker.js` (4 KB) - Database worker thread
-- `assets/sql-wasm.js` (48 KB) - SQL.js JavaScript
-- `assets/sql-wasm.wasm` (644 KB) - WebAssembly binary
-- `README.md` & `LICENSE` - Documentation
-
-Total release size: ~1MB
-
-### Architecture
-
-- **Frontend**: Svelte components with TypeScript
-- **Database**: SQLite via sql.js with optional worker thread
-- **Algorithm**: FSRS-4.5 spaced repetition
-- **Build**: esbuild with production optimizations
+Release notes for each version are in the `release-notes/` folder.

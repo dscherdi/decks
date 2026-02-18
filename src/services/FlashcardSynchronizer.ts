@@ -34,7 +34,6 @@ export interface SyncData {
   deckFilepath: string;
   deckConfig: DeckProfile;
   fileContent: string;
-  force: boolean;
 }
 
 /**

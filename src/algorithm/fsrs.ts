@@ -322,10 +322,18 @@ export class FSRS {
       intervalMinutes = minMinutes;
     }
 
-    // Calculate due date aligned to Study Day boundaries
-    const nextDayStartsAt = this.params.nextDayStartsAt ?? 4;
-    const intervalDays = Math.ceil(intervalMinutes / MINUTES_PER_DAY);
-    const dueDate = this.getStudyDayStartAfterDays(now, intervalDays, nextDayStartsAt);
+    let dueDate: string;
+
+    if (intervalMinutes < MINUTES_PER_DAY) {
+      // Sub-day intervals: set due date as exact offset from now
+      const dueDateMs = now.getTime() + intervalMinutes * 60 * 1000;
+      dueDate = new Date(dueDateMs).toISOString();
+    } else {
+      // Day-based intervals: align to study day boundaries
+      const nextDayStartsAt = this.params.nextDayStartsAt ?? 4;
+      const intervalDays = Math.ceil(intervalMinutes / MINUTES_PER_DAY);
+      dueDate = this.getStudyDayStartAfterDays(now, intervalDays, nextDayStartsAt);
+    }
 
     return {
       dueDate: dueDate,

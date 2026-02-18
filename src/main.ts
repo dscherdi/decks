@@ -246,7 +246,7 @@ export default class DecksPlugin extends Plugin {
           this.db,
           this.saveSettings.bind(this),
           this.logger,
-          () => this.getDecksView()?.refresh(false) || Promise.resolve(),
+          () => this.getDecksView()?.refresh() || Promise.resolve(),
           async () => {
             await this.getDecksView()?.refreshStats();
           },
@@ -399,7 +399,7 @@ export default class DecksPlugin extends Plugin {
       await yieldToUI();
 
       // Delegate to view for domain logic
-      await this.getDecksView()?.refresh(true);
+      await this.getDecksView()?.refresh();
 
       await yieldToUI();
 

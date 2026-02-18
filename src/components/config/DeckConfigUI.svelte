@@ -12,20 +12,16 @@
     | ((data: {
         profileId: string;
         profileUpdates: Partial<DeckProfile>;
-        selectionMode: "deck" | "tag";
-        selectedDeckId?: string;
-        selectedTag?: string;
+        selectedTag: string;
       }) => void)
     | undefined = undefined;
   export let oncancel: (() => void) | undefined = undefined;
 
   const profiles = initialProfiles;
-  let selectedDeckId = initialDeck.id;
   let selectedProfileId = initialDeck.profileId;
   let selectedProfile: DeckProfile | null = null;
   let allTags: string[] = [];
-  let selectionMode: "deck" | "tag" = "deck";
-  let selectedTag = "";
+  let selectedTag = initialDeck.tag;
 
   let deckSelectorContainer: HTMLElement;
   let profileSelectorContainer: HTMLElement;
@@ -50,9 +46,7 @@
         onsave({
           profileId: selectedProfileId,
           profileUpdates: {},
-          selectionMode,
-          selectedDeckId: selectionMode === "deck" ? selectedDeckId : undefined,
-          selectedTag: selectionMode === "tag" ? selectedTag : undefined,
+          selectedTag,
         });
       }
     } catch (error) {
@@ -81,49 +75,25 @@
     deckSelectorContainer.empty();
 
     new Setting(deckSelectorContainer)
-      .setName("Apply profile to")
-      .setDesc("Select deck or tag to apply profile")
+      .setName("Apply profile to tag")
+      .setDesc("Select tag to apply profile to all its decks")
       .addDropdown((dropdown) => {
-        // Add decks
-        for (const deck of allDecks) {
-          dropdown.addOption(`deck:${deck.id}`, `📄 ${deck.name}`);
-        }
-
-        // Add tags
         for (const tag of allTags) {
-          dropdown.addOption(`tag:${tag}`, `🏷️ ${tag}`);
+          dropdown.addOption(tag, tag);
         }
 
-        // Set initial value
-        dropdown.setValue(
-          selectionMode === "deck" ? `deck:${selectedDeckId}` : `tag:${selectedTag}`
-        );
+        dropdown.setValue(selectedTag);
 
         dropdown.onChange((value) => {
           const now = Date.now();
-          const eventId = `deck-selector-${value}`;
+          const eventId = `tag-selector-${value}`;
           if (now - lastEventTime < 100 && lastEventType === eventId) {
             return;
           }
           lastEventTime = now;
           lastEventType = eventId;
 
-          if (value.startsWith("deck:")) {
-            selectionMode = "deck";
-            selectedDeckId = value.substring(5);
-            const deck = allDecks.find((d) => d.id === selectedDeckId);
-            if (deck) {
-              selectedProfileId = deck.profileId;
-              const profile = profiles.find((p) => p.id === selectedProfileId);
-              if (profile) {
-                loadProfileSettings(profile);
-              }
-            }
-          } else if (value.startsWith("tag:")) {
-            selectionMode = "tag";
-            selectedTag = value.substring(4);
-          }
-
+          selectedTag = value;
           rebuildSelectors();
         });
       });
@@ -136,7 +106,7 @@
 
     new Setting(profileSelectorContainer)
       .setName("Profile")
-      .setDesc("Select a profile for this deck/tag")
+      .setDesc("Select a profile for this tag")
       .addDropdown((dropdown) => {
         // Add all profiles
         for (const profile of profiles) {
@@ -256,17 +226,17 @@
 
 <div class="decks-deck-config-modal">
   <div class="decks-config-section">
-    <h3>Deck Selection</h3>
+    <h3>Tag selection</h3>
     <div bind:this={deckSelectorContainer}></div>
   </div>
 
   <div class="decks-config-section">
-    <h3>Profile Selection</h3>
+    <h3>Profile selection</h3>
     <div bind:this={profileSelectorContainer}></div>
   </div>
 
   <div class="decks-config-section">
-    <h3>Current Profile Settings</h3>
+    <h3>Current profile settings</h3>
     <div bind:this={profileDetailsContainer}></div>
   </div>
 

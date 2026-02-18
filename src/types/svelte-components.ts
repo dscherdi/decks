@@ -69,7 +69,6 @@ export interface DeckListPanelConstructor {
       app: App;
       onDeckClick: (deck: Deck) => void;
       onRefresh: () => Promise<void>;
-      onForceRefreshDeck: (deckId: string) => Promise<void>;
       openStatisticsModal: () => void;
     };
   }): DeckListPanelComponent;
