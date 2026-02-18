@@ -280,23 +280,6 @@ export class DeckManager {
     const file = this.vault.getAbstractFileByPath(deck.filepath);
     if (!file || !(file instanceof TFile)) return;
 
-    // Get file modification time
-    const fileModifiedTime = new Date(file.stat.mtime);
-
-    // Check if file has been modified since last deck update
-    const deckModifiedTime = new Date(deck.modified);
-    if (fileModifiedTime <= deckModifiedTime) {
-      this.debugLog(
-        `File ${deck.filepath} not modified since last sync, skipping`
-      );
-      return;
-    }
-    this.debugLog(
-      `File modified: ${fileModifiedTime.toISOString()}, last sync: ${
-        deck.modified
-      }`
-    );
-
     // Read file content - this stays in DeckManager
     const fileContent = await this.vault.read(file);
 
