@@ -132,6 +132,10 @@ export default class DecksPlugin extends Plugin {
         }
       );
 
+      if (this.db.migrationNotice) {
+        new Notice(this.db.migrationNotice, 15000);
+      }
+
       // Initialize deck manager with optimized main-thread approach
       this.deckManager = new DeckManager(
         this.app.vault,

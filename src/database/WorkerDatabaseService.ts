@@ -94,6 +94,9 @@ export class WorkerDatabaseService extends BaseDatabaseService {
           if (event.data.success) {
             this.debugLog("Database migration completed successfully");
           }
+          if (event.data.migrationNotice) {
+            this.migrationNotice = event.data.migrationNotice as string;
+          }
           return;
         }
 

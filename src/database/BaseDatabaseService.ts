@@ -34,6 +34,7 @@ export abstract class BaseDatabaseService implements IDatabaseService {
     message: string,
     ...args: (string | number | object)[]
   ) => void;
+  public migrationNotice: string | null = null;
 
   constructor(
     dbPath: string,
@@ -1459,106 +1460,93 @@ export abstract class BaseDatabaseService implements IDatabaseService {
   }
 
   async restoreFromBackupData(backupData: Uint8Array): Promise<void> {
+    // Old column names that were renamed in later schema versions
+    const COLUMN_RENAMES: Record<string, string> = {
+      new_due_date: "new_due_at",
+      old_due_date: "old_due_at",
+      new_interval: "new_interval_minutes",
+      old_interval: "old_interval_minutes",
+      weights_version: "fsrs_weights_version",
+      time_elapsed: "time_elapsed_ms",
+    };
+
     try {
-      // Create a backup database instance to read data from
       const backupDb = await this.createBackupDatabaseInstance(backupData);
 
-      // Get all data from backup database
-      const reviewLogs = await this.queryBackupDatabase(
-        backupDb,
-        "SELECT * FROM review_logs"
+      // Get current schema column names
+      const currentLogColumns = new Set(
+        (await this.querySql("PRAGMA table_info(review_logs)") as SqlJsValue[][])
+          .map(row => row[1] as string)
       );
-      const reviewSessions = await this.queryBackupDatabase(
-        backupDb,
-        "SELECT * FROM review_sessions"
+      const currentSessionColumns = new Set(
+        (await this.querySql("PRAGMA table_info(review_sessions)") as SqlJsValue[][])
+          .map(row => row[1] as string)
       );
 
-      // Insert data into current database, avoiding duplicates
-      if (reviewSessions.length > 0) {
-        for (const session of reviewSessions) {
-          const sessionId = session[0]; // Assuming id is first column
+      // Restore review_sessions (schema is stable across versions)
+      try {
+        const backupSessionCols = (await this.queryBackupDatabase(
+          backupDb, "PRAGMA table_info(review_sessions)"
+        )).map(row => row[1] as string);
 
-          // Check if session already exists
-          const existsResult = await this.querySql(
-            "SELECT 1 as found FROM review_sessions WHERE id = ?",
-            [sessionId],
-            { asObject: true }
-          );
-
-          if (existsResult.length === 0) {
-            // Insert session if it doesn't exist - need to map columns properly
-            const columns = [
-              "id",
-              "deck_id",
-              "started_at",
-              "ended_at",
-              "goal_total",
-              "done_unique",
-            ];
-            const placeholders = columns.map(() => "?").join(", ");
-            await this.executeSql(
-              `INSERT INTO review_sessions (${columns.join(
-                ", "
-              )}) VALUES (${placeholders})`,
-              session
-            );
+        const sessionMapping: { backupIndex: number; currentName: string }[] = [];
+        for (let i = 0; i < backupSessionCols.length; i++) {
+          const col = backupSessionCols[i];
+          if (currentSessionColumns.has(col)) {
+            sessionMapping.push({ backupIndex: i, currentName: col });
           }
         }
-      }
 
-      if (reviewLogs.length > 0) {
-        for (const log of reviewLogs) {
-          const logId = log[0]; // Assuming id is first column
-
-          // Check if log already exists
-          const existsResult = await this.querySql(
-            "SELECT 1 as found FROM review_logs WHERE id = ?",
-            [logId],
-            { asObject: true }
+        if (sessionMapping.length > 0) {
+          const sessions = await this.queryBackupDatabase(
+            backupDb, "SELECT * FROM review_sessions"
           );
+          const columns = sessionMapping.map(m => m.currentName);
+          const placeholders = columns.map(() => "?").join(", ");
+          const insertSql = `INSERT OR IGNORE INTO review_sessions (${columns.join(", ")}) VALUES (${placeholders})`;
 
-          if (existsResult.length === 0) {
-            // Insert log if it doesn't exist - need to map all columns
-            const columns = [
-              "id",
-              "flashcard_id",
-              "reviewed_at",
-              "rating",
-              "elapsed_days",
-              "new_state",
-              "new_due_date",
-              "new_stability",
-              "new_difficulty",
-              "new_interval",
-              "new_repetitions",
-              "new_lapses",
-              "old_state",
-              "old_due_date",
-              "old_stability",
-              "old_difficulty",
-              "old_interval",
-              "old_repetitions",
-              "old_lapses",
-              "request_retention",
-              "profile",
-              "weights_version",
-              "time_elapsed",
-              "session_id",
-            ];
-            const placeholders = columns.map(() => "?").join(", ");
-            await this.executeSql(
-              `INSERT INTO review_logs (${columns.join(
-                ", "
-              )}) VALUES (${placeholders})`,
-              log
-            );
+          for (const session of sessions) {
+            const values = sessionMapping.map(m => session[m.backupIndex]);
+            await this.executeSql(insertSql, values);
           }
         }
+      } catch {
+        this.debugLog("Backup does not contain review_sessions table, skipping");
       }
 
-      // Clean up backup database
+      // Restore review_logs (handles column renames across schema versions)
+      try {
+        const backupLogCols = (await this.queryBackupDatabase(
+          backupDb, "PRAGMA table_info(review_logs)"
+        )).map(row => row[1] as string);
+
+        const logMapping: { backupIndex: number; currentName: string }[] = [];
+        for (let i = 0; i < backupLogCols.length; i++) {
+          const backupCol = backupLogCols[i];
+          const currentName = COLUMN_RENAMES[backupCol] ?? backupCol;
+          if (currentLogColumns.has(currentName)) {
+            logMapping.push({ backupIndex: i, currentName });
+          }
+        }
+
+        if (logMapping.length > 0) {
+          const logs = await this.queryBackupDatabase(
+            backupDb, "SELECT * FROM review_logs"
+          );
+          const columns = logMapping.map(m => m.currentName);
+          const placeholders = columns.map(() => "?").join(", ");
+          const insertSql = `INSERT OR IGNORE INTO review_logs (${columns.join(", ")}) VALUES (${placeholders})`;
+
+          for (const log of logs) {
+            const values = logMapping.map(m => log[m.backupIndex]);
+            await this.executeSql(insertSql, values);
+          }
+        }
+      } catch {
+        this.debugLog("Backup does not contain review_logs table, skipping");
+      }
+
       await this.closeBackupDatabaseInstance(backupDb);
-
       this.debugLog("Database restored from backup data");
     } catch (error) {
       console.error("Failed to restore from backup data:", error);

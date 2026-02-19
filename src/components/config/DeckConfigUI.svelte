@@ -84,7 +84,7 @@
 
         dropdown.setValue(selectedTag);
 
-        dropdown.onChange((value) => {
+        dropdown.onChange(async (value) => {
           const now = Date.now();
           const eventId = `tag-selector-${value}`;
           if (now - lastEventTime < 100 && lastEventType === eventId) {
@@ -94,6 +94,14 @@
           lastEventType = eventId;
 
           selectedTag = value;
+
+          const mappedProfileId = await db.getProfileIdForTag(value);
+          if (mappedProfileId) {
+            selectedProfileId = mappedProfileId;
+            const profile = profiles.find((p) => p.id === mappedProfileId);
+            if (profile) loadProfileSettings(profile);
+          }
+
           rebuildSelectors();
         });
       });
@@ -205,11 +213,13 @@
   }
 
   onMount(async () => {
-    // Load all tags from decks
+    // Load all tags from decks, including parent levels
     const uniqueTags = new Set<string>();
     for (const deck of allDecks) {
-      if (deck.tag) {
-        uniqueTags.add(deck.tag);
+      if (!deck.tag) continue;
+      const parts = deck.tag.split("/");
+      for (let i = 1; i <= parts.length; i++) {
+        uniqueTags.add(parts.slice(0, i).join("/"));
       }
     }
     allTags = Array.from(uniqueTags).sort();

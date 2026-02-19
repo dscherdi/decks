@@ -16,6 +16,9 @@ import type { SyncData, SyncResult } from "../services/FlashcardSynchronizer";
 
 // Proper interface for all database operations
 export interface IDatabaseService {
+  // Migration notice (set when DB was too old and had to be recreated)
+  migrationNotice: string | null;
+
   // Initialization
   initialize(): Promise<void>;
   close(): Promise<void>;

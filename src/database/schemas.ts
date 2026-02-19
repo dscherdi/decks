@@ -179,168 +179,68 @@ function getColumnNames(db: Database, tableName: string): string[] {
   }
 }
 
+
 export function buildMigrationSQL(db: Database): string {
-  const decksColumns = getColumnNames(db, "decks");
-  const flashcardsColumns = getColumnNames(db, "flashcards");
   const reviewLogsColumns = getColumnNames(db, "review_logs");
+  const reviewLogsExists = reviewLogsColumns.length > 0;
 
-  // Build decks migration - now with profile_id instead of config
-  const decksSelect = [
-    "id",
-    "name",
-    decksColumns.includes("filepath") ? "filepath" : `'' as filepath`,
-    "tag",
-    "last_reviewed",
-    `'profile_default' as profile_id`, // All decks use DEFAULT profile after migration
-    decksColumns.includes("created") ? "created" : `datetime('now') as created`,
-    decksColumns.includes("modified")
-      ? "modified"
-      : `datetime('now') as modified`,
-  ].join(", ");
+  // Helper: pick current column, fall back to old renamed column, then default
+  const col = (
+    columns: string[],
+    currentName: string,
+    oldName: string | null,
+    fallback: string
+  ): string => {
+    if (columns.includes(currentName)) return currentName;
+    if (oldName && columns.includes(oldName)) return `${oldName} as ${currentName}`;
+    return `${fallback} as ${currentName}`;
+  };
 
-  // Build flashcards migration
-  const flashcardsSelect = [
-    "id",
-    "deck_id",
-    "front",
-    "back",
-    flashcardsColumns.includes("type") ? "type" : `'header-paragraph' as type`,
-    flashcardsColumns.includes("source_file")
-      ? "source_file"
-      : `'' as source_file`,
-    flashcardsColumns.includes("content_hash")
-      ? "content_hash"
-      : `'' as content_hash`,
-    flashcardsColumns.includes("breadcrumb")
-      ? "breadcrumb"
-      : `'' as breadcrumb`,
-
-    flashcardsColumns.includes("state") ? "state" : `'new' as state`,
-    flashcardsColumns.includes("due_date")
-      ? "due_date"
-      : `datetime('now') as due_date`,
-    flashcardsColumns.includes("interval") ? "interval" : `0 as interval`,
-    flashcardsColumns.includes("repetitions")
-      ? "repetitions"
-      : `0 as repetitions`,
-    flashcardsColumns.includes("difficulty")
-      ? "difficulty"
-      : `5.0 as difficulty`,
-    flashcardsColumns.includes("stability") ? "stability" : `0 as stability`,
-    flashcardsColumns.includes("lapses") ? "lapses" : `0 as lapses`,
-    "last_reviewed",
-    "created",
-    "modified",
-  ].join(", ");
-
-  // Build review_logs migration
+  // Build review_logs migration (with fallbacks for renamed columns)
+  const rl = reviewLogsColumns;
   const reviewLogsSelect = [
     "id",
     "flashcard_id",
-    reviewLogsColumns.includes("session_id")
-      ? "session_id"
-      : "NULL as session_id",
-    reviewLogsColumns.includes("last_reviewed_at")
-      ? "last_reviewed_at"
-      : `datetime('now') as last_reviewed_at`,
-    reviewLogsColumns.includes("shown_at") ? "shown_at" : "NULL as shown_at",
-    reviewLogsColumns.includes("reviewed_at")
-      ? "reviewed_at"
-      : `datetime('now') as reviewed_at`,
-    reviewLogsColumns.includes("rating") ? "rating" : `3 as rating`,
-    reviewLogsColumns.includes("rating_label")
-      ? "rating_label"
-      : `'good' as rating_label`,
-    reviewLogsColumns.includes("time_elapsed_ms")
-      ? "time_elapsed_ms"
-      : "NULL as time_elapsed_ms",
-    reviewLogsColumns.includes("old_state")
-      ? "old_state"
-      : `'new' as old_state`,
-    reviewLogsColumns.includes("old_repetitions")
-      ? "old_repetitions"
-      : `0 as old_repetitions`,
-    reviewLogsColumns.includes("old_lapses") ? "old_lapses" : `0 as old_lapses`,
-    reviewLogsColumns.includes("old_stability")
-      ? "old_stability"
-      : `0 as old_stability`,
-    reviewLogsColumns.includes("old_difficulty")
-      ? "old_difficulty"
-      : `5.0 as old_difficulty`,
-    reviewLogsColumns.includes("new_state")
-      ? "new_state"
-      : `'review' as new_state`,
-    reviewLogsColumns.includes("new_repetitions")
-      ? "new_repetitions"
-      : `1 as new_repetitions`,
-    reviewLogsColumns.includes("new_lapses") ? "new_lapses" : `0 as new_lapses`,
-    reviewLogsColumns.includes("new_stability")
-      ? "new_stability"
-      : `2.5 as new_stability`,
-    reviewLogsColumns.includes("new_difficulty")
-      ? "new_difficulty"
-      : `5.0 as new_difficulty`,
-    reviewLogsColumns.includes("old_interval_minutes")
-      ? "old_interval_minutes"
-      : `0 as old_interval_minutes`,
-    reviewLogsColumns.includes("new_interval_minutes")
-      ? "new_interval_minutes"
-      : `1440 as new_interval_minutes`,
-    reviewLogsColumns.includes("old_due_at")
-      ? "old_due_at"
-      : `datetime('now') as old_due_at`,
-    reviewLogsColumns.includes("new_due_at")
-      ? "new_due_at"
-      : `datetime('now', '+1 day') as new_due_at`,
-    reviewLogsColumns.includes("elapsed_days")
-      ? "elapsed_days"
-      : `1.0 as elapsed_days`,
-    reviewLogsColumns.includes("retrievability")
-      ? "retrievability"
-      : `0.9 as retrievability`,
-    reviewLogsColumns.includes("request_retention")
-      ? "request_retention"
-      : `0.9 as request_retention`,
-    reviewLogsColumns.includes("profile") ? "profile" : `'STANDARD' as profile`,
-    reviewLogsColumns.includes("maximum_interval_days")
-      ? "maximum_interval_days"
-      : `36500 as maximum_interval_days`,
-    reviewLogsColumns.includes("min_minutes")
-      ? "min_minutes"
-      : `1 as min_minutes`,
-    reviewLogsColumns.includes("fsrs_weights_version")
-      ? "fsrs_weights_version"
-      : `'1.0' as fsrs_weights_version`,
-    reviewLogsColumns.includes("scheduler_version")
-      ? "scheduler_version"
-      : `'1.0' as scheduler_version`,
-    reviewLogsColumns.includes("note_model_id")
-      ? "note_model_id"
-      : "NULL as note_model_id",
-    reviewLogsColumns.includes("card_template_id")
-      ? "card_template_id"
-      : "NULL as card_template_id",
-    reviewLogsColumns.includes("content_hash")
-      ? "content_hash"
-      : "NULL as content_hash",
-    reviewLogsColumns.includes("client") ? "client" : "NULL as client",
-  ].join(", ");
-
-  // Build review_sessions migration
-  const reviewSessionsSelect = [
-    "id",
-    "deck_id",
-    "started_at",
-    "ended_at",
-    "goal_total",
-    "done_unique",
+    col(rl, "session_id", null, "NULL"),
+    col(rl, "last_reviewed_at", null, "datetime('now')"),
+    col(rl, "shown_at", null, "NULL"),
+    col(rl, "reviewed_at", null, "datetime('now')"),
+    col(rl, "rating", null, "3"),
+    col(rl, "rating_label", null, "'good'"),
+    col(rl, "time_elapsed_ms", "time_elapsed", "NULL"),
+    col(rl, "old_state", null, "'new'"),
+    col(rl, "old_repetitions", null, "0"),
+    col(rl, "old_lapses", null, "0"),
+    col(rl, "old_stability", null, "0"),
+    col(rl, "old_difficulty", null, "5.0"),
+    col(rl, "new_state", null, "'review'"),
+    col(rl, "new_repetitions", null, "1"),
+    col(rl, "new_lapses", null, "0"),
+    col(rl, "new_stability", null, "2.5"),
+    col(rl, "new_difficulty", null, "5.0"),
+    col(rl, "old_interval_minutes", "old_interval", "0"),
+    col(rl, "new_interval_minutes", "new_interval", "1440"),
+    col(rl, "old_due_at", "old_due_date", "datetime('now')"),
+    col(rl, "new_due_at", "new_due_date", "datetime('now', '+1 day')"),
+    col(rl, "elapsed_days", null, "1.0"),
+    col(rl, "retrievability", null, "0.9"),
+    col(rl, "request_retention", null, "0.9"),
+    col(rl, "profile", null, "'STANDARD'"),
+    col(rl, "maximum_interval_days", null, "36500"),
+    col(rl, "min_minutes", null, "1"),
+    col(rl, "fsrs_weights_version", "weights_version", "'1.0'"),
+    col(rl, "scheduler_version", null, "'1.0'"),
+    col(rl, "note_model_id", null, "NULL"),
+    col(rl, "card_template_id", null, "NULL"),
+    col(rl, "content_hash", null, "NULL"),
+    col(rl, "client", null, "NULL"),
   ].join(", ");
 
   return `
     PRAGMA foreign_keys = OFF;
     BEGIN;
 
-    -- Create DEFAULT profile
+    -- Preserve deckprofiles (schema unchanged, CREATE IF NOT EXISTS keeps existing)
     CREATE TABLE IF NOT EXISTS deckprofiles (
       id TEXT PRIMARY KEY,
       name TEXT NOT NULL UNIQUE,
@@ -376,7 +276,7 @@ export function buildMigrationSQL(db: Database): string {
       datetime('now')
     );
 
-    -- Ensure profile_tag_mappings exists for migration (might not exist in old schemas)
+    -- Preserve profile_tag_mappings (recreate with UNIQUE(tag) constraint)
     CREATE TABLE IF NOT EXISTS profile_tag_mappings (
       id TEXT PRIMARY KEY,
       profile_id TEXT NOT NULL,
@@ -384,7 +284,6 @@ export function buildMigrationSQL(db: Database): string {
       created TEXT NOT NULL
     );
 
-    -- Recreate with UNIQUE(tag) constraint (was UNIQUE(profile_id, tag))
     CREATE TABLE profile_tag_mappings_new (
       id TEXT PRIMARY KEY,
       profile_id TEXT NOT NULL,
@@ -393,7 +292,6 @@ export function buildMigrationSQL(db: Database): string {
       UNIQUE(tag)
     );
 
-    -- Deduplicate: INSERT OR IGNORE keeps first row per tag (ordered by latest created)
     INSERT OR IGNORE INTO profile_tag_mappings_new (id, profile_id, tag, created)
     SELECT id, profile_id, tag, created
     FROM profile_tag_mappings
@@ -402,42 +300,8 @@ export function buildMigrationSQL(db: Database): string {
     DROP TABLE profile_tag_mappings;
     ALTER TABLE profile_tag_mappings_new RENAME TO profile_tag_mappings;
 
-    -- Create new tables
-    CREATE TABLE decks_new (
-      id TEXT PRIMARY KEY,
-      name TEXT NOT NULL,
-      filepath TEXT NOT NULL UNIQUE,
-      tag TEXT NOT NULL,
-      last_reviewed TEXT,
-      profile_id TEXT NOT NULL,
-      created TEXT NOT NULL,
-      modified TEXT NOT NULL
-    );
-
-    CREATE TABLE flashcards_new (
-      id TEXT PRIMARY KEY,
-      deck_id TEXT NOT NULL,
-      front TEXT NOT NULL,
-      back TEXT NOT NULL,
-      type TEXT NOT NULL CHECK (type IN ('header-paragraph', 'table')),
-      source_file TEXT NOT NULL,
-      content_hash TEXT NOT NULL,
-      breadcrumb TEXT NOT NULL DEFAULT '',
-
-      state TEXT NOT NULL CHECK (state IN ('new', 'review')),
-      due_date TEXT NOT NULL,
-      interval REAL NOT NULL,
-      repetitions INTEGER NOT NULL DEFAULT 0,
-      difficulty REAL NOT NULL DEFAULT 5.0,
-      stability REAL NOT NULL DEFAULT 0,
-      lapses INTEGER NOT NULL DEFAULT 0,
-      last_reviewed TEXT,
-      created TEXT NOT NULL,
-      modified TEXT NOT NULL,
-      FOREIGN KEY (deck_id) REFERENCES decks(id) ON DELETE CASCADE
-    );
-
-    CREATE TABLE review_sessions_new (
+    -- Preserve review_sessions (schema stable, CREATE IF NOT EXISTS keeps existing)
+    CREATE TABLE IF NOT EXISTS review_sessions (
       id TEXT PRIMARY KEY,
       deck_id TEXT NOT NULL,
       started_at TEXT NOT NULL,
@@ -446,6 +310,7 @@ export function buildMigrationSQL(db: Database): string {
       done_unique INTEGER NOT NULL DEFAULT 0
     );
 
+    -- Migrate review_logs (column renames handled, JS-level table existence guard)
     CREATE TABLE review_logs_new (
       id TEXT PRIMARY KEY,
       flashcard_id TEXT NOT NULL,
@@ -484,30 +349,48 @@ export function buildMigrationSQL(db: Database): string {
       client TEXT
     );
 
-    -- Copy data with dynamic column mapping
-    INSERT OR IGNORE INTO decks_new (id, name, filepath, tag, last_reviewed, profile_id, created, modified)
-    SELECT ${decksSelect} FROM decks WHERE EXISTS (SELECT 1 FROM sqlite_master WHERE type='table' AND name='decks');
+    ${reviewLogsExists ? `INSERT OR IGNORE INTO review_logs_new (id, flashcard_id, session_id, last_reviewed_at, shown_at, reviewed_at, rating, rating_label, time_elapsed_ms, old_state, old_repetitions, old_lapses, old_stability, old_difficulty, new_state, new_repetitions, new_lapses, new_stability, new_difficulty, old_interval_minutes, new_interval_minutes, old_due_at, new_due_at, elapsed_days, retrievability, request_retention, profile, maximum_interval_days, min_minutes, fsrs_weights_version, scheduler_version, note_model_id, card_template_id, content_hash, client)
+    SELECT ${reviewLogsSelect} FROM review_logs;` : ""}
 
-    INSERT OR IGNORE INTO flashcards_new (id, deck_id, front, back, type, source_file, content_hash, breadcrumb, state, due_date, interval, repetitions, difficulty, stability, lapses, last_reviewed, created, modified)
-    SELECT ${flashcardsSelect} FROM flashcards WHERE EXISTS (SELECT 1 FROM sqlite_master WHERE type='table' AND name='flashcards');
-
-    INSERT OR IGNORE INTO review_logs_new (id, flashcard_id, session_id, last_reviewed_at, shown_at, reviewed_at, rating, rating_label, time_elapsed_ms, old_state, old_repetitions, old_lapses, old_stability, old_difficulty, new_state, new_repetitions, new_lapses, new_stability, new_difficulty, old_interval_minutes, new_interval_minutes, old_due_at, new_due_at, elapsed_days, retrievability, request_retention, profile, maximum_interval_days, min_minutes, fsrs_weights_version, scheduler_version, note_model_id, card_template_id, content_hash, client)
-    SELECT ${reviewLogsSelect} FROM review_logs WHERE EXISTS (SELECT 1 FROM sqlite_master WHERE type='table' AND name='review_logs');
-
-    INSERT OR IGNORE INTO review_sessions_new (id, deck_id, started_at, ended_at, goal_total, done_unique)
-    SELECT ${reviewSessionsSelect} FROM review_sessions WHERE EXISTS (SELECT 1 FROM sqlite_master WHERE type='table' AND name='review_sessions');
-
-    -- Drop old tables
     DROP TABLE IF EXISTS review_logs;
+    ALTER TABLE review_logs_new RENAME TO review_logs;
+
+    -- Drop and recreate decks/flashcards fresh (sync repopulates from vault)
     DROP TABLE IF EXISTS flashcards;
     DROP TABLE IF EXISTS decks;
-    DROP TABLE IF EXISTS review_sessions;
 
-    -- Rename new tables
-    ALTER TABLE decks_new RENAME TO decks;
-    ALTER TABLE flashcards_new RENAME TO flashcards;
-    ALTER TABLE review_sessions_new RENAME TO review_sessions;
-    ALTER TABLE review_logs_new RENAME TO review_logs;
+    CREATE TABLE decks (
+      id TEXT PRIMARY KEY,
+      name TEXT NOT NULL,
+      filepath TEXT NOT NULL UNIQUE,
+      tag TEXT NOT NULL,
+      last_reviewed TEXT,
+      profile_id TEXT NOT NULL,
+      created TEXT NOT NULL,
+      modified TEXT NOT NULL
+    );
+
+    CREATE TABLE flashcards (
+      id TEXT PRIMARY KEY,
+      deck_id TEXT NOT NULL,
+      front TEXT NOT NULL,
+      back TEXT NOT NULL,
+      type TEXT NOT NULL CHECK (type IN ('header-paragraph', 'table')),
+      source_file TEXT NOT NULL,
+      content_hash TEXT NOT NULL,
+      breadcrumb TEXT NOT NULL DEFAULT '',
+      state TEXT NOT NULL CHECK (state IN ('new', 'review')),
+      due_date TEXT NOT NULL,
+      interval REAL NOT NULL,
+      repetitions INTEGER NOT NULL DEFAULT 0,
+      difficulty REAL NOT NULL DEFAULT 5.0,
+      stability REAL NOT NULL DEFAULT 0,
+      lapses INTEGER NOT NULL DEFAULT 0,
+      last_reviewed TEXT,
+      created TEXT NOT NULL,
+      modified TEXT NOT NULL,
+      FOREIGN KEY (deck_id) REFERENCES decks(id) ON DELETE CASCADE
+    );
 
     -- Create indexes
     CREATE INDEX IF NOT EXISTS idx_deckprofiles_name ON deckprofiles(name);

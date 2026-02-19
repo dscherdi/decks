@@ -264,16 +264,19 @@ export class MainDatabaseService extends BaseDatabaseService {
         this.debugLog(
           `Migrating database from version ${currentVersion} to ${CURRENT_SCHEMA_VERSION}`
         );
-
-        // Use centralized migration SQL
         const migrationSQL = buildMigrationSQL(this.db);
         this.db.exec(migrationSQL);
-
         this.debugLog(`Database migrated to version ${CURRENT_SCHEMA_VERSION}`);
       }
     } catch (error) {
       console.error("Schema migration failed:", error);
-      // Don't throw here - continue with existing schema
+      try {
+        this.db.exec("ROLLBACK");
+      } catch {
+        // Transaction may not be open
+      }
+      this.db.exec(CREATE_TABLES_SQL);
+      this.migrationNotice = "Database migration failed. A fresh database was created — please restore from a backup to recover your review history.";
     }
   }
 
@@ -443,6 +446,28 @@ export class MainDatabaseService extends BaseDatabaseService {
               WHERE main.id IS NULL OR remote.modified > main.modified
             `);
 
+            // Merge Profiles (REPLACE only if remote.modified > main.modified)
+            try {
+              this.db.exec(`
+                INSERT OR REPLACE INTO deckprofiles
+                SELECT remote.* FROM remote.deckprofiles
+                LEFT JOIN deckprofiles AS main ON remote.id = main.id
+                WHERE main.id IS NULL OR remote.modified > main.modified
+              `);
+            } catch {
+              this.debugLog("Remote DB has no deckprofiles table, skipping");
+            }
+
+            // Merge Profile Tag Mappings (INSERT OR IGNORE - first mapping wins)
+            try {
+              this.db.exec(`
+                INSERT OR IGNORE INTO profile_tag_mappings
+                SELECT * FROM remote.profile_tag_mappings
+              `);
+            } catch {
+              this.debugLog("Remote DB has no profile_tag_mappings table, skipping");
+            }
+
             // Commit the transaction
             this.db.exec("COMMIT");
             this.debugLog("Successfully merged data from disk");
@@ -575,6 +600,58 @@ export class MainDatabaseService extends BaseDatabaseService {
                   cardStmt.free();
                 }
               }
+            }
+
+            // Merge profiles (conditional replace)
+            try {
+              const remoteProfiles = remoteDb.exec("SELECT * FROM deckprofiles");
+              if (remoteProfiles.length > 0) {
+                const profileData = remoteProfiles[0];
+                const modifiedIndex = profileData.columns.indexOf("modified");
+
+                for (const row of profileData.values) {
+                  const profileId = row[0];
+                  const remoteModified = row[modifiedIndex];
+
+                  const existingProfile = this.db.exec(
+                    `SELECT modified FROM deckprofiles WHERE id = ?`,
+                    [profileId]
+                  );
+                  const shouldReplace =
+                    !existingProfile.length ||
+                    (existingProfile[0]?.values?.[0]?.[0] || 0) <
+                      (remoteModified || 0);
+
+                  if (shouldReplace) {
+                    const profileStmt = this.db.prepare(`
+                      INSERT OR REPLACE INTO deckprofiles
+                      VALUES (${profileData.columns.map(() => "?").join(",")})
+                    `);
+                    profileStmt.run(row);
+                    profileStmt.free();
+                  }
+                }
+              }
+            } catch {
+              this.debugLog("Remote DB has no deckprofiles table, skipping");
+            }
+
+            // Merge profile tag mappings (INSERT OR IGNORE)
+            try {
+              const remoteMappings = remoteDb.exec("SELECT * FROM profile_tag_mappings");
+              if (remoteMappings.length > 0) {
+                const mappingData = remoteMappings[0];
+                const placeholders = mappingData.columns.map(() => "?").join(",");
+                const stmt = this.db.prepare(
+                  `INSERT OR IGNORE INTO profile_tag_mappings VALUES (${placeholders})`
+                );
+                for (const row of mappingData.values) {
+                  stmt.run(row);
+                }
+                stmt.free();
+              }
+            } catch {
+              this.debugLog("Remote DB has no profile_tag_mappings table, skipping");
             }
 
             // Commit the transaction

@@ -243,7 +243,6 @@ class SimpleDatabaseWorker {
       const currentVersion = Number(versionResult[0]?.values[0]?.[0]) || 0;
 
       if (currentVersion < CURRENT_SCHEMA_VERSION) {
-        // Execute migration directly
         try {
           const migrationSQL = buildMigrationSQL(this.db);
           this.db.exec(migrationSQL);
@@ -252,11 +251,17 @@ class SimpleDatabaseWorker {
             success: true,
           });
         } catch (error) {
+          try {
+            this.db.exec("ROLLBACK");
+          } catch {
+            // Transaction may not be open
+          }
+          this.db.exec(CREATE_TABLES_SQL);
           self.postMessage({
-            type: "migrationError",
-            error: (error as Error).message,
+            type: "migrationComplete",
+            success: true,
+            migrationNotice: "Database migration failed. A fresh database was created — please restore from a backup to recover your review history.",
           });
-          throw error;
         }
       } else {
         // No migration needed
@@ -420,6 +425,62 @@ class SimpleDatabaseWorker {
             }
           }
           insertStmt.free();
+        }
+
+        // 5. Merge Profiles (Conditional Replace)
+        try {
+          const profilesResult = remoteDb.exec("SELECT * FROM deckprofiles");
+          if (profilesResult.length > 0) {
+            const columns = profilesResult[0].columns;
+            const values = profilesResult[0].values;
+            const placeholders = columns.map(() => "?").join(",");
+            const modIndex = columns.indexOf("modified");
+            const idIndex = columns.indexOf("id");
+
+            const insertStmt = this.db.prepare(
+              `INSERT OR REPLACE INTO deckprofiles VALUES (${placeholders})`
+            );
+
+            for (const row of values) {
+              const remoteMod = row[modIndex] as string;
+              const id = row[idIndex] as string;
+
+              const localRes = this.db.exec(
+                "SELECT modified FROM deckprofiles WHERE id = ?",
+                [id]
+              );
+              const localMod = localRes.length
+                ? (localRes[0].values[0][0] as string)
+                : null;
+
+              if (!localMod || remoteMod > localMod) {
+                insertStmt.run(row);
+              }
+            }
+            insertStmt.free();
+          }
+        } catch {
+          // Remote DB may not have deckprofiles table
+        }
+
+        // 6. Merge Profile Tag Mappings (INSERT OR IGNORE)
+        try {
+          const mappingsResult = remoteDb.exec("SELECT * FROM profile_tag_mappings");
+          if (mappingsResult.length > 0) {
+            const columns = mappingsResult[0].columns;
+            const values = mappingsResult[0].values;
+            const placeholders = columns.map(() => "?").join(",");
+
+            const stmt = this.db.prepare(
+              `INSERT OR IGNORE INTO profile_tag_mappings VALUES (${placeholders})`
+            );
+            for (const row of values) {
+              stmt.run(row);
+            }
+            stmt.free();
+          }
+        } catch {
+          // Remote DB may not have profile_tag_mappings table
         }
 
         this.db.exec("COMMIT");

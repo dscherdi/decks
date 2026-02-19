@@ -152,7 +152,7 @@ export class DecksView extends ItemView {
       deck,
       this.db,
       async () => {
-        await this.refreshDecksAndStats();
+        await this.refresh();
       }
     ).open();
   }
