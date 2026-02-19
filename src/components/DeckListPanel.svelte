@@ -1,6 +1,11 @@
 <script lang="ts">
   import { onMount, onDestroy } from "svelte";
-  import type { DeckWithProfile, DeckStats, DeckGroup, DeckOrGroup } from "../database/types";
+  import type {
+    DeckWithProfile,
+    DeckStats,
+    DeckGroup,
+    DeckOrGroup,
+  } from "../database/types";
   import { isDeckGroup, isFileDeck } from "../database/types";
   import { generateDeckGroupId } from "../utils/hash";
 
@@ -29,7 +34,7 @@
     resize?: () => void;
   } = {};
 
-  let viewMode: 'files' | 'tags' = 'files';
+  let viewMode: "files" | "tags" = "files";
   let deckGroups: DeckGroup[] = [];
   let currentItems: DeckOrGroup[] = [];
 
@@ -125,7 +130,6 @@
     );
   }
 
-
   async function handleRefresh() {
     isRefreshing = true;
     try {
@@ -155,18 +159,20 @@
     decks = decks;
     isUpdatingStats = false;
   }
-  $: currentItems = viewMode === 'files'
-    ? allDecks.map(d => ({ ...d, type: 'file' as const }))
-    : deckGroups;
+  $: currentItems =
+    viewMode === "files"
+      ? allDecks.map((d) => ({ ...d, type: "file" as const }))
+      : deckGroups;
 
   $: filteredItems = filterItems(currentItems, filterText);
 
   function filterItems(items: DeckOrGroup[], filter: string): DeckOrGroup[] {
     if (!filter.trim()) return items;
     const filterLower = filter.toLowerCase();
-    return items.filter(item =>
-      item.name.toLowerCase().includes(filterLower) ||
-      item.tag.toLowerCase().includes(filterLower)
+    return items.filter(
+      (item) =>
+        item.name.toLowerCase().includes(filterLower) ||
+        item.tag.toLowerCase().includes(filterLower)
     );
   }
 
@@ -178,8 +184,9 @@
     );
 
     // Generate deck groups asynchronously
-    tagGroupService.aggregateByTag(newDecks)
-      .then(groups => {
+    tagGroupService
+      .aggregateByTag(newDecks)
+      .then((groups) => {
         deckGroups = groups;
       })
       .catch(console.error);
@@ -362,7 +369,7 @@
     configOption.textContent = "Configure profile";
     configOption.onclick = () => {
       closeActiveDropdown();
-      const deckForGroup = allDecks.find(d => group.deckIds.includes(d.id));
+      const deckForGroup = allDecks.find((d) => group.deckIds.includes(d.id));
       if (deckForGroup) {
         openDeckConfigModal(deckForGroup);
       }
@@ -646,7 +653,7 @@
 
 <div class="decks-deck-list-panel">
   <div class="decks-panel-header">
-    <h3 class="decks-panel-title">Flashcard Decks</h3>
+    <h3 class="decks-panel-title">Decks</h3>
     <div class="decks-header-buttons">
       <button
         class="decks-deck-config-button"
@@ -667,7 +674,8 @@
           stroke-linejoin="round"
         >
           <path d="M12 20h9"></path>
-          <path d="M16.5 3.5a2.121 2.121 0 0 1 3 3L7 19l-4 1 1-4L16.5 3.5z"></path>
+          <path d="M16.5 3.5a2.121 2.121 0 0 1 3 3L7 19l-4 1 1-4L16.5 3.5z"
+          ></path>
         </svg>
       </button>
       <button
@@ -687,7 +695,9 @@
           stroke-linecap="round"
           stroke-linejoin="round"
         >
-          <path d="M12.22 2h-.44a2 2 0 0 0-2 2v.18a2 2 0 0 1-1 1.73l-.43.25a2 2 0 0 1-2 0l-.15-.08a2 2 0 0 0-2.73.73l-.22.38a2 2 0 0 0 .73 2.73l.15.1a2 2 0 0 1 1 1.72v.51a2 2 0 0 1-1 1.74l-.15.09a2 2 0 0 0-.73 2.73l.22.38a2 2 0 0 0 2.73.73l.15-.08a2 2 0 0 1 2 0l.43.25a2 2 0 0 1 1 1.73V20a2 2 0 0 0 2 2h.44a2 2 0 0 0 2-2v-.18a2 2 0 0 1 1-1.73l.43-.25a2 2 0 0 1 2 0l.15.08a2 2 0 0 0 2.73-.73l.22-.39a2 2 0 0 0-.73-2.73l-.15-.08a2 2 0 0 1-1-1.74v-.5a2 2 0 0 1 1-1.74l.15-.09a2 2 0 0 0 .73-2.73l-.22-.38a2 2 0 0 0-2.73-.73l-.15.08a2 2 0 0 1-2 0l-.43-.25a2 2 0 0 1-1-1.73V4a2 2 0 0 0-2-2z"></path>
+          <path
+            d="M12.22 2h-.44a2 2 0 0 0-2 2v.18a2 2 0 0 1-1 1.73l-.43.25a2 2 0 0 1-2 0l-.15-.08a2 2 0 0 0-2.73.73l-.22.38a2 2 0 0 0 .73 2.73l.15.1a2 2 0 0 1 1 1.72v.51a2 2 0 0 1-1 1.74l-.15.09a2 2 0 0 0-.73 2.73l.22.38a2 2 0 0 0 2.73.73l.15-.08a2 2 0 0 1 2 0l.43.25a2 2 0 0 1 1 1.73V20a2 2 0 0 0 2 2h.44a2 2 0 0 0 2-2v-.18a2 2 0 0 1 1-1.73l.43-.25a2 2 0 0 1 2 0l.15.08a2 2 0 0 0 2.73-.73l.22-.39a2 2 0 0 0-.73-2.73l-.15-.08a2 2 0 0 1-1-1.74v-.5a2 2 0 0 1 1-1.74l.15-.09a2 2 0 0 0 .73-2.73l-.22-.38a2 2 0 0 0-2.73-.73l-.15.08a2 2 0 0 1-2 0l-.43-.25a2 2 0 0 1-1-1.73V4a2 2 0 0 0-2-2z"
+          ></path>
           <circle cx="12" cy="12" r="3"></circle>
         </svg>
       </button>
@@ -746,15 +756,15 @@
     <div class="decks-tab-switcher">
       <button
         class="decks-tab-button"
-        class:active={viewMode === 'files'}
-        on:click={() => viewMode = 'files'}
+        class:active={viewMode === "files"}
+        on:click={() => (viewMode = "files")}
       >
         Files ({allDecks.length})
       </button>
       <button
         class="decks-tab-button"
-        class:active={viewMode === 'tags'}
-        on:click={() => viewMode = 'tags'}
+        class:active={viewMode === "tags"}
+        on:click={() => (viewMode = "tags")}
       >
         Tags ({deckGroups.length})
       </button>
@@ -811,7 +821,7 @@
 
     {#if allDecks.length === 0}
       <div class="decks-empty-state">
-        <p>No flashcard decks found.</p>
+        <p>No decks found.</p>
         <p class="decks-help-text">
           Tag your notes with #flashcards to create decks.
         </p>
@@ -824,7 +834,9 @@
     {:else}
       <div class="decks-deck-table">
         <div class="decks-table-header">
-          <div class="decks-col-deck">{viewMode === 'files' ? 'Deck' : 'Tag group'}</div>
+          <div class="decks-col-deck">
+            {viewMode === "files" ? "Deck" : "Tag group"}
+          </div>
           <div class="decks-col-stat">New</div>
           <div class="decks-col-stat">Due</div>
           <div class="decks-col-config"></div>
@@ -851,7 +863,9 @@
                   {/if}
                   {item.name}
                   {#if isDeckGroup(item)}
-                    <span class="decks-tag-group-count">({item.deckIds.length} files)</span>
+                    <span class="decks-tag-group-count"
+                      >({item.deckIds.length} files)</span
+                    >
                   {/if}
                 </span>
               </div>
@@ -893,28 +907,34 @@
                   <button
                     class="decks-deck-config-button"
                     on:click={(e) =>
-                      handleTouchClick(() => handleGroupConfigClick(item, e), e)}
+                      handleTouchClick(
+                        () => handleGroupConfigClick(item, e),
+                        e
+                      )}
                     on:touchend={(e) =>
-                      handleTouchClick(() => handleGroupConfigClick(item, e), e)}
+                      handleTouchClick(
+                        () => handleGroupConfigClick(item, e),
+                        e
+                      )}
                     title="Tag group options"
                     aria-label="Options for {item.name}"
                   >
-                  <svg
-                    xmlns="http://www.w3.org/2000/svg"
-                    width="16"
-                    height="16"
-                    viewBox="0 0 24 24"
-                    fill="none"
-                    stroke="currentColor"
-                    stroke-width="2"
-                    stroke-linecap="round"
-                    stroke-linejoin="round"
-                  >
-                    <circle cx="12" cy="12" r="3"></circle>
-                    <path
-                      d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1 1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z"
-                    ></path>
-                  </svg>
+                    <svg
+                      xmlns="http://www.w3.org/2000/svg"
+                      width="16"
+                      height="16"
+                      viewBox="0 0 24 24"
+                      fill="none"
+                      stroke="currentColor"
+                      stroke-width="2"
+                      stroke-linecap="round"
+                      stroke-linejoin="round"
+                    >
+                      <circle cx="12" cy="12" r="3"></circle>
+                      <path
+                        d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1 1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z"
+                      ></path>
+                    </svg>
                   </button>
                 {:else if isFileDeck(item)}
                   <button
@@ -926,23 +946,23 @@
                     title="Configure deck settings"
                     aria-label="Configure {item.name}"
                   >
-                  <svg
-                    xmlns="http://www.w3.org/2000/svg"
-                    width="16"
-                    height="16"
-                    viewBox="0 0 24 24"
-                    fill="none"
-                    stroke="currentColor"
-                    stroke-width="2"
-                    stroke-linecap="round"
-                    stroke-linejoin="round"
-                  >
-                    <circle cx="12" cy="12" r="3"></circle>
-                    <path
-                      d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1 1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z"
-                    ></path>
-                  </svg>
-                </button>
+                    <svg
+                      xmlns="http://www.w3.org/2000/svg"
+                      width="16"
+                      height="16"
+                      viewBox="0 0 24 24"
+                      fill="none"
+                      stroke="currentColor"
+                      stroke-width="2"
+                      stroke-linecap="round"
+                      stroke-linejoin="round"
+                    >
+                      <circle cx="12" cy="12" r="3"></circle>
+                      <path
+                        d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1 1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z"
+                      ></path>
+                    </svg>
+                  </button>
                 {/if}
               </div>
             </div>
@@ -1789,7 +1809,9 @@
     z-index: 1000;
     opacity: 0;
     visibility: hidden;
-    transition: opacity 0.15s ease, visibility 0.15s ease;
+    transition:
+      opacity 0.15s ease,
+      visibility 0.15s ease;
   }
 
   :global(.decks-context-menu-visible) {

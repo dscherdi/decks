@@ -1577,4 +1577,117 @@ describe("Profiles Integration Tests", () => {
       expect(mappings.length).toBe(0);
     });
   });
+
+  describe("Profile cascade to subtags", () => {
+    const baseProfile = {
+      hasNewCardsLimitEnabled: false,
+      newCardsPerDay: 20,
+      hasReviewCardsLimitEnabled: false,
+      reviewCardsPerDay: 100,
+      headerLevel: 2,
+      reviewOrder: "due-date" as const,
+      fsrs: { requestRetention: 0.9, profile: "STANDARD" as const },
+      isDefault: false,
+    };
+
+    it("should cascade parent profile only to DEFAULT children", async () => {
+      await db.createProfile({ ...baseProfile, id: "profile_general", name: "General" });
+      await db.createProfile({ ...baseProfile, id: "profile_science", name: "Science" });
+      await db.save();
+
+      // Create decks — all start with DEFAULT
+      await db.createDeck({ id: "deck_root", name: "Root", filepath: "root.md", tag: "#flashcards", lastReviewed: null });
+      await db.createDeck({ id: "deck_math", name: "Math", filepath: "math.md", tag: "#flashcards/math", lastReviewed: null });
+      await db.createDeck({ id: "deck_science", name: "Science", filepath: "science.md", tag: "#flashcards/science", lastReviewed: null });
+      await db.save();
+
+      // Give science its own explicit mapping
+      await db.applyProfileToTag("profile_science", "#flashcards/science");
+      await db.save();
+
+      const scienceBefore = await db.getDeckById("deck_science");
+      expect(scienceBefore?.profileId).toBe("profile_science");
+
+      // Now apply General to root — should cascade to math (DEFAULT) but NOT science (custom)
+      await db.applyProfileToTag("profile_general", "#flashcards");
+      await db.save();
+
+      const root = await db.getDeckById("deck_root");
+      const math = await db.getDeckById("deck_math");
+      const science = await db.getDeckById("deck_science");
+
+      expect(root?.profileId).toBe("profile_general");
+      expect(math?.profileId).toBe("profile_general");
+      expect(science?.profileId).toBe("profile_science");
+    });
+
+    it("should revert subtag to parent profile when applying DEFAULT", async () => {
+      await db.createProfile({ ...baseProfile, id: "profile_general", name: "General" });
+      await db.createProfile({ ...baseProfile, id: "profile_math", name: "Math" });
+      await db.save();
+
+      await db.createDeck({ id: "deck_math", name: "Math", filepath: "math.md", tag: "#flashcards/math", lastReviewed: null });
+      await db.save();
+
+      // Set up parent and child mappings
+      await db.applyProfileToTag("profile_general", "#flashcards");
+      await db.applyProfileToTag("profile_math", "#flashcards/math");
+      await db.save();
+
+      const mathBefore = await db.getDeckById("deck_math");
+      expect(mathBefore?.profileId).toBe("profile_math");
+
+      // Apply DEFAULT to subtag — should delete its mapping and inherit parent
+      await db.applyProfileToTag(DEFAULT_PROFILE_ID, "#flashcards/math");
+      await db.save();
+
+      const mathAfter = await db.getDeckById("deck_math");
+      expect(mathAfter?.profileId).toBe("profile_general");
+
+      // Verify the explicit mapping was removed
+      const mappings = await db.getAllTagMappings();
+      expect(mappings.some(m => m.tag === "#flashcards/math")).toBe(false);
+      expect(mappings.some(m => m.tag === "#flashcards")).toBe(true);
+    });
+
+    it("should resolve most-specific parent mapping for child tags", async () => {
+      await db.createProfile({ ...baseProfile, id: "profile_general", name: "General" });
+      await db.createProfile({ ...baseProfile, id: "profile_math", name: "Math" });
+      await db.save();
+
+      // Set up two-level mapping hierarchy
+      await db.applyProfileToTag("profile_general", "#flashcards");
+      await db.applyProfileToTag("profile_math", "#flashcards/math");
+      await db.save();
+
+      // Create a deep child deck with DEFAULT
+      await db.createDeck({ id: "deck_calc", name: "Calculus", filepath: "calc.md", tag: "#flashcards/math/calculus", lastReviewed: null });
+      await db.save();
+
+      // Calculus should resolve to Math (most specific parent), not General
+      const calc = await db.getDeckById("deck_calc");
+      expect(calc?.profileId).toBe("profile_math");
+    });
+
+    it("should not cascade to children that already have a non-DEFAULT profile", async () => {
+      await db.createProfile({ ...baseProfile, id: "profile_a", name: "Profile A" });
+      await db.createProfile({ ...baseProfile, id: "profile_b", name: "Profile B" });
+      await db.save();
+
+      // Create child deck and give it profile_a via explicit mapping
+      await db.createDeck({ id: "deck_child", name: "Child", filepath: "child.md", tag: "#flashcards/child", lastReviewed: null });
+      await db.applyProfileToTag("profile_a", "#flashcards/child");
+      await db.save();
+
+      const childBefore = await db.getDeckById("deck_child");
+      expect(childBefore?.profileId).toBe("profile_a");
+
+      // Apply profile_b to parent — child already has profile_a, should not change
+      await db.applyProfileToTag("profile_b", "#flashcards");
+      await db.save();
+
+      const childAfter = await db.getDeckById("deck_child");
+      expect(childAfter?.profileId).toBe("profile_a");
+    });
+  });
 });

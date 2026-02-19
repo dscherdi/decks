@@ -556,19 +556,39 @@ export abstract class BaseDatabaseService implements IDatabaseService {
   }
 
   async applyProfileToTag(profileId: string, tag: string): Promise<number> {
-    // createTagMapping upserts via UNIQUE(tag) — replaces any existing mapping for this tag
-    await this.createTagMapping(profileId, tag);
+    if (profileId === DEFAULT_PROFILE_ID) {
+      // Remove explicit mapping so the tag inherits from its parent
+      const existingMappings = await this.getAllTagMappings();
+      const existing = existingMappings.find(m => m.tag === tag);
+      if (existing) {
+        await this.deleteTagMapping(existing.id);
+      }
+    } else {
+      // Upsert mapping via UNIQUE(tag)
+      await this.createTagMapping(profileId, tag);
+    }
 
-    // Get all decks and update those matching this tag or child tags
     const allDecks = await this.getAllDecks();
+    const allMappings = await this.getAllTagMappings();
+    const mappedTags = new Set(allMappings.map(m => m.tag));
     let count = 0;
 
     for (const deck of allDecks) {
-      if (deck.tag === tag || deck.tag.startsWith(tag + '/')) {
+      if (deck.tag === tag) {
+        // Exact match — always update
         const resolvedProfileId = await this.getProfileIdForTag(deck.tag) || DEFAULT_PROFILE_ID;
         if (deck.profileId !== resolvedProfileId) {
           await this.updateDeck(deck.id, { profileId: resolvedProfileId });
           count++;
+        }
+      } else if (deck.tag.startsWith(tag + '/')) {
+        // Child tag — skip if it has its own explicit tag mapping
+        if (!mappedTags.has(deck.tag)) {
+          const resolvedProfileId = await this.getProfileIdForTag(deck.tag) || DEFAULT_PROFILE_ID;
+          if (deck.profileId !== resolvedProfileId) {
+            await this.updateDeck(deck.id, { profileId: resolvedProfileId });
+            count++;
+          }
         }
       }
     }
