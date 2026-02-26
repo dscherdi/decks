@@ -81,13 +81,15 @@ export abstract class BaseDatabaseService implements IDatabaseService {
       reviewCardsPerDay: row[5] as number,
       headerLevel: row[6] as number,
       reviewOrder: row[7] as "due-date" | "random",
+      learningSteps: (row[8] as string) ?? "1m",
+      relearningSteps: (row[9] as string) ?? "10m",
       fsrs: {
-        requestRetention: row[8] as number,
-        profile: row[9] as "INTENSIVE" | "STANDARD",
+        requestRetention: row[10] as number,
+        profile: row[11] as "INTENSIVE" | "STANDARD",
       },
-      isDefault: Boolean(row[10]),
-      created: row[11] as string,
-      modified: row[12] as string,
+      isDefault: Boolean(row[12]),
+      created: row[13] as string,
+      modified: row[14] as string,
     };
   }
 
@@ -346,6 +348,8 @@ export abstract class BaseDatabaseService implements IDatabaseService {
       profile.reviewCardsPerDay,
       profile.headerLevel,
       profile.reviewOrder,
+      profile.learningSteps ?? "1m",
+      profile.relearningSteps ?? "10m",
       profile.fsrs.requestRetention,
       profile.fsrs.profile,
       profile.isDefault ? 1 : 0,
@@ -428,6 +432,8 @@ export abstract class BaseDatabaseService implements IDatabaseService {
       updated.reviewCardsPerDay,
       updated.headerLevel,
       updated.reviewOrder,
+      updated.learningSteps,
+      updated.relearningSteps,
       updated.fsrs.requestRetention,
       updated.fsrs.profile,
       this.getCurrentTimestamp(),

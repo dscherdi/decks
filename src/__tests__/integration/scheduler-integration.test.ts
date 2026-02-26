@@ -157,8 +157,8 @@ describe("Scheduler Integration Tests", () => {
       const updatedCard = await db.getFlashcardById(card.id);
       expect(updatedCard).toBeDefined();
       expect(updatedCard!.lapses).toBe(1);
-      // After lapse, interval is reset to minimum (1440 for STANDARD profile)
-      expect(updatedCard!.interval).toBeGreaterThanOrEqual(1440);
+      // After lapse, interval is reset to relearning step (10m default for STANDARD)
+      expect(updatedCard!.interval).toBe(10);
     });
   });
 

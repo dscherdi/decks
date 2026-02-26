@@ -5,6 +5,12 @@
   import type { IDatabaseService } from "../../database/DatabaseFactory";
   import type { ReviewOrder } from "../../types/ReviewOrder";
   import type { FSRSProfile } from "../../database/types";
+  import {
+    validateLearningSteps,
+    validateRelearningSteps,
+    getDefaultLearningSteps,
+    getDefaultRelearningSteps,
+  } from "../../utils/step-parser";
 
   export let db: IDatabaseService;
   export let initialProfiles: DeckProfile[];
@@ -26,6 +32,8 @@
   let headerLevelContainer: HTMLElement;
   let requestRetentionContainer: HTMLElement;
   let fsrsProfileContainer: HTMLElement;
+  let learningStepsContainer: HTMLElement;
+  let relearningStepsContainer: HTMLElement;
   let deckCountContainer: HTMLElement;
   let tagMappingsContainer: HTMLElement;
 
@@ -41,6 +49,18 @@
   let headerLevel = 2;
   let requestRetention = 0.9;
   let fsrsProfile: FSRSProfile = "STANDARD";
+  let learningSteps = "1m";
+  let relearningSteps = "10m";
+
+  // Validation error tracking
+  let nameError = false;
+  let newCardsError = false;
+  let reviewCardsError = false;
+  let retentionError = false;
+  let learningStepsError = false;
+  let relearningStepsError = false;
+
+  $: hasErrors = nameError || newCardsError || reviewCardsError || retentionError || learningStepsError || relearningStepsError;
 
   // Track last event to prevent double execution
   let lastEventTime = 0;
@@ -63,6 +83,16 @@
     headerLevel = profile.headerLevel;
     requestRetention = profile.fsrs.requestRetention;
     fsrsProfile = profile.fsrs.profile;
+    learningSteps = profile.learningSteps;
+    relearningSteps = profile.relearningSteps;
+
+    // Reset validation errors
+    nameError = false;
+    newCardsError = false;
+    reviewCardsError = false;
+    retentionError = false;
+    learningStepsError = false;
+    relearningStepsError = false;
 
     // Load tag mappings and deck count
     tagMappings = await db.getTagMappingsForProfile(profile.id);
@@ -102,6 +132,44 @@
     saving = true;
 
     try {
+      // Pre-save validation
+      if (!selectedProfile.isDefault && profileName.trim().length === 0) {
+        new Notice("Profile name cannot be empty");
+        saving = false;
+        return;
+      }
+      if (enableNewCardsLimit && (isNaN(newCardsLimit) || newCardsLimit < 1 || newCardsLimit > 9999)) {
+        new Notice("New cards per day must be between 1 and 9999");
+        saving = false;
+        return;
+      }
+      if (enableReviewCardsLimit && (isNaN(reviewCardsLimit) || reviewCardsLimit < 1 || reviewCardsLimit > 9999)) {
+        new Notice("Review cards per day must be between 1 and 9999");
+        saving = false;
+        return;
+      }
+      if (isNaN(requestRetention) || requestRetention < 0.5 || requestRetention > 0.995) {
+        new Notice("Request retention must be between 0.5 and 0.995");
+        saving = false;
+        return;
+      }
+      if (learningSteps.trim() !== "") {
+        const lsResult = validateLearningSteps(learningSteps, fsrsProfile);
+        if (!lsResult.valid) {
+          new Notice(lsResult.error ?? "Invalid again interval");
+          saving = false;
+          return;
+        }
+      }
+      if (relearningSteps.trim() !== "") {
+        const rsResult = validateRelearningSteps(relearningSteps, fsrsProfile);
+        if (!rsResult.valid) {
+          new Notice(rsResult.error ?? "Invalid again interval");
+          saving = false;
+          return;
+        }
+      }
+
       const updates: Partial<DeckProfile> = {
         name: profileName,
         newCardsPerDay: newCardsLimit,
@@ -110,6 +178,8 @@
         hasReviewCardsLimitEnabled: enableReviewCardsLimit,
         reviewOrder: reviewOrder,
         headerLevel: headerLevel,
+        learningSteps: learningSteps,
+        relearningSteps: relearningSteps,
         fsrs: {
           requestRetention: requestRetention,
           profile: fsrsProfile,
@@ -231,6 +301,13 @@
             .setDisabled(selectedProfile.isDefault)
             .onChange((value) => {
               profileName = value;
+              if (!selectedProfile.isDefault && value.trim().length === 0) {
+                nameError = true;
+                text.inputEl.addClass("decks-input-error");
+              } else {
+                nameError = false;
+                text.inputEl.removeClass("decks-input-error");
+              }
             });
         });
     }
@@ -244,6 +321,7 @@
         .addToggle((toggle) => {
           toggle.setValue(enableNewCardsLimit).onChange((value) => {
             enableNewCardsLimit = value;
+            if (!value) newCardsError = false;
             rebuildSettings();
           });
         });
@@ -254,15 +332,20 @@
       newCardsLimitContainer.empty();
       new Setting(newCardsLimitContainer)
         .setName("New cards per day")
-        .setDesc("Maximum new cards to introduce per day")
+        .setDesc("Maximum new cards to introduce per day (1-9999)")
         .addText((text) => {
           text
             .setValue(newCardsLimit.toString())
             .setPlaceholder("20")
             .onChange((value) => {
               const num = parseInt(value);
-              if (!isNaN(num) && num >= 0) {
+              if (!isNaN(num) && num >= 1 && num <= 9999) {
                 newCardsLimit = num;
+                newCardsError = false;
+                text.inputEl.removeClass("decks-input-error");
+              } else {
+                newCardsError = true;
+                text.inputEl.addClass("decks-input-error");
               }
             });
         });
@@ -279,6 +362,7 @@
         .addToggle((toggle) => {
           toggle.setValue(enableReviewCardsLimit).onChange((value) => {
             enableReviewCardsLimit = value;
+            if (!value) reviewCardsError = false;
             rebuildSettings();
           });
         });
@@ -289,20 +373,73 @@
       reviewCardsLimitContainer.empty();
       new Setting(reviewCardsLimitContainer)
         .setName("Review cards per day")
-        .setDesc("Maximum review cards per day")
+        .setDesc("Maximum review cards per day (1-9999)")
         .addText((text) => {
           text
             .setValue(reviewCardsLimit.toString())
             .setPlaceholder("100")
             .onChange((value) => {
               const num = parseInt(value);
-              if (!isNaN(num) && num >= 0) {
+              if (!isNaN(num) && num >= 1 && num <= 9999) {
                 reviewCardsLimit = num;
+                reviewCardsError = false;
+                text.inputEl.removeClass("decks-input-error");
+              } else {
+                reviewCardsError = true;
+                text.inputEl.addClass("decks-input-error");
               }
             });
         });
     } else if (reviewCardsLimitContainer) {
       reviewCardsLimitContainer.empty();
+    }
+
+    // Again interval for new cards
+    if (learningStepsContainer) {
+      learningStepsContainer.empty();
+      new Setting(learningStepsContainer)
+        .setName("Again interval")
+        .setDesc("Interval when pressing Again on a new card (e.g. 1m)")
+        .addText((text) => {
+          text
+            .setValue(learningSteps)
+            .setPlaceholder(getDefaultLearningSteps(fsrsProfile))
+            .onChange((value) => {
+              const result = validateLearningSteps(value, fsrsProfile);
+              if (result.valid || value.trim() === "") {
+                learningSteps = value;
+                learningStepsError = false;
+                text.inputEl.removeClass("decks-input-error");
+              } else {
+                learningStepsError = true;
+                text.inputEl.addClass("decks-input-error");
+              }
+            });
+        });
+    }
+
+    // Again interval for review cards (lapses)
+    if (relearningStepsContainer) {
+      relearningStepsContainer.empty();
+      new Setting(relearningStepsContainer)
+        .setName("Again interval")
+        .setDesc("Interval when pressing Again on a review card (e.g. 10m)")
+        .addText((text) => {
+          text
+            .setValue(relearningSteps)
+            .setPlaceholder(getDefaultRelearningSteps(fsrsProfile))
+            .onChange((value) => {
+              const result = validateRelearningSteps(value, fsrsProfile);
+              if (result.valid || value.trim() === "") {
+                relearningSteps = value;
+                relearningStepsError = false;
+                text.inputEl.removeClass("decks-input-error");
+              } else {
+                relearningStepsError = true;
+                text.inputEl.addClass("decks-input-error");
+              }
+            });
+        });
     }
 
     // Header level
@@ -350,6 +487,11 @@
               const num = parseFloat(value);
               if (!isNaN(num) && num >= 0.5 && num <= 0.995) {
                 requestRetention = num;
+                retentionError = false;
+                text.inputEl.removeClass("decks-input-error");
+              } else {
+                retentionError = true;
+                text.inputEl.addClass("decks-input-error");
               }
             });
         });
@@ -366,6 +508,7 @@
           dropdown.addOption("INTENSIVE", "Intensive");
           dropdown.setValue(fsrsProfile).onChange((value) => {
             fsrsProfile = value as FSRSProfile;
+            rebuildSettings();
           });
         });
     }
@@ -436,6 +579,16 @@
         </div>
 
         <div class="decks-settings-section">
+          <h4>New cards</h4>
+          <div bind:this={learningStepsContainer}></div>
+        </div>
+
+        <div class="decks-settings-section">
+          <h4>Lapses</h4>
+          <div bind:this={relearningStepsContainer}></div>
+        </div>
+
+        <div class="decks-settings-section">
           <h4>Card Parsing</h4>
           <div bind:this={headerLevelContainer}></div>
         </div>
@@ -467,7 +620,7 @@
         <button
           class="decks-btn-save"
           on:click={handleSaveProfile}
-          disabled={saving}
+          disabled={saving || hasErrors}
         >
           {saving ? "Saving..." : "Save Changes"}
         </button>
@@ -564,6 +717,10 @@
 
   .decks-btn-delete:hover {
     opacity: 0.8;
+  }
+
+  :global(.decks-input-error) {
+    border-color: var(--text-error) !important;
   }
 
   :global(.decks-config-readonly .setting-item-control) {

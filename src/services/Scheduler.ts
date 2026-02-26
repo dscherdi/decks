@@ -16,6 +16,7 @@ import { yieldToUI } from "../utils/ui";
 import type { Logger } from "../utils/logging";
 import type { DecksSettings } from "../settings";
 import { BackupService } from "./BackupService";
+import { parseSteps } from "../utils/step-parser";
 
 export interface SchedulerOptions {
   allowNew?: boolean;
@@ -280,9 +281,11 @@ export class Scheduler {
 
     const ratings: RatingLabel[] = ["again", "hard", "good", "easy"];
     const preview: Partial<SchedulingPreview> = {};
+    const now = new Date();
 
     for (const rating of ratings) {
-      const updatedCard = this.fsrs.updateCard(card, rating);
+      const fsrsResult = this.fsrs.updateCard(card, rating, now);
+      const updatedCard = this.applyStepOverride(card, rating, deck, fsrsResult, now);
       preview[rating] = {
         dueDate: updatedCard.dueDate,
         interval: updatedCard.interval,
@@ -326,7 +329,13 @@ export class Scheduler {
 
     // Calculate new card state
     const oldCard = { ...card };
-    const updatedCard = this.fsrs.updateCard(card, rating);
+    const updatedCard = this.applyStepOverride(
+      card,
+      rating,
+      deck,
+      this.fsrs.updateCard(card, rating),
+      now
+    );
 
     // Calculate review metrics
     const elapsedDays = this.getElapsedDays(card, now);
@@ -902,6 +911,56 @@ export class Scheduler {
   private async hasReviewCardQuotaForDeckGroup(deckGroup: DeckGroup): Promise<boolean> {
     const eligible = await this.getDeckIdsWithReviewQuota(deckGroup);
     return eligible.length > 0;
+  }
+
+  /**
+   * Override FSRS-calculated interval/dueDate with learning or relearning step intervals.
+   * FSRS stability/difficulty are preserved — only interval and dueDate change.
+   *
+   * New cards (INTENSIVE only) + Again: learningSteps[0] overrides interval
+   * Review cards + Again (both profiles): relearningSteps[0] overrides interval
+   * All other combinations: pure FSRS (no override)
+   */
+  private applyStepOverride(
+    originalCard: Flashcard,
+    rating: RatingLabel,
+    deck: DeckWithProfile,
+    fsrsResult: Flashcard,
+    now: Date
+  ): Flashcard {
+    let stepInterval: number | null = null;
+
+    if (originalCard.state === "new" && rating === "again") {
+      const learningSteps = parseSteps(deck.profile.learningSteps);
+      if (learningSteps.length > 0) {
+        stepInterval = learningSteps[0];
+      }
+    } else if (originalCard.state === "review" && rating === "again") {
+      const relearningSteps = parseSteps(deck.profile.relearningSteps);
+      if (relearningSteps.length > 0) {
+        stepInterval = relearningSteps[0];
+      }
+    }
+
+    if (stepInterval === null) {
+      return fsrsResult;
+    }
+
+    const dueDate = this.calculateDueDateForInterval(stepInterval, now);
+    return {
+      ...fsrsResult,
+      interval: stepInterval,
+      dueDate,
+    };
+  }
+
+  private calculateDueDateForInterval(intervalMinutes: number, now: Date): string {
+    if (intervalMinutes < 1440) {
+      return new Date(now.getTime() + intervalMinutes * 60 * 1000).toISOString();
+    }
+    const nextDayStartsAt = this.settings.review.nextDayStartsAt;
+    const intervalDays = Math.ceil(intervalMinutes / 1440);
+    return this.getStudyDayStartAfterDays(now, intervalDays, nextDayStartsAt);
   }
 
 }

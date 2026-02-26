@@ -1,7 +1,7 @@
 import type { Database } from "sql.js";
 
 // Current Schema Version
-export const CURRENT_SCHEMA_VERSION = 9;
+export const CURRENT_SCHEMA_VERSION = 10;
 
 // SQL Table Creation Schema - Used when database file doesn't exist
 export const CREATE_TABLES_SQL = `
@@ -18,6 +18,8 @@ export const CREATE_TABLES_SQL = `
     review_cards_per_day INTEGER NOT NULL DEFAULT 100,
     header_level INTEGER NOT NULL DEFAULT 2,
     review_order TEXT NOT NULL DEFAULT 'due-date' CHECK (review_order IN ('due-date', 'random')),
+    learning_steps TEXT NOT NULL DEFAULT '1m',
+    relearning_steps TEXT NOT NULL DEFAULT '10m',
     fsrs_request_retention REAL NOT NULL DEFAULT 0.9,
     fsrs_profile TEXT NOT NULL DEFAULT 'STANDARD' CHECK (fsrs_profile IN ('INTENSIVE', 'STANDARD')),
     is_default INTEGER NOT NULL DEFAULT 0,
@@ -125,6 +127,7 @@ export const CREATE_TABLES_SQL = `
     has_new_cards_limit_enabled, new_cards_per_day,
     has_review_cards_limit_enabled, review_cards_per_day,
     header_level, review_order,
+    learning_steps, relearning_steps,
     fsrs_request_retention, fsrs_profile,
     is_default, created, modified
   ) VALUES (
@@ -133,6 +136,7 @@ export const CREATE_TABLES_SQL = `
     0, 20,
     0, 100,
     2, 'due-date',
+    '1m', '10m',
     0.9, 'STANDARD',
     1,
     datetime('now'),
@@ -183,6 +187,8 @@ function getColumnNames(db: Database, tableName: string): string[] {
 export function buildMigrationSQL(db: Database): string {
   const reviewLogsColumns = getColumnNames(db, "review_logs");
   const reviewLogsExists = reviewLogsColumns.length > 0;
+  const deckprofilesColumns = getColumnNames(db, "deckprofiles");
+  const needsLearningSteps = deckprofilesColumns.length > 0 && !deckprofilesColumns.includes("learning_steps");
 
   // Helper: pick current column, fall back to old renamed column, then default
   const col = (
@@ -250,6 +256,8 @@ export function buildMigrationSQL(db: Database): string {
       review_cards_per_day INTEGER NOT NULL DEFAULT 100,
       header_level INTEGER NOT NULL DEFAULT 2,
       review_order TEXT NOT NULL DEFAULT 'due-date' CHECK (review_order IN ('due-date', 'random')),
+      learning_steps TEXT NOT NULL DEFAULT '1m',
+      relearning_steps TEXT NOT NULL DEFAULT '10m',
       fsrs_request_retention REAL NOT NULL DEFAULT 0.9,
       fsrs_profile TEXT NOT NULL DEFAULT 'STANDARD' CHECK (fsrs_profile IN ('INTENSIVE', 'STANDARD')),
       is_default INTEGER NOT NULL DEFAULT 0,
@@ -257,11 +265,18 @@ export function buildMigrationSQL(db: Database): string {
       modified TEXT NOT NULL
     );
 
+    ${needsLearningSteps ? `
+    ALTER TABLE deckprofiles ADD COLUMN learning_steps TEXT NOT NULL DEFAULT '1m';
+    ALTER TABLE deckprofiles ADD COLUMN relearning_steps TEXT NOT NULL DEFAULT '10m';
+    UPDATE deckprofiles SET learning_steps = '1m' WHERE fsrs_profile = 'INTENSIVE';
+    ` : ""}
+
     INSERT OR IGNORE INTO deckprofiles (
       id, name,
       has_new_cards_limit_enabled, new_cards_per_day,
       has_review_cards_limit_enabled, review_cards_per_day,
       header_level, review_order,
+      learning_steps, relearning_steps,
       fsrs_request_retention, fsrs_profile,
       is_default, created, modified
     ) VALUES (
@@ -270,6 +285,7 @@ export function buildMigrationSQL(db: Database): string {
       0, 20,
       0, 100,
       2, 'due-date',
+      '1m', '10m',
       0.9, 'STANDARD',
       1,
       datetime('now'),
@@ -466,21 +482,44 @@ export const SQL_QUERIES = {
       has_new_cards_limit_enabled, new_cards_per_day,
       has_review_cards_limit_enabled, review_cards_per_day,
       header_level, review_order,
+      learning_steps, relearning_steps,
       fsrs_request_retention, fsrs_profile,
       is_default, created, modified
-    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
   `,
 
-  GET_PROFILE_BY_ID: `SELECT * FROM deckprofiles WHERE id = ?`,
+  GET_PROFILE_BY_ID: `
+    SELECT id, name, has_new_cards_limit_enabled, new_cards_per_day,
+      has_review_cards_limit_enabled, review_cards_per_day,
+      header_level, review_order, learning_steps, relearning_steps,
+      fsrs_request_retention, fsrs_profile, is_default, created, modified
+    FROM deckprofiles WHERE id = ?
+  `,
 
-  GET_PROFILE_BY_NAME: `SELECT * FROM deckprofiles WHERE name = ?`,
+  GET_PROFILE_BY_NAME: `
+    SELECT id, name, has_new_cards_limit_enabled, new_cards_per_day,
+      has_review_cards_limit_enabled, review_cards_per_day,
+      header_level, review_order, learning_steps, relearning_steps,
+      fsrs_request_retention, fsrs_profile, is_default, created, modified
+    FROM deckprofiles WHERE name = ?
+  `,
 
   GET_ALL_PROFILES: `
-    SELECT * FROM deckprofiles
+    SELECT id, name, has_new_cards_limit_enabled, new_cards_per_day,
+      has_review_cards_limit_enabled, review_cards_per_day,
+      header_level, review_order, learning_steps, relearning_steps,
+      fsrs_request_retention, fsrs_profile, is_default, created, modified
+    FROM deckprofiles
     ORDER BY CASE WHEN is_default = 1 THEN 0 ELSE 1 END, name
   `,
 
-  GET_DEFAULT_PROFILE: `SELECT * FROM deckprofiles WHERE is_default = 1 LIMIT 1`,
+  GET_DEFAULT_PROFILE: `
+    SELECT id, name, has_new_cards_limit_enabled, new_cards_per_day,
+      has_review_cards_limit_enabled, review_cards_per_day,
+      header_level, review_order, learning_steps, relearning_steps,
+      fsrs_request_retention, fsrs_profile, is_default, created, modified
+    FROM deckprofiles WHERE is_default = 1 LIMIT 1
+  `,
 
   UPDATE_PROFILE: `
     UPDATE deckprofiles SET
@@ -488,6 +527,7 @@ export const SQL_QUERIES = {
       has_new_cards_limit_enabled = ?, new_cards_per_day = ?,
       has_review_cards_limit_enabled = ?, review_cards_per_day = ?,
       header_level = ?, review_order = ?,
+      learning_steps = ?, relearning_steps = ?,
       fsrs_request_retention = ?, fsrs_profile = ?,
       modified = ?
     WHERE id = ?
