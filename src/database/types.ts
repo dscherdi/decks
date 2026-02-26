@@ -107,6 +107,7 @@ export interface Flashcard {
   sourceFile: string;
   contentHash: string; // Hash of back content only (front is used for ID)
   breadcrumb: string; // Header hierarchy context (e.g., "Chapter 1 > Section 2")
+  notes: string; // Optional notes from third table column
 
   state: FlashcardState;
   dueDate: string;

@@ -75,10 +75,12 @@
   }
 
   let showAnswer = false;
+  let showNotes = false;
   let isLoading = false;
   let reviewFinished = false;
   let frontEl: HTMLElement;
   let backEl: HTMLElement;
+  let notesEl: HTMLElement;
   let schedulingInfo: SchedulingPreview | null = null;
   let reviewedCount = 0;
   let cardStartTime = 0;
@@ -176,6 +178,7 @@
     if (!currentCard) return;
 
     showAnswer = false;
+    showNotes = false;
     try {
       schedulingInfo = await scheduler.preview(currentCard.id);
     } catch (error) {
@@ -209,6 +212,18 @@
         renderMarkdown(currentCard.back, backEl, deckFilePath);
       }
     });
+  }
+
+  function toggleNotes() {
+    showNotes = !showNotes;
+    if (showNotes) {
+      tick().then(() => {
+        if (notesEl && currentCard?.notes) {
+          notesEl.empty();
+          renderMarkdown(currentCard.notes, notesEl, deckFilePath);
+        }
+      });
+    }
   }
 
   async function handleReview(rating: RatingLabel) {
@@ -296,6 +311,9 @@
         } else if (event.key === "ArrowLeft") {
           event.preventDefault();
           handleBrowsePrevious();
+        } else if ((event.key === "n" || event.key === "N") && currentCard?.notes) {
+          event.preventDefault();
+          toggleNotes();
         }
       }
       return;
@@ -311,6 +329,12 @@
       // Update timing before handling review
       lastEventTime = now;
       lastEventType = eventType;
+
+      if ((event.key === "n" || event.key === "N") && currentCard?.notes) {
+        event.preventDefault();
+        toggleNotes();
+        return;
+      }
 
       switch (event.key) {
         case "1":
@@ -580,6 +604,23 @@
           {/if}
           <div class="decks-card-side decks-back" bind:this={backEl}></div>
         </div>
+        {#if currentCard?.notes}
+          <div class="decks-notes-section">
+            <button
+              class="decks-notes-toggle"
+              on:click={toggleNotes}
+              type="button"
+            >
+              <span>{showNotes ? "Hide notes" : "Show notes"}</span>
+              <span class="decks-shortcut">N</span>
+            </button>
+            {#if showNotes}
+              <div class="decks-notes-wrapper">
+                <div class="decks-card-side decks-notes" bind:this={notesEl}></div>
+              </div>
+            {/if}
+          </div>
+        {/if}
       </div>
     </div>
 
@@ -822,6 +863,47 @@
   .decks-card-side.decks-back {
     font-size: 16px;
     line-height: 1.6;
+  }
+
+  .decks-notes-section {
+    width: 100%;
+    max-width: 900px;
+    margin-top: 12px;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+  }
+
+  .decks-notes-toggle {
+    background: var(--background-secondary);
+    border: 1px solid var(--background-modifier-border);
+    border-radius: 6px;
+    padding: 6px 16px;
+    cursor: pointer;
+    color: var(--text-muted);
+    font-size: 13px;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    transition: all 0.15s ease;
+  }
+
+  .decks-notes-toggle:hover {
+    background: var(--background-modifier-hover);
+    color: var(--text-normal);
+  }
+
+  .decks-notes-wrapper {
+    width: 100%;
+    max-width: 900px;
+    margin-top: 8px;
+  }
+
+  .decks-card-side.decks-notes {
+    font-size: 14px;
+    line-height: 1.5;
+    color: var(--text-muted);
+    border-style: dashed;
   }
 
   .decks-go-to-file-button,

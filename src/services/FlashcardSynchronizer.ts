@@ -8,6 +8,7 @@ import { levenshteinSimilarity } from "../utils/string";
 export interface FlashcardUpdates {
   front: string;
   back: string;
+  notes: string;
   type: string;
   contentHash: string;
   breadcrumb: string;
@@ -43,6 +44,14 @@ export interface SyncData {
 export class FlashcardSynchronizer {
   constructor(private db: Database) {}
 
+  private ensureNotesColumn(): void {
+    try {
+      this.db.exec("ALTER TABLE flashcards ADD COLUMN notes TEXT NOT NULL DEFAULT ''");
+    } catch {
+      // Column already exists
+    }
+  }
+
   /**
    * Execute batch database operations using raw SQL
    */
@@ -53,7 +62,7 @@ export class FlashcardSynchronizer {
         const card = op.flashcard;
         const updateStmt = this.db.prepare(`
                     UPDATE flashcards
-                    SET id = ?, front = ?, back = ?, content_hash = ?, breadcrumb = ?, modified = datetime('now')
+                    SET id = ?, front = ?, back = ?, content_hash = ?, breadcrumb = ?, notes = ?, modified = datetime('now')
                     WHERE id = ?
                 `);
         updateStmt.run([
@@ -62,6 +71,7 @@ export class FlashcardSynchronizer {
           card.back,
           card.contentHash,
           card.breadcrumb || "",
+          card.notes || "",
           op.oldId,
         ]);
         updateStmt.free();
@@ -80,10 +90,10 @@ export class FlashcardSynchronizer {
         const card = op.flashcard;
         const stmt = this.db.prepare(`
                     INSERT OR IGNORE INTO flashcards (
-                        id, deck_id, front, back, type, source_file, content_hash, breadcrumb,
+                        id, deck_id, front, back, type, source_file, content_hash, breadcrumb, notes,
                         state, due_date, interval, repetitions, difficulty, stability,
                         lapses, last_reviewed, created, modified
-                    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, datetime('now'), datetime('now'))
+                    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, datetime('now'), datetime('now'))
                 `);
         stmt.run([
           card.id,
@@ -94,6 +104,7 @@ export class FlashcardSynchronizer {
           card.sourceFile,
           card.contentHash,
           card.breadcrumb || "",
+          card.notes || "",
           card.state,
           card.dueDate,
           card.interval,
@@ -107,7 +118,7 @@ export class FlashcardSynchronizer {
       } else if (op.type === "update" && op.flashcardId && op.updates) {
         const stmt = this.db.prepare(`
                     UPDATE flashcards
-                    SET front = ?, back = ?, type = ?, content_hash = ?, breadcrumb = ?, modified = datetime('now')
+                    SET front = ?, back = ?, type = ?, content_hash = ?, breadcrumb = ?, notes = ?, modified = datetime('now')
                     WHERE id = ?
                 `);
         stmt.run([
@@ -116,6 +127,7 @@ export class FlashcardSynchronizer {
           op.updates.type,
           op.updates.contentHash,
           op.updates.breadcrumb || "",
+          op.updates.notes || "",
           op.flashcardId,
         ]);
         stmt.free();
@@ -131,6 +143,8 @@ export class FlashcardSynchronizer {
     progressCallback?: (progress: number, message?: string) => void
   ): SyncResult {
     try {
+      this.ensureNotesColumn();
+
       // Parse flashcards from content
       progressCallback?.(10, "Parsing flashcards from file content...");
       const parsedCards = FlashcardParser.parseFlashcardsFromContent(
@@ -156,6 +170,7 @@ export class FlashcardSynchronizer {
           sourceFile: row.source_file as string,
           contentHash: row.content_hash as string,
           breadcrumb: (row.breadcrumb as string) || "",
+          notes: (row.notes as string) || "",
           state: row.state as "new" | "review",
           dueDate: row.due_date as string,
           interval: row.interval as number,
@@ -184,6 +199,7 @@ export class FlashcardSynchronizer {
         parsed: {
           front: string;
           back: string;
+          notes: string;
           type: "header-paragraph" | "table";
           breadcrumb: string;
         };
@@ -222,10 +238,11 @@ export class FlashcardSynchronizer {
         processedIds.add(flashcardId);
 
         if (existingCard) {
-          // Update if content or breadcrumb changed
+          // Update if content, breadcrumb, or notes changed
           if (
             existingCard.contentHash !== contentHash ||
-            existingCard.breadcrumb !== parsed.breadcrumb
+            existingCard.breadcrumb !== parsed.breadcrumb ||
+            existingCard.notes !== (parsed.notes || "")
           ) {
             batchOperations.push({
               type: "update",
@@ -233,6 +250,7 @@ export class FlashcardSynchronizer {
               updates: {
                 front: parsed.front,
                 back: parsed.back,
+                notes: parsed.notes || "",
                 type: parsed.type,
                 contentHash: contentHash,
                 breadcrumb: parsed.breadcrumb,
@@ -290,6 +308,7 @@ export class FlashcardSynchronizer {
                 deckId: data.deckId,
                 front: newCardData.parsed.front,
                 back: newCardData.parsed.back,
+                notes: newCardData.parsed.notes || "",
                 type: newCardData.parsed.type,
                 sourceFile: data.deckFilepath,
                 contentHash: newCardData.contentHash,
@@ -338,6 +357,7 @@ export class FlashcardSynchronizer {
           deckId: data.deckId,
           front: newCardData.parsed.front,
           back: newCardData.parsed.back,
+          notes: newCardData.parsed.notes || "",
           type: newCardData.parsed.type,
           sourceFile: data.deckFilepath,
           contentHash: newCardData.contentHash,

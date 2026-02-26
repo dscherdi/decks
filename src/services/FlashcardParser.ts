@@ -1,6 +1,7 @@
 export interface ParsedFlashcard {
   front: string;
   back: string;
+  notes: string;
   type: "header-paragraph" | "table";
   breadcrumb: string;
 }
@@ -13,7 +14,7 @@ export class FlashcardParser {
   // Pre-compiled regex patterns for better performance
   private static readonly HEADER_REGEX = /^(#{1,6})\s+/;
   private static readonly TABLE_ROW_REGEX = /^\|.*\|$/;
-  private static readonly TABLE_SEPARATOR_REGEX = /^\|[\s-]+\|[\s-]+\|$/;
+  private static readonly TABLE_SEPARATOR_REGEX = /^\|[\s-]+\|[\s-]+\|(?:[\s-]+\|)?$/;
 
   /**
    * Parse flashcards from content string (optimized single-pass parsing)
@@ -88,6 +89,7 @@ export class FlashcardParser {
             flashcards.push({
               front: cells[0],
               back: cells[1],
+              notes: cells.length >= 3 ? (cells[2] || "") : "",
               type: "table",
               breadcrumb,
             });
@@ -235,6 +237,7 @@ export class FlashcardParser {
       flashcards.push({
         front: currentHeader.text.replace(/^#{1,6}\s+/, ""),
         back: currentContent.join("\n").trim(),
+        notes: "",
         type: "header-paragraph",
         breadcrumb,
       });

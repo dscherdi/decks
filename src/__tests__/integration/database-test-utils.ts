@@ -162,6 +162,8 @@ export class DatabaseTestUtils {
       back: backText,
       sourceFile: "/test/flashcard.md",
       contentHash: this.generateContentHash(backText),
+      breadcrumb: "",
+      notes: "",
       state: "new",
       created: new Date().toISOString(),
       modified: new Date().toISOString(),

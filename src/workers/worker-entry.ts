@@ -250,13 +250,19 @@ class SimpleDatabaseWorker {
             type: "migrationComplete",
             success: true,
           });
-        } catch (error) {
+        } catch {
           try {
             this.db.exec("ROLLBACK");
           } catch {
             // Transaction may not be open
           }
           this.db.exec(CREATE_TABLES_SQL);
+          // Ensure notes column exists if pre-existing table was preserved by IF NOT EXISTS
+          try {
+            this.db.exec("ALTER TABLE flashcards ADD COLUMN notes TEXT NOT NULL DEFAULT ''");
+          } catch {
+            // Column already exists
+          }
           self.postMessage({
             type: "migrationComplete",
             success: true,
@@ -400,12 +406,20 @@ class SimpleDatabaseWorker {
         if (cardsResult.length > 0) {
           const columns = cardsResult[0].columns;
           const values = cardsResult[0].values;
-          const placeholders = columns.map(() => "?").join(",");
           const modIndex = columns.indexOf("modified");
           const idIndex = columns.indexOf("id");
+          const hasNotesColumn = columns.includes("notes");
+
+          // Handle schema mismatch: if remote lacks notes column, inject it
+          const stateIndex = columns.indexOf("state");
+          const effectiveColumns = hasNotesColumn
+            ? columns
+            : [...columns.slice(0, stateIndex), "notes", ...columns.slice(stateIndex)];
+          const columnList = effectiveColumns.join(",");
+          const placeholders = effectiveColumns.map(() => "?").join(",");
 
           const insertStmt = this.db.prepare(
-            `INSERT OR REPLACE INTO flashcards VALUES (${placeholders})`
+            `INSERT OR REPLACE INTO flashcards (${columnList}) VALUES (${placeholders})`
           );
 
           for (const row of values) {
@@ -421,7 +435,10 @@ class SimpleDatabaseWorker {
               : null;
 
             if (!localMod || remoteMod > localMod) {
-              insertStmt.run(row);
+              const effectiveRow = hasNotesColumn
+                ? row
+                : [...row.slice(0, stateIndex), "", ...row.slice(stateIndex)];
+              insertStmt.run(effectiveRow);
             }
           }
           insertStmt.free();

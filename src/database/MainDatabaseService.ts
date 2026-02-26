@@ -276,6 +276,12 @@ export class MainDatabaseService extends BaseDatabaseService {
         // Transaction may not be open
       }
       this.db.exec(CREATE_TABLES_SQL);
+      // Ensure notes column exists if pre-existing table was preserved by IF NOT EXISTS
+      try {
+        this.db.exec("ALTER TABLE flashcards ADD COLUMN notes TEXT NOT NULL DEFAULT ''");
+      } catch {
+        // Column already exists
+      }
       this.migrationNotice = "Database migration failed. A fresh database was created — please restore from a backup to recover your review history.";
     }
   }
@@ -439,12 +445,30 @@ export class MainDatabaseService extends BaseDatabaseService {
             `);
 
             // Merge Flashcards (REPLACE only if remote.modified > main.modified)
-            this.db.exec(`
-              INSERT OR REPLACE INTO flashcards
-              SELECT remote.* FROM remote.flashcards
-              LEFT JOIN flashcards AS main ON remote.id = main.id
-              WHERE main.id IS NULL OR remote.modified > main.modified
-            `);
+            // Use try/catch to handle schema mismatch when remote DB lacks the notes column
+            try {
+              this.db.exec(`
+                INSERT OR REPLACE INTO flashcards
+                SELECT remote.* FROM remote.flashcards
+                LEFT JOIN flashcards AS main ON remote.id = main.id
+                WHERE main.id IS NULL OR remote.modified > main.modified
+              `);
+            } catch {
+              // Remote DB has different schema (e.g., missing notes column) - use explicit columns
+              this.db.exec(`
+                INSERT OR REPLACE INTO flashcards
+                (id, deck_id, front, back, type, source_file, content_hash, breadcrumb, notes,
+                 state, due_date, interval, repetitions, difficulty, stability, lapses,
+                 last_reviewed, created, modified)
+                SELECT r.id, r.deck_id, r.front, r.back, r.type, r.source_file, r.content_hash,
+                  COALESCE(r.breadcrumb, ''), '',
+                  r.state, r.due_date, r.interval, r.repetitions, r.difficulty, r.stability, r.lapses,
+                  r.last_reviewed, r.created, r.modified
+                FROM remote.flashcards r
+                LEFT JOIN flashcards AS main ON r.id = main.id
+                WHERE main.id IS NULL OR r.modified > main.modified
+              `);
+            }
 
             // Merge Profiles (REPLACE only if remote.modified > main.modified)
             try {
@@ -577,6 +601,13 @@ export class MainDatabaseService extends BaseDatabaseService {
             if (remoteFlashcards.length > 0) {
               const cardData = remoteFlashcards[0];
               const modifiedIndex = cardData.columns.indexOf("modified");
+              const hasNotesColumn = cardData.columns.includes("notes");
+              const columnList = hasNotesColumn
+                ? cardData.columns.join(",")
+                : [...cardData.columns.slice(0, cardData.columns.indexOf("state")), "notes", ...cardData.columns.slice(cardData.columns.indexOf("state"))].join(",");
+              const placeholders = hasNotesColumn
+                ? cardData.columns.map(() => "?").join(",")
+                : [...cardData.columns.slice(0, cardData.columns.indexOf("state")).map(() => "?"), "?", ...cardData.columns.slice(cardData.columns.indexOf("state")).map(() => "?")].join(",");
 
               for (const row of cardData.values) {
                 const cardId = row[0]; // Assuming id is first column
@@ -592,11 +623,14 @@ export class MainDatabaseService extends BaseDatabaseService {
                     (remoteModified || 0);
 
                 if (shouldReplace) {
+                  const rowValues = hasNotesColumn
+                    ? row
+                    : [...row.slice(0, cardData.columns.indexOf("state")), "", ...row.slice(cardData.columns.indexOf("state"))];
                   const cardStmt = this.db.prepare(`
-                    INSERT OR REPLACE INTO flashcards
-                    VALUES (${cardData.columns.map(() => "?").join(",")})
+                    INSERT OR REPLACE INTO flashcards (${columnList})
+                    VALUES (${placeholders})
                   `);
-                  cardStmt.run(row);
+                  cardStmt.run(rowValues);
                   cardStmt.free();
                 }
               }

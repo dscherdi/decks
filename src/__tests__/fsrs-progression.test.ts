@@ -25,6 +25,8 @@ describe("FSRS Progression & Explosion Safety", () => {
     type: "header-paragraph",
     sourceFile: "test.md",
     contentHash: "hash",
+    breadcrumb: "",
+    notes: "",
     state: "new",
     dueDate: new Date().toISOString(),
     interval: 0,

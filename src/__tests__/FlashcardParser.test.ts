@@ -18,12 +18,14 @@ describe("FlashcardParser", () => {
       expect(result[0]).toEqual({
         front: "What is 2+2?",
         back: "4",
+        notes: "",
         type: "table",
         breadcrumb: "Study Topics",
       });
       expect(result[1]).toEqual({
         front: "Capital of France",
         back: "Paris",
+        notes: "",
         type: "table",
         breadcrumb: "Study Topics",
       });
@@ -46,12 +48,14 @@ React is a JavaScript library for building user interfaces.
       expect(result[0]).toEqual({
         front: "What is TypeScript?",
         back: "TypeScript is a typed superset of JavaScript that compiles to plain JavaScript.",
+        notes: "",
         type: "header-paragraph",
         breadcrumb: "",
       });
       expect(result[1]).toEqual({
         front: "What is React?",
         back: "React is a JavaScript library for building user interfaces.",
+        notes: "",
         type: "header-paragraph",
         breadcrumb: "",
       });
@@ -78,12 +82,14 @@ This content should be ignored since we're targeting H3.
       expect(result[0]).toEqual({
         front: "Question 1",
         back: "Answer 1",
+        notes: "",
         type: "header-paragraph",
         breadcrumb: "",
       });
       expect(result[1]).toEqual({
         front: "Question 2",
         back: "Answer 2",
+        notes: "",
         type: "header-paragraph",
         breadcrumb: "",
       });
@@ -113,9 +119,11 @@ Cascading Style Sheets for styling web pages.
         "| What is HTML? | HyperText Markup Language |"
       );
       expect(result[0].type).toBe("header-paragraph");
+      expect(result[0].notes).toBe("");
       expect(result[1]).toEqual({
         front: "What is CSS?",
         back: "Cascading Style Sheets for styling web pages.",
+        notes: "",
         type: "header-paragraph",
         breadcrumb: "",
       });
@@ -138,6 +146,7 @@ Answer
       expect(result[0]).toEqual({
         front: "Question",
         back: "Answer",
+        notes: "",
         type: "header-paragraph",
         breadcrumb: "",
       });
@@ -160,6 +169,7 @@ Real answer.
       expect(result[0]).toEqual({
         front: "Real Question",
         back: "Real answer.",
+        notes: "",
         type: "header-paragraph",
         breadcrumb: "Flashcards Section",
       });
@@ -200,6 +210,7 @@ Some more content here.
       expect(result[0]).toEqual({
         front: "Complete question",
         back: "Complete answer",
+        notes: "",
         type: "table",
         breadcrumb: "Test Table",
       });
@@ -227,6 +238,7 @@ Key features:
       expect(result[0].back).toContain("Key features:");
       expect(result[0].back).toContain("- Event-driven");
       expect(result[0].type).toBe("header-paragraph");
+      expect(result[0].notes).toBe("");
     });
 
     it("should trim whitespace from table cells", () => {
@@ -244,6 +256,7 @@ Key features:
       expect(result[0]).toEqual({
         front: "Whitespace question",
         back: "Whitespace answer",
+        notes: "",
         type: "table",
         breadcrumb: "Whitespace Test",
       });
@@ -321,12 +334,14 @@ Some regular content here.
       expect(h2Result[0]).toEqual({
         front: "What is 2+2?",
         back: "4",
+        notes: "",
         type: "table",
         breadcrumb: "Main Title > Level 2 Header",
       });
       expect(h2Result[1]).toEqual({
         front: "What is 3+3?",
         back: "6",
+        notes: "",
         type: "table",
         breadcrumb: "Main Title > Level 2 Header",
       });
@@ -337,6 +352,7 @@ Some regular content here.
       expect(h3Result[0]).toEqual({
         front: "What is 5+5?",
         back: "10",
+        notes: "",
         type: "table",
         breadcrumb: "Main Title > Level 2 Header > Level 3 Header",
       });
@@ -353,6 +369,7 @@ Some regular content here.
         "| This should be ignored | Because it's under H4 |"
       );
       expect(h4Result[0].type).toBe("header-paragraph");
+      expect(h4Result[0].notes).toBe("");
 
       // Test with headerLevel 1 - should parse no flashcards
       const h1Result = FlashcardParser.parseFlashcardsFromContent(content, 1);
@@ -386,12 +403,14 @@ Some paragraph content here.
       expect(result[0]).toEqual({
         front: "What is 5+5?",
         back: "10",
+        notes: "",
         type: "table",
         breadcrumb: "Pure Table Header",
       });
       expect(result[1]).toEqual({
         front: "What is 6+6?",
         back: "12",
+        notes: "",
         type: "table",
         breadcrumb: "Pure Table Header",
       });
@@ -401,7 +420,152 @@ Some paragraph content here.
       expect(result[2].back).toContain("Some paragraph content here.");
       expect(result[2].back).toContain("| What is 7+7? | 14 |");
       expect(result[2].type).toBe("header-paragraph");
+      expect(result[2].notes).toBe("");
       expect(result[2].breadcrumb).toBe("");
+    });
+  });
+
+  describe("three-column table parsing", () => {
+    it("should parse 3-column table with notes", () => {
+      const content = `
+## Study Topics
+
+| Front | Back | Notes |
+|-------|------|-------|
+| What is 2+2? | 4 | Basic arithmetic |
+| Capital of France | Paris | European geography |
+      `;
+
+      const result = FlashcardParser.parseFlashcardsFromContent(content);
+
+      expect(result).toHaveLength(2);
+      expect(result[0]).toEqual({
+        front: "What is 2+2?",
+        back: "4",
+        notes: "Basic arithmetic",
+        type: "table",
+        breadcrumb: "Study Topics",
+      });
+      expect(result[1]).toEqual({
+        front: "Capital of France",
+        back: "Paris",
+        notes: "European geography",
+        type: "table",
+        breadcrumb: "Study Topics",
+      });
+    });
+
+    it("should handle 3-column table with empty notes cells", () => {
+      const content = `
+## Test
+
+| Front | Back | Notes |
+|-------|------|-------|
+| Q1 | A1 |  |
+| Q2 | A2 | Some note |
+      `;
+
+      const result = FlashcardParser.parseFlashcardsFromContent(content);
+
+      expect(result).toHaveLength(2);
+      expect(result[0].notes).toBe("");
+      expect(result[1].notes).toBe("Some note");
+    });
+
+    it("should handle mixed 2-column and 3-column tables in same file", () => {
+      const content = `
+## Two Columns
+
+| Front | Back |
+|-------|------|
+| Q1 | A1 |
+
+## Three Columns
+
+| Front | Back | Notes |
+|-------|------|-------|
+| Q2 | A2 | Note here |
+      `;
+
+      const result = FlashcardParser.parseFlashcardsFromContent(content);
+
+      expect(result).toHaveLength(2);
+      expect(result[0]).toEqual({
+        front: "Q1",
+        back: "A1",
+        notes: "",
+        type: "table",
+        breadcrumb: "Two Columns",
+      });
+      expect(result[1]).toEqual({
+        front: "Q2",
+        back: "A2",
+        notes: "Note here",
+        type: "table",
+        breadcrumb: "Three Columns",
+      });
+    });
+
+    it("should return empty notes for header-paragraph flashcards", () => {
+      const content = `
+## Question
+
+Answer content here.
+      `;
+
+      const result = FlashcardParser.parseFlashcardsFromContent(content);
+
+      expect(result).toHaveLength(1);
+      expect(result[0].notes).toBe("");
+      expect(result[0].type).toBe("header-paragraph");
+    });
+
+    it("should parse 3-column table with rich markdown content in notes", () => {
+      const content = `
+## Math Concepts
+
+| Concept | Definition | Proof Sketch |
+|---------|-----------|-------------|
+| Vektorraum | Eine Menge $V$ über einem Körper | **Beispiele:** $\\mathbb{K}^n$ |
+      `;
+
+      const result = FlashcardParser.parseFlashcardsFromContent(content);
+
+      expect(result).toHaveLength(1);
+      expect(result[0].front).toBe("Vektorraum");
+      expect(result[0].back).toBe("Eine Menge $V$ über einem Körper");
+      expect(result[0].notes).toBe("**Beispiele:** $\\mathbb{K}^n$");
+      expect(result[0].type).toBe("table");
+    });
+
+    it("should handle 3-column separator with varying dash lengths", () => {
+      const content = `
+## Test
+
+| Front | Back | Notes |
+| --- | --- | --- |
+| Q1 | A1 | N1 |
+      `;
+
+      const result = FlashcardParser.parseFlashcardsFromContent(content);
+
+      expect(result).toHaveLength(1);
+      expect(result[0].notes).toBe("N1");
+    });
+
+    it("should trim whitespace from notes cells", () => {
+      const content = `
+## Test
+
+| Front | Back | Notes |
+|-------|------|-------|
+|   Q1   |   A1   |   Note with spaces   |
+      `;
+
+      const result = FlashcardParser.parseFlashcardsFromContent(content);
+
+      expect(result).toHaveLength(1);
+      expect(result[0].notes).toBe("Note with spaces");
     });
   });
 

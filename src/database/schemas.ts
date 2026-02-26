@@ -1,7 +1,7 @@
 import type { Database } from "sql.js";
 
 // Current Schema Version
-export const CURRENT_SCHEMA_VERSION = 9;
+export const CURRENT_SCHEMA_VERSION = 10;
 
 // SQL Table Creation Schema - Used when database file doesn't exist
 export const CREATE_TABLES_SQL = `
@@ -56,6 +56,7 @@ export const CREATE_TABLES_SQL = `
     source_file TEXT NOT NULL,
     content_hash TEXT NOT NULL,
     breadcrumb TEXT NOT NULL DEFAULT '',
+    notes TEXT NOT NULL DEFAULT '',
 
     state TEXT NOT NULL CHECK (state IN ('new', 'review')),
     due_date TEXT NOT NULL,
@@ -379,6 +380,7 @@ export function buildMigrationSQL(db: Database): string {
       source_file TEXT NOT NULL,
       content_hash TEXT NOT NULL,
       breadcrumb TEXT NOT NULL DEFAULT '',
+      notes TEXT NOT NULL DEFAULT '',
       state TEXT NOT NULL CHECK (state IN ('new', 'review')),
       due_date TEXT NOT NULL,
       interval REAL NOT NULL,
@@ -536,10 +538,10 @@ export const SQL_QUERIES = {
   // Flashcard operations
   INSERT_FLASHCARD: `
     INSERT OR REPLACE INTO flashcards (
-      id, deck_id, front, back, type, source_file, content_hash, breadcrumb,
+      id, deck_id, front, back, type, source_file, content_hash, breadcrumb, notes,
       state, due_date, interval, repetitions,
       difficulty, stability, lapses, last_reviewed, created, modified
-    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
   `,
 
   DELETE_FLASHCARD: `DELETE FROM flashcards WHERE id = ?`,
