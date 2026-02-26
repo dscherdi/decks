@@ -15,6 +15,9 @@ export interface DeckProfile {
 
   reviewOrder: ReviewOrder;
 
+  learningSteps: string;
+  relearningSteps: string;
+
   fsrs: {
     requestRetention: number;
     profile: "INTENSIVE" | "STANDARD";
@@ -35,6 +38,8 @@ export const DEFAULT_DECK_PROFILE: Omit<DeckProfile, 'id' | 'created' | 'modifie
   reviewCardsPerDay: 100,
   headerLevel: 2,
   reviewOrder: "due-date",
+  learningSteps: "1m",
+  relearningSteps: "10m",
   fsrs: {
     requestRetention: DEFAULT_FSRS_PARAMETERS.requestRetention,
     profile: "STANDARD",

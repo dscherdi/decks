@@ -27,6 +27,8 @@ function createMockDeckWithProfile(
     reviewCardsPerDay: 100,
     headerLevel: 2,
     reviewOrder: "due-date",
+    learningSteps: "1m",
+    relearningSteps: "10m",
     fsrs: {
       requestRetention: 0.9,
       profile: "STANDARD",
