@@ -71,6 +71,26 @@ tags: [flashcards/vocabulary]
 - Tables need to be inside a header with header level specified in the settings to be parsed.
 - There should not be any other paragraphs in the header together with the table, because then it will be parsed as a Header+Paragraph Block
 
+#### Optional notes column
+
+You can add a third column for notes that provide extra context, hints, or mnemonics. Notes are shown during review via a toggle button on the back of the card.
+
+```markdown
+## Spanish vocabulary
+
+| Front               | Back        | Notes                                        |
+| -------------------- | ----------- | -------------------------------------------- |
+| Hola                 | Hello       | Informal greeting, used with friends         |
+| Buenos días          | Good morning| Literally "good days", used until noon       |
+| Gracias              | Thank you   | Add "muchas" for "thank you very much"       |
+| ¿Cómo estás?         | How are you?|                                              |
+```
+
+- The notes column is optional — tables without it work the same as before
+- Empty notes cells are allowed
+- During review, a small info icon appears on the back card when notes are available
+- Press **N** to toggle notes visibility
+
 ### Tips
 
 - **Use descriptive tags**: `#flashcards/spanish-verbs` instead of `#flashcards/deck1`
