@@ -121,14 +121,22 @@ export class AnkiExportModal extends Modal {
     config: AnkiExportConfig
   ): string {
     // Create Anki-compatible format with configurable separators
-    const headers = ["Front", "Back"];
+    const hasNotes = flashcards.some(
+      (card) => card.notes && card.notes.trim() !== ""
+    );
+    const headers = hasNotes
+      ? ["Front", "Back", "Notes"]
+      : ["Front", "Back"];
     const rows = [headers.join(config.separator)];
 
     flashcards.forEach((card) => {
       const front = this.sanitizeForAnki(card.front, config.separator);
       const back = this.sanitizeForAnki(card.back, config.separator);
-
-      rows.push([front, back].join(config.separator));
+      const fields = [front, back];
+      if (hasNotes) {
+        fields.push(this.sanitizeForAnki(card.notes || "", config.separator));
+      }
+      rows.push(fields.join(config.separator));
     });
 
     return rows.join("\n");

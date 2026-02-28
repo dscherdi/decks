@@ -256,13 +256,9 @@ class SimpleDatabaseWorker {
           } catch {
             // Transaction may not be open
           }
+          this.db.exec("DROP TABLE IF EXISTS flashcards");
+          this.db.exec("DROP TABLE IF EXISTS decks");
           this.db.exec(CREATE_TABLES_SQL);
-          // Ensure notes column exists if pre-existing table was preserved by IF NOT EXISTS
-          try {
-            this.db.exec("ALTER TABLE flashcards ADD COLUMN notes TEXT NOT NULL DEFAULT ''");
-          } catch {
-            // Column already exists
-          }
           self.postMessage({
             type: "migrationComplete",
             success: true,
@@ -450,12 +446,20 @@ class SimpleDatabaseWorker {
           if (profilesResult.length > 0) {
             const columns = profilesResult[0].columns;
             const values = profilesResult[0].values;
-            const placeholders = columns.map(() => "?").join(",");
             const modIndex = columns.indexOf("modified");
             const idIndex = columns.indexOf("id");
+            const hasLearningStepsColumn = columns.includes("learning_steps");
+
+            // Handle schema mismatch: if remote lacks learning_steps columns, inject them
+            const reviewOrderIndex = columns.indexOf("review_order");
+            const effectiveColumns = hasLearningStepsColumn
+              ? columns
+              : [...columns.slice(0, reviewOrderIndex + 1), "learning_steps", "relearning_steps", ...columns.slice(reviewOrderIndex + 1)];
+            const columnList = effectiveColumns.join(",");
+            const placeholders = effectiveColumns.map(() => "?").join(",");
 
             const insertStmt = this.db.prepare(
-              `INSERT OR REPLACE INTO deckprofiles VALUES (${placeholders})`
+              `INSERT OR REPLACE INTO deckprofiles (${columnList}) VALUES (${placeholders})`
             );
 
             for (const row of values) {
@@ -471,7 +475,10 @@ class SimpleDatabaseWorker {
                 : null;
 
               if (!localMod || remoteMod > localMod) {
-                insertStmt.run(row);
+                const effectiveRow = hasLearningStepsColumn
+                  ? row
+                  : [...row.slice(0, reviewOrderIndex + 1), "1m", "10m", ...row.slice(reviewOrderIndex + 1)];
+                insertStmt.run(effectiveRow);
               }
             }
             insertStmt.free();

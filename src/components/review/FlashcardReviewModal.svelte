@@ -603,22 +603,25 @@
             </button>
           {/if}
           <div class="decks-card-side decks-back" bind:this={backEl}></div>
-        </div>
-        {#if currentCard?.notes}
-          <div class="decks-notes-section">
+          {#if currentCard?.notes}
             <button
-              class="decks-notes-toggle"
+              class="decks-notes-button"
+              class:decks-notes-active={showNotes}
               on:click={toggleNotes}
+              title="Toggle notes (N)"
               type="button"
             >
-              <span>{showNotes ? "Hide notes" : "Show notes"}</span>
-              <span class="decks-shortcut">N</span>
+              <svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                <circle cx="12" cy="12" r="10"></circle>
+                <line x1="12" y1="16" x2="12" y2="12"></line>
+                <line x1="12" y1="8" x2="12.01" y2="8"></line>
+              </svg>
             </button>
-            {#if showNotes}
-              <div class="decks-notes-wrapper">
-                <div class="decks-card-side decks-notes" bind:this={notesEl}></div>
-              </div>
-            {/if}
+          {/if}
+        </div>
+        {#if showNotes && currentCard?.notes}
+          <div class="decks-notes-wrapper">
+            <div class="decks-card-side decks-notes" bind:this={notesEl}></div>
           </div>
         {/if}
       </div>
@@ -865,32 +868,40 @@
     line-height: 1.6;
   }
 
-  .decks-notes-section {
-    width: 100%;
-    max-width: 900px;
-    margin-top: 12px;
-    display: flex;
-    flex-direction: column;
-    align-items: center;
-  }
-
-  .decks-notes-toggle {
+  .decks-notes-button {
+    position: absolute;
+    bottom: 4px;
+    right: 4px;
     background: var(--background-secondary);
     border: 1px solid var(--background-modifier-border);
-    border-radius: 6px;
-    padding: 6px 16px;
+    border-radius: 3px;
+    padding: 3px;
     cursor: pointer;
     color: var(--text-muted);
-    font-size: 13px;
     display: flex;
     align-items: center;
-    gap: 8px;
+    justify-content: center;
     transition: all 0.15s ease;
+    z-index: 10;
+    min-height: unset !important;
+    min-width: unset !important;
+    height: auto;
+    width: auto;
   }
 
-  .decks-notes-toggle:hover {
+  .decks-notes-button:hover {
     background: var(--background-modifier-hover);
     color: var(--text-normal);
+    border-color: var(--interactive-accent);
+  }
+
+  .decks-notes-button:active {
+    transform: scale(0.95);
+  }
+
+  .decks-notes-button.decks-notes-active {
+    color: var(--interactive-accent);
+    border-color: var(--interactive-accent);
   }
 
   .decks-notes-wrapper {

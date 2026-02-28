@@ -275,13 +275,9 @@ export class MainDatabaseService extends BaseDatabaseService {
       } catch {
         // Transaction may not be open
       }
+      this.db.exec("DROP TABLE IF EXISTS flashcards");
+      this.db.exec("DROP TABLE IF EXISTS decks");
       this.db.exec(CREATE_TABLES_SQL);
-      // Ensure notes column exists if pre-existing table was preserved by IF NOT EXISTS
-      try {
-        this.db.exec("ALTER TABLE flashcards ADD COLUMN notes TEXT NOT NULL DEFAULT ''");
-      } catch {
-        // Column already exists
-      }
       this.migrationNotice = "Database migration failed. A fresh database was created — please restore from a backup to recover your review history.";
     }
   }
@@ -479,7 +475,25 @@ export class MainDatabaseService extends BaseDatabaseService {
                 WHERE main.id IS NULL OR remote.modified > main.modified
               `);
             } catch {
-              this.debugLog("Remote DB has no deckprofiles table, skipping");
+              // Remote DB has different schema (e.g., missing learning_steps) - use explicit columns
+              try {
+                this.db.exec(`
+                  INSERT OR REPLACE INTO deckprofiles
+                  (id, name, has_new_cards_limit_enabled, new_cards_per_day,
+                   has_review_cards_limit_enabled, review_cards_per_day,
+                   header_level, review_order, learning_steps, relearning_steps,
+                   fsrs_request_retention, fsrs_profile, is_default, created, modified)
+                  SELECT r.id, r.name, r.has_new_cards_limit_enabled, r.new_cards_per_day,
+                    r.has_review_cards_limit_enabled, r.review_cards_per_day,
+                    r.header_level, r.review_order, '1m', '10m',
+                    r.fsrs_request_retention, r.fsrs_profile, r.is_default, r.created, r.modified
+                  FROM remote.deckprofiles r
+                  LEFT JOIN deckprofiles AS main ON r.id = main.id
+                  WHERE main.id IS NULL OR r.modified > main.modified
+                `);
+              } catch {
+                this.debugLog("Remote DB has no deckprofiles table, skipping");
+              }
             }
 
             // Merge Profile Tag Mappings (INSERT OR IGNORE - first mapping wins)

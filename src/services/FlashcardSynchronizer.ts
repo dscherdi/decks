@@ -44,14 +44,6 @@ export interface SyncData {
 export class FlashcardSynchronizer {
   constructor(private db: Database) {}
 
-  private ensureNotesColumn(): void {
-    try {
-      this.db.exec("ALTER TABLE flashcards ADD COLUMN notes TEXT NOT NULL DEFAULT ''");
-    } catch {
-      // Column already exists
-    }
-  }
-
   /**
    * Execute batch database operations using raw SQL
    */
@@ -143,8 +135,6 @@ export class FlashcardSynchronizer {
     progressCallback?: (progress: number, message?: string) => void
   ): SyncResult {
     try {
-      this.ensureNotesColumn();
-
       // Parse flashcards from content
       progressCallback?.(10, "Parsing flashcards from file content...");
       const parsedCards = FlashcardParser.parseFlashcardsFromContent(
