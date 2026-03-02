@@ -25,6 +25,7 @@ import { type DecksSettings, DEFAULT_SETTINGS } from "./settings";
 import { DecksSettingTab } from "./components/settings/SettingsTab";
 
 import { DecksView } from "./components/DecksView";
+import { DecksViewModal } from "./components/DecksViewModal";
 
 export const VIEW_TYPE_DECKS = "decks-view";
 
@@ -195,8 +196,18 @@ export default class DecksPlugin extends Plugin {
       );
 
       // Add ribbon icon
-      this.addRibbonIcon("brain", "Flashcards", () => {
-        void this.activateView();
+      this.addRibbonIcon("brain", "Decks", () => {
+        new DecksViewModal(
+          this.app,
+          this.db,
+          this.deckSynchronizer,
+          this.deckManager,
+          this.scheduler,
+          this.statisticsService,
+          this.settings,
+          this.logger,
+          () => this.getDecksView()
+        ).open();
       });
 
       // Add command to show flashcards panel
@@ -205,6 +216,25 @@ export default class DecksPlugin extends Plugin {
         name: "Show flashcards panel",
         callback: () => {
           void this.activateView();
+        },
+      });
+
+      // Add command to open decks modal
+      this.addCommand({
+        id: "open-review-modal",
+        name: "Open review modal",
+        callback: () => {
+          new DecksViewModal(
+            this.app,
+            this.db,
+            this.deckSynchronizer,
+            this.deckManager,
+            this.scheduler,
+            this.statisticsService,
+            this.settings,
+            this.logger,
+            () => this.getDecksView()
+          ).open();
         },
       });
 

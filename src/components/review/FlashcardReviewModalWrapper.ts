@@ -24,6 +24,7 @@ export class FlashcardReviewModalWrapper extends Modal {
   private component: FlashcardReviewComponent | null = null;
   private markdownComponents: Component[] = [];
   private resizeHandler?: () => void;
+  public navigatedToSource = false;
 
   private renderMarkdown(content: string, el: HTMLElement): void {
     try {
@@ -130,6 +131,7 @@ export class FlashcardReviewModalWrapper extends Modal {
     await leaf.openFile(file, { eState: { line: lineNumber } });
     this.app.workspace.setActiveLeaf(leaf, { focus: true });
 
+    this.navigatedToSource = true;
     this.close();
 
     // Use setEphemeralState for reliable line scrolling
