@@ -463,6 +463,12 @@
   padding: 0;
 }
 
+@media (max-width: 768px) {
+  .decks-decks-view-container .decks-panel-header {
+    justify-content: center !important;
+  }
+}
+
 .decks-statistics-modal .modal {
   width: 100%;
   max-width: 85vw;
