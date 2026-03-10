@@ -318,7 +318,21 @@ export default class DecksPlugin extends Plugin {
       (loadedData || {}) as Record<string, unknown>
     ) as unknown as DecksSettings;
 
-    // Deep merge ensures all properties have valid defaults
+    // Migration: existing users upgrading from before deckTag was configurable
+    // should keep #flashcards, not get the new default #decks
+    if (loadedData && typeof loadedData === "object") {
+      const rawParsing = (loadedData as Record<string, unknown>).parsing;
+      if (
+        !rawParsing ||
+        typeof rawParsing !== "object" ||
+        !Object.prototype.hasOwnProperty.call(
+          rawParsing as Record<string, unknown>,
+          "deckTag"
+        )
+      ) {
+        this.settings.parsing.deckTag = "#flashcards";
+      }
+    }
   }
 
   async saveSettings() {
@@ -368,8 +382,9 @@ export default class DecksPlugin extends Plugin {
     // Get all tags using Obsidian's API (includes inline and frontmatter tags)
     const allTags = getAllTags(metadata) || [];
 
+    const baseTag = this.settings.parsing.deckTag;
     const hasFlashcardsTag = allTags.some((tag) =>
-      tag.startsWith("#flashcards")
+      tag.startsWith(baseTag)
     );
 
     this.logger.debug(
@@ -383,7 +398,7 @@ export default class DecksPlugin extends Plugin {
       if (existingDeck) {
         // Update deck tag if it changed
         const newTag =
-          allTags.find((tag) => tag.startsWith("#flashcards")) || "#flashcards";
+          allTags.find((tag) => tag.startsWith(baseTag)) || baseTag;
         if (existingDeck.tag !== newTag) {
           this.logger.debug(
             `Updating deck tag from ${existingDeck.tag} to ${newTag}`
@@ -400,7 +415,7 @@ export default class DecksPlugin extends Plugin {
       } else {
         // New file with flashcards tag - create deck for this file only
         const newTag =
-          allTags.find((tag) => tag.startsWith("#flashcards")) || "#flashcards";
+          allTags.find((tag) => tag.startsWith(baseTag)) || baseTag;
         await this.deckSynchronizer.createDeckForFile(file.path, newTag);
         await yieldToUI();
 

@@ -103,6 +103,7 @@ export class DecksViewModal extends Modal {
         openProfilesManagerModal: () => this.openProfilesManagerModal(),
         openDeckConfigModal: (deck: DeckWithProfile) =>
           this.openDeckConfigModal(deck),
+        deckTag: this.settings.parsing.deckTag,
       },
     }) as DeckListPanelComponent;
 

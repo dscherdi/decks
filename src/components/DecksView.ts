@@ -91,6 +91,7 @@ export class DecksView extends ItemView {
         openStatisticsModal: () => this.openStatisticsModal(),
         openProfilesManagerModal: () => this.openProfilesManagerModal(),
         openDeckConfigModal: (deck: DeckWithProfile) => this.openDeckConfigModal(deck),
+        deckTag: this.settings.parsing.deckTag,
       },
     }) as DeckListPanelComponent;
 

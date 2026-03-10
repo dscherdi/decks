@@ -54,6 +54,7 @@
   export let openStatisticsModal: () => void;
   export let openProfilesManagerModal: () => void;
   export let openDeckConfigModal: (deck: DeckWithProfile) => void;
+  export let deckTag = "#decks";
 
   const getReviewCounts = async (days: number) => {
     if (!statisticsService) {
@@ -775,7 +776,7 @@
         <input
           type="text"
           class="decks-filter-input"
-          placeholder="Filter by name or tag... (e.g., 'spanish', '#flashcards')"
+          placeholder={`Filter by name or tag... (e.g., 'spanish', '${deckTag}')`}
           bind:value={filterText}
           on:input={handleFilterInput}
           on:focus={handleFilterFocus}
@@ -823,7 +824,7 @@
       <div class="decks-empty-state">
         <p>No decks found.</p>
         <p class="decks-help-text">
-          Tag your notes with #flashcards to create decks.
+          Tag your notes with {deckTag} to create decks.
         </p>
       </div>
     {:else if decks.length === 0}

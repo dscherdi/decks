@@ -10,6 +10,7 @@ export interface DecksSettings {
   // Parsing Settings
   parsing: {
     folderSearchPath: string; // Folder path to scan for flashcard files, empty means scan entire vault
+    deckTag: string; // Base tag used to identify flashcard decks (e.g., "#decks", "#flashcards")
   };
 
   // UI Settings
@@ -47,6 +48,7 @@ export const DEFAULT_SETTINGS: DecksSettings = {
 
   parsing: {
     folderSearchPath: "", // Default: scan entire vault
+    deckTag: "#decks",
   },
 
   ui: {

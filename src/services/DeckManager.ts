@@ -63,7 +63,7 @@ export class DeckManager {
   }
 
   /**
-   * Scan vault for all decks (files with #flashcards tags)
+   * Scan vault for all decks (files with the configured deck tag)
    */
   scanVaultForDecks(): Map<string, TFile[]> {
     const decksMap = new Map<string, TFile[]>();
@@ -91,9 +91,9 @@ export class DeckManager {
         continue;
       }
 
-      // Look for #flashcards tags
+      const baseTag = this.settings?.parsing.deckTag || "#decks";
       const flashcardTags = allTags.filter((tag) =>
-        tag.startsWith("#flashcards")
+        tag.startsWith(baseTag)
       );
       this.debugLog(`All tags for ${file.path}:`, allTags);
       this.debugLog(`Flashcard tags for ${file.path}:`, flashcardTags);

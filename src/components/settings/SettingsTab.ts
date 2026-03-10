@@ -147,8 +147,52 @@ export class DecksSettingTab extends PluginSettingTab {
       );
   }
 
+  private isValidDeckTag(tag: string): boolean {
+    return /^#[a-z0-9][a-z0-9_-]*$/.test(tag);
+  }
+
+  private async migrateTagMappings(oldTag: string, newTag: string): Promise<void> {
+    const mappings = await this.db.getAllTagMappings();
+    for (const mapping of mappings) {
+      if (mapping.tag === oldTag || mapping.tag.startsWith(oldTag + "/")) {
+        const migratedTag = newTag + mapping.tag.slice(oldTag.length);
+        await this.db.deleteTagMapping(mapping.id);
+        await this.db.createTagMapping(mapping.profileId, migratedTag);
+      }
+    }
+    await this.db.save();
+  }
+
   private addParsingSettings(containerEl: HTMLElement): void {
     new Setting(containerEl).setName("Parsing").setHeading();
+
+    let previousTag = this.settings.parsing.deckTag;
+
+    new Setting(containerEl)
+      .setName("Deck tag")
+      .setDesc(
+        "Base tag used to identify flashcard decks. Files tagged with this " +
+          "(or sub-tags like " +
+          this.settings.parsing.deckTag +
+          "/math) will be treated as decks. " +
+          "The default tag has been renamed from #flashcards to #decks. " +
+          "If you were using #flashcards, it will continue to work until you change it here."
+      )
+      .addText((text) =>
+        text
+          .setPlaceholder("#decks")
+          .setValue(this.settings.parsing.deckTag)
+          .onChange(async (value) => {
+            const trimmed = value.trim().toLowerCase();
+            if (this.isValidDeckTag(trimmed) && trimmed !== previousTag) {
+              const oldTag = previousTag;
+              this.settings.parsing.deckTag = trimmed;
+              previousTag = trimmed;
+              await this.saveSettings();
+              await this.migrateTagMappings(oldTag, trimmed);
+            }
+          })
+      );
 
     // Get all folders for dropdown options
     const folderOptions: Record<string, string> = {
