@@ -22,11 +22,11 @@ If you like this plugin, consider buying me a coffee and I will add more feature
 
 ### Header + paragraph format
 
-Create a markdown file and tag it with `#flashcards`:
+Create a markdown file and tag it with `#decks` or a custom tag set in the settings:
 
 ```markdown
 ---
-tags: [flashcards/spanish-basics]
+tags: [decks/spanish-basics]
 ---
 
 # What does "Hola" mean in English?
@@ -53,7 +53,7 @@ Create flashcards using a two-column table:
 
 ```markdown
 ---
-tags: [flashcards/vocabulary]
+tags: [decks/vocabulary]
 ---
 
 ## Concepts
@@ -78,12 +78,12 @@ You can add a third column for notes that provide extra context, hints, or mnemo
 ```markdown
 ## Spanish vocabulary
 
-| Front               | Back        | Notes                                        |
-| -------------------- | ----------- | -------------------------------------------- |
-| Hola                 | Hello       | Informal greeting, used with friends         |
-| Buenos días          | Good morning| Literally "good days", used until noon       |
-| Gracias              | Thank you   | Add "muchas" for "thank you very much"       |
-| ¿Cómo estás?         | How are you?|                                              |
+| Front        | Back         | Notes                                  |
+| ------------ | ------------ | -------------------------------------- |
+| Hola         | Hello        | Informal greeting, used with friends   |
+| Buenos días  | Good morning | Literally "good days", used until noon |
+| Gracias      | Thank you    | Add "muchas" for "thank you very much" |
+| ¿Cómo estás? | How are you? |                                        |
 ```
 
 - The notes column is optional — tables without it work the same as before
@@ -93,7 +93,7 @@ You can add a third column for notes that provide extra context, hints, or mnemo
 
 ### Tips
 
-- **Use descriptive tags**: `#flashcards/spanish-verbs` instead of `#flashcards/deck1`
+- **Use descriptive tags**: `#decks/spanish-verbs` instead of `#decks/deck1`
 - **Keep cards atomic**: One concept per card
 - **Use images and formatting**: Markdown formatting is fully supported
 - **Organize by topic**: Group related concepts in the same deck
