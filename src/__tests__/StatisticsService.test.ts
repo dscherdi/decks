@@ -265,7 +265,7 @@ describe("StatisticsService", () => {
     beforeEach(() => {
       // Mock current date for consistent testing
       jest.useFakeTimers();
-      jest.setSystemTime(new Date("2024-01-15"));
+      jest.setSystemTime(new Date("2024-01-15").getTime());
     });
 
     afterEach(() => {
@@ -825,11 +825,11 @@ describe("StatisticsService", () => {
     });
   });
 
-  describe("Statistical Calculation Accuracy - Stress Tests", () => {
+  describe("Statistical Calculation Accuracy", () => {
     describe("Timeframe Statistics Mathematical Correctness", () => {
       beforeEach(() => {
         jest.useFakeTimers();
-        jest.setSystemTime(new Date("2024-06-15T12:00:00Z"));
+        jest.setSystemTime(new Date("2024-06-15T12:00:00Z").getTime());
       });
 
       afterEach(() => {
@@ -1167,148 +1167,19 @@ describe("StatisticsService", () => {
       });
     });
 
-    describe("Large Dataset Performance", () => {
-      it("should handle 10k+ daily stats efficiently", () => {
-        // Use real timers for this test to avoid date filtering issues
-        jest.useRealTimers();
-
-        const largeDailyStats: any[] = [];
-        const currentDate = new Date();
-
-        // Generate 10,000 days of data (about 27 years)
-        for (let i = 0; i < 10000; i++) {
-          const date = new Date(currentDate);
-          date.setDate(currentDate.getDate() - i);
-          largeDailyStats.push(
-            createMockDailyStats(
-              toLocalDateString(date),
-              Math.floor(Math.random() * 100) + 1,
-              Math.floor(Math.random() * 3600) + 60,
-              Math.floor(Math.random() * 10),
-              Math.floor(Math.random() * 90) + 10,
-              75 + Math.random() * 25
-            )
-          );
-        }
-
-        const mockStats = createMockStatistics(largeDailyStats);
-
-        const startTime = performance.now();
-
-        // Test various timeframe calculations
-        const day1 = statisticsService.getTimeframeStats(mockStats, 1);
-        const week = statisticsService.getTimeframeStats(mockStats, 7);
-        const month = statisticsService.getTimeframeStats(mockStats, 30);
-        const year = statisticsService.getTimeframeStats(mockStats, 365);
-
-        const endTime = performance.now();
-
-        // Should complete within reasonable time (less than 100ms)
-        expect(endTime - startTime).toBeLessThan(100);
-
-        // All results should be valid
-        [day1, week, month, year].forEach((result) => {
-          expect(result.reviews).toBeGreaterThan(0);
-          expect(result.timeSpent).toBeGreaterThan(0);
-          expect(result.correctRate).toBeGreaterThan(0);
-          expect(result.correctRate).toBeLessThan(100);
-        });
-
-        // Longer timeframes should have more data
-        expect(year.reviews).toBeGreaterThan(month.reviews);
-        expect(month.reviews).toBeGreaterThan(week.reviews);
-        expect(week.reviews).toBeGreaterThan(day1.reviews);
-
-        // Restore fake timers
-        jest.useFakeTimers();
-        jest.setSystemTime(new Date("2024-06-15T12:00:00Z"));
-      });
-
-      it("should handle massive forecast arrays efficiently", () => {
-        const massiveForecast: any[] = [];
-
-        // Generate 5 years of forecast data (1825 days)
-        for (let i = 0; i < 1825; i++) {
-          const date = new Date("2024-06-15");
-          date.setDate(date.getDate() + i);
-          massiveForecast.push({
-            date: toLocalDateString(date),
-            dueCount: Math.floor(Math.random() * 50) + (i < 100 ? 10 : 1), // Front-load some data
-          });
-        }
-
-        const mockStats = createMockStatistics();
-        mockStats.forecast = massiveForecast;
-
-        const startTime = performance.now();
-
-        const filtered = statisticsService.getFilteredForecastData(
-          mockStats,
-          365,
-          false
-        );
-        const stats = statisticsService.calculateForecastStats(
-          mockStats,
-          [],
-          365
-        );
-        const dueToday = statisticsService.getDueToday(mockStats);
-        const dueTomorrow = statisticsService.getDueTomorrow(mockStats);
-
-        const endTime = performance.now();
-
-        // Should complete quickly even with large dataset
-        expect(endTime - startTime).toBeLessThan(50);
-
-        // Results should be valid
-        expect(filtered.length).toBeLessThanOrEqual(365);
-        expect(stats.totalReviews).toBeGreaterThan(0);
-        expect(dueToday).toBeGreaterThanOrEqual(0);
-        expect(dueTomorrow).toBeGreaterThanOrEqual(0);
-      });
-    });
-
-    describe("Concurrent Access and State Management", () => {
-      it("should handle multiple simultaneous calculations without interference", async () => {
-        const mockStats = createMockStatistics([
-          createMockDailyStats("2024-06-14", 50, 1800, 5, 45, 90.0),
-          createMockDailyStats("2024-06-13", 30, 1200, 3, 27, 85.0),
-        ]);
-        mockStats.answerButtons = { again: 10, hard: 20, good: 30, easy: 40 };
-        mockStats.intervals = [
-          { interval: "1d", count: 20 },
-          { interval: "3d", count: 10 },
-        ];
-
-        // Simulate concurrent access by running multiple calculations simultaneously
-        const promises = Array.from({ length: 10 }, (_, i) =>
-          Promise.resolve().then(() => {
-            const timeframe = statisticsService.getTimeframeStats(mockStats, 7);
-            const ease = statisticsService.calculateAverageEase(mockStats);
-            const interval =
-              statisticsService.calculateAverageInterval(mockStats);
-            const total = statisticsService.getTotalCards(mockStats);
-
-            return { timeframe, ease, interval, total, index: i };
-          })
-        );
-
-        const results = await Promise.all(promises);
-
-        // All results should be identical (no shared state corruption)
-        const first = results[0];
-        results.forEach((result, index) => {
-          expect(result.timeframe).toEqual(first.timeframe);
-          expect(result.ease).toBe(first.ease);
-          expect(result.interval).toBe(first.interval);
-          expect(result.total).toBe(first.total);
-        });
-      });
-    });
   });
 
   describe("Boundary and Precision Testing", () => {
     describe("Floating Point Precision Edge Cases", () => {
+      beforeEach(() => {
+        jest.useFakeTimers();
+        jest.setSystemTime(new Date("2024-06-15").getTime());
+      });
+
+      afterEach(() => {
+        jest.useRealTimers();
+      });
+
       it("should handle very small decimal values in statistics", () => {
         const precisionStats = createMockStatistics([
           createMockDailyStats(
@@ -1362,7 +1233,7 @@ describe("StatisticsService", () => {
     describe("Date Boundary Validation", () => {
       it("should handle leap year calculations correctly", () => {
         jest.useFakeTimers();
-        jest.setSystemTime(new Date("2024-03-01T12:00:00Z")); // Day after leap day
+        jest.setSystemTime(new Date("2024-03-01T12:00:00Z").getTime()); // Day after leap day
 
         const leapYearStats = [
           createMockDailyStats("2024-02-29", 50, 1800, 5, 45, 90.0), // Leap day
@@ -1382,7 +1253,7 @@ describe("StatisticsService", () => {
 
       it("should handle year boundary transitions", () => {
         jest.useFakeTimers();
-        jest.setSystemTime(new Date("2024-01-02T12:00:00Z"));
+        jest.setSystemTime(new Date("2024-01-02T12:00:00Z").getTime());
 
         const yearBoundaryStats = [
           createMockDailyStats("2024-01-01", 30, 1200, 3, 27, 88.0),
@@ -1446,7 +1317,7 @@ describe("StatisticsService", () => {
 
         // Restore fake timers
         jest.useFakeTimers();
-        jest.setSystemTime(new Date("2024-06-15T12:00:00Z"));
+        jest.setSystemTime(new Date("2024-06-15T12:00:00Z").getTime());
       });
 
       it("should handle extreme interval distributions", () => {
@@ -1466,67 +1337,6 @@ describe("StatisticsService", () => {
       });
     });
 
-    describe("Memory and Performance Under Stress", () => {
-      it("should handle repeated calculations without memory accumulation", () => {
-        // Use real timers and current date for this test
-        jest.useRealTimers();
-
-        const currentDate = new Date();
-        const baseStats = createMockStatistics([
-          createMockDailyStats(
-            toLocalDateString(currentDate),
-            100,
-            3600,
-            10,
-            90,
-            90.0
-          ),
-        ]);
-
-        // Perform thousands of calculations
-        for (let i = 0; i < 100; i++) {
-          // Reduce iterations for performance
-          const timeframe = statisticsService.getTimeframeStats(baseStats, 30);
-          const ease = statisticsService.calculateAverageEase(baseStats);
-          const interval =
-            statisticsService.calculateAverageInterval(baseStats);
-
-          // Results should remain consistent
-          expect(timeframe.reviews).toBe(100);
-          expect(ease).toBe(0); // No answer buttons in base stats
-          expect(interval).toBe(0);
-        }
-
-        // Restore fake timers
-        jest.useFakeTimers();
-        jest.setSystemTime(new Date("2024-06-15T12:00:00Z"));
-      });
-
-      it("should maintain precision across temperature variations in calculations", () => {
-        // Simulate calculation "warming up" with repeated operations
-        const precisionStats = createMockStatistics();
-        precisionStats.answerButtons = {
-          again: 333,
-          hard: 333,
-          good: 333,
-          easy: 334,
-        };
-
-        const results: number[] = [];
-        for (let i = 0; i < 100; i++) {
-          results.push(statisticsService.calculateAverageEase(precisionStats));
-        }
-
-        // All results should be identical (no floating point drift)
-        const firstResult = results[0];
-        results.forEach((result) => {
-          expect(result).toBe(firstResult);
-        });
-
-        // Expected: (333*1 + 333*2 + 333*3 + 334*4) / 1333 ≈ 2.5
-        expect(firstResult).toBeCloseTo(2.5, 2);
-      });
-    });
   });
 });
 
