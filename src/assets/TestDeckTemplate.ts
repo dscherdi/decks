@@ -9,19 +9,20 @@ tags:
 
 Welcome to Decks! This file shows the two ways to create flashcards.
 
-## Table format
+- Header-Paragraph format
+- Use a markdown table with **Front** and **Back** columns. An optional **Notes** column adds extra context shown during review.
 
-Use a markdown table with **Front** and **Back** columns. An optional **Notes** column adds extra context shown during review.
+## Header-paragraph format
+
+Use a heading as the question and the paragraph below as the answer.
+
+## Table format
 
 | Front | Back | Notes |
 |---|---|---|
 | What is spaced repetition? | A learning technique that schedules reviews at increasing intervals based on recall strength | Used by Anki, Decks, and other apps |
 | What does FSRS stand for? | Free Spaced Repetition Scheduler | The algorithm Decks uses to schedule cards |
 | What are the four review ratings? | Again, Hard, Good, Easy | Again resets the card; Easy gives the longest interval |
-
-## Header-paragraph format
-
-Use a heading as the question and the paragraph below as the answer.
 
 ## What tag marks a file as a flashcard deck?
 
