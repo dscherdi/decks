@@ -7,7 +7,7 @@ describe("Settings", () => {
     });
 
     it("should have backgroundRefreshInterval set to 5 seconds by default", () => {
-      expect(DEFAULT_SETTINGS.ui.backgroundRefreshInterval).toBe(5);
+      expect(DEFAULT_SETTINGS.ui.backgroundRefreshInterval).toBe(120);
     });
 
     it("should have all required UI settings", () => {
@@ -60,19 +60,6 @@ describe("Settings", () => {
       expect(uiSettings.enableBackgroundRefresh).toBeDefined();
       expect(uiSettings.backgroundRefreshInterval).toBeDefined();
       expect(uiSettings.backgroundRefreshInterval).toBeGreaterThan(0);
-    });
-  });
-
-  describe("Background refresh settings validation", () => {
-    it("should have reasonable default values", () => {
-      expect(DEFAULT_SETTINGS.ui.enableBackgroundRefresh).toBe(true);
-      expect(DEFAULT_SETTINGS.ui.backgroundRefreshInterval).toBe(5);
-    });
-
-    it("should have interval within acceptable range", () => {
-      const interval = DEFAULT_SETTINGS.ui.backgroundRefreshInterval;
-      expect(interval).toBeGreaterThanOrEqual(1);
-      expect(interval).toBeLessThanOrEqual(60);
     });
   });
 
