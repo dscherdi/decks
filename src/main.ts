@@ -26,6 +26,8 @@ import { DecksSettingTab } from "./components/settings/SettingsTab";
 
 import { DecksView } from "./components/DecksView";
 import { DecksViewModal } from "./components/DecksViewModal";
+import { ReleaseNotesModal } from "./components/ReleaseNotesModal";
+import { TestDeckService } from "./services/TestDeckService";
 
 export const VIEW_TYPE_DECKS = "decks-view";
 
@@ -216,6 +218,44 @@ export default class DecksPlugin extends Plugin {
         name: "Show flashcards panel",
         callback: () => {
           void this.activateView();
+        },
+      });
+
+      // Add command to show release notes
+      this.addCommand({
+        id: "show-release-notes",
+        name: "Show release notes",
+        callback: () => {
+          new ReleaseNotesModal(this.app).open();
+        },
+      });
+
+      // Test deck: create on fresh install, also available as a command
+      const testDeckService = new TestDeckService(this.app);
+
+      if (!this.settings.hasCreatedTestDeck) {
+        this.settings.hasCreatedTestDeck = true;
+        await this.saveSettings();
+        this.app.workspace.onLayoutReady(() => {
+          testDeckService
+            .createTestDeck(
+              this.settings.parsing.deckTag,
+              this.settings.parsing.folderSearchPath
+            )
+            .catch(console.error);
+        });
+      }
+
+      this.addCommand({
+        id: "create-test-deck",
+        name: "Create test deck",
+        callback: () => {
+          testDeckService
+            .createTestDeck(
+              this.settings.parsing.deckTag,
+              this.settings.parsing.folderSearchPath
+            )
+            .catch(console.error);
         },
       });
 

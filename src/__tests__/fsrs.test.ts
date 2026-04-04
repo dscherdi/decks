@@ -1169,3 +1169,138 @@ describe("FSRS Algorithm - Pure Implementation", () => {
     });
   });
 });
+
+describe("FSRS-6 Formula Verification", () => {
+  const fsrs = new FSRS({ requestRetention: 0.9, profile: "STANDARD" });
+
+  const reviewCard: Flashcard = {
+    id: "v6-test",
+    deckId: "deck",
+    front: "Q",
+    back: "A",
+    type: "header-paragraph",
+    sourceFile: "test.md",
+    contentHash: "h",
+    state: "review",
+    dueDate: new Date().toISOString(),
+    interval: 14400,
+    repetitions: 5,
+    difficulty: 5.0,
+    stability: 10.0,
+    lapses: 0,
+    lastReviewed: new Date(Date.now() - 10 * 24 * 60 * 60 * 1000).toISOString(),
+    created: new Date().toISOString(),
+    modified: new Date().toISOString(),
+  };
+
+  it("forgettingCurve(S, S) returns 0.9", () => {
+    const stabilities = [1, 5, 10, 30, 100];
+    for (const s of stabilities) {
+      expect(fsrs.forgettingCurve(s, s)).toBeCloseTo(0.9, 5);
+    }
+  });
+
+  it("interval equals stability (days) when requestRetention = 0.9", () => {
+    const fsrs90 = new FSRS({ requestRetention: 0.9, profile: "STANDARD" });
+    const scheduling = fsrs90.getSchedulingInfo(reviewCard);
+    const intervalDays = scheduling.good.interval / 1440;
+    expect(intervalDays).toBeCloseTo(scheduling.good.stability, 2);
+  });
+
+  it("initDifficulty for Easy (rating 4) clamps to 1 with v6 defaults", () => {
+    const newCard: Flashcard = {
+      ...reviewCard,
+      state: "new",
+      stability: 0,
+      difficulty: 0,
+      repetitions: 0,
+      lapses: 0,
+      lastReviewed: null,
+    };
+    const scheduling = fsrs.getSchedulingInfo(newCard);
+    expect(scheduling.easy.difficulty).toBeGreaterThanOrEqual(1);
+    expect(scheduling.easy.difficulty).toBeLessThanOrEqual(10);
+  });
+});
+
+describe("FSRS-6 Short-term Scheduling", () => {
+  const fsrs = new FSRS({ requestRetention: 0.9, profile: "INTENSIVE", nextDayStartsAt: 4 });
+
+  const makeReviewCard = (lastReviewedAt: Date): Flashcard => ({
+    id: "short-term-test",
+    deckId: "deck",
+    front: "Q",
+    back: "A",
+    type: "header-paragraph",
+    sourceFile: "test.md",
+    contentHash: "h",
+    state: "review",
+    dueDate: lastReviewedAt.toISOString(),
+    interval: 1440,
+    repetitions: 3,
+    difficulty: 5.0,
+    stability: 2.0,
+    lapses: 0,
+    lastReviewed: lastReviewedAt.toISOString(),
+    created: lastReviewedAt.toISOString(),
+    modified: lastReviewedAt.toISOString(),
+  });
+
+  it("produces valid stability for same-day review", () => {
+    const lastReview = new Date("2025-06-15T08:00:00.000Z");
+    const now = new Date("2025-06-15T12:00:00.000Z");
+    const card = makeReviewCard(lastReview);
+    const scheduling = fsrs.getSchedulingInfo(card, now);
+    expect(scheduling.good.stability).toBeGreaterThan(0);
+    expect(isFinite(scheduling.good.stability)).toBe(true);
+  });
+
+  it("Good/Easy same-day review: stability does not decrease", () => {
+    const lastReview = new Date("2025-06-15T08:00:00.000Z");
+    const now = new Date("2025-06-15T12:00:00.000Z");
+    const card = makeReviewCard(lastReview);
+    const scheduling = fsrs.getSchedulingInfo(card, now);
+    expect(scheduling.good.stability).toBeGreaterThanOrEqual(card.stability);
+    expect(scheduling.easy.stability).toBeGreaterThanOrEqual(card.stability);
+  });
+
+  it("cross-day review produces different result than same-day review", () => {
+    const sameDay = new Date("2025-06-15T08:00:00.000Z");
+    const crossDay = new Date("2025-06-14T08:00:00.000Z");
+    const now = new Date("2025-06-15T12:00:00.000Z");
+
+    const sameDayCard = makeReviewCard(sameDay);
+    const crossDayCard = makeReviewCard(crossDay);
+
+    const sameDayScheduling = fsrs.getSchedulingInfo(sameDayCard, now);
+    const crossDayScheduling = fsrs.getSchedulingInfo(crossDayCard, now);
+
+    expect(sameDayScheduling.good.stability).not.toBeCloseTo(
+      crossDayScheduling.good.stability,
+      3
+    );
+  });
+
+  it("nextDayStartsAt boundary: cross-day review uses long-term formula, same-day uses short-term", () => {
+    const now = new Date("2025-06-15T06:00:00.000Z");
+    // Cross-day: last reviewed yesterday at the same time (24h elapsed)
+    const yesterday = new Date("2025-06-14T06:00:00.000Z");
+    // Same-day: last reviewed 2h ago on the same study day
+    const sameDay = new Date("2025-06-15T04:30:00.000Z");
+
+    const crossDayCard = makeReviewCard(yesterday);
+    const sameDayCard = makeReviewCard(sameDay);
+
+    const crossDayScheduling = fsrs.getSchedulingInfo(crossDayCard, now);
+    const sameDayScheduling = fsrs.getSchedulingInfo(sameDayCard, now);
+
+    // Both should be valid
+    expect(crossDayScheduling.good.stability).toBeGreaterThan(0);
+    expect(sameDayScheduling.good.stability).toBeGreaterThan(0);
+    // Long-term and short-term formulas produce different results
+    expect(crossDayScheduling.good.stability).not.toBeCloseTo(
+      sameDayScheduling.good.stability,
+      3
+    );
+  });
+});

@@ -120,8 +120,11 @@ describe("FSRS Profiles", () => {
         scheduling90.good.interval
       );
 
-      // Scaling factor should be ln(0.8)/ln(0.9) ≈ 2.1
-      const expectedFactor = Math.log(0.8) / Math.log(0.9);
+      // Scaling factor using FSRS-6 interval formula: I = S * (R^(-1/w20) - 1) / factor
+      const w20 = 0.1542;
+      const factor80 = Math.pow(0.8, -1 / w20) - 1;
+      const factor90 = Math.pow(0.9, -1 / w20) - 1;
+      const expectedFactor = factor80 / factor90;
       const actualFactor =
         scheduling80.good.interval / scheduling90.good.interval;
       expect(actualFactor).toBeCloseTo(expectedFactor, 1);

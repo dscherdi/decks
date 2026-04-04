@@ -149,6 +149,29 @@ Promise.all([esbuild.build(workerBuildOptions), esbuild.build(buildOptions)])
       /"__DECKS_EMBEDDED_ASSETS_PLACEHOLDER__"/g,
       embeddedAssetsJson
     );
+
+    // Inject latest release notes into bundle
+    const releaseNotesDir = path.join(__dirname, "release-notes");
+    const latestNote = fs.readdirSync(releaseNotesDir)
+      .filter((f) => f.endsWith(".md"))
+      .map((filename) => ({
+        version: filename.replace(".md", "").replace(/-/g, "."),
+        content: fs.readFileSync(path.join(releaseNotesDir, filename), "utf8").trim(),
+      }))
+      .sort((a, b) => {
+        const ap = a.version.split(".").map(Number);
+        const bp = b.version.split(".").map(Number);
+        for (let i = 0; i < 3; i++) {
+          if (bp[i] !== ap[i]) return bp[i] - ap[i];
+        }
+        return 0;
+      })[0];
+
+    mainJsContent = mainJsContent.replace(
+      /"__DECKS_RELEASE_NOTES_JSON__"/g,
+      JSON.stringify(latestNote ? JSON.stringify([latestNote]) : "[]")
+    );
+
     fs.writeFileSync(mainJsPath, mainJsContent);
 
     console.log(

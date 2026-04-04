@@ -594,7 +594,7 @@ export class Scheduler {
   }
 
   private getWeightsHash(profile: FSRSProfile): string {
-    return `${profile}-v1.0`;
+    return `${profile}-v6`;
   }
 
   private async getDueCardCount(

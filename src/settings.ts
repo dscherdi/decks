@@ -36,6 +36,9 @@ export interface DecksSettings {
   experimental: {
     enableDatabaseWorker: boolean;
   };
+
+  // Internal tracking
+  hasCreatedTestDeck: boolean;
 }
 
 export const DEFAULT_SETTINGS: DecksSettings = {
@@ -70,4 +73,6 @@ export const DEFAULT_SETTINGS: DecksSettings = {
   experimental: {
     enableDatabaseWorker: false,
   },
+
+  hasCreatedTestDeck: false,
 };

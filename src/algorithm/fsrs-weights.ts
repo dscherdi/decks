@@ -1,17 +1,23 @@
 /**
  * FSRS Algorithm Weights Configuration
  *
- * Centralized configuration for FSRS-4.5 algorithm weights optimized for sub-day intervals.
+ * Centralized configuration for FSRS-6 algorithm weights optimized for sub-day intervals.
  * These weights control the initial stability values for new card ratings and various
  * algorithm parameters for difficulty progression and stability updates.
+ * 21 weights total (w[0]–w[20]).
  */
 
 /**
- * FSRS-4.5 standard weights (day-based intervals)
+ * FSRS-6 standard weights (day-based intervals)
  */
 export const FSRS_WEIGHTS_STANDARD: number[] = [
-  0.4072, 1.1829, 3.1262, 15.4722, 7.2102, 0.5316, 1.0651, 0.0234, 1.616,
-  0.1544, 1.0824, 1.9813, 0.0953, 0.2975, 2.2042, 0.2407, 2.9466,
+  0.212,  1.2931, 2.3065, 8.2956,  // w[0-3]:  initial stability per rating (Again/Hard/Good/Easy)
+  6.4133, 0.8334, 3.0194, 0.001,   // w[4-7]:  difficulty params + mean reversion strength
+  1.8722, 0.1666, 0.796,  1.4835,  // w[8-11]: recall stability scaling
+  0.0614, 0.2629, 1.6483, 0.6014,  // w[12-15]: lapse stability + hard modifier
+  1.8729,                           // w[16]:   easy modifier (recall stability)
+  0.5425, 0.0912, 0.0658,           // w[17-19]: short-term scheduling
+  0.1542,                           // w[20]:   forgetting curve decay (trainable)
 ];
 
 /**
@@ -79,11 +85,11 @@ export function getMaxIntervalDaysForProfile(profile: FSRSProfile): number {
 
 /**
  * Validates FSRS weights array
- * @param weights - Array of 17 FSRS weights to validate
+ * @param weights - Array of 21 FSRS weights to validate
  * @returns true if valid, false otherwise
  */
 export function validateFSRSWeights(weights: number[]): boolean {
-  if (!Array.isArray(weights) || weights.length !== 17) {
+  if (!Array.isArray(weights) || weights.length !== 21) {
     return false;
   }
 

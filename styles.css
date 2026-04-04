@@ -648,3 +648,33 @@ div.decks-card-content
   margin-top: 16px;
   margin-bottom: 16px;
 }
+
+/* Release notes modal */
+
+.decks-release-notes-modal {
+  width: 600px;
+  max-width: 90vw;
+  min-width: 320px;
+  height: auto;
+  max-height: 80vh;
+}
+
+.decks-release-notes-modal > .modal-content {
+  overflow-y: auto;
+}
+
+.decks-release-notes-content {
+  padding: 8px 4px;
+}
+
+.decks-release-notes-section {
+  padding-bottom: 20px;
+  margin-bottom: 20px;
+  border-bottom: 1px solid var(--background-modifier-border);
+}
+
+.decks-release-notes-section:last-child {
+  border-bottom: none;
+  margin-bottom: 0;
+  padding-bottom: 0;
+}

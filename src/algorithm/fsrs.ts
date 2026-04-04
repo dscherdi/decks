@@ -110,6 +110,15 @@ export class FSRS {
     return getMaxIntervalDaysForProfile(this.params.profile);
   }
 
+  private getDecay(): number {
+    const w20 = this.getWeights()[20];
+    return isFinite(w20) && w20 > 0 ? w20 : 0.1542;
+  }
+
+  private getFactor(): number {
+    return Math.pow(0.9, -1 / this.getDecay()) - 1;
+  }
+
   /**
    * Validate FSRS parameters
    */
@@ -247,25 +256,29 @@ export class FSRS {
 
         // Validate current stability before using it
         if (!isFinite(newCard.stability) || newCard.stability <= 0) {
-          newCard.stability = this.initStability(3); // Default to "good" rating stability
+          newCard.stability = this.initStability(3);
         }
 
-        const retrievability = this.forgettingCurve(
-          newCard.elapsedDays,
-          newCard.stability
-        );
-
         newCard.difficulty = this.nextDifficulty(newCard.difficulty, rating);
-        newCard.stability = this.nextStability(
-          newCard.difficulty,
-          newCard.stability,
-          retrievability,
-          rating
-        );
 
-        // Final validation of calculated stability
-        if (!isFinite(newCard.stability) || newCard.stability <= 0) {
-          newCard.stability = this.initStability(rating);
+        if (this.isSameStudyDay(card.lastReview, now)) {
+          // Short-term scheduling: same study day (FSRS-6)
+          newCard.stability = this.shortTermStability(newCard.stability, rating);
+        } else {
+          // Long-term scheduling
+          const retrievability = this.forgettingCurve(
+            newCard.elapsedDays,
+            newCard.stability
+          );
+          newCard.stability = this.nextStability(
+            newCard.difficulty,
+            newCard.stability,
+            retrievability,
+            rating
+          );
+          if (!isFinite(newCard.stability) || newCard.stability <= 0) {
+            newCard.stability = this.initStability(rating);
+          }
         }
       }
 
@@ -376,6 +389,34 @@ export class FSRS {
     return currentStart.toISOString();
   }
 
+  private isSameStudyDay(lastReview: Date, now: Date): boolean {
+    const nextDayStartsAt = this.params.nextDayStartsAt ?? 4;
+    return (
+      this.getStudyDayStart(lastReview, nextDayStartsAt) ===
+      this.getStudyDayStart(now, nextDayStartsAt)
+    );
+  }
+
+  /**
+   * Short-term stability formula for same-study-day reviews — FSRS-6
+   * S' = S * e^(w17 * (G - 3 + w18)) * S^(-w19)
+   * Good/Easy: S' >= S (stability cannot decrease)
+   */
+  private shortTermStability(stability: number, rating: number): number {
+    const weights = this.getWeights();
+    const w17 = weights[17];
+    const w18 = weights[18];
+    const w19 = weights[19];
+
+    const result =
+      stability *
+      Math.exp(w17 * (rating - 3 + w18)) *
+      Math.pow(stability, -w19);
+
+    const constrained = rating >= 3 ? Math.max(result, stability) : result;
+    return isFinite(constrained) && constrained > 0 ? constrained : stability;
+  }
+
   private initStability(rating: number): number {
     const weights = this.getWeights();
     const stability = weights[rating - 1];
@@ -385,13 +426,10 @@ export class FSRS {
 
   private initDifficulty(rating: number): number {
     const weights = this.getWeights();
-    const w4 = weights[4];
-    const w5 = weights[5];
-    const ratingDiff = rating - 3;
-    const difficulty = w4 - w5 * ratingDiff;
-
-    const validDifficulty = isFinite(difficulty) ? difficulty : 5.0;
-    return Math.max(1, Math.min(10, validDifficulty));
+    // D_0(G) = w4 - e^(w5 * (G - 1)) + 1
+    const difficulty = weights[4] - Math.exp(weights[5] * (rating - 1)) + 1;
+    const valid = isFinite(difficulty) ? difficulty : 5.0;
+    return Math.max(1, Math.min(10, valid));
   }
 
   /**
@@ -440,26 +478,25 @@ export class FSRS {
   }
 
   /**
-   * Forgetting curve function with maximum precision
+   * Forgetting curve function — FSRS-6 trainable decay
+   * R(t, S) = (1 + factor * t / S)^(-w20)
+   * where factor = 0.9^(-1/w20) - 1, ensuring R(S, S) = 0.9
    */
   public forgettingCurve(elapsedDays: number, stability: number): number {
     if (!isFinite(elapsedDays) || !isFinite(stability) || stability <= 0) {
       return 0;
     }
 
-    // Store intermediate calculations to avoid precision loss
-    const stabilityFactor = 9 * stability;
-    const elapsedToStabilityRatio = elapsedDays / stabilityFactor;
-    const baseTerm = 1 + elapsedToStabilityRatio;
+    const decay = this.getDecay();
+    const factor = this.getFactor();
+    const base = 1 + factor * elapsedDays / stability;
 
-    if (!isFinite(baseTerm) || baseTerm <= 0) {
+    if (!isFinite(base) || base <= 0) {
       return 0;
     }
 
-    // Apply power with validation
-    const powerTerm = Math.pow(baseTerm, -1);
-
-    return isFinite(powerTerm) ? Math.max(0, Math.min(1, powerTerm)) : 0;
+    const result = Math.pow(base, -decay);
+    return isFinite(result) ? Math.max(0, Math.min(1, result)) : 0;
   }
 
   /**
@@ -484,24 +521,23 @@ export class FSRS {
   }
 
   /**
-   * Calculate next difficulty with maximum precision
+   * Calculate next difficulty with maximum precision — FSRS-6
+   * Uses linear damping and mean reversion toward D₀(4)
    */
   private nextDifficulty(difficulty: number, rating: number): number {
     if (!isFinite(difficulty)) {
       return 5.0;
     }
 
-    const weights = this.getWeights();
-    const w6 = weights[6];
-    const ratingDiff = rating - 3;
-    const difficultyChange = -w6 * ratingDiff;
-    const nextD = difficulty + difficultyChange;
+    const w6 = this.getWeights()[6];
+    // Linear damping: delta shrinks as D approaches 10
+    const dampedDelta = -w6 * (rating - 3) * (10 - difficulty) / 9;
+    const nextD = difficulty + dampedDelta;
 
-    // Apply mean reversion
-    const w4 = weights[4];
-    const revertedD = this.meanReversion(w4, nextD);
+    // Mean reversion toward D₀(4) — not raw w[4]
+    const d0Easy = this.initDifficulty(4);
+    const revertedD = this.meanReversion(d0Easy, nextD);
 
-    // Apply clamping only after all calculations
     if (revertedD < 1) return 1;
     if (revertedD > 10) return 10;
     return revertedD;
@@ -588,48 +624,28 @@ export class FSRS {
   private nextIntervalMinutes(stability: number): number {
     const minInterval = this.getMinMinutes();
 
-    // Validate stability
     if (!isFinite(stability) || stability <= 0) {
-      this.debugLog(`Invalid stability: ${stability}, using minMinutes`);
       return minInterval;
     }
 
-    // Validate parameters
-    if (
-      !isFinite(this.params.requestRetention) ||
-      this.params.requestRetention <= 0 ||
-      this.params.requestRetention >= 1
-    ) {
-      this.debugLog(
-        `Invalid requestRetention: ${this.params.requestRetention}, using minMinutes`
-      );
+    const r = this.params.requestRetention;
+    if (!isFinite(r) || r <= 0 || r >= 1) {
       return minInterval;
     }
 
-    // Calculate interval using I = S * k formula
-    const retentionLog = Math.log(this.params.requestRetention);
-    const baseLog = Math.log(0.9);
-    const k = retentionLog / baseLog;
-
-    // Convert stability from days to minutes and apply k factor
-    const intervalDays = stability * k;
+    // I = S * (R_d^(-1/decay) - 1) / factor
+    // At R_d = 0.9, simplifies to I = S (factor = 0.9^(-1/decay) - 1)
+    const decay = this.getDecay();
+    const factor = this.getFactor();
+    const intervalDays = stability * (Math.pow(r, -1 / decay) - 1) / factor;
     const intervalMinutes = intervalDays * MINUTES_PER_DAY;
 
-    // Validate calculation
     if (!isFinite(intervalMinutes) || intervalMinutes <= 0) {
-      this.debugLog(
-        `Invalid interval calculation: ${intervalMinutes}, using minMinutes`
-      );
       return minInterval;
     }
 
-    // Apply maximum interval limit
     const maxInterval = this.getMaxIntervalDays() * MINUTES_PER_DAY;
-
-    let result = Math.max(minInterval, intervalMinutes);
-    result = Math.min(result, maxInterval);
-
-    return result;
+    return Math.min(Math.max(minInterval, intervalMinutes), maxInterval);
   }
 
   /**
