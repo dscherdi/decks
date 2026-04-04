@@ -56,7 +56,7 @@ export const DEFAULT_SETTINGS: DecksSettings = {
 
   ui: {
     enableBackgroundRefresh: true,
-    backgroundRefreshInterval: 5,
+    backgroundRefreshInterval: 120,
     enableNotices: true,
   },
 
