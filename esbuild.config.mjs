@@ -150,9 +150,9 @@ Promise.all([esbuild.build(workerBuildOptions), esbuild.build(buildOptions)])
       embeddedAssetsJson
     );
 
-    // Inject latest release notes into bundle
+    // Inject release notes for the current minor version series into bundle
     const releaseNotesDir = path.join(__dirname, "release-notes");
-    const latestNote = fs.readdirSync(releaseNotesDir)
+    const allNotes = fs.readdirSync(releaseNotesDir)
       .filter((f) => f.endsWith(".md"))
       .map((filename) => ({
         version: filename.replace(".md", "").replace(/-/g, "."),
@@ -162,10 +162,22 @@ Promise.all([esbuild.build(workerBuildOptions), esbuild.build(buildOptions)])
         const ap = a.version.split(".").map(Number);
         const bp = b.version.split(".").map(Number);
         for (let i = 0; i < 3; i++) {
-          if (bp[i] !== ap[i]) return bp[i] - ap[i];
+          if (ap[i] !== bp[i]) return ap[i] - bp[i];
         }
         return 0;
-      })[0];
+      });
+
+    const latestVersion = allNotes.length > 0 ? allNotes[allNotes.length - 1].version : null;
+    const latestPrefix = latestVersion ? latestVersion.split(".").slice(0, 2).join(".") : null;
+
+    const seriesNotes = allNotes.filter((n) => n.version.startsWith(latestPrefix + "."));
+    const combinedContent = seriesNotes
+      .map((n) => `## ${n.version}\n\n${n.content}`)
+      .join("\n\n");
+
+    const latestNote = latestVersion
+      ? { version: latestVersion, content: combinedContent }
+      : null;
 
     mainJsContent = mainJsContent.replace(
       /"__DECKS_RELEASE_NOTES_JSON__"/g,
