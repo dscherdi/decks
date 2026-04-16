@@ -91,6 +91,23 @@ You can add a third column for notes that provide extra context, hints, or mnemo
 - During review, a small info icon appears on the back card when notes are available
 - Press **N** to toggle notes visibility
 
+### Title format
+
+Use the filename itself as the front of a single card. Enable "Title" in the header level setting of your profile, then the entire file content becomes the back:
+
+```markdown
+---
+tags: [decks/capitals]
+---
+The capital of France is Paris. It is located in northern France along the Seine river.
+```
+
+With the filename `What is the capital of France?.md`, this produces one card:
+- **Front**: What is the capital of France?
+- **Back**: The full file content
+
+This format is useful for atomic notes where the filename is already the question.
+
 ### Tips
 
 - **Use descriptive tags**: `#decks/spanish-verbs` instead of `#decks/deck1`
@@ -181,7 +198,7 @@ Open the Profiles Manager from the deck list panel to create and edit profiles. 
 - **Review cards per day**: Limit how many review cards are shown daily (per deck)
 - **Retention target**: How well you want to remember cards (default 90%)
 - **FSRS profile**: Standard or Intensive algorithm weights
-- **Header level**: Which header level to use for parsing flashcards
+- **Header level**: Which header level to use for parsing flashcards, or "Title" to use the filename as the card front
 - **Review order**: Oldest due first or random
 
 Assign a profile to a tag from the gear icon on any deck or tag group in the deck list.
