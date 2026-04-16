@@ -287,6 +287,7 @@ export class DeckManager {
 
     // Read file content - this stays in DeckManager
     const fileContent = await this.vault.read(file);
+    const fileTitle = file.basename.replace(/\.md$/i, "");
 
     // Create progress callback from ProgressTracker
     const progressCallback = progressTracker
@@ -303,6 +304,7 @@ export class DeckManager {
           deckFilepath: deck.filepath,
           deckConfig: deck.profile,
           fileContent: fileContent,
+          fileTitle: fileTitle,
         },
         progressCallback
       );

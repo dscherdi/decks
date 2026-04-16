@@ -671,4 +671,56 @@ This is content under an H4 directly after H2.
       expect(result[0].breadcrumb).toBe("Chapter 1");
     });
   });
+
+  describe("title mode (headerLevel 0)", () => {
+    it("should return a single card with fileTitle as front and full content as back", () => {
+      const content = `This is the body of the note.
+
+It has multiple paragraphs.`;
+
+      const result = FlashcardParser.parseFlashcardsFromContent(content, 0, "My Note");
+
+      expect(result).toHaveLength(1);
+      expect(result[0]).toEqual({
+        front: "My Note",
+        back: "This is the body of the note.\n\nIt has multiple paragraphs.",
+        notes: "",
+        type: "header-paragraph",
+        breadcrumb: "",
+      });
+    });
+
+    it("should strip YAML frontmatter from the back", () => {
+      const content = `---
+tags: flashcards
+---
+The actual content here.`;
+
+      const result = FlashcardParser.parseFlashcardsFromContent(content, 0, "Frontmatter File");
+
+      expect(result).toHaveLength(1);
+      expect(result[0].front).toBe("Frontmatter File");
+      expect(result[0].back).toBe("The actual content here.");
+    });
+
+    it("should return empty array when headerLevel is 0 but no fileTitle provided", () => {
+      const content = "Some content here.";
+
+      const result = FlashcardParser.parseFlashcardsFromContent(content, 0);
+
+      expect(result).toHaveLength(0);
+    });
+
+    it("should return a card with empty back for a file with only frontmatter", () => {
+      const content = `---
+tags: flashcards
+---`;
+
+      const result = FlashcardParser.parseFlashcardsFromContent(content, 0, "Empty File");
+
+      expect(result).toHaveLength(1);
+      expect(result[0].front).toBe("Empty File");
+      expect(result[0].back).toBe("");
+    });
+  });
 });

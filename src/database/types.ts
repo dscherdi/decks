@@ -29,6 +29,7 @@ export interface DeckProfile {
 }
 
 export const DEFAULT_PROFILE_ID = 'profile_default';
+export const HEADER_LEVEL_TITLE = 0;
 
 export const DEFAULT_DECK_PROFILE: Omit<DeckProfile, 'id' | 'created' | 'modified'> = {
   name: 'DEFAULT',

@@ -35,6 +35,7 @@ export interface SyncData {
   deckFilepath: string;
   deckConfig: DeckProfile;
   fileContent: string;
+  fileTitle?: string;
 }
 
 /**
@@ -139,7 +140,8 @@ export class FlashcardSynchronizer {
       progressCallback?.(10, "Parsing flashcards from file content...");
       const parsedCards = FlashcardParser.parseFlashcardsFromContent(
         data.fileContent,
-        data.deckConfig.headerLevel || 2
+        data.deckConfig.headerLevel,
+        data.fileTitle
       );
 
       // Get existing flashcards

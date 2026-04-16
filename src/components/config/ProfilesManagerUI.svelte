@@ -449,6 +449,7 @@
         .setName("Header level")
         .setDesc("Header level for flashcard parsing")
         .addDropdown((dropdown) => {
+          dropdown.addOption("0", "Title");
           for (let i = 1; i <= 6; i++) {
             dropdown.addOption(i.toString(), `H${i}`);
           }

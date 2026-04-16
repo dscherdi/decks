@@ -176,7 +176,7 @@
     // Header level
     new Setting(profileDetailsContainer)
       .setName("Header level")
-      .setDesc(`H${selectedProfile.headerLevel}`)
+      .setDesc(selectedProfile.headerLevel === 0 ? "Title" : `H${selectedProfile.headerLevel}`)
       .setClass("decks-config-readonly");
 
     // Review order

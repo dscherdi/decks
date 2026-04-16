@@ -718,4 +718,104 @@ describe("Full Workflow Integration Tests", () => {
       expect(overallStats.reviewStats.totalTimeMs).toBeGreaterThan(0);
     });
   });
+
+  describe("Title mode sync", () => {
+    it("should create a single card with the file title as front", async () => {
+      const fileContent = `---
+tags: flashcards
+---
+This note explains the water cycle.
+
+Water evaporates from oceans, condenses into clouds, and falls as precipitation.`;
+
+      const defaultProfile = await db.getDefaultProfile();
+      const titleProfile: Omit<DeckProfile, "created" | "modified"> = {
+        ...defaultProfile,
+        id: "profile_title_test",
+        name: "Title Mode",
+        headerLevel: 0,
+        isDefault: false,
+      };
+      await db.createProfile(titleProfile);
+
+      const deckId = generateDeckId("notes/Water Cycle.md");
+      const deck: Deck = {
+        id: deckId,
+        name: "Water Cycle",
+        filepath: "notes/Water Cycle.md",
+        tag: "#flashcards",
+        lastReviewed: null,
+        profileId: titleProfile.id,
+        created: new Date().toISOString(),
+        modified: new Date().toISOString(),
+      };
+      await db.createDeck(deck);
+
+      const syncResult = await db.syncFlashcardsForDeck({
+        deckId: deck.id,
+        deckName: deck.name,
+        deckFilepath: deck.filepath,
+        deckConfig: titleProfile,
+        fileContent,
+        fileTitle: "Water Cycle",
+      });
+
+      expect(syncResult.success).toBe(true);
+      expect(syncResult.parsedCount).toBe(1);
+
+      const flashcards = await db.getFlashcardsByDeck(deck.id);
+      expect(flashcards).toHaveLength(1);
+      expect(flashcards[0].front).toBe("Water Cycle");
+      expect(flashcards[0].back).toContain("water cycle");
+      expect(flashcards[0].back).not.toContain("tags: flashcards");
+    });
+
+    it("should update the card back when file content changes", async () => {
+      const defaultProfile = await db.getDefaultProfile();
+      const titleProfile: Omit<DeckProfile, "created" | "modified"> = {
+        ...defaultProfile,
+        id: "profile_title_update_test",
+        name: "Title Mode Update",
+        headerLevel: 0,
+        isDefault: false,
+      };
+      await db.createProfile(titleProfile);
+
+      const deckId = generateDeckId("notes/Photosynthesis.md");
+      const deck: Deck = {
+        id: deckId,
+        name: "Photosynthesis",
+        filepath: "notes/Photosynthesis.md",
+        tag: "#flashcards",
+        lastReviewed: null,
+        profileId: titleProfile.id,
+        created: new Date().toISOString(),
+        modified: new Date().toISOString(),
+      };
+      await db.createDeck(deck);
+
+      await db.syncFlashcardsForDeck({
+        deckId: deck.id,
+        deckName: deck.name,
+        deckFilepath: deck.filepath,
+        deckConfig: titleProfile,
+        fileContent: "Original content.",
+        fileTitle: "Photosynthesis",
+      });
+
+      await db.syncFlashcardsForDeck({
+        deckId: deck.id,
+        deckName: deck.name,
+        deckFilepath: deck.filepath,
+        deckConfig: titleProfile,
+        fileContent: "Updated content with more detail.",
+        fileTitle: "Photosynthesis",
+      });
+
+      const flashcards = await db.getFlashcardsByDeck(deck.id);
+      expect(flashcards).toHaveLength(1);
+      expect(flashcards[0].front).toBe("Photosynthesis");
+      expect(flashcards[0].back).toBe("Updated content with more detail.");
+    });
+  });
 });

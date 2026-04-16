@@ -19,13 +19,27 @@ export class FlashcardParser {
   /**
    * Parse flashcards from content string (optimized single-pass parsing)
    * @param content - Markdown content to parse
-   * @param headerLevel - Target header level for header-paragraph flashcards (1-6, default: 2)
+   * @param headerLevel - Target header level for header-paragraph flashcards (1-6, default: 2), or 0 for title mode
+   * @param fileTitle - File title used as card front when headerLevel is 0 (title mode)
    * @returns Array of parsed flashcards
    */
   static parseFlashcardsFromContent(
     content: string,
-    headerLevel = 2
+    headerLevel = 2,
+    fileTitle?: string
   ): ParsedFlashcard[] {
+    if (headerLevel === 0) {
+      if (!fileTitle) return [];
+      const back = FlashcardParser.stripFrontmatter(content).trim();
+      return [{
+        front: fileTitle,
+        back,
+        notes: "",
+        type: "header-paragraph",
+        breadcrumb: "",
+      }];
+    }
+
     const lines = content.split("\n");
     const flashcards: ParsedFlashcard[] = [];
 
@@ -212,6 +226,14 @@ export class FlashcardParser {
     );
 
     return flashcards;
+  }
+
+  private static stripFrontmatter(content: string): string {
+    const lines = content.split("\n");
+    if (lines[0]?.trim() !== "---") return content;
+    const end = lines.indexOf("---", 1);
+    if (end === -1) return content;
+    return lines.slice(end + 1).join("\n");
   }
 
   /**
