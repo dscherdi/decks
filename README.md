@@ -99,10 +99,12 @@ Use the filename itself as the front of a single card. Enable "Title" in the hea
 ---
 tags: [decks/capitals]
 ---
+
 The capital of France is Paris. It is located in northern France along the Seine river.
 ```
 
 With the filename `What is the capital of France?.md`, this produces one card:
+
 - **Front**: What is the capital of France?
 - **Back**: The full file content
 
@@ -126,7 +128,7 @@ This format is useful for atomic notes where the filename is already the questio
 
 ### FSRS algorithm
 
-Decks uses the Free Spaced Repetition Scheduler (FSRS), a modern algorithm that adapts to your performance, optimizes retention, and predicts when you are about to forget. Two built-in profiles are available:
+Decks uses the Free Spaced Repetition Scheduler (FSRS 6), a modern algorithm that adapts to your performance, optimizes retention, and predicts when you are about to forget. Two built-in profiles are available:
 
 - **Standard**: Balanced scheduling for everyday learning
 - **Intensive**: Shorter intervals for aggressive memorization
