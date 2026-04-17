@@ -4,6 +4,7 @@ export interface ParsedFlashcard {
   notes: string;
   type: "header-paragraph" | "table";
   breadcrumb: string;
+  isReverse?: boolean;
 }
 
 /**

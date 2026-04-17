@@ -2,7 +2,7 @@ import { FlashcardParser } from "./FlashcardParser";
 import type { Flashcard, DeckProfile } from "../database/types";
 import type { SqlJsValue } from "../database/sql-types";
 import type { Database } from "sql.js";
-import { generateFlashcardId, generateContentHash } from "../utils/hash";
+import { generateFlashcardId, generateContentHash, generateReverseFlashcardId } from "../utils/hash";
 import { levenshteinSimilarity } from "../utils/string";
 
 export interface FlashcardUpdates {
@@ -36,6 +36,7 @@ export interface SyncData {
   deckConfig: DeckProfile;
   fileContent: string;
   fileTitle?: string;
+  reverseCards?: boolean;
 }
 
 /**
@@ -144,6 +145,23 @@ export class FlashcardSynchronizer {
         data.fileTitle
       );
 
+      // Expand with reverse cards if enabled
+      const expandedCards = [...parsedCards];
+      if (data.reverseCards) {
+        for (const card of parsedCards) {
+          if (card.back) {
+            expandedCards.push({
+              front: card.back,
+              back: card.front,
+              notes: card.notes,
+              type: card.type,
+              breadcrumb: card.breadcrumb,
+              isReverse: true,
+            });
+          }
+        }
+      }
+
       // Get existing flashcards
       progressCallback?.(20, "Loading existing flashcards...");
       const existingFlashcards: Flashcard[] = [];
@@ -194,35 +212,41 @@ export class FlashcardSynchronizer {
           notes: string;
           type: "header-paragraph" | "table";
           breadcrumb: string;
+          isReverse?: boolean;
         };
         flashcardId: string;
         contentHash: string;
       }
       const cardsToCreate: ParsedCardData[] = [];
+      const reverseCardsToCreate: ParsedCardData[] = [];
       const cardsToDelete: Flashcard[] = [];
 
       // Process parsed cards - first pass: identify creates and updates
       progressCallback?.(30, "Processing flashcards...");
       for (
         let cardIndex = 0;
-        cardIndex < Math.min(parsedCards.length, 50000);
+        cardIndex < Math.min(expandedCards.length, 50000);
         cardIndex++
       ) {
-        const parsed = parsedCards[cardIndex];
+        const parsed = expandedCards[cardIndex];
 
         // Update progress periodically
         if (cardIndex % 100 === 0) {
           const cardProgress =
-            30 + (cardIndex / Math.min(parsedCards.length, 50000)) * 30;
+            30 + (cardIndex / Math.min(expandedCards.length, 50000)) * 30;
           progressCallback?.(
             cardProgress,
             `Processing card ${cardIndex + 1}/${Math.min(
-              parsedCards.length,
+              expandedCards.length,
               50000
             )}...`
           );
         }
-        const flashcardId = generateFlashcardId(parsed.front);
+
+        // Reverse cards use a stable ID based on the original card's front text (= reverse card's back)
+        const flashcardId = parsed.isReverse
+          ? generateReverseFlashcardId(parsed.back)
+          : generateFlashcardId(parsed.front);
         const contentHash = generateContentHash(parsed.back);
         const existingCard = existingById.get(flashcardId);
 
@@ -230,11 +254,14 @@ export class FlashcardSynchronizer {
         processedIds.add(flashcardId);
 
         if (existingCard) {
-          // Update if content, breadcrumb, or notes changed
+          // Update if content, breadcrumb, notes, or front changed.
+          // The front check is needed for reverse cards: their front (= original back) can change
+          // while their ID (= hash of original front) stays the same.
           if (
             existingCard.contentHash !== contentHash ||
             existingCard.breadcrumb !== parsed.breadcrumb ||
-            existingCard.notes !== (parsed.notes || "")
+            existingCard.notes !== (parsed.notes || "") ||
+            existingCard.front !== parsed.front
           ) {
             batchOperations.push({
               type: "update",
@@ -250,12 +277,12 @@ export class FlashcardSynchronizer {
             });
           }
         } else {
-          // Card doesn't exist - add to create list
-          cardsToCreate.push({
-            parsed,
-            flashcardId,
-            contentHash,
-          });
+          // Card doesn't exist — route to the appropriate create list
+          if (parsed.isReverse) {
+            reverseCardsToCreate.push({ parsed, flashcardId, contentHash });
+          } else {
+            cardsToCreate.push({ parsed, flashcardId, contentHash });
+          }
         }
       }
 
@@ -344,6 +371,52 @@ export class FlashcardSynchronizer {
         reviewLogStmt.free();
 
         // Create new flashcard
+        const flashcard: Omit<Flashcard, "created" | "modified"> = {
+          id: newCardData.flashcardId,
+          deckId: data.deckId,
+          front: newCardData.parsed.front,
+          back: newCardData.parsed.back,
+          notes: newCardData.parsed.notes || "",
+          type: newCardData.parsed.type,
+          sourceFile: data.deckFilepath,
+          contentHash: newCardData.contentHash,
+          breadcrumb: newCardData.parsed.breadcrumb,
+          state: reviewLogRow ? (reviewLogRow[0] as "new" | "review") : "new",
+          dueDate:
+            reviewLogRow && reviewLogRow[6] && reviewLogRow[1]
+              ? new Date(
+                  new Date(reviewLogRow[6] as string).getTime() +
+                    (reviewLogRow[1] as number) * 60 * 1000
+                ).toISOString()
+              : new Date().toISOString(),
+          interval: reviewLogRow ? (reviewLogRow[1] as number) : 0,
+          repetitions: reviewLogRow ? (reviewLogRow[2] as number) : 0,
+          difficulty: reviewLogRow ? (reviewLogRow[3] as number) : 5.0,
+          stability: reviewLogRow ? (reviewLogRow[4] as number) : 2.5,
+          lapses: reviewLogRow ? (reviewLogRow[5] as number) : 0,
+          lastReviewed: reviewLogRow ? (reviewLogRow[6] as string) : null,
+        };
+
+        batchOperations.push({
+          type: "create",
+          flashcard: flashcard,
+        });
+      }
+
+      // Process reverse cards (never participate in rename detection)
+      for (const newCardData of reverseCardsToCreate) {
+        const reviewLogStmt = this.db.prepare(`
+                    SELECT new_state, new_interval_minutes, new_repetitions, new_difficulty,
+                           new_stability, new_lapses, reviewed_at
+                    FROM review_logs
+                    WHERE flashcard_id = ?
+                    ORDER BY reviewed_at DESC
+                    LIMIT 1
+                `);
+        reviewLogStmt.bind([newCardData.flashcardId]);
+        const reviewLogRow = reviewLogStmt.step() ? reviewLogStmt.get() : null;
+        reviewLogStmt.free();
+
         const flashcard: Omit<Flashcard, "created" | "modified"> = {
           id: newCardData.flashcardId,
           deckId: data.deckId,

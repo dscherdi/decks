@@ -377,14 +377,15 @@
   async function handleBrowseNext() {
     if (!browseMode || isLoading) return;
 
-    browseCardIndex++;
-    if (browseCardIndex < browseCards.length) {
-      currentCard = browseCards[browseCardIndex];
-      await loadCard();
-    } else {
-      handleComplete({ reason: "browse-complete", reviewed: browseCardIndex });
+    if (browseCardIndex >= browseCards.length - 1) {
+      handleComplete({ reason: "browse-complete", reviewed: browseCards.length });
       reviewFinished = true;
+      return;
     }
+
+    browseCardIndex++;
+    currentCard = browseCards[browseCardIndex];
+    await loadCard();
   }
 
   async function handleBrowsePrevious() {
@@ -574,6 +575,7 @@
               on:click={handleNavigateToSource}
               title="Open source file"
               type="button"
+              tabindex="-1"
             >
               <svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
                 <path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"></path>

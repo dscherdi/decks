@@ -110,6 +110,33 @@ With the filename `What is the capital of France?.md`, this produces one card:
 
 This format is useful for atomic notes where the filename is already the question.
 
+### Reverse cards
+
+Add `reverse: true` to the frontmatter of any deck file to automatically generate a reversed version of every card. Each card will produce two entries: the original (front → back) and a reversed copy (back → front), so you practice recall in both directions.
+
+```markdown
+---
+tags: [decks/vocabulary]
+reverse: true
+---
+
+## Bonjour
+
+Hello
+
+## Merci
+
+Thank you
+```
+
+This creates four cards total:
+- "Bonjour" → "Hello"
+- "Hello" → "Bonjour"
+- "Merci" → "Thank you"
+- "Thank you" → "Merci"
+
+Works with all card formats (header-paragraph, table, and title). Review progress is tracked separately for each direction. To stop generating reverse cards, remove `reverse: true` from the frontmatter — the reversed cards will be deleted on the next sync while the original cards remain untouched.
+
 ### Tips
 
 - **Use descriptive tags**: `#decks/spanish-verbs` instead of `#decks/deck1`

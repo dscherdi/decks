@@ -54,3 +54,14 @@ export function generateDeckId(filepath: string): string {
 export function generateDeckGroupId(tag: string): string {
   return `deckgroup_${simpleHash(tag).toString(36)}`;
 }
+
+/**
+ * Generate unique reverse flashcard ID using hash of the original card's front text
+ * The ID is based on the original front text (= reverse card's back) so it stays
+ * stable when the original card's back content changes.
+ * @param originalFrontText The front text of the original (non-reversed) flashcard
+ * @returns A deterministic ID in format "rcard_HASH"
+ */
+export function generateReverseFlashcardId(originalFrontText: string): string {
+  return `rcard_${simpleHash("reverse:" + originalFrontText).toString(36)}`;
+}

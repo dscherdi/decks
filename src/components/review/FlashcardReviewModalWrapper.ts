@@ -194,15 +194,17 @@ export class FlashcardReviewModalWrapper extends Modal {
           }
         },
         onComplete: async (_event: CompleteEventDetail) => {
-          const message = this.browseMode
-            ? `Browse complete for ${this.deckOrGroup.name}!`
-            : `Review session complete for ${this.deckOrGroup.name}!`;
+          if (this.browseMode) {
+            this.close();
+            return;
+          }
 
           if (this.settings?.ui?.enableNotices !== false) {
-            new Notice(message);
+            new Notice(`Review session complete for ${this.deckOrGroup.name}!`);
           }
           // Refresh the view to update stats
           await this.refreshStats();
+          this.close();
         },
         onNavigateToSource: async (card: Flashcard) => {
           await this.navigateToFlashcardSource(card);

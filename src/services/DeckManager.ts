@@ -297,6 +297,9 @@ export class DeckManager {
 
     // Use unified sync method - implementation handles worker vs main thread
     try {
+      const fileMeta = this.metadataCache.getFileCache(file);
+      const reverseCards = fileMeta?.frontmatter?.reverse === true;
+
       const result = await this.db.syncFlashcardsForDeck(
         {
           deckId: deck.id,
@@ -305,6 +308,7 @@ export class DeckManager {
           deckConfig: deck.profile,
           fileContent: fileContent,
           fileTitle: fileTitle,
+          reverseCards,
         },
         progressCallback
       );
