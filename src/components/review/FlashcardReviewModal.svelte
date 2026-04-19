@@ -53,13 +53,8 @@
   }
 
   function getBreadcrumbParts(card: Flashcard): string[] {
-    const filename = card.sourceFile
-      ? card.sourceFile.replace(/\.md$/, "").split("/").pop() || ""
-      : "";
-    const parts: string[] = [];
-    if (filename) parts.push(filename);
-    if (card.breadcrumb) parts.push(...card.breadcrumb.split(" > "));
-    return parts;
+    if (!card.breadcrumb) return [];
+    return card.breadcrumb.split(" > ");
   }
 
   let collapsedBreadcrumbIndices = new Set<number>();
