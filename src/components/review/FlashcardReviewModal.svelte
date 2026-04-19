@@ -52,17 +52,26 @@
     }
   }
 
-  function getBreadcrumbDisplay(card: Flashcard): string {
-    // Get filename without extension from sourceFile
+  function getBreadcrumbParts(card: Flashcard): string[] {
     const filename = card.sourceFile
       ? card.sourceFile.replace(/\.md$/, "").split("/").pop() || ""
       : "";
+    const parts: string[] = [];
+    if (filename) parts.push(filename);
+    if (card.breadcrumb) parts.push(...card.breadcrumb.split(" > "));
+    return parts;
+  }
 
-    if (!card.breadcrumb) {
-      return filename;
+  let collapsedBreadcrumbIndices = new Set<number>();
+
+  function toggleBreadcrumbIndex(i: number) {
+    const next = new Set(collapsedBreadcrumbIndices);
+    if (next.has(i)) {
+      next.delete(i);
+    } else {
+      next.add(i);
     }
-
-    return filename ? `${filename} > ${card.breadcrumb}` : card.breadcrumb;
+    collapsedBreadcrumbIndices = next;
   }
 
   // Helper function to handle complete action (supports both Svelte 4 and Svelte 5)
@@ -153,9 +162,13 @@
       // If no initial card provided, get the first card from scheduler
       if (!currentCard) {
         if (isDeckGroup(deckOrGroup)) {
-          currentCard = await scheduler.getNextForDeckGroup(new Date(), deckOrGroup, {
-            allowNew: true,
-          });
+          currentCard = await scheduler.getNextForDeckGroup(
+            new Date(),
+            deckOrGroup,
+            {
+              allowNew: true,
+            }
+          );
         } else {
           currentCard = await scheduler.getNext(new Date(), deckOrGroup.id, {
             allowNew: true,
@@ -177,6 +190,12 @@
   async function loadCard() {
     if (!currentCard) return;
 
+    const parts = getBreadcrumbParts(currentCard);
+    const initialCollapsed = new Set<number>();
+    for (let idx = 0; idx < parts.length - 2; idx++) {
+      initialCollapsed.add(idx);
+    }
+    collapsedBreadcrumbIndices = initialCollapsed;
     showAnswer = false;
     showNotes = false;
     try {
@@ -249,9 +268,13 @@
 
       // Get the next card from the scheduler
       if (isDeckGroup(deckOrGroup)) {
-        currentCard = await scheduler.getNextForDeckGroup(new Date(), deckOrGroup, {
-          allowNew: true,
-        });
+        currentCard = await scheduler.getNextForDeckGroup(
+          new Date(),
+          deckOrGroup,
+          {
+            allowNew: true,
+          }
+        );
       } else {
         currentCard = await scheduler.getNext(new Date(), deckOrGroup.id, {
           allowNew: true,
@@ -305,13 +328,20 @@
         lastEventTime = now;
         lastEventType = eventType;
 
-        if (event.key === " " || event.key === "Enter" || event.key === "ArrowRight") {
+        if (
+          event.key === " " ||
+          event.key === "Enter" ||
+          event.key === "ArrowRight"
+        ) {
           event.preventDefault();
           handleBrowseNext();
         } else if (event.key === "ArrowLeft") {
           event.preventDefault();
           handleBrowsePrevious();
-        } else if ((event.key === "n" || event.key === "N") && currentCard?.notes) {
+        } else if (
+          (event.key === "n" || event.key === "N") &&
+          currentCard?.notes
+        ) {
           event.preventDefault();
           toggleNotes();
         }
@@ -378,7 +408,10 @@
     if (!browseMode || isLoading) return;
 
     if (browseCardIndex >= browseCards.length - 1) {
-      handleComplete({ reason: "browse-complete", reviewed: browseCards.length });
+      handleComplete({
+        reason: "browse-complete",
+        reviewed: browseCards.length,
+      });
       reviewFinished = true;
       return;
     }
@@ -507,8 +540,39 @@
 <div class="decks-review-modal">
   <div class="decks-modal-header">
     <h3>{browseMode ? "Browse" : "Review session"} - {deckOrGroup.name}</h3>
-    {#if currentCard && getBreadcrumbDisplay(currentCard)}
-      <div class="decks-breadcrumb">{getBreadcrumbDisplay(currentCard)}</div>
+    {#if currentCard}
+      {@const breadcrumbParts = getBreadcrumbParts(currentCard)}
+      {#if breadcrumbParts.length > 0}
+        <div class="decks-breadcrumb">
+          {#each breadcrumbParts as part, i}
+            {#if i > 0}<span class="decks-breadcrumb-sep">&nbsp;>&nbsp;</span
+              >{/if}
+            {#if collapsedBreadcrumbIndices.has(i)}
+              <span
+                class="decks-breadcrumb-collapsed"
+                role="button"
+                tabindex="-1"
+                on:click={() => toggleBreadcrumbIndex(i)}
+                on:keydown={(e) => {
+                  if (e.key === "Enter" || e.key === " ")
+                    toggleBreadcrumbIndex(i);
+                }}>...</span
+              >
+            {:else}
+              <span
+                class="decks-breadcrumb-expanded"
+                role="button"
+                tabindex="-1"
+                on:click={() => toggleBreadcrumbIndex(i)}
+                on:keydown={(e) => {
+                  if (e.key === "Enter" || e.key === " ")
+                    toggleBreadcrumbIndex(i);
+                }}>{part}</span
+              >
+            {/if}
+          {/each}
+        </div>
+      {/if}
     {/if}
     <div class="decks-header-stats">
       {#if browseMode}
@@ -577,8 +641,20 @@
               type="button"
               tabindex="-1"
             >
-              <svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-                <path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"></path>
+              <svg
+                xmlns="http://www.w3.org/2000/svg"
+                width="12"
+                height="12"
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                stroke-width="2"
+                stroke-linecap="round"
+                stroke-linejoin="round"
+              >
+                <path
+                  d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"
+                ></path>
                 <polyline points="15 3 21 3 21 9"></polyline>
                 <line x1="10" y1="14" x2="21" y2="3"></line>
               </svg>
@@ -598,9 +674,21 @@
               title="Copy content"
               type="button"
             >
-              <svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+              <svg
+                xmlns="http://www.w3.org/2000/svg"
+                width="12"
+                height="12"
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                stroke-width="2"
+                stroke-linecap="round"
+                stroke-linejoin="round"
+              >
                 <rect x="9" y="9" width="13" height="13" rx="2" ry="2"></rect>
-                <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"></path>
+                <path
+                  d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"
+                ></path>
               </svg>
             </button>
           {/if}
@@ -613,7 +701,17 @@
               title="Toggle notes (N)"
               type="button"
             >
-              <svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+              <svg
+                xmlns="http://www.w3.org/2000/svg"
+                width="12"
+                height="12"
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                stroke-width="2"
+                stroke-linecap="round"
+                stroke-linejoin="round"
+              >
                 <circle cx="12" cy="12" r="10"></circle>
                 <line x1="12" y1="16" x2="12" y2="12"></line>
                 <line x1="12" y1="8" x2="12.01" y2="8"></line>
@@ -662,7 +760,11 @@
             style="touch-action: manipulation;"
             type="button"
           >
-            <span>{browseCardIndex >= browseCards.length - 1 ? 'Finish' : 'Next'}</span>
+            <span
+              >{browseCardIndex >= browseCards.length - 1
+                ? "Finish"
+                : "Next"}</span
+            >
             <span class="decks-shortcut">Space</span>
           </button>
         </div>
@@ -747,9 +849,48 @@
   .decks-breadcrumb {
     font-size: 11px;
     color: var(--text-faint);
-    overflow: hidden;
-    text-overflow: ellipsis;
-    white-space: nowrap;
+  }
+
+  .decks-breadcrumb-sep {
+    display: inline;
+    white-space: "pre";
+  }
+
+  .decks-breadcrumb-collapsed,
+  .decks-breadcrumb-expanded {
+    display: inline;
+    outline: none;
+    user-select: none;
+    -webkit-tap-highlight-color: transparent;
+  }
+
+  .decks-breadcrumb-collapsed:focus,
+  .decks-breadcrumb-collapsed:focus-visible,
+  .decks-breadcrumb-expanded:focus,
+  .decks-breadcrumb-expanded:focus-visible {
+    outline: none;
+  }
+
+  .decks-breadcrumb-collapsed {
+    cursor: pointer;
+    color: var(--text-muted);
+    font-weight: 600;
+    letter-spacing: 0.05em;
+  }
+
+  .decks-breadcrumb-collapsed:hover {
+    color: var(--text-normal);
+  }
+
+  .decks-breadcrumb-expanded {
+    cursor: pointer;
+    color: var(--text-faint);
+    text-decoration: underline;
+    text-decoration-style: dotted;
+  }
+
+  .decks-breadcrumb-expanded:hover {
+    color: var(--text-muted);
   }
 
   .decks-modal-header {
