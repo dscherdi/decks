@@ -27,6 +27,7 @@ export interface SyncResult {
   success: boolean;
   parsedCount: number;
   operationsCount: number;
+  duplicatesSkipped: number;
 }
 
 export interface SyncData {
@@ -52,8 +53,20 @@ export class FlashcardSynchronizer {
   executeBatchOperations(operations: BatchOperation[]): void {
     for (const op of operations) {
       if (op.type === "migrate" && op.oldId && op.flashcard) {
-        // Migrate flashcard identity: update flashcard ID and content
+        // Safety check: if target ID already exists (hash collision), just delete the old card
         const card = op.flashcard;
+        const checkStmt = this.db.prepare("SELECT id FROM flashcards WHERE id = ?");
+        checkStmt.bind([card.id]);
+        const targetExists = checkStmt.step();
+        checkStmt.free();
+        if (targetExists) {
+          const deleteStmt = this.db.prepare("DELETE FROM flashcards WHERE id = ?");
+          deleteStmt.run([op.oldId]);
+          deleteStmt.free();
+          continue;
+        }
+
+        // Migrate flashcard identity: update flashcard ID and content
         const updateStmt = this.db.prepare(`
                     UPDATE flashcards
                     SET id = ?, front = ?, back = ?, content_hash = ?, breadcrumb = ?, notes = ?, modified = datetime('now')
@@ -203,6 +216,7 @@ export class FlashcardSynchronizer {
 
       const processedIds = new Set<string>();
       const batchOperations: BatchOperation[] = [];
+      let duplicatesSkipped = 0;
 
       // Build lists for smart rename detection
       interface ParsedCardData {
@@ -245,12 +259,15 @@ export class FlashcardSynchronizer {
 
         // Reverse cards use a stable ID based on the original card's front text (= reverse card's back)
         const flashcardId = parsed.isReverse
-          ? generateReverseFlashcardId(parsed.back)
-          : generateFlashcardId(parsed.front);
+          ? generateReverseFlashcardId(parsed.back, data.deckId)
+          : generateFlashcardId(parsed.front, data.deckId);
         const contentHash = generateContentHash(parsed.back);
         const existingCard = existingById.get(flashcardId);
 
-        if (processedIds.has(flashcardId)) continue;
+        if (processedIds.has(flashcardId)) {
+          duplicatesSkipped++;
+          continue;
+        }
         processedIds.add(flashcardId);
 
         if (existingCard) {
@@ -482,6 +499,7 @@ export class FlashcardSynchronizer {
         success: true,
         parsedCount: parsedCards.length,
         operationsCount: batchOperations.length,
+        duplicatesSkipped,
       };
     } catch (error) {
       throw new Error(`Sync failed: ${(error as Error).message}`);

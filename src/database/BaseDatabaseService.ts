@@ -651,7 +651,7 @@ export abstract class BaseDatabaseService implements IDatabaseService {
   ): Promise<void> {
     const now = this.getCurrentTimestamp();
     // Use provided ID first, then generate from front text
-    const flashcardId = flashcard.id || generateFlashcardId(flashcard.front);
+    const flashcardId = flashcard.id || generateFlashcardId(flashcard.front, flashcard.deckId);
     const flashcardWithId = {
       ...flashcard,
       id: flashcardId,
@@ -659,7 +659,7 @@ export abstract class BaseDatabaseService implements IDatabaseService {
       modified: now,
     };
 
-    const sql = `INSERT INTO flashcards
+    const sql = `INSERT OR IGNORE INTO flashcards
                  (id, deck_id, front, back, type, source_file, content_hash, breadcrumb, notes, state, due_date,
                   interval, repetitions, difficulty, stability, lapses, last_reviewed, created, modified)
                  VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`;
@@ -852,7 +852,7 @@ export abstract class BaseDatabaseService implements IDatabaseService {
     if (flashcards.length === 0) return;
 
     const now = this.getCurrentTimestamp();
-    const sql = `INSERT INTO flashcards
+    const sql = `INSERT OR IGNORE INTO flashcards
                  (id, deck_id, front, back, type, source_file, content_hash, breadcrumb, notes, state, due_date,
                   interval, repetitions, difficulty, stability, lapses, last_reviewed, created, modified)
                  VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`;

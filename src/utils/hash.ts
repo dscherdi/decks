@@ -20,12 +20,13 @@ function simpleHash(text: string): number {
 }
 
 /**
- * Generate unique flashcard ID using hash of front text
+ * Generate unique flashcard ID using hash of deck ID and front text
  * @param frontText The front text of the flashcard
+ * @param deckId The ID of the deck this card belongs to
  * @returns A deterministic ID in format "card_HASH"
  */
-export function generateFlashcardId(frontText: string): string {
-  return `card_${simpleHash(frontText).toString(36)}`;
+export function generateFlashcardId(frontText: string, deckId: string): string {
+  return `card_${simpleHash(deckId + "::" + frontText).toString(36)}`;
 }
 
 /**
@@ -56,12 +57,13 @@ export function generateDeckGroupId(tag: string): string {
 }
 
 /**
- * Generate unique reverse flashcard ID using hash of the original card's front text
+ * Generate unique reverse flashcard ID using hash of deck ID and the original card's front text
  * The ID is based on the original front text (= reverse card's back) so it stays
  * stable when the original card's back content changes.
  * @param originalFrontText The front text of the original (non-reversed) flashcard
+ * @param deckId The ID of the deck this card belongs to
  * @returns A deterministic ID in format "rcard_HASH"
  */
-export function generateReverseFlashcardId(originalFrontText: string): string {
-  return `rcard_${simpleHash("reverse:" + originalFrontText).toString(36)}`;
+export function generateReverseFlashcardId(originalFrontText: string, deckId: string): string {
+  return `rcard_${simpleHash("reverse:" + deckId + "::" + originalFrontText).toString(36)}`;
 }

@@ -313,6 +313,18 @@ export class DeckManager {
         progressCallback
       );
 
+      if (result.duplicatesSkipped > 0) {
+        this.debugLog(
+          `⚠️ Deck "${deck.name}" has ${result.duplicatesSkipped} duplicate flashcard(s) with the same front text. Only the first occurrence was kept.`
+        );
+        if (this.settings?.ui?.enableNotices) {
+          new Notice(
+            `⚠️ Deck "${deck.name}" has ${result.duplicatesSkipped} duplicate flashcard(s) with the same front text. Only the first occurrence was kept.`,
+            8000
+          );
+        }
+      }
+
       if (result.parsedCount > MAX_FLASHCARDS_PER_DECK) {
         this.debugLog(
           `⚠️ Deck "${deck.name}" exceeds flashcard limit. ${
