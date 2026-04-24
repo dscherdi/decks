@@ -18,6 +18,7 @@ export interface DecksSettings {
     enableBackgroundRefresh: boolean;
     backgroundRefreshInterval: number; // seconds
     enableNotices: boolean;
+    reviewDisplayMode: "modal" | "tab";
   };
 
   // Backup Settings
@@ -58,6 +59,7 @@ export const DEFAULT_SETTINGS: DecksSettings = {
     enableBackgroundRefresh: true,
     backgroundRefreshInterval: 120,
     enableNotices: true,
+    reviewDisplayMode: "modal",
   },
 
   backup: {

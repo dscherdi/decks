@@ -28,8 +28,13 @@ import { DecksView } from "./components/DecksView";
 import { DecksViewModal } from "./components/DecksViewModal";
 import { ReleaseNotesModal } from "./components/ReleaseNotesModal";
 import { TestDeckService } from "./services/TestDeckService";
+import {
+  FlashcardReviewView,
+  VIEW_TYPE_FLASHCARD_REVIEW,
+} from "./components/review/FlashcardReviewView";
 
 export const VIEW_TYPE_DECKS = "decks-view";
+export { VIEW_TYPE_FLASHCARD_REVIEW };
 
 /**
  * Deep merge utility that ignores null and undefined values
@@ -194,6 +199,18 @@ export default class DecksPlugin extends Plugin {
             this.settings,
             this.progressTracker,
             this.logger
+          )
+      );
+
+      // Register the review tab view
+      this.registerView(
+        VIEW_TYPE_FLASHCARD_REVIEW,
+        (leaf) =>
+          new FlashcardReviewView(
+            leaf,
+            this.scheduler,
+            this.settings,
+            this.db
           )
       );
 

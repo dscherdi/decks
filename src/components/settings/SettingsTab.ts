@@ -280,6 +280,23 @@ export class DecksSettingTab extends PluginSettingTab {
           })
       );
 
+    new Setting(containerEl)
+      .setName("Review display mode")
+      .setDesc(
+        // eslint-disable-next-line obsidianmd/ui/sentence-case
+        "Where review and browse sessions open. Tabs can be dragged to sidebars, bottom panels, or separate windows."
+      )
+      .addDropdown((dropdown) =>
+        dropdown
+          .addOption("modal", "Modal overlay")
+          .addOption("tab", "New tab")
+          .setValue(this.settings.ui.reviewDisplayMode)
+          .onChange(async (value) => {
+            this.settings.ui.reviewDisplayMode = value as "modal" | "tab";
+            await this.saveSettings();
+          })
+      );
+
     // Set initial state of interval setting
     intervalSetting.setDisabled(!this.settings.ui.enableBackgroundRefresh);
   }

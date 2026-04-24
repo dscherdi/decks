@@ -1,4 +1,4 @@
-import type { Deck, DeckWithProfile, DeckStats, DeckGroup, Flashcard } from "@/database/types";
+import type { DeckWithProfile, DeckStats, DeckGroup, Flashcard, DeckOrGroup } from "@/database/types";
 import { VIEW_TYPE_DECKS } from "@/main";
 import { DeckSynchronizer } from "@/services/DeckSynchronizer";
 import { DeckManager } from "@/services/DeckManager";
@@ -8,6 +8,10 @@ import { Logger } from "@/utils/logging";
 import { ItemView, WorkspaceLeaf, Notice } from "obsidian";
 import { Scheduler } from "@/services/Scheduler";
 import { FlashcardReviewModalWrapper } from "./review/FlashcardReviewModalWrapper";
+import {
+  FlashcardReviewView,
+  VIEW_TYPE_FLASHCARD_REVIEW,
+} from "./review/FlashcardReviewView";
 import { StatisticsModal } from "./settings/StatisticsModal";
 import { ProfilesManagerModal } from "./config/ProfilesManagerModal";
 import { DeckConfigModal } from "./config/DeckConfigModal";
@@ -277,7 +281,67 @@ export class DecksView extends ItemView {
     });
   }
 
-  async startReview(deck: Deck) {
+  private openReviewSession(
+    deckOrGroup: DeckOrGroup,
+    cards: Flashcard[],
+    browseMode: boolean
+  ): void {
+    if (this.settings.ui.reviewDisplayMode === "tab") {
+      this.openReviewInTab(deckOrGroup, cards, browseMode);
+    } else {
+      new FlashcardReviewModalWrapper(
+        this.app,
+        deckOrGroup,
+        cards,
+        this.scheduler,
+        this.settings,
+        this.db,
+        this.refreshDecksAndStats.bind(this),
+        this.refreshStatsById.bind(this),
+        browseMode
+      ).open();
+    }
+  }
+
+  private openReviewInTab(
+    deckOrGroup: DeckOrGroup,
+    cards: Flashcard[],
+    browseMode: boolean
+  ): void {
+    const { workspace } = this.app;
+    const existingLeaves = workspace.getLeavesOfType(
+      VIEW_TYPE_FLASHCARD_REVIEW
+    );
+
+    let leaf: WorkspaceLeaf;
+    if (existingLeaves.length > 0) {
+      leaf = existingLeaves[0];
+    } else {
+      leaf = workspace.getLeaf("tab");
+    }
+
+    void leaf
+      .setViewState({
+        type: VIEW_TYPE_FLASHCARD_REVIEW,
+        active: true,
+      })
+      .then(() => {
+        const view = leaf.view;
+        if (view instanceof FlashcardReviewView) {
+          view.setReviewData(
+            deckOrGroup,
+            cards,
+            browseMode,
+            this.refreshDecksAndStats.bind(this),
+            this.refreshStatsById.bind(this)
+          );
+        }
+        void workspace.revealLeaf(leaf);
+      })
+      .catch(console.error);
+  }
+
+  async startReview(deck: DeckWithProfile) {
     try {
       // First sync flashcards for this specific deck
       this.logger.debug(`Syncing cards for deck before review: ${deck.name}`);
@@ -376,17 +440,7 @@ export class DecksView extends ItemView {
         }
       }
 
-      // Open review modal
-      new FlashcardReviewModalWrapper(
-        this.app,
-        deck,
-        [nextCard],
-        this.scheduler,
-        this.settings,
-        this.db,
-        this.refreshDecksAndStats.bind(this),
-        this.refreshStatsById.bind(this)
-      ).open();
+      this.openReviewSession({ ...deck, type: "file" }, [nextCard], false);
     } catch (error) {
       console.error("Error starting review:", error);
       if (this.settings?.ui?.enableNotices !== false) {
@@ -421,17 +475,7 @@ export class DecksView extends ItemView {
         return;
       }
 
-      // Open review modal with deck group
-      new FlashcardReviewModalWrapper(
-        this.app,
-        deckGroup,
-        [nextCard],
-        this.scheduler,
-        this.settings,
-        this.db,
-        this.refreshDecksAndStats.bind(this),
-        this.refreshStatsById.bind(this)
-      ).open();
+      this.openReviewSession(deckGroup, [nextCard], false);
     } catch (error) {
       console.error("Error starting deck group review:", error);
       if (this.settings?.ui?.enableNotices !== false) {
@@ -440,7 +484,7 @@ export class DecksView extends ItemView {
     }
   }
 
-  async startBrowse(deck: Deck) {
+  async startBrowse(deck: DeckWithProfile) {
     try {
       this.logger.debug(`Starting browse mode for deck: ${deck.name}`);
       await this.deckSynchronizer.syncDeck(deck.id);
@@ -455,17 +499,7 @@ export class DecksView extends ItemView {
         return;
       }
 
-      new FlashcardReviewModalWrapper(
-        this.app,
-        deck,
-        allCards,
-        this.scheduler,
-        this.settings,
-        this.db,
-        this.refreshDecksAndStats.bind(this),
-        this.refreshStatsById.bind(this),
-        true
-      ).open();
+      this.openReviewSession({ ...deck, type: "file" }, allCards, true);
     } catch (error) {
       console.error("Error starting browse:", error);
       if (this.settings?.ui?.enableNotices !== false) {
@@ -496,17 +530,7 @@ export class DecksView extends ItemView {
         return;
       }
 
-      new FlashcardReviewModalWrapper(
-        this.app,
-        deckGroup,
-        allCards,
-        this.scheduler,
-        this.settings,
-        this.db,
-        this.refreshDecksAndStats.bind(this),
-        this.refreshStatsById.bind(this),
-        true
-      ).open();
+      this.openReviewSession(deckGroup, allCards, true);
     } catch (error) {
       console.error("Error starting deck group browse:", error);
       if (this.settings?.ui?.enableNotices !== false) {
