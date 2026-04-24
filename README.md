@@ -110,6 +110,44 @@ With the filename `What is the capital of France?.md`, this produces one card:
 
 This format is useful for atomic notes where the filename is already the question.
 
+### Cloze deletions
+
+Use `==highlight==` syntax to create cloze deletion flashcards. Each highlighted word or phrase becomes a separate card where that text is blanked out during review.
+
+```markdown
+---
+tags: [decks/science]
+---
+
+## The Solar System
+
+The ==Sun== is the star at the center of our solar system. The closest planet to the Sun is ==Mercury==, and the largest planet is ==Jupiter==.
+```
+
+This creates three cloze cards from a single paragraph — one for each highlight. During review:
+
+1. You see the front (header) and tap "Show answer"
+2. The paragraph appears with the active cloze as a clickable `[...]` blank
+3. Tap the blank to reveal the answer, then rate the card
+
+Cloze also works in table format — highlights in the Back column generate cloze cards:
+
+```markdown
+## Chemistry
+
+| Front | Back                                                    |
+| ----- | ------------------------------------------------------- |
+| H2O   | ==Water== — the most common molecule on Earth's surface |
+| NaCl  | ==Sodium chloride==, commonly known as ==table salt==   |
+```
+
+Two context modes are available per profile:
+
+- **Hidden** (default): All other clozes are also blanked out. The active blank has a distinct accent color so you know which one to answer.
+- **Open**: Other clozes show their text in muted style. Only the active one is blanked.
+
+Cards without any `==highlights==` remain normal flashcards even with cloze enabled. Cloze is enabled by default on new profiles and can be toggled in **Manage profiles**.
+
 ### Reverse cards
 
 Add `reverse: true` to the frontmatter of any deck file to automatically generate a reversed version of every card. Each card will produce two entries: the original (front → back) and a reversed copy (back → front), so you practice recall in both directions.
@@ -229,6 +267,8 @@ Open the Profiles Manager from the deck list panel to create and edit profiles. 
 - **FSRS profile**: Standard or Intensive algorithm weights
 - **Header level**: Which header level to use for parsing flashcards, or "Title" to use the filename as the card front
 - **Review order**: Oldest due first or random
+- **Cloze deletions**: Enable cloze cards from `==highlighted==` text (on by default)
+- **Cloze context**: Show or hide non-active clozes during review
 
 Assign a profile to a tag from the gear icon on any deck or tag group in the deck list.
 
