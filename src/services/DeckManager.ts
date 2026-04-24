@@ -258,9 +258,10 @@ export class DeckManager {
    */
   parseFlashcardsFromContent(
     content: string,
-    headerLevel = 2
+    headerLevel = 2,
+    clozeEnabled = false
   ): ParsedFlashcard[] {
-    return FlashcardParser.parseFlashcardsFromContent(content, headerLevel);
+    return FlashcardParser.parseFlashcardsFromContent(content, headerLevel, undefined, clozeEnabled);
   }
 
   /**
@@ -309,6 +310,7 @@ export class DeckManager {
           fileContent: fileContent,
           fileTitle: fileTitle,
           reverseCards,
+          clozeEnabled: deck.profile.clozeEnabled,
         },
         progressCallback
       );
@@ -414,8 +416,9 @@ export class DeckManager {
     const existingFlashcards = await this.db.getFlashcardsByDeck(deckId);
     const frontTextMap = new Map<string, Flashcard[]>();
 
-    // Group flashcards by front text
+    // Group flashcards by front text (skip cloze cards — they share front text by design)
     for (const card of existingFlashcards) {
+      if (card.type === "cloze") continue;
       const normalizedFront = card.front.trim().toLowerCase();
       if (!frontTextMap.has(normalizedFront)) {
         frontTextMap.set(normalizedFront, []);

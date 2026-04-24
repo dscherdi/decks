@@ -1,7 +1,7 @@
 <script lang="ts">
   import { onMount } from "svelte";
   import { Setting, Notice } from "obsidian";
-  import type { DeckProfile, ProfileTagMapping } from "../../database/types";
+  import type { DeckProfile, ProfileTagMapping, ClozeShowContext } from "../../database/types";
   import type { IDatabaseService } from "../../database/DatabaseFactory";
   import type { ReviewOrder } from "../../types/ReviewOrder";
   import type { FSRSProfile } from "../../database/types";
@@ -34,6 +34,8 @@
   let fsrsProfileContainer: HTMLElement;
   let learningStepsContainer: HTMLElement;
   let relearningStepsContainer: HTMLElement;
+  let clozeEnabledContainer: HTMLElement;
+  let clozeShowContextContainer: HTMLElement;
   let deckCountContainer: HTMLElement;
   let tagMappingsContainer: HTMLElement;
 
@@ -51,6 +53,8 @@
   let fsrsProfile: FSRSProfile = "STANDARD";
   let learningSteps = "1m";
   let relearningSteps = "10m";
+  let clozeEnabled = false;
+  let clozeShowContext: ClozeShowContext = "open";
 
   // Validation error tracking
   let nameError = false;
@@ -85,6 +89,8 @@
     fsrsProfile = profile.fsrs.profile;
     learningSteps = profile.learningSteps;
     relearningSteps = profile.relearningSteps;
+    clozeEnabled = profile.clozeEnabled;
+    clozeShowContext = profile.clozeShowContext;
 
     // Reset validation errors
     nameError = false;
@@ -184,6 +190,8 @@
           requestRetention: requestRetention,
           profile: fsrsProfile,
         },
+        clozeEnabled: clozeEnabled,
+        clozeShowContext: clozeShowContext,
         modified: new Date().toISOString(),
       };
 
@@ -459,6 +467,37 @@
         });
     }
 
+    // Cloze enabled toggle
+    if (clozeEnabledContainer) {
+      clozeEnabledContainer.empty();
+      new Setting(clozeEnabledContainer)
+        .setName("Cloze deletions")
+        .setDesc("Generate cloze cards from ==highlighted== text")
+        .addToggle((toggle) => {
+          toggle.setValue(clozeEnabled).onChange((value) => {
+            clozeEnabled = value;
+            rebuildSettings();
+          });
+        });
+    }
+
+    // Cloze show context dropdown
+    if (clozeShowContextContainer && clozeEnabled) {
+      clozeShowContextContainer.empty();
+      new Setting(clozeShowContextContainer)
+        .setName("Cloze context")
+        .setDesc("How non-tested clozes appear during review")
+        .addDropdown((dropdown) => {
+          dropdown.addOption("open", "Show other clozes");
+          dropdown.addOption("hidden", "Hide all clozes");
+          dropdown.setValue(clozeShowContext).onChange((value) => {
+            clozeShowContext = value as ClozeShowContext;
+          });
+        });
+    } else if (clozeShowContextContainer) {
+      clozeShowContextContainer.empty();
+    }
+
     // Review order
     if (reviewOrderContainer) {
       reviewOrderContainer.empty();
@@ -590,8 +629,10 @@
         </div>
 
         <div class="decks-settings-section">
-          <h4>Card Parsing</h4>
+          <h4>Card parsing</h4>
           <div bind:this={headerLevelContainer}></div>
+          <div bind:this={clozeEnabledContainer}></div>
+          <div bind:this={clozeShowContextContainer}></div>
         </div>
 
         <div class="decks-settings-section">

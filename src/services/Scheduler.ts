@@ -1,5 +1,6 @@
 import type {
   Flashcard,
+  FlashcardType,
   FlashcardState,
   DeckWithProfile,
   ReviewLog,
@@ -640,22 +641,41 @@ export class Scheduler {
       deckId: row[1] as string,
       front: row[2] as string,
       back: row[3] as string,
-      type: row[4] as "header-paragraph" | "table",
+      type: row[4] as FlashcardType,
       sourceFile: row[5] as string,
       contentHash: row[6] as string,
       breadcrumb: row[7] as string,
       notes: (row[8] as string) || "",
-      state: row[9] as FlashcardState,
-      dueDate: row[10] as string,
-      interval: row[11] as number,
-      repetitions: row[12] as number,
-      difficulty: row[13] as number,
-      stability: row[14] as number,
-      lapses: row[15] as number,
-      lastReviewed: row[16] as string | null,
-      created: row[17] as string,
-      modified: row[18] as string,
+      clozeText: (row[9] as string) ?? null,
+      clozeOrder: (row[10] as number) ?? null,
+      state: row[11] as FlashcardState,
+      dueDate: row[12] as string,
+      interval: row[13] as number,
+      repetitions: row[14] as number,
+      difficulty: row[15] as number,
+      stability: row[16] as number,
+      lapses: row[17] as number,
+      lastReviewed: row[18] as string | null,
+      created: row[19] as string,
+      modified: row[20] as string,
     };
+  }
+
+  async getClozeSiblings(card: Flashcard, now: Date): Promise<Flashcard[]> {
+    const query = `
+      SELECT * FROM flashcards
+      WHERE deck_id = ? AND front = ? AND type = 'cloze'
+        AND id != ?
+        AND ((state IN ('review', 'relearning') AND due_date <= ?) OR state = 'new')
+      ORDER BY cloze_order ASC
+    `;
+    const rows = await this.db.querySql<unknown[]>(query, [
+      card.deckId,
+      card.front,
+      card.id,
+      now.toISOString(),
+    ]);
+    return rows.map((row) => this.rowToFlashcard(row as unknown[]));
   }
 
   /**

@@ -1,6 +1,6 @@
 <script lang="ts">
   import { createEventDispatcher, onMount, onDestroy, tick } from "svelte";
-  import type { Flashcard, DeckOrGroup } from "../../database/types";
+  import type { Flashcard, DeckOrGroup, ClozeShowContext } from "../../database/types";
   import { isDeckGroup } from "../../database/types";
   import type { DecksSettings } from "../../settings";
   import { type RatingLabel } from "../../algorithm/fsrs";
@@ -48,13 +48,34 @@
 
   function handleCopyBack() {
     if (currentCard) {
-      navigator.clipboard.writeText(currentCard.back).catch(console.error);
+      const text = currentCard.type === "cloze"
+        ? currentCard.back.replace(/==((?:(?!==).)+)==/g, "$1")
+        : currentCard.back;
+      navigator.clipboard.writeText(text).catch(console.error);
     }
   }
 
   function getBreadcrumbParts(card: Flashcard): string[] {
     if (!card.breadcrumb) return [];
     return card.breadcrumb.split(" > ");
+  }
+
+  function setClozeAttributes(
+    el: HTMLElement,
+    clozeIndex: number,
+    mode: ClozeShowContext,
+    revealed: boolean
+  ): void {
+    el.setAttribute("data-decks-cloze-index", String(clozeIndex));
+    el.setAttribute("data-decks-cloze-mode", mode);
+    el.setAttribute("data-decks-cloze-revealed", String(revealed));
+    el.removeAttribute("data-decks-cloze-counter");
+  }
+
+  function clearClozeAttributes(el: HTMLElement): void {
+    el.removeAttribute("data-decks-cloze-index");
+    el.removeAttribute("data-decks-cloze-mode");
+    el.removeAttribute("data-decks-cloze-revealed");
   }
 
   let collapsedBreadcrumbIndices = new Set<number>();
@@ -92,6 +113,13 @@
   let sessionId: string | null = null;
   const deckFilePath = "";
   let sessionProgress: SessionProgress | null = null;
+
+  // Cloze group review state
+  let clozeGroup: Flashcard[] = [];
+  let clozeGroupIndex = 0;
+  let inClozeGroupReview = false;
+
+  $: clozeShowContext = deckOrGroup.profile?.clozeShowContext ?? "open";
 
   // Browse mode variables
   let browseCardIndex = 0;
@@ -182,6 +210,21 @@
     window.addEventListener("keydown", handleKeydown);
   });
 
+  function handleClozeBlankClick(event: Event) {
+    const target = event.target as HTMLElement;
+    if (!target.classList.contains("decks-cloze-active") || !currentCard?.clozeText) return;
+
+    const container = target.closest("[data-decks-cloze-index]");
+    if (!container || container.getAttribute("data-decks-cloze-revealed") === "true") return;
+
+    const span = document.createElement("span");
+    span.className = "decks-cloze-revealed";
+    span.textContent = currentCard.clozeText;
+    target.replaceWith(span);
+
+    container.setAttribute("data-decks-cloze-revealed", "true");
+  }
+
   async function loadCard() {
     if (!currentCard) return;
 
@@ -193,13 +236,22 @@
     collapsedBreadcrumbIndices = initialCollapsed;
     showAnswer = false;
     showNotes = false;
+
+    // Build cloze group when first encountering a cloze card
+    if (currentCard.type === "cloze" && !inClozeGroupReview) {
+      const siblings = await scheduler.getClozeSiblings(currentCard, new Date());
+      clozeGroup = [currentCard, ...siblings];
+      clozeGroupIndex = 0;
+      inClozeGroupReview = true;
+    }
+
     try {
       schedulingInfo = await scheduler.preview(currentCard.id);
     } catch (error) {
       console.error("Error getting scheduling preview:", error);
       schedulingInfo = null;
     }
-    cardStartTime = Date.now(); // Track when card is displayed
+    cardStartTime = Date.now();
 
     // Render front side
     if (frontEl) {
@@ -208,10 +260,14 @@
     }
 
     // Pre-render back side but keep it hidden
-    // Use tick() to ensure DOM is updated before rendering
     tick().then(() => {
       if (backEl && currentCard) {
         backEl.empty();
+        if (currentCard.type === "cloze" && currentCard.clozeOrder !== null) {
+          setClozeAttributes(backEl, currentCard.clozeOrder, clozeShowContext, false);
+        } else {
+          clearClozeAttributes(backEl);
+        }
         renderMarkdown(currentCard.back, backEl, deckFilePath);
       }
     });
@@ -219,10 +275,14 @@
 
   function revealAnswer() {
     showAnswer = true;
-    // Ensure back element is rendered after showAnswer becomes true
     tick().then(() => {
       if (backEl && currentCard) {
         backEl.empty();
+        if (currentCard.type === "cloze" && currentCard.clozeOrder !== null) {
+          setClozeAttributes(backEl, currentCard.clozeOrder, clozeShowContext, false);
+        } else {
+          clearClozeAttributes(backEl);
+        }
         renderMarkdown(currentCard.back, backEl, deckFilePath);
       }
     });
@@ -261,26 +321,39 @@
         await yieldToUI();
       }
 
-      // Get the next card from the scheduler
-      if (isDeckGroup(deckOrGroup)) {
-        currentCard = await scheduler.getNextForDeckGroup(
-          new Date(),
-          deckOrGroup,
-          {
-            allowNew: true,
-          }
-        );
-      } else {
-        currentCard = await scheduler.getNext(new Date(), deckOrGroup.id, {
-          allowNew: true,
-        });
-      }
-      await yieldToUI();
-
-      if (currentCard) {
+      // Advance through cloze group or get next card from scheduler
+      if (inClozeGroupReview && clozeGroupIndex < clozeGroup.length - 1) {
+        clozeGroupIndex++;
+        currentCard = clozeGroup[clozeGroupIndex];
         await loadCard();
       } else {
-        await endReview();
+        // Reset cloze group state
+        if (inClozeGroupReview) {
+          inClozeGroupReview = false;
+          clozeGroup = [];
+          clozeGroupIndex = 0;
+        }
+
+        if (isDeckGroup(deckOrGroup)) {
+          currentCard = await scheduler.getNextForDeckGroup(
+            new Date(),
+            deckOrGroup,
+            {
+              allowNew: true,
+            }
+          );
+        } else {
+          currentCard = await scheduler.getNext(new Date(), deckOrGroup.id, {
+            allowNew: true,
+          });
+        }
+        await yieldToUI();
+
+        if (currentCard) {
+          await loadCard();
+        } else {
+          await endReview();
+        }
       }
     } catch (error) {
       console.error("Error reviewing card:", error);
@@ -527,14 +600,16 @@
     return `${minutes}:${seconds.toString().padStart(2, "0")}`;
   }
 
-  $: if (currentCard) {
-    loadCard();
-  }
 </script>
 
 <div class="decks-review-modal">
   <div class="decks-modal-header">
-    <h3>{browseMode ? "Browse" : "Review session"} - {deckOrGroup.name}</h3>
+    <h3>
+      {browseMode ? "Browse" : "Review session"} - {deckOrGroup.name}
+      {#if inClozeGroupReview}
+        <span class="decks-cloze-indicator">Cloze {clozeGroupIndex + 1}/{clozeGroup.length}</span>
+      {/if}
+    </h3>
     {#if currentCard}
       {@const breadcrumbParts = getBreadcrumbParts(currentCard)}
       {#if breadcrumbParts.length > 0}
@@ -687,7 +762,8 @@
               </svg>
             </button>
           {/if}
-          <div class="decks-card-side decks-back" bind:this={backEl}></div>
+          <!-- svelte-ignore a11y-click-events-have-key-events a11y-no-static-element-interactions -->
+          <div class="decks-card-side decks-back" bind:this={backEl} on:click={handleClozeBlankClick}></div>
           {#if currentCard?.notes}
             <button
               class="decks-notes-button"
@@ -1869,4 +1945,44 @@
             padding-bottom: calc(12px + env(safe-area-inset-bottom));
         }
     }*/
+
+  :global(.decks-cloze-blank) {
+    background: var(--background-modifier-border);
+    padding: 2px 12px;
+    border-radius: 4px;
+    display: inline-block;
+    min-width: 40px;
+    text-align: center;
+  }
+
+  :global(.decks-cloze-active) {
+    background: var(--interactive-accent);
+    color: var(--text-on-accent);
+    padding: 2px 12px;
+    border-radius: 4px;
+    display: inline-block;
+    min-width: 40px;
+    text-align: center;
+    cursor: pointer;
+    font-weight: 600;
+  }
+
+  :global(.decks-cloze-revealed) {
+    font-weight: 600;
+    text-decoration: underline;
+    text-decoration-color: var(--text-accent);
+    text-underline-offset: 3px;
+  }
+
+  :global(.decks-cloze-context) {
+    color: var(--text-muted);
+    font-style: italic;
+  }
+
+  .decks-cloze-indicator {
+    font-size: 12px;
+    font-weight: 400;
+    color: var(--text-muted);
+    margin-left: 8px;
+  }
 </style>

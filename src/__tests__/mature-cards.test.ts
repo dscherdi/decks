@@ -17,6 +17,8 @@ describe("Mature Cards (TODO 19)", () => {
     contentHash: "hash123",
     breadcrumb: "",
     notes: "",
+    clozeText: null,
+    clozeOrder: null,
     state,
     dueDate: new Date().toISOString(),
     interval, // in minutes

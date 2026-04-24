@@ -2,36 +2,85 @@ export interface ParsedFlashcard {
   front: string;
   back: string;
   notes: string;
-  type: "header-paragraph" | "table";
+  type: "header-paragraph" | "table" | "cloze";
   breadcrumb: string;
   isReverse?: boolean;
+  clozeText?: string;
+  clozeOrder?: number;
 }
 
 /**
  * FlashcardParser - Consolidated parsing logic for flashcards from markdown content
- * Supports both table-based and header-paragraph flashcards with configurable header levels
+ * Supports table-based, header-paragraph, and cloze flashcards with configurable header levels
  */
 export class FlashcardParser {
   // Pre-compiled regex patterns for better performance
   private static readonly HEADER_REGEX = /^(#{1,6})\s+/;
   private static readonly TABLE_ROW_REGEX = /^\|.*\|$/;
   private static readonly TABLE_SEPARATOR_REGEX = /^\|[\s-]+\|[\s-]+\|(?:[\s-]+\|)?$/;
+  private static readonly CLOZE_REGEX = /==((?:(?!==).)+)==/g;
+
+  /**
+   * Expand a card into cloze cards if cloze markers are found, otherwise return original card.
+   * When cloze markers exist, returns N cloze cards (one per highlight) and NO regular card.
+   * When no cloze markers exist, returns the original card unchanged.
+   */
+  private static expandClozes(
+    front: string,
+    back: string,
+    notes: string,
+    type: "header-paragraph" | "table",
+    breadcrumb: string
+  ): ParsedFlashcard[] {
+    const matches: { text: string; index: number }[] = [];
+    let match: RegExpExecArray | null;
+    const regex = new RegExp(FlashcardParser.CLOZE_REGEX.source, "g");
+
+    while ((match = regex.exec(back)) !== null) {
+      matches.push({ text: match[1], index: matches.length });
+    }
+
+    if (matches.length === 0) {
+      return [{
+        front,
+        back,
+        notes,
+        type,
+        breadcrumb,
+      }];
+    }
+
+    return matches.map((m) => ({
+      front,
+      back,
+      notes,
+      type: "cloze" as const,
+      breadcrumb,
+      clozeText: m.text,
+      clozeOrder: m.index,
+    }));
+  }
 
   /**
    * Parse flashcards from content string (optimized single-pass parsing)
    * @param content - Markdown content to parse
    * @param headerLevel - Target header level for header-paragraph flashcards (1-6, default: 2), or 0 for title mode
    * @param fileTitle - File title used as card front when headerLevel is 0 (title mode)
+   * @param clozeEnabled - When true, ==highlighted== text generates cloze cards
    * @returns Array of parsed flashcards
    */
   static parseFlashcardsFromContent(
     content: string,
     headerLevel = 2,
-    fileTitle?: string
+    fileTitle?: string,
+    clozeEnabled = false
   ): ParsedFlashcard[] {
     if (headerLevel === 0) {
       if (!fileTitle) return [];
       const back = FlashcardParser.stripFrontmatter(content).trim();
+      if (clozeEnabled) {
+        return FlashcardParser.expandClozes(fileTitle, back, "", "header-paragraph", "");
+      }
       return [{
         front: fileTitle,
         back,
@@ -101,13 +150,22 @@ export class FlashcardParser {
           if (cells.length >= 2 && cells[0] && cells[1]) {
             // Build breadcrumb from header stack (excluding the current header since it's the table container)
             const breadcrumb = headerStack.map((h) => h.text).join(" > ");
-            flashcards.push({
-              front: cells[0],
-              back: cells[1],
-              notes: cells.length >= 3 ? (cells[2] || "") : "",
-              type: "table",
-              breadcrumb,
-            });
+            const rowNotes = cells.length >= 3 ? (cells[2] || "") : "";
+
+            if (clozeEnabled) {
+              const expanded = FlashcardParser.expandClozes(
+                cells[0], cells[1], rowNotes, "table", breadcrumb
+              );
+              flashcards.push(...expanded);
+            } else {
+              flashcards.push({
+                front: cells[0],
+                back: cells[1],
+                notes: rowNotes,
+                type: "table",
+                breadcrumb,
+              });
+            }
           }
         } else {
           // Table under wrong header level or has non-table content - treat as regular content
@@ -149,7 +207,8 @@ export class FlashcardParser {
               currentContent,
               flashcards,
               headerLevel,
-              breadcrumb
+              breadcrumb,
+              clozeEnabled
             );
             currentHeader = null;
             currentContent = [];
@@ -176,7 +235,8 @@ export class FlashcardParser {
             currentContent,
             flashcards,
             headerLevel,
-            breadcrumb
+            breadcrumb,
+            clozeEnabled
           );
 
           // Update header stack: pop all headers at same or deeper level
@@ -223,7 +283,8 @@ export class FlashcardParser {
       currentContent,
       flashcards,
       headerLevel,
-      finalBreadcrumb
+      finalBreadcrumb,
+      clozeEnabled
     );
 
     return flashcards;
@@ -239,31 +300,37 @@ export class FlashcardParser {
 
   /**
    * Helper to finalize current header flashcard
-   * @param currentHeader - Current header being processed
-   * @param currentContent - Content lines for the header
-   * @param flashcards - Array to add completed flashcard to
-   * @param targetHeaderLevel - Target header level to match
-   * @param breadcrumb - Header hierarchy breadcrumb
    */
   private static finalizeCurrentHeader(
     currentHeader: { text: string; level: number } | null,
     currentContent: string[],
     flashcards: ParsedFlashcard[],
     targetHeaderLevel: number,
-    breadcrumb: string
+    breadcrumb: string,
+    clozeEnabled = false
   ): void {
     if (
       currentHeader &&
       currentContent.length > 0 &&
       currentHeader.level === targetHeaderLevel
     ) {
-      flashcards.push({
-        front: currentHeader.text.replace(/^#{1,6}\s+/, ""),
-        back: currentContent.join("\n").trim(),
-        notes: "",
-        type: "header-paragraph",
-        breadcrumb,
-      });
+      const front = currentHeader.text.replace(/^#{1,6}\s+/, "");
+      const back = currentContent.join("\n").trim();
+
+      if (clozeEnabled) {
+        const expanded = FlashcardParser.expandClozes(
+          front, back, "", "header-paragraph", breadcrumb
+        );
+        flashcards.push(...expanded);
+      } else {
+        flashcards.push({
+          front,
+          back,
+          notes: "",
+          type: "header-paragraph",
+          breadcrumb,
+        });
+      }
     }
   }
 }

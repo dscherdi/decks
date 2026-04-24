@@ -187,9 +187,17 @@
       .setDesc(reviewOrderLabel)
       .setClass("decks-config-readonly");
 
+    // Cloze deletions
+    new Setting(profileDetailsContainer)
+      .setName("Cloze deletions")
+      .setDesc(selectedProfile.clozeEnabled
+        ? `Enabled (context: ${selectedProfile.clozeShowContext === "open" ? "show other clozes" : "hide all clozes"})`
+        : "Disabled")
+      .setClass("decks-config-readonly");
+
     // FSRS settings
     new Setting(profileDetailsContainer)
-      .setName("FSRS Settings")
+      .setName("FSRS settings")
       .setDesc(
         `Retention: ${selectedProfile.fsrs.requestRetention}, Profile: ${selectedProfile.fsrs.profile}`
       )

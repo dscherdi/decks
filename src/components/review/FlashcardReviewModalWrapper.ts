@@ -92,7 +92,7 @@ export class FlashcardReviewModalWrapper extends Modal {
     const lines = content.split("\n");
     let lineNumber = 0;
 
-    if (flashcard.type === "header-paragraph") {
+    if (flashcard.type === "header-paragraph" || flashcard.type === "cloze") {
       for (let i = 0; i < lines.length; i++) {
         const headerMatch = lines[i].match(/^(#{1,6})\s+(.+)$/);
         if (headerMatch && headerMatch[2].trim() === flashcard.front.trim()) {

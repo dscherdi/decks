@@ -558,7 +558,7 @@ export class MainDatabaseService extends BaseDatabaseService {
             if (remoteSessions.length > 0) {
               const sessionData = remoteSessions[0];
               const sessionStmt = this.db.prepare(`
-                INSERT OR IGNORE INTO review_sessions
+                INSERT OR IGNORE INTO review_sessions (${sessionData.columns.join(",")})
                 VALUES (${sessionData.columns.map(() => "?").join(",")})
               `);
 
@@ -572,7 +572,7 @@ export class MainDatabaseService extends BaseDatabaseService {
             if (remoteLogs.length > 0) {
               const logData = remoteLogs[0];
               const logStmt = this.db.prepare(`
-                INSERT OR IGNORE INTO review_logs
+                INSERT OR IGNORE INTO review_logs (${logData.columns.join(",")})
                 VALUES (${logData.columns.map(() => "?").join(",")})
               `);
 
@@ -602,7 +602,7 @@ export class MainDatabaseService extends BaseDatabaseService {
 
                 if (shouldReplace) {
                   const deckStmt = this.db.prepare(`
-                    INSERT OR REPLACE INTO decks
+                    INSERT OR REPLACE INTO decks (${deckData.columns.join(",")})
                     VALUES (${deckData.columns.map(() => "?").join(",")})
                   `);
                   deckStmt.run(row);
@@ -672,7 +672,7 @@ export class MainDatabaseService extends BaseDatabaseService {
 
                   if (shouldReplace) {
                     const profileStmt = this.db.prepare(`
-                      INSERT OR REPLACE INTO deckprofiles
+                      INSERT OR REPLACE INTO deckprofiles (${profileData.columns.join(",")})
                       VALUES (${profileData.columns.map(() => "?").join(",")})
                     `);
                     profileStmt.run(row);

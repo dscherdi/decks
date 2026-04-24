@@ -27,6 +27,8 @@ describe("FSRS Progression & Explosion Safety", () => {
     contentHash: "hash",
     breadcrumb: "",
     notes: "",
+    clozeText: null,
+    clozeOrder: null,
     state: "new",
     dueDate: new Date().toISOString(),
     interval: 0,

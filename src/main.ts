@@ -303,6 +303,48 @@ export default class DecksPlugin extends Plugin {
         })
       );
 
+      // Register markdown post-processor for cloze deletion rendering
+      this.registerMarkdownPostProcessor((el) => {
+        const container = el.closest("[data-decks-cloze-index]");
+        if (!container) return;
+
+        const activeIndexStr = container.getAttribute("data-decks-cloze-index");
+        if (activeIndexStr === null) return;
+        const activeIndex = parseInt(activeIndexStr, 10);
+        const mode = container.getAttribute("data-decks-cloze-mode") || "open";
+        const revealed = container.getAttribute("data-decks-cloze-revealed") === "true";
+
+        let markCount = parseInt(container.getAttribute("data-decks-cloze-counter") || "0", 10);
+        const marks = el.querySelectorAll("mark");
+
+        marks.forEach((mark) => {
+          const text = mark.textContent || "";
+          const currentIndex = markCount;
+          markCount++;
+          const span = document.createElement("span");
+
+          if (currentIndex === activeIndex) {
+            if (revealed) {
+              span.className = "decks-cloze-revealed";
+              span.textContent = text;
+            } else {
+              span.className = "decks-cloze-active";
+              span.textContent = "[...]";
+            }
+          } else if (mode === "hidden") {
+            span.className = "decks-cloze-blank";
+            span.textContent = "[...]";
+          } else {
+            span.className = "decks-cloze-context";
+            span.textContent = text;
+          }
+
+          mark.replaceWith(span);
+        });
+
+        container.setAttribute("data-decks-cloze-counter", String(markCount));
+      });
+
       // Add settings tab
       this.addSettingTab(
         new DecksSettingTab(

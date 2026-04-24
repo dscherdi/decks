@@ -1,7 +1,7 @@
 import type { Database } from "sql.js";
 
 // Current Schema Version
-export const CURRENT_SCHEMA_VERSION = 10;
+export const CURRENT_SCHEMA_VERSION = 11;
 
 // SQL Table Creation Schema - Used when database file doesn't exist
 export const CREATE_TABLES_SQL = `
@@ -22,6 +22,8 @@ export const CREATE_TABLES_SQL = `
     relearning_steps TEXT NOT NULL DEFAULT '10m',
     fsrs_request_retention REAL NOT NULL DEFAULT 0.9,
     fsrs_profile TEXT NOT NULL DEFAULT 'STANDARD' CHECK (fsrs_profile IN ('INTENSIVE', 'STANDARD')),
+    cloze_enabled INTEGER NOT NULL DEFAULT 1,
+    cloze_show_context TEXT NOT NULL DEFAULT 'hidden' CHECK (cloze_show_context IN ('open', 'hidden')),
     is_default INTEGER NOT NULL DEFAULT 0,
     created TEXT NOT NULL,
     modified TEXT NOT NULL
@@ -54,11 +56,13 @@ export const CREATE_TABLES_SQL = `
     deck_id TEXT NOT NULL,
     front TEXT NOT NULL,
     back TEXT NOT NULL,
-    type TEXT NOT NULL CHECK (type IN ('header-paragraph', 'table')),
+    type TEXT NOT NULL CHECK (type IN ('header-paragraph', 'table', 'cloze')),
     source_file TEXT NOT NULL,
     content_hash TEXT NOT NULL,
     breadcrumb TEXT NOT NULL DEFAULT '',
     notes TEXT NOT NULL DEFAULT '',
+    cloze_text TEXT,
+    cloze_order INTEGER,
 
     state TEXT NOT NULL CHECK (state IN ('new', 'review')),
     due_date TEXT NOT NULL,
@@ -190,6 +194,7 @@ export function buildMigrationSQL(db: Database): string {
   const reviewLogsExists = reviewLogsColumns.length > 0;
   const deckprofilesColumns = getColumnNames(db, "deckprofiles");
   const needsLearningSteps = deckprofilesColumns.length > 0 && !deckprofilesColumns.includes("learning_steps");
+  const needsCloze = deckprofilesColumns.length > 0 && !deckprofilesColumns.includes("cloze_enabled");
 
   // Helper: pick current column, fall back to old renamed column, then default
   const col = (
@@ -261,6 +266,8 @@ export function buildMigrationSQL(db: Database): string {
       relearning_steps TEXT NOT NULL DEFAULT '10m',
       fsrs_request_retention REAL NOT NULL DEFAULT 0.9,
       fsrs_profile TEXT NOT NULL DEFAULT 'STANDARD' CHECK (fsrs_profile IN ('INTENSIVE', 'STANDARD')),
+      cloze_enabled INTEGER NOT NULL DEFAULT 0,
+      cloze_show_context TEXT NOT NULL DEFAULT 'open' CHECK (cloze_show_context IN ('open', 'hidden')),
       is_default INTEGER NOT NULL DEFAULT 0,
       created TEXT NOT NULL,
       modified TEXT NOT NULL
@@ -270,6 +277,11 @@ export function buildMigrationSQL(db: Database): string {
     ALTER TABLE deckprofiles ADD COLUMN learning_steps TEXT NOT NULL DEFAULT '1m';
     ALTER TABLE deckprofiles ADD COLUMN relearning_steps TEXT NOT NULL DEFAULT '10m';
     UPDATE deckprofiles SET learning_steps = '1m' WHERE fsrs_profile = 'INTENSIVE';
+    ` : ""}
+
+    ${needsCloze ? `
+    ALTER TABLE deckprofiles ADD COLUMN cloze_enabled INTEGER NOT NULL DEFAULT 0;
+    ALTER TABLE deckprofiles ADD COLUMN cloze_show_context TEXT NOT NULL DEFAULT 'open';
     ` : ""}
 
     INSERT OR IGNORE INTO deckprofiles (
@@ -392,11 +404,13 @@ export function buildMigrationSQL(db: Database): string {
       deck_id TEXT NOT NULL,
       front TEXT NOT NULL,
       back TEXT NOT NULL,
-      type TEXT NOT NULL CHECK (type IN ('header-paragraph', 'table')),
+      type TEXT NOT NULL CHECK (type IN ('header-paragraph', 'table', 'cloze')),
       source_file TEXT NOT NULL,
       content_hash TEXT NOT NULL,
       breadcrumb TEXT NOT NULL DEFAULT '',
       notes TEXT NOT NULL DEFAULT '',
+      cloze_text TEXT,
+      cloze_order INTEGER,
       state TEXT NOT NULL CHECK (state IN ('new', 'review')),
       due_date TEXT NOT NULL,
       interval REAL NOT NULL,
@@ -486,15 +500,18 @@ export const SQL_QUERIES = {
       header_level, review_order,
       learning_steps, relearning_steps,
       fsrs_request_retention, fsrs_profile,
+      cloze_enabled, cloze_show_context,
       is_default, created, modified
-    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
   `,
 
   GET_PROFILE_BY_ID: `
     SELECT id, name, has_new_cards_limit_enabled, new_cards_per_day,
       has_review_cards_limit_enabled, review_cards_per_day,
       header_level, review_order, learning_steps, relearning_steps,
-      fsrs_request_retention, fsrs_profile, is_default, created, modified
+      fsrs_request_retention, fsrs_profile,
+      cloze_enabled, cloze_show_context,
+      is_default, created, modified
     FROM deckprofiles WHERE id = ?
   `,
 
@@ -502,7 +519,9 @@ export const SQL_QUERIES = {
     SELECT id, name, has_new_cards_limit_enabled, new_cards_per_day,
       has_review_cards_limit_enabled, review_cards_per_day,
       header_level, review_order, learning_steps, relearning_steps,
-      fsrs_request_retention, fsrs_profile, is_default, created, modified
+      fsrs_request_retention, fsrs_profile,
+      cloze_enabled, cloze_show_context,
+      is_default, created, modified
     FROM deckprofiles WHERE name = ?
   `,
 
@@ -510,7 +529,9 @@ export const SQL_QUERIES = {
     SELECT id, name, has_new_cards_limit_enabled, new_cards_per_day,
       has_review_cards_limit_enabled, review_cards_per_day,
       header_level, review_order, learning_steps, relearning_steps,
-      fsrs_request_retention, fsrs_profile, is_default, created, modified
+      fsrs_request_retention, fsrs_profile,
+      cloze_enabled, cloze_show_context,
+      is_default, created, modified
     FROM deckprofiles
     ORDER BY CASE WHEN is_default = 1 THEN 0 ELSE 1 END, name
   `,
@@ -519,7 +540,9 @@ export const SQL_QUERIES = {
     SELECT id, name, has_new_cards_limit_enabled, new_cards_per_day,
       has_review_cards_limit_enabled, review_cards_per_day,
       header_level, review_order, learning_steps, relearning_steps,
-      fsrs_request_retention, fsrs_profile, is_default, created, modified
+      fsrs_request_retention, fsrs_profile,
+      cloze_enabled, cloze_show_context,
+      is_default, created, modified
     FROM deckprofiles WHERE is_default = 1 LIMIT 1
   `,
 
@@ -531,6 +554,7 @@ export const SQL_QUERIES = {
       header_level = ?, review_order = ?,
       learning_steps = ?, relearning_steps = ?,
       fsrs_request_retention = ?, fsrs_profile = ?,
+      cloze_enabled = ?, cloze_show_context = ?,
       modified = ?
     WHERE id = ?
   `,
@@ -579,9 +603,10 @@ export const SQL_QUERIES = {
   INSERT_FLASHCARD: `
     INSERT OR REPLACE INTO flashcards (
       id, deck_id, front, back, type, source_file, content_hash, breadcrumb, notes,
+      cloze_text, cloze_order,
       state, due_date, interval, repetitions,
       difficulty, stability, lapses, last_reviewed, created, modified
-    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
   `,
 
   DELETE_FLASHCARD: `DELETE FROM flashcards WHERE id = ?`,

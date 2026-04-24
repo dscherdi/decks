@@ -1,6 +1,7 @@
 import {
   generateFlashcardId,
   generateReverseFlashcardId,
+  generateClozeFlashcardId,
   generateContentHash,
   generateDeckId,
 } from "../utils/hash";
@@ -82,6 +83,50 @@ describe("hash utilities", () => {
       expect(generateFlashcardId(question, "deck_1")).not.toBe(
         generateFlashcardId(question, "deck_2")
       );
+    });
+  });
+
+  describe("generateClozeFlashcardId", () => {
+    it("should return a string starting with ccard_", () => {
+      expect(generateClozeFlashcardId("front", "cloze", 0, "deck_1")).toMatch(/^ccard_/);
+    });
+
+    it("should be deterministic", () => {
+      expect(generateClozeFlashcardId("front", "cloze", 0, "deck_1")).toBe(
+        generateClozeFlashcardId("front", "cloze", 0, "deck_1")
+      );
+    });
+
+    it("should produce different IDs for different cloze text", () => {
+      expect(generateClozeFlashcardId("front", "clozeA", 0, "deck_1")).not.toBe(
+        generateClozeFlashcardId("front", "clozeB", 0, "deck_1")
+      );
+    });
+
+    it("should produce different IDs for same cloze text at different orders", () => {
+      expect(generateClozeFlashcardId("front", "same", 0, "deck_1")).not.toBe(
+        generateClozeFlashcardId("front", "same", 1, "deck_1")
+      );
+    });
+
+    it("should produce different IDs for same cloze in different decks", () => {
+      expect(generateClozeFlashcardId("front", "cloze", 0, "deck_1")).not.toBe(
+        generateClozeFlashcardId("front", "cloze", 0, "deck_2")
+      );
+    });
+
+    it("should not collide with card_ or rcard_ prefixes", () => {
+      const front = "test front";
+      const deckId = "deck_1";
+      const clozeId = generateClozeFlashcardId(front, "cloze", 0, deckId);
+      const cardId = generateFlashcardId(front, deckId);
+      const rcardId = generateReverseFlashcardId(front, deckId);
+
+      expect(clozeId).not.toBe(cardId);
+      expect(clozeId).not.toBe(rcardId);
+      expect(clozeId.startsWith("ccard_")).toBe(true);
+      expect(cardId.startsWith("card_")).toBe(true);
+      expect(rcardId.startsWith("rcard_")).toBe(true);
     });
   });
 

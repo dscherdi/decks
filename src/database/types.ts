@@ -1,6 +1,7 @@
 import { DEFAULT_FSRS_PARAMETERS } from "../algorithm/fsrs-weights";
 
 export type ReviewOrder = "due-date" | "random";
+export type ClozeShowContext = "open" | "hidden";
 
 export interface DeckProfile {
   id: string;
@@ -22,6 +23,9 @@ export interface DeckProfile {
     requestRetention: number;
     profile: "INTENSIVE" | "STANDARD";
   };
+
+  clozeEnabled: boolean;
+  clozeShowContext: ClozeShowContext;
 
   isDefault: boolean;
   created: string;
@@ -45,6 +49,8 @@ export const DEFAULT_DECK_PROFILE: Omit<DeckProfile, 'id' | 'created' | 'modifie
     requestRetention: DEFAULT_FSRS_PARAMETERS.requestRetention,
     profile: "STANDARD",
   },
+  clozeEnabled: true,
+  clozeShowContext: "hidden",
   isDefault: true,
 };
 
@@ -104,16 +110,20 @@ export function isFileDeck(item: DeckOrGroup): item is FileDeck {
 
 export type FlashcardState = "new" | "review";
 
+export type FlashcardType = "header-paragraph" | "table" | "cloze";
+
 export interface Flashcard {
   id: string;
   deckId: string;
   front: string;
   back: string;
-  type: "header-paragraph" | "table";
+  type: FlashcardType;
   sourceFile: string;
   contentHash: string; // Hash of back content only (front is used for ID)
   breadcrumb: string; // Header hierarchy context (e.g., "Chapter 1 > Section 2")
   notes: string; // Optional notes from third table column
+  clozeText: string | null; // The specific cloze text for this card (without == delimiters)
+  clozeOrder: number | null; // Ordinal position of this cloze within the back content
 
   state: FlashcardState;
   dueDate: string;

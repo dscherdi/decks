@@ -67,3 +67,20 @@ export function generateDeckGroupId(tag: string): string {
 export function generateReverseFlashcardId(originalFrontText: string, deckId: string): string {
   return `rcard_${simpleHash("reverse:" + deckId + "::" + originalFrontText).toString(36)}`;
 }
+
+/**
+ * Generate unique cloze flashcard ID using hash of deck ID, front text, cloze order, and cloze text
+ * @param frontText The front text of the flashcard (header or table Front column)
+ * @param clozeText The specific cloze text (without == delimiters)
+ * @param clozeOrder The ordinal position of this cloze within the back content
+ * @param deckId The ID of the deck this card belongs to
+ * @returns A deterministic ID in format "ccard_HASH"
+ */
+export function generateClozeFlashcardId(
+  frontText: string,
+  clozeText: string,
+  clozeOrder: number,
+  deckId: string
+): string {
+  return `ccard_${simpleHash("cloze:" + deckId + "::" + frontText + "::" + clozeOrder + "::" + clozeText).toString(36)}`;
+}

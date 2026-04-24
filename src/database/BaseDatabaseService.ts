@@ -5,6 +5,7 @@ import type {
   DeckWithProfile,
   ProfileTagMapping,
   Flashcard,
+  FlashcardType,
   ReviewLog,
   ReviewSession,
 } from "./types";
@@ -87,9 +88,11 @@ export abstract class BaseDatabaseService implements IDatabaseService {
         requestRetention: row[10] as number,
         profile: row[11] as "INTENSIVE" | "STANDARD",
       },
-      isDefault: Boolean(row[12]),
-      created: row[13] as string,
-      modified: row[14] as string,
+      clozeEnabled: Boolean(row[12]),
+      clozeShowContext: (row[13] as "open" | "hidden") ?? "open",
+      isDefault: Boolean(row[14]),
+      created: row[15] as string,
+      modified: row[16] as string,
     };
   }
 
@@ -108,21 +111,23 @@ export abstract class BaseDatabaseService implements IDatabaseService {
       deckId: row[1] as string,
       front: row[2] as string,
       back: row[3] as string,
-      type: row[4] as "header-paragraph" | "table",
+      type: row[4] as FlashcardType,
       sourceFile: row[5] as string,
       contentHash: row[6] as string,
       breadcrumb: row[7] as string,
       notes: (row[8] as string) || "",
-      state: row[9] as "new" | "review",
-      dueDate: row[10] as string,
-      interval: row[11] as number,
-      repetitions: row[12] as number,
-      difficulty: row[13] as number,
-      stability: row[14] as number,
-      lapses: row[15] as number,
-      lastReviewed: row[16] as string | null,
-      created: row[17] as string,
-      modified: row[18] as string,
+      clozeText: (row[9] as string) ?? null,
+      clozeOrder: (row[10] as number) ?? null,
+      state: row[11] as "new" | "review",
+      dueDate: row[12] as string,
+      interval: row[13] as number,
+      repetitions: row[14] as number,
+      difficulty: row[15] as number,
+      stability: row[16] as number,
+      lapses: row[17] as number,
+      lastReviewed: row[18] as string | null,
+      created: row[19] as string,
+      modified: row[20] as string,
     };
   }
 
@@ -353,6 +358,8 @@ export abstract class BaseDatabaseService implements IDatabaseService {
       profile.relearningSteps ?? "10m",
       profile.fsrs.requestRetention,
       profile.fsrs.profile,
+      profile.clozeEnabled ? 1 : 0,
+      profile.clozeShowContext ?? "open",
       profile.isDefault ? 1 : 0,
       now,
       now,
@@ -437,6 +444,8 @@ export abstract class BaseDatabaseService implements IDatabaseService {
       updated.relearningSteps,
       updated.fsrs.requestRetention,
       updated.fsrs.profile,
+      updated.clozeEnabled ? 1 : 0,
+      updated.clozeShowContext ?? "open",
       this.getCurrentTimestamp(),
       id,
     ]);
@@ -660,9 +669,10 @@ export abstract class BaseDatabaseService implements IDatabaseService {
     };
 
     const sql = `INSERT OR IGNORE INTO flashcards
-                 (id, deck_id, front, back, type, source_file, content_hash, breadcrumb, notes, state, due_date,
+                 (id, deck_id, front, back, type, source_file, content_hash, breadcrumb, notes,
+                  cloze_text, cloze_order, state, due_date,
                   interval, repetitions, difficulty, stability, lapses, last_reviewed, created, modified)
-                 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`;
+                 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`;
 
     await this.executeSql(sql, [
       flashcardWithId.id,
@@ -674,6 +684,8 @@ export abstract class BaseDatabaseService implements IDatabaseService {
       flashcardWithId.contentHash,
       flashcardWithId.breadcrumb || "",
       flashcardWithId.notes || "",
+      flashcardWithId.clozeText ?? null,
+      flashcardWithId.clozeOrder ?? null,
       flashcardWithId.state,
       flashcardWithId.dueDate,
       flashcardWithId.interval,
@@ -791,6 +803,10 @@ export abstract class BaseDatabaseService implements IDatabaseService {
           updateFields.push("due_date = ?");
         } else if (key === "lastReviewed") {
           updateFields.push("last_reviewed = ?");
+        } else if (key === "clozeText") {
+          updateFields.push("cloze_text = ?");
+        } else if (key === "clozeOrder") {
+          updateFields.push("cloze_order = ?");
         } else {
           updateFields.push(`${key} = ?`);
         }
@@ -853,9 +869,10 @@ export abstract class BaseDatabaseService implements IDatabaseService {
 
     const now = this.getCurrentTimestamp();
     const sql = `INSERT OR IGNORE INTO flashcards
-                 (id, deck_id, front, back, type, source_file, content_hash, breadcrumb, notes, state, due_date,
+                 (id, deck_id, front, back, type, source_file, content_hash, breadcrumb, notes,
+                  cloze_text, cloze_order, state, due_date,
                   interval, repetitions, difficulty, stability, lapses, last_reviewed, created, modified)
-                 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`;
+                 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`;
 
     for (const flashcard of flashcards) {
       await this.executeSql(sql, [
@@ -868,6 +885,8 @@ export abstract class BaseDatabaseService implements IDatabaseService {
         flashcard.contentHash,
         flashcard.breadcrumb || "",
         flashcard.notes || "",
+        flashcard.clozeText ?? null,
+        flashcard.clozeOrder ?? null,
         flashcard.state,
         flashcard.dueDate,
         flashcard.interval,
