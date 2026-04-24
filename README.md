@@ -7,6 +7,8 @@ If you like this plugin, consider buying me a coffee and I will add more feature
 <img src="https://cdn.buymeacoffee.com/buttons/v2/default-yellow.png" alt="Buy Me A Coffee" height="40">
 </a>
 
+[Join the discussion](https://discord.com/channels/686053708261228577/1497268419861418035)
+
 ## Demo
 
 ![Watch the demo](./decks_showcase.gif)
@@ -160,6 +162,7 @@ tags: [decks/anatomy]
 ## Bones of the arm
 
 ![[arm_bones.png]]
+
 1. ==Humerus==
 2. ==Radius==
 3. ==Ulna==
@@ -197,6 +200,7 @@ Thank you
 ```
 
 This creates four cards total:
+
 - "Bonjour" → "Hello"
 - "Hello" → "Bonjour"
 - "Merci" → "Thank you"
