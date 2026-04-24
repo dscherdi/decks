@@ -110,7 +110,7 @@ export function isFileDeck(item: DeckOrGroup): item is FileDeck {
 
 export type FlashcardState = "new" | "review";
 
-export type FlashcardType = "header-paragraph" | "table" | "cloze";
+export type FlashcardType = "header-paragraph" | "table" | "cloze" | "image-occlusion";
 
 export interface Flashcard {
   id: string;

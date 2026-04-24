@@ -1,7 +1,7 @@
 import type { Database } from "sql.js";
 
 // Current Schema Version
-export const CURRENT_SCHEMA_VERSION = 11;
+export const CURRENT_SCHEMA_VERSION = 12;
 
 // SQL Table Creation Schema - Used when database file doesn't exist
 export const CREATE_TABLES_SQL = `
@@ -56,7 +56,7 @@ export const CREATE_TABLES_SQL = `
     deck_id TEXT NOT NULL,
     front TEXT NOT NULL,
     back TEXT NOT NULL,
-    type TEXT NOT NULL CHECK (type IN ('header-paragraph', 'table', 'cloze')),
+    type TEXT NOT NULL CHECK (type IN ('header-paragraph', 'table', 'cloze', 'image-occlusion')),
     source_file TEXT NOT NULL,
     content_hash TEXT NOT NULL,
     breadcrumb TEXT NOT NULL DEFAULT '',
@@ -404,7 +404,7 @@ export function buildMigrationSQL(db: Database): string {
       deck_id TEXT NOT NULL,
       front TEXT NOT NULL,
       back TEXT NOT NULL,
-      type TEXT NOT NULL CHECK (type IN ('header-paragraph', 'table', 'cloze')),
+      type TEXT NOT NULL CHECK (type IN ('header-paragraph', 'table', 'cloze', 'image-occlusion')),
       source_file TEXT NOT NULL,
       content_hash TEXT NOT NULL,
       breadcrumb TEXT NOT NULL DEFAULT '',

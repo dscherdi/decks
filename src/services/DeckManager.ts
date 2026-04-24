@@ -418,7 +418,7 @@ export class DeckManager {
 
     // Group flashcards by front text (skip cloze cards — they share front text by design)
     for (const card of existingFlashcards) {
-      if (card.type === "cloze") continue;
+      if (card.type === "cloze" || card.type === "image-occlusion") continue;
       const normalizedFront = card.front.trim().toLowerCase();
       if (!frontTextMap.has(normalizedFront)) {
         frontTextMap.set(normalizedFront, []);

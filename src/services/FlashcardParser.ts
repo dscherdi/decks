@@ -2,7 +2,7 @@ export interface ParsedFlashcard {
   front: string;
   back: string;
   notes: string;
-  type: "header-paragraph" | "table" | "cloze";
+  type: "header-paragraph" | "table" | "cloze" | "image-occlusion";
   breadcrumb: string;
   isReverse?: boolean;
   clozeText?: string;
@@ -19,6 +19,8 @@ export class FlashcardParser {
   private static readonly TABLE_ROW_REGEX = /^\|.*\|$/;
   private static readonly TABLE_SEPARATOR_REGEX = /^\|[\s-]+\|[\s-]+\|(?:[\s-]+\|)?$/;
   private static readonly CLOZE_REGEX = /==((?:(?!==).)+)==/g;
+  private static readonly IMAGE_EMBED_REGEX = /^!\[\[.+\.(png|jpe?g|gif|svg|bmp|webp)\]\]$/i;
+  private static readonly NUMBERED_LIST_REGEX = /^\d+\.\s+(.+)$/;
 
   /**
    * Expand a card into cloze cards if cloze markers are found, otherwise return original card.
@@ -299,6 +301,66 @@ export class FlashcardParser {
   }
 
   /**
+   * Expand an image occlusion block into one card per numbered list item.
+   * Each list item becomes one card regardless of how many ==cloze== markers it contains.
+   * Items without ==cloze== markers use the full item text as the cloze text.
+   */
+  private static expandImageOcclusion(
+    imageEmbed: string,
+    back: string,
+    listItems: string[],
+    breadcrumb: string
+  ): ParsedFlashcard[] {
+    const cards: ParsedFlashcard[] = [];
+    let order = 0;
+
+    for (const item of listItems) {
+      const trimmed = item.trim();
+      if (!trimmed) continue;
+
+      const clozeText = trimmed.replace(/==((?:(?!==).)+)==/g, "$1");
+      cards.push({
+        front: imageEmbed,
+        back,
+        notes: "",
+        type: "image-occlusion",
+        breadcrumb,
+        clozeText,
+        clozeOrder: order,
+      });
+      order++;
+    }
+
+    return cards;
+  }
+
+  /**
+   * Detect if content is an image occlusion block:
+   * first non-empty line is an image embed, remaining non-empty lines are a numbered list.
+   * Returns the image embed and list item texts, or null if not matched.
+   */
+  private static detectImageOcclusion(
+    contentLines: string[]
+  ): { imageEmbed: string; listItems: string[] } | null {
+    const nonEmptyLines = contentLines
+      .map((l) => l.trim())
+      .filter((l) => l.length > 0);
+
+    if (nonEmptyLines.length < 2) return null;
+
+    if (!FlashcardParser.IMAGE_EMBED_REGEX.test(nonEmptyLines[0])) return null;
+
+    const listItems: string[] = [];
+    for (let i = 1; i < nonEmptyLines.length; i++) {
+      const match = FlashcardParser.NUMBERED_LIST_REGEX.exec(nonEmptyLines[i]);
+      if (!match) return null;
+      listItems.push(match[1]);
+    }
+
+    return { imageEmbed: nonEmptyLines[0], listItems };
+  }
+
+  /**
    * Helper to finalize current header flashcard
    */
   private static finalizeCurrentHeader(
@@ -318,6 +380,22 @@ export class FlashcardParser {
       const back = currentContent.join("\n").trim();
 
       if (clozeEnabled) {
+        const imageOcclusion = FlashcardParser.detectImageOcclusion(currentContent);
+        if (imageOcclusion) {
+          const backWithoutImage = currentContent
+            .filter((l) => l.trim() !== imageOcclusion.imageEmbed)
+            .join("\n")
+            .trim();
+          const imageOcclusionBreadcrumb = breadcrumb
+            ? `${breadcrumb} > ${front}`
+            : front;
+          const expanded = FlashcardParser.expandImageOcclusion(
+            imageOcclusion.imageEmbed, backWithoutImage, imageOcclusion.listItems, imageOcclusionBreadcrumb
+          );
+          flashcards.push(...expanded);
+          return;
+        }
+
         const expanded = FlashcardParser.expandClozes(
           front, back, "", "header-paragraph", breadcrumb
         );

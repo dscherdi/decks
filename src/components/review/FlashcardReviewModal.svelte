@@ -1,6 +1,6 @@
 <script lang="ts">
   import { createEventDispatcher, onMount, onDestroy, tick } from "svelte";
-  import type { Flashcard, DeckOrGroup, ClozeShowContext } from "../../database/types";
+  import type { Flashcard, DeckOrGroup, ClozeShowContext, FlashcardType } from "../../database/types";
   import { isDeckGroup } from "../../database/types";
   import type { DecksSettings } from "../../settings";
   import { type RatingLabel } from "../../algorithm/fsrs";
@@ -46,9 +46,54 @@
     }
   }
 
+  function isClozeType(type: FlashcardType): boolean {
+    return type === "cloze" || type === "image-occlusion";
+  }
+
+  function prepareImageOcclusionBack(
+    back: string,
+    activeIndex: number
+  ): { content: string; markStart: number; markEnd: number } {
+    const lines = back.split("\n");
+    const result: string[] = [];
+    let listIndex = 0;
+    let marksBefore = 0;
+    let activeMarkCount = 0;
+
+    for (const line of lines) {
+      const trimmed = line.trim();
+      const listMatch = /^\d+\.\s+(.+)$/.exec(trimmed);
+      if (listMatch) {
+        const itemText = listMatch[1];
+        const markMatches = itemText.match(/==((?:(?!==).)+)==/g);
+        const hasCloze = markMatches && markMatches.length > 0;
+
+        if (!hasCloze) {
+          result.push(line.replace(listMatch[1], `==${listMatch[1]}==`));
+          if (listIndex < activeIndex) marksBefore += 1;
+          if (listIndex === activeIndex) activeMarkCount = 1;
+        } else {
+          result.push(line);
+          const count = markMatches.length;
+          if (listIndex < activeIndex) marksBefore += count;
+          if (listIndex === activeIndex) activeMarkCount = count;
+        }
+        listIndex++;
+      } else {
+        result.push(line);
+      }
+    }
+
+    return {
+      content: result.join("\n"),
+      markStart: marksBefore,
+      markEnd: marksBefore + activeMarkCount,
+    };
+  }
+
   function handleCopyBack() {
     if (currentCard) {
-      const text = currentCard.type === "cloze"
+      const text = isClozeType(currentCard.type)
         ? currentCard.back.replace(/==((?:(?!==).)+)==/g, "$1")
         : currentCard.back;
       navigator.clipboard.writeText(text).catch(console.error);
@@ -64,16 +109,23 @@
     el: HTMLElement,
     clozeIndex: number,
     mode: ClozeShowContext,
-    revealed: boolean
+    revealed: boolean,
+    clozeIndexEnd?: number
   ): void {
     el.setAttribute("data-decks-cloze-index", String(clozeIndex));
     el.setAttribute("data-decks-cloze-mode", mode);
     el.setAttribute("data-decks-cloze-revealed", String(revealed));
     el.removeAttribute("data-decks-cloze-counter");
+    if (clozeIndexEnd !== undefined) {
+      el.setAttribute("data-decks-cloze-index-end", String(clozeIndexEnd));
+    } else {
+      el.removeAttribute("data-decks-cloze-index-end");
+    }
   }
 
   function clearClozeAttributes(el: HTMLElement): void {
     el.removeAttribute("data-decks-cloze-index");
+    el.removeAttribute("data-decks-cloze-index-end");
     el.removeAttribute("data-decks-cloze-mode");
     el.removeAttribute("data-decks-cloze-revealed");
   }
@@ -217,10 +269,20 @@
     const container = target.closest("[data-decks-cloze-index]");
     if (!container || container.getAttribute("data-decks-cloze-revealed") === "true") return;
 
-    const span = document.createElement("span");
-    span.className = "decks-cloze-revealed";
-    span.textContent = currentCard.clozeText;
-    target.replaceWith(span);
+    if (currentCard.type === "image-occlusion") {
+      const allActive = container.querySelectorAll(".decks-cloze-active");
+      allActive.forEach((el) => {
+        const span = document.createElement("span");
+        span.className = "decks-cloze-revealed";
+        span.textContent = el.getAttribute("data-decks-cloze-text") || el.textContent || "";
+        el.replaceWith(span);
+      });
+    } else {
+      const span = document.createElement("span");
+      span.className = "decks-cloze-revealed";
+      span.textContent = target.getAttribute("data-decks-cloze-text") || currentCard.clozeText;
+      target.replaceWith(span);
+    }
 
     container.setAttribute("data-decks-cloze-revealed", "true");
   }
@@ -238,7 +300,7 @@
     showNotes = false;
 
     // Build cloze group when first encountering a cloze card
-    if (currentCard.type === "cloze" && !inClozeGroupReview) {
+    if (isClozeType(currentCard.type) && !inClozeGroupReview) {
       const siblings = await scheduler.getClozeSiblings(currentCard, new Date());
       clozeGroup = [currentCard, ...siblings];
       clozeGroupIndex = 0;
@@ -263,12 +325,19 @@
     tick().then(() => {
       if (backEl && currentCard) {
         backEl.empty();
-        if (currentCard.type === "cloze" && currentCard.clozeOrder !== null) {
-          setClozeAttributes(backEl, currentCard.clozeOrder, clozeShowContext, false);
+        if (isClozeType(currentCard.type) && currentCard.clozeOrder !== null) {
+          if (currentCard.type === "image-occlusion") {
+            const prepared = prepareImageOcclusionBack(currentCard.back, currentCard.clozeOrder);
+            setClozeAttributes(backEl, prepared.markStart, clozeShowContext, false, prepared.markEnd);
+            renderMarkdown(prepared.content, backEl, deckFilePath);
+          } else {
+            setClozeAttributes(backEl, currentCard.clozeOrder, clozeShowContext, false);
+            renderMarkdown(currentCard.back, backEl, deckFilePath);
+          }
         } else {
           clearClozeAttributes(backEl);
+          renderMarkdown(currentCard.back, backEl, deckFilePath);
         }
-        renderMarkdown(currentCard.back, backEl, deckFilePath);
       }
     });
   }
@@ -278,12 +347,19 @@
     tick().then(() => {
       if (backEl && currentCard) {
         backEl.empty();
-        if (currentCard.type === "cloze" && currentCard.clozeOrder !== null) {
-          setClozeAttributes(backEl, currentCard.clozeOrder, clozeShowContext, false);
+        if (isClozeType(currentCard.type) && currentCard.clozeOrder !== null) {
+          if (currentCard.type === "image-occlusion") {
+            const prepared = prepareImageOcclusionBack(currentCard.back, currentCard.clozeOrder);
+            setClozeAttributes(backEl, prepared.markStart, clozeShowContext, false, prepared.markEnd);
+            renderMarkdown(prepared.content, backEl, deckFilePath);
+          } else {
+            setClozeAttributes(backEl, currentCard.clozeOrder, clozeShowContext, false);
+            renderMarkdown(currentCard.back, backEl, deckFilePath);
+          }
         } else {
           clearClozeAttributes(backEl);
+          renderMarkdown(currentCard.back, backEl, deckFilePath);
         }
-        renderMarkdown(currentCard.back, backEl, deckFilePath);
       }
     });
   }

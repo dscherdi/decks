@@ -664,7 +664,7 @@ export class Scheduler {
   async getClozeSiblings(card: Flashcard, now: Date): Promise<Flashcard[]> {
     const query = `
       SELECT * FROM flashcards
-      WHERE deck_id = ? AND front = ? AND type = 'cloze'
+      WHERE deck_id = ? AND front = ? AND type IN ('cloze', 'image-occlusion')
         AND id != ?
         AND ((state IN ('review', 'relearning') AND due_date <= ?) OR state = 'new')
       ORDER BY cloze_order ASC

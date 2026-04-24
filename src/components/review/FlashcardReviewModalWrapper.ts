@@ -100,6 +100,18 @@ export class FlashcardReviewModalWrapper extends Modal {
           break;
         }
       }
+    } else if (flashcard.type === "image-occlusion") {
+      const parts = flashcard.breadcrumb.split(" > ");
+      const headerText = parts[parts.length - 1]?.trim();
+      if (headerText) {
+        for (let i = 0; i < lines.length; i++) {
+          const headerMatch = lines[i].match(/^(#{1,6})\s+(.+)$/);
+          if (headerMatch && headerMatch[2].trim() === headerText) {
+            lineNumber = i;
+            break;
+          }
+        }
+      }
     } else if (flashcard.type === "table") {
       for (let i = 0; i < lines.length; i++) {
         const trimmedLine = lines[i].trim();

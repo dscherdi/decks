@@ -176,7 +176,7 @@ export class FlashcardSynchronizer {
       const expandedCards = [...parsedCards];
       if (data.reverseCards) {
         for (const card of parsedCards) {
-          if (card.back && card.type !== "cloze") {
+          if (card.back && card.type !== "cloze" && card.type !== "image-occlusion") {
             expandedCards.push({
               front: card.back,
               back: card.front,
@@ -276,12 +276,13 @@ export class FlashcardSynchronizer {
         }
 
         // ID generation varies by card type
-        const flashcardId = parsed.type === "cloze"
+        const isClozeType = parsed.type === "cloze" || parsed.type === "image-occlusion";
+        const flashcardId = isClozeType
           ? generateClozeFlashcardId(parsed.front, parsed.clozeText!, parsed.clozeOrder!, data.deckId)
           : parsed.isReverse
             ? generateReverseFlashcardId(parsed.back, data.deckId)
             : generateFlashcardId(parsed.front, data.deckId);
-        const contentHash = parsed.type === "cloze"
+        const contentHash = isClozeType
           ? generateContentHash(parsed.back + "::" + parsed.clozeText)
           : generateContentHash(parsed.back);
         const existingCard = existingById.get(flashcardId);

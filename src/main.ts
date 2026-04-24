@@ -311,6 +311,8 @@ export default class DecksPlugin extends Plugin {
         const activeIndexStr = container.getAttribute("data-decks-cloze-index");
         if (activeIndexStr === null) return;
         const activeIndex = parseInt(activeIndexStr, 10);
+        const activeEndStr = container.getAttribute("data-decks-cloze-index-end");
+        const activeEnd = activeEndStr !== null ? parseInt(activeEndStr, 10) : activeIndex + 1;
         const mode = container.getAttribute("data-decks-cloze-mode") || "open";
         const revealed = container.getAttribute("data-decks-cloze-revealed") === "true";
 
@@ -323,13 +325,14 @@ export default class DecksPlugin extends Plugin {
           markCount++;
           const span = document.createElement("span");
 
-          if (currentIndex === activeIndex) {
+          if (currentIndex >= activeIndex && currentIndex < activeEnd) {
             if (revealed) {
               span.className = "decks-cloze-revealed";
               span.textContent = text;
             } else {
               span.className = "decks-cloze-active";
               span.textContent = "[...]";
+              span.setAttribute("data-decks-cloze-text", text);
             }
           } else if (mode === "hidden") {
             span.className = "decks-cloze-blank";

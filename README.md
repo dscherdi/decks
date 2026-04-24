@@ -148,6 +148,35 @@ Two context modes are available per profile:
 
 Cards without any `==highlights==` remain normal flashcards even with cloze enabled. Cloze is enabled by default on new profiles and can be toggled in **Manage profiles**.
 
+### Image occlusion
+
+Create image occlusion flashcards by combining an image with a numbered list. The image should contain numbered indexes (labels) that correspond to the numbered list entries below it — each index on the image maps to the matching list item.
+
+```markdown
+---
+tags: [decks/anatomy]
+---
+
+## Bones of the arm
+
+![[arm_bones.png]]
+1. ==Humerus==
+2. ==Radius==
+3. ==Ulna==
+```
+
+In this example, the image `arm_bones.png` has labels "1", "2", and "3" pointing to different bones. Each numbered list item provides the answer for that label.
+
+This creates three cards — one for each numbered item. During review:
+
+- The **front** shows the image (with its numbered labels)
+- The **back** shows the numbered list with the active item blanked as `[...]`
+- Tap the blank to reveal the answer, then rate the card
+
+Image occlusion builds on the cloze feature and requires cloze to be enabled on the profile. Each list item is one card regardless of how many `==highlights==` it contains — all highlights in the active item are blanked and revealed together.
+
+Items without `==highlights==` still generate cards — the full item text is treated as the answer.
+
 ### Reverse cards
 
 Add `reverse: true` to the frontmatter of any deck file to automatically generate a reversed version of every card. Each card will produce two entries: the original (front → back) and a reversed copy (back → front), so you practice recall in both directions.

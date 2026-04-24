@@ -35,5 +35,24 @@ Open the deck settings (the ⚙ icon next to a deck) and set the **New cards per
 ## Can I sync Decks across devices?
 
 Yes. Decks uses a SQLite database stored in your vault. Syncing via iCloud, Dropbox, or Obsidian Sync will keep your progress in sync across devices.
+
+## Cloze deletions
+
+Use \`==highlight==\` syntax to create cloze flashcards where each highlight is blanked during review.
+
+## The Solar System
+
+The ==Sun== is the star at the center of our solar system. The closest planet is ==Mercury==, and the largest planet is ==Jupiter==.
+
+## Image occlusion
+
+Create image occlusion flashcards by combining an image with a numbered list. The image shows labeled regions and each list item becomes a separate card.
+
+## Bones of the arm
+
+![[arm_bones.png]]
+1. ==Humerus==
+2. ==Radius==
+3. ==Ulna==
 `;
 }
