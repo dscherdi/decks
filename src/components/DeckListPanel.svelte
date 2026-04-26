@@ -11,6 +11,7 @@
 
   import ReviewHeatmap from "./statistics/ReviewHeatmap.svelte";
   import { AnkiExportModal } from "./export/AnkiExportModal";
+  import { DeckResetModal } from "./DeckResetModal";
   import type { StatisticsService } from "@/services/StatisticsService";
   import type { DeckSynchronizer } from "@/services/DeckSynchronizer";
   import type { IDatabaseService } from "@/database/DatabaseFactory";
@@ -484,9 +485,18 @@
       openDeckConfigModal(deck);
     };
 
+    const resetOption = document.createElement("div");
+    resetOption.className = "decks-dropdown-option decks-dropdown-option-danger";
+    resetOption.textContent = "Reset progress";
+    resetOption.onclick = () => {
+      closeActiveDropdown();
+      openResetDeckModal(deck);
+    };
+
     dropdown.appendChild(browseOption);
     dropdown.appendChild(exportOption);
     dropdown.appendChild(configOption);
+    dropdown.appendChild(resetOption);
 
     // Position dropdown with viewport bounds checking
     const button = event.target as HTMLElement;
@@ -588,6 +598,15 @@
       return;
     }
     const modal = new AnkiExportModal(app, deck, db);
+    modal.open();
+  }
+
+  function openResetDeckModal(deck: DeckWithProfile) {
+    if (!app) {
+      console.warn("Plugin not available for deck reset");
+      return;
+    }
+    const modal = new DeckResetModal(app, deck, db, onRefresh);
     modal.open();
   }
 

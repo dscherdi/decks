@@ -819,6 +819,31 @@ export const SQL_QUERIES = {
     FROM review_logs
     WHERE session_id = ? AND flashcard_id = ?
   `,
+
+  RESET_DECK_FLASHCARDS: `
+    UPDATE flashcards SET
+      state = 'new',
+      due_date = datetime('now'),
+      interval = 0,
+      repetitions = 0,
+      difficulty = 5.0,
+      stability = 0,
+      lapses = 0,
+      last_reviewed = NULL,
+      modified = ?
+    WHERE deck_id = ?
+  `,
+
+  DELETE_REVIEW_LOGS_FOR_DECK: `
+    DELETE FROM review_logs
+    WHERE flashcard_id IN (
+      SELECT id FROM flashcards WHERE deck_id = ?
+    )
+  `,
+
+  DELETE_REVIEW_SESSIONS_FOR_DECK: `
+    DELETE FROM review_sessions WHERE deck_id = ?
+  `,
 };
 
 // Backup table creation SQL - matches main database schema exactly

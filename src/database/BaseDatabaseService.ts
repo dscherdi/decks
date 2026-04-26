@@ -1454,6 +1454,13 @@ export abstract class BaseDatabaseService implements IDatabaseService {
     await this.executeSql("DELETE FROM decks");
   }
 
+  async resetDeckProgress(deckId: string): Promise<void> {
+    const now = new Date().toISOString();
+    await this.executeSql(SQL_QUERIES.DELETE_REVIEW_LOGS_FOR_DECK, [deckId]);
+    await this.executeSql(SQL_QUERIES.DELETE_REVIEW_SESSIONS_FOR_DECK, [deckId]);
+    await this.executeSql(SQL_QUERIES.RESET_DECK_FLASHCARDS, [now, deckId]);
+  }
+
   async query(
     sql: string,
     params: SqlJsValue[] = [],
@@ -1531,6 +1538,82 @@ export abstract class BaseDatabaseService implements IDatabaseService {
         (await this.querySql("PRAGMA table_info(review_sessions)") as SqlJsValue[][])
           .map(row => row[1] as string)
       );
+
+      // Restore deckprofiles
+      try {
+        const currentProfileColumns = new Set(
+          (await this.querySql("PRAGMA table_info(deckprofiles)") as SqlJsValue[][])
+            .map(row => row[1] as string)
+        );
+
+        const backupProfileCols = (await this.queryBackupDatabase(
+          backupDb, "PRAGMA table_info(deckprofiles)"
+        )).map(row => row[1] as string);
+
+        const profileMapping: { backupIndex: number; currentName: string }[] = [];
+        for (let i = 0; i < backupProfileCols.length; i++) {
+          const col = backupProfileCols[i];
+          if (currentProfileColumns.has(col)) {
+            profileMapping.push({ backupIndex: i, currentName: col });
+          }
+        }
+
+        if (profileMapping.length > 0) {
+          const profiles = await this.queryBackupDatabase(
+            backupDb, "SELECT * FROM deckprofiles"
+          );
+          const columns = profileMapping.map(m => m.currentName);
+          const placeholders = columns.map(() => "?").join(", ");
+          const insertIgnoreSql = `INSERT OR IGNORE INTO deckprofiles (${columns.join(", ")}) VALUES (${placeholders})`;
+          const insertReplaceSql = `INSERT OR REPLACE INTO deckprofiles (${columns.join(", ")}) VALUES (${placeholders})`;
+
+          const isDefaultIndex = backupProfileCols.indexOf("is_default");
+
+          for (const profile of profiles) {
+            const values = profileMapping.map(m => profile[m.backupIndex]);
+            const isDefault = isDefaultIndex >= 0 && Boolean(profile[isDefaultIndex]);
+            await this.executeSql(isDefault ? insertIgnoreSql : insertReplaceSql, values);
+          }
+        }
+      } catch {
+        this.debugLog("Backup does not contain deckprofiles table, skipping");
+      }
+
+      // Restore profile_tag_mappings
+      try {
+        const currentTagMappingColumns = new Set(
+          (await this.querySql("PRAGMA table_info(profile_tag_mappings)") as SqlJsValue[][])
+            .map(row => row[1] as string)
+        );
+
+        const backupTagMappingCols = (await this.queryBackupDatabase(
+          backupDb, "PRAGMA table_info(profile_tag_mappings)"
+        )).map(row => row[1] as string);
+
+        const tagMappingMapping: { backupIndex: number; currentName: string }[] = [];
+        for (let i = 0; i < backupTagMappingCols.length; i++) {
+          const col = backupTagMappingCols[i];
+          if (currentTagMappingColumns.has(col)) {
+            tagMappingMapping.push({ backupIndex: i, currentName: col });
+          }
+        }
+
+        if (tagMappingMapping.length > 0) {
+          const mappings = await this.queryBackupDatabase(
+            backupDb, "SELECT * FROM profile_tag_mappings"
+          );
+          const columns = tagMappingMapping.map(m => m.currentName);
+          const placeholders = columns.map(() => "?").join(", ");
+          const insertSql = `INSERT OR REPLACE INTO profile_tag_mappings (${columns.join(", ")}) VALUES (${placeholders})`;
+
+          for (const mapping of mappings) {
+            const values = tagMappingMapping.map(m => mapping[m.backupIndex]);
+            await this.executeSql(insertSql, values);
+          }
+        }
+      } catch {
+        this.debugLog("Backup does not contain profile_tag_mappings table, skipping");
+      }
 
       // Restore review_sessions (schema is stable across versions)
       try {

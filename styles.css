@@ -662,6 +662,22 @@ div.decks-card-content
   visibility: visible;
 }
 
+.decks-dropdown-option-danger {
+  color: var(--text-error);
+}
+
+.decks-reset-warning {
+  font-weight: var(--font-weight-bold);
+  color: var(--text-error);
+}
+
+.decks-modal-button-container {
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+  margin-top: 16px;
+}
+
 .decks-button-container {
   margin-top: 16px;
   margin-bottom: 16px;

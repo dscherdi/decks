@@ -185,6 +185,7 @@ export interface IDatabaseService {
 
   // Utility operations
   purgeDatabase(): Promise<void>;
+  resetDeckProgress(deckId: string): Promise<void>;
 
   querySql<T>(
     sql: string,
