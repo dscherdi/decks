@@ -5,6 +5,7 @@ import type {
   DeckWithProfile,
   ReviewLog,
   DeckGroup,
+  CustomDeckGroup,
 } from "../database/types";
 import type { IDatabaseService } from "../database/DatabaseFactory";
 import { FSRS, type RatingLabel, type SchedulingCard } from "../algorithm/fsrs";
@@ -982,6 +983,57 @@ export class Scheduler {
     const nextDayStartsAt = this.settings.review.nextDayStartsAt;
     const intervalDays = Math.ceil(intervalMinutes / 1440);
     return this.getStudyDayStartAfterDays(now, intervalDays, nextDayStartsAt);
+  }
+
+  // CUSTOM DECK REVIEW METHODS
+
+  async startReviewSessionForCustomDeck(
+    customDeck: CustomDeckGroup,
+    now: Date = new Date(),
+  ): Promise<NewSession> {
+    this.debugLog(`Starting review session for custom deck: ${customDeck.name}`);
+
+    const dueCards = await this.db.getDueCardsForCustomDeck(customDeck.id);
+    const newCards = await this.db.getNewCardsForCustomDeck(customDeck.id);
+    const goalTotal = Math.max(1, dueCards.length + newCards.length);
+
+    const sessionId = await this.db.createReviewSession({
+      deckId: customDeck.id,
+      startedAt: now.toISOString(),
+      endedAt: null,
+      goalTotal,
+      doneUnique: 0,
+    });
+
+    this.debugLog(
+      `Review session created for custom deck: ${sessionId}, goal: ${goalTotal}`
+    );
+    return {
+      sessionId,
+      deckFilePath: '',
+    };
+  }
+
+  async getNextForCustomDeck(
+    _now: Date,
+    customDeck: CustomDeckGroup,
+    options: { allowNew?: boolean } = {}
+  ): Promise<Flashcard | null> {
+    const { allowNew = true } = options;
+
+    const dueCards = await this.db.getDueCardsForCustomDeck(customDeck.id);
+    if (dueCards.length > 0) {
+      return dueCards[0];
+    }
+
+    if (allowNew) {
+      const newCards = await this.db.getNewCardsForCustomDeck(customDeck.id);
+      if (newCards.length > 0) {
+        return newCards[0];
+      }
+    }
+
+    return null;
   }
 
 }

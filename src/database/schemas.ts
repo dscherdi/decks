@@ -1,7 +1,7 @@
 import type { Database } from "sql.js";
 
 // Current Schema Version
-export const CURRENT_SCHEMA_VERSION = 12;
+export const CURRENT_SCHEMA_VERSION = 13;
 
 // SQL Table Creation Schema - Used when database file doesn't exist
 export const CREATE_TABLES_SQL = `
@@ -126,6 +126,26 @@ export const CREATE_TABLES_SQL = `
     client TEXT
   );
 
+  -- Custom decks table
+  CREATE TABLE IF NOT EXISTS custom_decks (
+    id TEXT PRIMARY KEY,
+    name TEXT NOT NULL UNIQUE,
+    last_reviewed TEXT,
+    created TEXT NOT NULL,
+    modified TEXT NOT NULL
+  );
+
+  -- Custom deck cards junction table (many-to-many)
+  CREATE TABLE IF NOT EXISTS custom_deck_cards (
+    id TEXT PRIMARY KEY,
+    custom_deck_id TEXT NOT NULL,
+    flashcard_id TEXT NOT NULL,
+    created TEXT NOT NULL,
+    UNIQUE(custom_deck_id, flashcard_id),
+    FOREIGN KEY (custom_deck_id) REFERENCES custom_decks(id) ON DELETE CASCADE,
+    FOREIGN KEY (flashcard_id) REFERENCES flashcards(id) ON DELETE CASCADE
+  );
+
   -- Insert DEFAULT profile
   INSERT OR IGNORE INTO deckprofiles (
     id, name,
@@ -165,6 +185,10 @@ export const CREATE_TABLES_SQL = `
   -- Forecast-optimized indexes
   CREATE INDEX IF NOT EXISTS idx_flashcards_deck_due ON flashcards(deck_id, due_date);
   CREATE INDEX IF NOT EXISTS idx_review_logs_join ON review_logs(flashcard_id, reviewed_at);
+
+  -- Custom deck indexes
+  CREATE INDEX IF NOT EXISTS idx_custom_deck_cards_deck ON custom_deck_cards(custom_deck_id);
+  CREATE INDEX IF NOT EXISTS idx_custom_deck_cards_card ON custom_deck_cards(flashcard_id);
 
   -- Set schema version
   PRAGMA user_version = ${CURRENT_SCHEMA_VERSION};
@@ -424,6 +448,26 @@ export function buildMigrationSQL(db: Database): string {
       FOREIGN KEY (deck_id) REFERENCES decks(id) ON DELETE CASCADE
     );
 
+    -- Custom decks table
+    CREATE TABLE IF NOT EXISTS custom_decks (
+      id TEXT PRIMARY KEY,
+      name TEXT NOT NULL UNIQUE,
+      last_reviewed TEXT,
+      created TEXT NOT NULL,
+      modified TEXT NOT NULL
+    );
+
+    -- Custom deck cards junction table (many-to-many)
+    CREATE TABLE IF NOT EXISTS custom_deck_cards (
+      id TEXT PRIMARY KEY,
+      custom_deck_id TEXT NOT NULL,
+      flashcard_id TEXT NOT NULL,
+      created TEXT NOT NULL,
+      UNIQUE(custom_deck_id, flashcard_id),
+      FOREIGN KEY (custom_deck_id) REFERENCES custom_decks(id) ON DELETE CASCADE,
+      FOREIGN KEY (flashcard_id) REFERENCES flashcards(id) ON DELETE CASCADE
+    );
+
     -- Create indexes
     CREATE INDEX IF NOT EXISTS idx_deckprofiles_name ON deckprofiles(name);
     CREATE INDEX IF NOT EXISTS idx_deckprofiles_is_default ON deckprofiles(is_default);
@@ -439,6 +483,8 @@ export function buildMigrationSQL(db: Database): string {
     CREATE INDEX IF NOT EXISTS idx_review_logs_reviewed_at ON review_logs(reviewed_at);
     CREATE INDEX IF NOT EXISTS idx_flashcards_deck_due ON flashcards(deck_id, due_date);
     CREATE INDEX IF NOT EXISTS idx_review_logs_join ON review_logs(flashcard_id, reviewed_at);
+    CREATE INDEX IF NOT EXISTS idx_custom_deck_cards_deck ON custom_deck_cards(custom_deck_id);
+    CREATE INDEX IF NOT EXISTS idx_custom_deck_cards_card ON custom_deck_cards(flashcard_id);
 
     -- Set schema version
     PRAGMA user_version = ${CURRENT_SCHEMA_VERSION};
@@ -843,6 +889,119 @@ export const SQL_QUERIES = {
 
   DELETE_REVIEW_SESSIONS_FOR_DECK: `
     DELETE FROM review_sessions WHERE deck_id = ?
+  `,
+
+  // Custom deck operations
+  INSERT_CUSTOM_DECK: `
+    INSERT INTO custom_decks (id, name, last_reviewed, created, modified)
+    VALUES (?, ?, ?, ?, ?)
+  `,
+
+  GET_CUSTOM_DECK_BY_ID: `SELECT * FROM custom_decks WHERE id = ?`,
+
+  GET_CUSTOM_DECK_BY_NAME: `SELECT * FROM custom_decks WHERE name = ?`,
+
+  GET_ALL_CUSTOM_DECKS: `SELECT * FROM custom_decks ORDER BY name`,
+
+  UPDATE_CUSTOM_DECK: `
+    UPDATE custom_decks SET name = ?, modified = ?
+    WHERE id = ?
+  `,
+
+  UPDATE_CUSTOM_DECK_LAST_REVIEWED: `
+    UPDATE custom_decks SET last_reviewed = ?, modified = ?
+    WHERE id = ?
+  `,
+
+  DELETE_CUSTOM_DECK: `DELETE FROM custom_decks WHERE id = ?`,
+
+  // Custom deck card membership operations
+  INSERT_CUSTOM_DECK_CARD: `
+    INSERT OR IGNORE INTO custom_deck_cards (id, custom_deck_id, flashcard_id, created)
+    VALUES (?, ?, ?, ?)
+  `,
+
+  DELETE_CUSTOM_DECK_CARD: `
+    DELETE FROM custom_deck_cards
+    WHERE custom_deck_id = ? AND flashcard_id = ?
+  `,
+
+  DELETE_ALL_CUSTOM_DECK_CARDS: `
+    DELETE FROM custom_deck_cards WHERE custom_deck_id = ?
+  `,
+
+  GET_FLASHCARDS_FOR_CUSTOM_DECK: `
+    SELECT f.* FROM flashcards f
+    INNER JOIN custom_deck_cards cdc ON f.id = cdc.flashcard_id
+    WHERE cdc.custom_deck_id = ?
+    ORDER BY f.created
+  `,
+
+  GET_CUSTOM_DECKS_FOR_FLASHCARD: `
+    SELECT cd.* FROM custom_decks cd
+    INNER JOIN custom_deck_cards cdc ON cd.id = cdc.custom_deck_id
+    WHERE cdc.flashcard_id = ?
+    ORDER BY cd.name
+  `,
+
+  GET_FLASHCARD_IDS_FOR_CUSTOM_DECK: `
+    SELECT flashcard_id FROM custom_deck_cards
+    WHERE custom_deck_id = ?
+  `,
+
+  // Custom deck stats
+  COUNT_NEW_CARDS_CUSTOM_DECK: `
+    SELECT COUNT(*) FROM flashcards f
+    INNER JOIN custom_deck_cards cdc ON f.id = cdc.flashcard_id
+    WHERE cdc.custom_deck_id = ? AND f.state = 'new' AND f.due_date <= ?
+  `,
+
+  COUNT_DUE_CARDS_CUSTOM_DECK: `
+    SELECT COUNT(*) FROM flashcards f
+    INNER JOIN custom_deck_cards cdc ON f.id = cdc.flashcard_id
+    WHERE cdc.custom_deck_id = ? AND f.state = 'review' AND f.due_date <= ?
+  `,
+
+  COUNT_TOTAL_CARDS_CUSTOM_DECK: `
+    SELECT COUNT(*) FROM custom_deck_cards WHERE custom_deck_id = ?
+  `,
+
+  // Custom deck review card selection
+  GET_DUE_CARDS_FOR_CUSTOM_DECK: `
+    SELECT f.* FROM flashcards f
+    INNER JOIN custom_deck_cards cdc ON f.id = cdc.flashcard_id
+    WHERE cdc.custom_deck_id = ? AND f.due_date <= ? AND f.state = 'review'
+    ORDER BY f.due_date ASC
+  `,
+
+  GET_NEW_CARDS_FOR_CUSTOM_DECK: `
+    SELECT f.* FROM flashcards f
+    INNER JOIN custom_deck_cards cdc ON f.id = cdc.flashcard_id
+    WHERE cdc.custom_deck_id = ? AND f.due_date <= ? AND f.state = 'new'
+    ORDER BY f.due_date ASC
+  `,
+
+  RESET_CUSTOM_DECK_FLASHCARDS: `
+    UPDATE flashcards SET
+      state = 'new',
+      due_date = datetime('now'),
+      interval = 0,
+      repetitions = 0,
+      difficulty = 5.0,
+      stability = 0,
+      lapses = 0,
+      last_reviewed = NULL,
+      modified = ?
+    WHERE id IN (
+      SELECT flashcard_id FROM custom_deck_cards WHERE custom_deck_id = ?
+    )
+  `,
+
+  DELETE_REVIEW_LOGS_FOR_CUSTOM_DECK: `
+    DELETE FROM review_logs
+    WHERE flashcard_id IN (
+      SELECT flashcard_id FROM custom_deck_cards WHERE custom_deck_id = ?
+    )
   `,
 };
 

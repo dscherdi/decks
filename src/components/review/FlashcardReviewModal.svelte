@@ -1,7 +1,7 @@
 <script lang="ts">
   import { createEventDispatcher, onMount, onDestroy, tick } from "svelte";
   import type { Flashcard, DeckOrGroup, ClozeShowContext, FlashcardType } from "../../database/types";
-  import { isDeckGroup } from "../../database/types";
+  import { isDeckGroup, isCustomDeck } from "../../database/types";
   import type { DecksSettings } from "../../settings";
   import { type RatingLabel } from "../../algorithm/fsrs";
   import type {
@@ -219,6 +219,11 @@
           new Date(),
           settings.review.sessionDuration
         );
+      } else if (isCustomDeck(deckOrGroup)) {
+        session = await scheduler.startReviewSessionForCustomDeck(
+          deckOrGroup,
+          new Date(),
+        );
       } else {
         session = await scheduler.startFreshSession(
           deckOrGroup.id,
@@ -243,6 +248,12 @@
             {
               allowNew: true,
             }
+          );
+        } else if (isCustomDeck(deckOrGroup)) {
+          currentCard = await scheduler.getNextForCustomDeck(
+            new Date(),
+            deckOrGroup,
+            { allowNew: true }
           );
         } else {
           currentCard = await scheduler.getNext(new Date(), deckOrGroup.id, {
@@ -417,6 +428,12 @@
             {
               allowNew: true,
             }
+          );
+        } else if (isCustomDeck(deckOrGroup)) {
+          currentCard = await scheduler.getNextForCustomDeck(
+            new Date(),
+            deckOrGroup,
+            { allowNew: true }
           );
         } else {
           currentCard = await scheduler.getNext(new Date(), deckOrGroup.id, {

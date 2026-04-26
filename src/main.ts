@@ -27,7 +27,9 @@ import { DecksSettingTab } from "./components/settings/SettingsTab";
 import { DecksView } from "./components/DecksView";
 import { DecksViewModal } from "./components/DecksViewModal";
 import { ReleaseNotesModal } from "./components/ReleaseNotesModal";
+import { FlashcardManagerModal } from "./components/FlashcardManagerModal";
 import { TestDeckService } from "./services/TestDeckService";
+import { CustomDeckService } from "./services/CustomDeckService";
 import {
   FlashcardReviewView,
   VIEW_TYPE_FLASHCARD_REVIEW,
@@ -92,6 +94,7 @@ export default class DecksPlugin extends Plugin {
   private scheduler: Scheduler;
   private backupService: BackupService;
   private statisticsService: StatisticsService;
+  private customDeckService: CustomDeckService;
   public settings: DecksSettings;
   private logger: Logger;
   private progressTracker: ProgressTracker;
@@ -177,6 +180,9 @@ export default class DecksPlugin extends Plugin {
       // Initialize statistics service
       this.statisticsService = new StatisticsService(this.db, this.settings);
 
+      // Initialize custom deck service
+      this.customDeckService = new CustomDeckService(this.db);
+
       // Initialize scheduler
       this.scheduler = new Scheduler(
         this.db,
@@ -196,6 +202,7 @@ export default class DecksPlugin extends Plugin {
             this.deckManager,
             this.scheduler,
             this.statisticsService,
+            this.customDeckService,
             this.settings,
             this.progressTracker,
             this.logger
@@ -223,6 +230,7 @@ export default class DecksPlugin extends Plugin {
           this.deckManager,
           this.scheduler,
           this.statisticsService,
+          this.customDeckService,
           this.settings,
           this.logger,
           () => this.getDecksView()
@@ -244,6 +252,19 @@ export default class DecksPlugin extends Plugin {
         name: "Show release notes",
         callback: () => {
           new ReleaseNotesModal(this.app).open();
+        },
+      });
+
+      // Add command to open flashcard manager
+      this.addCommand({
+        id: "open-flashcard-manager",
+        name: "Open flashcard manager",
+        callback: () => {
+          new FlashcardManagerModal(
+            this.app,
+            this.db,
+            this.customDeckService,
+          ).open();
         },
       });
 
@@ -288,6 +309,7 @@ export default class DecksPlugin extends Plugin {
             this.deckManager,
             this.scheduler,
             this.statisticsService,
+            this.customDeckService,
             this.settings,
             this.logger,
             () => this.getDecksView()

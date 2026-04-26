@@ -712,3 +712,15 @@ div.decks-card-content
   margin-bottom: 0;
   padding-bottom: 0;
 }
+
+/* Flashcard Manager Modal */
+.decks-flashcard-manager-modal {
+  width: 90vw;
+  max-width: 1200px;
+  height: 80vh;
+}
+
+.decks-flashcard-manager-modal .modal-content {
+  height: 100%;
+  overflow: hidden;
+}

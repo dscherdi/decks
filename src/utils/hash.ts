@@ -69,6 +69,25 @@ export function generateReverseFlashcardId(originalFrontText: string, deckId: st
 }
 
 /**
+ * Generate custom deck ID using hash of name
+ * @param name The name of the custom deck
+ * @returns A deterministic ID in format "cdeck_HASH"
+ */
+export function generateCustomDeckId(name: string): string {
+  return `cdeck_${simpleHash(name).toString(36)}`;
+}
+
+/**
+ * Generate custom deck card membership ID using hash of custom deck ID and flashcard ID
+ * @param customDeckId The ID of the custom deck
+ * @param flashcardId The ID of the flashcard
+ * @returns A deterministic ID in format "cdc_HASH"
+ */
+export function generateCustomDeckCardId(customDeckId: string, flashcardId: string): string {
+  return `cdc_${simpleHash(customDeckId + "::" + flashcardId).toString(36)}`;
+}
+
+/**
  * Generate unique cloze flashcard ID using hash of deck ID, front text, cloze order, and cloze text
  * @param frontText The front text of the flashcard (header or table Front column)
  * @param clozeText The specific cloze text (without == delimiters)

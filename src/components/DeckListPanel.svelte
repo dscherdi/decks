@@ -6,7 +6,7 @@
     DeckGroup,
     DeckOrGroup,
   } from "../database/types";
-  import { isDeckGroup, isFileDeck } from "../database/types";
+  import { isDeckGroup, isFileDeck, isCustomDeck } from "../database/types";
   import { generateDeckGroupId } from "../utils/hash";
 
   import ReviewHeatmap from "./statistics/ReviewHeatmap.svelte";
@@ -16,6 +16,11 @@
   import type { DeckSynchronizer } from "@/services/DeckSynchronizer";
   import type { IDatabaseService } from "@/database/DatabaseFactory";
   import type { TagGroupService } from "@/services/TagGroupService";
+  import type { CustomDeckService } from "@/services/CustomDeckService";
+  import type { CustomDeckGroup } from "../database/types";
+  import { RenameCustomDeckModal } from "./RenameCustomDeckModal";
+  import { ConfirmModal } from "./ConfirmModal";
+  import { Notice } from "obsidian";
   import type { App } from "obsidian";
 
   let decks: DeckWithProfile[] = [];
@@ -35,8 +40,10 @@
     resize?: () => void;
   } = {};
 
-  let viewMode: "files" | "tags" = "files";
+  let viewMode: "files" | "tags" | "custom" = "files";
   let deckGroups: DeckGroup[] = [];
+  let customDeckGroups: CustomDeckGroup[] = [];
+  let customDeckStats = new Map<string, DeckStats>();
   let currentItems: DeckOrGroup[] = [];
 
   export let statisticsService: StatisticsService;
@@ -48,6 +55,9 @@
   export let onDeckGroupClick: (deckGroup: DeckGroup) => void;
   export let onBrowseDeck: (deck: DeckWithProfile) => void;
   export let onBrowseDeckGroup: (deckGroup: DeckGroup) => void;
+  export let onCustomDeckClick: (customDeck: CustomDeckGroup) => void;
+  export let onBrowseCustomDeck: (customDeck: CustomDeckGroup) => void;
+  export let onEditCustomDeck: (customDeck: CustomDeckGroup) => void;
 
   export let app: App;
 
@@ -55,6 +65,8 @@
   export let openStatisticsModal: () => void;
   export let openProfilesManagerModal: () => void;
   export let openDeckConfigModal: (deck: DeckWithProfile) => void;
+  export let openFlashcardManager: () => void;
+  export let customDeckService: CustomDeckService;
   export let deckTag = "#decks";
 
   const getReviewCounts = async (days: number) => {
@@ -117,12 +129,15 @@
     if (isDeckGroup(item)) {
       return generateDeckGroupId(item.tag);
     }
+    if (item.type === 'custom') {
+      return item.id;
+    }
     return item.id;
   }
 
   function getDeckStats(deckId: string): DeckStats {
     return (
-      stats.get(deckId) ?? {
+      stats.get(deckId) ?? customDeckStats.get(deckId) ?? {
         deckId,
         newCount: 0,
         dueCount: 0,
@@ -138,6 +153,7 @@
       await onRefresh();
       refreshHeatmap();
       await loadStudyStats();
+      await loadCustomDecks();
     } catch (error) {
       console.error("Error during refresh:", error);
     } finally {
@@ -164,7 +180,9 @@
   $: currentItems =
     viewMode === "files"
       ? allDecks.map((d) => ({ ...d, type: "file" as const }))
-      : deckGroups;
+      : viewMode === "tags"
+        ? deckGroups
+        : customDeckGroups;
 
   $: filteredItems = filterItems(currentItems, filterText);
 
@@ -174,7 +192,7 @@
     return items.filter(
       (item) =>
         item.name.toLowerCase().includes(filterLower) ||
-        item.tag.toLowerCase().includes(filterLower)
+        ("tag" in item && item.tag.toLowerCase().includes(filterLower))
     );
   }
 
@@ -256,7 +274,9 @@
   function handleItemClick(item: DeckOrGroup) {
     if (isDeckGroup(item)) {
       onDeckGroupClick(item);
-    } else {
+    } else if (isCustomDeck(item)) {
+      onCustomDeckClick(item);
+    } else if (isFileDeck(item)) {
       onDeckClick(item);
     }
   }
@@ -264,6 +284,15 @@
   export function refreshHeatmap() {
     if (heatmapComponent) {
       heatmapComponent.refresh();
+    }
+  }
+
+  async function loadCustomDecks() {
+    try {
+      customDeckGroups = await customDeckService.getAllCustomDeckGroups();
+      customDeckStats = await customDeckService.getAllCustomDeckStats();
+    } catch (e) {
+      console.error("Failed to load custom decks:", e);
     }
   }
 
@@ -325,10 +354,12 @@
     }
     refreshHeatmap();
     await loadStudyStats();
+    await loadCustomDecks();
   }
 
-  // Load study stats on component mount
+  // Load study stats and custom decks on component mount
   onMount(() => {
+    void loadCustomDecks();
     void loadStudyStats();
   });
 
@@ -562,6 +593,215 @@
     }, 0);
   }
 
+  function handleCustomDeckConfigClick(customDeck: CustomDeckGroup, event: Event) {
+    event.stopPropagation();
+
+    if (activeDropdown && activeDropdownDeckId === customDeck.id) {
+      closeActiveDropdown();
+      return;
+    }
+
+    closeActiveDropdown();
+
+    const dropdown = document.createElement("div");
+    dropdown.className = "decks-deck-config-dropdown";
+
+    const browseOption = document.createElement("div");
+    browseOption.className = "decks-dropdown-option";
+    browseOption.textContent = "Browse all cards";
+    browseOption.onclick = () => {
+      closeActiveDropdown();
+      onBrowseCustomDeck(customDeck);
+    };
+
+    const exportOption = document.createElement("div");
+    exportOption.className = "decks-dropdown-option";
+    exportOption.textContent = "Export to Anki";
+    exportOption.onclick = () => {
+      closeActiveDropdown();
+      openAnkiExportForCustomDeck(customDeck);
+    };
+
+    const renameOption = document.createElement("div");
+    renameOption.className = "decks-dropdown-option";
+    renameOption.textContent = "Rename";
+    renameOption.onclick = () => {
+      closeActiveDropdown();
+      renameCustomDeck(customDeck);
+    };
+
+    const resetOption = document.createElement("div");
+    resetOption.className = "decks-dropdown-option decks-dropdown-option-danger";
+    resetOption.textContent = "Reset progress";
+    resetOption.onclick = () => {
+      closeActiveDropdown();
+      resetCustomDeckProgress(customDeck);
+    };
+
+    const deleteOption = document.createElement("div");
+    deleteOption.className = "decks-dropdown-option decks-dropdown-option-danger";
+    deleteOption.textContent = "Delete";
+    deleteOption.onclick = () => {
+      closeActiveDropdown();
+      deleteCustomDeck(customDeck);
+    };
+
+    const editOption = document.createElement("div");
+    editOption.className = "decks-dropdown-option";
+    editOption.textContent = "Edit cards";
+    editOption.onclick = () => {
+      closeActiveDropdown();
+      onEditCustomDeck(customDeck);
+    };
+
+    dropdown.appendChild(browseOption);
+    dropdown.appendChild(editOption);
+    dropdown.appendChild(exportOption);
+    dropdown.appendChild(renameOption);
+    dropdown.appendChild(resetOption);
+    dropdown.appendChild(deleteOption);
+
+    const button = event.target as HTMLElement;
+    const rect = button.getBoundingClientRect();
+    const viewportWidth = window.innerWidth;
+    const viewportHeight = window.innerHeight;
+
+    dropdown.addClass("decks-context-menu");
+
+    document.body.appendChild(dropdown);
+    const dropdownRect = dropdown.getBoundingClientRect();
+
+    let top = rect.bottom + 5;
+    let left = rect.left;
+
+    if (top + dropdownRect.height > viewportHeight - 10) {
+      top = rect.top - dropdownRect.height - 5;
+    }
+    if (left + dropdownRect.width > viewportWidth - 10) {
+      left = viewportWidth - dropdownRect.width - 10;
+    }
+
+    top = Math.max(10, top);
+    left = Math.max(10, left);
+
+    dropdown.setCssProps({
+      top: `${top}px`,
+      left: `${left}px`,
+    });
+    dropdown.removeClass("decks-context-menu");
+    dropdown.addClass("decks-context-menu-visible");
+
+    activeDropdown = dropdown;
+    activeDropdownDeckId = customDeck.id;
+
+    dropdownEventListeners.click = (e: Event) => {
+      if (!dropdown.contains(e.target as Node)) {
+        closeActiveDropdown();
+      }
+    };
+    dropdownEventListeners.scroll = closeActiveDropdown;
+    dropdownEventListeners.resize = closeActiveDropdown;
+
+    setTimeout(() => {
+      if (dropdownEventListeners.click) {
+        document.addEventListener("click", dropdownEventListeners.click);
+      }
+      if (dropdownEventListeners.scroll) {
+        window.addEventListener("scroll", dropdownEventListeners.scroll, true);
+      }
+      if (dropdownEventListeners.resize) {
+        window.addEventListener("resize", dropdownEventListeners.resize);
+      }
+    }, 0);
+  }
+
+  function renameCustomDeck(customDeck: CustomDeckGroup) {
+    const existingNames = customDeckGroups
+      .map((g) => g.name)
+      .filter((n) => n !== customDeck.name);
+    new RenameCustomDeckModal(app, customDeck.name, existingNames, (newName) => {
+      customDeckService
+        .renameCustomDeck(customDeck.id, newName)
+        .then(() => loadCustomDecks())
+        .catch((e) => console.error("Failed to rename custom deck:", e));
+    }).open();
+  }
+
+  function deleteCustomDeck(customDeck: CustomDeckGroup) {
+    new ConfirmModal(app, {
+      title: "Delete custom deck",
+      message: `Delete custom deck "${customDeck.name}"? This will not delete the flashcards themselves.`,
+      confirmText: "Delete",
+      isDanger: true,
+      onConfirm: () => {
+        customDeckService
+          .deleteCustomDeck(customDeck.id)
+          .then(() => loadCustomDecks())
+          .catch((e) => console.error("Failed to delete custom deck:", e));
+      },
+    }).open();
+  }
+
+  function openAnkiExportForCustomDeck(customDeck: CustomDeckGroup) {
+    if (!app) {
+      console.warn("Plugin not available for Anki export");
+      return;
+    }
+
+    db.getFlashcardsForCustomDeck(customDeck.id)
+      .then((cards) => {
+        if (cards.length === 0) {
+          new Notice(`No cards found in "${customDeck.name}"`);
+          return;
+        }
+
+        const deckIds = [...new Set(cards.map((c) => c.deckId))];
+        db.getDeckById(deckIds[0])
+          .then((firstDeck) => {
+            if (!firstDeck) {
+              console.error("Cannot export: no source deck found");
+              return;
+            }
+
+            const virtualDeck = {
+              ...firstDeck,
+              id: customDeck.id,
+              name: customDeck.name,
+              tag: `[Custom: ${customDeck.name}]`,
+              filepath: `[Custom: ${customDeck.name}]`,
+            };
+
+            const modal = new AnkiExportModal(app, virtualDeck, db);
+            modal.deckIds = deckIds;
+            modal.isGroupExport = true;
+            modal.open();
+          })
+          .catch((e) => console.error("Error opening Anki export:", e));
+      })
+      .catch((e) => console.error("Error loading custom deck cards:", e));
+  }
+
+  function resetCustomDeckProgress(customDeck: CustomDeckGroup) {
+    new ConfirmModal(app, {
+      title: "Reset custom deck progress",
+      message: `Reset all progress for "${customDeck.name}"? All flashcards in this deck will be reset to new state and review history will be deleted. This cannot be undone.`,
+      confirmText: "Reset progress",
+      isDanger: true,
+      onConfirm: () => {
+        db.resetCustomDeckProgress(customDeck.id)
+          .then(() => db.save())
+          .then(() => {
+            new Notice(`Progress reset for "${customDeck.name}"`);
+            return loadCustomDecks();
+          })
+          .catch((e) => {
+            console.error("Failed to reset custom deck progress:", e);
+            new Notice("Failed to reset custom deck progress");
+          });
+      },
+    }).open();
+  }
+
   function closeActiveDropdown() {
     if (activeDropdown) {
       activeDropdown.remove();
@@ -788,6 +1028,20 @@
       >
         Tags ({deckGroups.length})
       </button>
+      <button
+        class="decks-tab-button"
+        class:active={viewMode === "custom"}
+        on:click={() => { viewMode = "custom"; loadCustomDecks(); }}
+      >
+        Custom ({customDeckGroups.length})
+      </button>
+      <button
+        class="decks-tab-button decks-tab-button-manager"
+        on:click={openFlashcardManager}
+        title="Open flashcard manager"
+      >
+        <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="7" height="7"></rect><rect x="14" y="3" width="7" height="7"></rect><rect x="14" y="14" width="7" height="7"></rect><rect x="3" y="14" width="7" height="7"></rect></svg>
+      </button>
     </div>
 
     <div class="decks-filter-section">
@@ -855,7 +1109,7 @@
       <div class="decks-deck-table">
         <div class="decks-table-header">
           <div class="decks-col-deck">
-            {viewMode === "files" ? "Deck" : "Tag group"}
+            {viewMode === "files" ? "Deck" : viewMode === "tags" ? "Tag group" : "Custom deck"}
           </div>
           <div class="decks-col-stat">New</div>
           <div class="decks-col-stat">Due</div>
@@ -880,11 +1134,17 @@
                 >
                   {#if isDeckGroup(item)}
                     <span class="decks-tag-group-icon">🏷️</span>
+                  {:else if item.type === 'custom'}
+                    <span class="decks-tag-group-icon">📋</span>
                   {/if}
                   {item.name}
                   {#if isDeckGroup(item)}
                     <span class="decks-tag-group-count"
                       >({item.deckIds.length} files)</span
+                    >
+                  {:else if item.type === 'custom'}
+                    <span class="decks-tag-group-count"
+                      >({item.flashcardIds.length} cards)</span
                     >
                   {/if}
                 </span>
@@ -893,15 +1153,15 @@
                 class="decks-col-stat"
                 class:has-cards={itemStats.newCount > 0}
                 class:updating={isUpdatingStats}
-                class:has-limit={item.profile.hasNewCardsLimitEnabled}
-                title={item.profile.hasNewCardsLimitEnabled
+                class:has-limit={'profile' in item && item.profile.hasNewCardsLimitEnabled}
+                title={'profile' in item && item.profile.hasNewCardsLimitEnabled
                   ? isDeckGroup(item)
                     ? `${itemStats.newCount} new cards available today (limit: ${item.profile.newCardsPerDay} per deck)`
                     : `${itemStats.newCount} new cards available today (limit: ${item.profile.newCardsPerDay})`
                   : `${itemStats.newCount} new cards due`}
               >
                 {itemStats.newCount}
-                {#if item.profile.hasNewCardsLimitEnabled}
+                {#if 'profile' in item && item.profile.hasNewCardsLimitEnabled}
                   <span class="decks-limit-indicator">⚠</span>
                 {/if}
               </div>
@@ -910,15 +1170,15 @@
                 class="decks-col-stat"
                 class:has-cards={itemStats.dueCount > 0}
                 class:updating={isUpdatingStats}
-                class:has-limit={item.profile.hasReviewCardsLimitEnabled}
-                title={item.profile.hasReviewCardsLimitEnabled
+                class:has-limit={'profile' in item && item.profile.hasReviewCardsLimitEnabled}
+                title={'profile' in item && item.profile.hasReviewCardsLimitEnabled
                   ? isDeckGroup(item)
                     ? `${itemStats.dueCount} review cards available today (limit: ${item.profile.reviewCardsPerDay} per deck)`
                     : `${itemStats.dueCount} review cards available today (limit: ${item.profile.reviewCardsPerDay})`
                   : `${itemStats.dueCount} review cards due`}
               >
                 {itemStats.dueCount}
-                {#if item.profile.hasReviewCardsLimitEnabled}
+                {#if 'profile' in item && item.profile.hasReviewCardsLimitEnabled}
                   <span class="decks-limit-indicator">📅</span>
                 {/if}
               </div>
@@ -937,6 +1197,39 @@
                         e
                       )}
                     title="Tag group options"
+                    aria-label="Options for {item.name}"
+                  >
+                    <svg
+                      xmlns="http://www.w3.org/2000/svg"
+                      width="16"
+                      height="16"
+                      viewBox="0 0 24 24"
+                      fill="none"
+                      stroke="currentColor"
+                      stroke-width="2"
+                      stroke-linecap="round"
+                      stroke-linejoin="round"
+                    >
+                      <circle cx="12" cy="12" r="3"></circle>
+                      <path
+                        d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1 1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z"
+                      ></path>
+                    </svg>
+                  </button>
+                {:else if isCustomDeck(item)}
+                  <button
+                    class="decks-deck-config-button"
+                    on:click={(e) =>
+                      handleTouchClick(
+                        () => handleCustomDeckConfigClick(item, e),
+                        e
+                      )}
+                    on:touchend={(e) =>
+                      handleTouchClick(
+                        () => handleCustomDeckConfigClick(item, e),
+                        e
+                      )}
+                    title="Custom deck options"
                     aria-label="Options for {item.name}"
                   >
                     <svg

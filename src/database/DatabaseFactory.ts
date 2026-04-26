@@ -10,6 +10,7 @@ import type {
   Flashcard,
   ReviewLog,
   ReviewSession,
+  CustomDeck,
 } from "./types";
 import type { SqlJsValue, SqlRecord, SqlRow } from "./sql-types";
 import type { SyncData, SyncResult } from "../services/FlashcardSynchronizer";
@@ -142,6 +143,32 @@ export interface IDatabaseService {
     flashcardId: string
   ): Promise<boolean>;
 
+  // Custom deck operations
+  createCustomDeck(name: string): Promise<string>;
+  getCustomDeckById(id: string): Promise<CustomDeck | null>;
+  getCustomDeckByName(name: string): Promise<CustomDeck | null>;
+  getAllCustomDecks(): Promise<CustomDeck[]>;
+  updateCustomDeck(id: string, updates: { name?: string }): Promise<void>;
+  updateCustomDeckLastReviewed(id: string, timestamp: string): Promise<void>;
+  deleteCustomDeck(id: string): Promise<void>;
+
+  // Custom deck card membership
+  addCardsToCustomDeck(customDeckId: string, flashcardIds: string[]): Promise<void>;
+  removeCardsFromCustomDeck(customDeckId: string, flashcardIds: string[]): Promise<void>;
+  removeAllCardsFromCustomDeck(customDeckId: string): Promise<void>;
+  getFlashcardsForCustomDeck(customDeckId: string): Promise<Flashcard[]>;
+  getCustomDecksForFlashcard(flashcardId: string): Promise<CustomDeck[]>;
+  getFlashcardIdsForCustomDeck(customDeckId: string): Promise<string[]>;
+
+  // Custom deck stats
+  countNewCardsCustomDeck(customDeckId: string): Promise<number>;
+  countDueCardsCustomDeck(customDeckId: string): Promise<number>;
+  countTotalCardsCustomDeck(customDeckId: string): Promise<number>;
+
+  // Custom deck review card selection
+  getDueCardsForCustomDeck(customDeckId: string): Promise<Flashcard[]>;
+  getNewCardsForCustomDeck(customDeckId: string): Promise<Flashcard[]>;
+
   // Statistics operations moved to StatisticsService
   getDailyReviewCounts(
     deckId: string,
@@ -186,6 +213,7 @@ export interface IDatabaseService {
   // Utility operations
   purgeDatabase(): Promise<void>;
   resetDeckProgress(deckId: string): Promise<void>;
+  resetCustomDeckProgress(customDeckId: string): Promise<void>;
 
   querySql<T>(
     sql: string,

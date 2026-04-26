@@ -4,6 +4,7 @@ import type {
   DeckGroup,
   Flashcard,
   DeckOrGroup,
+  CustomDeckGroup,
 } from "@/database/types";
 import { DeckSynchronizer } from "@/services/DeckSynchronizer";
 import { DeckManager } from "@/services/DeckManager";
@@ -23,6 +24,8 @@ import { ProfilesManagerModal } from "./config/ProfilesManagerModal";
 import { DeckConfigModal } from "./config/DeckConfigModal";
 import { StatisticsService } from "@/services/StatisticsService";
 import { TagGroupService } from "@/services/TagGroupService";
+import { CustomDeckService } from "@/services/CustomDeckService";
+import { FlashcardManagerModal } from "./FlashcardManagerModal";
 
 import DeckListPanel from "./DeckListPanel.svelte";
 import { mount, unmount } from "svelte";
@@ -37,6 +40,7 @@ export class DecksViewModal extends Modal {
   private scheduler: Scheduler;
   private statisticsService: StatisticsService;
   private tagGroupService: TagGroupService;
+  private customDeckService: CustomDeckService;
   private settings: DecksSettings;
   private logger: Logger;
   private deckListPanelComponent: DeckListPanelComponent | null = null;
@@ -50,6 +54,7 @@ export class DecksViewModal extends Modal {
     deckManager: DeckManager,
     scheduler: Scheduler,
     statisticsService: StatisticsService,
+    customDeckService: CustomDeckService,
     settings: DecksSettings,
     logger: Logger,
     getDecksView: () => DecksView | null
@@ -61,6 +66,7 @@ export class DecksViewModal extends Modal {
     this.scheduler = scheduler;
     this.statisticsService = statisticsService;
     this.tagGroupService = new TagGroupService(db);
+    this.customDeckService = customDeckService;
     this.settings = settings;
     this.logger = logger;
     this.getDecksView = getDecksView;
@@ -102,11 +108,22 @@ export class DecksViewModal extends Modal {
         onBrowseDeckGroup: (deckGroup: DeckGroup) => {
           void this.startBrowseForDeckGroup(deckGroup);
         },
+        onCustomDeckClick: (customDeck: CustomDeckGroup) => {
+          void this.startReviewForCustomDeck(customDeck);
+        },
+        onBrowseCustomDeck: (customDeck: CustomDeckGroup) => {
+          void this.startBrowseForCustomDeck(customDeck);
+        },
+        onEditCustomDeck: (customDeck: CustomDeckGroup) => {
+          this.openEditCustomDeck(customDeck);
+        },
+        customDeckService: this.customDeckService,
         onRefresh: () => this.refresh(),
         openStatisticsModal: () => this.openStatisticsModal(),
         openProfilesManagerModal: () => this.openProfilesManagerModal(),
         openDeckConfigModal: (deck: DeckWithProfile) =>
           this.openDeckConfigModal(deck),
+        openFlashcardManager: () => this.openFlashcardManager(),
         deckTag: this.settings.parsing.deckTag,
       },
     }) as DeckListPanelComponent;
@@ -150,6 +167,7 @@ export class DecksViewModal extends Modal {
       this.deckManager,
       this.scheduler,
       this.statisticsService,
+      this.customDeckService,
       this.settings,
       this.logger,
       this.getDecksView
@@ -223,6 +241,25 @@ export class DecksViewModal extends Modal {
       const view = this.getDecksView();
       if (view) await view.refresh();
     });
+    this.openWithReturn(modal);
+  }
+
+  private openFlashcardManager(): void {
+    const modal = new FlashcardManagerModal(
+      this.app,
+      this.db,
+      this.customDeckService,
+    );
+    this.openWithReturn(modal);
+  }
+
+  private openEditCustomDeck(customDeck: CustomDeckGroup): void {
+    const modal = new FlashcardManagerModal(
+      this.app,
+      this.db,
+      this.customDeckService,
+      { id: customDeck.id, name: customDeck.name },
+    );
     this.openWithReturn(modal);
   }
 
@@ -481,6 +518,54 @@ export class DecksViewModal extends Modal {
       this.openReviewSession(deckGroup, allCards, true);
     } catch (error) {
       console.error("Error starting deck group browse:", error);
+      if (this.settings?.ui?.enableNotices !== false) {
+        new Notice("Error starting browse. Check console for details.");
+      }
+    }
+  }
+
+  private async startReviewForCustomDeck(customDeck: CustomDeckGroup) {
+    try {
+      this.logger.debug(`Starting review for custom deck: ${customDeck.name}`);
+
+      const nextCard = await this.scheduler.getNextForCustomDeck(
+        new Date(),
+        customDeck,
+        { allowNew: true }
+      );
+
+      if (!nextCard) {
+        if (this.settings?.ui?.enableNotices !== false) {
+          new Notice(`No cards due in "${customDeck.name}" (${customDeck.flashcardIds.length} cards)`);
+        }
+        return;
+      }
+
+      this.openReviewSession(customDeck, [nextCard], false);
+    } catch (error) {
+      console.error("Error starting custom deck review:", error);
+      if (this.settings?.ui?.enableNotices !== false) {
+        new Notice("Error starting review. Check console for details.");
+      }
+    }
+  }
+
+  private async startBrowseForCustomDeck(customDeck: CustomDeckGroup) {
+    try {
+      this.logger.debug(`Starting browse mode for custom deck: ${customDeck.name}`);
+
+      const allCards = await this.db.getFlashcardsForCustomDeck(customDeck.id);
+
+      if (allCards.length === 0) {
+        if (this.settings?.ui?.enableNotices !== false) {
+          new Notice(`No cards found in "${customDeck.name}"`);
+        }
+        return;
+      }
+
+      this.openReviewSession(customDeck, allCards, true);
+    } catch (error) {
+      console.error("Error starting custom deck browse:", error);
       if (this.settings?.ui?.enableNotices !== false) {
         new Notice("Error starting browse. Check console for details.");
       }

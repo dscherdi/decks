@@ -98,7 +98,32 @@ export interface FileDeck extends DeckWithProfile {
   type: 'file';
 }
 
-export type DeckOrGroup = FileDeck | DeckGroup;
+export interface CustomDeck {
+  id: string;
+  name: string;
+  lastReviewed: string | null;
+  created: string;
+  modified: string;
+}
+
+export interface CustomDeckCard {
+  id: string;
+  customDeckId: string;
+  flashcardId: string;
+  created: string;
+}
+
+export interface CustomDeckGroup {
+  type: 'custom';
+  id: string;
+  name: string;
+  flashcardIds: string[];
+  lastReviewed: string | null;
+  created: string;
+  modified: string;
+}
+
+export type DeckOrGroup = FileDeck | DeckGroup | CustomDeckGroup;
 
 export function isDeckGroup(item: DeckOrGroup): item is DeckGroup {
   return item.type === 'group';
@@ -106,6 +131,10 @@ export function isDeckGroup(item: DeckOrGroup): item is DeckGroup {
 
 export function isFileDeck(item: DeckOrGroup): item is FileDeck {
   return item.type === 'file';
+}
+
+export function isCustomDeck(item: DeckOrGroup): item is CustomDeckGroup {
+  return item.type === 'custom';
 }
 
 export type FlashcardState = "new" | "review";
@@ -222,6 +251,8 @@ export interface DatabaseSchema {
   flashcards: Flashcard;
   review_logs: ReviewLog;
   review_sessions: ReviewSession;
+  custom_decks: CustomDeck;
+  custom_deck_cards: CustomDeckCard;
 }
 
 export interface DailyStats {

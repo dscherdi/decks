@@ -262,7 +262,7 @@ export class FlashcardReviewModalWrapper extends Modal {
     this.markdownComponents = [];
 
     // Refresh view when closing
-    const deckId = this.deckOrGroup.type === 'file' ? this.deckOrGroup.id : this.deckOrGroup.tag;
+    const deckId = this.deckOrGroup.type === 'file' ? this.deckOrGroup.id : this.deckOrGroup.type === 'custom' ? this.deckOrGroup.id : this.deckOrGroup.tag;
     this.refreshStatsById(deckId).catch(console.error);
   }
 }

@@ -506,6 +506,28 @@ export class MainDatabaseService extends BaseDatabaseService {
               this.debugLog("Remote DB has no profile_tag_mappings table, skipping");
             }
 
+            // Merge Custom Decks (REPLACE only if remote.modified > main.modified)
+            try {
+              this.db.exec(`
+                INSERT OR REPLACE INTO custom_decks
+                SELECT remote.* FROM remote.custom_decks
+                LEFT JOIN custom_decks AS main ON remote.id = main.id
+                WHERE main.id IS NULL OR remote.modified > main.modified
+              `);
+            } catch {
+              this.debugLog("Remote DB has no custom_decks table, skipping");
+            }
+
+            // Merge Custom Deck Cards (INSERT OR IGNORE - preserve memberships)
+            try {
+              this.db.exec(`
+                INSERT OR IGNORE INTO custom_deck_cards
+                SELECT * FROM remote.custom_deck_cards
+              `);
+            } catch {
+              this.debugLog("Remote DB has no custom_deck_cards table, skipping");
+            }
+
             // Commit the transaction
             this.db.exec("COMMIT");
             this.debugLog("Successfully merged data from disk");
@@ -700,6 +722,58 @@ export class MainDatabaseService extends BaseDatabaseService {
               }
             } catch {
               this.debugLog("Remote DB has no profile_tag_mappings table, skipping");
+            }
+
+            // Merge custom decks (conditional replace)
+            try {
+              const remoteCustomDecks = remoteDb.exec("SELECT * FROM custom_decks");
+              if (remoteCustomDecks.length > 0) {
+                const customDeckData = remoteCustomDecks[0];
+                const modifiedIndex = customDeckData.columns.indexOf("modified");
+
+                for (const row of customDeckData.values) {
+                  const deckId = row[0];
+                  const remoteModified = row[modifiedIndex];
+
+                  const existingDeck = this.db.exec(
+                    `SELECT modified FROM custom_decks WHERE id = ?`,
+                    [deckId]
+                  );
+                  const shouldReplace =
+                    !existingDeck.length ||
+                    (existingDeck[0]?.values?.[0]?.[0] || 0) <
+                      (remoteModified || 0);
+
+                  if (shouldReplace) {
+                    const deckStmt = this.db.prepare(`
+                      INSERT OR REPLACE INTO custom_decks (${customDeckData.columns.join(",")})
+                      VALUES (${customDeckData.columns.map(() => "?").join(",")})
+                    `);
+                    deckStmt.run(row);
+                    deckStmt.free();
+                  }
+                }
+              }
+            } catch {
+              this.debugLog("Remote DB has no custom_decks table, skipping");
+            }
+
+            // Merge custom deck cards (INSERT OR IGNORE)
+            try {
+              const remoteCustomCards = remoteDb.exec("SELECT * FROM custom_deck_cards");
+              if (remoteCustomCards.length > 0) {
+                const cardData = remoteCustomCards[0];
+                const placeholders = cardData.columns.map(() => "?").join(",");
+                const stmt = this.db.prepare(
+                  `INSERT OR IGNORE INTO custom_deck_cards VALUES (${placeholders})`
+                );
+                for (const row of cardData.values) {
+                  stmt.run(row);
+                }
+                stmt.free();
+              }
+            } catch {
+              this.debugLog("Remote DB has no custom_deck_cards table, skipping");
             }
 
             // Commit the transaction

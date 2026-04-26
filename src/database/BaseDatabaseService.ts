@@ -8,6 +8,7 @@ import type {
   FlashcardType,
   ReviewLog,
   ReviewSession,
+  CustomDeck,
 } from "./types";
 import { DEFAULT_PROFILE_ID, deckWithProfile } from "./types";
 import { SQL_QUERIES } from "./schemas";
@@ -22,7 +23,7 @@ import type {
   SqlRow,
 } from "./sql-types";
 import type { IDatabaseService } from "./DatabaseFactory";
-import { generateFlashcardId } from "../utils/hash";
+import { generateFlashcardId, generateCustomDeckId, generateCustomDeckCardId } from "../utils/hash";
 
 export interface QueryConfig {
   asObject?: boolean;
@@ -102,6 +103,16 @@ export abstract class BaseDatabaseService implements IDatabaseService {
       profileId: row[1] as string,
       tag: row[2] as string,
       created: row[3] as string,
+    };
+  }
+
+  protected parseCustomDeckRow(row: (string | number | null)[]): CustomDeck {
+    return {
+      id: row[0] as string,
+      name: row[1] as string,
+      lastReviewed: row[2] as string | null,
+      created: row[3] as string,
+      modified: row[4] as string,
     };
   }
 
@@ -1461,6 +1472,148 @@ export abstract class BaseDatabaseService implements IDatabaseService {
     await this.executeSql(SQL_QUERIES.RESET_DECK_FLASHCARDS, [now, deckId]);
   }
 
+  async resetCustomDeckProgress(customDeckId: string): Promise<void> {
+    const now = new Date().toISOString();
+    await this.executeSql(SQL_QUERIES.DELETE_REVIEW_LOGS_FOR_CUSTOM_DECK, [customDeckId]);
+    await this.executeSql(SQL_QUERIES.RESET_CUSTOM_DECK_FLASHCARDS, [now, customDeckId]);
+  }
+
+  // CUSTOM DECK OPERATIONS
+
+  async createCustomDeck(name: string): Promise<string> {
+    const id = generateCustomDeckId(name);
+    const now = new Date().toISOString();
+    await this.executeSql(SQL_QUERIES.INSERT_CUSTOM_DECK, [
+      id, name, null, now, now,
+    ]);
+    return id;
+  }
+
+  async getCustomDeckById(id: string): Promise<CustomDeck | null> {
+    const results = (await this.querySql(SQL_QUERIES.GET_CUSTOM_DECK_BY_ID, [id])) as (
+      | string | number | null
+    )[][];
+    return results.length > 0 ? this.parseCustomDeckRow(results[0]) : null;
+  }
+
+  async getCustomDeckByName(name: string): Promise<CustomDeck | null> {
+    const results = (await this.querySql(SQL_QUERIES.GET_CUSTOM_DECK_BY_NAME, [name])) as (
+      | string | number | null
+    )[][];
+    return results.length > 0 ? this.parseCustomDeckRow(results[0]) : null;
+  }
+
+  async getAllCustomDecks(): Promise<CustomDeck[]> {
+    const results = (await this.querySql(SQL_QUERIES.GET_ALL_CUSTOM_DECKS)) as (
+      | string | number | null
+    )[][];
+    return results.map((row) => this.parseCustomDeckRow(row));
+  }
+
+  async updateCustomDeck(id: string, updates: { name?: string }): Promise<void> {
+    const existing = await this.getCustomDeckById(id);
+    if (!existing) return;
+    const now = new Date().toISOString();
+    await this.executeSql(SQL_QUERIES.UPDATE_CUSTOM_DECK, [
+      updates.name ?? existing.name,
+      now,
+      id,
+    ]);
+  }
+
+  async updateCustomDeckLastReviewed(id: string, timestamp: string): Promise<void> {
+    const now = new Date().toISOString();
+    await this.executeSql(SQL_QUERIES.UPDATE_CUSTOM_DECK_LAST_REVIEWED, [
+      timestamp, now, id,
+    ]);
+  }
+
+  async deleteCustomDeck(id: string): Promise<void> {
+    await this.executeSql(SQL_QUERIES.DELETE_CUSTOM_DECK, [id]);
+  }
+
+  async addCardsToCustomDeck(customDeckId: string, flashcardIds: string[]): Promise<void> {
+    const now = new Date().toISOString();
+    for (const flashcardId of flashcardIds) {
+      const id = generateCustomDeckCardId(customDeckId, flashcardId);
+      await this.executeSql(SQL_QUERIES.INSERT_CUSTOM_DECK_CARD, [
+        id, customDeckId, flashcardId, now,
+      ]);
+    }
+  }
+
+  async removeCardsFromCustomDeck(customDeckId: string, flashcardIds: string[]): Promise<void> {
+    for (const flashcardId of flashcardIds) {
+      await this.executeSql(SQL_QUERIES.DELETE_CUSTOM_DECK_CARD, [
+        customDeckId, flashcardId,
+      ]);
+    }
+  }
+
+  async removeAllCardsFromCustomDeck(customDeckId: string): Promise<void> {
+    await this.executeSql(SQL_QUERIES.DELETE_ALL_CUSTOM_DECK_CARDS, [customDeckId]);
+  }
+
+  async getFlashcardsForCustomDeck(customDeckId: string): Promise<Flashcard[]> {
+    const results = (await this.querySql(SQL_QUERIES.GET_FLASHCARDS_FOR_CUSTOM_DECK, [customDeckId])) as (
+      | string | number | null
+    )[][];
+    return results.map((row) => this.rowToFlashcard(row));
+  }
+
+  async getCustomDecksForFlashcard(flashcardId: string): Promise<CustomDeck[]> {
+    const results = (await this.querySql(SQL_QUERIES.GET_CUSTOM_DECKS_FOR_FLASHCARD, [flashcardId])) as (
+      | string | number | null
+    )[][];
+    return results.map((row) => this.parseCustomDeckRow(row));
+  }
+
+  async getFlashcardIdsForCustomDeck(customDeckId: string): Promise<string[]> {
+    const results = (await this.querySql(SQL_QUERIES.GET_FLASHCARD_IDS_FOR_CUSTOM_DECK, [customDeckId])) as (
+      | string | number | null
+    )[][];
+    return results.map((row) => row[0] as string);
+  }
+
+  async countNewCardsCustomDeck(customDeckId: string): Promise<number> {
+    const now = new Date().toISOString();
+    const results = (await this.querySql(SQL_QUERIES.COUNT_NEW_CARDS_CUSTOM_DECK, [customDeckId, now])) as (
+      | string | number | null
+    )[][];
+    return (results[0]?.[0] as number) ?? 0;
+  }
+
+  async countDueCardsCustomDeck(customDeckId: string): Promise<number> {
+    const now = new Date().toISOString();
+    const results = (await this.querySql(SQL_QUERIES.COUNT_DUE_CARDS_CUSTOM_DECK, [customDeckId, now])) as (
+      | string | number | null
+    )[][];
+    return (results[0]?.[0] as number) ?? 0;
+  }
+
+  async countTotalCardsCustomDeck(customDeckId: string): Promise<number> {
+    const results = (await this.querySql(SQL_QUERIES.COUNT_TOTAL_CARDS_CUSTOM_DECK, [customDeckId])) as (
+      | string | number | null
+    )[][];
+    return (results[0]?.[0] as number) ?? 0;
+  }
+
+  async getDueCardsForCustomDeck(customDeckId: string): Promise<Flashcard[]> {
+    const now = new Date().toISOString();
+    const results = (await this.querySql(SQL_QUERIES.GET_DUE_CARDS_FOR_CUSTOM_DECK, [customDeckId, now])) as (
+      | string | number | null
+    )[][];
+    return results.map((row) => this.rowToFlashcard(row));
+  }
+
+  async getNewCardsForCustomDeck(customDeckId: string): Promise<Flashcard[]> {
+    const now = new Date().toISOString();
+    const results = (await this.querySql(SQL_QUERIES.GET_NEW_CARDS_FOR_CUSTOM_DECK, [customDeckId, now])) as (
+      | string | number | null
+    )[][];
+    return results.map((row) => this.rowToFlashcard(row));
+  }
+
   async query(
     sql: string,
     params: SqlJsValue[] = [],
@@ -1676,6 +1829,78 @@ export abstract class BaseDatabaseService implements IDatabaseService {
         }
       } catch {
         this.debugLog("Backup does not contain review_logs table, skipping");
+      }
+
+      // Restore custom_decks
+      try {
+        const currentCustomDeckColumns = new Set(
+          (await this.querySql("PRAGMA table_info(custom_decks)") as SqlJsValue[][])
+            .map(row => row[1] as string)
+        );
+
+        const backupCustomDeckCols = (await this.queryBackupDatabase(
+          backupDb, "PRAGMA table_info(custom_decks)"
+        )).map(row => row[1] as string);
+
+        const customDeckMapping: { backupIndex: number; currentName: string }[] = [];
+        for (let i = 0; i < backupCustomDeckCols.length; i++) {
+          const col = backupCustomDeckCols[i];
+          if (currentCustomDeckColumns.has(col)) {
+            customDeckMapping.push({ backupIndex: i, currentName: col });
+          }
+        }
+
+        if (customDeckMapping.length > 0) {
+          const customDecks = await this.queryBackupDatabase(
+            backupDb, "SELECT * FROM custom_decks"
+          );
+          const columns = customDeckMapping.map(m => m.currentName);
+          const placeholders = columns.map(() => "?").join(", ");
+          const insertSql = `INSERT OR REPLACE INTO custom_decks (${columns.join(", ")}) VALUES (${placeholders})`;
+
+          for (const deck of customDecks) {
+            const values = customDeckMapping.map(m => deck[m.backupIndex]);
+            await this.executeSql(insertSql, values);
+          }
+        }
+      } catch {
+        this.debugLog("Backup does not contain custom_decks table, skipping");
+      }
+
+      // Restore custom_deck_cards
+      try {
+        const currentCardColumns = new Set(
+          (await this.querySql("PRAGMA table_info(custom_deck_cards)") as SqlJsValue[][])
+            .map(row => row[1] as string)
+        );
+
+        const backupCardCols = (await this.queryBackupDatabase(
+          backupDb, "PRAGMA table_info(custom_deck_cards)"
+        )).map(row => row[1] as string);
+
+        const cardMapping: { backupIndex: number; currentName: string }[] = [];
+        for (let i = 0; i < backupCardCols.length; i++) {
+          const col = backupCardCols[i];
+          if (currentCardColumns.has(col)) {
+            cardMapping.push({ backupIndex: i, currentName: col });
+          }
+        }
+
+        if (cardMapping.length > 0) {
+          const cards = await this.queryBackupDatabase(
+            backupDb, "SELECT * FROM custom_deck_cards"
+          );
+          const columns = cardMapping.map(m => m.currentName);
+          const placeholders = columns.map(() => "?").join(", ");
+          const insertSql = `INSERT OR IGNORE INTO custom_deck_cards (${columns.join(", ")}) VALUES (${placeholders})`;
+
+          for (const card of cards) {
+            const values = cardMapping.map(m => card[m.backupIndex]);
+            await this.executeSql(insertSql, values);
+          }
+        }
+      } catch {
+        this.debugLog("Backup does not contain custom_deck_cards table, skipping");
       }
 
       await this.closeBackupDatabaseInstance(backupDb);

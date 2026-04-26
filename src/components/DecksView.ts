@@ -1,4 +1,4 @@
-import type { DeckWithProfile, DeckStats, DeckGroup, Flashcard, DeckOrGroup } from "@/database/types";
+import type { DeckWithProfile, DeckStats, DeckGroup, Flashcard, DeckOrGroup, CustomDeckGroup } from "@/database/types";
 import { VIEW_TYPE_DECKS } from "@/main";
 import { DeckSynchronizer } from "@/services/DeckSynchronizer";
 import { DeckManager } from "@/services/DeckManager";
@@ -17,6 +17,8 @@ import { ProfilesManagerModal } from "./config/ProfilesManagerModal";
 import { DeckConfigModal } from "./config/DeckConfigModal";
 import { StatisticsService } from "@/services/StatisticsService";
 import { TagGroupService } from "@/services/TagGroupService";
+import { CustomDeckService } from "@/services/CustomDeckService";
+import { FlashcardManagerModal } from "./FlashcardManagerModal";
 
 import DeckListPanel from "./DeckListPanel.svelte";
 import { mount, unmount } from "svelte";
@@ -31,6 +33,7 @@ export class DecksView extends ItemView {
   private scheduler: Scheduler;
   private statisticsService: StatisticsService;
   private tagGroupService: TagGroupService;
+  private customDeckService: CustomDeckService;
   private settings: DecksSettings;
   private deckListPanelComponent: DeckListPanelComponent | null = null;
   private backgroundRefreshInterval: number | null = null;
@@ -44,6 +47,7 @@ export class DecksView extends ItemView {
     deckManager: DeckManager,
     scheduler: Scheduler,
     statisticsService: StatisticsService,
+    customDeckService: CustomDeckService,
     settings: DecksSettings,
     progressTracker: ProgressTracker,
     logger: Logger
@@ -55,6 +59,7 @@ export class DecksView extends ItemView {
     this.scheduler = scheduler;
     this.statisticsService = statisticsService;
     this.tagGroupService = new TagGroupService(database);
+    this.customDeckService = customDeckService;
     this.settings = settings;
     this.logger = logger;
 
@@ -91,10 +96,15 @@ export class DecksView extends ItemView {
         onDeckGroupClick: (deckGroup: DeckGroup) => this.startReviewForDeckGroup(deckGroup),
         onBrowseDeck: (deck: DeckWithProfile) => this.startBrowse(deck),
         onBrowseDeckGroup: (deckGroup: DeckGroup) => this.startBrowseForDeckGroup(deckGroup),
+        onCustomDeckClick: (customDeck: CustomDeckGroup) => this.startReviewForCustomDeck(customDeck),
+        onBrowseCustomDeck: (customDeck: CustomDeckGroup) => this.startBrowseForCustomDeck(customDeck),
+        onEditCustomDeck: (customDeck: CustomDeckGroup) => this.openEditCustomDeck(customDeck),
+        customDeckService: this.customDeckService,
         onRefresh: () => this.refresh(),
         openStatisticsModal: () => this.openStatisticsModal(),
         openProfilesManagerModal: () => this.openProfilesManagerModal(),
         openDeckConfigModal: (deck: DeckWithProfile) => this.openDeckConfigModal(deck),
+        openFlashcardManager: () => this.openFlashcardManager(),
         deckTag: this.settings.parsing.deckTag,
       },
     }) as DeckListPanelComponent;
@@ -148,6 +158,23 @@ export class DecksView extends ItemView {
       async () => {
         await this.refresh();
       }
+    ).open();
+  }
+
+  openFlashcardManager(): void {
+    new FlashcardManagerModal(
+      this.app,
+      this.db,
+      this.customDeckService,
+    ).open();
+  }
+
+  openEditCustomDeck(customDeck: CustomDeckGroup): void {
+    new FlashcardManagerModal(
+      this.app,
+      this.db,
+      this.customDeckService,
+      { id: customDeck.id, name: customDeck.name },
     ).open();
   }
 
@@ -533,6 +560,54 @@ export class DecksView extends ItemView {
       this.openReviewSession(deckGroup, allCards, true);
     } catch (error) {
       console.error("Error starting deck group browse:", error);
+      if (this.settings?.ui?.enableNotices !== false) {
+        new Notice("Error starting browse. Check console for details.");
+      }
+    }
+  }
+
+  async startReviewForCustomDeck(customDeck: CustomDeckGroup) {
+    try {
+      this.logger.debug(`Starting review for custom deck: ${customDeck.name}`);
+
+      const nextCard = await this.scheduler.getNextForCustomDeck(
+        new Date(),
+        customDeck,
+        { allowNew: true }
+      );
+
+      if (!nextCard) {
+        if (this.settings?.ui?.enableNotices !== false) {
+          new Notice(`No cards due in "${customDeck.name}" (${customDeck.flashcardIds.length} cards)`);
+        }
+        return;
+      }
+
+      this.openReviewSession(customDeck, [nextCard], false);
+    } catch (error) {
+      console.error("Error starting custom deck review:", error);
+      if (this.settings?.ui?.enableNotices !== false) {
+        new Notice("Error starting review. Check console for details.");
+      }
+    }
+  }
+
+  async startBrowseForCustomDeck(customDeck: CustomDeckGroup) {
+    try {
+      this.logger.debug(`Starting browse mode for custom deck: ${customDeck.name}`);
+
+      const allCards = await this.db.getFlashcardsForCustomDeck(customDeck.id);
+
+      if (allCards.length === 0) {
+        if (this.settings?.ui?.enableNotices !== false) {
+          new Notice(`No cards found in "${customDeck.name}"`);
+        }
+        return;
+      }
+
+      this.openReviewSession(customDeck, allCards, true);
+    } catch (error) {
+      console.error("Error starting custom deck browse:", error);
       if (this.settings?.ui?.enableNotices !== false) {
         new Notice("Error starting browse. Check console for details.");
       }
