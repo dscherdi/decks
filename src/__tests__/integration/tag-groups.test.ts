@@ -113,7 +113,7 @@ describe("TagGroupService Integration Tests", () => {
       expect(historyGroup?.deckIds).toEqual([historyDeck.id]);
     });
 
-    it("should treat hierarchical tags as separate groups", async () => {
+    it("should include child tag decks in parent groups", async () => {
       const mathDeck = await createDeckWithProfile({
         name: "Math Deck",
         filepath: "/math.md",
@@ -141,9 +141,58 @@ describe("TagGroupService Integration Tests", () => {
       const calculusGroup = groups.find(g => g.tag === "#flashcards/math/calculus");
       const algebraGroup = groups.find(g => g.tag === "#flashcards/math/algebra");
 
-      expect(mathGroup?.deckIds).toEqual([mathDeck.id]);
+      // Parent group includes its own deck plus all child tag decks
+      expect(mathGroup?.deckIds).toHaveLength(3);
+      expect(mathGroup?.deckIds).toContain(mathDeck.id);
+      expect(mathGroup?.deckIds).toContain(calculusDeck.id);
+      expect(mathGroup?.deckIds).toContain(algebraDeck.id);
+
+      // Child groups only contain their own decks
       expect(calculusGroup?.deckIds).toEqual([calculusDeck.id]);
       expect(algebraGroup?.deckIds).toEqual([algebraDeck.id]);
+    });
+
+    it("should include deeply nested child tags in ancestor groups", async () => {
+      const mathDeck = await createDeckWithProfile({
+        name: "Math Deck",
+        filepath: "/math.md",
+        tag: "#flashcards/math",
+      });
+
+      const calculusDeck = await createDeckWithProfile({
+        name: "Calculus Deck",
+        filepath: "/calculus.md",
+        tag: "#flashcards/math/calculus",
+      });
+
+      const derivativesDeck = await createDeckWithProfile({
+        name: "Derivatives Deck",
+        filepath: "/derivatives.md",
+        tag: "#flashcards/math/calculus/derivatives",
+      });
+
+      const decksWithProfile = [mathDeck, calculusDeck, derivativesDeck];
+      const groups = await tagGroupService.aggregateByTag(decksWithProfile);
+
+      expect(groups).toHaveLength(3);
+
+      const mathGroup = groups.find(g => g.tag === "#flashcards/math");
+      const calculusGroup = groups.find(g => g.tag === "#flashcards/math/calculus");
+      const derivativesGroup = groups.find(g => g.tag === "#flashcards/math/calculus/derivatives");
+
+      // Top-level parent includes all descendants
+      expect(mathGroup?.deckIds).toHaveLength(3);
+      expect(mathGroup?.deckIds).toContain(mathDeck.id);
+      expect(mathGroup?.deckIds).toContain(calculusDeck.id);
+      expect(mathGroup?.deckIds).toContain(derivativesDeck.id);
+
+      // Mid-level parent includes its own deck plus grandchild
+      expect(calculusGroup?.deckIds).toHaveLength(2);
+      expect(calculusGroup?.deckIds).toContain(calculusDeck.id);
+      expect(calculusGroup?.deckIds).toContain(derivativesDeck.id);
+
+      // Leaf group only contains its own deck
+      expect(derivativesGroup?.deckIds).toEqual([derivativesDeck.id]);
     });
 
     it("should generate correct display names from hierarchical tags", async () => {

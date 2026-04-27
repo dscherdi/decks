@@ -18,22 +18,43 @@ export class TagGroupService {
       tagMap.get(deck.tag)!.push(deck);
     }
 
+    // Include child tag decks in parent groups
+    const allTags = Array.from(tagMap.keys());
+    for (const parentTag of allTags) {
+      for (const childTag of allTags) {
+        if (childTag !== parentTag && childTag.startsWith(parentTag + '/')) {
+          const childDecks = tagMap.get(childTag)!;
+          tagMap.get(parentTag)!.push(...childDecks);
+        }
+      }
+    }
+
     const deckGroups: DeckGroup[] = [];
     for (const [tag, groupDecks] of tagMap) {
-      const profile = await this.resolveProfileForTag(tag, groupDecks);
+      const uniqueDecks = this.deduplicateDecks(groupDecks);
+      const profile = await this.resolveProfileForTag(tag, uniqueDecks);
       deckGroups.push({
         type: 'group',
         tag,
         name: this.getDisplayName(tag),
-        deckIds: groupDecks.map(d => d.id),
+        deckIds: uniqueDecks.map(d => d.id),
         profile,
-        lastReviewed: this.getMostRecentReview(groupDecks),
-        created: this.getEarliestCreation(groupDecks),
-        modified: this.getMostRecentModification(groupDecks),
+        lastReviewed: this.getMostRecentReview(uniqueDecks),
+        created: this.getEarliestCreation(uniqueDecks),
+        modified: this.getMostRecentModification(uniqueDecks),
       });
     }
 
     return deckGroups.sort((a, b) => a.tag.localeCompare(b.tag));
+  }
+
+  private deduplicateDecks(decks: DeckWithProfile[]): DeckWithProfile[] {
+    const seen = new Set<string>();
+    return decks.filter(d => {
+      if (seen.has(d.id)) return false;
+      seen.add(d.id);
+      return true;
+    });
   }
 
   private getDisplayName(tag: string): string {
