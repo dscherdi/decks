@@ -255,6 +255,12 @@
     applyFilter();
   }
 
+  function clearFilter() {
+    filterText = "";
+    showSuggestions = false;
+    applyFilter();
+  }
+
   function handleFilterFocus() {
     inputFocused = true;
     if (filterText.trim()) {
@@ -995,15 +1001,27 @@
 
     <div class="decks-filter-section">
       <div class="decks-filter-container">
-        <input
-          type="text"
-          class="decks-filter-input"
-          placeholder={`Filter by name or tag... (e.g., 'spanish', '${deckTag}')`}
-          bind:value={filterText}
-          on:input={handleFilterInput}
-          on:focus={handleFilterFocus}
-          on:blur={handleFilterBlur}
-        />
+        <div class="decks-filter-input-wrapper">
+          <svg class="decks-filter-search-icon" xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="8"></circle><line x1="21" y1="21" x2="16.65" y2="16.65"></line></svg>
+          <input
+            type="text"
+            class="decks-filter-input"
+            placeholder={`Filter by name or tag... (e.g., 'spanish', '${deckTag}')`}
+            bind:value={filterText}
+            on:input={handleFilterInput}
+            on:focus={handleFilterFocus}
+            on:blur={handleFilterBlur}
+          />
+          {#if filterText}
+            <button
+              class="clickable-icon decks-filter-clear-button"
+              aria-label="Clear filter"
+              on:click={clearFilter}
+            >
+              <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="6" x2="6" y2="18"></line><line x1="6" y1="6" x2="18" y2="18"></line></svg>
+            </button>
+          {/if}
+        </div>
         {#if showSuggestions && filteredSuggestions.length > 0}
           <div class="decks-suggestions-dropdown">
             <div class="decks-suggestions-header">Filter by tags:</div>
@@ -1331,9 +1349,27 @@
     width: 100%;
   }
 
+  .decks-filter-input-wrapper {
+    position: relative;
+    display: flex;
+    align-items: center;
+  }
+
+  .decks-filter-search-icon {
+    position: absolute;
+    left: var(--size-4-2);
+    color: var(--text-faint);
+    pointer-events: none;
+  }
+
+  .decks-filter-clear-button {
+    position: absolute;
+    right: var(--size-4-1);
+  }
+
   .decks-filter-input {
     width: 100%;
-    padding: var(--size-4-1) var(--size-4-2);
+    padding: var(--size-4-1) 30px;
     border: 1px solid var(--background-modifier-border);
     border-radius: var(--radius-s);
     background: var(--background-modifier-form-field);
@@ -1344,8 +1380,8 @@
 
   .decks-filter-input:focus {
     outline: none;
-    border-color: var(--interactive-accent);
-    box-shadow: 0 0 0 2px var(--interactive-accent-hover);
+    border-color: var(--background-modifier-border-focus);
+    box-shadow: none;
   }
 
   .decks-filter-input::placeholder {
@@ -1357,11 +1393,11 @@
     top: 100%;
     left: 0;
     right: 0;
-    background: var(--background-primary);
+    background: var(--background-secondary);
     border: 1px solid var(--background-modifier-border);
     border-top: none;
     border-radius: 0 0 var(--radius-s) var(--radius-s);
-    box-shadow: var(--shadow-s);
+    box-shadow: none;
     z-index: var(--layer-popover);
     max-height: 200px;
     overflow-y: auto;
@@ -1371,7 +1407,6 @@
     padding: var(--size-4-1) var(--size-4-2);
     font-size: var(--font-ui-smaller);
     color: var(--text-faint);
-    border-bottom: 1px solid var(--background-modifier-border);
   }
 
   .decks-suggestion-item {
