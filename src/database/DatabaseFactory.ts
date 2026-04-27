@@ -11,6 +11,7 @@ import type {
   ReviewLog,
   ReviewSession,
   CustomDeck,
+  CustomDeckType,
 } from "./types";
 import type { SqlJsValue, SqlRecord, SqlRow } from "./sql-types";
 import type { SyncData, SyncResult } from "../services/FlashcardSynchronizer";
@@ -144,11 +145,11 @@ export interface IDatabaseService {
   ): Promise<boolean>;
 
   // Custom deck operations
-  createCustomDeck(name: string): Promise<string>;
+  createCustomDeck(name: string, deckType?: CustomDeckType, filterDefinition?: string | null): Promise<string>;
   getCustomDeckById(id: string): Promise<CustomDeck | null>;
   getCustomDeckByName(name: string): Promise<CustomDeck | null>;
   getAllCustomDecks(): Promise<CustomDeck[]>;
-  updateCustomDeck(id: string, updates: { name?: string }): Promise<void>;
+  updateCustomDeck(id: string, updates: { name?: string; filterDefinition?: string | null }): Promise<void>;
   updateCustomDeckLastReviewed(id: string, timestamp: string): Promise<void>;
   deleteCustomDeck(id: string): Promise<void>;
 

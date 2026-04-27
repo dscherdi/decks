@@ -19,6 +19,8 @@ import { StatisticsService } from "@/services/StatisticsService";
 import { TagGroupService } from "@/services/TagGroupService";
 import { CustomDeckService } from "@/services/CustomDeckService";
 import { FlashcardManagerModal } from "./FlashcardManagerModal";
+import { EditFilterModal } from "./EditFilterModal";
+import { CreateCustomDeckModal } from "./CreateCustomDeckModal";
 
 import DeckListPanel from "./DeckListPanel.svelte";
 import { mount, unmount } from "svelte";
@@ -100,6 +102,7 @@ export class DecksView extends ItemView {
         onBrowseCustomDeck: (customDeck: CustomDeckGroup) => this.startBrowseForCustomDeck(customDeck),
         onEditCustomDeck: (customDeck: CustomDeckGroup) => this.openEditCustomDeck(customDeck),
         customDeckService: this.customDeckService,
+        onCreateCustomDeck: () => this.openCreateCustomDeck(),
         onRefresh: () => this.refresh(),
         openStatisticsModal: () => this.openStatisticsModal(),
         openProfilesManagerModal: () => this.openProfilesManagerModal(),
@@ -169,13 +172,37 @@ export class DecksView extends ItemView {
     ).open();
   }
 
+  openCreateCustomDeck(): void {
+    this.customDeckService.getAllCustomDecks()
+      .then((decks) => {
+        new CreateCustomDeckModal(
+          this.app,
+          decks.map(d => d.name),
+          this.customDeckService,
+          this.db,
+          () => { void this.refresh(); },
+        ).open();
+      })
+      .catch(console.error);
+  }
+
   openEditCustomDeck(customDeck: CustomDeckGroup): void {
-    new FlashcardManagerModal(
-      this.app,
-      this.db,
-      this.customDeckService,
-      { id: customDeck.id, name: customDeck.name },
-    ).open();
+    if (customDeck.deckType === "filter") {
+      new EditFilterModal(
+        this.app,
+        customDeck,
+        this.customDeckService,
+        this.db,
+        () => { void this.refresh(); },
+      ).open();
+    } else {
+      new FlashcardManagerModal(
+        this.app,
+        this.db,
+        this.customDeckService,
+        { id: customDeck.id, name: customDeck.name },
+      ).open();
+    }
   }
 
   openDeckConfigModal(deck: DeckWithProfile): void {

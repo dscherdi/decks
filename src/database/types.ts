@@ -98,9 +98,41 @@ export interface FileDeck extends DeckWithProfile {
   type: 'file';
 }
 
+export type CustomDeckType = 'manual' | 'filter';
+
+export type FilterOperator =
+  | "equals" | "not_equals"
+  | "contains" | "not_contains"
+  | "greater_than" | "less_than"
+  | "before" | "after"
+  | "is_due" | "is_new"
+  | "in";
+
+export type FilterField =
+  | "deckId" | "deckTag" | "type" | "sourceFile" | "breadcrumb"
+  | "state" | "dueDate" | "difficulty" | "stability"
+  | "interval" | "repetitions" | "lapses"
+  | "lastReviewed" | "created";
+
+export interface FilterRule {
+  field: FilterField;
+  operator: FilterOperator;
+  value: string;
+}
+
+export type FilterLogic = "AND" | "OR";
+
+export interface FilterDefinition {
+  version: 1;
+  logic: FilterLogic;
+  rules: FilterRule[];
+}
+
 export interface CustomDeck {
   id: string;
   name: string;
+  deckType: CustomDeckType;
+  filterDefinition: string | null;
   lastReviewed: string | null;
   created: string;
   modified: string;
@@ -117,6 +149,8 @@ export interface CustomDeckGroup {
   type: 'custom';
   id: string;
   name: string;
+  deckType: CustomDeckType;
+  filterDefinition: string | null;
   flashcardIds: string[];
   lastReviewed: string | null;
   created: string;

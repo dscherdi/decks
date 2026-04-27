@@ -724,3 +724,9 @@ div.decks-card-content
   height: 100%;
   overflow: hidden;
 }
+
+.decks-filter-preview-count {
+  font-size: 12px;
+  color: var(--text-muted);
+  padding: 4px 0;
+}

@@ -1,7 +1,7 @@
 import type { Database } from "sql.js";
 
 // Current Schema Version
-export const CURRENT_SCHEMA_VERSION = 13;
+export const CURRENT_SCHEMA_VERSION = 14;
 
 // SQL Table Creation Schema - Used when database file doesn't exist
 export const CREATE_TABLES_SQL = `
@@ -130,6 +130,8 @@ export const CREATE_TABLES_SQL = `
   CREATE TABLE IF NOT EXISTS custom_decks (
     id TEXT PRIMARY KEY,
     name TEXT NOT NULL UNIQUE,
+    deck_type TEXT NOT NULL DEFAULT 'manual',
+    filter_definition TEXT,
     last_reviewed TEXT,
     created TEXT NOT NULL,
     modified TEXT NOT NULL
@@ -219,6 +221,8 @@ export function buildMigrationSQL(db: Database): string {
   const deckprofilesColumns = getColumnNames(db, "deckprofiles");
   const needsLearningSteps = deckprofilesColumns.length > 0 && !deckprofilesColumns.includes("learning_steps");
   const needsCloze = deckprofilesColumns.length > 0 && !deckprofilesColumns.includes("cloze_enabled");
+  const customDecksColumns = getColumnNames(db, "custom_decks");
+  const needsDeckType = customDecksColumns.length > 0 && !customDecksColumns.includes("deck_type");
 
   // Helper: pick current column, fall back to old renamed column, then default
   const col = (
@@ -452,10 +456,17 @@ export function buildMigrationSQL(db: Database): string {
     CREATE TABLE IF NOT EXISTS custom_decks (
       id TEXT PRIMARY KEY,
       name TEXT NOT NULL UNIQUE,
+      deck_type TEXT NOT NULL DEFAULT 'manual',
+      filter_definition TEXT,
       last_reviewed TEXT,
       created TEXT NOT NULL,
       modified TEXT NOT NULL
     );
+
+    ${needsDeckType ? `
+    ALTER TABLE custom_decks ADD COLUMN deck_type TEXT NOT NULL DEFAULT 'manual';
+    ALTER TABLE custom_decks ADD COLUMN filter_definition TEXT;
+    ` : ""}
 
     -- Custom deck cards junction table (many-to-many)
     CREATE TABLE IF NOT EXISTS custom_deck_cards (
@@ -893,8 +904,8 @@ export const SQL_QUERIES = {
 
   // Custom deck operations
   INSERT_CUSTOM_DECK: `
-    INSERT INTO custom_decks (id, name, last_reviewed, created, modified)
-    VALUES (?, ?, ?, ?, ?)
+    INSERT INTO custom_decks (id, name, deck_type, filter_definition, last_reviewed, created, modified)
+    VALUES (?, ?, ?, ?, ?, ?, ?)
   `,
 
   GET_CUSTOM_DECK_BY_ID: `SELECT * FROM custom_decks WHERE id = ?`,
@@ -904,7 +915,7 @@ export const SQL_QUERIES = {
   GET_ALL_CUSTOM_DECKS: `SELECT * FROM custom_decks ORDER BY name`,
 
   UPDATE_CUSTOM_DECK: `
-    UPDATE custom_decks SET name = ?, modified = ?
+    UPDATE custom_decks SET name = ?, filter_definition = ?, modified = ?
     WHERE id = ?
   `,
 

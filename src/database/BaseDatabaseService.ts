@@ -9,9 +9,12 @@ import type {
   ReviewLog,
   ReviewSession,
   CustomDeck,
+  CustomDeckType,
 } from "./types";
 import { DEFAULT_PROFILE_ID, deckWithProfile } from "./types";
+import type { FilterDefinition } from "./types";
 import { SQL_QUERIES } from "./schemas";
+import { compileFilter } from "../services/FilterEngine";
 import type { SyncData, SyncResult } from "../services/FlashcardSynchronizer";
 import type {
   SqlJsValue,
@@ -110,9 +113,11 @@ export abstract class BaseDatabaseService implements IDatabaseService {
     return {
       id: row[0] as string,
       name: row[1] as string,
-      lastReviewed: row[2] as string | null,
-      created: row[3] as string,
-      modified: row[4] as string,
+      deckType: (row[2] as string as CustomDeckType) ?? 'manual',
+      filterDefinition: row[3] as string | null,
+      lastReviewed: row[4] as string | null,
+      created: row[5] as string,
+      modified: row[6] as string,
     };
   }
 
@@ -1473,18 +1478,36 @@ export abstract class BaseDatabaseService implements IDatabaseService {
   }
 
   async resetCustomDeckProgress(customDeckId: string): Promise<void> {
+    const deck = await this.getCustomDeckById(customDeckId);
+    if (!deck) return;
     const now = new Date().toISOString();
+
+    if (deck.deckType === 'filter' && deck.filterDefinition) {
+      const cardIds = await this.getFlashcardIdsForCustomDeck(customDeckId);
+      if (cardIds.length === 0) return;
+      const placeholders = cardIds.map(() => "?").join(", ");
+      await this.executeSql(
+        `DELETE FROM review_logs WHERE flashcard_id IN (${placeholders})`,
+        cardIds
+      );
+      await this.executeSql(
+        `UPDATE flashcards SET state = 'new', due_date = ?, interval = 0, repetitions = 0, difficulty = 5.0, stability = 0, lapses = 0, last_reviewed = NULL, modified = ? WHERE id IN (${placeholders})`,
+        [now, now, ...cardIds]
+      );
+      return;
+    }
+
     await this.executeSql(SQL_QUERIES.DELETE_REVIEW_LOGS_FOR_CUSTOM_DECK, [customDeckId]);
     await this.executeSql(SQL_QUERIES.RESET_CUSTOM_DECK_FLASHCARDS, [now, customDeckId]);
   }
 
   // CUSTOM DECK OPERATIONS
 
-  async createCustomDeck(name: string): Promise<string> {
+  async createCustomDeck(name: string, deckType: CustomDeckType = 'manual', filterDefinition: string | null = null): Promise<string> {
     const id = generateCustomDeckId(name);
     const now = new Date().toISOString();
     await this.executeSql(SQL_QUERIES.INSERT_CUSTOM_DECK, [
-      id, name, null, now, now,
+      id, name, deckType, filterDefinition, null, now, now,
     ]);
     return id;
   }
@@ -1510,12 +1533,13 @@ export abstract class BaseDatabaseService implements IDatabaseService {
     return results.map((row) => this.parseCustomDeckRow(row));
   }
 
-  async updateCustomDeck(id: string, updates: { name?: string }): Promise<void> {
+  async updateCustomDeck(id: string, updates: { name?: string; filterDefinition?: string | null }): Promise<void> {
     const existing = await this.getCustomDeckById(id);
     if (!existing) return;
     const now = new Date().toISOString();
     await this.executeSql(SQL_QUERIES.UPDATE_CUSTOM_DECK, [
       updates.name ?? existing.name,
+      updates.filterDefinition !== undefined ? updates.filterDefinition : existing.filterDefinition,
       now,
       id,
     ]);
@@ -1554,7 +1578,29 @@ export abstract class BaseDatabaseService implements IDatabaseService {
     await this.executeSql(SQL_QUERIES.DELETE_ALL_CUSTOM_DECK_CARDS, [customDeckId]);
   }
 
+  private buildFilterQuery(filterDef: string, selectClause: string, extraWhere?: string, extraParams?: SqlJsValue[]): { sql: string; params: SqlJsValue[] } {
+    const definition: FilterDefinition = JSON.parse(filterDef);
+    const compiled = compileFilter(definition);
+    const from = compiled.requiresDeckJoin
+      ? "flashcards f JOIN decks d ON f.deck_id = d.id"
+      : "flashcards f";
+    const where = extraWhere
+      ? `(${compiled.whereClause}) AND (${extraWhere})`
+      : compiled.whereClause;
+    const params = [...compiled.params, ...(extraParams ?? [])];
+    return { sql: `SELECT ${selectClause} FROM ${from} WHERE ${where}`, params };
+  }
+
   async getFlashcardsForCustomDeck(customDeckId: string): Promise<Flashcard[]> {
+    const deck = await this.getCustomDeckById(customDeckId);
+    if (!deck) return [];
+
+    if (deck.deckType === 'filter' && deck.filterDefinition) {
+      const { sql, params } = this.buildFilterQuery(deck.filterDefinition, "f.*", undefined, undefined);
+      const results = (await this.querySql(`${sql} ORDER BY f.created`, params)) as (string | number | null)[][];
+      return results.map((row) => this.rowToFlashcard(row));
+    }
+
     const results = (await this.querySql(SQL_QUERIES.GET_FLASHCARDS_FOR_CUSTOM_DECK, [customDeckId])) as (
       | string | number | null
     )[][];
@@ -1569,6 +1615,15 @@ export abstract class BaseDatabaseService implements IDatabaseService {
   }
 
   async getFlashcardIdsForCustomDeck(customDeckId: string): Promise<string[]> {
+    const deck = await this.getCustomDeckById(customDeckId);
+    if (!deck) return [];
+
+    if (deck.deckType === 'filter' && deck.filterDefinition) {
+      const { sql, params } = this.buildFilterQuery(deck.filterDefinition, "f.id");
+      const results = (await this.querySql(sql, params)) as (string | number | null)[][];
+      return results.map((row) => row[0] as string);
+    }
+
     const results = (await this.querySql(SQL_QUERIES.GET_FLASHCARD_IDS_FOR_CUSTOM_DECK, [customDeckId])) as (
       | string | number | null
     )[][];
@@ -1576,7 +1631,18 @@ export abstract class BaseDatabaseService implements IDatabaseService {
   }
 
   async countNewCardsCustomDeck(customDeckId: string): Promise<number> {
+    const deck = await this.getCustomDeckById(customDeckId);
+    if (!deck) return 0;
     const now = new Date().toISOString();
+
+    if (deck.deckType === 'filter' && deck.filterDefinition) {
+      const { sql, params } = this.buildFilterQuery(
+        deck.filterDefinition, "COUNT(*)", "f.state = ? AND f.due_date <= ?", ["new", now]
+      );
+      const results = (await this.querySql(sql, params)) as (string | number | null)[][];
+      return (results[0]?.[0] as number) ?? 0;
+    }
+
     const results = (await this.querySql(SQL_QUERIES.COUNT_NEW_CARDS_CUSTOM_DECK, [customDeckId, now])) as (
       | string | number | null
     )[][];
@@ -1584,7 +1650,18 @@ export abstract class BaseDatabaseService implements IDatabaseService {
   }
 
   async countDueCardsCustomDeck(customDeckId: string): Promise<number> {
+    const deck = await this.getCustomDeckById(customDeckId);
+    if (!deck) return 0;
     const now = new Date().toISOString();
+
+    if (deck.deckType === 'filter' && deck.filterDefinition) {
+      const { sql, params } = this.buildFilterQuery(
+        deck.filterDefinition, "COUNT(*)", "f.state = ? AND f.due_date <= ?", ["review", now]
+      );
+      const results = (await this.querySql(sql, params)) as (string | number | null)[][];
+      return (results[0]?.[0] as number) ?? 0;
+    }
+
     const results = (await this.querySql(SQL_QUERIES.COUNT_DUE_CARDS_CUSTOM_DECK, [customDeckId, now])) as (
       | string | number | null
     )[][];
@@ -1592,6 +1669,15 @@ export abstract class BaseDatabaseService implements IDatabaseService {
   }
 
   async countTotalCardsCustomDeck(customDeckId: string): Promise<number> {
+    const deck = await this.getCustomDeckById(customDeckId);
+    if (!deck) return 0;
+
+    if (deck.deckType === 'filter' && deck.filterDefinition) {
+      const { sql, params } = this.buildFilterQuery(deck.filterDefinition, "COUNT(*)");
+      const results = (await this.querySql(sql, params)) as (string | number | null)[][];
+      return (results[0]?.[0] as number) ?? 0;
+    }
+
     const results = (await this.querySql(SQL_QUERIES.COUNT_TOTAL_CARDS_CUSTOM_DECK, [customDeckId])) as (
       | string | number | null
     )[][];
@@ -1599,7 +1685,18 @@ export abstract class BaseDatabaseService implements IDatabaseService {
   }
 
   async getDueCardsForCustomDeck(customDeckId: string): Promise<Flashcard[]> {
+    const deck = await this.getCustomDeckById(customDeckId);
+    if (!deck) return [];
     const now = new Date().toISOString();
+
+    if (deck.deckType === 'filter' && deck.filterDefinition) {
+      const { sql, params } = this.buildFilterQuery(
+        deck.filterDefinition, "f.*", "f.state = ? AND f.due_date <= ?", ["review", now]
+      );
+      const results = (await this.querySql(`${sql} ORDER BY f.due_date ASC`, params)) as (string | number | null)[][];
+      return results.map((row) => this.rowToFlashcard(row));
+    }
+
     const results = (await this.querySql(SQL_QUERIES.GET_DUE_CARDS_FOR_CUSTOM_DECK, [customDeckId, now])) as (
       | string | number | null
     )[][];
@@ -1607,7 +1704,18 @@ export abstract class BaseDatabaseService implements IDatabaseService {
   }
 
   async getNewCardsForCustomDeck(customDeckId: string): Promise<Flashcard[]> {
+    const deck = await this.getCustomDeckById(customDeckId);
+    if (!deck) return [];
     const now = new Date().toISOString();
+
+    if (deck.deckType === 'filter' && deck.filterDefinition) {
+      const { sql, params } = this.buildFilterQuery(
+        deck.filterDefinition, "f.*", "f.state = ? AND f.due_date <= ?", ["new", now]
+      );
+      const results = (await this.querySql(`${sql} ORDER BY f.due_date ASC`, params)) as (string | number | null)[][];
+      return results.map((row) => this.rowToFlashcard(row));
+    }
+
     const results = (await this.querySql(SQL_QUERIES.GET_NEW_CARDS_FOR_CUSTOM_DECK, [customDeckId, now])) as (
       | string | number | null
     )[][];

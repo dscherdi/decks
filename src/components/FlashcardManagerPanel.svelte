@@ -384,7 +384,7 @@
             {#if customDeckDropdownOpen}
               <!-- svelte-ignore a11y-no-static-element-interactions -->
               <div class="decks-fm-deck-dropdown" on:click|stopPropagation>
-                {#each customDecks as deck}
+                {#each customDecks.filter(d => d.deckType !== 'filter') as deck}
                   <button
                     class="decks-fm-dropdown-option"
                     on:click={() => handleAddToExistingDeck(deck.id)}

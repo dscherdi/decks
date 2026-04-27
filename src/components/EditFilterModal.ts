@@ -1,71 +1,50 @@
 import { Modal, Setting, Notice } from "obsidian";
 import type { App } from "obsidian";
-import type { FilterDefinition, CustomDeckType } from "../database/types";
+import type { FilterDefinition, CustomDeckGroup } from "../database/types";
 import type { CustomDeckService } from "../services/CustomDeckService";
 import type { IDatabaseService } from "../database/DatabaseFactory";
 import FilterBuilder from "./FilterBuilder.svelte";
 import { mount, unmount } from "svelte";
 import type { Svelte5MountedComponent } from "../types/svelte-components";
 
-export class CreateCustomDeckModal extends Modal {
-  private deckName = "";
-  private deckType: CustomDeckType = "filter";
-  private filterDefinition: FilterDefinition = { version: 1, logic: "AND", rules: [] };
+export class EditFilterModal extends Modal {
+  private filterDefinition: FilterDefinition;
   private previewTimeout: ReturnType<typeof setTimeout> | null = null;
   private filterComponent: Svelte5MountedComponent | null = null;
   private filterContainer: HTMLElement | null = null;
   private previewEl: HTMLElement | null = null;
-  private existingNames: string[];
+  private customDeck: CustomDeckGroup;
   private customDeckService: CustomDeckService;
   private db: IDatabaseService;
-  private onCreated: () => void;
+  private onSaved: () => void;
 
   constructor(
     app: App,
-    existingNames: string[],
+    customDeck: CustomDeckGroup,
     customDeckService: CustomDeckService,
     db: IDatabaseService,
-    onCreated: () => void,
+    onSaved: () => void,
   ) {
     super(app);
-    this.existingNames = existingNames;
+    this.customDeck = customDeck;
     this.customDeckService = customDeckService;
     this.db = db;
-    this.onCreated = onCreated;
+    this.onSaved = onSaved;
+    this.filterDefinition = customDeck.filterDefinition
+      ? JSON.parse(customDeck.filterDefinition) as FilterDefinition
+      : { version: 1, logic: "AND" as const, rules: [] };
   }
 
   onOpen() {
     const { contentEl } = this;
     contentEl.empty();
 
-    new Setting(contentEl).setName("Create custom deck").setHeading();
-
     new Setting(contentEl)
-      .setName("Deck name")
-      .addText((text) =>
-        text
-          .setPlaceholder("Enter deck name")
-          .onChange((value) => {
-            this.deckName = value;
-          })
-      );
+      .setName(`Edit filter: ${this.customDeck.name}`)
+      .setHeading();
 
-    new Setting(contentEl)
-      .setName("Deck type")
-      .setDesc("Filter decks dynamically match cards based on rules")
-      .addDropdown((dropdown) =>
-        dropdown
-          .addOption("filter", "Filter (dynamic)")
-          .addOption("manual", "Manual (static)")
-          .setValue(this.deckType)
-          .onChange((value) => {
-            this.deckType = value as CustomDeckType;
-            this.renderFilterSection();
-          })
-      );
-
-    this.filterContainer = contentEl.createDiv("decks-create-deck-filter-section");
-    this.renderFilterSection();
+    this.filterContainer = contentEl.createDiv("decks-edit-filter-section");
+    this.renderFilterBuilder();
 
     new Setting(contentEl)
       .addButton((btn) =>
@@ -77,15 +56,15 @@ export class CreateCustomDeckModal extends Modal {
       )
       .addButton((btn) =>
         btn
-          .setButtonText("Create")
+          .setButtonText("Save")
           .setCta()
           .onClick(() => {
-            this.handleCreate();
+            this.handleSave();
           })
       );
   }
 
-  private renderFilterSection() {
+  private renderFilterBuilder() {
     if (!this.filterContainer) return;
 
     if (this.filterComponent) {
@@ -94,8 +73,6 @@ export class CreateCustomDeckModal extends Modal {
     }
     this.filterContainer.empty();
     this.previewEl = null;
-
-    if (this.deckType !== "filter") return;
 
     this.loadFilterData()
       .then(({ decks, tags }) => {
@@ -146,38 +123,16 @@ export class CreateCustomDeckModal extends Modal {
       .catch(console.error);
   }
 
-  private handleCreate() {
-    const name = this.deckName.trim();
-    if (!name) {
-      new Notice("Please enter a deck name");
-      return;
-    }
-    if (this.existingNames.includes(name)) {
-      new Notice(`A deck named "${name}" already exists`);
-      return;
-    }
-
-    if (this.deckType === "filter") {
-      this.customDeckService.createFilterDeck(name, this.filterDefinition)
-        .then(() => {
-          new Notice(`Created filter deck "${name}"`);
-          this.onCreated();
-          this.close();
-        })
-        .catch((err: Error) => {
-          new Notice(`Failed to create deck: ${err.message}`);
-        });
-    } else {
-      this.customDeckService.createCustomDeck(name)
-        .then(() => {
-          new Notice(`Created custom deck "${name}"`);
-          this.onCreated();
-          this.close();
-        })
-        .catch((err: Error) => {
-          new Notice(`Failed to create deck: ${err.message}`);
-        });
-    }
+  private handleSave() {
+    this.customDeckService.updateFilter(this.customDeck.id, this.filterDefinition)
+      .then(() => {
+        new Notice(`Filter updated for "${this.customDeck.name}"`);
+        this.onSaved();
+        this.close();
+      })
+      .catch((err: Error) => {
+        new Notice(`Failed to update filter: ${err.message}`);
+      });
   }
 
   onClose() {

@@ -67,6 +67,7 @@
   export let openDeckConfigModal: (deck: DeckWithProfile) => void;
   export let openFlashcardManager: () => void;
   export let customDeckService: CustomDeckService;
+  export let onCreateCustomDeck: () => void;
   export let deckTag = "#decks";
 
   const getReviewCounts = async (days: number) => {
@@ -648,7 +649,7 @@
 
     const editOption = document.createElement("div");
     editOption.className = "decks-dropdown-option";
-    editOption.textContent = "Edit cards";
+    editOption.textContent = customDeck.deckType === "filter" ? "Edit filter" : "Edit cards";
     editOption.onclick = () => {
       closeActiveDropdown();
       onEditCustomDeck(customDeck);
@@ -1134,6 +1135,8 @@
                 >
                   {#if isDeckGroup(item)}
                     <span class="decks-tag-group-icon">🏷️</span>
+                  {:else if item.type === 'custom' && item.deckType === 'filter'}
+                    <span class="decks-tag-group-icon">🔍</span>
                   {:else if item.type === 'custom'}
                     <span class="decks-tag-group-icon">📋</span>
                   {/if}
@@ -1141,6 +1144,10 @@
                   {#if isDeckGroup(item)}
                     <span class="decks-tag-group-count"
                       >({item.deckIds.length} files)</span
+                    >
+                  {:else if item.type === 'custom' && item.deckType === 'filter'}
+                    <span class="decks-tag-group-count"
+                      >({getDeckStats(item.id).totalCount} cards)</span
                     >
                   {:else if item.type === 'custom'}
                     <span class="decks-tag-group-count"
@@ -1281,6 +1288,17 @@
             </div>
           {/each}
         </div>
+      </div>
+    {/if}
+
+    {#if viewMode === "custom"}
+      <div class="decks-create-custom-deck-bar">
+        <button
+          class="decks-create-custom-deck-btn"
+          on:click={onCreateCustomDeck}
+        >
+          + Create custom deck
+        </button>
       </div>
     {/if}
   </div>
@@ -2148,6 +2166,27 @@
 
   :global(.decks-dropdown-option:active) {
     background: var(--background-modifier-active);
+  }
+
+  .decks-create-custom-deck-bar {
+    padding: 8px 12px;
+    display: flex;
+    justify-content: center;
+  }
+
+  .decks-create-custom-deck-btn {
+    padding: 6px 16px;
+    border: 1px dashed var(--background-modifier-border);
+    border-radius: 4px;
+    background: transparent;
+    color: var(--text-accent);
+    font-size: 13px;
+    cursor: pointer;
+    transition: background-color 0.15s ease;
+  }
+
+  .decks-create-custom-deck-btn:hover {
+    background: var(--background-modifier-hover);
   }
 
   /* Study Statistics Section */

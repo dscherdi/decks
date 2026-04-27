@@ -26,6 +26,8 @@ import { StatisticsService } from "@/services/StatisticsService";
 import { TagGroupService } from "@/services/TagGroupService";
 import { CustomDeckService } from "@/services/CustomDeckService";
 import { FlashcardManagerModal } from "./FlashcardManagerModal";
+import { EditFilterModal } from "./EditFilterModal";
+import { CreateCustomDeckModal } from "./CreateCustomDeckModal";
 
 import DeckListPanel from "./DeckListPanel.svelte";
 import { mount, unmount } from "svelte";
@@ -118,6 +120,7 @@ export class DecksViewModal extends Modal {
           this.openEditCustomDeck(customDeck);
         },
         customDeckService: this.customDeckService,
+        onCreateCustomDeck: () => this.openCreateCustomDeck(),
         onRefresh: () => this.refresh(),
         openStatisticsModal: () => this.openStatisticsModal(),
         openProfilesManagerModal: () => this.openProfilesManagerModal(),
@@ -253,14 +256,40 @@ export class DecksViewModal extends Modal {
     this.openWithReturn(modal);
   }
 
+  private openCreateCustomDeck(): void {
+    this.customDeckService.getAllCustomDecks()
+      .then((decks) => {
+        const modal = new CreateCustomDeckModal(
+          this.app,
+          decks.map(d => d.name),
+          this.customDeckService,
+          this.db,
+          () => void this.refresh(),
+        );
+        this.openWithReturn(modal);
+      })
+      .catch(console.error);
+  }
+
   private openEditCustomDeck(customDeck: CustomDeckGroup): void {
-    const modal = new FlashcardManagerModal(
-      this.app,
-      this.db,
-      this.customDeckService,
-      { id: customDeck.id, name: customDeck.name },
-    );
-    this.openWithReturn(modal);
+    if (customDeck.deckType === "filter") {
+      const modal = new EditFilterModal(
+        this.app,
+        customDeck,
+        this.customDeckService,
+        this.db,
+        () => void this.refresh(),
+      );
+      this.openWithReturn(modal);
+    } else {
+      const modal = new FlashcardManagerModal(
+        this.app,
+        this.db,
+        this.customDeckService,
+        { id: customDeck.id, name: customDeck.name },
+      );
+      this.openWithReturn(modal);
+    }
   }
 
   private openReviewSession(

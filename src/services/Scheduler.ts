@@ -993,9 +993,9 @@ export class Scheduler {
   ): Promise<NewSession> {
     this.debugLog(`Starting review session for custom deck: ${customDeck.name}`);
 
-    const dueCards = await this.db.getDueCardsForCustomDeck(customDeck.id);
-    const newCards = await this.db.getNewCardsForCustomDeck(customDeck.id);
-    const goalTotal = Math.max(1, dueCards.length + newCards.length);
+    const dueCount = await this.db.countDueCardsCustomDeck(customDeck.id);
+    const newCount = await this.db.countNewCardsCustomDeck(customDeck.id);
+    const goalTotal = Math.max(1, dueCount + newCount);
 
     const sessionId = await this.db.createReviewSession({
       deckId: customDeck.id,
@@ -1005,6 +1005,7 @@ export class Scheduler {
       doneUnique: 0,
     });
 
+    this.currentSessionId = sessionId;
     this.debugLog(
       `Review session created for custom deck: ${sessionId}, goal: ${goalTotal}`
     );

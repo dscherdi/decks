@@ -225,6 +225,14 @@ export class FlashcardReviewView extends ItemView {
     if (!this.deckOrGroup) return;
 
     const generation = ++this.mountGeneration;
+
+    // End previous session before unmounting to avoid async onDestroy race
+    const oldSessionId = this.scheduler.getCurrentSession();
+    if (oldSessionId) {
+      this.scheduler.setCurrentSession(null);
+      this.scheduler.endReviewSession(oldSessionId).catch(console.error);
+    }
+
     this.unmountComponent();
 
     const { contentEl } = this;

@@ -190,7 +190,9 @@
   let lastEventTime = 0;
   let lastEventType = "";
 
-  $: progress = sessionProgress ? sessionProgress.progress : 0;
+  $: progress = sessionProgress
+    ? Math.max(sessionProgress.progress, sessionProgress.doneUnique > 0 ? 1 : 0)
+    : 0;
   $: timeRemainingDisplay = formatTimeRemaining(sessionTimeRemaining);
   $: cardsRemaining = sessionProgress
     ? sessionProgress.goalTotal - sessionProgress.doneUnique
@@ -659,7 +661,10 @@
     // End the review session
     if (sessionId) {
       await scheduler.endReviewSession(sessionId);
-      scheduler.setCurrentSession(null);
+      // Only clear current session if it's still ours (avoids race with new component's onMount)
+      if (scheduler.getCurrentSession() === sessionId) {
+        scheduler.setCurrentSession(null);
+      }
     }
 
     handleComplete({
