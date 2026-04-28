@@ -242,6 +242,9 @@ export class FlashcardReviewView extends ItemView {
     this.component = mount(FlashcardReviewModal, {
       target: contentEl,
       props: {
+        isActive: () =>
+          this.app.workspace.getActiveViewOfType(FlashcardReviewView) === this &&
+          !document.querySelector(".modal-container"),
         initialCard: this.initialCard,
         deckOrGroup: this.deckOrGroup,
         browseMode: this.browseMode,

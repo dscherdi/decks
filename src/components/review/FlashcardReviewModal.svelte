@@ -37,6 +37,7 @@
     | undefined = undefined;
   export let browseMode = false;
   export let allCards: Flashcard[] = [];
+  export let isActive: (() => boolean) | undefined = undefined;
 
   const dispatch = createEventDispatcher();
 
@@ -470,6 +471,7 @@
   }
 
   function handleKeydown(event: KeyboardEvent) {
+    if (isActive && !isActive()) return;
     if (isLoading) return;
 
     const now = Date.now();
