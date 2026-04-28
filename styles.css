@@ -463,6 +463,10 @@
   height: 100%;
 }
 
+.decks-modal .modal-close-button {
+  z-index: 1000;
+}
+
 .decks-modal-mobile .modal-close-button {
   z-index: 1000;
   position: absolute;

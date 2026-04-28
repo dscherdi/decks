@@ -805,7 +805,7 @@
         <div class="decks-front-wrapper">
           {#if onNavigateToSource && currentCard}
             <button
-              class="decks-go-to-file-button"
+              class="decks-go-to-file-button clickable-icon"
               on:click={handleNavigateToSource}
               title="Open source file"
               type="button"
@@ -841,7 +841,7 @@
         <div class="decks-back-wrapper">
           {#if currentCard}
             <button
-              class="decks-copy-button"
+              class="decks-copy-button clickable-icon"
               on:click={handleCopyBack}
               title="Copy content"
               type="button"
@@ -868,7 +868,7 @@
           <div class="decks-card-side decks-back" bind:this={backEl} on:click={handleClozeBlankClick}></div>
           {#if currentCard?.notes}
             <button
-              class="decks-notes-button"
+              class="decks-notes-button clickable-icon"
               class:decks-notes-active={showNotes}
               on:click={toggleNotes}
               title="Toggle notes (N)"
@@ -910,7 +910,7 @@
           type="button"
         >
           <span>Show Answer</span>
-          <span class="decks-shortcut">Space</span>
+          <kbd class="decks-shortcut">Space</kbd>
         </button>
       {/if}
 
@@ -923,8 +923,8 @@
             style="touch-action: manipulation;"
             type="button"
           >
+            <kbd class="decks-shortcut">&larr;</kbd>
             <span>Previous</span>
-            <span class="decks-shortcut">&larr;</span>
           </button>
           <button
             class="decks-browse-button decks-next"
@@ -938,7 +938,7 @@
                 ? "Finish"
                 : "Next"}</span
             >
-            <span class="decks-shortcut">Space</span>
+            <kbd class="decks-shortcut">Space</kbd>
           </button>
         </div>
       {:else if showAnswer && schedulingInfo}
@@ -954,7 +954,7 @@
             <div class="decks-interval">
               {getIntervalDisplay(schedulingInfo.again.interval)}
             </div>
-            <div class="decks-shortcut">1</div>
+            <kbd class="decks-shortcut">1</kbd>
           </button>
 
           <button
@@ -968,7 +968,7 @@
             <div class="decks-interval">
               {getIntervalDisplay(schedulingInfo.hard.interval)}
             </div>
-            <div class="decks-shortcut">2</div>
+            <kbd class="decks-shortcut">2</kbd>
           </button>
 
           <button
@@ -981,7 +981,7 @@
             <div class="decks-interval">
               {getIntervalDisplay(schedulingInfo.good.interval)}
             </div>
-            <div class="decks-shortcut">3</div>
+            <kbd class="decks-shortcut">3</kbd>
           </button>
 
           <button
@@ -994,7 +994,7 @@
             <div class="decks-interval">
               {getIntervalDisplay(schedulingInfo.easy.interval)}
             </div>
-            <div class="decks-shortcut">4</div>
+            <kbd class="decks-shortcut">4</kbd>
           </button>
         </div>
       {/if}
@@ -1019,8 +1019,9 @@
   }
 
   .decks-breadcrumb {
-    font-size: 11px;
-    color: var(--text-faint);
+    font-size: var(--font-ui-smaller);
+    color: var(--text-muted);
+    text-decoration: none;
   }
 
   .decks-breadcrumb-sep {
@@ -1056,13 +1057,12 @@
 
   .decks-breadcrumb-expanded {
     cursor: pointer;
-    color: var(--text-faint);
-    text-decoration: underline;
-    text-decoration-style: dotted;
+    color: var(--text-muted);
+    text-decoration: none;
   }
 
   .decks-breadcrumb-expanded:hover {
-    color: var(--text-muted);
+    color: var(--text-normal);
   }
 
   .decks-modal-header {
@@ -1077,6 +1077,7 @@
     margin: 0;
     font-size: 18px;
     font-weight: 600;
+    color: var(--text-normal);
   }
 
   .decks-header-stats {
@@ -1155,7 +1156,7 @@
   .decks-card-side {
     background: var(--background-secondary);
     border: 1px solid var(--background-modifier-border);
-    border-radius: 8px;
+    border-radius: var(--radius-m);
     padding: 24px;
     min-height: 100px;
     width: 100%;
@@ -1188,36 +1189,16 @@
     position: absolute;
     bottom: 4px;
     right: 4px;
-    background: var(--background-secondary);
-    border: 1px solid var(--background-modifier-border);
-    border-radius: 3px;
-    padding: 3px;
-    cursor: pointer;
-    color: var(--text-muted);
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    transition: all 0.15s ease;
     z-index: 10;
-    min-height: unset !important;
-    min-width: unset !important;
-    height: auto;
-    width: auto;
-  }
-
-  .decks-notes-button:hover {
-    background: var(--background-modifier-hover);
-    color: var(--text-normal);
-    border-color: var(--interactive-accent);
-  }
-
-  .decks-notes-button:active {
-    transform: scale(0.95);
+    width: 24px !important;
+    height: 24px !important;
+    min-width: 0 !important;
+    min-height: 0 !important;
+    padding: 0 !important;
   }
 
   .decks-notes-button.decks-notes-active {
     color: var(--interactive-accent);
-    border-color: var(--interactive-accent);
   }
 
   .decks-notes-wrapper {
@@ -1230,7 +1211,6 @@
     font-size: 14px;
     line-height: 1.5;
     color: var(--text-muted);
-    border-style: dashed;
   }
 
   .decks-go-to-file-button,
@@ -1238,33 +1218,12 @@
     position: absolute;
     top: 4px;
     right: 4px;
-    background: var(--background-secondary);
-    border: 1px solid var(--background-modifier-border);
-    border-radius: 3px;
-    padding: 3px;
-    cursor: pointer;
-    color: var(--text-muted);
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    transition: all 0.15s ease;
     z-index: 10;
-    min-height: unset !important;
-    min-width: unset !important;
-    height: auto;
-    width: auto;
-  }
-
-  .decks-go-to-file-button:hover,
-  .decks-copy-button:hover {
-    background: var(--background-modifier-hover);
-    color: var(--text-normal);
-    border-color: var(--interactive-accent);
-  }
-
-  .decks-go-to-file-button:active,
-  .decks-copy-button:active {
-    transform: scale(0.95);
+    width: 24px !important;
+    height: 24px !important;
+    min-width: 0 !important;
+    min-height: 0 !important;
+    padding: 0 !important;
   }
 
   .decks-answer-section {
@@ -1281,7 +1240,7 @@
 
   .decks-separator {
     height: 1px;
-    background: var(--background-modifier-border);
+    background: var(--background-modifier-border-hover);
     margin: 0 auto;
     width: 100%;
     max-width: 600px;
@@ -1309,12 +1268,13 @@
     border: none;
     pointer-events: auto !important;
     touch-action: manipulation;
-    border-radius: 6px;
+    border-radius: var(--radius-m);
     cursor: pointer;
     transition: all 0.2s ease;
     display: flex;
-    justify-content: space-between;
+    justify-content: center;
     align-items: center;
+    gap: 8px;
     position: relative;
     box-sizing: border-box;
     min-height: 48px;
@@ -1330,20 +1290,21 @@
   }
 
   .decks-shortcut {
-    font-size: 12px;
-    opacity: 0.8;
+    font-family: var(--font-monospace);
+    font-size: var(--font-ui-smaller);
     padding: 2px 6px;
-    background: rgba(0, 0, 0, 0.2);
-    border-radius: 3px;
-    margin-left: 8px;
+    background-color: var(--background-modifier-form-field);
+    border: 1px solid var(--background-modifier-border);
+    border-radius: var(--radius-s);
+    color: var(--text-muted);
     display: inline-block;
+    line-height: 1;
   }
 
   .decks-difficulty-buttons {
-    display: flex;
-    gap: 8px;
-    justify-content: center;
-    flex-wrap: nowrap;
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(100px, 1fr));
+    gap: 12px;
     padding: 0 10px;
     box-sizing: border-box;
     width: 100%;
@@ -1353,16 +1314,17 @@
 
   .decks-difficulty-button,
   .decks-rate-btn {
-    flex: 1;
     min-width: 44px;
     min-height: 44px;
     padding: 12px 8px;
     pointer-events: auto !important;
     touch-action: manipulation !important;
-    border: 2px solid var(--background-modifier-border);
-    background: var(--background-primary);
+    border: 1px solid var(--background-modifier-border);
+    border-top: 3px solid var(--background-modifier-border);
+    background-color: var(--background-secondary);
+    background-image: none;
     color: var(--text-normal);
-    border-radius: 6px;
+    border-radius: var(--radius-m);
     cursor: pointer;
     transition: all 0.2s ease;
     position: relative;
@@ -1385,8 +1347,9 @@
 
   .decks-difficulty-button:hover,
   .decks-difficulty-button:active {
-    transform: translateY(-2px);
-    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
+    background: var(--background-modifier-hover);
+    transform: translateY(-1px);
+    box-shadow: var(--shadow-s);
   }
 
   .decks-difficulty-button:disabled {
@@ -1396,43 +1359,19 @@
   }
 
   .decks-difficulty-button.decks-again {
-    border-color: #e74c3c;
-  }
-
-  .decks-difficulty-button.decks-again:hover,
-  .decks-difficulty-button.decks-again:active {
-    background: #e74c3c;
-    color: white;
+    border-top-color: #e74c3c;
   }
 
   .decks-difficulty-button.decks-hard {
-    border-color: #f39c12;
-  }
-
-  .decks-difficulty-button.decks-hard:hover,
-  .decks-difficulty-button.decks-hard:active {
-    background: #f39c12;
-    color: white;
+    border-top-color: #f39c12;
   }
 
   .decks-difficulty-button.decks-good {
-    border-color: #27ae60;
-  }
-
-  .decks-difficulty-button.decks-good:hover,
-  .decks-difficulty-button.decks-good:active {
-    background: #27ae60;
-    color: white;
+    border-top-color: #27ae60;
   }
 
   .decks-difficulty-button.decks-easy {
-    border-color: #3498db;
-  }
-
-  .decks-difficulty-button.decks-easy:hover,
-  .decks-difficulty-button.decks-easy:active {
-    background: #3498db;
-    color: white;
+    border-top-color: #3498db;
   }
 
   .decks-button-label {
@@ -1451,13 +1390,10 @@
 
   .decks-difficulty-button .decks-shortcut {
     position: absolute;
-    top: 2px;
-    right: 2px;
-    font-size: 9px;
-    padding: 1px 3px;
-    background: var(--background-modifier-border);
-    border-radius: 2px;
-    opacity: 0.7;
+    top: 4px;
+    right: 4px;
+    font-size: 10px;
+    padding: 1px 4px;
   }
 
   .decks-browse-slider {
@@ -1484,10 +1420,8 @@
 
   .decks-browse-buttons {
     display: flex;
-    gap: 12px;
-    justify-content: center;
-    max-width: 500px;
-    margin: 0 auto;
+    gap: var(--size-4-2);
+    width: 100%;
   }
 
   .decks-browse-button {
@@ -1498,11 +1432,12 @@
     background: var(--interactive-accent);
     color: var(--text-on-accent);
     border: none;
-    border-radius: 6px;
+    border-radius: var(--radius-m);
     cursor: pointer;
     display: flex;
-    justify-content: space-between;
+    justify-content: center;
     align-items: center;
+    gap: 8px;
     min-height: 48px;
     touch-action: manipulation;
     -webkit-tap-highlight-color: transparent;
@@ -1517,7 +1452,7 @@
 
   .decks-browse-button:hover {
     transform: translateY(-1px);
-    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+    box-shadow: var(--shadow-s);
   }
 
   .decks-browse-button.decks-prev:hover {
