@@ -834,8 +834,10 @@
         </div>
       </div>
 
-      <div class="decks-answer-section" class:hidden={!showAnswer}>
+      {#if showAnswer}
         <div class="decks-separator"></div>
+      {/if}
+      <div class="decks-answer-section" class:hidden={!showAnswer}>
         <div class="decks-back-wrapper">
           {#if currentCard}
             <button
@@ -1008,12 +1010,11 @@
   .decks-review-modal {
     display: flex;
     flex-direction: column;
-    height: 98%;
+    height: 100%;
     background: var(--background-primary);
     color: var(--text-normal);
     overflow: hidden;
     width: 100%;
-    margin-top: 15px;
     justify-content: space-between;
   }
 
@@ -1161,7 +1162,8 @@
     max-width: 900px;
     box-sizing: border-box;
     word-wrap: break-word;
-    overflow-wrap: break-word;
+    overflow-wrap: anywhere;
+    overflow-x: auto;
   }
 
   .decks-front-wrapper,
@@ -1280,7 +1282,7 @@
   .decks-separator {
     height: 1px;
     background: var(--background-modifier-border);
-    margin: 16px auto;
+    margin: 0 auto;
     width: 100%;
     max-width: 600px;
   }
@@ -1593,8 +1595,6 @@
   /* Mobile responsive styles */
   @media (max-width: 768px) {
     .decks-review-modal {
-      height: 100%;
-      margin-top: 0;
       box-sizing: border-box;
       overflow-x: hidden;
     }
