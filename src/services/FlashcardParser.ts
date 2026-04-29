@@ -4,6 +4,7 @@ export interface ParsedFlashcard {
   notes: string;
   type: "header-paragraph" | "table" | "cloze" | "image-occlusion";
   breadcrumb: string;
+  tags: string[];
   isReverse?: boolean;
   clozeText?: string;
   clozeOrder?: number;
@@ -21,6 +22,26 @@ export class FlashcardParser {
   private static readonly CLOZE_REGEX = /==((?:(?!==).)+)==/g;
   private static readonly IMAGE_EMBED_REGEX = /^!\[\[.+\.(png|jpe?g|gif|svg|bmp|webp)\]\]$/i;
   private static readonly NUMBERED_LIST_REGEX = /^\d+\.\s+(.+)$/;
+  // Obsidian tag syntax: must start with a letter, allows letters/digits/_/-//
+  private static readonly HEADER_TAG_REGEX = /(?:^|\s)#([A-Za-z][A-Za-z0-9_\-/]*)/g;
+
+  /**
+   * Extract Obsidian-style tags from header text and return cleaned text.
+   * - Tags ("#foo") are removed from the returned text.
+   * - Returned tags are deduplicated and lowercased for case-insensitive filtering.
+   */
+  static extractAndStripTags(headerText: string): { cleaned: string; tags: string[] } {
+    const tags: string[] = [];
+    const cleaned = headerText
+      .replace(FlashcardParser.HEADER_TAG_REGEX, (_match, tag: string) => {
+        tags.push(tag);
+        return " ";
+      })
+      .replace(/\s+/g, " ")
+      .trim();
+    const unique = Array.from(new Set(tags.map((t) => t.toLowerCase())));
+    return { cleaned, tags: unique };
+  }
 
   /**
    * Expand a card into cloze cards if cloze markers are found, otherwise return original card.
@@ -32,7 +53,8 @@ export class FlashcardParser {
     back: string,
     notes: string,
     type: "header-paragraph" | "table",
-    breadcrumb: string
+    breadcrumb: string,
+    tags: string[]
   ): ParsedFlashcard[] {
     const matches: { text: string; index: number }[] = [];
     let match: RegExpExecArray | null;
@@ -49,6 +71,7 @@ export class FlashcardParser {
         notes,
         type,
         breadcrumb,
+        tags: [...tags],
       }];
     }
 
@@ -58,6 +81,7 @@ export class FlashcardParser {
       notes,
       type: "cloze" as const,
       breadcrumb,
+      tags: [...tags],
       clozeText: m.text,
       clozeOrder: m.index,
     }));
@@ -81,7 +105,7 @@ export class FlashcardParser {
       if (!fileTitle) return [];
       const back = FlashcardParser.stripFrontmatter(content).trim();
       if (clozeEnabled) {
-        return FlashcardParser.expandClozes(fileTitle, back, "", "header-paragraph", "");
+        return FlashcardParser.expandClozes(fileTitle, back, "", "header-paragraph", "", []);
       }
       return [{
         front: fileTitle,
@@ -89,6 +113,7 @@ export class FlashcardParser {
         notes: "",
         type: "header-paragraph",
         breadcrumb: "",
+        tags: [],
       }];
     }
 
@@ -98,14 +123,14 @@ export class FlashcardParser {
     // Single pass through lines for both table and header parsing
     let inTable = false;
     let tableRowCount = 0;
-    let currentHeader: { text: string; level: number } | null = null;
+    let currentHeader: { text: string; level: number; tags: string[] } | null = null;
     let currentContent: string[] = [];
     let inFrontmatter = false;
     let skipNextParagraph = false;
     let hasNonTableContent = false;
 
-    // Header stack for breadcrumb tracking
-    const headerStack: Array<{ text: string; level: number }> = [];
+    // Header stack for breadcrumb tracking (text is already tag-stripped)
+    const headerStack: Array<{ text: string; level: number; tags: string[] }> = [];
 
     for (let i = 0; i < lines.length; i++) {
       const line = lines[i];
@@ -153,10 +178,11 @@ export class FlashcardParser {
             // Build breadcrumb from header stack (excluding the current header since it's the table container)
             const breadcrumb = headerStack.map((h) => h.text).join(" > ");
             const rowNotes = cells.length >= 3 ? (cells[2] || "") : "";
+            const rowTags = currentHeader ? [...currentHeader.tags] : [];
 
             if (clozeEnabled) {
               const expanded = FlashcardParser.expandClozes(
-                cells[0], cells[1], rowNotes, "table", breadcrumb
+                cells[0], cells[1], rowNotes, "table", breadcrumb, rowTags
               );
               flashcards.push(...expanded);
             } else {
@@ -166,6 +192,7 @@ export class FlashcardParser {
                 notes: rowNotes,
                 type: "table",
                 breadcrumb,
+                tags: rowTags,
               });
             }
           }
@@ -194,7 +221,9 @@ export class FlashcardParser {
         const headerMatch = FlashcardParser.HEADER_REGEX.exec(line);
         if (headerMatch) {
           const currentHeaderLevel = headerMatch[1].length;
-          const headerText = line.replace(/^#{1,6}\s+/, "");
+          const rawHeaderText = line.replace(/^#{1,6}\s+/, "");
+          const { cleaned: headerText, tags: headerTags } =
+            FlashcardParser.extractAndStripTags(rawHeaderText);
 
           // Check for title headers to skip
           if (line.match(/^#\s+/) && line.toLowerCase().includes("flashcard")) {
@@ -221,7 +250,7 @@ export class FlashcardParser {
             ) {
               headerStack.pop();
             }
-            headerStack.push({ text: headerText, level: currentHeaderLevel });
+            headerStack.push({ text: headerText, level: currentHeaderLevel, tags: headerTags });
             continue;
           }
 
@@ -248,13 +277,14 @@ export class FlashcardParser {
           ) {
             headerStack.pop();
           }
-          // Push current header onto stack
-          headerStack.push({ text: headerText, level: currentHeaderLevel });
+          // Push current header onto stack (text is tag-stripped)
+          headerStack.push({ text: headerText, level: currentHeaderLevel, tags: headerTags });
 
-          // Start new header
+          // Start new header (text holds the original line for downstream front-text extraction)
           currentHeader = {
             text: line,
             level: currentHeaderLevel,
+            tags: headerTags,
           };
           currentContent = [];
           hasNonTableContent = false;
@@ -309,7 +339,8 @@ export class FlashcardParser {
     imageEmbed: string,
     back: string,
     listItems: string[],
-    breadcrumb: string
+    breadcrumb: string,
+    tags: string[]
   ): ParsedFlashcard[] {
     const cards: ParsedFlashcard[] = [];
     let order = 0;
@@ -325,6 +356,7 @@ export class FlashcardParser {
         notes: "",
         type: "image-occlusion",
         breadcrumb,
+        tags: [...tags],
         clozeText,
         clozeOrder: order,
       });
@@ -364,7 +396,7 @@ export class FlashcardParser {
    * Helper to finalize current header flashcard
    */
   private static finalizeCurrentHeader(
-    currentHeader: { text: string; level: number } | null,
+    currentHeader: { text: string; level: number; tags: string[] } | null,
     currentContent: string[],
     flashcards: ParsedFlashcard[],
     targetHeaderLevel: number,
@@ -376,8 +408,10 @@ export class FlashcardParser {
       currentContent.length > 0 &&
       currentHeader.level === targetHeaderLevel
     ) {
-      const front = currentHeader.text.replace(/^#{1,6}\s+/, "");
+      const rawFront = currentHeader.text.replace(/^#{1,6}\s+/, "");
+      const { cleaned: front } = FlashcardParser.extractAndStripTags(rawFront);
       const back = currentContent.join("\n").trim();
+      const tags = [...currentHeader.tags];
 
       if (clozeEnabled) {
         const imageOcclusion = FlashcardParser.detectImageOcclusion(currentContent);
@@ -390,14 +424,14 @@ export class FlashcardParser {
             ? `${breadcrumb} > ${front}`
             : front;
           const expanded = FlashcardParser.expandImageOcclusion(
-            imageOcclusion.imageEmbed, backWithoutImage, imageOcclusion.listItems, imageOcclusionBreadcrumb
+            imageOcclusion.imageEmbed, backWithoutImage, imageOcclusion.listItems, imageOcclusionBreadcrumb, tags
           );
           flashcards.push(...expanded);
           return;
         }
 
         const expanded = FlashcardParser.expandClozes(
-          front, back, "", "header-paragraph", breadcrumb
+          front, back, "", "header-paragraph", breadcrumb, tags
         );
         flashcards.push(...expanded);
       } else {
@@ -407,6 +441,7 @@ export class FlashcardParser {
           notes: "",
           type: "header-paragraph",
           breadcrumb,
+          tags,
         });
       }
     }

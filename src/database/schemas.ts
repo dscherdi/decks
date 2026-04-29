@@ -1,7 +1,7 @@
 import type { Database } from "sql.js";
 
 // Current Schema Version
-export const CURRENT_SCHEMA_VERSION = 14;
+export const CURRENT_SCHEMA_VERSION = 15;
 
 // SQL Table Creation Schema - Used when database file doesn't exist
 export const CREATE_TABLES_SQL = `
@@ -74,6 +74,7 @@ export const CREATE_TABLES_SQL = `
     last_reviewed TEXT,
     created TEXT NOT NULL,
     modified TEXT NOT NULL,
+    tags TEXT NOT NULL DEFAULT '',
     FOREIGN KEY (deck_id) REFERENCES decks(id) ON DELETE CASCADE
   );
 
@@ -449,6 +450,7 @@ export function buildMigrationSQL(db: Database): string {
       last_reviewed TEXT,
       created TEXT NOT NULL,
       modified TEXT NOT NULL,
+      tags TEXT NOT NULL DEFAULT '',
       FOREIGN KEY (deck_id) REFERENCES decks(id) ON DELETE CASCADE
     );
 
@@ -662,8 +664,8 @@ export const SQL_QUERIES = {
       id, deck_id, front, back, type, source_file, content_hash, breadcrumb, notes,
       cloze_text, cloze_order,
       state, due_date, interval, repetitions,
-      difficulty, stability, lapses, last_reviewed, created, modified
-    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+      difficulty, stability, lapses, last_reviewed, created, modified, tags
+    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
   `,
 
   DELETE_FLASHCARD: `DELETE FROM flashcards WHERE id = ?`,

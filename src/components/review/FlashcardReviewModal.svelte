@@ -201,7 +201,7 @@
           }
         }
         scored.sort((a, b) => b.score - a.score);
-        return scored.slice(0, 10);
+        return scored.slice(0, 50);
       })()
     : [];
 
@@ -799,6 +799,13 @@
           {/each}
         </div>
       {/if}
+      {#if currentCard.tags && currentCard.tags.length > 0}
+        <div class="decks-card-tags">
+          {#each currentCard.tags as t}
+            <span class="decks-card-tag-chip">#{t}</span>
+          {/each}
+        </div>
+      {/if}
     {/if}
     <div class="decks-header-stats">
       {#if browseMode}
@@ -1153,6 +1160,22 @@
     font-size: var(--font-ui-smaller);
     color: var(--text-muted);
     text-decoration: none;
+  }
+
+  .decks-card-tags {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 4px;
+    margin-top: 4px;
+  }
+
+  .decks-card-tag-chip {
+    display: inline-block;
+    padding: 1px 8px;
+    border-radius: 10px;
+    background: var(--background-modifier-hover);
+    color: var(--text-muted);
+    font-size: var(--font-ui-smaller);
   }
 
   .decks-breadcrumb-sep {

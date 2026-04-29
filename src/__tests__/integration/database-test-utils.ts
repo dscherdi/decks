@@ -164,6 +164,7 @@ export class DatabaseTestUtils {
       contentHash: this.generateContentHash(backText),
       breadcrumb: "",
       notes: "",
+      tags: [],
       clozeText: null,
       clozeOrder: null,
       state: "new",

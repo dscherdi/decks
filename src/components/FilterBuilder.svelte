@@ -6,11 +6,12 @@
   export let previewCount: number | null = null;
   export let availableDecks: { id: string; name: string }[] = [];
   export let availableTags: string[] = [];
+  export let availableCardTags: string[] = [];
 
   interface FieldOption {
     value: FilterField;
     label: string;
-    type: "string" | "numeric" | "date" | "state" | "deckId" | "deckTag";
+    type: "string" | "numeric" | "date" | "state" | "deckId" | "deckTag" | "tags";
   }
 
   const FIELD_OPTIONS: FieldOption[] = [
@@ -18,6 +19,7 @@
     { value: "dueDate", label: "Due date", type: "date" },
     { value: "deckId", label: "Deck", type: "deckId" },
     { value: "deckTag", label: "Deck tag", type: "deckTag" },
+    { value: "tags", label: "Card tag", type: "tags" },
     { value: "sourceFile", label: "Source file", type: "string" },
     { value: "breadcrumb", label: "Breadcrumb", type: "string" },
     { value: "type", label: "Card type", type: "string" },
@@ -65,6 +67,12 @@
           { value: "contains", label: "Contains" },
           { value: "equals", label: "Equals" },
           { value: "not_contains", label: "Does not contain" },
+        ];
+      case "tags":
+        return [
+          { value: "contains", label: "Has tag" },
+          { value: "not_contains", label: "Does not have tag" },
+          { value: "in", label: "Has any of" },
         ];
       case "string":
       default:
@@ -231,6 +239,35 @@
                 <option value={tag}>{tag}</option>
               {/each}
             </select>
+          {:else if rule.field === "tags" && rule.operator !== "in"}
+            <select
+              class="decks-fb-value-select"
+              value={rule.value}
+              on:change={(e) => {
+                const target = e.target;
+                if (target instanceof HTMLSelectElement) {
+                  updateRule(index, { value: target.value });
+                }
+              }}
+            >
+              <option value="">Select tag...</option>
+              {#each availableCardTags as tag}
+                <option value={tag}>{tag}</option>
+              {/each}
+            </select>
+          {:else if rule.field === "tags" && rule.operator === "in"}
+            <div class="decks-fb-deck-checklist">
+              {#each availableCardTags as tag}
+                <label class="decks-fb-deck-check-item">
+                  <input
+                    type="checkbox"
+                    checked={getSelectedDeckIds(rule.value).has(tag)}
+                    on:change={() => toggleDeckId(index, tag)}
+                  />
+                  <span>{tag}</span>
+                </label>
+              {/each}
+            </div>
           {:else if rule.field === "state"}
             <select
               class="decks-fb-value-select"

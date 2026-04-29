@@ -28,7 +28,9 @@
   let searchQuery = "";
   let tagFilter = "";
   let deckFilter = "";
+  let cardTagFilter = "";
   let availableTags: string[] = [];
+  let availableCardTags: string[] = [];
   let availableDecks: { id: string; name: string }[] = [];
 
   let sorts: ActiveSort[] = [{ field: "dueDate", direction: "asc" }];
@@ -44,13 +46,13 @@
   let showNewDeckInput = false;
   let customDeckDropdownEl: HTMLDivElement | null = null;
 
-  $: filteredFlashcards = applyFilters(allFlashcards, searchQuery, tagFilter, deckFilter);
+  $: filteredFlashcards = applyFilters(allFlashcards, searchQuery, tagFilter, deckFilter, cardTagFilter);
   $: sortedFlashcards = applySorts(filteredFlashcards, sorts);
   $: displayedFlashcards = sortedFlashcards.slice(0, displayLimit);
   $: hasMore = sortedFlashcards.length > displayLimit;
   $: selectedCount = selectedIds.size;
 
-  function applyFilters(cards: Flashcard[], query: string, tag: string, deck: string): Flashcard[] {
+  function applyFilters(cards: Flashcard[], query: string, tag: string, deck: string, cardTag: string): Flashcard[] {
     let result = cards;
 
     if (tag) {
@@ -67,6 +69,10 @@
       result = result.filter((c) => c.deckId === deck);
     }
 
+    if (cardTag) {
+      result = result.filter((c) => c.tags.includes(cardTag));
+    }
+
     if (query.trim()) {
       const search = prepareFuzzySearch(query);
       result = result.filter((c) => {
@@ -76,7 +82,8 @@
           search(c.back) !== null ||
           search(c.sourceFile) !== null ||
           search(c.breadcrumb) !== null ||
-          (deckTag !== "" && search(deckTag) !== null)
+          (deckTag !== "" && search(deckTag) !== null) ||
+          c.tags.some((t) => search(t) !== null)
         );
       });
     }
@@ -275,6 +282,11 @@
       } else {
         allFlashcards = await db.getAllFlashcards();
       }
+      const cardTagSet = new Set<string>();
+      for (const c of allFlashcards) {
+        for (const t of c.tags) cardTagSet.add(t);
+      }
+      availableCardTags = Array.from(cardTagSet).sort();
     } finally {
       loading = false;
     }
@@ -331,6 +343,15 @@
         <option value="">All decks</option>
         {#each availableDecks as deck}
           <option value={deck.id}>{deck.name}</option>
+        {/each}
+      </select>
+      <select
+        class="decks-fm-tag-select"
+        bind:value={cardTagFilter}
+      >
+        <option value="">All card tags</option>
+        {#each availableCardTags as t}
+          <option value={t}>#{t}</option>
         {/each}
       </select>
     </div>
@@ -454,7 +475,8 @@
           <div class="decks-fm-col-back">Back</div>
           <div class="decks-fm-col-file">File</div>
           <div class="decks-fm-col-breadcrumb">Breadcrumb</div>
-          <div class="decks-fm-col-tag">Tag</div>
+          <div class="decks-fm-col-tag">Deck tag</div>
+          <div class="decks-fm-col-cardtags">Card tags</div>
           <div class="decks-fm-col-state">State</div>
           <div class="decks-fm-col-due">Due</div>
           <div class="decks-fm-col-reviewed">Reviewed</div>
@@ -490,6 +512,11 @@
               <div class="decks-fm-col-tag">
                 {deckTagMap.get(card.deckId) ?? ""}
               </div>
+              <div class="decks-fm-col-cardtags">
+                {#each card.tags as t}
+                  <span class="decks-fm-cardtag-chip">#{t}</span>
+                {/each}
+              </div>
               <div class="decks-fm-col-state">
                 <span class="decks-fm-state-badge decks-fm-state-{card.state}">
                   {card.state === "new" ? "New" : "Review"}
@@ -511,12 +538,12 @@
     <div class="decks-fm-footer">
       <span>
         {#if isEditMode && editingCustomDeckName}
-          {#if searchQuery || tagFilter || deckFilter}
+          {#if searchQuery || tagFilter || deckFilter || cardTagFilter}
             Showing {sortedFlashcards.length} of {allFlashcards.length} cards in "{editingCustomDeckName}"
           {:else}
             {allFlashcards.length} cards in "{editingCustomDeckName}"
           {/if}
-        {:else if searchQuery || tagFilter || deckFilter}
+        {:else if searchQuery || tagFilter || deckFilter || cardTagFilter}
           Showing {sortedFlashcards.length} of {allFlashcards.length} flashcards
         {:else}
           {allFlashcards.length} flashcards
@@ -745,7 +772,7 @@
 
   .decks-fm-table-header {
     display: grid;
-    grid-template-columns: 36px 1fr 1fr 120px 120px 100px 70px 80px 80px;
+    grid-template-columns: 36px 1fr 1fr 120px 120px 100px 120px 70px 80px 80px;
     gap: 4px;
     padding: 6px 8px;
     background: var(--background-secondary);
@@ -760,7 +787,7 @@
 
   .decks-fm-table-row {
     display: grid;
-    grid-template-columns: 36px 1fr 1fr 120px 120px 100px 70px 80px 80px;
+    grid-template-columns: 36px 1fr 1fr 120px 120px 100px 120px 70px 80px 80px;
     gap: 4px;
     padding: 4px 8px;
     font-size: 12px;
@@ -793,6 +820,24 @@
     white-space: nowrap;
     display: flex;
     align-items: center;
+  }
+
+  .decks-fm-col-cardtags {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 2px;
+    align-items: center;
+    overflow: hidden;
+  }
+
+  .decks-fm-cardtag-chip {
+    display: inline-block;
+    padding: 1px 6px;
+    border-radius: 8px;
+    background: var(--background-modifier-hover);
+    color: var(--text-muted);
+    font-size: 10px;
+    white-space: nowrap;
   }
 
   .decks-fm-col-state,

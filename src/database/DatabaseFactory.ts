@@ -77,6 +77,7 @@ export interface IDatabaseService {
   getFlashcardById(flashcardId: string): Promise<Flashcard | null>;
   getFlashcardsByDeck(deckId: string): Promise<Flashcard[]>;
   getAllFlashcards(): Promise<Flashcard[]>;
+  getAllFlashcardTags(): Promise<string[]>;
   getDueFlashcards(deckId: string): Promise<Flashcard[]>;
   getReviewableFlashcards(deckId: string): Promise<Flashcard[]>;
   getNewCardsForReview(deckId: string): Promise<Flashcard[]>;

@@ -637,6 +637,8 @@ export class Scheduler {
    * Convert database row to Flashcard object (same logic as DatabaseService)
    */
   private rowToFlashcard(row: unknown[]): Flashcard {
+    const tagsRaw = (row[21] as string) || "";
+    const tags = tagsRaw === "" ? [] : tagsRaw.split(",").filter((t) => t.length > 0);
     return {
       id: row[0] as string,
       deckId: row[1] as string,
@@ -659,6 +661,7 @@ export class Scheduler {
       lastReviewed: row[18] as string | null,
       created: row[19] as string,
       modified: row[20] as string,
+      tags,
     };
   }
 

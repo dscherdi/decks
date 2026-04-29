@@ -12,8 +12,24 @@ export interface FlashcardUpdates {
   type: string;
   contentHash: string;
   breadcrumb: string;
+  tags: string[];
   clozeText: string | null;
   clozeOrder: number | null;
+}
+
+function serializeTagsForSql(tags: string[] | undefined): string {
+  if (!tags || tags.length === 0) return "";
+  return tags.filter((t) => t.length > 0).join(",");
+}
+
+function tagsEqual(a: string[], b: string[]): boolean {
+  if (a.length !== b.length) return false;
+  const sa = [...a].sort();
+  const sb = [...b].sort();
+  for (let i = 0; i < sa.length; i++) {
+    if (sa[i] !== sb[i]) return false;
+  }
+  return true;
 }
 
 export interface BatchOperation {
@@ -73,7 +89,7 @@ export class FlashcardSynchronizer {
         const updateStmt = this.db.prepare(`
                     UPDATE flashcards
                     SET id = ?, front = ?, back = ?, content_hash = ?, breadcrumb = ?, notes = ?,
-                        type = ?, cloze_text = ?, cloze_order = ?, modified = datetime('now')
+                        type = ?, cloze_text = ?, cloze_order = ?, tags = ?, modified = datetime('now')
                     WHERE id = ?
                 `);
         updateStmt.run([
@@ -86,6 +102,7 @@ export class FlashcardSynchronizer {
           card.type,
           card.clozeText ?? null,
           card.clozeOrder ?? null,
+          serializeTagsForSql(card.tags),
           op.oldId,
         ]);
         updateStmt.free();
@@ -107,8 +124,8 @@ export class FlashcardSynchronizer {
                         id, deck_id, front, back, type, source_file, content_hash, breadcrumb, notes,
                         cloze_text, cloze_order,
                         state, due_date, interval, repetitions, difficulty, stability,
-                        lapses, last_reviewed, created, modified
-                    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, datetime('now'), datetime('now'))
+                        lapses, last_reviewed, created, modified, tags
+                    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, datetime('now'), datetime('now'), ?)
                 `);
         stmt.run([
           card.id,
@@ -130,13 +147,14 @@ export class FlashcardSynchronizer {
           card.stability,
           card.lapses,
           card.lastReviewed,
+          serializeTagsForSql(card.tags),
         ]);
         stmt.free();
       } else if (op.type === "update" && op.flashcardId && op.updates) {
         const stmt = this.db.prepare(`
                     UPDATE flashcards
                     SET front = ?, back = ?, type = ?, content_hash = ?, breadcrumb = ?, notes = ?,
-                        cloze_text = ?, cloze_order = ?, modified = datetime('now')
+                        cloze_text = ?, cloze_order = ?, tags = ?, modified = datetime('now')
                     WHERE id = ?
                 `);
         stmt.run([
@@ -148,6 +166,7 @@ export class FlashcardSynchronizer {
           op.updates.notes || "",
           op.updates.clozeText,
           op.updates.clozeOrder,
+          serializeTagsForSql(op.updates.tags),
           op.flashcardId,
         ]);
         stmt.free();
@@ -183,6 +202,7 @@ export class FlashcardSynchronizer {
               notes: card.notes,
               type: card.type,
               breadcrumb: card.breadcrumb,
+              tags: [...card.tags],
               isReverse: true,
             });
           }
@@ -198,6 +218,8 @@ export class FlashcardSynchronizer {
       stmt.bind([data.deckId]);
       while (stmt.step()) {
         const row = stmt.getAsObject() as Record<string, SqlJsValue>;
+        const tagsRaw = (row.tags as string) || "";
+        const tags = tagsRaw === "" ? [] : tagsRaw.split(",").filter((t) => t.length > 0);
         existingFlashcards.push({
           id: row.id as string,
           deckId: row.deck_id as string,
@@ -220,6 +242,7 @@ export class FlashcardSynchronizer {
           lastReviewed: row.last_reviewed as string | null,
           created: row.created as string,
           modified: row.modified as string,
+          tags,
         });
       }
       stmt.free();
@@ -242,6 +265,7 @@ export class FlashcardSynchronizer {
           notes: string;
           type: FlashcardType;
           breadcrumb: string;
+          tags: string[];
           isReverse?: boolean;
           clozeText?: string;
           clozeOrder?: number;
@@ -294,13 +318,15 @@ export class FlashcardSynchronizer {
         processedIds.add(flashcardId);
 
         if (existingCard) {
-          // Update if content, breadcrumb, notes, front, or type changed.
+          // Update if content, breadcrumb, notes, front, type, or tags changed.
+          // Tags are excluded from contentHash, so they need an explicit comparison.
           if (
             existingCard.contentHash !== contentHash ||
             existingCard.breadcrumb !== parsed.breadcrumb ||
             existingCard.notes !== (parsed.notes || "") ||
             existingCard.front !== parsed.front ||
-            existingCard.type !== parsed.type
+            existingCard.type !== parsed.type ||
+            !tagsEqual(existingCard.tags, parsed.tags)
           ) {
             batchOperations.push({
               type: "update",
@@ -312,6 +338,7 @@ export class FlashcardSynchronizer {
                 type: parsed.type,
                 contentHash: contentHash,
                 breadcrumb: parsed.breadcrumb,
+                tags: parsed.tags,
                 clozeText: parsed.clozeText ?? null,
                 clozeOrder: parsed.clozeOrder ?? null,
               },
@@ -373,6 +400,7 @@ export class FlashcardSynchronizer {
                 sourceFile: data.deckFilepath,
                 contentHash: newCardData.contentHash,
                 breadcrumb: newCardData.parsed.breadcrumb,
+                tags: newCardData.parsed.tags,
                 clozeText: newCardData.parsed.clozeText ?? null,
                 clozeOrder: newCardData.parsed.clozeOrder ?? null,
                 state: oldCard.state,
@@ -424,6 +452,7 @@ export class FlashcardSynchronizer {
           sourceFile: data.deckFilepath,
           contentHash: newCardData.contentHash,
           breadcrumb: newCardData.parsed.breadcrumb,
+          tags: newCardData.parsed.tags,
           clozeText: newCardData.parsed.clozeText ?? null,
           clozeOrder: newCardData.parsed.clozeOrder ?? null,
           state: reviewLogRow ? (reviewLogRow[0] as "new" | "review") : "new",
@@ -472,6 +501,7 @@ export class FlashcardSynchronizer {
           sourceFile: data.deckFilepath,
           contentHash: newCardData.contentHash,
           breadcrumb: newCardData.parsed.breadcrumb,
+          tags: newCardData.parsed.tags,
           clozeText: null,
           clozeOrder: null,
           state: reviewLogRow ? (reviewLogRow[0] as "new" | "review") : "new",

@@ -32,6 +32,11 @@ export interface QueryConfig {
   asObject?: boolean;
 }
 
+function serializeTags(tags: string[] | undefined): string {
+  if (!tags || tags.length === 0) return "";
+  return tags.filter((t) => t.length > 0).join(",");
+}
+
 export abstract class BaseDatabaseService implements IDatabaseService {
   protected dbPath: string;
   protected adapter: DataAdapter;
@@ -122,6 +127,8 @@ export abstract class BaseDatabaseService implements IDatabaseService {
   }
 
   protected rowToFlashcard(row: (string | number | null)[]): Flashcard {
+    const tagsRaw = (row[21] as string) || "";
+    const tags = tagsRaw === "" ? [] : tagsRaw.split(",").filter((t) => t.length > 0);
     return {
       id: row[0] as string,
       deckId: row[1] as string,
@@ -144,6 +151,7 @@ export abstract class BaseDatabaseService implements IDatabaseService {
       lastReviewed: row[18] as string | null,
       created: row[19] as string,
       modified: row[20] as string,
+      tags,
     };
   }
 
@@ -687,8 +695,8 @@ export abstract class BaseDatabaseService implements IDatabaseService {
     const sql = `INSERT OR IGNORE INTO flashcards
                  (id, deck_id, front, back, type, source_file, content_hash, breadcrumb, notes,
                   cloze_text, cloze_order, state, due_date,
-                  interval, repetitions, difficulty, stability, lapses, last_reviewed, created, modified)
-                 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`;
+                  interval, repetitions, difficulty, stability, lapses, last_reviewed, created, modified, tags)
+                 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`;
 
     await this.executeSql(sql, [
       flashcardWithId.id,
@@ -712,6 +720,7 @@ export abstract class BaseDatabaseService implements IDatabaseService {
       flashcardWithId.lastReviewed,
       flashcardWithId.created,
       flashcardWithId.modified,
+      serializeTags(flashcardWithId.tags),
     ]);
   }
 
@@ -747,6 +756,20 @@ export abstract class BaseDatabaseService implements IDatabaseService {
     return results.map((row: (string | number | null)[]) =>
       this.rowToFlashcard(row)
     );
+  }
+
+  async getAllFlashcardTags(): Promise<string[]> {
+    const sql = `SELECT DISTINCT tags FROM flashcards WHERE tags != ''`;
+    const results = (await this.querySql(sql, [])) as (string | number | null)[][];
+    const tagSet = new Set<string>();
+    for (const row of results) {
+      const tagStr = (row[0] as string) || "";
+      for (const tag of tagStr.split(",")) {
+        const trimmed = tag.trim();
+        if (trimmed.length > 0) tagSet.add(trimmed);
+      }
+    }
+    return Array.from(tagSet).sort();
   }
 
   async getDueFlashcards(deckId: string): Promise<Flashcard[]> {
@@ -826,7 +849,11 @@ export abstract class BaseDatabaseService implements IDatabaseService {
         } else {
           updateFields.push(`${key} = ?`);
         }
-        params.push(updates[key as keyof Flashcard] ?? null);
+        if (key === "tags") {
+          params.push(serializeTags(updates.tags));
+        } else {
+          params.push(updates[key as keyof Flashcard] as string | number | null ?? null);
+        }
       }
     });
 
@@ -855,9 +882,9 @@ export abstract class BaseDatabaseService implements IDatabaseService {
     // Update flashcard ID and content
     await this.executeSql(
       `UPDATE flashcards
-             SET id = ?, front = ?, back = ?, content_hash = ?, notes = ?, modified = ?
+             SET id = ?, front = ?, back = ?, content_hash = ?, notes = ?, tags = ?, modified = ?
              WHERE id = ?`,
-      [newCard.id, newCard.front, newCard.back, newCard.contentHash, newCard.notes || "", now, oldId]
+      [newCard.id, newCard.front, newCard.back, newCard.contentHash, newCard.notes || "", serializeTags(newCard.tags), now, oldId]
     );
 
     // Migrate review_logs to new ID (critical since FK removed)
@@ -887,8 +914,8 @@ export abstract class BaseDatabaseService implements IDatabaseService {
     const sql = `INSERT OR IGNORE INTO flashcards
                  (id, deck_id, front, back, type, source_file, content_hash, breadcrumb, notes,
                   cloze_text, cloze_order, state, due_date,
-                  interval, repetitions, difficulty, stability, lapses, last_reviewed, created, modified)
-                 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`;
+                  interval, repetitions, difficulty, stability, lapses, last_reviewed, created, modified, tags)
+                 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`;
 
     for (const flashcard of flashcards) {
       await this.executeSql(sql, [
@@ -913,6 +940,7 @@ export abstract class BaseDatabaseService implements IDatabaseService {
         flashcard.lastReviewed,
         now,
         now,
+        serializeTags(flashcard.tags),
       ]);
     }
   }

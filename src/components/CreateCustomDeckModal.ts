@@ -98,7 +98,7 @@ export class CreateCustomDeckModal extends Modal {
     if (this.deckType !== "filter") return;
 
     this.loadFilterData()
-      .then(({ decks, tags }) => {
+      .then(({ decks, tags, cardTags }) => {
         if (!this.filterContainer) return;
         this.filterComponent = mount(FilterBuilder, {
           target: this.filterContainer,
@@ -111,6 +111,7 @@ export class CreateCustomDeckModal extends Modal {
             previewCount: null,
             availableDecks: decks,
             availableTags: tags,
+            availableCardTags: cardTags,
           },
         }) as Svelte5MountedComponent;
         this.previewEl = this.filterContainer.createDiv("decks-filter-preview-count");
@@ -119,11 +120,12 @@ export class CreateCustomDeckModal extends Modal {
       .catch(console.error);
   }
 
-  private async loadFilterData(): Promise<{ decks: { id: string; name: string }[]; tags: string[] }> {
+  private async loadFilterData(): Promise<{ decks: { id: string; name: string }[]; tags: string[]; cardTags: string[] }> {
     const allDecks = await this.db.getAllDecks();
     const decks = allDecks.map(d => ({ id: d.id, name: d.name })).sort((a, b) => a.name.localeCompare(b.name));
     const tags = [...new Set(allDecks.map(d => d.tag))].sort();
-    return { decks, tags };
+    const cardTags = await this.db.getAllFlashcardTags();
+    return { decks, tags, cardTags };
   }
 
   private schedulePreview() {

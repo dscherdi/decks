@@ -13,6 +13,7 @@ const FIELD_TO_COLUMN: Record<string, string> = {
   type: "f.type",
   sourceFile: "f.source_file",
   breadcrumb: "f.breadcrumb",
+  tags: "f.tags",
   state: "f.state",
   dueDate: "f.due_date",
   difficulty: "f.difficulty",
@@ -28,11 +29,23 @@ const NUMERIC_FIELDS = new Set([
   "difficulty", "stability", "interval", "repetitions", "lapses",
 ]);
 
+// Tags are stored as comma-joined ("math,science") in f.tags. To match
+// a single tag exactly within that list, wrap the column and parameter
+// with delimiters so "math" matches "math" but not "mathematics".
+function tagDelimitedColumn(): string {
+  return "(',' || COALESCE(f.tags, '') || ',')";
+}
+
+function tagDelimitedParam(tag: string): string {
+  return `%,${tag.toLowerCase()},%`;
+}
+
 function compileRule(rule: FilterRule, params: SqlJsValue[]): string {
   const column = FIELD_TO_COLUMN[rule.field];
   if (!column) {
     throw new Error(`Unknown filter field: ${rule.field}`);
   }
+  const isTags = rule.field === "tags";
 
   switch (rule.operator) {
     case "is_due": {
@@ -44,6 +57,10 @@ function compileRule(rule: FilterRule, params: SqlJsValue[]): string {
       params.push("new");
       return `(f.state = ?)`;
     case "equals":
+      if (isTags) {
+        params.push(tagDelimitedParam(rule.value));
+        return `(${tagDelimitedColumn()} LIKE ?)`;
+      }
       if (NUMERIC_FIELDS.has(rule.field)) {
         params.push(parseFloat(rule.value));
       } else {
@@ -51,6 +68,10 @@ function compileRule(rule: FilterRule, params: SqlJsValue[]): string {
       }
       return `(${column} = ?)`;
     case "not_equals":
+      if (isTags) {
+        params.push(tagDelimitedParam(rule.value));
+        return `(${tagDelimitedColumn()} NOT LIKE ?)`;
+      }
       if (NUMERIC_FIELDS.has(rule.field)) {
         params.push(parseFloat(rule.value));
       } else {
@@ -58,9 +79,17 @@ function compileRule(rule: FilterRule, params: SqlJsValue[]): string {
       }
       return `(${column} != ?)`;
     case "contains":
+      if (isTags) {
+        params.push(tagDelimitedParam(rule.value));
+        return `(${tagDelimitedColumn()} LIKE ?)`;
+      }
       params.push(`%${rule.value}%`);
       return `(${column} LIKE ?)`;
     case "not_contains":
+      if (isTags) {
+        params.push(tagDelimitedParam(rule.value));
+        return `(${tagDelimitedColumn()} NOT LIKE ?)`;
+      }
       params.push(`%${rule.value}%`);
       return `(${column} NOT LIKE ?)`;
     case "greater_than":
@@ -79,6 +108,13 @@ function compileRule(rule: FilterRule, params: SqlJsValue[]): string {
       const values = rule.value.split(",").map(v => v.trim()).filter(v => v.length > 0);
       if (values.length === 0) {
         return "(1 = 0)";
+      }
+      if (isTags) {
+        const clauses = values.map(() => `${tagDelimitedColumn()} LIKE ?`).join(" OR ");
+        for (const v of values) {
+          params.push(tagDelimitedParam(v));
+        }
+        return `(${clauses})`;
       }
       const placeholders = values.map(() => "?").join(", ");
       for (const v of values) {

@@ -21,6 +21,7 @@ describe("FlashcardParser", () => {
         notes: "",
         type: "table",
         breadcrumb: "Study Topics",
+        tags: [],
       });
       expect(result[1]).toEqual({
         front: "Capital of France",
@@ -28,6 +29,7 @@ describe("FlashcardParser", () => {
         notes: "",
         type: "table",
         breadcrumb: "Study Topics",
+        tags: [],
       });
     });
 
@@ -51,6 +53,7 @@ React is a JavaScript library for building user interfaces.
         notes: "",
         type: "header-paragraph",
         breadcrumb: "",
+        tags: [],
       });
       expect(result[1]).toEqual({
         front: "What is React?",
@@ -58,6 +61,7 @@ React is a JavaScript library for building user interfaces.
         notes: "",
         type: "header-paragraph",
         breadcrumb: "",
+        tags: [],
       });
     });
 
@@ -85,6 +89,7 @@ This content should be ignored since we're targeting H3.
         notes: "",
         type: "header-paragraph",
         breadcrumb: "",
+        tags: [],
       });
       expect(result[1]).toEqual({
         front: "Question 2",
@@ -92,6 +97,7 @@ This content should be ignored since we're targeting H3.
         notes: "",
         type: "header-paragraph",
         breadcrumb: "",
+        tags: [],
       });
     });
 
@@ -126,6 +132,7 @@ Cascading Style Sheets for styling web pages.
         notes: "",
         type: "header-paragraph",
         breadcrumb: "",
+        tags: [],
       });
     });
 
@@ -149,6 +156,7 @@ Answer
         notes: "",
         type: "header-paragraph",
         breadcrumb: "",
+        tags: [],
       });
     });
 
@@ -172,6 +180,7 @@ Real answer.
         notes: "",
         type: "header-paragraph",
         breadcrumb: "Flashcards Section",
+        tags: [],
       });
     });
 
@@ -213,6 +222,7 @@ Some more content here.
         notes: "",
         type: "table",
         breadcrumb: "Test Table",
+        tags: [],
       });
     });
 
@@ -259,6 +269,7 @@ Key features:
         notes: "",
         type: "table",
         breadcrumb: "Whitespace Test",
+        tags: [],
       });
     });
 
@@ -337,6 +348,7 @@ Some regular content here.
         notes: "",
         type: "table",
         breadcrumb: "Main Title > Level 2 Header",
+        tags: [],
       });
       expect(h2Result[1]).toEqual({
         front: "What is 3+3?",
@@ -344,6 +356,7 @@ Some regular content here.
         notes: "",
         type: "table",
         breadcrumb: "Main Title > Level 2 Header",
+        tags: [],
       });
 
       // Test with headerLevel 3 - should only parse table under ### header
@@ -355,6 +368,7 @@ Some regular content here.
         notes: "",
         type: "table",
         breadcrumb: "Main Title > Level 2 Header > Level 3 Header",
+        tags: [],
       });
 
       // Test with headerLevel 4 - table should be part of header-paragraph since there's other content
@@ -406,6 +420,7 @@ Some paragraph content here.
         notes: "",
         type: "table",
         breadcrumb: "Pure Table Header",
+        tags: [],
       });
       expect(result[1]).toEqual({
         front: "What is 6+6?",
@@ -413,6 +428,7 @@ Some paragraph content here.
         notes: "",
         type: "table",
         breadcrumb: "Pure Table Header",
+        tags: [],
       });
 
       // Third should be header-paragraph with table content included
@@ -445,6 +461,7 @@ Some paragraph content here.
         notes: "Basic arithmetic",
         type: "table",
         breadcrumb: "Study Topics",
+        tags: [],
       });
       expect(result[1]).toEqual({
         front: "Capital of France",
@@ -452,6 +469,7 @@ Some paragraph content here.
         notes: "European geography",
         type: "table",
         breadcrumb: "Study Topics",
+        tags: [],
       });
     });
 
@@ -496,6 +514,7 @@ Some paragraph content here.
         notes: "",
         type: "table",
         breadcrumb: "Two Columns",
+        tags: [],
       });
       expect(result[1]).toEqual({
         front: "Q2",
@@ -503,6 +522,7 @@ Some paragraph content here.
         notes: "Note here",
         type: "table",
         breadcrumb: "Three Columns",
+        tags: [],
       });
     });
 
@@ -687,6 +707,7 @@ It has multiple paragraphs.`;
         notes: "",
         type: "header-paragraph",
         breadcrumb: "",
+        tags: [],
       });
     });
 
@@ -721,6 +742,138 @@ tags: flashcards
       expect(result).toHaveLength(1);
       expect(result[0].front).toBe("Empty File");
       expect(result[0].back).toBe("");
+    });
+  });
+
+  describe("header tags extraction", () => {
+    it("should extract tags from a header-paragraph card", () => {
+      const content = `
+## My Header #math #science
+
+This is the answer.
+`;
+      const result = FlashcardParser.parseFlashcardsFromContent(content);
+      expect(result).toHaveLength(1);
+      expect(result[0].front).toBe("My Header");
+      expect(result[0].tags).toEqual(["math", "science"]);
+      expect(result[0].breadcrumb).toBe("");
+    });
+
+    it("should propagate header tags to all table rows under that header", () => {
+      const content = `
+## Topic #important
+
+| Front | Back |
+|-------|------|
+| Q1 | A1 |
+| Q2 | A2 |
+`;
+      const result = FlashcardParser.parseFlashcardsFromContent(content);
+      expect(result).toHaveLength(2);
+      expect(result[0].tags).toEqual(["important"]);
+      expect(result[1].tags).toEqual(["important"]);
+    });
+
+    it("should give different cards different tags based on their containing header", () => {
+      const content = `
+## Math #science
+
+| Front | Back |
+|-------|------|
+| Q1 | A1 |
+| Q1b | A1b |
+
+## History #social
+
+| Front | Back |
+|-------|------|
+| Q2 | A2 |
+`;
+      const result = FlashcardParser.parseFlashcardsFromContent(content);
+      expect(result).toHaveLength(3);
+      expect(result[0].tags).toEqual(["science"]);
+      expect(result[1].tags).toEqual(["science"]);
+      expect(result[2].tags).toEqual(["social"]);
+    });
+
+    it("should accept tags with slash and dash characters", () => {
+      const content = `
+## My Heading #math/algebra #high-priority #snake_case
+
+Content
+`;
+      const result = FlashcardParser.parseFlashcardsFromContent(content);
+      expect(result[0].tags).toEqual(["math/algebra", "high-priority", "snake_case"]);
+    });
+
+    it("should not treat pure-numeric '#123' as a tag", () => {
+      const content = `
+## Heading #123 #real
+
+Content
+`;
+      const result = FlashcardParser.parseFlashcardsFromContent(content);
+      expect(result[0].tags).toEqual(["real"]);
+      expect(result[0].front).toContain("#123");
+    });
+
+    it("should not treat mid-word '#bar' as a tag", () => {
+      const content = `
+## foo#bar Heading #real
+
+Content
+`;
+      const result = FlashcardParser.parseFlashcardsFromContent(content);
+      expect(result[0].tags).toEqual(["real"]);
+      expect(result[0].front).toContain("foo#bar");
+    });
+
+    it("should lowercase and deduplicate tags", () => {
+      const content = `
+## Heading #Math #math #MATH
+
+Content
+`;
+      const result = FlashcardParser.parseFlashcardsFromContent(content);
+      expect(result[0].tags).toEqual(["math"]);
+    });
+
+    it("should strip tags from breadcrumb when nested", () => {
+      const content = `
+## Parent #parent-tag
+
+### Child #child-tag
+
+Content
+`;
+      const result = FlashcardParser.parseFlashcardsFromContent(content, 3);
+      expect(result).toHaveLength(1);
+      expect(result[0].front).toBe("Child");
+      expect(result[0].tags).toEqual(["child-tag"]);
+      expect(result[0].breadcrumb).toBe("Parent");
+    });
+
+    it("should give cloze cards under a tagged header the parent's tags", () => {
+      const content = `
+## Topic #science
+
+The ==capital== of France is ==Paris==.
+`;
+      const result = FlashcardParser.parseFlashcardsFromContent(content, 2, undefined, true);
+      expect(result.length).toBeGreaterThan(0);
+      for (const card of result) {
+        expect(card.tags).toEqual(["science"]);
+      }
+    });
+
+    it("should default to empty tags for headers without tags", () => {
+      const content = `
+## Plain Header
+
+Content
+`;
+      const result = FlashcardParser.parseFlashcardsFromContent(content);
+      expect(result[0].tags).toEqual([]);
     });
   });
 });

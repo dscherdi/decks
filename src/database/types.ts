@@ -109,7 +109,7 @@ export type FilterOperator =
   | "in";
 
 export type FilterField =
-  | "deckId" | "deckTag" | "type" | "sourceFile" | "breadcrumb"
+  | "deckId" | "deckTag" | "type" | "sourceFile" | "breadcrumb" | "tags"
   | "state" | "dueDate" | "difficulty" | "stability"
   | "interval" | "repetitions" | "lapses"
   | "lastReviewed" | "created";
@@ -185,6 +185,7 @@ export interface Flashcard {
   contentHash: string; // Hash of back content only (front is used for ID)
   breadcrumb: string; // Header hierarchy context (e.g., "Chapter 1 > Section 2")
   notes: string; // Optional notes from third table column
+  tags: string[]; // Tags inherited from header (e.g. "## Heading #math #science")
   clozeText: string | null; // The specific cloze text for this card (without == delimiters)
   clozeOrder: number | null; // Ordinal position of this cloze within the back content
 
