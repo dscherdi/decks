@@ -2,7 +2,7 @@
   import type { Flashcard, CustomDeck } from "../database/types";
   import type { IDatabaseService } from "../database/DatabaseFactory";
   import type { CustomDeckService } from "../services/CustomDeckService";
-  import { fuzzySearchFlashcards } from "../utils/fuzzy-search";
+  import { prepareFuzzySearch } from "obsidian";
   import { onMount, onDestroy } from "svelte";
 
   export let db: IDatabaseService;
@@ -68,7 +68,17 @@
     }
 
     if (query.trim()) {
-      result = fuzzySearchFlashcards(query, result, deckTagMap);
+      const search = prepareFuzzySearch(query);
+      result = result.filter((c) => {
+        const deckTag = deckTagMap.get(c.deckId) ?? "";
+        return (
+          search(c.front) !== null ||
+          search(c.back) !== null ||
+          search(c.sourceFile) !== null ||
+          search(c.breadcrumb) !== null ||
+          (deckTag !== "" && search(deckTag) !== null)
+        );
+      });
     }
 
     return result;

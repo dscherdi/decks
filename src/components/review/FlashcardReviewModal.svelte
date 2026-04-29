@@ -10,6 +10,7 @@
     SessionProgress,
   } from "../../services/Scheduler";
   import { yieldToUI } from "@/utils/ui";
+  import { prepareFuzzySearch } from "obsidian";
 
   export let deckOrGroup: DeckOrGroup;
   export let initialCard: Flashcard | null = null;
@@ -177,6 +178,32 @@
   // Browse mode variables
   let browseCardIndex = 0;
   let browseCards: Flashcard[] = [];
+
+  // Quick switcher state
+  let searchMode = false;
+  let searchQuery = "";
+  let searchInputEl: HTMLInputElement | undefined;
+
+  $: searchResults = searchMode && searchQuery.trim()
+    ? (() => {
+        const search = prepareFuzzySearch(searchQuery);
+        const scored: { card: Flashcard; index: number; score: number }[] = [];
+        for (let i = 0; i < browseCards.length; i++) {
+          const c = browseCards[i];
+          const frontResult = search(c.front);
+          const backResult = search(c.back);
+          const best = Math.max(
+            frontResult ? frontResult.score : -Infinity,
+            backResult ? backResult.score : -Infinity
+          );
+          if (frontResult || backResult) {
+            scored.push({ card: c, index: i, score: best });
+          }
+        }
+        scored.sort((a, b) => b.score - a.score);
+        return scored.slice(0, 10);
+      })()
+    : [];
 
   // Swipe tracking for mobile browse navigation
   let touchStartX = 0;
@@ -473,6 +500,7 @@
   function handleKeydown(event: KeyboardEvent) {
     if (isActive && !isActive()) return;
     if (isLoading) return;
+    if (searchMode) return;
 
     const now = Date.now();
     const eventType = "keyboard";
@@ -599,6 +627,34 @@
       currentCard = browseCards[browseCardIndex];
       showAnswer = false;
       await loadCard();
+    }
+  }
+
+  async function openSearch() {
+    searchMode = true;
+    searchQuery = "";
+    await tick();
+    searchInputEl?.focus();
+  }
+
+  function closeSearch() {
+    searchMode = false;
+    searchQuery = "";
+  }
+
+  async function selectSearchResult(index: number) {
+    browseCardIndex = index;
+    currentCard = browseCards[index];
+    showAnswer = false;
+    closeSearch();
+    await loadCard();
+  }
+
+  function handleSearchKeydown(event: KeyboardEvent) {
+    if (event.key === "Escape") {
+      event.preventDefault();
+      event.stopPropagation();
+      closeSearch();
     }
   }
 
@@ -747,18 +803,93 @@
     <div class="decks-header-stats">
       {#if browseMode}
         {#if browseCards.length > 1}
-          <div class="decks-browse-slider">
-            <input
-              type="range"
-              class="decks-browse-range"
-              min="0"
-              max={browseCards.length - 1}
-              bind:value={browseCardIndex}
-              on:input={handleSliderNavigation}
-            />
-            <span class="decks-browse-slider-label">
-              Card {browseCardIndex + 1} / {browseCards.length}
-            </span>
+          <div class="decks-browse-row">
+            {#if searchMode}
+              <div class="decks-qs-wrapper">
+                <input
+                  type="text"
+                  class="decks-qs-input"
+                  placeholder="Search cards..."
+                  bind:value={searchQuery}
+                  bind:this={searchInputEl}
+                  on:keydown={handleSearchKeydown}
+                />
+                {#if searchResults.length > 0}
+                  <div class="decks-qs-dropdown">
+                    {#each searchResults as result (result.card.id)}
+                      <button
+                        type="button"
+                        class="decks-qs-result"
+                        on:pointerup={() => selectSearchResult(result.index)}
+                      >
+                        <span class="decks-qs-result-front"
+                          >{result.card.front}</span
+                        >
+                        <span class="decks-qs-result-index"
+                          >#{result.index + 1}</span
+                        >
+                      </button>
+                    {/each}
+                  </div>
+                {:else if searchQuery.trim()}
+                  <div class="decks-qs-dropdown decks-qs-empty">
+                    No cards match
+                  </div>
+                {/if}
+              </div>
+            {:else}
+              <div class="decks-browse-slider">
+                <input
+                  type="range"
+                  class="decks-browse-range"
+                  min="0"
+                  max={browseCards.length - 1}
+                  bind:value={browseCardIndex}
+                  on:input={handleSliderNavigation}
+                />
+                <span class="decks-browse-slider-label">
+                  Card {browseCardIndex + 1} / {browseCards.length}
+                </span>
+              </div>
+            {/if}
+            <button
+              type="button"
+              class="clickable-icon decks-qs-toggle"
+              aria-label={searchMode ? "Close search" : "Search cards"}
+              on:pointerup={() => (searchMode ? closeSearch() : openSearch())}
+            >
+              {#if searchMode}
+                <svg
+                  xmlns="http://www.w3.org/2000/svg"
+                  width="16"
+                  height="16"
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="currentColor"
+                  stroke-width="2"
+                  stroke-linecap="round"
+                  stroke-linejoin="round"
+                >
+                  <line x1="18" y1="6" x2="6" y2="18"></line>
+                  <line x1="6" y1="6" x2="18" y2="18"></line>
+                </svg>
+              {:else}
+                <svg
+                  xmlns="http://www.w3.org/2000/svg"
+                  width="16"
+                  height="16"
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="currentColor"
+                  stroke-width="2"
+                  stroke-linecap="round"
+                  stroke-linejoin="round"
+                >
+                  <circle cx="11" cy="11" r="8"></circle>
+                  <line x1="21" y1="21" x2="16.65" y2="16.65"></line>
+                </svg>
+              {/if}
+            </button>
           </div>
         {:else}
           <div class="decks-progress-info">
@@ -1416,6 +1547,106 @@
     white-space: nowrap;
     min-width: 90px;
     text-align: right;
+  }
+
+  .decks-browse-row {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    width: 100%;
+  }
+
+  .decks-browse-row .decks-browse-slider {
+    flex: 1;
+  }
+
+  .decks-qs-toggle {
+    flex-shrink: 0;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    color: var(--text-muted);
+  }
+
+  .decks-qs-toggle:hover {
+    color: var(--text-normal);
+  }
+
+  .decks-qs-wrapper {
+    flex: 1;
+    position: relative;
+  }
+
+  .decks-qs-input {
+    width: 100%;
+    padding: 6px 10px;
+    border: 1px solid var(--background-modifier-border);
+    border-radius: var(--radius-s);
+    background: var(--background-modifier-form-field);
+    color: var(--text-normal);
+    font-size: 13px;
+    box-sizing: border-box;
+  }
+
+  .decks-qs-input:focus {
+    outline: none;
+    border-color: var(--interactive-accent);
+  }
+
+  .decks-qs-dropdown {
+    position: absolute;
+    top: calc(100% + 4px);
+    left: 0;
+    right: 0;
+    z-index: var(--layer-popover);
+    background: var(--background-secondary);
+    border: 1px solid var(--background-modifier-border);
+    border-radius: var(--radius-m);
+    box-shadow: var(--shadow-l);
+    max-height: 320px;
+    overflow-y: auto;
+    padding: 4px 0;
+  }
+
+  .decks-qs-result {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+    width: 100%;
+    padding: 8px 12px;
+    background: transparent;
+    border: none;
+    cursor: pointer;
+    text-align: left;
+    color: var(--text-normal);
+    font-size: 13px;
+    touch-action: manipulation;
+    -webkit-tap-highlight-color: transparent;
+  }
+
+  .decks-qs-result:hover {
+    background: var(--background-modifier-hover);
+  }
+
+  .decks-qs-result-front {
+    flex: 1;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+
+  .decks-qs-result-index {
+    flex-shrink: 0;
+    font-size: 11px;
+    color: var(--text-muted);
+    font-variant-numeric: tabular-nums;
+  }
+
+  .decks-qs-empty {
+    padding: 10px 12px;
+    font-size: 12px;
+    color: var(--text-muted);
   }
 
   .decks-browse-buttons {
