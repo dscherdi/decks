@@ -1154,7 +1154,6 @@
     overflow: hidden;
     width: 100%;
     justify-content: space-between;
-    padding-top: 16px;
   }
 
   :global(.modal) .decks-review-modal {
