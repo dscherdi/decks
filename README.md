@@ -208,6 +208,38 @@ This creates four cards total:
 
 Works with all card formats (header-paragraph, table, and title). Review progress is tracked separately for each direction. To stop generating reverse cards, remove `reverse: true` from the frontmatter — the reversed cards will be deleted on the next sync while the original cards remain untouched.
 
+### Tagging flashcards
+
+Add tags directly to your headers using standard Obsidian `#tag` syntax. Tags are stored on each flashcard but stripped from the displayed front text, so cards stay clean while still being filterable.
+
+```markdown
+---
+tags: [decks/biology]
+---
+
+## What is photosynthesis? #plants #high-school
+
+The process by which plants convert sunlight into energy.
+
+## Cell organelles #cells #important
+
+| Front      | Back                              |
+| ---------- | --------------------------------- |
+| Nucleus    | Stores the cell's DNA             |
+| Ribosome   | Site of protein synthesis         |
+| Mitochondrion | Generates energy via ATP       |
+```
+
+- Tags use standard Obsidian syntax: letters, digits, `-`, `_`, and `/` are allowed (e.g. `#math/algebra`, `#high-priority`)
+- **Header-paragraph cards** take their own header's tags
+- **Table cards** inherit the tags from the header that contains the table — tag the header once and every row in the table picks them up
+- **Reverse cards** inherit the original card's tags, so both directions stay tagged the same
+- Tags are removed from the front text and breadcrumb shown during review and rendered as small chips instead
+- **Tag-only edits don't reset FSRS state** — rename, add, or remove a tag freely without losing your review progress
+- Because the syntax is standard Obsidian, your tags also show up in Obsidian's tag pane
+
+You can use these tags to build **filter decks** that pull in cards across multiple files — e.g. a "high-school review" deck containing every card tagged `#high-school`. See the deck management UI: choose "Card tag" as the filter field.
+
 ### Tips
 
 - **Use descriptive tags**: `#decks/spanish-verbs` instead of `#decks/deck1`
