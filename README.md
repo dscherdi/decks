@@ -1,164 +1,105 @@
 # Decks
 
-Decks is a spaced repetition flashcard plugin for Obsidian that helps you learn and memorize information using the FSRS algorithm.
+**Turn your Obsidian notes into flashcards. No separate deck to build.**
 
-If you like this plugin, consider buying me a coffee and I will add more features.
-<a href="https://www.buymeacoffee.com/dscherdil0">
-<img src="https://cdn.buymeacoffee.com/buttons/v2/default-yellow.png" alt="Buy Me A Coffee" height="40">
-</a>
+Tag a file with `#decks`. Every header you wrote becomes the front of a card; every paragraph below becomes the back. Tables, image occlusion, and `==cloze==` highlights work the same way. Scheduling is handled by FSRS — the modern spaced-repetition algorithm.
 
-[Join the discussion](https://discord.com/channels/686053708261228577/1497268419861418035)
+![Demo](./decks_showcase.gif)
 
-## Demo
+[Discord](https://discord.com/channels/686053708261228577/1497268419861418035) · [Release notes](./release-notes/) · [Buy me a coffee](https://www.buymeacoffee.com/dscherdil0)
 
-![Watch the demo](./decks_showcase.gif)
+## Why Decks
 
-## Quick start
+- **Your notes are already the deck.** Tag a file, every header becomes a front, every paragraph becomes a back. Coming from Anki, there's nothing to author twice.
+- **Four formats, no syntax to learn.** Headers, two-column tables, image occlusion, and `==cloze==` from highlights you already use.
+- **FSRS-native scheduling.** Two profiles (Standard / Intensive), per-tag retention targets, no SM-2 baggage.
+- **Real multi-device sync.** Database merges across iCloud/Dropbox automatically — review on phone and desktop, no lost history.
+- **Built for mobile.** Touch-tuned review UI, safe-area aware, tested daily on phones.
 
-1. **Install the plugin**: Download and enable Decks in your Obsidian plugins
-2. **Open the panel**: Click the brain icon in the ribbon or use the command palette
-3. **Create your first deck**: Follow the guide below to create flashcards
-4. **Start learning**: Click on any deck to begin reviewing flashcards
+## 60-second quick start
 
-## Creating flashcards
+1. Install **Decks** from Community Plugins, enable it.
+2. Open any note. Add `#decks` to its frontmatter or as an inline tag.
+3. Write a header, then a paragraph below it. Repeat for as many cards as you want:
 
-### Header + paragraph format
+   ```markdown
+   ---
+   tags: [decks/spanish]
+   ---
 
-Create a markdown file and tag it with `#decks` or a custom tag set in the settings:
+   # What does "Hola" mean?
+
+   Hello.
+
+   # How do you say "Thank you" in Spanish?
+
+   Gracias.
+   ```
+
+4. Click the **brain icon** in the ribbon to open the Decks panel. Click your file. Start reviewing.
+
+The filename becomes the deck name. Cards sync automatically when you save the note.
+
+## Card formats
+
+Decks supports four ways to write cards. Pick whichever matches how you already write notes.
+
+<details>
+<summary><b>Header + paragraph</b> — the default. Each header is a front, the body below is the back.</summary>
 
 ```markdown
 ---
-tags: [decks/spanish-basics]
+tags: [decks/spanish]
 ---
 
 # What does "Hola" mean in English?
 
-Hello
+Hello.
 
 # How do you say "Thank you" in Spanish?
 
-Gracias
-
-# What is the Spanish word for "water"?
-
-Agua
+Gracias.
 ```
 
-- Each header becomes the **front** of a flashcard
-- All content until the next header becomes the **back**
-- The filename becomes your deck name
-- Cards are automatically extracted and synced
+The filename becomes the deck name. Header level is configurable per profile.
 
-### Table format
+</details>
 
-Create flashcards using a two-column table:
+<details>
+<summary><b>Tables</b> — two-column markdown tables, with an optional notes column.</summary>
 
 ```markdown
----
-tags: [decks/vocabulary]
----
-
 ## Concepts
 
-| Question                | Answer                                                   |
-| ----------------------- | -------------------------------------------------------- |
-| What is photosynthesis? | The process by which plants convert sunlight into energy |
-| Define gravity          | The force that attracts objects toward each other        |
-| What is DNA?            | Deoxyribonucleic acid - carries genetic information      |
+| Question                | Answer                                            |
+| ----------------------- | ------------------------------------------------- |
+| What is photosynthesis? | The process plants use to convert sunlight        |
+| Define gravity          | The force that attracts objects toward each other |
 ```
 
-- First column = **front** of flashcard
-- Second column = **back** of flashcard
-- Header row is ignored
-- Tables need to be inside a header with header level specified in the settings to be parsed.
-- There should not be any other paragraphs in the header together with the table, because then it will be parsed as a Header+Paragraph Block
+- First column = front, second column = back. Header row is ignored.
+- Tables must sit directly under a header (no other paragraphs inside).
+- Add a third "Notes" column for hints/mnemonics shown via toggle (press **N**) during review.
 
-#### Optional notes column
+</details>
 
-You can add a third column for notes that provide extra context, hints, or mnemonics. Notes are shown during review via a toggle button on the back of the card.
-
-```markdown
-## Spanish vocabulary
-
-| Front        | Back         | Notes                                  |
-| ------------ | ------------ | -------------------------------------- |
-| Hola         | Hello        | Informal greeting, used with friends   |
-| Buenos días  | Good morning | Literally "good days", used until noon |
-| Gracias      | Thank you    | Add "muchas" for "thank you very much" |
-| ¿Cómo estás? | How are you? |                                        |
-```
-
-- The notes column is optional — tables without it work the same as before
-- Empty notes cells are allowed
-- During review, a small info icon appears on the back card when notes are available
-- Press **N** to toggle notes visibility
-
-### Title format
-
-Use the filename itself as the front of a single card. Enable "Title" in the header level setting of your profile, then the entire file content becomes the back:
+<details>
+<summary><b>Cloze deletions</b> — highlight text with <code>==text==</code> to blank it out.</summary>
 
 ```markdown
----
-tags: [decks/capitals]
----
-
-The capital of France is Paris. It is located in northern France along the Seine river.
-```
-
-With the filename `What is the capital of France?.md`, this produces one card:
-
-- **Front**: What is the capital of France?
-- **Back**: The full file content
-
-This format is useful for atomic notes where the filename is already the question.
-
-### Cloze deletions
-
-Use `==highlight==` syntax to create cloze deletion flashcards. Each highlighted word or phrase becomes a separate card where that text is blanked out during review.
-
-```markdown
----
-tags: [decks/science]
----
-
 ## The Solar System
 
 The ==Sun== is the star at the center of our solar system. The closest planet to the Sun is ==Mercury==, and the largest planet is ==Jupiter==.
 ```
 
-This creates three cloze cards from a single paragraph — one for each highlight. During review:
+Each highlight becomes one card. During review the active blank shows as `[...]`; tap to reveal. Cloze also works inside table cells. Two context modes per profile (hide or show other clozes). Enabled by default.
 
-1. You see the front (header) and tap "Show answer"
-2. The paragraph appears with the active cloze as a clickable `[...]` blank
-3. Tap the blank to reveal the answer, then rate the card
+</details>
 
-Cloze also works in table format — highlights in the Back column generate cloze cards:
-
-```markdown
-## Chemistry
-
-| Front | Back                                                    |
-| ----- | ------------------------------------------------------- |
-| H2O   | ==Water== — the most common molecule on Earth's surface |
-| NaCl  | ==Sodium chloride==, commonly known as ==table salt==   |
-```
-
-Two context modes are available per profile:
-
-- **Hidden** (default): All other clozes are also blanked out. The active blank has a distinct accent color so you know which one to answer.
-- **Open**: Other clozes show their text in muted style. Only the active one is blanked.
-
-Cards without any `==highlights==` remain normal flashcards even with cloze enabled. Cloze is enabled by default on new profiles and can be toggled in **Manage profiles**.
-
-### Image occlusion
-
-Create image occlusion flashcards by combining an image with a numbered list. The image should contain numbered indexes (labels) that correspond to the numbered list entries below it — each index on the image maps to the matching list item.
+<details>
+<summary><b>Image occlusion</b> — an image plus a numbered list. Numbers on the image map to the list.</summary>
 
 ```markdown
----
-tags: [decks/anatomy]
----
-
 ## Bones of the arm
 
 ![[arm_bones.png]]
@@ -168,191 +109,60 @@ tags: [decks/anatomy]
 3. ==Ulna==
 ```
 
-In this example, the image `arm_bones.png` has labels "1", "2", and "3" pointing to different bones. Each numbered list item provides the answer for that label.
+Each list item is one card. The image (with its numbered labels) shows on the front; the matching item is blanked on the back. Builds on cloze, so cloze must be enabled on the profile.
 
-This creates three cards — one for each numbered item. During review:
+</details>
 
-- The **front** shows the image (with its numbered labels)
-- The **back** shows the numbered list with the active item blanked as `[...]`
-- Tap the blank to reveal the answer, then rate the card
+<details>
+<summary><b>More: title format, reverse cards, per-card tags</b></summary>
 
-Image occlusion builds on the cloze feature and requires cloze to be enabled on the profile. Each list item is one card regardless of how many `==highlights==` it contains — all highlights in the active item are blanked and revealed together.
+**Title format** — the filename becomes the front, the entire file becomes the back. Set "Title" as the header level in your profile.
 
-Items without `==highlights==` still generate cards — the full item text is treated as the answer.
+**Reverse cards** — add `reverse: true` to a file's frontmatter to auto-generate a reversed copy of every card. Progress is tracked separately per direction.
 
-### Reverse cards
+**Per-card tags** — add `#tag` directly in headers (e.g., `## What is photosynthesis? #plants #high-school`). Tags are stripped from the displayed front, shown as chips during review, and inherited by table rows and reverse cards. Build "filter decks" that pull every card with a given tag across your vault.
 
-Add `reverse: true` to the frontmatter of any deck file to automatically generate a reversed version of every card. Each card will produce two entries: the original (front → back) and a reversed copy (back → front), so you practice recall in both directions.
+</details>
 
-```markdown
----
-tags: [decks/vocabulary]
-reverse: true
----
+## What you get
 
-## Bonjour
+- Browse mode and timed review sessions with daily limits.
+- Per-tag profiles (Standard / Intensive FSRS, retention target, daily quotas).
+- Custom decks built from filter rules — e.g., every card tagged `#high-school`.
+- Statistics: heatmap, retention, future-due forecast, intervals, hourly breakdown, answer-button stats.
+- Anki export, automatic backups, multi-device merge sync.
+- Keyboard shortcuts: **Space** to flip, **1–4** to rate.
 
-Hello
+## Settings
 
-## Merci
+Open **Settings → Decks** for daily limits, retention targets, search paths, session duration, and backup options. Per-tag overrides via the gear icon on any deck.
 
-Thank you
-```
+<details>
+<summary>All settings</summary>
 
-This creates four cards total:
+**Profile settings** (Manage profiles in the deck panel):
+- New cards per day, review cards per day (per deck)
+- Retention target (default 90%)
+- FSRS profile: Standard or Intensive
+- Header level for parsing (or "Title" to use the filename)
+- Review order: oldest due first, or random
+- Cloze deletions: enabled by default
+- Cloze context: hidden or open
 
-- "Bonjour" → "Hello"
-- "Hello" → "Bonjour"
-- "Merci" → "Thank you"
-- "Thank you" → "Merci"
+**Review settings:** session duration (1–60 min), next-day rollover hour (default 4 AM), keyboard shortcuts toggle.
 
-Works with all card formats (header-paragraph, table, and title). Review progress is tracked separately for each direction. To stop generating reverse cards, remove `reverse: true` from the frontmatter — the reversed cards will be deleted on the next sync while the original cards remain untouched.
+**Parsing settings:** scan the entire vault, or restrict to a folder.
 
-### Tagging flashcards
+**Other:** background refresh interval, automatic backup count, debug logging.
 
-Add tags directly to your headers using standard Obsidian `#tag` syntax. Tags are stored on each flashcard but stripped from the displayed front text, so cards stay clean while still being filterable.
+</details>
 
-```markdown
----
-tags: [decks/biology]
----
+## Release notes & support
 
-## What is photosynthesis? #plants #high-school
+- **Release notes** for each version are in [`release-notes/`](./release-notes/).
+- **Discuss on Discord** — [join the server](https://discord.com/channels/686053708261228577/1497268419861418035).
+- **Support development** — [Buy me a coffee](https://www.buymeacoffee.com/dscherdil0).
 
-The process by which plants convert sunlight into energy.
+## License
 
-## Cell organelles #cells #important
-
-| Front      | Back                              |
-| ---------- | --------------------------------- |
-| Nucleus    | Stores the cell's DNA             |
-| Ribosome   | Site of protein synthesis         |
-| Mitochondrion | Generates energy via ATP       |
-```
-
-- Tags use standard Obsidian syntax: letters, digits, `-`, `_`, and `/` are allowed (e.g. `#math/algebra`, `#high-priority`)
-- **Header-paragraph cards** take their own header's tags
-- **Table cards** inherit the tags from the header that contains the table — tag the header once and every row in the table picks them up
-- **Reverse cards** inherit the original card's tags, so both directions stay tagged the same
-- Tags are removed from the front text and breadcrumb shown during review and rendered as small chips instead
-- **Tag-only edits don't reset FSRS state** — rename, add, or remove a tag freely without losing your review progress
-- Because the syntax is standard Obsidian, your tags also show up in Obsidian's tag pane
-
-You can use these tags to build **filter decks** that pull in cards across multiple files — e.g. a "high-school review" deck containing every card tagged `#high-school`. See the deck management UI: choose "Card tag" as the filter field.
-
-### Tips
-
-- **Use descriptive tags**: `#decks/spanish-verbs` instead of `#decks/deck1`
-- **Keep cards atomic**: One concept per card
-- **Use images and formatting**: Markdown formatting is fully supported
-- **Organize by topic**: Group related concepts in the same deck
-
-## Key concepts
-
-### Learning states
-
-- **New**: Cards you have never seen before
-- **Learning**: Cards in short-term review cycle with short intervals
-- **Due**: Cards scheduled for long-term spaced repetition review
-- **Mature**: Cards with an interval of 21 days or more
-
-### FSRS algorithm
-
-Decks uses the Free Spaced Repetition Scheduler (FSRS 6), a modern algorithm that adapts to your performance, optimizes retention, and predicts when you are about to forget. Two built-in profiles are available:
-
-- **Standard**: Balanced scheduling for everyday learning
-- **Intensive**: Shorter intervals for aggressive memorization
-
-### Review ratings
-
-When reviewing flashcards you rate each card:
-
-- **Again**: I don't remember this at all. Resets the card to learning state.
-- **Hard**: I struggled but got it eventually. Shorter than normal spacing.
-- **Good**: I remembered it correctly. Normal interval increase.
-- **Easy**: Too easy, I know this well. Longer interval increase.
-
-## Features
-
-### Deck profiles
-
-Create custom profiles with configurable daily limits for new and review cards, retention targets, and FSRS algorithm selection. Profiles are assigned to tags so all decks under a tag share the same settings. Each deck in a tag group enforces its own daily quota.
-
-### Browse mode
-
-Browse all cards in a deck or tag group without affecting their scheduling state. Navigate forward and backward through the full card list.
-
-### Review sessions
-
-Timed review sessions with a configurable duration (default 25 minutes). A progress bar tracks how many cards you have reviewed toward the session goal, which respects your daily limits.
-
-### Keyboard shortcuts
-
-During review:
-
-- **Space**: Show answer or move to next card
-- **1**: Again
-- **2**: Hard
-- **3**: Good
-- **4**: Easy
-
-### Statistics
-
-Track your learning with detailed analytics:
-
-- Study time (today, this week, this month, all time)
-- Card state breakdown (new, learning, review, mature)
-- Review heatmap calendar
-- Charts: reviews over time, stability distribution, future due forecast, maturity progression, hourly breakdown, answer button stats
-- Per-deck and overall statistics
-
-### Anki export
-
-Export flashcards to Anki-compatible format with configurable deck names and note types.
-
-### Multi-device sync
-
-Works with Dropbox, iCloud, or any file sync service. When the database is modified on multiple devices, Decks merges the changes automatically — review history is preserved from both sides and cards use the most recently modified version.
-
-### Mobile support
-
-Fully responsive design for Obsidian mobile with touch-friendly buttons and safe-area handling.
-
-## Configuration
-
-Access settings from Obsidian Settings > Decks.
-
-### Profiles
-
-Open the Profiles Manager from the deck list panel to create and edit profiles. Each profile controls:
-
-- **New cards per day**: Limit how many new cards are introduced daily (per deck)
-- **Review cards per day**: Limit how many review cards are shown daily (per deck)
-- **Retention target**: How well you want to remember cards (default 90%)
-- **FSRS profile**: Standard or Intensive algorithm weights
-- **Header level**: Which header level to use for parsing flashcards, or "Title" to use the filename as the card front
-- **Review order**: Oldest due first or random
-- **Cloze deletions**: Enable cloze cards from `==highlighted==` text (on by default)
-- **Cloze context**: Show or hide non-active clozes during review
-
-Assign a profile to a tag from the gear icon on any deck or tag group in the deck list.
-
-### Review settings
-
-- **Session duration**: How long each review session lasts (1-60 minutes)
-- **Next day starts at**: When the study day rolls over (default 4:00 AM)
-- **Keyboard shortcuts**: Enable or disable keyboard shortcuts during review
-
-### Parsing settings
-
-- **Search path**: Scan the entire vault or restrict to a specific folder
-
-### Other settings
-
-- **Background refresh**: Automatically refresh the deck list on an interval
-- **Automatic backups**: Keep up to N database backups
-- **Debug logging**: Enable detailed logging for troubleshooting
-
-## Release notes
-
-Release notes for each version are in the `release-notes/` folder.
+See [LICENSE](./LICENSE).
