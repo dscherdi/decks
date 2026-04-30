@@ -1,5 +1,5 @@
 <script lang="ts">
-  import { onMount, onDestroy } from "svelte";
+  import { onMount, onDestroy, tick } from "svelte";
   import type {
     DeckWithProfile,
     DeckStats,
@@ -28,10 +28,8 @@
   let stats = new Map<string, DeckStats>();
   let filterText = "";
   let heatmapComponent: ReviewHeatmap;
-  let showSuggestions = false;
-  let availableTags: string[] = [];
-  let filteredSuggestions: string[] = [];
-  let inputFocused = false;
+  let searchOpen = false;
+  let searchInputEl: HTMLInputElement | undefined;
   let activeDropdown: HTMLElement | null = null;
   let activeDropdownDeckId: string | null = null;
   let dropdownEventListeners: {
@@ -199,10 +197,6 @@
 
   export function updateDecks(newDecks: DeckWithProfile[]) {
     allDecks = newDecks;
-    // Extract unique tags
-    availableTags = [...new Set(newDecks.map((deck) => deck.tag))].filter(
-      (tag) => tag
-    );
 
     // Generate deck groups asynchronously
     tagGroupService
@@ -231,51 +225,29 @@
   function handleFilterInput(event: Event) {
     const target = event.target as HTMLInputElement;
     filterText = target.value;
-    updateSuggestions();
-    applyFilter();
-  }
-
-  function updateSuggestions() {
-    if (!filterText.trim()) {
-      showSuggestions = false;
-      return;
-    }
-
-    const filter = filterText.toLowerCase();
-    filteredSuggestions = availableTags.filter(
-      (tag) =>
-        tag.toLowerCase().includes(filter) && tag.toLowerCase() !== filter
-    );
-    showSuggestions = filteredSuggestions.length > 0;
-  }
-
-  function selectSuggestion(tag: string) {
-    filterText = tag;
-    showSuggestions = false;
     applyFilter();
   }
 
   function clearFilter() {
     filterText = "";
-    showSuggestions = false;
     applyFilter();
   }
 
-  function handleFilterFocus() {
-    inputFocused = true;
-    if (filterText.trim()) {
-      updateSuggestions();
-    } else if (availableTags.length > 0) {
-      showSuggestions = true;
+  async function toggleSearch() {
+    searchOpen = !searchOpen;
+    if (searchOpen) {
+      await tick();
+      searchInputEl?.focus();
     }
   }
 
-  function handleFilterBlur() {
-    inputFocused = false;
-    // Delay hiding suggestions to allow clicks
-    setTimeout(() => {
-      showSuggestions = false;
-    }, 200);
+  function handleSearchKeydown(event: KeyboardEvent) {
+    if (event.key === "Escape") {
+      event.preventDefault();
+      clearFilter();
+      searchOpen = false;
+      searchInputEl?.blur();
+    }
   }
 
   function handleItemClick(item: DeckOrGroup) {
@@ -991,6 +963,16 @@
       </div>
       <button
         class="clickable-icon"
+        class:decks-search-toggle-active={searchOpen}
+        on:click={toggleSearch}
+        title="Search"
+        aria-label="Search"
+        aria-expanded={searchOpen}
+      >
+        <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="8"></circle><line x1="21" y1="21" x2="16.65" y2="16.65"></line></svg>
+      </button>
+      <button
+        class="clickable-icon"
         on:click={openFlashcardManager}
         title="Open flashcard manager"
         aria-label="Open flashcard manager"
@@ -999,18 +981,18 @@
       </button>
     </div>
 
-    <div class="decks-filter-section">
-      <div class="decks-filter-container">
+    {#if searchOpen}
+      <div class="decks-collapsible-search-row">
         <div class="decks-filter-input-wrapper">
           <svg class="decks-filter-search-icon" xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="8"></circle><line x1="21" y1="21" x2="16.65" y2="16.65"></line></svg>
           <input
             type="text"
             class="decks-filter-input"
-            placeholder={`Filter by name or tag... (e.g., 'spanish', '${deckTag}')`}
+            placeholder="Filter..."
+            bind:this={searchInputEl}
             bind:value={filterText}
             on:input={handleFilterInput}
-            on:focus={handleFilterFocus}
-            on:blur={handleFilterBlur}
+            on:keydown={handleSearchKeydown}
           />
           {#if filterText}
             <button
@@ -1022,43 +1004,8 @@
             </button>
           {/if}
         </div>
-        {#if showSuggestions && filteredSuggestions.length > 0}
-          <div class="decks-suggestions-dropdown">
-            <div class="decks-suggestions-header">Filter by tags:</div>
-            {#each filteredSuggestions as tag}
-              <button
-                class="decks-suggestion-item"
-                on:mousedown|preventDefault={() => selectSuggestion(tag)}
-                on:click={(e) =>
-                  handleTouchClick(() => selectSuggestion(tag), e)}
-                on:touchend={(e) =>
-                  handleTouchClick(() => selectSuggestion(tag), e)}
-              >
-                {tag}
-              </button>
-            {/each}
-          </div>
-        {:else if !filterText.trim() && availableTags.length > 0 && inputFocused}
-          <div class="decks-suggestions-dropdown">
-            <div class="decks-suggestions-header">
-              Available tags (click to filter):
-            </div>
-            {#each availableTags.slice(0, 5) as tag}
-              <button
-                class="decks-suggestion-item"
-                on:mousedown|preventDefault={() => selectSuggestion(tag)}
-                on:click={(e) =>
-                  handleTouchClick(() => selectSuggestion(tag), e)}
-                on:touchend={(e) =>
-                  handleTouchClick(() => selectSuggestion(tag), e)}
-              >
-                {tag}
-              </button>
-            {/each}
-          </div>
-        {/if}
       </div>
-    </div>
+    {/if}
 
     {#if allDecks.length === 0}
       <div class="decks-empty-state">
@@ -1338,15 +1285,14 @@
     font-weight: var(--font-semibold);
   }
 
-  /* ── Filter input ── */
-  .decks-filter-section {
-    padding: 0 var(--size-4-3);
-    margin-bottom: var(--size-4-3);
+  /* ── Collapsible search row ── */
+  .decks-collapsible-search-row {
+    padding: var(--size-4-2) var(--size-4-3);
+    border-bottom: 1px solid var(--background-modifier-border);
   }
 
-  .decks-filter-container {
-    position: relative;
-    width: 100%;
+  .decks-search-toggle-active {
+    color: var(--text-accent);
   }
 
   .decks-filter-input-wrapper {
@@ -1386,43 +1332,6 @@
 
   .decks-filter-input::placeholder {
     color: var(--text-faint);
-  }
-
-  .decks-suggestions-dropdown {
-    position: absolute;
-    top: 100%;
-    left: 0;
-    right: 0;
-    background: var(--background-secondary);
-    border: 1px solid var(--background-modifier-border);
-    border-top: none;
-    border-radius: 0 0 var(--radius-s) var(--radius-s);
-    box-shadow: none;
-    z-index: var(--layer-popover);
-    max-height: 200px;
-    overflow-y: auto;
-  }
-
-  .decks-suggestions-header {
-    padding: var(--size-4-1) var(--size-4-2);
-    font-size: var(--font-ui-smaller);
-    color: var(--text-faint);
-  }
-
-  .decks-suggestion-item {
-    display: block;
-    width: 100%;
-    padding: var(--size-4-1) var(--size-4-2);
-    border: none;
-    background: transparent;
-    color: var(--text-normal);
-    text-align: left;
-    font-size: var(--font-ui-small);
-    cursor: pointer;
-  }
-
-  .decks-suggestion-item:hover {
-    background: var(--background-modifier-hover);
   }
 
   /* ── Deck table ── */
