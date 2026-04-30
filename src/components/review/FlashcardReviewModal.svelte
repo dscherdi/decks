@@ -1154,6 +1154,11 @@
     overflow: hidden;
     width: 100%;
     justify-content: space-between;
+    padding-top: 16px;
+  }
+
+  :global(.modal) .decks-review-modal {
+    padding-top: calc(env(safe-area-inset-top) + 16px);
   }
 
   .decks-breadcrumb {
@@ -1456,9 +1461,9 @@
   }
 
   .decks-difficulty-buttons {
-    display: grid;
-    grid-template-columns: repeat(auto-fit, minmax(100px, 1fr));
-    gap: 12px;
+    display: flex;
+    flex-wrap: nowrap;
+    gap: 8px;
     padding: 0 10px;
     box-sizing: border-box;
     width: 100%;
@@ -1468,9 +1473,10 @@
 
   .decks-difficulty-button,
   .decks-rate-btn {
-    min-width: 44px;
+    flex: 1 1 0;
+    min-width: 0;
     min-height: 44px;
-    padding: 12px 8px;
+    padding: 12px 6px;
     pointer-events: auto !important;
     touch-action: manipulation !important;
     border: 1px solid var(--background-modifier-border);
@@ -1548,6 +1554,11 @@
     right: 4px;
     font-size: 10px;
     padding: 1px 4px;
+  }
+
+  :global(body.is-mobile) .decks-rate-btn .decks-shortcut,
+  :global(body.is-mobile) .decks-difficulty-button .decks-shortcut {
+    display: none;
   }
 
   .decks-browse-slider {
@@ -1834,7 +1845,7 @@
     }
 
     .decks-difficulty-button {
-      padding: 10px 6px;
+      padding: 10px 4px;
       min-height: 48px;
     }
 
