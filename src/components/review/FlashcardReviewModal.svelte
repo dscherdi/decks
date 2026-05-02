@@ -167,6 +167,7 @@
   let sessionId: string | null = null;
   const deckFilePath = "";
   let sessionProgress: SessionProgress | null = null;
+  let canUndo = false;
 
   // Cloze group review state
   let clozeGroup: Flashcard[] = [];
@@ -265,6 +266,7 @@
       sessionId = session.sessionId;
       scheduler.setCurrentSession(sessionId);
       sessionProgress = await scheduler.getSessionProgress(sessionId);
+      canUndo = await scheduler.hasUndoableReview();
 
       // Initialize session timer
       startSessionTimer();
@@ -431,6 +433,7 @@
       if (sessionId) {
         sessionProgress = await scheduler.getSessionProgress(sessionId);
       }
+      canUndo = await scheduler.hasUndoableReview();
 
       // Trigger stats refresh after each card review
       if (onCardReviewed) {
@@ -485,6 +488,38 @@
     }
   }
 
+  async function handleUndo() {
+    if (isLoading || !canUndo || browseMode) return;
+    isLoading = true;
+    try {
+      const restored = await scheduler.undoLastReview();
+      if (!restored) {
+        canUndo = await scheduler.hasUndoableReview();
+        return;
+      }
+
+      inClozeGroupReview = false;
+      clozeGroup = [];
+      clozeGroupIndex = 0;
+
+      currentCard = restored;
+      reviewedCount = Math.max(0, reviewedCount - 1);
+      if (sessionId) {
+        sessionProgress = await scheduler.getSessionProgress(sessionId);
+      }
+      canUndo = await scheduler.hasUndoableReview();
+      await loadCard();
+      if (onCardReviewed) {
+        await onCardReviewed(restored);
+        await yieldToUI();
+      }
+    } catch (error) {
+      console.error("Error undoing review:", error);
+    } finally {
+      isLoading = false;
+    }
+  }
+
   function getIntervalDisplay(minutes: number): string {
     if (minutes < 60) {
       return `${Math.round(minutes)}m`;
@@ -507,6 +542,18 @@
 
     // Prevent double execution within 100ms (same as touch protection)
     if (now - lastEventTime < 100 && lastEventType === eventType) {
+      return;
+    }
+
+    if (
+      !browseMode &&
+      (event.metaKey || event.ctrlKey) &&
+      (event.key === "z" || event.key === "Z")
+    ) {
+      event.preventDefault();
+      lastEventTime = now;
+      lastEventType = eventType;
+      handleUndo();
       return;
     }
 
@@ -941,6 +988,31 @@
     >
       <div class="decks-question-section">
         <div class="decks-front-wrapper">
+          {#if canUndo && !browseMode}
+            <button
+              class="decks-undo-button clickable-icon"
+              on:click={handleUndo}
+              disabled={isLoading}
+              title="Undo last review (Cmd/Ctrl+Z)"
+              type="button"
+              tabindex="-1"
+            >
+              <svg
+                xmlns="http://www.w3.org/2000/svg"
+                width="12"
+                height="12"
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                stroke-width="2"
+                stroke-linecap="round"
+                stroke-linejoin="round"
+              >
+                <path d="M3 7v6h6"></path>
+                <path d="M21 17a9 9 0 0 0-15-6.7L3 13"></path>
+              </svg>
+            </button>
+          {/if}
           {#if onNavigateToSource && currentCard}
             <button
               class="decks-go-to-file-button clickable-icon"
@@ -1376,6 +1448,18 @@
     position: absolute;
     top: 4px;
     right: 4px;
+    z-index: 10;
+    width: 24px !important;
+    height: 24px !important;
+    min-width: 0 !important;
+    min-height: 0 !important;
+    padding: 0 !important;
+  }
+
+  .decks-undo-button {
+    position: absolute;
+    top: 4px;
+    left: 4px;
     z-index: 10;
     width: 24px !important;
     height: 24px !important;

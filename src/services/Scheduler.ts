@@ -439,6 +439,67 @@ export class Scheduler {
   }
 
   /**
+   * Undo the most recent review in the current session, restoring the card's
+   * pre-review FSRS state and removing the review log entry. Returns the
+   * restored card, or null if there's nothing to undo.
+   */
+  async undoLastReview(): Promise<Flashcard | null> {
+    if (!this.currentSessionId) return null;
+
+    const log = await this.db.getLatestReviewLogForSession(
+      this.currentSessionId
+    );
+    if (!log) return null;
+
+    const card = await this.db.getFlashcardById(log.flashcardId);
+    if (!card) {
+      this.debugLog(
+        `Undo: card ${log.flashcardId} not found, removing orphan log ${log.id}`
+      );
+      await this.db.deleteReviewLogById(log.id);
+      return null;
+    }
+
+    await this.db.updateFlashcard(card.id, {
+      state: log.oldState,
+      dueDate: log.oldDueAt,
+      interval: log.oldIntervalMinutes,
+      repetitions: log.oldRepetitions,
+      difficulty: log.oldDifficulty,
+      stability: log.oldStability,
+      lapses: log.oldLapses,
+      lastReviewed: log.lastReviewedAt || null,
+    });
+
+    const reviewCount = await this.db.countCardReviewsInSession(
+      this.currentSessionId,
+      card.id
+    );
+    if (reviewCount === 1) {
+      const session = await this.db.getReviewSessionById(this.currentSessionId);
+      if (session) {
+        const nextDoneUnique = Math.max(0, session.doneUnique - 1);
+        await this.db.updateReviewSessionDoneUnique(
+          this.currentSessionId,
+          nextDoneUnique
+        );
+      }
+    }
+
+    await this.db.deleteReviewLogById(log.id);
+
+    return await this.db.getFlashcardById(card.id);
+  }
+
+  async hasUndoableReview(): Promise<boolean> {
+    if (!this.currentSessionId) return false;
+    const log = await this.db.getLatestReviewLogForSession(
+      this.currentSessionId
+    );
+    return log !== null;
+  }
+
+  /**
    * Save all pending changes to disk
    */
   async save(): Promise<void> {

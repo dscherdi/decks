@@ -1356,6 +1356,23 @@ export abstract class BaseDatabaseService implements IDatabaseService {
     return this.mapRowsToReviewLogs(results as ReviewLogRow[]);
   }
 
+  async getLatestReviewLogForSession(
+    sessionId: string
+  ): Promise<ReviewLog | null> {
+    const sql = `SELECT * FROM review_logs WHERE session_id = ? ORDER BY reviewed_at DESC LIMIT 1`;
+    const results = await this.querySql<ReviewLogRow>(sql, [sessionId], {
+      asObject: true,
+    });
+    if (results.length === 0) return null;
+    return this.mapRowsToReviewLogs(results)[0];
+  }
+
+  async deleteReviewLogById(reviewLogId: string): Promise<void> {
+    await this.executeSql("DELETE FROM review_logs WHERE id = ?", [
+      reviewLogId,
+    ]);
+  }
+
   private mapRowsToReviewLogs(results: ReviewLogRow[]): ReviewLog[] {
     return results.map((row) => ({
       id: row.id,
@@ -1478,6 +1495,19 @@ export abstract class BaseDatabaseService implements IDatabaseService {
       asObject: true,
     });
     return results.length > 0;
+  }
+
+  async countCardReviewsInSession(
+    sessionId: string,
+    flashcardId: string
+  ): Promise<number> {
+    const sql = `SELECT COUNT(*) as count FROM review_logs WHERE session_id = ? AND flashcard_id = ?`;
+    const results = await this.querySql<{ count: number }>(
+      sql,
+      [sessionId, flashcardId],
+      { asObject: true }
+    );
+    return results.length > 0 ? results[0].count : 0;
   }
 
   async getDailyReviewCounts(

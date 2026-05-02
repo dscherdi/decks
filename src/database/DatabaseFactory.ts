@@ -121,6 +121,10 @@ export interface IDatabaseService {
   getLatestReviewLogForFlashcard(
     flashcardId: string
   ): Promise<ReviewLog | null>;
+  getLatestReviewLogForSession(
+    sessionId: string
+  ): Promise<ReviewLog | null>;
+  deleteReviewLogById(reviewLogId: string): Promise<void>;
   getAllReviewLogs(): Promise<ReviewLog[]>;
   reviewLogExists(reviewLogId: string): Promise<boolean>;
 
@@ -144,6 +148,10 @@ export interface IDatabaseService {
     sessionId: string,
     flashcardId: string
   ): Promise<boolean>;
+  countCardReviewsInSession(
+    sessionId: string,
+    flashcardId: string
+  ): Promise<number>;
 
   // Custom deck operations
   createCustomDeck(name: string, deckType?: CustomDeckType, filterDefinition?: string | null): Promise<string>;
