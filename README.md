@@ -1,6 +1,6 @@
 # Decks
 
-**Turn your Obsidian notes into flashcards. No separate deck to build.**
+**Turn your Obsidian notes into flashcards. No special syntax. No separate deck to build.**
 
 Tag a file with `#decks`. Every header you wrote becomes the front of a card; every paragraph below becomes the back. Tables, image occlusion, and `==cloze==` highlights work the same way. Scheduling is handled by FSRS — the modern spaced-repetition algorithm.
 
@@ -141,6 +141,7 @@ Open **Settings → Decks** for daily limits, retention targets, search paths, s
 <summary>All settings</summary>
 
 **Profile settings** (Manage profiles in the deck panel):
+
 - New cards per day, review cards per day (per deck)
 - Retention target (default 90%)
 - FSRS profile: Standard or Intensive
