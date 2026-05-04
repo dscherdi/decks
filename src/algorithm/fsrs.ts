@@ -424,17 +424,28 @@ export class FSRS {
     return result;
   }
 
-  private initDifficulty(rating: number): number {
+  /**
+   * D_0(G) = w4 - e^(w5 * (G - 1)) + 1 — without clamping.
+   * Used as the mean-reversion anchor in nextDifficulty (must be unclamped to
+   * match the FSRS-6 spec; the unclamped value for G=Easy is ~-4.807).
+   */
+  private initDifficultyRaw(rating: number): number {
     const weights = this.getWeights();
-    // D_0(G) = w4 - e^(w5 * (G - 1)) + 1
     const difficulty = weights[4] - Math.exp(weights[5] * (rating - 1)) + 1;
-    const valid = isFinite(difficulty) ? difficulty : 5.0;
-    return Math.max(1, Math.min(10, valid));
+    return isFinite(difficulty) ? difficulty : 5.0;
+  }
+
+  private initDifficulty(rating: number): number {
+    return Math.max(1, Math.min(10, this.initDifficultyRaw(rating)));
   }
 
   /**
-   * Forgetting Stability formula for lapse handling (FSRS 4.5)
-   * S_new = w[11] * D^(-w[12]) * ((S + 1)^w[13] - 1) * e^(w[14] * (1 - R))
+   * Forgetting Stability formula for lapse handling — FSRS-6
+   * S_new = min(
+   *   w[11] * D^(-w[12]) * ((S + 1)^w[13] - 1) * e^(w[14] * (1 - R)),  // long-term
+   *   S / e^(w[17] * w[18])                                              // short-term cap
+   * )
+   * The short-term cap (~0.952·S) prevents a lapse from increasing stability.
    */
   private forgettingStability(
     difficulty: number,
@@ -446,34 +457,34 @@ export class FSRS {
     const w12 = weights[12];
     const w13 = weights[13];
     const w14 = weights[14];
+    const w17 = weights[17];
+    const w18 = weights[18];
 
-    // Validate inputs
     if (
       !isFinite(difficulty) ||
       !isFinite(stability) ||
       !isFinite(retrievability) ||
       stability <= 0
     ) {
-      return this.initStability(1); // Fallback to w[0]
+      return this.initStability(1);
     }
 
     try {
-      // S_new = w[11] * D^(-w[12]) * ((S + 1)^w[13] - 1) * e^(w[14] * (1 - R))
-      const difficultyTerm = Math.pow(difficulty, -w12);
-      const stabilityTerm = Math.pow(stability + 1, w13) - 1;
-      const retrievabilityTerm = Math.exp(w14 * (1 - retrievability));
+      const longTerm =
+        w11 *
+        Math.pow(difficulty, -w12) *
+        (Math.pow(stability + 1, w13) - 1) *
+        Math.exp(w14 * (1 - retrievability));
+      const shortTermCap = stability / Math.exp(w17 * w18);
 
-      const result = w11 * difficultyTerm * stabilityTerm * retrievabilityTerm;
+      const result = Math.min(longTerm, shortTermCap);
 
-      // Validate result
       if (!isFinite(result) || result <= 0) {
-        return this.initStability(1); // Fallback to w[0]
+        return this.initStability(1);
       }
-
       return result;
     } catch {
-      // Math error (overflow, etc.)
-      return this.initStability(1); // Fallback to w[0]
+      return this.initStability(1);
     }
   }
 
@@ -534,8 +545,9 @@ export class FSRS {
     const dampedDelta = -w6 * (rating - 3) * (10 - difficulty) / 9;
     const nextD = difficulty + dampedDelta;
 
-    // Mean reversion toward D₀(4) — not raw w[4]
-    const d0Easy = this.initDifficulty(4);
+    // Mean reversion toward unclamped D₀(4) — matches FSRS-6 spec (py-fsrs
+    // uses _initial_difficulty(Easy, clamp=False) which is ~-4.807).
+    const d0Easy = this.initDifficultyRaw(4);
     const revertedD = this.meanReversion(d0Easy, nextD);
 
     if (revertedD < 1) return 1;

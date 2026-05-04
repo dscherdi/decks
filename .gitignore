@@ -25,3 +25,8 @@ demo_vault/
 # Generated release notes (created by workflow)
 RELEASE_NOTES.md
 GITHUB_RELEASE_NOTES.md
+
+# Benchmark data and results (see benchmark/README.md)
+benchmark/data
+benchmark/results/*
+!benchmark/results/.gitkeep

@@ -18,7 +18,10 @@
     "test": "jest",
     "test:unit": "jest --testPathIgnorePatterns=integration",
     "test:integration": "jest --config jest.integration.config.js",
-    "test:all": "npm run test:unit && npm run test:integration"
+    "test:all": "npm run test:unit && npm run test:integration",
+    "benchmark": "node benchmark/build.mjs && node benchmark/.bundle/cli.cjs",
+    "benchmark:smoke": "node benchmark/build.mjs smoke && node benchmark/.bundle/smoke.cjs",
+    "benchmark:spec-check": "node benchmark/build.mjs spec-check && node benchmark/.bundle/specCheck.cjs"
   },
   "keywords": [
     "obsidian",
@@ -58,6 +61,8 @@
     "eslint-plugin-obsidianmd": "^0.1.9",
     "eslint-plugin-svelte": "^3.13.1",
     "glob": "^13.0.0",
+    "hyparquet": "^1.25.6",
+    "hyparquet-compressors": "^1.1.1",
     "jest": "^30.2.0",
     "lru-cache": "^11.2.4",
     "obsidian": "^1.11.0",
@@ -70,6 +75,7 @@
     "svelte-check": "^4.3.5",
     "svelte-preprocess": "^6.0.3",
     "ts-jest": "^29.4.6",
+    "tsx": "^4.21.0",
     "typescript": "^5.9.3"
   }
 }
