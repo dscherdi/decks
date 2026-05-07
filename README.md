@@ -12,7 +12,8 @@ Tag a file with `#decks`. Every header you wrote becomes the front of a card; ev
 
 - **Your notes are already the deck.** Tag a file, every header becomes a front, every paragraph becomes a back. Coming from Anki, there's nothing to author twice.
 - **Four formats, no syntax to learn.** Headers, two-column tables, image occlusion, and `==cloze==` from highlights you already use.
-- **FSRS-native scheduling.** Two profiles (Standard / Intensive), per-tag retention targets, no SM-2 baggage.
+- **FSRS-native scheduling.** Three profiles (Standard / Intensive / Trained), per-tag retention targets, no SM-2 baggage.
+- **Algorithm tuning.** One-click optimizer trains the FSRS weights on your own review history — better scheduling for your forgetting curve, all client-side.
 - **Real multi-device sync.** Database merges across iCloud/Dropbox automatically — review on phone and desktop, no lost history.
 - **Built for mobile.** Touch-tuned review UI, safe-area aware, tested daily on phones.
 
@@ -133,6 +134,23 @@ Each list item is one card. The image (with its numbered labels) shows on the fr
 - Anki export, automatic backups, multi-device merge sync.
 - Keyboard shortcuts: **Space** to flip, **1–4** to rate.
 
+## Personalized scheduling
+
+FSRS ships with sensible defaults that work well out of the box. Once you've accumulated ~100 reviews, you can train the algorithm's 21 weights against your own review history and get card schedules tailored to your specific forgetting curve — the same kind of thing Anki desktop does, but client-side, no server, no telemetry.
+
+**Settings → Algorithm tuning → Optimize parameters.** Training runs in seconds for typical decks; you'll see a before/after log-loss comparison, click Apply to use the trained weights or Discard to keep defaults. Re-train any time to refine the weights as you accumulate more reviews.
+
+Trained weights are global but per-profile applied — pick **Trained** in any profile's FSRS profile dropdown to opt that profile in. Intensive profiles continue to use their sub-day defaults; existing card data is preserved through training.
+
+<details>
+<summary>How it works under the hood</summary>
+
+The optimizer matches the open-spaced-repetition reference methodology: Adam optimizer over binary cross-entropy loss, cosine-annealed learning rate, parameter clipping against published FSRS-6 bounds. Step count scales with your review history (more reviews → more iterations).
+
+The implementation has been validated against the published FSRS-6 spec (1396/1396 forward-pass cases match bit-exact) and benchmarked against 443M anonymized Anki reviews — calibration of shipped defaults agrees with empirical recall to within 0.8 percentage points. See [docs/FSRS_OPTIMIZER.md](./docs/FSRS_OPTIMIZER.md) for the full write-up: comparison with the reference benchmark, what to expect at different deck sizes, and known limitations.
+
+</details>
+
 ## Settings
 
 Open **Settings → Decks** for daily limits, retention targets, search paths, session duration, and backup options. Per-tag overrides via the gear icon on any deck.
@@ -144,7 +162,7 @@ Open **Settings → Decks** for daily limits, retention targets, search paths, s
 
 - New cards per day, review cards per day (per deck)
 - Retention target (default 90%)
-- FSRS profile: Standard or Intensive
+- FSRS profile: Standard, Intensive, or Trained (Trained available after optimizing parameters)
 - Header level for parsing (or "Title" to use the filename)
 - Review order: oldest due first, or random
 - Cloze deletions: enabled by default
