@@ -11,15 +11,18 @@ export class ProfilesManagerModal extends Modal {
   private component: ProfilesManagerComponent | null = null;
   private onProfilesChanged: () => Promise<void>;
   private resizeHandler?: () => void;
+  private trainedWeightsAvailable: boolean;
 
   constructor(
     app: App,
     db: IDatabaseService,
-    onProfilesChanged: () => Promise<void>
+    onProfilesChanged: () => Promise<void>,
+    trainedWeightsAvailable = false
   ) {
     super(app);
     this.db = db;
     this.onProfilesChanged = onProfilesChanged;
+    this.trainedWeightsAvailable = trainedWeightsAvailable;
   }
 
   async onOpen() {
@@ -48,6 +51,7 @@ export class ProfilesManagerModal extends Modal {
       props: {
         db: this.db,
         initialProfiles: this.profiles,
+        trainedWeightsAvailable: this.trainedWeightsAvailable,
         onclose: () => {
           this.close();
         },

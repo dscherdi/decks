@@ -22,6 +22,7 @@ export interface DeckProfile {
   fsrs: {
     requestRetention: number;
     profile: "INTENSIVE" | "STANDARD";
+    useTrainedWeights: boolean;
   };
 
   clozeEnabled: boolean;
@@ -48,6 +49,7 @@ export const DEFAULT_DECK_PROFILE: Omit<DeckProfile, 'id' | 'created' | 'modifie
   fsrs: {
     requestRetention: DEFAULT_FSRS_PARAMETERS.requestRetention,
     profile: "STANDARD",
+    useTrainedWeights: false,
   },
   clozeEnabled: true,
   clozeShowContext: "hidden",

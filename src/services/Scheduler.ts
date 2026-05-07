@@ -622,9 +622,17 @@ export class Scheduler {
   }
 
   private updateFSRSForDeck(deck: DeckWithProfile): void {
+    // Per-profile choice: when the profile opts in to trained weights AND
+    // global trained weights exist, apply them. INTENSIVE never uses trained
+    // (its w[0..3] are sub-day UX choices, not learned).
+    const trained = this.settings.fsrs?.trainedWeights ?? null;
+    const isStandard = deck.profile.fsrs.profile === "STANDARD";
+    const useTrained =
+      isStandard && trained !== null && deck.profile.fsrs.useTrainedWeights;
     this.fsrs.updateParameters({
       requestRetention: deck.profile.fsrs.requestRetention,
       profile: deck.profile.fsrs.profile,
+      weights: useTrained ? trained : undefined,
       nextDayStartsAt: this.settings.review.nextDayStartsAt,
     });
   }

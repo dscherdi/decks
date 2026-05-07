@@ -12,6 +12,7 @@ import { BackupService } from "../../services/BackupService";
 import DecksPlugin from "@/main";
 import type { IDatabaseService } from "@/database/DatabaseFactory";
 import { Logger } from "@/utils/logging";
+import { OptimizeFsrsModal } from "./OptimizeFsrsModal";
 
 export class DecksSettingTab extends PluginSettingTab {
   private settings: DecksSettings;
@@ -75,6 +76,9 @@ export class DecksSettingTab extends PluginSettingTab {
     // Backup Settings
     this.addBackupSettings(containerEl);
 
+    // FSRS optimization
+    this.addFsrsOptimizationSettings(containerEl);
+
     // Debug Settings
     this.addDebugSettings(containerEl);
 
@@ -83,6 +87,64 @@ export class DecksSettingTab extends PluginSettingTab {
 
     // Database Management Settings
     this.addDatabaseSettings(containerEl);
+  }
+
+  private addFsrsOptimizationSettings(containerEl: HTMLElement): void {
+    new Setting(containerEl).setName("Algorithm tuning").setHeading();
+
+    const fsrs = this.settings.fsrs;
+    const desc = this.formatFsrsDescription();
+
+    const setting = new Setting(containerEl)
+      .setName("Optimize parameters")
+      .setDesc(desc);
+
+    setting.addButton((b) =>
+      b
+        .setButtonText("Optimize")
+        .setCta()
+        .onClick(() => {
+          new OptimizeFsrsModal(
+            this.app,
+            this.db,
+            this.settings,
+            this.saveSettings,
+            this.logger,
+            () => this.display()
+          ).open();
+        })
+    );
+
+    if (fsrs.trainedWeights !== null) {
+      setting.addButton((b) =>
+        b
+          .setButtonText("Reset to defaults")
+          .setWarning()
+          .onClick(async () => {
+            this.settings.fsrs.trainedWeights = null;
+            this.settings.fsrs.lastTrainedAt = null;
+            this.settings.fsrs.lastTrainedReviewCount = 0;
+            this.settings.fsrs.lastBeforeLogLoss = null;
+            this.settings.fsrs.lastAfterLogLoss = null;
+            await this.saveSettings();
+            new Notice("Trained parameters cleared, defaults restored.");
+            this.display();
+          })
+      );
+    }
+  }
+
+  private formatFsrsDescription(): string {
+    const fsrs = this.settings.fsrs;
+    if (fsrs.trainedWeights === null) {
+      return "Trains the algorithm's 21 weights on your standard-profile review history. Needs at least 100 reviews. Intensive decks are unaffected.";
+    }
+    const when = fsrs.lastTrainedAt
+      ? new Date(fsrs.lastTrainedAt).toLocaleString()
+      : "unknown";
+    const before = fsrs.lastBeforeLogLoss?.toFixed(4) ?? "—";
+    const after = fsrs.lastAfterLogLoss?.toFixed(4) ?? "—";
+    return `Currently using trained weights from ${when} (${fsrs.lastTrainedReviewCount.toLocaleString()} reviews, log-loss ${before} → ${after}).`;
   }
 
   private addReviewSettings(containerEl: HTMLElement): void {

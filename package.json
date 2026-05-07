@@ -21,7 +21,8 @@
     "test:all": "npm run test:unit && npm run test:integration",
     "benchmark": "node benchmark/build.mjs && node benchmark/.bundle/cli.cjs",
     "benchmark:smoke": "node benchmark/build.mjs smoke && node benchmark/.bundle/smoke.cjs",
-    "benchmark:spec-check": "node benchmark/build.mjs spec-check && node benchmark/.bundle/specCheck.cjs"
+    "benchmark:spec-check": "node benchmark/build.mjs spec-check && node benchmark/.bundle/specCheck.cjs",
+    "benchmark:compare": "node benchmark/build.mjs compare && node benchmark/.bundle/compareOptimizers.cjs"
   },
   "keywords": [
     "obsidian",
@@ -60,6 +61,7 @@
     "eslint": "^9.39.2",
     "eslint-plugin-obsidianmd": "^0.1.9",
     "eslint-plugin-svelte": "^3.13.1",
+    "fsrs-rs-nodejs": "^0.9.0",
     "glob": "^13.0.0",
     "hyparquet": "^1.25.6",
     "hyparquet-compressors": "^1.1.1",

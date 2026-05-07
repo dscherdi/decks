@@ -1,7 +1,7 @@
 import type { Database } from "sql.js";
 
 // Current Schema Version
-export const CURRENT_SCHEMA_VERSION = 15;
+export const CURRENT_SCHEMA_VERSION = 16;
 
 // SQL Table Creation Schema - Used when database file doesn't exist
 export const CREATE_TABLES_SQL = `
@@ -22,6 +22,7 @@ export const CREATE_TABLES_SQL = `
     relearning_steps TEXT NOT NULL DEFAULT '10m',
     fsrs_request_retention REAL NOT NULL DEFAULT 0.9,
     fsrs_profile TEXT NOT NULL DEFAULT 'STANDARD' CHECK (fsrs_profile IN ('INTENSIVE', 'STANDARD')),
+    fsrs_use_trained INTEGER NOT NULL DEFAULT 0,
     cloze_enabled INTEGER NOT NULL DEFAULT 1,
     cloze_show_context TEXT NOT NULL DEFAULT 'hidden' CHECK (cloze_show_context IN ('open', 'hidden')),
     is_default INTEGER NOT NULL DEFAULT 0,
@@ -222,6 +223,7 @@ export function buildMigrationSQL(db: Database): string {
   const deckprofilesColumns = getColumnNames(db, "deckprofiles");
   const needsLearningSteps = deckprofilesColumns.length > 0 && !deckprofilesColumns.includes("learning_steps");
   const needsCloze = deckprofilesColumns.length > 0 && !deckprofilesColumns.includes("cloze_enabled");
+  const needsUseTrained = deckprofilesColumns.length > 0 && !deckprofilesColumns.includes("fsrs_use_trained");
   const customDecksColumns = getColumnNames(db, "custom_decks");
   const needsDeckType = customDecksColumns.length > 0 && !customDecksColumns.includes("deck_type");
 
@@ -295,6 +297,7 @@ export function buildMigrationSQL(db: Database): string {
       relearning_steps TEXT NOT NULL DEFAULT '10m',
       fsrs_request_retention REAL NOT NULL DEFAULT 0.9,
       fsrs_profile TEXT NOT NULL DEFAULT 'STANDARD' CHECK (fsrs_profile IN ('INTENSIVE', 'STANDARD')),
+      fsrs_use_trained INTEGER NOT NULL DEFAULT 0,
       cloze_enabled INTEGER NOT NULL DEFAULT 0,
       cloze_show_context TEXT NOT NULL DEFAULT 'open' CHECK (cloze_show_context IN ('open', 'hidden')),
       is_default INTEGER NOT NULL DEFAULT 0,
@@ -311,6 +314,10 @@ export function buildMigrationSQL(db: Database): string {
     ${needsCloze ? `
     ALTER TABLE deckprofiles ADD COLUMN cloze_enabled INTEGER NOT NULL DEFAULT 0;
     ALTER TABLE deckprofiles ADD COLUMN cloze_show_context TEXT NOT NULL DEFAULT 'open';
+    ` : ""}
+
+    ${needsUseTrained ? `
+    ALTER TABLE deckprofiles ADD COLUMN fsrs_use_trained INTEGER NOT NULL DEFAULT 0;
     ` : ""}
 
     INSERT OR IGNORE INTO deckprofiles (
@@ -558,17 +565,17 @@ export const SQL_QUERIES = {
       has_review_cards_limit_enabled, review_cards_per_day,
       header_level, review_order,
       learning_steps, relearning_steps,
-      fsrs_request_retention, fsrs_profile,
+      fsrs_request_retention, fsrs_profile, fsrs_use_trained,
       cloze_enabled, cloze_show_context,
       is_default, created, modified
-    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
   `,
 
   GET_PROFILE_BY_ID: `
     SELECT id, name, has_new_cards_limit_enabled, new_cards_per_day,
       has_review_cards_limit_enabled, review_cards_per_day,
       header_level, review_order, learning_steps, relearning_steps,
-      fsrs_request_retention, fsrs_profile,
+      fsrs_request_retention, fsrs_profile, fsrs_use_trained,
       cloze_enabled, cloze_show_context,
       is_default, created, modified
     FROM deckprofiles WHERE id = ?
@@ -578,7 +585,7 @@ export const SQL_QUERIES = {
     SELECT id, name, has_new_cards_limit_enabled, new_cards_per_day,
       has_review_cards_limit_enabled, review_cards_per_day,
       header_level, review_order, learning_steps, relearning_steps,
-      fsrs_request_retention, fsrs_profile,
+      fsrs_request_retention, fsrs_profile, fsrs_use_trained,
       cloze_enabled, cloze_show_context,
       is_default, created, modified
     FROM deckprofiles WHERE name = ?
@@ -588,7 +595,7 @@ export const SQL_QUERIES = {
     SELECT id, name, has_new_cards_limit_enabled, new_cards_per_day,
       has_review_cards_limit_enabled, review_cards_per_day,
       header_level, review_order, learning_steps, relearning_steps,
-      fsrs_request_retention, fsrs_profile,
+      fsrs_request_retention, fsrs_profile, fsrs_use_trained,
       cloze_enabled, cloze_show_context,
       is_default, created, modified
     FROM deckprofiles
@@ -599,7 +606,7 @@ export const SQL_QUERIES = {
     SELECT id, name, has_new_cards_limit_enabled, new_cards_per_day,
       has_review_cards_limit_enabled, review_cards_per_day,
       header_level, review_order, learning_steps, relearning_steps,
-      fsrs_request_retention, fsrs_profile,
+      fsrs_request_retention, fsrs_profile, fsrs_use_trained,
       cloze_enabled, cloze_show_context,
       is_default, created, modified
     FROM deckprofiles WHERE is_default = 1 LIMIT 1
@@ -612,7 +619,7 @@ export const SQL_QUERIES = {
       has_review_cards_limit_enabled = ?, review_cards_per_day = ?,
       header_level = ?, review_order = ?,
       learning_steps = ?, relearning_steps = ?,
-      fsrs_request_retention = ?, fsrs_profile = ?,
+      fsrs_request_retention = ?, fsrs_profile = ?, fsrs_use_trained = ?,
       cloze_enabled = ?, cloze_show_context = ?,
       modified = ?
     WHERE id = ?

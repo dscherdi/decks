@@ -166,3 +166,81 @@ export function computeMetrics(records: PredictionRecord[]): BenchmarkMetrics {
   m.addMany(records);
   return m.finalize();
 }
+
+/**
+ * Per-user metric aggregation matching srs-benchmark methodology: compute
+ * LogLoss / RMSE-bins / AUC for each user's prediction set, then take a
+ * sample-weighted mean across users (weight = number of predictions per user).
+ *
+ * This differs from StreamingMetrics' global aggregation: a user with 10k
+ * reviews and a user with 100 reviews count proportionally to their prediction
+ * counts here, whereas global aggregation treats every prediction equally
+ * (which over-weights heavy users).
+ */
+export interface PerUserSummary {
+  userId: number;
+  predictions: number;
+  logLoss: number;
+  rmseBins: number;
+  auc: number;
+  meanPredicted: number;
+  meanActual: number;
+}
+
+export interface PerUserAggregateMetrics {
+  users: number;
+  totalPredictions: number;
+  weightedLogLoss: number;
+  weightedRmseBins: number;
+  weightedAuc: number;
+  weightedMeanPredicted: number;
+  weightedMeanActual: number;
+  perUser: PerUserSummary[];
+}
+
+export class PerUserMetricsAggregator {
+  private summaries: PerUserSummary[] = [];
+
+  add(userId: number, records: PredictionRecord[]): void {
+    if (records.length === 0) return;
+    const m = computeMetrics(records);
+    if (!Number.isFinite(m.logLoss) || !Number.isFinite(m.auc)) return;
+    this.summaries.push({
+      userId,
+      predictions: m.count,
+      logLoss: m.logLoss,
+      rmseBins: m.rmseBins,
+      auc: m.auc,
+      meanPredicted: m.meanPredicted,
+      meanActual: m.meanActual,
+    });
+  }
+
+  finalize(): PerUserAggregateMetrics {
+    let totalPredictions = 0;
+    let sumLogLoss = 0;
+    let sumRmse = 0;
+    let sumAuc = 0;
+    let sumP = 0;
+    let sumY = 0;
+    for (const s of this.summaries) {
+      totalPredictions += s.predictions;
+      sumLogLoss += s.logLoss * s.predictions;
+      sumRmse += s.rmseBins * s.predictions;
+      sumAuc += s.auc * s.predictions;
+      sumP += s.meanPredicted * s.predictions;
+      sumY += s.meanActual * s.predictions;
+    }
+    const n = totalPredictions;
+    return {
+      users: this.summaries.length,
+      totalPredictions,
+      weightedLogLoss: n > 0 ? sumLogLoss / n : Number.NaN,
+      weightedRmseBins: n > 0 ? sumRmse / n : Number.NaN,
+      weightedAuc: n > 0 ? sumAuc / n : Number.NaN,
+      weightedMeanPredicted: n > 0 ? sumP / n : Number.NaN,
+      weightedMeanActual: n > 0 ? sumY / n : Number.NaN,
+      perUser: this.summaries.slice(),
+    };
+  }
+}

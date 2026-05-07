@@ -733,3 +733,60 @@ div.decks-card-content
   color: var(--text-muted);
   padding: 4px 0;
 }
+
+/* FSRS optimization modal */
+.decks-fsrs-progress {
+  height: 8px;
+  width: 100%;
+  background: var(--background-modifier-border);
+  border-radius: 4px;
+  overflow: hidden;
+  margin: 12px 0;
+}
+
+.decks-fsrs-progress-bar {
+  height: 100%;
+}
+
+.decks-fsrs-progress-bar-fill {
+  background: var(--interactive-accent);
+  width: var(--decks-fsrs-progress-pct, 0%);
+  transition: width 80ms linear;
+}
+
+.decks-fsrs-stats {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  margin: 12px 0;
+  padding: 12px;
+  background: var(--background-secondary);
+  border-radius: 6px;
+}
+
+.decks-fsrs-stat-row {
+  display: flex;
+  justify-content: space-between;
+}
+
+.decks-fsrs-stat-label {
+  color: var(--text-muted);
+}
+
+.decks-fsrs-stat-value {
+  font-variant-numeric: tabular-nums;
+  font-weight: 600;
+}
+
+.decks-fsrs-muted {
+  color: var(--text-muted);
+  font-size: 0.9em;
+}
+
+.decks-fsrs-error {
+  background: var(--background-secondary);
+  padding: 8px;
+  border-radius: 4px;
+  font-size: 0.85em;
+  white-space: pre-wrap;
+}

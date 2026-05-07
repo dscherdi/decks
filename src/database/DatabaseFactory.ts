@@ -131,6 +131,7 @@ export interface IDatabaseService {
   // Optimized review log queries for statistics
   getReviewLogsByDeck(deckId: string): Promise<ReviewLog[]>;
   getReviewLogsByDecks(deckIds: string[]): Promise<ReviewLog[]>;
+  getReviewLogsForStandardProfile(): Promise<ReviewLog[]>;
 
   // Review session operations
   createReviewSession(session: Omit<ReviewSession, "id">): Promise<string>;

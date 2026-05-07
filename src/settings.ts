@@ -38,6 +38,17 @@ export interface DecksSettings {
     enableDatabaseWorker: boolean;
   };
 
+  // Global FSRS weight optimization. Whether a STANDARD profile applies these
+  // trained weights is a per-profile choice (DeckProfile.fsrs.useTrainedWeights);
+  // INTENSIVE profiles always ignore them.
+  fsrs: {
+    trainedWeights: number[] | null; // null = no trained weights yet
+    lastTrainedAt: string | null;
+    lastTrainedReviewCount: number;
+    lastBeforeLogLoss: number | null;
+    lastAfterLogLoss: number | null;
+  };
+
   // Internal tracking
   hasCreatedTestDeck: boolean;
 }
@@ -74,6 +85,14 @@ export const DEFAULT_SETTINGS: DecksSettings = {
 
   experimental: {
     enableDatabaseWorker: false,
+  },
+
+  fsrs: {
+    trainedWeights: null,
+    lastTrainedAt: null,
+    lastTrainedReviewCount: 0,
+    lastBeforeLogLoss: null,
+    lastAfterLogLoss: null,
   },
 
   hasCreatedTestDeck: false,

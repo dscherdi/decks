@@ -15,6 +15,7 @@
   export let db: IDatabaseService;
   export let initialProfiles: DeckProfile[];
   export let onclose: () => void;
+  export let trainedWeightsAvailable = false;
 
   let profiles: DeckProfile[] = initialProfiles;
   let selectedProfileId = "";
@@ -51,6 +52,7 @@
   let headerLevel = 2;
   let requestRetention = 0.9;
   let fsrsProfile: FSRSProfile = "STANDARD";
+  let useTrainedWeights = false;
   let learningSteps = "1m";
   let relearningSteps = "10m";
   let clozeEnabled = false;
@@ -87,6 +89,7 @@
     headerLevel = profile.headerLevel;
     requestRetention = profile.fsrs.requestRetention;
     fsrsProfile = profile.fsrs.profile;
+    useTrainedWeights = profile.fsrs.useTrainedWeights;
     learningSteps = profile.learningSteps;
     relearningSteps = profile.relearningSteps;
     clozeEnabled = profile.clozeEnabled;
@@ -189,6 +192,7 @@
         fsrs: {
           requestRetention: requestRetention,
           profile: fsrsProfile,
+          useTrainedWeights: useTrainedWeights,
         },
         clozeEnabled: clozeEnabled,
         clozeShowContext: clozeShowContext,
@@ -540,14 +544,36 @@
     // FSRS profile
     if (fsrsProfileContainer) {
       fsrsProfileContainer.empty();
+      const desc = trainedWeightsAvailable
+        ? "Standard or intensive use shipped weights. Trained applies your optimized weights (standard intervals)."
+        : "Learning intensity profile. Train weights in algorithm tuning to enable the Trained option.";
+      const currentValue =
+        fsrsProfile === "STANDARD" && useTrainedWeights ? "TRAINED" : fsrsProfile;
       new Setting(fsrsProfileContainer)
         .setName("FSRS profile")
-        .setDesc("Learning intensity profile")
+        .setDesc(desc)
         .addDropdown((dropdown) => {
           dropdown.addOption("STANDARD", "Standard");
           dropdown.addOption("INTENSIVE", "Intensive");
-          dropdown.setValue(fsrsProfile).onChange((value) => {
-            fsrsProfile = value as FSRSProfile;
+          dropdown.addOption(
+            "TRAINED",
+            trainedWeightsAvailable ? "Trained" : "Trained (unavailable)"
+          );
+          if (!trainedWeightsAvailable) {
+            const selectEl = dropdown.selectEl as HTMLSelectElement;
+            const opt = Array.from(selectEl.options).find(
+              (o) => o.value === "TRAINED"
+            );
+            if (opt) opt.disabled = true;
+          }
+          dropdown.setValue(currentValue).onChange((value) => {
+            if (value === "TRAINED") {
+              fsrsProfile = "STANDARD";
+              useTrainedWeights = true;
+            } else {
+              fsrsProfile = value as FSRSProfile;
+              useTrainedWeights = false;
+            }
             rebuildSettings();
           });
         });

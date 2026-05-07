@@ -15,6 +15,7 @@ export interface FSRSParameters {
   requestRetention: number; // target retention rate (0,1)
   profile: FSRSProfile; // "INTENSIVE" | "STANDARD"
   nextDayStartsAt?: number; // Hour (0-23) when study day rolls over (default 4)
+  weights?: number[]; // Per-profile trained weights — overrides defaults when set
 }
 
 export interface FSRSCard {
@@ -90,10 +91,10 @@ export class FSRS {
   }
 
   /**
-   * Get current profile weights (hardcoded, not user-editable)
+   * Get current weights — trained override if set, else profile defaults.
    */
   private getWeights(): number[] {
-    return getWeightsForProfile(this.params.profile);
+    return this.params.weights ?? getWeightsForProfile(this.params.profile);
   }
 
   /**

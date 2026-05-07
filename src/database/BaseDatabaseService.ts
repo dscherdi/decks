@@ -96,12 +96,13 @@ export abstract class BaseDatabaseService implements IDatabaseService {
       fsrs: {
         requestRetention: row[10] as number,
         profile: row[11] as "INTENSIVE" | "STANDARD",
+        useTrainedWeights: Boolean(row[12]),
       },
-      clozeEnabled: Boolean(row[12]),
-      clozeShowContext: (row[13] as "open" | "hidden") ?? "open",
-      isDefault: Boolean(row[14]),
-      created: row[15] as string,
-      modified: row[16] as string,
+      clozeEnabled: Boolean(row[13]),
+      clozeShowContext: (row[14] as "open" | "hidden") ?? "open",
+      isDefault: Boolean(row[15]),
+      created: row[16] as string,
+      modified: row[17] as string,
     };
   }
 
@@ -382,6 +383,7 @@ export abstract class BaseDatabaseService implements IDatabaseService {
       profile.relearningSteps ?? "10m",
       profile.fsrs.requestRetention,
       profile.fsrs.profile,
+      profile.fsrs.useTrainedWeights ? 1 : 0,
       profile.clozeEnabled ? 1 : 0,
       profile.clozeShowContext ?? "open",
       profile.isDefault ? 1 : 0,
@@ -468,6 +470,7 @@ export abstract class BaseDatabaseService implements IDatabaseService {
       updated.relearningSteps,
       updated.fsrs.requestRetention,
       updated.fsrs.profile,
+      updated.fsrs.useTrainedWeights ? 1 : 0,
       updated.clozeEnabled ? 1 : 0,
       updated.clozeShowContext ?? "open",
       this.getCurrentTimestamp(),
@@ -1353,6 +1356,26 @@ export abstract class BaseDatabaseService implements IDatabaseService {
       ORDER BY rl.reviewed_at DESC
     `;
     const results = await this.querySql(sql, deckIds, { asObject: true });
+    return this.mapRowsToReviewLogs(results as ReviewLogRow[]);
+  }
+
+  /**
+   * Review logs across every flashcard whose deck's profile is STANDARD.
+   * Used by the global FSRS weight optimizer — INTENSIVE decks are excluded
+   * because their `w[0..3]` are sub-day UX choices, not learnable parameters.
+   * Returns oldest-first ordering, suitable for chronological replay.
+   */
+  async getReviewLogsForStandardProfile(): Promise<ReviewLog[]> {
+    const sql = `
+      SELECT rl.*
+      FROM review_logs rl
+      JOIN flashcards f ON rl.flashcard_id = f.id
+      JOIN decks d ON f.deck_id = d.id
+      JOIN deckprofiles p ON d.profile_id = p.id
+      WHERE p.fsrs_profile = 'STANDARD'
+      ORDER BY rl.reviewed_at ASC
+    `;
+    const results = await this.querySql(sql, [], { asObject: true });
     return this.mapRowsToReviewLogs(results as ReviewLogRow[]);
   }
 

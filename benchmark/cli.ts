@@ -5,6 +5,8 @@ interface ParsedArgs {
   data: string;
   users: number | "all";
   includeSameDay: boolean;
+  train: boolean;
+  kfold: number;
   out: string;
 }
 
@@ -14,6 +16,8 @@ function parseArgs(argv: string[]): ParsedArgs {
     const a = argv[i];
     if (a === "--include-same-day") {
       args.includeSameDay = true;
+    } else if (a === "--train") {
+      args.train = true;
     } else if (a.startsWith("--")) {
       const key = a.slice(2);
       const next = argv[i + 1];
@@ -49,33 +53,58 @@ function parseArgs(argv: string[]): ParsedArgs {
       ? args.out
       : resolve("benchmark", "results", `${stamp}.json`);
 
+  let kfold = 1;
+  if (typeof args.kfold === "string") {
+    const k = parseInt(args.kfold, 10);
+    if (!Number.isFinite(k) || k < 1) {
+      throw new Error(`--kfold must be >= 1, got "${args.kfold}"`);
+    }
+    kfold = k;
+  }
+
   return {
     data: resolve(args.data),
     users,
     includeSameDay: args.includeSameDay === true,
+    train: args.train === true,
+    kfold,
     out,
   };
 }
 
 function usage(): string {
-  return `Usage: npm run benchmark -- --data <path> [--users N|all] [--include-same-day] [--out <path>]
+  return `Usage: npm run benchmark -- --data <path> [--users N|all] [--include-same-day] [--train] [--kfold N] [--out <path>]
 
   --data <path>          Path to revlogs/ root (containing user_id=N/ subdirs)
   --users N|all          Number of users to evaluate (default 50)
   --include-same-day     Include reviews with elapsed_days=0 in metrics
+  --train                Per-user training. Default: 80/20 chronological split.
+                         Combined with --kfold N, uses TimeSeriesSplit (matches
+                         the published srs-benchmark methodology).
+  --kfold N              Number of TimeSeriesSplit folds (default 1 = simple 80/20).
+                         Use 5 to match published FSRS-6 baseline methodology.
+                         Only meaningful with --train.
   --out <path>           Output JSON path (default benchmark/results/<timestamp>.json)
 `;
 }
 
 async function main(): Promise<void> {
   const opts = parseArgs(process.argv.slice(2));
+  let mode = "FSRS-6 (STANDARD default weights)";
+  if (opts.train) {
+    mode = opts.kfold >= 2
+      ? `FSRS-6 (per-user trained weights, ${opts.kfold}-fold TimeSeriesSplit)`
+      : "FSRS-6 (per-user trained weights, 80/20 split)";
+  }
   process.stderr.write(
-    `Benchmarking FSRS-6 (STANDARD weights) on ${opts.users} users from ${opts.data}\n`
+    `Benchmarking ${mode} on ${opts.users} users from ${opts.data}\n`
   );
   const result = await runBenchmark({
     dataPath: opts.data,
     users: opts.users,
     includeSameDay: opts.includeSameDay,
+    train: opts.train,
+    trainOptions: opts.kfold >= 2 ? { kfold: opts.kfold } : undefined,
     outPath: opts.out,
   });
 

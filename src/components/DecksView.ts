@@ -160,7 +160,9 @@ export class DecksView extends ItemView {
       this.db,
       async () => {
         await this.refresh();
-      }
+      },
+      this.settings.fsrs?.trainedWeights !== null &&
+        this.settings.fsrs?.trainedWeights !== undefined
     ).open();
   }
 
