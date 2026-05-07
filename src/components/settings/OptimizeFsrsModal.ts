@@ -54,10 +54,17 @@ export class OptimizeFsrsModal extends Modal {
     this.renderProgress(0, 0, "Loading review history…");
     const service = new FsrsOptimizationService(this.db, this.logger);
 
+    // Warm-start from the user's current trained weights when present. This
+    // makes "before LogLoss" reflect the user's actual current scheduling
+    // (not shipped defaults) and avoids re-discovering the same optimum on
+    // every retrain.
+    const existing = this.settings.fsrs.trainedWeights;
+    const startOptions = existing ? { initial: existing.slice() } : undefined;
+
     const result = await service.run((p) => {
       if (this.aborted) return;
       this.renderProgress(p.step, p.totalSteps, `Training step ${p.step} / ${p.totalSteps}`);
-    });
+    }, startOptions);
 
     if (this.aborted) return;
     this.result = result;

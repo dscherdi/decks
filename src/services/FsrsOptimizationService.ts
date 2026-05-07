@@ -34,8 +34,15 @@ export class FsrsOptimizationService {
       `FsrsOptimizationService.run: ${logs.length} review logs loaded`
     );
 
+    // Step count scales with data size (matches fsrs-optimizer's
+    // n_epoch=5, batch_size=512), but floored at 100 so lightweight users
+    // keep their current behavior. Heavy users get proportionally more
+    // gradient updates — measurably better convergence on 5k+ reviews.
+    const steps = Math.max(100, 5 * Math.ceil(logs.length / 512));
+
     return optimizeWeights(logs, {
       yieldFn: yieldToUI,
+      steps,
       ...options,
       onProgress,
     });

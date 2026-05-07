@@ -1360,20 +1360,22 @@ export abstract class BaseDatabaseService implements IDatabaseService {
   }
 
   /**
-   * Review logs across every flashcard whose deck's profile is STANDARD.
-   * Used by the global FSRS weight optimizer — INTENSIVE decks are excluded
-   * because their `w[0..3]` are sub-day UX choices, not learnable parameters.
-   * Returns oldest-first ordering, suitable for chronological replay.
+   * Review logs that were recorded under the STANDARD profile, used by the
+   * global FSRS weight optimizer. INTENSIVE-era reviews are excluded because
+   * their `w[0..3]` are sub-day UX choices, not learnable parameters.
+   *
+   * Filter is on `review_logs.profile` (the snapshot at review time), not on
+   * the deck's current profile — otherwise a user could switch a deck's
+   * profile to STANDARD just before training and pull in INTENSIVE-era reviews.
+   *
+   * Returns oldest-first ordering for chronological replay.
    */
   async getReviewLogsForStandardProfile(): Promise<ReviewLog[]> {
     const sql = `
-      SELECT rl.*
-      FROM review_logs rl
-      JOIN flashcards f ON rl.flashcard_id = f.id
-      JOIN decks d ON f.deck_id = d.id
-      JOIN deckprofiles p ON d.profile_id = p.id
-      WHERE p.fsrs_profile = 'STANDARD'
-      ORDER BY rl.reviewed_at ASC
+      SELECT *
+      FROM review_logs
+      WHERE profile = 'STANDARD'
+      ORDER BY reviewed_at ASC
     `;
     const results = await this.querySql(sql, [], { asObject: true });
     return this.mapRowsToReviewLogs(results as ReviewLogRow[]);

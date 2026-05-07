@@ -31,7 +31,7 @@ The optimizer is implemented in pure TypeScript at [src/algorithm/fsrs-optimizer
 | Learning rate | 4e-2 with cosine annealing | Matches fsrs-optimizer. |
 | Gradient | Numerical (central difference) over 21 weights | 42 forward passes per step. Bounded floating-point error, no autograd needed. |
 | Mini-batch | 256 cards (with replacement) | We batch by card, not by review (see Limitations). |
-| Steps | 100, fixed | Bench-only adaptive variant: `5 × ⌈N/512⌉` (matches fsrs-optimizer's `n_epoch × ceil(reviews / batch_size)`). |
+| Steps | `max(100, 5 × ⌈N/512⌉)` adaptive | Floors at 100 so light users keep prior behavior; heavy users get proportionally more updates (matches fsrs-optimizer's `n_epoch × ceil(reviews / batch_size)`). |
 | Parameter clipping | Per-weight bounds from `fsrs-bounds.ts` | Lifted verbatim from py-fsrs `LOWER_BOUNDS_PARAMETERS` / `UPPER_BOUNDS_PARAMETERS`. |
 | State caching | None — each gradient step replays card prefixes from scratch | Hot path is cheap arithmetic; ~20 s for 5 k reviews. |
 
