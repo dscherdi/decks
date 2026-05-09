@@ -1,6 +1,11 @@
 <script lang="ts">
   import { createEventDispatcher, onMount, onDestroy, tick } from "svelte";
-  import type { Flashcard, DeckOrGroup, ClozeShowContext, FlashcardType } from "../../database/types";
+  import type {
+    Flashcard,
+    DeckOrGroup,
+    ClozeShowContext,
+    FlashcardType,
+  } from "../../database/types";
   import { isDeckGroup, isCustomDeck } from "../../database/types";
   import type { DecksSettings } from "../../settings";
   import { type RatingLabel } from "../../algorithm/fsrs";
@@ -192,26 +197,28 @@
   let searchQuery = "";
   let searchInputEl: HTMLInputElement | undefined;
 
-  $: searchResults = searchMode && searchQuery.trim()
-    ? (() => {
-        const search = prepareFuzzySearch(searchQuery);
-        const scored: { card: Flashcard; index: number; score: number }[] = [];
-        for (let i = 0; i < browseCards.length; i++) {
-          const c = browseCards[i];
-          const frontResult = search(c.front);
-          const backResult = search(c.back);
-          const best = Math.max(
-            frontResult ? frontResult.score : -Infinity,
-            backResult ? backResult.score : -Infinity
-          );
-          if (frontResult || backResult) {
-            scored.push({ card: c, index: i, score: best });
+  $: searchResults =
+    searchMode && searchQuery.trim()
+      ? (() => {
+          const search = prepareFuzzySearch(searchQuery);
+          const scored: { card: Flashcard; index: number; score: number }[] =
+            [];
+          for (let i = 0; i < browseCards.length; i++) {
+            const c = browseCards[i];
+            const frontResult = search(c.front);
+            const backResult = search(c.back);
+            const best = Math.max(
+              frontResult ? frontResult.score : -Infinity,
+              backResult ? backResult.score : -Infinity
+            );
+            if (frontResult || backResult) {
+              scored.push({ card: c, index: i, score: best });
+            }
           }
-        }
-        scored.sort((a, b) => b.score - a.score);
-        return scored.slice(0, 50);
-      })()
-    : [];
+          scored.sort((a, b) => b.score - a.score);
+          return scored.slice(0, 50);
+        })()
+      : [];
 
   // Swipe tracking for mobile browse navigation
   let touchStartX = 0;
@@ -260,7 +267,7 @@
       } else if (isCustomDeck(deckOrGroup)) {
         session = await scheduler.startReviewSessionForCustomDeck(
           deckOrGroup,
-          new Date(),
+          new Date()
         );
       } else {
         session = await scheduler.startFreshSession(
@@ -314,23 +321,33 @@
 
   function handleClozeBlankClick(event: Event) {
     const target = event.target as HTMLElement;
-    if (!target.classList.contains("decks-cloze-active") || !currentCard?.clozeText) return;
+    if (
+      !target.classList.contains("decks-cloze-active") ||
+      !currentCard?.clozeText
+    )
+      return;
 
     const container = target.closest("[data-decks-cloze-index]");
-    if (!container || container.getAttribute("data-decks-cloze-revealed") === "true") return;
+    if (
+      !container ||
+      container.getAttribute("data-decks-cloze-revealed") === "true"
+    )
+      return;
 
     if (currentCard.type === "image-occlusion") {
       const allActive = container.querySelectorAll(".decks-cloze-active");
       allActive.forEach((el) => {
         const span = document.createElement("span");
         span.className = "decks-cloze-revealed";
-        span.textContent = el.getAttribute("data-decks-cloze-text") || el.textContent || "";
+        span.textContent =
+          el.getAttribute("data-decks-cloze-text") || el.textContent || "";
         el.replaceWith(span);
       });
     } else {
       const span = document.createElement("span");
       span.className = "decks-cloze-revealed";
-      span.textContent = target.getAttribute("data-decks-cloze-text") || currentCard.clozeText;
+      span.textContent =
+        target.getAttribute("data-decks-cloze-text") || currentCard.clozeText;
       target.replaceWith(span);
     }
 
@@ -351,7 +368,10 @@
 
     // Build cloze group when first encountering a cloze card
     if (isClozeType(currentCard.type) && !inClozeGroupReview) {
-      const siblings = await scheduler.getClozeSiblings(currentCard, new Date());
+      const siblings = await scheduler.getClozeSiblings(
+        currentCard,
+        new Date()
+      );
       clozeGroup = [currentCard, ...siblings];
       clozeGroupIndex = 0;
       inClozeGroupReview = true;
@@ -377,11 +397,25 @@
         backEl.empty();
         if (isClozeType(currentCard.type) && currentCard.clozeOrder !== null) {
           if (currentCard.type === "image-occlusion") {
-            const prepared = prepareImageOcclusionBack(currentCard.back, currentCard.clozeOrder);
-            setClozeAttributes(backEl, prepared.markStart, clozeShowContext, false, prepared.markEnd);
+            const prepared = prepareImageOcclusionBack(
+              currentCard.back,
+              currentCard.clozeOrder
+            );
+            setClozeAttributes(
+              backEl,
+              prepared.markStart,
+              clozeShowContext,
+              false,
+              prepared.markEnd
+            );
             renderMarkdown(prepared.content, backEl, deckFilePath);
           } else {
-            setClozeAttributes(backEl, currentCard.clozeOrder, clozeShowContext, false);
+            setClozeAttributes(
+              backEl,
+              currentCard.clozeOrder,
+              clozeShowContext,
+              false
+            );
             renderMarkdown(currentCard.back, backEl, deckFilePath);
           }
         } else {
@@ -399,11 +433,25 @@
         backEl.empty();
         if (isClozeType(currentCard.type) && currentCard.clozeOrder !== null) {
           if (currentCard.type === "image-occlusion") {
-            const prepared = prepareImageOcclusionBack(currentCard.back, currentCard.clozeOrder);
-            setClozeAttributes(backEl, prepared.markStart, clozeShowContext, false, prepared.markEnd);
+            const prepared = prepareImageOcclusionBack(
+              currentCard.back,
+              currentCard.clozeOrder
+            );
+            setClozeAttributes(
+              backEl,
+              prepared.markStart,
+              clozeShowContext,
+              false,
+              prepared.markEnd
+            );
             renderMarkdown(prepared.content, backEl, deckFilePath);
           } else {
-            setClozeAttributes(backEl, currentCard.clozeOrder, clozeShowContext, false);
+            setClozeAttributes(
+              backEl,
+              currentCard.clozeOrder,
+              clozeShowContext,
+              false
+            );
             renderMarkdown(currentCard.back, backEl, deckFilePath);
           }
         } else {
@@ -809,7 +857,6 @@
     const seconds = totalSeconds % 60;
     return `${minutes}:${seconds.toString().padStart(2, "0")}`;
   }
-
 </script>
 
 <div class="decks-review-modal">
@@ -817,7 +864,9 @@
     <h3>
       {browseMode ? "Browse" : "Review session"} - {deckOrGroup.name}
       {#if inClozeGroupReview}
-        <span class="decks-cloze-indicator">Cloze {clozeGroupIndex + 1}/{clozeGroup.length}</span>
+        <span class="decks-cloze-indicator"
+          >Cloze {clozeGroupIndex + 1}/{clozeGroup.length}</span
+        >
       {/if}
     </h3>
     {#if currentCard}
@@ -1026,13 +1075,11 @@
                 class="clickable-icon decks-warning-icon"
                 type="button"
                 tabindex="-1"
-                aria-label={
-                  cardHealth.isLeech && cardHealth.isDense
-                    ? "Card is repeatedly forgotten and complex — consider revising"
-                    : cardHealth.isLeech
+                aria-label={cardHealth.isLeech && cardHealth.isDense
+                  ? "Card is repeatedly forgotten and complex — consider revising"
+                  : cardHealth.isLeech
                     ? "Card is repeatedly forgotten — consider rewriting"
-                    : "Card is complex. Consider splitting it."
-                }
+                    : "Card is complex. Consider splitting it."}
               >
                 <svg
                   xmlns="http://www.w3.org/2000/svg"
@@ -1045,7 +1092,9 @@
                   stroke-linecap="round"
                   stroke-linejoin="round"
                 >
-                  <path d="m21.73 18-8-14a2 2 0 0 0-3.48 0l-8 14A2 2 0 0 0 4 21h16a2 2 0 0 0 1.73-3Z"></path>
+                  <path
+                    d="m21.73 18-8-14a2 2 0 0 0-3.48 0l-8 14A2 2 0 0 0 4 21h16a2 2 0 0 0 1.73-3Z"
+                  ></path>
                   <path d="M12 9v4"></path>
                   <path d="M12 17h.01"></path>
                 </svg>
@@ -1114,7 +1163,11 @@
             </button>
           {/if}
           <!-- svelte-ignore a11y-click-events-have-key-events a11y-no-static-element-interactions -->
-          <div class="decks-card-side decks-back" bind:this={backEl} on:click={handleClozeBlankClick}></div>
+          <div
+            class="decks-card-side decks-back"
+            bind:this={backEl}
+            on:click={handleClozeBlankClick}
+          ></div>
           {#if currentCard?.notes}
             <button
               class="decks-notes-button clickable-icon"
@@ -1295,11 +1348,11 @@
 
   .decks-card-utilities {
     position: absolute;
-    top: 8px;
-    right: 8px;
+    top: 4px;
+    right: 4px;
     z-index: 10;
     display: flex;
-    gap: 8px;
+    gap: 4px;
   }
 
   .decks-warning-icon {
