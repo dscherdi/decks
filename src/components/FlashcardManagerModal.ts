@@ -2,15 +2,23 @@ import { Modal, Notice } from "obsidian";
 import type { App } from "obsidian";
 import type { IDatabaseService } from "../database/DatabaseFactory";
 import type { CustomDeckService } from "../services/CustomDeckService";
+import type { FilterDefinition } from "../database/types";
 import FlashcardManagerPanel from "./FlashcardManagerPanel.svelte";
+import type {
+  EditTarget,
+  EditCommitPayload,
+} from "./FlashcardManagerEditTypes";
 import { mount, unmount } from "svelte";
 import type { Svelte5MountedComponent } from "../types/svelte-components";
 
 export type FlashcardManagerComponent = Svelte5MountedComponent;
 
-interface EditCustomDeckOptions {
-  id: string;
-  name: string;
+// Kept as an alias for callers that imported the old name.
+export type EditCustomDeckTarget = EditTarget;
+
+export interface FlashcardManagerThresholds {
+  leechThreshold: number;
+  denseCardCharThreshold: number;
 }
 
 export class FlashcardManagerModal extends Modal {
@@ -18,18 +26,24 @@ export class FlashcardManagerModal extends Modal {
   private customDeckService: CustomDeckService;
   private component: FlashcardManagerComponent | null = null;
   private resizeHandler?: () => void;
-  private editingCustomDeck: EditCustomDeckOptions | null;
+  private editingCustomDeck: EditTarget | null;
+  private thresholds: FlashcardManagerThresholds;
+  private onDeckListChanged?: () => void | Promise<void>;
 
   constructor(
     app: App,
     db: IDatabaseService,
     customDeckService: CustomDeckService,
-    editingCustomDeck?: EditCustomDeckOptions,
+    thresholds: FlashcardManagerThresholds,
+    editingCustomDeck?: EditTarget,
+    onDeckListChanged?: () => void | Promise<void>,
   ) {
     super(app);
     this.db = db;
     this.customDeckService = customDeckService;
+    this.thresholds = thresholds;
     this.editingCustomDeck = editingCustomDeck ?? null;
+    this.onDeckListChanged = onDeckListChanged;
   }
 
   onOpen() {
@@ -52,35 +66,64 @@ export class FlashcardManagerModal extends Modal {
       props: {
         db: this.db,
         customDeckService: this.customDeckService,
-        editingCustomDeckId: this.editingCustomDeck?.id ?? null,
-        editingCustomDeckName: this.editingCustomDeck?.name ?? null,
+        leechThreshold: this.thresholds.leechThreshold,
+        denseCardCharThreshold: this.thresholds.denseCardCharThreshold,
+        initialEditTarget: this.editingCustomDeck,
+        onCommitEdit: async (
+          target: EditTarget,
+          payload: EditCommitPayload
+        ) => {
+          try {
+            if (payload.kind === "filter") {
+              await this.customDeckService.updateFilter(target.id, payload.definition);
+              new Notice(`Filter deck "${target.name}" updated`);
+            } else {
+              if (payload.toAdd.length > 0) {
+                await this.customDeckService.addFlashcards(target.id, payload.toAdd);
+              }
+              if (payload.toRemove.length > 0) {
+                await this.customDeckService.removeFlashcards(target.id, payload.toRemove);
+              }
+              new Notice(
+                `Updated "${target.name}" — ${payload.toAdd.length} added, ${payload.toRemove.length} removed`
+              );
+            }
+            await this.onDeckListChanged?.();
+            this.close();
+          } catch (error) {
+            new Notice(`Failed to save: ${error instanceof Error ? error.message : String(error)}`);
+          }
+        },
         onCreateCustomDeck: async (name: string, flashcardIds: string[]) => {
           try {
             const deck = await this.customDeckService.createCustomDeck(name);
-            await this.customDeckService.addFlashcards(deck.id, flashcardIds);
+            if (flashcardIds.length > 0) {
+              await this.customDeckService.addFlashcards(deck.id, flashcardIds);
+            }
             new Notice(`Created custom deck "${name}" with ${flashcardIds.length} cards`);
+            await this.onDeckListChanged?.();
           } catch (error) {
             new Notice(`Failed to create deck: ${error instanceof Error ? error.message : String(error)}`);
+          }
+        },
+        onCreateFilterDeck: async (name: string, definition: FilterDefinition) => {
+          try {
+            await this.customDeckService.createFilterDeck(name, definition);
+            new Notice(`Created filter deck "${name}"`);
+            await this.onDeckListChanged?.();
+          } catch (error) {
+            new Notice(`Failed to create filter deck: ${error instanceof Error ? error.message : String(error)}`);
           }
         },
         onAddToCustomDeck: async (customDeckId: string, flashcardIds: string[]) => {
           try {
             await this.customDeckService.addFlashcards(customDeckId, flashcardIds);
             new Notice(`Added ${flashcardIds.length} cards to custom deck`);
+            await this.onDeckListChanged?.();
           } catch (error) {
             new Notice(`Failed to add cards: ${error instanceof Error ? error.message : String(error)}`);
           }
         },
-        onRemoveFromCustomDeck: this.editingCustomDeck
-          ? async (customDeckId: string, flashcardIds: string[]) => {
-              try {
-                await this.customDeckService.removeFlashcards(customDeckId, flashcardIds);
-                new Notice(`Removed ${flashcardIds.length} cards from custom deck`);
-              } catch (error) {
-                new Notice(`Failed to remove cards: ${error instanceof Error ? error.message : String(error)}`);
-              }
-            }
-          : null,
       },
     }) as FlashcardManagerComponent;
 

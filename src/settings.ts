@@ -5,6 +5,8 @@ export interface DecksSettings {
     enableKeyboardShortcuts: boolean;
     sessionDuration: number; // Session duration in minutes (1-60, default 25)
     nextDayStartsAt: number; // Hour (0-23) when study day rolls over (default 4 AM)
+    leechThreshold: number; // Lapses count at/above which a card is flagged as a leech (default 8)
+    denseCardCharThreshold: number; // back text length (chars) at/above which a card is flagged as dense (default 500)
   };
 
   // Parsing Settings
@@ -59,6 +61,8 @@ export const DEFAULT_SETTINGS: DecksSettings = {
     enableKeyboardShortcuts: true,
     sessionDuration: 25,
     nextDayStartsAt: 4,
+    leechThreshold: 8,
+    denseCardCharThreshold: 500,
   },
 
   parsing: {

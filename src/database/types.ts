@@ -114,7 +114,8 @@ export type FilterField =
   | "deckId" | "deckTag" | "type" | "sourceFile" | "breadcrumb" | "tags"
   | "state" | "dueDate" | "difficulty" | "stability"
   | "interval" | "repetitions" | "lapses"
-  | "lastReviewed" | "created";
+  | "lastReviewed" | "created"
+  | "isLeech" | "isDense";
 
 export interface FilterRule {
   field: FilterField;

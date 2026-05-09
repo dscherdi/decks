@@ -14,7 +14,7 @@ import type {
 import { DEFAULT_PROFILE_ID, deckWithProfile } from "./types";
 import type { FilterDefinition } from "./types";
 import { SQL_QUERIES } from "./schemas";
-import { compileFilter } from "../services/FilterEngine";
+import { compileFilter, type FilterCompileOptions } from "../services/FilterEngine";
 import type { SyncData, SyncResult } from "../services/FlashcardSynchronizer";
 import type {
   SqlJsValue,
@@ -45,6 +45,7 @@ export abstract class BaseDatabaseService implements IDatabaseService {
     ...args: (string | number | object)[]
   ) => void;
   public migrationNotice: string | null = null;
+  protected filterCompileOptions: FilterCompileOptions = {};
 
   constructor(
     dbPath: string,
@@ -54,6 +55,10 @@ export abstract class BaseDatabaseService implements IDatabaseService {
     this.dbPath = dbPath;
     this.adapter = adapter;
     this.debugLog = debugLog;
+  }
+
+  setFilterCompileOptions(options: FilterCompileOptions): void {
+    this.filterCompileOptions = options;
   }
 
   // Abstract methods to be implemented by concrete classes
@@ -1663,7 +1668,7 @@ export abstract class BaseDatabaseService implements IDatabaseService {
 
   private buildFilterQuery(filterDef: string, selectClause: string, extraWhere?: string, extraParams?: SqlJsValue[]): { sql: string; params: SqlJsValue[] } {
     const definition: FilterDefinition = JSON.parse(filterDef);
-    const compiled = compileFilter(definition);
+    const compiled = compileFilter(definition, this.filterCompileOptions);
     const from = compiled.requiresDeckJoin
       ? "flashcards f JOIN decks d ON f.deck_id = d.id"
       : "flashcards f";

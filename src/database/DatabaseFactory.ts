@@ -15,6 +15,7 @@ import type {
 } from "./types";
 import type { SqlJsValue, SqlRecord, SqlRow } from "./sql-types";
 import type { SyncData, SyncResult } from "../services/FlashcardSynchronizer";
+import type { FilterCompileOptions } from "../services/FilterEngine";
 
 // Proper interface for all database operations
 export interface IDatabaseService {
@@ -25,6 +26,9 @@ export interface IDatabaseService {
   initialize(): Promise<void>;
   close(): Promise<void>;
   save(): Promise<void>;
+
+  // Filter options (thresholds for virtual filter fields like isLeech/isDense)
+  setFilterCompileOptions(options: FilterCompileOptions): void;
 
   // Deck operations
   createDeck(

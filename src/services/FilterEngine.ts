@@ -7,6 +7,14 @@ export interface CompiledFilter {
   requiresDeckJoin: boolean;
 }
 
+export interface FilterCompileOptions {
+  leechThreshold?: number;
+  denseCardCharThreshold?: number;
+}
+
+export const DEFAULT_LEECH_THRESHOLD = 8;
+export const DEFAULT_DENSE_CHAR_THRESHOLD = 500;
+
 const FIELD_TO_COLUMN: Record<string, string> = {
   deckId: "f.deck_id",
   deckTag: "d.tag",
@@ -29,6 +37,8 @@ const NUMERIC_FIELDS = new Set([
   "difficulty", "stability", "interval", "repetitions", "lapses",
 ]);
 
+const VIRTUAL_FIELDS = new Set(["isLeech", "isDense"]);
+
 // Tags are stored as comma-joined ("math,science") in f.tags. To match
 // a single tag exactly within that list, wrap the column and parameter
 // with delimiters so "math" matches "math" but not "mathematics".
@@ -40,7 +50,42 @@ function tagDelimitedParam(tag: string): string {
   return `%,${tag.toLowerCase()},%`;
 }
 
-function compileRule(rule: FilterRule, params: SqlJsValue[]): string {
+function parseBoolValue(value: string): boolean {
+  return value === "true" || value === "1";
+}
+
+function compileVirtualRule(
+  rule: FilterRule,
+  params: SqlJsValue[],
+  options: Required<FilterCompileOptions>
+): string {
+  if (rule.operator !== "equals" && rule.operator !== "not_equals") {
+    throw new Error(
+      `Field "${rule.field}" only supports equals/not_equals operators`
+    );
+  }
+  const expected = parseBoolValue(rule.value);
+  const negated = rule.operator === "not_equals" ? !expected : expected;
+
+  if (rule.field === "isLeech") {
+    params.push(options.leechThreshold);
+    return negated ? `(f.lapses >= ?)` : `(f.lapses < ?)`;
+  }
+  if (rule.field === "isDense") {
+    params.push(options.denseCardCharThreshold);
+    return negated ? `(LENGTH(f.back) >= ?)` : `(LENGTH(f.back) < ?)`;
+  }
+  throw new Error(`Unknown virtual field: ${rule.field}`);
+}
+
+function compileRule(
+  rule: FilterRule,
+  params: SqlJsValue[],
+  options: Required<FilterCompileOptions>
+): string {
+  if (VIRTUAL_FIELDS.has(rule.field)) {
+    return compileVirtualRule(rule, params, options);
+  }
   const column = FIELD_TO_COLUMN[rule.field];
   if (!column) {
     throw new Error(`Unknown filter field: ${rule.field}`);
@@ -127,16 +172,24 @@ function compileRule(rule: FilterRule, params: SqlJsValue[]): string {
   }
 }
 
-export function compileFilter(definition: FilterDefinition): CompiledFilter {
+export function compileFilter(
+  definition: FilterDefinition,
+  options: FilterCompileOptions = {}
+): CompiledFilter {
   const params: SqlJsValue[] = [];
   const requiresDeckJoin = definition.rules.some(r => r.field === "deckTag");
+  const resolved: Required<FilterCompileOptions> = {
+    leechThreshold: options.leechThreshold ?? DEFAULT_LEECH_THRESHOLD,
+    denseCardCharThreshold:
+      options.denseCardCharThreshold ?? DEFAULT_DENSE_CHAR_THRESHOLD,
+  };
 
   if (definition.rules.length === 0) {
     return { whereClause: "1 = 1", params, requiresDeckJoin };
   }
 
   const joiner = definition.logic === "OR" ? " OR " : " AND ";
-  const clauses = definition.rules.map(rule => compileRule(rule, params));
+  const clauses = definition.rules.map(rule => compileRule(rule, params, resolved));
   const whereClause = clauses.join(joiner);
 
   return { whereClause, params, requiresDeckJoin };

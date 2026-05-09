@@ -5,10 +5,16 @@ import type {
   FilterDefinition,
 } from "../database/types";
 import type { IDatabaseService } from "../database/DatabaseFactory";
-import { compileFilter } from "./FilterEngine";
+import { compileFilter, type FilterCompileOptions } from "./FilterEngine";
 
 export class CustomDeckService {
+  private filterCompileOptions: FilterCompileOptions = {};
+
   constructor(private db: IDatabaseService) {}
+
+  setFilterCompileOptions(options: FilterCompileOptions): void {
+    this.filterCompileOptions = options;
+  }
 
   async createCustomDeck(name: string): Promise<CustomDeck> {
     const existing = await this.db.getCustomDeckByName(name);
@@ -49,7 +55,7 @@ export class CustomDeckService {
   }
 
   async previewFilter(filterDefinition: FilterDefinition): Promise<number> {
-    const compiled = compileFilter(filterDefinition);
+    const compiled = compileFilter(filterDefinition, this.filterCompileOptions);
     const from = compiled.requiresDeckJoin
       ? "flashcards f JOIN decks d ON f.deck_id = d.id"
       : "flashcards f";

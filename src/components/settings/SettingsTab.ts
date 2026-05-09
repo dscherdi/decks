@@ -207,6 +207,42 @@ export class DecksSettingTab extends PluginSettingTab {
             await this.saveSettings();
           })
       );
+
+    new Setting(containerEl)
+      .setName("Leech threshold")
+      .setDesc(
+        "A card is flagged as a leech once its lapse count reaches this number (default 8). Leeches are repeatedly forgotten and likely need rewriting."
+      )
+      .addText((text) =>
+        text
+          .setPlaceholder("8")
+          .setValue(this.settings.review.leechThreshold.toString())
+          .onChange(async (value) => {
+            const num = parseInt(value);
+            if (!isNaN(num) && num >= 1 && num <= 100) {
+              this.settings.review.leechThreshold = num;
+              await this.saveSettings();
+            }
+          })
+      );
+
+    new Setting(containerEl)
+      .setName("Dense card character threshold")
+      .setDesc(
+        "A card is flagged as dense once its back text reaches this many characters (default 500). Dense cards are typically too information-rich and benefit from being split."
+      )
+      .addText((text) =>
+        text
+          .setPlaceholder("500")
+          .setValue(this.settings.review.denseCardCharThreshold.toString())
+          .onChange(async (value) => {
+            const num = parseInt(value);
+            if (!isNaN(num) && num >= 50 && num <= 5000) {
+              this.settings.review.denseCardCharThreshold = num;
+              await this.saveSettings();
+            }
+          })
+      );
   }
 
   private isValidDeckTag(tag: string): boolean {

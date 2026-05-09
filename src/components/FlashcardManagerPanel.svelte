@@ -1,39 +1,67 @@
 <script lang="ts">
-  import type { Flashcard, CustomDeck } from "../database/types";
+  import type {
+    Flashcard,
+    CustomDeck,
+    FilterDefinition,
+    FilterRule,
+  } from "../database/types";
   import type { IDatabaseService } from "../database/DatabaseFactory";
   import type { CustomDeckService } from "../services/CustomDeckService";
-  import { prepareFuzzySearch } from "obsidian";
+  import { evaluateFilter } from "../services/FilterEvaluator";
+  import { computeCardHealth } from "../services/CardHealth";
+  import { formatBadgeParts } from "../services/FilterBadgeFormatter";
+  import type { EditTarget, EditCommitPayload } from "./FlashcardManagerEditTypes";
+  import FilterBuilder from "./FilterBuilder.svelte";
   import { onMount, onDestroy } from "svelte";
+  import { prepareFuzzySearch } from "obsidian";
 
   export let db: IDatabaseService;
   export let customDeckService: CustomDeckService;
   export let onCreateCustomDeck: (name: string, flashcardIds: string[]) => Promise<void>;
   export let onAddToCustomDeck: (customDeckId: string, flashcardIds: string[]) => Promise<void>;
-  export let onRemoveFromCustomDeck: ((customDeckId: string, flashcardIds: string[]) => Promise<void>) | null = null;
-  export let editingCustomDeckId: string | null = null;
-  export let editingCustomDeckName: string | null = null;
+  export let onCreateFilterDeck: ((name: string, definition: FilterDefinition) => Promise<void>) | null = null;
+  export let onCommitEdit:
+    | ((target: EditTarget, payload: EditCommitPayload) => Promise<void>)
+    | null = null;
+  export let initialEditTarget: EditTarget | null = null;
+  export let leechThreshold = 8;
+  export let denseCardCharThreshold = 500;
 
-  type SortField = "lastReviewed" | "dueDate" | "state" | "sourceFile" | "breadcrumb";
+  type SortColumn =
+    | "front"
+    | "back"
+    | "sourceFile"
+    | "breadcrumb"
+    | "deckTag"
+    | "state"
+    | "health"
+    | "dueDate"
+    | "lastReviewed";
   type SortDirection = "asc" | "desc";
-
-  interface ActiveSort {
-    field: SortField;
-    direction: SortDirection;
-  }
 
   let allFlashcards: Flashcard[] = [];
   let deckTagMap: Map<string, string> = new Map();
   let customDecks: CustomDeck[] = [];
 
-  let searchQuery = "";
-  let tagFilter = "";
-  let deckFilter = "";
-  let cardTagFilter = "";
   let availableTags: string[] = [];
   let availableCardTags: string[] = [];
   let availableDecks: { id: string; name: string }[] = [];
 
-  let sorts: ActiveSort[] = [{ field: "dueDate", direction: "asc" }];
+  let editTarget: EditTarget | null = initialEditTarget;
+  let originalDeckCards: Set<string> | null = null;
+  let editTargetSelectId: string = initialEditTarget?.id ?? "";
+
+  let filterDefinition: FilterDefinition =
+    initialEditTarget?.kind === "filter"
+      ? initialEditTarget.filterDefinition
+      : { version: 1, logic: "AND", rules: [] };
+
+  let searchQuery = "";
+  let filterPopoverOpen = false;
+  let filterPopoverContainer: HTMLDivElement | null = null;
+
+  let sortColumn: SortColumn = "dueDate";
+  let sortDirection: SortDirection = "asc";
 
   let selectedIds: Set<string> = new Set();
   let selectAll = false;
@@ -46,85 +74,143 @@
   let showNewDeckInput = false;
   let customDeckDropdownEl: HTMLDivElement | null = null;
 
-  $: filteredFlashcards = applyFilters(allFlashcards, searchQuery, tagFilter, deckFilter, cardTagFilter);
-  $: sortedFlashcards = applySorts(filteredFlashcards, sorts);
+  let saveAsDeckMode: "filter" | null = null;
+  let saveAsDeckName = "";
+
+  $: thresholds = { leechThreshold, denseCardCharThreshold };
+  $: ruleFilteredFlashcards = filterByRules(
+    allFlashcards,
+    filterDefinition,
+    deckTagMap,
+    thresholds
+  );
+  $: searchedFlashcards = applySearchRanking(ruleFilteredFlashcards, searchQuery);
+  $: sortedFlashcards = searchQuery.trim()
+    ? searchedFlashcards
+    : sortCards(searchedFlashcards, sortColumn, sortDirection);
   $: displayedFlashcards = sortedFlashcards.slice(0, displayLimit);
   $: hasMore = sortedFlashcards.length > displayLimit;
   $: selectedCount = selectedIds.size;
+  $: hasFilter = filterDefinition.rules.length > 0;
+  $: hasSearch = searchQuery.trim().length > 0;
+  $: filterRowVisible = hasFilter || hasSearch;
 
-  function applyFilters(cards: Flashcard[], query: string, tag: string, deck: string, cardTag: string): Flashcard[] {
-    let result = cards;
-
-    if (tag) {
-      const matchingDeckIds = new Set<string>();
-      for (const [deckId, deckTag] of deckTagMap) {
-        if (deckTag === tag) {
-          matchingDeckIds.add(deckId);
-        }
-      }
-      result = result.filter((c) => matchingDeckIds.has(c.deckId));
-    }
-
-    if (deck) {
-      result = result.filter((c) => c.deckId === deck);
-    }
-
-    if (cardTag) {
-      result = result.filter((c) => c.tags.includes(cardTag));
-    }
-
-    if (query.trim()) {
-      const search = prepareFuzzySearch(query);
-      result = result.filter((c) => {
-        const deckTag = deckTagMap.get(c.deckId) ?? "";
-        return (
-          search(c.front) !== null ||
-          search(c.back) !== null ||
-          search(c.sourceFile) !== null ||
-          search(c.breadcrumb) !== null ||
-          (deckTag !== "" && search(deckTag) !== null) ||
-          c.tags.some((t) => search(t) !== null)
-        );
-      });
-    }
-
-    return result;
+  // Cancel save-as if rules cleared mid-flight.
+  $: if (saveAsDeckMode === "filter" && !hasFilter) {
+    saveAsDeckMode = null;
+    saveAsDeckName = "";
   }
 
-  function applySorts(cards: Flashcard[], activeSorts: ActiveSort[]): Flashcard[] {
-    if (activeSorts.length === 0) return cards;
-
-    return [...cards].sort((a, b) => {
-      for (const sort of activeSorts) {
-        const cmp = compareByField(a, b, sort.field);
-        if (cmp !== 0) {
-          return sort.direction === "asc" ? cmp : -cmp;
-        }
-      }
-      return 0;
-    });
+  function filterByRules(
+    cards: Flashcard[],
+    def: FilterDefinition,
+    tagMap: Map<string, string>,
+    th: { leechThreshold: number; denseCardCharThreshold: number }
+  ): Flashcard[] {
+    if (def.rules.length === 0) return cards;
+    return cards.filter((c) =>
+      evaluateFilter(c, def, { deckTagMap: tagMap, thresholds: th })
+    );
   }
 
-  function compareByField(a: Flashcard, b: Flashcard, field: SortField): number {
-    switch (field) {
+  type FuzzyMatcher = ReturnType<typeof prepareFuzzySearch>;
+
+  function applySearchRanking(cards: Flashcard[], query: string): Flashcard[] {
+    const q = query.trim();
+    if (!q) return cards;
+    const search = prepareFuzzySearch(q);
+    const ranked: { card: Flashcard; tier: number; score: number }[] = [];
+    for (const c of cards) {
+      const r = computeSearchRank(c, search);
+      if (r) ranked.push({ card: c, tier: r.tier, score: r.score });
+    }
+    ranked.sort((a, b) => a.tier - b.tier || b.score - a.score);
+    return ranked.map((r) => r.card);
+  }
+
+  // Priority order: filename -> breadcrumb -> front -> back. First field that
+  // matches sets the tier; the actual fuzzy score is the tiebreaker within a tier.
+  function computeSearchRank(
+    card: Flashcard,
+    search: FuzzyMatcher
+  ): { tier: number; score: number } | null {
+    const fields: string[] = [
+      getFilename(card.sourceFile),
+      card.breadcrumb,
+      card.front,
+      card.back,
+    ];
+    for (let i = 0; i < fields.length; i++) {
+      const value = fields[i];
+      if (!value) continue;
+      const result = search(value);
+      if (result) return { tier: i, score: result.score };
+    }
+    return null;
+  }
+
+  function healthRank(card: Flashcard): number {
+    const h = computeCardHealth(card, thresholds);
+    if (h.isLeech && h.isDense) return 3;
+    if (h.isLeech) return 2;
+    if (h.isDense) return 1;
+    return 0;
+  }
+
+  function sortCards(
+    cards: Flashcard[],
+    column: SortColumn,
+    direction: SortDirection
+  ): Flashcard[] {
+    const sorted = [...cards].sort((a, b) => compareByColumn(a, b, column));
+    return direction === "asc" ? sorted : sorted.reverse();
+  }
+
+  function compareByColumn(a: Flashcard, b: Flashcard, column: SortColumn): number {
+    switch (column) {
+      case "front":
+        return a.front.localeCompare(b.front);
+      case "back":
+        return a.back.localeCompare(b.back);
+      case "sourceFile":
+        return a.sourceFile.localeCompare(b.sourceFile);
+      case "breadcrumb":
+        return a.breadcrumb.localeCompare(b.breadcrumb);
+      case "deckTag": {
+        const ta = deckTagMap.get(a.deckId) ?? "";
+        const tb = deckTagMap.get(b.deckId) ?? "";
+        return ta.localeCompare(tb);
+      }
+      case "state": {
+        const order = { new: 0, review: 1 } as const;
+        return order[a.state] - order[b.state];
+      }
+      case "health":
+        return healthRank(a) - healthRank(b);
+      case "dueDate":
+        return a.dueDate.localeCompare(b.dueDate);
       case "lastReviewed": {
         const aVal = a.lastReviewed ?? "";
         const bVal = b.lastReviewed ?? "";
         return aVal.localeCompare(bVal);
       }
-      case "dueDate":
-        return a.dueDate.localeCompare(b.dueDate);
-      case "state": {
-        const order = { new: 0, review: 1 };
-        return order[a.state] - order[b.state];
-      }
-      case "sourceFile":
-        return a.sourceFile.localeCompare(b.sourceFile);
-      case "breadcrumb":
-        return a.breadcrumb.localeCompare(b.breadcrumb);
       default:
         return 0;
     }
+  }
+
+  function toggleSort(column: SortColumn) {
+    if (sortColumn === column) {
+      sortDirection = sortDirection === "asc" ? "desc" : "asc";
+    } else {
+      sortColumn = column;
+      sortDirection = "asc";
+    }
+  }
+
+  function sortGlyph(column: SortColumn): string {
+    if (sortColumn !== column) return "";
+    return sortDirection === "asc" ? "▲" : "▼";
   }
 
   function truncate(text: string, maxLen: number): string {
@@ -166,7 +252,7 @@
       newSet.add(id);
     }
     selectedIds = newSet;
-    selectAll = selectedIds.size === filteredFlashcards.length && filteredFlashcards.length > 0;
+    selectAll = selectedIds.size === sortedFlashcards.length && sortedFlashcards.length > 0;
   }
 
   function toggleSelectAll() {
@@ -174,7 +260,7 @@
       selectedIds = new Set();
       selectAll = false;
     } else {
-      selectedIds = new Set(filteredFlashcards.map((c) => c.id));
+      selectedIds = new Set(sortedFlashcards.map((c) => c.id));
       selectAll = true;
     }
   }
@@ -182,33 +268,6 @@
   function clearSelection() {
     selectedIds = new Set();
     selectAll = false;
-  }
-
-  function addSort(field: SortField) {
-    const existing = sorts.find((s) => s.field === field);
-    if (existing) {
-      sorts = sorts.map((s) =>
-        s.field === field
-          ? { ...s, direction: s.direction === "asc" ? "desc" : "asc" }
-          : s
-      );
-    } else {
-      sorts = [...sorts, { field, direction: "asc" }];
-    }
-  }
-
-  function removeSort(field: SortField) {
-    sorts = sorts.filter((s) => s.field !== field);
-  }
-
-  function getSortLabel(field: SortField): string {
-    switch (field) {
-      case "lastReviewed": return "Last reviewed";
-      case "dueDate": return "Due date";
-      case "state": return "State";
-      case "sourceFile": return "Filename";
-      case "breadcrumb": return "Breadcrumb";
-    }
   }
 
   function loadMore() {
@@ -246,17 +305,117 @@
     }
   }
 
-  const isEditMode = !!editingCustomDeckId;
+  $: isEditMode = !!editTarget;
+  $: editingCustomDeckName = editTarget?.name ?? null;
 
-  async function handleRemoveFromDeck() {
-    if (!editingCustomDeckId || !onRemoveFromCustomDeck) return;
-    const ids = Array.from(selectedIds);
-    await onRemoveFromCustomDeck(editingCustomDeckId, ids);
-    allFlashcards = allFlashcards.filter((c) => !selectedIds.has(c.id));
-    clearSelection();
+  async function handleEditTargetChange(event: Event) {
+    const target = event.target;
+    if (!(target instanceof HTMLSelectElement)) return;
+    const id = target.value;
+    await applyEditTargetById(id);
+  }
+
+  async function applyEditTargetById(id: string) {
+    editTargetSelectId = id;
+    if (!id) {
+      editTarget = null;
+      originalDeckCards = null;
+      selectedIds = new Set();
+      selectAll = false;
+      filterDefinition = { version: 1, logic: "AND", rules: [] };
+      return;
+    }
+    const deck = customDecks.find((d) => d.id === id);
+    if (!deck) return;
+    if (deck.deckType === "filter") {
+      const def: FilterDefinition = deck.filterDefinition
+        ? JSON.parse(deck.filterDefinition)
+        : { version: 1, logic: "AND", rules: [] };
+      editTarget = { kind: "filter", id: deck.id, name: deck.name, filterDefinition: def };
+      filterDefinition = def;
+      originalDeckCards = null;
+      selectedIds = new Set();
+      selectAll = false;
+    } else {
+      const cardIds = await db.getFlashcardIdsForCustomDeck(deck.id);
+      editTarget = { kind: "manual", id: deck.id, name: deck.name };
+      originalDeckCards = new Set(cardIds);
+      selectedIds = new Set(cardIds);
+      selectAll = false;
+      filterDefinition = { version: 1, logic: "AND", rules: [] };
+    }
+  }
+
+  function cancelEdit() {
+    void applyEditTargetById("");
+  }
+
+  async function saveEdit() {
+    if (!editTarget || !onCommitEdit) return;
+    let payload: EditCommitPayload;
+    if (editTarget.kind === "filter") {
+      payload = { kind: "filter", definition: filterDefinition };
+    } else {
+      const original = originalDeckCards ?? new Set<string>();
+      const toAdd: string[] = [];
+      const toRemove: string[] = [];
+      for (const id of selectedIds) if (!original.has(id)) toAdd.push(id);
+      for (const id of original) if (!selectedIds.has(id)) toRemove.push(id);
+      payload = { kind: "manual", toAdd, toRemove };
+    }
+    await onCommitEdit(editTarget, payload);
+  }
+
+  function startSaveAs() {
+    saveAsDeckMode = "filter";
+    saveAsDeckName = "";
+  }
+
+  function cancelSaveAs() {
+    saveAsDeckMode = null;
+    saveAsDeckName = "";
+  }
+
+  async function confirmSaveAs() {
+    const name = saveAsDeckName.trim();
+    if (!name || !onCreateFilterDeck || !hasFilter) return;
+    await onCreateFilterDeck(name, filterDefinition);
+    saveAsDeckMode = null;
+    saveAsDeckName = "";
+    customDecks = await customDeckService.getAllCustomDecks();
+  }
+
+  function removeRule(index: number) {
+    filterDefinition = {
+      ...filterDefinition,
+      rules: filterDefinition.rules.filter((_, i) => i !== index),
+    };
+  }
+
+  function clearSearch() {
+    searchQuery = "";
+  }
+
+  function toggleFilterPopover() {
+    filterPopoverOpen = !filterPopoverOpen;
+  }
+
+  function handleDocClickPopover(event: MouseEvent) {
+    if (!filterPopoverOpen) return;
+    if (
+      filterPopoverContainer &&
+      !filterPopoverContainer.contains(event.target as Node)
+    ) {
+      filterPopoverOpen = false;
+    }
+  }
+
+  function badgeParts(rule: FilterRule) {
+    return formatBadgeParts(rule, availableDecks);
   }
 
   onMount(async () => {
+    document.addEventListener("click", handleDocClickPopover);
     try {
       const [decks, cDecks] = await Promise.all([
         db.getAllDecks(),
@@ -277,10 +436,11 @@
       availableTags = Array.from(tags).sort();
       availableDecks = deckList.sort((a, b) => a.name.localeCompare(b.name));
 
-      if (isEditMode && editingCustomDeckId) {
-        allFlashcards = await db.getFlashcardsForCustomDeck(editingCustomDeckId);
-      } else {
-        allFlashcards = await db.getAllFlashcards();
+      allFlashcards = await db.getAllFlashcards();
+      if (initialEditTarget?.kind === "manual") {
+        const cardIds = await db.getFlashcardIdsForCustomDeck(initialEditTarget.id);
+        originalDeckCards = new Set(cardIds);
+        selectedIds = new Set(cardIds);
       }
       const cardTagSet = new Set<string>();
       for (const c of allFlashcards) {
@@ -294,21 +454,24 @@
 
   onDestroy(() => {
     document.removeEventListener("click", handleOutsideClick);
+    document.removeEventListener("click", handleDocClickPopover);
   });
 
-  // Clean up selection when filter changes
+  // Clean up selection when filter or search changes
   $: {
-    if (filteredFlashcards) {
-      const filteredIds = new Set(filteredFlashcards.map((c) => c.id));
+    if (sortedFlashcards) {
+      const visibleIds = new Set(sortedFlashcards.map((c) => c.id));
       const newSelected = new Set<string>();
       for (const id of selectedIds) {
-        if (filteredIds.has(id)) {
+        if (visibleIds.has(id)) {
           newSelected.add(id);
         }
       }
       if (newSelected.size !== selectedIds.size) {
         selectedIds = newSelected;
-        selectAll = selectedIds.size === filteredFlashcards.length && filteredFlashcards.length > 0;
+        selectAll =
+          selectedIds.size === sortedFlashcards.length &&
+          sortedFlashcards.length > 0;
       }
     }
   }
@@ -319,93 +482,142 @@
   {#if loading}
     <div class="decks-fm-loading">Loading flashcards...</div>
   {:else}
-    <!-- Search and filter bar -->
-    <div class="decks-fm-filter-bar">
-      <input
-        type="text"
-        class="decks-fm-search-input"
-        placeholder="Search flashcards..."
-        bind:value={searchQuery}
-      />
-      <select
-        class="decks-fm-tag-select"
-        bind:value={tagFilter}
-      >
-        <option value="">All tags</option>
-        {#each availableTags as tag}
-          <option value={tag}>{tag}</option>
-        {/each}
-      </select>
-      <select
-        class="decks-fm-tag-select"
-        bind:value={deckFilter}
-      >
-        <option value="">All decks</option>
-        {#each availableDecks as deck}
-          <option value={deck.id}>{deck.name}</option>
-        {/each}
-      </select>
-      <select
-        class="decks-fm-tag-select"
-        bind:value={cardTagFilter}
-      >
-        <option value="">All card tags</option>
-        {#each availableCardTags as t}
-          <option value={t}>#{t}</option>
-        {/each}
-      </select>
-    </div>
-
-    <!-- Sort controls -->
-    <div class="decks-fm-sort-bar">
-      <span class="decks-fm-sort-label">Sort:</span>
-      {#each sorts as sort}
-        <button
-          class="decks-fm-sort-chip"
-          on:click={() => addSort(sort.field)}
+    <!-- Edit target row: dropdown to pick a custom deck to edit -->
+    {#if customDecks.length > 0 || isEditMode}
+      <div class="decks-edit-target-row">
+        <label class="decks-edit-target-label" for="decks-edit-target-select">Edit:</label>
+        <select
+          id="decks-edit-target-select"
+          class="decks-edit-target-select"
+          value={editTargetSelectId}
+          on:change={handleEditTargetChange}
         >
-          {getSortLabel(sort.field)} {sort.direction === "asc" ? "\u2191" : "\u2193"}
-          <span
-            class="decks-fm-chip-remove"
-            role="button"
-            tabindex="0"
-            on:click|stopPropagation={() => removeSort(sort.field)}
-            on:keydown={(e) => e.key === "Enter" && removeSort(sort.field)}
-          >&times;</span>
-        </button>
-      {/each}
-      <select
-        class="decks-fm-sort-add"
-        on:change={(e) => {
-          const target = e.target;
-          if (target instanceof HTMLSelectElement && target.value) {
-            addSort(target.value as SortField);
-            target.value = "";
-          }
-        }}
-      >
-        <option value="">+ Add sort</option>
-        <option value="dueDate">Due date</option>
-        <option value="lastReviewed">Last reviewed</option>
-        <option value="state">State</option>
-        <option value="sourceFile">Filename</option>
-        <option value="breadcrumb">Breadcrumb</option>
-      </select>
-    </div>
-
-    <!-- Action bar (when cards selected) -->
-    {#if selectedCount > 0}
-      <div class="decks-fm-action-bar">
-        <span class="decks-fm-selected-count">{selectedCount} selected</span>
+          <option value="">— Browse all flashcards —</option>
+          {#each customDecks as deck (deck.id)}
+            <option value={deck.id}>
+              {deck.deckType === "filter" ? "🔍" : "📁"} {deck.name}
+            </option>
+          {/each}
+        </select>
         {#if isEditMode}
           <button
-            class="decks-fm-action-btn decks-fm-remove-btn"
-            on:click={handleRemoveFromDeck}
-          >
-            Remove from deck
-          </button>
-        {:else}
-          <div class="decks-fm-deck-dropdown-container" bind:this={customDeckDropdownEl}>
+            class="decks-edit-save-btn"
+            disabled={!onCommitEdit}
+            on:click={saveEdit}
+            title="Save changes to {editingCustomDeckName ?? 'this deck'}"
+          >Save</button>
+          <button
+            class="decks-edit-cancel-btn"
+            on:click={cancelEdit}
+            title="Discard edit and return to browse mode"
+          >Cancel</button>
+        {/if}
+      </div>
+    {/if}
+
+    <!-- Control bar: search + filter button -->
+    <div class="decks-control-bar">
+      <div class="decks-control-search-wrap">
+        <span class="decks-control-search-icon" aria-hidden="true">🔍</span>
+        <input
+          type="text"
+          class="decks-control-search"
+          placeholder="Search filename, breadcrumb, front, back..."
+          bind:value={searchQuery}
+        />
+        {#if hasSearch}
+          <button
+            class="decks-control-search-clear"
+            on:click={clearSearch}
+            title="Clear search"
+            aria-label="Clear search"
+          >×</button>
+        {/if}
+      </div>
+      <div class="decks-filter-popover-container" bind:this={filterPopoverContainer}>
+        <button
+          class="decks-control-filter-btn"
+          class:decks-control-filter-btn-active={hasFilter || filterPopoverOpen}
+          on:click|stopPropagation={toggleFilterPopover}
+          aria-expanded={filterPopoverOpen}
+        >
+          + Filter{hasFilter ? ` (${filterDefinition.rules.length})` : ""}
+        </button>
+        {#if filterPopoverOpen}
+          <!-- svelte-ignore a11y-no-static-element-interactions -->
+          <div class="decks-filter-popover" on:click|stopPropagation>
+            <FilterBuilder
+              filterDefinition={filterDefinition}
+              availableDecks={availableDecks}
+              availableTags={availableTags}
+              availableCardTags={availableCardTags}
+              previewCount={ruleFilteredFlashcards.length}
+              onChange={(def) => { filterDefinition = def; }}
+            />
+          </div>
+        {/if}
+      </div>
+    </div>
+
+    <!-- Active filters row: badges + save as filter deck -->
+    {#if filterRowVisible}
+      <div class="decks-active-filters-row">
+        <div class="decks-active-filters-badges">
+          {#each filterDefinition.rules as rule, i (i)}
+            {@const parts = badgeParts(rule)}
+            <span class="decks-badge">
+              {#if parts.key}
+                <span class="decks-badge-key">{parts.key}:</span>
+              {/if}
+              <span class="decks-badge-value">{parts.value}</span>
+              <button
+                class="decks-badge-close"
+                on:click={() => removeRule(i)}
+                aria-label="Remove filter"
+              >×</button>
+            </span>
+          {/each}
+          {#if !hasFilter && hasSearch}
+            <span class="decks-active-filters-hint">Search-only view (saving is disabled)</span>
+          {/if}
+        </div>
+        {#if !isEditMode}
+          <div class="decks-save-action">
+            {#if saveAsDeckMode === "filter"}
+              <input
+                type="text"
+                class="decks-save-name-input"
+                placeholder="Filter deck name"
+                bind:value={saveAsDeckName}
+                on:keydown={(e) => { if (e.key === "Enter") confirmSaveAs(); if (e.key === "Escape") cancelSaveAs(); }}
+              />
+              <button
+                class="decks-save-confirm-btn"
+                disabled={!saveAsDeckName.trim()}
+                on:click={confirmSaveAs}
+              >Save</button>
+              <button
+                class="decks-save-cancel-btn"
+                on:click={cancelSaveAs}
+              >Cancel</button>
+            {:else}
+              <button
+                class="decks-save-as-deck-btn"
+                disabled={!hasFilter || !onCreateFilterDeck}
+                on:click={startSaveAs}
+                title={hasFilter ? "Save current filter as a filter deck" : "Add a filter rule to save"}
+              >💾 Save as filter deck</button>
+            {/if}
+          </div>
+        {/if}
+      </div>
+    {/if}
+
+    <!-- Action bar (when cards selected, free mode only) -->
+    {#if selectedCount > 0 && !isEditMode}
+      <div class="decks-fm-action-bar">
+        <span class="decks-fm-selected-count">{selectedCount} selected</span>
+        <div class="decks-fm-deck-dropdown-container" bind:this={customDeckDropdownEl}>
             <button
               class="decks-fm-action-btn"
               on:click={toggleCustomDeckDropdown}
@@ -450,13 +662,6 @@
               </div>
             {/if}
           </div>
-        {/if}
-        <button
-          class="decks-fm-action-btn decks-fm-deselect-btn"
-          on:click={clearSelection}
-        >
-          Deselect all
-        </button>
       </div>
     {/if}
 
@@ -471,23 +676,46 @@
               on:change={toggleSelectAll}
             />
           </div>
-          <div class="decks-fm-col-front">Front</div>
-          <div class="decks-fm-col-back">Back</div>
-          <div class="decks-fm-col-file">File</div>
-          <div class="decks-fm-col-breadcrumb">Breadcrumb</div>
-          <div class="decks-fm-col-tag">Deck tag</div>
+          <div class="decks-fm-col-front decks-fm-col-sortable" role="button" tabindex="0" on:click={() => toggleSort("front")} on:keydown={(e) => e.key === "Enter" && toggleSort("front")}>
+            Front <span class="decks-fm-sort-glyph">{sortGlyph("front")}</span>
+          </div>
+          <div class="decks-fm-col-back decks-fm-col-sortable" role="button" tabindex="0" on:click={() => toggleSort("back")} on:keydown={(e) => e.key === "Enter" && toggleSort("back")}>
+            Back <span class="decks-fm-sort-glyph">{sortGlyph("back")}</span>
+          </div>
+          <div class="decks-fm-col-file decks-fm-col-sortable" role="button" tabindex="0" on:click={() => toggleSort("sourceFile")} on:keydown={(e) => e.key === "Enter" && toggleSort("sourceFile")}>
+            File <span class="decks-fm-sort-glyph">{sortGlyph("sourceFile")}</span>
+          </div>
+          <div class="decks-fm-col-breadcrumb decks-fm-col-sortable" role="button" tabindex="0" on:click={() => toggleSort("breadcrumb")} on:keydown={(e) => e.key === "Enter" && toggleSort("breadcrumb")}>
+            Breadcrumb <span class="decks-fm-sort-glyph">{sortGlyph("breadcrumb")}</span>
+          </div>
+          <div class="decks-fm-col-tag decks-fm-col-sortable" role="button" tabindex="0" on:click={() => toggleSort("deckTag")} on:keydown={(e) => e.key === "Enter" && toggleSort("deckTag")}>
+            Deck tag <span class="decks-fm-sort-glyph">{sortGlyph("deckTag")}</span>
+          </div>
           <div class="decks-fm-col-cardtags">Card tags</div>
-          <div class="decks-fm-col-state">State</div>
-          <div class="decks-fm-col-due">Due</div>
-          <div class="decks-fm-col-reviewed">Reviewed</div>
+          <div class="decks-fm-col-state decks-fm-col-sortable" role="button" tabindex="0" on:click={() => toggleSort("state")} on:keydown={(e) => e.key === "Enter" && toggleSort("state")}>
+            State <span class="decks-fm-sort-glyph">{sortGlyph("state")}</span>
+          </div>
+          <div class="decks-fm-col-health decks-fm-col-sortable" role="button" tabindex="0" on:click={() => toggleSort("health")} on:keydown={(e) => e.key === "Enter" && toggleSort("health")}>
+            Health <span class="decks-fm-sort-glyph">{sortGlyph("health")}</span>
+          </div>
+          <div class="decks-fm-col-due decks-fm-col-sortable" role="button" tabindex="0" on:click={() => toggleSort("dueDate")} on:keydown={(e) => e.key === "Enter" && toggleSort("dueDate")}>
+            Due <span class="decks-fm-sort-glyph">{sortGlyph("dueDate")}</span>
+          </div>
+          <div class="decks-fm-col-reviewed decks-fm-col-sortable" role="button" tabindex="0" on:click={() => toggleSort("lastReviewed")} on:keydown={(e) => e.key === "Enter" && toggleSort("lastReviewed")}>
+            Reviewed <span class="decks-fm-sort-glyph">{sortGlyph("lastReviewed")}</span>
+          </div>
         </div>
 
         <div class="decks-fm-table-body">
           {#each displayedFlashcards as card (card.id)}
+            {@const health = computeCardHealth(card, thresholds)}
             <div
               class="decks-fm-table-row"
               class:decks-fm-row-selected={selectedIds.has(card.id)}
+              role="row"
+              tabindex="0"
               on:click={() => toggleSelection(card.id)}
+              on:keydown={(e) => e.key === "Enter" && toggleSelection(card.id)}
             >
               <div class="decks-fm-col-check">
                 <input
@@ -522,6 +750,23 @@
                   {card.state === "new" ? "New" : "Review"}
                 </span>
               </div>
+              <div class="decks-fm-col-health">
+                {#if health.isLeech}
+                  <span class="decks-fm-health-badge decks-fm-health-leech" title="Repeatedly forgotten ({card.lapses} lapses) — consider rewriting">
+                    Leech
+                  </span>
+                {/if}
+                {#if health.isDense}
+                  <span class="decks-fm-health-badge decks-fm-health-dense" title="Back content is {card.back.length} chars — consider splitting">
+                    Dense
+                  </span>
+                {/if}
+                {#if !health.isLeech && !health.isDense}
+                  <span class="decks-fm-health-badge decks-fm-health-healthy" title="No leech or density issues detected">
+                    Healthy
+                  </span>
+                {/if}
+              </div>
               <div class="decks-fm-col-due">
                 {formatRelativeDate(card.dueDate)}
               </div>
@@ -538,12 +783,12 @@
     <div class="decks-fm-footer">
       <span>
         {#if isEditMode && editingCustomDeckName}
-          {#if searchQuery || tagFilter || deckFilter || cardTagFilter}
+          {#if filterRowVisible}
             Showing {sortedFlashcards.length} of {allFlashcards.length} cards in "{editingCustomDeckName}"
           {:else}
             {allFlashcards.length} cards in "{editingCustomDeckName}"
           {/if}
-        {:else if searchQuery || tagFilter || deckFilter || cardTagFilter}
+        {:else if filterRowVisible}
           Showing {sortedFlashcards.length} of {allFlashcards.length} flashcards
         {:else}
           {allFlashcards.length} flashcards
@@ -574,75 +819,300 @@
     color: var(--text-muted);
   }
 
-  .decks-fm-filter-bar {
-    display: flex;
-    gap: 8px;
-  }
-
-  .decks-fm-search-input {
-    flex: 1;
-    padding: 6px 10px;
-    border: 1px solid var(--background-modifier-border);
-    border-radius: 4px;
-    background: var(--background-primary);
-    color: var(--text-normal);
-    font-size: 13px;
-  }
-
-  .decks-fm-tag-select {
-    padding: 6px 10px;
-    border: 1px solid var(--background-modifier-border);
-    border-radius: 4px;
-    background: var(--background-primary);
-    color: var(--text-normal);
-    font-size: 13px;
-    min-width: 140px;
-  }
-
-  .decks-fm-sort-bar {
+  /* Control bar */
+  .decks-edit-target-row {
     display: flex;
     align-items: center;
-    gap: 6px;
-    flex-wrap: wrap;
+    gap: 8px;
+    padding: 4px 8px;
+    background: var(--background-secondary);
+    border-radius: 6px;
   }
 
-  .decks-fm-sort-label {
+  .decks-edit-target-label {
     font-size: 12px;
     color: var(--text-muted);
+    font-weight: 500;
   }
 
-  .decks-fm-sort-chip {
-    display: inline-flex;
-    align-items: center;
-    gap: 4px;
-    padding: 2px 8px;
-    border-radius: 12px;
-    background: var(--background-modifier-hover);
+  .decks-edit-target-select {
+    flex: 1;
+    padding: 4px 8px;
     border: 1px solid var(--background-modifier-border);
+    border-radius: 4px;
+    background: var(--background-primary);
     color: var(--text-normal);
+    font-size: 13px;
+  }
+
+  .decks-edit-save-btn {
+    padding: 4px 12px;
+    border-radius: 4px;
+    border: 1px solid var(--interactive-accent);
+    background: var(--interactive-accent);
+    color: var(--text-on-accent);
     font-size: 12px;
     cursor: pointer;
   }
 
-  .decks-fm-chip-remove {
-    cursor: pointer;
-    font-size: 14px;
-    line-height: 1;
-    opacity: 0.6;
+  .decks-edit-save-btn:disabled {
+    opacity: 0.5;
+    cursor: not-allowed;
   }
 
-  .decks-fm-chip-remove:hover {
-    opacity: 1;
-  }
-
-  .decks-fm-sort-add {
-    padding: 2px 6px;
-    border: 1px dashed var(--background-modifier-border);
+  .decks-edit-cancel-btn {
+    padding: 4px 12px;
     border-radius: 4px;
+    border: 1px solid var(--background-modifier-border);
     background: transparent;
     color: var(--text-muted);
     font-size: 12px;
     cursor: pointer;
+  }
+
+  .decks-edit-cancel-btn:hover {
+    background: var(--background-modifier-hover);
+    color: var(--text-normal);
+  }
+
+  .decks-control-bar {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 6px 8px;
+    background: var(--background-secondary);
+    border-radius: 6px;
+  }
+
+  .decks-control-search-wrap {
+    flex: 1;
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    padding: 4px 10px;
+    background: var(--background-primary);
+    border: 1px solid var(--background-modifier-border);
+    border-radius: 4px;
+  }
+
+  .decks-control-search-wrap:focus-within {
+    border-color: var(--interactive-accent);
+  }
+
+  .decks-control-search-icon {
+    font-size: 12px;
+    opacity: 0.6;
+  }
+
+  .decks-control-search {
+    flex: 1;
+    border: none;
+    background: transparent;
+    color: var(--text-normal);
+    font-size: 13px;
+    outline: none;
+    padding: 2px 0;
+  }
+
+  .decks-control-search-clear {
+    background: transparent;
+    border: none;
+    color: var(--text-muted);
+    cursor: pointer;
+    font-size: 16px;
+    line-height: 1;
+    padding: 0 4px;
+  }
+
+  .decks-control-search-clear:hover {
+    color: var(--text-normal);
+  }
+
+  .decks-control-filter-btn {
+    padding: 5px 14px;
+    border: 1px solid var(--background-modifier-border);
+    border-radius: 4px;
+    background: var(--background-primary);
+    color: var(--text-normal);
+    font-size: 13px;
+    cursor: pointer;
+    white-space: nowrap;
+  }
+
+  .decks-control-filter-btn:hover {
+    background: var(--background-modifier-hover);
+  }
+
+  .decks-control-filter-btn-active {
+    background: var(--interactive-accent);
+    color: var(--text-on-accent);
+    border-color: var(--interactive-accent);
+  }
+
+  /* Filter popover */
+  .decks-filter-popover-container {
+    position: relative;
+  }
+
+  .decks-filter-popover {
+    position: absolute;
+    top: calc(100% + 6px);
+    right: 0;
+    z-index: 1000;
+    min-width: 520px;
+    max-width: 720px;
+    max-height: 70vh;
+    overflow-y: auto;
+    overscroll-behavior: contain;
+    padding: 12px;
+    background-color: var(--background-primary);
+    border: 1px solid var(--background-modifier-border);
+    border-radius: 6px;
+    box-shadow: var(--shadow-l);
+  }
+
+  /* Active filters row */
+  .decks-active-filters-row {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    flex-wrap: wrap;
+    padding: 4px 8px;
+  }
+
+  .decks-active-filters-badges {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 6px;
+    flex: 1;
+    align-items: center;
+  }
+
+  .decks-active-filters-hint {
+    font-size: 12px;
+    color: var(--text-muted);
+    font-style: italic;
+  }
+
+  .decks-badge {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    padding: 4px 8px;
+    border: 1px solid var(--background-modifier-border);
+    border-radius: var(--radius-s);
+    background-color: var(--background-secondary-alt);
+    color: var(--text-normal);
+    font-size: var(--font-ui-smaller);
+    line-height: 1.2;
+    white-space: nowrap;
+    max-width: 260px;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+
+  .decks-badge-key {
+    color: var(--text-muted);
+    font-weight: 500;
+  }
+
+  .decks-badge-value {
+    color: var(--text-normal);
+    font-weight: 600;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+
+  /* Override Obsidian's default button styles so the close icon doesn't get
+     stretched into a pill or gain a hover background. */
+  .decks-badge .decks-badge-close {
+    background: transparent !important;
+    border: none !important;
+    box-shadow: none !important;
+    min-height: unset !important;
+    height: auto !important;
+    padding: 0 !important;
+    margin: 0 !important;
+
+    color: var(--text-muted);
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 14px;
+    line-height: 1;
+  }
+
+  .decks-badge .decks-badge-close:hover {
+    background: transparent !important;
+    color: var(--text-error);
+  }
+
+  .decks-save-action {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    margin-left: auto;
+  }
+
+  .decks-save-as-deck-btn {
+    padding: 4px 12px;
+    border-radius: 4px;
+    border: 1px solid var(--background-modifier-border);
+    background: var(--interactive-normal);
+    color: var(--text-normal);
+    font-size: 12px;
+    cursor: pointer;
+    white-space: nowrap;
+  }
+
+  .decks-save-as-deck-btn:hover:not(:disabled) {
+    background: var(--interactive-hover);
+  }
+
+  .decks-save-as-deck-btn:disabled {
+    opacity: 0.5;
+    cursor: not-allowed;
+  }
+
+  .decks-save-name-input {
+    padding: 4px 8px;
+    border: 1px solid var(--background-modifier-border);
+    border-radius: 4px;
+    background: var(--background-primary);
+    color: var(--text-normal);
+    font-size: 12px;
+    min-width: 200px;
+  }
+
+  .decks-save-confirm-btn {
+    padding: 4px 12px;
+    border-radius: 4px;
+    border: 1px solid var(--interactive-accent);
+    background: var(--interactive-accent);
+    color: var(--text-on-accent);
+    font-size: 12px;
+    cursor: pointer;
+  }
+
+  .decks-save-confirm-btn:disabled {
+    opacity: 0.5;
+    cursor: not-allowed;
+  }
+
+  .decks-save-cancel-btn {
+    padding: 4px 12px;
+    border-radius: 4px;
+    border: 1px solid var(--background-modifier-border);
+    background: transparent;
+    color: var(--text-muted);
+    font-size: 12px;
+    cursor: pointer;
+  }
+
+  .decks-save-cancel-btn:hover {
+    background: var(--background-modifier-hover);
+    color: var(--text-normal);
   }
 
   .decks-fm-action-bar {
@@ -670,8 +1140,13 @@
     cursor: pointer;
   }
 
-  .decks-fm-action-btn:hover {
+  .decks-fm-action-btn:hover:not(:disabled) {
     background: var(--interactive-hover);
+  }
+
+  .decks-fm-action-btn:disabled {
+    opacity: 0.5;
+    cursor: not-allowed;
   }
 
   .decks-fm-remove-btn {
@@ -682,10 +1157,6 @@
 
   .decks-fm-remove-btn:hover {
     opacity: 0.9;
-  }
-
-  .decks-fm-deselect-btn {
-    margin-left: auto;
   }
 
   .decks-fm-deck-dropdown-container {
@@ -767,12 +1238,12 @@
 
   .decks-fm-table {
     width: 100%;
-    min-width: 800px;
+    min-width: 900px;
   }
 
   .decks-fm-table-header {
     display: grid;
-    grid-template-columns: 36px 1fr 1fr 120px 120px 100px 120px 70px 80px 80px;
+    grid-template-columns: 36px 1fr 1fr 110px 110px 90px 110px 70px 90px 80px 80px;
     gap: 4px;
     padding: 6px 8px;
     background: var(--background-secondary);
@@ -785,9 +1256,24 @@
     border-bottom: 1px solid var(--background-modifier-border);
   }
 
+  .decks-fm-col-sortable {
+    cursor: pointer;
+    user-select: none;
+  }
+
+  .decks-fm-col-sortable:hover {
+    color: var(--text-normal);
+  }
+
+  .decks-fm-sort-glyph {
+    font-size: 9px;
+    margin-left: 2px;
+    opacity: 0.7;
+  }
+
   .decks-fm-table-row {
     display: grid;
-    grid-template-columns: 36px 1fr 1fr 120px 120px 100px 120px 70px 80px 80px;
+    grid-template-columns: 36px 1fr 1fr 110px 110px 90px 110px 70px 90px 80px 80px;
     gap: 4px;
     padding: 4px 8px;
     font-size: 12px;
@@ -841,14 +1327,18 @@
   }
 
   .decks-fm-col-state,
+  .decks-fm-col-health,
   .decks-fm-col-due,
   .decks-fm-col-reviewed {
     display: flex;
     align-items: center;
     font-size: 11px;
+    flex-wrap: wrap;
+    gap: 2px;
   }
 
-  .decks-fm-state-badge {
+  .decks-fm-state-badge,
+  .decks-fm-health-badge {
     padding: 1px 6px;
     border-radius: 8px;
     font-size: 10px;
@@ -864,6 +1354,23 @@
   .decks-fm-state-review {
     background: var(--color-green);
     color: var(--text-on-accent);
+  }
+
+  .decks-fm-health-leech {
+    background: var(--color-red);
+    color: var(--text-on-accent);
+  }
+
+  .decks-fm-health-dense {
+    background: var(--color-orange);
+    color: var(--text-on-accent);
+  }
+
+  .decks-fm-health-healthy {
+    background: transparent;
+    border: 1px solid var(--color-green);
+    color: var(--color-green);
+    font-weight: 500;
   }
 
   .decks-fm-footer {

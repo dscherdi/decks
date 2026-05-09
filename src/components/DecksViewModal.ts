@@ -5,6 +5,7 @@ import type {
   Flashcard,
   DeckOrGroup,
   CustomDeckGroup,
+  FilterDefinition,
 } from "@/database/types";
 import { DeckSynchronizer } from "@/services/DeckSynchronizer";
 import { DeckManager } from "@/services/DeckManager";
@@ -26,8 +27,6 @@ import { StatisticsService } from "@/services/StatisticsService";
 import { TagGroupService } from "@/services/TagGroupService";
 import { CustomDeckService } from "@/services/CustomDeckService";
 import { FlashcardManagerModal } from "./FlashcardManagerModal";
-import { EditFilterModal } from "./EditFilterModal";
-import { CreateCustomDeckModal } from "./CreateCustomDeckModal";
 
 import DeckListPanel from "./DeckListPanel.svelte";
 import { mount, unmount } from "svelte";
@@ -120,7 +119,6 @@ export class DecksViewModal extends Modal {
           this.openEditCustomDeck(customDeck);
         },
         customDeckService: this.customDeckService,
-        onCreateCustomDeck: () => this.openCreateCustomDeck(),
         onRefresh: () => this.refresh(),
         openStatisticsModal: () => this.openStatisticsModal(),
         openProfilesManagerModal: () => this.openProfilesManagerModal(),
@@ -258,32 +256,32 @@ export class DecksViewModal extends Modal {
       this.app,
       this.db,
       this.customDeckService,
+      {
+        leechThreshold: this.settings.review.leechThreshold,
+        denseCardCharThreshold: this.settings.review.denseCardCharThreshold,
+      },
+      undefined,
+      () => void this.refresh(),
     );
     this.openWithReturn(modal);
   }
 
-  private openCreateCustomDeck(): void {
-    this.customDeckService.getAllCustomDecks()
-      .then((decks) => {
-        const modal = new CreateCustomDeckModal(
-          this.app,
-          decks.map(d => d.name),
-          this.customDeckService,
-          this.db,
-          () => void this.refresh(),
-        );
-        this.openWithReturn(modal);
-      })
-      .catch(console.error);
-  }
 
   private openEditCustomDeck(customDeck: CustomDeckGroup): void {
+    const thresholds = {
+      leechThreshold: this.settings.review.leechThreshold,
+      denseCardCharThreshold: this.settings.review.denseCardCharThreshold,
+    };
     if (customDeck.deckType === "filter") {
-      const modal = new EditFilterModal(
+      const filterDefinition: FilterDefinition = customDeck.filterDefinition
+        ? JSON.parse(customDeck.filterDefinition)
+        : { version: 1, logic: "AND", rules: [] };
+      const modal = new FlashcardManagerModal(
         this.app,
-        customDeck,
-        this.customDeckService,
         this.db,
+        this.customDeckService,
+        thresholds,
+        { kind: "filter", id: customDeck.id, name: customDeck.name, filterDefinition },
         () => void this.refresh(),
       );
       this.openWithReturn(modal);
@@ -292,7 +290,9 @@ export class DecksViewModal extends Modal {
         this.app,
         this.db,
         this.customDeckService,
-        { id: customDeck.id, name: customDeck.name },
+        thresholds,
+        { kind: "manual", id: customDeck.id, name: customDeck.name },
+        () => void this.refresh(),
       );
       this.openWithReturn(modal);
     }

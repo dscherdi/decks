@@ -11,6 +11,7 @@
   } from "../../services/Scheduler";
   import { yieldToUI } from "@/utils/ui";
   import { prepareFuzzySearch } from "obsidian";
+  import { computeCardHealth } from "../../services/CardHealth";
 
   export let deckOrGroup: DeckOrGroup;
   export let initialCard: Flashcard | null = null;
@@ -164,6 +165,12 @@
   let reviewedCount = 0;
   let cardStartTime = 0;
   let currentCard: Flashcard | null = initialCard;
+  $: cardHealth = currentCard
+    ? computeCardHealth(currentCard, {
+        leechThreshold: settings.review.leechThreshold,
+        denseCardCharThreshold: settings.review.denseCardCharThreshold,
+      })
+    : null;
   let sessionId: string | null = null;
   const deckFilePath = "";
   let sessionProgress: SessionProgress | null = null;
@@ -1013,33 +1020,65 @@
               </svg>
             </button>
           {/if}
-          {#if onNavigateToSource && currentCard}
-            <button
-              class="decks-go-to-file-button clickable-icon"
-              on:click={handleNavigateToSource}
-              title="Open source file"
-              type="button"
-              tabindex="-1"
-            >
-              <svg
-                xmlns="http://www.w3.org/2000/svg"
-                width="12"
-                height="12"
-                viewBox="0 0 24 24"
-                fill="none"
-                stroke="currentColor"
-                stroke-width="2"
-                stroke-linecap="round"
-                stroke-linejoin="round"
+          <div class="decks-card-utilities">
+            {#if cardHealth && (cardHealth.isLeech || cardHealth.isDense)}
+              <button
+                class="clickable-icon decks-warning-icon"
+                type="button"
+                tabindex="-1"
+                aria-label={
+                  cardHealth.isLeech && cardHealth.isDense
+                    ? "Card is repeatedly forgotten and complex — consider revising"
+                    : cardHealth.isLeech
+                    ? "Card is repeatedly forgotten — consider rewriting"
+                    : "Card is complex. Consider splitting it."
+                }
               >
-                <path
-                  d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"
-                ></path>
-                <polyline points="15 3 21 3 21 9"></polyline>
-                <line x1="10" y1="14" x2="21" y2="3"></line>
-              </svg>
-            </button>
-          {/if}
+                <svg
+                  xmlns="http://www.w3.org/2000/svg"
+                  width="14"
+                  height="14"
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="currentColor"
+                  stroke-width="2"
+                  stroke-linecap="round"
+                  stroke-linejoin="round"
+                >
+                  <path d="m21.73 18-8-14a2 2 0 0 0-3.48 0l-8 14A2 2 0 0 0 4 21h16a2 2 0 0 0 1.73-3Z"></path>
+                  <path d="M12 9v4"></path>
+                  <path d="M12 17h.01"></path>
+                </svg>
+              </button>
+            {/if}
+            {#if onNavigateToSource && currentCard}
+              <button
+                class="decks-go-to-file-button clickable-icon"
+                on:click={handleNavigateToSource}
+                aria-label="Open source file"
+                type="button"
+                tabindex="-1"
+              >
+                <svg
+                  xmlns="http://www.w3.org/2000/svg"
+                  width="12"
+                  height="12"
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="currentColor"
+                  stroke-width="2"
+                  stroke-linecap="round"
+                  stroke-linejoin="round"
+                >
+                  <path
+                    d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"
+                  ></path>
+                  <polyline points="15 3 21 3 21 9"></polyline>
+                  <line x1="10" y1="14" x2="21" y2="3"></line>
+                </svg>
+              </button>
+            {/if}
+          </div>
           <div class="decks-card-side decks-front" bind:this={frontEl}></div>
         </div>
       </div>
@@ -1254,6 +1293,28 @@
     font-size: var(--font-ui-smaller);
   }
 
+  .decks-card-utilities {
+    position: absolute;
+    top: 8px;
+    right: 8px;
+    z-index: 10;
+    display: flex;
+    gap: 8px;
+  }
+
+  .decks-warning-icon {
+    width: 24px !important;
+    height: 24px !important;
+    min-width: 0 !important;
+    min-height: 0 !important;
+    padding: 0 !important;
+    color: var(--text-muted);
+  }
+
+  .decks-warning-icon:hover {
+    color: var(--text-warning);
+  }
+
   .decks-breadcrumb-sep {
     display: inline;
     white-space: "pre";
@@ -1443,7 +1504,14 @@
     color: var(--text-muted);
   }
 
-  .decks-go-to-file-button,
+  .decks-go-to-file-button {
+    width: 24px !important;
+    height: 24px !important;
+    min-width: 0 !important;
+    min-height: 0 !important;
+    padding: 0 !important;
+  }
+
   .decks-copy-button {
     position: absolute;
     top: 4px;

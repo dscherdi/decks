@@ -11,7 +11,7 @@
   interface FieldOption {
     value: FilterField;
     label: string;
-    type: "string" | "numeric" | "date" | "state" | "deckId" | "deckTag" | "tags";
+    type: "string" | "numeric" | "date" | "state" | "deckId" | "deckTag" | "tags" | "boolean";
   }
 
   const FIELD_OPTIONS: FieldOption[] = [
@@ -30,6 +30,8 @@
     { value: "lapses", label: "Lapses", type: "numeric" },
     { value: "lastReviewed", label: "Last reviewed", type: "date" },
     { value: "created", label: "Created", type: "date" },
+    { value: "isLeech", label: "Is leech", type: "boolean" },
+    { value: "isDense", label: "Is dense", type: "boolean" },
   ];
 
   function getOperatorsForField(field: FilterField): { value: FilterOperator; label: string }[] {
@@ -37,6 +39,11 @@
     if (!fieldOption) return [];
 
     switch (fieldOption.type) {
+      case "boolean":
+        return [
+          { value: "equals", label: "Is" },
+          { value: "not_equals", label: "Is not" },
+        ];
       case "state":
         return [
           { value: "is_new", label: "Is new" },
@@ -119,7 +126,8 @@
       const operators = getOperatorsForField(updates.field);
       if (operators.length > 0) {
         updated.operator = operators[0].value;
-        updated.value = "";
+        const newType = FIELD_OPTIONS.find(f => f.value === updates.field)?.type;
+        updated.value = newType === "boolean" ? "true" : "";
       }
     }
 
@@ -297,6 +305,20 @@
               <option value="table">Table</option>
               <option value="cloze">Cloze</option>
               <option value="image-occlusion">Image occlusion</option>
+            </select>
+          {:else if rule.field === "isLeech" || rule.field === "isDense"}
+            <select
+              class="decks-fb-value-select"
+              value={rule.value || "true"}
+              on:change={(e) => {
+                const target = e.target;
+                if (target instanceof HTMLSelectElement) {
+                  updateRule(index, { value: target.value });
+                }
+              }}
+            >
+              <option value="true">True</option>
+              <option value="false">False</option>
             </select>
           {:else}
             <input

@@ -238,5 +238,71 @@ describe("FilterEngine", () => {
       );
       expect(result.params).toEqual(["%science%", 5, "new"]);
     });
+
+    it("should compile isLeech=true with default threshold", () => {
+      const def: FilterDefinition = {
+        version: 1,
+        logic: "AND",
+        rules: [{ field: "isLeech", operator: "equals", value: "true" }],
+      };
+      const result = compileFilter(def);
+      expect(result.whereClause).toBe("(f.lapses >= ?)");
+      expect(result.params).toEqual([8]);
+    });
+
+    it("should compile isLeech=true with custom threshold", () => {
+      const def: FilterDefinition = {
+        version: 1,
+        logic: "AND",
+        rules: [{ field: "isLeech", operator: "equals", value: "true" }],
+      };
+      const result = compileFilter(def, { leechThreshold: 3 });
+      expect(result.whereClause).toBe("(f.lapses >= ?)");
+      expect(result.params).toEqual([3]);
+    });
+
+    it("should compile isLeech=false (inverted)", () => {
+      const def: FilterDefinition = {
+        version: 1,
+        logic: "AND",
+        rules: [{ field: "isLeech", operator: "equals", value: "false" }],
+      };
+      const result = compileFilter(def);
+      expect(result.whereClause).toBe("(f.lapses < ?)");
+      expect(result.params).toEqual([8]);
+    });
+
+    it("should compile isDense=true with default threshold", () => {
+      const def: FilterDefinition = {
+        version: 1,
+        logic: "AND",
+        rules: [{ field: "isDense", operator: "equals", value: "true" }],
+      };
+      const result = compileFilter(def);
+      expect(result.whereClause).toBe("(LENGTH(f.back) >= ?)");
+      expect(result.params).toEqual([500]);
+    });
+
+    it("should compile isDense=true with custom threshold", () => {
+      const def: FilterDefinition = {
+        version: 1,
+        logic: "AND",
+        rules: [{ field: "isDense", operator: "equals", value: "true" }],
+      };
+      const result = compileFilter(def, { denseCardCharThreshold: 100 });
+      expect(result.whereClause).toBe("(LENGTH(f.back) >= ?)");
+      expect(result.params).toEqual([100]);
+    });
+
+    it("should reject non-equals operators on virtual fields", () => {
+      const def: FilterDefinition = {
+        version: 1,
+        logic: "AND",
+        rules: [{ field: "isLeech", operator: "greater_than", value: "true" }],
+      };
+      expect(() => compileFilter(def)).toThrow(
+        /only supports equals\/not_equals/
+      );
+    });
   });
 });

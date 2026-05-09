@@ -65,7 +65,6 @@
   export let openDeckConfigModal: (deck: DeckWithProfile) => void;
   export let openFlashcardManager: () => void;
   export let customDeckService: CustomDeckService;
-  export let onCreateCustomDeck: () => void;
   export let deckTag = "#decks";
 
   const getReviewCounts = async (days: number) => {
@@ -915,6 +914,15 @@
       </button>
       <button
         class="clickable-icon"
+        on:click={(e) => handleTouchClick(openFlashcardManager, e)}
+        on:touchend={(e) => handleTouchClick(openFlashcardManager, e)}
+        title="Open flashcard manager"
+        aria-label="Open flashcard manager"
+      >
+        <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="7" height="7"></rect><rect x="14" y="3" width="7" height="7"></rect><rect x="14" y="14" width="7" height="7"></rect><rect x="3" y="14" width="7" height="7"></rect></svg>
+      </button>
+      <button
+        class="clickable-icon"
         on:click={(e) => handleTouchClick(onOpenStatistics, e)}
         on:touchend={(e) => handleTouchClick(onOpenStatistics, e)}
         title="View statistics"
@@ -970,14 +978,6 @@
         aria-expanded={searchOpen}
       >
         <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="8"></circle><line x1="21" y1="21" x2="16.65" y2="16.65"></line></svg>
-      </button>
-      <button
-        class="clickable-icon"
-        on:click={openFlashcardManager}
-        title="Open flashcard manager"
-        aria-label="Open flashcard manager"
-      >
-        <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="7" height="7"></rect><rect x="14" y="3" width="7" height="7"></rect><rect x="14" y="14" width="7" height="7"></rect><rect x="3" y="14" width="7" height="7"></rect></svg>
       </button>
     </div>
 
@@ -1140,16 +1140,6 @@
       </div>
     {/if}
 
-    {#if viewMode === "custom"}
-      <div class="decks-create-custom-deck-bar">
-        <button
-          class="decks-create-custom-deck-btn"
-          on:click={onCreateCustomDeck}
-        >
-          + Create custom deck
-        </button>
-      </div>
-    {/if}
   </div>
 
   <div class="decks-heatmap-section">
@@ -1471,29 +1461,6 @@
 
   .decks-deck-row:hover .decks-row-action {
     opacity: 1;
-  }
-
-  /* ── Create custom deck button ── */
-  .decks-create-custom-deck-bar {
-    padding: var(--size-4-2) var(--size-4-3);
-    display: flex;
-    justify-content: center;
-  }
-
-  .decks-create-custom-deck-btn {
-    padding: var(--size-4-1) var(--size-4-3);
-    border: 1px solid var(--background-modifier-border);
-    border-radius: var(--radius-m);
-    background: transparent;
-    color: var(--text-muted);
-    font-size: var(--font-ui-small);
-    cursor: pointer;
-    transition: all 0.15s ease;
-  }
-
-  .decks-create-custom-deck-btn:hover {
-    background: var(--background-modifier-hover);
-    color: var(--text-normal);
   }
 
   /* ── Empty state ── */

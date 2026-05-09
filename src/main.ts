@@ -183,6 +183,9 @@ export default class DecksPlugin extends Plugin {
       // Initialize custom deck service
       this.customDeckService = new CustomDeckService(this.db);
 
+      // Apply current filter compile thresholds (leech / dense) to db + service
+      this.applyFilterCompileOptions();
+
       // Initialize scheduler
       this.scheduler = new Scheduler(
         this.db,
@@ -264,6 +267,14 @@ export default class DecksPlugin extends Plugin {
             this.app,
             this.db,
             this.customDeckService,
+            {
+              leechThreshold: this.settings.review.leechThreshold,
+              denseCardCharThreshold: this.settings.review.denseCardCharThreshold,
+            },
+            undefined,
+            async () => {
+              await this.getDecksView()?.refresh();
+            },
           ).open();
         },
       });
@@ -469,6 +480,18 @@ export default class DecksPlugin extends Plugin {
         this.settings.parsing.folderSearchPath
       );
     }
+
+    // Refresh filter compile thresholds in case leech/dense settings changed
+    this.applyFilterCompileOptions();
+  }
+
+  private applyFilterCompileOptions(): void {
+    const options = {
+      leechThreshold: this.settings.review.leechThreshold,
+      denseCardCharThreshold: this.settings.review.denseCardCharThreshold,
+    };
+    this.db?.setFilterCompileOptions(options);
+    this.customDeckService?.setFilterCompileOptions(options);
   }
 
   async activateView() {
