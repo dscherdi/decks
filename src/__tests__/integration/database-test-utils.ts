@@ -41,8 +41,20 @@ export class InMemoryAdapter implements DataAdapter {
     this.files.set(path, new TextEncoder().encode(data));
   }
 
-  async list(path: string): Promise<any> {
-    return [];
+  async list(path: string): Promise<{ files: string[]; folders: string[] }> {
+    const prefix = path === "" || path === "/" ? "" : path.replace(/\/?$/, "/");
+    const files: string[] = [];
+    const folders = new Set<string>();
+    for (const name of this.files.keys()) {
+      if (prefix !== "" && !name.startsWith(prefix)) continue;
+      const rel = name.slice(prefix.length);
+      if (rel.includes("/")) {
+        folders.add(prefix + rel.split("/")[0]);
+      } else {
+        files.push(name);
+      }
+    }
+    return { files, folders: Array.from(folders) };
   }
 
   async stat(path: string): Promise<any> {

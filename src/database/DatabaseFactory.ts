@@ -260,7 +260,19 @@ export interface IDatabaseService {
   // Synchronization operations
   syncWithDisk(): Promise<void>;
 
+  // Sync log idempotency: per-source-device high-water marks. Local only;
+  // never propagated cross-device (excluded from mergeRemoteIntoMain).
+  getJournalState(): Promise<JournalStateRow[]>;
+  upsertJournalState(row: JournalStateRow): Promise<void>;
+
   // Transaction methods removed - no longer using transactions
+}
+
+export interface JournalStateRow {
+  sourceDeviceId: string;
+  lastAppliedSeq: number;
+  lastAppliedHlc: string;  // JSON-encoded HLCValue tuple
+  lastAppliedAt: string;   // ISO timestamp
 }
 
 export interface DatabaseServiceOptions {

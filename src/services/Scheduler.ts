@@ -19,6 +19,8 @@ import type { Logger } from "../utils/logging";
 import type { DecksSettings } from "../settings";
 import { BackupService } from "./BackupService";
 import { parseSteps } from "../utils/step-parser";
+import type { SyncLog } from "./SyncLog";
+import type { RateOp } from "./SyncLog.types";
 
 export interface SchedulerOptions {
   allowNew?: boolean;
@@ -54,6 +56,7 @@ export class Scheduler {
   private logger?: Logger;
   private backupService: BackupService;
   private settings: DecksSettings;
+  private syncLog: SyncLog | null = null;
 
   constructor(
     db: IDatabaseService,
@@ -66,6 +69,15 @@ export class Scheduler {
     this.logger = logger;
     this.backupService = backupService;
     this.settings = settings;
+  }
+
+  /**
+   * Wire the sync log post-construction. Optional — when absent, rate()
+   * just updates the local DB (the pre-Day-5 behavior). Plugin main.ts
+   * injects the live SyncLog instance after both services are constructed.
+   */
+  setSyncLog(syncLog: SyncLog): void {
+    this.syncLog = syncLog;
   }
 
   private debugLog(message: string, data?: unknown): void {
@@ -419,7 +431,12 @@ export class Scheduler {
       contentHash: card.contentHash,
     };
 
-    // Update card state and create review log (no save during review)
+    // Update card state and create review log (no save during review).
+    // Generate the log id up front so the same id flows into both the local
+    // row and the sync log op payload — other devices then INSERT OR IGNORE
+    // on the same PK and stay consistent.
+    const logId = `log_${Date.now()}_${Math.random().toString(36).substring(2, 11)}`;
+
     await this.db.updateFlashcard(updatedCard.id, {
       state: updatedCard.state,
       dueDate: updatedCard.dueDate,
@@ -433,7 +450,62 @@ export class Scheduler {
 
     await yieldToUI();
 
-    await this.db.createReviewLog(reviewLog);
+    await this.db.insertReviewLog({ ...reviewLog, id: logId });
+
+    if (this.syncLog) {
+      const op: RateOp = {
+        o: "rate",
+        p: {
+          c: updatedCard.id,
+          st: updatedCard.stability,
+          d: updatedCard.difficulty,
+          due: updatedCard.dueDate,
+          rep: updatedCard.repetitions,
+          lap: updatedCard.lapses,
+          state: updatedCard.state,
+          lastReviewed: updatedCard.lastReviewed ?? now.toISOString(),
+          interval: updatedCard.interval,
+          log: {
+            id: logId,
+            flashcardId: reviewLog.flashcardId,
+            sessionId: reviewLog.sessionId ?? null,
+            lastReviewedAt: reviewLog.lastReviewedAt,
+            shownAt: reviewLog.shownAt ?? null,
+            reviewedAt: reviewLog.reviewedAt,
+            rating: reviewLog.rating,
+            ratingLabel: reviewLog.ratingLabel,
+            timeElapsedMs: reviewLog.timeElapsedMs ?? null,
+            oldState: reviewLog.oldState,
+            oldRepetitions: reviewLog.oldRepetitions,
+            oldLapses: reviewLog.oldLapses,
+            oldStability: reviewLog.oldStability,
+            oldDifficulty: reviewLog.oldDifficulty,
+            newState: reviewLog.newState,
+            newRepetitions: reviewLog.newRepetitions,
+            newLapses: reviewLog.newLapses,
+            newStability: reviewLog.newStability,
+            newDifficulty: reviewLog.newDifficulty,
+            oldIntervalMinutes: reviewLog.oldIntervalMinutes,
+            newIntervalMinutes: reviewLog.newIntervalMinutes,
+            oldDueAt: reviewLog.oldDueAt,
+            newDueAt: reviewLog.newDueAt,
+            elapsedDays: reviewLog.elapsedDays,
+            retrievability: reviewLog.retrievability,
+            requestRetention: reviewLog.requestRetention,
+            profile: reviewLog.profile,
+            maximumIntervalDays: reviewLog.maximumIntervalDays,
+            minMinutes: reviewLog.minMinutes,
+            fsrsWeightsVersion: reviewLog.fsrsWeightsVersion,
+            schedulerVersion: reviewLog.schedulerVersion,
+            noteModelId: reviewLog.noteModelId ?? null,
+            cardTemplateId: reviewLog.cardTemplateId ?? null,
+            contentHash: reviewLog.contentHash ?? null,
+            client: reviewLog.client ?? null,
+          },
+        },
+      };
+      this.syncLog.append(op);
+    }
 
     return updatedCard;
   }

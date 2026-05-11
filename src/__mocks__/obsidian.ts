@@ -203,3 +203,21 @@ export class MarkdownRenderer {
     el.textContent = content;
   }
 }
+
+// Tests run in Node; treat them as a Linux desktop. DeviceLocalState only
+// embeds the platform prefix in deviceId strings, so this default is harmless.
+export const Platform = {
+  isDesktop: true,
+  isMobile: false,
+  isDesktopApp: true,
+  isMobileApp: false,
+  isIosApp: false,
+  isAndroidApp: false,
+  isPhone: false,
+  isTablet: false,
+  isMacOS: false,
+  isWin: false,
+  isLinux: true,
+  isSafari: false,
+  resourcePathPrefix: "",
+};

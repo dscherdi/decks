@@ -14,6 +14,8 @@ import {
 import { DeckManager } from "./services/DeckManager";
 import { DeckSynchronizer } from "./services/DeckSynchronizer";
 import { Scheduler } from "./services/Scheduler";
+import { DeviceLocalState } from "./services/DeviceLocalState";
+import { SyncLog } from "./services/SyncLog";
 import { BackupService } from "./services/BackupService";
 import { StatisticsService } from "./services/StatisticsService";
 import { yieldToUI } from "./utils/ui";
@@ -101,6 +103,8 @@ export default class DecksPlugin extends Plugin {
   private lastKnownDatabaseMtime = 0;
   private lastReloadFromDiskAt = 0;
   private reloadFromDiskInFlight = false;
+  private deviceLocalState: DeviceLocalState;
+  private syncLog: SyncLog;
 
   async onload() {
     // Load settings first
@@ -183,6 +187,21 @@ export default class DecksPlugin extends Plugin {
       // Apply current filter compile thresholds (leech / dense) to db + service
       this.applyFilterCompileOptions();
 
+      // Per-device sync state (deviceId, seq counter, HLC clock). Backed by
+      // window.localStorage so it never propagates cross-device via data.json.
+      this.deviceLocalState = new DeviceLocalState();
+
+      // Append-only sync log. One file per device in vault root,
+      // <deviceId>.deckssynclog, hidden from Obsidian's file explorer by
+      // the custom extension but sync'd by iCloud / Obsidian Sync as a
+      // small text file (much faster than the binary decks.db).
+      this.syncLog = new SyncLog(
+        this.app.vault.adapter,
+        this.deviceLocalState,
+        this.logger,
+        this.db
+      );
+
       // Initialize scheduler
       this.scheduler = new Scheduler(
         this.db,
@@ -190,6 +209,7 @@ export default class DecksPlugin extends Plugin {
         this.backupService,
         this.logger
       );
+      this.scheduler.setSyncLog(this.syncLog);
 
       // Register the side panel view
       this.registerView(
@@ -341,6 +361,17 @@ export default class DecksPlugin extends Plugin {
         })
       );
 
+      // Flush any buffered sync-log ops to disk before the window loses
+      // focus or the app backgrounds. Covers desktop alt-tab and mobile
+      // app-suspend. Without this, ops written in the last 2s before
+      // backgrounding would stay in memory and never make it to iCloud.
+      this.registerDomEvent(window, "blur", () => {
+        void this.syncLog?.flushNow();
+      });
+      this.registerDomEvent(window, "pagehide", () => {
+        void this.syncLog?.flushNow();
+      });
+
       // Listen for file changes to update decks
       this.registerEvent(
         this.app.vault.on("modify", async (file) => {
@@ -455,6 +486,10 @@ export default class DecksPlugin extends Plugin {
   onunload() {
     this.logger.debug("Unloading Decks plugin");
 
+    // Drain any buffered sync-log ops to disk before tearing down. Plugin
+    // disable / reload would otherwise lose the last <2s of ops.
+    void this.syncLog?.flushNow();
+
     // Close database connection using factory singleton
     void DatabaseFactory.close();
   }
@@ -538,6 +573,12 @@ export default class DecksPlugin extends Plugin {
    * bursts (alt-tab, modal open/close). Single-flight so concurrent firings
    * collapse into one merge. Never writes back to disk — that would create
    * an iCloud feedback loop where every read triggers another upload.
+   *
+   * Two-step sync on focus:
+   *   1. SQL merge from disk DB (slow, captures the legacy fallback path)
+   *   2. SyncLog.applyPending() — replays new ops from other devices' logs
+   *      since the last applied seq. This is the fast path: small text
+   *      files iCloud delivers in seconds.
    */
   private async reloadFromDiskIfNewer(): Promise<void> {
     if (!this.db) return;
@@ -548,7 +589,7 @@ export default class DecksPlugin extends Plugin {
     this.reloadFromDiskInFlight = true;
     try {
       await this.db.syncWithDisk();
-      // Trigger UI refresh so deck list reflects merged state.
+      await this.syncLog?.applyPending();
       await this.getDecksView()?.refresh();
     } catch (error) {
       this.logger.debug("reloadFromDiskIfNewer failed", error as object);

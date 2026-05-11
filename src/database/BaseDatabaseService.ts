@@ -25,7 +25,7 @@ import type {
   SqlRecord,
   SqlRow,
 } from "./sql-types";
-import type { IDatabaseService } from "./DatabaseFactory";
+import type { IDatabaseService, JournalStateRow } from "./DatabaseFactory";
 import { generateFlashcardId, generateCustomDeckId, generateCustomDeckCardId } from "../utils/hash";
 
 export interface QueryConfig {
@@ -2139,4 +2139,30 @@ export abstract class BaseDatabaseService implements IDatabaseService {
   ): Promise<T[] | SqlJsValue[][]>;
 
   abstract syncWithDisk(): Promise<void>;
+
+  // Sync log idempotency state. Local-only (never propagated cross-device).
+  async getJournalState(): Promise<JournalStateRow[]> {
+    const rows = (await this.querySql(
+      "SELECT source_device_id, last_applied_seq, last_applied_hlc, last_applied_at FROM journal_state"
+    )) as Array<[string, number, string, string]>;
+    return rows.map((r) => ({
+      sourceDeviceId: r[0],
+      lastAppliedSeq: r[1],
+      lastAppliedHlc: r[2],
+      lastAppliedAt: r[3],
+    }));
+  }
+
+  async upsertJournalState(row: JournalStateRow): Promise<void> {
+    await this.executeSql(
+      `INSERT INTO journal_state
+         (source_device_id, last_applied_seq, last_applied_hlc, last_applied_at, byte_offset)
+       VALUES (?, ?, ?, ?, 0)
+       ON CONFLICT(source_device_id) DO UPDATE SET
+         last_applied_seq = excluded.last_applied_seq,
+         last_applied_hlc = excluded.last_applied_hlc,
+         last_applied_at = excluded.last_applied_at`,
+      [row.sourceDeviceId, row.lastAppliedSeq, row.lastAppliedHlc, row.lastAppliedAt]
+    );
+  }
 }
