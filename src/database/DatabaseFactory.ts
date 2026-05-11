@@ -1,6 +1,7 @@
 import type { DataAdapter } from "obsidian";
 import type { QueryConfig } from "./BaseDatabaseService";
 import { WorkerDatabaseService } from "./WorkerDatabaseService";
+import type { SyncLog } from "../services/SyncLog";
 import type {
   Deck,
   DeckProfile,
@@ -28,6 +29,10 @@ export interface IDatabaseService {
 
   // Filter options (thresholds for virtual filter fields like isLeech/isDense)
   setFilterCompileOptions(options: FilterCompileOptions): void;
+
+  // Attach the sync log so CRUD methods can emit cross-device ops after
+  // their DB writes. Optional — when unset, mutations stay local-only.
+  setSyncLog(syncLog: SyncLog): void;
 
   // Deck operations
   createDeck(
@@ -244,6 +249,13 @@ export interface IDatabaseService {
     params?: SqlJsValue[],
     config?: QueryConfig
   ): Promise<T[] | SqlJsValue[][]>;
+
+  // Raw DDL/DML for sync-log handlers + journal_state upserts. Production
+  // CRUD lives on this interface as typed methods; executeSql exists for
+  // the sync-log path that needs INSERT/UPDATE without the duplicate-checks
+  // and validation the public CRUD enforces.
+  executeSql(sql: string, params?: SqlJsValue[]): Promise<void>;
+
   // Backup operations
   createBackupDatabase(backupPath: string): Promise<void>;
   restoreFromBackupDatabase(backupPath: string): Promise<void>;

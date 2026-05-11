@@ -26,6 +26,8 @@ import type {
   SqlRow,
 } from "./sql-types";
 import type { IDatabaseService, JournalStateRow } from "./DatabaseFactory";
+import type { SyncLog } from "../services/SyncLog";
+import type { SyncOpV1 } from "../services/SyncLog.types";
 import { generateFlashcardId, generateCustomDeckId, generateCustomDeckCardId } from "../utils/hash";
 
 export interface QueryConfig {
@@ -46,6 +48,9 @@ export abstract class BaseDatabaseService implements IDatabaseService {
   ) => void;
   public migrationNotice: string | null = null;
   protected filterCompileOptions: FilterCompileOptions = {};
+  // Sync log is injected post-construction by main.ts. When unset, CRUD
+  // methods just write to the DB (tests + the early plugin-init window).
+  protected syncLog: SyncLog | null = null;
 
   constructor(
     dbPath: string,
@@ -59,6 +64,24 @@ export abstract class BaseDatabaseService implements IDatabaseService {
 
   setFilterCompileOptions(options: FilterCompileOptions): void {
     this.filterCompileOptions = options;
+  }
+
+  setSyncLog(syncLog: SyncLog): void {
+    this.syncLog = syncLog;
+  }
+
+  /**
+   * Emit an op to the sync log if one is attached. Helper for CRUD methods
+   * so each call site stays one line. Never throws — sync log failures
+   * shouldn't break local DB writes.
+   */
+  protected emitSyncOp(op: SyncOpV1): void {
+    if (!this.syncLog) return;
+    try {
+      this.syncLog.append(op);
+    } catch (error) {
+      this.debugLog("syncLog.append threw (continuing):", error as object);
+    }
   }
 
   // Abstract methods to be implemented by concrete classes
@@ -396,6 +419,30 @@ export abstract class BaseDatabaseService implements IDatabaseService {
       now,
     ]);
 
+    this.emitSyncOp({
+      o: "profile_upsert",
+      p: {
+        id: profile.id,
+        name: profile.name,
+        hasNewCardsLimitEnabled: profile.hasNewCardsLimitEnabled,
+        newCardsPerDay: profile.newCardsPerDay,
+        hasReviewCardsLimitEnabled: profile.hasReviewCardsLimitEnabled,
+        reviewCardsPerDay: profile.reviewCardsPerDay,
+        headerLevel: profile.headerLevel,
+        reviewOrder: profile.reviewOrder,
+        learningSteps: profile.learningSteps ?? "1m",
+        relearningSteps: profile.relearningSteps ?? "10m",
+        fsrsRequestRetention: profile.fsrs.requestRetention,
+        fsrsProfile: profile.fsrs.profile,
+        fsrsUseTrained: profile.fsrs.useTrainedWeights,
+        clozeEnabled: profile.clozeEnabled,
+        clozeShowContext: profile.clozeShowContext ?? "open",
+        isDefault: profile.isDefault,
+        created: now,
+        modified: now,
+      },
+    });
+
     return profile.id;
   }
 
@@ -463,6 +510,7 @@ export abstract class BaseDatabaseService implements IDatabaseService {
       fsrs: updates.fsrs ? { ...current.fsrs, ...updates.fsrs } : current.fsrs,
     };
 
+    const modifiedAt = this.getCurrentTimestamp();
     await this.executeSql(SQL_QUERIES.UPDATE_PROFILE, [
       updated.name,
       updated.hasNewCardsLimitEnabled ? 1 : 0,
@@ -478,9 +526,33 @@ export abstract class BaseDatabaseService implements IDatabaseService {
       updated.fsrs.useTrainedWeights ? 1 : 0,
       updated.clozeEnabled ? 1 : 0,
       updated.clozeShowContext ?? "open",
-      this.getCurrentTimestamp(),
+      modifiedAt,
       id,
     ]);
+
+    this.emitSyncOp({
+      o: "profile_upsert",
+      p: {
+        id,
+        name: updated.name,
+        hasNewCardsLimitEnabled: updated.hasNewCardsLimitEnabled,
+        newCardsPerDay: updated.newCardsPerDay,
+        hasReviewCardsLimitEnabled: updated.hasReviewCardsLimitEnabled,
+        reviewCardsPerDay: updated.reviewCardsPerDay,
+        headerLevel: updated.headerLevel,
+        reviewOrder: updated.reviewOrder,
+        learningSteps: updated.learningSteps,
+        relearningSteps: updated.relearningSteps,
+        fsrsRequestRetention: updated.fsrs.requestRetention,
+        fsrsProfile: updated.fsrs.profile,
+        fsrsUseTrained: updated.fsrs.useTrainedWeights,
+        clozeEnabled: updated.clozeEnabled,
+        clozeShowContext: updated.clozeShowContext ?? "open",
+        isDefault: updated.isDefault,
+        created: updated.created,
+        modified: modifiedAt,
+      },
+    });
   }
 
   async deleteProfile(id: string): Promise<void> {
@@ -504,11 +576,19 @@ export abstract class BaseDatabaseService implements IDatabaseService {
       id,
     ]);
 
-    // Soft delete tag mappings owned by this profile
+    // Soft delete tag mappings owned by this profile. Note: we emit
+    // tag_mapping_delete ops below for each affected mapping so other
+    // devices see the cascade rather than guessing it from the profile
+    // tombstone alone.
+    const ownedMappings = await this.getTagMappingsForProfile(id);
     await this.executeSql(SQL_QUERIES.DELETE_TAG_MAPPINGS_FOR_PROFILE, [now, id]);
+    for (const m of ownedMappings) {
+      this.emitSyncOp({ o: "tag_mapping_delete", p: { id: m.id, deletedAt: now } });
+    }
 
     // Soft delete profile
     await this.executeSql(SQL_QUERIES.DELETE_PROFILE, [now, now, id]);
+    this.emitSyncOp({ o: "profile_delete", p: { id, deletedAt: now } });
   }
 
   async getDeckCountForProfile(profileId: string): Promise<number> {
@@ -541,6 +621,11 @@ export abstract class BaseDatabaseService implements IDatabaseService {
       tag,
       now,
     ]);
+
+    this.emitSyncOp({
+      o: "tag_mapping_upsert",
+      p: { id, profileId, tag, created: now },
+    });
 
     return id;
   }
@@ -600,7 +685,9 @@ export abstract class BaseDatabaseService implements IDatabaseService {
   }
 
   async deleteTagMapping(id: string): Promise<void> {
-    await this.executeSql(SQL_QUERIES.DELETE_TAG_MAPPING, [this.getCurrentTimestamp(), id]);
+    const now = this.getCurrentTimestamp();
+    await this.executeSql(SQL_QUERIES.DELETE_TAG_MAPPING, [now, id]);
+    this.emitSyncOp({ o: "tag_mapping_delete", p: { id, deletedAt: now } });
   }
 
   async applyProfileToTag(profileId: string, tag: string): Promise<number> {
@@ -1446,6 +1533,15 @@ export abstract class BaseDatabaseService implements IDatabaseService {
       .toString(36)
       .substring(2, 11)}`;
     await this.insertReviewSession({ ...session, id: sessionId });
+    this.emitSyncOp({
+      o: "session_start",
+      p: {
+        id: sessionId,
+        deckId: session.deckId,
+        startedAt: session.startedAt,
+        goalTotal: session.goalTotal,
+      },
+    });
     return sessionId;
   }
 
@@ -1487,11 +1583,20 @@ export abstract class BaseDatabaseService implements IDatabaseService {
   ): Promise<void> {
     const sql = `UPDATE review_sessions SET done_unique = ? WHERE id = ?`;
     await this.executeSql(sql, [doneUnique, sessionId]);
+    this.emitSyncOp({
+      o: "session_progress",
+      p: { id: sessionId, doneUnique },
+    });
   }
 
   async endReviewSession(sessionId: string): Promise<void> {
+    const endedAt = this.getCurrentTimestamp();
     const sql = `UPDATE review_sessions SET ended_at = ? WHERE id = ?`;
-    await this.executeSql(sql, [this.getCurrentTimestamp(), sessionId]);
+    await this.executeSql(sql, [endedAt, sessionId]);
+    this.emitSyncOp({
+      o: "session_end",
+      p: { id: sessionId, endedAt },
+    });
   }
 
   async insertReviewSession(session: ReviewSession): Promise<void> {
@@ -1597,6 +1702,18 @@ export abstract class BaseDatabaseService implements IDatabaseService {
     await this.executeSql(SQL_QUERIES.INSERT_CUSTOM_DECK, [
       id, name, deckType, filterDefinition, null, now, now,
     ]);
+    this.emitSyncOp({
+      o: "custom_deck_upsert",
+      p: {
+        id,
+        name,
+        deckType,
+        filterDefinition,
+        lastReviewed: null,
+        created: now,
+        modified: now,
+      },
+    });
     return id;
   }
 
@@ -1625,12 +1742,26 @@ export abstract class BaseDatabaseService implements IDatabaseService {
     const existing = await this.getCustomDeckById(id);
     if (!existing) return;
     const now = new Date().toISOString();
+    const newName = updates.name ?? existing.name;
+    const newFilter = updates.filterDefinition !== undefined ? updates.filterDefinition : existing.filterDefinition;
     await this.executeSql(SQL_QUERIES.UPDATE_CUSTOM_DECK, [
-      updates.name ?? existing.name,
-      updates.filterDefinition !== undefined ? updates.filterDefinition : existing.filterDefinition,
+      newName,
+      newFilter,
       now,
       id,
     ]);
+    this.emitSyncOp({
+      o: "custom_deck_upsert",
+      p: {
+        id,
+        name: newName,
+        deckType: existing.deckType,
+        filterDefinition: newFilter,
+        lastReviewed: existing.lastReviewed,
+        created: existing.created,
+        modified: now,
+      },
+    });
   }
 
   async updateCustomDeckLastReviewed(id: string, timestamp: string): Promise<void> {
@@ -1638,11 +1769,15 @@ export abstract class BaseDatabaseService implements IDatabaseService {
     await this.executeSql(SQL_QUERIES.UPDATE_CUSTOM_DECK_LAST_REVIEWED, [
       timestamp, now, id,
     ]);
+    // last_reviewed updates are user-local and high-churn; intentionally not
+    // emitted on the sync log to keep log size bounded. Other devices will
+    // converge on their own last_reviewed values via their own usage.
   }
 
   async deleteCustomDeck(id: string): Promise<void> {
     const now = this.getCurrentTimestamp();
     await this.executeSql(SQL_QUERIES.DELETE_CUSTOM_DECK, [now, now, id]);
+    this.emitSyncOp({ o: "custom_deck_delete", p: { id, deletedAt: now } });
   }
 
   async addCardsToCustomDeck(customDeckId: string, flashcardIds: string[]): Promise<void> {
@@ -1652,14 +1787,36 @@ export abstract class BaseDatabaseService implements IDatabaseService {
       await this.executeSql(SQL_QUERIES.INSERT_CUSTOM_DECK_CARD, [
         id, customDeckId, flashcardId, now,
       ]);
+      // Clear any local tombstone for this pair — the user just re-added it.
+      await this.executeSql(
+        "DELETE FROM custom_deck_card_tombstones WHERE custom_deck_id = ? AND flashcard_id = ?",
+        [customDeckId, flashcardId]
+      );
+      this.emitSyncOp({
+        o: "custom_deck_card_add",
+        p: { customDeckId, flashcardId, created: now },
+      });
     }
   }
 
   async removeCardsFromCustomDeck(customDeckId: string, flashcardIds: string[]): Promise<void> {
+    const now = new Date().toISOString();
     for (const flashcardId of flashcardIds) {
       await this.executeSql(SQL_QUERIES.DELETE_CUSTOM_DECK_CARD, [
         customDeckId, flashcardId,
       ]);
+      // Local tombstone so a stale remote `_add` op can't resurrect this row.
+      await this.executeSql(
+        `INSERT INTO custom_deck_card_tombstones (custom_deck_id, flashcard_id, removed_at_hlc)
+         VALUES (?, ?, ?)
+         ON CONFLICT(custom_deck_id, flashcard_id) DO UPDATE SET
+           removed_at_hlc = excluded.removed_at_hlc`,
+        [customDeckId, flashcardId, now]
+      );
+      this.emitSyncOp({
+        o: "custom_deck_card_remove",
+        p: { customDeckId, flashcardId, removedAt: now },
+      });
     }
   }
 

@@ -201,6 +201,10 @@ export default class DecksPlugin extends Plugin {
         this.logger,
         this.db
       );
+      // After both exist, attach the log so every CRUD method on the DB
+      // automatically emits the matching sync op (profile, tag mapping,
+      // custom deck, session ops). Without this, only Scheduler.rate emits.
+      this.db.setSyncLog(this.syncLog);
 
       // Initialize scheduler
       this.scheduler = new Scheduler(
