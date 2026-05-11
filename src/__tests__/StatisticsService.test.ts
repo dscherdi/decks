@@ -219,7 +219,6 @@ const mockSettings = {
   },
   backup: { enableAutoBackup: true, maxBackups: 5 },
   debug: { enableLogging: false, performanceLogs: false },
-  experimental: { enableDatabaseWorker: false },
 };
 
 describe("StatisticsService", () => {

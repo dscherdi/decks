@@ -97,27 +97,27 @@ UI Layer (Svelte Components)
     ↓
 Service Layer (TypeScript Business Logic)
     ↓
-Database Layer (SQL.js with Main/Worker Variants)
+Database Layer (SQL.js in a Web Worker)
     ↓
 Storage Layer (Obsidian Vault)
 ```
 
 ### Key Architectural Patterns
 
-1. **Factory Pattern**: `DatabaseFactory` creates either `MainDatabaseService` (runs in main thread) or `WorkerDatabaseService` (offloads to Web Worker) based on settings
-2. **Abstract Base Class**: `BaseDatabaseService` contains 1,467 lines of shared business logic; concrete implementations only handle SQL execution
+1. **Factory Pattern**: `DatabaseFactory` always instantiates `WorkerDatabaseService` for production. `MainDatabaseService` is preserved as a **test-only** in-process variant for Jest integration tests (Web Workers don't run in Node).
+2. **Abstract Base Class**: `BaseDatabaseService` contains the shared business logic; concrete implementations only handle SQL execution.
 3. **Strategy Pattern**: FSRS algorithm encapsulated with profile-based parameters (STANDARD vs INTENSIVE)
-4. **Worker Pattern**: Heavy parsing/sync operations can be offloaded to Web Workers for performance
+4. **Worker Pattern**: Database always runs in a Web Worker — UI thread is never blocked on DB ops.
 5. **Service Injection**: Services created once in main.ts and injected into components via props (no DI framework)
 
 ## Database Architecture
 
-### Dual Execution Modes
+### Execution Model
 
-The database layer has two implementations that share the same business logic:
+The database runs in a Web Worker in production. `MainDatabaseService` exists as a test-only in-process variant — Jest's Node environment lacks Web Worker primitives, so integration tests instantiate `MainDatabaseService` directly. Production code never imports it.
 
-- **MainDatabaseService**: Runs SQL.js in main thread, direct database manipulation
-- **WorkerDatabaseService**: Communicates with Web Worker via message passing, main thread handles I/O (loading db file, SQL.js assets), worker handles SQL execution
+- **WorkerDatabaseService** (production): Communicates with Web Worker via message passing. Main thread handles I/O (loading db file, SQL.js assets); worker handles SQL execution. UI never blocks on DB ops.
+- **MainDatabaseService** (tests only): Runs SQL.js in the test process, direct database manipulation. Imported by `src/__tests__/integration/*.test.ts` and `test-db-utils.ts`.
 
 **Key Design Decision**: `BaseDatabaseService` contains ALL business logic (queries, row parsing, batch operations). Concrete implementations only provide:
 
@@ -136,7 +136,7 @@ The database layer has two implementations that share the same business logic:
 
 This enables users to sync via Dropbox/iCloud without losing data from either device.
 
-**Implementation**: See `MainDatabaseService.syncWithDisk()` around line 200.
+**Implementation**: See `WorkerDatabaseService.syncWithDisk()` (worker path used in production) and `MainDatabaseService.syncWithDisk()` (in-process path used by tests). Both call the same merge SQL.
 
 ### Schema Management
 
@@ -163,7 +163,7 @@ review_sessions -- Session tracking with goal/progress
 **Key Methods**:
 
 - `scanVaultForDecks()`: Traverses vault to find files with `#flashcards` tags
-- `syncFlashcardsForDeck()`: **Routing logic** - delegates to worker or main thread based on database type
+- `syncFlashcardsForDeck()`: delegates parsing/sync to the database service (worker in production)
 - `generateDeckId()`: Deterministic ID generation based on filepath hash (ensures same deck = same ID across devices)
 
 **Performance**: Checks file `mtime` vs `deck.modified` to skip unchanged files. Calls `yieldToUI()` to prevent blocking the main thread.
@@ -247,15 +247,11 @@ Weights loaded from `src/algorithm/fsrs-weights.ts` (19 weights per profile).
    ↓
 4. Read file content from vault
    ↓
-5. ROUTING DECISION:
-   if (WorkerDatabaseService):
-     → db.syncFlashcardsForDeckWorker({deckId, fileContent, ...})
-        → Worker: FlashcardParser.parseFlashcardsFromContent()
-        → Worker: FlashcardSynchronizer.syncFlashcardsForDeck()
-        → Worker: Execute batch SQL operations
-   else (MainDatabaseService):
-     → FlashcardParser.parseFlashcardsFromContent() (main thread)
-     → FlashcardSynchronizer.syncFlashcardsForDeck() (main thread)
+5. Worker pipeline:
+   → db.syncFlashcardsForDeckWorker({deckId, fileContent, ...})
+      → Worker: FlashcardParser.parseFlashcardsFromContent()
+      → Worker: FlashcardSynchronizer.syncFlashcardsForDeck()
+      → Worker: Execute batch SQL operations
    ↓
 6. Update deck.modified timestamp
    ↓
@@ -397,7 +393,7 @@ Deck config includes daily limits, review order, header level, and FSRS settings
 
 **Graceful degradation**: Operations catch errors, log them, and either return defaults or fall back to alternative implementations.
 
-**Worker fallback**: If worker operation fails, automatically fall back to main thread execution.
+**Worker errors**: If a worker operation fails, the error is surfaced to the caller. There is no main-thread fallback in production — the dual-mode path was removed.
 
 ### Type Safety
 
@@ -485,7 +481,7 @@ Each GitHub release includes:
 1. Check `WorkerDatabaseService` message passing logic
 2. Verify `worker-entry.ts` message handlers
 3. Use `console.log` in worker (visible in DevTools console)
-4. Test with `MainDatabaseService` to isolate worker-specific issues
+4. For isolating SQL/business-logic bugs vs worker-transport bugs, run the relevant integration test in Jest — those use `MainDatabaseService` (in-process), so a passing test there narrows the issue to worker-transport
 5. Check `pendingRequests` Map for stuck operations
 
 ### Adding FSRS Tests

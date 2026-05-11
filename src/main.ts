@@ -129,16 +129,11 @@ export default class DecksPlugin extends Plugin {
       // Initialize database with worker support
       const databasePath = `${pluginDir}/flashcards.db`;
 
-      // Use experimental setting to control worker usage
-      const useWorker = this.settings.experimental.enableDatabaseWorker;
-
       this.db = await DatabaseFactory.create(
         databasePath,
         adapter,
         this.logger.debug.bind(this),
         {
-          useWorker,
-          workerEnabled: true,
           configDir: this.app.vault.configDir,
         }
       );

@@ -82,9 +82,6 @@ export class DecksSettingTab extends PluginSettingTab {
     // Debug Settings
     this.addDebugSettings(containerEl);
 
-    // Experimental Settings
-    this.addExperimentalSettings(containerEl);
-
     // Database Management Settings
     this.addDatabaseSettings(containerEl);
   }
@@ -443,39 +440,6 @@ export class DecksSettingTab extends PluginSettingTab {
             }
             this.settings.debug.performanceLogs = value;
             await this.saveSettings();
-          })
-      );
-  }
-
-  private addExperimentalSettings(containerEl: HTMLElement): void {
-    new Setting(containerEl).setName("Experimental features").setHeading();
-    containerEl.createEl("p", {
-      text: "Experimental features may be unstable. Use with caution and back up your data.",
-      cls: "setting-item-description",
-    });
-
-    new Setting(containerEl)
-      .setName("Database worker thread")
-      .setDesc(
-        "Run database operations in a background worker thread to prevent UI freezing with large databases. Requires restart to take effect."
-      )
-      .addToggle((toggle) =>
-        toggle
-          .setValue(this.settings.experimental?.enableDatabaseWorker || false)
-          .onChange(async (value) => {
-            if (!this.settings.experimental) {
-              this.settings.experimental = {
-                enableDatabaseWorker: false,
-              };
-            }
-            this.settings.experimental.enableDatabaseWorker = value;
-            await this.saveSettings();
-
-            new Notice(
-              value
-                ? "Database worker enabled. Restart Obsidian to activate."
-                : "Database worker disabled. Restart Obsidian to deactivate."
-            );
           })
       );
   }

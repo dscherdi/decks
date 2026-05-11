@@ -52,9 +52,6 @@ const createMockSettings = (): DecksSettings => ({
     enableLogging: false,
     performanceLogs: false,
   },
-  experimental: {
-    enableDatabaseWorker: false,
-  },
 });
 
 // Helper function to create a deck with proper type

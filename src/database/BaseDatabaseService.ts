@@ -504,11 +504,11 @@ export abstract class BaseDatabaseService implements IDatabaseService {
       id,
     ]);
 
-    // Delete tag mappings
-    await this.executeSql(SQL_QUERIES.DELETE_TAG_MAPPINGS_FOR_PROFILE, [id]);
+    // Soft delete tag mappings owned by this profile
+    await this.executeSql(SQL_QUERIES.DELETE_TAG_MAPPINGS_FOR_PROFILE, [now, id]);
 
-    // Delete profile
-    await this.executeSql(SQL_QUERIES.DELETE_PROFILE, [id]);
+    // Soft delete profile
+    await this.executeSql(SQL_QUERIES.DELETE_PROFILE, [now, now, id]);
   }
 
   async getDeckCountForProfile(profileId: string): Promise<number> {
@@ -600,7 +600,7 @@ export abstract class BaseDatabaseService implements IDatabaseService {
   }
 
   async deleteTagMapping(id: string): Promise<void> {
-    await this.executeSql(SQL_QUERIES.DELETE_TAG_MAPPING, [id]);
+    await this.executeSql(SQL_QUERIES.DELETE_TAG_MAPPING, [this.getCurrentTimestamp(), id]);
   }
 
   async applyProfileToTag(profileId: string, tag: string): Promise<number> {
@@ -1641,7 +1641,8 @@ export abstract class BaseDatabaseService implements IDatabaseService {
   }
 
   async deleteCustomDeck(id: string): Promise<void> {
-    await this.executeSql(SQL_QUERIES.DELETE_CUSTOM_DECK, [id]);
+    const now = this.getCurrentTimestamp();
+    await this.executeSql(SQL_QUERIES.DELETE_CUSTOM_DECK, [now, now, id]);
   }
 
   async addCardsToCustomDeck(customDeckId: string, flashcardIds: string[]): Promise<void> {

@@ -48,9 +48,6 @@ const createMockSettings = (): DecksSettings => ({
     enableLogging: false,
     performanceLogs: false,
   },
-  experimental: {
-    enableDatabaseWorker: false,
-  },
 });
 
 describe("Large Deck Integration Tests", () => {

@@ -35,11 +35,6 @@ export interface DecksSettings {
     performanceLogs: boolean;
   };
 
-  // Experimental Settings
-  experimental: {
-    enableDatabaseWorker: boolean;
-  };
-
   // Global FSRS weight optimization. Whether a STANDARD profile applies these
   // trained weights is a per-profile choice (DeckProfile.fsrs.useTrainedWeights);
   // INTENSIVE profiles always ignore them.
@@ -85,10 +80,6 @@ export const DEFAULT_SETTINGS: DecksSettings = {
   debug: {
     enableLogging: false,
     performanceLogs: false,
-  },
-
-  experimental: {
-    enableDatabaseWorker: false,
   },
 
   fsrs: {

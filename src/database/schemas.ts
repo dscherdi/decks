@@ -1,7 +1,7 @@
 import type { Database } from "sql.js";
 
 // Current Schema Version
-export const CURRENT_SCHEMA_VERSION = 16;
+export const CURRENT_SCHEMA_VERSION = 17;
 
 // SQL Table Creation Schema - Used when database file doesn't exist
 export const CREATE_TABLES_SQL = `
@@ -27,7 +27,8 @@ export const CREATE_TABLES_SQL = `
     cloze_show_context TEXT NOT NULL DEFAULT 'hidden' CHECK (cloze_show_context IN ('open', 'hidden')),
     is_default INTEGER NOT NULL DEFAULT 0,
     created TEXT NOT NULL,
-    modified TEXT NOT NULL
+    modified TEXT NOT NULL,
+    deleted_at TEXT
   );
 
   -- Profile tag mappings table
@@ -36,6 +37,7 @@ export const CREATE_TABLES_SQL = `
     profile_id TEXT NOT NULL,
     tag TEXT NOT NULL,
     created TEXT NOT NULL,
+    deleted_at TEXT,
     UNIQUE(tag)
   );
 
@@ -136,7 +138,8 @@ export const CREATE_TABLES_SQL = `
     filter_definition TEXT,
     last_reviewed TEXT,
     created TEXT NOT NULL,
-    modified TEXT NOT NULL
+    modified TEXT NOT NULL,
+    deleted_at TEXT
   );
 
   -- Custom deck cards junction table (many-to-many)
@@ -148,6 +151,23 @@ export const CREATE_TABLES_SQL = `
     UNIQUE(custom_deck_id, flashcard_id),
     FOREIGN KEY (custom_deck_id) REFERENCES custom_decks(id) ON DELETE CASCADE,
     FOREIGN KEY (flashcard_id) REFERENCES flashcards(id) ON DELETE CASCADE
+  );
+
+  -- Custom deck card tombstones (local-only; tracks junction-table removals for sync log idempotency)
+  CREATE TABLE IF NOT EXISTS custom_deck_card_tombstones (
+    custom_deck_id TEXT NOT NULL,
+    flashcard_id TEXT NOT NULL,
+    removed_at_hlc TEXT NOT NULL,
+    PRIMARY KEY (custom_deck_id, flashcard_id)
+  );
+
+  -- Sync log idempotency table (local-only; per-device high-water marks for applied ops)
+  CREATE TABLE IF NOT EXISTS journal_state (
+    source_device_id TEXT PRIMARY KEY,
+    last_applied_seq INTEGER NOT NULL,
+    last_applied_hlc TEXT NOT NULL,
+    last_applied_at TEXT NOT NULL,
+    byte_offset INTEGER NOT NULL DEFAULT 0
   );
 
   -- Insert DEFAULT profile
@@ -194,6 +214,11 @@ export const CREATE_TABLES_SQL = `
   CREATE INDEX IF NOT EXISTS idx_custom_deck_cards_deck ON custom_deck_cards(custom_deck_id);
   CREATE INDEX IF NOT EXISTS idx_custom_deck_cards_card ON custom_deck_cards(flashcard_id);
 
+  -- Tombstone indexes (so live-row scans stay cheap)
+  CREATE INDEX IF NOT EXISTS idx_deckprofiles_live ON deckprofiles(deleted_at);
+  CREATE INDEX IF NOT EXISTS idx_profile_tag_mappings_live ON profile_tag_mappings(deleted_at);
+  CREATE INDEX IF NOT EXISTS idx_custom_decks_live ON custom_decks(deleted_at);
+
   -- Set schema version
   PRAGMA user_version = ${CURRENT_SCHEMA_VERSION};
 
@@ -224,8 +249,10 @@ export function buildMigrationSQL(db: Database): string {
   const needsLearningSteps = deckprofilesColumns.length > 0 && !deckprofilesColumns.includes("learning_steps");
   const needsCloze = deckprofilesColumns.length > 0 && !deckprofilesColumns.includes("cloze_enabled");
   const needsUseTrained = deckprofilesColumns.length > 0 && !deckprofilesColumns.includes("fsrs_use_trained");
+  const needsDeckprofilesDeletedAt = deckprofilesColumns.length > 0 && !deckprofilesColumns.includes("deleted_at");
   const customDecksColumns = getColumnNames(db, "custom_decks");
   const needsDeckType = customDecksColumns.length > 0 && !customDecksColumns.includes("deck_type");
+  const needsCustomDecksDeletedAt = customDecksColumns.length > 0 && !customDecksColumns.includes("deleted_at");
 
   // Helper: pick current column, fall back to old renamed column, then default
   const col = (
@@ -320,6 +347,10 @@ export function buildMigrationSQL(db: Database): string {
     ALTER TABLE deckprofiles ADD COLUMN fsrs_use_trained INTEGER NOT NULL DEFAULT 0;
     ` : ""}
 
+    ${needsDeckprofilesDeletedAt ? `
+    ALTER TABLE deckprofiles ADD COLUMN deleted_at TEXT;
+    ` : ""}
+
     INSERT OR IGNORE INTO deckprofiles (
       id, name,
       has_new_cards_limit_enabled, new_cards_per_day,
@@ -354,6 +385,7 @@ export function buildMigrationSQL(db: Database): string {
       profile_id TEXT NOT NULL,
       tag TEXT NOT NULL,
       created TEXT NOT NULL,
+      deleted_at TEXT,
       UNIQUE(tag)
     );
 
@@ -477,6 +509,10 @@ export function buildMigrationSQL(db: Database): string {
     ALTER TABLE custom_decks ADD COLUMN filter_definition TEXT;
     ` : ""}
 
+    ${needsCustomDecksDeletedAt ? `
+    ALTER TABLE custom_decks ADD COLUMN deleted_at TEXT;
+    ` : ""}
+
     -- Custom deck cards junction table (many-to-many)
     CREATE TABLE IF NOT EXISTS custom_deck_cards (
       id TEXT PRIMARY KEY,
@@ -486,6 +522,23 @@ export function buildMigrationSQL(db: Database): string {
       UNIQUE(custom_deck_id, flashcard_id),
       FOREIGN KEY (custom_deck_id) REFERENCES custom_decks(id) ON DELETE CASCADE,
       FOREIGN KEY (flashcard_id) REFERENCES flashcards(id) ON DELETE CASCADE
+    );
+
+    -- Custom deck card tombstones (local-only; tracks junction-table removals for sync log idempotency)
+    CREATE TABLE IF NOT EXISTS custom_deck_card_tombstones (
+      custom_deck_id TEXT NOT NULL,
+      flashcard_id TEXT NOT NULL,
+      removed_at_hlc TEXT NOT NULL,
+      PRIMARY KEY (custom_deck_id, flashcard_id)
+    );
+
+    -- Sync log idempotency table (local-only; per-device high-water marks for applied ops)
+    CREATE TABLE IF NOT EXISTS journal_state (
+      source_device_id TEXT PRIMARY KEY,
+      last_applied_seq INTEGER NOT NULL,
+      last_applied_hlc TEXT NOT NULL,
+      last_applied_at TEXT NOT NULL,
+      byte_offset INTEGER NOT NULL DEFAULT 0
     );
 
     -- Create indexes
@@ -505,6 +558,11 @@ export function buildMigrationSQL(db: Database): string {
     CREATE INDEX IF NOT EXISTS idx_review_logs_join ON review_logs(flashcard_id, reviewed_at);
     CREATE INDEX IF NOT EXISTS idx_custom_deck_cards_deck ON custom_deck_cards(custom_deck_id);
     CREATE INDEX IF NOT EXISTS idx_custom_deck_cards_card ON custom_deck_cards(flashcard_id);
+
+    -- Tombstone indexes (so live-row scans stay cheap)
+    CREATE INDEX IF NOT EXISTS idx_deckprofiles_live ON deckprofiles(deleted_at);
+    CREATE INDEX IF NOT EXISTS idx_profile_tag_mappings_live ON profile_tag_mappings(deleted_at);
+    CREATE INDEX IF NOT EXISTS idx_custom_decks_live ON custom_decks(deleted_at);
 
     -- Set schema version
     PRAGMA user_version = ${CURRENT_SCHEMA_VERSION};
@@ -578,7 +636,7 @@ export const SQL_QUERIES = {
       fsrs_request_retention, fsrs_profile, fsrs_use_trained,
       cloze_enabled, cloze_show_context,
       is_default, created, modified
-    FROM deckprofiles WHERE id = ?
+    FROM deckprofiles WHERE id = ? AND deleted_at IS NULL
   `,
 
   GET_PROFILE_BY_NAME: `
@@ -588,7 +646,7 @@ export const SQL_QUERIES = {
       fsrs_request_retention, fsrs_profile, fsrs_use_trained,
       cloze_enabled, cloze_show_context,
       is_default, created, modified
-    FROM deckprofiles WHERE name = ?
+    FROM deckprofiles WHERE name = ? AND deleted_at IS NULL
   `,
 
   GET_ALL_PROFILES: `
@@ -599,6 +657,7 @@ export const SQL_QUERIES = {
       cloze_enabled, cloze_show_context,
       is_default, created, modified
     FROM deckprofiles
+    WHERE deleted_at IS NULL
     ORDER BY CASE WHEN is_default = 1 THEN 0 ELSE 1 END, name
   `,
 
@@ -609,7 +668,7 @@ export const SQL_QUERIES = {
       fsrs_request_retention, fsrs_profile, fsrs_use_trained,
       cloze_enabled, cloze_show_context,
       is_default, created, modified
-    FROM deckprofiles WHERE is_default = 1 LIMIT 1
+    FROM deckprofiles WHERE is_default = 1 AND deleted_at IS NULL LIMIT 1
   `,
 
   UPDATE_PROFILE: `
@@ -622,10 +681,12 @@ export const SQL_QUERIES = {
       fsrs_request_retention = ?, fsrs_profile = ?, fsrs_use_trained = ?,
       cloze_enabled = ?, cloze_show_context = ?,
       modified = ?
-    WHERE id = ?
+    WHERE id = ? AND deleted_at IS NULL
   `,
 
-  DELETE_PROFILE: `DELETE FROM deckprofiles WHERE id = ? AND is_default = 0`,
+  // Soft delete: refuse to tombstone the default profile, set deleted_at and bump modified.
+  // Pass the same ISO timestamp for both ? params.
+  DELETE_PROFILE: `UPDATE deckprofiles SET deleted_at = ?, modified = ? WHERE id = ? AND is_default = 0 AND deleted_at IS NULL`,
 
   COUNT_DECKS_USING_PROFILE: `
     SELECT COUNT(*) as count FROM decks WHERE profile_id = ?
@@ -639,30 +700,38 @@ export const SQL_QUERIES = {
     SELECT * FROM decks WHERE profile_id = ? ORDER BY name
   `,
 
-  // Profile tag mapping operations
+  // Profile tag mapping operations.
+  // Inserts always clear deleted_at so a re-mapped tag after a soft-delete revives correctly.
   INSERT_PROFILE_TAG_MAPPING: `
-    INSERT OR REPLACE INTO profile_tag_mappings (id, profile_id, tag, created)
-    VALUES (?, ?, ?, ?)
+    INSERT INTO profile_tag_mappings (id, profile_id, tag, created, deleted_at)
+    VALUES (?, ?, ?, ?, NULL)
+    ON CONFLICT(tag) DO UPDATE SET
+      id = excluded.id,
+      profile_id = excluded.profile_id,
+      created = excluded.created,
+      deleted_at = NULL
   `,
 
   GET_TAG_MAPPINGS_FOR_PROFILE: `
-    SELECT * FROM profile_tag_mappings WHERE profile_id = ?
+    SELECT * FROM profile_tag_mappings WHERE profile_id = ? AND deleted_at IS NULL
   `,
 
   GET_ALL_TAG_MAPPINGS: `
-    SELECT * FROM profile_tag_mappings
+    SELECT * FROM profile_tag_mappings WHERE deleted_at IS NULL
   `,
 
   GET_PROFILE_FOR_TAG: `
-    SELECT * FROM profile_tag_mappings WHERE tag = ?
+    SELECT * FROM profile_tag_mappings WHERE tag = ? AND deleted_at IS NULL
   `,
 
+  // Soft delete. Pass an ISO timestamp.
   DELETE_TAG_MAPPING: `
-    DELETE FROM profile_tag_mappings WHERE id = ?
+    UPDATE profile_tag_mappings SET deleted_at = ? WHERE id = ? AND deleted_at IS NULL
   `,
 
+  // Soft delete all mappings owned by a profile.
   DELETE_TAG_MAPPINGS_FOR_PROFILE: `
-    DELETE FROM profile_tag_mappings WHERE profile_id = ?
+    UPDATE profile_tag_mappings SET deleted_at = ? WHERE profile_id = ? AND deleted_at IS NULL
   `,
 
   // Flashcard operations
@@ -917,23 +986,24 @@ export const SQL_QUERIES = {
     VALUES (?, ?, ?, ?, ?, ?, ?)
   `,
 
-  GET_CUSTOM_DECK_BY_ID: `SELECT * FROM custom_decks WHERE id = ?`,
+  GET_CUSTOM_DECK_BY_ID: `SELECT * FROM custom_decks WHERE id = ? AND deleted_at IS NULL`,
 
-  GET_CUSTOM_DECK_BY_NAME: `SELECT * FROM custom_decks WHERE name = ?`,
+  GET_CUSTOM_DECK_BY_NAME: `SELECT * FROM custom_decks WHERE name = ? AND deleted_at IS NULL`,
 
-  GET_ALL_CUSTOM_DECKS: `SELECT * FROM custom_decks ORDER BY name`,
+  GET_ALL_CUSTOM_DECKS: `SELECT * FROM custom_decks WHERE deleted_at IS NULL ORDER BY name`,
 
   UPDATE_CUSTOM_DECK: `
     UPDATE custom_decks SET name = ?, filter_definition = ?, modified = ?
-    WHERE id = ?
+    WHERE id = ? AND deleted_at IS NULL
   `,
 
   UPDATE_CUSTOM_DECK_LAST_REVIEWED: `
     UPDATE custom_decks SET last_reviewed = ?, modified = ?
-    WHERE id = ?
+    WHERE id = ? AND deleted_at IS NULL
   `,
 
-  DELETE_CUSTOM_DECK: `DELETE FROM custom_decks WHERE id = ?`,
+  // Soft delete. Pass an ISO timestamp for both ? params.
+  DELETE_CUSTOM_DECK: `UPDATE custom_decks SET deleted_at = ?, modified = ? WHERE id = ? AND deleted_at IS NULL`,
 
   // Custom deck card membership operations
   INSERT_CUSTOM_DECK_CARD: `
@@ -960,7 +1030,7 @@ export const SQL_QUERIES = {
   GET_CUSTOM_DECKS_FOR_FLASHCARD: `
     SELECT cd.* FROM custom_decks cd
     INNER JOIN custom_deck_cards cdc ON cd.id = cdc.custom_deck_id
-    WHERE cdc.flashcard_id = ?
+    WHERE cdc.flashcard_id = ? AND cd.deleted_at IS NULL
     ORDER BY cd.name
   `,
 

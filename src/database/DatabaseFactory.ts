@@ -1,6 +1,5 @@
 import type { DataAdapter } from "obsidian";
 import type { QueryConfig } from "./BaseDatabaseService";
-import { MainDatabaseService } from "./MainDatabaseService";
 import { WorkerDatabaseService } from "./WorkerDatabaseService";
 import type {
   Deck,
@@ -265,8 +264,6 @@ export interface IDatabaseService {
 }
 
 export interface DatabaseServiceOptions {
-  useWorker?: boolean;
-  workerEnabled?: boolean;
   configDir?: string;
 }
 
@@ -280,38 +277,27 @@ export class DatabaseFactory {
     debugLog: (message: string, ...args: (string | number | object)[]) => void,
     options: DatabaseServiceOptions = {}
   ): Promise<IDatabaseService> {
-    // Check if we already have an instance for this path
     if (this.instance && this.currentPath === dbPath) {
       debugLog("Returning existing database instance");
       return this.instance;
     }
 
-    // Close existing instance if path changed
     if (this.instance && this.currentPath !== dbPath) {
       debugLog("Database path changed, closing existing instance");
       await this.instance.close();
       this.instance = null;
     }
 
-    const {
-      useWorker = false,
-      workerEnabled = false,
-      configDir = "",
-    } = options;
+    const { configDir = "" } = options;
 
     try {
-      if (useWorker && workerEnabled) {
-        debugLog("Creating WorkerDatabaseService instance");
-        this.instance = new WorkerDatabaseService(
-          dbPath,
-          adapter,
-          configDir,
-          debugLog
-        );
-      } else {
-        debugLog("Creating MainDatabaseService instance");
-        this.instance = new MainDatabaseService(dbPath, adapter, debugLog);
-      }
+      debugLog("Creating WorkerDatabaseService instance");
+      this.instance = new WorkerDatabaseService(
+        dbPath,
+        adapter,
+        configDir,
+        debugLog
+      );
 
       await this.instance.initialize();
       this.currentPath = dbPath;

@@ -1,3 +1,7 @@
+// TEST-ONLY: in-process DB used by Jest integration tests.
+// Production always uses WorkerDatabaseService via DatabaseFactory.
+// Do not import this from production code — workers run on every Obsidian
+// platform and the dual execution path is no longer maintained for production.
 import type { DataAdapter } from "obsidian";
 import { BaseDatabaseService } from "./BaseDatabaseService";
 import type { QueryConfig } from "./BaseDatabaseService";
