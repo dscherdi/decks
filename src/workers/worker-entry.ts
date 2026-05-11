@@ -314,208 +314,255 @@ class SimpleDatabaseWorker {
   }
 
   /**
-   * Sync with disk file - performs merge entirely in worker
+   * Sync with disk file - performs merge entirely in worker.
+   * Merges the remote DB's state into the in-memory DB. Does NOT write back to disk.
+   * Same code path is used by reloadFromDiskIfNewer (auto-refresh on focus).
    */
   syncWithDisk(fileBuffer: Uint8Array): void {
     if (!this.db || !this.initialized) {
       throw new Error("Database not initialized");
     }
+    if (!this.SQL) throw new Error("SQL.js not initialized");
 
     let remoteDb: Database | null = null;
-
     try {
-      // Create a temporary database connection for the disk file
-      if (!this.SQL) throw new Error("SQL.js not initialized");
       remoteDb = new this.SQL.Database(fileBuffer);
-
-      // Begin Transaction on MAIN DB
-      this.db.exec("BEGIN TRANSACTION");
-
-      try {
-        // 1. Merge Review Sessions (INSERT OR IGNORE)
-        const sessionsResult = remoteDb.exec("SELECT * FROM review_sessions");
-        if (sessionsResult.length > 0) {
-          const columns = sessionsResult[0].columns;
-          const values = sessionsResult[0].values;
-          const placeholders = columns.map(() => "?").join(",");
-
-          const stmt = this.db.prepare(
-            `INSERT OR IGNORE INTO review_sessions VALUES (${placeholders})`
-          );
-          for (const row of values) {
-            stmt.run(row);
-          }
-          stmt.free();
-        }
-
-        // 2. Merge Review Logs (INSERT OR IGNORE)
-        const logsResult = remoteDb.exec("SELECT * FROM review_logs");
-        if (logsResult.length > 0) {
-          const columns = logsResult[0].columns;
-          const values = logsResult[0].values;
-          const placeholders = columns.map(() => "?").join(",");
-
-          const stmt = this.db.prepare(
-            `INSERT OR IGNORE INTO review_logs VALUES (${placeholders})`
-          );
-          for (const row of values) {
-            stmt.run(row);
-          }
-          stmt.free();
-        }
-
-        // 3. Merge Decks (Conditional Replace)
-        const decksResult = remoteDb.exec("SELECT * FROM decks");
-        if (decksResult.length > 0) {
-          const columns = decksResult[0].columns;
-          const values = decksResult[0].values;
-          const placeholders = columns.map(() => "?").join(",");
-          const modIndex = columns.indexOf("modified");
-          const idIndex = columns.indexOf("id");
-
-          const insertStmt = this.db.prepare(
-            `INSERT OR REPLACE INTO decks VALUES (${placeholders})`
-          );
-
-          for (const row of values) {
-            const remoteMod = row[modIndex] as string;
-            const id = row[idIndex] as string;
-
-            // Check local
-            const localRes = this.db.exec(
-              "SELECT modified FROM decks WHERE id = ?",
-              [id]
-            );
-            const localMod = localRes.length
-              ? (localRes[0].values[0][0] as string)
-              : null;
-
-            if (!localMod || remoteMod > localMod) {
-              insertStmt.run(row);
-            }
-          }
-          insertStmt.free();
-        }
-
-        // 4. Merge Flashcards (Conditional Replace)
-        const cardsResult = remoteDb.exec("SELECT * FROM flashcards");
-        if (cardsResult.length > 0) {
-          const columns = cardsResult[0].columns;
-          const values = cardsResult[0].values;
-          const modIndex = columns.indexOf("modified");
-          const idIndex = columns.indexOf("id");
-          const hasNotesColumn = columns.includes("notes");
-
-          // Handle schema mismatch: if remote lacks notes column, inject it
-          const stateIndex = columns.indexOf("state");
-          const effectiveColumns = hasNotesColumn
-            ? columns
-            : [...columns.slice(0, stateIndex), "notes", ...columns.slice(stateIndex)];
-          const columnList = effectiveColumns.join(",");
-          const placeholders = effectiveColumns.map(() => "?").join(",");
-
-          const insertStmt = this.db.prepare(
-            `INSERT OR REPLACE INTO flashcards (${columnList}) VALUES (${placeholders})`
-          );
-
-          for (const row of values) {
-            const remoteMod = row[modIndex] as string;
-            const id = row[idIndex] as string;
-
-            const localRes = this.db.exec(
-              "SELECT modified FROM flashcards WHERE id = ?",
-              [id]
-            );
-            const localMod = localRes.length
-              ? (localRes[0].values[0][0] as string)
-              : null;
-
-            if (!localMod || remoteMod > localMod) {
-              const effectiveRow = hasNotesColumn
-                ? row
-                : [...row.slice(0, stateIndex), "", ...row.slice(stateIndex)];
-              insertStmt.run(effectiveRow);
-            }
-          }
-          insertStmt.free();
-        }
-
-        // 5. Merge Profiles (Conditional Replace)
-        try {
-          const profilesResult = remoteDb.exec("SELECT * FROM deckprofiles");
-          if (profilesResult.length > 0) {
-            const columns = profilesResult[0].columns;
-            const values = profilesResult[0].values;
-            const modIndex = columns.indexOf("modified");
-            const idIndex = columns.indexOf("id");
-            const hasLearningStepsColumn = columns.includes("learning_steps");
-
-            // Handle schema mismatch: if remote lacks learning_steps columns, inject them
-            const reviewOrderIndex = columns.indexOf("review_order");
-            const effectiveColumns = hasLearningStepsColumn
-              ? columns
-              : [...columns.slice(0, reviewOrderIndex + 1), "learning_steps", "relearning_steps", ...columns.slice(reviewOrderIndex + 1)];
-            const columnList = effectiveColumns.join(",");
-            const placeholders = effectiveColumns.map(() => "?").join(",");
-
-            const insertStmt = this.db.prepare(
-              `INSERT OR REPLACE INTO deckprofiles (${columnList}) VALUES (${placeholders})`
-            );
-
-            for (const row of values) {
-              const remoteMod = row[modIndex] as string;
-              const id = row[idIndex] as string;
-
-              const localRes = this.db.exec(
-                "SELECT modified FROM deckprofiles WHERE id = ?",
-                [id]
-              );
-              const localMod = localRes.length
-                ? (localRes[0].values[0][0] as string)
-                : null;
-
-              if (!localMod || remoteMod > localMod) {
-                const effectiveRow = hasLearningStepsColumn
-                  ? row
-                  : [...row.slice(0, reviewOrderIndex + 1), "1m", "10m", ...row.slice(reviewOrderIndex + 1)];
-                insertStmt.run(effectiveRow);
-              }
-            }
-            insertStmt.free();
-          }
-        } catch {
-          // Remote DB may not have deckprofiles table
-        }
-
-        // 6. Merge Profile Tag Mappings (INSERT OR IGNORE)
-        try {
-          const mappingsResult = remoteDb.exec("SELECT * FROM profile_tag_mappings");
-          if (mappingsResult.length > 0) {
-            const columns = mappingsResult[0].columns;
-            const values = mappingsResult[0].values;
-            const placeholders = columns.map(() => "?").join(",");
-
-            const stmt = this.db.prepare(
-              `INSERT OR IGNORE INTO profile_tag_mappings VALUES (${placeholders})`
-            );
-            for (const row of values) {
-              stmt.run(row);
-            }
-            stmt.free();
-          }
-        } catch {
-          // Remote DB may not have profile_tag_mappings table
-        }
-
-        this.db.exec("COMMIT");
-        self.postMessage({ type: "dbg", message: "Sync with disk completed" });
-      } catch (err) {
-        this.db.exec("ROLLBACK");
-        throw err;
-      }
+      this.performMerge(remoteDb);
     } finally {
       if (remoteDb) remoteDb.close();
     }
+  }
+
+  /**
+   * Core merge: take a fully-opened remote DB and merge its data into the
+   * in-memory DB. Wrapped in a transaction; rolled back on error.
+   *
+   * Conflict resolution:
+   *   - Append-only tables (review_sessions, review_logs, custom_deck_cards):
+   *     INSERT OR IGNORE — both sides' rows survive.
+   *   - decks, flashcards: conditional replace by `modified` (markdown is the
+   *     source of truth, no tombstones).
+   *   - deckprofiles, custom_decks: conditional replace by effective timestamp
+   *     COALESCE(deleted_at, modified) — propagates tombstones.
+   *   - profile_tag_mappings: conditional replace by COALESCE(deleted_at, created).
+   *
+   * Excluded (local-only): journal_state, custom_deck_card_tombstones.
+   */
+  private performMerge(remoteDb: Database): void {
+    if (!this.db) throw new Error("Database not initialized");
+
+    this.db.exec("BEGIN TRANSACTION");
+    try {
+      this.mergeAppendOnly(remoteDb, "review_sessions");
+      this.mergeAppendOnly(remoteDb, "review_logs");
+      this.mergeByModified(remoteDb, "decks");
+      this.mergeFlashcards(remoteDb);
+      this.mergeProfiles(remoteDb);
+      // profile_tag_mappings: bulk merge stays additive (first writer wins per tag);
+      // the sync log path (HLC-ordered tag_mapping_upsert/_delete) handles cross-
+      // device conflicts and tombstones precisely.
+      this.mergeAppendOnly(remoteDb, "profile_tag_mappings");
+      this.mergeCustomDecks(remoteDb);
+      this.mergeAppendOnly(remoteDb, "custom_deck_cards");
+
+      this.db.exec("COMMIT");
+      self.postMessage({ type: "dbg", message: "Sync with disk completed" });
+    } catch (err) {
+      this.db.exec("ROLLBACK");
+      throw err;
+    }
+  }
+
+  private mergeAppendOnly(remoteDb: Database, table: string): void {
+    if (!this.db) return;
+    try {
+      const result = remoteDb.exec(`SELECT * FROM ${table}`);
+      if (result.length === 0) return;
+      const columns = result[0].columns;
+      const placeholders = columns.map(() => "?").join(",");
+      const columnList = columns.join(",");
+      const stmt = this.db.prepare(
+        `INSERT OR IGNORE INTO ${table} (${columnList}) VALUES (${placeholders})`
+      );
+      for (const row of result[0].values) stmt.run(row);
+      stmt.free();
+    } catch {
+      // Remote may lack the table on older schemas.
+    }
+  }
+
+  private mergeByModified(remoteDb: Database, table: string): void {
+    if (!this.db) return;
+    try {
+      const result = remoteDb.exec(`SELECT * FROM ${table}`);
+      if (result.length === 0) return;
+      const columns = result[0].columns;
+      const modIndex = columns.indexOf("modified");
+      const idIndex = columns.indexOf("id");
+      const placeholders = columns.map(() => "?").join(",");
+      const columnList = columns.join(",");
+      const stmt = this.db.prepare(
+        `INSERT OR REPLACE INTO ${table} (${columnList}) VALUES (${placeholders})`
+      );
+      for (const row of result[0].values) {
+        const id = row[idIndex] as string;
+        const remoteMod = row[modIndex] as string;
+        const localRes = this.db.exec(
+          `SELECT modified FROM ${table} WHERE id = ?`,
+          [id]
+        );
+        const localMod = localRes.length
+          ? (localRes[0].values[0][0] as string)
+          : null;
+        if (!localMod || remoteMod > localMod) stmt.run(row);
+      }
+      stmt.free();
+    } catch {
+      // Remote may lack the table.
+    }
+  }
+
+  private mergeFlashcards(remoteDb: Database): void {
+    if (!this.db) return;
+    try {
+      const result = remoteDb.exec("SELECT * FROM flashcards");
+      if (result.length === 0) return;
+      const columns = result[0].columns;
+      const modIndex = columns.indexOf("modified");
+      const idIndex = columns.indexOf("id");
+      const hasNotesColumn = columns.includes("notes");
+      const stateIndex = columns.indexOf("state");
+      const effectiveColumns = hasNotesColumn
+        ? columns
+        : [...columns.slice(0, stateIndex), "notes", ...columns.slice(stateIndex)];
+      const columnList = effectiveColumns.join(",");
+      const placeholders = effectiveColumns.map(() => "?").join(",");
+      const stmt = this.db.prepare(
+        `INSERT OR REPLACE INTO flashcards (${columnList}) VALUES (${placeholders})`
+      );
+      for (const row of result[0].values) {
+        const id = row[idIndex] as string;
+        const remoteMod = row[modIndex] as string;
+        const localRes = this.db.exec(
+          "SELECT modified FROM flashcards WHERE id = ?",
+          [id]
+        );
+        const localMod = localRes.length
+          ? (localRes[0].values[0][0] as string)
+          : null;
+        if (!localMod || remoteMod > localMod) {
+          const effectiveRow = hasNotesColumn
+            ? row
+            : [...row.slice(0, stateIndex), "", ...row.slice(stateIndex)];
+          stmt.run(effectiveRow);
+        }
+      }
+      stmt.free();
+    } catch {
+      // Schema or table missing on remote.
+    }
+  }
+
+  /**
+   * Tombstone-aware merge by effective timestamp = COALESCE(deleted_at, modified).
+   * A deletion on one device wins over a stale local row even when the local
+   * `modified` was bumped later, because deleted_at takes precedence.
+   * Pre-v17 remote schemas lack deleted_at; treated as alive (degrades to plain
+   * modified comparison).
+   */
+  private mergeByEffectiveTimestamp(remoteDb: Database, table: string): void {
+    if (!this.db) return;
+    try {
+      const result = remoteDb.exec(`SELECT * FROM ${table}`);
+      if (result.length === 0) return;
+      const columns = result[0].columns;
+      const idIndex = columns.indexOf("id");
+      const modIndex = columns.indexOf("modified");
+      const deletedIndex = columns.indexOf("deleted_at");
+      const placeholders = columns.map(() => "?").join(",");
+      const columnList = columns.join(",");
+      const stmt = this.db.prepare(
+        `INSERT OR REPLACE INTO ${table} (${columnList}) VALUES (${placeholders})`
+      );
+      for (const row of result[0].values) {
+        const id = row[idIndex] as string;
+        const remoteMod = row[modIndex] as string;
+        const remoteDel = deletedIndex >= 0 ? (row[deletedIndex] as string | null) : null;
+        const remoteEffective = remoteDel || remoteMod;
+
+        const localRes = this.db.exec(
+          `SELECT COALESCE(deleted_at, modified) FROM ${table} WHERE id = ?`,
+          [id]
+        );
+        const localEffective = localRes.length
+          ? (localRes[0].values[0][0] as string)
+          : null;
+
+        if (!localEffective || remoteEffective > localEffective) stmt.run(row);
+      }
+      stmt.free();
+    } catch {
+      // Table may not exist on remote.
+    }
+  }
+
+  private mergeProfiles(remoteDb: Database): void {
+    if (!this.db) return;
+    // deckprofiles has both `modified` and `deleted_at` (v17+).
+    // Schema-mismatch fallback: if remote lacks learning_steps, inject defaults.
+    try {
+      const result = remoteDb.exec("SELECT * FROM deckprofiles");
+      if (result.length === 0) return;
+      const columns = result[0].columns;
+      const hasLearningSteps = columns.includes("learning_steps");
+      if (hasLearningSteps) {
+        // Hot path: schemas match, use the generic merge.
+        this.mergeByEffectiveTimestamp(remoteDb, "deckprofiles");
+        return;
+      }
+      // Cold path: pre-v9 remote schema. Mirror the old explicit-column logic.
+      const idIndex = columns.indexOf("id");
+      const modIndex = columns.indexOf("modified");
+      const reviewOrderIndex = columns.indexOf("review_order");
+      const effectiveColumns = [
+        ...columns.slice(0, reviewOrderIndex + 1),
+        "learning_steps",
+        "relearning_steps",
+        ...columns.slice(reviewOrderIndex + 1),
+      ];
+      const columnList = effectiveColumns.join(",");
+      const placeholders = effectiveColumns.map(() => "?").join(",");
+      const stmt = this.db.prepare(
+        `INSERT OR REPLACE INTO deckprofiles (${columnList}) VALUES (${placeholders})`
+      );
+      for (const row of result[0].values) {
+        const id = row[idIndex] as string;
+        const remoteMod = row[modIndex] as string;
+        const localRes = this.db.exec(
+          "SELECT COALESCE(deleted_at, modified) FROM deckprofiles WHERE id = ?",
+          [id]
+        );
+        const localEff = localRes.length
+          ? (localRes[0].values[0][0] as string)
+          : null;
+        if (!localEff || remoteMod > localEff) {
+          const effectiveRow = [
+            ...row.slice(0, reviewOrderIndex + 1),
+            "1m",
+            "10m",
+            ...row.slice(reviewOrderIndex + 1),
+          ];
+          stmt.run(effectiveRow);
+        }
+      }
+      stmt.free();
+    } catch {
+      // Remote may lack the table.
+    }
+  }
+
+  private mergeCustomDecks(remoteDb: Database): void {
+    this.mergeByEffectiveTimestamp(remoteDb, "custom_decks");
   }
 }
 

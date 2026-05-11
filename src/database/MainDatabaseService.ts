@@ -470,16 +470,20 @@ export class MainDatabaseService extends BaseDatabaseService {
               `);
             }
 
-            // Merge Profiles (REPLACE only if remote.modified > main.modified)
+            // Merge Profiles by effective timestamp COALESCE(deleted_at, modified)
+            // so a soft-delete on one device propagates to the other.
             try {
               this.db.exec(`
                 INSERT OR REPLACE INTO deckprofiles
                 SELECT remote.* FROM remote.deckprofiles
                 LEFT JOIN deckprofiles AS main ON remote.id = main.id
-                WHERE main.id IS NULL OR remote.modified > main.modified
+                WHERE main.id IS NULL
+                   OR COALESCE(remote.deleted_at, remote.modified) > COALESCE(main.deleted_at, main.modified)
               `);
             } catch {
-              // Remote DB has different schema (e.g., missing learning_steps) - use explicit columns
+              // Pre-v17 remote DB lacks deleted_at and/or learning_steps. Fall back
+              // to explicit columns and plain-modified comparison (no tombstones
+              // to propagate in either direction here).
               try {
                 this.db.exec(`
                   INSERT OR REPLACE INTO deckprofiles
@@ -493,7 +497,7 @@ export class MainDatabaseService extends BaseDatabaseService {
                     r.fsrs_request_retention, r.fsrs_profile, r.is_default, r.created, r.modified
                   FROM remote.deckprofiles r
                   LEFT JOIN deckprofiles AS main ON r.id = main.id
-                  WHERE main.id IS NULL OR r.modified > main.modified
+                  WHERE main.id IS NULL OR r.modified > COALESCE(main.deleted_at, main.modified)
                 `);
               } catch {
                 this.debugLog("Remote DB has no deckprofiles table, skipping");
@@ -510,13 +514,14 @@ export class MainDatabaseService extends BaseDatabaseService {
               this.debugLog("Remote DB has no profile_tag_mappings table, skipping");
             }
 
-            // Merge Custom Decks (REPLACE only if remote.modified > main.modified)
+            // Merge Custom Decks by effective timestamp COALESCE(deleted_at, modified).
             try {
               this.db.exec(`
                 INSERT OR REPLACE INTO custom_decks
                 SELECT remote.* FROM remote.custom_decks
                 LEFT JOIN custom_decks AS main ON remote.id = main.id
-                WHERE main.id IS NULL OR remote.modified > main.modified
+                WHERE main.id IS NULL
+                   OR COALESCE(remote.deleted_at, remote.modified) > COALESCE(main.deleted_at, main.modified)
               `);
             } catch {
               this.debugLog("Remote DB has no custom_decks table, skipping");
@@ -676,25 +681,28 @@ export class MainDatabaseService extends BaseDatabaseService {
               }
             }
 
-            // Merge profiles (conditional replace)
+            // Merge profiles by effective timestamp COALESCE(deleted_at, modified).
             try {
               const remoteProfiles = remoteDb.exec("SELECT * FROM deckprofiles");
               if (remoteProfiles.length > 0) {
                 const profileData = remoteProfiles[0];
                 const modifiedIndex = profileData.columns.indexOf("modified");
+                const deletedIndex = profileData.columns.indexOf("deleted_at");
 
                 for (const row of profileData.values) {
                   const profileId = row[0];
-                  const remoteModified = row[modifiedIndex];
+                  const remoteModified = row[modifiedIndex] as string;
+                  const remoteDeleted = deletedIndex >= 0 ? (row[deletedIndex] as string | null) : null;
+                  const remoteEffective = remoteDeleted || remoteModified;
 
                   const existingProfile = this.db.exec(
-                    `SELECT modified FROM deckprofiles WHERE id = ?`,
+                    `SELECT COALESCE(deleted_at, modified) FROM deckprofiles WHERE id = ?`,
                     [profileId]
                   );
-                  const shouldReplace =
-                    !existingProfile.length ||
-                    (existingProfile[0]?.values?.[0]?.[0] || 0) <
-                      (remoteModified || 0);
+                  const localEffective = existingProfile.length
+                    ? (existingProfile[0]?.values?.[0]?.[0] as string | null)
+                    : null;
+                  const shouldReplace = !localEffective || remoteEffective > localEffective;
 
                   if (shouldReplace) {
                     const profileStmt = this.db.prepare(`
@@ -728,25 +736,28 @@ export class MainDatabaseService extends BaseDatabaseService {
               this.debugLog("Remote DB has no profile_tag_mappings table, skipping");
             }
 
-            // Merge custom decks (conditional replace)
+            // Merge custom decks by effective timestamp COALESCE(deleted_at, modified).
             try {
               const remoteCustomDecks = remoteDb.exec("SELECT * FROM custom_decks");
               if (remoteCustomDecks.length > 0) {
                 const customDeckData = remoteCustomDecks[0];
                 const modifiedIndex = customDeckData.columns.indexOf("modified");
+                const deletedIndex = customDeckData.columns.indexOf("deleted_at");
 
                 for (const row of customDeckData.values) {
                   const deckId = row[0];
-                  const remoteModified = row[modifiedIndex];
+                  const remoteModified = row[modifiedIndex] as string;
+                  const remoteDeleted = deletedIndex >= 0 ? (row[deletedIndex] as string | null) : null;
+                  const remoteEffective = remoteDeleted || remoteModified;
 
                   const existingDeck = this.db.exec(
-                    `SELECT modified FROM custom_decks WHERE id = ?`,
+                    `SELECT COALESCE(deleted_at, modified) FROM custom_decks WHERE id = ?`,
                     [deckId]
                   );
-                  const shouldReplace =
-                    !existingDeck.length ||
-                    (existingDeck[0]?.values?.[0]?.[0] || 0) <
-                      (remoteModified || 0);
+                  const localEffective = existingDeck.length
+                    ? (existingDeck[0]?.values?.[0]?.[0] as string | null)
+                    : null;
+                  const shouldReplace = !localEffective || remoteEffective > localEffective;
 
                   if (shouldReplace) {
                     const deckStmt = this.db.prepare(`

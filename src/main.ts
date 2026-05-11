@@ -99,6 +99,8 @@ export default class DecksPlugin extends Plugin {
   private logger: Logger;
   private progressTracker: ProgressTracker;
   private lastKnownDatabaseMtime = 0;
+  private lastReloadFromDiskAt = 0;
+  private reloadFromDiskInFlight = false;
 
   async onload() {
     // Load settings first
@@ -323,6 +325,22 @@ export default class DecksPlugin extends Plugin {
         },
       });
 
+      // Reload from disk on window/leaf focus so the user sees other-device
+      // changes that iCloud (or Obsidian Sync, Dropbox, ...) just delivered.
+      // syncWithDisk() merges remote into in-memory only — it does NOT write
+      // back, which avoids the iCloud feedback loop where every read triggers
+      // another upload.
+      this.registerDomEvent(window, "focus", () => {
+        void this.reloadFromDiskIfNewer();
+      });
+      this.registerEvent(
+        this.app.workspace.on("active-leaf-change", (leaf) => {
+          if (leaf?.view.getViewType() === VIEW_TYPE_DECKS) {
+            void this.reloadFromDiskIfNewer();
+          }
+        })
+      );
+
       // Listen for file changes to update decks
       this.registerEvent(
         this.app.vault.on("modify", async (file) => {
@@ -511,6 +529,31 @@ export default class DecksPlugin extends Plugin {
 
     if (leaf) {
       await workspace.revealLeaf(leaf);
+    }
+  }
+
+  /**
+   * Pull other-device changes from disk into in-memory DB. Triggered by
+   * window/leaf focus events. Throttled to 2s to dampen rapid-fire focus
+   * bursts (alt-tab, modal open/close). Single-flight so concurrent firings
+   * collapse into one merge. Never writes back to disk — that would create
+   * an iCloud feedback loop where every read triggers another upload.
+   */
+  private async reloadFromDiskIfNewer(): Promise<void> {
+    if (!this.db) return;
+    if (this.reloadFromDiskInFlight) return;
+    const now = Date.now();
+    if (now - this.lastReloadFromDiskAt < 2000) return;
+    this.lastReloadFromDiskAt = now;
+    this.reloadFromDiskInFlight = true;
+    try {
+      await this.db.syncWithDisk();
+      // Trigger UI refresh so deck list reflects merged state.
+      await this.getDecksView()?.refresh();
+    } catch (error) {
+      this.logger.debug("reloadFromDiskIfNewer failed", error as object);
+    } finally {
+      this.reloadFromDiskInFlight = false;
     }
   }
 
