@@ -158,6 +158,7 @@ export class MainDatabaseService extends BaseDatabaseService {
 
       // Update lastKnownModified after successful save
       await this.updateLastKnownModified();
+      this.markDirty(false);
 
       this.debugLog("Database saved successfully");
     } catch (error) {
@@ -189,6 +190,7 @@ export class MainDatabaseService extends BaseDatabaseService {
     const stmt = this.db.prepare(sql);
     try {
       stmt.run(params);
+      this.markDirty(true);
     } finally {
       stmt.free();
     }

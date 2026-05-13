@@ -34,6 +34,11 @@ export interface IDatabaseService {
   // their DB writes. Optional — when unset, mutations stay local-only.
   setSyncLog(syncLog: SyncLog): void;
 
+  // Dirty-flag tracking for the periodic snapshot timer. Mutations flip
+  // this true via executeSql; save() flips it false. The plugin reads
+  // isDirty() to decide whether the 30-min snapshot timer should fire.
+  isDirty(): boolean;
+
   // Deck operations
   createDeck(
     deck: Omit<Deck, "created" | "modified" | "profileId"> & { id?: string; profileId?: string }

@@ -105,6 +105,7 @@ export default class DecksPlugin extends Plugin {
   private reloadFromDiskInFlight = false;
   private deviceLocalState: DeviceLocalState;
   private syncLog: SyncLog;
+  private snapshotTimer: number | null = null;
 
   async onload() {
     // Load settings first
@@ -365,16 +366,43 @@ export default class DecksPlugin extends Plugin {
         })
       );
 
-      // Flush any buffered sync-log ops to disk before the window loses
-      // focus or the app backgrounds. Covers desktop alt-tab and mobile
-      // app-suspend. Without this, ops written in the last 2s before
-      // backgrounding would stay in memory and never make it to iCloud.
+      // Flush any buffered sync-log ops to disk + persist the in-memory DB
+      // snapshot before the window loses focus or the app backgrounds.
+      // Covers desktop alt-tab and mobile app-suspend. Without this, ops
+      // written in the last 2s before backgrounding would stay in memory
+      // and never make it to iCloud.
       this.registerDomEvent(window, "blur", () => {
-        void this.syncLog?.flushNow();
+        void this.flushAndSnapshotIfDirty();
       });
       this.registerDomEvent(window, "pagehide", () => {
-        void this.syncLog?.flushNow();
+        void this.flushAndSnapshotIfDirty();
       });
+
+      // Periodic snapshot timer. The decks.db binary is now persisted only
+      // when dirty AND the timer fires — instead of after every local op.
+      // This keeps iCloud's "stability heuristic" from constantly resetting
+      // (binary blob keeps changing) so the BIG file uploads cleanly during
+      // idle periods while the small .deckssynclog files carry the hot path.
+      this.snapshotTimer = window.setInterval(() => {
+        if (this.db?.isDirty()) {
+          void this.db.save().catch((error) => {
+            this.logger.debug("periodic snapshot save failed", error as object);
+          });
+        }
+      }, 30 * 60 * 1000);
+      this.register(() => {
+        if (this.snapshotTimer !== null) {
+          window.clearInterval(this.snapshotTimer);
+          this.snapshotTimer = null;
+        }
+      });
+
+      // Compact our own sync log on plugin load so the file doesn't grow
+      // unbounded across years of use. Best-effort; failures here are
+      // harmless (we just keep the longer file until the next attempt).
+      void this.syncLog
+        .compact()
+        .catch((error) => this.logger.debug("startup compact failed", error as object));
 
       // Listen for file changes to update decks
       this.registerEvent(
@@ -490,9 +518,10 @@ export default class DecksPlugin extends Plugin {
   onunload() {
     this.logger.debug("Unloading Decks plugin");
 
-    // Drain any buffered sync-log ops to disk before tearing down. Plugin
-    // disable / reload would otherwise lose the last <2s of ops.
-    void this.syncLog?.flushNow();
+    // Drain any buffered sync-log ops + persist the DB snapshot before
+    // tearing down. Plugin disable / reload would otherwise lose the last
+    // <2s of ops and any in-memory mutations not yet snapshotted.
+    void this.flushAndSnapshotIfDirty();
 
     // Close database connection using factory singleton
     void DatabaseFactory.close();
@@ -584,6 +613,28 @@ export default class DecksPlugin extends Plugin {
    *      since the last applied seq. This is the fast path: small text
    *      files iCloud delivers in seconds.
    */
+  /**
+   * Drain any buffered sync-log ops to disk and, if the in-memory DB has
+   * unsaved mutations, persist the snapshot too. Called on window blur,
+   * pagehide (mobile background), and onunload. Best-effort: failures are
+   * logged but don't surface to the user — the next focus reload or
+   * periodic timer will retry.
+   */
+  private async flushAndSnapshotIfDirty(): Promise<void> {
+    try {
+      await this.syncLog?.flushNow();
+    } catch (error) {
+      this.logger.debug("flushNow failed on blur/pagehide", error as object);
+    }
+    if (this.db?.isDirty()) {
+      try {
+        await this.db.save();
+      } catch (error) {
+        this.logger.debug("save failed on blur/pagehide", error as object);
+      }
+    }
+  }
+
   private async reloadFromDiskIfNewer(): Promise<void> {
     if (!this.db) return;
     if (this.reloadFromDiskInFlight) return;

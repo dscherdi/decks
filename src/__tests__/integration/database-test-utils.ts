@@ -95,8 +95,13 @@ export class InMemoryAdapter implements DataAdapter {
   async remove(): Promise<void> {
     throw new Error("Not implemented");
   }
-  async rename(): Promise<void> {
-    throw new Error("Not implemented");
+  async rename(from: string, to: string): Promise<void> {
+    const data = this.files.get(from);
+    if (data === undefined) {
+      throw new Error(`ENOENT: rename source missing: ${from}`);
+    }
+    this.files.set(to, data);
+    this.files.delete(from);
   }
   async copy(): Promise<void> {
     throw new Error("Not implemented");

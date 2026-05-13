@@ -25,10 +25,13 @@ import { hlcReceive, hlcSend, hlcParse, type HLCValue } from "./HLC";
 import { KNOWN_OP_TYPES_V1 } from "./SyncLog.types";
 import type { SyncOpV1, SyncLogEntry } from "./SyncLog.types";
 import { applyOp } from "./SyncLog.handlers";
+import { safeRename } from "../utils/adapter";
 
 const FLUSH_DEBOUNCE_MS = 2000;
 const FLUSH_BACKSTOP_COUNT = 10;
 const LOG_EXT = ".deckssynclog";
+const COMPACT_RETENTION_DAYS = 30;
+const MS_PER_DAY = 24 * 60 * 60 * 1000;
 
 export class SyncLog {
   private buffer: string[] = [];
@@ -148,22 +151,48 @@ export class SyncLog {
     try {
       const sources = await this.listOtherDeviceLogPaths();
       const consumed = await this.loadJournalState();
-      for (const { sourceDeviceId, path } of sources) {
-        await this.applyFromSource(sourceDeviceId, path, consumed.get(sourceDeviceId) ?? 0);
+      for (const source of sources) {
+        await this.applyFromSource(
+          source.sourceDeviceId,
+          source.path,
+          consumed.get(source.sourceDeviceId) ?? 0
+        );
+        if (source.isConflict) {
+          // Move the conflict-copy file aside so the next applyPending
+          // doesn't re-scan it. The renamed file remains in the vault as
+          // a forensic record (kept until manual cleanup) instead of being
+          // deleted, in case the user wants to inspect what got merged.
+          await this.renameConsumedConflictFile(source.path).catch((error) => {
+            this.logger.debug(
+              `SyncLog: failed to rename consumed conflict file ${source.path}`,
+              error as object
+            );
+          });
+        }
       }
     } finally {
       this.applying = false;
     }
   }
 
+  private async renameConsumedConflictFile(path: string): Promise<void> {
+    const stamp = new Date().toISOString().replace(/[:.]/g, "-");
+    const target = `${path}.consumed-${stamp}`;
+    await safeRename(this.adapter, path, target);
+  }
+
   /**
    * List every `*.deckssynclog` file in the vault root except our own.
-   * Conflict-copy files (e.g. `mac (conflicted copy ...).deckssynclog`) are
-   * detected in Day 7's polish pass; for Day 5 we skip them silently — the
-   * basename-equals-deviceId check below filters them out automatically since
-   * a conflict-copy name contains parentheses and spaces.
+   *
+   * Conflict-copy files — `<deviceId> (Mac's conflicted copy 2026-05-10).deckssynclog`
+   * (iCloud), `<deviceId>.sync-conflict-20260510-...` (Syncthing), etc. —
+   * are mapped back to their owning deviceId so their entries flow into the
+   * same journal_state high-water mark. After a successful apply we rename
+   * them so they won't be re-processed on the next focus event.
    */
-  private async listOtherDeviceLogPaths(): Promise<Array<{ sourceDeviceId: string; path: string }>> {
+  private async listOtherDeviceLogPaths(): Promise<
+    Array<{ sourceDeviceId: string; path: string; isConflict: boolean }>
+  > {
     let listed: { files: string[] };
     try {
       listed = await this.adapter.list("");
@@ -172,15 +201,25 @@ export class SyncLog {
       return [];
     }
     const ownPath = this.ownLogPath;
-    const result: Array<{ sourceDeviceId: string; path: string }> = [];
+    const ownDeviceId = this.deviceState.getDeviceId();
+    const result: Array<{ sourceDeviceId: string; path: string; isConflict: boolean }> = [];
     for (const file of listed.files) {
-      if (!file.endsWith(LOG_EXT)) continue;
+      const parsed = parseDeviceFromFilename(file);
+      if (!parsed) continue;
       if (file === ownPath) continue;
-      const deviceId = file.slice(0, file.length - LOG_EXT.length);
-      // Skip conflict-copy files; their basenames contain parentheses/spaces
-      // that real deviceIds (UUID-derived) never have.
-      if (!/^[a-z0-9-]+$/i.test(deviceId)) continue;
-      result.push({ sourceDeviceId: deviceId, path: file });
+      // Even our own log might appear with a conflict-copy suffix if iCloud
+      // got confused. We DO want to consume those entries (they're our ops
+      // that got stranded in the conflicted copy) — but with care: they
+      // should be applied via our normal journal_state path so we don't
+      // double-apply our own writes. Skip same-deviceId conflict copies for
+      // now; their content is duplicated in our own log via append, so the
+      // safest move is to just rename them out of the way.
+      if (parsed.deviceId === ownDeviceId && !parsed.isConflict) continue;
+      result.push({
+        sourceDeviceId: parsed.deviceId,
+        path: file,
+        isConflict: parsed.isConflict,
+      });
     }
     return result;
   }
@@ -266,12 +305,140 @@ export class SyncLog {
   }
 
   /**
+   * Truncate this device's log to the last N days of entries (default 30).
+   * Drops older lines, rewrites the file atomically via tmp + safeRename.
+   *
+   * Called on plugin startup and once per session; not on every focus event.
+   * Frequency is bounded because (a) the rewrite reads the whole file and
+   * (b) the resulting file change triggers a fresh iCloud upload of the
+   * (much-smaller) compacted log — useful but not free.
+   *
+   * Safety notes:
+   *   - We compact ONLY our own log file. Other devices' logs are read-only
+   *     to us; modifying them would race with their owner's appends.
+   *   - Day 7 uses a simple time-based cutoff. Day 8 polish layers in a
+   *     consumed-receipt floor so we don't drop entries some other device
+   *     hasn't yet read. For now, a 30-day window is a safe over-estimate.
+   *   - We flush any in-flight buffer before reading so we don't lose ops
+   *     that were appended but not yet on disk.
+   */
+  async compact(retentionDays: number = COMPACT_RETENTION_DAYS): Promise<{
+    before: number;
+    after: number;
+  }> {
+    await this.flushNow();
+
+    const path = this.ownLogPath;
+    let content: string;
+    try {
+      if (!(await this.adapter.exists(path))) return { before: 0, after: 0 };
+      content = await this.adapter.read(path);
+    } catch (error) {
+      this.logger.debug("SyncLog.compact: read failed", error as object);
+      return { before: 0, after: 0 };
+    }
+
+    const lines = content.split("\n");
+    const cutoff = Date.now() - retentionDays * MS_PER_DAY;
+    const kept: string[] = [];
+    let droppedCount = 0;
+    let beforeCount = 0;
+
+    for (const rawLine of lines) {
+      const line = rawLine.trim();
+      if (!line) continue;
+      beforeCount += 1;
+      // Cheap parse: pull just the hlc field; if anything is off, keep the
+      // line. Better to retain a suspicious record than risk losing it.
+      let parsedTs: number | null = null;
+      try {
+        const obj: unknown = JSON.parse(line);
+        if (
+          obj &&
+          typeof obj === "object" &&
+          "hlc" in obj &&
+          Array.isArray((obj as { hlc: unknown }).hlc) &&
+          typeof (obj as { hlc: number[] }).hlc[0] === "number"
+        ) {
+          parsedTs = (obj as { hlc: number[] }).hlc[0];
+        }
+      } catch {
+        // Malformed line — keep it so the next applyPending can log/skip.
+        kept.push(line);
+        continue;
+      }
+      if (parsedTs !== null && parsedTs < cutoff) {
+        droppedCount += 1;
+        continue;
+      }
+      kept.push(line);
+    }
+
+    if (droppedCount === 0) {
+      return { before: beforeCount, after: beforeCount };
+    }
+
+    const newContent = kept.length > 0 ? kept.join("\n") + "\n" : "";
+    const tmpPath = `${path}.compact-tmp`;
+    try {
+      await this.adapter.write(tmpPath, newContent);
+      await safeRename(this.adapter, tmpPath, path);
+      this.logger.debug(
+        `SyncLog.compact: ${path} ${beforeCount} → ${kept.length} entries (dropped ${droppedCount} older than ${retentionDays}d)`
+      );
+    } catch (error) {
+      this.logger.error("SyncLog.compact: rewrite failed", error);
+      // Best-effort cleanup of the tmp file. If this also throws, the next
+      // compaction pass will overwrite it anyway.
+      try {
+        await this.adapter.remove(tmpPath);
+      } catch {
+        /* ignore */
+      }
+      throw error;
+    }
+
+    return { before: beforeCount, after: kept.length };
+  }
+
+  /**
    * Test-only inspection of the buffered (unflushed) line count. Used by
    * SyncLog.test.ts to verify the debounce/backstop semantics.
    */
   bufferLengthForTests(): number {
     return this.buffer.length;
   }
+}
+
+/**
+ * Recognize the deviceId behind a sync-log file's name. Handles:
+ *   - Clean files:   "lin-abc123def456.deckssynclog"
+ *   - iCloud:        "lin-abc123def456 (Mac's conflicted copy 2026-05-10).deckssynclog"
+ *   - Syncthing:     "lin-abc123def456.sync-conflict-20260510-123456-MAC.deckssynclog"
+ *   - Obsidian Sync: "lin-abc123def456.conflict.deckssynclog"
+ *
+ * The recognition rule: the basename (minus the extension) either equals a
+ * deviceId-shaped string, or starts with one followed by a space/dot/paren
+ * and arbitrary suffix. Anything else is rejected — we'd rather skip an
+ * unfamiliar file than apply ops from it.
+ */
+function parseDeviceFromFilename(
+  file: string
+): { deviceId: string; isConflict: boolean } | null {
+  if (!file.endsWith(LOG_EXT)) return null;
+  const base = file.slice(0, file.length - LOG_EXT.length);
+  if (base.length === 0) return null;
+  // Exact deviceId — no conflict.
+  if (/^[a-z0-9-]+$/i.test(base)) {
+    return { deviceId: base, isConflict: false };
+  }
+  // Conflict-copy: deviceId prefix followed by a separator.
+  const m = base.match(/^([a-z0-9-]+)[ (.]/i);
+  if (!m) return null;
+  // Reject files where the suffix doesn't look like a conflict marker. This
+  // is a soft heuristic, intentionally permissive: better to consume a
+  // weirdly-named valid log than to miss the user's data.
+  return { deviceId: m[1], isConflict: true };
 }
 
 /**

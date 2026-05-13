@@ -278,4 +278,57 @@ describe("SyncLog round-trip", () => {
     },
     20000
   );
+
+  it(
+    "consumes a conflict-copy file (iCloud-style) and renames it aside",
+    async () => {
+      const sharedAdapter = new InMemoryAdapter();
+      const deviceB = await createDevice(
+        sharedAdapter,
+        "/dbb.db",
+        new InMemoryStorage()
+      );
+      // Need a custom deck on device B for the upsert op to target.
+      // Build the conflict-copy filename by hand using a synthetic deviceId
+      // that doesn't exist as a normal log — this mirrors iCloud's pattern
+      // of creating a "(...)" conflict copy alongside the canonical file.
+      const conflictPath =
+        "mac-conflict999abc (Mac's conflicted copy 2026-05-13).deckssynclog";
+      const op = {
+        hlc: [Date.parse("2030-01-01T00:00:00Z"), 0, "mac-conflict999abc"],
+        s: 1,
+        v: 1,
+        o: "custom_deck_upsert",
+        p: {
+          id: "cd_from_conflict",
+          name: "Imported from conflict copy",
+          deckType: "manual",
+          filterDefinition: null,
+          lastReviewed: null,
+          created: "2030-01-01T00:00:00Z",
+          modified: "2030-01-01T00:00:00Z",
+        },
+      };
+      await sharedAdapter.write(conflictPath, JSON.stringify(op) + "\n");
+
+      // Before applyPending: the custom deck does not exist on device B.
+      expect(await deviceB.db.getCustomDeckById("cd_from_conflict")).toBeNull();
+
+      await deviceB.log.applyPending();
+
+      // The op was consumed and applied.
+      const got = await deviceB.db.getCustomDeckById("cd_from_conflict");
+      expect(got).not.toBeNull();
+      expect(got!.name).toBe("Imported from conflict copy");
+
+      // The conflict file was renamed aside (so a second applyPending won't
+      // reprocess it). The new name ends with ".consumed-<timestamp>".
+      const stillPresent = await sharedAdapter.exists(conflictPath);
+      expect(stillPresent).toBe(false);
+      const listed = await sharedAdapter.list("");
+      const consumed = listed.files.filter((f) => f.includes(".consumed-"));
+      expect(consumed.length).toBeGreaterThan(0);
+    },
+    20000
+  );
 });

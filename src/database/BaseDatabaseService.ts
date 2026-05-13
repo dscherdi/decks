@@ -51,6 +51,12 @@ export abstract class BaseDatabaseService implements IDatabaseService {
   // Sync log is injected post-construction by main.ts. When unset, CRUD
   // methods just write to the DB (tests + the early plugin-init window).
   protected syncLog: SyncLog | null = null;
+  // Dirty since last save(). Set by any executeSql() (which is the only
+  // mutation path on the public surface; querySql() doesn't touch this).
+  // Read by main.ts's periodic snapshot timer to decide whether to call
+  // save() — when nothing's dirty, a save would just rewrite the same bytes
+  // to disk and trigger an unnecessary iCloud upload.
+  protected dirty = false;
 
   constructor(
     dbPath: string,
@@ -68,6 +74,20 @@ export abstract class BaseDatabaseService implements IDatabaseService {
 
   setSyncLog(syncLog: SyncLog): void {
     this.syncLog = syncLog;
+  }
+
+  isDirty(): boolean {
+    return this.dirty;
+  }
+
+  /**
+   * Mark the in-memory DB as having unsaved mutations. Called from
+   * concrete subclasses' executeSql() (the worker forwards via message,
+   * MainDatabaseService runs inline) and from save() with `false` after
+   * a successful persist.
+   */
+  protected markDirty(value: boolean): void {
+    this.dirty = value;
   }
 
   /**

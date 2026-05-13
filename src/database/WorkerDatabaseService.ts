@@ -239,6 +239,7 @@ export class WorkerDatabaseService extends BaseDatabaseService {
 
       // Update lastKnownModified after successful save
       await this.updateLastKnownModified();
+      this.markDirty(false);
 
       this.debugLog("Database saved successfully!");
     } catch (error) {
@@ -261,6 +262,7 @@ export class WorkerDatabaseService extends BaseDatabaseService {
   async executeSql(sql: string, params: SqlJsValue[] = []): Promise<void> {
     if (!this.worker) throw new Error("Worker not initialized");
     await this.sendMessage("executeSql", { sql, params });
+    this.markDirty(true);
   }
 
   // Generic overload for object queries

@@ -32,6 +32,26 @@ class FakeAdapter {
     }
     this.files.set(path, (this.files.get(path) ?? "") + data);
   }
+  async exists(path: string): Promise<boolean> {
+    return this.files.has(path);
+  }
+  async read(path: string): Promise<string> {
+    const data = this.files.get(path);
+    if (data === undefined) throw new Error(`not found: ${path}`);
+    return data;
+  }
+  async write(path: string, data: string): Promise<void> {
+    this.files.set(path, data);
+  }
+  async rename(from: string, to: string): Promise<void> {
+    const data = this.files.get(from);
+    if (data === undefined) throw new Error(`ENOENT: ${from}`);
+    this.files.set(to, data);
+    this.files.delete(from);
+  }
+  async remove(path: string): Promise<void> {
+    this.files.delete(path);
+  }
 }
 
 function makeLogger(): Logger {
@@ -291,6 +311,161 @@ describe("SyncLog", () => {
       const adapter = new FakeAdapter();
       const { log } = makeSyncLog(adapter);
       await expect(log.applyPending()).resolves.toBeUndefined();
+    });
+  });
+
+  describe("compact", () => {
+    beforeEach(() => {
+      // Compaction reads timestamps; use real timers so the cutoff math works.
+      jest.useRealTimers();
+    });
+
+    // Build a JSONL line with a given pt (physical timestamp in ms). The rest
+    // of the fields are placeholders — compact only looks at hlc[0].
+    function makeLine(pt: number, seq: number): string {
+      return (
+        JSON.stringify({
+          hlc: [pt, 0, "dev-x"],
+          s: seq,
+          v: 1,
+          o: "rate",
+          p: { c: "card_x" },
+        }) + "\n"
+      );
+    }
+
+    it("is a no-op when the log file doesn't exist", async () => {
+      const adapter = new FakeAdapter();
+      const { log } = makeSyncLog(adapter);
+      const result = await log.compact();
+      expect(result).toEqual({ before: 0, after: 0 });
+    });
+
+    it("drops entries older than the retention window and rewrites the file", async () => {
+      const adapter = new FakeAdapter();
+      const { log, state } = makeSyncLog(adapter);
+      const path = `${state.getDeviceId()}.deckssynclog`;
+      const now = Date.now();
+      const old = now - 60 * 24 * 60 * 60 * 1000; // 60 days ago
+      const recent = now - 5 * 24 * 60 * 60 * 1000; // 5 days ago
+      adapter.files.set(
+        path,
+        makeLine(old, 1) + makeLine(old, 2) + makeLine(recent, 3)
+      );
+
+      const result = await log.compact(30);
+      expect(result.before).toBe(3);
+      expect(result.after).toBe(1);
+
+      const remaining = adapter.files.get(path)!;
+      expect(remaining.split("\n").filter(Boolean)).toHaveLength(1);
+      // The kept line must be the recent one.
+      const kept = JSON.parse(remaining.split("\n")[0]);
+      expect(kept.s).toBe(3);
+    });
+
+    it("is a no-op when nothing is older than the cutoff", async () => {
+      const adapter = new FakeAdapter();
+      const { log, state } = makeSyncLog(adapter);
+      const path = `${state.getDeviceId()}.deckssynclog`;
+      const now = Date.now();
+      adapter.files.set(path, makeLine(now, 1) + makeLine(now, 2));
+
+      const result = await log.compact(30);
+      expect(result).toEqual({ before: 2, after: 2 });
+      // File is untouched (no rename happened, content identical).
+      expect(adapter.files.get(path)!.split("\n").filter(Boolean)).toHaveLength(2);
+    });
+
+    it("preserves malformed lines rather than silently dropping them", async () => {
+      const adapter = new FakeAdapter();
+      const { log, state } = makeSyncLog(adapter);
+      const path = `${state.getDeviceId()}.deckssynclog`;
+      const now = Date.now();
+      const old = now - 60 * 24 * 60 * 60 * 1000;
+      adapter.files.set(
+        path,
+        makeLine(old, 1) + "{not valid json\n" + makeLine(now, 2)
+      );
+
+      await log.compact(30);
+      const remaining = adapter.files.get(path)!;
+      // The malformed line is retained; only the genuinely-old line is dropped.
+      expect(remaining).toContain("{not valid json");
+      expect(remaining.split("\n").filter(Boolean)).toHaveLength(2);
+    });
+
+    it("flushes any pending buffered ops before reading", async () => {
+      const adapter = new FakeAdapter();
+      const { log, state } = makeSyncLog(adapter);
+      const path = `${state.getDeviceId()}.deckssynclog`;
+
+      // Seed an old entry on disk so something will be dropped.
+      const old = Date.now() - 60 * 24 * 60 * 60 * 1000;
+      adapter.files.set(path, makeLine(old, 1));
+
+      // Append a fresh op that's still in the buffer.
+      log.append({
+        o: "rate",
+        p: {
+          c: "card_new",
+          st: 1,
+          d: 5,
+          due: "2030-01-01T00:00:00Z",
+          rep: 1,
+          lap: 0,
+          state: "review",
+          lastReviewed: "2030-01-01T00:00:00Z",
+          interval: 1440,
+          log: {
+            id: "log_new",
+            flashcardId: "card_new",
+            sessionId: null,
+            lastReviewedAt: "2030-01-01T00:00:00Z",
+            shownAt: null,
+            reviewedAt: "2030-01-01T00:00:00Z",
+            rating: 3,
+            ratingLabel: "good",
+            timeElapsedMs: 1,
+            oldState: "new",
+            oldRepetitions: 0,
+            oldLapses: 0,
+            oldStability: 0,
+            oldDifficulty: 5,
+            newState: "review",
+            newRepetitions: 1,
+            newLapses: 0,
+            newStability: 1,
+            newDifficulty: 5,
+            oldIntervalMinutes: 0,
+            newIntervalMinutes: 1440,
+            oldDueAt: "2030-01-01T00:00:00Z",
+            newDueAt: "2030-01-02T00:00:00Z",
+            elapsedDays: 0,
+            retrievability: 0.9,
+            requestRetention: 0.9,
+            profile: "STANDARD",
+            maximumIntervalDays: 36500,
+            minMinutes: 1,
+            fsrsWeightsVersion: "1.0",
+            schedulerVersion: "1.0",
+            noteModelId: null,
+            cardTemplateId: null,
+            contentHash: null,
+            client: null,
+          },
+        },
+      });
+      expect(log.bufferLengthForTests()).toBe(1);
+
+      await log.compact(30);
+
+      // Buffer drained, old entry dropped, new entry preserved on disk.
+      expect(log.bufferLengthForTests()).toBe(0);
+      const remaining = adapter.files.get(path)!;
+      const kept = remaining.split("\n").filter(Boolean);
+      expect(kept).toHaveLength(1);
+      expect(JSON.parse(kept[0]).p.c).toBe("card_new");
     });
   });
 });
