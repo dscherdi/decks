@@ -57,6 +57,11 @@ async function createDevice(
   await db.initialize();
   const state = new DeviceLocalState(storage);
   const log = new SyncLog(adapter, state, logger, db);
+  // Match the production wiring (main.ts does this after both services
+  // are constructed). Without it, CRUD methods on the DB silently skip
+  // their `emitSyncOp` calls and the round-trip tests don't actually
+  // exercise the auto-emission path.
+  db.setSyncLog(log);
   return { db, log, state };
 }
 
@@ -599,6 +604,107 @@ describe("SyncLog round-trip", () => {
         const content = await sharedAdapter.read(logPath);
         expect(content.trim()).toBe("");
       }
+    },
+    20000
+  );
+
+  it(
+    "deck_reset on device A wipes device B's review history for that deck",
+    async () => {
+      const sharedAdapter = new InMemoryAdapter();
+      const deviceA = await createDevice(
+        sharedAdapter,
+        "/dba.db",
+        new InMemoryStorage()
+      );
+      const deviceB = await createDevice(
+        sharedAdapter,
+        "/dbb.db",
+        new InMemoryStorage()
+      );
+
+      // Both devices share the same deck and card.
+      const cardId = await seedSharedCard([deviceA, deviceB]);
+
+      // Both devices have the card in some "reviewed" state by hand
+      // (we want a clean cross-device starting point, not running the rate
+      // path). Stamp modified in the past so the reset cutoff catches it.
+      // Past timestamp so resetAt = `now` (real wall-clock) is later than
+      // the cards' modified — required for the reset's cutoff guard to pass.
+      const baselineModified = "2020-01-01T00:00:00Z";
+      for (const dev of [deviceA, deviceB]) {
+        await dev.db.updateFlashcard(cardId, {
+          state: "review",
+          stability: 4.2,
+          difficulty: 6,
+          dueDate: "2020-01-10T00:00:00Z",
+          interval: 1440,
+          repetitions: 3,
+          lapses: 0,
+          lastReviewed: baselineModified,
+          modified: baselineModified,
+        });
+        await dev.db.insertReviewLog({
+          id: `log_${dev.state.getDeviceId()}`,
+          flashcardId: cardId,
+          sessionId: undefined,
+          lastReviewedAt: "2019-12-31T00:00:00Z",
+          shownAt: undefined,
+          reviewedAt: baselineModified,
+          rating: 3,
+          ratingLabel: "good",
+          timeElapsedMs: 1000,
+          oldState: "new",
+          oldRepetitions: 0,
+          oldLapses: 0,
+          oldStability: 0,
+          oldDifficulty: 5,
+          newState: "review",
+          newRepetitions: 3,
+          newLapses: 0,
+          newStability: 4.2,
+          newDifficulty: 6,
+          oldIntervalMinutes: 0,
+          newIntervalMinutes: 1440,
+          oldDueAt: baselineModified,
+          newDueAt: "2020-01-10T00:00:00Z",
+          elapsedDays: 1,
+          retrievability: 0.9,
+          requestRetention: 0.9,
+          profile: "STANDARD",
+          maximumIntervalDays: 36500,
+          minMinutes: 1,
+          fsrsWeightsVersion: "1.0",
+          schedulerVersion: "1.0",
+        });
+      }
+
+      // Device A calls resetDeckProgress — this is the production CRUD
+      // path that emits `deck_reset` automatically.
+      await deviceA.db.resetDeckProgress("deck_shared");
+      await deviceA.log.flushNow();
+
+      // Sanity: device A locally has the card in "new" state.
+      expect((await deviceA.db.getFlashcardById(cardId))!.state).toBe("new");
+
+      // Device B is still in the pre-reset state.
+      expect((await deviceB.db.getFlashcardById(cardId))!.state).toBe("review");
+
+      // Apply pending: deck_reset op flows over, resets B's card too.
+      await deviceB.log.applyPending();
+      const cardB = await deviceB.db.getFlashcardById(cardId);
+      expect(cardB!.state).toBe("new");
+      expect(cardB!.stability).toBe(0);
+      expect(cardB!.repetitions).toBe(0);
+
+      // B's own review_log row is gone too (deleted because reviewed_at
+      // is at the cutoff timestamp, <= resetAt).
+      const remaining = (await deviceB.db.querySql<{ c: number }>(
+        "SELECT COUNT(*) as c FROM review_logs WHERE flashcard_id = ?",
+        [cardId],
+        { asObject: true }
+      ))[0].c;
+      expect(remaining).toBe(0);
     },
     20000
   );

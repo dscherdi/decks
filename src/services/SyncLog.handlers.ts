@@ -51,12 +51,14 @@ export async function applyOp(
 const HANDLERS: Partial<Record<SyncLogEntry["o"], OpHandler>> = {
   rate: handleRate,
   rate_undo: handleRateUndo,
+  deck_reset: handleDeckReset,
   profile_upsert: handleProfileUpsert,
   profile_delete: handleProfileDelete,
   tag_mapping_upsert: handleTagMappingUpsert,
   tag_mapping_delete: handleTagMappingDelete,
   custom_deck_upsert: handleCustomDeckUpsert,
   custom_deck_delete: handleCustomDeckDelete,
+  custom_deck_reset: handleCustomDeckReset,
   custom_deck_card_add: handleCustomDeckCardAdd,
   custom_deck_card_remove: handleCustomDeckCardRemove,
   session_start: handleSessionStart,
@@ -223,6 +225,133 @@ async function handleRateUndo(
   }
 
   await db.deleteReviewLogById(logId);
+}
+
+/**
+ * Apply a remote `deck_reset` op: bulk-wipe progress for every card in the
+ * deck the user reset. The resetAt timestamp serves as a wall-clock cutoff
+ * so a concurrent-rate scenario survives correctly:
+ *   - Logs / sessions with timestamp <= resetAt are deleted.
+ *   - Cards whose `modified` <= resetAt are reset to "new" state.
+ *   - Cards modified AFTER resetAt are left alone (someone else's newer
+ *     rate from a different device beat the reset).
+ *
+ * The receiver doesn't need a card-id list — it looks up its own
+ * flashcards-for-deck and applies the cutoff filter locally.
+ */
+async function handleDeckReset(
+  db: IDatabaseService,
+  _sourceDeviceId: string,
+  entry: SyncLogEntry,
+  logger: Logger
+): Promise<void> {
+  if (entry.o !== "deck_reset") return;
+  const { deckId, resetAt } = entry.p;
+
+  // Wipe logs whose review predates the reset.
+  await db.executeSql(
+    `DELETE FROM review_logs
+     WHERE flashcard_id IN (SELECT id FROM flashcards WHERE deck_id = ?)
+       AND reviewed_at <= ?`,
+    [deckId, resetAt]
+  );
+
+  // Wipe sessions started before the reset.
+  await db.executeSql(
+    `DELETE FROM review_sessions
+     WHERE deck_id = ? AND started_at <= ?`,
+    [deckId, resetAt]
+  );
+
+  // Reset cards whose state hasn't been touched by a newer rate.
+  await db.executeSql(
+    `UPDATE flashcards
+     SET state = 'new',
+         due_date = ?,
+         interval = 0,
+         repetitions = 0,
+         difficulty = 5.0,
+         stability = 0,
+         lapses = 0,
+         last_reviewed = NULL,
+         modified = ?
+     WHERE deck_id = ? AND modified <= ?`,
+    [resetAt, resetAt, deckId, resetAt]
+  );
+
+  logger.debug(`SyncLog deck_reset: deck=${deckId} cutoff=${resetAt} applied`);
+}
+
+/**
+ * Apply a remote `custom_deck_reset` op. Same cutoff semantics as
+ * deck_reset, but the card set is derived from the custom deck's
+ * membership (manual type) or its filter definition (filter type).
+ *
+ * For filter-type custom decks, the cards reset are whatever the filter
+ * matches on THIS device at apply time — same logical scope as
+ * BaseDatabaseService.resetCustomDeckProgress.
+ */
+async function handleCustomDeckReset(
+  db: IDatabaseService,
+  _sourceDeviceId: string,
+  entry: SyncLogEntry,
+  logger: Logger
+): Promise<void> {
+  if (entry.o !== "custom_deck_reset") return;
+  const { customDeckId, resetAt } = entry.p;
+
+  // If the custom deck doesn't exist locally (e.g. tombstoned, or its
+  // upsert op hasn't arrived yet), there's nothing to reset. The op was
+  // applied per journal_state, so we move on — if the deck materializes
+  // later via a custom_deck_upsert op, it'll arrive in its post-reset
+  // state from the source device anyway.
+  const deck = await db.getCustomDeckById(customDeckId);
+  if (!deck) {
+    logger.debug(
+      `SyncLog custom_deck_reset: deck ${customDeckId} not present locally; skipping`
+    );
+    return;
+  }
+
+  // Identify the card set the same way the local resetCustomDeckProgress
+  // does it: filter decks evaluate the filter; manual decks read the
+  // junction table.
+  let cardIds: string[];
+  if (deck.deckType === "filter" && deck.filterDefinition) {
+    cardIds = await db.getFlashcardIdsForCustomDeck(customDeckId);
+  } else {
+    cardIds = await db.getFlashcardIdsForCustomDeck(customDeckId);
+  }
+  if (cardIds.length === 0) return;
+
+  // Bulk-delete logs and reset cards in scope, both gated by the cutoff.
+  const placeholders = cardIds.map(() => "?").join(", ");
+
+  await db.executeSql(
+    `DELETE FROM review_logs
+     WHERE flashcard_id IN (${placeholders})
+       AND reviewed_at <= ?`,
+    [...cardIds, resetAt]
+  );
+
+  await db.executeSql(
+    `UPDATE flashcards
+     SET state = 'new',
+         due_date = ?,
+         interval = 0,
+         repetitions = 0,
+         difficulty = 5.0,
+         stability = 0,
+         lapses = 0,
+         last_reviewed = NULL,
+         modified = ?
+     WHERE id IN (${placeholders}) AND modified <= ?`,
+    [resetAt, resetAt, ...cardIds, resetAt]
+  );
+
+  logger.debug(
+    `SyncLog custom_deck_reset: deck=${customDeckId} cutoff=${resetAt} cards=${cardIds.length} applied`
+  );
 }
 
 // ---------- Profiles ------------------------------------------------------

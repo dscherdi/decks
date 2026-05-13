@@ -19,6 +19,7 @@ export interface SyncLogEntryHeader {
 export type SyncOpV1 =
   | RateOp
   | RateUndoOp
+  | DeckResetOp
   | SessionStartOp
   | SessionProgressOp
   | SessionEndOp
@@ -28,6 +29,7 @@ export type SyncOpV1 =
   | TagMappingDeleteOp
   | CustomDeckUpsertOp
   | CustomDeckDeleteOp
+  | CustomDeckResetOp
   | CustomDeckCardAddOp
   | CustomDeckCardRemoveOp;
 
@@ -59,6 +61,41 @@ export interface RateUndoOp {
     // back to. The id is the same one the original `rate` op carried in
     // `p.log.id`, so receiving devices can correlate them.
     logId: string;
+  };
+}
+
+/**
+ * Bulk reset of a deck's progress: deletes all review_logs + review_sessions
+ * for the deck and resets every card's FSRS state back to "new". The
+ * resetAt timestamp serves as a wall-clock cutoff so a concurrent rate
+ * from another device (newer than resetAt) survives the reset.
+ *
+ * One op covers a multi-row operation. The receiver re-evaluates which
+ * cards belong to the deck locally — no need to enumerate ids in the
+ * payload.
+ */
+export interface DeckResetOp {
+  o: "deck_reset";
+  p: {
+    deckId: string;
+    // ISO timestamp of when the user triggered the reset. Cards modified
+    // later than this are NOT touched by the receiver (cross-device
+    // concurrent-rate protection). Logs/sessions whose timestamp is
+    // later than this are also kept.
+    resetAt: string;
+  };
+}
+
+/**
+ * Bulk reset of a custom deck's progress. Same semantics as `deck_reset`
+ * but scoped to the cards reachable from `custom_deck_cards` (manual
+ * type) or matching the deck's filter definition (filter type).
+ */
+export interface CustomDeckResetOp {
+  o: "custom_deck_reset";
+  p: {
+    customDeckId: string;
+    resetAt: string;
   };
 }
 
@@ -243,6 +280,7 @@ export interface CustomDeckCardRemoveOp {
 export const KNOWN_OP_TYPES_V1: ReadonlySet<SyncOpV1["o"]> = new Set([
   "rate",
   "rate_undo",
+  "deck_reset",
   "session_start",
   "session_progress",
   "session_end",
@@ -252,6 +290,7 @@ export const KNOWN_OP_TYPES_V1: ReadonlySet<SyncOpV1["o"]> = new Set([
   "tag_mapping_delete",
   "custom_deck_upsert",
   "custom_deck_delete",
+  "custom_deck_reset",
   "custom_deck_card_add",
   "custom_deck_card_remove",
 ]);

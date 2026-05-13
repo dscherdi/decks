@@ -1719,6 +1719,7 @@ export abstract class BaseDatabaseService implements IDatabaseService {
     await this.executeSql(SQL_QUERIES.DELETE_REVIEW_LOGS_FOR_DECK, [deckId]);
     await this.executeSql(SQL_QUERIES.DELETE_REVIEW_SESSIONS_FOR_DECK, [deckId]);
     await this.executeSql(SQL_QUERIES.RESET_DECK_FLASHCARDS, [now, deckId]);
+    this.emitSyncOp({ o: "deck_reset", p: { deckId, resetAt: now } });
   }
 
   async resetCustomDeckProgress(customDeckId: string): Promise<void> {
@@ -1738,11 +1739,13 @@ export abstract class BaseDatabaseService implements IDatabaseService {
         `UPDATE flashcards SET state = 'new', due_date = ?, interval = 0, repetitions = 0, difficulty = 5.0, stability = 0, lapses = 0, last_reviewed = NULL, modified = ? WHERE id IN (${placeholders})`,
         [now, now, ...cardIds]
       );
+      this.emitSyncOp({ o: "custom_deck_reset", p: { customDeckId, resetAt: now } });
       return;
     }
 
     await this.executeSql(SQL_QUERIES.DELETE_REVIEW_LOGS_FOR_CUSTOM_DECK, [customDeckId]);
     await this.executeSql(SQL_QUERIES.RESET_CUSTOM_DECK_FLASHCARDS, [now, customDeckId]);
+    this.emitSyncOp({ o: "custom_deck_reset", p: { customDeckId, resetAt: now } });
   }
 
   // CUSTOM DECK OPERATIONS
@@ -1872,7 +1875,25 @@ export abstract class BaseDatabaseService implements IDatabaseService {
   }
 
   async removeAllCardsFromCustomDeck(customDeckId: string): Promise<void> {
+    // Read membership first so each removed pair gets a tombstone +
+    // sync op, matching the per-card removeCardsFromCustomDeck pattern.
+    const cardIds = await this.getFlashcardIdsForCustomDeck(customDeckId);
     await this.executeSql(SQL_QUERIES.DELETE_ALL_CUSTOM_DECK_CARDS, [customDeckId]);
+    if (cardIds.length === 0) return;
+    const now = new Date().toISOString();
+    for (const flashcardId of cardIds) {
+      await this.executeSql(
+        `INSERT INTO custom_deck_card_tombstones (custom_deck_id, flashcard_id, removed_at_hlc)
+         VALUES (?, ?, ?)
+         ON CONFLICT(custom_deck_id, flashcard_id) DO UPDATE SET
+           removed_at_hlc = excluded.removed_at_hlc`,
+        [customDeckId, flashcardId, now]
+      );
+      this.emitSyncOp({
+        o: "custom_deck_card_remove",
+        p: { customDeckId, flashcardId, removedAt: now },
+      });
+    }
   }
 
   private buildFilterQuery(filterDef: string, selectClause: string, extraWhere?: string, extraParams?: SqlJsValue[]): { sql: string; params: SqlJsValue[] } {
