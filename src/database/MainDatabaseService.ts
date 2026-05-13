@@ -438,13 +438,33 @@ export class MainDatabaseService extends BaseDatabaseService {
               SELECT * FROM remote.review_logs
             `);
 
-            // Merge Decks (REPLACE only if remote.modified > main.modified)
-            this.db.exec(`
-              INSERT OR REPLACE INTO decks
-              SELECT remote.* FROM remote.decks
-              LEFT JOIN decks AS main ON remote.id = main.id
-              WHERE main.id IS NULL OR remote.modified > main.modified
-            `);
+            // Merge Decks (REPLACE only if remote.modified > main.modified).
+            // last_synced_mtime is local-per-device (each device sees its own
+            // wall-clock mtime when iCloud delivers the markdown). Preserve
+            // local's value for matched rows; default 0 for newly-inserted
+            // rows so the next refresh re-parses them.
+            try {
+              this.db.exec(`
+                INSERT OR REPLACE INTO decks (id, name, filepath, tag, last_reviewed, profile_id, created, modified, last_synced_mtime)
+                SELECT remote.id, remote.name, remote.filepath, remote.tag, remote.last_reviewed, remote.profile_id, remote.created, remote.modified,
+                       COALESCE(main.last_synced_mtime, 0)
+                FROM remote.decks
+                LEFT JOIN decks AS main ON remote.id = main.id
+                WHERE main.id IS NULL OR remote.modified > main.modified
+              `);
+            } catch {
+              // Remote schema is pre-v18 (no last_synced_mtime column on remote.decks).
+              // Fall back to the legacy whole-row copy; the local column keeps its
+              // default 0 for fresh rows and we accept temporary correctness loss
+              // until both devices migrate.
+              this.db.exec(`
+                INSERT OR REPLACE INTO decks (id, name, filepath, tag, last_reviewed, profile_id, created, modified)
+                SELECT remote.id, remote.name, remote.filepath, remote.tag, remote.last_reviewed, remote.profile_id, remote.created, remote.modified
+                FROM remote.decks
+                LEFT JOIN decks AS main ON remote.id = main.id
+                WHERE main.id IS NULL OR remote.modified > main.modified
+              `);
+            }
 
             // Merge Flashcards (REPLACE only if remote.modified > main.modified)
             // Use try/catch to handle schema mismatch when remote DB lacks the notes column
@@ -615,25 +635,32 @@ export class MainDatabaseService extends BaseDatabaseService {
               logStmt.free();
             }
 
-            // Merge decks (conditional replace)
+            // Merge decks (conditional replace). last_synced_mtime is
+            // local-per-device; preserve the local value across INSERT OR
+            // REPLACE by reading it first and rewriting the row before insert.
             if (remoteDecks.length > 0) {
               const deckData = remoteDecks[0];
               const modifiedIndex = deckData.columns.indexOf("modified");
+              const localMtimeIndex = deckData.columns.indexOf("last_synced_mtime");
 
               for (const row of deckData.values) {
                 const deckId = row[0]; // Assuming id is first column
                 const remoteModified = row[modifiedIndex];
 
                 const existingDeck = this.db.exec(
-                  `SELECT modified FROM decks WHERE id = ?`,
+                  `SELECT modified, last_synced_mtime FROM decks WHERE id = ?`,
                   [deckId]
                 );
+                const localRow = existingDeck[0]?.values?.[0];
                 const shouldReplace =
-                  !existingDeck.length ||
-                  (existingDeck[0]?.values?.[0]?.[0] || 0) <
-                    (remoteModified || 0);
+                  !localRow || (localRow[0] || 0) < (remoteModified || 0);
 
                 if (shouldReplace) {
+                  // Preserve local mtime (or 0 for brand-new rows).
+                  if (localMtimeIndex >= 0) {
+                    const localMtime = localRow ? (localRow[1] as number) || 0 : 0;
+                    row[localMtimeIndex] = localMtime;
+                  }
                   const deckStmt = this.db.prepare(`
                     INSERT OR REPLACE INTO decks (${deckData.columns.join(",")})
                     VALUES (${deckData.columns.map(() => "?").join(",")})

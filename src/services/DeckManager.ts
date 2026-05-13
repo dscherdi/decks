@@ -265,11 +265,19 @@ export class DeckManager {
   }
 
   /**
-   * Sync flashcards for a specific deck - now delegates to worker
+   * Sync flashcards for a specific deck - now delegates to worker.
+   *
+   * Mtime gate: skips the parse + DB write entirely when the source file's
+   * stat.mtime is at or below the value we recorded on the last successful
+   * sync. Pass `{ force: true }` to bypass (used by profile-driven reparses
+   * and the manual force-full-resync command). Without the gate, every focus
+   * event and every unrelated UI refresh would re-read + re-parse every
+   * tagged file in the vault.
    */
   async syncFlashcardsForDeck(
     deckId: string,
-    progressTracker?: ProgressTracker
+    progressTracker?: ProgressTracker,
+    options: { force?: boolean } = {}
   ): Promise<void> {
     const deckSyncStartTime = performance.now();
     this.debugLog(`Syncing flashcards for deck ID: ${deckId}`);
@@ -285,6 +293,18 @@ export class DeckManager {
 
     const file = this.vault.getAbstractFileByPath(deck.filepath);
     if (!file || !(file instanceof TFile)) return;
+
+    // mtime gate
+    const fileMtime = file.stat.mtime;
+    if (!options.force) {
+      const lastSyncedMtime = await this.db.getDeckLastSyncedMtime(deckId);
+      if (lastSyncedMtime > 0 && fileMtime <= lastSyncedMtime) {
+        this.debugLog(
+          `Skipping sync for ${deck.name}: file mtime ${fileMtime} <= last_synced_mtime ${lastSyncedMtime}`
+        );
+        return;
+      }
+    }
 
     // Read file content - this stays in DeckManager
     const fileContent = await this.vault.read(file);
@@ -349,6 +369,12 @@ export class DeckManager {
           result.operationsCount
         } operations)`
       );
+
+      // Stamp the mtime gate. Only after the sync succeeded — if anything
+      // above threw, we want the next sync to retry (mtime stays unchanged
+      // so the gate condition `fileMtime > lastSyncedMtime` is satisfied
+      // and parse happens again next time).
+      await this.db.setDeckLastSyncedMtime(deck.id, fileMtime);
 
       // Check for duplicates after sync
       try {

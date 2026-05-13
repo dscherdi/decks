@@ -134,6 +134,21 @@ Each list item is one card. The image (with its numbered labels) shows on the fr
 - Anki export, automatic backups, multi-device merge sync.
 - Keyboard shortcuts: **Space** to flip, **1–4** to rate.
 
+## Multi-device sync
+
+Decks syncs alongside your vault — iCloud Drive, Obsidian Sync, Dropbox, Syncthing, anything that shares the vault folder works.
+
+The plugin uses two files:
+
+- **`<plugin folder>/flashcards.db`** — the SQLite database holding every card's FSRS state and full review history. This is the cold-storage snapshot, persisted to disk every ~30 minutes when there's new activity (and on app background / unload).
+- **`<deviceId>.deckssynclog`** — one small append-only JSONL file per device, in your vault root. Every state change you make — rating a card, editing a profile, creating a custom deck, starting/ending a review session — is recorded here as a single short line. Other devices read these files on app focus and replay the entries against their own database.
+
+The custom `.deckssynclog` extension keeps the file out of Obsidian's file explorer; you'll see it in Finder/Files but it never shows up as a note. iCloud and other file-sync providers ship these small text files **dramatically faster** than the binary database — typically seconds instead of minutes — which is why the cross-device "I just rated this on my Mac, now I see it on my iPhone" lag is usually around 15–30 seconds rather than 1–2 minutes.
+
+The log self-truncates to the last 30 days on plugin load. Long-running cross-device state (months or years of review history) is preserved in the binary database, which still syncs through your file-sync provider on its own slower schedule.
+
+If your sync provider creates conflict-copy files (e.g. iCloud's `<deviceId> (Mac's conflicted copy 2026-05-13).deckssynclog`), the plugin detects them, applies any unique entries, and renames the original aside as `*.consumed-<timestamp>` so it's not re-processed.
+
 ## Personalized scheduling
 
 FSRS ships with sensible defaults that work well out of the box. Once you've accumulated ~100 reviews, you can train the algorithm's 21 weights against your own review history and get card schedules tailored to your specific forgetting curve — the same kind of thing Anki desktop does, but client-side, no server, no telemetry.

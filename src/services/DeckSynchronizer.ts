@@ -14,6 +14,11 @@ export interface SyncProgress {
 export interface SyncOptions {
   showProgress?: boolean;
   onProgress?: (progress: SyncProgress) => void;
+  // Bypass the per-deck mtime gate and force a full re-parse of every deck.
+  // Default false: only re-parse decks whose source file's mtime has
+  // advanced since last sync. Set true for the manual "force full resync"
+  // command or whenever you suspect the local cache is wrong.
+  force?: boolean;
 }
 
 export interface SyncResult {
@@ -107,7 +112,7 @@ export class DeckSynchronizer {
    * Main sync operation - coordinates deck discovery and flashcard synchronization
    */
   async sync(options: SyncOptions = {}): Promise<SyncResult> {
-    const { showProgress = false, onProgress } = options;
+    const { showProgress = false, onProgress, force = false } = options;
 
     if (this.isSyncing) {
       this.logger.debug("Sync already in progress, skipping...");
@@ -176,7 +181,8 @@ export class DeckSynchronizer {
 
         await this.deckManager.syncFlashcardsForDeck(
           deck.id,
-          this.progressTracker
+          this.progressTracker,
+          { force }
         );
         await yieldToUI();
 
@@ -271,9 +277,11 @@ export class DeckSynchronizer {
   }
 
   /**
-   * Sync flashcards for a specific deck
+   * Sync flashcards for a specific deck. `force` bypasses the mtime gate
+   * (used by handleFileRename in main.ts where we know the file changed
+   * even though mtime checks could be ambiguous mid-rename).
    */
-  async syncDeck(deckId: string): Promise<void> {
+  async syncDeck(deckId: string, options: { force?: boolean } = {}): Promise<void> {
     this.logger.debug(`Syncing specific deck ID: ${deckId}`);
 
     const deck = await this.db.getDeckById(deckId);
@@ -284,7 +292,8 @@ export class DeckSynchronizer {
 
     await this.deckManager.syncFlashcardsForDeck(
       deckId,
-      this.progressTracker
+      this.progressTracker,
+      options
     );
   }
 

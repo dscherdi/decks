@@ -330,6 +330,27 @@ export default class DecksPlugin extends Plugin {
         },
       });
 
+      // Force a full resync (bypasses the mtime gate). Defensive lever for
+      // the rare "I think the index is wrong" case — normally the gate
+      // handles incremental sync correctly and this is unnecessary.
+      this.addCommand({
+        id: "force-full-resync",
+        name: "Force full resync (re-parse every deck)",
+        callback: () => {
+          new Notice("Re-parsing every deck. This may take a moment…");
+          this.deckSynchronizer
+            .sync({ force: true })
+            .then(() => {
+              new Notice("Full resync complete.");
+              void this.getDecksView()?.refresh();
+            })
+            .catch((error) => {
+              this.logger.error("Force resync failed", error);
+              new Notice("Resync failed. See console for details.");
+            });
+        },
+      });
+
       // Add command to open decks modal
       this.addCommand({
         id: "open-review-modal",
@@ -425,6 +446,19 @@ export default class DecksPlugin extends Plugin {
         this.app.vault.on("rename", async (file, oldPath) => {
           if (file instanceof TFile && file.extension === "md") {
             await this.handleFileRename(file, oldPath);
+          }
+        })
+      );
+
+      // New tagged files should appear in the deck list immediately,
+      // without waiting for the next manual refresh. We can't always read
+      // the tag synchronously on "create" (Obsidian populates metadataCache
+      // a beat later), so the handler is event-driven via metadataCache's
+      // own "changed" event the FIRST time it fires for this file.
+      this.registerEvent(
+        this.app.vault.on("create", async (file) => {
+          if (file instanceof TFile && file.extension === "md") {
+            await this.handleFileCreate(file);
           }
         })
       );
@@ -743,6 +777,45 @@ export default class DecksPlugin extends Plugin {
     await this.getDecksView()?.refreshStats();
   }
 
+  /**
+   * Handle a newly-created markdown file. If it carries the configured
+   * deck tag, create the deck row and parse the cards. The tag may not be
+   * visible synchronously on `create` because Obsidian populates the
+   * metadata cache a beat later; defer once via metadataCache "changed"
+   * if needed.
+   */
+  async handleFileCreate(file: TFile): Promise<void> {
+    const baseTag = this.settings.parsing.deckTag;
+    const checkAndSync = async (): Promise<boolean> => {
+      const metadata = this.app.metadataCache.getFileCache(file);
+      if (!metadata) return false;
+      const tags = getAllTags(metadata) || [];
+      const hasTag = tags.some((t) => t.startsWith(baseTag));
+      if (!hasTag) return true; // metadata seen, definitely no tag — stop deferring
+      this.logger.debug(`New tagged file detected: ${file.path}`);
+      // Full discovery sync creates the deck and parses cards; the mtime
+      // gate guarantees only the new file is parsed, not every existing deck.
+      try {
+        await this.deckSynchronizer.sync();
+        await this.getDecksView()?.refresh();
+      } catch (error) {
+        this.logger.error(`Failed to sync newly-created file ${file.path}`, error);
+      }
+      return true;
+    };
+
+    if (await checkAndSync()) return;
+
+    // Metadata not yet ready — defer until metadataCache fires "changed"
+    // for this file. Self-unregistering one-shot listener.
+    const ref = this.app.metadataCache.on("changed", (changedFile) => {
+      if (changedFile !== file) return;
+      this.app.metadataCache.offref(ref);
+      void checkAndSync();
+    });
+    this.registerEvent(ref);
+  }
+
   async handleFileRename(file: TAbstractFile, oldPath: string): Promise<void> {
     if (file instanceof TFile && file.extension === "md") {
       // Handle deck ID regeneration for renamed files
@@ -764,6 +837,14 @@ export default class DecksPlugin extends Plugin {
 
         // Update all flashcard deck IDs
         await this.deckManager.updateFlashcardDeckIds(oldDeckId, newDeckId);
+
+        // Clear the mtime gate for the renamed deck. The file's mtime may
+        // not advance on a pure rename (some filesystems preserve it), so
+        // without this clear the next refresh would short-circuit and skip
+        // re-parsing — fine for a same-content rename, but rename+edit in
+        // one swing would lose the edit. Zero forces the next sync to read
+        // the file fresh.
+        await this.db.setDeckLastSyncedMtime(newDeckId, 0);
 
         await yieldToUI();
 

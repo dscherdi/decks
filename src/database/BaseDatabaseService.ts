@@ -530,6 +530,16 @@ export abstract class BaseDatabaseService implements IDatabaseService {
       fsrs: updates.fsrs ? { ...current.fsrs, ...updates.fsrs } : current.fsrs,
     };
 
+    // If a field that affects MARKDOWN PARSING changed, every deck pointing
+    // at this profile needs to be re-parsed (the parser interprets headers
+    // and cloze syntax based on these). Other fields (FSRS retention, daily
+    // limits, learning steps, review order) only affect future scheduling
+    // and don't change card content; the existing mtime gate keeps all decks
+    // fast-path on the next refresh.
+    const parsingAffected =
+      updated.headerLevel !== current.headerLevel ||
+      updated.clozeEnabled !== current.clozeEnabled;
+
     const modifiedAt = this.getCurrentTimestamp();
     await this.executeSql(SQL_QUERIES.UPDATE_PROFILE, [
       updated.name,
@@ -549,6 +559,11 @@ export abstract class BaseDatabaseService implements IDatabaseService {
       modifiedAt,
       id,
     ]);
+
+    if (parsingAffected) {
+      // Force every deck on this profile to re-parse on next sync.
+      await this.clearLastSyncedMtimeForProfile(id);
+    }
 
     this.emitSyncOp({
       o: "profile_upsert",
@@ -2341,5 +2356,24 @@ export abstract class BaseDatabaseService implements IDatabaseService {
          last_applied_at = excluded.last_applied_at`,
       [row.sourceDeviceId, row.lastAppliedSeq, row.lastAppliedHlc, row.lastAppliedAt]
     );
+  }
+
+  // mtime gate accessors. Local-per-device (excluded from cross-device merge).
+  async getDeckLastSyncedMtime(deckId: string): Promise<number> {
+    const rows = (await this.querySql(
+      SQL_QUERIES.GET_DECK_LAST_SYNCED_MTIME,
+      [deckId]
+    )) as Array<[number]>;
+    if (rows.length === 0) return 0;
+    const value = rows[0][0];
+    return typeof value === "number" ? value : 0;
+  }
+
+  async setDeckLastSyncedMtime(deckId: string, mtime: number): Promise<void> {
+    await this.executeSql(SQL_QUERIES.UPDATE_DECK_LAST_SYNCED_MTIME, [mtime, deckId]);
+  }
+
+  async clearLastSyncedMtimeForProfile(profileId: string): Promise<void> {
+    await this.executeSql(SQL_QUERIES.CLEAR_LAST_SYNCED_MTIME_BY_PROFILE, [profileId]);
   }
 }

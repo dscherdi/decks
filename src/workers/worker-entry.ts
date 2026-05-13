@@ -355,7 +355,7 @@ class SimpleDatabaseWorker {
     try {
       this.mergeAppendOnly(remoteDb, "review_sessions");
       this.mergeAppendOnly(remoteDb, "review_logs");
-      this.mergeByModified(remoteDb, "decks");
+      this.mergeDecks(remoteDb);
       this.mergeFlashcards(remoteDb);
       this.mergeProfiles(remoteDb);
       // profile_tag_mappings: bulk merge stays additive (first writer wins per tag);
@@ -419,6 +419,58 @@ class SimpleDatabaseWorker {
       stmt.free();
     } catch {
       // Remote may lack the table.
+    }
+  }
+
+  /**
+   * Specialized decks merge: preserves the local `last_synced_mtime` value
+   * across cross-device sync. That column is per-device (each device sees
+   * its own wall-clock mtime when iCloud delivers the source markdown), so
+   * the remote's value would be wrong for us. We read local mtime first and
+   * splice it into the row before INSERT OR REPLACE.
+   */
+  private mergeDecks(remoteDb: Database): void {
+    if (!this.db) return;
+    try {
+      const result = remoteDb.exec("SELECT * FROM decks");
+      if (result.length === 0) return;
+      const columns = result[0].columns;
+      const modIndex = columns.indexOf("modified");
+      const idIndex = columns.indexOf("id");
+      const localMtimeIndex = columns.indexOf("last_synced_mtime");
+      const placeholders = columns.map(() => "?").join(",");
+      const columnList = columns.join(",");
+      const stmt = this.db.prepare(
+        `INSERT OR REPLACE INTO decks (${columnList}) VALUES (${placeholders})`
+      );
+      for (const row of result[0].values) {
+        const id = row[idIndex] as string;
+        const remoteMod = row[modIndex] as string;
+        const localRes = this.db.exec(
+          "SELECT modified, last_synced_mtime FROM decks WHERE id = ?",
+          [id]
+        );
+        const localRow = localRes.length ? localRes[0].values[0] : null;
+        const localMod = localRow ? (localRow[0] as string) : null;
+        if (!localMod || remoteMod > localMod) {
+          // Preserve local mtime (or 0 for brand-new rows).
+          if (localMtimeIndex >= 0) {
+            const localMtime = localRow ? (localRow[1] as number) || 0 : 0;
+            // Mutate a copy so we don't poison subsequent iterations.
+            const writeRow = [...row];
+            writeRow[localMtimeIndex] = localMtime;
+            stmt.run(writeRow);
+          } else {
+            stmt.run(row);
+          }
+        }
+      }
+      stmt.free();
+    } catch {
+      // Remote may have a pre-v18 schema. Fall back to the generic merge,
+      // accepting that the local column keeps its current value (since
+      // INSERT OR REPLACE without that column in the list reverts to default).
+      this.mergeByModified(remoteDb, "decks");
     }
   }
 

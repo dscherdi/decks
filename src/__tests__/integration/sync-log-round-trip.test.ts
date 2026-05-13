@@ -280,6 +280,100 @@ describe("SyncLog round-trip", () => {
   );
 
   it(
+    "skips malformed lines in the middle of a log without losing surrounding ops",
+    async () => {
+      const sharedAdapter = new InMemoryAdapter();
+      const deviceB = await createDevice(
+        sharedAdapter,
+        "/dbb.db",
+        new InMemoryStorage()
+      );
+      const fakeDeviceId = "mac-edge1abc2def3";
+
+      const op1 = {
+        hlc: [Date.parse("2030-01-01T00:00:00Z"), 0, fakeDeviceId],
+        s: 1,
+        v: 1,
+        o: "custom_deck_upsert",
+        p: {
+          id: "cd_first",
+          name: "First",
+          deckType: "manual",
+          filterDefinition: null,
+          lastReviewed: null,
+          created: "2030-01-01T00:00:00Z",
+          modified: "2030-01-01T00:00:00Z",
+        },
+      };
+      const op2 = {
+        hlc: [Date.parse("2030-01-02T00:00:00Z"), 0, fakeDeviceId],
+        s: 2,
+        v: 1,
+        o: "custom_deck_upsert",
+        p: {
+          id: "cd_third",
+          name: "Third",
+          deckType: "manual",
+          filterDefinition: null,
+          lastReviewed: null,
+          created: "2030-01-02T00:00:00Z",
+          modified: "2030-01-02T00:00:00Z",
+        },
+      };
+      // Mix a torn / corrupt line between two valid ones — simulates either
+      // an iCloud byte-stream race or a manual edit that scrambled the file.
+      const malformed = "{ THIS IS NOT JSON  ";
+      await sharedAdapter.write(
+        `${fakeDeviceId}.deckssynclog`,
+        [JSON.stringify(op1), malformed, JSON.stringify(op2)].join("\n") + "\n"
+      );
+
+      await deviceB.log.applyPending();
+
+      // Both well-formed ops landed; the malformed line was skipped.
+      expect((await deviceB.db.getCustomDeckById("cd_first"))!.name).toBe("First");
+      expect((await deviceB.db.getCustomDeckById("cd_third"))!.name).toBe("Third");
+
+      const state = await deviceB.db.getJournalState();
+      const ours = state.find((r) => r.sourceDeviceId === fakeDeviceId);
+      expect(ours?.lastAppliedSeq).toBe(2);
+    },
+    20000
+  );
+
+  it(
+    "tolerates stale journal_state pointing at a deviceId whose log file has been deleted",
+    async () => {
+      const sharedAdapter = new InMemoryAdapter();
+      const deviceB = await createDevice(
+        sharedAdapter,
+        "/dbb.db",
+        new InMemoryStorage()
+      );
+
+      // Plant a journal_state row for a device whose log file doesn't exist
+      // (user wiped the vault file, or the device hasn't synced yet). This
+      // is the state a long-offline-device scenario leaves us in.
+      await deviceB.db.upsertJournalState({
+        sourceDeviceId: "mac-ghost9999aaaa",
+        lastAppliedSeq: 42,
+        lastAppliedHlc: "[1000,0,\"mac-ghost9999aaaa\"]",
+        lastAppliedAt: "2030-01-01T00:00:00Z",
+      });
+
+      // applyPending must not throw — no log file means nothing to do for
+      // that source. The journal_state row stays put (we don't garbage-
+      // collect ghost devices in Day 8; that's a future enhancement).
+      await expect(deviceB.log.applyPending()).resolves.toBeUndefined();
+
+      const state = await deviceB.db.getJournalState();
+      const ghost = state.find((r) => r.sourceDeviceId === "mac-ghost9999aaaa");
+      expect(ghost?.lastAppliedSeq).toBe(42);
+    },
+    20000
+  );
+
+  it(
     "consumes a conflict-copy file (iCloud-style) and renames it aside",
     async () => {
       const sharedAdapter = new InMemoryAdapter();

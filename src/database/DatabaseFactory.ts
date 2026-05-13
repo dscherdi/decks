@@ -39,6 +39,14 @@ export interface IDatabaseService {
   // isDirty() to decide whether the 30-min snapshot timer should fire.
   isDirty(): boolean;
 
+  // mtime gate for incremental flashcard sync. Local-only — these values
+  // reflect each device's view of file.stat.mtime when it last parsed the
+  // source markdown. Used by DeckManager.syncFlashcardsForDeck to skip
+  // reparse work when the file hasn't changed since last successful sync.
+  getDeckLastSyncedMtime(deckId: string): Promise<number>;
+  setDeckLastSyncedMtime(deckId: string, mtime: number): Promise<void>;
+  clearLastSyncedMtimeForProfile(profileId: string): Promise<void>;
+
   // Deck operations
   createDeck(
     deck: Omit<Deck, "created" | "modified" | "profileId"> & { id?: string; profileId?: string }

@@ -1,7 +1,7 @@
 import type { Database } from "sql.js";
 
 // Current Schema Version
-export const CURRENT_SCHEMA_VERSION = 17;
+export const CURRENT_SCHEMA_VERSION = 18;
 
 // SQL Table Creation Schema - Used when database file doesn't exist
 export const CREATE_TABLES_SQL = `
@@ -50,7 +50,11 @@ export const CREATE_TABLES_SQL = `
     last_reviewed TEXT,
     profile_id TEXT NOT NULL,
     created TEXT NOT NULL,
-    modified TEXT NOT NULL
+    modified TEXT NOT NULL,
+    -- LOCAL-ONLY: mtime of the source markdown file when this deck was last
+    -- parsed. Per-device (each device sees its own wall-clock mtime when
+    -- iCloud delivers a file). Excluded from mergeRemoteIntoMain.
+    last_synced_mtime INTEGER NOT NULL DEFAULT 0
   );
 
   -- Flashcards table
@@ -464,7 +468,8 @@ export function buildMigrationSQL(db: Database): string {
       last_reviewed TEXT,
       profile_id TEXT NOT NULL,
       created TEXT NOT NULL,
-      modified TEXT NOT NULL
+      modified TEXT NOT NULL,
+      last_synced_mtime INTEGER NOT NULL DEFAULT 0
     );
 
     CREATE TABLE flashcards (
@@ -601,6 +606,22 @@ export const SQL_QUERIES = {
     UPDATE decks
     SET last_reviewed = ?, modified = ?
     WHERE id = ?
+  `,
+
+  // Local-per-device: tracks file.stat.mtime of the source markdown the
+  // last time we parsed it. Used by the mtime gate in syncFlashcardsForDeck.
+  GET_DECK_LAST_SYNCED_MTIME: `
+    SELECT last_synced_mtime FROM decks WHERE id = ?
+  `,
+
+  UPDATE_DECK_LAST_SYNCED_MTIME: `
+    UPDATE decks SET last_synced_mtime = ? WHERE id = ?
+  `,
+
+  // Used when a profile change forces a reparse: zeroes the mtime for every
+  // deck pointing at the given profile so the next sync re-parses them.
+  CLEAR_LAST_SYNCED_MTIME_BY_PROFILE: `
+    UPDATE decks SET last_synced_mtime = 0 WHERE profile_id = ?
   `,
 
   RENAME_DECK: `

@@ -244,16 +244,13 @@ export class SyncLog {
       return;
     }
 
+    // Parse + filter all ops upfront so the transaction scope wraps only
+    // the actual DB work. parseEntry never throws synchronously here — we
+    // catch and skip per-line. KNOWN_OP_TYPES_V1 guards against forward-
+    // compat: a newer plugin's op type is silently skipped rather than
+    // applied half-way.
     const lines = content.split("\n");
-    let appliedTo = lastAppliedSeq;
-    let lastHlc: HLCValue | null = null;
-
-    // No strict +1 gap-detection: log files are written via atomic
-    // adapter.append, and iCloud delivers files as atomic units (never
-    // partial). Source devices write seqs in order; the first encounter
-    // with a new source picks up wherever its seqs started (post-skip-
-    // ahead, that's typically 100+). The only "gap" we'd see comes from a
-    // mid-line crash, which parseEntry handles by skipping the bad line.
+    const pendingOps: SyncLogEntry[] = [];
     for (const rawLine of lines) {
       const line = rawLine.trim();
       if (!line) continue;
@@ -273,34 +270,64 @@ export class SyncLog {
         );
         continue;
       }
-      if (entry.s <= appliedTo) continue;
+      if (entry.s <= lastAppliedSeq) continue;
+      pendingOps.push(entry);
+    }
+    if (pendingOps.length === 0) return;
 
-      try {
-        await applyOp(this.db!, sourceDeviceId, entry, this.logger);
-      } catch (error) {
-        this.logger.error(
-          `SyncLog: handler for op ${entry.s} from ${sourceDeviceId} threw; stopping this source`,
-          error
-        );
-        break;
+    let appliedTo = lastAppliedSeq;
+    let lastHlc: HLCValue | null = null;
+
+    // Wrap the apply batch in a SQL transaction so a crash or handler
+    // failure mid-batch leaves the DB in a coherent state. On commit,
+    // journal_state advances in lockstep with the highest-applied seq —
+    // a crash before commit means nothing was applied AND nothing was
+    // recorded, so the next applyPending re-tries from scratch. Idempotent
+    // handlers handle the "we already applied this op once" case.
+    await this.db!.executeSql("BEGIN TRANSACTION");
+    try {
+      for (const entry of pendingOps) {
+        try {
+          await applyOp(this.db!, sourceDeviceId, entry, this.logger);
+        } catch (error) {
+          this.logger.error(
+            `SyncLog: handler for op ${entry.s} from ${sourceDeviceId} threw; stopping this source`,
+            error
+          );
+          break;
+        }
+        appliedTo = entry.s;
+        lastHlc = entry.hlc;
       }
 
-      appliedTo = entry.s;
-      lastHlc = entry.hlc;
+      if (appliedTo > lastAppliedSeq && lastHlc) {
+        await this.db!.upsertJournalState({
+          sourceDeviceId,
+          lastAppliedSeq: appliedTo,
+          lastAppliedHlc: JSON.stringify(lastHlc),
+          lastAppliedAt: new Date().toISOString(),
+        });
+      }
+      await this.db!.executeSql("COMMIT");
+    } catch (error) {
+      // Best-effort rollback. If this also throws, the worker's next op
+      // will fail with "no transaction active" — surfacing the original
+      // issue rather than masking it.
+      try {
+        await this.db!.executeSql("ROLLBACK");
+      } catch {
+        /* ignore */
+      }
+      throw error;
     }
 
     if (appliedTo > lastAppliedSeq && lastHlc) {
-      // Advance local HLC past the highest received so future hlcSend()
-      // values strictly dominate anything we just applied.
+      // HLC advance happens OUTSIDE the SQL transaction since localStorage
+      // isn't transactional. Worst case if we crash between commit and HLC
+      // persist: the next hlcSend produces a slightly-too-low value, but
+      // the next applyPending advances us past anything received again.
       hlcReceive(this.deviceState.getHlcState(), lastHlc);
       this.deviceState.persistHlc();
-
-      await this.db!.upsertJournalState({
-        sourceDeviceId,
-        lastAppliedSeq: appliedTo,
-        lastAppliedHlc: JSON.stringify(lastHlc),
-        lastAppliedAt: new Date().toISOString(),
-      });
     }
   }
 
