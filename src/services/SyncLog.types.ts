@@ -18,6 +18,7 @@ export interface SyncLogEntryHeader {
 
 export type SyncOpV1 =
   | RateOp
+  | RateUndoOp
   | SessionStartOp
   | SessionProgressOp
   | SessionEndOp
@@ -37,6 +38,28 @@ export type SyncLogEntry = SyncLogEntryHeader & SyncOpV1;
 export interface RateOp {
   o: "rate";
   p: RateOpPayload;
+}
+
+/**
+ * Reverts a previously-emitted `rate` op. The receiving device looks up the
+ * referenced review_log row, copies oldState/oldDueAt/... back onto the
+ * flashcard (only if the card's `modified` still matches the log's
+ * `reviewedAt` — i.e., no newer change has touched the card in the meantime),
+ * then deletes the log row.
+ *
+ * Emitted by Scheduler.undoLastReview when the original rate op has already
+ * been flushed to disk. If the rate is still in the in-memory buffer, the
+ * Scheduler drops it from the buffer instead — cleaner outcome since the op
+ * never leaves the device.
+ */
+export interface RateUndoOp {
+  o: "rate_undo";
+  p: {
+    // Points at the review_log row whose pre-state we'll roll the card
+    // back to. The id is the same one the original `rate` op carried in
+    // `p.log.id`, so receiving devices can correlate them.
+    logId: string;
+  };
 }
 
 export interface RateOpPayload {
@@ -219,6 +242,7 @@ export interface CustomDeckCardRemoveOp {
 // op types from newer plugin versions with a warning.
 export const KNOWN_OP_TYPES_V1: ReadonlySet<SyncOpV1["o"]> = new Set([
   "rate",
+  "rate_undo",
   "session_start",
   "session_progress",
   "session_end",

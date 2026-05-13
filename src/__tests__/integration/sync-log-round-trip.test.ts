@@ -374,6 +374,236 @@ describe("SyncLog round-trip", () => {
   );
 
   it(
+    "rate then rate_undo on device A reverts device B's card and removes the log row",
+    async () => {
+      const sharedAdapter = new InMemoryAdapter();
+      const deviceA = await createDevice(
+        sharedAdapter,
+        "/dba.db",
+        new InMemoryStorage()
+      );
+      const deviceB = await createDevice(
+        sharedAdapter,
+        "/dbb.db",
+        new InMemoryStorage()
+      );
+
+      const cardId = await seedSharedCard([deviceA, deviceB]);
+
+      // Device A: rate the card, then flush so the rate definitely leaves
+      // the device (so the undo will take the rate_undo path rather than
+      // the buffer-cancel path).
+      const reviewedAt = "2030-05-11T12:00:00Z";
+      const logId = "log_round_trip_1";
+      await deviceA.db.updateFlashcard(cardId, {
+        state: "review",
+        stability: 4.2,
+        difficulty: 5.1,
+        dueDate: "2030-05-20T00:00:00Z",
+        repetitions: 1,
+        lapses: 0,
+        lastReviewed: reviewedAt,
+        interval: 1440,
+      });
+      await deviceA.db.insertReviewLog({
+        id: logId,
+        flashcardId: cardId,
+        sessionId: undefined,
+        lastReviewedAt: "2030-05-10T00:00:00Z",
+        shownAt: undefined,
+        reviewedAt,
+        rating: 3,
+        ratingLabel: "good",
+        timeElapsedMs: 1500,
+        oldState: "new",
+        oldRepetitions: 0,
+        oldLapses: 0,
+        oldStability: 0,
+        oldDifficulty: 5,
+        newState: "review",
+        newRepetitions: 1,
+        newLapses: 0,
+        newStability: 4.2,
+        newDifficulty: 5.1,
+        oldIntervalMinutes: 0,
+        newIntervalMinutes: 1440,
+        oldDueAt: "2030-05-10T00:00:00Z",
+        newDueAt: "2030-05-20T00:00:00Z",
+        elapsedDays: 1,
+        retrievability: 0.9,
+        requestRetention: 0.9,
+        profile: "STANDARD",
+        maximumIntervalDays: 36500,
+        minMinutes: 1,
+        fsrsWeightsVersion: "1.0",
+        schedulerVersion: "1.0",
+      });
+      deviceA.log.append({
+        o: "rate",
+        p: {
+          c: cardId,
+          st: 4.2,
+          d: 5.1,
+          due: "2030-05-20T00:00:00Z",
+          rep: 1,
+          lap: 0,
+          state: "review",
+          lastReviewed: reviewedAt,
+          interval: 1440,
+          log: {
+            id: logId,
+            flashcardId: cardId,
+            sessionId: null,
+            lastReviewedAt: "2030-05-10T00:00:00Z",
+            shownAt: null,
+            reviewedAt,
+            rating: 3,
+            ratingLabel: "good",
+            timeElapsedMs: 1500,
+            oldState: "new",
+            oldRepetitions: 0,
+            oldLapses: 0,
+            oldStability: 0,
+            oldDifficulty: 5,
+            newState: "review",
+            newRepetitions: 1,
+            newLapses: 0,
+            newStability: 4.2,
+            newDifficulty: 5.1,
+            oldIntervalMinutes: 0,
+            newIntervalMinutes: 1440,
+            oldDueAt: "2030-05-10T00:00:00Z",
+            newDueAt: "2030-05-20T00:00:00Z",
+            elapsedDays: 0,
+            retrievability: 0.9,
+            requestRetention: 0.9,
+            profile: "STANDARD",
+            maximumIntervalDays: 36500,
+            minMinutes: 1,
+            fsrsWeightsVersion: "1.0",
+            schedulerVersion: "1.0",
+            noteModelId: null,
+            cardTemplateId: null,
+            contentHash: null,
+            client: null,
+          },
+        },
+      });
+      await deviceA.log.flushNow();
+
+      // Device B applies the rate, then sees its card in the post-review state.
+      await deviceB.log.applyPending();
+      expect((await deviceB.db.getFlashcardById(cardId))!.state).toBe("review");
+      expect((await deviceB.db.getFlashcardById(cardId))!.stability).toBeCloseTo(4.2);
+
+      // Device A undoes: the rate is already flushed, so cancelBufferedRate
+      // returns false and the Scheduler emits rate_undo.
+      expect(deviceA.log.cancelBufferedRate(logId)).toBe(false);
+      deviceA.log.append({ o: "rate_undo", p: { logId } });
+      await deviceA.db.deleteReviewLogById(logId);
+      await deviceA.log.flushNow();
+
+      // Device B applies the undo.
+      await deviceB.log.applyPending();
+      const cardAfterUndo = await deviceB.db.getFlashcardById(cardId);
+      expect(cardAfterUndo!.state).toBe("new");
+      expect(cardAfterUndo!.stability).toBe(0);
+      expect(cardAfterUndo!.difficulty).toBe(5);
+      // The log row is gone on both devices.
+      const logRowB = (await deviceB.db.querySql<{ c: number }>(
+        "SELECT COUNT(*) as c FROM review_logs WHERE id = ?",
+        [logId],
+        { asObject: true }
+      ))[0].c;
+      expect(logRowB).toBe(0);
+    },
+    20000
+  );
+
+  it(
+    "rate-then-undo within the buffer window emits nothing (best-case outcome)",
+    async () => {
+      const sharedAdapter = new InMemoryAdapter();
+      const deviceA = await createDevice(
+        sharedAdapter,
+        "/dba.db",
+        new InMemoryStorage()
+      );
+
+      // Append rate but DON'T flush — simulates an undo fired within the
+      // 2s debounce window.
+      const logId = "log_buffered_rate";
+      deviceA.log.append({
+        o: "rate",
+        p: {
+          c: "card_x",
+          st: 1,
+          d: 5,
+          due: "2030-01-02T00:00:00Z",
+          rep: 1,
+          lap: 0,
+          state: "review",
+          lastReviewed: "2030-01-01T00:00:00Z",
+          interval: 1440,
+          log: {
+            id: logId,
+            flashcardId: "card_x",
+            sessionId: null,
+            lastReviewedAt: "2030-01-01T00:00:00Z",
+            shownAt: null,
+            reviewedAt: "2030-01-01T00:00:00Z",
+            rating: 3,
+            ratingLabel: "good",
+            timeElapsedMs: 1000,
+            oldState: "new",
+            oldRepetitions: 0,
+            oldLapses: 0,
+            oldStability: 0,
+            oldDifficulty: 5,
+            newState: "review",
+            newRepetitions: 1,
+            newLapses: 0,
+            newStability: 1,
+            newDifficulty: 5,
+            oldIntervalMinutes: 0,
+            newIntervalMinutes: 1440,
+            oldDueAt: "2030-01-01T00:00:00Z",
+            newDueAt: "2030-01-02T00:00:00Z",
+            elapsedDays: 0,
+            retrievability: 0.9,
+            requestRetention: 0.9,
+            profile: "STANDARD",
+            maximumIntervalDays: 36500,
+            minMinutes: 1,
+            fsrsWeightsVersion: "1.0",
+            schedulerVersion: "1.0",
+            noteModelId: null,
+            cardTemplateId: null,
+            contentHash: null,
+            client: null,
+          },
+        },
+      });
+      expect(deviceA.log.bufferLengthForTests()).toBe(1);
+
+      // Undo within the window: cancel succeeds, no rate_undo emitted.
+      expect(deviceA.log.cancelBufferedRate(logId)).toBe(true);
+      expect(deviceA.log.bufferLengthForTests()).toBe(0);
+
+      // Flush would be a no-op now.
+      await deviceA.log.flushNow();
+      const logPath = deviceA.log.ownLogPath;
+      // The log file is never created (or is empty) since nothing was flushed.
+      const exists = await sharedAdapter.exists(logPath);
+      if (exists) {
+        const content = await sharedAdapter.read(logPath);
+        expect(content.trim()).toBe("");
+      }
+    },
+    20000
+  );
+
+  it(
     "consumes a conflict-copy file (iCloud-style) and renames it aside",
     async () => {
       const sharedAdapter = new InMemoryAdapter();

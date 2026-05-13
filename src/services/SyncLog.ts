@@ -43,15 +43,21 @@ export class SyncLog {
     private readonly adapter: DataAdapter,
     private readonly deviceState: DeviceLocalState,
     private readonly logger: Logger,
-    private readonly db: IDatabaseService | null = null
+    private readonly db: IDatabaseService | null = null,
+    // Vault-relative folder for sync log files. Empty string = vault root
+    // (the default and what iCloud syncs fastest). Pre-normalized by the
+    // caller via resolveSyncLogFolder.
+    private readonly logFolder = ""
   ) {}
 
   /**
-   * Path of this device's log file in the vault root. Public so other
-   * components (compaction, sweep) can identify "our" file vs. others'.
+   * Path of this device's log file. The folder prefix is configurable via
+   * settings (default: vault root). Public so other components (compaction,
+   * sweep) can identify "our" file vs. others'.
    */
   get ownLogPath(): string {
-    return `${this.deviceState.getDeviceId()}${LOG_EXT}`;
+    const name = `${this.deviceState.getDeviceId()}${LOG_EXT}`;
+    return this.logFolder === "" ? name : `${this.logFolder}/${name}`;
   }
 
   /**
@@ -195,16 +201,25 @@ export class SyncLog {
   > {
     let listed: { files: string[] };
     try {
-      listed = await this.adapter.list("");
+      // adapter.list() returns full vault-relative paths (including the
+      // folder prefix) and is non-recursive — listing "_sync" yields only
+      // immediate children of _sync/, not files in deeper subfolders.
+      listed = await this.adapter.list(this.logFolder);
     } catch (error) {
-      this.logger.debug("SyncLog: failed to list vault root", error as object);
+      this.logger.debug(
+        `SyncLog: failed to list ${this.logFolder || "vault root"}`,
+        error as object
+      );
       return [];
     }
     const ownPath = this.ownLogPath;
     const ownDeviceId = this.deviceState.getDeviceId();
     const result: Array<{ sourceDeviceId: string; path: string; isConflict: boolean }> = [];
     for (const file of listed.files) {
-      const parsed = parseDeviceFromFilename(file);
+      // Filenames are matched on the basename so a folder prefix doesn't
+      // throw off the deviceId regex.
+      const basename = file.includes("/") ? file.slice(file.lastIndexOf("/") + 1) : file;
+      const parsed = parseDeviceFromFilename(basename);
       if (!parsed) continue;
       if (file === ownPath) continue;
       // Even our own log might appear with a conflict-copy suffix if iCloud
@@ -426,6 +441,37 @@ export class SyncLog {
     }
 
     return { before: beforeCount, after: kept.length };
+  }
+
+  /**
+   * If a `rate` op for the given logId is still in the pending buffer,
+   * remove it and return true. Otherwise return false. Used by undo so we
+   * can avoid ever shipping a rate that the user immediately reversed
+   * (cleaner than shipping `rate` then `rate_undo` in quick succession).
+   *
+   * Iteration is O(N) where N is bounded by the FLUSH_BACKSTOP_COUNT (10),
+   * so this is microsecond-scale work even in the worst case.
+   */
+  cancelBufferedRate(logId: string): boolean {
+    for (let i = 0; i < this.buffer.length; i++) {
+      const line = this.buffer[i];
+      // Cheap pre-filter: skip lines that don't even contain the id.
+      if (!line.includes(logId)) continue;
+      try {
+        const entry = JSON.parse(line.trimEnd()) as SyncLogEntry;
+        if (
+          entry.o === "rate" &&
+          (entry.p as { log: { id: string } }).log.id === logId
+        ) {
+          this.buffer.splice(i, 1);
+          return true;
+        }
+      } catch {
+        // Malformed line in our own buffer is unexpected; skip and keep
+        // looking. Worst case the caller falls back to emitting rate_undo.
+      }
+    }
+    return false;
   }
 
   /**

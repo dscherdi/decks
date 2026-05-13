@@ -204,6 +204,16 @@ export class MarkdownRenderer {
   }
 }
 
+// normalizePath: trims, collapses repeated slashes, and converts backslashes.
+// Mirrors Obsidian's behavior closely enough for path-resolver unit tests.
+export function normalizePath(path: string): string {
+  if (!path) return "";
+  return path
+    .replace(/\\/g, "/")
+    .replace(/\/{2,}/g, "/")
+    .replace(/^\/+|\/+$/g, "");
+}
+
 // Tests run in Node; treat them as a Linux desktop. DeviceLocalState only
 // embeds the platform prefix in deviceId strings, so this default is harmless.
 export const Platform = {

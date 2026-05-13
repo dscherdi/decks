@@ -16,6 +16,11 @@ import { DeckSynchronizer } from "./services/DeckSynchronizer";
 import { Scheduler } from "./services/Scheduler";
 import { DeviceLocalState } from "./services/DeviceLocalState";
 import { SyncLog } from "./services/SyncLog";
+import {
+  resolveDbPath,
+  resolveBackupFolder,
+  resolveSyncLogFolder,
+} from "./utils/paths";
 import { BackupService } from "./services/BackupService";
 import { StatisticsService } from "./services/StatisticsService";
 import { yieldToUI } from "./utils/ui";
@@ -131,10 +136,24 @@ export default class DecksPlugin extends Plugin {
         await adapter.mkdir(pluginDir);
       }
 
-      // FSRS instances are now created per-deck as needed
+      // Resolved paths (user-configurable in Settings → File locations).
+      // Empty/unset values fall back to the legacy plugin-folder defaults
+      // so existing installs are unaffected. Changes to dbFolder and
+      // syncLogFolder require a restart; backupFolder is read on demand.
+      const pathCtx = {
+        manifestDir: this.manifest.dir,
+        manifestId: this.manifest.id,
+        vaultConfigDir: this.app.vault.configDir,
+      };
+      const databasePath = resolveDbPath(this.settings.paths, pathCtx);
+      const backupDir = resolveBackupFolder(this.settings.paths, pathCtx);
+      const syncLogFolder = resolveSyncLogFolder(this.settings.paths);
 
-      // Initialize database with worker support
-      const databasePath = `${pluginDir}/flashcards.db`;
+      // Ensure parent dirs for the resolved paths exist.
+      const dbParent = databasePath.substring(0, databasePath.lastIndexOf("/"));
+      if (dbParent && !(await adapter.exists(dbParent))) {
+        await adapter.mkdir(dbParent);
+      }
 
       this.db = await DatabaseFactory.create(
         databasePath,
@@ -170,12 +189,10 @@ export default class DecksPlugin extends Plugin {
         this.app.vault.configDir
       );
 
-      // Initialize backup service
-      const backupFolderName = this.manifest.dir?.split('/').pop() || this.manifest.id;
+      // Initialize backup service with the resolved backup folder.
       this.backupService = new BackupService(
         this.app.vault.adapter,
-        this.app.vault.configDir,
-        backupFolderName,
+        backupDir,
         this.logger.debug.bind(this.logger)
       );
 
@@ -192,15 +209,17 @@ export default class DecksPlugin extends Plugin {
       // window.localStorage so it never propagates cross-device via data.json.
       this.deviceLocalState = new DeviceLocalState();
 
-      // Append-only sync log. One file per device in vault root,
-      // <deviceId>.deckssynclog, hidden from Obsidian's file explorer by
-      // the custom extension but sync'd by iCloud / Obsidian Sync as a
-      // small text file (much faster than the binary decks.db).
+      // Append-only sync log. One file per device under syncLogFolder
+      // (vault root by default), named <deviceId>.deckssynclog. Hidden
+      // from Obsidian's file explorer by the custom extension but sync'd
+      // by iCloud / Obsidian Sync as a small text file (much faster than
+      // the binary decks.db).
       this.syncLog = new SyncLog(
         this.app.vault.adapter,
         this.deviceLocalState,
         this.logger,
-        this.db
+        this.db,
+        syncLogFolder
       );
       // After both exist, attach the log so every CRUD method on the DB
       // automatically emits the matching sync op (profile, tag mapping,
@@ -632,6 +651,20 @@ export default class DecksPlugin extends Plugin {
     if (leaf) {
       await workspace.revealLeaf(leaf);
     }
+  }
+
+  /**
+   * Push a new backup folder setting through to the BackupService. Called
+   * from the settings tab onChange so the "Available backups" dropdown
+   * starts listing from the new location immediately, without restart.
+   */
+  refreshBackupFolder(_rawFolder: string): void {
+    const resolved = resolveBackupFolder(this.settings.paths, {
+      manifestDir: this.manifest.dir,
+      manifestId: this.manifest.id,
+      vaultConfigDir: this.app.vault.configDir,
+    });
+    this.backupService.setBackupDir(resolved);
   }
 
   /**

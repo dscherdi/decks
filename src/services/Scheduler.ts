@@ -560,6 +560,18 @@ export class Scheduler {
 
     await this.db.deleteReviewLogById(log.id);
 
+    // Sync the undo. If the matching `rate` op is still buffered (the
+    // common case — undo usually fires seconds after the rate, well within
+    // the 2s flush debounce), drop it and emit nothing. Other devices
+    // never see either op — the cleanest possible outcome. If it has
+    // already flushed, emit a `rate_undo` so they revert their copy.
+    if (this.syncLog) {
+      const cancelled = this.syncLog.cancelBufferedRate(log.id);
+      if (!cancelled) {
+        this.syncLog.append({ o: "rate_undo", p: { logId: log.id } });
+      }
+    }
+
     return await this.db.getFlashcardById(card.id);
   }
 

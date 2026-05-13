@@ -960,6 +960,11 @@ export abstract class BaseDatabaseService implements IDatabaseService {
     const updateFields: string[] = [];
     const params: (string | number | null)[] = [];
 
+    // `modified` is auto-stamped to "now" UNLESS the caller passed an
+    // explicit value (e.g. the sync-log rate handler sets it to the source
+    // device's reviewedAt so the modified-match guard in rate_undo works).
+    const callerProvidedModified = updates.modified !== undefined;
+
     Object.keys(updates).forEach((key) => {
       if (updates[key as keyof Flashcard] !== undefined && key !== "id") {
         if (key === "deckId") {
@@ -987,8 +992,10 @@ export abstract class BaseDatabaseService implements IDatabaseService {
       }
     });
 
-    updateFields.push("modified = ?");
-    params.push(this.getCurrentTimestamp());
+    if (!callerProvidedModified) {
+      updateFields.push("modified = ?");
+      params.push(this.getCurrentTimestamp());
+    }
     params.push(flashcardId);
 
     const sql = `UPDATE flashcards SET ${updateFields.join(", ")} WHERE id = ?`;
@@ -1513,6 +1520,15 @@ export abstract class BaseDatabaseService implements IDatabaseService {
   ): Promise<ReviewLog | null> {
     const sql = `SELECT * FROM review_logs WHERE session_id = ? ORDER BY reviewed_at DESC LIMIT 1`;
     const results = await this.querySql<ReviewLogRow>(sql, [sessionId], {
+      asObject: true,
+    });
+    if (results.length === 0) return null;
+    return this.mapRowsToReviewLogs(results)[0];
+  }
+
+  async getReviewLogById(reviewLogId: string): Promise<ReviewLog | null> {
+    const sql = `SELECT * FROM review_logs WHERE id = ? LIMIT 1`;
+    const results = await this.querySql<ReviewLogRow>(sql, [reviewLogId], {
       asObject: true,
     });
     if (results.length === 0) return null;

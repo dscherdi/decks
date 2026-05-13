@@ -151,8 +151,7 @@ describe("BackupService", () => {
     mockDb = createMockDatabase();
     backupService = new BackupService(
       mockAdapter as any,
-      "/vault/.obsidian",
-      "decks",
+      "/vault/.obsidian/plugins/decks/backups",
       jest.fn()
     );
   });

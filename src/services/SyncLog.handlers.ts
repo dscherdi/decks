@@ -50,6 +50,7 @@ export async function applyOp(
 // Internal: dispatch table.
 const HANDLERS: Partial<Record<SyncLogEntry["o"], OpHandler>> = {
   rate: handleRate,
+  rate_undo: handleRateUndo,
   profile_upsert: handleProfileUpsert,
   profile_delete: handleProfileDelete,
   tag_mapping_upsert: handleTagMappingUpsert,
@@ -163,6 +164,65 @@ async function handleRate(
     lastReviewed: p.lastReviewed,
     modified: p.log.reviewedAt,
   });
+}
+
+/**
+ * Apply a remote `rate_undo` op:
+ *   1. Look up the referenced review_log row locally.
+ *   2. If the card still exists AND its `modified` matches the log's
+ *      `reviewedAt`, revert the FSRS state from oldState/oldDueAt/etc.
+ *      The modified-match guard prevents trampling a CONCURRENT rate that
+ *      a different device did against the same card after the original
+ *      rate but before the undo arrived — that newer rate's state is
+ *      still the right answer.
+ *   3. Delete the log row.
+ *
+ * Tolerates "log not found locally" silently: this happens when the
+ * original `rate` op was cancelled before flushing on the source device
+ * (cleanest outcome — nothing leaked out) or hasn't reached us yet.
+ * The seq-ordered apply within a single source guarantees the matching
+ * rate is processed first when it WAS flushed, so this is rare in practice.
+ */
+async function handleRateUndo(
+  db: IDatabaseService,
+  sourceDeviceId: string,
+  entry: SyncLogEntry,
+  logger: Logger
+): Promise<void> {
+  if (entry.o !== "rate_undo") return;
+  const { logId } = entry.p;
+
+  const log = await db.getReviewLogById(logId);
+  if (!log) {
+    logger.debug(
+      `SyncLog rate_undo from ${sourceDeviceId}: log ${logId} not found locally; nothing to revert`
+    );
+    return;
+  }
+
+  const card = await db.getFlashcardById(log.flashcardId);
+  if (card && card.modified === log.reviewedAt) {
+    await db.updateFlashcard(card.id, {
+      state: log.oldState,
+      dueDate: log.oldDueAt,
+      interval: log.oldIntervalMinutes,
+      repetitions: log.oldRepetitions,
+      difficulty: log.oldDifficulty,
+      stability: log.oldStability,
+      lapses: log.oldLapses,
+      lastReviewed: log.lastReviewedAt || null,
+      // Reuse reviewedAt as the new modified. Same value as before — no
+      // false "newer" signal for cross-device merge. The next sync only
+      // touches this card if someone explicitly modifies it after.
+      modified: log.reviewedAt,
+    });
+  } else if (card) {
+    logger.debug(
+      `SyncLog rate_undo from ${sourceDeviceId}: card ${log.flashcardId} modified ${card.modified} no longer matches log ${log.reviewedAt}; keeping newer state, just deleting log row`
+    );
+  }
+
+  await db.deleteReviewLogById(logId);
 }
 
 // ---------- Profiles ------------------------------------------------------

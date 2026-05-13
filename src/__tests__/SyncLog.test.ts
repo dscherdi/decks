@@ -79,7 +79,7 @@ function makeSyncLog(adapter: FakeAdapter): {
 
 // A sample op shape we can stuff into append() in tests without needing the
 // full FSRS payload.
-function sampleOp(cardId: string): SyncOpV1 {
+function sampleOp(cardId: string): SyncOpV1 & { o: "rate" } {
   return {
     o: "rate",
     p: {
@@ -311,6 +311,59 @@ describe("SyncLog", () => {
       const adapter = new FakeAdapter();
       const { log } = makeSyncLog(adapter);
       await expect(log.applyPending()).resolves.toBeUndefined();
+    });
+  });
+
+  describe("cancelBufferedRate", () => {
+    it("removes a matching rate op from the buffer and returns true", () => {
+      const adapter = new FakeAdapter();
+      const { log } = makeSyncLog(adapter);
+
+      const op = sampleOp("card_a");
+      log.append(op);
+      expect(log.bufferLengthForTests()).toBe(1);
+
+      const logId = op.p.log.id;
+      expect(log.cancelBufferedRate(logId)).toBe(true);
+      expect(log.bufferLengthForTests()).toBe(0);
+    });
+
+    it("returns false when no matching rate is buffered (already flushed)", async () => {
+      const adapter = new FakeAdapter();
+      const { log } = makeSyncLog(adapter);
+
+      const op = sampleOp("card_a");
+      log.append(op);
+      await log.flushNow();
+      expect(log.bufferLengthForTests()).toBe(0);
+
+      // Already on disk — caller would emit rate_undo instead.
+      expect(log.cancelBufferedRate(op.p.log.id)).toBe(false);
+    });
+
+    it("only removes the rate matching the given logId, leaves others alone", () => {
+      const adapter = new FakeAdapter();
+      const { log } = makeSyncLog(adapter);
+
+      const opA = sampleOp("card_a");
+      const opB = sampleOp("card_b");
+      log.append(opA);
+      log.append(opB);
+      expect(log.bufferLengthForTests()).toBe(2);
+
+      expect(log.cancelBufferedRate(opA.p.log.id)).toBe(true);
+      expect(log.bufferLengthForTests()).toBe(1);
+      // The remaining buffered op should be opB's.
+      expect(log.cancelBufferedRate(opB.p.log.id)).toBe(true);
+      expect(log.bufferLengthForTests()).toBe(0);
+    });
+
+    it("returns false for an unknown logId without disturbing the buffer", () => {
+      const adapter = new FakeAdapter();
+      const { log } = makeSyncLog(adapter);
+      log.append(sampleOp("card_a"));
+      expect(log.cancelBufferedRate("log_never_existed")).toBe(false);
+      expect(log.bufferLengthForTests()).toBe(1);
     });
   });
 

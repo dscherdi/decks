@@ -142,6 +142,7 @@ export interface IDatabaseService {
   getLatestReviewLogForFlashcard(
     flashcardId: string
   ): Promise<ReviewLog | null>;
+  getReviewLogById(reviewLogId: string): Promise<ReviewLog | null>;
   getLatestReviewLogForSession(
     sessionId: string
   ): Promise<ReviewLog | null>;

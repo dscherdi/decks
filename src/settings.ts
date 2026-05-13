@@ -35,6 +35,24 @@ export interface DecksSettings {
     performanceLogs: boolean;
   };
 
+  // File location settings. All paths are vault-relative — empty/unset uses
+  // the per-field default so existing installs are unaffected. The intended
+  // use case is moving these files out of the hidden .obsidian/ folder so
+  // iCloud syncs them at first-class priority instead of the deprioritized
+  // hidden-directory tier.
+  paths: {
+    // Folder holding the SQLite DB. Default: plugin folder (".obsidian/plugins/decks").
+    // Changes require a restart to take effect.
+    dbFolder: string;
+    // Folder for periodic backups. Default: plugin folder + "/backups".
+    // Read on demand by BackupService, so changes take effect immediately
+    // without restart.
+    backupFolder: string;
+    // Folder for the per-device .deckssynclog files. Default: vault root.
+    // Changes require a restart to take effect.
+    syncLogFolder: string;
+  };
+
   // Global FSRS weight optimization. Whether a STANDARD profile applies these
   // trained weights is a per-profile choice (DeckProfile.fsrs.useTrainedWeights);
   // INTENSIVE profiles always ignore them.
@@ -80,6 +98,12 @@ export const DEFAULT_SETTINGS: DecksSettings = {
   debug: {
     enableLogging: false,
     performanceLogs: false,
+  },
+
+  paths: {
+    dbFolder: "",
+    backupFolder: "",
+    syncLogFolder: "",
   },
 
   fsrs: {

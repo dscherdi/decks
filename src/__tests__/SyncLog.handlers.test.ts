@@ -36,6 +36,12 @@ class FakeDb {
   async reviewLogExists(id: string): Promise<boolean> {
     return this.logs.has(id);
   }
+  async getReviewLogById(id: string): Promise<ReviewLog | null> {
+    return this.logs.get(id) ?? null;
+  }
+  async deleteReviewLogById(id: string): Promise<void> {
+    this.logs.delete(id);
+  }
   async updateFlashcard(id: string, updates: Partial<Flashcard>): Promise<void> {
     this.updateFlashcardCalls.push({ id, updates });
     const existing = this.cards.get(id);
@@ -235,5 +241,121 @@ describe("SyncLog handlers - rate", () => {
     expect(db.insertReviewLogCalls).toBe(0);
     expect(db.updateFlashcardCalls).toHaveLength(0);
     expect(logger.debug).toHaveBeenCalled();
+  });
+});
+
+describe("SyncLog handlers - rate_undo", () => {
+  function rateUndoEntry(logId: string): SyncLogEntry {
+    return {
+      hlc: [Date.now() + 1, 0, "remote-dev"],
+      s: 2,
+      v: 1,
+      o: "rate_undo",
+      p: { logId },
+    };
+  }
+
+  it("reverts the card to oldState and deletes the log row when modified matches reviewedAt", async () => {
+    const db = new FakeDb();
+    db.seedCard(seedCard({ id: "card_a", modified: "2026-05-01T00:00:00Z" }));
+
+    // Apply the original rate first so the log row + new state exist.
+    const reviewedAt = "2026-05-11T00:00:00Z";
+    await applyOp(asDb(db), "remote-dev", rateEntry("card_a", reviewedAt), makeLogger());
+    expect(db.getCard("card_a")!.state).toBe("review");
+    expect(db.getCard("card_a")!.stability).toBeCloseTo(4.2);
+
+    // Now undo.
+    const logId = `log_card_a_${reviewedAt}`;
+    await applyOp(asDb(db), "remote-dev", rateUndoEntry(logId), makeLogger());
+
+    const card = db.getCard("card_a")!;
+    expect(card.state).toBe("new"); // oldState from the log
+    expect(card.stability).toBe(0); // oldStability from the log
+    expect(card.difficulty).toBeCloseTo(5); // oldDifficulty from the log
+    expect(db.getLog(logId)).toBeUndefined(); // log row deleted
+  });
+
+  it("does NOT revert when local card was modified by a newer change (modified-match guard)", async () => {
+    const db = new FakeDb();
+    db.seedCard(seedCard({ id: "card_a", modified: "2026-05-01T00:00:00Z" }));
+
+    const reviewedAt = "2026-05-11T00:00:00Z";
+    await applyOp(asDb(db), "remote-dev", rateEntry("card_a", reviewedAt), makeLogger());
+    // Simulate a CONCURRENT rate from a different device that landed
+    // after the original rate but before the undo. Bumps `modified` past
+    // `reviewedAt` of the log.
+    await db.updateFlashcard("card_a", { modified: "2026-05-12T00:00:00Z", stability: 9.9 });
+    db.updateFlashcardCalls.length = 0; // reset to count only the undo's calls
+
+    const logId = `log_card_a_${reviewedAt}`;
+    await applyOp(asDb(db), "remote-dev", rateUndoEntry(logId), makeLogger());
+
+    const card = db.getCard("card_a")!;
+    // The concurrent newer state is preserved...
+    expect(card.stability).toBeCloseTo(9.9);
+    expect(card.modified).toBe("2026-05-12T00:00:00Z");
+    // ...no updateFlashcard call from the undo handler...
+    expect(db.updateFlashcardCalls).toHaveLength(0);
+    // ...but the log row is still cleaned up.
+    expect(db.getLog(logId)).toBeUndefined();
+  });
+
+  it("is a silent no-op when the referenced log doesn't exist locally", async () => {
+    const db = new FakeDb();
+    db.seedCard(seedCard({ id: "card_a", modified: "2026-05-01T00:00:00Z" }));
+
+    await applyOp(
+      asDb(db),
+      "remote-dev",
+      rateUndoEntry("log_never_existed"),
+      makeLogger()
+    );
+
+    // No mutations.
+    expect(db.updateFlashcardCalls).toHaveLength(0);
+    expect(db.getCard("card_a")!.modified).toBe("2026-05-01T00:00:00Z");
+  });
+
+  it("deletes the log row even when the card no longer exists locally", async () => {
+    const db = new FakeDb();
+    // No card seeded — but seed a log row directly to simulate the
+    // "card was unsynced/deleted but log lingers" edge case.
+    const log = {
+      id: "log_orphan",
+      flashcardId: "card_gone",
+      reviewedAt: "2026-05-11T00:00:00Z",
+      lastReviewedAt: "2026-05-10T00:00:00Z",
+      rating: 3 as const,
+      ratingLabel: "good" as const,
+      oldState: "new" as const,
+      oldRepetitions: 0,
+      oldLapses: 0,
+      oldStability: 0,
+      oldDifficulty: 5,
+      newState: "review" as const,
+      newRepetitions: 1,
+      newLapses: 0,
+      newStability: 1,
+      newDifficulty: 5,
+      oldIntervalMinutes: 0,
+      newIntervalMinutes: 1440,
+      oldDueAt: "2026-05-11T00:00:00Z",
+      newDueAt: "2026-05-12T00:00:00Z",
+      elapsedDays: 0,
+      retrievability: 0.9,
+      requestRetention: 0.9,
+      profile: "STANDARD" as const,
+      maximumIntervalDays: 36500,
+      minMinutes: 1,
+      fsrsWeightsVersion: "1.0",
+      schedulerVersion: "1.0",
+    };
+    await db.insertReviewLog(log);
+
+    await applyOp(asDb(db), "remote-dev", rateUndoEntry("log_orphan"), makeLogger());
+
+    expect(db.updateFlashcardCalls).toHaveLength(0);
+    expect(db.getLog("log_orphan")).toBeUndefined();
   });
 });

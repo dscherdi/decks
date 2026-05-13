@@ -82,8 +82,81 @@ export class DecksSettingTab extends PluginSettingTab {
     // Debug Settings
     this.addDebugSettings(containerEl);
 
+    // File locations (DB path, backups, sync logs)
+    this.addPathsSettings(containerEl);
+
     // Database Management Settings
     this.addDatabaseSettings(containerEl);
+  }
+
+  private addPathsSettings(containerEl: HTMLElement): void {
+    const configDir = this.plugin.app.vault.configDir;
+    const pluginFolder = `${configDir}/plugins/${this.plugin.manifest.id}`;
+
+    new Setting(containerEl).setName("File locations").setHeading();
+    containerEl.createEl("p", {
+      text:
+        `All paths are vault-relative. Leave empty to use the default location. ` +
+        `Most users won't need to change these — they exist so you can move the ` +
+        `DB out of the hidden ${configDir}/ folder (where iCloud and other sync ` +
+        `providers tend to deprioritize it).`,
+      cls: "setting-item-description",
+    });
+
+    new Setting(containerEl)
+      .setName("Database folder")
+      .setDesc(
+        `Folder containing flashcards.db. Default: ${pluginFolder}/. ` +
+        `Restart Obsidian after changing this. The DB file is not moved ` +
+        `automatically — back up first, then either move the file manually ` +
+        `or use 'Restore from file' below to import it into the new location.`
+      )
+      .addText((text) =>
+        text
+          .setPlaceholder(pluginFolder)
+          .setValue(this.settings.paths.dbFolder)
+          .onChange(async (value) => {
+            this.settings.paths.dbFolder = value.trim();
+            await this.saveSettings();
+          })
+      );
+
+    new Setting(containerEl)
+      .setName("Backup folder")
+      .setDesc(
+        `Folder for automatic and manual backups. Default: ${pluginFolder}/backups/. ` +
+        `Changes take effect immediately — no restart needed.`
+      )
+      .addText((text) =>
+        text
+          .setPlaceholder(`${pluginFolder}/backups`)
+          .setValue(this.settings.paths.backupFolder)
+          .onChange(async (value) => {
+            this.settings.paths.backupFolder = value.trim();
+            await this.saveSettings();
+            // BackupService reads the folder on demand; nudge it now so
+            // "available backups" picks up the new location immediately.
+            const newFolder = this.settings.paths.backupFolder.trim();
+            this.plugin.refreshBackupFolder?.(newFolder);
+          })
+      );
+
+    new Setting(containerEl)
+      .setName("Sync log folder")
+      .setDesc(
+        `Folder for the per-device .deckssynclog files used by multi-device sync. ` +
+        `Default: vault root (which iCloud syncs fastest). Restart Obsidian ` +
+        `after changing this.`
+      )
+      .addText((text) =>
+        text
+          .setPlaceholder("(vault root)")
+          .setValue(this.settings.paths.syncLogFolder)
+          .onChange(async (value) => {
+            this.settings.paths.syncLogFolder = value.trim();
+            await this.saveSettings();
+          })
+      );
   }
 
   private addFsrsOptimizationSettings(containerEl: HTMLElement): void {
@@ -556,12 +629,73 @@ export class DecksSettingTab extends PluginSettingTab {
 
             await this.restoreBackup(selectedBackup);
           })
+      )
+      .addButton((button) =>
+        button
+          .setButtonText("Restore from file")
+          .setTooltip("Pick a .db backup from anywhere on disk")
+          .onClick(() => {
+            this.pickAndRestoreFromFile();
+          })
       );
 
     // Initial load of backup list
     this.refreshBackupList(backupSetting).catch((error) => {
       this.logger.debug("Failed to load initial backup list:", error);
     });
+  }
+
+  /**
+   * Open a native file picker for a .db file anywhere on disk, then restore
+   * the database from its raw bytes. Uses HTML <input type="file"> rather
+   * than Electron's remote.dialog so the same code works on iOS/Android
+   * Obsidian (the WebView's native picker is available everywhere). The
+   * raw bytes are validated against the SQLite header + schema version
+   * before being applied.
+   */
+  private pickAndRestoreFromFile(): void {
+    const input = document.createElement("input");
+    input.type = "file";
+    input.accept = ".db,application/octet-stream";
+    // Hidden from the document — we only need it as a programmatic file
+    // picker trigger. The setCssProps helper avoids ESLint's no-inline-
+    // style rule while keeping the element invisible.
+    input.setCssProps({ display: "none" });
+    input.addEventListener("change", () => {
+      const file = input.files?.[0];
+      if (!file) return;
+      this.restoreFromFileBytes(file).catch((error: Error) => {
+        this.logger.debug("Restore from file failed", error);
+        new Notice(`❌ Restore failed: ${error.message}`, 8000);
+      });
+    });
+    document.body.appendChild(input);
+    input.click();
+    // Detach after the picker fires; some browsers leak the element otherwise.
+    setTimeout(() => input.remove(), 60_000);
+  }
+
+  private async restoreFromFileBytes(file: File): Promise<void> {
+    if (!this.db) throw new Error("Database not available");
+    const progressNotice = new Notice(`Restoring from ${file.name}…`, 0);
+    try {
+      const buffer = await file.arrayBuffer();
+      await this.backupService.restoreFromFile(
+        buffer,
+        this.db,
+        (current, total) => {
+          const progress = Math.round((current / total) * 100);
+          progressNotice.setMessage(`Restoring from ${file.name}: ${progress}%`);
+        }
+      );
+      progressNotice.hide();
+      if (this.plugin.view) {
+        await this.plugin.view.refresh(true);
+      }
+    } catch (error) {
+      progressNotice.hide();
+      throw error;
+    }
   }
 
   private async refreshBackupList(setting: Setting): Promise<void> {
