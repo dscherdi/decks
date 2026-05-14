@@ -586,28 +586,29 @@ export class DeckManager {
   }
 
   /**
-   * Get all deck stats (file decks + tag groups) as a Map
-   * This is the unified method to get all statistics for the UI
+   * Get all deck stats (file decks + tag groups) as a Map. Per-deck stats
+   * are independent — fire them in parallel with Promise.all rather than
+   * the previous sequential await chain. For a vault with N decks this
+   * collapses N round-trips' wall-time into one (subject to the worker's
+   * sequential message processing, which is still a big win because the
+   * JS-side await chain disappears).
    */
   async getAllDeckStatsMap(): Promise<Map<string, DeckStats>> {
     const tagGroupService = new TagGroupService(this.db);
     const statsMap = new Map<string, DeckStats>();
 
-    // Get stats for all file-based decks
     const decks = await this.db.getAllDecks();
-    for (const deck of decks) {
-      const deckStats = await this.getDeckStats(deck.id);
-      statsMap.set(deckStats.deckId, deckStats);
-    }
+    const deckStatsPairs = await Promise.all(
+      decks.map(async (d) => [d.id, await this.getDeckStats(d.id)] as const)
+    );
+    for (const [id, stats] of deckStatsPairs) statsMap.set(id, stats);
 
-    // Get stats for all tag groups
     const decksWithProfiles = await this.db.getAllDecksWithProfiles();
     const tagGroups = await tagGroupService.aggregateByTag(decksWithProfiles);
-
-    for (const group of tagGroups) {
-      const groupStats = await this.getDeckGroupStats(group);
-      statsMap.set(groupStats.deckId, groupStats);
-    }
+    const groupStatsPairs = await Promise.all(
+      tagGroups.map(async (g) => [g.tag, await this.getDeckGroupStats(g)] as const)
+    );
+    for (const [, stats] of groupStatsPairs) statsMap.set(stats.deckId, stats);
 
     return statsMap;
   }

@@ -219,22 +219,64 @@ export class DecksView extends ItemView {
     ).open();
   }
 
-  async refresh() {
-    this.logger.debug("DecksView.refresh() called");
+  /**
+   * Stale-while-revalidate refresh. Two stages:
+   *   1. Instant paint from the DB (no sync) so the user sees their decks
+   *      within a single DB-query round-trip rather than waiting for the
+   *      full sync (vault scan + per-deck reparse + stats).
+   *   2. Background sync that re-paints only if something changed.
+   *
+   * Pass `skipSync: true` to suppress stage 2 — used when reopening the
+   * modal right after a review, where the deck list cannot have meaningfully
+   * changed since the last sync.
+   */
+  async refresh(options: { skipSync?: boolean } = {}): Promise<void> {
+    this.logger.debug("DecksView.refresh() called", options);
     try {
-      await this.deckSynchronizer.performSync();
-
-      // Update the view with refreshed data
-      const updatedDecks = await this.db.getAllDecksWithProfiles();
-      const deckStats = await this.getAllDeckStatsMap();
-      await this.update(updatedDecks, deckStats);
-
-      this.logger.debug("Refresh complete");
+      // Stage 1: paint from current DB state.
+      const initialDecks = await this.db.getAllDecksWithProfiles();
+      const initialStats = await this.getAllDeckStatsMap();
+      await this.update(initialDecks, initialStats);
     } catch (error) {
-      this.logger.error("Error refreshing decks:", error);
+      this.logger.error("Error painting initial deck state:", error);
       if (this.settings?.ui?.enableNotices !== false) {
-        new Notice("Error refreshing decks. Check console for details.");
+        new Notice("Error loading decks. Check console for details.");
       }
+      return;
+    }
+
+    if (options.skipSync) return;
+    // Skip sync if one completed within the last 2s — the data is fresh
+    // enough and we'd just be re-triggering a no-op vault scan.
+    const sinceLastSync = Date.now() - this.deckSynchronizer.lastSyncCompletedAt;
+    if (sinceLastSync >= 0 && sinceLastSync < 2000) {
+      this.logger.debug(`DecksView.refresh skipping sync (${sinceLastSync}ms since last)`);
+      return;
+    }
+
+    // Stage 2: background sync.
+    void this.runBackgroundSync();
+  }
+
+  // Single-flight guard so rapid refresh triggers (modal open + focus
+  // event in the same frame, say) don't fan out into concurrent syncs.
+  private backgroundSyncInFlight = false;
+
+  private async runBackgroundSync(): Promise<void> {
+    if (this.backgroundSyncInFlight) return;
+    this.backgroundSyncInFlight = true;
+    try {
+      this.deckListPanelComponent?.setSyncing?.(true);
+      await this.deckSynchronizer.performSync();
+      const decks = await this.db.getAllDecksWithProfiles();
+      const stats = await this.getAllDeckStatsMap();
+      await this.update(decks, stats);
+      this.logger.debug("Background sync complete");
+    } catch (error) {
+      this.logger.error("Background sync failed:", error);
+    } finally {
+      this.deckListPanelComponent?.setSyncing?.(false);
+      this.backgroundSyncInFlight = false;
     }
   }
 

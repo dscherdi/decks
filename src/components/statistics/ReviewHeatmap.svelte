@@ -89,11 +89,14 @@
 
     days = daysArray;
 
-    // Group into weeks
-    weeks = [];
+    // Group into weeks — build new array and assign once so Svelte
+    // reactivity fires (mutation-after-assign isn't guaranteed to trigger
+    // dependent template re-renders).
+    const newWeeks: typeof weeks = [];
     for (let i = 0; i < days.length; i += 7) {
-      weeks.push(days.slice(i, i + 7));
+      newWeeks.push(days.slice(i, i + 7));
     }
+    weeks = newWeeks;
   }
 
   function getIntensityClass(count: number): string {
@@ -117,60 +120,61 @@
     return dateStr === today;
   }
 
-  function getMonthsData(): Array<{
+  type MonthsData = Array<{
     month: string;
     weeks: Array<Array<{ date: string; count: number; dayOfWeek: number }>>;
-  }> {
-    if (weeks.length === 0) return [];
+  }>;
 
-    const monthsData: Array<{
-      month: string;
-      weeks: Array<Array<{ date: string; count: number; dayOfWeek: number }>>;
-    }> = [];
+  function computeMonthsData(
+    weeksArr: typeof weeks,
+    year: number
+  ): MonthsData {
+    if (weeksArr.length === 0) return [];
+
+    const result: MonthsData = [];
     let currentMonth = -1;
     let currentMonthWeeks: Array<
       Array<{ date: string; count: number; dayOfWeek: number }>
     > = [];
 
-    weeks.forEach((week) => {
+    weeksArr.forEach((week) => {
       const firstDay = week[0];
       if (firstDay) {
         const date = new Date(firstDay.date);
         const month = date.getMonth();
-        const year = date.getFullYear();
+        const weekYear = date.getFullYear();
 
-        // Only process weeks within the selected year
-        if (year === currentYear) {
+        if (weekYear === year) {
           if (month !== currentMonth) {
-            // Save previous month if it exists
             if (currentMonth !== -1 && currentMonthWeeks.length > 0) {
-              monthsData.push({
+              result.push({
                 month: months[currentMonth],
                 weeks: currentMonthWeeks,
               });
             }
-
-            // Start new month
             currentMonth = month;
             currentMonthWeeks = [week];
           } else {
-            // Add week to current month
             currentMonthWeeks.push(week);
           }
         }
       }
     });
 
-    // Don't forget the last month
     if (currentMonth !== -1 && currentMonthWeeks.length > 0) {
-      monthsData.push({
+      result.push({
         month: months[currentMonth],
         weeks: currentMonthWeeks,
       });
     }
 
-    return monthsData;
+    return result;
   }
+
+  // Reactive: re-derive whenever weeks or currentYear change.
+  // The {#each} block in the template iterates this directly so Svelte
+  // tracks the dependency and re-renders when weeks is reassigned.
+  $: monthsData = computeMonthsData(weeks, currentYear);
 
   function calculateMaxWeeks(width: number) {
     if (width === 0) return 20; // Not yet rendered
@@ -225,17 +229,18 @@
   }
 
   export async function refresh() {
-    isLoading = true;
+    let newCounts: Map<string, number>;
     try {
-      // Fetch full year data (365-366 days)
-      reviewCounts = await getReviewCounts(366);
-      maxCount = 0;
-      generateDays();
+      newCounts = await getReviewCounts(366);
     } catch (error) {
       console.error("Failed to load review counts:", error);
-    } finally {
       isLoading = false;
+      return;
     }
+    reviewCounts = newCounts;
+    maxCount = 0;
+    generateDays();
+    isLoading = false;
   }
 
   onMount(() => {
@@ -310,7 +315,7 @@
     {:else}
       <div class="decks-heatmap">
         <div class="decks-months-container">
-          {#each getMonthsData() as { month, weeks: monthWeeks }}
+          {#each monthsData as { month, weeks: monthWeeks }}
             <div class="decks-month-container">
               <div class="decks-month-label">{month}</div>
               <div class="decks-month-grid">

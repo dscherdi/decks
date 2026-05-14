@@ -160,44 +160,85 @@ export class DecksViewModal extends Modal {
     contentEl.empty();
   }
 
-  private reopenSelf() {
-    new DecksViewModal(
-      this.app,
-      this.db,
-      this.deckSynchronizer,
-      this.deckManager,
-      this.scheduler,
-      this.statisticsService,
-      this.customDeckService,
-      this.settings,
-      this.logger,
-      this.getDecksView
-    ).open();
-  }
-
+  /**
+   * Open a child modal that should return focus to us when it closes.
+   *
+   * Previous impl closed+recreated this modal on every child close, which
+   * (a) made the user see a flash of the sidepanel underneath while the
+   * recreate happened, and (b) destroyed all our internal state (scroll
+   * position, filter input, etc.). Now we just stack the child on top —
+   * Obsidian's modal layering handles overlap natively — and on child
+   * close we patch our existing panel from fresh DB state. No recreate,
+   * no flash, no lost state.
+   *
+   * Exception: when a review's source-nav was triggered, the user wants
+   * to read the source markdown file. We close ourselves so they have
+   * the workspace fully visible.
+   */
   private openWithReturn(childModal: Modal) {
-    this.close();
     const originalOnClose = childModal.onClose.bind(childModal);
     childModal.onClose = () => {
       originalOnClose();
       const isSourceNav =
         childModal instanceof FlashcardReviewModalWrapper &&
         childModal.navigatedToSource;
-      if (!isSourceNav) {
-        this.reopenSelf();
+      if (isSourceNav) {
+        this.close();
+        return;
       }
+      // Patch our panel from current DB state. skipSync because a sync
+      // ran when we first opened — the only DB changes since then are
+      // local rate ops from the child, which we already wrote synchronously.
+      void this.refresh({ skipSync: true });
     };
     childModal.open();
   }
 
-  private async refresh() {
+  /**
+   * Stale-while-revalidate refresh. Stage 1 paints from DB instantly so
+   * the user sees their decks within one DB round-trip. Stage 2 runs the
+   * sync in the background and re-paints if anything changed. The sync
+   * is skipped entirely when one just completed (returning from a review
+   * is the canonical case — review takes far longer than the 2s window).
+   */
+  private async refresh(options: { skipSync?: boolean } = {}): Promise<void> {
     try {
-      await this.deckSynchronizer.performSync();
-      const updatedDecks = await this.db.getAllDecksWithProfiles();
-      const deckStats = await this.getAllDeckStatsMap();
-      await this.deckListPanelComponent?.updateAll?.(updatedDecks, deckStats);
+      // Stage 1: instant paint.
+      const initialDecks = await this.db.getAllDecksWithProfiles();
+      const initialStats = await this.getAllDeckStatsMap();
+      await this.deckListPanelComponent?.updateAll?.(initialDecks, initialStats);
     } catch (error) {
-      this.logger.error("Error refreshing decks in modal:", error);
+      this.logger.error("Error painting initial deck state in modal:", error);
+      return;
+    }
+
+    if (options.skipSync) return;
+    // Skip sync if one completed very recently (review return-trip path).
+    const sinceLastSync = Date.now() - this.deckSynchronizer.lastSyncCompletedAt;
+    if (sinceLastSync >= 0 && sinceLastSync < 2000) {
+      this.logger.debug(`Skipping sync — completed ${sinceLastSync}ms ago`);
+      return;
+    }
+
+    void this.runBackgroundSync();
+  }
+
+  private backgroundSyncInFlight = false;
+
+  private async runBackgroundSync(): Promise<void> {
+    if (this.backgroundSyncInFlight) return;
+    this.backgroundSyncInFlight = true;
+    try {
+      this.deckListPanelComponent?.setSyncing?.(true);
+      await this.deckSynchronizer.performSync();
+      const decks = await this.db.getAllDecksWithProfiles();
+      const stats = await this.getAllDeckStatsMap();
+      await this.deckListPanelComponent?.updateAll?.(decks, stats);
+    } catch (error) {
+      this.logger.error("Background sync failed in modal:", error);
+    } finally {
+      this.deckListPanelComponent?.setSyncing?.(false);
+      this.backgroundSyncInFlight = false;
     }
   }
 
@@ -205,7 +246,25 @@ export class DecksViewModal extends Modal {
     return await this.deckManager.getAllDeckStatsMap();
   }
 
+  /**
+   * Refresh both our own modal panel AND the sidepanel view (for users
+   * who keep the leaf view open). Called from the review modal on
+   * onCardReviewed / onComplete — the review wrapper passes a bound
+   * reference, so this fires while the review is open on top of us.
+   */
   private async refreshDecksAndStats() {
+    // Our own panel first so the modal's heatmap and stats reflect the
+    // review live (the user can swipe past the review to peek at the
+    // deck list underneath, or see updates the moment review closes).
+    if (this.deckListPanelComponent) {
+      try {
+        const decks = await this.db.getAllDecksWithProfiles();
+        const stats = await this.getAllDeckStatsMap();
+        await this.deckListPanelComponent.updateAll?.(decks, stats);
+      } catch (error) {
+        this.logger.debug("Failed to refresh modal panel:", error);
+      }
+    }
     const view = this.getDecksView();
     if (view) {
       await view.refreshDecksAndStats();
@@ -213,6 +272,21 @@ export class DecksViewModal extends Modal {
   }
 
   private async refreshStatsById(deckId: string) {
+    // Single-deck patch on our own panel — the keyed {#each} lets Svelte
+    // update just that row without reflowing the rest of the list.
+    if (this.deckListPanelComponent) {
+      try {
+        const stats = await this.deckManager.getDeckStats(deckId);
+        await this.deckListPanelComponent.updateAll?.(
+          undefined,
+          undefined,
+          deckId,
+          stats
+        );
+      } catch (error) {
+        this.logger.debug("Failed to refresh modal panel stats:", error);
+      }
+    }
     const view = this.getDecksView();
     if (view) {
       await view.refreshStatsById(deckId);

@@ -1,5 +1,6 @@
 <script lang="ts">
   import { onMount, onDestroy, tick } from "svelte";
+  import { fade } from "svelte/transition";
   import type {
     DeckWithProfile,
     DeckStats,
@@ -109,6 +110,12 @@
   };
 
   let isRefreshing = false;
+  // Distinct from isRefreshing: this fires when a background sync runs
+  // outside the user's manual refresh button click (modal open, focus
+  // event, etc.). Both flags share the same spinning-icon visual via
+  // `decks-refreshing` so the user always sees "sync in flight" feedback
+  // regardless of how the sync was triggered.
+  let isSyncing = false;
   let isUpdatingStats = false;
   let studyStats = {
     totalHours: 0,
@@ -157,6 +164,13 @@
     } finally {
       isRefreshing = false;
     }
+  }
+
+  // Called by DecksView / DecksViewModal when a non-user-initiated sync
+  // is in flight. Bound to the same spinning-icon visual as the manual
+  // refresh button so the user always sees consistent feedback.
+  export function setSyncing(value: boolean): void {
+    isSyncing = value;
   }
 
   export function updateStatsById(deckId: string, newStats: DeckStats) {
@@ -932,11 +946,11 @@
       </button>
       <button
         class="clickable-icon"
-        class:decks-refreshing={isRefreshing}
+        class:decks-refreshing={isRefreshing || isSyncing}
         on:click={(e) => handleTouchClick(() => void handleRefresh(), e)}
         on:touchend={(e) => handleTouchClick(() => void handleRefresh(), e)}
         disabled={isRefreshing}
-        title="Refresh"
+        title={isSyncing ? "Syncing in background…" : "Refresh"}
         aria-label="Refresh"
       >
         <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M23 4v6h-6"></path><path d="M1 20v-6h6"></path><path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15"></path></svg>
@@ -1030,9 +1044,21 @@
             <div class="decks-col-stat">Due</div>
             <div class="decks-col-config"></div>
           </div>
-          {#each filteredItems as item}
+          {#each filteredItems as item, i (getItemId(item))}
             {@const itemStats = getDeckStats(getItemId(item))}
-            <div class="decks-deck-row">
+            <!--
+              Staggered fade-in: each row appears 30ms after the previous,
+              so the list eases in rather than popping. Keyed (id), so the
+              transition fires ONLY on first appearance and on genuinely
+              new rows — existing rows that just got fresh stats stay put.
+              `|global` is required so the fade fires on the very first
+              paint too (going from empty state → populated mounts the
+              {:else} block fresh; local transitions don't play in that
+              case, only `|global` does).
+              200ms total per row keeps the stagger snappy.
+            -->
+            <div class="decks-deck-row" in:fade|global={{ duration: 200, delay: Math.min(i, 20) * 30 }}>
+
               <div class="decks-col-deck">
                 <span
                   class="decks-deck-name-link"
@@ -1542,7 +1568,7 @@
 
   :global(.decks-context-menu) {
     position: fixed;
-    z-index: var(--layer-popover);
+    z-index: calc(var(--layer-modal) + 1);
     opacity: 0;
     visibility: hidden;
     transition: opacity 0.1s ease, visibility 0.1s ease;
@@ -1550,7 +1576,7 @@
 
   :global(.decks-context-menu-visible) {
     position: fixed;
-    z-index: var(--layer-popover);
+    z-index: calc(var(--layer-modal) + 1);
     opacity: 1;
     visibility: visible;
   }

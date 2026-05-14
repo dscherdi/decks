@@ -56,6 +56,10 @@ export type DeckListPanelComponent = (
     singleDeckId?: string,
     singleDeckStats?: DeckStats
   ): Promise<void>;
+  // Flips a non-blocking "background sync in flight" indicator in the
+  // panel header (animates the existing refresh button). The deck list
+  // stays populated throughout — only the icon reflects the state.
+  setSyncing?(isSyncing: boolean): void;
 };
 
 // Constructor interface for DeckListPanel

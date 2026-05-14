@@ -36,6 +36,11 @@ export class DeckSynchronizer {
   private isSyncing = false;
   private logger: Logger;
   private progressTracker: ProgressTracker;
+  // Wall-clock ms when the most recent sync completed successfully. Used by
+  // modal-open paths to skip a redundant sync that just ran (e.g. returning
+  // from a review session). Survives across modal instances because the
+  // synchronizer itself is a singleton owned by the plugin.
+  private _lastSyncCompletedAt = 0;
 
   constructor(
     db: IDatabaseService,
@@ -55,6 +60,15 @@ export class DeckSynchronizer {
    */
   get isInProgress(): boolean {
     return this.isSyncing;
+  }
+
+  /**
+   * Wall-clock ms of the last successful sync completion. Used by
+   * stale-while-revalidate modal opens to skip a redundant background
+   * sync that just ran. Returns 0 if no sync has completed yet.
+   */
+  get lastSyncCompletedAt(): number {
+    return this._lastSyncCompletedAt;
   }
 
   /**
@@ -253,6 +267,7 @@ export class DeckSynchronizer {
         });
       }
 
+      this._lastSyncCompletedAt = Date.now();
       return {
         totalDecks: decks.length,
         totalFlashcards,
