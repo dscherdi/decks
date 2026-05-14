@@ -1,4 +1,4 @@
-import { Modal, Component, Notice, MarkdownRenderer, App, TFile } from "obsidian";
+import { Modal, Component, Notice, MarkdownRenderer, MarkdownView, App, TFile } from "obsidian";
 import type { Flashcard, DeckOrGroup } from "../../database/types";
 import type { RatingLabel } from "../../algorithm/fsrs";
 import type { Scheduler } from "../../services/Scheduler";
@@ -10,7 +10,7 @@ import type {
 } from "../../types/svelte-components";
 import FlashcardReviewModal from "./FlashcardReviewModal.svelte";
 import { mount, unmount } from "svelte";
-import { FlashcardParser } from "../../services/FlashcardParser";
+import { findFlashcardLine } from "../../utils/source-navigator";
 
 export class FlashcardReviewModalWrapper extends Modal {
   private deckOrGroup: DeckOrGroup;
@@ -91,52 +91,7 @@ export class FlashcardReviewModalWrapper extends Modal {
 
     const content = await this.app.vault.read(file);
     const lines = content.split("\n");
-    let lineNumber = 0;
-
-    if (flashcard.type === "header-paragraph" || flashcard.type === "cloze") {
-      const target = flashcard.front.trim();
-      for (let i = 0; i < lines.length; i++) {
-        const headerMatch = lines[i].match(/^(#{1,6})\s+(.+)$/);
-        if (headerMatch) {
-          const { cleaned } = FlashcardParser.extractAndStripTags(headerMatch[2]);
-          if (cleaned === target) {
-            lineNumber = i;
-            break;
-          }
-        }
-      }
-    } else if (flashcard.type === "image-occlusion") {
-      const parts = flashcard.breadcrumb.split(" > ");
-      const headerText = parts[parts.length - 1]?.trim();
-      if (headerText) {
-        for (let i = 0; i < lines.length; i++) {
-          const headerMatch = lines[i].match(/^(#{1,6})\s+(.+)$/);
-          if (headerMatch) {
-            const { cleaned } = FlashcardParser.extractAndStripTags(headerMatch[2]);
-            if (cleaned === headerText) {
-              lineNumber = i;
-              break;
-            }
-          }
-        }
-      }
-    } else if (flashcard.type === "table") {
-      for (let i = 0; i < lines.length; i++) {
-        const trimmedLine = lines[i].trim();
-        // Check if it's a table row (starts and ends with |)
-        if (/^\|.*\|$/.test(trimmedLine)) {
-          // Parse the same way FlashcardParser does
-          const cells = trimmedLine
-            .slice(1, -1)
-            .split("|")
-            .map((cell) => cell.trim());
-          if (cells.length >= 1 && cells[0] === flashcard.front) {
-            lineNumber = i;
-            break;
-          }
-        }
-      }
-    }
+    const lineNumber = findFlashcardLine(lines, flashcard) ?? 0;
 
     // Check if file is already open in an existing leaf
     let leaf = this.app.workspace.getLeavesOfType("markdown").find((l) => {
@@ -154,11 +109,17 @@ export class FlashcardReviewModalWrapper extends Modal {
     this.navigatedToSource = true;
     this.close();
 
-    // Use setEphemeralState for reliable line scrolling
+    // Reading mode uses the preview view's native applyScroll which is
+    // line-accurate. Source / Live Preview both delegate through
+    // setEphemeralState so Obsidian's own logic handles CM6 widget
+    // boundaries (table rows render as atomic widgets in Live Preview).
     setTimeout(() => {
       const view = leaf.view;
-      if (view && "setEphemeralState" in view) {
-        (view as { setEphemeralState: (state: { line: number }) => void }).setEphemeralState({ line: lineNumber });
+      if (!(view instanceof MarkdownView)) return;
+      if (view.getMode() === "preview") {
+        view.previewMode.applyScroll(lineNumber);
+      } else {
+        view.setEphemeralState({ line: lineNumber });
       }
     }, 100);
   }
