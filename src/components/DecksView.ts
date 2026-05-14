@@ -39,6 +39,7 @@ export class DecksView extends ItemView {
   private backgroundRefreshInterval: number | null = null;
   private progressTracker: ProgressTracker;
   private logger: Logger;
+  private saveSettings: () => Promise<void>;
 
   constructor(
     leaf: WorkspaceLeaf,
@@ -50,7 +51,8 @@ export class DecksView extends ItemView {
     customDeckService: CustomDeckService,
     settings: DecksSettings,
     progressTracker: ProgressTracker,
-    logger: Logger
+    logger: Logger,
+    saveSettings: () => Promise<void>
   ) {
     super(leaf);
     this.db = database;
@@ -62,8 +64,29 @@ export class DecksView extends ItemView {
     this.customDeckService = customDeckService;
     this.settings = settings;
     this.logger = logger;
+    this.saveSettings = saveSettings;
 
     this.progressTracker = progressTracker;
+  }
+
+  private async togglePin(id: string): Promise<void> {
+    const set = new Set(this.settings.ui.pinnedDeckIds);
+    if (!set.delete(id)) set.add(id);
+    this.settings.ui.pinnedDeckIds = [...set];
+    await this.saveSettings();
+    this.deckListPanelComponent?.updatePinnedIds?.(
+      this.settings.ui.pinnedDeckIds,
+    );
+  }
+
+  /**
+   * Push fresh pinned ids into this view's panel from outside (the modal
+   * calls this after a toggle so both views stay in sync without each
+   * persisting independently).
+   */
+  applyPinnedIdsUpdate(ids: string[]): void {
+    this.settings.ui.pinnedDeckIds = ids;
+    this.deckListPanelComponent?.updatePinnedIds?.(ids);
   }
 
   getViewType(): string {
@@ -106,6 +129,8 @@ export class DecksView extends ItemView {
         openDeckConfigModal: (deck: DeckWithProfile) => this.openDeckConfigModal(deck),
         openFlashcardManager: () => this.openFlashcardManager(),
         deckTag: this.settings.parsing.deckTag,
+        pinnedDeckIds: this.settings.ui.pinnedDeckIds,
+        onTogglePin: (id: string) => this.togglePin(id),
       },
     }) as DeckListPanelComponent;
 

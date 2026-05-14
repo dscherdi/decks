@@ -60,6 +60,9 @@ export type DeckListPanelComponent = (
   // panel header (animates the existing refresh button). The deck list
   // stays populated throughout — only the icon reflects the state.
   setSyncing?(isSyncing: boolean): void;
+  // Push fresh pinned ids in after a settings save / cross-device reload
+  // so the panel resorts without remounting.
+  updatePinnedIds?(ids: string[]): void;
 };
 
 // Constructor interface for DeckListPanel

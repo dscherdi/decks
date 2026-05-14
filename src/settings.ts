@@ -21,6 +21,9 @@ export interface DecksSettings {
     backgroundRefreshInterval: number; // seconds
     enableNotices: boolean;
     reviewDisplayMode: "modal" | "tab";
+    // Deck / group / custom-deck ids the user has pinned to the top of
+    // the deck list. Synced across devices via data.json.
+    pinnedDeckIds: string[];
   };
 
   // Backup Settings
@@ -88,6 +91,7 @@ export const DEFAULT_SETTINGS: DecksSettings = {
     backgroundRefreshInterval: 120,
     enableNotices: true,
     reviewDisplayMode: "modal",
+    pinnedDeckIds: [],
   },
 
   backup: {

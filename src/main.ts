@@ -249,7 +249,8 @@ export default class DecksPlugin extends Plugin {
             this.customDeckService,
             this.settings,
             this.progressTracker,
-            this.logger
+            this.logger,
+            () => this.saveSettings()
           )
       );
 
@@ -277,7 +278,8 @@ export default class DecksPlugin extends Plugin {
           this.customDeckService,
           this.settings,
           this.logger,
-          () => this.getDecksView()
+          () => this.getDecksView(),
+          () => this.saveSettings()
         ).open();
       });
 
@@ -385,7 +387,8 @@ export default class DecksPlugin extends Plugin {
             this.customDeckService,
             this.settings,
             this.logger,
-            () => this.getDecksView()
+            () => this.getDecksView(),
+            () => this.saveSettings()
           ).open();
         },
       });

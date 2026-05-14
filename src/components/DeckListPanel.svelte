@@ -21,8 +21,9 @@
   import type { CustomDeckGroup } from "../database/types";
   import { RenameCustomDeckModal } from "./RenameCustomDeckModal";
   import { ConfirmModal } from "./ConfirmModal";
-  import { Notice } from "obsidian";
+  import { Notice, setIcon } from "obsidian";
   import type { App } from "obsidian";
+  import { sortPinnedFirst } from "@/utils/deck-sort";
 
   let decks: DeckWithProfile[] = [];
   let allDecks: DeckWithProfile[] = [];
@@ -67,6 +68,55 @@
   export let openFlashcardManager: () => void;
   export let customDeckService: CustomDeckService;
   export let deckTag = "#decks";
+  // Synced via data.json — pin/unpin on one device shows up on all others
+  // after the user's normal cloud sync. The panel owns rendering and
+  // re-sort; the parent owns persistence via onTogglePin.
+  export let pinnedDeckIds: string[] = [];
+  export let onTogglePin: (id: string) => Promise<void> | void = () => {};
+
+  $: pinnedIds = new Set(pinnedDeckIds);
+
+  async function togglePinFor(id: string) {
+    await onTogglePin(id);
+  }
+
+  /**
+   * Lets the parent push fresh pinned ids in (e.g., after saveSettings or
+   * a cross-device settings reload) without remounting. Same pattern as
+   * the existing updateAll / updateStats methods.
+   */
+  export function updatePinnedIds(ids: string[]): void {
+    pinnedDeckIds = ids;
+  }
+
+  function buildPinDropdownOption(id: string): HTMLDivElement {
+    const option = document.createElement("div");
+    option.className = "decks-dropdown-option";
+    const isPinned = pinnedIds.has(id);
+    const labelEl = document.createElement("span");
+    labelEl.className = "decks-dropdown-option-label";
+    labelEl.textContent = isPinned ? "Unpin from top" : "Pin to top";
+    const iconEl = document.createElement("span");
+    iconEl.className = "decks-dropdown-option-icon";
+    setIcon(iconEl, isPinned ? "pin-off" : "pin");
+    option.appendChild(iconEl);
+    option.appendChild(labelEl);
+    option.onclick = () => {
+      closeActiveDropdown();
+      togglePinFor(id);
+    };
+    return option;
+  }
+
+  function pinIconAction(el: HTMLElement, iconName: string) {
+    setIcon(el, iconName);
+    return {
+      update(newIconName: string) {
+        el.empty();
+        setIcon(el, newIconName);
+      },
+    };
+  }
 
   const getReviewCounts = async (days: number) => {
     if (!statisticsService) {
@@ -196,7 +246,11 @@
         ? deckGroups
         : customDeckGroups;
 
-  $: filteredItems = filterItems(currentItems, filterText);
+  $: filteredItems = sortPinnedFirst(
+    filterItems(currentItems, filterText),
+    getItemId,
+    pinnedIds,
+  );
 
   function filterItems(items: DeckOrGroup[], filter: string): DeckOrGroup[] {
     if (!filter.trim()) return items;
@@ -400,6 +454,9 @@
       }
     };
 
+    const pinOption = buildPinDropdownOption(groupId);
+
+    dropdown.appendChild(pinOption);
     dropdown.appendChild(browseOption);
     dropdown.appendChild(exportOption);
     dropdown.appendChild(configOption);
@@ -516,6 +573,9 @@
       openResetDeckModal(deck);
     };
 
+    const pinOption = buildPinDropdownOption(deck.id);
+
+    dropdown.appendChild(pinOption);
     dropdown.appendChild(browseOption);
     dropdown.appendChild(exportOption);
     dropdown.appendChild(configOption);
@@ -646,6 +706,9 @@
       onEditCustomDeck(customDeck);
     };
 
+    const pinOption = buildPinDropdownOption(customDeck.id);
+
+    dropdown.appendChild(pinOption);
     dropdown.appendChild(browseOption);
     dropdown.appendChild(editOption);
     dropdown.appendChild(exportOption);
@@ -1057,9 +1120,16 @@
               case, only `|global` does).
               200ms total per row keeps the stagger snappy.
             -->
-            <div class="decks-deck-row" in:fade|global={{ duration: 200, delay: Math.min(i, 20) * 30 }}>
+            <div
+              class="decks-deck-row"
+              class:decks-deck-row-pinned={pinnedIds.has(getItemId(item))}
+              in:fade|global={{ duration: 200, delay: Math.min(i, 20) * 30 }}
+            >
 
               <div class="decks-col-deck">
+                {#if pinnedIds.has(getItemId(item))}
+                  <span class="decks-pin-indicator" use:pinIconAction={"pin"} title="Pinned"></span>
+                {/if}
                 <span
                   class="decks-deck-name-link"
                   on:click={(e) =>
@@ -1586,10 +1656,43 @@
     cursor: pointer;
     font-size: var(--font-ui-small);
     color: var(--text-normal);
+    display: flex;
+    align-items: center;
+    gap: var(--size-2-3);
   }
 
   :global(.decks-dropdown-option:hover) {
     background: var(--background-modifier-hover);
+  }
+
+  :global(.decks-dropdown-option-icon) {
+    display: inline-flex;
+    align-items: center;
+    color: var(--text-muted);
+  }
+
+  :global(.decks-dropdown-option-icon svg) {
+    width: 14px;
+    height: 14px;
+  }
+
+  /* Pinned row indicator + subtle accent on the row itself */
+  .decks-pin-indicator {
+    display: inline-flex;
+    align-items: center;
+    margin-right: 4px;
+    color: var(--text-accent);
+    vertical-align: middle;
+  }
+
+  .decks-pin-indicator :global(svg) {
+    width: 12px;
+    height: 12px;
+  }
+
+  .decks-deck-row-pinned {
+    border-left: 2px solid var(--text-accent);
+    padding-left: calc(var(--size-4-3) - 2px);
   }
 
   /* ── Scrollbar ── */

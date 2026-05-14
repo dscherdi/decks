@@ -47,6 +47,7 @@ export class DecksViewModal extends Modal {
   private deckListPanelComponent: DeckListPanelComponent | null = null;
   private resizeHandler?: () => void;
   private getDecksView: () => DecksView | null;
+  private saveSettings: () => Promise<void>;
 
   constructor(
     app: App,
@@ -58,7 +59,8 @@ export class DecksViewModal extends Modal {
     customDeckService: CustomDeckService,
     settings: DecksSettings,
     logger: Logger,
-    getDecksView: () => DecksView | null
+    getDecksView: () => DecksView | null,
+    saveSettings: () => Promise<void>
   ) {
     super(app);
     this.db = db;
@@ -71,6 +73,19 @@ export class DecksViewModal extends Modal {
     this.settings = settings;
     this.logger = logger;
     this.getDecksView = getDecksView;
+    this.saveSettings = saveSettings;
+  }
+
+  private async togglePin(id: string): Promise<void> {
+    const set = new Set(this.settings.ui.pinnedDeckIds);
+    if (!set.delete(id)) set.add(id);
+    this.settings.ui.pinnedDeckIds = [...set];
+    await this.saveSettings();
+    this.deckListPanelComponent?.updatePinnedIds?.(
+      this.settings.ui.pinnedDeckIds,
+    );
+    // Also push into the sidepanel if it's open so both views stay in sync.
+    this.getDecksView()?.applyPinnedIdsUpdate(this.settings.ui.pinnedDeckIds);
   }
 
   onOpen() {
@@ -126,6 +141,8 @@ export class DecksViewModal extends Modal {
           this.openDeckConfigModal(deck),
         openFlashcardManager: () => this.openFlashcardManager(),
         deckTag: this.settings.parsing.deckTag,
+        pinnedDeckIds: this.settings.ui.pinnedDeckIds,
+        onTogglePin: (id: string) => this.togglePin(id),
       },
     }) as DeckListPanelComponent;
 
