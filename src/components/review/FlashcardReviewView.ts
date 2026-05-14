@@ -17,6 +17,7 @@ import type {
 } from "../../types/svelte-components";
 import FlashcardReviewModal from "./FlashcardReviewModal.svelte";
 import { mount, unmount } from "svelte";
+import { FlashcardParser } from "../../services/FlashcardParser";
 
 export const VIEW_TYPE_FLASHCARD_REVIEW = "flashcard-review-view";
 
@@ -164,11 +165,15 @@ export class FlashcardReviewView extends ItemView {
     let lineNumber = 0;
 
     if (flashcard.type === "header-paragraph" || flashcard.type === "cloze") {
+      const target = flashcard.front.trim();
       for (let i = 0; i < lines.length; i++) {
         const headerMatch = lines[i].match(/^(#{1,6})\s+(.+)$/);
-        if (headerMatch && headerMatch[2].trim() === flashcard.front.trim()) {
-          lineNumber = i;
-          break;
+        if (headerMatch) {
+          const { cleaned } = FlashcardParser.extractAndStripTags(headerMatch[2]);
+          if (cleaned === target) {
+            lineNumber = i;
+            break;
+          }
         }
       }
     } else if (flashcard.type === "image-occlusion") {
@@ -177,9 +182,12 @@ export class FlashcardReviewView extends ItemView {
       if (headerText) {
         for (let i = 0; i < lines.length; i++) {
           const headerMatch = lines[i].match(/^(#{1,6})\s+(.+)$/);
-          if (headerMatch && headerMatch[2].trim() === headerText) {
-            lineNumber = i;
-            break;
+          if (headerMatch) {
+            const { cleaned } = FlashcardParser.extractAndStripTags(headerMatch[2]);
+            if (cleaned === headerText) {
+              lineNumber = i;
+              break;
+            }
           }
         }
       }
