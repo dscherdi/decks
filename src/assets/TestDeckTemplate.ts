@@ -4,55 +4,66 @@ export function getTestDeckContent(deckTag: string): string {
 tags:
   - ${tag}
 ---
-
 # Getting started with Decks
 
-Welcome to Decks! This file shows the two ways to create flashcards.
+Welcome to Decks! To turn this file (or any file) into a flashcard deck, simply add the \`#decks\` tag to your frontmatter or anywhere in the body.
 
-- Header-Paragraph format
-- Use a markdown table with **Front** and **Back** columns. An optional **Notes** column adds extra context shown during review.
+Decks supports four main formats. Pick the one that fits your notes best.
 
-## Header-paragraph format
+---
 
-Use a heading as the question and the paragraph below as the answer.
+## 1. Header-paragraph format
 
-## Table format
+By default, Decks uses **H2 headings (\`##\`)** as the front of the card, and the paragraph directly below it as the back. *(You can change this header level in the deck settings).*
 
-| Front | Back | Notes |
-|---|---|---|
-| What is spaced repetition? | A learning technique that schedules reviews at increasing intervals based on recall strength | Used by Anki, Decks, and other apps |
-| What does FSRS stand for? | Free Spaced Repetition Scheduler | The algorithm Decks uses to schedule cards |
-| What are the four review ratings? | Again, Hard, Good, Easy | Again resets the card; Easy gives the longest interval |
+## What is spaced repetition?
+
+A learning technique that schedules reviews at increasing intervals based on recall strength.
 
 ## What tag marks a file as a flashcard deck?
 
-The \`${deckTag}\` tag marks a file as a deck. Add it to the frontmatter \`tags\` list or anywhere in the body.
+The \`#decks\` tag. Add it to the frontmatter \`tags\` list or anywhere in the body.
 
-## How do I limit how many cards I review per day?
+---
 
-Open the deck settings (the ⚙ icon next to a deck) and set the **New cards per day** and **Review cards per day** limits.
+## 2. Table format
 
-## Can I sync Decks across devices?
+You can use two-column markdown tables to generate cards in bulk. 
+**Crucial Rule:** The table *must* sit directly under a heading. That heading acts as the container for those cards. 
 
-Yes. Decks uses a SQLite database stored in your vault. Syncing via iCloud, Dropbox, or Obsidian Sync will keep your progress in sync across devices.
+## FSRS Concepts
 
-## Cloze deletions
+| Front                             | Back                                                   | Notes                                                  |
+| --------------------------------- | ------------------------------------------------------ | ------------------------------------------------------ |
+| What does FSRS stand for?         | Free Spaced Repetition Scheduler                       | The algorithm Decks uses to schedule cards             |
+| What are the four review ratings? | Again, Hard, Good, Easy                                | Again resets the card; Easy gives the longest interval |
 
-Use \`==highlight==\` syntax to create cloze flashcards where each highlight is blanked during review.
+*(Note: The first column is the Front, the second is the Back. The optional third column is for Notes/Hints).*
 
-## The Solar System
+---
+
+## 3. Cloze deletions
+
+Use \`==highlight==\` syntax to create fill-in-the-blank cards. Every highlight becomes its own card.
+
+## The solar system
 
 The ==Sun== is the star at the center of our solar system. The closest planet is ==Mercury==, and the largest planet is ==Jupiter==.
 
-## Image occlusion
+---
 
-Create image occlusion flashcards by combining an image with a numbered list. The image shows labeled regions and each list item becomes a separate card.
+## 4. Image occlusion
+
+Combine an image with a numbered list. The image shows the labeled regions, and each list item becomes a separate card. 
 
 ## Bones of the arm
 
 ![[arm_bones.png]]
+
 1. ==Humerus==
 2. ==Radius==
 3. ==Ulna==
+
+---
 `;
 }
