@@ -749,6 +749,10 @@ export abstract class BaseDatabaseService implements IDatabaseService {
         const resolvedProfileId = await this.getProfileIdForTag(deck.tag) || DEFAULT_PROFILE_ID;
         if (deck.profileId !== resolvedProfileId) {
           await this.updateDeck(deck.id, { profileId: resolvedProfileId });
+          // The new profile may have a different headerLevel / clozeEnabled,
+          // so the cached parsed flashcards no longer reflect parsing rules.
+          // Reset the mtime gate so the next sync reparses this deck.
+          await this.setDeckLastSyncedMtime(deck.id, 0);
           count++;
         }
       } else if (deck.tag.startsWith(tag + '/')) {
@@ -757,6 +761,7 @@ export abstract class BaseDatabaseService implements IDatabaseService {
           const resolvedProfileId = await this.getProfileIdForTag(deck.tag) || DEFAULT_PROFILE_ID;
           if (deck.profileId !== resolvedProfileId) {
             await this.updateDeck(deck.id, { profileId: resolvedProfileId });
+            await this.setDeckLastSyncedMtime(deck.id, 0);
             count++;
           }
         }
