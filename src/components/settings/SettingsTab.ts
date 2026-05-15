@@ -465,6 +465,26 @@ export class DecksSettingTab extends PluginSettingTab {
           })
       );
 
+    new Setting(containerEl)
+      .setName("Hide decks with fewer than")
+      .setDesc(
+        "Decks (and groups) with fewer than this many total cards are hidden from the list. Pinned decks are always shown. Set to 0 to disable."
+      )
+      .addText((text) =>
+        text
+          .setPlaceholder("0")
+          .setValue(String(this.settings.ui.minDeckCardCount))
+          .onChange(async (value) => {
+            const n = Number.parseInt(value, 10);
+            const next = Number.isFinite(n) && n >= 0 ? n : 0;
+            this.settings.ui.minDeckCardCount = next;
+            await this.saveSettings();
+            // Push the new threshold into the sidepanel if it's mounted
+            // so the user sees the filter apply without reopening.
+            this.plugin.getDecksView()?.applyMinDeckCardCountUpdate(next);
+          })
+      );
+
     // Set initial state of interval setting
     intervalSetting.setDisabled(!this.settings.ui.enableBackgroundRefresh);
   }

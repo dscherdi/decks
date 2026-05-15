@@ -3,6 +3,7 @@ import type { Deck, DeckStats } from "../database/types";
 import type { IDatabaseService } from "../database/DatabaseFactory";
 import type { StatisticsService } from "../services/StatisticsService";
 import type { DeckSynchronizer } from "../services/DeckSynchronizer";
+import type { DeckListSortMode } from "../settings";
 import type { App } from "obsidian";
 
 // Base Svelte component interface (Svelte 4 style)
@@ -63,6 +64,10 @@ export type DeckListPanelComponent = (
   // Push fresh pinned ids in after a settings save / cross-device reload
   // so the panel resorts without remounting.
   updatePinnedIds?(ids: string[]): void;
+  // Push a new sort mode in after a settings save / cross-device reload.
+  updateSortMode?(mode: DeckListSortMode): void;
+  // Push a new min-card-count threshold in after settings change.
+  updateMinDeckCardCount?(value: number): void;
 };
 
 // Constructor interface for DeckListPanel

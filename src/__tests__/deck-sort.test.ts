@@ -1,80 +1,223 @@
-import { sortPinnedFirst } from "../utils/deck-sort";
+import { sortDeckList } from "../utils/deck-sort";
 
 interface Item {
   id: string;
   name: string;
 }
 
+interface Stats {
+  newCount: number;
+  dueCount: number;
+  totalCount: number;
+}
+
 const idOf = (item: Item) => item.id;
+const noStats = (_id: string): Stats | undefined => undefined;
+const statsMap = (m: Record<string, Stats>) =>
+  (id: string): Stats | undefined => m[id];
 
-describe("sortPinnedFirst", () => {
-  it("returns the same array reference when input is empty", () => {
-    const items: Item[] = [];
-    expect(sortPinnedFirst(items, idOf, new Set())).toBe(items);
+describe("sortDeckList", () => {
+  describe("name-asc (default)", () => {
+    it("returns the same array reference when input is empty", () => {
+      const items: Item[] = [];
+      expect(sortDeckList(items, idOf, noStats, new Set(), "name-asc")).toBe(items);
+    });
+
+    it("with no pins, sorts everything alphabetically", () => {
+      const items: Item[] = [
+        { id: "1", name: "Charlie" },
+        { id: "2", name: "alpha" },
+        { id: "3", name: "Bravo" },
+      ];
+      const sorted = sortDeckList(items, idOf, noStats, new Set(), "name-asc");
+      expect(sorted.map((i) => i.name)).toEqual(["alpha", "Bravo", "Charlie"]);
+    });
+
+    it("pinned items come first, alphabetical within each group", () => {
+      const items: Item[] = [
+        { id: "1", name: "Charlie" },
+        { id: "2", name: "Alpha" },
+        { id: "3", name: "Bravo" },
+        { id: "4", name: "Delta" },
+      ];
+      const sorted = sortDeckList(
+        items,
+        idOf,
+        noStats,
+        new Set(["3", "1"]),
+        "name-asc",
+      );
+      expect(sorted.map((i) => i.name)).toEqual([
+        "Bravo",
+        "Charlie",
+        "Alpha",
+        "Delta",
+      ]);
+    });
+
+    it("case-insensitive sort", () => {
+      const items: Item[] = [
+        { id: "1", name: "banana" },
+        { id: "2", name: "Apple" },
+        { id: "3", name: "cherry" },
+      ];
+      const sorted = sortDeckList(items, idOf, noStats, new Set(), "name-asc");
+      expect(sorted.map((i) => i.name)).toEqual(["Apple", "banana", "cherry"]);
+    });
+
+    it("does not mutate the input array", () => {
+      const items: Item[] = [
+        { id: "1", name: "Charlie" },
+        { id: "2", name: "Alpha" },
+      ];
+      const snapshot = items.map((i) => i.id);
+      sortDeckList(items, idOf, noStats, new Set(["2"]), "name-asc");
+      expect(items.map((i) => i.id)).toEqual(snapshot);
+    });
+
+    it("pinned ids that don't match any item are ignored without crashing", () => {
+      const items: Item[] = [
+        { id: "1", name: "Alpha" },
+        { id: "2", name: "Beta" },
+      ];
+      const sorted = sortDeckList(
+        items,
+        idOf,
+        noStats,
+        new Set(["ghost", "phantom"]),
+        "name-asc",
+      );
+      expect(sorted.map((i) => i.name)).toEqual(["Alpha", "Beta"]);
+    });
   });
 
-  it("with no pins, sorts everything alphabetically", () => {
-    const items: Item[] = [
-      { id: "1", name: "Charlie" },
-      { id: "2", name: "alpha" },
-      { id: "3", name: "Bravo" },
-    ];
-    const sorted = sortPinnedFirst(items, idOf, new Set());
-    expect(sorted.map((i) => i.name)).toEqual(["alpha", "Bravo", "Charlie"]);
+  describe("name-desc", () => {
+    it("reverses alphabetical order within each partition", () => {
+      const items: Item[] = [
+        { id: "1", name: "Alpha" },
+        { id: "2", name: "Bravo" },
+        { id: "3", name: "Charlie" },
+        { id: "4", name: "Delta" },
+      ];
+      const sorted = sortDeckList(
+        items,
+        idOf,
+        noStats,
+        new Set(["1", "2"]),
+        "name-desc",
+      );
+      expect(sorted.map((i) => i.name)).toEqual([
+        "Bravo",
+        "Alpha",
+        "Delta",
+        "Charlie",
+      ]);
+    });
   });
 
-  it("pinned items come first, alphabetical within each group", () => {
+  describe("new-asc / new-desc", () => {
     const items: Item[] = [
-      { id: "1", name: "Charlie" },
-      { id: "2", name: "Alpha" },
-      { id: "3", name: "Bravo" },
-      { id: "4", name: "Delta" },
+      { id: "a", name: "Aardvark" },
+      { id: "b", name: "Beaver" },
+      { id: "c", name: "Cobra" },
     ];
-    const sorted = sortPinnedFirst(items, idOf, new Set(["3", "1"]));
-    expect(sorted.map((i) => i.name)).toEqual([
-      "Bravo",
-      "Charlie",
-      "Alpha",
-      "Delta",
-    ]);
+    const stats = statsMap({
+      a: { newCount: 10, dueCount: 0, totalCount: 10 },
+      b: { newCount: 2, dueCount: 0, totalCount: 2 },
+      c: { newCount: 5, dueCount: 0, totalCount: 5 },
+    });
+
+    it("sorts ascending by newCount", () => {
+      const sorted = sortDeckList(items, idOf, stats, new Set(), "new-asc");
+      expect(sorted.map((i) => i.id)).toEqual(["b", "c", "a"]);
+    });
+
+    it("sorts descending by newCount", () => {
+      const sorted = sortDeckList(items, idOf, stats, new Set(), "new-desc");
+      expect(sorted.map((i) => i.id)).toEqual(["a", "c", "b"]);
+    });
+
+    it("ties break by name ascending in both directions", () => {
+      const tied: Item[] = [
+        { id: "x", name: "Banana" },
+        { id: "y", name: "Apple" },
+        { id: "z", name: "Cherry" },
+      ];
+      const tiedStats = statsMap({
+        x: { newCount: 5, dueCount: 0, totalCount: 5 },
+        y: { newCount: 5, dueCount: 0, totalCount: 5 },
+        z: { newCount: 5, dueCount: 0, totalCount: 5 },
+      });
+      const asc = sortDeckList(tied, idOf, tiedStats, new Set(), "new-asc");
+      const desc = sortDeckList(tied, idOf, tiedStats, new Set(), "new-desc");
+      expect(asc.map((i) => i.name)).toEqual(["Apple", "Banana", "Cherry"]);
+      expect(desc.map((i) => i.name)).toEqual(["Apple", "Banana", "Cherry"]);
+    });
   });
 
-  it("all items pinned -> alphabetical order", () => {
+  describe("due-asc / due-desc", () => {
     const items: Item[] = [
-      { id: "1", name: "Gamma" },
-      { id: "2", name: "Alpha" },
-      { id: "3", name: "Beta" },
+      { id: "a", name: "Aardvark" },
+      { id: "b", name: "Beaver" },
+      { id: "c", name: "Cobra" },
     ];
-    const sorted = sortPinnedFirst(items, idOf, new Set(["1", "2", "3"]));
-    expect(sorted.map((i) => i.name)).toEqual(["Alpha", "Beta", "Gamma"]);
+    const stats = statsMap({
+      a: { newCount: 0, dueCount: 0, totalCount: 1 },
+      b: { newCount: 0, dueCount: 12, totalCount: 12 },
+      c: { newCount: 0, dueCount: 3, totalCount: 3 },
+    });
+
+    it("sorts ascending by dueCount", () => {
+      const sorted = sortDeckList(items, idOf, stats, new Set(), "due-asc");
+      expect(sorted.map((i) => i.id)).toEqual(["a", "c", "b"]);
+    });
+
+    it("sorts descending by dueCount", () => {
+      const sorted = sortDeckList(items, idOf, stats, new Set(), "due-desc");
+      expect(sorted.map((i) => i.id)).toEqual(["b", "c", "a"]);
+    });
   });
 
-  it("pinned ids that don't match any item are ignored without crashing", () => {
-    const items: Item[] = [
-      { id: "1", name: "Alpha" },
-      { id: "2", name: "Beta" },
-    ];
-    const sorted = sortPinnedFirst(items, idOf, new Set(["ghost", "phantom"]));
-    expect(sorted.map((i) => i.name)).toEqual(["Alpha", "Beta"]);
+  describe("missing stats", () => {
+    it("treats missing stats as zero for numeric sorts", () => {
+      const items: Item[] = [
+        { id: "a", name: "Anchor" },
+        { id: "b", name: "Buoy" },
+        { id: "c", name: "Cable" },
+      ];
+      const partial = statsMap({
+        b: { newCount: 5, dueCount: 5, totalCount: 10 },
+      });
+      const sorted = sortDeckList(items, idOf, partial, new Set(), "new-desc");
+      // b (5) first; a and c both have no stats (0), so name-asc tiebreak
+      expect(sorted.map((i) => i.id)).toEqual(["b", "a", "c"]);
+    });
   });
 
-  it("does not mutate the input array", () => {
-    const items: Item[] = [
-      { id: "1", name: "Charlie" },
-      { id: "2", name: "Alpha" },
-    ];
-    const snapshot = items.map((i) => i.id);
-    sortPinnedFirst(items, idOf, new Set(["2"]));
-    expect(items.map((i) => i.id)).toEqual(snapshot);
-  });
-
-  it("case-insensitive sort: lowercase and uppercase intermix correctly", () => {
-    const items: Item[] = [
-      { id: "1", name: "banana" },
-      { id: "2", name: "Apple" },
-      { id: "3", name: "cherry" },
-    ];
-    const sorted = sortPinnedFirst(items, idOf, new Set());
-    expect(sorted.map((i) => i.name)).toEqual(["Apple", "banana", "cherry"]);
+  describe("pinned partition sorts independently", () => {
+    it("pinned items use the chosen sort mode within their group", () => {
+      const items: Item[] = [
+        { id: "a", name: "Alpha" },
+        { id: "b", name: "Beta" },
+        { id: "c", name: "Charlie" },
+        { id: "d", name: "Delta" },
+      ];
+      const stats = statsMap({
+        a: { newCount: 1, dueCount: 0, totalCount: 1 },
+        b: { newCount: 8, dueCount: 0, totalCount: 8 },
+        c: { newCount: 3, dueCount: 0, totalCount: 3 },
+        d: { newCount: 5, dueCount: 0, totalCount: 5 },
+      });
+      const sorted = sortDeckList(
+        items,
+        idOf,
+        stats,
+        new Set(["a", "b"]),
+        "new-desc",
+      );
+      // pinned (b, a) sorted by new-desc -> b (8), a (1)
+      // unpinned (c, d) sorted by new-desc -> d (5), c (3)
+      expect(sorted.map((i) => i.id)).toEqual(["b", "a", "d", "c"]);
+    });
   });
 });

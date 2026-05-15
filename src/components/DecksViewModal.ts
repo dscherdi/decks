@@ -33,6 +33,7 @@ import { mount, unmount } from "svelte";
 import type { DeckListPanelComponent } from "../types/svelte-components";
 import type { IDatabaseService } from "../database/DatabaseFactory";
 import type { DecksView } from "./DecksView";
+import type { DeckListSortMode } from "@/settings";
 
 export class DecksViewModal extends Modal {
   private db: IDatabaseService;
@@ -86,6 +87,13 @@ export class DecksViewModal extends Modal {
     );
     // Also push into the sidepanel if it's open so both views stay in sync.
     this.getDecksView()?.applyPinnedIdsUpdate(this.settings.ui.pinnedDeckIds);
+  }
+
+  private async changeSortMode(mode: DeckListSortMode): Promise<void> {
+    this.settings.ui.deckListSort = mode;
+    await this.saveSettings();
+    this.deckListPanelComponent?.updateSortMode?.(mode);
+    this.getDecksView()?.applySortModeUpdate(mode);
   }
 
   onOpen() {
@@ -143,6 +151,9 @@ export class DecksViewModal extends Modal {
         deckTag: this.settings.parsing.deckTag,
         pinnedDeckIds: this.settings.ui.pinnedDeckIds,
         onTogglePin: (id: string) => this.togglePin(id),
+        deckListSort: this.settings.ui.deckListSort,
+        minDeckCardCount: this.settings.ui.minDeckCardCount,
+        onChangeSortMode: (mode: DeckListSortMode) => this.changeSortMode(mode),
       },
     }) as DeckListPanelComponent;
 

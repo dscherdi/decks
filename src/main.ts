@@ -928,7 +928,7 @@ export default class DecksPlugin extends Plugin {
     }
   }
 
-  private getDecksView(): DecksView | null {
+  getDecksView(): DecksView | null {
     const leaves = this.app.workspace.getLeavesOfType(VIEW_TYPE_DECKS);
     if (leaves.length > 0) {
       const view = leaves[0].view;

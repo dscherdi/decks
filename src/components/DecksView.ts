@@ -25,6 +25,7 @@ import { mount, unmount } from "svelte";
 import { ProgressTracker } from "@/utils/progress";
 import type { DeckListPanelComponent } from "../types/svelte-components";
 import type { IDatabaseService } from "../database/DatabaseFactory";
+import type { DeckListSortMode } from "@/settings";
 
 export class DecksView extends ItemView {
   private db: IDatabaseService;
@@ -89,6 +90,22 @@ export class DecksView extends ItemView {
     this.deckListPanelComponent?.updatePinnedIds?.(ids);
   }
 
+  private async changeSortMode(mode: DeckListSortMode): Promise<void> {
+    this.settings.ui.deckListSort = mode;
+    await this.saveSettings();
+    this.deckListPanelComponent?.updateSortMode?.(mode);
+  }
+
+  applySortModeUpdate(mode: DeckListSortMode): void {
+    this.settings.ui.deckListSort = mode;
+    this.deckListPanelComponent?.updateSortMode?.(mode);
+  }
+
+  applyMinDeckCardCountUpdate(value: number): void {
+    this.settings.ui.minDeckCardCount = value;
+    this.deckListPanelComponent?.updateMinDeckCardCount?.(value);
+  }
+
   getViewType(): string {
     return VIEW_TYPE_DECKS;
   }
@@ -131,6 +148,9 @@ export class DecksView extends ItemView {
         deckTag: this.settings.parsing.deckTag,
         pinnedDeckIds: this.settings.ui.pinnedDeckIds,
         onTogglePin: (id: string) => this.togglePin(id),
+        deckListSort: this.settings.ui.deckListSort,
+        minDeckCardCount: this.settings.ui.minDeckCardCount,
+        onChangeSortMode: (mode: DeckListSortMode) => this.changeSortMode(mode),
       },
     }) as DeckListPanelComponent;
 

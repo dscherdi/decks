@@ -1,3 +1,11 @@
+export type DeckListSortMode =
+  | "name-asc"
+  | "name-desc"
+  | "new-asc"
+  | "new-desc"
+  | "due-asc"
+  | "due-desc";
+
 export interface DecksSettings {
   // Review Session Settings
   review: {
@@ -24,6 +32,11 @@ export interface DecksSettings {
     // Deck / group / custom-deck ids the user has pinned to the top of
     // the deck list. Synced across devices via data.json.
     pinnedDeckIds: string[];
+    // Active sort key + direction for the deck list column headers.
+    deckListSort: DeckListSortMode;
+    // Decks with totalCount strictly less than this number are hidden
+    // from the list. Pinned decks are exempt. 0 disables the filter.
+    minDeckCardCount: number;
   };
 
   // Backup Settings
@@ -92,6 +105,8 @@ export const DEFAULT_SETTINGS: DecksSettings = {
     enableNotices: false,
     reviewDisplayMode: "modal",
     pinnedDeckIds: [],
+    deckListSort: "name-asc",
+    minDeckCardCount: 0,
   },
 
   backup: {

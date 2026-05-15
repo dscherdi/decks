@@ -23,7 +23,8 @@
   import { ConfirmModal } from "./ConfirmModal";
   import { Notice, setIcon } from "obsidian";
   import type { App } from "obsidian";
-  import { sortPinnedFirst } from "@/utils/deck-sort";
+  import { sortDeckList, filterByMinCount } from "@/utils/deck-sort";
+  import type { DeckListSortMode } from "@/settings";
 
   let decks: DeckWithProfile[] = [];
   let allDecks: DeckWithProfile[] = [];
@@ -87,6 +88,55 @@
    */
   export function updatePinnedIds(ids: string[]): void {
     pinnedDeckIds = ids;
+  }
+
+  // Active sort + size filter — both synced through data.json. The panel
+  // owns rendering and re-sort; the parent owns persistence.
+  export let deckListSort: DeckListSortMode = "name-asc";
+  export let minDeckCardCount = 0;
+  export let onChangeSortMode: (mode: DeckListSortMode) => Promise<void> | void =
+    () => {};
+
+  export function updateSortMode(mode: DeckListSortMode): void {
+    deckListSort = mode;
+  }
+
+  export function updateMinDeckCardCount(value: number): void {
+    minDeckCardCount = value;
+  }
+
+  /**
+   * Click handler for sortable column headers. Cycles asc/desc on the same
+   * column, otherwise starts fresh at ascending. Calls into the parent so
+   * the choice is persisted to settings.
+   */
+  async function clickSortColumn(column: "name" | "new" | "due") {
+    const ascMode = `${column}-asc` as DeckListSortMode;
+    const descMode = `${column}-desc` as DeckListSortMode;
+    const nextMode = deckListSort === ascMode ? descMode : ascMode;
+    await onChangeSortMode(nextMode);
+  }
+
+  function sortArrowIcon(column: "name" | "new" | "due", mode: DeckListSortMode): string {
+    if (mode === `${column}-asc`) return "arrow-up";
+    if (mode === `${column}-desc`) return "arrow-down";
+    return "chevrons-up-down";
+  }
+  $: nameArrow = sortArrowIcon("name", deckListSort);
+  $: newArrow = sortArrowIcon("new", deckListSort);
+  $: dueArrow = sortArrowIcon("due", deckListSort);
+  $: nameSortActive = deckListSort === "name-asc" || deckListSort === "name-desc";
+  $: newSortActive = deckListSort === "new-asc" || deckListSort === "new-desc";
+  $: dueSortActive = deckListSort === "due-asc" || deckListSort === "due-desc";
+
+  function sortIconAction(el: HTMLElement, iconName: string) {
+    setIcon(el, iconName);
+    return {
+      update(name: string) {
+        el.empty();
+        setIcon(el, name);
+      },
+    };
   }
 
   function buildPinDropdownOption(id: string): HTMLDivElement {
@@ -246,10 +296,18 @@
         ? deckGroups
         : customDeckGroups;
 
-  $: filteredItems = sortPinnedFirst(
-    filterItems(currentItems, filterText),
+  $: filteredItems = sortDeckList(
+    filterByMinCount(
+      filterItems(currentItems, filterText),
+      getItemId,
+      getDeckStats,
+      pinnedIds,
+      minDeckCardCount,
+    ),
     getItemId,
+    getDeckStats,
     pinnedIds,
+    deckListSort,
   );
 
   function filterItems(items: DeckOrGroup[], filter: string): DeckOrGroup[] {
@@ -1100,11 +1158,36 @@
       <div class="decks-deck-table">
         <div class="decks-table-body">
           <div class="decks-table-header">
-            <div class="decks-col-deck">
-              {viewMode === "files" ? "Deck" : viewMode === "tags" ? "Tag group" : "Custom deck"}
-            </div>
-            <div class="decks-col-stat">New</div>
-            <div class="decks-col-stat">Due</div>
+            <button
+              type="button"
+              class="decks-col-deck decks-col-sortable"
+              class:decks-col-sortable-active={nameSortActive}
+              on:click={() => void clickSortColumn("name")}
+              aria-label="Sort by name"
+            >
+              <span>{viewMode === "files" ? "Deck" : viewMode === "tags" ? "Tag group" : "Custom deck"}</span>
+              <span class="decks-sort-arrow" use:sortIconAction={nameArrow}></span>
+            </button>
+            <button
+              type="button"
+              class="decks-col-stat decks-col-sortable"
+              class:decks-col-sortable-active={newSortActive}
+              on:click={() => void clickSortColumn("new")}
+              aria-label="Sort by new card count"
+            >
+              <span>New</span>
+              <span class="decks-sort-arrow" use:sortIconAction={newArrow}></span>
+            </button>
+            <button
+              type="button"
+              class="decks-col-stat decks-col-sortable"
+              class:decks-col-sortable-active={dueSortActive}
+              on:click={() => void clickSortColumn("due")}
+              aria-label="Sort by due card count"
+            >
+              <span>Due</span>
+              <span class="decks-sort-arrow" use:sortIconAction={dueArrow}></span>
+            </button>
             <div class="decks-col-config"></div>
           </div>
           {#each filteredItems as item, i (getItemId(item))}
@@ -1447,6 +1530,65 @@
     top: 0;
     background: var(--background-primary);
     z-index: 1;
+  }
+
+  /* Sortable column header: strips default <button> chrome so it reads
+     as the same flat label, plus a hover cue + a tucked-in sort arrow. */
+  .decks-col-sortable {
+    background: transparent;
+    border: none;
+    outline: none;
+    padding: 0;
+    margin: 0;
+    font: inherit;
+    color: inherit;
+    text-transform: inherit;
+    letter-spacing: inherit;
+    cursor: pointer;
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    box-shadow: none;
+  }
+
+  .decks-col-sortable:hover {
+    color: var(--text-normal);
+  }
+
+  .decks-col-sortable:focus,
+  .decks-col-sortable:focus-visible {
+    outline: none;
+    box-shadow: none;
+  }
+
+  /* Deck name column header: left-align label + arrow inside its grid cell. */
+  .decks-col-deck.decks-col-sortable {
+    justify-content: flex-start;
+  }
+
+  /* Stat columns are right-aligned — keep the same alignment when the
+     header becomes a sortable button. */
+  .decks-col-stat.decks-col-sortable {
+    justify-content: flex-end;
+  }
+
+  /* Arrow: dimmed by default so it reads as an affordance, not a state.
+     Active column gets full-opacity accent color. */
+  .decks-sort-arrow {
+    display: inline-flex;
+    align-items: center;
+    color: var(--text-faint);
+    opacity: 0.6;
+  }
+
+  .decks-col-sortable-active .decks-sort-arrow {
+    color: var(--text-accent);
+    opacity: 1;
+  }
+
+  .decks-sort-arrow :global(svg) {
+    width: 12px;
+    height: 12px;
   }
 
   .decks-table-body {
