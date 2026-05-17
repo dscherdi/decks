@@ -182,6 +182,34 @@ The answer is 4.
     });
   });
 
+  describe("parent header tag inheritance", () => {
+    it("persists merged ancestor and own tags through sync", async () => {
+      const { deck, profile } = await createTestDeck("tags-parent");
+
+      const content = `# Math #math
+
+## Algebra basics #algebra
+
+x + 1 = 2 → x = ?
+`;
+      const result = await db.syncFlashcardsForDeck({
+        deckId: deck.id,
+        deckName: deck.name,
+        deckFilepath: deck.filepath,
+        deckConfig: profile,
+        fileContent: content,
+      });
+      expect(result.success).toBe(true);
+
+      const cards = await db.getFlashcardsByDeck(deck.id);
+      expect(cards).toHaveLength(1);
+      expect(cards[0].front).toBe("Algebra basics");
+      expect(cards[0].tags.sort()).toEqual(["algebra", "math"]);
+      expect(cards[0].breadcrumb).toBe("Math");
+      expect(cards[0].breadcrumb).not.toContain("#");
+    });
+  });
+
   describe("reverse card inheritance", () => {
     it("creates reverse cards with the same tags as their original", async () => {
       const { deck, profile } = await createTestDeck("tags-reverse");

@@ -44,6 +44,18 @@ export class FlashcardParser {
   }
 
   /**
+   * Flatten and dedupe tags across every header in the stack so descendant cards
+   * inherit tags from each ancestor header (and their own header).
+   */
+  private static collectStackTags(
+    headerStack: Array<{ tags: string[] }>
+  ): string[] {
+    const out: string[] = [];
+    for (const h of headerStack) out.push(...h.tags);
+    return Array.from(new Set(out));
+  }
+
+  /**
    * Expand a card into cloze cards if cloze markers are found, otherwise return original card.
    * When cloze markers exist, returns N cloze cards (one per highlight) and NO regular card.
    * When no cloze markers exist, returns the original card unchanged.
@@ -178,7 +190,7 @@ export class FlashcardParser {
             // Build breadcrumb from header stack (excluding the current header since it's the table container)
             const breadcrumb = headerStack.map((h) => h.text).join(" > ");
             const rowNotes = cells.length >= 3 ? (cells[2] || "") : "";
-            const rowTags = currentHeader ? [...currentHeader.tags] : [];
+            const rowTags = FlashcardParser.collectStackTags(headerStack);
 
             if (clozeEnabled) {
               const expanded = FlashcardParser.expandClozes(
@@ -233,12 +245,14 @@ export class FlashcardParser {
               .slice(0, -1)
               .map((h) => h.text)
               .join(" > ");
+            const stackTags = FlashcardParser.collectStackTags(headerStack);
             FlashcardParser.finalizeCurrentHeader(
               currentHeader,
               currentContent,
               flashcards,
               headerLevel,
               breadcrumb,
+              stackTags,
               clozeEnabled
             );
             currentHeader = null;
@@ -259,6 +273,7 @@ export class FlashcardParser {
             .slice(0, -1)
             .map((h) => h.text)
             .join(" > ");
+          const stackTags = FlashcardParser.collectStackTags(headerStack);
 
           // Finalize previous header
           FlashcardParser.finalizeCurrentHeader(
@@ -267,6 +282,7 @@ export class FlashcardParser {
             flashcards,
             headerLevel,
             breadcrumb,
+            stackTags,
             clozeEnabled
           );
 
@@ -310,12 +326,14 @@ export class FlashcardParser {
       .slice(0, -1)
       .map((h) => h.text)
       .join(" > ");
+    const finalStackTags = FlashcardParser.collectStackTags(headerStack);
     FlashcardParser.finalizeCurrentHeader(
       currentHeader,
       currentContent,
       flashcards,
       headerLevel,
       finalBreadcrumb,
+      finalStackTags,
       clozeEnabled
     );
 
@@ -401,6 +419,7 @@ export class FlashcardParser {
     flashcards: ParsedFlashcard[],
     targetHeaderLevel: number,
     breadcrumb: string,
+    stackTags: string[],
     clozeEnabled = false
   ): void {
     if (
@@ -411,7 +430,7 @@ export class FlashcardParser {
       const rawFront = currentHeader.text.replace(/^#{1,6}\s+/, "");
       const { cleaned: front } = FlashcardParser.extractAndStripTags(rawFront);
       const back = currentContent.join("\n").trim();
-      const tags = [...currentHeader.tags];
+      const tags = [...stackTags];
 
       if (clozeEnabled) {
         const imageOcclusion = FlashcardParser.detectImageOcclusion(currentContent);

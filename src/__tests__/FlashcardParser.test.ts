@@ -849,7 +849,7 @@ Content
       const result = FlashcardParser.parseFlashcardsFromContent(content, 3);
       expect(result).toHaveLength(1);
       expect(result[0].front).toBe("Child");
-      expect(result[0].tags).toEqual(["child-tag"]);
+      expect(result[0].tags.sort()).toEqual(["child-tag", "parent-tag"]);
       expect(result[0].breadcrumb).toBe("Parent");
     });
 
@@ -874,6 +874,135 @@ Content
 `;
       const result = FlashcardParser.parseFlashcardsFromContent(content);
       expect(result[0].tags).toEqual([]);
+    });
+  });
+
+  describe("parent header tag inheritance", () => {
+    it("inherits tags from a single ancestor header", () => {
+      const content = `
+## Parent #math
+
+### Child
+
+Content
+`;
+      const result = FlashcardParser.parseFlashcardsFromContent(content, 3);
+      expect(result).toHaveLength(1);
+      expect(result[0].front).toBe("Child");
+      expect(result[0].tags).toEqual(["math"]);
+      expect(result[0].breadcrumb).toBe("Parent");
+    });
+
+    it("inherits tags from every ancestor in the chain", () => {
+      const content = `
+## A #x
+
+### B #y
+
+#### C
+
+Content
+`;
+      const result = FlashcardParser.parseFlashcardsFromContent(content, 4);
+      expect(result).toHaveLength(1);
+      expect(result[0].tags.sort()).toEqual(["x", "y"]);
+      expect(result[0].breadcrumb).toBe("A > B");
+    });
+
+    it("merges own and ancestor tags, deduplicating overlaps", () => {
+      const content = `
+## Parent #math
+
+### Child #math #science
+
+Content
+`;
+      const result = FlashcardParser.parseFlashcardsFromContent(content, 3);
+      expect(result).toHaveLength(1);
+      expect(result[0].tags.sort()).toEqual(["math", "science"]);
+    });
+
+    it("isolates sibling subtrees so tags don't leak across siblings", () => {
+      const content = `
+## A #x
+
+### A1
+
+Content A1
+
+## B #y
+
+### B1
+
+Content B1
+`;
+      const result = FlashcardParser.parseFlashcardsFromContent(content, 3);
+      expect(result).toHaveLength(2);
+      const a1 = result.find((c) => c.front === "A1");
+      const b1 = result.find((c) => c.front === "B1");
+      expect(a1?.tags).toEqual(["x"]);
+      expect(b1?.tags).toEqual(["y"]);
+    });
+
+    it("keeps breadcrumbs clean of tag syntax at every ancestor level", () => {
+      const content = `
+## P #pt
+
+### Q #qt
+
+Content
+`;
+      const result = FlashcardParser.parseFlashcardsFromContent(content, 3);
+      expect(result).toHaveLength(1);
+      expect(result[0].breadcrumb).toBe("P");
+      expect(result[0].breadcrumb).not.toContain("#");
+      expect(result[0].tags.sort()).toEqual(["pt", "qt"]);
+    });
+
+    it("inherits ancestor tags into table rows", () => {
+      const content = `
+## Parent #parent
+
+### Section #section
+
+| Front | Back |
+|-------|------|
+| Q1 | A1 |
+| Q2 | A2 |
+`;
+      const result = FlashcardParser.parseFlashcardsFromContent(content, 3);
+      expect(result).toHaveLength(2);
+      for (const card of result) {
+        expect(card.tags.sort()).toEqual(["parent", "section"]);
+      }
+    });
+
+    it("inherits ancestor tags into cloze cards", () => {
+      const content = `
+## Parent #science
+
+### Q
+
+The ==capital== of France is ==Paris==.
+`;
+      const result = FlashcardParser.parseFlashcardsFromContent(content, 3, undefined, true);
+      expect(result.length).toBeGreaterThan(0);
+      for (const card of result) {
+        expect(card.tags).toEqual(["science"]);
+      }
+    });
+
+    it("does not pollute tags when an ancestor has no tags", () => {
+      const content = `
+## Plain
+
+### Child #only
+
+Content
+`;
+      const result = FlashcardParser.parseFlashcardsFromContent(content, 3);
+      expect(result).toHaveLength(1);
+      expect(result[0].tags).toEqual(["only"]);
     });
   });
 });
