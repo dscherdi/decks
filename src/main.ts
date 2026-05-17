@@ -34,7 +34,11 @@ import { DecksSettingTab } from "./components/settings/SettingsTab";
 import { DecksView } from "./components/DecksView";
 import { DecksViewModal } from "./components/DecksViewModal";
 import { ReleaseNotesModal } from "./components/ReleaseNotesModal";
-import { FlashcardManagerModal } from "./components/FlashcardManagerModal";
+import {
+  FlashcardManagerView,
+  VIEW_TYPE_FLASHCARD_MANAGER,
+  openFlashcardManager,
+} from "./components/FlashcardManagerView";
 import { TestDeckService } from "./services/TestDeckService";
 import { CustomDeckService } from "./services/CustomDeckService";
 import {
@@ -43,7 +47,7 @@ import {
 } from "./components/review/FlashcardReviewView";
 
 export const VIEW_TYPE_DECKS = "decks-view";
-export { VIEW_TYPE_FLASHCARD_REVIEW };
+export { VIEW_TYPE_FLASHCARD_REVIEW, VIEW_TYPE_FLASHCARD_MANAGER };
 
 /**
  * Deep merge utility that ignores null and undefined values
@@ -266,6 +270,18 @@ export default class DecksPlugin extends Plugin {
           )
       );
 
+      // Register the flashcard manager tab view
+      this.registerView(
+        VIEW_TYPE_FLASHCARD_MANAGER,
+        (leaf) =>
+          new FlashcardManagerView(
+            leaf,
+            this.db,
+            this.customDeckService,
+            this.settings,
+          ),
+      );
+
       // Add ribbon icon
       this.addRibbonIcon("brain", "Decks", () => {
         new DecksViewModal(
@@ -306,19 +322,16 @@ export default class DecksPlugin extends Plugin {
         id: "open-flashcard-manager",
         name: "Open flashcard manager",
         callback: () => {
-          new FlashcardManagerModal(
+          openFlashcardManager(
             this.app,
             this.db,
             this.customDeckService,
-            {
-              leechThreshold: this.settings.review.leechThreshold,
-              denseCardCharThreshold: this.settings.review.denseCardCharThreshold,
-            },
+            this.settings,
             undefined,
             async () => {
               await this.getDecksView()?.refresh();
             },
-          ).open();
+          );
         },
       });
 

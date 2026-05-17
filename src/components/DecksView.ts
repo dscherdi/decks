@@ -18,7 +18,7 @@ import { DeckConfigModal } from "./config/DeckConfigModal";
 import { StatisticsService } from "@/services/StatisticsService";
 import { TagGroupService } from "@/services/TagGroupService";
 import { CustomDeckService } from "@/services/CustomDeckService";
-import { FlashcardManagerModal } from "./FlashcardManagerModal";
+import { openFlashcardManager } from "./FlashcardManagerView";
 
 import DeckListPanel from "./DeckListPanel.svelte";
 import { mount, unmount } from "svelte";
@@ -209,47 +209,39 @@ export class DecksView extends ItemView {
   }
 
   openFlashcardManager(): void {
-    new FlashcardManagerModal(
+    openFlashcardManager(
       this.app,
       this.db,
       this.customDeckService,
-      {
-        leechThreshold: this.settings.review.leechThreshold,
-        denseCardCharThreshold: this.settings.review.denseCardCharThreshold,
-      },
+      this.settings,
       undefined,
       () => this.refresh(),
-    ).open();
+    );
   }
 
 
   openEditCustomDeck(customDeck: CustomDeckGroup): void {
-    const thresholds = {
-      leechThreshold: this.settings.review.leechThreshold,
-      denseCardCharThreshold: this.settings.review.denseCardCharThreshold,
-    };
-
     if (customDeck.deckType === "filter") {
       const filterDefinition: FilterDefinition = customDeck.filterDefinition
         ? JSON.parse(customDeck.filterDefinition)
         : { version: 1, logic: "AND", rules: [] };
-      new FlashcardManagerModal(
+      openFlashcardManager(
         this.app,
         this.db,
         this.customDeckService,
-        thresholds,
+        this.settings,
         { kind: "filter", id: customDeck.id, name: customDeck.name, filterDefinition },
         () => this.refresh(),
-      ).open();
+      );
     } else {
-      new FlashcardManagerModal(
+      openFlashcardManager(
         this.app,
         this.db,
         this.customDeckService,
-        thresholds,
+        this.settings,
         { kind: "manual", id: customDeck.id, name: customDeck.name },
         () => this.refresh(),
-      ).open();
+      );
     }
   }
 

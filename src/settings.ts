@@ -29,6 +29,7 @@ export interface DecksSettings {
     backgroundRefreshInterval: number; // seconds
     enableNotices: boolean;
     reviewDisplayMode: "modal" | "tab";
+    flashcardManagerDisplayMode: "modal" | "tab";
     // Deck / group / custom-deck ids the user has pinned to the top of
     // the deck list. Synced across devices via data.json.
     pinnedDeckIds: string[];
@@ -104,6 +105,7 @@ export const DEFAULT_SETTINGS: DecksSettings = {
     backgroundRefreshInterval: 120,
     enableNotices: false,
     reviewDisplayMode: "modal",
+    flashcardManagerDisplayMode: "modal",
     pinnedDeckIds: [],
     deckListSort: "name-asc",
     minDeckCardCount: 0,

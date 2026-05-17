@@ -466,6 +466,25 @@ export class DecksSettingTab extends PluginSettingTab {
       );
 
     new Setting(containerEl)
+      .setName("Flashcard manager display mode")
+      .setDesc(
+        // eslint-disable-next-line obsidianmd/ui/sentence-case
+        "Where the flashcard manager opens. Tabs can be dragged to sidebars, bottom panels, or separate windows."
+      )
+      .addDropdown((dropdown) =>
+        dropdown
+          .addOption("modal", "Modal overlay")
+          .addOption("tab", "New tab")
+          .setValue(this.settings.ui.flashcardManagerDisplayMode)
+          .onChange(async (value) => {
+            this.settings.ui.flashcardManagerDisplayMode = value as
+              | "modal"
+              | "tab";
+            await this.saveSettings();
+          })
+      );
+
+    new Setting(containerEl)
       .setName("Hide decks with fewer than")
       .setDesc(
         "Decks (and groups) with fewer than this many total cards are hidden from the list. Pinned decks are always shown. Set to 0 to disable."

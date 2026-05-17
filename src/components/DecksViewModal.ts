@@ -27,6 +27,7 @@ import { StatisticsService } from "@/services/StatisticsService";
 import { TagGroupService } from "@/services/TagGroupService";
 import { CustomDeckService } from "@/services/CustomDeckService";
 import { FlashcardManagerModal } from "./FlashcardManagerModal";
+import { openFlashcardManager } from "./FlashcardManagerView";
 
 import DeckListPanel from "./DeckListPanel.svelte";
 import { mount, unmount } from "svelte";
@@ -360,50 +361,64 @@ export class DecksViewModal extends Modal {
   }
 
   private openFlashcardManager(): void {
-    const modal = new FlashcardManagerModal(
-      this.app,
-      this.db,
-      this.customDeckService,
-      {
-        leechThreshold: this.settings.review.leechThreshold,
-        denseCardCharThreshold: this.settings.review.denseCardCharThreshold,
-      },
-      undefined,
-      () => void this.refresh(),
-    );
-    this.openWithReturn(modal);
+    this.presentFlashcardManager(undefined);
   }
 
 
   private openEditCustomDeck(customDeck: CustomDeckGroup): void {
-    const thresholds = {
-      leechThreshold: this.settings.review.leechThreshold,
-      denseCardCharThreshold: this.settings.review.denseCardCharThreshold,
-    };
     if (customDeck.deckType === "filter") {
       const filterDefinition: FilterDefinition = customDeck.filterDefinition
         ? JSON.parse(customDeck.filterDefinition)
         : { version: 1, logic: "AND", rules: [] };
-      const modal = new FlashcardManagerModal(
-        this.app,
-        this.db,
-        this.customDeckService,
-        thresholds,
-        { kind: "filter", id: customDeck.id, name: customDeck.name, filterDefinition },
-        () => void this.refresh(),
-      );
-      this.openWithReturn(modal);
+      this.presentFlashcardManager({
+        kind: "filter",
+        id: customDeck.id,
+        name: customDeck.name,
+        filterDefinition,
+      });
     } else {
-      const modal = new FlashcardManagerModal(
+      this.presentFlashcardManager({
+        kind: "manual",
+        id: customDeck.id,
+        name: customDeck.name,
+      });
+    }
+  }
+
+  // The modal path keeps the deck-list modal underneath via openWithReturn;
+  // the tab path closes us first so the new tab is actually visible.
+  private presentFlashcardManager(
+    editTarget: import("./FlashcardManagerEditTypes").EditTarget | undefined,
+  ): void {
+    if (this.settings.ui.flashcardManagerDisplayMode === "tab") {
+      this.close();
+      openFlashcardManager(
         this.app,
         this.db,
         this.customDeckService,
-        thresholds,
-        { kind: "manual", id: customDeck.id, name: customDeck.name },
-        () => void this.refresh(),
+        this.settings,
+        editTarget,
+        async () => {
+          const view = this.getDecksView();
+          if (view) await view.refresh();
+        },
       );
-      this.openWithReturn(modal);
+      return;
     }
+
+    const thresholds = {
+      leechThreshold: this.settings.review.leechThreshold,
+      denseCardCharThreshold: this.settings.review.denseCardCharThreshold,
+    };
+    const modal = new FlashcardManagerModal(
+      this.app,
+      this.db,
+      this.customDeckService,
+      thresholds,
+      editTarget,
+      () => void this.refresh(),
+    );
+    this.openWithReturn(modal);
   }
 
   private openReviewSession(
