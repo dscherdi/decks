@@ -87,7 +87,7 @@
   $: searchedFlashcards = applySearchRanking(ruleFilteredFlashcards, searchQuery);
   $: sortedFlashcards = searchQuery.trim()
     ? searchedFlashcards
-    : sortCards(searchedFlashcards, sortColumn, sortDirection);
+    : sortCards(searchedFlashcards, sortColumn, sortDirection, originalDeckCards);
   $: displayedFlashcards = sortedFlashcards.slice(0, displayLimit);
   $: hasMore = sortedFlashcards.length > displayLimit;
   $: selectedCount = selectedIds.size;
@@ -160,10 +160,18 @@
   function sortCards(
     cards: Flashcard[],
     column: SortColumn,
-    direction: SortDirection
+    direction: SortDirection,
+    pinnedIds: Set<string> | null = null,
   ): Flashcard[] {
     const sorted = [...cards].sort((a, b) => compareByColumn(a, b, column));
-    return direction === "asc" ? sorted : sorted.reverse();
+    const ordered = direction === "asc" ? sorted : sorted.reverse();
+    if (!pinnedIds || pinnedIds.size === 0) return ordered;
+    const pinned: Flashcard[] = [];
+    const rest: Flashcard[] = [];
+    for (const c of ordered) {
+      (pinnedIds.has(c.id) ? pinned : rest).push(c);
+    }
+    return [...pinned, ...rest];
   }
 
   function compareByColumn(a: Flashcard, b: Flashcard, column: SortColumn): number {
