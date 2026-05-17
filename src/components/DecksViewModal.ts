@@ -304,13 +304,19 @@ export class DecksViewModal extends Modal {
     // update just that row without reflowing the rest of the list.
     if (this.deckListPanelComponent) {
       try {
-        const stats = await this.deckManager.getDeckStats(deckId);
-        await this.deckListPanelComponent.updateAll?.(
-          undefined,
-          undefined,
-          deckId,
-          stats
-        );
+        const customDeck = await this.db.getCustomDeckById(deckId);
+        if (customDeck) {
+          const stats = await this.customDeckService.getCustomDeckStats(deckId);
+          this.deckListPanelComponent.updateCustomDeckStatsById?.(deckId, stats);
+        } else {
+          const stats = await this.deckManager.getDeckStats(deckId);
+          await this.deckListPanelComponent.updateAll?.(
+            undefined,
+            undefined,
+            deckId,
+            stats
+          );
+        }
       } catch (error) {
         this.logger.debug("Failed to refresh modal panel stats:", error);
       }

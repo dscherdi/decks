@@ -57,6 +57,11 @@ export type DeckListPanelComponent = (
     singleDeckId?: string,
     singleDeckStats?: DeckStats
   ): Promise<void>;
+  // Patch a single custom deck's stats. Required because custom decks reference
+  // cards in file decks — file-deck stat queries (countTotalCards etc.) always
+  // return zero for a custom deck id and would otherwise shadow the real
+  // counts.
+  updateCustomDeckStatsById?(deckId: string, newStats: DeckStats): void;
   // Flips a non-blocking "background sync in flight" indicator in the
   // panel header (animates the existing refresh button). The deck list
   // stays populated throughout — only the icon reflects the state.

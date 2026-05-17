@@ -357,11 +357,16 @@ export class DecksView extends ItemView {
       `DecksView.refreshStatsById() executing for deck: ${deckId}`
     );
     try {
-      // Get stats for the specific deck
+      const customDeck = await this.db.getCustomDeckById(deckId);
+      if (customDeck) {
+        const stats = await this.customDeckService.getCustomDeckStats(deckId);
+        this.deckListPanelComponent?.updateCustomDeckStatsById?.(deckId, stats);
+        return;
+      }
+
       const deckStats = await this.deckManager.getDeckStats(deckId);
       this.logger.debug("Updated deck stats for:", deckId);
 
-      // Update component using unified function
       if (this.deckListPanelComponent && deckStats) {
         await this.deckListPanelComponent.updateAll?.(
           undefined,

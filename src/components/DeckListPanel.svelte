@@ -281,6 +281,16 @@
     loadStudyStats().catch(console.error);
     isUpdatingStats = false;
   }
+
+  // Single-custom-deck stats patch. Custom decks reference cards that live in
+  // file decks, so their stats must be computed via CustomDeckService — never
+  // routed through the file-deck `stats` map, which would shadow the correct
+  // values returned by customDeckStats in getDeckStats().
+  export function updateCustomDeckStatsById(deckId: string, newStats: DeckStats) {
+    customDeckStats.set(deckId, newStats);
+    // eslint-disable-next-line no-self-assign
+    customDeckStats = customDeckStats;
+  }
   // Function to force UI update when stats change
   export function updateStats(newStats: Map<string, DeckStats>) {
     isUpdatingStats = true;
