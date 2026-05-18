@@ -16,6 +16,9 @@
   } from "chart.js";
   import { StatisticsService } from "@/services/StatisticsService";
   import { Logger } from "@/utils/logging";
+  import { I18n } from "@/i18n/I18n";
+
+  const t = I18n.t;
 
   // Register Chart.js components
   Chart.register(
@@ -92,7 +95,7 @@
       datasets: [
         {
           type: "bar" as const,
-          label: "Review Count",
+          label: t.statistics.reviewCountLabel,
           data: hourlyCounts,
           backgroundColor: "rgba(59, 130, 246, 0.7)",
           borderColor: "rgb(59, 130, 246)",
@@ -101,7 +104,7 @@
         },
         {
           type: "line" as const,
-          label: "Success Rate (%)",
+          label: t.statistics.successRatePercent,
           data: successRates,
           backgroundColor: "rgba(34, 197, 94, 0.7)",
           borderColor: "rgb(34, 197, 94)",
@@ -133,7 +136,7 @@
           x: {
             title: {
               display: true,
-              text: "Hour of Day",
+              text: t.statistics.hourOfDay,
             },
           },
           y: {
@@ -143,7 +146,7 @@
             beginAtZero: true,
             title: {
               display: true,
-              text: "Number of Reviews",
+              text: t.statistics.numberOfReviews,
             },
             ticks: {
               precision: 0,
@@ -172,7 +175,7 @@
         plugins: {
           title: {
             display: true,
-            text: "Review Activity by Hour of Day",
+            text: t.statistics.hourlyBreakdownChart,
           },
           legend: {
             display: true,
@@ -182,12 +185,18 @@
             callbacks: {
               label: function (context: TooltipItem<"bar" | "line">) {
                 const datasetLabel = context.dataset.label || "";
-                const value = context.parsed.y;
+                const value = context.parsed.y ?? 0;
 
-                if (datasetLabel.includes("Success Rate")) {
-                  return `${datasetLabel}: ${value}%`;
+                if (context.dataset.yAxisID === "y1") {
+                  return I18n.format(t.statistics.hourlySuccessRateTooltip, {
+                    label: datasetLabel,
+                    value,
+                  });
                 } else {
-                  return `${datasetLabel}: ${value} reviews`;
+                  return I18n.format(t.statistics.hourlyReviewsTooltip, {
+                    label: datasetLabel,
+                    value,
+                  });
                 }
               },
               afterBody: function (
@@ -197,16 +206,16 @@
                 let timeDescription = "";
 
                 if (hour >= 6 && hour < 12) {
-                  timeDescription = "Morning";
+                  timeDescription = t.statistics.morning;
                 } else if (hour >= 12 && hour < 18) {
-                  timeDescription = "Afternoon";
+                  timeDescription = t.statistics.afternoon;
                 } else if (hour >= 18 && hour < 22) {
-                  timeDescription = "Evening";
+                  timeDescription = t.statistics.evening;
                 } else {
-                  timeDescription = "Night";
+                  timeDescription = t.statistics.night;
                 }
 
-                return `Time period: ${timeDescription}`;
+                return I18n.format(t.statistics.timePeriod, { period: timeDescription });
               },
             },
           },
@@ -224,10 +233,10 @@
   }
 </script>
 
-<h3>Review Activity by Hour</h3>
+<h3>{t.statistics.hourlyBreakdownTitle}</h3>
 <p class="decks-chart-subtitle">
   {#if selectedDeckIds.length === 0}
-    <span class="decks-loading-indicator">Select a deck to view review activity by hour.</span>
+    <span class="decks-loading-indicator">{t.statistics.selectDeckHourly}</span>
   {/if}
 </p>
 <div class="decks-hourly-breakdown-chart">

@@ -1,5 +1,8 @@
 <script lang="ts">
   import type { Statistics } from "@/database/types";
+  import { I18n } from "@/i18n/I18n";
+
+  const t = I18n.t;
 
   export let statistics: Statistics | null;
   export let todayStats: {
@@ -62,46 +65,46 @@
 <div class="decks-stats">
   <!-- Current Status -->
   <div class="decks-stats-section">
-    <h3>Current Status</h3>
+    <h3>{t.statistics.currentStatus}</h3>
     <div class="decks-stats-grid">
       <div class="decks-stat-card">
         <div class="decks-stat-value">
           {statistics?.cardStats?.new || 0}
         </div>
-        <div class="decks-stat-label">New cards</div>
+        <div class="decks-stat-label">{t.statistics.newCardsLabel}</div>
       </div>
       <div class="decks-stat-card">
         <div class="decks-stat-value" style="display: none;">0</div>
-        <div class="decks-stat-label" style="display: none;">Learning</div>
+        <div class="decks-stat-label" style="display: none;">{t.statistics.learningLabel}</div>
       </div>
       <div class="decks-stat-card">
         <div class="decks-stat-value">
           {statistics?.cardStats?.review || 0}
         </div>
-        <div class="decks-stat-label">Review</div>
+        <div class="decks-stat-label">{t.statistics.cardCountsReview}</div>
       </div>
       <div class="decks-stat-card">
         <div class="decks-stat-value">
           {statistics?.cardStats?.mature || 0}
         </div>
-        <div class="decks-stat-label">Mature</div>
+        <div class="decks-stat-label">{t.statistics.matureLabel}</div>
       </div>
       <div class="decks-stat-card">
         <div class="decks-stat-value">{getDueToday()}</div>
-        <div class="decks-stat-label">Due Today</div>
+        <div class="decks-stat-label">{t.statistics.dueToday}</div>
       </div>
     </div>
   </div>
 
   <!-- Review Pace -->
   <div class="decks-stats-section">
-    <h3>Review Pace</h3>
+    <h3>{t.statistics.reviewPace}</h3>
     <div class="decks-stats-grid">
       <div class="decks-stat-card">
         <div class="decks-stat-value">
           {statistics?.averagePace ? formatPace(statistics.averagePace) : "N/A"}
         </div>
-        <div class="decks-stat-label">Average per Card</div>
+        <div class="decks-stat-label">{t.statistics.averagePerCard}</div>
       </div>
       <div class="decks-stat-card">
         <div class="decks-stat-value">
@@ -109,40 +112,40 @@
             ? formatTime(statistics.totalReviewTime)
             : "N/A"}
         </div>
-        <div class="decks-stat-label">Total Time</div>
+        <div class="decks-stat-label">{t.statistics.totalTime}</div>
       </div>
       <div class="decks-stat-card">
         <div class="decks-stat-value">
           {statistics?.totalReviews || 0}
         </div>
-        <div class="decks-stat-label">Total Reviews</div>
+        <div class="decks-stat-label">{t.statistics.totalReviews}</div>
       </div>
     </div>
   </div>
 
   <!-- Time Period Statistics -->
   <div class="decks-stats-section">
-    <h3>Activity Summary</h3>
+    <h3>{t.statistics.activitySummary}</h3>
     <div class="decks-timeframe-stats">
       {#if todayStats}
         <div class="decks-timeframe-card">
-          <h4>Today</h4>
+          <h4>{t.statistics.today}</h4>
           <div class="decks-timeframe-grid">
             <div>
               <span class="decks-timeframe-value">{todayStats.reviews}</span>
-              <span class="decks-timeframe-label">reviews</span>
+              <span class="decks-timeframe-label">{t.statistics.labelReviews}</span>
             </div>
             <div>
               <span class="decks-timeframe-value"
                 >{formatTime(todayStats.timeSpent)}</span
               >
-              <span class="decks-timeframe-label">time</span>
+              <span class="decks-timeframe-label">{t.statistics.labelTime}</span>
             </div>
             <div>
               <span class="decks-timeframe-value"
                 >{formatPercentage(todayStats.correctRate)}</span
               >
-              <span class="decks-timeframe-label">correct</span>
+              <span class="decks-timeframe-label">{t.statistics.labelCorrect}</span>
             </div>
           </div>
         </div>
@@ -150,23 +153,23 @@
 
       {#if weekStats}
         <div class="decks-timeframe-card">
-          <h4>This Week</h4>
+          <h4>{t.statistics.thisWeek}</h4>
           <div class="decks-timeframe-grid">
             <div>
               <span class="decks-timeframe-value">{weekStats.reviews}</span>
-              <span class="decks-timeframe-label">reviews</span>
+              <span class="decks-timeframe-label">{t.statistics.labelReviews}</span>
             </div>
             <div>
               <span class="decks-timeframe-value"
                 >{formatTime(weekStats.timeSpent)}</span
               >
-              <span class="decks-timeframe-label">time</span>
+              <span class="decks-timeframe-label">{t.statistics.labelTime}</span>
             </div>
             <div>
               <span class="decks-timeframe-value"
                 >{formatPercentage(weekStats.correctRate)}</span
               >
-              <span class="decks-timeframe-label">correct</span>
+              <span class="decks-timeframe-label">{t.statistics.labelCorrect}</span>
             </div>
           </div>
         </div>
@@ -174,23 +177,23 @@
 
       {#if monthStats}
         <div class="decks-timeframe-card">
-          <h4>This Month</h4>
+          <h4>{t.statistics.thisMonth}</h4>
           <div class="decks-timeframe-grid">
             <div>
               <span class="decks-timeframe-value">{monthStats.reviews}</span>
-              <span class="decks-timeframe-label">reviews</span>
+              <span class="decks-timeframe-label">{t.statistics.labelReviews}</span>
             </div>
             <div>
               <span class="decks-timeframe-value"
                 >{formatTime(monthStats.timeSpent)}</span
               >
-              <span class="decks-timeframe-label">time</span>
+              <span class="decks-timeframe-label">{t.statistics.labelTime}</span>
             </div>
             <div>
               <span class="decks-timeframe-value"
                 >{formatPercentage(monthStats.correctRate)}</span
               >
-              <span class="decks-timeframe-label">correct</span>
+              <span class="decks-timeframe-label">{t.statistics.labelCorrect}</span>
             </div>
           </div>
         </div>
@@ -198,23 +201,23 @@
 
       {#if yearStats}
         <div class="decks-timeframe-card">
-          <h4>This Year</h4>
+          <h4>{t.statistics.thisYear}</h4>
           <div class="decks-timeframe-grid">
             <div>
               <span class="decks-timeframe-value">{yearStats.reviews}</span>
-              <span class="decks-timeframe-label">reviews</span>
+              <span class="decks-timeframe-label">{t.statistics.labelReviews}</span>
             </div>
             <div>
               <span class="decks-timeframe-value"
                 >{formatTime(yearStats.timeSpent)}</span
               >
-              <span class="decks-timeframe-label">time</span>
+              <span class="decks-timeframe-label">{t.statistics.labelTime}</span>
             </div>
             <div>
               <span class="decks-timeframe-value"
                 >{formatPercentage(yearStats.correctRate)}</span
               >
-              <span class="decks-timeframe-label">correct</span>
+              <span class="decks-timeframe-label">{t.statistics.labelCorrect}</span>
             </div>
           </div>
         </div>
@@ -224,11 +227,11 @@
 
   <!-- Answer Buttons -->
   <div class="decks-stats-section">
-    <h3>Answer Buttons</h3>
+    <h3>{t.statistics.answerButtons}</h3>
     {#if statistics?.answerButtons && (statistics.answerButtons.again > 0 || statistics.answerButtons.hard > 0 || statistics.answerButtons.good > 0 || statistics.answerButtons.easy > 0)}
       <div class="decks-answer-buttons">
         <div class="decks-button-stat again">
-          <div class="decks-button-label">Again</div>
+          <div class="decks-button-label">{t.review.again}</div>
           <div class="decks-button-value">
             {statistics.answerButtons.again}
           </div>
@@ -244,7 +247,7 @@
           </div>
         </div>
         <div class="decks-button-stat hard">
-          <div class="decks-button-label">Hard</div>
+          <div class="decks-button-label">{t.review.hard}</div>
           <div class="decks-button-value">{statistics.answerButtons.hard}</div>
           <div class="decks-button-percentage">
             {formatPercentage(
@@ -258,7 +261,7 @@
           </div>
         </div>
         <div class="decks-button-stat good">
-          <div class="decks-button-label">Good</div>
+          <div class="decks-button-label">{t.review.good}</div>
           <div class="decks-button-value">{statistics.answerButtons.good}</div>
           <div class="decks-button-percentage">
             {formatPercentage(
@@ -272,7 +275,7 @@
           </div>
         </div>
         <div class="decks-button-stat easy">
-          <div class="decks-button-label">Easy</div>
+          <div class="decks-button-label">{t.review.easy}</div>
           <div class="decks-button-value">{statistics.answerButtons.easy}</div>
           <div class="decks-button-percentage">
             {formatPercentage(
@@ -288,9 +291,9 @@
       </div>
     {:else}
       <div class="decks-no-data-message">
-        <p>No answer button data available yet.</p>
+        <p>{t.statistics.noAnswerButtonData}</p>
         <p class="decks-help-text">
-          Complete some reviews to see answer button statistics.
+          {t.statistics.completeReviewsHint}
         </p>
       </div>
     {/if}

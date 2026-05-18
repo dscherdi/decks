@@ -1,6 +1,7 @@
 import { App, Modal, Notice } from "obsidian";
 import type { DeckWithProfile } from "../database/types";
 import type { IDatabaseService } from "../database/DatabaseFactory";
+import { I18n } from "@/i18n/I18n";
 
 export class DeckResetModal extends Modal {
   private deck: DeckWithProfile;
@@ -23,19 +24,19 @@ export class DeckResetModal extends Modal {
     const { contentEl } = this;
     contentEl.empty();
 
-    this.setTitle("Reset deck progress");
+    this.setTitle(I18n.t.modals.deckReset.title);
 
     contentEl.createEl("p", {
-      text: `This will reset all progress for "${this.deck.name}":`,
+      text: I18n.format(I18n.t.modals.deckReset.intro, { name: this.deck.name }),
     });
 
     const ul = contentEl.createEl("ul");
-    ul.createEl("li", { text: "All flashcards reset to new state" });
-    ul.createEl("li", { text: "Review history deleted" });
-    ul.createEl("li", { text: "Review sessions deleted" });
+    ul.createEl("li", { text: I18n.t.modals.deckReset.listCardsReset });
+    ul.createEl("li", { text: I18n.t.modals.deckReset.listHistoryDeleted });
+    ul.createEl("li", { text: I18n.t.modals.deckReset.listSessionsDeleted });
 
     contentEl.createEl("p", {
-      text: "This action cannot be undone.",
+      text: I18n.t.modals.deckReset.cannotUndo,
       cls: "decks-reset-warning",
     });
 
@@ -43,11 +44,13 @@ export class DeckResetModal extends Modal {
       cls: "decks-modal-button-container",
     });
 
-    const cancelButton = buttonContainer.createEl("button", { text: "Cancel" });
+    const cancelButton = buttonContainer.createEl("button", {
+      text: I18n.t.modals.deckReset.cancel,
+    });
     cancelButton.onclick = () => this.close();
 
     const confirmButton = buttonContainer.createEl("button", {
-      text: "Reset progress",
+      text: I18n.t.modals.deckReset.resetButton,
       cls: "mod-warning",
     });
     confirmButton.onclick = () => {
@@ -57,17 +60,17 @@ export class DeckResetModal extends Modal {
   }
 
   private async performReset(): Promise<void> {
-    const notice = new Notice("Resetting deck progress...", 0);
+    const notice = new Notice(I18n.t.modals.deckReset.resetting, 0);
     try {
       await this.db.resetDeckProgress(this.deck.id);
       await this.db.save();
       notice.hide();
-      new Notice("Deck progress reset successfully");
+      new Notice(I18n.t.modals.deckReset.resetSuccess);
       await this.onComplete();
     } catch (error) {
       notice.hide();
       console.error("Failed to reset deck progress:", error);
-      new Notice("Failed to reset deck progress");
+      new Notice(I18n.t.modals.deckReset.resetFailed);
     }
   }
 

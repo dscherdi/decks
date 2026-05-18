@@ -2,6 +2,10 @@
   import { onMount } from "svelte";
   import { StatisticsService } from "@/services/StatisticsService";
   import { Logger } from "@/utils/logging";
+  import { I18n } from "@/i18n/I18n";
+
+  const t = I18n.t;
+  const YOUNG_MATURE_THRESHOLD = 21;
 
   export let selectedDeckIds: string[] = [];
   export let statisticsService: StatisticsService;
@@ -45,15 +49,14 @@
 </script>
 
 <div class="decks-true-retention-table">
-  <h4>True Retention</h4>
+  <h4>{t.statistics.trueRetentionTitle}</h4>
   {#if selectedDeckIds.length === 0}
     <p class="decks-chart-subtitle">
-      <span class="decks-loading-indicator">Select a deck to view retention statistics.</span>
+      <span class="decks-loading-indicator">{t.statistics.selectDeckRetention}</span>
     </p>
   {:else}
     <div class="decks-retention-description">
-      Pass rates for review cards (rating ≥ Good). Cards with intervals > 1 day
-      only.
+      {t.statistics.retentionDescription}
     </div>
   {/if}
 
@@ -61,15 +64,15 @@
     <table class="decks-retention-table">
     <thead>
       <tr>
-        <th>Card Type</th>
-        <th>Passed</th>
-        <th>Total</th>
-        <th>Pass Rate</th>
+        <th>{t.statistics.columnCardType}</th>
+        <th>{t.statistics.columnPassed}</th>
+        <th>{t.statistics.columnTotalLabel}</th>
+        <th>{t.statistics.columnPassRate}</th>
       </tr>
     </thead>
     <tbody>
       <tr>
-        <td class="decks-card-type young">Young (&lt; 21 days)</td>
+        <td class="decks-card-type young">{I18n.format(t.statistics.youngWithDays, { count: YOUNG_MATURE_THRESHOLD })}</td>
         <td class="decks-count">{retentionStats.young.passed}</td>
         <td class="decks-count">{retentionStats.young.total}</td>
         <td class="decks-rate young-rate"
@@ -77,7 +80,7 @@
         >
       </tr>
       <tr>
-        <td class="decks-card-type mature">Mature (≥ 21 days)</td>
+        <td class="decks-card-type mature">{I18n.format(t.statistics.matureWithDays, { count: YOUNG_MATURE_THRESHOLD })}</td>
         <td class="decks-count">{retentionStats.mature.passed}</td>
         <td class="decks-count">{retentionStats.mature.total}</td>
         <td class="decks-rate mature-rate"
@@ -85,7 +88,7 @@
         >
       </tr>
       <tr class="decks-total-row">
-        <td class="decks-card-type all">All Cards</td>
+        <td class="decks-card-type all">{t.statistics.allCards}</td>
         <td class="decks-count">{retentionStats.all.passed}</td>
         <td class="decks-count">{retentionStats.all.total}</td>
         <td class="decks-rate all-rate"
@@ -98,8 +101,7 @@
 
   {#if selectedDeckIds.length > 0 && retentionStats.all.total === 0}
     <div class="decks-no-data">
-      No review data available yet. Complete some reviews to see retention
-      statistics.
+      {t.statistics.noReviewDataYet}
     </div>
   {/if}
 </div>

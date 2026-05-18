@@ -2,6 +2,9 @@
   import { createEventDispatcher, onMount } from "svelte";
   import { Setting } from "obsidian";
   import type { Deck, AnkiExportConfig } from "../../database/types";
+  import { I18n } from "@/i18n/I18n";
+
+  const t = I18n.t;
 
   export let deck: Deck;
   export let onexport: ((config: AnkiExportConfig) => void) | undefined =
@@ -84,11 +87,11 @@
     // Anki Deck Name
     if (deckNameContainer) {
       new Setting(deckNameContainer)
-        .setName("Anki Deck Name")
-        .setDesc("Name of the deck in Anki where cards will be imported")
+        .setName(t.ankiExport.ankiDeckNameLabel)
+        .setDesc(t.ankiExport.ankiDeckNameDesc)
         .addText((text) =>
           text
-            .setPlaceholder("Enter deck name...")
+            .setPlaceholder(t.ankiExport.ankiDeckNamePlaceholder)
             .setValue(ankiDeckName)
             .onChange((value) => {
               ankiDeckName = value;
@@ -101,32 +104,32 @@
 <svelte:window on:keydown={handleKeydown} />
 
 <div class="decks-anki-export-ui">
-  <h2 class="">Export to Anki: {deck.name}`</h2>
+  <h2 class="">{I18n.format(t.ankiExport.titleWithName, { name: deck.name })}</h2>
   <!-- Deck Information Section -->
   <div class="decks-deck-info-section">
-    <h3>Export Information</h3>
+    <h3>{t.ankiExport.sectionInfo}</h3>
     <ul class="decks-deck-info-list">
-      <li><strong>Source Deck:</strong> {deck.name}</li>
-      <li><strong>Source Tag:</strong> {deck.tag}</li>
-      <li><strong>Source File:</strong> {deck.filepath}</li>
+      <li><strong>{t.ankiExport.infoSourceDeck}</strong> {deck.name}</li>
+      <li><strong>{t.ankiExport.infoSourceTag}</strong> {deck.tag}</li>
+      <li><strong>{t.ankiExport.infoSourceFile}</strong> {deck.filepath}</li>
     </ul>
   </div>
 
   <!-- Export Instructions -->
   <div class="decks-instructions-section">
-    <h3>How to Import</h3>
+    <h3>{t.ankiExport.sectionHowToImport}</h3>
     <ol class="decks-instructions-list">
-      <li>This will download a text file compatible with Anki</li>
-      <li>Open Anki and go to <strong>File → Import</strong></li>
-      <li>Select the downloaded file</li>
-      <li>Choose your target deck and import settings</li>
-      <li>Click <strong>Import</strong> to add the cards</li>
+      <li>{t.ankiExport.importStep1}</li>
+      <li>{t.ankiExport.importStep2Prefix} <strong>{t.ankiExport.importStep2Item}</strong></li>
+      <li>{t.ankiExport.importStep3}</li>
+      <li>{t.ankiExport.importStep4}</li>
+      <li>{t.ankiExport.importStep5Prefix} <strong>{t.ankiExport.importStep5Item}</strong> {t.ankiExport.importStep5Suffix}</li>
     </ol>
   </div>
 
   <!-- Export Settings Section -->
   <div class="decks-export-settings-section">
-    <h3>Export Settings</h3>
+    <h3>{t.ankiExport.sectionSettings}</h3>
 
     <!-- Obsidian Native Components -->
     <div bind:this={deckNameContainer}></div>
@@ -140,12 +143,12 @@
       on:touchend={(e) => handleTouchClick(handleExport, e)}
       disabled={exporting || !ankiDeckName.trim()}
     >
-      {exporting ? "Exporting..." : "Export to Anki"}
+      {exporting ? t.ankiExport.exporting : t.ankiExport.exportButtonLabel}
     </button>
     <button
       on:click={(e) => handleTouchClick(handleCancel, e)}
       on:touchend={(e) => handleTouchClick(handleCancel, e)}
-      disabled={exporting}>Cancel</button
+      disabled={exporting}>{t.ankiExport.cancel}</button
     >
   </div>
 </div>

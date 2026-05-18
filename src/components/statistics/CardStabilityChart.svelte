@@ -13,6 +13,9 @@
   } from "chart.js";
   import { StatisticsService } from "@/services/StatisticsService";
   import { Logger } from "@/utils/logging";
+  import { I18n } from "@/i18n/I18n";
+
+  const t = I18n.t;
 
   // Register Chart.js components
   Chart.register(
@@ -132,14 +135,14 @@
           x: {
             title: {
               display: true,
-              text: "Stability Range",
+              text: t.statistics.cardStabilityRange,
             },
           },
           y: {
             beginAtZero: true,
             title: {
               display: true,
-              text: "Number of Cards",
+              text: t.statistics.numberOfCards,
             },
             ticks: {
               precision: 0,
@@ -149,7 +152,7 @@
         plugins: {
           title: {
             display: true,
-            text: "Card Stability Distribution",
+            text: t.statistics.cardStabilityDistribution,
           },
           legend: {
             display: true,
@@ -166,7 +169,11 @@
                 );
                 const percentage =
                   total > 0 ? ((value / total) * 100).toFixed(1) : "0";
-                return `${dataset.label}: ${value} cards (${percentage}%)`;
+                return I18n.format(t.statistics.cardCountsTooltip, {
+                  label: dataset.label ?? "",
+                  count: value ?? 0,
+                  percent: percentage,
+                });
               },
             },
           },
@@ -185,13 +192,13 @@
   }
 </script>
 
-<h3>Card Stability Distribution</h3>
+<h3>{t.statistics.cardStabilityDistribution}</h3>
 <p class="decks-chart-subtitle">
   {#if selectedDeckIds.length === 0}
-    <span class="decks-loading-indicator">Select a deck to view card stability distribution.</span>
+    <span class="decks-loading-indicator">{t.statistics.selectDeckCardStability}</span>
   {:else}
     <span class="decks-chart-description">
-      FSRS stability values show how well cards are retained in memory
+      {t.statistics.cardStabilitySubtitle}
     </span>
   {/if}
 </p>

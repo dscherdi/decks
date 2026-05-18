@@ -19,6 +19,7 @@ import type {
 import FlashcardReviewModal from "./FlashcardReviewModal.svelte";
 import { mount, unmount } from "svelte";
 import { findFlashcardLine } from "../../utils/source-navigator";
+import { I18n } from "@/i18n/I18n";
 
 export const VIEW_TYPE_FLASHCARD_REVIEW = "flashcard-review-view";
 
@@ -57,10 +58,13 @@ export class FlashcardReviewView extends ItemView {
 
   getDisplayText(): string {
     if (!this.deckOrGroup) {
-      return "Review";
+      return I18n.t.views.review;
     }
-    const prefix = this.browseMode ? "Browse" : "Review";
-    return `${prefix}: ${this.deckOrGroup.name}`;
+    const prefix = this.browseMode ? I18n.t.views.browse : I18n.t.views.review;
+    return I18n.format(I18n.t.views.reviewOf, {
+      prefix,
+      name: this.deckOrGroup.name,
+    });
   }
 
   getIcon(): string {
@@ -157,7 +161,9 @@ export class FlashcardReviewView extends ItemView {
   ): Promise<void> {
     const file = this.app.vault.getAbstractFileByPath(flashcard.sourceFile);
     if (!(file instanceof TFile)) {
-      new Notice(`File not found: ${flashcard.sourceFile}`);
+      new Notice(
+        I18n.format(I18n.t.notices.fileNotFound, { path: flashcard.sourceFile })
+      );
       return;
     }
 
@@ -248,7 +254,9 @@ export class FlashcardReviewView extends ItemView {
 
           if (this.settings?.ui?.enableNotices !== false && this.deckOrGroup) {
             new Notice(
-              `Review session complete for ${this.deckOrGroup.name}!`
+              I18n.format(I18n.t.notices.reviewSessionCompleteFor, {
+                deckName: this.deckOrGroup.name,
+              })
             );
           }
           if (this.refreshStats) {

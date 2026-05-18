@@ -15,6 +15,7 @@ import {
   type FlashcardManagerComponent,
   type FlashcardManagerThresholds,
 } from "./FlashcardManagerModal";
+import { I18n } from "@/i18n/I18n";
 
 export const VIEW_TYPE_FLASHCARD_MANAGER = "flashcard-manager-view";
 
@@ -51,9 +52,11 @@ export class FlashcardManagerView extends ItemView {
 
   getDisplayText(): string {
     if (this.editingCustomDeck) {
-      return `Manage: ${this.editingCustomDeck.name}`;
+      return I18n.format(I18n.t.views.managerOf, {
+        deckName: this.editingCustomDeck.name,
+      });
     }
-    return "Flashcard manager";
+    return I18n.t.views.manager;
   }
 
   getIcon(): string {
@@ -108,7 +111,7 @@ export class FlashcardManagerView extends ItemView {
           try {
             if (payload.kind === "filter") {
               await this.customDeckService.updateFilter(target.id, payload.definition);
-              new Notice(`Filter deck "${target.name}" updated`);
+              new Notice(I18n.format(I18n.t.notices.filterDeckUpdated, { name: target.name }));
             } else {
               if (payload.toAdd.length > 0) {
                 await this.customDeckService.addFlashcards(target.id, payload.toAdd);
@@ -117,13 +120,21 @@ export class FlashcardManagerView extends ItemView {
                 await this.customDeckService.removeFlashcards(target.id, payload.toRemove);
               }
               new Notice(
-                `Updated "${target.name}" — ${payload.toAdd.length} added, ${payload.toRemove.length} removed`,
+                I18n.format(I18n.t.notices.customDeckUpdatedCounts, {
+                  name: target.name,
+                  added: payload.toAdd.length,
+                  removed: payload.toRemove.length,
+                }),
               );
             }
             await this.onDeckListChanged?.();
             this.leaf.detach();
           } catch (error) {
-            new Notice(`Failed to save: ${error instanceof Error ? error.message : String(error)}`);
+            new Notice(
+              I18n.format(I18n.t.notices.failedToSave, {
+                message: error instanceof Error ? error.message : String(error),
+              }),
+            );
           }
         },
         onCreateCustomDeck: async (name: string, flashcardIds: string[]) => {
@@ -132,28 +143,49 @@ export class FlashcardManagerView extends ItemView {
             if (flashcardIds.length > 0) {
               await this.customDeckService.addFlashcards(deck.id, flashcardIds);
             }
-            new Notice(`Created custom deck "${name}" with ${flashcardIds.length} cards`);
+            new Notice(
+              I18n.format(I18n.t.notices.customDeckCreated, {
+                name,
+                count: flashcardIds.length,
+              }),
+            );
             await this.onDeckListChanged?.();
           } catch (error) {
-            new Notice(`Failed to create deck: ${error instanceof Error ? error.message : String(error)}`);
+            new Notice(
+              I18n.format(I18n.t.notices.failedToCreateDeck, {
+                message: error instanceof Error ? error.message : String(error),
+              }),
+            );
           }
         },
         onCreateFilterDeck: async (name: string, definition: FilterDefinition) => {
           try {
             await this.customDeckService.createFilterDeck(name, definition);
-            new Notice(`Created filter deck "${name}"`);
+            new Notice(I18n.format(I18n.t.notices.filterDeckCreated, { name }));
             await this.onDeckListChanged?.();
           } catch (error) {
-            new Notice(`Failed to create filter deck: ${error instanceof Error ? error.message : String(error)}`);
+            new Notice(
+              I18n.format(I18n.t.notices.failedToCreateFilterDeck, {
+                message: error instanceof Error ? error.message : String(error),
+              }),
+            );
           }
         },
         onAddToCustomDeck: async (customDeckId: string, flashcardIds: string[]) => {
           try {
             await this.customDeckService.addFlashcards(customDeckId, flashcardIds);
-            new Notice(`Added ${flashcardIds.length} cards to custom deck`);
+            new Notice(
+              I18n.format(I18n.t.notices.cardsAddedToCustomDeck, {
+                count: flashcardIds.length,
+              }),
+            );
             await this.onDeckListChanged?.();
           } catch (error) {
-            new Notice(`Failed to add cards: ${error instanceof Error ? error.message : String(error)}`);
+            new Notice(
+              I18n.format(I18n.t.notices.failedToAddCards, {
+                message: error instanceof Error ? error.message : String(error),
+              }),
+            );
           }
         },
       },

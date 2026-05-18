@@ -25,6 +25,9 @@
   import type { App } from "obsidian";
   import { sortDeckList, filterByMinCount } from "@/utils/deck-sort";
   import type { DeckListSortMode } from "@/settings";
+  import { I18n } from "@/i18n/I18n";
+
+  const t = I18n.t;
 
   let decks: DeckWithProfile[] = [];
   let allDecks: DeckWithProfile[] = [];
@@ -145,7 +148,7 @@
     const isPinned = pinnedIds.has(id);
     const labelEl = document.createElement("span");
     labelEl.className = "decks-dropdown-option-label";
-    labelEl.textContent = isPinned ? "Unpin from top" : "Pin to top";
+    labelEl.textContent = isPinned ? t.deckList.unpinFromTop : t.deckList.pinToTop;
     const iconEl = document.createElement("span");
     iconEl.className = "decks-dropdown-option-icon";
     setIcon(iconEl, isPinned ? "pin-off" : "pin");
@@ -497,7 +500,7 @@
 
     const browseOption = document.createElement("div");
     browseOption.className = "decks-dropdown-option";
-    browseOption.textContent = "Browse all cards";
+    browseOption.textContent = t.deckList.browseAllCards;
     browseOption.onclick = () => {
       closeActiveDropdown();
       onBrowseDeckGroup(group);
@@ -513,7 +516,7 @@
 
     const configOption = document.createElement("div");
     configOption.className = "decks-dropdown-option";
-    configOption.textContent = "Configure profile";
+    configOption.textContent = t.deckList.configureProfile;
     configOption.onclick = () => {
       closeActiveDropdown();
       const deckForGroup = allDecks.find((d) => group.deckIds.includes(d.id));
@@ -611,7 +614,7 @@
 
     const browseOption = document.createElement("div");
     browseOption.className = "decks-dropdown-option";
-    browseOption.textContent = "Browse all cards";
+    browseOption.textContent = t.deckList.browseAllCards;
     browseOption.onclick = () => {
       closeActiveDropdown();
       onBrowseDeck(deck);
@@ -627,7 +630,7 @@
 
     const configOption = document.createElement("div");
     configOption.className = "decks-dropdown-option";
-    configOption.textContent = "Configure profile";
+    configOption.textContent = t.deckList.configureProfile;
     configOption.onclick = () => {
       closeActiveDropdown();
       openDeckConfigModal(deck);
@@ -635,7 +638,7 @@
 
     const resetOption = document.createElement("div");
     resetOption.className = "decks-dropdown-option decks-dropdown-option-danger";
-    resetOption.textContent = "Reset progress";
+    resetOption.textContent = t.deckList.resetProgress;
     resetOption.onclick = () => {
       closeActiveDropdown();
       openResetDeckModal(deck);
@@ -728,7 +731,7 @@
 
     const browseOption = document.createElement("div");
     browseOption.className = "decks-dropdown-option";
-    browseOption.textContent = "Browse all cards";
+    browseOption.textContent = t.deckList.browseAllCards;
     browseOption.onclick = () => {
       closeActiveDropdown();
       onBrowseCustomDeck(customDeck);
@@ -744,7 +747,7 @@
 
     const renameOption = document.createElement("div");
     renameOption.className = "decks-dropdown-option";
-    renameOption.textContent = "Rename";
+    renameOption.textContent = t.deckList.rename;
     renameOption.onclick = () => {
       closeActiveDropdown();
       renameCustomDeck(customDeck);
@@ -752,7 +755,7 @@
 
     const resetOption = document.createElement("div");
     resetOption.className = "decks-dropdown-option decks-dropdown-option-danger";
-    resetOption.textContent = "Reset progress";
+    resetOption.textContent = t.deckList.resetProgress;
     resetOption.onclick = () => {
       closeActiveDropdown();
       resetCustomDeckProgress(customDeck);
@@ -760,7 +763,7 @@
 
     const deleteOption = document.createElement("div");
     deleteOption.className = "decks-dropdown-option decks-dropdown-option-danger";
-    deleteOption.textContent = "Delete";
+    deleteOption.textContent = t.deckList.delete;
     deleteOption.onclick = () => {
       closeActiveDropdown();
       deleteCustomDeck(customDeck);
@@ -768,7 +771,7 @@
 
     const editOption = document.createElement("div");
     editOption.className = "decks-dropdown-option";
-    editOption.textContent = customDeck.deckType === "filter" ? "Edit filter" : "Edit cards";
+    editOption.textContent = customDeck.deckType === "filter" ? t.deckList.editFilter : t.deckList.editCards;
     editOption.onclick = () => {
       closeActiveDropdown();
       onEditCustomDeck(customDeck);
@@ -852,9 +855,9 @@
 
   function deleteCustomDeck(customDeck: CustomDeckGroup) {
     new ConfirmModal(app, {
-      title: "Delete custom deck",
-      message: `Delete custom deck "${customDeck.name}"? This will not delete the flashcards themselves.`,
-      confirmText: "Delete",
+      title: t.deckList.deleteCustomDeckTitle,
+      message: I18n.format(t.deckList.deleteCustomDeckMessage, { name: customDeck.name }),
+      confirmText: t.deckList.confirmDelete,
       isDanger: true,
       onConfirm: () => {
         customDeckService
@@ -874,7 +877,7 @@
     db.getFlashcardsForCustomDeck(customDeck.id)
       .then((cards) => {
         if (cards.length === 0) {
-          new Notice(`No cards found in "${customDeck.name}"`);
+          new Notice(I18n.format(t.notices.noCardsFoundInGroup, { name: customDeck.name }));
           return;
         }
 
@@ -906,20 +909,20 @@
 
   function resetCustomDeckProgress(customDeck: CustomDeckGroup) {
     new ConfirmModal(app, {
-      title: "Reset custom deck progress",
-      message: `Reset all progress for "${customDeck.name}"? All flashcards in this deck will be reset to new state and review history will be deleted. This cannot be undone.`,
-      confirmText: "Reset progress",
+      title: t.deckList.resetCustomDeckTitle,
+      message: I18n.format(t.deckList.resetCustomDeckProgress, { name: customDeck.name }),
+      confirmText: t.deckList.resetProgress,
       isDanger: true,
       onConfirm: () => {
         db.resetCustomDeckProgress(customDeck.id)
           .then(() => db.save())
           .then(() => {
-            new Notice(`Progress reset for "${customDeck.name}"`);
+            new Notice(I18n.format(t.deckList.progressResetFor, { name: customDeck.name }));
             return loadCustomDecks();
           })
           .catch((e) => {
             console.error("Failed to reset custom deck progress:", e);
-            new Notice("Failed to reset custom deck progress");
+            new Notice(t.deckList.resetCustomDeckFailed);
           });
       },
     }).open();
@@ -1036,15 +1039,15 @@
 
 <div class="decks-deck-list-panel">
   <div class="decks-panel-header">
-    <div class="decks-panel-title">Decks</div>
+    <div class="decks-panel-title">{t.deckList.title}</div>
     <div class="decks-header-buttons">
       <button
         class="clickable-icon"
         on:click={(e) => handleTouchClick(onOpenDeckConfig, e)}
         on:touchend={(e) => handleTouchClick(onOpenDeckConfig, e)}
-        title="Configure deck"
+        title={t.deckList.configureDeck}
         disabled={allDecks.length === 0}
-        aria-label="Configure deck"
+        aria-label={t.deckList.configureDeck}
       >
         <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 20h9"></path><path d="M16.5 3.5a2.121 2.121 0 0 1 3 3L7 19l-4 1 1-4L16.5 3.5z"></path></svg>
       </button>
@@ -1052,8 +1055,8 @@
         class="clickable-icon"
         on:click={(e) => handleTouchClick(onOpenProfilesManager, e)}
         on:touchend={(e) => handleTouchClick(onOpenProfilesManager, e)}
-        title="Manage profiles"
-        aria-label="Manage profiles"
+        title={t.deckList.profiles}
+        aria-label={t.deckList.profiles}
       >
         <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12.22 2h-.44a2 2 0 0 0-2 2v.18a2 2 0 0 1-1 1.73l-.43.25a2 2 0 0 1-2 0l-.15-.08a2 2 0 0 0-2.73.73l-.22.38a2 2 0 0 0 .73 2.73l.15.1a2 2 0 0 1 1 1.72v.51a2 2 0 0 1-1 1.74l-.15.09a2 2 0 0 0-.73 2.73l.22.38a2 2 0 0 0 2.73.73l.15-.08a2 2 0 0 1 2 0l.43.25a2 2 0 0 1 1 1.73V20a2 2 0 0 0 2 2h.44a2 2 0 0 0 2-2v-.18a2 2 0 0 1 1-1.73l.43-.25a2 2 0 0 1 2 0l.15.08a2 2 0 0 0 2.73-.73l.22-.39a2 2 0 0 0-.73-2.73l-.15-.08a2 2 0 0 1-1-1.74v-.5a2 2 0 0 1 1-1.74l.15-.09a2 2 0 0 0 .73-2.73l-.22-.38a2 2 0 0 0-2.73-.73l-.15.08a2 2 0 0 1-2 0l-.43-.25a2 2 0 0 1-1-1.73V4a2 2 0 0 0-2-2z"></path><circle cx="12" cy="12" r="3"></circle></svg>
       </button>
@@ -1061,8 +1064,8 @@
         class="clickable-icon"
         on:click={(e) => handleTouchClick(openFlashcardManager, e)}
         on:touchend={(e) => handleTouchClick(openFlashcardManager, e)}
-        title="Open flashcard manager"
-        aria-label="Open flashcard manager"
+        title={t.deckList.openManager}
+        aria-label={t.deckList.openManager}
       >
         <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="7" height="7"></rect><rect x="14" y="3" width="7" height="7"></rect><rect x="14" y="14" width="7" height="7"></rect><rect x="3" y="14" width="7" height="7"></rect></svg>
       </button>
@@ -1070,8 +1073,8 @@
         class="clickable-icon"
         on:click={(e) => handleTouchClick(onOpenStatistics, e)}
         on:touchend={(e) => handleTouchClick(onOpenStatistics, e)}
-        title="View statistics"
-        aria-label="View statistics"
+        title={t.deckList.statistics}
+        aria-label={t.deckList.statistics}
       >
         <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 3v18h18"></path><path d="M18 17V9"></path><path d="M13 17V5"></path><path d="M8 17v-3"></path></svg>
       </button>
@@ -1081,8 +1084,8 @@
         on:click={(e) => handleTouchClick(() => void handleRefresh(), e)}
         on:touchend={(e) => handleTouchClick(() => void handleRefresh(), e)}
         disabled={isRefreshing}
-        title={isSyncing ? "Syncing in background…" : "Refresh"}
-        aria-label="Refresh"
+        title={isSyncing ? t.deckList.syncing : t.deckList.refresh}
+        aria-label={t.deckList.refresh}
       >
         <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M23 4v6h-6"></path><path d="M1 20v-6h6"></path><path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15"></path></svg>
       </button>
@@ -1097,29 +1100,29 @@
           class:decks-tab-active={viewMode === "files"}
           on:click={() => (viewMode = "files")}
         >
-          Files ({allDecks.length})
+          {t.deckList.tabFiles} ({allDecks.length})
         </button>
         <button
           class="decks-tab-button"
           class:decks-tab-active={viewMode === "tags"}
           on:click={() => (viewMode = "tags")}
         >
-          Tags ({deckGroups.length})
+          {t.deckList.tabTags} ({deckGroups.length})
         </button>
         <button
           class="decks-tab-button"
           class:decks-tab-active={viewMode === "custom"}
           on:click={() => { viewMode = "custom"; loadCustomDecks(); }}
         >
-          Custom ({customDeckGroups.length})
+          {t.deckList.tabCustom} ({customDeckGroups.length})
         </button>
       </div>
       <button
         class="clickable-icon"
         class:decks-search-toggle-active={searchOpen}
         on:click={toggleSearch}
-        title="Search"
-        aria-label="Search"
+        title={t.deckList.search}
+        aria-label={t.deckList.search}
         aria-expanded={searchOpen}
       >
         <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="8"></circle><line x1="21" y1="21" x2="16.65" y2="16.65"></line></svg>
@@ -1133,7 +1136,7 @@
           <input
             type="text"
             class="decks-filter-input"
-            placeholder="Filter..."
+            placeholder={t.deckList.filterPlaceholder}
             bind:this={searchInputEl}
             bind:value={filterText}
             on:input={handleFilterInput}
@@ -1142,7 +1145,7 @@
           {#if filterText}
             <button
               class="clickable-icon decks-filter-clear-button"
-              aria-label="Clear filter"
+              aria-label={t.deckList.clearFilter}
               on:click={clearFilter}
             >
               <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="6" x2="6" y2="18"></line><line x1="6" y1="6" x2="18" y2="18"></line></svg>
@@ -1154,15 +1157,15 @@
 
     {#if allDecks.length === 0}
       <div class="decks-empty-state">
-        <p>No decks found.</p>
+        <p>{t.deckList.emptyNoDecks}</p>
         <p class="decks-help-text">
-          Tag your notes with {deckTag} to create decks.
+          {I18n.format(t.deckList.tagYourNotes, { tag: deckTag })}
         </p>
       </div>
     {:else if decks.length === 0}
       <div class="decks-empty-state">
-        <p>No decks match your filter.</p>
-        <p class="decks-help-text">Try adjusting your search terms.</p>
+        <p>{t.deckList.emptyNoFilterMatch}</p>
+        <p class="decks-help-text">{t.deckList.emptyFilterHint}</p>
       </div>
     {:else}
       <div class="decks-deck-table">
@@ -1173,9 +1176,9 @@
               class="decks-col-deck decks-col-sortable"
               class:decks-col-sortable-active={nameSortActive}
               on:click={() => void clickSortColumn("name")}
-              aria-label="Sort by name"
+              aria-label={t.deckList.sortByName}
             >
-              <span>{viewMode === "files" ? "Deck" : viewMode === "tags" ? "Tag group" : "Custom deck"}</span>
+              <span>{viewMode === "files" ? t.deckList.columnDeck : viewMode === "tags" ? t.deckList.columnTagGroup : t.deckList.columnCustomDeck}</span>
               <span class="decks-sort-arrow" use:sortIconAction={nameArrow}></span>
             </button>
             <button
@@ -1183,9 +1186,9 @@
               class="decks-col-stat decks-col-sortable"
               class:decks-col-sortable-active={newSortActive}
               on:click={() => void clickSortColumn("new")}
-              aria-label="Sort by new card count"
+              aria-label={t.deckList.sortByNewCardCount}
             >
-              <span>New</span>
+              <span>{t.deckList.columnNew}</span>
               <span class="decks-sort-arrow" use:sortIconAction={newArrow}></span>
             </button>
             <button
@@ -1193,9 +1196,9 @@
               class="decks-col-stat decks-col-sortable"
               class:decks-col-sortable-active={dueSortActive}
               on:click={() => void clickSortColumn("due")}
-              aria-label="Sort by due card count"
+              aria-label={t.deckList.sortByDueCardCount}
             >
-              <span>Due</span>
+              <span>{t.deckList.columnDue}</span>
               <span class="decks-sort-arrow" use:sortIconAction={dueArrow}></span>
             </button>
             <div class="decks-col-config"></div>
@@ -1221,7 +1224,7 @@
 
               <div class="decks-col-deck">
                 {#if pinnedIds.has(getItemId(item))}
-                  <span class="decks-pin-indicator" use:pinIconAction={"pin"} title="Pinned"></span>
+                  <span class="decks-pin-indicator" use:pinIconAction={"pin"} title={t.deckList.pinned}></span>
                 {/if}
                 <span
                   class="decks-deck-name-link"
@@ -1232,7 +1235,7 @@
                   on:keydown={(e) => e.key === "Enter" && handleItemClick(item)}
                   role="button"
                   tabindex="0"
-                  title="Click to review {item.name}"
+                  title={I18n.format(t.deckList.clickToReview, { name: item.name })}
                 >
                   {#if isDeckGroup(item)}
                     <span class="decks-tag-group-icon">🏷️</span>
@@ -1244,15 +1247,15 @@
                   {item.name}
                   {#if isDeckGroup(item)}
                     <span class="decks-tag-group-count"
-                      >({item.deckIds.length} files)</span
+                      >{I18n.format(t.deckList.filesCount, { count: item.deckIds.length })}</span
                     >
                   {:else if item.type === 'custom' && item.deckType === 'filter'}
                     <span class="decks-tag-group-count"
-                      >({getDeckStats(item.id).totalCount} cards)</span
+                      >{I18n.format(t.deckList.cardsCount, { count: getDeckStats(item.id).totalCount })}</span
                     >
                   {:else if item.type === 'custom'}
                     <span class="decks-tag-group-count"
-                      >({item.flashcardIds.length} cards)</span
+                      >{I18n.format(t.deckList.cardsCount, { count: item.flashcardIds.length })}</span
                     >
                   {/if}
                 </span>
@@ -1264,9 +1267,9 @@
                 class:has-limit={'profile' in item && item.profile.hasNewCardsLimitEnabled}
                 title={'profile' in item && item.profile.hasNewCardsLimitEnabled
                   ? isDeckGroup(item)
-                    ? `${itemStats.newCount} new cards available today (limit: ${item.profile.newCardsPerDay} per deck)`
-                    : `${itemStats.newCount} new cards available today (limit: ${item.profile.newCardsPerDay})`
-                  : `${itemStats.newCount} new cards due`}
+                    ? I18n.format(t.deckList.newCardsGroupTooltip, { count: itemStats.newCount, limit: item.profile.newCardsPerDay })
+                    : I18n.format(t.deckList.newCardsLimitTooltip, { count: itemStats.newCount, limit: item.profile.newCardsPerDay })
+                  : I18n.format(t.deckList.newCardsDueTooltip, { count: itemStats.newCount })}
               >
                 {itemStats.newCount}
                 {#if 'profile' in item && item.profile.hasNewCardsLimitEnabled}
@@ -1281,9 +1284,9 @@
                 class:has-limit={'profile' in item && item.profile.hasReviewCardsLimitEnabled}
                 title={'profile' in item && item.profile.hasReviewCardsLimitEnabled
                   ? isDeckGroup(item)
-                    ? `${itemStats.dueCount} review cards available today (limit: ${item.profile.reviewCardsPerDay} per deck)`
-                    : `${itemStats.dueCount} review cards available today (limit: ${item.profile.reviewCardsPerDay})`
-                  : `${itemStats.dueCount} review cards due`}
+                    ? I18n.format(t.deckList.reviewCardsGroupTooltip, { count: itemStats.dueCount, limit: item.profile.reviewCardsPerDay })
+                    : I18n.format(t.deckList.reviewCardsLimitTooltip, { count: itemStats.dueCount, limit: item.profile.reviewCardsPerDay })
+                  : I18n.format(t.deckList.reviewCardsDueTooltip, { count: itemStats.dueCount })}
               >
                 {itemStats.dueCount}
                 {#if 'profile' in item && item.profile.hasReviewCardsLimitEnabled}
@@ -1296,8 +1299,8 @@
                     class="clickable-icon decks-row-action"
                     on:click={(e) => handleTouchClick(() => handleGroupConfigClick(item, e), e)}
                     on:touchend={(e) => handleTouchClick(() => handleGroupConfigClick(item, e), e)}
-                    title="Tag group options"
-                    aria-label="Options for {item.name}"
+                    title={t.deckList.optionsTagGroup}
+                    aria-label={I18n.format(t.deckList.optionsForItem, { name: item.name })}
                   >
                     <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="5" r="1"></circle><circle cx="12" cy="12" r="1"></circle><circle cx="12" cy="19" r="1"></circle></svg>
                   </button>
@@ -1306,8 +1309,8 @@
                     class="clickable-icon decks-row-action"
                     on:click={(e) => handleTouchClick(() => handleCustomDeckConfigClick(item, e), e)}
                     on:touchend={(e) => handleTouchClick(() => handleCustomDeckConfigClick(item, e), e)}
-                    title="Custom deck options"
-                    aria-label="Options for {item.name}"
+                    title={t.deckList.optionsCustomDeck}
+                    aria-label={I18n.format(t.deckList.optionsForItem, { name: item.name })}
                   >
                     <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="5" r="1"></circle><circle cx="12" cy="12" r="1"></circle><circle cx="12" cy="19" r="1"></circle></svg>
                   </button>
@@ -1316,8 +1319,8 @@
                     class="clickable-icon decks-row-action"
                     on:click={(e) => handleTouchClick(() => handleConfigClick(item, e), e)}
                     on:touchend={(e) => handleTouchClick(() => handleConfigClick(item, e), e)}
-                    title="Deck options"
-                    aria-label="Options for {item.name}"
+                    title={t.deckList.optionsDeck}
+                    aria-label={I18n.format(t.deckList.optionsForItem, { name: item.name })}
                   >
                     <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="5" r="1"></circle><circle cx="12" cy="12" r="1"></circle><circle cx="12" cy="19" r="1"></circle></svg>
                   </button>
@@ -1338,27 +1341,29 @@
   <div class="decks-study-stats-section">
     {#if studyStats.todayCards > 0}
       <div class="decks-today-summary">
-        Studied {studyStats.todayCards} cards in {formatHours(
-          studyStats.todayHours
-        )} today ({formatPace(studyStats.todayPaceSeconds)})
+        {I18n.format(t.deckList.studiedSummary, {
+          cards: studyStats.todayCards,
+          hours: formatHours(studyStats.todayHours),
+          pace: formatPace(studyStats.todayPaceSeconds),
+        })}
       </div>
     {/if}
 
     <div class="decks-stats-grid">
       <div class="decks-stat-item">
-        <div class="decks-stat-label">Total</div>
+        <div class="decks-stat-label">{t.deckList.statTotal}</div>
         <div class="decks-stat-value">
           {formatHours(studyStats.totalHours)}
         </div>
       </div>
       <div class="decks-stat-item">
-        <div class="decks-stat-label">Past month</div>
+        <div class="decks-stat-label">{t.deckList.statPastMonth}</div>
         <div class="decks-stat-value">
           {formatHours(studyStats.pastMonthHours)}
         </div>
       </div>
       <div class="decks-stat-item">
-        <div class="decks-stat-label">Past week</div>
+        <div class="decks-stat-label">{t.deckList.statPastWeek}</div>
         <div class="decks-stat-value">
           {formatHours(studyStats.pastWeekHours)}
         </div>

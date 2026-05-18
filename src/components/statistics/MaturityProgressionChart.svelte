@@ -14,6 +14,9 @@
   } from "chart.js";
   import { StatisticsService } from "@/services/StatisticsService";
   import { Logger } from "@/utils/logging";
+  import { I18n } from "@/i18n/I18n";
+
+  const t = I18n.t;
 
   // Register Chart.js components
   Chart.register(
@@ -235,7 +238,7 @@
 
     const baseDatasets = [
       {
-        label: "New cards",
+        label: t.statistics.newCardsLabel,
         data: newCards,
         backgroundColor: "rgba(59, 130, 246, 0.5)",
         borderColor: "rgb(59, 130, 246)",
@@ -246,7 +249,7 @@
         order: 2,
       },
       {
-        label: "Learning cards",
+        label: t.statistics.learningCardsLabel,
         data: learningCards,
         backgroundColor: "rgba(245, 158, 11, 0.5)",
         borderColor: "rgb(245, 158, 11)",
@@ -257,7 +260,7 @@
         order: 2,
       },
       {
-        label: "Mature cards",
+        label: t.statistics.matureCardsLabel,
         data: matureCards,
         backgroundColor: "rgba(34, 197, 94, 0.5)",
         borderColor: "rgb(34, 197, 94)",
@@ -279,7 +282,9 @@
       );
 
       baseDatasets.push({
-        label: `Standard maintenance level (${Math.round(theoreticalMaintenanceLevel)}%)`,
+        label: I18n.format(t.statistics.standardMaintenanceLine, {
+          percent: Math.round(theoreticalMaintenanceLevel),
+        }),
         data: standardMaintenanceLine,
         borderColor: "rgba(168, 85, 247, 1)", // Bright purple for better visibility
         borderWidth: 3, // Same thickness as user's line
@@ -303,7 +308,9 @@
       );
 
       baseDatasets.push({
-        label: `Your maintenance level (${Math.round(maintenanceLevel)}%)`,
+        label: I18n.format(t.statistics.yourMaintenanceLine, {
+          percent: Math.round(maintenanceLevel),
+        }),
         data: maintenanceLine,
         borderColor: "rgba(239, 68, 68, 1)", // Fully opaque red dashed line
         borderWidth: 3, // Thicker line to be more visible
@@ -350,7 +357,7 @@
           plugins: {
             title: {
               display: true,
-              text: "Card Maturity Progression",
+              text: t.statistics.cardMaturityProgression,
             },
             legend: {
               display: true,
@@ -365,7 +372,7 @@
                     (sum, item) => sum + (item.raw as number),
                     0
                   );
-                  return `Total: ${total} cards`;
+                  return I18n.format(t.statistics.maturityTotalCards, { count: total });
                 },
               },
             },
@@ -374,7 +381,7 @@
             x: {
               title: {
                 display: true,
-                text: "Days from Now",
+                text: t.statistics.daysFromNow,
               },
               ticks: {
                 maxTicksLimit: 12,
@@ -384,7 +391,7 @@
               stacked: true,
               title: {
                 display: true,
-                text: "Number of Cards",
+                text: t.statistics.numberOfCards,
               },
               beginAtZero: true,
             },
@@ -398,34 +405,33 @@
 </script>
 
 <div class="maturity-progression-chart-container">
-  <h3>Maturity Progression Forecast</h3>
+  <h3>{t.statistics.maturityForecast}</h3>
   <p class="decks-chart-subtitle">
     {#if selectedDeckIds.length === 0}
       <span class="decks-loading-indicator"
-        >Select a deck to view maturity progression forecast.</span
+        >{t.statistics.selectDeckMaturity}</span
       >
     {:else}
-      Projection of how cards will progress to maturity over time based on
-      current review pace.
+      {t.statistics.maturitySubtitle}
       {#if isLoading}
-        <span class="decks-loading-indicator">Calculating...</span>
+        <span class="decks-loading-indicator">{t.statistics.calculating}</span>
       {:else if maintenanceLevel !== null && lapseRate > 0}
         <strong
-          >Based on your historical retention rate of {Math.round(
-            100 - lapseRate
-          )}%, approximately {Math.round(maintenanceLevel)}% of cards (~{Math.round(
-            (maintenanceLevel / 100) * totalCards
-          )} cards) will always be in the learning phase due to natural lapses.</strong
+          >{I18n.format(t.statistics.maturityRetentionDetail, {
+            retention: Math.round(100 - lapseRate),
+            maintenance: Math.round(maintenanceLevel),
+            count: Math.round((maintenanceLevel / 100) * totalCards),
+          })}</strong
         >
         {#if equilibriumDay !== null}
-          Equilibrium reached in {formatDaysNaturally(equilibriumDay)}.
+          {I18n.format(t.statistics.maturityEquilibrium, { days: formatDaysNaturally(equilibriumDay) })}
         {/if}
       {:else if daysToMaturity !== null}
         <strong
-          >All cards will be mature in approximately {formatDaysNaturally(
-            daysToMaturity
-          )}</strong
-        > at current pace.
+          >{I18n.format(t.statistics.maturityAllMatureAtPace, {
+            days: formatDaysNaturally(daysToMaturity),
+          })}</strong
+        >
       {/if}
     {/if}
   </p>

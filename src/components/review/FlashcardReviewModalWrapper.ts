@@ -11,6 +11,7 @@ import type {
 import FlashcardReviewModal from "./FlashcardReviewModal.svelte";
 import { mount, unmount } from "svelte";
 import { findFlashcardLine } from "../../utils/source-navigator";
+import { I18n } from "@/i18n/I18n";
 
 export class FlashcardReviewModalWrapper extends Modal {
   private deckOrGroup: DeckOrGroup;
@@ -85,7 +86,9 @@ export class FlashcardReviewModalWrapper extends Modal {
   private async navigateToFlashcardSource(flashcard: Flashcard): Promise<void> {
     const file = this.app.vault.getAbstractFileByPath(flashcard.sourceFile);
     if (!(file instanceof TFile)) {
-      new Notice(`File not found: ${flashcard.sourceFile}`);
+      new Notice(
+        I18n.format(I18n.t.notices.fileNotFound, { path: flashcard.sourceFile })
+      );
       return;
     }
 
@@ -181,7 +184,11 @@ export class FlashcardReviewModalWrapper extends Modal {
           }
 
           if (this.settings?.ui?.enableNotices !== false) {
-            new Notice(`Review session complete for ${this.deckOrGroup.name}!`);
+            new Notice(
+              I18n.format(I18n.t.notices.reviewSessionCompleteFor, {
+                deckName: this.deckOrGroup.name,
+              })
+            );
           }
           // Refresh the view to update stats
           await this.refreshStats();

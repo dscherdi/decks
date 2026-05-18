@@ -10,6 +10,9 @@
   } from "chart.js";
   import { StatisticsService } from "@/services/StatisticsService";
   import { Logger } from "@/utils/logging";
+  import { I18n } from "@/i18n/I18n";
+
+  const t = I18n.t;
 
   export let selectedDeckIds: string[] = [];
   export let statisticsService: StatisticsService;
@@ -84,21 +87,21 @@
 
     if (counts.new > 0) {
       data.push(counts.new);
-      labels.push("New");
+      labels.push(t.statistics.cardCountsNew);
       backgroundColor.push("#3b82f6");
       borderColor.push("#2563eb");
     }
 
     if (counts.young > 0) {
       data.push(counts.young);
-      labels.push("Young");
+      labels.push(t.statistics.youngCards.split(" (")[0]);
       backgroundColor.push("#f59e0b");
       borderColor.push("#d97706");
     }
 
     if (counts.mature > 0) {
       data.push(counts.mature);
-      labels.push("Mature");
+      labels.push(t.statistics.matureLabel);
       backgroundColor.push("#22c55e");
       borderColor.push("#16a34a");
     }
@@ -137,7 +140,7 @@
           plugins: {
             title: {
               display: true,
-              text: "Card Distribution by State",
+              text: t.statistics.cardDistributionByState,
             },
             legend: {
               display: true,
@@ -153,7 +156,11 @@
                     0
                   );
                   const percentage = ((value / total) * 100).toFixed(1);
-                  return `${label}: ${value} cards (${percentage}%)`;
+                  return I18n.format(t.statistics.cardCountsTooltip, {
+                    label,
+                    count: value,
+                    percent: percentage,
+                  });
                 },
               },
             },
@@ -174,7 +181,7 @@
             plugins: {
               title: {
                 display: true,
-                text: "Card Distribution by State (Doughnut)",
+                text: t.statistics.cardDistributionByStateDoughnut,
               },
               legend: {
                 display: true,
@@ -193,11 +200,11 @@
   }
 </script>
 
-<h3>Card Distribution</h3>
+<h3>{t.statistics.cardDistribution}</h3>
 <p class="decks-chart-subtitle">
   {#if selectedDeckIds.length === 0}
     <span class="decks-loading-indicator"
-      >Select a deck to view card distribution.</span
+      >{t.statistics.selectDeckCardDistribution}</span
     >
   {/if}
 </p>

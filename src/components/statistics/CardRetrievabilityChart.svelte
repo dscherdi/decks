@@ -13,6 +13,9 @@
   } from "chart.js";
   import { StatisticsService } from "@/services/StatisticsService";
   import { Logger } from "@/utils/logging";
+  import { I18n } from "@/i18n/I18n";
+
+  const t = I18n.t;
 
   // Register Chart.js components
   Chart.register(
@@ -64,10 +67,10 @@
   function processChartData() {
     if (!retrievabilityData || retrievabilityData.size === 0) {
       return {
-        labels: ["No Data"],
+        labels: [t.statistics.noData],
         datasets: [
           {
-            label: "Reviews",
+            label: t.statistics.reviewsLabel,
             data: [0],
             backgroundColor: "#6b7280",
             borderColor: "#4b5563",
@@ -116,7 +119,7 @@
       labels,
       datasets: [
         {
-          label: "Number of Reviews",
+          label: t.statistics.numberOfReviews,
           data,
           backgroundColor: colors,
           borderColor: colors.map((color) =>
@@ -146,14 +149,14 @@
           x: {
             title: {
               display: true,
-              text: "Retrievability Range",
+              text: t.statistics.retrievabilityRange,
             },
           },
           y: {
             beginAtZero: true,
             title: {
               display: true,
-              text: "Number of Reviews",
+              text: t.statistics.numberOfReviews,
             },
             ticks: {
               precision: 0,
@@ -163,7 +166,7 @@
         plugins: {
           title: {
             display: true,
-            text: "Card Retrievability Distribution",
+            text: t.statistics.cardRetrievabilityDistribution,
           },
           legend: {
             display: true,
@@ -180,10 +183,14 @@
                 );
                 const percentage =
                   total > 0 ? ((value / total) * 100).toFixed(1) : "0";
-                return `${dataset.label}: ${value} reviews (${percentage}%)`;
+                return I18n.format(t.statistics.reviewsTooltip, {
+                  label: dataset.label ?? "",
+                  count: value ?? 0,
+                  percent: percentage,
+                });
               },
               afterLabel: function (_context: TooltipItem<"bar">) {
-                return "Higher retrievability = easier to recall";
+                return t.statistics.higherRetrievabilityTip;
               },
             },
           },
@@ -202,13 +209,13 @@
   }
 </script>
 
-<h3>Card Retrievability Distribution</h3>
+<h3>{t.statistics.cardRetrievabilityDistribution}</h3>
 <p class="decks-chart-subtitle">
   {#if selectedDeckIds.length === 0}
-    <span class="decks-loading-indicator">Select a deck to view card retrievability distribution.</span>
+    <span class="decks-loading-indicator">{t.statistics.selectDeckCardRetrievability}</span>
   {:else}
     <span class="decks-chart-description">
-      FSRS retrievability values show likelihood of recall today (0-100%)
+      {t.statistics.cardRetrievabilitySubtitle}
     </span>
   {/if}
 </p>

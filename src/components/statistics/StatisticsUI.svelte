@@ -18,6 +18,9 @@
 
   import { StatisticsService } from "../../services/StatisticsService";
   import { Logger } from "@/utils/logging";
+  import { I18n } from "@/i18n/I18n";
+
+  const t = I18n.t;
 
   export let statisticsService: StatisticsService;
   export let logger: Logger;
@@ -108,14 +111,14 @@
       deckFilterContainer.empty();
 
       new Setting(deckFilterContainer)
-        .setName("Select Deck(s):")
+        .setName(t.statistics.selectDeckLabel)
         .setClass("decks-deck-filter-container")
         .addDropdown((dropdown) => {
-          dropdown.addOption("", "-- Select a deck --");
-          dropdown.addOption("all", "All Decks");
+          dropdown.addOption("", t.statistics.deckDropdownPrompt);
+          dropdown.addOption("all", t.statistics.allDecks);
 
           availableTags.forEach((tag) => {
-            dropdown.addOption(`tag:${tag}`, `Tag: ${tag}`);
+            dropdown.addOption(`tag:${tag}`, I18n.format(t.statistics.tagPrefix, { tag }));
           });
 
           availableDecks.forEach((deck) => {
@@ -162,12 +165,12 @@
       timeframeFilterContainer.empty();
 
       new Setting(timeframeFilterContainer)
-        .setName("Timeframe:")
+        .setName(t.statistics.timeframeLabel)
         .setClass("decks-timeframe-filter-container")
         .addDropdown((dropdown) =>
           dropdown
-            .addOption("12months", "Last 12 Months")
-            .addOption("all", "All History")
+            .addOption("12months", t.statistics.timeframeLast12Months)
+            .addOption("all", t.statistics.timeframeAllHistory)
             .setValue(selectedTimeframe)
             .onChange(async (value: string) => {
               selectedTimeframe = value;
@@ -320,7 +323,7 @@
 </script>
 
 <div class="decks-statistics-container">
-  <h2 class="decks-statistics-modal-title">Overrall Statistics</h2>
+  <h2 class="decks-statistics-modal-title">{t.statistics.statisticsTitle}</h2>
 
   <div class="decks-filters">
     <div bind:this={deckFilterContainer}></div>
@@ -328,30 +331,30 @@
   </div>
 
   {#if loading}
-    <div class="decks-loading">Loading statistics...</div>
+    <div class="decks-loading">{t.statistics.loadingStatistics}</div>
   {:else if !statistics && selectedDeckFilter !== ""}
     <div class="decks-error">
-      <h3>Failed to Load Statistics</h3>
-      <p>There was an error loading your statistics. This might be due to:</p>
+      <h3>{t.statistics.failedToLoad}</h3>
+      <p>{t.statistics.failedToLoadIntro}</p>
       <ul>
-        <li>Database connection issues</li>
-        <li>Corrupted data</li>
-        <li>Large dataset taking too long to process</li>
+        <li>{t.statistics.failedReasonDb}</li>
+        <li>{t.statistics.failedReasonData}</li>
+        <li>{t.statistics.failedReasonSize}</li>
       </ul>
-      <p>Check the browser console (F12) for detailed error information.</p>
+      <p>{t.statistics.failedConsoleHint}</p>
       <button
         class="decks-retry-button"
         on:click={(e) => handleTouchClick(retryLoading, e)}
         on:touchend={(e) => handleTouchClick(retryLoading, e)}
       >
-        Retry Loading
+        {t.statistics.retryLoading}
       </button>
     </div>
   {:else if !statistics && selectedDeckFilter === ""}
     <div class="decks-no-selection">
       <p class="decks-chart-subtitle">
         <span class="decks-loading-indicator"
-          >Select a deck from the dropdown above to view statistics.</span
+          >{t.statistics.selectDeckPrompt}</span
         >
       </p>
     </div>
@@ -460,8 +463,8 @@
     <!-- Review Heatmap -->
     {#key selectedDeckIds.join(",")}
       <div class="decks-stats-section">
-        <h3>Review Heatmap</h3>
-        <p>Daily review activity over time</p>
+        <h3>{t.statistics.reviewHeatmapTitle}</h3>
+        <p>{t.statistics.dailyReviewActivity}</p>
         <ReviewHeatmap
           bind:this={heatmapComponent}
           getReviewCounts={async (days) => {

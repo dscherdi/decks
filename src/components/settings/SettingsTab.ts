@@ -13,6 +13,8 @@ import DecksPlugin from "@/main";
 import type { IDatabaseService } from "@/database/DatabaseFactory";
 import { Logger } from "@/utils/logging";
 import { OptimizeFsrsModal } from "./OptimizeFsrsModal";
+import { I18n } from "@/i18n/I18n";
+import { SUPPORTED_LANGUAGES, type LanguagePreference } from "@/i18n/locales";
 
 export class DecksSettingTab extends PluginSettingTab {
   private settings: DecksSettings;
@@ -62,7 +64,8 @@ export class DecksSettingTab extends PluginSettingTab {
     const { containerEl } = this;
     containerEl.empty();
 
-    ;
+    // Language
+    this.addLanguageSettings(containerEl);
 
     // Review Session Settings
     this.addReviewSettings(containerEl);
@@ -89,28 +92,46 @@ export class DecksSettingTab extends PluginSettingTab {
     this.addDatabaseSettings(containerEl);
   }
 
+  private addLanguageSettings(containerEl: HTMLElement): void {
+    new Setting(containerEl).setName(I18n.t.settings.language.heading).setHeading();
+
+    new Setting(containerEl)
+      .setName(I18n.t.settings.language.name)
+      .setDesc(I18n.t.settings.language.desc)
+      .addDropdown((dropdown) => {
+        dropdown.addOption("auto", I18n.t.settings.language.auto);
+        for (const lang of SUPPORTED_LANGUAGES) {
+          dropdown.addOption(lang.code, lang.label);
+        }
+        dropdown
+          .setValue(this.settings.i18n?.language ?? "auto")
+          .onChange(async (value) => {
+            this.settings.i18n = { language: value as LanguagePreference };
+            await this.saveSettings();
+            // Re-resolve language and re-render this settings tab immediately,
+            // so the user sees the change confirmed in the new language.
+            // Other already-mounted views (deck list, review modal, commands)
+            // still need a plugin reload to pick it up.
+            I18n.init(this.settings);
+            new Notice(I18n.t.notices.languageChanged);
+            this.display();
+          });
+      });
+  }
+
   private addPathsSettings(containerEl: HTMLElement): void {
     const configDir = this.plugin.app.vault.configDir;
     const pluginFolder = `${configDir}/plugins/${this.plugin.manifest.id}`;
 
-    new Setting(containerEl).setName("File locations").setHeading();
+    new Setting(containerEl).setName(I18n.t.settings.paths.heading).setHeading();
     containerEl.createEl("p", {
-      text:
-        `All paths are vault-relative. Leave empty to use the default location. ` +
-        `Most users won't need to change these — they exist so you can move the ` +
-        `DB out of the hidden ${configDir}/ folder (where iCloud and other sync ` +
-        `providers tend to deprioritize it).`,
+      text: I18n.format(I18n.t.settings.paths.paragraph, { configDir }),
       cls: "setting-item-description",
     });
 
     new Setting(containerEl)
-      .setName("Database folder")
-      .setDesc(
-        `Folder containing flashcards.db. Default: ${pluginFolder}/. ` +
-        `Restart Obsidian after changing this. The DB file is not moved ` +
-        `automatically — back up first, then either move the file manually ` +
-        `or use 'Restore from file' below to import it into the new location.`
-      )
+      .setName(I18n.t.settings.paths.dbFolder)
+      .setDesc(I18n.format(I18n.t.settings.paths.dbFolderDesc, { pluginFolder }))
       .addText((text) =>
         text
           .setPlaceholder(pluginFolder)
@@ -122,14 +143,13 @@ export class DecksSettingTab extends PluginSettingTab {
       );
 
     new Setting(containerEl)
-      .setName("Backup folder")
-      .setDesc(
-        `Folder for automatic and manual backups. Default: ${pluginFolder}/backups/. ` +
-        `Changes take effect immediately — no restart needed.`
-      )
+      .setName(I18n.t.settings.paths.backupFolder)
+      .setDesc(I18n.format(I18n.t.settings.paths.backupFolderDesc, { pluginFolder }))
       .addText((text) =>
         text
-          .setPlaceholder(`${pluginFolder}/backups`)
+          .setPlaceholder(
+            I18n.format(I18n.t.settings.paths.backupFolderPlaceholder, { pluginFolder })
+          )
           .setValue(this.settings.paths.backupFolder)
           .onChange(async (value) => {
             this.settings.paths.backupFolder = value.trim();
@@ -142,15 +162,11 @@ export class DecksSettingTab extends PluginSettingTab {
       );
 
     new Setting(containerEl)
-      .setName("Sync log folder")
-      .setDesc(
-        `Folder for the per-device .deckssynclog files used by multi-device sync. ` +
-        `Default: vault root (which iCloud syncs fastest). Restart Obsidian ` +
-        `after changing this.`
-      )
+      .setName(I18n.t.settings.paths.syncLogFolder)
+      .setDesc(I18n.t.settings.paths.syncLogFolderDesc)
       .addText((text) =>
         text
-          .setPlaceholder("(vault root)")
+          .setPlaceholder(I18n.t.settings.paths.syncLogFolderPlaceholder)
           .setValue(this.settings.paths.syncLogFolder)
           .onChange(async (value) => {
             this.settings.paths.syncLogFolder = value.trim();
@@ -160,18 +176,18 @@ export class DecksSettingTab extends PluginSettingTab {
   }
 
   private addFsrsOptimizationSettings(containerEl: HTMLElement): void {
-    new Setting(containerEl).setName("Algorithm tuning").setHeading();
+    new Setting(containerEl).setName(I18n.t.settings.fsrs.heading).setHeading();
 
     const fsrs = this.settings.fsrs;
     const desc = this.formatFsrsDescription();
 
     const setting = new Setting(containerEl)
-      .setName("Optimize parameters")
+      .setName(I18n.t.settings.fsrs.optimize)
       .setDesc(desc);
 
     setting.addButton((b) =>
       b
-        .setButtonText("Optimize")
+        .setButtonText(I18n.t.settings.fsrs.optimizeButton)
         .setCta()
         .onClick(() => {
           new OptimizeFsrsModal(
@@ -188,7 +204,7 @@ export class DecksSettingTab extends PluginSettingTab {
     if (fsrs.trainedWeights !== null) {
       setting.addButton((b) =>
         b
-          .setButtonText("Reset to defaults")
+          .setButtonText(I18n.t.settings.fsrs.resetButton)
           .setWarning()
           .onClick(async () => {
             this.settings.fsrs.trainedWeights = null;
@@ -197,7 +213,7 @@ export class DecksSettingTab extends PluginSettingTab {
             this.settings.fsrs.lastBeforeLogLoss = null;
             this.settings.fsrs.lastAfterLogLoss = null;
             await this.saveSettings();
-            new Notice("Trained parameters cleared, defaults restored.");
+            new Notice(I18n.t.notices.trainedParamsCleared);
             this.display();
           })
       );
@@ -207,22 +223,27 @@ export class DecksSettingTab extends PluginSettingTab {
   private formatFsrsDescription(): string {
     const fsrs = this.settings.fsrs;
     if (fsrs.trainedWeights === null) {
-      return "Trains the algorithm's 21 weights on your standard-profile review history. Needs at least 100 reviews. Intensive decks are unaffected.";
+      return I18n.t.settings.fsrs.descUntrained;
     }
     const when = fsrs.lastTrainedAt
       ? new Date(fsrs.lastTrainedAt).toLocaleString()
-      : "unknown";
-    const before = fsrs.lastBeforeLogLoss?.toFixed(4) ?? "—";
-    const after = fsrs.lastAfterLogLoss?.toFixed(4) ?? "—";
-    return `Currently using trained weights from ${when} (${fsrs.lastTrainedReviewCount.toLocaleString()} reviews, log-loss ${before} → ${after}).`;
+      : I18n.t.settings.fsrs.descTrainedUnknownWhen;
+    const before = fsrs.lastBeforeLogLoss?.toFixed(4) ?? I18n.t.settings.fsrs.descTrainedMissingMetric;
+    const after = fsrs.lastAfterLogLoss?.toFixed(4) ?? I18n.t.settings.fsrs.descTrainedMissingMetric;
+    return I18n.format(I18n.t.settings.fsrs.descTrained, {
+      when,
+      count: fsrs.lastTrainedReviewCount.toLocaleString(),
+      before,
+      after,
+    });
   }
 
   private addReviewSettings(containerEl: HTMLElement): void {
-    new Setting(containerEl).setName("Review sessions").setHeading();
+    new Setting(containerEl).setName(I18n.t.settings.review.heading).setHeading();
 
     new Setting(containerEl)
-      .setName("Show progress")
-      .setDesc("Display progress bar during review sessions")
+      .setName(I18n.t.settings.review.showProgress)
+      .setDesc(I18n.t.settings.review.showProgressDesc)
       .addToggle((toggle) =>
         toggle
           .setValue(this.settings.review.showProgress)
@@ -233,8 +254,8 @@ export class DecksSettingTab extends PluginSettingTab {
       );
 
     new Setting(containerEl)
-      .setName("Keyboard shortcuts")
-      .setDesc("Enable keyboard shortcuts in review modal (1-4 for difficulty)")
+      .setName(I18n.t.settings.review.keyboardShortcuts)
+      .setDesc(I18n.t.settings.review.keyboardShortcutsDesc)
       .addToggle((toggle) =>
         toggle
           .setValue(this.settings.review.enableKeyboardShortcuts)
@@ -245,13 +266,11 @@ export class DecksSettingTab extends PluginSettingTab {
       );
 
     new Setting(containerEl)
-      .setName("Session duration")
-      .setDesc(
-        "Maximum duration for flashcard review sessions in minutes (1-60)"
-      )
+      .setName(I18n.t.settings.review.sessionDuration)
+      .setDesc(I18n.t.settings.review.sessionDurationDesc)
       .addText((text) =>
         text
-          .setPlaceholder("25")
+          .setPlaceholder(I18n.t.settings.review.sessionDurationPlaceholder)
           .setValue(this.settings.review.sessionDuration.toString())
           .onChange(async (value) => {
             const num = parseInt(value);
@@ -263,10 +282,8 @@ export class DecksSettingTab extends PluginSettingTab {
       );
 
     new Setting(containerEl)
-      .setName("Study day starts at")
-      .setDesc(
-        "Hour when the study day rolls over (0-23, default is 4). Reviews done before this hour count toward the previous day's statistics and daily limits."
-      )
+      .setName(I18n.t.settings.review.studyDayStartsAt)
+      .setDesc(I18n.t.settings.review.studyDayStartsAtDesc)
       .addSlider((slider) =>
         slider
           .setLimits(0, 23, 1)
@@ -279,13 +296,11 @@ export class DecksSettingTab extends PluginSettingTab {
       );
 
     new Setting(containerEl)
-      .setName("Leech threshold")
-      .setDesc(
-        "A card is flagged as a leech once its lapse count reaches this number (default 8). Leeches are repeatedly forgotten and likely need rewriting."
-      )
+      .setName(I18n.t.settings.review.leechThreshold)
+      .setDesc(I18n.t.settings.review.leechThresholdDesc)
       .addText((text) =>
         text
-          .setPlaceholder("8")
+          .setPlaceholder(I18n.t.settings.review.leechThresholdPlaceholder)
           .setValue(this.settings.review.leechThreshold.toString())
           .onChange(async (value) => {
             const num = parseInt(value);
@@ -297,13 +312,11 @@ export class DecksSettingTab extends PluginSettingTab {
       );
 
     new Setting(containerEl)
-      .setName("Dense card character threshold")
-      .setDesc(
-        "A card is flagged as dense once its back text reaches this many characters (default 500). Dense cards are typically too information-rich and benefit from being split."
-      )
+      .setName(I18n.t.settings.review.denseCardCharThreshold)
+      .setDesc(I18n.t.settings.review.denseCardCharThresholdDesc)
       .addText((text) =>
         text
-          .setPlaceholder("500")
+          .setPlaceholder(I18n.t.settings.review.denseCardCharThresholdPlaceholder)
           .setValue(this.settings.review.denseCardCharThreshold.toString())
           .onChange(async (value) => {
             const num = parseInt(value);
@@ -332,23 +345,20 @@ export class DecksSettingTab extends PluginSettingTab {
   }
 
   private addParsingSettings(containerEl: HTMLElement): void {
-    new Setting(containerEl).setName("Parsing").setHeading();
+    new Setting(containerEl).setName(I18n.t.settings.parsing.heading).setHeading();
 
     let previousTag = this.settings.parsing.deckTag;
 
     new Setting(containerEl)
-      .setName("Deck tag")
+      .setName(I18n.t.settings.parsing.deckTag)
       .setDesc(
-        "Base tag used to identify flashcard decks. Files tagged with this " +
-          "(or sub-tags like " +
-          this.settings.parsing.deckTag +
-          "/math) will be treated as decks. " +
-          "The default tag has been renamed from #flashcards to #decks. " +
-          "If you were using #flashcards, it will continue to work until you change it here."
+        I18n.format(I18n.t.settings.parsing.deckTagDesc, {
+          tag: this.settings.parsing.deckTag,
+        })
       )
       .addText((text) =>
         text
-          .setPlaceholder("#decks")
+          .setPlaceholder(I18n.t.settings.parsing.deckTagPlaceholder)
           .setValue(this.settings.parsing.deckTag)
           .onChange(async (value) => {
             const trimmed = value.trim().toLowerCase();
@@ -364,7 +374,7 @@ export class DecksSettingTab extends PluginSettingTab {
 
     // Get all folders for dropdown options
     const folderOptions: Record<string, string> = {
-      "": "Scan entire vault (default)",
+      "": I18n.t.settings.parsing.folderSearchPathDefault,
     };
 
     this.app.vault.getAllFolders().forEach((folder) => {
@@ -372,10 +382,8 @@ export class DecksSettingTab extends PluginSettingTab {
     });
 
     new Setting(containerEl)
-      .setName("Folder search path")
-      .setDesc(
-        "Limit scanning to a specific folder. Select 'scan entire vault' to scan all files."
-      )
+      .setName(I18n.t.settings.parsing.folderSearchPath)
+      .setDesc(I18n.t.settings.parsing.folderSearchPathDesc)
       .addDropdown((dropdown) => {
         // Add options to dropdown
         Object.entries(folderOptions).forEach(([value, display]) => {
@@ -392,14 +400,14 @@ export class DecksSettingTab extends PluginSettingTab {
   }
 
   private addUISettings(containerEl: HTMLElement): void {
-    new Setting(containerEl).setName("User interface").setHeading();
+    new Setting(containerEl).setName(I18n.t.settings.ui.heading).setHeading();
 
     const intervalSetting = new Setting(containerEl)
-      .setName("Background refresh interval")
-      .setDesc("How often to refresh deck stats in the side panel (in seconds)")
+      .setName(I18n.t.settings.ui.backgroundRefreshInterval)
+      .setDesc(I18n.t.settings.ui.backgroundRefreshIntervalDesc)
       .addText((text) =>
         text
-          .setPlaceholder("5")
+          .setPlaceholder(I18n.t.settings.ui.backgroundRefreshIntervalPlaceholder)
           .setValue(this.settings.ui.backgroundRefreshInterval.toString())
           .onChange(async (value) => {
             const num = parseInt(value);
@@ -413,8 +421,8 @@ export class DecksSettingTab extends PluginSettingTab {
       );
 
     new Setting(containerEl)
-      .setName("Enable background refresh")
-      .setDesc("Automatically refresh deck stats in the side panel")
+      .setName(I18n.t.settings.ui.enableBackgroundRefresh)
+      .setDesc(I18n.t.settings.ui.enableBackgroundRefreshDesc)
       .addToggle((toggle) =>
         toggle
           .setValue(this.settings.ui.enableBackgroundRefresh)
@@ -435,10 +443,8 @@ export class DecksSettingTab extends PluginSettingTab {
       );
 
     new Setting(containerEl)
-      .setName("Enable notices")
-      .setDesc(
-        "Show notification messages for completed review sessions and sync operations"
-      )
+      .setName(I18n.t.settings.ui.enableNotices)
+      .setDesc(I18n.t.settings.ui.enableNoticesDesc)
       .addToggle((toggle) =>
         toggle
           .setValue(this.settings.ui.enableNotices)
@@ -449,15 +455,12 @@ export class DecksSettingTab extends PluginSettingTab {
       );
 
     new Setting(containerEl)
-      .setName("Review display mode")
-      .setDesc(
-        // eslint-disable-next-line obsidianmd/ui/sentence-case
-        "Where review and browse sessions open. Tabs can be dragged to sidebars, bottom panels, or separate windows."
-      )
+      .setName(I18n.t.settings.ui.reviewDisplayMode)
+      .setDesc(I18n.t.settings.ui.reviewDisplayModeDesc)
       .addDropdown((dropdown) =>
         dropdown
-          .addOption("modal", "Modal overlay")
-          .addOption("tab", "New tab")
+          .addOption("modal", I18n.t.settings.ui.displayModeModal)
+          .addOption("tab", I18n.t.settings.ui.displayModeTab)
           .setValue(this.settings.ui.reviewDisplayMode)
           .onChange(async (value) => {
             this.settings.ui.reviewDisplayMode = value as "modal" | "tab";
@@ -466,15 +469,12 @@ export class DecksSettingTab extends PluginSettingTab {
       );
 
     new Setting(containerEl)
-      .setName("Flashcard manager display mode")
-      .setDesc(
-        // eslint-disable-next-line obsidianmd/ui/sentence-case
-        "Where the flashcard manager opens. Tabs can be dragged to sidebars, bottom panels, or separate windows."
-      )
+      .setName(I18n.t.settings.ui.flashcardManagerDisplayMode)
+      .setDesc(I18n.t.settings.ui.flashcardManagerDisplayModeDesc)
       .addDropdown((dropdown) =>
         dropdown
-          .addOption("modal", "Modal overlay")
-          .addOption("tab", "New tab")
+          .addOption("modal", I18n.t.settings.ui.displayModeModal)
+          .addOption("tab", I18n.t.settings.ui.displayModeTab)
           .setValue(this.settings.ui.flashcardManagerDisplayMode)
           .onChange(async (value) => {
             this.settings.ui.flashcardManagerDisplayMode = value as
@@ -485,13 +485,11 @@ export class DecksSettingTab extends PluginSettingTab {
       );
 
     new Setting(containerEl)
-      .setName("Hide decks with fewer than")
-      .setDesc(
-        "Decks (and groups) with fewer than this many total cards are hidden from the list. Pinned decks are always shown. Set to 0 to disable."
-      )
+      .setName(I18n.t.settings.ui.minDeckCardCount)
+      .setDesc(I18n.t.settings.ui.minDeckCardCountDesc)
       .addText((text) =>
         text
-          .setPlaceholder("0")
+          .setPlaceholder(I18n.t.settings.ui.minDeckCardCountPlaceholder)
           .setValue(String(this.settings.ui.minDeckCardCount))
           .onChange(async (value) => {
             const n = Number.parseInt(value, 10);
@@ -509,17 +507,15 @@ export class DecksSettingTab extends PluginSettingTab {
   }
 
   private addDebugSettings(containerEl: HTMLElement): void {
-    new Setting(containerEl).setName("Debug").setHeading();
+    new Setting(containerEl).setName(I18n.t.settings.debug.heading).setHeading();
     containerEl.createEl("p", {
-      text: "Debug settings for troubleshooting and development.",
+      text: I18n.t.settings.debug.paragraph,
       cls: "setting-item-description",
     });
 
     new Setting(containerEl)
-      .setName("Enable debug logging")
-      .setDesc(
-        "Show detailed logging in the console for sync operations and flashcard processing"
-      )
+      .setName(I18n.t.settings.debug.enableLogging)
+      .setDesc(I18n.t.settings.debug.enableLoggingDesc)
       .addToggle((toggle) =>
         toggle
           .setValue(this.settings.debug?.enableLogging || false)
@@ -536,10 +532,8 @@ export class DecksSettingTab extends PluginSettingTab {
       );
 
     new Setting(containerEl)
-      .setName("Enable performance logs")
-      .setDesc(
-        "Show performance timing metrics in the console (sync times, parsing performance, etc.)"
-      )
+      .setName(I18n.t.settings.debug.performanceLogs)
+      .setDesc(I18n.t.settings.debug.performanceLogsDesc)
       .addToggle((toggle) =>
         toggle
           .setValue(this.settings.debug?.performanceLogs || false)
@@ -557,20 +551,18 @@ export class DecksSettingTab extends PluginSettingTab {
   }
 
   private addDatabaseSettings(containerEl: HTMLElement): void {
-    new Setting(containerEl).setName("Database management").setHeading();
+    new Setting(containerEl).setName(I18n.t.settings.database.heading).setHeading();
     containerEl.createEl("p", {
-      text: "Manage your flashcard database. Use with caution - these actions cannot be undone.",
+      text: I18n.t.settings.database.paragraph,
       cls: "setting-item-description",
     });
 
     new Setting(containerEl)
-      .setName("Purge database")
-      .setDesc(
-        "Permanently delete all flashcards, review history, and deck data. This will force a clean rebuild from your vault files. All progress will be lost!"
-      )
+      .setName(I18n.t.settings.database.purgeDatabase)
+      .setDesc(I18n.t.settings.database.purgeDatabaseDesc)
       .addButton((button) =>
         button
-          .setButtonText("Purge database")
+          .setButtonText(I18n.t.settings.database.purgeDatabaseButton)
           .setWarning()
           .onClick(() => {
             new DatabasePurgeModal(
@@ -585,11 +577,11 @@ export class DecksSettingTab extends PluginSettingTab {
   }
 
   private addBackupSettings(containerEl: HTMLElement): void {
-    new Setting(containerEl).setName("Backup").setHeading();
+    new Setting(containerEl).setName(I18n.t.settings.backup.heading).setHeading();
 
     new Setting(containerEl)
-      .setName("Enable auto backup")
-      .setDesc("Automatically backup review data after each session")
+      .setName(I18n.t.settings.backup.enableAutoBackup)
+      .setDesc(I18n.t.settings.backup.enableAutoBackupDesc)
       .addToggle((toggle) =>
         toggle
           .setValue(this.settings.backup.enableAutoBackup)
@@ -600,8 +592,8 @@ export class DecksSettingTab extends PluginSettingTab {
       );
 
     new Setting(containerEl)
-      .setName("Max backups")
-      .setDesc("Maximum number of backups to keep (3-10)")
+      .setName(I18n.t.settings.backup.maxBackups)
+      .setDesc(I18n.t.settings.backup.maxBackupsDesc)
       .addSlider((slider) =>
         slider
           .setLimits(3, 10, 1)
@@ -615,54 +607,59 @@ export class DecksSettingTab extends PluginSettingTab {
       );
 
     new Setting(containerEl)
-      .setName("Create backup now")
-      .setDesc("Create a manual backup of your flashcard database")
+      .setName(I18n.t.settings.backup.createBackupNow)
+      .setDesc(I18n.t.settings.backup.createBackupNowDesc)
       .addButton((button) =>
         button
-          .setButtonText("Create backup")
+          .setButtonText(I18n.t.settings.backup.createBackupButton)
           .setCta()
           .onClick(async () => {
-            const notice = new Notice("Creating backup...", 0);
+            const notice = new Notice(I18n.t.notices.creatingBackup, 0);
             try {
               const filename = await this.backupService.createBackup(this.db);
               notice.hide();
-              new Notice(`✅ Backup created: ${filename}`, 5000);
+              new Notice(I18n.format(I18n.t.notices.backupCreated, { filename }), 5000);
             } catch (error) {
               notice.hide();
-              new Notice(`❌ Failed to create backup: ${(error as Error).message}`, 8000);
+              new Notice(
+                I18n.format(I18n.t.notices.backupFailed, {
+                  message: (error as Error).message,
+                }),
+                8000
+              );
               this.logger.debug("Backup creation failed:", error);
             }
           })
       );
 
     // Backup restoration section
-    new Setting(containerEl).setName("Restore backup").setHeading();
+    new Setting(containerEl).setName(I18n.t.settings.backup.restoreHeading).setHeading();
 
     let selectedBackup = "";
     const backupSetting = new Setting(containerEl)
-      .setName("Available backups")
-      .setDesc("Select a backup to restore")
+      .setName(I18n.t.settings.backup.availableBackups)
+      .setDesc(I18n.t.settings.backup.availableBackupsDesc)
       .addDropdown((dropdown) => {
-        dropdown.addOption("", "Select backup...");
+        dropdown.addOption("", I18n.t.settings.backup.selectBackupOption);
         dropdown.onChange((value) => {
           selectedBackup = value;
         });
       })
       .addButton((button) =>
         button
-          .setButtonText("Refresh")
-          .setTooltip("Refresh backup list")
+          .setButtonText(I18n.t.settings.backup.refreshButton)
+          .setTooltip(I18n.t.settings.backup.refreshTooltip)
           .onClick(async () => {
             await this.refreshBackupList(backupSetting);
           })
       )
       .addButton((button) =>
         button
-          .setButtonText("Restore")
+          .setButtonText(I18n.t.settings.backup.restoreButton)
           .setCta()
           .onClick(async () => {
             if (!selectedBackup) {
-              new Notice("Please select a backup to restore");
+              new Notice(I18n.t.notices.selectBackupPrompt);
               return;
             }
 
@@ -671,8 +668,8 @@ export class DecksSettingTab extends PluginSettingTab {
       )
       .addButton((button) =>
         button
-          .setButtonText("Restore from file")
-          .setTooltip("Pick a .db backup from anywhere on disk")
+          .setButtonText(I18n.t.settings.backup.restoreFromFile)
+          .setTooltip(I18n.t.settings.backup.restoreFromFileTooltip)
           .onClick(() => {
             this.pickAndRestoreFromFile();
           })
@@ -705,7 +702,10 @@ export class DecksSettingTab extends PluginSettingTab {
       if (!file) return;
       this.restoreFromFileBytes(file).catch((error: Error) => {
         this.logger.debug("Restore from file failed", error);
-        new Notice(`❌ Restore failed: ${error.message}`, 8000);
+        new Notice(
+          I18n.format(I18n.t.notices.restoreFailed, { message: error.message }),
+          8000
+        );
       });
     });
     document.body.appendChild(input);
@@ -716,7 +716,10 @@ export class DecksSettingTab extends PluginSettingTab {
 
   private async restoreFromFileBytes(file: File): Promise<void> {
     if (!this.db) throw new Error("Database not available");
-    const progressNotice = new Notice(`Restoring from ${file.name}…`, 0);
+    const progressNotice = new Notice(
+      I18n.format(I18n.t.notices.restoringFromFile, { filename: file.name }),
+      0
+    );
     try {
       const buffer = await file.arrayBuffer();
       await this.backupService.restoreFromFile(
@@ -724,7 +727,12 @@ export class DecksSettingTab extends PluginSettingTab {
         this.db,
         (current, total) => {
           const progress = Math.round((current / total) * 100);
-          progressNotice.setMessage(`Restoring from ${file.name}: ${progress}%`);
+          progressNotice.setMessage(
+            I18n.format(I18n.t.notices.restoringFromFileProgress, {
+              filename: file.name,
+              progress,
+            })
+          );
         }
       );
       progressNotice.hide();
@@ -750,7 +758,7 @@ export class DecksSettingTab extends PluginSettingTab {
 
       if (dropdown === undefined) {
         this.logger.debug("Dropdown component not found");
-        new Notice("Dropdown not found", 3000);
+        new Notice(I18n.t.notices.dropdownNotFound, 3000);
         return;
       }
 
@@ -762,14 +770,14 @@ export class DecksSettingTab extends PluginSettingTab {
       // Add default option
       const defaultOption = dropdown.selectEl.createEl("option");
       defaultOption.value = "";
-      defaultOption.textContent = "Select backup...";
+      defaultOption.textContent = I18n.t.settings.backup.selectBackupOption;
 
       if (backups.length === 0) {
         const noBackupsOption = dropdown.selectEl.createEl("option");
         noBackupsOption.value = "";
-        noBackupsOption.textContent = "No backups found";
+        noBackupsOption.textContent = I18n.t.settings.backup.noBackupsOption;
         dropdown.setDisabled(true);
-        new Notice("No backups found", 3000);
+        new Notice(I18n.t.notices.noBackupsFound, 3000);
       } else {
         dropdown.setDisabled(false);
         for (const backup of backups) {
@@ -777,16 +785,24 @@ export class DecksSettingTab extends PluginSettingTab {
           option.value = backup.filename;
           option.textContent = `${backup.timestamp.toLocaleString()}`;
         }
-        new Notice(`Found ${backups.length} backup(s)`, 3000);
+        new Notice(
+          I18n.format(I18n.t.notices.backupsFound, { count: backups.length }),
+          3000
+        );
       }
     } catch (error) {
       this.logger.debug("Failed to load backup list:", error);
-      new Notice(`Failed to load backup list: ${(error as Error).message}`, 5000);
+      new Notice(
+        I18n.format(I18n.t.notices.backupListFailed, {
+          message: (error as Error).message,
+        }),
+        5000
+      );
     }
   }
 
   private async restoreBackup(filename: string): Promise<void> {
-    const progressNotice = new Notice("Restoring backup...", 0);
+    const progressNotice = new Notice(I18n.t.notices.restoringBackup, 0);
 
     try {
       // Get database service from plugin
@@ -805,7 +821,11 @@ export class DecksSettingTab extends PluginSettingTab {
           total = totalCount;
           const progress = Math.round((current / total) * 100);
           progressNotice.setMessage(
-            `Restoring backup: ${progress}% (${current}/${total})`
+            I18n.format(I18n.t.notices.restoreProgress, {
+              progress,
+              current,
+              total,
+            })
           );
         }
       );
@@ -818,7 +838,12 @@ export class DecksSettingTab extends PluginSettingTab {
     } catch (error) {
       progressNotice.hide();
       this.logger.debug("Backup restoration failed:", error);
-      new Notice(`❌ Backup restoration failed: ${(error as Error).message}`, 8000);
+      new Notice(
+        I18n.format(I18n.t.notices.backupRestoreFailed, {
+          message: (error as Error).message,
+        }),
+        8000
+      );
     }
   }
 }
@@ -847,7 +872,7 @@ class DatabasePurgeModal extends Modal {
     const { contentEl } = this;
     contentEl.empty();
 
-    contentEl.createEl("h2", { text: "Purge database" });
+    contentEl.createEl("h2", { text: I18n.t.modals.purgeDatabase.title });
 
     const warning = contentEl.createEl("div", {
       cls: "setting-item-description",
@@ -855,30 +880,30 @@ class DatabasePurgeModal extends Modal {
 
     const p1 = warning.createEl("p");
     p1.createEl("strong", {
-      text: "This will permanently delete all flashcard data including:",
+      text: I18n.t.modals.purgeDatabase.warningStrong,
     });
 
     const ul = warning.createEl("ul");
-    ul.createEl("li", { text: "All flashcards and their content" });
-    ul.createEl("li", { text: "Complete review history and progress" });
-    ul.createEl("li", { text: "All deck information" });
-    ul.createEl("li", { text: "Statistical data" });
+    ul.createEl("li", { text: I18n.t.modals.purgeDatabase.listFlashcards });
+    ul.createEl("li", { text: I18n.t.modals.purgeDatabase.listReviews });
+    ul.createEl("li", { text: I18n.t.modals.purgeDatabase.listDecks });
+    ul.createEl("li", { text: I18n.t.modals.purgeDatabase.listStatistics });
 
     const p2 = warning.createEl("p");
-    p2.createEl("strong", { text: "This action cannot be undone!" });
+    p2.createEl("strong", { text: I18n.t.modals.purgeDatabase.cannotUndo });
 
     warning.createEl("p", {
-      text: "The database will be rebuilt from your current vault files, but all progress will be lost.",
+      text: I18n.t.modals.purgeDatabase.rebuildNote,
     });
 
     contentEl.createEl("p", {
-      text: "To confirm this action, type the text shown in the placeholder below",
+      text: I18n.t.modals.purgeDatabase.confirmPrompt,
       cls: "setting-item-description",
     });
 
     const input = contentEl.createEl("input", {
       type: "text",
-      placeholder: "DELETE ALL DATA",
+      placeholder: I18n.t.modals.purgeDatabase.confirmPlaceholder,
       cls: "decks-dialog-width decks-dialog-margin-bottom",
     });
 
@@ -886,21 +911,23 @@ class DatabasePurgeModal extends Modal {
       cls: "decks-flex-container decks-flex-gap decks-flex-justify-end",
     });
 
-    const cancelButton = buttonContainer.createEl("button", { text: "Cancel" });
+    const cancelButton = buttonContainer.createEl("button", {
+      text: I18n.t.modals.purgeDatabase.cancel,
+    });
     cancelButton.onclick = () => this.close();
 
     const confirmButton = buttonContainer.createEl("button", {
-      text: "Purge database",
+      text: I18n.t.modals.purgeDatabase.purgeButton,
       cls: "mod-warning",
     });
 
     confirmButton.onclick = async () => {
-      if (input.value === "DELETE ALL DATA") {
+      if (input.value === I18n.t.modals.purgeDatabase.confirmPlaceholder) {
         try {
           this.close();
 
           // Show progress notice
-          const notice = new Notice("Purging database...", 0);
+          const notice = new Notice(I18n.t.notices.purgingDatabase, 0);
 
           // Purge the database
           await this.purgeDatabase();
@@ -909,23 +936,17 @@ class DatabasePurgeModal extends Modal {
           await this.performSync(true);
 
           // Update the notice
-          notice.setMessage("✅ Database purged and rebuilt successfully");
+          notice.setMessage(I18n.t.notices.databasePurged);
           setTimeout(() => notice.hide(), 3000);
 
           // Refresh the view
           await this.refreshViewStats();
         } catch (error) {
           this.logger.debug("Failed to purge database:", error);
-          new Notice(
-            "Failed to purge database. Check the console for details.",
-            5000
-          );
+          new Notice(I18n.t.notices.purgeFailed, 5000);
         }
       } else {
-        new Notice(
-          "Confirmation text doesn't match. Database purge cancelled.",
-          3000
-        );
+        new Notice(I18n.t.notices.purgeConfirmMismatch, 3000);
       }
     };
 

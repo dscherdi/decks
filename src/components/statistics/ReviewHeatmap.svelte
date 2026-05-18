@@ -1,6 +1,9 @@
 <script lang="ts">
   import { onMount } from "svelte";
   import { toLocalDateString } from "@/utils/date-utils";
+  import { I18n } from "@/i18n/I18n";
+
+  const t = I18n.t;
 
   export let getReviewCounts: (days: number) => Promise<Map<string, number>>;
 
@@ -20,20 +23,13 @@
   let lastEventTime = 0;
   let lastEventType = "";
 
-  const months = [
-    "Jan",
-    "Feb",
-    "Mar",
-    "Apr",
-    "May",
-    "Jun",
-    "Jul",
-    "Aug",
-    "Sep",
-    "Oct",
-    "Nov",
-    "Dec",
-  ];
+  // Localized short month names via the user's resolved language code.
+  // Falls back to English if the locale is unknown to Intl.
+  const months = Array.from({ length: 12 }, (_, i) =>
+    new Intl.DateTimeFormat(I18n.code, { month: "short" }).format(
+      new Date(2024, i, 1)
+    )
+  );
 
   function generateDays() {
     // Always show full year from January 1 to December 31
@@ -273,7 +269,7 @@
         >
           <path d="M7.41 8.59L12 13.17l4.59-4.58L18 10l-6 6-6-6z" />
         </svg>
-        <h4>Review activity</h4>
+        <h4>{t.statistics.reviewActivityHeading}</h4>
       </div>
       {#if !isLoading}
         <span class="decks-total-reviews">
@@ -311,7 +307,7 @@
 
   {#if !collapsed}
     {#if isLoading}
-      <div class="decks-loading">Loading...</div>
+      <div class="decks-loading">{t.statistics.loading}</div>
     {:else}
       <div class="decks-heatmap">
         <div class="decks-months-container">
@@ -339,7 +335,7 @@
       </div>
 
       <div class="decks-legend">
-        <span class="decks-legend-label">Less</span>
+        <span class="decks-legend-label">{t.statistics.legendLess}</span>
         <div class="decks-legend-colors">
           <div class="decks-legend-square decks-intensity-0"></div>
           <div class="decks-legend-square decks-intensity-1"></div>
@@ -347,7 +343,7 @@
           <div class="decks-legend-square decks-intensity-3"></div>
           <div class="decks-legend-square decks-intensity-4"></div>
         </div>
-        <span class="decks-legend-label">More</span>
+        <span class="decks-legend-label">{t.statistics.legendMore}</span>
       </div>
     {/if}
   {/if}

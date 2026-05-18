@@ -11,6 +11,10 @@
     getDefaultLearningSteps,
     getDefaultRelearningSteps,
   } from "../../utils/step-parser";
+  import { I18n } from "@/i18n/I18n";
+
+  const t = I18n.t;
+  const p = t.profiles;
 
   export let db: IDatabaseService;
   export let initialProfiles: DeckProfile[];
@@ -131,7 +135,7 @@
     await selectProfile(newProfileId);
     rebuildProfileSelector();
 
-    new Notice("Created new profile");
+    new Notice(p.noticeProfileCreated);
   }
 
   async function handleSaveProfile() {
@@ -143,29 +147,29 @@
     try {
       // Pre-save validation
       if (!selectedProfile.isDefault && profileName.trim().length === 0) {
-        new Notice("Profile name cannot be empty");
+        new Notice(p.noticeProfileNameEmpty);
         saving = false;
         return;
       }
       if (enableNewCardsLimit && (isNaN(newCardsLimit) || newCardsLimit < 1 || newCardsLimit > 9999)) {
-        new Notice("New cards per day must be between 1 and 9999");
+        new Notice(p.noticeNewCardsRange);
         saving = false;
         return;
       }
       if (enableReviewCardsLimit && (isNaN(reviewCardsLimit) || reviewCardsLimit < 1 || reviewCardsLimit > 9999)) {
-        new Notice("Review cards per day must be between 1 and 9999");
+        new Notice(p.noticeReviewCardsRange);
         saving = false;
         return;
       }
       if (isNaN(requestRetention) || requestRetention < 0.5 || requestRetention > 0.995) {
-        new Notice("Request retention must be between 0.5 and 0.995");
+        new Notice(p.noticeRequestRetentionRange);
         saving = false;
         return;
       }
       if (learningSteps.trim() !== "") {
         const lsResult = validateLearningSteps(learningSteps, fsrsProfile);
         if (!lsResult.valid) {
-          new Notice(lsResult.error ?? "Invalid again interval");
+          new Notice(lsResult.error ?? p.noticeInvalidAgainInterval);
           saving = false;
           return;
         }
@@ -173,7 +177,7 @@
       if (relearningSteps.trim() !== "") {
         const rsResult = validateRelearningSteps(relearningSteps, fsrsProfile);
         if (!rsResult.valid) {
-          new Notice(rsResult.error ?? "Invalid again interval");
+          new Notice(rsResult.error ?? p.noticeInvalidAgainInterval);
           saving = false;
           return;
         }
@@ -207,10 +211,10 @@
       await selectProfile(selectedProfile.id);
       rebuildProfileSelector();
 
-      new Notice("Profile saved successfully");
+      new Notice(p.noticeProfileSaved);
     } catch (error) {
       console.error("Error saving profile:", error);
-      new Notice("Error saving profile");
+      new Notice(p.noticeProfileSaveError);
     } finally {
       saving = false;
     }
@@ -218,12 +222,12 @@
 
   async function handleDeleteProfile() {
     if (!selectedProfile || selectedProfile.isDefault) {
-      new Notice("Cannot delete the DEFAULT profile");
+      new Notice(p.noticeCannotDeleteDefault);
       return;
     }
 
     const confirmDelete = confirm(
-      `Are you sure you want to delete the profile "${selectedProfile.name}"?\n\nAll decks using this profile will be reset to the DEFAULT profile.`
+      I18n.format(p.confirmDeletePrompt, { name: selectedProfile.name })
     );
 
     if (!confirmDelete) return;
@@ -239,7 +243,7 @@
     }
     rebuildProfileSelector();
 
-    new Notice("Profile deleted");
+    new Notice(p.noticeProfileDeleted);
   }
 
   async function handleRemoveTagMapping(mappingId: string) {
@@ -264,12 +268,12 @@
     profileSelectorContainer.empty();
 
     new Setting(profileSelectorContainer)
-      .setName("Select Profile")
-      .setDesc("Choose a profile to view and edit")
+      .setName(p.selectProfile)
+      .setDesc(p.chooseProfileDesc)
       .addDropdown((dropdown) => {
         for (const profile of profiles) {
           const label = profile.isDefault
-            ? `${profile.name} (DEFAULT)`
+            ? `${profile.name} ${p.defaultSuffix}`
             : profile.name;
           dropdown.addOption(profile.id, label);
         }
@@ -290,8 +294,8 @@
       })
       .addButton((button) => {
         button
-          .setButtonText("Create New Profile")
-          .setTooltip("Create a new profile")
+          .setButtonText(p.createNewProfile)
+          .setTooltip(p.createTooltip)
           .onClick(() => {
             handleCreateNewProfile();
           });
@@ -305,8 +309,8 @@
     if (profileNameContainer) {
       profileNameContainer.empty();
       new Setting(profileNameContainer)
-        .setName("Profile Name")
-        .setDesc("Name for this profile")
+        .setName(p.profileName)
+        .setDesc(p.profileNameDesc)
         .addText((text) => {
           text
             .setValue(profileName)
@@ -328,8 +332,8 @@
     if (enableNewCardsContainer) {
       enableNewCardsContainer.empty();
       new Setting(enableNewCardsContainer)
-        .setName("Limit new cards per day")
-        .setDesc("Enable daily limit for new cards")
+        .setName(p.limitNewCardsLabel)
+        .setDesc(p.limitNewCardsDesc)
         .addToggle((toggle) => {
           toggle.setValue(enableNewCardsLimit).onChange((value) => {
             enableNewCardsLimit = value;
@@ -343,8 +347,8 @@
     if (newCardsLimitContainer && enableNewCardsLimit) {
       newCardsLimitContainer.empty();
       new Setting(newCardsLimitContainer)
-        .setName("New cards per day")
-        .setDesc("Maximum new cards to introduce per day (1-9999)")
+        .setName(p.newCardsPerDayLabel)
+        .setDesc(p.newCardsPerDayDesc)
         .addText((text) => {
           text
             .setValue(newCardsLimit.toString())
@@ -369,8 +373,8 @@
     if (enableReviewCardsContainer) {
       enableReviewCardsContainer.empty();
       new Setting(enableReviewCardsContainer)
-        .setName("Limit review cards per day")
-        .setDesc("Enable daily limit for review cards")
+        .setName(p.limitReviewCardsLabel)
+        .setDesc(p.limitReviewCardsDesc)
         .addToggle((toggle) => {
           toggle.setValue(enableReviewCardsLimit).onChange((value) => {
             enableReviewCardsLimit = value;
@@ -384,8 +388,8 @@
     if (reviewCardsLimitContainer && enableReviewCardsLimit) {
       reviewCardsLimitContainer.empty();
       new Setting(reviewCardsLimitContainer)
-        .setName("Review cards per day")
-        .setDesc("Maximum review cards per day (1-9999)")
+        .setName(p.reviewCardsPerDayLabel)
+        .setDesc(p.reviewCardsPerDayDesc)
         .addText((text) => {
           text
             .setValue(reviewCardsLimit.toString())
@@ -410,8 +414,8 @@
     if (learningStepsContainer) {
       learningStepsContainer.empty();
       new Setting(learningStepsContainer)
-        .setName("Again interval")
-        .setDesc("Interval when pressing Again on a new card (e.g. 1m)")
+        .setName(p.againIntervalNew)
+        .setDesc(p.againIntervalNewDesc)
         .addText((text) => {
           text
             .setValue(learningSteps)
@@ -434,8 +438,8 @@
     if (relearningStepsContainer) {
       relearningStepsContainer.empty();
       new Setting(relearningStepsContainer)
-        .setName("Again interval")
-        .setDesc("Interval when pressing Again on a review card (e.g. 10m)")
+        .setName(p.againIntervalReview)
+        .setDesc(p.againIntervalReviewDesc)
         .addText((text) => {
           text
             .setValue(relearningSteps)
@@ -458,12 +462,12 @@
     if (headerLevelContainer) {
       headerLevelContainer.empty();
       new Setting(headerLevelContainer)
-        .setName("Header level")
-        .setDesc("Header level for flashcard parsing")
+        .setName(p.headerLevelLabel)
+        .setDesc(p.headerLevelDescParsing)
         .addDropdown((dropdown) => {
-          dropdown.addOption("0", "Title");
+          dropdown.addOption("0", t.config.headerTitle);
           for (let i = 1; i <= 6; i++) {
-            dropdown.addOption(i.toString(), `H${i}`);
+            dropdown.addOption(i.toString(), I18n.format(t.config.headerH, { level: i }));
           }
           dropdown.setValue(headerLevel.toString()).onChange((value) => {
             headerLevel = parseInt(value);
@@ -475,8 +479,8 @@
     if (clozeEnabledContainer) {
       clozeEnabledContainer.empty();
       new Setting(clozeEnabledContainer)
-        .setName("Cloze deletions")
-        .setDesc("Generate cloze cards from ==highlighted== text")
+        .setName(p.clozeDeletionsLabel)
+        .setDesc(p.clozeDeletionsDesc)
         .addToggle((toggle) => {
           toggle.setValue(clozeEnabled).onChange((value) => {
             clozeEnabled = value;
@@ -489,11 +493,11 @@
     if (clozeShowContextContainer && clozeEnabled) {
       clozeShowContextContainer.empty();
       new Setting(clozeShowContextContainer)
-        .setName("Cloze context")
-        .setDesc("How non-tested clozes appear during review")
+        .setName(p.clozeContextLabel)
+        .setDesc(p.clozeContextDesc)
         .addDropdown((dropdown) => {
-          dropdown.addOption("open", "Show other clozes");
-          dropdown.addOption("hidden", "Hide all clozes");
+          dropdown.addOption("open", p.clozeShowOption);
+          dropdown.addOption("hidden", p.clozeHideOption);
           dropdown.setValue(clozeShowContext).onChange((value) => {
             clozeShowContext = value as ClozeShowContext;
           });
@@ -506,11 +510,11 @@
     if (reviewOrderContainer) {
       reviewOrderContainer.empty();
       new Setting(reviewOrderContainer)
-        .setName("Review order")
-        .setDesc("Order in which cards are reviewed")
+        .setName(p.reviewOrderLabel)
+        .setDesc(p.reviewOrderDesc)
         .addDropdown((dropdown) => {
-          dropdown.addOption("due-date", "Oldest Due First");
-          dropdown.addOption("random", "Random");
+          dropdown.addOption("due-date", t.config.reviewOrderOldestDue);
+          dropdown.addOption("random", t.config.reviewOrderRandomLabel);
           dropdown.setValue(reviewOrder).onChange((value) => {
             reviewOrder = value as ReviewOrder;
           });
@@ -521,8 +525,8 @@
     if (requestRetentionContainer) {
       requestRetentionContainer.empty();
       new Setting(requestRetentionContainer)
-        .setName("Request retention")
-        .setDesc("Target retention rate (0.5 - 0.995)")
+        .setName(p.requestRetentionLabel)
+        .setDesc(p.requestRetentionDesc)
         .addText((text) => {
           text
             .setValue(requestRetention.toString())
@@ -545,19 +549,19 @@
     if (fsrsProfileContainer) {
       fsrsProfileContainer.empty();
       const desc = trainedWeightsAvailable
-        ? "Standard or intensive use shipped weights. Trained applies your optimized weights (standard intervals)."
-        : "Learning intensity profile. Train weights in algorithm tuning to enable the Trained option.";
+        ? p.fsrsTrainedDesc
+        : p.fsrsUntrainedDesc;
       const currentValue =
         fsrsProfile === "STANDARD" && useTrainedWeights ? "TRAINED" : fsrsProfile;
       new Setting(fsrsProfileContainer)
-        .setName("FSRS profile")
+        .setName(p.fsrsProfileLabel)
         .setDesc(desc)
         .addDropdown((dropdown) => {
-          dropdown.addOption("STANDARD", "Standard");
-          dropdown.addOption("INTENSIVE", "Intensive");
+          dropdown.addOption("STANDARD", p.fsrsStandardOption);
+          dropdown.addOption("INTENSIVE", p.fsrsIntensiveOption);
           dropdown.addOption(
             "TRAINED",
-            trainedWeightsAvailable ? "Trained" : "Trained (unavailable)"
+            trainedWeightsAvailable ? p.fsrsTrainedOption : p.fsrsTrainedUnavailable
           );
           if (!trainedWeightsAvailable) {
             const selectEl = dropdown.selectEl as HTMLSelectElement;
@@ -583,8 +587,8 @@
     if (deckCountContainer) {
       deckCountContainer.empty();
       new Setting(deckCountContainer)
-        .setName("Decks Using Profile")
-        .setDesc(`${deckCount} deck(s)`)
+        .setName(p.decksUsingProfile)
+        .setDesc(I18n.format(p.deckCount, { count: deckCount }))
         .setClass("decks-config-readonly");
     }
 
@@ -593,7 +597,7 @@
       tagMappingsContainer.empty();
       if (tagMappings.length > 0) {
         tagMappingsContainer.createEl("h4", {
-          text: "Tag Assignments",
+          text: p.tagAssignmentsHeading,
           cls: "decks-button-container",
         });
 
@@ -632,12 +636,12 @@
 
     {#if selectedProfile}
       <div class="decks-profile-settings">
-        <h3>Profile Settings</h3>
+        <h3>{p.profileSettings}</h3>
 
         <div bind:this={profileNameContainer}></div>
 
         <div class="decks-settings-section">
-          <h4>Daily limits</h4>
+          <h4>{p.sectionDailyLimits}</h4>
           <div bind:this={enableNewCardsContainer}></div>
           <div bind:this={newCardsLimitContainer}></div>
           <div bind:this={enableReviewCardsContainer}></div>
@@ -645,35 +649,35 @@
         </div>
 
         <div class="decks-settings-section">
-          <h4>New cards</h4>
+          <h4>{p.sectionNewCards}</h4>
           <div bind:this={learningStepsContainer}></div>
         </div>
 
         <div class="decks-settings-section">
-          <h4>Lapses</h4>
+          <h4>{p.sectionLapses}</h4>
           <div bind:this={relearningStepsContainer}></div>
         </div>
 
         <div class="decks-settings-section">
-          <h4>Card parsing</h4>
+          <h4>{p.sectionCardParsing}</h4>
           <div bind:this={headerLevelContainer}></div>
           <div bind:this={clozeEnabledContainer}></div>
           <div bind:this={clozeShowContextContainer}></div>
         </div>
 
         <div class="decks-settings-section">
-          <h4>Review Settings</h4>
+          <h4>{p.sectionReviewSettings}</h4>
           <div bind:this={reviewOrderContainer}></div>
         </div>
 
         <div class="decks-settings-section">
-          <h4>FSRS Algorithm</h4>
+          <h4>{p.sectionFsrsAlgorithm}</h4>
           <div bind:this={requestRetentionContainer}></div>
           <div bind:this={fsrsProfileContainer}></div>
         </div>
 
         <div class="decks-settings-section">
-          <h4>Profile Info</h4>
+          <h4>{p.sectionProfileInfo}</h4>
           <div bind:this={deckCountContainer}></div>
           <div bind:this={tagMappingsContainer}></div>
         </div>
@@ -690,16 +694,16 @@
           on:click={handleSaveProfile}
           disabled={saving || hasErrors}
         >
-          {saving ? "Saving..." : "Save Changes"}
+          {saving ? p.savingChanges : p.saveChanges}
         </button>
         {#if !selectedProfile.isDefault}
           <button class="decks-btn-delete" on:click={handleDeleteProfile}>
-            Delete Profile
+            {p.deleteProfileButton}
           </button>
         {/if}
       </div>
     {/if}
-    <button on:click={onclose}>Close</button>
+    <button on:click={onclose}>{p.close}</button>
   </div>
 </div>
 

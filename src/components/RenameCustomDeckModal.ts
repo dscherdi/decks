@@ -1,5 +1,6 @@
 import { Modal, Setting } from "obsidian";
 import type { App } from "obsidian";
+import { I18n } from "@/i18n/I18n";
 
 export class RenameCustomDeckModal extends Modal {
   private newName: string;
@@ -22,14 +23,14 @@ export class RenameCustomDeckModal extends Modal {
     const { contentEl } = this;
     contentEl.empty();
 
-    new Setting(contentEl).setName("Rename custom deck").setHeading();
+    new Setting(contentEl).setName(I18n.t.modals.renameCustomDeck.title).setHeading();
 
     new Setting(contentEl)
-      .setName("Deck name")
+      .setName(I18n.t.modals.renameCustomDeck.label)
       .addText((text) =>
         text
           .setValue(this.newName)
-          .setPlaceholder("Enter new name")
+          .setPlaceholder(I18n.t.modals.renameCustomDeck.placeholder)
           .onChange((value) => {
             this.newName = value;
           })
@@ -38,14 +39,14 @@ export class RenameCustomDeckModal extends Modal {
     new Setting(contentEl)
       .addButton((btn) =>
         btn
-          .setButtonText("Cancel")
+          .setButtonText(I18n.t.modals.renameCustomDeck.cancel)
           .onClick(() => {
             this.close();
           })
       )
       .addButton((btn) =>
         btn
-          .setButtonText("Rename")
+          .setButtonText(I18n.t.modals.renameCustomDeck.rename)
           .setCta()
           .onClick(() => {
             const name = this.newName.trim();

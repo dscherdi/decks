@@ -4,6 +4,7 @@ import type { DecksSettings } from "../../settings";
 import { FsrsOptimizationService } from "../../services/FsrsOptimizationService";
 import type { TrainingResult } from "../../algorithm/fsrs-optimizer";
 import type { Logger } from "../../utils/logging";
+import { I18n } from "@/i18n/I18n";
 
 /**
  * Train-then-confirm FSRS weight optimization modal.
@@ -38,7 +39,7 @@ export class OptimizeFsrsModal extends Modal {
   }
 
   onOpen(): void {
-    this.titleEl.setText("Optimize parameters");
+    this.titleEl.setText(I18n.t.modals.optimizeFsrs.title);
     this.runTraining().catch((err) => {
       this.logger?.error?.("FSRS optimization failed", err);
       this.renderError(err instanceof Error ? err.message : String(err));
@@ -51,7 +52,7 @@ export class OptimizeFsrsModal extends Modal {
   }
 
   private async runTraining(): Promise<void> {
-    this.renderProgress(0, 0, "Loading review history…");
+    this.renderProgress(0, 0, I18n.t.modals.optimizeFsrs.loadingHistory);
     const service = new FsrsOptimizationService(this.db, this.logger);
 
     // Warm-start from the user's current trained weights when present. This
@@ -63,7 +64,14 @@ export class OptimizeFsrsModal extends Modal {
 
     const result = await service.run((p) => {
       if (this.aborted) return;
-      this.renderProgress(p.step, p.totalSteps, `Training step ${p.step} / ${p.totalSteps}`);
+      this.renderProgress(
+        p.step,
+        p.totalSteps,
+        I18n.format(I18n.t.modals.optimizeFsrs.trainingStep, {
+          step: p.step,
+          total: p.totalSteps,
+        })
+      );
     }, startOptions);
 
     if (this.aborted) return;
@@ -94,16 +102,16 @@ export class OptimizeFsrsModal extends Modal {
     const c = this.contentEl;
     c.empty();
     c.createEl("p", {
-      text:
-        result.reason ??
-        "Not enough review history yet to train. Keep reviewing and try again later.",
+      text: result.reason ?? I18n.t.modals.optimizeFsrs.notEnough,
     });
     c.createEl("p", {
       cls: "decks-fsrs-muted",
-      text: `Reviews available on STANDARD-profile decks: ${result.reviewsTrained}.`,
+      text: I18n.format(I18n.t.modals.optimizeFsrs.reviewsAvailable, {
+        count: result.reviewsTrained,
+      }),
     });
     new Setting(c).addButton((b) =>
-      b.setButtonText("Close").onClick(() => this.close())
+      b.setButtonText(I18n.t.modals.optimizeFsrs.close).onClick(() => this.close())
     );
   }
 
@@ -116,31 +124,32 @@ export class OptimizeFsrsModal extends Modal {
     const improvedPct = before > 0 ? ((before - after) / before) * 100 : 0;
 
     c.createEl("p", {
-      text: `Trained on ${result.reviewsTrained.toLocaleString()} reviews across ${result.cardsTrained.toLocaleString()} cards in ${(
-        result.durationMs / 1000
-      ).toFixed(1)} s.`,
+      text: I18n.format(I18n.t.modals.optimizeFsrs.trainedSummary, {
+        reviews: result.reviewsTrained.toLocaleString(),
+        cards: result.cardsTrained.toLocaleString(),
+        seconds: (result.durationMs / 1000).toFixed(1),
+      }),
     });
 
     const stats = c.createDiv({ cls: "decks-fsrs-stats" });
-    this.renderStat(stats, "Log-loss before", before.toFixed(4));
-    this.renderStat(stats, "Log-loss after", after.toFixed(4));
-    this.renderStat(stats, "Improvement", `${improvedPct.toFixed(2)} %`);
+    this.renderStat(stats, I18n.t.modals.optimizeFsrs.logLossBefore, before.toFixed(4));
+    this.renderStat(stats, I18n.t.modals.optimizeFsrs.logLossAfter, after.toFixed(4));
+    this.renderStat(stats, I18n.t.modals.optimizeFsrs.improvement, `${improvedPct.toFixed(2)} %`);
 
     if (improvedPct < 0.01) {
       c.createEl("p", {
         cls: "decks-fsrs-muted",
-        text:
-          "Training did not meaningfully improve log-loss — current weights are already a good fit. You can safely discard.",
+        text: I18n.t.modals.optimizeFsrs.noImprovement,
       });
     }
 
     const buttons = new Setting(c);
     buttons.addButton((b) =>
-      b.setButtonText("Discard").onClick(() => this.close())
+      b.setButtonText(I18n.t.modals.optimizeFsrs.discard).onClick(() => this.close())
     );
     buttons.addButton((b) =>
       b
-        .setButtonText("Apply")
+        .setButtonText(I18n.t.modals.optimizeFsrs.apply)
         .setCta()
         .onClick(async () => {
           await this.applyResult(result);
@@ -157,10 +166,10 @@ export class OptimizeFsrsModal extends Modal {
   private renderError(message: string): void {
     const c = this.contentEl;
     c.empty();
-    c.createEl("p", { text: "Optimization failed:" });
+    c.createEl("p", { text: I18n.t.modals.optimizeFsrs.failedHeader });
     c.createEl("pre", { text: message, cls: "decks-fsrs-error" });
     new Setting(c).addButton((b) =>
-      b.setButtonText("Close").onClick(() => this.close())
+      b.setButtonText(I18n.t.modals.optimizeFsrs.close).onClick(() => this.close())
     );
   }
 
@@ -171,7 +180,7 @@ export class OptimizeFsrsModal extends Modal {
     this.settings.fsrs.lastBeforeLogLoss = result.beforeLogLoss;
     this.settings.fsrs.lastAfterLogLoss = result.afterLogLoss;
     await this.saveSettings();
-    new Notice("Trained parameters applied.");
+    new Notice(I18n.t.modals.optimizeFsrs.applied);
     this.onApplied?.();
     this.close();
   }

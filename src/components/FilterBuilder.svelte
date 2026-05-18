@@ -1,5 +1,9 @@
 <script lang="ts">
   import type { FilterDefinition, FilterRule, FilterField, FilterOperator, FilterLogic } from "../database/types";
+  import { I18n } from "@/i18n/I18n";
+
+  const t = I18n.t;
+  const fb = t.filterBuilder;
 
   export let filterDefinition: FilterDefinition;
   export let onChange: (def: FilterDefinition) => void;
@@ -15,23 +19,23 @@
   }
 
   const FIELD_OPTIONS: FieldOption[] = [
-    { value: "state", label: "Card state", type: "state" },
-    { value: "dueDate", label: "Due date", type: "date" },
-    { value: "deckId", label: "Deck", type: "deckId" },
-    { value: "deckTag", label: "Deck tag", type: "deckTag" },
-    { value: "tags", label: "Card tag", type: "tags" },
-    { value: "sourceFile", label: "Source file", type: "string" },
-    { value: "breadcrumb", label: "Breadcrumb", type: "string" },
-    { value: "type", label: "Card type", type: "string" },
-    { value: "difficulty", label: "Difficulty", type: "numeric" },
-    { value: "stability", label: "Stability", type: "numeric" },
-    { value: "interval", label: "Interval (min)", type: "numeric" },
-    { value: "repetitions", label: "Repetitions", type: "numeric" },
-    { value: "lapses", label: "Lapses", type: "numeric" },
-    { value: "lastReviewed", label: "Last reviewed", type: "date" },
-    { value: "created", label: "Created", type: "date" },
-    { value: "isLeech", label: "Is leech", type: "boolean" },
-    { value: "isDense", label: "Is dense", type: "boolean" },
+    { value: "state", label: fb.fieldCardState, type: "state" },
+    { value: "dueDate", label: fb.fieldDueDate, type: "date" },
+    { value: "deckId", label: fb.fieldDeck, type: "deckId" },
+    { value: "deckTag", label: fb.fieldDeckTag, type: "deckTag" },
+    { value: "tags", label: fb.fieldCardTag, type: "tags" },
+    { value: "sourceFile", label: fb.fieldSourceFile, type: "string" },
+    { value: "breadcrumb", label: fb.fieldBreadcrumb, type: "string" },
+    { value: "type", label: fb.fieldCardType, type: "string" },
+    { value: "difficulty", label: fb.fieldDifficulty, type: "numeric" },
+    { value: "stability", label: fb.fieldStability, type: "numeric" },
+    { value: "interval", label: fb.fieldInterval, type: "numeric" },
+    { value: "repetitions", label: fb.fieldRepetitions, type: "numeric" },
+    { value: "lapses", label: fb.fieldLapses, type: "numeric" },
+    { value: "lastReviewed", label: fb.fieldReviewed, type: "date" },
+    { value: "created", label: fb.fieldCreated, type: "date" },
+    { value: "isLeech", label: fb.fieldIsLeech, type: "boolean" },
+    { value: "isDense", label: fb.fieldIsDense, type: "boolean" },
   ];
 
   function getOperatorsForField(field: FilterField): { value: FilterOperator; label: string }[] {
@@ -41,53 +45,53 @@
     switch (fieldOption.type) {
       case "boolean":
         return [
-          { value: "equals", label: "Is" },
-          { value: "not_equals", label: "Is not" },
+          { value: "equals", label: fb.operatorIs },
+          { value: "not_equals", label: fb.operatorIsNot },
         ];
       case "state":
         return [
-          { value: "is_new", label: "Is new" },
-          { value: "is_due", label: "Is due" },
-          { value: "equals", label: "Equals" },
-          { value: "not_equals", label: "Not equals" },
+          { value: "is_new", label: fb.operatorIsNew },
+          { value: "is_due", label: fb.operatorIsDue },
+          { value: "equals", label: fb.operatorEqualsCap },
+          { value: "not_equals", label: fb.operatorNotEquals },
         ];
       case "date":
         return [
-          { value: "is_due", label: "Is due" },
-          { value: "before", label: "Before" },
-          { value: "after", label: "After" },
+          { value: "is_due", label: fb.operatorIsDue },
+          { value: "before", label: fb.operatorBeforeCap },
+          { value: "after", label: fb.operatorAfterCap },
         ];
       case "numeric":
         return [
-          { value: "equals", label: "Equals" },
-          { value: "not_equals", label: "Not equals" },
-          { value: "greater_than", label: "Greater than" },
-          { value: "less_than", label: "Less than" },
+          { value: "equals", label: fb.operatorEqualsCap },
+          { value: "not_equals", label: fb.operatorNotEquals },
+          { value: "greater_than", label: fb.operatorGreaterThan },
+          { value: "less_than", label: fb.operatorLessThan },
         ];
       case "deckId":
         return [
-          { value: "in", label: "Is one of" },
-          { value: "equals", label: "Equals" },
+          { value: "in", label: fb.operatorIsOneOf },
+          { value: "equals", label: fb.operatorEqualsCap },
         ];
       case "deckTag":
         return [
-          { value: "contains", label: "Contains" },
-          { value: "equals", label: "Equals" },
-          { value: "not_contains", label: "Does not contain" },
+          { value: "contains", label: fb.operatorContainsCap },
+          { value: "equals", label: fb.operatorEqualsCap },
+          { value: "not_contains", label: fb.operatorNotContainsCap },
         ];
       case "tags":
         return [
-          { value: "contains", label: "Has tag" },
-          { value: "not_contains", label: "Does not have tag" },
-          { value: "in", label: "Has any of" },
+          { value: "contains", label: fb.operatorHasTag },
+          { value: "not_contains", label: fb.operatorDoesNotHaveTag },
+          { value: "in", label: fb.operatorHasAnyOf },
         ];
       case "string":
       default:
         return [
-          { value: "contains", label: "Contains" },
-          { value: "not_contains", label: "Does not contain" },
-          { value: "equals", label: "Equals" },
-          { value: "not_equals", label: "Not equals" },
+          { value: "contains", label: fb.operatorContainsCap },
+          { value: "not_contains", label: fb.operatorNotContainsCap },
+          { value: "equals", label: fb.operatorEqualsCap },
+          { value: "not_equals", label: fb.operatorNotEquals },
         ];
     }
   }
@@ -168,18 +172,18 @@
   <!-- Logic toggle -->
   {#if filterDefinition.rules.length > 1}
     <div class="decks-fb-logic">
-      <span class="decks-fb-logic-label">Match</span>
+      <span class="decks-fb-logic-label">{fb.matchLabel}</span>
       <button
         class="decks-fb-logic-btn"
         class:decks-fb-logic-active={filterDefinition.logic === "AND"}
         on:click={() => setLogic("AND")}
-      >All</button>
+      >{fb.matchAllOption}</button>
       <button
         class="decks-fb-logic-btn"
         class:decks-fb-logic-active={filterDefinition.logic === "OR"}
         on:click={() => setLogic("OR")}
-      >Any</button>
-      <span class="decks-fb-logic-label">of the following rules</span>
+      >{fb.matchAnyOption}</button>
+      <span class="decks-fb-logic-label">{fb.matchSuffix}</span>
     </div>
   {/if}
 
@@ -242,7 +246,7 @@
                 }
               }}
             >
-              <option value="">Select tag...</option>
+              <option value="">{fb.selectTagPlaceholder}</option>
               {#each availableTags as tag}
                 <option value={tag}>{tag}</option>
               {/each}
@@ -258,7 +262,7 @@
                 }
               }}
             >
-              <option value="">Select tag...</option>
+              <option value="">{fb.selectTagPlaceholder}</option>
               {#each availableCardTags as tag}
                 <option value={tag}>{tag}</option>
               {/each}
@@ -287,8 +291,8 @@
                 }
               }}
             >
-              <option value="new">New</option>
-              <option value="review">Review</option>
+              <option value="new">{fb.stateNew}</option>
+              <option value="review">{fb.stateReview}</option>
             </select>
           {:else if rule.field === "type"}
             <select
@@ -301,10 +305,10 @@
                 }
               }}
             >
-              <option value="header-paragraph">Header paragraph</option>
-              <option value="table">Table</option>
-              <option value="cloze">Cloze</option>
-              <option value="image-occlusion">Image occlusion</option>
+              <option value="header-paragraph">{fb.typeHeaderParagraph}</option>
+              <option value="table">{fb.typeTable}</option>
+              <option value="cloze">{fb.typeCloze}</option>
+              <option value="image-occlusion">{fb.typeImageOcclusion}</option>
             </select>
           {:else if rule.field === "isLeech" || rule.field === "isDense"}
             <select
@@ -317,15 +321,15 @@
                 }
               }}
             >
-              <option value="true">True</option>
-              <option value="false">False</option>
+              <option value="true">{fb.boolTrue}</option>
+              <option value="false">{fb.boolFalse}</option>
             </select>
           {:else}
             <input
               class="decks-fb-value-input"
               type={FIELD_OPTIONS.find(f => f.value === rule.field)?.type === "numeric" ? "number" : "text"}
               value={rule.value}
-              placeholder="Value..."
+              placeholder={fb.valuePlaceholder}
               on:input={(e) => {
                 const target = e.target;
                 if (target instanceof HTMLInputElement) {
@@ -339,7 +343,7 @@
         <button
           class="decks-fb-remove-btn"
           on:click={() => removeRule(index)}
-          title="Remove rule"
+          title={fb.removeRule}
         >&times;</button>
       </div>
     {/each}
@@ -347,11 +351,11 @@
 
   <div class="decks-fb-footer">
     <button class="decks-fb-add-btn" on:click={addRule}>
-      + Add rule
+      {fb.addRule}
     </button>
     {#if previewCount !== null}
       <span class="decks-fb-preview">
-        {previewCount} card{previewCount !== 1 ? "s" : ""} match
+        {I18n.format(previewCount === 1 ? fb.cardMatchSingular : fb.cardsMatch, { count: previewCount })}
       </span>
     {/if}
   </div>

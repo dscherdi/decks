@@ -13,6 +13,9 @@
   } from "chart.js";
   import { StatisticsService } from "@/services/StatisticsService";
   import { Logger } from "@/utils/logging";
+  import { I18n } from "@/i18n/I18n";
+
+  const t = I18n.t;
 
   // Register Chart.js components
   Chart.register(
@@ -128,14 +131,14 @@
           x: {
             title: {
               display: true,
-              text: "Date Added",
+              text: t.statistics.dateAdded,
             },
           },
           y: {
             beginAtZero: true,
             title: {
               display: true,
-              text: "Number of Cards",
+              text: t.statistics.numberOfCards,
             },
             ticks: {
               precision: 0,
@@ -145,7 +148,7 @@
         plugins: {
           title: {
             display: true,
-            text: "Cards Added Over Time",
+            text: t.statistics.cardsAddedOverTime,
           },
           legend: {
             display: true,
@@ -154,12 +157,16 @@
           tooltip: {
             callbacks: {
               label: function (context: TooltipItem<"bar">) {
-                const value = context.parsed.y;
-                const plural = value === 1 ? "card" : "cards";
-                return `${context.dataset.label}: ${value} ${plural}`;
+                const value = context.parsed.y ?? 0;
+                const plural = value === 1 ? t.statistics.cardSingular : t.statistics.cardPlural;
+                return I18n.format(t.statistics.cardsAddedTooltip, {
+                  label: context.dataset.label ?? "",
+                  count: value,
+                  plural,
+                });
               },
               afterLabel: function (_context: TooltipItem<"bar">) {
-                return "Based on first review date";
+                return t.statistics.basedOnFirstReview;
               },
             },
           },
@@ -187,21 +194,21 @@
   }
 </script>
 
-<h3>Cards Added Over Time</h3>
+<h3>{t.statistics.cardsAddedOverTime}</h3>
 <p class="decks-chart-subtitle">
   {#if selectedDeckIds.length === 0}
-    <span class="decks-loading-indicator">Select a deck to view cards added over time.</span>
+    <span class="decks-loading-indicator">{t.statistics.selectDeckCardsAdded}</span>
   {/if}
 </p>
 {#if selectedDeckIds.length > 0}
   <div class="decks-chart-controls">
     <label>
-      Timeframe:
+      {t.statistics.timeframeLabel}
       <select bind:value={timeframe} on:change={handleFilterChange}>
-        <option value="1m">1 Month</option>
-        <option value="3m">3 Months</option>
-        <option value="1y">1 Year</option>
-        <option value="all">All Time</option>
+        <option value="1m">{t.statistics.timeframe1Month}</option>
+        <option value="3m">{t.statistics.timeframe3Months}</option>
+        <option value="1y">{t.statistics.timeframe1Year}</option>
+        <option value="all">{t.statistics.allTime}</option>
       </select>
     </label>
   </div>

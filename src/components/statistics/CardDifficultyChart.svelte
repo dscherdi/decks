@@ -13,6 +13,9 @@
   } from "chart.js";
   import { StatisticsService } from "@/services/StatisticsService";
   import { Logger } from "@/utils/logging";
+  import { I18n } from "@/i18n/I18n";
+
+  const t = I18n.t;
 
   // Register Chart.js components
   Chart.register(
@@ -146,14 +149,14 @@
           x: {
             title: {
               display: true,
-              text: "Difficulty Range",
+              text: t.statistics.cardDifficultyRange,
             },
           },
           y: {
             beginAtZero: true,
             title: {
               display: true,
-              text: "Number of Cards",
+              text: t.statistics.numberOfCards,
             },
             ticks: {
               precision: 0,
@@ -163,7 +166,7 @@
         plugins: {
           title: {
             display: true,
-            text: "Card Difficulty Distribution",
+            text: t.statistics.cardDifficultyDistribution,
           },
           legend: {
             display: true,
@@ -180,10 +183,14 @@
                 );
                 const percentage =
                   total > 0 ? ((value / total) * 100).toFixed(1) : "0";
-                return `${dataset.label}: ${value} cards (${percentage}%)`;
+                return I18n.format(t.statistics.cardCountsTooltip, {
+                  label: dataset.label ?? "",
+                  count: value ?? 0,
+                  percent: percentage,
+                });
               },
               afterLabel: function (_context: TooltipItem<"bar">) {
-                return "Higher difficulty = harder to remember";
+                return t.statistics.higherDifficultyTip;
               },
             },
           },
@@ -202,13 +209,13 @@
   }
 </script>
 
-<h3>Card Difficulty Distribution</h3>
+<h3>{t.statistics.cardDifficultyDistribution}</h3>
 <p class="decks-chart-subtitle">
   {#if selectedDeckIds.length === 0}
-    <span class="decks-loading-indicator">Select a deck to view card difficulty distribution.</span>
+    <span class="decks-loading-indicator">{t.statistics.selectDeckCardDifficulty}</span>
   {:else}
     <span class="decks-chart-description">
-      FSRS difficulty values indicate how hard cards are to remember
+      {t.statistics.cardDifficultySubtitle}
     </span>
   {/if}
 </p>

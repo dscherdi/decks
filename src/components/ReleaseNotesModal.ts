@@ -1,5 +1,6 @@
 import { Modal, App, MarkdownRenderer, Component } from "obsidian";
 import RELEASE_NOTES_DATA from "../assets/ReleaseNotesData";
+import { I18n } from "@/i18n/I18n";
 
 export class ReleaseNotesModal extends Modal {
   private markdownComponents: Component[] = [];
@@ -12,7 +13,7 @@ export class ReleaseNotesModal extends Modal {
     const { contentEl } = this;
     contentEl.empty();
 
-    this.setTitle("What's new");
+    this.setTitle(I18n.t.modals.releaseNotes.title);
 
     const modalEl = this.containerEl.querySelector(".modal");
     if (modalEl instanceof HTMLElement) {

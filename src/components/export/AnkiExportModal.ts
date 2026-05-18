@@ -7,6 +7,7 @@ import type {
 } from "../../types/svelte-components";
 import AnkiExportUI from "./AnkiExportUI.svelte";
 import { mount, unmount } from "svelte";
+import { I18n } from "@/i18n/I18n";
 
 export class AnkiExportModal extends Modal {
   private deck: Deck;
@@ -95,7 +96,7 @@ export class AnkiExportModal extends Modal {
       }
 
       if (flashcards.length === 0) {
-        new Notice("No flashcards found in this deck to export");
+        new Notice(I18n.t.notices.noFlashcardsToExport);
         return;
       }
 
@@ -105,14 +106,19 @@ export class AnkiExportModal extends Modal {
       // Create and download file
       this.downloadAnkiFile(ankiData, config.ankiDeckName);
 
-      const exportType = this.isGroupExport ? "tag group" : "deck";
+      const exportType = this.isGroupExport
+        ? I18n.t.notices.ankiExportTypeTagGroup
+        : I18n.t.notices.ankiExportTypeDeck;
       new Notice(
-        `Successfully exported ${flashcards.length} flashcards from ${exportType} to Anki format`
+        I18n.format(I18n.t.notices.ankiExportSuccess, {
+          count: flashcards.length,
+          type: exportType,
+        })
       );
       this.close();
     } catch (error) {
       console.error("Error exporting to Anki:", error);
-      new Notice("Failed to export deck to Anki format");
+      new Notice(I18n.t.notices.ankiExportFailed);
     }
   }
 

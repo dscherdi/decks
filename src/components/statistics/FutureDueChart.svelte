@@ -22,6 +22,9 @@
   } from "../../services/StatisticsService";
   import { Logger } from "@/utils/logging";
   import { toLocalDateString } from "@/utils/date-utils";
+  import { I18n } from "@/i18n/I18n";
+
+  const t = I18n.t;
 
   // Register Chart.js components
   Chart.register(
@@ -146,8 +149,8 @@
     const tomorrowStr = toLocalDateString(tomorrow);
 
     const labels = displayData.map((day) => {
-      if (day.date === todayStr) return "Today";
-      if (day.date === tomorrowStr) return "Tomorrow";
+      if (day.date === todayStr) return t.statistics.today;
+      if (day.date === tomorrowStr) return t.statistics.tomorrow;
 
       // Calculate days from today
       const dayDate = new Date(day.date);
@@ -185,7 +188,7 @@
     const datasets = [
       {
         type: "line" as const,
-        label: "Due cards",
+        label: t.statistics.dueCards,
         data: barData,
         backgroundColor: "rgba(34, 197, 94, 0.3)",
         borderColor: "rgb(34, 197, 94)",
@@ -202,7 +205,7 @@
     if (showBacklog && backlogData.length > 0) {
       datasets.push({
         type: "line" as const,
-        label: "Cumulative",
+        label: t.statistics.cumulativeSeries,
         data: cumulativeData,
         backgroundColor: "rgba(156, 163, 175, 0.3)",
         borderColor: "rgba(156, 163, 175, 0.7)",
@@ -257,7 +260,7 @@
               beginAtZero: true,
               title: {
                 display: true,
-                text: "Due cards",
+                text: t.statistics.dueCards,
               },
               ticks: {
                 precision: 0,
@@ -270,7 +273,7 @@
               beginAtZero: true,
               title: {
                 display: true,
-                text: "Cumulative Backlog",
+                text: t.statistics.cumulativeBacklog,
               },
               grid: {
                 drawOnChartArea: false,
@@ -292,17 +295,17 @@
               callbacks: {
                 title: function (tooltipItems: TooltipItem<"bar" | "line">[]) {
                   const label = tooltipItems[0].label;
-                  if (label === "Today") return "Today";
-                  if (label === "Tomorrow") return "Tomorrow";
-                  return `Day ${label}`;
+                  if (label === t.statistics.today) return t.statistics.today;
+                  if (label === t.statistics.tomorrow) return t.statistics.tomorrow;
+                  return I18n.format(t.statistics.dayLabel, { label });
                 },
                 label: function (context: TooltipItem<"bar" | "line">) {
-                  const value = context.parsed.y;
-                  const datasetLabel = context.dataset.label || "";
-                  if (datasetLabel.includes("Cumulative")) {
-                    return `Total backlog: ${value} reviews`;
+                  const value = context.parsed.y ?? 0;
+                  const isCumulative = context.dataset.yAxisID === "y1";
+                  if (isCumulative) {
+                    return I18n.format(t.statistics.totalBacklogTooltip, { value });
                   } else {
-                    return `Due: ${value} cards`;
+                    return I18n.format(t.statistics.dueTooltip, { value });
                   }
                 },
               },
@@ -366,14 +369,14 @@
 </script>
 
 <div class="future-due-chart-container">
-  <h3>Future Due</h3>
+  <h3>{t.statistics.futureDueTitle}</h3>
   <p class="decks-chart-subtitle">
     {#if selectedDeckIds.length === 0}
       <span class="decks-loading-indicator"
-        >Select a deck to view future due reviews.</span
+        >{t.statistics.selectDeckFutureDue}</span
       >
     {:else}
-      The number of reviews due in the future.
+      {t.statistics.futureDueSubtitle}
     {/if}
   </p>
 
@@ -381,25 +384,25 @@
     <div class="chart-controls">
       <label class="backlog-control">
         <input type="checkbox" bind:checked={showBacklog} />
-        Backlog
+        {t.statistics.backlogControl}
       </label>
 
       <div class="timeframe-controls">
         <label>
           <input type="radio" bind:group={timeframe} value="1m" />
-          1 month
+          {t.statistics.onemonth}
         </label>
         <label>
           <input type="radio" bind:group={timeframe} value="3m" />
-          3 months
+          {t.statistics.threeMonths}
         </label>
         <label>
           <input type="radio" bind:group={timeframe} value="1y" />
-          1 year
+          {t.statistics.oneYear}
         </label>
         <label>
           <input type="radio" bind:group={timeframe} value="all" />
-          all
+          {t.statistics.all}
         </label>
       </div>
     </div>
@@ -412,15 +415,15 @@
   {#if selectedDeckIds.length > 0}
     <div class="chart-stats">
       <div class="stat">
-        <span class="stat-label">Total Reviews:</span>
+        <span class="stat-label">{t.statistics.totalReviewsLabel}</span>
         <span class="stat-value">{forecastStats.totalReviews}</span>
       </div>
       <div class="stat">
-        <span class="stat-label">Avg/Day:</span>
+        <span class="stat-label">{t.statistics.avgPerDay}</span>
         <span class="stat-value">{forecastStats.averagePerDay}</span>
       </div>
       <div class="stat">
-        <span class="stat-label">Due Tomorrow: </span>
+        <span class="stat-label">{t.statistics.dueTomorrow}</span>
         <span class="stat-value" style="color: #f97316;"
           >{forecastStats.dueTomorrow}</span
         >
@@ -429,8 +432,7 @@
 
     {#if !statistics?.forecast || statistics.forecast.length === 0 || !statistics.forecast.some((day) => day.dueCount > 0)}
       <div class="no-data">
-        No upcoming reviews scheduled. Add flashcards to your decks to see
-        forecast.
+        {t.statistics.noUpcomingReviews}
       </div>
     {/if}
   {/if}

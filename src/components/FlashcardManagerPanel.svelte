@@ -14,6 +14,10 @@
   import FilterBuilder from "./FilterBuilder.svelte";
   import { onMount, onDestroy } from "svelte";
   import { prepareFuzzySearch } from "obsidian";
+  import { I18n } from "@/i18n/I18n";
+
+  const t = I18n.t;
+  const m = t.manager;
 
   export let db: IDatabaseService;
   export let customDeckService: CustomDeckService;
@@ -488,19 +492,19 @@
 <!-- svelte-ignore a11y-click-events-have-key-events -->
 <div class="decks-flashcard-manager">
   {#if loading}
-    <div class="decks-fm-loading">Loading flashcards...</div>
+    <div class="decks-fm-loading">{m.loadingFlashcards}</div>
   {:else}
     <!-- Edit target row: dropdown to pick a custom deck to edit -->
     {#if customDecks.length > 0 || isEditMode}
       <div class="decks-edit-target-row">
-        <label class="decks-edit-target-label" for="decks-edit-target-select">Edit:</label>
+        <label class="decks-edit-target-label" for="decks-edit-target-select">{m.editLabel}</label>
         <select
           id="decks-edit-target-select"
           class="decks-edit-target-select"
           value={editTargetSelectId}
           on:change={handleEditTargetChange}
         >
-          <option value="">— Browse all flashcards —</option>
+          <option value="">{m.browseAllOption}</option>
           {#each customDecks as deck (deck.id)}
             <option value={deck.id}>
               {deck.deckType === "filter" ? "🔍" : "📁"} {deck.name}
@@ -512,13 +516,13 @@
             class="decks-edit-save-btn"
             disabled={!onCommitEdit}
             on:click={saveEdit}
-            title="Save changes to {editingCustomDeckName ?? 'this deck'}"
-          >Save</button>
+            title={I18n.format(m.saveTooltip, { name: editingCustomDeckName ?? "" })}
+          >{m.saveButton}</button>
           <button
             class="decks-edit-cancel-btn"
             on:click={cancelEdit}
-            title="Discard edit and return to browse mode"
-          >Cancel</button>
+            title={m.discardTooltip}
+          >{m.cancelButton}</button>
         {/if}
       </div>
     {/if}
@@ -530,15 +534,15 @@
         <input
           type="text"
           class="decks-control-search"
-          placeholder="Search filename, breadcrumb, front, back..."
+          placeholder={m.searchPlaceholderFull}
           bind:value={searchQuery}
         />
         {#if hasSearch}
           <button
             class="decks-control-search-clear"
             on:click={clearSearch}
-            title="Clear search"
-            aria-label="Clear search"
+            title={m.clearSearch}
+            aria-label={m.clearSearch}
           >×</button>
         {/if}
       </div>
@@ -549,7 +553,7 @@
           on:click|stopPropagation={toggleFilterPopover}
           aria-expanded={filterPopoverOpen}
         >
-          + Filter{hasFilter ? ` (${filterDefinition.rules.length})` : ""}
+          {hasFilter ? I18n.format(m.filterButtonCount, { count: filterDefinition.rules.length }) : m.filterButton}
         </button>
         {#if filterPopoverOpen}
           <!-- svelte-ignore a11y-no-static-element-interactions -->
@@ -581,12 +585,12 @@
               <button
                 class="decks-badge-close"
                 on:click={() => removeRule(i)}
-                aria-label="Remove filter"
+                aria-label={m.removeFilterAria}
               >×</button>
             </span>
           {/each}
           {#if !hasFilter && hasSearch}
-            <span class="decks-active-filters-hint">Search-only view (saving is disabled)</span>
+            <span class="decks-active-filters-hint">{m.searchOnlyView}</span>
           {/if}
         </div>
         {#if !isEditMode}
@@ -595,7 +599,7 @@
               <input
                 type="text"
                 class="decks-save-name-input"
-                placeholder="Filter deck name"
+                placeholder={m.filterDeckNamePlaceholder}
                 bind:value={saveAsDeckName}
                 on:keydown={(e) => { if (e.key === "Enter") confirmSaveAs(); if (e.key === "Escape") cancelSaveAs(); }}
               />
@@ -603,18 +607,18 @@
                 class="decks-save-confirm-btn"
                 disabled={!saveAsDeckName.trim()}
                 on:click={confirmSaveAs}
-              >Save</button>
+              >{m.saveButton}</button>
               <button
                 class="decks-save-cancel-btn"
                 on:click={cancelSaveAs}
-              >Cancel</button>
+              >{m.cancelButton}</button>
             {:else}
               <button
                 class="decks-save-as-deck-btn"
                 disabled={!hasFilter || !onCreateFilterDeck}
                 on:click={startSaveAs}
-                title={hasFilter ? "Save current filter as a filter deck" : "Add a filter rule to save"}
-              >💾 Save as filter deck</button>
+                title={hasFilter ? m.saveAsTitleHasFilter : m.saveAsTitleNoFilter}
+              >{m.saveAsFilterDeck}</button>
             {/if}
           </div>
         {/if}
@@ -624,13 +628,13 @@
     <!-- Action bar (when cards selected, free mode only) -->
     {#if selectedCount > 0 && !isEditMode}
       <div class="decks-fm-action-bar">
-        <span class="decks-fm-selected-count">{selectedCount} selected</span>
+        <span class="decks-fm-selected-count">{I18n.format(m.selectedCount, { count: selectedCount })}</span>
         <div class="decks-fm-deck-dropdown-container" bind:this={customDeckDropdownEl}>
             <button
               class="decks-fm-action-btn"
               on:click={toggleCustomDeckDropdown}
             >
-              Add to custom deck
+              {m.addToCustomDeck}
             </button>
             {#if customDeckDropdownOpen}
               <!-- svelte-ignore a11y-no-static-element-interactions -->
@@ -648,13 +652,13 @@
                     class="decks-fm-dropdown-option decks-fm-dropdown-new"
                     on:click={() => { showNewDeckInput = true; }}
                   >
-                    + Create new deck...
+                    {m.createNewDeckOption}
                   </button>
                 {:else}
                   <div class="decks-fm-new-deck-input">
                     <input
                       type="text"
-                      placeholder="Deck name"
+                      placeholder={m.newDeckPlaceholder}
                       bind:value={newDeckName}
                       on:keydown={(e) => e.key === "Enter" && handleCreateNewDeck()}
                     />
@@ -663,7 +667,7 @@
                       on:click={handleCreateNewDeck}
                       disabled={!newDeckName.trim()}
                     >
-                      Create
+                      {m.createButton}
                     </button>
                   </div>
                 {/if}
@@ -685,32 +689,32 @@
             />
           </div>
           <div class="decks-fm-col-front decks-fm-col-sortable" role="button" tabindex="0" on:click={() => toggleSort("front")} on:keydown={(e) => e.key === "Enter" && toggleSort("front")}>
-            Front <span class="decks-fm-sort-glyph">{sortGlyph("front")}</span>
+            {m.colFront} <span class="decks-fm-sort-glyph">{sortGlyph("front")}</span>
           </div>
           <div class="decks-fm-col-back decks-fm-col-sortable" role="button" tabindex="0" on:click={() => toggleSort("back")} on:keydown={(e) => e.key === "Enter" && toggleSort("back")}>
-            Back <span class="decks-fm-sort-glyph">{sortGlyph("back")}</span>
+            {m.colBack} <span class="decks-fm-sort-glyph">{sortGlyph("back")}</span>
           </div>
           <div class="decks-fm-col-file decks-fm-col-sortable" role="button" tabindex="0" on:click={() => toggleSort("sourceFile")} on:keydown={(e) => e.key === "Enter" && toggleSort("sourceFile")}>
-            File <span class="decks-fm-sort-glyph">{sortGlyph("sourceFile")}</span>
+            {m.colFile} <span class="decks-fm-sort-glyph">{sortGlyph("sourceFile")}</span>
           </div>
           <div class="decks-fm-col-breadcrumb decks-fm-col-sortable" role="button" tabindex="0" on:click={() => toggleSort("breadcrumb")} on:keydown={(e) => e.key === "Enter" && toggleSort("breadcrumb")}>
-            Breadcrumb <span class="decks-fm-sort-glyph">{sortGlyph("breadcrumb")}</span>
+            {m.colBreadcrumb} <span class="decks-fm-sort-glyph">{sortGlyph("breadcrumb")}</span>
           </div>
           <div class="decks-fm-col-tag decks-fm-col-sortable" role="button" tabindex="0" on:click={() => toggleSort("deckTag")} on:keydown={(e) => e.key === "Enter" && toggleSort("deckTag")}>
-            Deck tag <span class="decks-fm-sort-glyph">{sortGlyph("deckTag")}</span>
+            {m.colDeckTag} <span class="decks-fm-sort-glyph">{sortGlyph("deckTag")}</span>
           </div>
-          <div class="decks-fm-col-cardtags">Card tags</div>
+          <div class="decks-fm-col-cardtags">{m.colCardTags}</div>
           <div class="decks-fm-col-state decks-fm-col-sortable" role="button" tabindex="0" on:click={() => toggleSort("state")} on:keydown={(e) => e.key === "Enter" && toggleSort("state")}>
-            State <span class="decks-fm-sort-glyph">{sortGlyph("state")}</span>
+            {m.colState} <span class="decks-fm-sort-glyph">{sortGlyph("state")}</span>
           </div>
           <div class="decks-fm-col-health decks-fm-col-sortable" role="button" tabindex="0" on:click={() => toggleSort("health")} on:keydown={(e) => e.key === "Enter" && toggleSort("health")}>
-            Health <span class="decks-fm-sort-glyph">{sortGlyph("health")}</span>
+            {m.colHealth} <span class="decks-fm-sort-glyph">{sortGlyph("health")}</span>
           </div>
           <div class="decks-fm-col-due decks-fm-col-sortable" role="button" tabindex="0" on:click={() => toggleSort("dueDate")} on:keydown={(e) => e.key === "Enter" && toggleSort("dueDate")}>
-            Due <span class="decks-fm-sort-glyph">{sortGlyph("dueDate")}</span>
+            {m.colDue} <span class="decks-fm-sort-glyph">{sortGlyph("dueDate")}</span>
           </div>
           <div class="decks-fm-col-reviewed decks-fm-col-sortable" role="button" tabindex="0" on:click={() => toggleSort("lastReviewed")} on:keydown={(e) => e.key === "Enter" && toggleSort("lastReviewed")}>
-            Reviewed <span class="decks-fm-sort-glyph">{sortGlyph("lastReviewed")}</span>
+            {m.colReviewed} <span class="decks-fm-sort-glyph">{sortGlyph("lastReviewed")}</span>
           </div>
         </div>
 
@@ -755,23 +759,23 @@
               </div>
               <div class="decks-fm-col-state">
                 <span class="decks-fm-state-badge decks-fm-state-{card.state}">
-                  {card.state === "new" ? "New" : "Review"}
+                  {card.state === "new" ? m.badgeNew : m.badgeReview}
                 </span>
               </div>
               <div class="decks-fm-col-health">
                 {#if health.isLeech}
-                  <span class="decks-fm-health-badge decks-fm-health-leech" title="Repeatedly forgotten ({card.lapses} lapses) — consider rewriting">
-                    Leech
+                  <span class="decks-fm-health-badge decks-fm-health-leech" title={I18n.format(m.leechTooltip, { count: card.lapses })}>
+                    {m.badgeLeech}
                   </span>
                 {/if}
                 {#if health.isDense}
-                  <span class="decks-fm-health-badge decks-fm-health-dense" title="Back content is {card.back.length} chars — consider splitting">
-                    Dense
+                  <span class="decks-fm-health-badge decks-fm-health-dense" title={I18n.format(m.denseTooltip, { count: card.back.length })}>
+                    {m.badgeDense}
                   </span>
                 {/if}
                 {#if !health.isLeech && !health.isDense}
-                  <span class="decks-fm-health-badge decks-fm-health-healthy" title="No leech or density issues detected">
-                    Healthy
+                  <span class="decks-fm-health-badge decks-fm-health-healthy" title={m.healthyTooltip}>
+                    {m.badgeHealthy}
                   </span>
                 {/if}
               </div>
@@ -792,14 +796,14 @@
       <span>
         {#if isEditMode && editingCustomDeckName}
           {#if filterRowVisible}
-            Showing {sortedFlashcards.length} of {allFlashcards.length} cards in "{editingCustomDeckName}"
+            {I18n.format(m.footerShowingOfInDeck, { shown: sortedFlashcards.length, total: allFlashcards.length, name: editingCustomDeckName })}
           {:else}
-            {allFlashcards.length} cards in "{editingCustomDeckName}"
+            {I18n.format(m.footerInDeck, { total: allFlashcards.length, name: editingCustomDeckName })}
           {/if}
         {:else if filterRowVisible}
-          Showing {sortedFlashcards.length} of {allFlashcards.length} flashcards
+          {I18n.format(m.footerShowingOf, { shown: sortedFlashcards.length, total: allFlashcards.length })}
         {:else}
-          {allFlashcards.length} flashcards
+          {I18n.format(m.footerTotal, { total: allFlashcards.length })}
         {/if}
       </span>
       {#if hasMore}

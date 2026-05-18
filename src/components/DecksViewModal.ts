@@ -35,6 +35,7 @@ import type { DeckListPanelComponent } from "../types/svelte-components";
 import type { IDatabaseService } from "../database/DatabaseFactory";
 import type { DecksView } from "./DecksView";
 import type { DeckListSortMode } from "@/settings";
+import { I18n } from "@/i18n/I18n";
 
 export class DecksViewModal extends Modal {
   private db: IDatabaseService;
@@ -516,7 +517,9 @@ export class DecksViewModal extends Modal {
       });
 
       if (!nextCard) {
-        let message = `No cards due for review in ${deck.name}`;
+        let message = I18n.format(I18n.t.notices.noCardsDueForReview, {
+          deckName: deck.name,
+        });
 
         const newLimitReached =
           profile.hasNewCardsLimitEnabled &&
@@ -526,13 +529,25 @@ export class DecksViewModal extends Modal {
           (remainingReview === 0 || remainingReview === "none");
 
         if (newLimitReached && reviewLimitReached) {
-          message += `\n\nDaily limits reached:`;
-          message += `\nNew cards: ${profile.newCardsPerDay}/${profile.newCardsPerDay}`;
-          message += `\nReview cards: ${profile.reviewCardsPerDay}/${profile.reviewCardsPerDay}`;
+          message += I18n.t.notices.dailyLimitsReached;
+          message += I18n.format(I18n.t.notices.dailyNewLimit, {
+            used: profile.newCardsPerDay,
+            max: profile.newCardsPerDay,
+          });
+          message += I18n.format(I18n.t.notices.dailyReviewLimit, {
+            used: profile.reviewCardsPerDay,
+            max: profile.reviewCardsPerDay,
+          });
         } else if (newLimitReached) {
-          message += `\n\nDaily new cards limit reached: ${profile.newCardsPerDay}/${profile.newCardsPerDay}`;
+          message += I18n.format(I18n.t.notices.dailyNewOnlyLimit, {
+            used: profile.newCardsPerDay,
+            max: profile.newCardsPerDay,
+          });
         } else if (reviewLimitReached) {
-          message += `\n\nDaily review cards limit reached: ${profile.reviewCardsPerDay}/${profile.reviewCardsPerDay}`;
+          message += I18n.format(I18n.t.notices.dailyReviewOnlyLimit, {
+            used: profile.reviewCardsPerDay,
+            max: profile.reviewCardsPerDay,
+          });
         }
 
         if (this.settings?.ui?.enableNotices !== false) {
@@ -545,23 +560,39 @@ export class DecksViewModal extends Modal {
         profile.hasNewCardsLimitEnabled ||
         profile.hasReviewCardsLimitEnabled
       ) {
-        let limitInfo = `Daily progress for ${deck.name}:\n`;
+        let limitInfo = I18n.format(I18n.t.notices.dailyProgressHeader, {
+          deckName: deck.name,
+        });
         if (profile.hasNewCardsLimitEnabled) {
           if (profile.newCardsPerDay === 0) {
-            limitInfo += `New cards: DISABLED (0 allowed per day)\n`;
+            limitInfo += I18n.t.notices.dailyProgressNewDisabled;
           } else if (dailyCounts.newCount >= profile.newCardsPerDay) {
-            limitInfo += `New cards: ${dailyCounts.newCount}/${profile.newCardsPerDay} (LIMIT EXCEEDED)\n`;
+            limitInfo += I18n.format(I18n.t.notices.dailyProgressNewExceeded, {
+              used: dailyCounts.newCount,
+              max: profile.newCardsPerDay,
+            });
           } else {
-            limitInfo += `New cards: ${dailyCounts.newCount}/${profile.newCardsPerDay} (${remainingNew} remaining)\n`;
+            limitInfo += I18n.format(I18n.t.notices.dailyProgressNewRemaining, {
+              used: dailyCounts.newCount,
+              max: profile.newCardsPerDay,
+              remaining: remainingNew,
+            });
           }
         }
         if (profile.hasReviewCardsLimitEnabled) {
           if (profile.reviewCardsPerDay === 0) {
-            limitInfo += `Review cards: DISABLED (0 allowed per day)\n`;
+            limitInfo += I18n.t.notices.dailyProgressReviewDisabled;
           } else if (dailyCounts.reviewCount >= profile.reviewCardsPerDay) {
-            limitInfo += `Review cards: ${dailyCounts.reviewCount}/${profile.reviewCardsPerDay} (LIMIT EXCEEDED)\n`;
+            limitInfo += I18n.format(I18n.t.notices.dailyProgressReviewExceeded, {
+              used: dailyCounts.reviewCount,
+              max: profile.reviewCardsPerDay,
+            });
           } else {
-            limitInfo += `Review cards: ${dailyCounts.reviewCount}/${profile.reviewCardsPerDay} (${remainingReview} remaining)\n`;
+            limitInfo += I18n.format(I18n.t.notices.dailyProgressReviewRemaining, {
+              used: dailyCounts.reviewCount,
+              max: profile.reviewCardsPerDay,
+              remaining: remainingReview,
+            });
           }
         }
 
@@ -575,7 +606,7 @@ export class DecksViewModal extends Modal {
             dailyCounts.reviewCount >= profile.reviewCardsPerDay);
 
         if (newLimitExceeded || reviewLimitExceeded) {
-          limitInfo += `\n\nNote: Only learning cards will be shown (limits exceeded)`;
+          limitInfo += I18n.t.notices.dailyProgressOnlyLearning;
         }
 
         if (this.settings?.ui?.enableNotices !== false) {
@@ -587,7 +618,7 @@ export class DecksViewModal extends Modal {
     } catch (error) {
       console.error("Error starting review:", error);
       if (this.settings?.ui?.enableNotices !== false) {
-        new Notice("Error starting review. Check console for details.");
+        new Notice(I18n.t.notices.errorStartingReview);
       }
     }
   }
@@ -610,7 +641,10 @@ export class DecksViewModal extends Modal {
       if (!nextCard) {
         if (this.settings?.ui?.enableNotices !== false) {
           new Notice(
-            `No cards due in "${deckGroup.name}" (${deckGroup.deckIds.length} files)`
+            I18n.format(I18n.t.notices.noCardsDueInGroup, {
+              name: deckGroup.name,
+              count: deckGroup.deckIds.length,
+            })
           );
         }
         return;
@@ -620,7 +654,7 @@ export class DecksViewModal extends Modal {
     } catch (error) {
       console.error("Error starting deck group review:", error);
       if (this.settings?.ui?.enableNotices !== false) {
-        new Notice("Error starting review. Check console for details.");
+        new Notice(I18n.t.notices.errorStartingReview);
       }
     }
   }
@@ -635,7 +669,9 @@ export class DecksViewModal extends Modal {
 
       if (allCards.length === 0) {
         if (this.settings?.ui?.enableNotices !== false) {
-          new Notice(`No cards found in ${deck.name}`);
+          new Notice(
+            I18n.format(I18n.t.notices.noCardsFoundInDeck, { deckName: deck.name })
+          );
         }
         return;
       }
@@ -644,7 +680,7 @@ export class DecksViewModal extends Modal {
     } catch (error) {
       console.error("Error starting browse:", error);
       if (this.settings?.ui?.enableNotices !== false) {
-        new Notice("Error starting browse. Check console for details.");
+        new Notice(I18n.t.notices.errorStartingBrowse);
       }
     }
   }
@@ -668,7 +704,9 @@ export class DecksViewModal extends Modal {
 
       if (allCards.length === 0) {
         if (this.settings?.ui?.enableNotices !== false) {
-          new Notice(`No cards found in "${deckGroup.name}"`);
+          new Notice(
+            I18n.format(I18n.t.notices.noCardsFoundInGroup, { name: deckGroup.name })
+          );
         }
         return;
       }
@@ -677,7 +715,7 @@ export class DecksViewModal extends Modal {
     } catch (error) {
       console.error("Error starting deck group browse:", error);
       if (this.settings?.ui?.enableNotices !== false) {
-        new Notice("Error starting browse. Check console for details.");
+        new Notice(I18n.t.notices.errorStartingBrowse);
       }
     }
   }
@@ -694,7 +732,12 @@ export class DecksViewModal extends Modal {
 
       if (!nextCard) {
         if (this.settings?.ui?.enableNotices !== false) {
-          new Notice(`No cards due in "${customDeck.name}" (${customDeck.flashcardIds.length} cards)`);
+          new Notice(
+            I18n.format(I18n.t.notices.noCardsDueInCustomDeck, {
+              name: customDeck.name,
+              count: customDeck.flashcardIds.length,
+            })
+          );
         }
         return;
       }
@@ -703,7 +746,7 @@ export class DecksViewModal extends Modal {
     } catch (error) {
       console.error("Error starting custom deck review:", error);
       if (this.settings?.ui?.enableNotices !== false) {
-        new Notice("Error starting review. Check console for details.");
+        new Notice(I18n.t.notices.errorStartingReview);
       }
     }
   }
@@ -716,7 +759,9 @@ export class DecksViewModal extends Modal {
 
       if (allCards.length === 0) {
         if (this.settings?.ui?.enableNotices !== false) {
-          new Notice(`No cards found in "${customDeck.name}"`);
+          new Notice(
+            I18n.format(I18n.t.notices.noCardsFoundInGroup, { name: customDeck.name })
+          );
         }
         return;
       }
@@ -725,7 +770,7 @@ export class DecksViewModal extends Modal {
     } catch (error) {
       console.error("Error starting custom deck browse:", error);
       if (this.settings?.ui?.enableNotices !== false) {
-        new Notice("Error starting browse. Check console for details.");
+        new Notice(I18n.t.notices.errorStartingBrowse);
       }
     }
   }

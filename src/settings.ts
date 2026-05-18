@@ -1,3 +1,5 @@
+import type { LanguagePreference } from "@/i18n/locales";
+
 export type DeckListSortMode =
   | "name-asc"
   | "name-desc"
@@ -81,6 +83,11 @@ export interface DecksSettings {
     lastAfterLogLoss: number | null;
   };
 
+  // Internationalization
+  i18n: {
+    language: LanguagePreference; // "auto" follows Obsidian's getLanguage()
+  };
+
   // Internal tracking
   hasCreatedTestDeck: boolean;
 }
@@ -133,6 +140,10 @@ export const DEFAULT_SETTINGS: DecksSettings = {
     lastTrainedReviewCount: 0,
     lastBeforeLogLoss: null,
     lastAfterLogLoss: null,
+  },
+
+  i18n: {
+    language: "auto",
   },
 
   hasCreatedTestDeck: false,

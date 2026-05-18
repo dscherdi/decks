@@ -30,6 +30,7 @@ import { generateDeckId } from "./utils/hash";
 
 import { type DecksSettings, DEFAULT_SETTINGS } from "./settings";
 import { DecksSettingTab } from "./components/settings/SettingsTab";
+import { I18n } from "./i18n/I18n";
 
 import { DecksView } from "./components/DecksView";
 import { DecksViewModal } from "./components/DecksViewModal";
@@ -119,6 +120,9 @@ export default class DecksPlugin extends Plugin {
   async onload() {
     // Load settings first
     await this.loadSettings();
+
+    // Resolve the active UI language before any view, command, or notice is registered
+    I18n.init(this.settings);
 
     // Initialize utilities
     const pluginFolderName = this.manifest.dir?.split('/').pop() || this.manifest.id;
@@ -283,7 +287,7 @@ export default class DecksPlugin extends Plugin {
       );
 
       // Add ribbon icon
-      this.addRibbonIcon("brain", "Decks", () => {
+      this.addRibbonIcon("brain", I18n.t.ribbon.decks, () => {
         new DecksViewModal(
           this.app,
           this.db,
@@ -302,7 +306,7 @@ export default class DecksPlugin extends Plugin {
       // Add command to show flashcards panel
       this.addCommand({
         id: "show-flashcards-panel",
-        name: "Show flashcards panel",
+        name: I18n.t.commands.showPanel,
         callback: () => {
           void this.activateView();
         },
@@ -311,7 +315,7 @@ export default class DecksPlugin extends Plugin {
       // Add command to show release notes
       this.addCommand({
         id: "show-release-notes",
-        name: "Show release notes",
+        name: I18n.t.commands.showReleaseNotes,
         callback: () => {
           new ReleaseNotesModal(this.app).open();
         },
@@ -320,7 +324,7 @@ export default class DecksPlugin extends Plugin {
       // Add command to open flashcard manager
       this.addCommand({
         id: "open-flashcard-manager",
-        name: "Open flashcard manager",
+        name: I18n.t.commands.openManager,
         callback: () => {
           openFlashcardManager(
             this.app,
@@ -353,7 +357,7 @@ export default class DecksPlugin extends Plugin {
 
       this.addCommand({
         id: "create-test-deck",
-        name: "Create test deck",
+        name: I18n.t.commands.createTestDeck,
         callback: () => {
           testDeckService
             .createTestDeck(
@@ -369,18 +373,18 @@ export default class DecksPlugin extends Plugin {
       // handles incremental sync correctly and this is unnecessary.
       this.addCommand({
         id: "force-full-resync",
-        name: "Force full resync (re-parse every deck)",
+        name: I18n.t.commands.fullResync,
         callback: () => {
-          new Notice("Re-parsing every deck. This may take a moment…");
+          new Notice(I18n.t.notices.reparsing);
           this.deckSynchronizer
             .sync({ force: true })
             .then(() => {
-              new Notice("Full resync complete.");
+              new Notice(I18n.t.notices.resyncComplete);
               void this.getDecksView()?.refresh();
             })
             .catch((error) => {
               this.logger.error("Force resync failed", error);
-              new Notice("Resync failed. See console for details.");
+              new Notice(I18n.t.notices.resyncFailed);
             });
         },
       });
@@ -388,7 +392,7 @@ export default class DecksPlugin extends Plugin {
       // Add command to open decks modal
       this.addCommand({
         id: "open-review-modal",
-        name: "Open review modal",
+        name: I18n.t.commands.openReview,
         callback: () => {
           new DecksViewModal(
             this.app,
@@ -577,9 +581,7 @@ export default class DecksPlugin extends Plugin {
     } catch (error) {
       console.error("Error loading Decks plugin:", error);
       if (this.settings?.ui?.enableNotices !== false) {
-        new Notice(
-          "Failed to load decks plugin. Check the console for details."
-        );
+        new Notice(I18n.t.notices.loadFailed);
       }
     }
   }

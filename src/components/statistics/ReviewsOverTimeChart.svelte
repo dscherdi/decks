@@ -14,6 +14,9 @@
   import "chartjs-adapter-date-fns";
   import { Logger } from "@/utils/logging";
   import { StatisticsService } from "@/services/StatisticsService";
+  import { I18n } from "@/i18n/I18n";
+
+  const t = I18n.t;
 
   // Register Chart.js components
   Chart.register(
@@ -162,7 +165,7 @@
             stacked: true,
             title: {
               display: true,
-              text: "Date",
+              text: t.statistics.dateAxisLabel,
             },
           },
           y: {
@@ -170,7 +173,7 @@
             beginAtZero: true,
             title: {
               display: true,
-              text: "Reviews",
+              text: t.statistics.reviewsLabel,
             },
             ticks: {
               precision: 0,
@@ -180,7 +183,7 @@
         plugins: {
           title: {
             display: true,
-            text: "Reviews Over Time",
+            text: t.statistics.reviewsOverTimeTitle,
           },
           legend: {
             display: true,
@@ -238,21 +241,21 @@
   }
 </script>
 
-<h3>Reviews Over Time</h3>
+<h3>{t.statistics.reviewsOverTimeTitle}</h3>
 <p class="decks-chart-subtitle">
   {#if selectedDeckIds.length === 0}
-    <span class="decks-loading-indicator">Select a deck to view review history.</span>
+    <span class="decks-loading-indicator">{t.statistics.selectDeckReviewsOverTime}</span>
   {/if}
 </p>
 {#if selectedDeckIds.length > 0}
   <div class="decks-chart-controls">
     <label>
-      Timeframe:
+      {t.statistics.timeframeLabel}
       <select bind:value={selectedTimeframe} on:change={handleFilterChange}>
-        <option value="1m">1 Month</option>
-        <option value="3m">3 Months</option>
-        <option value="1y">1 Year</option>
-        <option value="all">All Time</option>
+        <option value="1m">{t.statistics.timeframe1Month}</option>
+        <option value="3m">{t.statistics.timeframe3Months}</option>
+        <option value="1y">{t.statistics.timeframe1Year}</option>
+        <option value="all">{t.statistics.allTime}</option>
       </select>
     </label>
   </div>

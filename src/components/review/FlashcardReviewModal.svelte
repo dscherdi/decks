@@ -17,6 +17,10 @@
   import { yieldToUI } from "@/utils/ui";
   import { prepareFuzzySearch } from "obsidian";
   import { computeCardHealth } from "../../services/CardHealth";
+  import { I18n } from "@/i18n/I18n";
+
+  const t = I18n.t;
+  const r = t.review;
 
   export let deckOrGroup: DeckOrGroup;
   export let initialCard: Flashcard | null = null;
@@ -919,7 +923,7 @@
                 <input
                   type="text"
                   class="decks-qs-input"
-                  placeholder="Search cards..."
+                  placeholder={r.searchCardsPlaceholder}
                   bind:value={searchQuery}
                   bind:this={searchInputEl}
                   on:keydown={handleSearchKeydown}
@@ -943,7 +947,7 @@
                   </div>
                 {:else if searchQuery.trim()}
                   <div class="decks-qs-dropdown decks-qs-empty">
-                    No cards match
+                    {r.noCardsMatch}
                   </div>
                 {/if}
               </div>
@@ -958,14 +962,14 @@
                   on:input={handleSliderNavigation}
                 />
                 <span class="decks-browse-slider-label">
-                  Card {browseCardIndex + 1} / {browseCards.length}
+                  {I18n.format(r.cardOfCount, { current: browseCardIndex + 1, total: browseCards.length })}
                 </span>
               </div>
             {/if}
             <button
               type="button"
               class="clickable-icon decks-qs-toggle"
-              aria-label={searchMode ? "Close search" : "Search cards"}
+              aria-label={searchMode ? r.closeSearch : r.searchCards}
               on:pointerup={() => (searchMode ? closeSearch() : openSearch())}
             >
               {#if searchMode}
@@ -1003,22 +1007,22 @@
           </div>
         {:else}
           <div class="decks-progress-info">
-            <span>Card {browseCardIndex + 1} of {browseCards.length}</span>
+            <span>{I18n.format(r.cardOfCountAlt, { current: browseCardIndex + 1, total: browseCards.length })}</span>
           </div>
         {/if}
       {:else}
         <div class="decks-progress-info">
-          <span>Reviewed: {reviewedCountDisplay}</span>
+          <span>{I18n.format(r.reviewedLabel, { count: reviewedCountDisplay })}</span>
           <span class="decks-remaining"
             >({sessionProgress
-              ? `${cardsRemaining} remaining`
+              ? I18n.format(r.remainingCount, { count: cardsRemaining })
               : currentCard
-                ? "More cards available"
-                : "Session complete"})</span
+                ? r.moreCardsAvailable
+                : r.sessionComplete})</span
           >
         </div>
         <div class="decks-timer-display">
-          <span class="decks-timer-label">Time Remaining:</span>
+          <span class="decks-timer-label">{r.timeRemaining}</span>
           <span
             class="decks-timer-value"
             class:decks-timer-warning={sessionTimeRemaining < 60000}
@@ -1049,7 +1053,7 @@
               class="decks-undo-button clickable-icon"
               on:click={handleUndo}
               disabled={isLoading}
-              title="Undo last review (Cmd/Ctrl+Z)"
+              title={r.undoTooltip}
               type="button"
               tabindex="-1"
             >
@@ -1076,10 +1080,10 @@
                 type="button"
                 tabindex="-1"
                 aria-label={cardHealth.isLeech && cardHealth.isDense
-                  ? "Card is repeatedly forgotten and complex — consider revising"
+                  ? r.cardLeechAndDense
                   : cardHealth.isLeech
-                    ? "Card is repeatedly forgotten — consider rewriting"
-                    : "Card is complex. Consider splitting it."}
+                    ? r.cardLeech
+                    : r.cardDense}
               >
                 <svg
                   xmlns="http://www.w3.org/2000/svg"
@@ -1104,7 +1108,7 @@
               <button
                 class="decks-go-to-file-button clickable-icon"
                 on:click={handleNavigateToSource}
-                aria-label="Open source file"
+                aria-label={r.openSourceFile}
                 type="button"
                 tabindex="-1"
               >
@@ -1141,7 +1145,7 @@
             <button
               class="decks-copy-button clickable-icon"
               on:click={handleCopyBack}
-              title="Copy content"
+              title={r.copyContent}
               type="button"
             >
               <svg
@@ -1173,7 +1177,7 @@
               class="decks-notes-button clickable-icon"
               class:decks-notes-active={showNotes}
               on:click={toggleNotes}
-              title="Toggle notes (N)"
+              title={r.toggleNotes}
               type="button"
             >
               <svg
@@ -1211,8 +1215,8 @@
           style="touch-action: manipulation;"
           type="button"
         >
-          <span>Show Answer</span>
-          <kbd class="decks-shortcut">Space</kbd>
+          <span>{r.showAnswerButton}</span>
+          <kbd class="decks-shortcut">{r.spaceShortcut}</kbd>
         </button>
       {/if}
 
@@ -1226,7 +1230,7 @@
             type="button"
           >
             <kbd class="decks-shortcut">&larr;</kbd>
-            <span>Previous</span>
+            <span>{r.previous}</span>
           </button>
           <button
             class="decks-browse-button decks-next"
@@ -1237,10 +1241,10 @@
           >
             <span
               >{browseCardIndex >= browseCards.length - 1
-                ? "Finish"
-                : "Next"}</span
+                ? r.finish
+                : r.next}</span
             >
-            <kbd class="decks-shortcut">Space</kbd>
+            <kbd class="decks-shortcut">{r.spaceShortcut}</kbd>
           </button>
         </div>
       {:else if showAnswer && schedulingInfo}
@@ -1252,7 +1256,7 @@
             style="touch-action: manipulation;"
             type="button"
           >
-            <div class="decks-button-label">Again</div>
+            <div class="decks-button-label">{r.again}</div>
             <div class="decks-interval">
               {getIntervalDisplay(schedulingInfo.again.interval)}
             </div>
@@ -1266,7 +1270,7 @@
             disabled={isLoading}
             type="button"
           >
-            <div class="decks-button-label">Hard</div>
+            <div class="decks-button-label">{r.hard}</div>
             <div class="decks-interval">
               {getIntervalDisplay(schedulingInfo.hard.interval)}
             </div>
@@ -1279,7 +1283,7 @@
             disabled={isLoading}
             type="button"
           >
-            <div class="decks-button-label">Good</div>
+            <div class="decks-button-label">{r.good}</div>
             <div class="decks-interval">
               {getIntervalDisplay(schedulingInfo.good.interval)}
             </div>
@@ -1292,7 +1296,7 @@
             disabled={isLoading}
             type="button"
           >
-            <div class="decks-button-label">Easy</div>
+            <div class="decks-button-label">{r.easy}</div>
             <div class="decks-interval">
               {getIntervalDisplay(schedulingInfo.easy.interval)}
             </div>
@@ -1303,7 +1307,7 @@
     </div>
   {:else}
     <div class="decks-empty-state">
-      <p>No cards to review</p>
+      <p>{r.noMoreCards}</p>
     </div>
   {/if}
 </div>

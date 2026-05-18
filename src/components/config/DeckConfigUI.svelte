@@ -3,6 +3,9 @@
   import { Setting, Notice } from "obsidian";
   import type { Deck, DeckProfile } from "../../database/types";
   import type { IDatabaseService } from "../../database/DatabaseFactory";
+  import { I18n } from "@/i18n/I18n";
+
+  const t = I18n.t;
 
   export let db: IDatabaseService;
   export let initialDeck: Deck;
@@ -51,7 +54,7 @@
       }
     } catch (error) {
       console.error("Error saving deck configuration:", error);
-      new Notice("Error saving configuration");
+      new Notice(t.config.errorSavingConfig);
     } finally {
       saving = false;
     }
@@ -75,8 +78,8 @@
     deckSelectorContainer.empty();
 
     new Setting(deckSelectorContainer)
-      .setName("Apply profile to tag")
-      .setDesc("Select tag to apply profile to all its decks")
+      .setName(t.config.applyProfileToTag)
+      .setDesc(t.config.applyProfileDesc)
       .addDropdown((dropdown) => {
         for (const tag of allTags) {
           dropdown.addOption(tag, tag);
@@ -113,8 +116,8 @@
     profileSelectorContainer.empty();
 
     new Setting(profileSelectorContainer)
-      .setName("Profile")
-      .setDesc("Select a profile for this tag")
+      .setName(t.config.profileLabel)
+      .setDesc(t.config.profileSelectDesc)
       .addDropdown((dropdown) => {
         // Add all profiles
         for (const profile of profiles) {
@@ -152,72 +155,81 @@
 
     // Profile name (read-only)
     new Setting(profileDetailsContainer)
-      .setName("Profile Name")
+      .setName(t.config.profileNameLabel)
       .setDesc(selectedProfile.name)
       .setClass("decks-config-readonly");
 
     // Daily limits
     const newCardsDesc = selectedProfile.hasNewCardsLimitEnabled
-      ? `${selectedProfile.newCardsPerDay} per day`
-      : "Unlimited";
+      ? I18n.format(t.config.perDay, { count: selectedProfile.newCardsPerDay })
+      : t.config.unlimited;
     new Setting(profileDetailsContainer)
-      .setName("New cards limit")
+      .setName(t.config.newCardsLimitLabel)
       .setDesc(newCardsDesc)
       .setClass("decks-config-readonly");
 
     const reviewCardsDesc = selectedProfile.hasReviewCardsLimitEnabled
-      ? `${selectedProfile.reviewCardsPerDay} per day`
-      : "Unlimited";
+      ? I18n.format(t.config.perDay, { count: selectedProfile.reviewCardsPerDay })
+      : t.config.unlimited;
     new Setting(profileDetailsContainer)
-      .setName("Review Cards Limit")
+      .setName(t.config.reviewCardsLimitLabel)
       .setDesc(reviewCardsDesc)
       .setClass("decks-config-readonly");
 
     // Header level
     new Setting(profileDetailsContainer)
-      .setName("Header level")
-      .setDesc(selectedProfile.headerLevel === 0 ? "Title" : `H${selectedProfile.headerLevel}`)
+      .setName(t.config.headerLevelLabel)
+      .setDesc(selectedProfile.headerLevel === 0
+        ? t.config.headerTitle
+        : I18n.format(t.config.headerH, { level: selectedProfile.headerLevel }))
       .setClass("decks-config-readonly");
 
     // Review order
     const reviewOrderLabel =
-      selectedProfile.reviewOrder === "due-date" ? "Oldest Due First" : "Random";
+      selectedProfile.reviewOrder === "due-date"
+        ? t.config.reviewOrderOldestDue
+        : t.config.reviewOrderRandomLabel;
     new Setting(profileDetailsContainer)
-      .setName("Review order")
+      .setName(t.config.reviewOrderLabel)
       .setDesc(reviewOrderLabel)
       .setClass("decks-config-readonly");
 
     // Cloze deletions
     new Setting(profileDetailsContainer)
-      .setName("Cloze deletions")
+      .setName(t.config.clozeDeletions)
       .setDesc(selectedProfile.clozeEnabled
-        ? `Enabled (context: ${selectedProfile.clozeShowContext === "open" ? "show other clozes" : "hide all clozes"})`
-        : "Disabled")
+        ? I18n.format(t.config.clozeEnabled, {
+            mode: selectedProfile.clozeShowContext === "open"
+              ? t.config.clozeShowOthers
+              : t.config.clozeHideAll,
+          })
+        : t.config.clozeDisabled)
       .setClass("decks-config-readonly");
 
     // FSRS settings
     new Setting(profileDetailsContainer)
-      .setName("FSRS settings")
+      .setName(t.config.fsrsSettings)
       .setDesc(
-        `Retention: ${selectedProfile.fsrs.requestRetention}, Profile: ${selectedProfile.fsrs.profile}`
+        I18n.format(t.config.fsrsSettingsDesc, {
+          retention: selectedProfile.fsrs.requestRetention,
+          profile: selectedProfile.fsrs.profile,
+        })
       )
       .setClass("decks-config-readonly");
 
     // Deck count
     db.getDeckCountForProfile(selectedProfile.id).then((count) => {
       new Setting(profileDetailsContainer)
-        .setName("Decks Using Profile")
-        .setDesc(`${count} deck(s)`)
+        .setName(t.config.decksUsingProfile)
+        .setDesc(I18n.format(t.config.deckCount, { count }))
         .setClass("decks-config-readonly");
     });
 
     // Note about editing
     const noteEl = profileDetailsContainer.createDiv("decks-config-note");
     const p = noteEl.createEl("p");
-    p.createEl("strong", { text: "Note:" });
-    p.appendText(
-      ' To edit profile settings, use the "Manage Profiles" button in the main Decks panel.'
-    );
+    p.createEl("strong", { text: t.config.editNoteIntro });
+    p.appendText(t.config.editNoteBody);
   }
 
   onMount(async () => {
@@ -245,17 +257,17 @@
 <div class="decks-deck-config-modal">
   <div class="decks-config-content">
     <div class="decks-config-section">
-      <h3>Tag selection</h3>
+      <h3>{t.config.sectionTagSelection}</h3>
       <div bind:this={deckSelectorContainer}></div>
     </div>
 
     <div class="decks-config-section">
-      <h3>Profile selection</h3>
+      <h3>{t.config.sectionProfileSelection}</h3>
       <div bind:this={profileSelectorContainer}></div>
     </div>
 
     <div class="decks-config-section">
-      <h3>Current profile settings</h3>
+      <h3>{t.config.sectionCurrentSettings}</h3>
       <div bind:this={profileDetailsContainer}></div>
     </div>
   </div>
@@ -266,10 +278,10 @@
       on:click={handleCancel}
       disabled={saving}
     >
-      Cancel
+      {t.config.cancel}
     </button>
     <button class="decks-btn-primary" on:click={handleSave} disabled={saving}>
-      {saving ? "Saving..." : "Save"}
+      {saving ? t.config.saving : t.config.save}
     </button>
   </div>
 </div>

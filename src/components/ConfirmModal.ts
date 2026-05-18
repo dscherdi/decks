@@ -1,5 +1,6 @@
 import { Modal } from "obsidian";
 import type { App } from "obsidian";
+import { I18n } from "@/i18n/I18n";
 
 export class ConfirmModal extends Modal {
   private title: string;
@@ -21,7 +22,7 @@ export class ConfirmModal extends Modal {
     super(app);
     this.title = options.title;
     this.message = options.message;
-    this.confirmText = options.confirmText ?? "Confirm";
+    this.confirmText = options.confirmText ?? I18n.t.modals.confirm.confirm;
     this.isDanger = options.isDanger ?? false;
     this.onConfirm = options.onConfirm;
   }
@@ -38,7 +39,7 @@ export class ConfirmModal extends Modal {
       cls: "decks-modal-button-container",
     });
 
-    const cancelButton = buttonContainer.createEl("button", { text: "Cancel" });
+    const cancelButton = buttonContainer.createEl("button", { text: I18n.t.modals.confirm.cancel });
     cancelButton.onclick = () => this.close();
 
     const confirmButton = buttonContainer.createEl("button", {
