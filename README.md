@@ -1,4 +1,4 @@
-# Decks ![Downloads](https://img.shields.io/github/downloads/dscherdi/decks/total) ![Release](https://img.shields.io/github/v/release/dscherdi/decks)
+# Decks ![Downloads](https://img.shields.io/github/downloads/dscherdi/decks/total) ![Downloads Latest](https://img.shields.io/github/downloads/dscherdi/decks/latest/total?style=flat-square) ![Release](https://img.shields.io/github/v/release/dscherdi/decks)
 
 **Turn your Obsidian notes into flashcards. No special syntax. No separate deck to build.**
 
