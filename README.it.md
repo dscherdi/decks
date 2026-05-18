@@ -138,6 +138,7 @@ FSRS viene fornito con impostazioni predefinite logiche che funzionano benissimo
 - Le **Note di rilascio** per ogni versione si trovano in [`release-notes/`](./release-notes/).
 - **Partecipa su Discord** — [unisciti al server](https://discord.com/channels/686053708261228577/1497268419861418035).
 - **Sostieni lo sviluppo** — [Offrimi un caffè](https://www.buymeacoffee.com/dscherdil0).
+- **Guida alla traduzione** - [Guida alla traduzione](./docs/TRANSLATING.md).
 
 ## Licenza
 

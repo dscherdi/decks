@@ -127,6 +127,7 @@ FSRS, kutudan çıktığı gibi harika çalışan mantıklı varsayılanlarla ge
 - Her sürüm için **Sürüm notları** [`release-notes/`](./release-notes/) klasöründedir.
 - **Discord'da tartışın** — [sunucuya katılın](https://discord.com/channels/686053708261228577/1497268419861418035).
 - **Geliştirmeyi destekleyin** — [Bana bir kahve ısmarla](https://www.buymeacoffee.com/dscherdil0).
+- **Çeviri Rehberi** - [Çeviri Rehberi](./docs/TRANSLATING.md).
 
 ## Lisans
 

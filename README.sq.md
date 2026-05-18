@@ -127,6 +127,7 @@ FSRS vjen me parazgjedhje të arsyeshme që funksionojnë shumë mirë që në f
 - **Shënimet e versionit** për çdo përditësim ndodhen në [`release-notes/`](./release-notes/).
 - **Diskuto në Discord** — [bashkohu në server](https://discord.com/channels/686053708261228577/1497268419861418035).
 - **Mbështet zhvillimin** — [Më bli një kafe](https://www.buymeacoffee.com/dscherdil0).
+- **Udhëzuesi i përkthimit** - [Udhëzuesi i përkthimit](./docs/TRANSLATING.md).
 
 ## Licenca
 

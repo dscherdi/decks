@@ -198,6 +198,7 @@ Open **Settings → Decks** for daily limits, retention targets, search paths, s
 - **Release notes** for each version are in [`release-notes/`](./release-notes/).
 - **Discuss on Discord** — [join the server](https://discord.com/channels/686053708261228577/1497268419861418035).
 - **Support development** — [Buy me a coffee](https://www.buymeacoffee.com/dscherdil0).
+- **Translation Guide** - [Translation Guide](./docs/TRANSLATING.md).
 
 ## License
 

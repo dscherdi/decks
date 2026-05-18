@@ -198,6 +198,7 @@ Abre **Ajustes → Decks** para límites diarios, objetivos de retención, rutas
 - **Notas de versión** de cada versión en [`release-notes/`](./release-notes/).
 - **Discusión en Discord** — [únete al servidor](https://discord.com/channels/686053708261228577/1497268419861418035).
 - **Apoya el desarrollo** — [Invítame a un café](https://www.buymeacoffee.com/dscherdil0).
+- **Guía de traducción** - [Guía de traducción](./docs/TRANSLATING.md).
 
 ## Licencia
 

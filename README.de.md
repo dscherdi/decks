@@ -198,6 +198,7 @@ Die Implementierung wurde gegen die veröffentlichte FSRS-6-Spezifikation validi
 - **Versionshinweise** für jede Version findest du in [`release-notes/`](./release-notes/).
 - **Diskutiere auf Discord** — [tritt dem Server bei](https://discord.com/channels/686053708261228577/1497268419861418035).
 - **Unterstütze die Entwicklung** — [Spendier mir einen Kaffee](https://www.buymeacoffee.com/dscherdil0).
+- **Übersetzungsleitfaden** - [Übersetzungsleitfaden](./docs/TRANSLATING.md).
 
 ## Lizenz
 

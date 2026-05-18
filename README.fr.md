@@ -147,6 +147,7 @@ FSRS est livré avec des paramètres par défaut judicieux qui fonctionnent trè
 - Les **Notes de version** pour chaque mise à jour se trouvent dans [`release-notes/`](./release-notes/).
 - **Discutez sur Discord** — [rejoignez le serveur](https://discord.com/channels/686053708261228577/1497268419861418035).
 - **Soutenez le développement** — [Offrez-moi un café](https://www.buymeacoffee.com/dscherdil0).
+- **Guide de traduction** - [Guide de traduction](./docs/TRANSLATING.md).
 
 ## Licence
 

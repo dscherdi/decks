@@ -136,6 +136,7 @@ FSRS は初期状態でも十分に機能するデフォルト設定が備わっ
 - 各バージョンの **リリースノート** は [`release-notes/`](./release-notes/) にあります。
 - **Discord で議論する** — [サーバーに参加](https://discord.com/channels/686053708261228577/1497268419861418035)。
 - **開発を支援する** — [Buy me a coffee](https://www.buymeacoffee.com/dscherdil0)。
+- **翻訳ガイド** - [翻訳ガイド](./docs/TRANSLATING.md)。
 
 ## ライセンス
 

@@ -127,6 +127,7 @@ Thank you.
 - توجد **ملاحظات الإصدار** لكل تحديث في [`release-notes/`](./release-notes/).
 - **ناقش على Discord** — [انضم إلى الخادم](https://discord.com/channels/686053708261228577/1497268419861418035).
 - **ادعم التطوير** — [اشترِ لي قهوة](https://www.buymeacoffee.com/dscherdil0).
+- **دليل الترجمة** - [دليل الترجمة](./docs/TRANSLATING.md).
 
 ## الترخيص
 
