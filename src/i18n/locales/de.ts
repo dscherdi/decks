@@ -15,33 +15,85 @@ export const de: Translations = {
     decks: "Stapel",
   },
 
+  testDeck: {
+    filename: "Decks — Erste Schritte.md",
+    title: "Erste Schritte mit Decks",
+    intro:
+      "Willkommen bei Decks! Um diese Datei (oder eine beliebige andere) in einen Karteikarten-Stapel zu verwandeln, füge einfach das Tag `{tag}` zu den Frontmatter-Eigenschaften oder irgendwo im Text hinzu.",
+    formatsHint:
+      "Decks unterstützt vier Hauptformate. Wähle dasjenige, das am besten zu deinen Notizen passt.",
+    section1: "1. Überschrift-Absatz-Format",
+    section1Body:
+      "Standardmäßig verwendet Decks **H2-Überschriften (`##`)** als Vorderseite der Karte und den direkt darunter liegenden Absatz als Rückseite. *(Du kannst diese Überschriftenebene in den Deck-Einstellungen ändern).*",
+    q1: "Was ist Spaced Repetition?",
+    a1: "Eine Lerntechnik, die Wiederholungen in immer größeren Abständen plant, basierend darauf, wie gut man sich erinnert.",
+    q2: "Welches Tag markiert eine Datei als Karteikarten-Stapel?",
+    a2: "Das Tag `{tag}`. Füge es zur `tags`-Liste im Frontmatter oder irgendwo im Text hinzu.",
+    section2: "2. Tabellen-Format",
+    section2Body:
+      "Du kannst zweispaltige Markdown-Tabellen verwenden, um Karten in großen Mengen zu erstellen.\n**Wichtige Regel:** Die Tabelle *muss* direkt unter einer Überschrift stehen. Diese Überschrift fungiert als Container für die Karten.",
+    fsrsConceptsHeading: "FSRS-Konzepte",
+    colFront: "Vorderseite",
+    colBack: "Rückseite",
+    colNotes: "Notizen",
+    row1Front: "Wofür steht FSRS?",
+    row1Back: "Free Spaced Repetition Scheduler",
+    row1Notes: "Der Algorithmus, den Decks zum Planen von Karten verwendet",
+    row2Front: "Was sind die vier Bewertungsstufen?",
+    row2Back: "Noch einmal, Schwer, Gut, Einfach",
+    row2Notes:
+      "„Noch einmal“ setzt die Karte zurück; „Einfach“ gibt den längsten Intervall",
+    tableNote:
+      "*(Hinweis: Die erste Spalte ist die Vorderseite, die zweite die Rückseite. Die optionale dritte Spalte ist für Notizen/Hinweise gedacht).*",
+    section3: "3. Lückentexte (Cloze)",
+    section3Body:
+      "Verwende die Syntax `==hervorgehoben==`, um Lückentext-Karten zu erstellen. Jede Hervorhebung wird zu einer eigenen Karte.",
+    solarHeading: "Das Sonnensystem",
+    solarBody:
+      "Die ==Sonne== ist der Stern im Zentrum unseres Sonnensystems. Der nächste Planet ist der ==Merkur== und der größte Planet ist der ==Jupiter==.",
+    section4: "4. Bildverdeckung (Image occlusion)",
+    section4Body:
+      "Kombiniere ein Bild mit einer nummerierten Liste. Das Bild zeigt die markierten Bereiche, und jeder Listenpunkt wird zu einer separaten Karte.",
+    bonesHeading: "Knochen des Arms",
+    bone1: "Humerus (Oberarmknochen)",
+    bone2: "Radius (Speiche)",
+    bone3: "Ulna (Elle)",
+  },
+
   commands: {
     showPanel: "Karteikarten-Panel anzeigen",
     showReleaseNotes: "Versionshinweise anzeigen",
     openManager: "Karteikarten-Manager öffnen",
     createTestDeck: "Teststapel erstellen",
-    fullResync: "Vollständige Neusynchronisierung erzwingen (jeden Stapel neu parsen)",
+    fullResync:
+      "Vollständige Neusynchronisierung erzwingen (jeden Stapel neu parsen)",
     openReview: "Wiederholungsfenster öffnen",
   },
 
   notices: {
-    reparsing: "Jeder Stapel wird neu eingelesen. Dies kann einen Moment dauern…",
+    reparsing:
+      "Jeder Stapel wird neu eingelesen. Dies kann einen Moment dauern…",
     resyncComplete: "Vollständige Neusynchronisierung abgeschlossen.",
-    resyncFailed: "Neusynchronisierung fehlgeschlagen. Siehe Konsole für Details.",
-    loadFailed: "Plugin konnte nicht geladen werden. Siehe Konsole für Details.",
-    languageChanged: "Sprache geändert. Plugin neu laden, damit die Änderung wirksam wird.",
+    resyncFailed:
+      "Neusynchronisierung fehlgeschlagen. Siehe Konsole für Details.",
+    loadFailed:
+      "Plugin konnte nicht geladen werden. Siehe Konsole für Details.",
+    languageChanged:
+      "Sprache geändert. Plugin neu laden, damit die Änderung wirksam wird.",
     noCardsInDeck: "Keine Karten gefunden in {deckName}",
-    customDeckCreated: "Benutzerdefinierten Stapel \"{name}\" mit {count} Karten erstellt",
-    customDeckUpdated: "Benutzerdefinierter Stapel \"{name}\" aktualisiert",
-    customDeckDeleted: "Benutzerdefinierter Stapel \"{name}\" gelöscht",
-    customDeckRenamed: "Benutzerdefinierter Stapel umbenannt in \"{name}\"",
+    customDeckCreated:
+      'Benutzerdefinierten Stapel "{name}" mit {count} Karten erstellt',
+    customDeckUpdated: 'Benutzerdefinierter Stapel "{name}" aktualisiert',
+    customDeckDeleted: 'Benutzerdefinierter Stapel "{name}" gelöscht',
+    customDeckRenamed: 'Benutzerdefinierter Stapel umbenannt in "{name}"',
     deckResetSuccess: "Stapel-Fortschritt erfolgreich zurückgesetzt",
     deckResetFailed: "Zurücksetzen des Stapel-Fortschritts fehlgeschlagen",
     reviewStartFailed: "Fehler beim Starten der Wiederholung. Siehe Konsole.",
     sessionComplete: "Wiederholungssitzung abgeschlossen",
     sessionCompleteCount: "{count} Karten wiederholt",
     duplicatesFound: "{count} doppelte Karte(n) in {deckName} gefunden",
-    trainedParamsCleared: "Trainierte Parameter gelöscht, Standardwerte wiederhergestellt.",
+    trainedParamsCleared:
+      "Trainierte Parameter gelöscht, Standardwerte wiederhergestellt.",
     creatingBackup: "Sicherung wird erstellt…",
     backupCreated: "✅ Sicherung erstellt: {filename}",
     backupFailed: "❌ Sicherung fehlgeschlagen: {message}",
@@ -49,56 +101,78 @@ export const de: Translations = {
     restoringBackup: "Sicherung wird wiederhergestellt…",
     restoringFromFile: "Wiederherstellung aus {filename}…",
     restoringFromFileProgress: "Wiederherstellung aus {filename}: {progress}%",
-    restoreProgress: "Sicherung wird wiederhergestellt: {progress}% ({current}/{total})",
+    restoreProgress:
+      "Sicherung wird wiederhergestellt: {progress}% ({current}/{total})",
     restoreFailed: "❌ Wiederherstellung fehlgeschlagen: {message}",
-    backupRestoreFailed: "❌ Wiederherstellung der Sicherung fehlgeschlagen: {message}",
+    backupRestoreFailed:
+      "❌ Wiederherstellung der Sicherung fehlgeschlagen: {message}",
     dropdownNotFound: "Dropdown nicht gefunden",
     noBackupsFound: "Keine Sicherungen gefunden",
     backupsFound: "{count} Sicherung(en) gefunden",
     backupListFailed: "Sicherungsliste konnte nicht geladen werden: {message}",
     purgingDatabase: "Datenbank wird geleert…",
     databasePurged: "✅ Datenbank geleert und neu aufgebaut",
-    purgeFailed: "Datenbank konnte nicht geleert werden. Siehe Konsole für Details.",
-    purgeConfirmMismatch: "Bestätigungstext stimmt nicht überein. Datenbankleerung abgebrochen.",
-    errorLoadingDecks: "Fehler beim Laden der Stapel. Siehe Konsole für Details.",
-    errorStartingReview: "Fehler beim Starten der Wiederholung. Siehe Konsole für Details.",
-    errorStartingBrowse: "Fehler beim Starten des Durchsuchens. Siehe Konsole für Details.",
+    purgeFailed:
+      "Datenbank konnte nicht geleert werden. Siehe Konsole für Details.",
+    purgeConfirmMismatch:
+      "Bestätigungstext stimmt nicht überein. Datenbankleerung abgebrochen.",
+    errorLoadingDecks:
+      "Fehler beim Laden der Stapel. Siehe Konsole für Details.",
+    errorStartingReview:
+      "Fehler beim Starten der Wiederholung. Siehe Konsole für Details.",
+    errorStartingBrowse:
+      "Fehler beim Starten des Durchsuchens. Siehe Konsole für Details.",
     noCardsFoundInDeck: "Keine Karten gefunden in {deckName}",
     noCardsDueForReview: "Keine Karten zur Wiederholung fällig in {deckName}",
-    noCardsFoundInGroup: "Keine Karten gefunden in \"{name}\"",
-    noCardsDueInGroup: "Keine Karten fällig in \"{name}\" ({count} Dateien)",
-    noCardsDueInCustomDeck: "Keine Karten fällig in \"{name}\" ({count} Karten)",
+    noCardsFoundInGroup: 'Keine Karten gefunden in "{name}"',
+    noCardsDueInGroup: 'Keine Karten fällig in "{name}" ({count} Dateien)',
+    noCardsDueInCustomDeck: 'Keine Karten fällig in "{name}" ({count} Karten)',
     fileNotFound: "Datei nicht gefunden: {path}",
-    reviewSessionCompleteFor: "Wiederholungssitzung abgeschlossen für {deckName}!",
-    filterDeckUpdated: "Filterstapel \"{name}\" aktualisiert",
-    customDeckUpdatedCounts: "\"{name}\" aktualisiert — {added} hinzugefügt, {removed} entfernt",
+    reviewSessionCompleteFor:
+      "Wiederholungssitzung abgeschlossen für {deckName}!",
+    filterDeckUpdated: 'Filterstapel "{name}" aktualisiert',
+    customDeckUpdatedCounts:
+      '"{name}" aktualisiert — {added} hinzugefügt, {removed} entfernt',
     failedToSave: "Speichern fehlgeschlagen: {message}",
     failedToCreateDeck: "Stapel konnte nicht erstellt werden: {message}",
-    failedToCreateFilterDeck: "Filterstapel konnte nicht erstellt werden: {message}",
+    failedToCreateFilterDeck:
+      "Filterstapel konnte nicht erstellt werden: {message}",
     failedToAddCards: "Karten konnten nicht hinzugefügt werden: {message}",
-    filterDeckCreated: "Filterstapel \"{name}\" erstellt",
-    cardsAddedToCustomDeck: "{count} Karten zum benutzerdefinierten Stapel hinzugefügt",
+    filterDeckCreated: 'Filterstapel "{name}" erstellt',
+    cardsAddedToCustomDeck:
+      "{count} Karten zum benutzerdefinierten Stapel hinzugefügt",
     dailyLimitsReached: "\n\nTägliche Limits erreicht:",
     dailyNewLimit: "\nNeue Karten: {used}/{max}",
     dailyReviewLimit: "\nWiederholungskarten: {used}/{max}",
-    dailyNewOnlyLimit: "\n\nTägliches Limit für neue Karten erreicht: {used}/{max}",
-    dailyReviewOnlyLimit: "\n\nTägliches Limit für Wiederholungskarten erreicht: {used}/{max}",
+    dailyNewOnlyLimit:
+      "\n\nTägliches Limit für neue Karten erreicht: {used}/{max}",
+    dailyReviewOnlyLimit:
+      "\n\nTägliches Limit für Wiederholungskarten erreicht: {used}/{max}",
     dailyProgressHeader: "Tagesfortschritt für {deckName}:\n",
     dailyProgressNewDisabled: "Neue Karten: DEAKTIVIERT (0 pro Tag erlaubt)\n",
-    dailyProgressNewExceeded: "Neue Karten: {used}/{max} (LIMIT ÜBERSCHRITTEN)\n",
-    dailyProgressNewRemaining: "Neue Karten: {used}/{max} ({remaining} verbleibend)\n",
-    dailyProgressReviewDisabled: "Wiederholungskarten: DEAKTIVIERT (0 pro Tag erlaubt)\n",
-    dailyProgressReviewExceeded: "Wiederholungskarten: {used}/{max} (LIMIT ÜBERSCHRITTEN)\n",
-    dailyProgressReviewRemaining: "Wiederholungskarten: {used}/{max} ({remaining} verbleibend)\n",
-    dailyProgressOnlyLearning: "\n\nHinweis: Nur Lernkarten werden angezeigt (Limits überschritten)",
-    noFlashcardsToExport: "Keine Karten in diesem Stapel zum Exportieren gefunden",
-    ankiExportSuccess: "{count} Karten erfolgreich vom {type} ins Anki-Format exportiert",
+    dailyProgressNewExceeded:
+      "Neue Karten: {used}/{max} (LIMIT ÜBERSCHRITTEN)\n",
+    dailyProgressNewRemaining:
+      "Neue Karten: {used}/{max} ({remaining} verbleibend)\n",
+    dailyProgressReviewDisabled:
+      "Wiederholungskarten: DEAKTIVIERT (0 pro Tag erlaubt)\n",
+    dailyProgressReviewExceeded:
+      "Wiederholungskarten: {used}/{max} (LIMIT ÜBERSCHRITTEN)\n",
+    dailyProgressReviewRemaining:
+      "Wiederholungskarten: {used}/{max} ({remaining} verbleibend)\n",
+    dailyProgressOnlyLearning:
+      "\n\nHinweis: Nur Lernkarten werden angezeigt (Limits überschritten)",
+    noFlashcardsToExport:
+      "Keine Karten in diesem Stapel zum Exportieren gefunden",
+    ankiExportSuccess:
+      "{count} Karten erfolgreich vom {type} ins Anki-Format exportiert",
     ankiExportFailed: "Export in das Anki-Format fehlgeschlagen",
     ankiExportTypeDeck: "Stapel",
     ankiExportTypeTagGroup: "Tag-Gruppe",
   },
 
   deckList: {
+    exportToAnki: "Nach Anki exportieren",
     title: "Stapel",
     emptyNoDecks: "Keine Stapel gefunden.",
     emptyNoFilterMatch: "Keine Stapel entsprechen dem Filter.",
@@ -142,26 +216,36 @@ export const de: Translations = {
     clickToReview: "Klicken, um {name} zu wiederholen",
     resetProgress: "Fortschritt zurücksetzen",
     deleteCustomDeckTitle: "Benutzerdefinierten Stapel löschen",
-    deleteCustomDeckMessage: "Benutzerdefinierten Stapel \"{name}\" löschen? Die Karten selbst werden nicht gelöscht.",
-    resetCustomDeckProgress: "Allen Fortschritt für \"{name}\" zurücksetzen? Alle Karten dieses Stapels werden auf neu zurückgesetzt und der Wiederholungsverlauf wird gelöscht. Diese Aktion kann nicht rückgängig gemacht werden.",
-    progressResetFor: "Fortschritt zurückgesetzt für \"{name}\"",
-    resetCustomDeckTitle: "Fortschritt des benutzerdefinierten Stapels zurücksetzen",
-    resetCustomDeckMessage: "Fortschritt der Karten in \"{name}\" zurücksetzen? Der Wiederholungsverlauf für diese Karten wird gelöscht und sie kehren in den neuen Zustand zurück.",
-    resetCustomDeckFailed: "Zurücksetzen des benutzerdefinierten Stapels fehlgeschlagen",
+    deleteCustomDeckMessage:
+      'Benutzerdefinierten Stapel "{name}" löschen? Die Karten selbst werden nicht gelöscht.',
+    resetCustomDeckProgress:
+      'Allen Fortschritt für "{name}" zurücksetzen? Alle Karten dieses Stapels werden auf neu zurückgesetzt und der Wiederholungsverlauf wird gelöscht. Diese Aktion kann nicht rückgängig gemacht werden.',
+    progressResetFor: 'Fortschritt zurückgesetzt für "{name}"',
+    resetCustomDeckTitle:
+      "Fortschritt des benutzerdefinierten Stapels zurücksetzen",
+    resetCustomDeckMessage:
+      'Fortschritt der Karten in "{name}" zurücksetzen? Der Wiederholungsverlauf für diese Karten wird gelöscht und sie kehren in den neuen Zustand zurück.',
+    resetCustomDeckFailed:
+      "Zurücksetzen des benutzerdefinierten Stapels fehlgeschlagen",
     confirmDelete: "Löschen",
     newCardsTooltip: "Heute verbleibende neue Karten: {remaining} / {limit}",
-    reviewCardsTooltip: "Heute verbleibende Wiederholungskarten: {remaining} / {limit}",
+    reviewCardsTooltip:
+      "Heute verbleibende Wiederholungskarten: {remaining} / {limit}",
     tabFiles: "Dateien",
     tabTags: "Tags",
     tabCustom: "Benutzerdefiniert",
     tagYourNotes: "Versehe deine Notizen mit {tag}, um Stapel zu erstellen.",
     filesCount: "({count} Dateien)",
     cardsCount: "({count} Karten)",
-    newCardsGroupTooltip: "{count} neue Karten heute verfügbar (Limit: {limit} pro Stapel)",
-    newCardsLimitTooltip: "{count} neue Karten heute verfügbar (Limit: {limit})",
+    newCardsGroupTooltip:
+      "{count} neue Karten heute verfügbar (Limit: {limit} pro Stapel)",
+    newCardsLimitTooltip:
+      "{count} neue Karten heute verfügbar (Limit: {limit})",
     newCardsDueTooltip: "{count} neue Karten fällig",
-    reviewCardsGroupTooltip: "{count} Wiederholungskarten heute verfügbar (Limit: {limit} pro Stapel)",
-    reviewCardsLimitTooltip: "{count} Wiederholungskarten heute verfügbar (Limit: {limit})",
+    reviewCardsGroupTooltip:
+      "{count} Wiederholungskarten heute verfügbar (Limit: {limit} pro Stapel)",
+    reviewCardsLimitTooltip:
+      "{count} Wiederholungskarten heute verfügbar (Limit: {limit})",
     reviewCardsDueTooltip: "{count} Wiederholungskarten fällig",
     studiedSummary: "{cards} Karten in {hours} heute gelernt ({pace})",
   },
@@ -195,7 +279,8 @@ export const de: Translations = {
     nextCloze: "Nächste Lücke",
     openSource: "Quellnotiz öffnen",
     openSourceFile: "Quelldatei öffnen",
-    cardLeechAndDense: "Karte wird wiederholt vergessen und ist komplex — überarbeiten erwägen",
+    cardLeechAndDense:
+      "Karte wird wiederholt vergessen und ist komplex — überarbeiten erwägen",
     cardLeech: "Karte wird wiederholt vergessen — neu schreiben erwägen",
     cardDense: "Karte ist komplex. Aufteilen erwägen.",
     copyContent: "Inhalt kopieren",
@@ -299,11 +384,13 @@ export const de: Translations = {
     badgeLeech: "Egel",
     badgeDense: "Dicht",
     badgeHealthy: "Gesund",
-    leechTooltip: "Wiederholt vergessen ({count} mal) — neu schreiben in Erwägung ziehen",
-    denseTooltip: "Rückseite hat {count} Zeichen — Aufteilen in Erwägung ziehen",
+    leechTooltip:
+      "Wiederholt vergessen ({count} mal) — neu schreiben in Erwägung ziehen",
+    denseTooltip:
+      "Rückseite hat {count} Zeichen — Aufteilen in Erwägung ziehen",
     healthyTooltip: "Keine Egel- oder Dichte-Probleme erkannt",
-    footerShowingOfInDeck: "{shown} von {total} Karten in „{name}\" angezeigt",
-    footerInDeck: "{total} Karten in „{name}\"",
+    footerShowingOfInDeck: '{shown} von {total} Karten in „{name}" angezeigt',
+    footerInDeck: '{total} Karten in „{name}"',
     footerShowingOf: "{shown} von {total} Karteikarten angezeigt",
     footerTotal: "{total} Karteikarten",
   },
@@ -336,13 +423,15 @@ export const de: Translations = {
     decksUsingProfile: "Stapel, die das Profil verwenden",
     deckCount: "{count} Stapel",
     editNoteIntro: "Hinweis:",
-    editNoteBody: " Um Profileinstellungen zu bearbeiten, nutze die Schaltfläche „Profile verwalten\" im Hauptpanel.",
+    editNoteBody:
+      ' Um Profileinstellungen zu bearbeiten, nutze die Schaltfläche „Profile verwalten" im Hauptpanel.',
     sectionTagSelection: "Tag-Auswahl",
     sectionProfileSelection: "Profil-Auswahl",
     sectionCurrentSettings: "Aktuelle Profil-Einstellungen",
     saving: "Speichere …",
     applyProfileToTag: "Profil auf Tag anwenden",
-    applyProfileDesc: "Wähle ein Tag, um das Profil auf alle seine Stapel anzuwenden",
+    applyProfileDesc:
+      "Wähle ein Tag, um das Profil auf alle seine Stapel anzuwenden",
     errorSavingConfig: "Fehler beim Speichern der Konfiguration",
     requestRetention: "Gewünschte Retention",
     requestRetentionDesc: "Zielwahrscheinlichkeit für Erinnerung (0,7-0,99)",
@@ -351,21 +440,26 @@ export const de: Translations = {
     learningSteps: "Lernschritte",
     relearningSteps: "Nachlernschritte",
     newCardsPerDay: "Neue Karten pro Tag",
-    newCardsPerDayDesc: "Maximale Anzahl neuer Karten pro Tag (0 deaktiviert das Limit)",
+    newCardsPerDayDesc:
+      "Maximale Anzahl neuer Karten pro Tag (0 deaktiviert das Limit)",
     reviewsPerDay: "Wiederholungen pro Tag",
-    reviewsPerDayDesc: "Maximale Anzahl Wiederholungskarten pro Tag (0 deaktiviert das Limit)",
+    reviewsPerDayDesc:
+      "Maximale Anzahl Wiederholungskarten pro Tag (0 deaktiviert das Limit)",
     reviewOrder: "Wiederholungsreihenfolge",
     reviewOrderDueDate: "Fälligkeitsdatum",
     reviewOrderRandom: "Zufällig",
     headerLevel: "Überschriftenebene für Karten",
-    headerLevelDesc: "Überschriftenebene, die als Vorderseite in Überschrift-Absatz-Stapeln behandelt wird",
+    headerLevelDesc:
+      "Überschriftenebene, die als Vorderseite in Überschrift-Absatz-Stapeln behandelt wird",
     useTrainedWeights: "Trainierte Gewichte verwenden",
-    useTrainedWeightsDesc: "Wendet die global trainierten FSRS-Gewichte auf diesen Stapel an (nur Standard-Profil).",
+    useTrainedWeightsDesc:
+      "Wendet die global trainierten FSRS-Gewichte auf diesen Stapel an (nur Standard-Profil).",
     save: "Speichern",
     cancel: "Abbrechen",
     reset: "Auf Standard zurücksetzen",
     enableDailyLimits: "Tageslimits aktivieren",
-    enableDailyLimitsDesc: "Anzahl neuer und Wiederholungskarten pro Tag begrenzen",
+    enableDailyLimitsDesc:
+      "Anzahl neuer und Wiederholungskarten pro Tag begrenzen",
   },
 
   profiles: {
@@ -383,7 +477,8 @@ export const de: Translations = {
     removeTagMapping: "Tag-Zuordnung entfernen",
     tagPlaceholder: "Tag eingeben (z. B. #decks/math)",
     noProfiles: "Noch keine benutzerdefinierten Profile",
-    deleteConfirm: "Dieses Profil löschen? Stapel, die es verwenden, fallen auf das Standardprofil zurück.",
+    deleteConfirm:
+      "Dieses Profil löschen? Stapel, die es verwenden, fallen auf das Standardprofil zurück.",
     cannotDeleteDefault: "Die Standardprofile können nicht gelöscht werden.",
     selectProfile: "Profil auswählen",
     chooseProfileDesc: "Wähle ein Profil zum Anzeigen und Bearbeiten",
@@ -407,15 +502,18 @@ export const de: Translations = {
     reviewCardsPerDayLabel: "Wiederholungskarten pro Tag",
     reviewCardsPerDayDesc: "Maximale Wiederholungskarten pro Tag (1-9999)",
     againIntervalNew: "Nochmal-Intervall",
-    againIntervalNewDesc: "Intervall bei Nochmal auf einer neuen Karte (z. B. 1m)",
+    againIntervalNewDesc:
+      "Intervall bei Nochmal auf einer neuen Karte (z. B. 1m)",
     againIntervalReview: "Nochmal-Intervall",
-    againIntervalReviewDesc: "Intervall bei Nochmal auf einer Wiederholungskarte (z. B. 10m)",
+    againIntervalReviewDesc:
+      "Intervall bei Nochmal auf einer Wiederholungskarte (z. B. 10m)",
     headerLevelLabel: "Überschriftenebene",
     headerLevelDescParsing: "Überschriftenebene für das Parsen",
     clozeDeletionsLabel: "Lückentexte",
     clozeDeletionsDesc: "Lückentexte aus ==hervorgehobenem== Text generieren",
     clozeContextLabel: "Lücken-Kontext",
-    clozeContextDesc: "Wie nicht abgefragte Lücken bei der Wiederholung erscheinen",
+    clozeContextDesc:
+      "Wie nicht abgefragte Lücken bei der Wiederholung erscheinen",
     clozeShowOption: "Andere Lücken anzeigen",
     clozeHideOption: "Alle Lücken verbergen",
     reviewOrderLabel: "Wiederholungsreihenfolge",
@@ -423,8 +521,10 @@ export const de: Translations = {
     requestRetentionLabel: "Gewünschte Retention",
     requestRetentionDesc: "Ziel-Retentionsrate (0,5 - 0,995)",
     fsrsProfileLabel: "FSRS-Profil",
-    fsrsTrainedDesc: "Standard oder Intensiv nutzen mitgelieferte Gewichte. Trainiert wendet deine optimierten Gewichte an (Standard-Intervalle).",
-    fsrsUntrainedDesc: "Lernintensitäts-Profil. Trainiere Gewichte in der Algorithmus-Feinabstimmung, um die Option Trainiert zu aktivieren.",
+    fsrsTrainedDesc:
+      "Standard oder Intensiv nutzen mitgelieferte Gewichte. Trainiert wendet deine optimierten Gewichte an (Standard-Intervalle).",
+    fsrsUntrainedDesc:
+      "Lernintensitäts-Profil. Trainiere Gewichte in der Algorithmus-Feinabstimmung, um die Option Trainiert zu aktivieren.",
     fsrsStandardOption: "Standard",
     fsrsIntensiveOption: "Intensiv",
     fsrsTrainedOption: "Trainiert",
@@ -438,15 +538,19 @@ export const de: Translations = {
     close: "Schließen",
     noticeProfileCreated: "Neues Profil erstellt",
     noticeProfileNameEmpty: "Profilname darf nicht leer sein",
-    noticeNewCardsRange: "Neue Karten pro Tag müssen zwischen 1 und 9999 liegen",
-    noticeReviewCardsRange: "Wiederholungskarten pro Tag müssen zwischen 1 und 9999 liegen",
-    noticeRequestRetentionRange: "Gewünschte Retention muss zwischen 0,5 und 0,995 liegen",
+    noticeNewCardsRange:
+      "Neue Karten pro Tag müssen zwischen 1 und 9999 liegen",
+    noticeReviewCardsRange:
+      "Wiederholungskarten pro Tag müssen zwischen 1 und 9999 liegen",
+    noticeRequestRetentionRange:
+      "Gewünschte Retention muss zwischen 0,5 und 0,995 liegen",
     noticeInvalidAgainInterval: "Ungültiges Nochmal-Intervall",
     noticeProfileSaved: "Profil gespeichert",
     noticeProfileSaveError: "Fehler beim Speichern des Profils",
     noticeCannotDeleteDefault: "Das STANDARD-Profil kann nicht gelöscht werden",
     noticeProfileDeleted: "Profil gelöscht",
-    confirmDeletePrompt: "Bist du sicher, dass du das Profil „{name}\" löschen möchtest?\n\nAlle Stapel, die dieses Profil verwenden, werden auf das STANDARD-Profil zurückgesetzt.",
+    confirmDeletePrompt:
+      'Bist du sicher, dass du das Profil „{name}" löschen möchtest?\n\nAlle Stapel, die dieses Profil verwenden, werden auf das STANDARD-Profil zurückgesetzt.',
     defaultSuffix: "(STANDARD)",
   },
 
@@ -460,6 +564,15 @@ export const de: Translations = {
     cardCountsReview: "Wiederholen",
     cardCountsRelearning: "Nachlernen",
     cardCountsTotal: "Gesamt",
+    cardCountsYoung: "Jung",
+    cardCountsMature: "Reif",
+    cardsAddedSeries: "Hinzugefügte Karten",
+    againSeries: "Nochmal",
+    hardSeries: "Schwer",
+    goodSeries: "Gut",
+    easySeries: "Leicht",
+    reviewsOnDate: "{count} Wiederholungen am {date}",
+    totalReviewsCount: "{count} Wiederholungen",
     cardDifficulty: "Karten-Schwierigkeit",
     cardStability: "Karten-Stabilität",
     cardRetrievability: "Karten-Abrufbarkeit",
@@ -515,28 +628,36 @@ export const de: Translations = {
     cardDistributionByState: "Kartenverteilung nach Zustand",
     cardDistributionByStateDoughnut: "Kartenverteilung nach Zustand (Ring)",
     cardCountsTooltip: "{label}: {count} Karten ({percent}%)",
-    selectDeckCardDistribution: "Wähle einen Stapel, um die Kartenverteilung anzuzeigen.",
+    selectDeckCardDistribution:
+      "Wähle einen Stapel, um die Kartenverteilung anzuzeigen.",
     cardDifficultyDistribution: "Verteilung der Kartenschwierigkeit",
     cardDifficultyRange: "Schwierigkeitsbereich",
-    cardDifficultySubtitle: "FSRS-Schwierigkeitswerte geben an, wie schwer Karten zu merken sind",
+    cardDifficultySubtitle:
+      "FSRS-Schwierigkeitswerte geben an, wie schwer Karten zu merken sind",
     higherDifficultyTip: "Höhere Schwierigkeit = schwerer zu merken",
     numberOfCards: "Anzahl Karten",
     numberOfReviews: "Anzahl Wiederholungen",
-    selectDeckCardDifficulty: "Wähle einen Stapel, um die Kartenschwierigkeit anzuzeigen.",
+    selectDeckCardDifficulty:
+      "Wähle einen Stapel, um die Kartenschwierigkeit anzuzeigen.",
     cardStabilityDistribution: "Verteilung der Kartenstabilität",
     cardStabilityRange: "Stabilitätsbereich",
-    cardStabilitySubtitle: "FSRS-Stabilitätswerte zeigen, wie gut Karten im Gedächtnis verankert sind",
-    selectDeckCardStability: "Wähle einen Stapel, um die Kartenstabilität anzuzeigen.",
+    cardStabilitySubtitle:
+      "FSRS-Stabilitätswerte zeigen, wie gut Karten im Gedächtnis verankert sind",
+    selectDeckCardStability:
+      "Wähle einen Stapel, um die Kartenstabilität anzuzeigen.",
     cardRetrievabilityDistribution: "Verteilung der Karten-Abrufbarkeit",
     retrievabilityRange: "Abrufbarkeitsbereich",
     reviewsLabel: "Wiederholungen",
-    cardRetrievabilitySubtitle: "FSRS-Abrufbarkeitswerte zeigen die Wahrscheinlichkeit, sich heute zu erinnern (0-100%)",
+    cardRetrievabilitySubtitle:
+      "FSRS-Abrufbarkeitswerte zeigen die Wahrscheinlichkeit, sich heute zu erinnern (0-100%)",
     higherRetrievabilityTip: "Höhere Abrufbarkeit = leichter abrufbar",
     reviewsTooltip: "{label}: {count} Wiederholungen ({percent}%)",
-    selectDeckCardRetrievability: "Wähle einen Stapel, um die Karten-Abrufbarkeit anzuzeigen.",
+    selectDeckCardRetrievability:
+      "Wähle einen Stapel, um die Karten-Abrufbarkeit anzuzeigen.",
     cardsAddedOverTime: "Hinzugefügte Karten im Zeitverlauf",
     dateAdded: "Hinzufügedatum",
-    selectDeckCardsAdded: "Wähle einen Stapel, um hinzugefügte Karten im Zeitverlauf anzuzeigen.",
+    selectDeckCardsAdded:
+      "Wähle einen Stapel, um hinzugefügte Karten im Zeitverlauf anzuzeigen.",
     cardsAddedTooltip: "{label}: {count} {plural}",
     cardSingular: "Karte",
     cardPlural: "Karten",
@@ -547,7 +668,8 @@ export const de: Translations = {
     timeframe1Year: "1 Jahr",
     allTime: "Gesamtzeit",
     futureDueTitle: "Zukünftig fällig",
-    selectDeckFutureDue: "Wähle einen Stapel, um zukünftig fällige Wiederholungen anzuzeigen.",
+    selectDeckFutureDue:
+      "Wähle einen Stapel, um zukünftig fällige Wiederholungen anzuzeigen.",
     dueCards: "Fällige Karten",
     cumulativeBacklog: "Kumulativer Rückstand",
     totalReviewsLabel: "Wiederholungen gesamt:",
@@ -563,13 +685,15 @@ export const de: Translations = {
     dayLabel: "Tag {label}",
     totalBacklogTooltip: "Gesamter Rückstand: {value} Wiederholungen",
     dueTooltip: "Fällig: {value} Karten",
-    noUpcomingReviews: "Keine bevorstehenden Wiederholungen geplant. Füge deinen Stapeln Karten hinzu, um eine Prognose zu sehen.",
+    noUpcomingReviews:
+      "Keine bevorstehenden Wiederholungen geplant. Füge deinen Stapeln Karten hinzu, um eine Prognose zu sehen.",
     hourlyBreakdownTitle: "Wiederholungsaktivität nach Stunde",
     hourlyBreakdownChart: "Wiederholungsaktivität nach Tagesstunde",
     reviewCountLabel: "Wiederholungsanzahl",
     hourOfDay: "Tagesstunde",
     successRatePercent: "Erfolgsrate (%)",
-    selectDeckHourly: "Wähle einen Stapel, um die stündliche Aktivität anzuzeigen.",
+    selectDeckHourly:
+      "Wähle einen Stapel, um die stündliche Aktivität anzuzeigen.",
     hourlySuccessRateTooltip: "{label}: {value}%",
     hourlyReviewsTooltip: "{label}: {value} Wiederholungen",
     timePeriod: "Tageszeit: {period}",
@@ -585,12 +709,16 @@ export const de: Translations = {
     learningCardsLabel: "Karten im Lernen",
     selectDeckMaturity: "Wähle einen Stapel, um die Reife-Prognose anzuzeigen.",
     calculating: "Berechne …",
-    maturityRetentionNote: "Basierend auf deiner historischen Retentionsrate von {percent}% reifen deine Karten so:",
+    maturityRetentionNote:
+      "Basierend auf deiner historischen Retentionsrate von {percent}% reifen deine Karten so:",
     maturityAllMatureIn: "Alle Karten sind in etwa {days} reif.",
-    maturitySubtitle: "Prognose, wie Karten basierend auf dem aktuellen Wiederholungstempo zur Reife kommen.",
-    maturityRetentionDetail: "Basierend auf deiner historischen Retentionsrate von {retention}% werden ungefähr {maintenance}% der Karten (~{count} Karten) durch natürliche Fehler immer in der Lernphase sein.",
+    maturitySubtitle:
+      "Prognose, wie Karten basierend auf dem aktuellen Wiederholungstempo zur Reife kommen.",
+    maturityRetentionDetail:
+      "Basierend auf deiner historischen Retentionsrate von {retention}% werden ungefähr {maintenance}% der Karten (~{count} Karten) durch natürliche Fehler immer in der Lernphase sein.",
     maturityEquilibrium: "Gleichgewicht in {days} erreicht.",
-    maturityAllMatureAtPace: "Alle Karten sind in etwa {days} reif beim aktuellen Tempo.",
+    maturityAllMatureAtPace:
+      "Alle Karten sind in etwa {days} reif beim aktuellen Tempo.",
     maturityTotalCards: "Gesamt: {count} Karten",
     standardMaintenanceLine: "Standard-Erhaltungslinie ({percent}%)",
     yourMaintenanceLine: "Deine Erhaltungslinie ({percent}%)",
@@ -614,10 +742,13 @@ export const de: Translations = {
     reviewIntervalDistribution: "Verteilung der Wiederholungsintervalle",
     intervalRange: "Intervallbereich",
     reviewIntervalsTitle: "Wiederholungsintervalle",
-    selectDeckIntervals: "Wähle einen Stapel, um die Intervallverteilung anzuzeigen.",
-    reviewIntervalsSubtitle: "Verteilung der aktuellen Wiederholungsintervalle der Karten",
+    selectDeckIntervals:
+      "Wähle einen Stapel, um die Intervallverteilung anzuzeigen.",
+    reviewIntervalsSubtitle:
+      "Verteilung der aktuellen Wiederholungsintervalle der Karten",
     reviewsOverTimeTitle: "Wiederholungen im Zeitverlauf",
-    selectDeckReviewsOverTime: "Wähle einen Stapel, um den Wiederholungsverlauf anzuzeigen.",
+    selectDeckReviewsOverTime:
+      "Wähle einen Stapel, um den Wiederholungsverlauf anzuzeigen.",
     dateAxisLabel: "Datum",
     selectDeckLabel: "Stapel auswählen:",
     deckDropdownPrompt: "-- Stapel wählen --",
@@ -626,25 +757,31 @@ export const de: Translations = {
     statisticsTitle: "Gesamtstatistik",
     loadingStatistics: "Statistiken werden geladen …",
     failedToLoad: "Statistiken konnten nicht geladen werden",
-    failedToLoadIntro: "Beim Laden deiner Statistiken ist ein Fehler aufgetreten. Mögliche Ursachen:",
+    failedToLoadIntro:
+      "Beim Laden deiner Statistiken ist ein Fehler aufgetreten. Mögliche Ursachen:",
     failedReasonDb: "Probleme mit der Datenbankverbindung",
     failedReasonData: "Beschädigte Daten",
     failedReasonSize: "Großer Datensatz, dessen Verarbeitung zu lange dauert",
-    failedConsoleHint: "Prüfe die Browser-Konsole (F12) für detaillierte Fehlerinformationen.",
+    failedConsoleHint:
+      "Prüfe die Browser-Konsole (F12) für detaillierte Fehlerinformationen.",
     retryLoading: "Erneut laden",
     timeframeLast12Months: "Letzte 12 Monate",
     timeframeAllHistory: "Gesamte Historie",
     labelReviews: "Wiederholungen",
     labelTime: "Zeit",
     labelCorrect: "richtig",
-    completeReviewsHint: "Wiederhole einige Karten, um Statistiken zu den Antwortschaltflächen zu sehen.",
+    completeReviewsHint:
+      "Wiederhole einige Karten, um Statistiken zu den Antwortschaltflächen zu sehen.",
     selectDeckPrompt: "Wähle oben einen Stapel aus, um Statistiken anzuzeigen.",
     reviewHeatmapTitle: "Wiederholungs-Heatmap",
     dailyReviewActivity: "Tägliche Wiederholungsaktivität im Zeitverlauf",
     trueRetentionTitle: "Tatsächliche Retention",
-    selectDeckRetention: "Wähle einen Stapel, um Retentions-Statistiken anzuzeigen.",
-    retentionDescription: "Erfolgsquoten für Wiederholungskarten (Bewertung ≥ Gut). Nur Karten mit Intervallen > 1 Tag.",
-    noReviewDataYet: "Noch keine Wiederholungsdaten vorhanden. Wiederhole einige Karten, um Retentions-Statistiken zu sehen.",
+    selectDeckRetention:
+      "Wähle einen Stapel, um Retentions-Statistiken anzuzeigen.",
+    retentionDescription:
+      "Erfolgsquoten für Wiederholungskarten (Bewertung ≥ Gut). Nur Karten mit Intervallen > 1 Tag.",
+    noReviewDataYet:
+      "Noch keine Wiederholungsdaten vorhanden. Wiederhole einige Karten, um Retentions-Statistiken zu sehen.",
     columnCardType: "Kartentyp",
     columnPassed: "Bestanden",
     columnTotalLabel: "Gesamt",
@@ -665,7 +802,8 @@ export const de: Translations = {
     deckName: "Stapelname",
     deckNamePlaceholder: "Mein Stapel",
     ankiDeckNameLabel: "Anki-Stapelname",
-    ankiDeckNameDesc: "Name des Stapels in Anki, in den die Karten importiert werden",
+    ankiDeckNameDesc:
+      "Name des Stapels in Anki, in den die Karten importiert werden",
     ankiDeckNamePlaceholder: "Stapelname eingeben...",
     includeTags: "Tags einschließen",
     includeTagsDesc: "Stapel- und Karten-Tags in den Export aufnehmen",
@@ -787,7 +925,7 @@ export const de: Translations = {
     },
     deckReset: {
       title: "Stapel-Fortschritt zurücksetzen",
-      intro: "Dies setzt den gesamten Fortschritt für \"{name}\" zurück:",
+      intro: 'Dies setzt den gesamten Fortschritt für "{name}" zurück:',
       listCardsReset: "Alle Karten in den neuen Zustand zurückgesetzt",
       listHistoryDeleted: "Wiederholungsverlauf gelöscht",
       listSessionsDeleted: "Wiederholungssitzungen gelöscht",
@@ -800,14 +938,17 @@ export const de: Translations = {
     },
     purgeDatabase: {
       title: "Datenbank leeren",
-      warningStrong: "Dies löscht endgültig alle Karteikartendaten, einschließlich:",
+      warningStrong:
+        "Dies löscht endgültig alle Karteikartendaten, einschließlich:",
       listFlashcards: "Aller Karten und ihres Inhalts",
       listReviews: "Vollständigen Wiederholungsverlaufs und Fortschritts",
       listDecks: "Aller Stapelinformationen",
       listStatistics: "Statistischer Daten",
       cannotUndo: "Diese Aktion kann nicht rückgängig gemacht werden!",
-      rebuildNote: "Die Datenbank wird aus deinen aktuellen Vault-Dateien neu aufgebaut, aber der gesamte Fortschritt geht verloren.",
-      confirmPrompt: "Um diese Aktion zu bestätigen, gib den im Platzhalter gezeigten Text ein",
+      rebuildNote:
+        "Die Datenbank wird aus deinen aktuellen Vault-Dateien neu aufgebaut, aber der gesamte Fortschritt geht verloren.",
+      confirmPrompt:
+        "Um diese Aktion zu bestätigen, gib den im Platzhalter gezeigten Text ein",
       confirmPlaceholder: "DELETE ALL DATA",
       purgeButton: "Datenbank leeren",
       cancel: "Abbrechen",
@@ -825,13 +966,17 @@ export const de: Translations = {
       title: "Parameter optimieren",
       loadingHistory: "Wiederholungsverlauf wird geladen…",
       trainingStep: "Trainingsschritt {step} / {total}",
-      notEnough: "Noch nicht genug Wiederholungsverlauf zum Trainieren. Wiederhole weiter und versuche es später erneut.",
-      reviewsAvailable: "Verfügbare Wiederholungen auf STANDARD-Profil-Stapeln: {count}.",
-      trainedSummary: "Trainiert mit {reviews} Wiederholungen über {cards} Karten in {seconds} s.",
+      notEnough:
+        "Noch nicht genug Wiederholungsverlauf zum Trainieren. Wiederhole weiter und versuche es später erneut.",
+      reviewsAvailable:
+        "Verfügbare Wiederholungen auf STANDARD-Profil-Stapeln: {count}.",
+      trainedSummary:
+        "Trainiert mit {reviews} Wiederholungen über {cards} Karten in {seconds} s.",
       logLossBefore: "Log-Loss vorher",
       logLossAfter: "Log-Loss nachher",
       improvement: "Verbesserung",
-      noImprovement: "Das Training hat den Log-Loss nicht wesentlich verbessert — die aktuellen Gewichte passen bereits gut. Du kannst sicher verwerfen.",
+      noImprovement:
+        "Das Training hat den Log-Loss nicht wesentlich verbessert — die aktuellen Gewichte passen bereits gut. Du kannst sicher verwerfen.",
       discard: "Verwerfen",
       apply: "Anwenden",
       close: "Schließen",
@@ -850,67 +995,83 @@ export const de: Translations = {
     language: {
       heading: "Sprache",
       name: "Plugin-Sprache",
-      desc: "Wähle die Anzeigesprache. \"Auto\" folgt der Spracheinstellung von Obsidian. Eine Änderung erfordert das Neuladen des Plugins.",
+      desc: 'Wähle die Anzeigesprache. "Auto" folgt der Spracheinstellung von Obsidian. Eine Änderung erfordert das Neuladen des Plugins.',
       auto: "Auto",
     },
 
     review: {
       heading: "Wiederholungssitzungen",
       showProgress: "Fortschritt anzeigen",
-      showProgressDesc: "Fortschrittsbalken während Wiederholungssitzungen anzeigen",
+      showProgressDesc:
+        "Fortschrittsbalken während Wiederholungssitzungen anzeigen",
       keyboardShortcuts: "Tastenkürzel",
-      keyboardShortcutsDesc: "Tastenkürzel im Wiederholungsfenster aktivieren (1-4 für Schwierigkeit)",
+      keyboardShortcutsDesc:
+        "Tastenkürzel im Wiederholungsfenster aktivieren (1-4 für Schwierigkeit)",
       sessionDuration: "Sitzungsdauer",
-      sessionDurationDesc: "Maximale Dauer für Wiederholungssitzungen in Minuten (1-60)",
+      sessionDurationDesc:
+        "Maximale Dauer für Wiederholungssitzungen in Minuten (1-60)",
       sessionDurationPlaceholder: "25",
       studyDayStartsAt: "Lerntag beginnt um",
-      studyDayStartsAtDesc: "Stunde, zu der der Lerntag wechselt (0-23, Standard 4). Wiederholungen vor dieser Stunde zählen zur Statistik und zu den Tageslimits des Vortags.",
+      studyDayStartsAtDesc:
+        "Stunde, zu der der Lerntag wechselt (0-23, Standard 4). Wiederholungen vor dieser Stunde zählen zur Statistik und zu den Tageslimits des Vortags.",
       leechThreshold: "Egel-Schwelle",
-      leechThresholdDesc: "Eine Karte wird als Egel markiert, sobald ihre Vergessen-Anzahl diese Zahl erreicht (Standard 8). Egel werden wiederholt vergessen und sollten meist umgeschrieben werden.",
+      leechThresholdDesc:
+        "Eine Karte wird als Egel markiert, sobald ihre Vergessen-Anzahl diese Zahl erreicht (Standard 8). Egel werden wiederholt vergessen und sollten meist umgeschrieben werden.",
       leechThresholdPlaceholder: "8",
       denseCardCharThreshold: "Schwellenwert dichte Karten (Zeichen)",
-      denseCardCharThresholdDesc: "Eine Karte wird als dicht markiert, sobald ihr Rücktext diese Zeichenanzahl erreicht (Standard 500). Dichte Karten sind meist zu informationsreich und profitieren vom Aufteilen.",
+      denseCardCharThresholdDesc:
+        "Eine Karte wird als dicht markiert, sobald ihr Rücktext diese Zeichenanzahl erreicht (Standard 500). Dichte Karten sind meist zu informationsreich und profitieren vom Aufteilen.",
       denseCardCharThresholdPlaceholder: "500",
     },
 
     parsing: {
       heading: "Parsen",
       deckTag: "Stapel-Tag",
-      deckTagDesc: "Basis-Tag zur Identifizierung von Karteikarten-Stapeln. Dateien mit diesem Tag (oder Unter-Tags wie {tag}/math) werden als Stapel behandelt. Das Standard-Tag wurde von #flashcards auf #decks geändert. #flashcards funktioniert weiterhin, bis du es hier änderst.",
+      deckTagDesc:
+        "Basis-Tag zur Identifizierung von Karteikarten-Stapeln. Dateien mit diesem Tag (oder Unter-Tags wie {tag}/math) werden als Stapel behandelt. Das Standard-Tag wurde von #flashcards auf #decks geändert. #flashcards funktioniert weiterhin, bis du es hier änderst.",
       deckTagPlaceholder: "#decks",
       folderSearchPath: "Ordnersuchpfad",
-      folderSearchPathDesc: "Scan auf einen bestimmten Ordner beschränken. „Ganzen Vault scannen\" wählen, um alle Dateien zu scannen.",
+      folderSearchPathDesc:
+        'Scan auf einen bestimmten Ordner beschränken. „Ganzen Vault scannen" wählen, um alle Dateien zu scannen.',
       folderSearchPathDefault: "Ganzen Vault scannen (Standard)",
     },
 
     ui: {
       heading: "Benutzeroberfläche",
       backgroundRefreshInterval: "Aktualisierungsintervall im Hintergrund",
-      backgroundRefreshIntervalDesc: "Wie oft die Stapel-Statistik im Seitenpanel aktualisiert wird (in Sekunden)",
+      backgroundRefreshIntervalDesc:
+        "Wie oft die Stapel-Statistik im Seitenpanel aktualisiert wird (in Sekunden)",
       backgroundRefreshIntervalPlaceholder: "5",
       enableBackgroundRefresh: "Hintergrundaktualisierung aktivieren",
-      enableBackgroundRefreshDesc: "Stapel-Statistik im Seitenpanel automatisch aktualisieren",
+      enableBackgroundRefreshDesc:
+        "Stapel-Statistik im Seitenpanel automatisch aktualisieren",
       enableNotices: "Benachrichtigungen aktivieren",
-      enableNoticesDesc: "Benachrichtigungen für abgeschlossene Wiederholungssitzungen und Sync-Operationen anzeigen",
+      enableNoticesDesc:
+        "Benachrichtigungen für abgeschlossene Wiederholungssitzungen und Sync-Operationen anzeigen",
       reviewDisplayMode: "Anzeigemodus für Wiederholungen",
-      reviewDisplayModeDesc: "Wo Wiederholungs- und Durchsuchen-Sitzungen geöffnet werden. Tabs können in Seitenleisten, untere Panels oder separate Fenster gezogen werden.",
+      reviewDisplayModeDesc:
+        "Wo Wiederholungs- und Durchsuchen-Sitzungen geöffnet werden. Tabs können in Seitenleisten, untere Panels oder separate Fenster gezogen werden.",
       flashcardManagerDisplayMode: "Anzeigemodus für Karteikarten-Manager",
-      flashcardManagerDisplayModeDesc: "Wo der Karteikarten-Manager geöffnet wird. Tabs können in Seitenleisten, untere Panels oder separate Fenster gezogen werden.",
+      flashcardManagerDisplayModeDesc:
+        "Wo der Karteikarten-Manager geöffnet wird. Tabs können in Seitenleisten, untere Panels oder separate Fenster gezogen werden.",
       displayModeModal: "Modal-Overlay",
       displayModeTab: "Neuer Tab",
       minDeckCardCount: "Stapel ausblenden mit weniger als",
-      minDeckCardCountDesc: "Stapel (und Gruppen) mit weniger als dieser Gesamtkartenanzahl werden aus der Liste ausgeblendet. Angeheftete Stapel sind immer sichtbar. 0 deaktiviert.",
+      minDeckCardCountDesc:
+        "Stapel (und Gruppen) mit weniger als dieser Gesamtkartenanzahl werden aus der Liste ausgeblendet. Angeheftete Stapel sind immer sichtbar. 0 deaktiviert.",
       minDeckCardCountPlaceholder: "0",
     },
 
     backup: {
       heading: "Sicherung",
       enableAutoBackup: "Automatische Sicherung aktivieren",
-      enableAutoBackupDesc: "Wiederholungsdaten nach jeder Sitzung automatisch sichern",
+      enableAutoBackupDesc:
+        "Wiederholungsdaten nach jeder Sitzung automatisch sichern",
       maxBackups: "Maximale Sicherungen",
       maxBackupsDesc: "Maximale Anzahl der zu behaltenden Sicherungen (3-10)",
       createBackupNow: "Jetzt Sicherung erstellen",
-      createBackupNowDesc: "Manuelle Sicherung der Karteikarten-Datenbank erstellen",
+      createBackupNowDesc:
+        "Manuelle Sicherung der Karteikarten-Datenbank erstellen",
       createBackupButton: "Sicherung erstellen",
       restoreHeading: "Sicherung wiederherstellen",
       availableBackups: "Verfügbare Sicherungen",
@@ -921,7 +1082,8 @@ export const de: Translations = {
       refreshTooltip: "Sicherungsliste aktualisieren",
       restoreButton: "Wiederherstellen",
       restoreFromFile: "Aus Datei wiederherstellen",
-      restoreFromFileTooltip: "Eine .db-Sicherung von beliebiger Stelle auf der Festplatte wählen",
+      restoreFromFileTooltip:
+        "Eine .db-Sicherung von beliebiger Stelle auf der Festplatte wählen",
     },
 
     fsrs: {
@@ -929,8 +1091,10 @@ export const de: Translations = {
       optimize: "Parameter optimieren",
       optimizeButton: "Optimieren",
       resetButton: "Auf Standard zurücksetzen",
-      descUntrained: "Trainiert die 21 Gewichte des Algorithmus auf deinem Standard-Profil-Wiederholungsverlauf. Benötigt mindestens 100 Wiederholungen. Intensive Stapel sind nicht betroffen.",
-      descTrained: "Verwende derzeit trainierte Gewichte vom {when} ({count} Wiederholungen, Log-Loss {before} → {after}).",
+      descUntrained:
+        "Trainiert die 21 Gewichte des Algorithmus auf deinem Standard-Profil-Wiederholungsverlauf. Benötigt mindestens 100 Wiederholungen. Intensive Stapel sind nicht betroffen.",
+      descTrained:
+        "Verwende derzeit trainierte Gewichte vom {when} ({count} Wiederholungen, Log-Loss {before} → {after}).",
       descTrainedUnknownWhen: "unbekannt",
       descTrainedMissingMetric: "—",
     },
@@ -939,29 +1103,37 @@ export const de: Translations = {
       heading: "Debug",
       paragraph: "Debug-Einstellungen für Fehlersuche und Entwicklung.",
       enableLogging: "Debug-Logging aktivieren",
-      enableLoggingDesc: "Detailliertes Logging in der Konsole für Sync-Operationen und Karteikartenverarbeitung anzeigen",
+      enableLoggingDesc:
+        "Detailliertes Logging in der Konsole für Sync-Operationen und Karteikartenverarbeitung anzeigen",
       performanceLogs: "Performance-Logs aktivieren",
-      performanceLogsDesc: "Performance-Timing-Metriken in der Konsole anzeigen (Sync-Zeiten, Parsing-Performance usw.)",
+      performanceLogsDesc:
+        "Performance-Timing-Metriken in der Konsole anzeigen (Sync-Zeiten, Parsing-Performance usw.)",
     },
 
     paths: {
       heading: "Dateispeicherorte",
-      paragraph: "Alle Pfade sind Vault-relativ. Leer lassen für den Standardpfad. Die meisten Nutzer müssen hier nichts ändern — die Optionen sind vorhanden, um die Datenbank aus dem versteckten Ordner {configDir}/ zu verschieben (iCloud und andere Sync-Anbieter behandeln versteckte Ordner nachrangig).",
+      paragraph:
+        "Alle Pfade sind Vault-relativ. Leer lassen für den Standardpfad. Die meisten Nutzer müssen hier nichts ändern — die Optionen sind vorhanden, um die Datenbank aus dem versteckten Ordner {configDir}/ zu verschieben (iCloud und andere Sync-Anbieter behandeln versteckte Ordner nachrangig).",
       dbFolder: "Datenbankordner",
-      dbFolderDesc: "Ordner mit flashcards.db. Standard: {pluginFolder}/. Obsidian nach Änderung neu starten. Die DB-Datei wird nicht automatisch verschoben — zuerst sichern, dann manuell verschieben oder mit „Aus Datei wiederherstellen\" in den neuen Speicherort importieren.",
+      dbFolderDesc:
+        'Ordner mit flashcards.db. Standard: {pluginFolder}/. Obsidian nach Änderung neu starten. Die DB-Datei wird nicht automatisch verschoben — zuerst sichern, dann manuell verschieben oder mit „Aus Datei wiederherstellen" in den neuen Speicherort importieren.',
       backupFolder: "Sicherungsordner",
-      backupFolderDesc: "Ordner für automatische und manuelle Sicherungen. Standard: {pluginFolder}/backups/. Änderungen werden sofort wirksam — kein Neustart erforderlich.",
+      backupFolderDesc:
+        "Ordner für automatische und manuelle Sicherungen. Standard: {pluginFolder}/backups/. Änderungen werden sofort wirksam — kein Neustart erforderlich.",
       backupFolderPlaceholder: "{pluginFolder}/backups",
       syncLogFolder: "Sync-Log-Ordner",
-      syncLogFolderDesc: "Ordner für die geräteweisen .deckssynclog-Dateien für die Multi-Device-Synchronisierung. Standard: Vault-Wurzel (die iCloud am schnellsten synchronisiert). Obsidian nach Änderung neu starten.",
+      syncLogFolderDesc:
+        "Ordner für die geräteweisen .deckssynclog-Dateien für die Multi-Device-Synchronisierung. Standard: Vault-Wurzel (die iCloud am schnellsten synchronisiert). Obsidian nach Änderung neu starten.",
       syncLogFolderPlaceholder: "(Vault-Wurzel)",
     },
 
     database: {
       heading: "Datenbankverwaltung",
-      paragraph: "Verwalte deine Karteikarten-Datenbank. Mit Vorsicht verwenden – diese Aktionen können nicht rückgängig gemacht werden.",
+      paragraph:
+        "Verwalte deine Karteikarten-Datenbank. Mit Vorsicht verwenden – diese Aktionen können nicht rückgängig gemacht werden.",
       purgeDatabase: "Datenbank leeren",
-      purgeDatabaseDesc: "Löscht alle Karten, den Wiederholungsverlauf und die Stapel-Daten endgültig. Erzwingt einen sauberen Neuaufbau aus den Vault-Dateien. Aller Fortschritt geht verloren!",
+      purgeDatabaseDesc:
+        "Löscht alle Karten, den Wiederholungsverlauf und die Stapel-Daten endgültig. Erzwingt einen sauberen Neuaufbau aus den Vault-Dateien. Aller Fortschritt geht verloren!",
       purgeDatabaseButton: "Datenbank leeren",
     },
   },

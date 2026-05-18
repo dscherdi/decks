@@ -1,5 +1,7 @@
 # Decks ![Downloads](https://img.shields.io/github/downloads/dscherdi/decks/total) ![Downloads Latest](https://img.shields.io/github/downloads/dscherdi/decks/latest/total?style=flat-square) ![Release](https://img.shields.io/github/v/release/dscherdi/decks)
 
+**English** · [Deutsch](./README.de.md) · [Español](./README.es.md) · [Français](./README.fr.md) · [Italiano](./README.it.md) · [Русский](./README.ru.md) · [Türkçe](./README.tr.md) · [Shqip](./README.sq.md) · [العربية](./README.ar.md) · [हिन्दी](./README.hi.md) · [中文](./README.zh.md) · [繁體中文](./README.zh-TW.md) · [日本語](./README.ja.md)
+
 **Turn your Obsidian notes into flashcards. No special syntax. No separate deck to build.**
 
 Tag a file with `#decks`. Every header you wrote becomes the front of a card; every paragraph below becomes the back. Tables, image occlusion, and `==cloze==` highlights work the same way. Scheduling is handled by FSRS — the modern spaced-repetition algorithm.

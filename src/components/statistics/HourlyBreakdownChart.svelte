@@ -160,7 +160,7 @@
             max: 100,
             title: {
               display: true,
-              text: "Success Rate (%)",
+              text: t.statistics.successRatePercent,
             },
             grid: {
               drawOnChartArea: false,

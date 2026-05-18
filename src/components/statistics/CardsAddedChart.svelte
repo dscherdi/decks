@@ -106,7 +106,7 @@
       labels,
       datasets: [
         {
-          label: "Cards added",
+          label: t.statistics.cardsAddedSeries,
           data,
           backgroundColor: "#10b981",
           borderColor: "#059669",

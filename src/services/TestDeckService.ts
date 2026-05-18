@@ -1,7 +1,6 @@
 import { App } from "obsidian";
 import { getTestDeckContent } from "../assets/TestDeckTemplate";
-
-const TEST_DECK_FILENAME = "Decks \u2014 Getting started.md";
+import { I18n } from "@/i18n/I18n";
 
 export class TestDeckService {
   private app: App;
@@ -11,9 +10,10 @@ export class TestDeckService {
   }
 
   async createTestDeck(deckTag: string, folderPath?: string): Promise<void> {
+    const localizedFilename = I18n.t.testDeck.filename;
     const filename = folderPath
-      ? `${folderPath.replace(/\/$/, "")}/${TEST_DECK_FILENAME}`
-      : TEST_DECK_FILENAME;
+      ? `${folderPath.replace(/\/$/, "")}/${localizedFilename}`
+      : localizedFilename;
 
     if (await this.app.vault.adapter.exists(filename)) {
       return;

@@ -13,33 +13,82 @@ export const ru: Translations = {
 
   ribbon: { decks: "Колоды" },
 
+  testDeck: {
+    filename: "Decks — С чего начать.md",
+    title: "Начало работы с Decks",
+    intro:
+      "Добро пожаловать в Decks! Чтобы превратить этот файл (или любой другой) в колоду флеш-карт, просто добавьте тег `{tag}` в frontmatter или в любое место в тексте.",
+    formatsHint:
+      "Decks поддерживает четыре основных формата. Выберите тот, который лучше всего подходит для ваших заметок.",
+    section1: "1. Формат заголовок-абзац",
+    section1Body:
+      "По умолчанию Decks использует **заголовки H2 (`##`)** в качестве лицевой стороны карты, а абзац непосредственно под ним — как обратную сторону. *(Вы можете изменить уровень заголовка в настройках колоды).*.",
+    q1: "Что такое интервальное повторение?",
+    a1: "Методика обучения, которая планирует повторения с увеличивающимися интервалами в зависимости от того, насколько хорошо вы помните материал.",
+    q2: "Какой тег помечает файл как колоду флеш-карт?",
+    a2: "Тег `{tag}`. Добавьте его в список `tags` во frontmatter или в любое место в тексте.",
+    section2: "2. Табличный формат",
+    section2Body:
+      "Вы можете использовать Markdown-таблицы из двух колонок для массового создания карт.\n**Важное правило:** Таблица *обязательно* должна находиться непосредственно под заголовком. Этот заголовок служит контейнером для карт.",
+    fsrsConceptsHeading: "Концепции FSRS",
+    colFront: "Лицевая сторона",
+    colBack: "Обратная сторона",
+    colNotes: "Заметки",
+    row1Front: "Как расшифровывается FSRS?",
+    row1Back: "Free Spaced Repetition Scheduler",
+    row1Notes: "Алгоритм, который Decks использует для планирования карточек",
+    row2Front: "Каковы четыре оценки повторения?",
+    row2Back: "Снова, Трудно, Хорошо, Легко",
+    row2Notes:
+      "«Снова» сбрасывает карточку; «Легко» дает самый длинный интервал",
+    tableNote:
+      "*(Примечание: Первая колонка — Лицевая сторона, вторая — Обратная сторона. Опциональная третья колонка предназначена для Заметок/Подсказок).*.",
+    section3: "3. Карточки с пропусками (Cloze)",
+    section3Body:
+      "Используйте синтаксис `==выделение==` для создания карточек с заполнением пропусков. Каждое выделение становится отдельной картой.",
+    solarHeading: "Солнечная система",
+    solarBody:
+      "==Солнце== — это звезда в центре нашей Солнечной системы. Ближайшая к нему планета — ==Меркурий==, а самая большая — ==Юпитер==.",
+    section4: "4. Скрытие частей изображения",
+    section4Body:
+      "Объедините изображение с нумерованным списком. Изображение показывает отмеченные области, и каждый пункт списка становится отдельной карточкой.",
+    bonesHeading: "Кости руки",
+    bone1: "Плечевая кость",
+    bone2: "Лучевая кость",
+    bone3: "Локтевая кость",
+  },
+
   commands: {
     showPanel: "Показать панель карточек",
     showReleaseNotes: "Показать заметки о выпуске",
     openManager: "Открыть менеджер карточек",
     createTestDeck: "Создать тестовую колоду",
-    fullResync: "Принудительная полная синхронизация (повторный анализ всех колод)",
+    fullResync:
+      "Принудительная полная синхронизация (повторный анализ всех колод)",
     openReview: "Открыть окно повторения",
   },
 
   notices: {
-    reparsing: "Повторный анализ каждой колоды. Это может занять немного времени…",
+    reparsing:
+      "Повторный анализ каждой колоды. Это может занять немного времени…",
     resyncComplete: "Полная синхронизация завершена.",
     resyncFailed: "Сбой синхронизации. Подробности в консоли.",
     loadFailed: "Не удалось загрузить плагин. Подробности в консоли.",
     languageChanged: "Язык изменён. Перезагрузите плагин для применения.",
     noCardsInDeck: "Карточки не найдены в {deckName}",
-    customDeckCreated: "Пользовательская колода \"{name}\" создана с {count} карточками",
-    customDeckUpdated: "Пользовательская колода \"{name}\" обновлена",
-    customDeckDeleted: "Пользовательская колода \"{name}\" удалена",
-    customDeckRenamed: "Пользовательская колода переименована в \"{name}\"",
+    customDeckCreated:
+      'Пользовательская колода "{name}" создана с {count} карточками',
+    customDeckUpdated: 'Пользовательская колода "{name}" обновлена',
+    customDeckDeleted: 'Пользовательская колода "{name}" удалена',
+    customDeckRenamed: 'Пользовательская колода переименована в "{name}"',
     deckResetSuccess: "Прогресс колоды успешно сброшен",
     deckResetFailed: "Не удалось сбросить прогресс колоды",
     reviewStartFailed: "Ошибка при запуске повторения. Подробности в консоли.",
     sessionComplete: "Сессия повторения завершена",
     sessionCompleteCount: "Повторено карточек: {count}",
     duplicatesFound: "Найдено {count} дубликат(ов) в {deckName}",
-    trainedParamsCleared: "Обученные параметры сброшены, значения по умолчанию восстановлены.",
+    trainedParamsCleared:
+      "Обученные параметры сброшены, значения по умолчанию восстановлены.",
     creatingBackup: "Создаётся резервная копия…",
     backupCreated: "✅ Резервная копия создана: {filename}",
     backupFailed: "❌ Не удалось создать резервную копию: {message}",
@@ -63,40 +112,51 @@ export const ru: Translations = {
     errorStartingBrowse: "Ошибка запуска просмотра. Подробности в консоли.",
     noCardsFoundInDeck: "Карточки не найдены в {deckName}",
     noCardsDueForReview: "Нет карточек для повторения в {deckName}",
-    noCardsFoundInGroup: "Карточки не найдены в \"{name}\"",
-    noCardsDueInGroup: "Нет карточек к повторению в \"{name}\" ({count} файлов)",
-    noCardsDueInCustomDeck: "Нет карточек к повторению в \"{name}\" ({count} карточек)",
+    noCardsFoundInGroup: 'Карточки не найдены в "{name}"',
+    noCardsDueInGroup: 'Нет карточек к повторению в "{name}" ({count} файлов)',
+    noCardsDueInCustomDeck:
+      'Нет карточек к повторению в "{name}" ({count} карточек)',
     fileNotFound: "Файл не найден: {path}",
     reviewSessionCompleteFor: "Сессия повторения для {deckName} завершена!",
-    filterDeckUpdated: "Фильтр-колода \"{name}\" обновлена",
-    customDeckUpdatedCounts: "\"{name}\" обновлена — добавлено {added}, удалено {removed}",
+    filterDeckUpdated: 'Фильтр-колода "{name}" обновлена',
+    customDeckUpdatedCounts:
+      '"{name}" обновлена — добавлено {added}, удалено {removed}',
     failedToSave: "Не удалось сохранить: {message}",
     failedToCreateDeck: "Не удалось создать колоду: {message}",
     failedToCreateFilterDeck: "Не удалось создать фильтр-колоду: {message}",
     failedToAddCards: "Не удалось добавить карточки: {message}",
-    filterDeckCreated: "Фильтр-колода \"{name}\" создана",
-    cardsAddedToCustomDeck: "В пользовательскую колоду добавлено карточек: {count}",
+    filterDeckCreated: 'Фильтр-колода "{name}" создана',
+    cardsAddedToCustomDeck:
+      "В пользовательскую колоду добавлено карточек: {count}",
     dailyLimitsReached: "\n\nДневные лимиты достигнуты:",
     dailyNewLimit: "\nНовые карточки: {used}/{max}",
     dailyReviewLimit: "\nПовторение карточек: {used}/{max}",
-    dailyNewOnlyLimit: "\n\nДостигнут дневной лимит новых карточек: {used}/{max}",
-    dailyReviewOnlyLimit: "\n\nДостигнут дневной лимит повторений: {used}/{max}",
+    dailyNewOnlyLimit:
+      "\n\nДостигнут дневной лимит новых карточек: {used}/{max}",
+    dailyReviewOnlyLimit:
+      "\n\nДостигнут дневной лимит повторений: {used}/{max}",
     dailyProgressHeader: "Дневной прогресс для {deckName}:\n",
     dailyProgressNewDisabled: "Новые карточки: ОТКЛЮЧЕНЫ (0 в день)\n",
     dailyProgressNewExceeded: "Новые карточки: {used}/{max} (ЛИМИТ ПРЕВЫШЕН)\n",
-    dailyProgressNewRemaining: "Новые карточки: {used}/{max} (осталось {remaining})\n",
+    dailyProgressNewRemaining:
+      "Новые карточки: {used}/{max} (осталось {remaining})\n",
     dailyProgressReviewDisabled: "Карточки повторения: ОТКЛЮЧЕНЫ (0 в день)\n",
-    dailyProgressReviewExceeded: "Карточки повторения: {used}/{max} (ЛИМИТ ПРЕВЫШЕН)\n",
-    dailyProgressReviewRemaining: "Карточки повторения: {used}/{max} (осталось {remaining})\n",
-    dailyProgressOnlyLearning: "\n\nПримечание: будут показаны только карточки в обучении (лимиты превышены)",
+    dailyProgressReviewExceeded:
+      "Карточки повторения: {used}/{max} (ЛИМИТ ПРЕВЫШЕН)\n",
+    dailyProgressReviewRemaining:
+      "Карточки повторения: {used}/{max} (осталось {remaining})\n",
+    dailyProgressOnlyLearning:
+      "\n\nПримечание: будут показаны только карточки в обучении (лимиты превышены)",
     noFlashcardsToExport: "В этой колоде нет карточек для экспорта",
-    ankiExportSuccess: "Экспортировано {count} карточек из {type} в формат Anki",
+    ankiExportSuccess:
+      "Экспортировано {count} карточек из {type} в формат Anki",
     ankiExportFailed: "Не удалось экспортировать в формат Anki",
     ankiExportTypeDeck: "колоды",
     ankiExportTypeTagGroup: "группы тегов",
   },
 
   deckList: {
+    exportToAnki: "Экспорт в Anki",
     title: "Колоды",
     emptyNoDecks: "Колоды не найдены.",
     emptyNoFilterMatch: "Нет колод, соответствующих фильтру.",
@@ -140,26 +200,34 @@ export const ru: Translations = {
     clickToReview: "Нажмите для повторения {name}",
     resetProgress: "Сбросить прогресс",
     deleteCustomDeckTitle: "Удалить пользовательскую колоду",
-    deleteCustomDeckMessage: "Удалить пользовательскую колоду \"{name}\"? Сами карточки удалены не будут.",
-    resetCustomDeckProgress: "Сбросить весь прогресс для \"{name}\"? Все карточки этой колоды вернутся в состояние «новые», и история повторений будет удалена. Действие необратимо.",
-    progressResetFor: "Прогресс сброшен для \"{name}\"",
+    deleteCustomDeckMessage:
+      'Удалить пользовательскую колоду "{name}"? Сами карточки удалены не будут.',
+    resetCustomDeckProgress:
+      'Сбросить весь прогресс для "{name}"? Все карточки этой колоды вернутся в состояние «новые», и история повторений будет удалена. Действие необратимо.',
+    progressResetFor: 'Прогресс сброшен для "{name}"',
     resetCustomDeckTitle: "Сбросить прогресс пользовательской колоды",
-    resetCustomDeckMessage: "Сбросить прогресс карточек в \"{name}\"? История этих карточек будет удалена, и они вернутся в состояние «новые».",
+    resetCustomDeckMessage:
+      'Сбросить прогресс карточек в "{name}"? История этих карточек будет удалена, и они вернутся в состояние «новые».',
     resetCustomDeckFailed: "Не удалось сбросить пользовательскую колоду",
     confirmDelete: "Удалить",
     newCardsTooltip: "Новых карточек осталось сегодня: {remaining} / {limit}",
-    reviewCardsTooltip: "Карточек к повторению осталось сегодня: {remaining} / {limit}",
+    reviewCardsTooltip:
+      "Карточек к повторению осталось сегодня: {remaining} / {limit}",
     tabFiles: "Файлы",
     tabTags: "Теги",
     tabCustom: "Пользовательские",
     tagYourNotes: "Отметьте заметки тегом {tag}, чтобы создать колоды.",
     filesCount: "({count} файлов)",
     cardsCount: "({count} карточек)",
-    newCardsGroupTooltip: "{count} новых карточек доступно сегодня (лимит: {limit} на колоду)",
-    newCardsLimitTooltip: "{count} новых карточек доступно сегодня (лимит: {limit})",
+    newCardsGroupTooltip:
+      "{count} новых карточек доступно сегодня (лимит: {limit} на колоду)",
+    newCardsLimitTooltip:
+      "{count} новых карточек доступно сегодня (лимит: {limit})",
     newCardsDueTooltip: "{count} новых карточек к повторению",
-    reviewCardsGroupTooltip: "{count} карточек к повторению сегодня (лимит: {limit} на колоду)",
-    reviewCardsLimitTooltip: "{count} карточек к повторению сегодня (лимит: {limit})",
+    reviewCardsGroupTooltip:
+      "{count} карточек к повторению сегодня (лимит: {limit} на колоду)",
+    reviewCardsLimitTooltip:
+      "{count} карточек к повторению сегодня (лимит: {limit})",
     reviewCardsDueTooltip: "{count} карточек к повторению",
     studiedSummary: "Сегодня изучено {cards} карточек за {hours} ({pace})",
   },
@@ -193,7 +261,8 @@ export const ru: Translations = {
     nextCloze: "Следующий пропуск",
     openSource: "Открыть исходную заметку",
     openSourceFile: "Открыть исходный файл",
-    cardLeechAndDense: "Карточка часто забывается и сложна — стоит её пересмотреть",
+    cardLeechAndDense:
+      "Карточка часто забывается и сложна — стоит её пересмотреть",
     cardLeech: "Карточка часто забывается — стоит её переписать",
     cardDense: "Карточка сложная. Стоит её разделить.",
     copyContent: "Копировать содержимое",
@@ -297,7 +366,8 @@ export const ru: Translations = {
     badgeLeech: "Пиявка",
     badgeDense: "Плотная",
     badgeHealthy: "Здоровая",
-    leechTooltip: "Многократно забывается ({count} забываний) — рассмотрите переписывание",
+    leechTooltip:
+      "Многократно забывается ({count} забываний) — рассмотрите переписывание",
     denseTooltip: "Оборот содержит {count} символов — рассмотрите разделение",
     healthyTooltip: "Проблем с пиявкой или плотностью не обнаружено",
     footerShowingOfInDeck: "Показано {shown} из {total} карточек в «{name}»",
@@ -334,13 +404,15 @@ export const ru: Translations = {
     decksUsingProfile: "Колоды, использующие профиль",
     deckCount: "{count} колод(а)",
     editNoteIntro: "Примечание:",
-    editNoteBody: " Чтобы редактировать настройки профиля, используйте кнопку «Управление профилями» в основной панели.",
+    editNoteBody:
+      " Чтобы редактировать настройки профиля, используйте кнопку «Управление профилями» в основной панели.",
     sectionTagSelection: "Выбор тега",
     sectionProfileSelection: "Выбор профиля",
     sectionCurrentSettings: "Настройки текущего профиля",
     saving: "Сохранение…",
     applyProfileToTag: "Применить профиль к тегу",
-    applyProfileDesc: "Выберите тег, чтобы применить профиль ко всем его колодам",
+    applyProfileDesc:
+      "Выберите тег, чтобы применить профиль ко всем его колодам",
     errorSavingConfig: "Ошибка сохранения конфигурации",
     requestRetention: "Запрошенное удержание",
     requestRetentionDesc: "Целевая вероятность припоминания (0,7-0,99)",
@@ -349,21 +421,26 @@ export const ru: Translations = {
     learningSteps: "Шаги обучения",
     relearningSteps: "Шаги переучивания",
     newCardsPerDay: "Новых карточек в день",
-    newCardsPerDayDesc: "Максимальное число новых карточек в день (0 отключает лимит)",
+    newCardsPerDayDesc:
+      "Максимальное число новых карточек в день (0 отключает лимит)",
     reviewsPerDay: "Повторений в день",
-    reviewsPerDayDesc: "Максимальное число карточек к повторению в день (0 отключает лимит)",
+    reviewsPerDayDesc:
+      "Максимальное число карточек к повторению в день (0 отключает лимит)",
     reviewOrder: "Порядок повторения",
     reviewOrderDueDate: "По дате",
     reviewOrderRandom: "Случайный",
     headerLevel: "Уровень заголовка для карточек",
-    headerLevelDesc: "Уровень заголовка, который считается лицевой стороной в колодах формата «заголовок-абзац»",
+    headerLevelDesc:
+      "Уровень заголовка, который считается лицевой стороной в колодах формата «заголовок-абзац»",
     useTrainedWeights: "Использовать обученные веса",
-    useTrainedWeightsDesc: "Применяет глобально обученные веса FSRS к этой колоде (только стандартный профиль).",
+    useTrainedWeightsDesc:
+      "Применяет глобально обученные веса FSRS к этой колоде (только стандартный профиль).",
     save: "Сохранить",
     cancel: "Отмена",
     reset: "Сбросить к умолчаниям",
     enableDailyLimits: "Включить дневные лимиты",
-    enableDailyLimitsDesc: "Ограничивает число новых и повторяемых карточек в день",
+    enableDailyLimitsDesc:
+      "Ограничивает число новых и повторяемых карточек в день",
   },
 
   profiles: {
@@ -381,7 +458,8 @@ export const ru: Translations = {
     removeTagMapping: "Удалить соответствие",
     tagPlaceholder: "Тег (например, #decks/math)",
     noProfiles: "Пользовательских профилей пока нет",
-    deleteConfirm: "Удалить этот профиль? Использующие его колоды вернутся к профилю по умолчанию.",
+    deleteConfirm:
+      "Удалить этот профиль? Использующие его колоды вернутся к профилю по умолчанию.",
     cannotDeleteDefault: "Профили по умолчанию нельзя удалить.",
     selectProfile: "Выбрать профиль",
     chooseProfileDesc: "Выберите профиль для просмотра и редактирования",
@@ -405,15 +483,19 @@ export const ru: Translations = {
     reviewCardsPerDayLabel: "Карточек повторения в день",
     reviewCardsPerDayDesc: "Максимум карточек повторения в день (1-9999)",
     againIntervalNew: "Интервал Снова",
-    againIntervalNewDesc: "Интервал при нажатии Снова для новой карточки (например, 1м)",
+    againIntervalNewDesc:
+      "Интервал при нажатии Снова для новой карточки (например, 1м)",
     againIntervalReview: "Интервал Снова",
-    againIntervalReviewDesc: "Интервал при нажатии Снова для карточки повторения (например, 10м)",
+    againIntervalReviewDesc:
+      "Интервал при нажатии Снова для карточки повторения (например, 10м)",
     headerLevelLabel: "Уровень заголовка",
     headerLevelDescParsing: "Уровень заголовка для разбора",
     clozeDeletionsLabel: "Пропуски",
-    clozeDeletionsDesc: "Создавать карточки с пропусками из текста ==выделено==",
+    clozeDeletionsDesc:
+      "Создавать карточки с пропусками из текста ==выделено==",
     clozeContextLabel: "Контекст пропусков",
-    clozeContextDesc: "Как непротестированные пропуски отображаются при повторении",
+    clozeContextDesc:
+      "Как непротестированные пропуски отображаются при повторении",
     clozeShowOption: "Показать другие пропуски",
     clozeHideOption: "Скрыть все пропуски",
     reviewOrderLabel: "Порядок повторения",
@@ -421,8 +503,10 @@ export const ru: Translations = {
     requestRetentionLabel: "Запрошенное удержание",
     requestRetentionDesc: "Целевой уровень удержания (0,5 - 0,995)",
     fsrsProfileLabel: "Профиль FSRS",
-    fsrsTrainedDesc: "Стандартный и интенсивный используют поставляемые веса. Обученный применяет ваши оптимизированные веса (стандартные интервалы).",
-    fsrsUntrainedDesc: "Профиль интенсивности обучения. Обучите веса в настройке алгоритма, чтобы включить вариант Обученный.",
+    fsrsTrainedDesc:
+      "Стандартный и интенсивный используют поставляемые веса. Обученный применяет ваши оптимизированные веса (стандартные интервалы).",
+    fsrsUntrainedDesc:
+      "Профиль интенсивности обучения. Обучите веса в настройке алгоритма, чтобы включить вариант Обученный.",
     fsrsStandardOption: "Стандартный",
     fsrsIntensiveOption: "Интенсивный",
     fsrsTrainedOption: "Обученный",
@@ -437,14 +521,17 @@ export const ru: Translations = {
     noticeProfileCreated: "Новый профиль создан",
     noticeProfileNameEmpty: "Имя профиля не может быть пустым",
     noticeNewCardsRange: "Число новых карточек в день должно быть от 1 до 9999",
-    noticeReviewCardsRange: "Число карточек повторения в день должно быть от 1 до 9999",
-    noticeRequestRetentionRange: "Запрошенное удержание должно быть в диапазоне 0,5 - 0,995",
+    noticeReviewCardsRange:
+      "Число карточек повторения в день должно быть от 1 до 9999",
+    noticeRequestRetentionRange:
+      "Запрошенное удержание должно быть в диапазоне 0,5 - 0,995",
     noticeInvalidAgainInterval: "Неверный интервал Снова",
     noticeProfileSaved: "Профиль сохранён",
     noticeProfileSaveError: "Ошибка сохранения профиля",
     noticeCannotDeleteDefault: "Нельзя удалить профиль ПО УМОЛЧАНИЮ",
     noticeProfileDeleted: "Профиль удалён",
-    confirmDeletePrompt: "Удалить профиль «{name}»?\n\nВсе колоды, использующие этот профиль, будут сброшены к профилю ПО УМОЛЧАНИЮ.",
+    confirmDeletePrompt:
+      "Удалить профиль «{name}»?\n\nВсе колоды, использующие этот профиль, будут сброшены к профилю ПО УМОЛЧАНИЮ.",
     defaultSuffix: "(ПО УМОЛЧАНИЮ)",
   },
 
@@ -458,6 +545,15 @@ export const ru: Translations = {
     cardCountsReview: "Повторение",
     cardCountsRelearning: "Переучивание",
     cardCountsTotal: "Всего",
+    cardCountsYoung: "Молодые",
+    cardCountsMature: "Зрелые",
+    cardsAddedSeries: "Добавленные карточки",
+    againSeries: "Снова",
+    hardSeries: "Трудно",
+    goodSeries: "Хорошо",
+    easySeries: "Легко",
+    reviewsOnDate: "Повторений: {count} ({date})",
+    totalReviewsCount: "{count} повторений",
     cardDifficulty: "Сложность карточек",
     cardStability: "Стабильность карточек",
     cardRetrievability: "Извлекаемость",
@@ -511,27 +607,34 @@ export const ru: Translations = {
     // Chart strings — DRAFT translations
     cardDistribution: "Распределение карточек",
     cardDistributionByState: "Распределение карточек по состоянию",
-    cardDistributionByStateDoughnut: "Распределение карточек по состоянию (кольцо)",
+    cardDistributionByStateDoughnut:
+      "Распределение карточек по состоянию (кольцо)",
     cardCountsTooltip: "{label}: {count} карточек ({percent}%)",
     selectDeckCardDistribution: "Выберите колоду, чтобы увидеть распределение.",
     cardDifficultyDistribution: "Распределение сложности",
     cardDifficultyRange: "Диапазон сложности",
-    cardDifficultySubtitle: "Значения сложности FSRS показывают, насколько трудно запомнить карточки",
+    cardDifficultySubtitle:
+      "Значения сложности FSRS показывают, насколько трудно запомнить карточки",
     higherDifficultyTip: "Выше сложность = труднее запомнить",
     numberOfCards: "Количество карточек",
     numberOfReviews: "Количество повторений",
-    selectDeckCardDifficulty: "Выберите колоду, чтобы увидеть распределение сложности.",
+    selectDeckCardDifficulty:
+      "Выберите колоду, чтобы увидеть распределение сложности.",
     cardStabilityDistribution: "Распределение стабильности",
     cardStabilityRange: "Диапазон стабильности",
-    cardStabilitySubtitle: "Значения стабильности FSRS показывают, насколько хорошо карточки удерживаются в памяти",
-    selectDeckCardStability: "Выберите колоду, чтобы увидеть распределение стабильности.",
+    cardStabilitySubtitle:
+      "Значения стабильности FSRS показывают, насколько хорошо карточки удерживаются в памяти",
+    selectDeckCardStability:
+      "Выберите колоду, чтобы увидеть распределение стабильности.",
     cardRetrievabilityDistribution: "Распределение извлекаемости",
     retrievabilityRange: "Диапазон извлекаемости",
     reviewsLabel: "Повторения",
-    cardRetrievabilitySubtitle: "Значения извлекаемости FSRS показывают вероятность припоминания сегодня (0-100%)",
+    cardRetrievabilitySubtitle:
+      "Значения извлекаемости FSRS показывают вероятность припоминания сегодня (0-100%)",
     higherRetrievabilityTip: "Выше извлекаемость = легче припомнить",
     reviewsTooltip: "{label}: {count} повторений ({percent}%)",
-    selectDeckCardRetrievability: "Выберите колоду, чтобы увидеть распределение извлекаемости.",
+    selectDeckCardRetrievability:
+      "Выберите колоду, чтобы увидеть распределение извлекаемости.",
     cardsAddedOverTime: "Добавленные карточки во времени",
     dateAdded: "Дата добавления",
     selectDeckCardsAdded: "Выберите колоду, чтобы увидеть карточки во времени.",
@@ -561,7 +664,8 @@ export const ru: Translations = {
     dayLabel: "День {label}",
     totalBacklogTooltip: "Общий накопленный объём: {value} повторений",
     dueTooltip: "К повторению: {value} карточек",
-    noUpcomingReviews: "Нет запланированных повторений. Добавьте карточки в колоды, чтобы увидеть прогноз.",
+    noUpcomingReviews:
+      "Нет запланированных повторений. Добавьте карточки в колоды, чтобы увидеть прогноз.",
     hourlyBreakdownTitle: "Активность по часам",
     hourlyBreakdownChart: "Активность повторений по часам дня",
     reviewCountLabel: "Количество повторений",
@@ -583,12 +687,16 @@ export const ru: Translations = {
     learningCardsLabel: "Карточки в изучении",
     selectDeckMaturity: "Выберите колоду, чтобы увидеть прогноз зрелости.",
     calculating: "Вычисление…",
-    maturityRetentionNote: "На основе вашего исторического уровня удержания {percent}%, карточки будут созревать так:",
+    maturityRetentionNote:
+      "На основе вашего исторического уровня удержания {percent}%, карточки будут созревать так:",
     maturityAllMatureIn: "Все карточки станут зрелыми примерно через {days}.",
-    maturitySubtitle: "Прогноз того, как карточки будут созревать со временем при текущем темпе повторений.",
-    maturityRetentionDetail: "На основе вашего исторического уровня удержания {retention}%, примерно {maintenance}% карточек (~{count} карточек) всегда будут в фазе изучения из-за естественных забываний.",
+    maturitySubtitle:
+      "Прогноз того, как карточки будут созревать со временем при текущем темпе повторений.",
+    maturityRetentionDetail:
+      "На основе вашего исторического уровня удержания {retention}%, примерно {maintenance}% карточек (~{count} карточек) всегда будут в фазе изучения из-за естественных забываний.",
     maturityEquilibrium: "Равновесие достигнуто через {days}.",
-    maturityAllMatureAtPace: "Все карточки станут зрелыми примерно через {days} при текущем темпе.",
+    maturityAllMatureAtPace:
+      "Все карточки станут зрелыми примерно через {days} при текущем темпе.",
     maturityTotalCards: "Всего: {count} карточек",
     standardMaintenanceLine: "Стандартный уровень поддержания ({percent}%)",
     yourMaintenanceLine: "Ваш уровень поддержания ({percent}%)",
@@ -612,10 +720,12 @@ export const ru: Translations = {
     reviewIntervalDistribution: "Распределение интервалов повторений",
     intervalRange: "Диапазон интервалов",
     reviewIntervalsTitle: "Интервалы повторений",
-    selectDeckIntervals: "Выберите колоду, чтобы увидеть распределение интервалов.",
+    selectDeckIntervals:
+      "Выберите колоду, чтобы увидеть распределение интервалов.",
     reviewIntervalsSubtitle: "Распределение текущих интервалов повторений",
     reviewsOverTimeTitle: "Повторения во времени",
-    selectDeckReviewsOverTime: "Выберите колоду, чтобы увидеть историю повторений.",
+    selectDeckReviewsOverTime:
+      "Выберите колоду, чтобы увидеть историю повторений.",
     dateAxisLabel: "Дата",
     selectDeckLabel: "Выберите колоду(ы):",
     deckDropdownPrompt: "-- Выберите колоду --",
@@ -624,25 +734,31 @@ export const ru: Translations = {
     statisticsTitle: "Общая статистика",
     loadingStatistics: "Загрузка статистики…",
     failedToLoad: "Не удалось загрузить статистику",
-    failedToLoadIntro: "Произошла ошибка при загрузке статистики. Возможные причины:",
+    failedToLoadIntro:
+      "Произошла ошибка при загрузке статистики. Возможные причины:",
     failedReasonDb: "Проблемы соединения с базой данных",
     failedReasonData: "Повреждённые данные",
     failedReasonSize: "Слишком большой набор данных для обработки",
-    failedConsoleHint: "Проверьте консоль браузера (F12) для подробной информации об ошибке.",
+    failedConsoleHint:
+      "Проверьте консоль браузера (F12) для подробной информации об ошибке.",
     retryLoading: "Повторить",
     timeframeLast12Months: "Последние 12 месяцев",
     timeframeAllHistory: "Вся история",
     labelReviews: "повторений",
     labelTime: "время",
     labelCorrect: "верно",
-    completeReviewsHint: "Выполните несколько повторений, чтобы увидеть статистику кнопок ответа.",
-    selectDeckPrompt: "Выберите колоду в списке выше, чтобы увидеть статистику.",
+    completeReviewsHint:
+      "Выполните несколько повторений, чтобы увидеть статистику кнопок ответа.",
+    selectDeckPrompt:
+      "Выберите колоду в списке выше, чтобы увидеть статистику.",
     reviewHeatmapTitle: "Тепловая карта повторений",
     dailyReviewActivity: "Ежедневная активность повторений во времени",
     trueRetentionTitle: "Реальное удержание",
     selectDeckRetention: "Выберите колоду, чтобы увидеть статистику удержания.",
-    retentionDescription: "Доля успеха для карточек повторения (оценка ≥ Хорошо). Только карточки с интервалом > 1 день.",
-    noReviewDataYet: "Данных повторений пока нет. Завершите несколько повторений, чтобы увидеть статистику удержания.",
+    retentionDescription:
+      "Доля успеха для карточек повторения (оценка ≥ Хорошо). Только карточки с интервалом > 1 день.",
+    noReviewDataYet:
+      "Данных повторений пока нет. Завершите несколько повторений, чтобы увидеть статистику удержания.",
     columnCardType: "Тип карточки",
     columnPassed: "Пройдено",
     columnTotalLabel: "Всего",
@@ -658,7 +774,8 @@ export const ru: Translations = {
     titleWithName: "Экспорт в Anki: {name}",
     description: "Экспортировать выбранные карточки как CSV для Anki.",
     ankiDeckNameLabel: "Имя колоды в Anki",
-    ankiDeckNameDesc: "Имя колоды в Anki, в которую будут импортированы карточки",
+    ankiDeckNameDesc:
+      "Имя колоды в Anki, в которую будут импортированы карточки",
     ankiDeckNamePlaceholder: "Введите имя колоды...",
     exportButtonLabel: "Экспорт в Anki",
     sectionInfo: "Информация об экспорте",
@@ -781,7 +898,7 @@ export const ru: Translations = {
     },
     deckReset: {
       title: "Сбросить прогресс колоды",
-      intro: "Это сбросит весь прогресс для \"{name}\":",
+      intro: 'Это сбросит весь прогресс для "{name}":',
       listCardsReset: "Все карточки возвращены в состояние «новые»",
       listHistoryDeleted: "История повторений удалена",
       listSessionsDeleted: "Сессии повторения удалены",
@@ -800,25 +917,35 @@ export const ru: Translations = {
       listDecks: "Всю информацию о колодах",
       listStatistics: "Статистические данные",
       cannotUndo: "Это действие необратимо!",
-      rebuildNote: "База данных будет пересобрана из текущих файлов хранилища, но весь прогресс будет потерян.",
-      confirmPrompt: "Для подтверждения введите текст, показанный в плейсхолдере",
+      rebuildNote:
+        "База данных будет пересобрана из текущих файлов хранилища, но весь прогресс будет потерян.",
+      confirmPrompt:
+        "Для подтверждения введите текст, показанный в плейсхолдере",
       confirmPlaceholder: "DELETE ALL DATA",
       purgeButton: "Очистить базу данных",
       cancel: "Отмена",
     },
-    releaseNotes: { title: "Что нового", close: "Закрыть", versionLabel: "Версия {version}" },
+    releaseNotes: {
+      title: "Что нового",
+      close: "Закрыть",
+      versionLabel: "Версия {version}",
+    },
     statistics: { title: "Статистика", close: "Закрыть" },
     optimizeFsrs: {
       title: "Оптимизация параметров",
       loadingHistory: "Загрузка истории повторений…",
       trainingStep: "Шаг обучения {step} / {total}",
-      notEnough: "Истории повторений пока недостаточно для обучения. Продолжайте повторять и попробуйте позже.",
-      reviewsAvailable: "Доступные повторения на колодах со СТАНДАРТНЫМ профилем: {count}.",
-      trainedSummary: "Обучено на {reviews} повторений по {cards} карточкам за {seconds} с.",
+      notEnough:
+        "Истории повторений пока недостаточно для обучения. Продолжайте повторять и попробуйте позже.",
+      reviewsAvailable:
+        "Доступные повторения на колодах со СТАНДАРТНЫМ профилем: {count}.",
+      trainedSummary:
+        "Обучено на {reviews} повторений по {cards} карточкам за {seconds} с.",
       logLossBefore: "Log-loss до",
       logLossAfter: "Log-loss после",
       improvement: "Улучшение",
-      noImprovement: "Обучение не дало значимого улучшения log-loss — текущие веса уже хорошо подобраны. Можно безопасно отказаться.",
+      noImprovement:
+        "Обучение не дало значимого улучшения log-loss — текущие веса уже хорошо подобраны. Можно безопасно отказаться.",
       discard: "Отказаться",
       apply: "Применить",
       close: "Закрыть",
@@ -833,7 +960,7 @@ export const ru: Translations = {
     language: {
       heading: "Язык",
       name: "Язык плагина",
-      desc: "Выберите язык отображения. \"Авто\" следует языку Obsidian. Для применения требуется перезагрузка плагина.",
+      desc: 'Выберите язык отображения. "Авто" следует языку Obsidian. Для применения требуется перезагрузка плагина.',
       auto: "Авто",
     },
     review: {
@@ -841,51 +968,64 @@ export const ru: Translations = {
       showProgress: "Показывать прогресс",
       showProgressDesc: "Показывать индикатор прогресса во время сессий",
       keyboardShortcuts: "Сочетания клавиш",
-      keyboardShortcutsDesc: "Включить сочетания клавиш в окне повторения (1-4 для сложности)",
+      keyboardShortcutsDesc:
+        "Включить сочетания клавиш в окне повторения (1-4 для сложности)",
       sessionDuration: "Длительность сессии",
       sessionDurationDesc: "Максимальная длительность сессии в минутах (1-60)",
       sessionDurationPlaceholder: "25",
       studyDayStartsAt: "Учебный день начинается в",
-      studyDayStartsAtDesc: "Час, в который начинается новый учебный день (0-23, по умолчанию 4). Повторения до этого часа учитываются в статистике и лимитах предыдущего дня.",
+      studyDayStartsAtDesc:
+        "Час, в который начинается новый учебный день (0-23, по умолчанию 4). Повторения до этого часа учитываются в статистике и лимитах предыдущего дня.",
       leechThreshold: "Порог пиявки",
-      leechThresholdDesc: "Карточка помечается как пиявка, когда количество забываний достигает этого числа (по умолчанию 8). Пиявки часто забываются и обычно требуют переписывания.",
+      leechThresholdDesc:
+        "Карточка помечается как пиявка, когда количество забываний достигает этого числа (по умолчанию 8). Пиявки часто забываются и обычно требуют переписывания.",
       leechThresholdPlaceholder: "8",
       denseCardCharThreshold: "Порог символов для плотной карточки",
-      denseCardCharThresholdDesc: "Карточка помечается как плотная, когда оборот достигает этого числа символов (по умолчанию 500). Плотные карточки часто содержат слишком много информации, и их полезно разделять.",
+      denseCardCharThresholdDesc:
+        "Карточка помечается как плотная, когда оборот достигает этого числа символов (по умолчанию 500). Плотные карточки часто содержат слишком много информации, и их полезно разделять.",
       denseCardCharThresholdPlaceholder: "500",
     },
     parsing: {
       heading: "Анализ",
       deckTag: "Тег колоды",
-      deckTagDesc: "Базовый тег для идентификации колод. Файлы с этим тегом (или подтегами вида {tag}/math) считаются колодами. Стандартный тег был изменён с #flashcards на #decks. Если вы использовали #flashcards, он продолжит работать, пока вы не измените его здесь.",
+      deckTagDesc:
+        "Базовый тег для идентификации колод. Файлы с этим тегом (или подтегами вида {tag}/math) считаются колодами. Стандартный тег был изменён с #flashcards на #decks. Если вы использовали #flashcards, он продолжит работать, пока вы не измените его здесь.",
       deckTagPlaceholder: "#decks",
       folderSearchPath: "Путь поиска папок",
-      folderSearchPathDesc: "Ограничить сканирование указанной папкой. Выберите «сканировать всё хранилище», чтобы сканировать все файлы.",
+      folderSearchPathDesc:
+        "Ограничить сканирование указанной папкой. Выберите «сканировать всё хранилище», чтобы сканировать все файлы.",
       folderSearchPathDefault: "Сканировать всё хранилище (по умолчанию)",
     },
     ui: {
       heading: "Интерфейс",
       backgroundRefreshInterval: "Интервал фонового обновления",
-      backgroundRefreshIntervalDesc: "Как часто обновлять статистику в боковой панели (в секундах)",
+      backgroundRefreshIntervalDesc:
+        "Как часто обновлять статистику в боковой панели (в секундах)",
       backgroundRefreshIntervalPlaceholder: "5",
       enableBackgroundRefresh: "Включить фоновое обновление",
-      enableBackgroundRefreshDesc: "Автоматически обновлять статистику в боковой панели",
+      enableBackgroundRefreshDesc:
+        "Автоматически обновлять статистику в боковой панели",
       enableNotices: "Включить уведомления",
-      enableNoticesDesc: "Показывать уведомления о завершении сессий и операциях синхронизации",
+      enableNoticesDesc:
+        "Показывать уведомления о завершении сессий и операциях синхронизации",
       reviewDisplayMode: "Режим показа повторения",
-      reviewDisplayModeDesc: "Где открываются сессии повторения и просмотра. Вкладки можно перетаскивать в боковые панели, нижние панели или отдельные окна.",
+      reviewDisplayModeDesc:
+        "Где открываются сессии повторения и просмотра. Вкладки можно перетаскивать в боковые панели, нижние панели или отдельные окна.",
       flashcardManagerDisplayMode: "Режим показа менеджера карточек",
-      flashcardManagerDisplayModeDesc: "Где открывается менеджер карточек. Вкладки можно перетаскивать в боковые панели, нижние панели или отдельные окна.",
+      flashcardManagerDisplayModeDesc:
+        "Где открывается менеджер карточек. Вкладки можно перетаскивать в боковые панели, нижние панели или отдельные окна.",
       displayModeModal: "Модальное окно",
       displayModeTab: "Новая вкладка",
       minDeckCardCount: "Скрывать колоды с менее чем",
-      minDeckCardCountDesc: "Колоды (и группы) с меньшим общим количеством карточек скрываются из списка. Закреплённые колоды показываются всегда. 0 отключает.",
+      minDeckCardCountDesc:
+        "Колоды (и группы) с меньшим общим количеством карточек скрываются из списка. Закреплённые колоды показываются всегда. 0 отключает.",
       minDeckCardCountPlaceholder: "0",
     },
     backup: {
       heading: "Резервные копии",
       enableAutoBackup: "Включить автобэкап",
-      enableAutoBackupDesc: "Автоматически создавать резервную копию после каждой сессии",
+      enableAutoBackupDesc:
+        "Автоматически создавать резервную копию после каждой сессии",
       maxBackups: "Макс. копий",
       maxBackupsDesc: "Максимальное число хранимых копий (3-10)",
       createBackupNow: "Создать копию сейчас",
@@ -907,8 +1047,10 @@ export const ru: Translations = {
       optimize: "Оптимизировать параметры",
       optimizeButton: "Оптимизировать",
       resetButton: "Сбросить к умолчаниям",
-      descUntrained: "Обучает 21 параметр алгоритма на вашей истории повторений стандартного профиля. Требуется минимум 100 повторений. Интенсивные колоды не затрагиваются.",
-      descTrained: "Сейчас используются обученные веса от {when} ({count} повторений, log-loss {before} → {after}).",
+      descUntrained:
+        "Обучает 21 параметр алгоритма на вашей истории повторений стандартного профиля. Требуется минимум 100 повторений. Интенсивные колоды не затрагиваются.",
+      descTrained:
+        "Сейчас используются обученные веса от {when} ({count} повторений, log-loss {before} → {after}).",
       descTrainedUnknownWhen: "неизвестно",
       descTrainedMissingMetric: "—",
     },
@@ -916,27 +1058,35 @@ export const ru: Translations = {
       heading: "Отладка",
       paragraph: "Параметры отладки для диагностики и разработки.",
       enableLogging: "Включить отладочные логи",
-      enableLoggingDesc: "Показывать подробные логи в консоли для синхронизации и обработки карточек",
+      enableLoggingDesc:
+        "Показывать подробные логи в консоли для синхронизации и обработки карточек",
       performanceLogs: "Включить логи производительности",
-      performanceLogsDesc: "Показывать метрики времени в консоли (время синхронизации, парсинга и т. д.)",
+      performanceLogsDesc:
+        "Показывать метрики времени в консоли (время синхронизации, парсинга и т. д.)",
     },
     paths: {
       heading: "Расположение файлов",
-      paragraph: "Все пути относительны хранилища. Оставьте пустым для значения по умолчанию. Большинству пользователей не нужно их менять — они существуют для переноса БД из скрытой папки {configDir}/ (которую iCloud и другие сервисы синхронизации обычно понижают в приоритете).",
+      paragraph:
+        "Все пути относительны хранилища. Оставьте пустым для значения по умолчанию. Большинству пользователей не нужно их менять — они существуют для переноса БД из скрытой папки {configDir}/ (которую iCloud и другие сервисы синхронизации обычно понижают в приоритете).",
       dbFolder: "Папка базы данных",
-      dbFolderDesc: "Папка с flashcards.db. По умолчанию: {pluginFolder}/. Перезапустите Obsidian после изменения. Файл БД не перемещается автоматически — сделайте резервную копию, затем переместите файл вручную или используйте «Восстановить из файла», чтобы импортировать в новое расположение.",
+      dbFolderDesc:
+        "Папка с flashcards.db. По умолчанию: {pluginFolder}/. Перезапустите Obsidian после изменения. Файл БД не перемещается автоматически — сделайте резервную копию, затем переместите файл вручную или используйте «Восстановить из файла», чтобы импортировать в новое расположение.",
       backupFolder: "Папка резервных копий",
-      backupFolderDesc: "Папка для автоматических и ручных копий. По умолчанию: {pluginFolder}/backups/. Изменения применяются сразу — перезапуск не требуется.",
+      backupFolderDesc:
+        "Папка для автоматических и ручных копий. По умолчанию: {pluginFolder}/backups/. Изменения применяются сразу — перезапуск не требуется.",
       backupFolderPlaceholder: "{pluginFolder}/backups",
       syncLogFolder: "Папка журнала синхронизации",
-      syncLogFolderDesc: "Папка для пер-устройственных файлов .deckssynclog. По умолчанию: корень хранилища (где iCloud синхронизирует быстрее всего). Перезапустите Obsidian после изменения.",
+      syncLogFolderDesc:
+        "Папка для пер-устройственных файлов .deckssynclog. По умолчанию: корень хранилища (где iCloud синхронизирует быстрее всего). Перезапустите Obsidian после изменения.",
       syncLogFolderPlaceholder: "(корень хранилища)",
     },
     database: {
       heading: "Управление базой данных",
-      paragraph: "Управляйте базой данных карточек. Используйте с осторожностью — эти действия необратимы.",
+      paragraph:
+        "Управляйте базой данных карточек. Используйте с осторожностью — эти действия необратимы.",
       purgeDatabase: "Очистить базу данных",
-      purgeDatabaseDesc: "Безвозвратно удаляет все карточки, историю повторений и данные колод. Принудительно пересобирает базу из файлов хранилища. Весь прогресс будет потерян!",
+      purgeDatabaseDesc:
+        "Безвозвратно удаляет все карточки, историю повторений и данные колод. Принудительно пересобирает базу из файлов хранилища. Весь прогресс будет потерян!",
       purgeDatabaseButton: "Очистить базу данных",
     },
   },

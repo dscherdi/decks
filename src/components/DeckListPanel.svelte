@@ -508,7 +508,7 @@
 
     const exportOption = document.createElement("div");
     exportOption.className = "decks-dropdown-option";
-    exportOption.textContent = "Export to Anki";
+    exportOption.textContent = t.deckList.exportToAnki;
     exportOption.onclick = () => {
       closeActiveDropdown();
       openAnkiExportForGroup(group);
@@ -622,7 +622,7 @@
 
     const exportOption = document.createElement("div");
     exportOption.className = "decks-dropdown-option";
-    exportOption.textContent = "Export to Anki";
+    exportOption.textContent = t.deckList.exportToAnki;
     exportOption.onclick = () => {
       closeActiveDropdown();
       openAnkiExport(deck);
@@ -739,7 +739,7 @@
 
     const exportOption = document.createElement("div");
     exportOption.className = "decks-dropdown-option";
-    exportOption.textContent = "Export to Anki";
+    exportOption.textContent = t.deckList.exportToAnki;
     exportOption.onclick = () => {
       closeActiveDropdown();
       openAnkiExportForCustomDeck(customDeck);

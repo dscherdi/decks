@@ -94,14 +94,14 @@
 
     if (counts.young > 0) {
       data.push(counts.young);
-      labels.push(t.statistics.youngCards.split(" (")[0]);
+      labels.push(t.statistics.cardCountsYoung);
       backgroundColor.push("#f59e0b");
       borderColor.push("#d97706");
     }
 
     if (counts.mature > 0) {
       data.push(counts.mature);
-      labels.push(t.statistics.matureLabel);
+      labels.push(t.statistics.cardCountsMature);
       backgroundColor.push("#22c55e");
       borderColor.push("#16a34a");
     }

@@ -273,10 +273,12 @@
       </div>
       {#if !isLoading}
         <span class="decks-total-reviews">
-          {Array.from(reviewCounts.values()).reduce(
-            (sum, count) => sum + count,
-            0
-          )} reviews
+          {I18n.format(t.statistics.totalReviewsCount, {
+            count: Array.from(reviewCounts.values()).reduce(
+              (sum, count) => sum + count,
+              0
+            ),
+          })}
         </span>
       {/if}
     </div>
@@ -323,7 +325,7 @@
                         class="decks-day {getIntensityClass(day.count)}"
                         class:decks-today={isToday(day.date)}
                         class:outside-year={dayYear !== currentYear}
-                        title="{day.count} reviews on {formatDate(day.date)}"
+                        title={I18n.format(t.statistics.reviewsOnDate, { count: day.count, date: formatDate(day.date) })}
                       ></div>
                     {/each}
                   </div>

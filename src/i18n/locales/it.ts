@@ -13,6 +13,51 @@ export const it: Translations = {
 
   ribbon: { decks: "Mazzi" },
 
+  testDeck: {
+    filename: "Decks — Primi passi.md",
+    title: "Primi passi con Decks",
+    intro:
+      "Benvenuto in Decks! Per trasformare questo file (o qualsiasi altro) in un mazzo di flashcard, aggiungi semplicemente il tag `{tag}` al tuo frontmatter o ovunque nel testo.",
+    formatsHint:
+      "Decks supporta quattro formati principali. Scegli quello che si adatta meglio ai tuoi appunti.",
+    section1: "1. Formato intestazione-paragrafo",
+    section1Body:
+      "Per impostazione predefinita, Decks utilizza le **intestazioni H2 (`##`)** come fronte della carta, e il paragrafo direttamente sotto come retro. *(Puoi cambiare questo livello di intestazione nelle impostazioni del mazzo).*.",
+    q1: "Cos'è la ripetizione dilazionata (spaced repetition)?",
+    a1: "Una tecnica di apprendimento che programma i ripassi a intervalli crescenti in base alla forza del ricordo.",
+    q2: "Quale tag identifica un file come un mazzo di flashcard?",
+    a2: "Il tag `{tag}`. Aggiungilo all'elenco `tags` del frontmatter o ovunque nel testo.",
+    section2: "2. Formato tabella",
+    section2Body:
+      "Puoi usare le tabelle markdown a due colonne per generare carte in blocco.\n**Regola fondamentale:** La tabella *deve* trovarsi direttamente sotto un'intestazione. Quell'intestazione funge da contenitore per quelle carte.",
+    fsrsConceptsHeading: "Concetti FSRS",
+    colFront: "Fronte",
+    colBack: "Retro",
+    colNotes: "Note",
+    row1Front: "Per cosa sta FSRS?",
+    row1Back: "Free Spaced Repetition Scheduler",
+    row1Notes: "L'algoritmo che Decks utilizza per programmare le carte",
+    row2Front: "Quali sono le quattro valutazioni di ripasso?",
+    row2Back: "Di nuovo, Difficile, Buono, Facile",
+    row2Notes:
+      "«Di nuovo» resetta la carta; «Facile» dà l'intervallo più lungo",
+    tableNote:
+      "*(Nota: La prima colonna è il Fronte, la seconda è il Retro. La terza colonna opzionale è per Note/Suggerimenti).*.",
+    section3: "3. Riempimento degli spazi (Cloze)",
+    section3Body:
+      "Usa la sintassi `==evidenziato==` per creare carte da completare. Ogni parte evidenziata diventa una carta a sé.",
+    solarHeading: "Il sistema solare",
+    solarBody:
+      "Il ==Sole== è la stella al centro del nostro sistema solare. Il pianeta più vicino è ==Mercurio== e il più grande è ==Giove==.",
+    section4: "4. Occlusione d'immagine",
+    section4Body:
+      "Combina un'immagine con un elenco numerato. L'immagine mostra le regioni etichettate e ogni voce dell'elenco diventa una carta separata.",
+    bonesHeading: "Ossa del braccio",
+    bone1: "Omero",
+    bone2: "Radio",
+    bone3: "Ulna",
+  },
+
   commands: {
     showPanel: "Mostra pannello schede",
     showReleaseNotes: "Mostra note di rilascio",
@@ -23,23 +68,27 @@ export const it: Translations = {
   },
 
   notices: {
-    reparsing: "Rianalisi di ogni mazzo in corso. Potrebbe richiedere un momento…",
+    reparsing:
+      "Rianalisi di ogni mazzo in corso. Potrebbe richiedere un momento…",
     resyncComplete: "Risincronizzazione completata.",
     resyncFailed: "Risincronizzazione fallita. Vedi la console per i dettagli.",
     loadFailed: "Caricamento plugin fallito. Vedi la console per i dettagli.",
-    languageChanged: "Lingua cambiata. Ricarica il plugin perché abbia effetto.",
+    languageChanged:
+      "Lingua cambiata. Ricarica il plugin perché abbia effetto.",
     noCardsInDeck: "Nessuna scheda trovata in {deckName}",
-    customDeckCreated: "Mazzo personalizzato \"{name}\" creato con {count} schede",
-    customDeckUpdated: "Mazzo personalizzato \"{name}\" aggiornato",
-    customDeckDeleted: "Mazzo personalizzato \"{name}\" eliminato",
-    customDeckRenamed: "Mazzo personalizzato rinominato in \"{name}\"",
+    customDeckCreated:
+      'Mazzo personalizzato "{name}" creato con {count} schede',
+    customDeckUpdated: 'Mazzo personalizzato "{name}" aggiornato',
+    customDeckDeleted: 'Mazzo personalizzato "{name}" eliminato',
+    customDeckRenamed: 'Mazzo personalizzato rinominato in "{name}"',
     deckResetSuccess: "Progresso del mazzo reimpostato con successo",
     deckResetFailed: "Errore nel reimpostare il progresso del mazzo",
     reviewStartFailed: "Errore nell'avvio del ripasso. Vedi la console.",
     sessionComplete: "Sessione di ripasso completata",
     sessionCompleteCount: "{count} schede ripassate",
     duplicatesFound: "Trovate {count} scheda/e duplicata/e in {deckName}",
-    trainedParamsCleared: "Parametri addestrati cancellati, valori predefiniti ripristinati.",
+    trainedParamsCleared:
+      "Parametri addestrati cancellati, valori predefiniti ripristinati.",
     creatingBackup: "Creazione del backup…",
     backupCreated: "✅ Backup creato: {filename}",
     backupFailed: "❌ Backup fallito: {message}",
@@ -57,38 +106,50 @@ export const it: Translations = {
     purgingDatabase: "Pulizia del database…",
     databasePurged: "✅ Database pulito e ricostruito con successo",
     purgeFailed: "Pulizia del database fallita. Vedi la console.",
-    purgeConfirmMismatch: "Il testo di conferma non coincide. Pulizia annullata.",
+    purgeConfirmMismatch:
+      "Il testo di conferma non coincide. Pulizia annullata.",
     errorLoadingDecks: "Errore nel caricare i mazzi. Vedi la console.",
     errorStartingReview: "Errore nell'avvio del ripasso. Vedi la console.",
-    errorStartingBrowse: "Errore nell'avvio della navigazione. Vedi la console.",
+    errorStartingBrowse:
+      "Errore nell'avvio della navigazione. Vedi la console.",
     noCardsFoundInDeck: "Nessuna scheda trovata in {deckName}",
     noCardsDueForReview: "Nessuna scheda da ripassare in {deckName}",
-    noCardsFoundInGroup: "Nessuna scheda trovata in \"{name}\"",
-    noCardsDueInGroup: "Nessuna scheda da ripassare in \"{name}\" ({count} file)",
-    noCardsDueInCustomDeck: "Nessuna scheda da ripassare in \"{name}\" ({count} schede)",
+    noCardsFoundInGroup: 'Nessuna scheda trovata in "{name}"',
+    noCardsDueInGroup: 'Nessuna scheda da ripassare in "{name}" ({count} file)',
+    noCardsDueInCustomDeck:
+      'Nessuna scheda da ripassare in "{name}" ({count} schede)',
     fileNotFound: "File non trovato: {path}",
     reviewSessionCompleteFor: "Sessione di ripasso completata per {deckName}!",
-    filterDeckUpdated: "Mazzo filtro \"{name}\" aggiornato",
-    customDeckUpdatedCounts: "\"{name}\" aggiornato — {added} aggiunte, {removed} rimosse",
+    filterDeckUpdated: 'Mazzo filtro "{name}" aggiornato',
+    customDeckUpdatedCounts:
+      '"{name}" aggiornato — {added} aggiunte, {removed} rimosse',
     failedToSave: "Salvataggio fallito: {message}",
     failedToCreateDeck: "Creazione del mazzo fallita: {message}",
     failedToCreateFilterDeck: "Creazione del mazzo filtro fallita: {message}",
     failedToAddCards: "Aggiunta delle schede fallita: {message}",
-    filterDeckCreated: "Mazzo filtro \"{name}\" creato",
+    filterDeckCreated: 'Mazzo filtro "{name}" creato',
     cardsAddedToCustomDeck: "{count} schede aggiunte al mazzo personalizzato",
     dailyLimitsReached: "\n\nLimiti giornalieri raggiunti:",
     dailyNewLimit: "\nSchede nuove: {used}/{max}",
     dailyReviewLimit: "\nSchede da ripassare: {used}/{max}",
-    dailyNewOnlyLimit: "\n\nLimite giornaliero di schede nuove raggiunto: {used}/{max}",
-    dailyReviewOnlyLimit: "\n\nLimite giornaliero di ripassi raggiunto: {used}/{max}",
+    dailyNewOnlyLimit:
+      "\n\nLimite giornaliero di schede nuove raggiunto: {used}/{max}",
+    dailyReviewOnlyLimit:
+      "\n\nLimite giornaliero di ripassi raggiunto: {used}/{max}",
     dailyProgressHeader: "Progresso giornaliero per {deckName}:\n",
-    dailyProgressNewDisabled: "Schede nuove: DISABILITATE (0 consentite al giorno)\n",
+    dailyProgressNewDisabled:
+      "Schede nuove: DISABILITATE (0 consentite al giorno)\n",
     dailyProgressNewExceeded: "Schede nuove: {used}/{max} (LIMITE SUPERATO)\n",
-    dailyProgressNewRemaining: "Schede nuove: {used}/{max} ({remaining} rimanenti)\n",
-    dailyProgressReviewDisabled: "Schede da ripassare: DISABILITATE (0 consentite al giorno)\n",
-    dailyProgressReviewExceeded: "Schede da ripassare: {used}/{max} (LIMITE SUPERATO)\n",
-    dailyProgressReviewRemaining: "Schede da ripassare: {used}/{max} ({remaining} rimanenti)\n",
-    dailyProgressOnlyLearning: "\n\nNota: verranno mostrate solo le schede in apprendimento (limiti superati)",
+    dailyProgressNewRemaining:
+      "Schede nuove: {used}/{max} ({remaining} rimanenti)\n",
+    dailyProgressReviewDisabled:
+      "Schede da ripassare: DISABILITATE (0 consentite al giorno)\n",
+    dailyProgressReviewExceeded:
+      "Schede da ripassare: {used}/{max} (LIMITE SUPERATO)\n",
+    dailyProgressReviewRemaining:
+      "Schede da ripassare: {used}/{max} ({remaining} rimanenti)\n",
+    dailyProgressOnlyLearning:
+      "\n\nNota: verranno mostrate solo le schede in apprendimento (limiti superati)",
     noFlashcardsToExport: "Nessuna scheda da esportare in questo mazzo",
     ankiExportSuccess: "{count} schede esportate dal {type} in formato Anki",
     ankiExportFailed: "Esportazione in formato Anki fallita",
@@ -97,6 +158,7 @@ export const it: Translations = {
   },
 
   deckList: {
+    exportToAnki: "Esporta in Anki",
     title: "Mazzi",
     emptyNoDecks: "Nessun mazzo trovato.",
     emptyNoFilterMatch: "Nessun mazzo corrisponde al filtro.",
@@ -140,26 +202,34 @@ export const it: Translations = {
     clickToReview: "Clicca per ripassare {name}",
     resetProgress: "Reimposta progresso",
     deleteCustomDeckTitle: "Elimina mazzo personalizzato",
-    deleteCustomDeckMessage: "Eliminare il mazzo personalizzato \"{name}\"? Le schede stesse non saranno eliminate.",
-    resetCustomDeckProgress: "Reimpostare tutto il progresso di \"{name}\"? Tutte le schede torneranno allo stato nuovo e la cronologia di ripasso sarà cancellata. Azione irreversibile.",
-    progressResetFor: "Progresso reimpostato per \"{name}\"",
+    deleteCustomDeckMessage:
+      'Eliminare il mazzo personalizzato "{name}"? Le schede stesse non saranno eliminate.',
+    resetCustomDeckProgress:
+      'Reimpostare tutto il progresso di "{name}"? Tutte le schede torneranno allo stato nuovo e la cronologia di ripasso sarà cancellata. Azione irreversibile.',
+    progressResetFor: 'Progresso reimpostato per "{name}"',
     resetCustomDeckTitle: "Reimposta progresso del mazzo personalizzato",
-    resetCustomDeckMessage: "Reimpostare il progresso delle schede in \"{name}\"? La cronologia di queste schede sarà cancellata e torneranno allo stato nuovo.",
+    resetCustomDeckMessage:
+      'Reimpostare il progresso delle schede in "{name}"? La cronologia di queste schede sarà cancellata e torneranno allo stato nuovo.',
     resetCustomDeckFailed: "Reimpostazione del mazzo personalizzato fallita",
     confirmDelete: "Elimina",
     newCardsTooltip: "Schede nuove rimanenti oggi: {remaining} / {limit}",
-    reviewCardsTooltip: "Schede da ripassare rimanenti oggi: {remaining} / {limit}",
+    reviewCardsTooltip:
+      "Schede da ripassare rimanenti oggi: {remaining} / {limit}",
     tabFiles: "File",
     tabTags: "Tag",
     tabCustom: "Personalizzato",
     tagYourNotes: "Etichetta le note con {tag} per creare mazzi.",
     filesCount: "({count} file)",
     cardsCount: "({count} schede)",
-    newCardsGroupTooltip: "{count} schede nuove disponibili oggi (limite: {limit} per mazzo)",
-    newCardsLimitTooltip: "{count} schede nuove disponibili oggi (limite: {limit})",
+    newCardsGroupTooltip:
+      "{count} schede nuove disponibili oggi (limite: {limit} per mazzo)",
+    newCardsLimitTooltip:
+      "{count} schede nuove disponibili oggi (limite: {limit})",
     newCardsDueTooltip: "{count} schede nuove da ripassare",
-    reviewCardsGroupTooltip: "{count} schede di ripasso disponibili oggi (limite: {limit} per mazzo)",
-    reviewCardsLimitTooltip: "{count} schede di ripasso disponibili oggi (limite: {limit})",
+    reviewCardsGroupTooltip:
+      "{count} schede di ripasso disponibili oggi (limite: {limit} per mazzo)",
+    reviewCardsLimitTooltip:
+      "{count} schede di ripasso disponibili oggi (limite: {limit})",
     reviewCardsDueTooltip: "{count} schede di ripasso",
     studiedSummary: "{cards} schede studiate in {hours} oggi ({pace})",
   },
@@ -193,7 +263,8 @@ export const it: Translations = {
     nextCloze: "Prossima lacuna",
     openSource: "Apri nota sorgente",
     openSourceFile: "Apri file sorgente",
-    cardLeechAndDense: "Scheda ripetutamente dimenticata e complessa — valuta di revisionarla",
+    cardLeechAndDense:
+      "Scheda ripetutamente dimenticata e complessa — valuta di revisionarla",
     cardLeech: "Scheda ripetutamente dimenticata — valuta di riscriverla",
     cardDense: "La scheda è complessa. Valuta di dividerla.",
     copyContent: "Copia contenuto",
@@ -297,7 +368,8 @@ export const it: Translations = {
     badgeLeech: "Sanguisuga",
     badgeDense: "Densa",
     badgeHealthy: "Sana",
-    leechTooltip: "Dimenticata ripetutamente ({count} lapsi) — valuta di riscriverla",
+    leechTooltip:
+      "Dimenticata ripetutamente ({count} lapsi) — valuta di riscriverla",
     denseTooltip: "Il retro ha {count} caratteri — valuta di dividerla",
     healthyTooltip: "Nessun problema di sanguisuga o densità rilevato",
     footerShowingOfInDeck: "Mostrate {shown} di {total} schede in «{name}»",
@@ -334,13 +406,15 @@ export const it: Translations = {
     decksUsingProfile: "Mazzi che usano il profilo",
     deckCount: "{count} mazzo/i",
     editNoteIntro: "Nota:",
-    editNoteBody: " Per modificare le impostazioni del profilo, usa il pulsante «Gestisci profili» nel pannello principale.",
+    editNoteBody:
+      " Per modificare le impostazioni del profilo, usa il pulsante «Gestisci profili» nel pannello principale.",
     sectionTagSelection: "Selezione tag",
     sectionProfileSelection: "Selezione profilo",
     sectionCurrentSettings: "Impostazioni profilo attuale",
     saving: "Salvataggio…",
     applyProfileToTag: "Applica profilo al tag",
-    applyProfileDesc: "Seleziona un tag per applicare il profilo a tutti i suoi mazzi",
+    applyProfileDesc:
+      "Seleziona un tag per applicare il profilo a tutti i suoi mazzi",
     errorSavingConfig: "Errore nel salvataggio della configurazione",
     requestRetention: "Ritenzione richiesta",
     requestRetentionDesc: "Probabilità di recupero desiderata (0,7-0,99)",
@@ -349,21 +423,26 @@ export const it: Translations = {
     learningSteps: "Passi di apprendimento",
     relearningSteps: "Passi di riapprendimento",
     newCardsPerDay: "Schede nuove al giorno",
-    newCardsPerDayDesc: "Numero massimo di schede nuove al giorno (0 disattiva il limite)",
+    newCardsPerDayDesc:
+      "Numero massimo di schede nuove al giorno (0 disattiva il limite)",
     reviewsPerDay: "Ripassi al giorno",
-    reviewsPerDayDesc: "Numero massimo di schede di ripasso al giorno (0 disattiva il limite)",
+    reviewsPerDayDesc:
+      "Numero massimo di schede di ripasso al giorno (0 disattiva il limite)",
     reviewOrder: "Ordine di ripasso",
     reviewOrderDueDate: "Data di scadenza",
     reviewOrderRandom: "Casuale",
     headerLevel: "Livello di intestazione per le schede",
-    headerLevelDesc: "Livello di intestazione trattato come fronte nei mazzi intestazione-paragrafo",
+    headerLevelDesc:
+      "Livello di intestazione trattato come fronte nei mazzi intestazione-paragrafo",
     useTrainedWeights: "Usa pesi addestrati",
-    useTrainedWeightsDesc: "Applica i pesi FSRS addestrati globalmente a questo mazzo (solo profilo standard).",
+    useTrainedWeightsDesc:
+      "Applica i pesi FSRS addestrati globalmente a questo mazzo (solo profilo standard).",
     save: "Salva",
     cancel: "Annulla",
     reset: "Ripristina predefiniti",
     enableDailyLimits: "Attiva limiti giornalieri",
-    enableDailyLimitsDesc: "Limita il numero di schede nuove e di ripasso al giorno",
+    enableDailyLimitsDesc:
+      "Limita il numero di schede nuove e di ripasso al giorno",
   },
 
   profiles: {
@@ -381,7 +460,8 @@ export const it: Translations = {
     removeTagMapping: "Rimuovi associazione",
     tagPlaceholder: "Tag (es. #decks/math)",
     noProfiles: "Nessun profilo personalizzato",
-    deleteConfirm: "Eliminare questo profilo? I mazzi che lo usano torneranno al profilo predefinito.",
+    deleteConfirm:
+      "Eliminare questo profilo? I mazzi che lo usano torneranno al profilo predefinito.",
     cannotDeleteDefault: "I profili predefiniti non possono essere eliminati.",
     selectProfile: "Seleziona profilo",
     chooseProfileDesc: "Scegli un profilo da visualizzare e modificare",
@@ -399,15 +479,19 @@ export const it: Translations = {
     limitNewCardsLabel: "Limita schede nuove al giorno",
     limitNewCardsDesc: "Attiva limite giornaliero per schede nuove",
     newCardsPerDayLabel: "Schede nuove al giorno",
-    newCardsPerDayDesc: "Numero massimo di schede nuove da introdurre al giorno (1-9999)",
+    newCardsPerDayDesc:
+      "Numero massimo di schede nuove da introdurre al giorno (1-9999)",
     limitReviewCardsLabel: "Limita schede di ripasso al giorno",
     limitReviewCardsDesc: "Attiva limite giornaliero per schede di ripasso",
     reviewCardsPerDayLabel: "Schede di ripasso al giorno",
-    reviewCardsPerDayDesc: "Numero massimo di schede di ripasso al giorno (1-9999)",
+    reviewCardsPerDayDesc:
+      "Numero massimo di schede di ripasso al giorno (1-9999)",
     againIntervalNew: "Intervallo Di nuovo",
-    againIntervalNewDesc: "Intervallo premendo Di nuovo su una scheda nuova (es. 1m)",
+    againIntervalNewDesc:
+      "Intervallo premendo Di nuovo su una scheda nuova (es. 1m)",
     againIntervalReview: "Intervallo Di nuovo",
-    againIntervalReviewDesc: "Intervallo premendo Di nuovo su una scheda di ripasso (es. 10m)",
+    againIntervalReviewDesc:
+      "Intervallo premendo Di nuovo su una scheda di ripasso (es. 10m)",
     headerLevelLabel: "Livello di intestazione",
     headerLevelDescParsing: "Livello di intestazione per l'analisi",
     clozeDeletionsLabel: "Lacune",
@@ -421,8 +505,10 @@ export const it: Translations = {
     requestRetentionLabel: "Ritenzione richiesta",
     requestRetentionDesc: "Tasso di ritenzione obiettivo (0,5 - 0,995)",
     fsrsProfileLabel: "Profilo FSRS",
-    fsrsTrainedDesc: "Standard o intensivo usano i pesi forniti. Addestrato applica i tuoi pesi ottimizzati (intervalli standard).",
-    fsrsUntrainedDesc: "Profilo di intensità di apprendimento. Addestra i pesi nella regolazione dell'algoritmo per abilitare Addestrato.",
+    fsrsTrainedDesc:
+      "Standard o intensivo usano i pesi forniti. Addestrato applica i tuoi pesi ottimizzati (intervalli standard).",
+    fsrsUntrainedDesc:
+      "Profilo di intensità di apprendimento. Addestra i pesi nella regolazione dell'algoritmo per abilitare Addestrato.",
     fsrsStandardOption: "Standard",
     fsrsIntensiveOption: "Intensivo",
     fsrsTrainedOption: "Addestrato",
@@ -437,14 +523,17 @@ export const it: Translations = {
     noticeProfileCreated: "Nuovo profilo creato",
     noticeProfileNameEmpty: "Il nome del profilo non può essere vuoto",
     noticeNewCardsRange: "Le schede nuove al giorno devono essere tra 1 e 9999",
-    noticeReviewCardsRange: "Le schede di ripasso al giorno devono essere tra 1 e 9999",
-    noticeRequestRetentionRange: "La ritenzione richiesta deve essere tra 0,5 e 0,995",
+    noticeReviewCardsRange:
+      "Le schede di ripasso al giorno devono essere tra 1 e 9999",
+    noticeRequestRetentionRange:
+      "La ritenzione richiesta deve essere tra 0,5 e 0,995",
     noticeInvalidAgainInterval: "Intervallo Di nuovo non valido",
     noticeProfileSaved: "Profilo salvato",
     noticeProfileSaveError: "Errore nel salvataggio del profilo",
     noticeCannotDeleteDefault: "Impossibile eliminare il profilo PREDEFINITO",
     noticeProfileDeleted: "Profilo eliminato",
-    confirmDeletePrompt: "Sei sicuro di voler eliminare il profilo \"{name}\"?\n\nTutti i mazzi che usano questo profilo verranno reimpostati sul profilo PREDEFINITO.",
+    confirmDeletePrompt:
+      'Sei sicuro di voler eliminare il profilo "{name}"?\n\nTutti i mazzi che usano questo profilo verranno reimpostati sul profilo PREDEFINITO.',
     defaultSuffix: "(PREDEFINITO)",
   },
 
@@ -458,6 +547,15 @@ export const it: Translations = {
     cardCountsReview: "Ripasso",
     cardCountsRelearning: "Riapprendimento",
     cardCountsTotal: "Totale",
+    cardCountsYoung: "Giovani",
+    cardCountsMature: "Mature",
+    cardsAddedSeries: "Schede aggiunte",
+    againSeries: "Di nuovo",
+    hardSeries: "Difficile",
+    goodSeries: "Bene",
+    easySeries: "Facile",
+    reviewsOnDate: "{count} ripassi il {date}",
+    totalReviewsCount: "{count} ripassi",
     cardDifficulty: "Difficoltà schede",
     cardStability: "Stabilità schede",
     cardRetrievability: "Recuperabilità",
@@ -513,28 +611,37 @@ export const it: Translations = {
     cardDistributionByState: "Distribuzione per stato",
     cardDistributionByStateDoughnut: "Distribuzione per stato (anello)",
     cardCountsTooltip: "{label}: {count} schede ({percent}%)",
-    selectDeckCardDistribution: "Seleziona un mazzo per visualizzare la distribuzione.",
+    selectDeckCardDistribution:
+      "Seleziona un mazzo per visualizzare la distribuzione.",
     cardDifficultyDistribution: "Distribuzione della difficoltà",
     cardDifficultyRange: "Intervallo di difficoltà",
-    cardDifficultySubtitle: "I valori di difficoltà FSRS indicano quanto è difficile ricordare le schede",
+    cardDifficultySubtitle:
+      "I valori di difficoltà FSRS indicano quanto è difficile ricordare le schede",
     higherDifficultyTip: "Maggiore difficoltà = più difficile da ricordare",
     numberOfCards: "Numero di schede",
     numberOfReviews: "Numero di ripassi",
-    selectDeckCardDifficulty: "Seleziona un mazzo per visualizzare la distribuzione di difficoltà.",
+    selectDeckCardDifficulty:
+      "Seleziona un mazzo per visualizzare la distribuzione di difficoltà.",
     cardStabilityDistribution: "Distribuzione della stabilità",
     cardStabilityRange: "Intervallo di stabilità",
-    cardStabilitySubtitle: "I valori di stabilità FSRS indicano quanto bene le schede sono trattenute in memoria",
-    selectDeckCardStability: "Seleziona un mazzo per visualizzare la distribuzione di stabilità.",
+    cardStabilitySubtitle:
+      "I valori di stabilità FSRS indicano quanto bene le schede sono trattenute in memoria",
+    selectDeckCardStability:
+      "Seleziona un mazzo per visualizzare la distribuzione di stabilità.",
     cardRetrievabilityDistribution: "Distribuzione della recuperabilità",
     retrievabilityRange: "Intervallo di recuperabilità",
     reviewsLabel: "Ripassi",
-    cardRetrievabilitySubtitle: "I valori di recuperabilità FSRS indicano la probabilità di ricordare oggi (0-100%)",
-    higherRetrievabilityTip: "Maggiore recuperabilità = più facile da ricordare",
+    cardRetrievabilitySubtitle:
+      "I valori di recuperabilità FSRS indicano la probabilità di ricordare oggi (0-100%)",
+    higherRetrievabilityTip:
+      "Maggiore recuperabilità = più facile da ricordare",
     reviewsTooltip: "{label}: {count} ripassi ({percent}%)",
-    selectDeckCardRetrievability: "Seleziona un mazzo per visualizzare la distribuzione di recuperabilità.",
+    selectDeckCardRetrievability:
+      "Seleziona un mazzo per visualizzare la distribuzione di recuperabilità.",
     cardsAddedOverTime: "Schede aggiunte nel tempo",
     dateAdded: "Data di aggiunta",
-    selectDeckCardsAdded: "Seleziona un mazzo per visualizzare le schede aggiunte nel tempo.",
+    selectDeckCardsAdded:
+      "Seleziona un mazzo per visualizzare le schede aggiunte nel tempo.",
     cardsAddedTooltip: "{label}: {count} {plural}",
     cardSingular: "scheda",
     cardPlural: "schede",
@@ -545,7 +652,8 @@ export const it: Translations = {
     timeframe1Year: "1 anno",
     allTime: "Tutto",
     futureDueTitle: "Prossime scadenze",
-    selectDeckFutureDue: "Seleziona un mazzo per visualizzare le prossime scadenze.",
+    selectDeckFutureDue:
+      "Seleziona un mazzo per visualizzare le prossime scadenze.",
     dueCards: "Schede in scadenza",
     cumulativeBacklog: "Arretrato cumulativo",
     totalReviewsLabel: "Ripassi totali:",
@@ -561,7 +669,8 @@ export const it: Translations = {
     dayLabel: "Giorno {label}",
     totalBacklogTooltip: "Arretrato totale: {value} ripassi",
     dueTooltip: "In scadenza: {value} schede",
-    noUpcomingReviews: "Nessun ripasso futuro pianificato. Aggiungi schede ai tuoi mazzi per vedere una previsione.",
+    noUpcomingReviews:
+      "Nessun ripasso futuro pianificato. Aggiungi schede ai tuoi mazzi per vedere una previsione.",
     hourlyBreakdownTitle: "Attività per ora",
     hourlyBreakdownChart: "Attività di ripasso per ora del giorno",
     reviewCountLabel: "Numero di ripassi",
@@ -581,14 +690,19 @@ export const it: Translations = {
     newCardsLabel: "Schede nuove",
     matureCardsLabel: "Schede mature",
     learningCardsLabel: "Schede in apprendimento",
-    selectDeckMaturity: "Seleziona un mazzo per visualizzare la previsione di maturità.",
+    selectDeckMaturity:
+      "Seleziona un mazzo per visualizzare la previsione di maturità.",
     calculating: "Calcolo in corso…",
-    maturityRetentionNote: "In base alla tua ritenzione storica del {percent}%, ecco come matureranno le tue schede:",
+    maturityRetentionNote:
+      "In base alla tua ritenzione storica del {percent}%, ecco come matureranno le tue schede:",
     maturityAllMatureIn: "Tutte le schede saranno mature in circa {days}.",
-    maturitySubtitle: "Proiezione di come le schede progrediranno verso la maturità in base al ritmo di ripasso attuale.",
-    maturityRetentionDetail: "In base alla tua ritenzione storica del {retention}%, circa {maintenance}% delle schede (~{count} schede) resteranno sempre in fase di apprendimento a causa degli oblii naturali.",
+    maturitySubtitle:
+      "Proiezione di come le schede progrediranno verso la maturità in base al ritmo di ripasso attuale.",
+    maturityRetentionDetail:
+      "In base alla tua ritenzione storica del {retention}%, circa {maintenance}% delle schede (~{count} schede) resteranno sempre in fase di apprendimento a causa degli oblii naturali.",
     maturityEquilibrium: "Equilibrio raggiunto in {days}.",
-    maturityAllMatureAtPace: "Tutte le schede saranno mature in circa {days} al ritmo attuale.",
+    maturityAllMatureAtPace:
+      "Tutte le schede saranno mature in circa {days} al ritmo attuale.",
     maturityTotalCards: "Totale: {count} schede",
     standardMaintenanceLine: "Livello di mantenimento standard ({percent}%)",
     yourMaintenanceLine: "Il tuo livello di mantenimento ({percent}%)",
@@ -612,10 +726,13 @@ export const it: Translations = {
     reviewIntervalDistribution: "Distribuzione degli intervalli",
     intervalRange: "Intervallo",
     reviewIntervalsTitle: "Intervalli di ripasso",
-    selectDeckIntervals: "Seleziona un mazzo per visualizzare la distribuzione degli intervalli.",
-    reviewIntervalsSubtitle: "Distribuzione degli intervalli di ripasso attuali",
+    selectDeckIntervals:
+      "Seleziona un mazzo per visualizzare la distribuzione degli intervalli.",
+    reviewIntervalsSubtitle:
+      "Distribuzione degli intervalli di ripasso attuali",
     reviewsOverTimeTitle: "Ripassi nel tempo",
-    selectDeckReviewsOverTime: "Seleziona un mazzo per visualizzare lo storico dei ripassi.",
+    selectDeckReviewsOverTime:
+      "Seleziona un mazzo per visualizzare lo storico dei ripassi.",
     dateAxisLabel: "Data",
     selectDeckLabel: "Seleziona mazzo/i:",
     deckDropdownPrompt: "-- Seleziona un mazzo --",
@@ -624,25 +741,32 @@ export const it: Translations = {
     statisticsTitle: "Statistiche generali",
     loadingStatistics: "Caricamento statistiche…",
     failedToLoad: "Errore nel caricamento delle statistiche",
-    failedToLoadIntro: "Si è verificato un errore nel caricare le tue statistiche. Possibili cause:",
+    failedToLoadIntro:
+      "Si è verificato un errore nel caricare le tue statistiche. Possibili cause:",
     failedReasonDb: "Problemi di connessione al database",
     failedReasonData: "Dati corrotti",
     failedReasonSize: "Set di dati troppo grande da elaborare",
-    failedConsoleHint: "Controlla la console del browser (F12) per maggiori dettagli.",
+    failedConsoleHint:
+      "Controlla la console del browser (F12) per maggiori dettagli.",
     retryLoading: "Riprova",
     timeframeLast12Months: "Ultimi 12 mesi",
     timeframeAllHistory: "Tutta la cronologia",
     labelReviews: "ripassi",
     labelTime: "tempo",
     labelCorrect: "corrette",
-    completeReviewsHint: "Completa alcuni ripassi per vedere le statistiche dei pulsanti di risposta.",
-    selectDeckPrompt: "Seleziona un mazzo dal menu sopra per visualizzare le statistiche.",
+    completeReviewsHint:
+      "Completa alcuni ripassi per vedere le statistiche dei pulsanti di risposta.",
+    selectDeckPrompt:
+      "Seleziona un mazzo dal menu sopra per visualizzare le statistiche.",
     reviewHeatmapTitle: "Heatmap dei ripassi",
     dailyReviewActivity: "Attività giornaliera di ripasso nel tempo",
     trueRetentionTitle: "Ritenzione reale",
-    selectDeckRetention: "Seleziona un mazzo per visualizzare le statistiche di ritenzione.",
-    retentionDescription: "Tassi di successo per le schede di ripasso (valutazione ≥ Bene). Solo schede con intervalli > 1 giorno.",
-    noReviewDataYet: "Nessun dato di ripasso disponibile. Completa alcuni ripassi per vedere le statistiche di ritenzione.",
+    selectDeckRetention:
+      "Seleziona un mazzo per visualizzare le statistiche di ritenzione.",
+    retentionDescription:
+      "Tassi di successo per le schede di ripasso (valutazione ≥ Bene). Solo schede con intervalli > 1 giorno.",
+    noReviewDataYet:
+      "Nessun dato di ripasso disponibile. Completa alcuni ripassi per vedere le statistiche di ritenzione.",
     columnCardType: "Tipo di scheda",
     columnPassed: "Superate",
     columnTotalLabel: "Totale",
@@ -658,7 +782,8 @@ export const it: Translations = {
     titleWithName: "Esporta in Anki: {name}",
     description: "Esporta le schede selezionate come CSV compatibile con Anki.",
     ankiDeckNameLabel: "Nome del mazzo Anki",
-    ankiDeckNameDesc: "Nome del mazzo in Anki in cui le schede saranno importate",
+    ankiDeckNameDesc:
+      "Nome del mazzo in Anki in cui le schede saranno importate",
     ankiDeckNamePlaceholder: "Inserisci il nome del mazzo...",
     exportButtonLabel: "Esporta in Anki",
     sectionInfo: "Informazioni esportazione",
@@ -781,7 +906,7 @@ export const it: Translations = {
     },
     deckReset: {
       title: "Reimposta progresso del mazzo",
-      intro: "Questo reimposterà tutto il progresso per \"{name}\":",
+      intro: 'Questo reimposterà tutto il progresso per "{name}":',
       listCardsReset: "Tutte le schede tornano allo stato nuovo",
       listHistoryDeleted: "Cronologia di ripasso eliminata",
       listSessionsDeleted: "Sessioni di ripasso eliminate",
@@ -794,31 +919,42 @@ export const it: Translations = {
     },
     purgeDatabase: {
       title: "Pulisci database",
-      warningStrong: "Questo eliminerà permanentemente tutti i dati delle schede, inclusi:",
+      warningStrong:
+        "Questo eliminerà permanentemente tutti i dati delle schede, inclusi:",
       listFlashcards: "Tutte le schede e il loro contenuto",
       listReviews: "Cronologia completa dei ripassi e progresso",
       listDecks: "Tutte le informazioni sui mazzi",
       listStatistics: "Dati statistici",
       cannotUndo: "Questa azione non può essere annullata!",
-      rebuildNote: "Il database sarà ricostruito dai tuoi file attuali del vault, ma tutto il progresso andrà perso.",
-      confirmPrompt: "Per confermare questa azione, digita il testo mostrato nel placeholder",
+      rebuildNote:
+        "Il database sarà ricostruito dai tuoi file attuali del vault, ma tutto il progresso andrà perso.",
+      confirmPrompt:
+        "Per confermare questa azione, digita il testo mostrato nel placeholder",
       confirmPlaceholder: "DELETE ALL DATA",
       purgeButton: "Pulisci database",
       cancel: "Annulla",
     },
-    releaseNotes: { title: "Novità", close: "Chiudi", versionLabel: "Versione {version}" },
+    releaseNotes: {
+      title: "Novità",
+      close: "Chiudi",
+      versionLabel: "Versione {version}",
+    },
     statistics: { title: "Statistiche", close: "Chiudi" },
     optimizeFsrs: {
       title: "Ottimizza parametri",
       loadingHistory: "Caricamento cronologia ripassi…",
       trainingStep: "Passo di addestramento {step} / {total}",
-      notEnough: "Non c'è ancora abbastanza cronologia per l'addestramento. Continua a ripassare e riprova più tardi.",
-      reviewsAvailable: "Ripassi disponibili su mazzi del profilo STANDARD: {count}.",
-      trainedSummary: "Addestrato su {reviews} ripassi tra {cards} schede in {seconds} s.",
+      notEnough:
+        "Non c'è ancora abbastanza cronologia per l'addestramento. Continua a ripassare e riprova più tardi.",
+      reviewsAvailable:
+        "Ripassi disponibili su mazzi del profilo STANDARD: {count}.",
+      trainedSummary:
+        "Addestrato su {reviews} ripassi tra {cards} schede in {seconds} s.",
       logLossBefore: "Log-loss prima",
       logLossAfter: "Log-loss dopo",
       improvement: "Miglioramento",
-      noImprovement: "L'addestramento non ha migliorato significativamente il log-loss — i pesi attuali sono già un buon adattamento. Puoi scartare senza problemi.",
+      noImprovement:
+        "L'addestramento non ha migliorato significativamente il log-loss — i pesi attuali sono già un buon adattamento. Puoi scartare senza problemi.",
       discard: "Scarta",
       apply: "Applica",
       close: "Chiudi",
@@ -833,53 +969,67 @@ export const it: Translations = {
     language: {
       heading: "Lingua",
       name: "Lingua del plugin",
-      desc: "Scegli la lingua. \"Auto\" segue le impostazioni di Obsidian. Il cambio richiede il ricaricamento del plugin.",
+      desc: 'Scegli la lingua. "Auto" segue le impostazioni di Obsidian. Il cambio richiede il ricaricamento del plugin.',
       auto: "Auto",
     },
     review: {
       heading: "Sessioni di ripasso",
       showProgress: "Mostra progresso",
-      showProgressDesc: "Mostra la barra di progresso durante le sessioni di ripasso",
+      showProgressDesc:
+        "Mostra la barra di progresso durante le sessioni di ripasso",
       keyboardShortcuts: "Scorciatoie da tastiera",
-      keyboardShortcutsDesc: "Attiva scorciatoie nella finestra di ripasso (1-4 per la difficoltà)",
+      keyboardShortcutsDesc:
+        "Attiva scorciatoie nella finestra di ripasso (1-4 per la difficoltà)",
       sessionDuration: "Durata della sessione",
-      sessionDurationDesc: "Durata massima delle sessioni di ripasso in minuti (1-60)",
+      sessionDurationDesc:
+        "Durata massima delle sessioni di ripasso in minuti (1-60)",
       sessionDurationPlaceholder: "25",
       studyDayStartsAt: "Il giorno di studio inizia alle",
-      studyDayStartsAtDesc: "Ora in cui il giorno di studio cambia (0-23, predefinito 4). I ripassi prima di quest'ora contano per il giorno precedente.",
+      studyDayStartsAtDesc:
+        "Ora in cui il giorno di studio cambia (0-23, predefinito 4). I ripassi prima di quest'ora contano per il giorno precedente.",
       leechThreshold: "Soglia sanguisuga",
-      leechThresholdDesc: "Una scheda è segnata come sanguisuga quando i lapsi raggiungono questo numero (predefinito 8). Le sanguisughe vengono dimenticate ripetutamente e di solito vanno riscritte.",
+      leechThresholdDesc:
+        "Una scheda è segnata come sanguisuga quando i lapsi raggiungono questo numero (predefinito 8). Le sanguisughe vengono dimenticate ripetutamente e di solito vanno riscritte.",
       leechThresholdPlaceholder: "8",
       denseCardCharThreshold: "Soglia di carattere per schede dense",
-      denseCardCharThresholdDesc: "Una scheda è segnata come densa quando il retro raggiunge questo numero di caratteri (predefinito 500). Le schede dense beneficiano spesso di essere divise.",
+      denseCardCharThresholdDesc:
+        "Una scheda è segnata come densa quando il retro raggiunge questo numero di caratteri (predefinito 500). Le schede dense beneficiano spesso di essere divise.",
       denseCardCharThresholdPlaceholder: "500",
     },
     parsing: {
       heading: "Analisi",
       deckTag: "Tag del mazzo",
-      deckTagDesc: "Tag base per identificare i mazzi. I file con questo tag (o sotto-tag come {tag}/math) sono trattati come mazzi. Il tag predefinito è cambiato da #flashcards a #decks. Se usavi #flashcards, continuerà a funzionare finché non lo cambi qui.",
+      deckTagDesc:
+        "Tag base per identificare i mazzi. I file con questo tag (o sotto-tag come {tag}/math) sono trattati come mazzi. Il tag predefinito è cambiato da #flashcards a #decks. Se usavi #flashcards, continuerà a funzionare finché non lo cambi qui.",
       deckTagPlaceholder: "#decks",
       folderSearchPath: "Percorso di ricerca",
-      folderSearchPathDesc: "Limita la scansione a una cartella specifica. Seleziona « scansiona tutto il vault » per scansionare tutti i file.",
+      folderSearchPathDesc:
+        "Limita la scansione a una cartella specifica. Seleziona « scansiona tutto il vault » per scansionare tutti i file.",
       folderSearchPathDefault: "Scansiona tutto il vault (predefinito)",
     },
     ui: {
       heading: "Interfaccia",
       backgroundRefreshInterval: "Intervallo di aggiornamento in background",
-      backgroundRefreshIntervalDesc: "Frequenza di aggiornamento delle statistiche nel pannello laterale (in secondi)",
+      backgroundRefreshIntervalDesc:
+        "Frequenza di aggiornamento delle statistiche nel pannello laterale (in secondi)",
       backgroundRefreshIntervalPlaceholder: "5",
       enableBackgroundRefresh: "Attiva aggiornamento in background",
-      enableBackgroundRefreshDesc: "Aggiorna automaticamente le statistiche nel pannello laterale",
+      enableBackgroundRefreshDesc:
+        "Aggiorna automaticamente le statistiche nel pannello laterale",
       enableNotices: "Attiva notifiche",
-      enableNoticesDesc: "Mostra notifiche per sessioni completate e operazioni di sincronizzazione",
+      enableNoticesDesc:
+        "Mostra notifiche per sessioni completate e operazioni di sincronizzazione",
       reviewDisplayMode: "Modalità di visualizzazione del ripasso",
-      reviewDisplayModeDesc: "Dove si aprono le sessioni di ripasso e navigazione. Le schede possono essere trascinate in barre laterali, pannelli inferiori o finestre separate.",
+      reviewDisplayModeDesc:
+        "Dove si aprono le sessioni di ripasso e navigazione. Le schede possono essere trascinate in barre laterali, pannelli inferiori o finestre separate.",
       flashcardManagerDisplayMode: "Modalità del gestore schede",
-      flashcardManagerDisplayModeDesc: "Dove si apre il gestore schede. Le schede possono essere trascinate in barre laterali, pannelli inferiori o finestre separate.",
+      flashcardManagerDisplayModeDesc:
+        "Dove si apre il gestore schede. Le schede possono essere trascinate in barre laterali, pannelli inferiori o finestre separate.",
       displayModeModal: "Modale sovrapposto",
       displayModeTab: "Nuova scheda",
       minDeckCardCount: "Nascondi mazzi con meno di",
-      minDeckCardCountDesc: "I mazzi (e i gruppi) con meno schede totali sono nascosti dall'elenco. I mazzi fissati sono sempre visibili. 0 disattiva.",
+      minDeckCardCountDesc:
+        "I mazzi (e i gruppi) con meno schede totali sono nascosti dall'elenco. I mazzi fissati sono sempre visibili. 0 disattiva.",
       minDeckCardCountPlaceholder: "0",
     },
     backup: {
@@ -907,36 +1057,47 @@ export const it: Translations = {
       optimize: "Ottimizza parametri",
       optimizeButton: "Ottimizza",
       resetButton: "Ripristina predefiniti",
-      descUntrained: "Addestra i 21 pesi dell'algoritmo sulla tua cronologia di ripasso del profilo standard. Servono almeno 100 ripassi. I mazzi intensivi non sono influenzati.",
-      descTrained: "Sta usando pesi addestrati del {when} ({count} ripassi, log-loss {before} → {after}).",
+      descUntrained:
+        "Addestra i 21 pesi dell'algoritmo sulla tua cronologia di ripasso del profilo standard. Servono almeno 100 ripassi. I mazzi intensivi non sono influenzati.",
+      descTrained:
+        "Sta usando pesi addestrati del {when} ({count} ripassi, log-loss {before} → {after}).",
       descTrainedUnknownWhen: "sconosciuto",
       descTrainedMissingMetric: "—",
     },
     debug: {
       heading: "Debug",
-      paragraph: "Impostazioni di debug per la risoluzione dei problemi e lo sviluppo.",
+      paragraph:
+        "Impostazioni di debug per la risoluzione dei problemi e lo sviluppo.",
       enableLogging: "Attiva logging di debug",
-      enableLoggingDesc: "Mostra log dettagliati nella console per sincronizzazione ed elaborazione schede",
+      enableLoggingDesc:
+        "Mostra log dettagliati nella console per sincronizzazione ed elaborazione schede",
       performanceLogs: "Attiva log delle prestazioni",
-      performanceLogsDesc: "Mostra metriche di tempo nella console (tempi di sync, prestazioni di parsing, ecc.)",
+      performanceLogsDesc:
+        "Mostra metriche di tempo nella console (tempi di sync, prestazioni di parsing, ecc.)",
     },
     paths: {
       heading: "Percorsi dei file",
-      paragraph: "Tutti i percorsi sono relativi al vault. Lascia vuoto per usare la posizione predefinita. La maggior parte degli utenti non ha bisogno di cambiarli — esistono per permetterti di spostare il DB fuori dalla cartella nascosta {configDir}/ (che iCloud e altri sistemi di sincronizzazione tendono a deprioritizzare).",
+      paragraph:
+        "Tutti i percorsi sono relativi al vault. Lascia vuoto per usare la posizione predefinita. La maggior parte degli utenti non ha bisogno di cambiarli — esistono per permetterti di spostare il DB fuori dalla cartella nascosta {configDir}/ (che iCloud e altri sistemi di sincronizzazione tendono a deprioritizzare).",
       dbFolder: "Cartella del database",
-      dbFolderDesc: "Cartella contenente flashcards.db. Predefinito: {pluginFolder}/. Riavvia Obsidian dopo la modifica. Il file DB non viene spostato automaticamente — fai prima un backup, poi spostalo manualmente o usa « Ripristina da file » per importarlo nella nuova posizione.",
+      dbFolderDesc:
+        "Cartella contenente flashcards.db. Predefinito: {pluginFolder}/. Riavvia Obsidian dopo la modifica. Il file DB non viene spostato automaticamente — fai prima un backup, poi spostalo manualmente o usa « Ripristina da file » per importarlo nella nuova posizione.",
       backupFolder: "Cartella backup",
-      backupFolderDesc: "Cartella per backup automatici e manuali. Predefinito: {pluginFolder}/backups/. Le modifiche hanno effetto immediato — nessun riavvio richiesto.",
+      backupFolderDesc:
+        "Cartella per backup automatici e manuali. Predefinito: {pluginFolder}/backups/. Le modifiche hanno effetto immediato — nessun riavvio richiesto.",
       backupFolderPlaceholder: "{pluginFolder}/backups",
       syncLogFolder: "Cartella del log di sincronizzazione",
-      syncLogFolderDesc: "Cartella per i file .deckssynclog per dispositivo usati dalla sincronizzazione multi-dispositivo. Predefinito: radice del vault (che iCloud sincronizza più velocemente). Riavvia Obsidian dopo la modifica.",
+      syncLogFolderDesc:
+        "Cartella per i file .deckssynclog per dispositivo usati dalla sincronizzazione multi-dispositivo. Predefinito: radice del vault (che iCloud sincronizza più velocemente). Riavvia Obsidian dopo la modifica.",
       syncLogFolderPlaceholder: "(radice del vault)",
     },
     database: {
       heading: "Gestione del database",
-      paragraph: "Gestisci il tuo database di schede. Usare con cautela — queste azioni sono irreversibili.",
+      paragraph:
+        "Gestisci il tuo database di schede. Usare con cautela — queste azioni sono irreversibili.",
       purgeDatabase: "Pulisci database",
-      purgeDatabaseDesc: "Elimina permanentemente tutte le schede, la cronologia di ripasso e i dati dei mazzi. Forza una ricostruzione pulita dai tuoi file del vault. Tutto il progresso andrà perso!",
+      purgeDatabaseDesc:
+        "Elimina permanentemente tutte le schede, la cronologia di ripasso e i dati dei mazzi. Forza una ricostruzione pulita dai tuoi file del vault. Tutto il progresso andrà perso!",
       purgeDatabaseButton: "Pulisci database",
     },
   },

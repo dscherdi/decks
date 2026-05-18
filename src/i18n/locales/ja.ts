@@ -13,6 +13,51 @@ export const ja: Translations = {
 
   ribbon: { decks: "デッキ" },
 
+  testDeck: {
+    filename: "Decks — はじめに.md",
+    title: "Decks のはじめ方",
+    intro:
+      "Decks へようこそ！このファイル（または任意のファイル）をフラッシュカードのデッキに変えるには、フロントマターまたは本文のどこかに `{tag}` タグを追加するだけです。",
+    formatsHint:
+      "Decks は主に4つのフォーマットをサポートしています。ノートに最も適したものを選んでください。",
+    section1: "1. 見出し・段落フォーマット",
+    section1Body:
+      "デフォルトでは、Decks は **H2 見出し (`##`)** をカードの表面として、その直下の段落を裏面として使用します。*（この見出しレベルはデッキ設定で変更できます）。*",
+    q1: "間隔反復（Spaced Repetition）とは何ですか？",
+    a1: "記憶の定着度に基づいて、徐々に間隔を広げながら復習をスケジュールする学習手法です。",
+    q2: "ファイルをフラッシュカードのデッキとしてマークするタグは何ですか？",
+    a2: "`{tag}` タグです。フロントマターの `tags` リストか、本文のどこかに追加します。",
+    section2: "2. テーブルフォーマット",
+    section2Body:
+      "2列の Markdown テーブルを使用して、カードを一括生成できます。\n**重要なルール：** テーブルは必ず見出しの直下に配置する*必要があります*。その見出しがカードのコンテナとして機能します。",
+    fsrsConceptsHeading: "FSRS の概念",
+    colFront: "表面",
+    colBack: "裏面",
+    colNotes: "ノート",
+    row1Front: "FSRS は何の略ですか？",
+    row1Back: "Free Spaced Repetition Scheduler",
+    row1Notes: "Decks がカードのスケジュールを立てるために使用するアルゴリズム",
+    row2Front: "4つの復習評価は何ですか？",
+    row2Back: "もう一度, 難しい, 普通, 簡単",
+    row2Notes:
+      "「もう一度」はカードをリセットし、「簡単」は最も長い間隔を与えます",
+    tableNote:
+      "*（注：1列目は表面、2列目は裏面です。オプションの3列目はノート/ヒント用です）。*",
+    section3: "3. 穴埋め（Cloze）",
+    section3Body:
+      "`==ハイライト==` 構文を使用して、穴埋めカードを作成します。それぞれのハイライトが1枚のカードになります。",
+    solarHeading: "太陽系",
+    solarBody:
+      "==太陽== は私たちの太陽系の中心にある恒星です。最も近い惑星は ==水星== で、最も大きな惑星は ==木星== です。",
+    section4: "4. 画像の穴埋め（Image occlusion）",
+    section4Body:
+      "画像と番号付きリストを組み合わせます。画像にはラベル付けされた領域が表示され、リストの各項目が個別のカードになります。",
+    bonesHeading: "腕の骨",
+    bone1: "上腕骨",
+    bone2: "橈骨 (とうこつ)",
+    bone3: "尺骨 (しゃっこつ)",
+  },
+
   commands: {
     showPanel: "フラッシュカードパネルを表示",
     showReleaseNotes: "リリースノートを表示",
@@ -26,16 +71,20 @@ export const ja: Translations = {
     reparsing: "各デッキを再解析中。少しお待ちください…",
     resyncComplete: "完全な再同期が完了しました。",
     resyncFailed: "再同期に失敗しました。詳細はコンソールを確認してください。",
-    loadFailed: "プラグインを読み込めませんでした。詳細はコンソールを確認してください。",
-    languageChanged: "言語を変更しました。反映にはプラグインの再読み込みが必要です。",
+    loadFailed:
+      "プラグインを読み込めませんでした。詳細はコンソールを確認してください。",
+    languageChanged:
+      "言語を変更しました。反映にはプラグインの再読み込みが必要です。",
     noCardsInDeck: "{deckName} にカードが見つかりません",
-    customDeckCreated: "カスタムデッキ「{name}」を {count} 枚のカードで作成しました",
+    customDeckCreated:
+      "カスタムデッキ「{name}」を {count} 枚のカードで作成しました",
     customDeckUpdated: "カスタムデッキ「{name}」を更新しました",
     customDeckDeleted: "カスタムデッキ「{name}」を削除しました",
     customDeckRenamed: "カスタムデッキの名前を「{name}」に変更しました",
     deckResetSuccess: "デッキの進捗をリセットしました",
     deckResetFailed: "デッキの進捗のリセットに失敗しました",
-    reviewStartFailed: "復習の開始に失敗しました。詳細はコンソールを確認してください。",
+    reviewStartFailed:
+      "復習の開始に失敗しました。詳細はコンソールを確認してください。",
     sessionComplete: "復習セッションが完了しました",
     sessionCompleteCount: "{count} 枚のカードを復習しました",
     duplicatesFound: "{deckName} に {count} 枚の重複カードが見つかりました",
@@ -56,20 +105,26 @@ export const ja: Translations = {
     backupListFailed: "バックアップ一覧の読み込みに失敗: {message}",
     purgingDatabase: "データベースを消去中…",
     databasePurged: "✅ データベースを消去・再構築しました",
-    purgeFailed: "データベースの消去に失敗しました。詳細はコンソールを確認してください。",
-    purgeConfirmMismatch: "確認テキストが一致しません。消去をキャンセルしました。",
-    errorLoadingDecks: "デッキの読み込みエラー。詳細はコンソールを確認してください。",
+    purgeFailed:
+      "データベースの消去に失敗しました。詳細はコンソールを確認してください。",
+    purgeConfirmMismatch:
+      "確認テキストが一致しません。消去をキャンセルしました。",
+    errorLoadingDecks:
+      "デッキの読み込みエラー。詳細はコンソールを確認してください。",
     errorStartingReview: "復習開始エラー。詳細はコンソールを確認してください。",
     errorStartingBrowse: "閲覧開始エラー。詳細はコンソールを確認してください。",
     noCardsFoundInDeck: "{deckName} にカードが見つかりません",
     noCardsDueForReview: "{deckName} に復習対象のカードがありません",
     noCardsFoundInGroup: "「{name}」にカードが見つかりません",
-    noCardsDueInGroup: "「{name}」に復習対象のカードがありません（{count} ファイル）",
-    noCardsDueInCustomDeck: "「{name}」に復習対象のカードがありません（{count} 枚）",
+    noCardsDueInGroup:
+      "「{name}」に復習対象のカードがありません（{count} ファイル）",
+    noCardsDueInCustomDeck:
+      "「{name}」に復習対象のカードがありません（{count} 枚）",
     fileNotFound: "ファイルが見つかりません: {path}",
     reviewSessionCompleteFor: "{deckName} の復習セッションが完了しました！",
     filterDeckUpdated: "フィルタデッキ「{name}」を更新しました",
-    customDeckUpdatedCounts: "「{name}」を更新 — {added} 枚追加、{removed} 枚削除",
+    customDeckUpdatedCounts:
+      "「{name}」を更新 — {added} 枚追加、{removed} 枚削除",
     failedToSave: "保存に失敗: {message}",
     failedToCreateDeck: "デッキの作成に失敗: {message}",
     failedToCreateFilterDeck: "フィルタデッキの作成に失敗: {message}",
@@ -80,23 +135,28 @@ export const ja: Translations = {
     dailyNewLimit: "\n新規カード: {used}/{max}",
     dailyReviewLimit: "\n復習カード: {used}/{max}",
     dailyNewOnlyLimit: "\n\n本日の新規カードの上限に達しました: {used}/{max}",
-    dailyReviewOnlyLimit: "\n\n本日の復習カードの上限に達しました: {used}/{max}",
+    dailyReviewOnlyLimit:
+      "\n\n本日の復習カードの上限に達しました: {used}/{max}",
     dailyProgressHeader: "{deckName} の本日の進捗:\n",
     dailyProgressNewDisabled: "新規カード: 無効（1日あたり0枚）\n",
     dailyProgressNewExceeded: "新規カード: {used}/{max}（上限超過）\n",
     dailyProgressNewRemaining: "新規カード: {used}/{max}（残り {remaining}）\n",
     dailyProgressReviewDisabled: "復習カード: 無効（1日あたり0枚）\n",
     dailyProgressReviewExceeded: "復習カード: {used}/{max}（上限超過）\n",
-    dailyProgressReviewRemaining: "復習カード: {used}/{max}（残り {remaining}）\n",
-    dailyProgressOnlyLearning: "\n\n注: 学習中のカードのみ表示されます（上限超過）",
+    dailyProgressReviewRemaining:
+      "復習カード: {used}/{max}（残り {remaining}）\n",
+    dailyProgressOnlyLearning:
+      "\n\n注: 学習中のカードのみ表示されます（上限超過）",
     noFlashcardsToExport: "このデッキにエクスポート対象のカードはありません",
-    ankiExportSuccess: "{type} から {count} 枚のカードを Anki 形式にエクスポートしました",
+    ankiExportSuccess:
+      "{type} から {count} 枚のカードを Anki 形式にエクスポートしました",
     ankiExportFailed: "Anki 形式へのエクスポートに失敗しました",
     ankiExportTypeDeck: "デッキ",
     ankiExportTypeTagGroup: "タググループ",
   },
 
   deckList: {
+    exportToAnki: "Anki にエクスポート",
     title: "デッキ",
     emptyNoDecks: "デッキが見つかりません。",
     emptyNoFilterMatch: "フィルタに一致するデッキがありません。",
@@ -140,11 +200,14 @@ export const ja: Translations = {
     clickToReview: "{name} を復習",
     resetProgress: "進捗をリセット",
     deleteCustomDeckTitle: "カスタムデッキを削除",
-    deleteCustomDeckMessage: "カスタムデッキ「{name}」を削除しますか？カード自体は削除されません。",
-    resetCustomDeckProgress: "「{name}」のすべての進捗をリセットしますか？このデッキのすべてのカードが新規状態に戻り、復習履歴が削除されます。この操作は元に戻せません。",
+    deleteCustomDeckMessage:
+      "カスタムデッキ「{name}」を削除しますか？カード自体は削除されません。",
+    resetCustomDeckProgress:
+      "「{name}」のすべての進捗をリセットしますか？このデッキのすべてのカードが新規状態に戻り、復習履歴が削除されます。この操作は元に戻せません。",
     progressResetFor: "「{name}」の進捗をリセットしました",
     resetCustomDeckTitle: "カスタムデッキの進捗をリセット",
-    resetCustomDeckMessage: "「{name}」のカードの進捗をリセットしますか？これらのカードの復習履歴が削除され、新規状態に戻ります。",
+    resetCustomDeckMessage:
+      "「{name}」のカードの進捗をリセットしますか？これらのカードの復習履歴が削除され、新規状態に戻ります。",
     resetCustomDeckFailed: "カスタムデッキの進捗リセットに失敗しました",
     confirmDelete: "削除",
     newCardsTooltip: "本日の残り新規カード: {remaining} / {limit}",
@@ -155,11 +218,15 @@ export const ja: Translations = {
     tagYourNotes: "ノートに {tag} を付けてデッキを作成します。",
     filesCount: "（{count} ファイル）",
     cardsCount: "（{count} 枚）",
-    newCardsGroupTooltip: "本日 {count} 枚の新規カードが利用可能（上限: デッキあたり {limit}）",
-    newCardsLimitTooltip: "本日 {count} 枚の新規カードが利用可能（上限: {limit}）",
+    newCardsGroupTooltip:
+      "本日 {count} 枚の新規カードが利用可能（上限: デッキあたり {limit}）",
+    newCardsLimitTooltip:
+      "本日 {count} 枚の新規カードが利用可能（上限: {limit}）",
     newCardsDueTooltip: "{count} 枚の新規カード",
-    reviewCardsGroupTooltip: "本日 {count} 枚の復習カードが利用可能（上限: デッキあたり {limit}）",
-    reviewCardsLimitTooltip: "本日 {count} 枚の復習カードが利用可能（上限: {limit})",
+    reviewCardsGroupTooltip:
+      "本日 {count} 枚の復習カードが利用可能（上限: デッキあたり {limit}）",
+    reviewCardsLimitTooltip:
+      "本日 {count} 枚の復習カードが利用可能（上限: {limit})",
     reviewCardsDueTooltip: "{count} 枚の復習カード",
     studiedSummary: "本日 {hours} で {cards} 枚学習（{pace}）",
   },
@@ -334,13 +401,15 @@ export const ja: Translations = {
     decksUsingProfile: "このプロファイルを使うデッキ",
     deckCount: "{count} デッキ",
     editNoteIntro: "注：",
-    editNoteBody: " プロファイル設定を編集するには、メインパネルの「プロファイル管理」ボタンを使用してください。",
+    editNoteBody:
+      " プロファイル設定を編集するには、メインパネルの「プロファイル管理」ボタンを使用してください。",
     sectionTagSelection: "タグの選択",
     sectionProfileSelection: "プロファイルの選択",
     sectionCurrentSettings: "現在のプロファイル設定",
     saving: "保存中…",
     applyProfileToTag: "タグにプロファイルを適用",
-    applyProfileDesc: "タグを選択するとそのすべてのデッキにプロファイルが適用されます",
+    applyProfileDesc:
+      "タグを選択するとそのすべてのデッキにプロファイルが適用されます",
     errorSavingConfig: "設定の保存中にエラー",
     requestRetention: "目標保持率",
     requestRetentionDesc: "想起の目標確率（0.7-0.99）",
@@ -358,7 +427,8 @@ export const ja: Translations = {
     headerLevel: "カードの見出しレベル",
     headerLevelDesc: "見出し-段落型デッキで表として扱う見出しレベル",
     useTrainedWeights: "学習済み重みを使用",
-    useTrainedWeightsDesc: "グローバルに学習した FSRS の重みをこのデッキに適用します（標準プロファイルのみ）。",
+    useTrainedWeightsDesc:
+      "グローバルに学習した FSRS の重みをこのデッキに適用します（標準プロファイルのみ）。",
     save: "保存",
     cancel: "キャンセル",
     reset: "既定値に戻す",
@@ -381,7 +451,8 @@ export const ja: Translations = {
     removeTagMapping: "マッピングを削除",
     tagPlaceholder: "タグ（例: #decks/math）",
     noProfiles: "カスタムプロファイルはまだありません",
-    deleteConfirm: "このプロファイルを削除しますか？使用中のデッキは既定プロファイルに戻ります。",
+    deleteConfirm:
+      "このプロファイルを削除しますか？使用中のデッキは既定プロファイルに戻ります。",
     cannotDeleteDefault: "既定プロファイルは削除できません。",
     selectProfile: "プロファイルを選択",
     chooseProfileDesc: "表示・編集するプロファイルを選択",
@@ -407,7 +478,8 @@ export const ja: Translations = {
     againIntervalNew: "もう一度の間隔",
     againIntervalNewDesc: "新規カードで「もう一度」を押した時の間隔（例：1m）",
     againIntervalReview: "もう一度の間隔",
-    againIntervalReviewDesc: "復習カードで「もう一度」を押した時の間隔（例：10m）",
+    againIntervalReviewDesc:
+      "復習カードで「もう一度」を押した時の間隔（例：10m）",
     headerLevelLabel: "見出しレベル",
     headerLevelDescParsing: "解析に使う見出しレベル",
     clozeDeletionsLabel: "穴埋め",
@@ -421,8 +493,10 @@ export const ja: Translations = {
     requestRetentionLabel: "目標保持率",
     requestRetentionDesc: "目標の保持率（0.5 - 0.995）",
     fsrsProfileLabel: "FSRS プロファイル",
-    fsrsTrainedDesc: "標準・集中は同梱の重みを使用。学習済みはあなたの最適化された重みを適用します（標準間隔）。",
-    fsrsUntrainedDesc: "学習強度プロファイル。アルゴリズム調整で重みを学習させると「学習済み」が有効になります。",
+    fsrsTrainedDesc:
+      "標準・集中は同梱の重みを使用。学習済みはあなたの最適化された重みを適用します（標準間隔）。",
+    fsrsUntrainedDesc:
+      "学習強度プロファイル。アルゴリズム調整で重みを学習させると「学習済み」が有効になります。",
     fsrsStandardOption: "標準",
     fsrsIntensiveOption: "集中",
     fsrsTrainedOption: "学習済み",
@@ -436,15 +510,19 @@ export const ja: Translations = {
     close: "閉じる",
     noticeProfileCreated: "新規プロファイルを作成しました",
     noticeProfileNameEmpty: "プロファイル名は空にできません",
-    noticeNewCardsRange: "1日あたりの新規カードは 1 〜 9999 の範囲で指定してください",
-    noticeReviewCardsRange: "1日あたりの復習カードは 1 〜 9999 の範囲で指定してください",
-    noticeRequestRetentionRange: "目標保持率は 0.5 〜 0.995 の範囲で指定してください",
+    noticeNewCardsRange:
+      "1日あたりの新規カードは 1 〜 9999 の範囲で指定してください",
+    noticeReviewCardsRange:
+      "1日あたりの復習カードは 1 〜 9999 の範囲で指定してください",
+    noticeRequestRetentionRange:
+      "目標保持率は 0.5 〜 0.995 の範囲で指定してください",
     noticeInvalidAgainInterval: "無効な「もう一度」の間隔",
     noticeProfileSaved: "プロファイルを保存しました",
     noticeProfileSaveError: "プロファイルの保存中にエラー",
     noticeCannotDeleteDefault: "既定プロファイルは削除できません",
     noticeProfileDeleted: "プロファイルを削除しました",
-    confirmDeletePrompt: "プロファイル「{name}」を削除しますか？\n\nこのプロファイルを使用しているすべてのデッキは既定プロファイルにリセットされます。",
+    confirmDeletePrompt:
+      "プロファイル「{name}」を削除しますか？\n\nこのプロファイルを使用しているすべてのデッキは既定プロファイルにリセットされます。",
     defaultSuffix: "（既定）",
   },
 
@@ -458,6 +536,15 @@ export const ja: Translations = {
     cardCountsReview: "復習",
     cardCountsRelearning: "再学習",
     cardCountsTotal: "合計",
+    cardCountsYoung: "若い",
+    cardCountsMature: "成熟",
+    cardsAddedSeries: "追加されたカード",
+    againSeries: "もう一度",
+    hardSeries: "難しい",
+    goodSeries: "普通",
+    easySeries: "簡単",
+    reviewsOnDate: "{date}：復習 {count} 件",
+    totalReviewsCount: "{count} 件の復習",
     cardDifficulty: "カードの難易度",
     cardStability: "カードの安定度",
     cardRetrievability: "想起可能性",
@@ -520,21 +607,27 @@ export const ja: Translations = {
     higherDifficultyTip: "難易度が高い = 覚えにくい",
     numberOfCards: "カード数",
     numberOfReviews: "復習回数",
-    selectDeckCardDifficulty: "デッキを選択するとカード難易度の分布が表示されます。",
+    selectDeckCardDifficulty:
+      "デッキを選択するとカード難易度の分布が表示されます。",
     cardStabilityDistribution: "カード安定度の分布",
     cardStabilityRange: "安定度の範囲",
-    cardStabilitySubtitle: "FSRS の安定度値は、カードが記憶にどれだけ定着しているかを示します",
-    selectDeckCardStability: "デッキを選択するとカード安定度の分布が表示されます。",
+    cardStabilitySubtitle:
+      "FSRS の安定度値は、カードが記憶にどれだけ定着しているかを示します",
+    selectDeckCardStability:
+      "デッキを選択するとカード安定度の分布が表示されます。",
     cardRetrievabilityDistribution: "カード想起可能性の分布",
     retrievabilityRange: "想起可能性の範囲",
     reviewsLabel: "復習",
-    cardRetrievabilitySubtitle: "FSRS の想起可能性は本日の想起確率を示します（0-100%）",
+    cardRetrievabilitySubtitle:
+      "FSRS の想起可能性は本日の想起確率を示します（0-100%）",
     higherRetrievabilityTip: "想起可能性が高い = 思い出しやすい",
     reviewsTooltip: "{label}：{count} 件の復習（{percent}%）",
-    selectDeckCardRetrievability: "デッキを選択するとカード想起可能性の分布が表示されます。",
+    selectDeckCardRetrievability:
+      "デッキを選択するとカード想起可能性の分布が表示されます。",
     cardsAddedOverTime: "経時的に追加されたカード",
     dateAdded: "追加日",
-    selectDeckCardsAdded: "デッキを選択すると経時的に追加されたカードが表示されます。",
+    selectDeckCardsAdded:
+      "デッキを選択すると経時的に追加されたカードが表示されます。",
     cardsAddedTooltip: "{label}：{count} {plural}",
     cardSingular: "枚",
     cardPlural: "枚",
@@ -561,7 +654,8 @@ export const ja: Translations = {
     dayLabel: "{label} 日目",
     totalBacklogTooltip: "総残量：{value} 件の復習",
     dueTooltip: "期日：{value} 枚",
-    noUpcomingReviews: "予定された復習はありません。デッキにカードを追加すると予測が表示されます。",
+    noUpcomingReviews:
+      "予定された復習はありません。デッキにカードを追加すると予測が表示されます。",
     hourlyBreakdownTitle: "時間別アクティビティ",
     hourlyBreakdownChart: "時間別の復習アクティビティ",
     reviewCountLabel: "復習回数",
@@ -583,12 +677,16 @@ export const ja: Translations = {
     learningCardsLabel: "学習中カード",
     selectDeckMaturity: "デッキを選択すると成熟度予測が表示されます。",
     calculating: "計算中…",
-    maturityRetentionNote: "過去の保持率 {percent}% に基づき、カードは次のように成熟していきます：",
+    maturityRetentionNote:
+      "過去の保持率 {percent}% に基づき、カードは次のように成熟していきます：",
     maturityAllMatureIn: "すべてのカードは約 {days} で成熟します。",
-    maturitySubtitle: "現在の復習ペースに基づき、カードがどのように成熟していくかの予測です。",
-    maturityRetentionDetail: "過去の保持率 {retention}% に基づき、約 {maintenance}% のカード（約 {count} 枚）は自然な忘却により常に学習段階にとどまります。",
+    maturitySubtitle:
+      "現在の復習ペースに基づき、カードがどのように成熟していくかの予測です。",
+    maturityRetentionDetail:
+      "過去の保持率 {retention}% に基づき、約 {maintenance}% のカード（約 {count} 枚）は自然な忘却により常に学習段階にとどまります。",
     maturityEquilibrium: "{days} で均衡に達します。",
-    maturityAllMatureAtPace: "現在のペースでは、すべてのカードは約 {days} で成熟します。",
+    maturityAllMatureAtPace:
+      "現在のペースでは、すべてのカードは約 {days} で成熟します。",
     maturityTotalCards: "合計：{count} 枚",
     standardMaintenanceLine: "標準維持レベル ({percent}%)",
     yourMaintenanceLine: "あなたの維持レベル ({percent}%)",
@@ -624,11 +722,13 @@ export const ja: Translations = {
     statisticsTitle: "全体統計",
     loadingStatistics: "統計を読み込み中…",
     failedToLoad: "統計の読み込みに失敗",
-    failedToLoadIntro: "統計の読み込み中にエラーが発生しました。考えられる原因：",
+    failedToLoadIntro:
+      "統計の読み込み中にエラーが発生しました。考えられる原因：",
     failedReasonDb: "データベース接続の問題",
     failedReasonData: "データの破損",
     failedReasonSize: "データセットが大きすぎて処理に時間がかかる",
-    failedConsoleHint: "詳細なエラー情報はブラウザのコンソール (F12) を確認してください。",
+    failedConsoleHint:
+      "詳細なエラー情報はブラウザのコンソール (F12) を確認してください。",
     retryLoading: "再試行",
     timeframeLast12Months: "過去 12 か月",
     timeframeAllHistory: "全期間",
@@ -636,13 +736,16 @@ export const ja: Translations = {
     labelTime: "時間",
     labelCorrect: "正答",
     completeReviewsHint: "復習を行うと回答ボタンの統計が表示されます。",
-    selectDeckPrompt: "上のドロップダウンからデッキを選択して統計を表示します。",
+    selectDeckPrompt:
+      "上のドロップダウンからデッキを選択して統計を表示します。",
     reviewHeatmapTitle: "復習ヒートマップ",
     dailyReviewActivity: "時系列の日次復習アクティビティ",
     trueRetentionTitle: "実際の保持率",
     selectDeckRetention: "デッキを選択すると保持率統計が表示されます。",
-    retentionDescription: "復習カードの正答率（評価 ≥ 普通）。間隔が 1 日を超えるカードのみ。",
-    noReviewDataYet: "復習データはまだありません。復習を行うと保持率統計が表示されます。",
+    retentionDescription:
+      "復習カードの正答率（評価 ≥ 普通）。間隔が 1 日を超えるカードのみ。",
+    noReviewDataYet:
+      "復習データはまだありません。復習を行うと保持率統計が表示されます。",
     columnCardType: "カードの種類",
     columnPassed: "正答",
     columnTotalLabel: "合計",
@@ -800,25 +903,35 @@ export const ja: Translations = {
       listDecks: "すべてのデッキ情報",
       listStatistics: "統計データ",
       cannotUndo: "この操作は元に戻せません！",
-      rebuildNote: "データベースは現在の Vault ファイルから再構築されますが、すべての進捗は失われます。",
-      confirmPrompt: "この操作を確認するには、プレースホルダーに表示されたテキストを入力してください",
+      rebuildNote:
+        "データベースは現在の Vault ファイルから再構築されますが、すべての進捗は失われます。",
+      confirmPrompt:
+        "この操作を確認するには、プレースホルダーに表示されたテキストを入力してください",
       confirmPlaceholder: "DELETE ALL DATA",
       purgeButton: "データベースを消去",
       cancel: "キャンセル",
     },
-    releaseNotes: { title: "新着情報", close: "閉じる", versionLabel: "バージョン {version}" },
+    releaseNotes: {
+      title: "新着情報",
+      close: "閉じる",
+      versionLabel: "バージョン {version}",
+    },
     statistics: { title: "統計", close: "閉じる" },
     optimizeFsrs: {
       title: "パラメータを最適化",
       loadingHistory: "復習履歴を読み込み中…",
       trainingStep: "学習ステップ {step} / {total}",
-      notEnough: "学習に必要な復習履歴がまだ不足しています。引き続き復習し、後でもう一度試してください。",
-      reviewsAvailable: "STANDARD プロファイルのデッキで利用可能な復習: {count} 件。",
-      trainedSummary: "{cards} 枚のカードについて {reviews} 件の復習で {seconds} 秒の学習を実施。",
+      notEnough:
+        "学習に必要な復習履歴がまだ不足しています。引き続き復習し、後でもう一度試してください。",
+      reviewsAvailable:
+        "STANDARD プロファイルのデッキで利用可能な復習: {count} 件。",
+      trainedSummary:
+        "{cards} 枚のカードについて {reviews} 件の復習で {seconds} 秒の学習を実施。",
       logLossBefore: "学習前 Log-loss",
       logLossAfter: "学習後 Log-loss",
       improvement: "改善",
-      noImprovement: "学習による log-loss の改善はわずかです — 現在の重みは既に適合しています。安全に破棄できます。",
+      noImprovement:
+        "学習による log-loss の改善はわずかです — 現在の重みは既に適合しています。安全に破棄できます。",
       discard: "破棄",
       apply: "適用",
       close: "閉じる",
@@ -841,26 +954,32 @@ export const ja: Translations = {
       showProgress: "進捗を表示",
       showProgressDesc: "復習セッション中に進捗バーを表示",
       keyboardShortcuts: "キーボードショートカット",
-      keyboardShortcutsDesc: "復習ウィンドウでショートカットを有効化（1-4 で難易度）",
+      keyboardShortcutsDesc:
+        "復習ウィンドウでショートカットを有効化（1-4 で難易度）",
       sessionDuration: "セッション時間",
       sessionDurationDesc: "復習セッションの最大時間（分、1-60）",
       sessionDurationPlaceholder: "25",
       studyDayStartsAt: "学習日が始まる時刻",
-      studyDayStartsAtDesc: "学習日が切り替わる時刻（0-23、既定 4）。この時刻より前の復習は前日の統計と上限に算入されます。",
+      studyDayStartsAtDesc:
+        "学習日が切り替わる時刻（0-23、既定 4）。この時刻より前の復習は前日の統計と上限に算入されます。",
       leechThreshold: "リーチのしきい値",
-      leechThresholdDesc: "失念回数がこの数に達するとカードがリーチとして扱われます（既定 8）。リーチは繰り返し忘れられがちで、書き直しが望ましいことが多いです。",
+      leechThresholdDesc:
+        "失念回数がこの数に達するとカードがリーチとして扱われます（既定 8）。リーチは繰り返し忘れられがちで、書き直しが望ましいことが多いです。",
       leechThresholdPlaceholder: "8",
       denseCardCharThreshold: "高密度カードの文字数しきい値",
-      denseCardCharThresholdDesc: "裏面の文字数がこの数に達するとカードが密度高として扱われます（既定 500）。密度高カードは分割することで学習しやすくなります。",
+      denseCardCharThresholdDesc:
+        "裏面の文字数がこの数に達するとカードが密度高として扱われます（既定 500）。密度高カードは分割することで学習しやすくなります。",
       denseCardCharThresholdPlaceholder: "500",
     },
     parsing: {
       heading: "解析",
       deckTag: "デッキタグ",
-      deckTagDesc: "デッキを識別するベースタグ。このタグ（または {tag}/math のようなサブタグ）が付いたファイルがデッキとして扱われます。既定タグは #flashcards から #decks に変更されました。#flashcards も、ここで変更するまでは引き続き使用できます。",
+      deckTagDesc:
+        "デッキを識別するベースタグ。このタグ（または {tag}/math のようなサブタグ）が付いたファイルがデッキとして扱われます。既定タグは #flashcards から #decks に変更されました。#flashcards も、ここで変更するまでは引き続き使用できます。",
       deckTagPlaceholder: "#decks",
       folderSearchPath: "検索フォルダ",
-      folderSearchPathDesc: "スキャンを特定のフォルダに限定します。「Vault 全体をスキャン」を選ぶとすべてのファイルがスキャンされます。",
+      folderSearchPathDesc:
+        "スキャンを特定のフォルダに限定します。「Vault 全体をスキャン」を選ぶとすべてのファイルがスキャンされます。",
       folderSearchPathDefault: "Vault 全体をスキャン（既定）",
     },
     ui: {
@@ -873,13 +992,16 @@ export const ja: Translations = {
       enableNotices: "通知を有効化",
       enableNoticesDesc: "完了したセッションと同期操作に関する通知を表示",
       reviewDisplayMode: "復習の表示モード",
-      reviewDisplayModeDesc: "復習・閲覧セッションを開く場所。タブはサイドバー、下部パネル、別ウィンドウにドラッグできます。",
+      reviewDisplayModeDesc:
+        "復習・閲覧セッションを開く場所。タブはサイドバー、下部パネル、別ウィンドウにドラッグできます。",
       flashcardManagerDisplayMode: "カード管理の表示モード",
-      flashcardManagerDisplayModeDesc: "カード管理を開く場所。タブはサイドバー、下部パネル、別ウィンドウにドラッグできます。",
+      flashcardManagerDisplayModeDesc:
+        "カード管理を開く場所。タブはサイドバー、下部パネル、別ウィンドウにドラッグできます。",
       displayModeModal: "モーダル",
       displayModeTab: "新規タブ",
       minDeckCardCount: "次より少ないデッキを非表示",
-      minDeckCardCountDesc: "総カード数がこの数未満のデッキ（およびグループ）は一覧から隠されます。固定されたデッキは常に表示されます。0 で無効。",
+      minDeckCardCountDesc:
+        "総カード数がこの数未満のデッキ（およびグループ）は一覧から隠されます。固定されたデッキは常に表示されます。0 で無効。",
       minDeckCardCountPlaceholder: "0",
     },
     backup: {
@@ -907,8 +1029,10 @@ export const ja: Translations = {
       optimize: "パラメータを最適化",
       optimizeButton: "最適化",
       resetButton: "既定値に戻す",
-      descUntrained: "標準プロファイルの復習履歴に基づいてアルゴリズムの 21 個の重みを学習します。最低 100 件の復習が必要です。集中デッキには影響しません。",
-      descTrained: "現在 {when} の学習済み重みを使用中（{count} 件の復習、log-loss {before} → {after}）。",
+      descUntrained:
+        "標準プロファイルの復習履歴に基づいてアルゴリズムの 21 個の重みを学習します。最低 100 件の復習が必要です。集中デッキには影響しません。",
+      descTrained:
+        "現在 {when} の学習済み重みを使用中（{count} 件の復習、log-loss {before} → {after}）。",
       descTrainedUnknownWhen: "不明",
       descTrainedMissingMetric: "—",
     },
@@ -916,27 +1040,35 @@ export const ja: Translations = {
       heading: "デバッグ",
       paragraph: "トラブルシューティングと開発のためのデバッグ設定。",
       enableLogging: "デバッグログを有効化",
-      enableLoggingDesc: "同期操作とカード処理に関する詳細なログをコンソールに表示",
+      enableLoggingDesc:
+        "同期操作とカード処理に関する詳細なログをコンソールに表示",
       performanceLogs: "パフォーマンスログを有効化",
-      performanceLogsDesc: "パフォーマンスのタイミング指標をコンソールに表示（同期時間、解析性能など）",
+      performanceLogsDesc:
+        "パフォーマンスのタイミング指標をコンソールに表示（同期時間、解析性能など）",
     },
     paths: {
       heading: "ファイルの場所",
-      paragraph: "すべてのパスは Vault 相対です。既定の場所を使うには空のままにします。多くのユーザーは変更不要です — 隠しフォルダ {configDir}/ の外に DB を移動するために用意されています（iCloud などの同期プロバイダは隠しフォルダの優先度を下げる傾向があります）。",
+      paragraph:
+        "すべてのパスは Vault 相対です。既定の場所を使うには空のままにします。多くのユーザーは変更不要です — 隠しフォルダ {configDir}/ の外に DB を移動するために用意されています（iCloud などの同期プロバイダは隠しフォルダの優先度を下げる傾向があります）。",
       dbFolder: "データベースフォルダ",
-      dbFolderDesc: "flashcards.db を含むフォルダ。既定: {pluginFolder}/。変更後は Obsidian を再起動してください。DB ファイルは自動で移動されません — 先にバックアップを取り、手動で移動するか「ファイルから復元」で新しい場所にインポートしてください。",
+      dbFolderDesc:
+        "flashcards.db を含むフォルダ。既定: {pluginFolder}/。変更後は Obsidian を再起動してください。DB ファイルは自動で移動されません — 先にバックアップを取り、手動で移動するか「ファイルから復元」で新しい場所にインポートしてください。",
       backupFolder: "バックアップフォルダ",
-      backupFolderDesc: "自動・手動バックアップ用フォルダ。既定: {pluginFolder}/backups/。変更は即時反映 — 再起動不要。",
+      backupFolderDesc:
+        "自動・手動バックアップ用フォルダ。既定: {pluginFolder}/backups/。変更は即時反映 — 再起動不要。",
       backupFolderPlaceholder: "{pluginFolder}/backups",
       syncLogFolder: "同期ログフォルダ",
-      syncLogFolderDesc: "マルチデバイス同期で使用される、デバイスごとの .deckssynclog ファイルのフォルダ。既定: Vault のルート（iCloud が最速で同期）。変更後は Obsidian を再起動してください。",
+      syncLogFolderDesc:
+        "マルチデバイス同期で使用される、デバイスごとの .deckssynclog ファイルのフォルダ。既定: Vault のルート（iCloud が最速で同期）。変更後は Obsidian を再起動してください。",
       syncLogFolderPlaceholder: "（Vault のルート）",
     },
     database: {
       heading: "データベース管理",
-      paragraph: "カードデータベースを管理します。これらの操作は取り消せません — 慎重に使用してください。",
+      paragraph:
+        "カードデータベースを管理します。これらの操作は取り消せません — 慎重に使用してください。",
       purgeDatabase: "データベースを消去",
-      purgeDatabaseDesc: "すべてのカード、復習履歴、デッキデータを完全に削除します。Vault ファイルから一からの再構築を強制します。すべての進捗が失われます！",
+      purgeDatabaseDesc:
+        "すべてのカード、復習履歴、デッキデータを完全に削除します。Vault ファイルから一からの再構築を強制します。すべての進捗が失われます！",
       purgeDatabaseButton: "データベースを消去",
     },
   },

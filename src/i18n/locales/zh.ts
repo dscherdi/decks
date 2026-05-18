@@ -13,6 +13,49 @@ export const zh: Translations = {
 
   ribbon: { decks: "牌组" },
 
+  testDeck: {
+    filename: "Decks — 快速入门.md",
+    title: "Decks 快速入门",
+    intro:
+      "欢迎使用 Decks！要将此文件（或任何文件）转换为抽认卡牌组，只需将 `{tag}` 标签添加到 frontmatter 或正文中的任何位置。",
+    formatsHint: "Decks 支持四种主要格式。选择最适合您笔记的格式。",
+    section1: "1. 标题-段落格式",
+    section1Body:
+      "默认情况下，Decks 使用 **H2 标题 (`##`)** 作为卡片的正面，其正下方的段落作为背面。*(您可以在牌组设置中更改此标题级别)。*",
+    q1: "什么是间隔重复？",
+    a1: "一种学习技术，根据记忆强度以递增的间隔安排复习。",
+    q2: "什么标签能将文件标记为抽认卡牌组？",
+    a2: "`{tag}` 标签。将其添加到 frontmatter 的 `tags` 列表或正文中的任何位置。",
+    section2: "2. 表格格式",
+    section2Body:
+      "您可以使用两列的 Markdown 表格来批量生成卡片。\n**关键规则：** 表格*必须*直接位于标题下方。该标题将作为这些卡片的容器。",
+    fsrsConceptsHeading: "FSRS 概念",
+    colFront: "正面",
+    colBack: "背面",
+    colNotes: "笔记",
+    row1Front: "FSRS 代表什么？",
+    row1Back: "Free Spaced Repetition Scheduler (自由间隔重复调度器)",
+    row1Notes: "Decks 用于调度卡片的算法",
+    row2Front: "有哪四个复习评分？",
+    row2Back: "重来，困难，良好，简单",
+    row2Notes: "“重来”会重置卡片；“简单”会给出最长的间隔",
+    tableNote:
+      "*(注：第一列是正面，第二列是背面。可选的第三列用于笔记/提示)。*",
+    section3: "3. 填空 (Cloze)",
+    section3Body:
+      "使用 `==高亮==` 语法创建填空卡片。每个高亮部分都会成为其自身的一张卡片。",
+    solarHeading: "太阳系",
+    solarBody:
+      "==太阳==是我们太阳系中心的恒星。距离最近的行星是==水星==，最大的行星是==木星==。",
+    section4: "4. 图片遮挡",
+    section4Body:
+      "将图片与编号列表结合使用。图片显示标记的区域，列表中的每个项目都将成为一张单独的卡片。",
+    bonesHeading: "手臂骨骼",
+    bone1: "肱骨",
+    bone2: "桡骨",
+    bone3: "尺骨",
+  },
+
   commands: {
     showPanel: "显示卡片面板",
     showReleaseNotes: "显示发行说明",
@@ -87,7 +130,8 @@ export const zh: Translations = {
     dailyProgressNewRemaining: "新卡片：{used}/{max}（剩余 {remaining}）\n",
     dailyProgressReviewDisabled: "复习卡片：已禁用（每天 0 张）\n",
     dailyProgressReviewExceeded: "复习卡片：{used}/{max}（已超出限额）\n",
-    dailyProgressReviewRemaining: "复习卡片：{used}/{max}（剩余 {remaining}）\n",
+    dailyProgressReviewRemaining:
+      "复习卡片：{used}/{max}（剩余 {remaining}）\n",
     dailyProgressOnlyLearning: "\n\n注意：仅显示学习中的卡片（已超出限额）",
     noFlashcardsToExport: "此牌组没有可导出的卡片",
     ankiExportSuccess: "已成功将 {count} 张卡片从{type}导出为 Anki 格式",
@@ -97,6 +141,7 @@ export const zh: Translations = {
   },
 
   deckList: {
+    exportToAnki: "导出到 Anki",
     title: "牌组",
     emptyNoDecks: "未找到牌组。",
     emptyNoFilterMatch: "没有牌组匹配该筛选条件。",
@@ -141,10 +186,12 @@ export const zh: Translations = {
     resetProgress: "重置进度",
     deleteCustomDeckTitle: "删除自定义牌组",
     deleteCustomDeckMessage: "删除自定义牌组「{name}」？卡片本身不会被删除。",
-    resetCustomDeckProgress: "重置「{name}」的所有进度？该牌组的所有卡片将恢复为新卡状态，复习历史将被删除。此操作无法撤销。",
+    resetCustomDeckProgress:
+      "重置「{name}」的所有进度？该牌组的所有卡片将恢复为新卡状态，复习历史将被删除。此操作无法撤销。",
     progressResetFor: "已重置「{name}」的进度",
     resetCustomDeckTitle: "重置自定义牌组进度",
-    resetCustomDeckMessage: "重置「{name}」中卡片的进度？这些卡片的复习历史将被清除并恢复为新卡状态。",
+    resetCustomDeckMessage:
+      "重置「{name}」中卡片的进度？这些卡片的复习历史将被清除并恢复为新卡状态。",
     resetCustomDeckFailed: "重置自定义牌组失败",
     confirmDelete: "删除",
     newCardsTooltip: "今日剩余新卡片：{remaining} / {limit}",
@@ -158,7 +205,8 @@ export const zh: Translations = {
     newCardsGroupTooltip: "今日可用 {count} 张新卡片（限额：每牌组 {limit}）",
     newCardsLimitTooltip: "今日可用 {count} 张新卡片（限额：{limit}）",
     newCardsDueTooltip: "{count} 张到期新卡片",
-    reviewCardsGroupTooltip: "今日可用 {count} 张复习卡片（限额：每牌组 {limit}）",
+    reviewCardsGroupTooltip:
+      "今日可用 {count} 张复习卡片（限额：每牌组 {limit}）",
     reviewCardsLimitTooltip: "今日可用 {count} 张复习卡片（限额：{limit}）",
     reviewCardsDueTooltip: "{count} 张到期复习卡片",
     studiedSummary: "今日在 {hours} 内学习了 {cards} 张卡片（{pace}）",
@@ -358,7 +406,8 @@ export const zh: Translations = {
     headerLevel: "卡片的标题级别",
     headerLevelDesc: "在标题-段落型牌组中作为正面的标题级别",
     useTrainedWeights: "使用训练权重",
-    useTrainedWeightsDesc: "将全局训练的 FSRS 权重应用到此牌组（仅限标准配置文件）。",
+    useTrainedWeightsDesc:
+      "将全局训练的 FSRS 权重应用到此牌组（仅限标准配置文件）。",
     save: "保存",
     cancel: "取消",
     reset: "重置为默认",
@@ -421,8 +470,10 @@ export const zh: Translations = {
     requestRetentionLabel: "目标记忆率",
     requestRetentionDesc: "目标记忆率（0.5 - 0.995）",
     fsrsProfileLabel: "FSRS 配置",
-    fsrsTrainedDesc: "标准或强化使用内置权重。已训练应用你的优化权重（标准间隔）。",
-    fsrsUntrainedDesc: "学习强度配置。请在算法调优中训练权重以启用「已训练」选项。",
+    fsrsTrainedDesc:
+      "标准或强化使用内置权重。已训练应用你的优化权重（标准间隔）。",
+    fsrsUntrainedDesc:
+      "学习强度配置。请在算法调优中训练权重以启用「已训练」选项。",
     fsrsStandardOption: "标准",
     fsrsIntensiveOption: "强化",
     fsrsTrainedOption: "已训练",
@@ -444,7 +495,8 @@ export const zh: Translations = {
     noticeProfileSaveError: "保存配置出错",
     noticeCannotDeleteDefault: "无法删除默认配置",
     noticeProfileDeleted: "配置已删除",
-    confirmDeletePrompt: "确定要删除配置「{name}」吗？\n\n使用此配置的所有牌组都将重置为默认配置。",
+    confirmDeletePrompt:
+      "确定要删除配置「{name}」吗？\n\n使用此配置的所有牌组都将重置为默认配置。",
     defaultSuffix: "（默认）",
   },
 
@@ -458,6 +510,15 @@ export const zh: Translations = {
     cardCountsReview: "复习",
     cardCountsRelearning: "重新学习",
     cardCountsTotal: "总计",
+    cardCountsYoung: "年轻",
+    cardCountsMature: "成熟",
+    cardsAddedSeries: "已添加卡片",
+    againSeries: "重来",
+    hardSeries: "困难",
+    goodSeries: "良好",
+    easySeries: "简单",
+    reviewsOnDate: "{date} 复习 {count} 次",
+    totalReviewsCount: "{count} 次复习",
     cardDifficulty: "卡片难度",
     cardStability: "卡片稳定度",
     cardRetrievability: "可回忆性",
@@ -583,10 +644,12 @@ export const zh: Translations = {
     learningCardsLabel: "学习中卡片",
     selectDeckMaturity: "选择一个牌组以查看成熟度预测。",
     calculating: "计算中…",
-    maturityRetentionNote: "基于你的历史记忆率 {percent}%，你的卡片将这样成熟：",
+    maturityRetentionNote:
+      "基于你的历史记忆率 {percent}%，你的卡片将这样成熟：",
     maturityAllMatureIn: "所有卡片将在大约 {days} 内成熟。",
     maturitySubtitle: "根据当前复习节奏对卡片随时间成熟的预测。",
-    maturityRetentionDetail: "基于你的历史记忆率 {retention}%，约 {maintenance}% 的卡片（约 {count} 张）因自然遗忘将始终处于学习阶段。",
+    maturityRetentionDetail:
+      "基于你的历史记忆率 {retention}%，约 {maintenance}% 的卡片（约 {count} 张）因自然遗忘将始终处于学习阶段。",
     maturityEquilibrium: "{days} 内达到平衡。",
     maturityAllMatureAtPace: "按当前节奏，所有卡片将在大约 {days} 内成熟。",
     maturityTotalCards: "总计：{count} 张",
@@ -641,7 +704,8 @@ export const zh: Translations = {
     dailyReviewActivity: "随时间的每日复习活动",
     trueRetentionTitle: "真实记忆率",
     selectDeckRetention: "选择一个牌组以查看记忆率统计。",
-    retentionDescription: "复习卡片的通过率（评分 ≥ 良好）。仅包含间隔 > 1 天的卡片。",
+    retentionDescription:
+      "复习卡片的通过率（评分 ≥ 良好）。仅包含间隔 > 1 天的卡片。",
     noReviewDataYet: "暂无复习数据。完成一些复习后即可查看记忆率统计。",
     columnCardType: "卡片类型",
     columnPassed: "通过",
@@ -806,7 +870,11 @@ export const zh: Translations = {
       purgeButton: "清空数据库",
       cancel: "取消",
     },
-    releaseNotes: { title: "新功能", close: "关闭", versionLabel: "版本 {version}" },
+    releaseNotes: {
+      title: "新功能",
+      close: "关闭",
+      versionLabel: "版本 {version}",
+    },
     statistics: { title: "统计", close: "关闭" },
     optimizeFsrs: {
       title: "优化参数",
@@ -814,11 +882,13 @@ export const zh: Translations = {
       trainingStep: "训练步骤 {step} / {total}",
       notEnough: "复习历史不足，无法进行训练。请继续复习后再试。",
       reviewsAvailable: "STANDARD 配置文件牌组的可用复习数：{count}。",
-      trainedSummary: "已对 {cards} 张卡片的 {reviews} 次复习训练 {seconds} 秒。",
+      trainedSummary:
+        "已对 {cards} 张卡片的 {reviews} 次复习训练 {seconds} 秒。",
       logLossBefore: "训练前 Log-loss",
       logLossAfter: "训练后 Log-loss",
       improvement: "改进",
-      noImprovement: "训练未显著改进 log-loss — 当前权重已经较好。可以安全放弃。",
+      noImprovement:
+        "训练未显著改进 log-loss — 当前权重已经较好。可以安全放弃。",
       discard: "放弃",
       apply: "应用",
       close: "关闭",
@@ -846,21 +916,26 @@ export const zh: Translations = {
       sessionDurationDesc: "卡片复习会话的最大时长（分钟，1-60）",
       sessionDurationPlaceholder: "25",
       studyDayStartsAt: "学习日开始于",
-      studyDayStartsAtDesc: "学习日切换的小时数（0-23，默认 4）。该时刻之前的复习会计入前一天的统计与每日限额。",
+      studyDayStartsAtDesc:
+        "学习日切换的小时数（0-23，默认 4）。该时刻之前的复习会计入前一天的统计与每日限额。",
       leechThreshold: "顽固卡阈值",
-      leechThresholdDesc: "当遗忘次数达到此数时，卡片会被标记为顽固卡（默认 8）。顽固卡常被遗忘，通常需要重写。",
+      leechThresholdDesc:
+        "当遗忘次数达到此数时，卡片会被标记为顽固卡（默认 8）。顽固卡常被遗忘，通常需要重写。",
       leechThresholdPlaceholder: "8",
       denseCardCharThreshold: "高密度卡字符阈值",
-      denseCardCharThresholdDesc: "当背面文本达到此字符数时，卡片会被标记为高密度（默认 500）。高密度卡通常信息过多，拆分会更易学。",
+      denseCardCharThresholdDesc:
+        "当背面文本达到此字符数时，卡片会被标记为高密度（默认 500）。高密度卡通常信息过多，拆分会更易学。",
       denseCardCharThresholdPlaceholder: "500",
     },
     parsing: {
       heading: "解析",
       deckTag: "牌组标签",
-      deckTagDesc: "用于识别卡片牌组的基础标签。带有此标签（或像 {tag}/math 的子标签）的文件将被视为牌组。默认标签已从 #flashcards 改为 #decks。如果你之前使用 #flashcards，在此处更改前仍会继续工作。",
+      deckTagDesc:
+        "用于识别卡片牌组的基础标签。带有此标签（或像 {tag}/math 的子标签）的文件将被视为牌组。默认标签已从 #flashcards 改为 #decks。如果你之前使用 #flashcards，在此处更改前仍会继续工作。",
       deckTagPlaceholder: "#decks",
       folderSearchPath: "搜索文件夹",
-      folderSearchPathDesc: "将扫描限制到特定文件夹。选择「扫描整个 Vault」以扫描所有文件。",
+      folderSearchPathDesc:
+        "将扫描限制到特定文件夹。选择「扫描整个 Vault」以扫描所有文件。",
       folderSearchPathDefault: "扫描整个 Vault（默认）",
     },
     ui: {
@@ -873,13 +948,16 @@ export const zh: Translations = {
       enableNotices: "启用通知",
       enableNoticesDesc: "为已完成的复习会话和同步操作显示通知",
       reviewDisplayMode: "复习显示模式",
-      reviewDisplayModeDesc: "复习和浏览会话的打开位置。标签页可拖动到侧栏、底部面板或独立窗口。",
+      reviewDisplayModeDesc:
+        "复习和浏览会话的打开位置。标签页可拖动到侧栏、底部面板或独立窗口。",
       flashcardManagerDisplayMode: "卡片管理器显示模式",
-      flashcardManagerDisplayModeDesc: "卡片管理器的打开位置。标签页可拖动到侧栏、底部面板或独立窗口。",
+      flashcardManagerDisplayModeDesc:
+        "卡片管理器的打开位置。标签页可拖动到侧栏、底部面板或独立窗口。",
       displayModeModal: "模态窗口",
       displayModeTab: "新标签页",
       minDeckCardCount: "隐藏少于以下数量的牌组",
-      minDeckCardCountDesc: "总卡片数少于该值的牌组（和分组）会从列表中隐藏。置顶的牌组始终显示。0 表示禁用。",
+      minDeckCardCountDesc:
+        "总卡片数少于该值的牌组（和分组）会从列表中隐藏。置顶的牌组始终显示。0 表示禁用。",
       minDeckCardCountPlaceholder: "0",
     },
     backup: {
@@ -907,8 +985,10 @@ export const zh: Translations = {
       optimize: "优化参数",
       optimizeButton: "优化",
       resetButton: "重置为默认",
-      descUntrained: "在你的标准配置文件复习历史上训练算法的 21 个权重。至少需要 100 次复习。强化牌组不受影响。",
-      descTrained: "当前使用 {when} 训练的权重（{count} 次复习，log-loss {before} → {after}）。",
+      descUntrained:
+        "在你的标准配置文件复习历史上训练算法的 21 个权重。至少需要 100 次复习。强化牌组不受影响。",
+      descTrained:
+        "当前使用 {when} 训练的权重（{count} 次复习，log-loss {before} → {after}）。",
       descTrainedUnknownWhen: "未知",
       descTrainedMissingMetric: "—",
     },
@@ -922,21 +1002,26 @@ export const zh: Translations = {
     },
     paths: {
       heading: "文件位置",
-      paragraph: "所有路径都相对于 Vault。留空使用默认位置。大多数用户无需更改 — 这些选项的存在是为了让你将数据库移出隐藏文件夹 {configDir}/（iCloud 等同步服务往往会降级处理隐藏目录）。",
+      paragraph:
+        "所有路径都相对于 Vault。留空使用默认位置。大多数用户无需更改 — 这些选项的存在是为了让你将数据库移出隐藏文件夹 {configDir}/（iCloud 等同步服务往往会降级处理隐藏目录）。",
       dbFolder: "数据库文件夹",
-      dbFolderDesc: "包含 flashcards.db 的文件夹。默认：{pluginFolder}/。更改后请重启 Obsidian。数据库文件不会自动迁移 — 请先备份，然后手动移动文件或使用「从文件恢复」将其导入新位置。",
+      dbFolderDesc:
+        "包含 flashcards.db 的文件夹。默认：{pluginFolder}/。更改后请重启 Obsidian。数据库文件不会自动迁移 — 请先备份，然后手动移动文件或使用「从文件恢复」将其导入新位置。",
       backupFolder: "备份文件夹",
-      backupFolderDesc: "自动和手动备份的文件夹。默认：{pluginFolder}/backups/。更改立即生效，无需重启。",
+      backupFolderDesc:
+        "自动和手动备份的文件夹。默认：{pluginFolder}/backups/。更改立即生效，无需重启。",
       backupFolderPlaceholder: "{pluginFolder}/backups",
       syncLogFolder: "同步日志文件夹",
-      syncLogFolderDesc: "多设备同步使用的每设备 .deckssynclog 文件的文件夹。默认：Vault 根目录（iCloud 同步最快的位置）。更改后请重启 Obsidian。",
+      syncLogFolderDesc:
+        "多设备同步使用的每设备 .deckssynclog 文件的文件夹。默认：Vault 根目录（iCloud 同步最快的位置）。更改后请重启 Obsidian。",
       syncLogFolderPlaceholder: "（Vault 根目录）",
     },
     database: {
       heading: "数据库管理",
       paragraph: "管理你的卡片数据库。请谨慎使用 — 这些操作无法撤销。",
       purgeDatabase: "清空数据库",
-      purgeDatabaseDesc: "永久删除所有卡片、复习历史和牌组数据。这将强制从你的 Vault 文件进行干净重建。所有进度都将丢失！",
+      purgeDatabaseDesc:
+        "永久删除所有卡片、复习历史和牌组数据。这将强制从你的 Vault 文件进行干净重建。所有进度都将丢失！",
       purgeDatabaseButton: "清空数据库",
     },
   },

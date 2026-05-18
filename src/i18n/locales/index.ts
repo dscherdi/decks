@@ -8,6 +8,9 @@ import { zh } from "./zh";
 import { ja } from "./ja";
 import { hi } from "./hi";
 import { sq } from "./sq";
+import { ar } from "./ar";
+import { tr } from "./tr";
+import { zhTW } from "./zhTW";
 
 export type LanguageCode =
   | "en"
@@ -19,7 +22,10 @@ export type LanguageCode =
   | "zh"
   | "ja"
   | "hi"
-  | "sq";
+  | "sq"
+  | "ar"
+  | "tr"
+  | "zh-TW";
 
 export type LanguagePreference = "auto" | LanguageCode;
 
@@ -34,6 +40,9 @@ export const LOCALES: Record<LanguageCode, Translations> = {
   ja,
   hi,
   sq,
+  ar,
+  tr,
+  "zh-TW": zhTW,
 };
 
 export const SUPPORTED_LANGUAGES: { code: LanguageCode; label: string }[] = [
@@ -47,6 +56,9 @@ export const SUPPORTED_LANGUAGES: { code: LanguageCode; label: string }[] = [
   { code: "ja", label: "日本語" },
   { code: "hi", label: "हिन्दी" },
   { code: "sq", label: "Shqip" },
+  { code: "ar", label: "العربية" },
+  { code: "tr", label: "Türkçe" },
+  { code: "zh-TW", label: "繁體中文" },
 ];
 
 export type { Translations } from "./en";

@@ -114,28 +114,28 @@
       labels: sortedDates,
       datasets: [
         {
-          label: "Again",
+          label: t.statistics.againSeries,
           data: sortedDates.map((date) => reviewData.get(date)!.again),
           backgroundColor: "#ef4444",
           borderColor: "#dc2626",
           borderWidth: 1,
         },
         {
-          label: "Hard",
+          label: t.statistics.hardSeries,
           data: sortedDates.map((date) => reviewData.get(date)!.hard),
           backgroundColor: "#f97316",
           borderColor: "#ea580c",
           borderWidth: 1,
         },
         {
-          label: "Good",
+          label: t.statistics.goodSeries,
           data: sortedDates.map((date) => reviewData.get(date)!.good),
           backgroundColor: "#22c55e",
           borderColor: "#16a34a",
           borderWidth: 1,
         },
         {
-          label: "Easy",
+          label: t.statistics.easySeries,
           data: sortedDates.map((date) => reviewData.get(date)!.easy),
           backgroundColor: "#3b82f6",
           borderColor: "#2563eb",

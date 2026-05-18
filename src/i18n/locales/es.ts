@@ -15,33 +15,85 @@ export const es: Translations = {
     decks: "Mazos",
   },
 
+  testDeck: {
+    filename: "Decks — Primeros pasos.md",
+    title: "Primeros pasos con Decks",
+    intro:
+      "¡Te damos la bienvenida a Decks! Para convertir este archivo (o cualquier otro) en un mazo de tarjetas, simplemente añade la etiqueta `{tag}` en el frontmatter o en cualquier parte del texto.",
+    formatsHint:
+      "Decks admite cuatro formatos principales. Elige el que mejor se adapte a tus notas.",
+    section1: "1. Formato de encabezado-párrafo",
+    section1Body:
+      "Por defecto, Decks utiliza **encabezados H2 (`##`)** como el anverso de la tarjeta, y el párrafo directamente debajo como el reverso. *(Puedes cambiar este nivel de encabezado en los ajustes del mazo).*.",
+    q1: "¿Qué es la repetición espaciada?",
+    a1: "Una técnica de aprendizaje que programa repasos en intervalos crecientes basados en la fuerza de la retención.",
+    q2: "¿Qué etiqueta marca un archivo como un mazo de tarjetas?",
+    a2: "La etiqueta `{tag}`. Añádela a la lista de `tags` del frontmatter o en cualquier parte del cuerpo del texto.",
+    section2: "2. Formato de tabla",
+    section2Body:
+      "Puedes usar tablas markdown de dos columnas para generar tarjetas en bloque.\n**Regla fundamental:** La tabla *debe* estar directamente debajo de un encabezado. Ese encabezado actúa como contenedor de esas tarjetas.",
+    fsrsConceptsHeading: "Conceptos de FSRS",
+    colFront: "Anverso",
+    colBack: "Reverso",
+    colNotes: "Notas",
+    row1Front: "¿Qué significan las siglas FSRS?",
+    row1Back: "Free Spaced Repetition Scheduler",
+    row1Notes: "El algoritmo que Decks usa para programar tarjetas",
+    row2Front: "¿Cuáles son las cuatro calificaciones de repaso?",
+    row2Back: "Otra vez, Difícil, Bien, Fácil",
+    row2Notes:
+      "«Otra vez» reinicia la tarjeta; «Fácil» da el intervalo más largo",
+    tableNote:
+      "*(Nota: La primera columna es el Anverso, la segunda el Reverso. La tercera columna opcional es para Notas/Pistas).*.",
+    section3: "3. Huecos (Cloze)",
+    section3Body:
+      "Usa la sintaxis `==resaltado==` para rellenar los huecos. Cada texto resaltado se convierte en su propia tarjeta.",
+    solarHeading: "El sistema solar",
+    solarBody:
+      "El ==Sol== es la estrella en el centro de nuestro sistema solar. El planeta más cercano es ==Mercurio==, y el más grande es ==Júpiter==.",
+    section4: "4. Oclusión de imagen",
+    section4Body:
+      "Combina una imagen con una lista numerada. La imagen muestra las regiones etiquetadas, y cada elemento de la lista se convierte en una tarjeta separada.",
+    bonesHeading: "Huesos del brazo",
+    bone1: "Húmero",
+    bone2: "Radio",
+    bone3: "Cúbito",
+  },
+
   commands: {
     showPanel: "Mostrar panel de tarjetas",
     showReleaseNotes: "Mostrar notas de la versión",
     openManager: "Abrir gestor de tarjetas",
     createTestDeck: "Crear mazo de prueba",
-    fullResync: "Forzar resincronización completa (volver a analizar todos los mazos)",
+    fullResync:
+      "Forzar resincronización completa (volver a analizar todos los mazos)",
     openReview: "Abrir ventana de repaso",
   },
 
   notices: {
     reparsing: "Reanalizando cada mazo. Esto puede tardar un momento…",
     resyncComplete: "Resincronización completa.",
-    resyncFailed: "Resincronización fallida. Consulta la consola para más detalles.",
-    loadFailed: "No se pudo cargar el plugin. Consulta la consola para más detalles.",
-    languageChanged: "Idioma cambiado. Recarga el plugin para que tenga efecto.",
+    resyncFailed:
+      "Resincronización fallida. Consulta la consola para más detalles.",
+    loadFailed:
+      "No se pudo cargar el plugin. Consulta la consola para más detalles.",
+    languageChanged:
+      "Idioma cambiado. Recarga el plugin para que tenga efecto.",
     noCardsInDeck: "No se encontraron tarjetas en {deckName}",
-    customDeckCreated: "Mazo personalizado \"{name}\" creado con {count} tarjetas",
-    customDeckUpdated: "Mazo personalizado \"{name}\" actualizado",
-    customDeckDeleted: "Mazo personalizado \"{name}\" eliminado",
-    customDeckRenamed: "Mazo personalizado renombrado a \"{name}\"",
+    customDeckCreated:
+      'Mazo personalizado "{name}" creado con {count} tarjetas',
+    customDeckUpdated: 'Mazo personalizado "{name}" actualizado',
+    customDeckDeleted: 'Mazo personalizado "{name}" eliminado',
+    customDeckRenamed: 'Mazo personalizado renombrado a "{name}"',
     deckResetSuccess: "Progreso del mazo reiniciado con éxito",
     deckResetFailed: "Error al reiniciar el progreso del mazo",
     reviewStartFailed: "Error al iniciar el repaso. Consulta la consola.",
     sessionComplete: "Sesión de repaso completada",
     sessionCompleteCount: "Se repasaron {count} tarjetas",
-    duplicatesFound: "Se encontraron {count} tarjeta(s) duplicada(s) en {deckName}",
-    trainedParamsCleared: "Parámetros entrenados borrados, valores por defecto restaurados.",
+    duplicatesFound:
+      "Se encontraron {count} tarjeta(s) duplicada(s) en {deckName}",
+    trainedParamsCleared:
+      "Parámetros entrenados borrados, valores por defecto restaurados.",
     creatingBackup: "Creando copia de seguridad…",
     backupCreated: "✅ Copia de seguridad creada: {filename}",
     backupFailed: "❌ Error al crear la copia de seguridad: {message}",
@@ -49,7 +101,8 @@ export const es: Translations = {
     restoringBackup: "Restaurando copia de seguridad…",
     restoringFromFile: "Restaurando desde {filename}…",
     restoringFromFileProgress: "Restaurando desde {filename}: {progress}%",
-    restoreProgress: "Restaurando copia de seguridad: {progress}% ({current}/{total})",
+    restoreProgress:
+      "Restaurando copia de seguridad: {progress}% ({current}/{total})",
     restoreFailed: "❌ Restauración fallida: {message}",
     backupRestoreFailed: "❌ Restauración de copia fallida: {message}",
     dropdownNotFound: "Desplegable no encontrado",
@@ -59,46 +112,61 @@ export const es: Translations = {
     purgingDatabase: "Purgando base de datos…",
     databasePurged: "✅ Base de datos purgada y reconstruida con éxito",
     purgeFailed: "Error al purgar la base de datos. Consulta la consola.",
-    purgeConfirmMismatch: "El texto de confirmación no coincide. Purga cancelada.",
+    purgeConfirmMismatch:
+      "El texto de confirmación no coincide. Purga cancelada.",
     errorLoadingDecks: "Error al cargar los mazos. Consulta la consola.",
     errorStartingReview: "Error al iniciar el repaso. Consulta la consola.",
-    errorStartingBrowse: "Error al iniciar la exploración. Consulta la consola.",
+    errorStartingBrowse:
+      "Error al iniciar la exploración. Consulta la consola.",
     noCardsFoundInDeck: "No se encontraron tarjetas en {deckName}",
     noCardsDueForReview: "No hay tarjetas pendientes de repaso en {deckName}",
-    noCardsFoundInGroup: "No se encontraron tarjetas en \"{name}\"",
-    noCardsDueInGroup: "Sin tarjetas pendientes en \"{name}\" ({count} archivos)",
-    noCardsDueInCustomDeck: "Sin tarjetas pendientes en \"{name}\" ({count} tarjetas)",
+    noCardsFoundInGroup: 'No se encontraron tarjetas en "{name}"',
+    noCardsDueInGroup: 'Sin tarjetas pendientes en "{name}" ({count} archivos)',
+    noCardsDueInCustomDeck:
+      'Sin tarjetas pendientes en "{name}" ({count} tarjetas)',
     fileNotFound: "Archivo no encontrado: {path}",
     reviewSessionCompleteFor: "¡Sesión de repaso completada para {deckName}!",
-    filterDeckUpdated: "Mazo de filtro \"{name}\" actualizado",
-    customDeckUpdatedCounts: "\"{name}\" actualizado — {added} añadidas, {removed} eliminadas",
+    filterDeckUpdated: 'Mazo de filtro "{name}" actualizado',
+    customDeckUpdatedCounts:
+      '"{name}" actualizado — {added} añadidas, {removed} eliminadas',
     failedToSave: "Error al guardar: {message}",
     failedToCreateDeck: "Error al crear el mazo: {message}",
     failedToCreateFilterDeck: "Error al crear el mazo de filtro: {message}",
     failedToAddCards: "Error al añadir tarjetas: {message}",
-    filterDeckCreated: "Mazo de filtro \"{name}\" creado",
+    filterDeckCreated: 'Mazo de filtro "{name}" creado',
     cardsAddedToCustomDeck: "{count} tarjetas añadidas al mazo personalizado",
     dailyLimitsReached: "\n\nLímites diarios alcanzados:",
     dailyNewLimit: "\nTarjetas nuevas: {used}/{max}",
     dailyReviewLimit: "\nTarjetas de repaso: {used}/{max}",
-    dailyNewOnlyLimit: "\n\nLímite diario de tarjetas nuevas alcanzado: {used}/{max}",
-    dailyReviewOnlyLimit: "\n\nLímite diario de tarjetas de repaso alcanzado: {used}/{max}",
+    dailyNewOnlyLimit:
+      "\n\nLímite diario de tarjetas nuevas alcanzado: {used}/{max}",
+    dailyReviewOnlyLimit:
+      "\n\nLímite diario de tarjetas de repaso alcanzado: {used}/{max}",
     dailyProgressHeader: "Progreso diario de {deckName}:\n",
-    dailyProgressNewDisabled: "Tarjetas nuevas: DESACTIVADAS (0 permitidas por día)\n",
-    dailyProgressNewExceeded: "Tarjetas nuevas: {used}/{max} (LÍMITE SUPERADO)\n",
-    dailyProgressNewRemaining: "Tarjetas nuevas: {used}/{max} ({remaining} restantes)\n",
-    dailyProgressReviewDisabled: "Tarjetas de repaso: DESACTIVADAS (0 permitidas por día)\n",
-    dailyProgressReviewExceeded: "Tarjetas de repaso: {used}/{max} (LÍMITE SUPERADO)\n",
-    dailyProgressReviewRemaining: "Tarjetas de repaso: {used}/{max} ({remaining} restantes)\n",
-    dailyProgressOnlyLearning: "\n\nNota: Solo se mostrarán tarjetas en aprendizaje (límites superados)",
+    dailyProgressNewDisabled:
+      "Tarjetas nuevas: DESACTIVADAS (0 permitidas por día)\n",
+    dailyProgressNewExceeded:
+      "Tarjetas nuevas: {used}/{max} (LÍMITE SUPERADO)\n",
+    dailyProgressNewRemaining:
+      "Tarjetas nuevas: {used}/{max} ({remaining} restantes)\n",
+    dailyProgressReviewDisabled:
+      "Tarjetas de repaso: DESACTIVADAS (0 permitidas por día)\n",
+    dailyProgressReviewExceeded:
+      "Tarjetas de repaso: {used}/{max} (LÍMITE SUPERADO)\n",
+    dailyProgressReviewRemaining:
+      "Tarjetas de repaso: {used}/{max} ({remaining} restantes)\n",
+    dailyProgressOnlyLearning:
+      "\n\nNota: Solo se mostrarán tarjetas en aprendizaje (límites superados)",
     noFlashcardsToExport: "No hay tarjetas en este mazo para exportar",
-    ankiExportSuccess: "{count} tarjetas exportadas desde {type} al formato Anki",
+    ankiExportSuccess:
+      "{count} tarjetas exportadas desde {type} al formato Anki",
     ankiExportFailed: "Error al exportar al formato Anki",
     ankiExportTypeDeck: "mazo",
     ankiExportTypeTagGroup: "grupo de etiquetas",
   },
 
   deckList: {
+    exportToAnki: "Exportar a Anki",
     title: "Mazos",
     emptyNoDecks: "No se encontraron mazos.",
     emptyNoFilterMatch: "Ningún mazo coincide con el filtro.",
@@ -142,26 +210,34 @@ export const es: Translations = {
     clickToReview: "Haz clic para repasar {name}",
     resetProgress: "Reiniciar progreso",
     deleteCustomDeckTitle: "Eliminar mazo personalizado",
-    deleteCustomDeckMessage: "¿Eliminar el mazo personalizado \"{name}\"? Las tarjetas en sí no se eliminarán.",
-    resetCustomDeckProgress: "¿Reiniciar todo el progreso de \"{name}\"? Todas las tarjetas volverán al estado nuevo y se borrará el historial de repasos. Esta acción no se puede deshacer.",
-    progressResetFor: "Progreso reiniciado para \"{name}\"",
+    deleteCustomDeckMessage:
+      '¿Eliminar el mazo personalizado "{name}"? Las tarjetas en sí no se eliminarán.',
+    resetCustomDeckProgress:
+      '¿Reiniciar todo el progreso de "{name}"? Todas las tarjetas volverán al estado nuevo y se borrará el historial de repasos. Esta acción no se puede deshacer.',
+    progressResetFor: 'Progreso reiniciado para "{name}"',
     resetCustomDeckTitle: "Reiniciar progreso del mazo personalizado",
-    resetCustomDeckMessage: "¿Reiniciar progreso de las tarjetas en \"{name}\"? Se borrará el historial de estas tarjetas y volverán al estado nuevo.",
+    resetCustomDeckMessage:
+      '¿Reiniciar progreso de las tarjetas en "{name}"? Se borrará el historial de estas tarjetas y volverán al estado nuevo.',
     resetCustomDeckFailed: "Error al reiniciar el mazo personalizado",
     confirmDelete: "Eliminar",
     newCardsTooltip: "Tarjetas nuevas restantes hoy: {remaining} / {limit}",
-    reviewCardsTooltip: "Tarjetas de repaso restantes hoy: {remaining} / {limit}",
+    reviewCardsTooltip:
+      "Tarjetas de repaso restantes hoy: {remaining} / {limit}",
     tabFiles: "Archivos",
     tabTags: "Etiquetas",
     tabCustom: "Personalizado",
     tagYourNotes: "Etiqueta tus notas con {tag} para crear mazos.",
     filesCount: "({count} archivos)",
     cardsCount: "({count} tarjetas)",
-    newCardsGroupTooltip: "{count} tarjetas nuevas disponibles hoy (límite: {limit} por mazo)",
-    newCardsLimitTooltip: "{count} tarjetas nuevas disponibles hoy (límite: {limit})",
+    newCardsGroupTooltip:
+      "{count} tarjetas nuevas disponibles hoy (límite: {limit} por mazo)",
+    newCardsLimitTooltip:
+      "{count} tarjetas nuevas disponibles hoy (límite: {limit})",
     newCardsDueTooltip: "{count} tarjetas nuevas pendientes",
-    reviewCardsGroupTooltip: "{count} tarjetas de repaso disponibles hoy (límite: {limit} por mazo)",
-    reviewCardsLimitTooltip: "{count} tarjetas de repaso disponibles hoy (límite: {limit})",
+    reviewCardsGroupTooltip:
+      "{count} tarjetas de repaso disponibles hoy (límite: {limit} por mazo)",
+    reviewCardsLimitTooltip:
+      "{count} tarjetas de repaso disponibles hoy (límite: {limit})",
     reviewCardsDueTooltip: "{count} tarjetas de repaso pendientes",
     studiedSummary: "Hoy estudiaste {cards} tarjetas en {hours} ({pace})",
   },
@@ -195,7 +271,8 @@ export const es: Translations = {
     nextCloze: "Siguiente hueco",
     openSource: "Abrir nota de origen",
     openSourceFile: "Abrir archivo de origen",
-    cardLeechAndDense: "Tarjeta olvidada repetidamente y compleja — considera revisarla",
+    cardLeechAndDense:
+      "Tarjeta olvidada repetidamente y compleja — considera revisarla",
     cardLeech: "Tarjeta olvidada repetidamente — considera reescribirla",
     cardDense: "La tarjeta es compleja. Considera dividirla.",
     copyContent: "Copiar contenido",
@@ -299,11 +376,12 @@ export const es: Translations = {
     badgeLeech: "Sanguijuela",
     badgeDense: "Densa",
     badgeHealthy: "Saludable",
-    leechTooltip: "Olvidada repetidamente ({count} lapsus) — considera reescribirla",
+    leechTooltip:
+      "Olvidada repetidamente ({count} lapsus) — considera reescribirla",
     denseTooltip: "El reverso tiene {count} caracteres — considera dividirla",
     healthyTooltip: "Sin problemas de sanguijuela o densidad detectados",
-    footerShowingOfInDeck: "Mostrando {shown} de {total} tarjetas en \"{name}\"",
-    footerInDeck: "{total} tarjetas en \"{name}\"",
+    footerShowingOfInDeck: 'Mostrando {shown} de {total} tarjetas en "{name}"',
+    footerInDeck: '{total} tarjetas en "{name}"',
     footerShowingOf: "Mostrando {shown} de {total} tarjetas",
     footerTotal: "{total} tarjetas",
   },
@@ -336,13 +414,15 @@ export const es: Translations = {
     decksUsingProfile: "Mazos que usan el perfil",
     deckCount: "{count} mazo(s)",
     editNoteIntro: "Nota:",
-    editNoteBody: " Para editar los ajustes del perfil, usa el botón «Gestionar perfiles» en el panel principal.",
+    editNoteBody:
+      " Para editar los ajustes del perfil, usa el botón «Gestionar perfiles» en el panel principal.",
     sectionTagSelection: "Selección de etiqueta",
     sectionProfileSelection: "Selección de perfil",
     sectionCurrentSettings: "Ajustes del perfil actual",
     saving: "Guardando…",
     applyProfileToTag: "Aplicar perfil a la etiqueta",
-    applyProfileDesc: "Selecciona una etiqueta para aplicar el perfil a todos sus mazos",
+    applyProfileDesc:
+      "Selecciona una etiqueta para aplicar el perfil a todos sus mazos",
     errorSavingConfig: "Error al guardar la configuración",
     requestRetention: "Retención solicitada",
     requestRetentionDesc: "Probabilidad objetivo de recuerdo (0,7-0,99)",
@@ -351,21 +431,26 @@ export const es: Translations = {
     learningSteps: "Pasos de aprendizaje",
     relearningSteps: "Pasos de reaprendizaje",
     newCardsPerDay: "Tarjetas nuevas por día",
-    newCardsPerDayDesc: "Número máximo de tarjetas nuevas al día (0 desactiva el límite)",
+    newCardsPerDayDesc:
+      "Número máximo de tarjetas nuevas al día (0 desactiva el límite)",
     reviewsPerDay: "Repasos por día",
-    reviewsPerDayDesc: "Número máximo de tarjetas de repaso al día (0 desactiva el límite)",
+    reviewsPerDayDesc:
+      "Número máximo de tarjetas de repaso al día (0 desactiva el límite)",
     reviewOrder: "Orden de repaso",
     reviewOrderDueDate: "Fecha de vencimiento",
     reviewOrderRandom: "Aleatorio",
     headerLevel: "Nivel de encabezado para tarjetas",
-    headerLevelDesc: "Nivel de encabezado tratado como anverso en mazos de encabezado-párrafo",
+    headerLevelDesc:
+      "Nivel de encabezado tratado como anverso en mazos de encabezado-párrafo",
     useTrainedWeights: "Usar pesos entrenados",
-    useTrainedWeightsDesc: "Aplica los pesos FSRS entrenados globalmente a este mazo (solo perfil estándar).",
+    useTrainedWeightsDesc:
+      "Aplica los pesos FSRS entrenados globalmente a este mazo (solo perfil estándar).",
     save: "Guardar",
     cancel: "Cancelar",
     reset: "Restablecer valores predeterminados",
     enableDailyLimits: "Activar límites diarios",
-    enableDailyLimitsDesc: "Limita el número de tarjetas nuevas y de repaso al día",
+    enableDailyLimitsDesc:
+      "Limita el número de tarjetas nuevas y de repaso al día",
   },
 
   profiles: {
@@ -383,7 +468,8 @@ export const es: Translations = {
     removeTagMapping: "Quitar asignación",
     tagPlaceholder: "Etiqueta (p. ej. #decks/math)",
     noProfiles: "Aún no hay perfiles personalizados",
-    deleteConfirm: "¿Eliminar este perfil? Los mazos que lo usan volverán al perfil predeterminado.",
+    deleteConfirm:
+      "¿Eliminar este perfil? Los mazos que lo usan volverán al perfil predeterminado.",
     cannotDeleteDefault: "Los perfiles predeterminados no se pueden eliminar.",
     selectProfile: "Seleccionar perfil",
     chooseProfileDesc: "Elige un perfil para ver y editar",
@@ -401,15 +487,18 @@ export const es: Translations = {
     limitNewCardsLabel: "Limitar tarjetas nuevas por día",
     limitNewCardsDesc: "Activar límite diario de tarjetas nuevas",
     newCardsPerDayLabel: "Tarjetas nuevas por día",
-    newCardsPerDayDesc: "Máximo de tarjetas nuevas a introducir por día (1-9999)",
+    newCardsPerDayDesc:
+      "Máximo de tarjetas nuevas a introducir por día (1-9999)",
     limitReviewCardsLabel: "Limitar tarjetas de repaso por día",
     limitReviewCardsDesc: "Activar límite diario de tarjetas de repaso",
     reviewCardsPerDayLabel: "Tarjetas de repaso por día",
     reviewCardsPerDayDesc: "Máximo de tarjetas de repaso por día (1-9999)",
     againIntervalNew: "Intervalo de Otra vez",
-    againIntervalNewDesc: "Intervalo al pulsar Otra vez en una tarjeta nueva (p. ej. 1m)",
+    againIntervalNewDesc:
+      "Intervalo al pulsar Otra vez en una tarjeta nueva (p. ej. 1m)",
     againIntervalReview: "Intervalo de Otra vez",
-    againIntervalReviewDesc: "Intervalo al pulsar Otra vez en una tarjeta de repaso (p. ej. 10m)",
+    againIntervalReviewDesc:
+      "Intervalo al pulsar Otra vez en una tarjeta de repaso (p. ej. 10m)",
     headerLevelLabel: "Nivel de encabezado",
     headerLevelDescParsing: "Nivel de encabezado para el análisis",
     clozeDeletionsLabel: "Huecos",
@@ -423,8 +512,10 @@ export const es: Translations = {
     requestRetentionLabel: "Retención solicitada",
     requestRetentionDesc: "Tasa de retención objetivo (0,5 - 0,995)",
     fsrsProfileLabel: "Perfil FSRS",
-    fsrsTrainedDesc: "Estándar e intensivo usan pesos de fábrica. Entrenado aplica tus pesos optimizados (intervalos estándar).",
-    fsrsUntrainedDesc: "Perfil de intensidad de aprendizaje. Entrena los pesos en Ajuste del algoritmo para habilitar la opción Entrenado.",
+    fsrsTrainedDesc:
+      "Estándar e intensivo usan pesos de fábrica. Entrenado aplica tus pesos optimizados (intervalos estándar).",
+    fsrsUntrainedDesc:
+      "Perfil de intensidad de aprendizaje. Entrena los pesos en Ajuste del algoritmo para habilitar la opción Entrenado.",
     fsrsStandardOption: "Estándar",
     fsrsIntensiveOption: "Intensivo",
     fsrsTrainedOption: "Entrenado",
@@ -438,15 +529,19 @@ export const es: Translations = {
     close: "Cerrar",
     noticeProfileCreated: "Nuevo perfil creado",
     noticeProfileNameEmpty: "El nombre del perfil no puede estar vacío",
-    noticeNewCardsRange: "Las tarjetas nuevas por día deben estar entre 1 y 9999",
-    noticeReviewCardsRange: "Las tarjetas de repaso por día deben estar entre 1 y 9999",
-    noticeRequestRetentionRange: "La retención solicitada debe estar entre 0,5 y 0,995",
+    noticeNewCardsRange:
+      "Las tarjetas nuevas por día deben estar entre 1 y 9999",
+    noticeReviewCardsRange:
+      "Las tarjetas de repaso por día deben estar entre 1 y 9999",
+    noticeRequestRetentionRange:
+      "La retención solicitada debe estar entre 0,5 y 0,995",
     noticeInvalidAgainInterval: "Intervalo de Otra vez no válido",
     noticeProfileSaved: "Perfil guardado con éxito",
     noticeProfileSaveError: "Error al guardar el perfil",
     noticeCannotDeleteDefault: "No se puede eliminar el perfil PREDETERMINADO",
     noticeProfileDeleted: "Perfil eliminado",
-    confirmDeletePrompt: "¿Seguro que quieres eliminar el perfil \"{name}\"?\n\nTodos los mazos que usan este perfil se restablecerán al perfil PREDETERMINADO.",
+    confirmDeletePrompt:
+      '¿Seguro que quieres eliminar el perfil "{name}"?\n\nTodos los mazos que usan este perfil se restablecerán al perfil PREDETERMINADO.',
     defaultSuffix: "(PREDETERMINADO)",
   },
 
@@ -460,6 +555,15 @@ export const es: Translations = {
     cardCountsReview: "Repaso",
     cardCountsRelearning: "Reaprendiendo",
     cardCountsTotal: "Total",
+    cardCountsYoung: "Jóvenes",
+    cardCountsMature: "Maduras",
+    cardsAddedSeries: "Tarjetas añadidas",
+    againSeries: "Otra vez",
+    hardSeries: "Difícil",
+    goodSeries: "Bien",
+    easySeries: "Fácil",
+    reviewsOnDate: "{count} repasos el {date}",
+    totalReviewsCount: "{count} repasos",
     cardDifficulty: "Dificultad de tarjetas",
     cardStability: "Estabilidad de tarjetas",
     cardRetrievability: "Recuperabilidad",
@@ -513,30 +617,38 @@ export const es: Translations = {
     // Chart strings — DRAFT translations
     cardDistribution: "Distribución de tarjetas",
     cardDistributionByState: "Distribución de tarjetas por estado",
-    cardDistributionByStateDoughnut: "Distribución de tarjetas por estado (donut)",
+    cardDistributionByStateDoughnut:
+      "Distribución de tarjetas por estado (donut)",
     cardCountsTooltip: "{label}: {count} tarjetas ({percent}%)",
     selectDeckCardDistribution: "Selecciona un mazo para ver la distribución.",
     cardDifficultyDistribution: "Distribución de dificultad",
     cardDifficultyRange: "Rango de dificultad",
-    cardDifficultySubtitle: "Los valores de dificultad de FSRS indican cuán difíciles son las tarjetas",
+    cardDifficultySubtitle:
+      "Los valores de dificultad de FSRS indican cuán difíciles son las tarjetas",
     higherDifficultyTip: "Mayor dificultad = más difícil de recordar",
     numberOfCards: "Número de tarjetas",
     numberOfReviews: "Número de repasos",
-    selectDeckCardDifficulty: "Selecciona un mazo para ver la distribución de dificultad.",
+    selectDeckCardDifficulty:
+      "Selecciona un mazo para ver la distribución de dificultad.",
     cardStabilityDistribution: "Distribución de estabilidad",
     cardStabilityRange: "Rango de estabilidad",
-    cardStabilitySubtitle: "Los valores de estabilidad de FSRS muestran qué tan bien se retienen las tarjetas en memoria",
-    selectDeckCardStability: "Selecciona un mazo para ver la distribución de estabilidad.",
+    cardStabilitySubtitle:
+      "Los valores de estabilidad de FSRS muestran qué tan bien se retienen las tarjetas en memoria",
+    selectDeckCardStability:
+      "Selecciona un mazo para ver la distribución de estabilidad.",
     cardRetrievabilityDistribution: "Distribución de recuperabilidad",
     retrievabilityRange: "Rango de recuperabilidad",
     reviewsLabel: "Repasos",
-    cardRetrievabilitySubtitle: "Los valores de recuperabilidad de FSRS muestran la probabilidad de recuerdo hoy (0-100%)",
+    cardRetrievabilitySubtitle:
+      "Los valores de recuperabilidad de FSRS muestran la probabilidad de recuerdo hoy (0-100%)",
     higherRetrievabilityTip: "Mayor recuperabilidad = más fácil de recordar",
     reviewsTooltip: "{label}: {count} repasos ({percent}%)",
-    selectDeckCardRetrievability: "Selecciona un mazo para ver la distribución de recuperabilidad.",
+    selectDeckCardRetrievability:
+      "Selecciona un mazo para ver la distribución de recuperabilidad.",
     cardsAddedOverTime: "Tarjetas añadidas en el tiempo",
     dateAdded: "Fecha de adición",
-    selectDeckCardsAdded: "Selecciona un mazo para ver las tarjetas añadidas en el tiempo.",
+    selectDeckCardsAdded:
+      "Selecciona un mazo para ver las tarjetas añadidas en el tiempo.",
     cardsAddedTooltip: "{label}: {count} {plural}",
     cardSingular: "tarjeta",
     cardPlural: "tarjetas",
@@ -563,7 +675,8 @@ export const es: Translations = {
     dayLabel: "Día {label}",
     totalBacklogTooltip: "Acumulado total: {value} repasos",
     dueTooltip: "Pendientes: {value} tarjetas",
-    noUpcomingReviews: "No hay repasos programados. Añade tarjetas a tus mazos para ver el pronóstico.",
+    noUpcomingReviews:
+      "No hay repasos programados. Añade tarjetas a tus mazos para ver el pronóstico.",
     hourlyBreakdownTitle: "Actividad por hora",
     hourlyBreakdownChart: "Actividad de repaso por hora del día",
     reviewCountLabel: "Cantidad de repasos",
@@ -585,12 +698,17 @@ export const es: Translations = {
     learningCardsLabel: "Tarjetas en aprendizaje",
     selectDeckMaturity: "Selecciona un mazo para ver el pronóstico de madurez.",
     calculating: "Calculando…",
-    maturityRetentionNote: "Según tu retención histórica de {percent}%, así madurarán tus tarjetas:",
-    maturityAllMatureIn: "Todas las tarjetas estarán maduras en aproximadamente {days}.",
-    maturitySubtitle: "Proyección de cómo madurarán las tarjetas con el tiempo según el ritmo actual de repaso.",
-    maturityRetentionDetail: "Según tu retención histórica de {retention}%, aproximadamente {maintenance}% de las tarjetas (~{count} tarjetas) estarán siempre en la fase de aprendizaje debido a olvidos naturales.",
+    maturityRetentionNote:
+      "Según tu retención histórica de {percent}%, así madurarán tus tarjetas:",
+    maturityAllMatureIn:
+      "Todas las tarjetas estarán maduras en aproximadamente {days}.",
+    maturitySubtitle:
+      "Proyección de cómo madurarán las tarjetas con el tiempo según el ritmo actual de repaso.",
+    maturityRetentionDetail:
+      "Según tu retención histórica de {retention}%, aproximadamente {maintenance}% de las tarjetas (~{count} tarjetas) estarán siempre en la fase de aprendizaje debido a olvidos naturales.",
     maturityEquilibrium: "Equilibrio alcanzado en {days}.",
-    maturityAllMatureAtPace: "Todas las tarjetas estarán maduras en aproximadamente {days} al ritmo actual.",
+    maturityAllMatureAtPace:
+      "Todas las tarjetas estarán maduras en aproximadamente {days} al ritmo actual.",
     maturityTotalCards: "Total: {count} tarjetas",
     standardMaintenanceLine: "Nivel de mantenimiento estándar ({percent}%)",
     yourMaintenanceLine: "Tu nivel de mantenimiento ({percent}%)",
@@ -614,10 +732,13 @@ export const es: Translations = {
     reviewIntervalDistribution: "Distribución de intervalos",
     intervalRange: "Rango de intervalo",
     reviewIntervalsTitle: "Intervalos de repaso",
-    selectDeckIntervals: "Selecciona un mazo para ver la distribución de intervalos.",
-    reviewIntervalsSubtitle: "Distribución de los intervalos de repaso actuales",
+    selectDeckIntervals:
+      "Selecciona un mazo para ver la distribución de intervalos.",
+    reviewIntervalsSubtitle:
+      "Distribución de los intervalos de repaso actuales",
     reviewsOverTimeTitle: "Repasos en el tiempo",
-    selectDeckReviewsOverTime: "Selecciona un mazo para ver el historial de repasos.",
+    selectDeckReviewsOverTime:
+      "Selecciona un mazo para ver el historial de repasos.",
     dateAxisLabel: "Fecha",
     selectDeckLabel: "Selecciona mazo(s):",
     deckDropdownPrompt: "-- Selecciona un mazo --",
@@ -626,25 +747,32 @@ export const es: Translations = {
     statisticsTitle: "Estadísticas generales",
     loadingStatistics: "Cargando estadísticas…",
     failedToLoad: "Error al cargar estadísticas",
-    failedToLoadIntro: "Hubo un error al cargar tus estadísticas. Posibles causas:",
+    failedToLoadIntro:
+      "Hubo un error al cargar tus estadísticas. Posibles causas:",
     failedReasonDb: "Problemas de conexión con la base de datos",
     failedReasonData: "Datos corruptos",
     failedReasonSize: "Conjunto de datos demasiado grande para procesar",
-    failedConsoleHint: "Revisa la consola del navegador (F12) para más detalles.",
+    failedConsoleHint:
+      "Revisa la consola del navegador (F12) para más detalles.",
     retryLoading: "Reintentar",
     timeframeLast12Months: "Últimos 12 meses",
     timeframeAllHistory: "Todo el historial",
     labelReviews: "repasos",
     labelTime: "tiempo",
     labelCorrect: "correcto",
-    completeReviewsHint: "Completa algunos repasos para ver las estadísticas de los botones de respuesta.",
-    selectDeckPrompt: "Selecciona un mazo del desplegable para ver estadísticas.",
+    completeReviewsHint:
+      "Completa algunos repasos para ver las estadísticas de los botones de respuesta.",
+    selectDeckPrompt:
+      "Selecciona un mazo del desplegable para ver estadísticas.",
     reviewHeatmapTitle: "Mapa de calor de repasos",
     dailyReviewActivity: "Actividad diaria de repaso en el tiempo",
     trueRetentionTitle: "Retención real",
-    selectDeckRetention: "Selecciona un mazo para ver las estadísticas de retención.",
-    retentionDescription: "Tasas de acierto para tarjetas de repaso (calificación ≥ Bien). Solo tarjetas con intervalos > 1 día.",
-    noReviewDataYet: "Aún no hay datos de repaso. Completa algunos repasos para ver las estadísticas de retención.",
+    selectDeckRetention:
+      "Selecciona un mazo para ver las estadísticas de retención.",
+    retentionDescription:
+      "Tasas de acierto para tarjetas de repaso (calificación ≥ Bien). Solo tarjetas con intervalos > 1 día.",
+    noReviewDataYet:
+      "Aún no hay datos de repaso. Completa algunos repasos para ver las estadísticas de retención.",
     columnCardType: "Tipo de tarjeta",
     columnPassed: "Acertadas",
     columnTotalLabel: "Total",
@@ -658,9 +786,11 @@ export const es: Translations = {
   ankiExport: {
     title: "Exportar a Anki",
     titleWithName: "Exportar a Anki: {name}",
-    description: "Exporta las tarjetas seleccionadas como CSV compatible con Anki.",
+    description:
+      "Exporta las tarjetas seleccionadas como CSV compatible con Anki.",
     ankiDeckNameLabel: "Nombre del mazo en Anki",
-    ankiDeckNameDesc: "Nombre del mazo en Anki al que se importarán las tarjetas",
+    ankiDeckNameDesc:
+      "Nombre del mazo en Anki al que se importarán las tarjetas",
     ankiDeckNamePlaceholder: "Introduce el nombre del mazo...",
     exportButtonLabel: "Exportar a Anki",
     sectionInfo: "Información del export",
@@ -787,7 +917,7 @@ export const es: Translations = {
     },
     deckReset: {
       title: "Reiniciar progreso del mazo",
-      intro: "Esto reiniciará todo el progreso de \"{name}\":",
+      intro: 'Esto reiniciará todo el progreso de "{name}":',
       listCardsReset: "Todas las tarjetas vuelven al estado nuevo",
       listHistoryDeleted: "Historial de repasos eliminado",
       listSessionsDeleted: "Sesiones de repaso eliminadas",
@@ -800,14 +930,17 @@ export const es: Translations = {
     },
     purgeDatabase: {
       title: "Purgar base de datos",
-      warningStrong: "Esto eliminará permanentemente todos los datos de tarjetas, incluyendo:",
+      warningStrong:
+        "Esto eliminará permanentemente todos los datos de tarjetas, incluyendo:",
       listFlashcards: "Todas las tarjetas y su contenido",
       listReviews: "El historial completo de repasos y el progreso",
       listDecks: "Toda la información de los mazos",
       listStatistics: "Datos estadísticos",
       cannotUndo: "¡Esta acción no se puede deshacer!",
-      rebuildNote: "La base de datos se reconstruirá desde los archivos actuales del vault, pero se perderá todo el progreso.",
-      confirmPrompt: "Para confirmar esta acción, escribe el texto mostrado en el placeholder",
+      rebuildNote:
+        "La base de datos se reconstruirá desde los archivos actuales del vault, pero se perderá todo el progreso.",
+      confirmPrompt:
+        "Para confirmar esta acción, escribe el texto mostrado en el placeholder",
       confirmPlaceholder: "DELETE ALL DATA",
       purgeButton: "Purgar base de datos",
       cancel: "Cancelar",
@@ -825,13 +958,17 @@ export const es: Translations = {
       title: "Optimizar parámetros",
       loadingHistory: "Cargando historial de repasos…",
       trainingStep: "Paso de entrenamiento {step} / {total}",
-      notEnough: "Aún no hay suficiente historial de repasos para entrenar. Sigue repasando e inténtalo más tarde.",
-      reviewsAvailable: "Repasos disponibles en mazos de perfil estándar: {count}.",
-      trainedSummary: "Entrenado con {reviews} repasos en {cards} tarjetas en {seconds} s.",
+      notEnough:
+        "Aún no hay suficiente historial de repasos para entrenar. Sigue repasando e inténtalo más tarde.",
+      reviewsAvailable:
+        "Repasos disponibles en mazos de perfil estándar: {count}.",
+      trainedSummary:
+        "Entrenado con {reviews} repasos en {cards} tarjetas en {seconds} s.",
       logLossBefore: "Log-loss antes",
       logLossAfter: "Log-loss después",
       improvement: "Mejora",
-      noImprovement: "El entrenamiento no mejoró el log-loss de forma significativa — los pesos actuales ya son un buen ajuste. Puedes descartar con seguridad.",
+      noImprovement:
+        "El entrenamiento no mejoró el log-loss de forma significativa — los pesos actuales ya son un buen ajuste. Puedes descartar con seguridad.",
       discard: "Descartar",
       apply: "Aplicar",
       close: "Cerrar",
@@ -850,63 +987,78 @@ export const es: Translations = {
     language: {
       heading: "Idioma",
       name: "Idioma del plugin",
-      desc: "Elige el idioma. \"Auto\" sigue la configuración de Obsidian. Cambiarlo requiere recargar el plugin para que tenga efecto.",
+      desc: 'Elige el idioma. "Auto" sigue la configuración de Obsidian. Cambiarlo requiere recargar el plugin para que tenga efecto.',
       auto: "Auto",
     },
 
     review: {
       heading: "Sesiones de repaso",
       showProgress: "Mostrar progreso",
-      showProgressDesc: "Mostrar barra de progreso durante las sesiones de repaso",
+      showProgressDesc:
+        "Mostrar barra de progreso durante las sesiones de repaso",
       keyboardShortcuts: "Atajos de teclado",
-      keyboardShortcutsDesc: "Activar atajos de teclado en la ventana de repaso (1-4 para dificultad)",
+      keyboardShortcutsDesc:
+        "Activar atajos de teclado en la ventana de repaso (1-4 para dificultad)",
       sessionDuration: "Duración de la sesión",
-      sessionDurationDesc: "Duración máxima de las sesiones de repaso en minutos (1-60)",
+      sessionDurationDesc:
+        "Duración máxima de las sesiones de repaso en minutos (1-60)",
       sessionDurationPlaceholder: "25",
       studyDayStartsAt: "El día de estudio empieza a",
-      studyDayStartsAtDesc: "Hora a la que cambia el día de estudio (0-23, por defecto 4). Los repasos antes de esta hora cuentan para las estadísticas y límites diarios del día anterior.",
+      studyDayStartsAtDesc:
+        "Hora a la que cambia el día de estudio (0-23, por defecto 4). Los repasos antes de esta hora cuentan para las estadísticas y límites diarios del día anterior.",
       leechThreshold: "Umbral de sanguijuela",
-      leechThresholdDesc: "Una tarjeta se marca como sanguijuela cuando su número de lapsus llega a esta cifra (por defecto 8). Las sanguijuelas se olvidan repetidamente y suelen necesitar reescribirse.",
+      leechThresholdDesc:
+        "Una tarjeta se marca como sanguijuela cuando su número de lapsus llega a esta cifra (por defecto 8). Las sanguijuelas se olvidan repetidamente y suelen necesitar reescribirse.",
       leechThresholdPlaceholder: "8",
       denseCardCharThreshold: "Umbral de caracteres para tarjetas densas",
-      denseCardCharThresholdDesc: "Una tarjeta se marca como densa cuando su reverso alcanza este número de caracteres (por defecto 500). Las tarjetas densas suelen tener demasiada información y conviene dividirlas.",
+      denseCardCharThresholdDesc:
+        "Una tarjeta se marca como densa cuando su reverso alcanza este número de caracteres (por defecto 500). Las tarjetas densas suelen tener demasiada información y conviene dividirlas.",
       denseCardCharThresholdPlaceholder: "500",
     },
 
     parsing: {
       heading: "Análisis",
       deckTag: "Etiqueta de mazo",
-      deckTagDesc: "Etiqueta base para identificar mazos de tarjetas. Los archivos con esta etiqueta (o sub-etiquetas como {tag}/math) se tratan como mazos. La etiqueta por defecto cambió de #flashcards a #decks. Si usabas #flashcards, seguirá funcionando hasta que lo cambies aquí.",
+      deckTagDesc:
+        "Etiqueta base para identificar mazos de tarjetas. Los archivos con esta etiqueta (o sub-etiquetas como {tag}/math) se tratan como mazos. La etiqueta por defecto cambió de #flashcards a #decks. Si usabas #flashcards, seguirá funcionando hasta que lo cambies aquí.",
       deckTagPlaceholder: "#decks",
       folderSearchPath: "Carpeta de búsqueda",
-      folderSearchPathDesc: "Limita el análisis a una carpeta concreta. Selecciona 'escanear todo el vault' para analizar todos los archivos.",
+      folderSearchPathDesc:
+        "Limita el análisis a una carpeta concreta. Selecciona 'escanear todo el vault' para analizar todos los archivos.",
       folderSearchPathDefault: "Escanear todo el vault (por defecto)",
     },
 
     ui: {
       heading: "Interfaz",
       backgroundRefreshInterval: "Intervalo de actualización en segundo plano",
-      backgroundRefreshIntervalDesc: "Con qué frecuencia se actualizan las estadísticas en el panel lateral (en segundos)",
+      backgroundRefreshIntervalDesc:
+        "Con qué frecuencia se actualizan las estadísticas en el panel lateral (en segundos)",
       backgroundRefreshIntervalPlaceholder: "5",
       enableBackgroundRefresh: "Activar actualización en segundo plano",
-      enableBackgroundRefreshDesc: "Actualiza automáticamente las estadísticas en el panel lateral",
+      enableBackgroundRefreshDesc:
+        "Actualiza automáticamente las estadísticas en el panel lateral",
       enableNotices: "Activar notificaciones",
-      enableNoticesDesc: "Muestra mensajes para sesiones completadas y operaciones de sincronización",
+      enableNoticesDesc:
+        "Muestra mensajes para sesiones completadas y operaciones de sincronización",
       reviewDisplayMode: "Modo de visualización del repaso",
-      reviewDisplayModeDesc: "Dónde se abren las sesiones de repaso y exploración. Las pestañas pueden arrastrarse a barras laterales, paneles inferiores o ventanas separadas.",
+      reviewDisplayModeDesc:
+        "Dónde se abren las sesiones de repaso y exploración. Las pestañas pueden arrastrarse a barras laterales, paneles inferiores o ventanas separadas.",
       flashcardManagerDisplayMode: "Modo del gestor de tarjetas",
-      flashcardManagerDisplayModeDesc: "Dónde se abre el gestor de tarjetas. Las pestañas pueden arrastrarse a barras laterales, paneles inferiores o ventanas separadas.",
+      flashcardManagerDisplayModeDesc:
+        "Dónde se abre el gestor de tarjetas. Las pestañas pueden arrastrarse a barras laterales, paneles inferiores o ventanas separadas.",
       displayModeModal: "Modal superpuesto",
       displayModeTab: "Pestaña nueva",
       minDeckCardCount: "Ocultar mazos con menos de",
-      minDeckCardCountDesc: "Los mazos (y grupos) con menos tarjetas en total se ocultan de la lista. Los mazos fijados siempre se muestran. 0 desactiva.",
+      minDeckCardCountDesc:
+        "Los mazos (y grupos) con menos tarjetas en total se ocultan de la lista. Los mazos fijados siempre se muestran. 0 desactiva.",
       minDeckCardCountPlaceholder: "0",
     },
 
     backup: {
       heading: "Copia de seguridad",
       enableAutoBackup: "Activar copia automática",
-      enableAutoBackupDesc: "Hacer una copia de seguridad de los datos después de cada sesión",
+      enableAutoBackupDesc:
+        "Hacer una copia de seguridad de los datos después de cada sesión",
       maxBackups: "Máx. copias",
       maxBackupsDesc: "Número máximo de copias a conservar (3-10)",
       createBackupNow: "Crear copia ahora",
@@ -921,7 +1073,8 @@ export const es: Translations = {
       refreshTooltip: "Actualizar lista de copias",
       restoreButton: "Restaurar",
       restoreFromFile: "Restaurar desde archivo",
-      restoreFromFileTooltip: "Selecciona un archivo .db de cualquier ubicación",
+      restoreFromFileTooltip:
+        "Selecciona un archivo .db de cualquier ubicación",
     },
 
     fsrs: {
@@ -929,39 +1082,50 @@ export const es: Translations = {
       optimize: "Optimizar parámetros",
       optimizeButton: "Optimizar",
       resetButton: "Restablecer predeterminados",
-      descUntrained: "Entrena los 21 pesos del algoritmo con tu historial de repasos del perfil estándar. Requiere al menos 100 repasos. Los mazos intensivos no se ven afectados.",
-      descTrained: "Usando actualmente pesos entrenados desde {when} ({count} repasos, log-loss {before} → {after}).",
+      descUntrained:
+        "Entrena los 21 pesos del algoritmo con tu historial de repasos del perfil estándar. Requiere al menos 100 repasos. Los mazos intensivos no se ven afectados.",
+      descTrained:
+        "Usando actualmente pesos entrenados desde {when} ({count} repasos, log-loss {before} → {after}).",
       descTrainedUnknownWhen: "desconocido",
       descTrainedMissingMetric: "—",
     },
 
     debug: {
       heading: "Depuración",
-      paragraph: "Ajustes de depuración para resolución de problemas y desarrollo.",
+      paragraph:
+        "Ajustes de depuración para resolución de problemas y desarrollo.",
       enableLogging: "Activar registro de depuración",
-      enableLoggingDesc: "Muestra registros detallados en la consola para sincronización y procesamiento de tarjetas",
+      enableLoggingDesc:
+        "Muestra registros detallados en la consola para sincronización y procesamiento de tarjetas",
       performanceLogs: "Activar registros de rendimiento",
-      performanceLogsDesc: "Muestra métricas de tiempo de rendimiento en la consola (sincronización, análisis, etc.)",
+      performanceLogsDesc:
+        "Muestra métricas de tiempo de rendimiento en la consola (sincronización, análisis, etc.)",
     },
 
     paths: {
       heading: "Ubicaciones de archivos",
-      paragraph: "Todas las rutas son relativas al vault. Deja vacío para usar la ubicación por defecto. La mayoría de usuarios no necesita cambiarlas — existen para que puedas mover la BD fuera de la carpeta oculta {configDir}/ (que iCloud y otros sincronizadores tratan con menor prioridad).",
+      paragraph:
+        "Todas las rutas son relativas al vault. Deja vacío para usar la ubicación por defecto. La mayoría de usuarios no necesita cambiarlas — existen para que puedas mover la BD fuera de la carpeta oculta {configDir}/ (que iCloud y otros sincronizadores tratan con menor prioridad).",
       dbFolder: "Carpeta de base de datos",
-      dbFolderDesc: "Carpeta que contiene flashcards.db. Por defecto: {pluginFolder}/. Reinicia Obsidian después de cambiar. El archivo no se mueve automáticamente — haz copia primero, luego muévelo manualmente o usa 'Restaurar desde archivo' para importarlo a la nueva ubicación.",
+      dbFolderDesc:
+        "Carpeta que contiene flashcards.db. Por defecto: {pluginFolder}/. Reinicia Obsidian después de cambiar. El archivo no se mueve automáticamente — haz copia primero, luego muévelo manualmente o usa 'Restaurar desde archivo' para importarlo a la nueva ubicación.",
       backupFolder: "Carpeta de copias",
-      backupFolderDesc: "Carpeta para copias automáticas y manuales. Por defecto: {pluginFolder}/backups/. Los cambios surten efecto inmediatamente — no se requiere reinicio.",
+      backupFolderDesc:
+        "Carpeta para copias automáticas y manuales. Por defecto: {pluginFolder}/backups/. Los cambios surten efecto inmediatamente — no se requiere reinicio.",
       backupFolderPlaceholder: "{pluginFolder}/backups",
       syncLogFolder: "Carpeta del log de sincronización",
-      syncLogFolderDesc: "Carpeta de los archivos .deckssynclog por dispositivo usados por la sincronización multi-dispositivo. Por defecto: raíz del vault (la que iCloud sincroniza más rápido). Reinicia Obsidian después de cambiar.",
+      syncLogFolderDesc:
+        "Carpeta de los archivos .deckssynclog por dispositivo usados por la sincronización multi-dispositivo. Por defecto: raíz del vault (la que iCloud sincroniza más rápido). Reinicia Obsidian después de cambiar.",
       syncLogFolderPlaceholder: "(raíz del vault)",
     },
 
     database: {
       heading: "Gestión de la base de datos",
-      paragraph: "Gestiona tu base de datos de tarjetas. Usar con precaución — estas acciones no se pueden deshacer.",
+      paragraph:
+        "Gestiona tu base de datos de tarjetas. Usar con precaución — estas acciones no se pueden deshacer.",
       purgeDatabase: "Purgar base de datos",
-      purgeDatabaseDesc: "Elimina permanentemente todas las tarjetas, el historial de repasos y los datos de los mazos. Esto forzará una reconstrucción limpia desde los archivos del vault. ¡Se perderá todo el progreso!",
+      purgeDatabaseDesc:
+        "Elimina permanentemente todas las tarjetas, el historial de repasos y los datos de los mazos. Esto forzará una reconstrucción limpia desde los archivos del vault. ¡Se perderá todo el progreso!",
       purgeDatabaseButton: "Purgar base de datos",
     },
   },

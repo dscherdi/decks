@@ -1,68 +1,72 @@
+import { I18n } from "@/i18n/I18n";
+
 export function getTestDeckContent(deckTag: string): string {
   const tag = deckTag.replace("#", "");
+  const t = I18n.t.testDeck;
+  const tagBacktick = `\`${deckTag}\``;
+
   return `---
 tags:
   - ${tag}
 ---
-# Getting started with Decks
+# ${t.title}
 
-Welcome to Decks! To turn this file (or any file) into a flashcard deck, simply add the \`#decks\` tag to your frontmatter or anywhere in the body.
+${I18n.format(t.intro, { tag: tagBacktick })}
 
-Decks supports four main formats. Pick the one that fits your notes best.
-
----
-
-## 1. Header-paragraph format
-
-By default, Decks uses **H2 headings (\`##\`)** as the front of the card, and the paragraph directly below it as the back. *(You can change this header level in the deck settings).*
-
-## What is spaced repetition?
-
-A learning technique that schedules reviews at increasing intervals based on recall strength.
-
-## What tag marks a file as a flashcard deck?
-
-The \`#decks\` tag. Add it to the frontmatter \`tags\` list or anywhere in the body.
+${t.formatsHint}
 
 ---
 
-## 2. Table format
+## ${t.section1}
 
-You can use two-column markdown tables to generate cards in bulk. 
-**Crucial Rule:** The table *must* sit directly under a heading. That heading acts as the container for those cards. 
+${t.section1Body}
 
-## FSRS Concepts
+## ${t.q1}
 
-| Front                             | Back                                                   | Notes                                                  |
-| --------------------------------- | ------------------------------------------------------ | ------------------------------------------------------ |
-| What does FSRS stand for?         | Free Spaced Repetition Scheduler                       | The algorithm Decks uses to schedule cards             |
-| What are the four review ratings? | Again, Hard, Good, Easy                                | Again resets the card; Easy gives the longest interval |
+${t.a1}
 
-*(Note: The first column is the Front, the second is the Back. The optional third column is for Notes/Hints).*
+## ${t.q2}
+
+${I18n.format(t.a2, { tag: tagBacktick })}
 
 ---
 
-## 3. Cloze deletions
+## ${t.section2}
 
-Use \`==highlight==\` syntax to create fill-in-the-blank cards. Every highlight becomes its own card.
+${t.section2Body}
 
-## The solar system
+## ${t.fsrsConceptsHeading}
 
-The ==Sun== is the star at the center of our solar system. The closest planet is ==Mercury==, and the largest planet is ==Jupiter==.
+| ${t.colFront} | ${t.colBack} | ${t.colNotes} |
+| --- | --- | --- |
+| ${t.row1Front} | ${t.row1Back} | ${t.row1Notes} |
+| ${t.row2Front} | ${t.row2Back} | ${t.row2Notes} |
+
+${t.tableNote}
 
 ---
 
-## 4. Image occlusion
+## ${t.section3}
 
-Combine an image with a numbered list. The image shows the labeled regions, and each list item becomes a separate card. 
+${t.section3Body}
 
-## Bones of the arm
+## ${t.solarHeading}
+
+${t.solarBody}
+
+---
+
+## ${t.section4}
+
+${t.section4Body}
+
+## ${t.bonesHeading}
 
 ![[arm_bones.png]]
 
-1. ==Humerus==
-2. ==Radius==
-3. ==Ulna==
+1. ==${t.bone1}==
+2. ==${t.bone2}==
+3. ==${t.bone3}==
 
 ---
 `;

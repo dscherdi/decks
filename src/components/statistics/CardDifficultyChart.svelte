@@ -67,10 +67,10 @@
   function processChartData() {
     if (!difficultyData || difficultyData.size === 0) {
       return {
-        labels: ["No Data"],
+        labels: [t.statistics.noData],
         datasets: [
           {
-            label: "Cards",
+            label: t.statistics.cardPlural,
             data: [0],
             backgroundColor: "#6b7280",
             borderColor: "#4b5563",
@@ -119,7 +119,7 @@
       labels,
       datasets: [
         {
-          label: "Number of cards",
+          label: t.statistics.numberOfCards,
           data,
           backgroundColor: colors,
           borderColor: colors.map((color) =>
