@@ -363,6 +363,7 @@ export const fr: Translations = {
     createButton: "Créer",
     colFront: "Recto",
     colBack: "Verso",
+    colNotes: "Notes",
     colFile: "Fichier",
     colBreadcrumb: "Chemin",
     colDeckTag: "Étiquette du paquet",

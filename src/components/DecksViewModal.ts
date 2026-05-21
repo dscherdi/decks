@@ -51,6 +51,7 @@ export class DecksViewModal extends Modal {
   private resizeHandler?: () => void;
   private getDecksView: () => DecksView | null;
   private saveSettings: () => Promise<void>;
+  private openEditModal?: (card: Flashcard) => Promise<void>;
 
   constructor(
     app: App,
@@ -63,7 +64,8 @@ export class DecksViewModal extends Modal {
     settings: DecksSettings,
     logger: Logger,
     getDecksView: () => DecksView | null,
-    saveSettings: () => Promise<void>
+    saveSettings: () => Promise<void>,
+    openEditModal?: (card: Flashcard) => Promise<void>,
   ) {
     super(app);
     this.db = db;
@@ -77,6 +79,7 @@ export class DecksViewModal extends Modal {
     this.logger = logger;
     this.getDecksView = getDecksView;
     this.saveSettings = saveSettings;
+    this.openEditModal = openEditModal;
   }
 
   private async togglePin(id: string): Promise<void> {
@@ -403,6 +406,14 @@ export class DecksViewModal extends Modal {
           const view = this.getDecksView();
           if (view) await view.refresh();
         },
+        async () => {
+          await this.deckManager.cleanupOrphanedDecks();
+        },
+        (widths) => {
+          this.settings.ui.managerColumnWidths = widths;
+          void this.saveSettings();
+        },
+        this.openEditModal,
       );
       return;
     }
@@ -418,6 +429,15 @@ export class DecksViewModal extends Modal {
       thresholds,
       editTarget,
       () => void this.refresh(),
+      async () => {
+        await this.deckManager.cleanupOrphanedDecks();
+      },
+      this.settings.ui.managerColumnWidths ?? {},
+      (widths) => {
+        this.settings.ui.managerColumnWidths = widths;
+        void this.saveSettings();
+      },
+      this.openEditModal,
     );
     this.openWithReturn(modal);
   }

@@ -320,6 +320,7 @@ export const en = {
     createButton: "Create",
     colFront: "Front",
     colBack: "Back",
+    colNotes: "Notes",
     colFile: "File",
     colBreadcrumb: "Breadcrumb",
     colDeckTag: "Deck tag",

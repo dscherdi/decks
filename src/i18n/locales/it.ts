@@ -355,6 +355,7 @@ export const it: Translations = {
     createButton: "Crea",
     colFront: "Fronte",
     colBack: "Retro",
+    colNotes: "Note",
     colFile: "File",
     colBreadcrumb: "Percorso",
     colDeckTag: "Tag mazzo",

@@ -371,6 +371,7 @@ export const de: Translations = {
     createButton: "Erstellen",
     colFront: "Vorderseite",
     colBack: "Rückseite",
+    colNotes: "Notizen",
     colFile: "Datei",
     colBreadcrumb: "Pfad",
     colDeckTag: "Stapel-Tag",

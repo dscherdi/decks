@@ -337,6 +337,7 @@ export const zhTW: Translations = {
     createButton: "建立",
     colFront: "正面",
     colBack: "背面",
+    colNotes: "筆記",
     colFile: "檔案",
     colBreadcrumb: "路徑",
     colDeckTag: "牌組標籤",

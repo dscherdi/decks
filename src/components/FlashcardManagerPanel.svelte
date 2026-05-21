@@ -27,16 +27,100 @@
   export let onCommitEdit:
     | ((target: EditTarget, payload: EditCommitPayload) => Promise<void>)
     | null = null;
+  export let onCleanupOrphans: (() => Promise<void>) | null = null;
+  export let initialColumnWidths: Record<string, number> = {};
+  export let onColumnWidthsChange: ((widths: Record<string, number>) => void) | null = null;
+  export let onEditCard: ((card: Flashcard) => Promise<void>) | null = null;
+  let editInFlightId: string | null = null;
   export let initialEditTarget: EditTarget | null = null;
   export let leechThreshold = 8;
   export let denseCardCharThreshold = 500;
 
+  const COLUMN_DEFAULTS: Record<string, number> = {
+    check: 36,
+    front: 240,
+    back: 240,
+    notes: 200,
+    file: 110,
+    breadcrumb: 110,
+    deckTag: 90,
+    cardTags: 110,
+    state: 70,
+    health: 90,
+    dueDate: 80,
+    lastReviewed: 80,
+    edit: 48,
+  };
+  const COLUMN_ORDER: string[] = [
+    "check",
+    "front",
+    "back",
+    "notes",
+    "file",
+    "breadcrumb",
+    "deckTag",
+    "cardTags",
+    "state",
+    "health",
+    "dueDate",
+    "lastReviewed",
+    "edit",
+  ];
+  const MIN_COLUMN_WIDTH = 50;
+
+  let columnWidths: Record<string, number> = { ...COLUMN_DEFAULTS, ...initialColumnWidths };
+  let resizingColumn: string | null = null;
+
+  $: gridTemplate = COLUMN_ORDER.map(
+    (k) => `${columnWidths[k] ?? COLUMN_DEFAULTS[k]}px`,
+  ).join(" ");
+
+  async function handleEditCard(card: Flashcard) {
+    if (!onEditCard) return;
+    if (editInFlightId) return;
+    editInFlightId = card.id;
+    try {
+      await onEditCard(card);
+      const dtMap = deckTagMap;
+      const rawFlashcards = await db.getAllFlashcards();
+      allFlashcards = rawFlashcards.filter((c) => dtMap.has(c.deckId));
+    } catch (e) {
+      console.warn("Edit failed:", e);
+    } finally {
+      editInFlightId = null;
+    }
+  }
+
+  function handleResizeStart(column: string, event: PointerEvent) {
+    event.preventDefault();
+    event.stopPropagation();
+    resizingColumn = column;
+    const startX = event.clientX;
+    const startWidth = columnWidths[column] ?? COLUMN_DEFAULTS[column];
+
+    const onMove = (e: PointerEvent) => {
+      const delta = e.clientX - startX;
+      const next = Math.max(MIN_COLUMN_WIDTH, startWidth + delta);
+      columnWidths = { ...columnWidths, [column]: next };
+    };
+    const onUp = () => {
+      window.removeEventListener("pointermove", onMove);
+      window.removeEventListener("pointerup", onUp);
+      resizingColumn = null;
+      onColumnWidthsChange?.({ ...columnWidths });
+    };
+    window.addEventListener("pointermove", onMove);
+    window.addEventListener("pointerup", onUp);
+  }
+
   type SortColumn =
     | "front"
     | "back"
+    | "notes"
     | "sourceFile"
     | "breadcrumb"
     | "deckTag"
+    | "cardTags"
     | "state"
     | "health"
     | "dueDate"
@@ -184,6 +268,8 @@
         return a.front.localeCompare(b.front);
       case "back":
         return a.back.localeCompare(b.back);
+      case "notes":
+        return (a.notes ?? "").localeCompare(b.notes ?? "");
       case "sourceFile":
         return a.sourceFile.localeCompare(b.sourceFile);
       case "breadcrumb":
@@ -191,6 +277,11 @@
       case "deckTag": {
         const ta = deckTagMap.get(a.deckId) ?? "";
         const tb = deckTagMap.get(b.deckId) ?? "";
+        return ta.localeCompare(tb);
+      }
+      case "cardTags": {
+        const ta = [...a.tags].sort().join(",");
+        const tb = [...b.tags].sort().join(",");
         return ta.localeCompare(tb);
       }
       case "state": {
@@ -429,6 +520,14 @@
   onMount(async () => {
     document.addEventListener("click", handleDocClickPopover);
     try {
+      if (onCleanupOrphans) {
+        try {
+          await onCleanupOrphans();
+        } catch (e) {
+          console.warn("Orphan deck cleanup failed:", e);
+        }
+      }
+
       const [decks, cDecks] = await Promise.all([
         db.getAllDecks(),
         customDeckService.getAllCustomDecks(),
@@ -448,7 +547,8 @@
       availableTags = Array.from(tags).sort();
       availableDecks = deckList.sort((a, b) => a.name.localeCompare(b.name));
 
-      allFlashcards = await db.getAllFlashcards();
+      const rawFlashcards = await db.getAllFlashcards();
+      allFlashcards = rawFlashcards.filter((c) => dtMap.has(c.deckId));
       if (initialEditTarget?.kind === "manual") {
         const cardIds = await db.getFlashcardIdsForCustomDeck(initialEditTarget.id);
         originalDeckCards = new Set(cardIds);
@@ -678,8 +778,8 @@
     {/if}
 
     <!-- Table -->
-    <div class="decks-fm-table-container">
-      <div class="decks-fm-table">
+    <div class="decks-fm-table-container" class:decks-fm-resizing={resizingColumn !== null}>
+      <div class="decks-fm-table" style="--decks-fm-grid: {gridTemplate};">
         <div class="decks-fm-table-header">
           <div class="decks-fm-col-check">
             <input
@@ -690,32 +790,58 @@
           </div>
           <div class="decks-fm-col-front decks-fm-col-sortable" role="button" tabindex="0" on:click={() => toggleSort("front")} on:keydown={(e) => e.key === "Enter" && toggleSort("front")}>
             {m.colFront} <span class="decks-fm-sort-glyph">{sortGlyph("front")}</span>
+            <!-- svelte-ignore a11y_no_noninteractive_element_interactions -->
+            <div class="decks-fm-col-resize-handle" role="separator" tabindex="-1" on:pointerdown={(e) => handleResizeStart("front", e)} on:click|stopPropagation></div>
           </div>
           <div class="decks-fm-col-back decks-fm-col-sortable" role="button" tabindex="0" on:click={() => toggleSort("back")} on:keydown={(e) => e.key === "Enter" && toggleSort("back")}>
             {m.colBack} <span class="decks-fm-sort-glyph">{sortGlyph("back")}</span>
+            <!-- svelte-ignore a11y_no_noninteractive_element_interactions -->
+            <div class="decks-fm-col-resize-handle" role="separator" tabindex="-1" on:pointerdown={(e) => handleResizeStart("back", e)} on:click|stopPropagation></div>
+          </div>
+          <div class="decks-fm-col-notes decks-fm-col-sortable" role="button" tabindex="0" on:click={() => toggleSort("notes")} on:keydown={(e) => e.key === "Enter" && toggleSort("notes")}>
+            {m.colNotes} <span class="decks-fm-sort-glyph">{sortGlyph("notes")}</span>
+            <!-- svelte-ignore a11y_no_noninteractive_element_interactions -->
+            <div class="decks-fm-col-resize-handle" role="separator" tabindex="-1" on:pointerdown={(e) => handleResizeStart("notes", e)} on:click|stopPropagation></div>
           </div>
           <div class="decks-fm-col-file decks-fm-col-sortable" role="button" tabindex="0" on:click={() => toggleSort("sourceFile")} on:keydown={(e) => e.key === "Enter" && toggleSort("sourceFile")}>
             {m.colFile} <span class="decks-fm-sort-glyph">{sortGlyph("sourceFile")}</span>
+            <!-- svelte-ignore a11y_no_noninteractive_element_interactions -->
+            <div class="decks-fm-col-resize-handle" role="separator" tabindex="-1" on:pointerdown={(e) => handleResizeStart("file", e)} on:click|stopPropagation></div>
           </div>
           <div class="decks-fm-col-breadcrumb decks-fm-col-sortable" role="button" tabindex="0" on:click={() => toggleSort("breadcrumb")} on:keydown={(e) => e.key === "Enter" && toggleSort("breadcrumb")}>
             {m.colBreadcrumb} <span class="decks-fm-sort-glyph">{sortGlyph("breadcrumb")}</span>
+            <!-- svelte-ignore a11y_no_noninteractive_element_interactions -->
+            <div class="decks-fm-col-resize-handle" role="separator" tabindex="-1" on:pointerdown={(e) => handleResizeStart("breadcrumb", e)} on:click|stopPropagation></div>
           </div>
           <div class="decks-fm-col-tag decks-fm-col-sortable" role="button" tabindex="0" on:click={() => toggleSort("deckTag")} on:keydown={(e) => e.key === "Enter" && toggleSort("deckTag")}>
             {m.colDeckTag} <span class="decks-fm-sort-glyph">{sortGlyph("deckTag")}</span>
+            <!-- svelte-ignore a11y_no_noninteractive_element_interactions -->
+            <div class="decks-fm-col-resize-handle" role="separator" tabindex="-1" on:pointerdown={(e) => handleResizeStart("deckTag", e)} on:click|stopPropagation></div>
           </div>
-          <div class="decks-fm-col-cardtags">{m.colCardTags}</div>
+          <div class="decks-fm-col-cardtags decks-fm-col-sortable" role="button" tabindex="0" on:click={() => toggleSort("cardTags")} on:keydown={(e) => e.key === "Enter" && toggleSort("cardTags")}>
+            {m.colCardTags} <span class="decks-fm-sort-glyph">{sortGlyph("cardTags")}</span>
+            <!-- svelte-ignore a11y_no_noninteractive_element_interactions -->
+            <div class="decks-fm-col-resize-handle" role="separator" tabindex="-1" on:pointerdown={(e) => handleResizeStart("cardTags", e)} on:click|stopPropagation></div>
+          </div>
           <div class="decks-fm-col-state decks-fm-col-sortable" role="button" tabindex="0" on:click={() => toggleSort("state")} on:keydown={(e) => e.key === "Enter" && toggleSort("state")}>
             {m.colState} <span class="decks-fm-sort-glyph">{sortGlyph("state")}</span>
+            <!-- svelte-ignore a11y_no_noninteractive_element_interactions -->
+            <div class="decks-fm-col-resize-handle" role="separator" tabindex="-1" on:pointerdown={(e) => handleResizeStart("state", e)} on:click|stopPropagation></div>
           </div>
           <div class="decks-fm-col-health decks-fm-col-sortable" role="button" tabindex="0" on:click={() => toggleSort("health")} on:keydown={(e) => e.key === "Enter" && toggleSort("health")}>
             {m.colHealth} <span class="decks-fm-sort-glyph">{sortGlyph("health")}</span>
+            <!-- svelte-ignore a11y_no_noninteractive_element_interactions -->
+            <div class="decks-fm-col-resize-handle" role="separator" tabindex="-1" on:pointerdown={(e) => handleResizeStart("health", e)} on:click|stopPropagation></div>
           </div>
           <div class="decks-fm-col-due decks-fm-col-sortable" role="button" tabindex="0" on:click={() => toggleSort("dueDate")} on:keydown={(e) => e.key === "Enter" && toggleSort("dueDate")}>
             {m.colDue} <span class="decks-fm-sort-glyph">{sortGlyph("dueDate")}</span>
+            <!-- svelte-ignore a11y_no_noninteractive_element_interactions -->
+            <div class="decks-fm-col-resize-handle" role="separator" tabindex="-1" on:pointerdown={(e) => handleResizeStart("dueDate", e)} on:click|stopPropagation></div>
           </div>
           <div class="decks-fm-col-reviewed decks-fm-col-sortable" role="button" tabindex="0" on:click={() => toggleSort("lastReviewed")} on:keydown={(e) => e.key === "Enter" && toggleSort("lastReviewed")}>
             {m.colReviewed} <span class="decks-fm-sort-glyph">{sortGlyph("lastReviewed")}</span>
           </div>
+          <div class="decks-fm-col-edit" aria-hidden="true"></div>
         </div>
 
         <div class="decks-fm-table-body">
@@ -742,6 +868,9 @@
               </div>
               <div class="decks-fm-col-back" title={card.back}>
                 {truncate(card.back, 50)}
+              </div>
+              <div class="decks-fm-col-notes" title={card.notes}>
+                {truncate(card.notes ?? "", 50)}
               </div>
               <div class="decks-fm-col-file" title={card.sourceFile}>
                 {getFilename(card.sourceFile)}
@@ -784,6 +913,20 @@
               </div>
               <div class="decks-fm-col-reviewed">
                 {formatRelativeDate(card.lastReviewed)}
+              </div>
+              <div class="decks-fm-col-edit">
+                <button
+                  type="button"
+                  class="decks-fm-edit-button clickable-icon"
+                  aria-label="Edit flashcard"
+                  title="Edit flashcard"
+                  on:click|stopPropagation={() => handleEditCard(card)}
+                >
+                  <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                    <path d="M12 20h9"></path>
+                    <path d="M16.5 3.5a2.121 2.121 0 0 1 3 3L7 19l-4 1 1-4Z"></path>
+                  </svg>
+                </button>
               </div>
             </div>
           {/each}
@@ -1250,12 +1393,12 @@
 
   .decks-fm-table {
     width: 100%;
-    min-width: 900px;
+    min-width: 1048px;
   }
 
   .decks-fm-table-header {
     display: grid;
-    grid-template-columns: 36px 1fr 1fr 110px 110px 90px 110px 70px 90px 80px 80px;
+    grid-template-columns: var(--decks-fm-grid);
     gap: 4px;
     padding: 6px 8px;
     background: var(--background-secondary);
@@ -1271,6 +1414,7 @@
   .decks-fm-col-sortable {
     cursor: pointer;
     user-select: none;
+    position: relative;
   }
 
   .decks-fm-col-sortable:hover {
@@ -1283,9 +1427,32 @@
     opacity: 0.7;
   }
 
+  .decks-fm-col-resize-handle {
+    position: absolute;
+    top: 0;
+    right: -2px;
+    width: 4px;
+    height: 100%;
+    cursor: col-resize;
+    z-index: 2;
+  }
+
+  .decks-fm-col-resize-handle:hover {
+    background: var(--interactive-accent);
+  }
+
+  .decks-fm-resizing {
+    cursor: col-resize;
+    user-select: none;
+  }
+
+  .decks-fm-resizing * {
+    cursor: col-resize !important;
+  }
+
   .decks-fm-table-row {
     display: grid;
-    grid-template-columns: 36px 1fr 1fr 110px 110px 90px 110px 70px 90px 80px 80px;
+    grid-template-columns: var(--decks-fm-grid);
     gap: 4px;
     padding: 4px 8px;
     font-size: 12px;
@@ -1308,8 +1475,39 @@
     justify-content: center;
   }
 
+  /* Right-pinned Edit column — sticks to the right edge of the horizontal
+   * scroller so the edit button is always reachable without scrolling. */
+  .decks-fm-col-edit {
+    position: sticky;
+    right: 0;
+    z-index: 2;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    background: var(--background-primary);
+    border-left: 1px solid var(--background-modifier-border);
+  }
+  .decks-fm-table-header .decks-fm-col-edit {
+    background: var(--background-secondary);
+    z-index: 3;
+  }
+  .decks-fm-table-row:hover .decks-fm-col-edit {
+    background: var(--background-modifier-hover);
+  }
+  .decks-fm-row-selected .decks-fm-col-edit {
+    background: var(--background-modifier-active-hover);
+  }
+  .decks-fm-edit-button {
+    width: 28px !important;
+    height: 28px !important;
+    min-width: 0 !important;
+    min-height: 0 !important;
+    padding: 0 !important;
+  }
+
   .decks-fm-col-front,
   .decks-fm-col-back,
+  .decks-fm-col-notes,
   .decks-fm-col-file,
   .decks-fm-col-breadcrumb,
   .decks-fm-col-tag {

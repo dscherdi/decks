@@ -54,6 +54,27 @@ export class DeckManager {
     this.fileFilter.updateFolderSearchPath(folderSearchPath);
   }
 
+  /**
+   * Remove decks from the DB whose source file no longer exists in the vault.
+   * Cheaper than syncDecks — does not scan or re-parse content.
+   * Returns the number of orphan decks deleted.
+   */
+  async cleanupOrphanedDecks(): Promise<number> {
+    const existingDecks = await this.db.getAllDecks();
+    let deleted = 0;
+    for (const deck of existingDecks) {
+      const file = this.vault.getAbstractFileByPath(deck.filepath);
+      if (!(file instanceof TFile)) {
+        this.debugLog(
+          `Cleaning up orphaned deck: "${deck.name}" (${deck.filepath})`
+        );
+        await this.db.deleteDeckByFilepath(deck.filepath);
+        deleted++;
+      }
+    }
+    return deleted;
+  }
+
   private debugLog(message: string, ...args: unknown[]): void {
     this.logger?.debug(message, ...args);
   }

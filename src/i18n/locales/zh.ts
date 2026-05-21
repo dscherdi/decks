@@ -332,6 +332,7 @@ export const zh: Translations = {
     createButton: "创建",
     colFront: "正面",
     colBack: "背面",
+    colNotes: "笔记",
     colFile: "文件",
     colBreadcrumb: "面包屑",
     colDeckTag: "牌组标签",

@@ -40,6 +40,9 @@ export interface DecksSettings {
     // Decks with totalCount strictly less than this number are hidden
     // from the list. Pinned decks are exempt. 0 disables the filter.
     minDeckCardCount: number;
+    // Per-column widths (in pixels) for the flashcard manager table.
+    // Empty object means use defaults from the grid template.
+    managerColumnWidths: Record<string, number>;
   };
 
   // Backup Settings
@@ -116,6 +119,7 @@ export const DEFAULT_SETTINGS: DecksSettings = {
     pinnedDeckIds: [],
     deckListSort: "name-asc",
     minDeckCardCount: 0,
+    managerColumnWidths: {},
   },
 
   backup: {

@@ -355,6 +355,7 @@ export const tr: Translations = {
     createButton: "Oluştur",
     colFront: "Ön",
     colBack: "Arka",
+    colNotes: "Notlar",
     colFile: "Dosya",
     colBreadcrumb: "Yol",
     colDeckTag: "Deste etiketi",

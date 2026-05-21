@@ -346,6 +346,7 @@ export const ar: Translations = {
     createButton: "إنشاء",
     colFront: "الوجه",
     colBack: "الظهر",
+    colNotes: "ملاحظات",
     colFile: "الملف",
     colBreadcrumb: "المسار",
     colDeckTag: "علامة الرزمة",

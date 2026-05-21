@@ -353,6 +353,7 @@ export const ru: Translations = {
     createButton: "Создать",
     colFront: "Лицо",
     colBack: "Оборот",
+    colNotes: "Заметки",
     colFile: "Файл",
     colBreadcrumb: "Путь",
     colDeckTag: "Тег колоды",

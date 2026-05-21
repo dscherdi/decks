@@ -358,6 +358,7 @@ export const hi: Translations = {
     createButton: "बनाएं",
     colFront: "सामने",
     colBack: "पीछे",
+    colNotes: "नोट्स",
     colFile: "फ़ाइल",
     colBreadcrumb: "ब्रेडक्रंब",
     colDeckTag: "डेक टैग",

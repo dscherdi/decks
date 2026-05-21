@@ -42,6 +42,7 @@ export class DecksView extends ItemView {
   private progressTracker: ProgressTracker;
   private logger: Logger;
   private saveSettings: () => Promise<void>;
+  private openEditModal?: (card: Flashcard) => Promise<void>;
 
   constructor(
     leaf: WorkspaceLeaf,
@@ -54,7 +55,8 @@ export class DecksView extends ItemView {
     settings: DecksSettings,
     progressTracker: ProgressTracker,
     logger: Logger,
-    saveSettings: () => Promise<void>
+    saveSettings: () => Promise<void>,
+    openEditModal?: (card: Flashcard) => Promise<void>,
   ) {
     super(leaf);
     this.db = database;
@@ -67,6 +69,7 @@ export class DecksView extends ItemView {
     this.settings = settings;
     this.logger = logger;
     this.saveSettings = saveSettings;
+    this.openEditModal = openEditModal;
 
     this.progressTracker = progressTracker;
   }
@@ -217,6 +220,14 @@ export class DecksView extends ItemView {
       this.settings,
       undefined,
       () => this.refresh(),
+      async () => {
+        await this.deckManager.cleanupOrphanedDecks();
+      },
+      (widths) => {
+        this.settings.ui.managerColumnWidths = widths;
+        void this.saveSettings();
+      },
+      this.openEditModal,
     );
   }
 
@@ -233,6 +244,9 @@ export class DecksView extends ItemView {
         this.settings,
         { kind: "filter", id: customDeck.id, name: customDeck.name, filterDefinition },
         () => this.refresh(),
+        async () => {
+          await this.deckManager.cleanupOrphanedDecks();
+        },
       );
     } else {
       openFlashcardManager(
@@ -242,6 +256,9 @@ export class DecksView extends ItemView {
         this.settings,
         { kind: "manual", id: customDeck.id, name: customDeck.name },
         () => this.refresh(),
+        async () => {
+          await this.deckManager.cleanupOrphanedDecks();
+        },
       );
     }
   }

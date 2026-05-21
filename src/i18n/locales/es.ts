@@ -363,6 +363,7 @@ export const es: Translations = {
     createButton: "Crear",
     colFront: "Anverso",
     colBack: "Reverso",
+    colNotes: "Notas",
     colFile: "Archivo",
     colBreadcrumb: "Ruta",
     colDeckTag: "Etiqueta del mazo",

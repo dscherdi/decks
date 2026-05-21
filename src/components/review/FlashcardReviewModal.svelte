@@ -188,6 +188,7 @@
   // Cloze group review state
   let clozeGroup: Flashcard[] = [];
   let clozeGroupIndex = 0;
+  let clozeGroupTotal = 0;
   let inClozeGroupReview = false;
 
   $: clozeShowContext = deckOrGroup.profile?.clozeShowContext ?? "open";
@@ -378,6 +379,7 @@
       );
       clozeGroup = [currentCard, ...siblings];
       clozeGroupIndex = 0;
+      clozeGroupTotal = await scheduler.getClozeGroupSize(currentCard);
       inClozeGroupReview = true;
     }
 
@@ -511,6 +513,7 @@
           inClozeGroupReview = false;
           clozeGroup = [];
           clozeGroupIndex = 0;
+          clozeGroupTotal = 0;
         }
 
         if (isDeckGroup(deckOrGroup)) {
@@ -560,6 +563,7 @@
       inClozeGroupReview = false;
       clozeGroup = [];
       clozeGroupIndex = 0;
+      clozeGroupTotal = 0;
 
       currentCard = restored;
       reviewedCount = Math.max(0, reviewedCount - 1);
@@ -867,9 +871,9 @@
   <div class="decks-modal-header">
     <h3>
       {browseMode ? "Browse" : "Review session"} - {deckOrGroup.name}
-      {#if inClozeGroupReview}
+      {#if inClozeGroupReview && currentCard}
         <span class="decks-cloze-indicator"
-          >Cloze {clozeGroupIndex + 1}/{clozeGroup.length}</span
+          >Cloze {(currentCard.clozeOrder ?? clozeGroupIndex) + 1}/{clozeGroupTotal}</span
         >
       {/if}
     </h3>

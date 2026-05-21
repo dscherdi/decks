@@ -273,6 +273,23 @@ Key features:
       });
     });
 
+    it("un-escapes \\| and <br> in table cells", () => {
+      const content = `
+## Escaped
+
+| Front | Back | Notes |
+|-------|------|-------|
+| a\\|b | line1<br>line2 | n\\|o |
+      `;
+
+      const result = FlashcardParser.parseFlashcardsFromContent(content);
+
+      expect(result).toHaveLength(1);
+      expect(result[0].front).toBe("a|b");
+      expect(result[0].back).toBe("line1\nline2");
+      expect(result[0].notes).toBe("n|o");
+    });
+
     it("should handle different header levels correctly", () => {
       const content = `
 # H1 Header

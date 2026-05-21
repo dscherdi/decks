@@ -216,4 +216,34 @@ describe("Image Occlusion Parser", () => {
       expect(imageOcclusion[0].front).toBe("![[skeleton.png]]");
     });
   });
+
+  describe("image embed syntax variants", () => {
+    it("accepts wikilink with size qualifier", () => {
+      const content = "## Diagram\n![[brain.png|400]]\n1. ==Hippocampus==\n2. ==Amygdala==";
+      const cards = FlashcardParser.parseFlashcardsFromContent(content, 2, undefined, true);
+      expect(cards.every((c) => c.type === "image-occlusion")).toBe(true);
+      expect(cards[0].front).toBe("![[brain.png|400]]");
+    });
+
+    it("accepts wikilink with alt-text qualifier", () => {
+      const content = "## Diagram\n![[brain.png|brain anatomy]]\n1. ==Hippocampus==";
+      const cards = FlashcardParser.parseFlashcardsFromContent(content, 2, undefined, true);
+      expect(cards).toHaveLength(1);
+      expect(cards[0].type).toBe("image-occlusion");
+    });
+
+    it("accepts standard markdown image syntax", () => {
+      const content = "## Diagram\n![](brain.png)\n1. ==Hippocampus==\n2. ==Amygdala==";
+      const cards = FlashcardParser.parseFlashcardsFromContent(content, 2, undefined, true);
+      expect(cards).toHaveLength(2);
+      expect(cards.every((c) => c.type === "image-occlusion")).toBe(true);
+    });
+
+    it("accepts uppercase extension and additional formats", () => {
+      const content = "## Diagram\n![[brain.JPEG|400]]\n1. ==A==";
+      const cards = FlashcardParser.parseFlashcardsFromContent(content, 2, undefined, true);
+      expect(cards).toHaveLength(1);
+      expect(cards[0].type).toBe("image-occlusion");
+    });
+  });
 });

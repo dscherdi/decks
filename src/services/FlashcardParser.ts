@@ -1,3 +1,5 @@
+import { splitTableLine, unescapeTableCell } from "../utils/markdown-table";
+
 export interface ParsedFlashcard {
   front: string;
   back: string;
@@ -20,7 +22,8 @@ export class FlashcardParser {
   private static readonly TABLE_ROW_REGEX = /^\|.*\|$/;
   private static readonly TABLE_SEPARATOR_REGEX = /^\|[\s-]+\|[\s-]+\|(?:[\s-]+\|)?$/;
   private static readonly CLOZE_REGEX = /==((?:(?!==).)+)==/g;
-  private static readonly IMAGE_EMBED_REGEX = /^!\[\[.+\.(png|jpe?g|gif|svg|bmp|webp)\]\]$/i;
+  private static readonly IMAGE_EMBED_REGEX =
+    /^!\[\[[^\]]+\.(png|jpe?g|gif|svg|bmp|webp|avif|heic|heif|tiff?)(\|[^\]]*)?\]\]$|^!\[[^\]]*\]\([^)]+\.(png|jpe?g|gif|svg|bmp|webp|avif|heic|heif|tiff?)(\s+[^)]+)?\)$/i;
   private static readonly NUMBERED_LIST_REGEX = /^\d+\.\s+(.+)$/;
   // Obsidian tag syntax: must start with a letter, allows letters/digits/_/-//
   private static readonly HEADER_TAG_REGEX = /(?:^|\s)#([A-Za-z][A-Za-z0-9_\-/]*)/g;
@@ -180,11 +183,11 @@ export class FlashcardParser {
             continue;
           }
 
-          // Parse table row
-          const cells = trimmedLine
-            .slice(1, -1) // Remove leading/trailing pipes
-            .split("|")
-            .map((cell) => cell.trim());
+          // Parse table row. Pipes preceded by a backslash are treated as
+          // literal cell content (`\|` → `|`); `<br>` is treated as a newline.
+          const cells = splitTableLine(trimmedLine.slice(1, -1)).map(
+            (cell) => unescapeTableCell(cell.trim()),
+          );
 
           if (cells.length >= 2 && cells[0] && cells[1]) {
             // Build breadcrumb from header stack (excluding the current header since it's the table container)

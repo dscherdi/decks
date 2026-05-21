@@ -2,7 +2,7 @@ import { ItemView, Notice, WorkspaceLeaf } from "obsidian";
 import type { App } from "obsidian";
 import type { IDatabaseService } from "../database/DatabaseFactory";
 import type { CustomDeckService } from "../services/CustomDeckService";
-import type { FilterDefinition } from "../database/types";
+import type { FilterDefinition, Flashcard } from "../database/types";
 import type { DecksSettings } from "../settings";
 import FlashcardManagerPanel from "./FlashcardManagerPanel.svelte";
 import type {
@@ -27,6 +27,10 @@ export class FlashcardManagerView extends ItemView {
   private editingCustomDeck: EditTarget | null = null;
   private thresholds: FlashcardManagerThresholds;
   private onDeckListChanged?: () => void | Promise<void>;
+  private onCleanupOrphans?: () => Promise<void>;
+  private initialColumnWidths: Record<string, number> = {};
+  private onColumnWidthsChange?: (widths: Record<string, number>) => void;
+  private onEditCard?: (card: Flashcard) => Promise<void>;
 
   private component: FlashcardManagerComponent | null = null;
 
@@ -67,10 +71,18 @@ export class FlashcardManagerView extends ItemView {
     thresholds: FlashcardManagerThresholds,
     editingCustomDeck: EditTarget | null,
     onDeckListChanged?: () => void | Promise<void>,
+    onCleanupOrphans?: () => Promise<void>,
+    initialColumnWidths: Record<string, number> = {},
+    onColumnWidthsChange?: (widths: Record<string, number>) => void,
+    onEditCard?: (card: Flashcard) => Promise<void>,
   ): void {
     this.thresholds = thresholds;
     this.editingCustomDeck = editingCustomDeck;
     this.onDeckListChanged = onDeckListChanged;
+    this.onCleanupOrphans = onCleanupOrphans;
+    this.initialColumnWidths = initialColumnWidths;
+    this.onColumnWidthsChange = onColumnWidthsChange;
+    this.onEditCard = onEditCard;
     this.leaf.updateHeader();
     this.mountComponent();
   }
@@ -104,6 +116,10 @@ export class FlashcardManagerView extends ItemView {
         leechThreshold: this.thresholds.leechThreshold,
         denseCardCharThreshold: this.thresholds.denseCardCharThreshold,
         initialEditTarget: this.editingCustomDeck,
+        onCleanupOrphans: this.onCleanupOrphans ?? null,
+        initialColumnWidths: this.initialColumnWidths,
+        onColumnWidthsChange: this.onColumnWidthsChange ?? null,
+        onEditCard: this.onEditCard ?? null,
         onCommitEdit: async (
           target: EditTarget,
           payload: EditCommitPayload,
@@ -216,11 +232,15 @@ export function openFlashcardManager(
   settings: DecksSettings,
   editingCustomDeck?: EditTarget,
   onDeckListChanged?: () => void | Promise<void>,
+  onCleanupOrphans?: () => Promise<void>,
+  onColumnWidthsChange?: (widths: Record<string, number>) => void,
+  onEditCard?: (card: Flashcard) => Promise<void>,
 ): void {
   const thresholds: FlashcardManagerThresholds = {
     leechThreshold: settings.review.leechThreshold,
     denseCardCharThreshold: settings.review.denseCardCharThreshold,
   };
+  const initialColumnWidths = settings.ui.managerColumnWidths ?? {};
 
   if (settings.ui.flashcardManagerDisplayMode === "tab") {
     const { workspace } = app;
@@ -232,7 +252,15 @@ export function openFlashcardManager(
       .then(() => {
         const view = leaf.view;
         if (view instanceof FlashcardManagerView) {
-          view.setManagerData(thresholds, editingCustomDeck ?? null, onDeckListChanged);
+          view.setManagerData(
+            thresholds,
+            editingCustomDeck ?? null,
+            onDeckListChanged,
+            onCleanupOrphans,
+            initialColumnWidths,
+            onColumnWidthsChange,
+            onEditCard,
+          );
         }
         void workspace.revealLeaf(leaf);
       })
@@ -247,5 +275,9 @@ export function openFlashcardManager(
     thresholds,
     editingCustomDeck,
     onDeckListChanged,
+    onCleanupOrphans,
+    initialColumnWidths,
+    onColumnWidthsChange,
+    onEditCard,
   ).open();
 }

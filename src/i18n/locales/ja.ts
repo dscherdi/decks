@@ -351,6 +351,7 @@ export const ja: Translations = {
     createButton: "作成",
     colFront: "表",
     colBack: "裏",
+    colNotes: "ノート",
     colFile: "ファイル",
     colBreadcrumb: "パンくず",
     colDeckTag: "デッキタグ",

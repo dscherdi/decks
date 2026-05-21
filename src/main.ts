@@ -23,6 +23,9 @@ import {
 } from "./utils/paths";
 import { BackupService } from "./services/BackupService";
 import { StatisticsService } from "./services/StatisticsService";
+import { FlashcardWriter, type FlashcardEdits } from "./services/FlashcardWriter";
+import { FlashcardEditModalWrapper } from "./components/FlashcardEditModalWrapper";
+import type { Flashcard } from "./database/types";
 import { yieldToUI } from "./utils/ui";
 import { Logger, formatTime } from "./utils/logging";
 import { ProgressTracker } from "./utils/progress";
@@ -107,6 +110,7 @@ export default class DecksPlugin extends Plugin {
   private backupService: BackupService;
   private statisticsService: StatisticsService;
   private customDeckService: CustomDeckService;
+  private flashcardWriter: FlashcardWriter;
   public settings: DecksSettings;
   private logger: Logger;
   private progressTracker: ProgressTracker;
@@ -209,6 +213,7 @@ export default class DecksPlugin extends Plugin {
 
       // Initialize custom deck service
       this.customDeckService = new CustomDeckService(this.db);
+      this.flashcardWriter = new FlashcardWriter(this.app);
 
       // Apply current filter compile thresholds (leech / dense) to db + service
       this.applyFilterCompileOptions();
@@ -258,7 +263,8 @@ export default class DecksPlugin extends Plugin {
             this.settings,
             this.progressTracker,
             this.logger,
-            () => this.saveSettings()
+            () => this.saveSettings(),
+            (card) => this.openEditFlashcardModal(card),
           )
       );
 
@@ -299,7 +305,8 @@ export default class DecksPlugin extends Plugin {
           this.settings,
           this.logger,
           () => this.getDecksView(),
-          () => this.saveSettings()
+          () => this.saveSettings(),
+          (card) => this.openEditFlashcardModal(card),
         ).open();
       });
 
@@ -335,6 +342,14 @@ export default class DecksPlugin extends Plugin {
             async () => {
               await this.getDecksView()?.refresh();
             },
+            async () => {
+              await this.deckManager.cleanupOrphanedDecks();
+            },
+            (widths) => {
+              this.settings.ui.managerColumnWidths = widths;
+              void this.saveSettings();
+            },
+            (card) => this.openEditFlashcardModal(card),
           );
         },
       });
@@ -405,7 +420,8 @@ export default class DecksPlugin extends Plugin {
             this.settings,
             this.logger,
             () => this.getDecksView(),
-            () => this.saveSettings()
+            () => this.saveSettings(),
+            (card) => this.openEditFlashcardModal(card),
           ).open();
         },
       });
@@ -736,6 +752,39 @@ export default class DecksPlugin extends Plugin {
     } finally {
       this.reloadFromDiskInFlight = false;
     }
+  }
+
+  /**
+   * Open the edit modal for a single flashcard. Resolves after the user
+   * cancels or saves; on save, writes to the markdown file and re-syncs
+   * the affected deck before resolving.
+   */
+  async openEditFlashcardModal(card: Flashcard): Promise<void> {
+    return new Promise((resolve) => {
+      let resolved = false;
+      const settle = () => {
+        if (resolved) return;
+        resolved = true;
+        resolve();
+      };
+      const wrapper = new FlashcardEditModalWrapper(
+        this.app,
+        card,
+        async (edits: FlashcardEdits) => {
+          const result = await this.flashcardWriter.editFlashcard(card, edits);
+          if (result.ok) {
+            const file = this.app.vault.getAbstractFileByPath(card.sourceFile);
+            if (file instanceof TFile) {
+              await this.handleFileChange(file);
+            }
+            new Notice("Card updated");
+          }
+          return result;
+        },
+        settle,
+      );
+      wrapper.open();
+    });
   }
 
   async handleFileChange(file: TFile) {

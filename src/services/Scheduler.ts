@@ -835,6 +835,20 @@ export class Scheduler {
     return rows.map((row) => this.rowToFlashcard(row as unknown[]));
   }
 
+  async getClozeGroupSize(card: Flashcard): Promise<number> {
+    const query = `
+      SELECT COUNT(*) FROM flashcards
+      WHERE deck_id = ? AND front = ? AND type IN ('cloze', 'image-occlusion')
+    `;
+    const rows = await this.db.querySql<unknown[]>(query, [
+      card.deckId,
+      card.front,
+    ]);
+    if (rows.length === 0) return 1;
+    const count = Number((rows[0] as unknown[])[0]);
+    return Number.isFinite(count) && count > 0 ? count : 1;
+  }
+
   /**
    * Calculates the start of the current Study Day in UTC
    *

@@ -2,7 +2,7 @@ import { Modal, Notice } from "obsidian";
 import type { App } from "obsidian";
 import type { IDatabaseService } from "../database/DatabaseFactory";
 import type { CustomDeckService } from "../services/CustomDeckService";
-import type { FilterDefinition } from "../database/types";
+import type { FilterDefinition, Flashcard } from "../database/types";
 import FlashcardManagerPanel from "./FlashcardManagerPanel.svelte";
 import type {
   EditTarget,
@@ -30,6 +30,10 @@ export class FlashcardManagerModal extends Modal {
   private editingCustomDeck: EditTarget | null;
   private thresholds: FlashcardManagerThresholds;
   private onDeckListChanged?: () => void | Promise<void>;
+  private onCleanupOrphans?: () => Promise<void>;
+  private initialColumnWidths: Record<string, number>;
+  private onColumnWidthsChange?: (widths: Record<string, number>) => void;
+  private onEditCard?: (card: Flashcard) => Promise<void>;
 
   constructor(
     app: App,
@@ -38,6 +42,10 @@ export class FlashcardManagerModal extends Modal {
     thresholds: FlashcardManagerThresholds,
     editingCustomDeck?: EditTarget,
     onDeckListChanged?: () => void | Promise<void>,
+    onCleanupOrphans?: () => Promise<void>,
+    initialColumnWidths: Record<string, number> = {},
+    onColumnWidthsChange?: (widths: Record<string, number>) => void,
+    onEditCard?: (card: Flashcard) => Promise<void>,
   ) {
     super(app);
     this.db = db;
@@ -45,6 +53,10 @@ export class FlashcardManagerModal extends Modal {
     this.thresholds = thresholds;
     this.editingCustomDeck = editingCustomDeck ?? null;
     this.onDeckListChanged = onDeckListChanged;
+    this.onCleanupOrphans = onCleanupOrphans;
+    this.initialColumnWidths = initialColumnWidths;
+    this.onColumnWidthsChange = onColumnWidthsChange;
+    this.onEditCard = onEditCard;
   }
 
   onOpen() {
@@ -70,6 +82,10 @@ export class FlashcardManagerModal extends Modal {
         leechThreshold: this.thresholds.leechThreshold,
         denseCardCharThreshold: this.thresholds.denseCardCharThreshold,
         initialEditTarget: this.editingCustomDeck,
+        onCleanupOrphans: this.onCleanupOrphans ?? null,
+        initialColumnWidths: this.initialColumnWidths,
+        onColumnWidthsChange: this.onColumnWidthsChange ?? null,
+        onEditCard: this.onEditCard ?? null,
         onCommitEdit: async (
           target: EditTarget,
           payload: EditCommitPayload

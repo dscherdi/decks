@@ -2,6 +2,7 @@ import {
   findBreadcrumbSection,
   findFlashcardLine,
   findFlashcardLineInRange,
+  findFlashcardSegment,
 } from "../utils/source-navigator";
 
 const split = (s: string) => s.split("\n");
@@ -285,6 +286,95 @@ describe("source-navigator", () => {
         breadcrumb: "",
       });
       expect(hit).toBe(0);
+    });
+  });
+
+  describe("findFlashcardSegment", () => {
+    it("header-paragraph: returns block ending at next equal-level header", () => {
+      const lines = split(
+        "# Top\n## What?\nthe answer\nmore body\n## Next\nbody",
+      );
+      const seg = findFlashcardSegment(lines, {
+        type: "header-paragraph",
+        front: "What?",
+        breadcrumb: "Top",
+        clozeOrder: null,
+      });
+      expect(seg).toEqual({ start: 1, end: 4 });
+    });
+
+    it("header-paragraph: block extends to EOF when no closing header", () => {
+      const lines = split("## Q\nbody1\nbody2");
+      const seg = findFlashcardSegment(lines, {
+        type: "header-paragraph",
+        front: "Q",
+        breadcrumb: "",
+        clozeOrder: null,
+      });
+      expect(seg).toEqual({ start: 0, end: 3 });
+    });
+
+    it("table: returns the single table-row line", () => {
+      const lines = split(
+        "## Vocab\n| Front | Back |\n|---|---|\n| Q1 | A1 |\n| Q2 | A2 |",
+      );
+      const seg = findFlashcardSegment(lines, {
+        type: "table",
+        front: "Q2",
+        breadcrumb: "Vocab",
+        clozeOrder: null,
+      });
+      expect(seg).toEqual({ start: 4, end: 5 });
+    });
+
+    it("cloze: header host returns the full block", () => {
+      const lines = split(
+        "## Pacific?\nThe ==Pacific== is the largest ocean.\n## Next\nx",
+      );
+      const seg = findFlashcardSegment(lines, {
+        type: "cloze",
+        front: "Pacific?",
+        breadcrumb: "",
+        clozeOrder: 0,
+      });
+      expect(seg).toEqual({ start: 0, end: 2 });
+    });
+
+    it("cloze: table host returns single row", () => {
+      const lines = split(
+        "## Vocab\n| Front | Back |\n|---|---|\n| Q1 | ==A1== |\n",
+      );
+      const seg = findFlashcardSegment(lines, {
+        type: "cloze",
+        front: "Q1",
+        breadcrumb: "Vocab",
+        clozeOrder: 0,
+      });
+      expect(seg).toEqual({ start: 3, end: 4 });
+    });
+
+    it("image-occlusion: returns the Nth numbered-list item", () => {
+      const lines = split(
+        "## Diagram\n![[brain.png]]\n1. ==Hippocampus==\n2. ==Amygdala==\n3. ==Thalamus==",
+      );
+      const seg = findFlashcardSegment(lines, {
+        type: "image-occlusion",
+        front: "![[brain.png]]",
+        breadcrumb: "Diagram",
+        clozeOrder: 1,
+      });
+      expect(seg).toEqual({ start: 3, end: 4 });
+    });
+
+    it("returns null when the card cannot be located", () => {
+      const lines = split("## A\nbody");
+      const seg = findFlashcardSegment(lines, {
+        type: "header-paragraph",
+        front: "Missing",
+        breadcrumb: "",
+        clozeOrder: null,
+      });
+      expect(seg).toBeNull();
     });
   });
 });

@@ -364,6 +364,7 @@ export const sq: Translations = {
     createButton: "Krijo",
     colFront: "Para",
     colBack: "Prapa",
+    colNotes: "Shënime",
     colFile: "Skedari",
     colBreadcrumb: "Shtegu",
     colDeckTag: "Etiketa e pakos",

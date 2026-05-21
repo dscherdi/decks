@@ -1,9 +1,13 @@
 import type { Flashcard } from "../database/types";
 import { FlashcardParser } from "../services/FlashcardParser";
+import { splitTableLine, unescapeTableCell } from "./markdown-table";
 
 const HEADER_REGEX = /^(#{1,6})\s+(.+)$/;
 const TABLE_ROW_REGEX = /^\|.*\|$/;
 const BREADCRUMB_SEPARATOR = " > ";
+const IMAGE_EMBED_REGEX =
+  /^!\[\[[^\]]+\.(png|jpe?g|gif|svg|bmp|webp|avif|heic|heif|tiff?)(\|[^\]]*)?\]\]$|^!\[[^\]]*\]\([^)]+\.(png|jpe?g|gif|svg|bmp|webp|avif|heic|heif|tiff?)(\s+[^)]+)?\)$/i;
+const NUMBERED_LIST_REGEX = /^\d+\.\s+(.+)$/;
 
 interface HeaderInfo {
   level: number;
@@ -22,10 +26,11 @@ function matchHeader(line: string): HeaderInfo | null {
 function matchTableRowFront(line: string, target: string): boolean {
   const trimmed = line.trim();
   if (!TABLE_ROW_REGEX.test(trimmed)) return false;
-  const cells = trimmed
-    .slice(1, -1)
-    .split("|")
-    .map((c) => c.trim());
+  // Respect escaped pipes and un-escape so we compare against the same
+  // un-escaped value the parser stored in card.front.
+  const cells = splitTableLine(trimmed.slice(1, -1)).map(
+    (c) => unescapeTableCell(c.trim()),
+  );
   return cells.length >= 1 && cells[0] === target;
 }
 
@@ -148,6 +153,97 @@ export function findFlashcardLine(
   }
 
   return findFlashcardLineInRange(lines, 0, lines.length, flashcard);
+}
+
+/**
+ * Find the markdown line range [start, end) that a flashcard occupies in
+ * the file. The writer replaces this range with a fresh segment built from
+ * user edits.
+ *
+ * - header-paragraph: full block, header line to (but not including) the
+ *   next header at level <= host level (or EOF).
+ * - table: the single table-row line.
+ * - cloze: same as the host block (header if the anchor is a header line,
+ *   table row otherwise).
+ * - image-occlusion: the single numbered-list line at `clozeOrder` under
+ *   the parent header.
+ */
+export function findFlashcardSegment(
+  lines: string[],
+  flashcard: Pick<Flashcard, "type" | "front" | "breadcrumb" | "clozeOrder">,
+): { start: number; end: number } | null {
+  if (flashcard.type === "image-occlusion") {
+    return findImageOcclusionItemSegment(
+      lines,
+      flashcard.breadcrumb,
+      flashcard.front,
+      flashcard.clozeOrder ?? 0,
+    );
+  }
+
+  const anchor = findFlashcardLine(lines, flashcard);
+  if (anchor === null) return null;
+
+  const headerHit = matchHeader(lines[anchor]);
+  if (headerHit) {
+    const end = findHeaderBlockEnd(lines, anchor, headerHit.level);
+    return { start: anchor, end };
+  }
+
+  return { start: anchor, end: anchor + 1 };
+}
+
+function findHeaderBlockEnd(
+  lines: string[],
+  headerIndex: number,
+  headerLevel: number,
+): number {
+  for (let i = headerIndex + 1; i < lines.length; i++) {
+    const h = matchHeader(lines[i]);
+    if (h && h.level <= headerLevel) return i;
+  }
+  return lines.length;
+}
+
+function findImageOcclusionItemSegment(
+  lines: string[],
+  breadcrumb: string,
+  imageEmbed: string,
+  clozeOrder: number,
+): { start: number; end: number } | null {
+  const parentHeaderIndex = findImageOcclusionLine(lines, breadcrumb);
+  if (parentHeaderIndex === null) return null;
+
+  const headerHit = matchHeader(lines[parentHeaderIndex]);
+  if (!headerHit) return null;
+  const blockEnd = findHeaderBlockEnd(
+    lines,
+    parentHeaderIndex,
+    headerHit.level,
+  );
+
+  const targetEmbed = imageEmbed.trim();
+  let imageLineIndex = -1;
+  for (let i = parentHeaderIndex + 1; i < blockEnd; i++) {
+    const trimmed = lines[i].trim();
+    if (trimmed === targetEmbed || IMAGE_EMBED_REGEX.test(trimmed)) {
+      imageLineIndex = i;
+      break;
+    }
+  }
+  if (imageLineIndex === -1) return null;
+
+  let itemIndex = 0;
+  for (let i = imageLineIndex + 1; i < blockEnd; i++) {
+    const trimmed = lines[i].trim();
+    if (NUMBERED_LIST_REGEX.test(trimmed)) {
+      if (itemIndex === clozeOrder) {
+        return { start: i, end: i + 1 };
+      }
+      itemIndex++;
+    }
+  }
+  return null;
 }
 
 function findImageOcclusionLine(

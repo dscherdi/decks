@@ -43,6 +43,13 @@ export class Vault {
     this.files.set(file.path, content);
   }
 
+  async process(file: TFile, fn: (data: string) => string): Promise<string> {
+    const current = this.files.get(file.path) ?? "";
+    const next = fn(current);
+    this.files.set(file.path, next);
+    return next;
+  }
+
   getMarkdownFiles(): TFile[] {
     return this.markdownFiles;
   }
