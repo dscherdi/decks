@@ -13,6 +13,7 @@ import {
 } from "./database/DatabaseFactory";
 import { DeckManager } from "./services/DeckManager";
 import { DeckSynchronizer } from "./services/DeckSynchronizer";
+import { CanvasFileEventHandlers } from "./services/CanvasFileEventHandlers";
 import { Scheduler } from "./services/Scheduler";
 import { DeviceLocalState } from "./services/DeviceLocalState";
 import { SyncLog } from "./services/SyncLog";
@@ -106,6 +107,7 @@ export default class DecksPlugin extends Plugin {
   private db: IDatabaseService;
   public deckManager: DeckManager;
   private deckSynchronizer: DeckSynchronizer;
+  private canvasFileEvents: CanvasFileEventHandlers;
   private scheduler: Scheduler;
   private backupService: BackupService;
   private statisticsService: StatisticsService;
@@ -205,6 +207,20 @@ export default class DecksPlugin extends Plugin {
         this.app.vault.adapter,
         this.app.vault.configDir
       );
+
+      // Canvas file events route through their own handler module — the
+      // markdown-tag-based handlers don't apply to .canvas files (no
+      // frontmatter, folder-scope instead of tag-scope).
+      this.canvasFileEvents = new CanvasFileEventHandlers({
+        settings: this.settings,
+        db: this.db,
+        deckSynchronizer: this.deckSynchronizer,
+        logger: this.logger,
+        scheduleDeckSync: (deckId: string) => this.scheduleDeckSync(deckId),
+        refreshStats: async () => {
+          await this.getDecksView()?.refreshStats();
+        },
+      });
 
       // Initialize backup service with the resolved backup folder.
       this.backupService = new BackupService(
@@ -523,10 +539,12 @@ export default class DecksPlugin extends Plugin {
         .compact()
         .catch((error) => this.logger.debug("startup compact failed", error as object));
 
-      // Listen for file changes to update decks
+      // Listen for file changes to update decks. Both .md (tag-scoped) and
+      // .canvas (folder-scoped) files reach the handlers, which branch by
+      // extension and dispatch to the right pipeline.
       this.registerEvent(
         this.app.vault.on("modify", async (file) => {
-          if (file instanceof TFile && file.extension === "md") {
+          if (file instanceof TFile && (file.extension === "md" || file.extension === "canvas")) {
             await this.handleFileChange(file);
           }
         })
@@ -534,7 +552,7 @@ export default class DecksPlugin extends Plugin {
 
       this.registerEvent(
         this.app.vault.on("delete", async (file) => {
-          if (file instanceof TFile && file.extension === "md") {
+          if (file instanceof TFile && (file.extension === "md" || file.extension === "canvas")) {
             await this.handleFileDelete(file);
           }
         })
@@ -542,20 +560,21 @@ export default class DecksPlugin extends Plugin {
 
       this.registerEvent(
         this.app.vault.on("rename", async (file, oldPath) => {
-          if (file instanceof TFile && file.extension === "md") {
+          if (file instanceof TFile && (file.extension === "md" || file.extension === "canvas")) {
             await this.handleFileRename(file, oldPath);
           }
         })
       );
 
       // New tagged files should appear in the deck list immediately,
-      // without waiting for the next manual refresh. We can't always read
-      // the tag synchronously on "create" (Obsidian populates metadataCache
-      // a beat later), so the handler is event-driven via metadataCache's
-      // own "changed" event the FIRST time it fires for this file.
+      // without waiting for the next manual refresh. For markdown we can't
+      // always read the tag synchronously on "create" (Obsidian populates
+      // metadataCache a beat later), so the handler defers via
+      // metadataCache's own "changed" event the FIRST time it fires for the
+      // file. Canvas files have no metadata to wait for — handled inline.
       this.registerEvent(
         this.app.vault.on("create", async (file) => {
-          if (file instanceof TFile && file.extension === "md") {
+          if (file instanceof TFile && (file.extension === "md" || file.extension === "canvas")) {
             await this.handleFileCreate(file);
           }
         })
@@ -838,6 +857,10 @@ export default class DecksPlugin extends Plugin {
   }
 
   async handleFileChange(file: TFile) {
+    if (file.extension === "canvas") {
+      await this.canvasFileEvents.onModified(file);
+      return;
+    }
     // Check if file has flashcards tag
     const metadata = this.app.metadataCache.getFileCache(file);
     this.logger.debug(`File changed: ${file.path}, metadata:`, metadata);
@@ -953,6 +976,10 @@ export default class DecksPlugin extends Plugin {
   }
 
   async handleFileDelete(file: TFile) {
+    if (file.extension === "canvas") {
+      await this.canvasFileEvents.onDeleted(file.path);
+      return;
+    }
     // Remove the deck and all associated flashcards/review logs
     await this.db.deleteDeckByFilepath(file.path);
 
@@ -968,6 +995,10 @@ export default class DecksPlugin extends Plugin {
    * if needed.
    */
   async handleFileCreate(file: TFile): Promise<void> {
+    if (file.extension === "canvas") {
+      await this.canvasFileEvents.onCreated(file);
+      return;
+    }
     const baseTag = this.settings.parsing.deckTag;
     const checkAndSync = async (): Promise<boolean> => {
       const metadata = this.app.metadataCache.getFileCache(file);
@@ -1000,6 +1031,10 @@ export default class DecksPlugin extends Plugin {
   }
 
   async handleFileRename(file: TAbstractFile, oldPath: string): Promise<void> {
+    if (file instanceof TFile && file.extension === "canvas") {
+      await this.canvasFileEvents.onRenamed(file, oldPath);
+      return;
+    }
     if (file instanceof TFile && file.extension === "md") {
       // Handle deck ID regeneration for renamed files
       const oldDeck = await this.db.getDeckByFilepath(oldPath);
