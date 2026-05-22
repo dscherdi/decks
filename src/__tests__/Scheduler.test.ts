@@ -332,7 +332,9 @@ describe("Scheduler", () => {
         modified: new Date().toISOString(),
       };
 
-      // Mock new card query (getNextNewCard)
+      // Mock new card query (getNextNewCard). The positional shape must match
+      // the flashcards table column order — schema v19 inserts source_node_id
+      // between cloze_order and state.
       mockDb.querySql.mockResolvedValueOnce([
         [
           mockNewCard.id,
@@ -346,6 +348,7 @@ describe("Scheduler", () => {
           mockNewCard.notes,
           mockNewCard.clozeText,
           mockNewCard.clozeOrder,
+          mockNewCard.sourceNodeId ?? null,
           mockNewCard.state,
           mockNewCard.dueDate,
           mockNewCard.interval,
