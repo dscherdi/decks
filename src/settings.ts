@@ -100,6 +100,7 @@ export interface DecksSettings {
 
   // Internal tracking
   hasCreatedTestDeck: boolean;
+  hasCreatedCanvasTestDeck: boolean;
 }
 
 export const DEFAULT_SETTINGS: DecksSettings = {
@@ -163,4 +164,5 @@ export const DEFAULT_SETTINGS: DecksSettings = {
   },
 
   hasCreatedTestDeck: false,
+  hasCreatedCanvasTestDeck: false,
 };

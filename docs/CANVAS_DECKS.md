@@ -13,6 +13,12 @@ Open **Settings → Canvas decks** and configure:
 
 That's it. Drop a `.canvas` file in the configured folder, restart your sync or trigger a refresh, and the canvas appears as a new deck.
 
+### Getting-started canvas
+
+On first install — and once on the next plugin load for existing installs upgrading to a version that has Canvas Decks — the plugin auto-creates a `Decks — Canvas getting started.canvas` file inside a `Canvas decks/` folder, and points the **Canvas decks folder** setting at that folder if it was empty. The file demonstrates the three text-format card types (header-paragraph, table, cloze) across four text nodes.
+
+You can also recreate it any time via the command palette: **Decks: Create canvas test deck**. Delete the file or fold the folder under another path — the plugin won't recreate or overwrite it (gated on the `hasCreatedCanvasTestDeck` flag and existence-check on the target path).
+
 ### Per-text-node parsing
 
 A canvas is a JSON document; each `type: "text"` node carries markdown content. The parser visits every text node independently and feeds its content through the same `FlashcardParser.parseFlashcardsFromContent()` pipeline used for markdown decks. The four card formats work inside a node:

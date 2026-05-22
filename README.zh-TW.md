@@ -118,7 +118,7 @@ Thank you.
 
 ### Canvas 牌組
 
-在 Obsidian Canvas (`.canvas`) 檔案中編寫卡片，而非 Markdown 檔案。已設定資料夾中的每個 canvas 都會成為一個牌組；每個文字節點都會以上述相同的四種卡片格式進行解析。透過 **設定 → Canvas 牌組** 設定：資料夾與標籤（預設 `#decks/canvas`）。在複習中點選「前往來源」會開啟 canvas 並聚焦到來源文字節點。詳情請見 **[docs/CANVAS_DECKS.md](docs/CANVAS_DECKS.md)**。
+在 Obsidian Canvas (`.canvas`) 檔案中編寫卡片，而非 Markdown 檔案。已設定資料夾中的每個 canvas 都會成為一個牌組；每個文字節點都會以上述相同的四種卡片格式進行解析。透過 **設定 → Canvas 牌組** 設定：資料夾與標籤（預設 `#decks/canvas`）。在複習中點選「前往來源」會開啟 canvas 並聚焦到來源文字節點。首次安裝（或升級）時，會在 `Canvas decks/` 資料夾中自動建立一份 `Decks — Canvas 入門.canvas`。詳情請見 **[docs/CANVAS_DECKS.md](docs/CANVAS_DECKS.md)**。
 
 ## 個人化排程
 

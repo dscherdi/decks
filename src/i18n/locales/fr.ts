@@ -13,6 +13,37 @@ export const fr: Translations = {
 
   ribbon: { decks: "Paquets" },
 
+  testDeckCanvas: {
+    filename: "Decks — Démarrer avec canvas.canvas",
+    title: "Démarrer avec canvas",
+    intro:
+      "Ce canvas est aussi un paquet de cartes. Chaque nœud texte ci-dessous contient une ou plusieurs cartes, analysées avec les mêmes formats qu'un paquet Markdown. L'étiquette du paquet est {tag}.",
+    formatsHint:
+      "Déplace les nœuds, modifie le texte, ajoutes-en — chaque nœud texte dans les fichiers .canvas de ce dossier fait partie de ton paquet.",
+    section1: "Cartes en-tête + paragraphe",
+    q1: "Qu'est-ce qui différencie un paquet canvas d'un paquet Markdown ?",
+    a1: "Chaque nœud texte est analysé indépendamment. Mélange librement les formats entre les nœuds.",
+    q2: "Où le plugin cherche-t-il les paquets canvas ?",
+    a2:
+      "Dans le dossier configuré dans Paramètres → Paquets canvas. Ce fichier s'y trouve.",
+    section2: "Cartes en tableau",
+    fsrsConceptsHeading: "Concepts FSRS",
+    colFront: "Recto",
+    colBack: "Verso",
+    colNotes: "Notes",
+    row1Front: "Que signifie FSRS ?",
+    row1Back: "Free Spaced Repetition Scheduler",
+    row1Notes: "L'algorithme que Decks utilise pour planifier les cartes",
+    row2Front: "Quelles sont les quatre notes de révision ?",
+    row2Back: "Encore, Difficile, Bien, Facile",
+    row2Notes:
+      "« Encore » réinitialise la carte ; « Facile » donne l'intervalle le plus long",
+    section3: "Cartes à trous (cloze)",
+    solarHeading: "Le système solaire",
+    solarBody:
+      "Le ==Soleil== est l'étoile au centre de notre système solaire. La planète la plus proche est ==Mercure== et la plus grande est ==Jupiter==.",
+  },
+
   testDeck: {
     filename: "Decks — Premiers pas.md",
     title: "Premiers pas avec Decks",
@@ -63,6 +94,7 @@ export const fr: Translations = {
     showReleaseNotes: "Afficher les notes de version",
     openManager: "Ouvrir le gestionnaire de cartes",
     createTestDeck: "Créer un paquet de test",
+    createCanvasTestDeck: "Créer un paquet de test canvas",
     fullResync:
       "Forcer une resynchronisation complète (réanalyser chaque paquet)",
     openReview: "Ouvrir la fenêtre de révision",

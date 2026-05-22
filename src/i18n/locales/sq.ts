@@ -15,6 +15,37 @@ export const sq: Translations = {
     decks: "Pakot",
   },
 
+  testDeckCanvas: {
+    filename: "Decks — Fillimi me canvas.canvas",
+    title: "Fillimi me canvas",
+    intro:
+      "Ky canvas është gjithashtu një pako kartash. Çdo nyje teksti më poshtë mban një ose më shumë karta, të analizuara me të njëjtat formate si një pako Markdown. Etiketa e pakos është {tag}.",
+    formatsHint:
+      "Zhvendos nyjet, modifiko tekstin, shto të reja — çdo nyje teksti në skedarët .canvas të kësaj dosjeje bëhet pjesë e pakos sate.",
+    section1: "Karta titull-paragraf",
+    q1: "Çfarë e bën një pako canvas të ndryshme nga një pako Markdown?",
+    a1: "Çdo nyje teksti analizohet veçmas. Mund t'i përziesh lirisht formatet midis nyjeve.",
+    q2: "Ku i kërkon shtojca pakot canvas?",
+    a2:
+      "Brenda dosjes së konfiguruar te Cilësimet → Pako canvas. Ky skedar ndodhet aty.",
+    section2: "Karta tabele",
+    fsrsConceptsHeading: "Konceptet FSRS",
+    colFront: "Përpara",
+    colBack: "Prapa",
+    colNotes: "Shënime",
+    row1Front: "Çfarë do të thotë FSRS?",
+    row1Back: "Free Spaced Repetition Scheduler",
+    row1Notes: "Algoritmi që Decks përdor për të planifikuar kartat",
+    row2Front: "Cilat janë katër vlerësimet e rishikimit?",
+    row2Back: "Përsëri, E vështirë, Mirë, E lehtë",
+    row2Notes:
+      "«Përsëri» e ri-fillon kartën; «E lehtë» jep intervalin më të gjatë",
+    section3: "Karta me boshllëqe (cloze)",
+    solarHeading: "Sistemi diellor",
+    solarBody:
+      "==Dielli== është ylli në qendër të sistemit tonë diellor. Planeti më i afërt është ==Mërkuri==, dhe planeti më i madh është ==Jupiteri==.",
+  },
+
   testDeck: {
     filename: "Decks — Hapat e parë.md",
     title: "Hapat e parë me Decks",
@@ -64,6 +95,7 @@ export const sq: Translations = {
     showReleaseNotes: "Shfaq shënimet e versionit",
     openManager: "Hap menaxherin e kartave",
     createTestDeck: "Krijo pako testimi",
+    createCanvasTestDeck: "Krijo pako testimi canvas",
     fullResync: "Detyro sinkronizimin e plotë (ri-analizo çdo pako)",
     openReview: "Hap dritaren e rishikimit",
   },

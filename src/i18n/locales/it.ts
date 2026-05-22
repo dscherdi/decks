@@ -13,6 +13,37 @@ export const it: Translations = {
 
   ribbon: { decks: "Mazzi" },
 
+  testDeckCanvas: {
+    filename: "Decks — Inizia con canvas.canvas",
+    title: "Inizia con canvas",
+    intro:
+      "Questo canvas è anche un mazzo di carte. Ogni nodo di testo qui sotto contiene una o più carte, analizzate con gli stessi formati di un mazzo Markdown. Il tag del mazzo è {tag}.",
+    formatsHint:
+      "Sposta i nodi, modifica il testo, aggiungine altri — ogni nodo di testo nei file .canvas di questa cartella entra a far parte del tuo mazzo.",
+    section1: "Carte intestazione-paragrafo",
+    q1: "Cosa rende un mazzo canvas diverso da un mazzo Markdown?",
+    a1: "Ogni nodo di testo viene analizzato in modo indipendente. Mischia liberamente i formati tra i nodi.",
+    q2: "Dove cerca il plugin i mazzi canvas?",
+    a2:
+      "Nella cartella configurata in Impostazioni → Mazzi canvas. Questo file si trova lì.",
+    section2: "Carte a tabella",
+    fsrsConceptsHeading: "Concetti FSRS",
+    colFront: "Fronte",
+    colBack: "Retro",
+    colNotes: "Note",
+    row1Front: "Cosa significa FSRS?",
+    row1Back: "Free Spaced Repetition Scheduler",
+    row1Notes: "L'algoritmo che Decks usa per pianificare le carte",
+    row2Front: "Quali sono le quattro valutazioni di ripasso?",
+    row2Back: "Ancora, Difficile, Buono, Facile",
+    row2Notes:
+      "«Ancora» reimposta la carta; «Facile» dà l'intervallo più lungo",
+    section3: "Carte a riempimento (cloze)",
+    solarHeading: "Il sistema solare",
+    solarBody:
+      "Il ==Sole== è la stella al centro del nostro sistema solare. Il pianeta più vicino è ==Mercurio== e il più grande è ==Giove==.",
+  },
+
   testDeck: {
     filename: "Decks — Primi passi.md",
     title: "Primi passi con Decks",
@@ -63,6 +94,7 @@ export const it: Translations = {
     showReleaseNotes: "Mostra note di rilascio",
     openManager: "Apri gestore schede",
     createTestDeck: "Crea mazzo di prova",
+    createCanvasTestDeck: "Crea mazzo di prova canvas",
     fullResync: "Forza risincronizzazione completa (rianalizza ogni mazzo)",
     openReview: "Apri finestra di ripasso",
   },

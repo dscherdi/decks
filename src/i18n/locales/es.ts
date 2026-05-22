@@ -15,6 +15,37 @@ export const es: Translations = {
     decks: "Mazos",
   },
 
+  testDeckCanvas: {
+    filename: "Decks — Comenzar con canvas.canvas",
+    title: "Comenzar con canvas",
+    intro:
+      "Este canvas también es un mazo de tarjetas. Cada nodo de texto debajo contiene una o más tarjetas, analizadas con los mismos formatos que un mazo de Markdown. La etiqueta del mazo es {tag}.",
+    formatsHint:
+      "Arrastra nodos, edita el texto, añade más — cada nodo de texto en los archivos .canvas de esta carpeta forma parte de tu mazo.",
+    section1: "Tarjetas encabezado-párrafo",
+    q1: "¿Qué hace diferente a un mazo de canvas frente a un mazo de Markdown?",
+    a1: "Cada nodo de texto se analiza de forma independiente. Mezcla formatos libremente entre nodos.",
+    q2: "¿Dónde busca el plugin los mazos de canvas?",
+    a2:
+      "Dentro de la carpeta configurada en Ajustes → Mazos de canvas. Este archivo vive allí.",
+    section2: "Tarjetas de tabla",
+    fsrsConceptsHeading: "Conceptos de FSRS",
+    colFront: "Anverso",
+    colBack: "Reverso",
+    colNotes: "Notas",
+    row1Front: "¿Qué significa FSRS?",
+    row1Back: "Free Spaced Repetition Scheduler",
+    row1Notes: "El algoritmo que usa Decks para programar las tarjetas",
+    row2Front: "¿Cuáles son las cuatro valoraciones de repaso?",
+    row2Back: "Otra vez, Difícil, Bien, Fácil",
+    row2Notes:
+      "«Otra vez» reinicia la tarjeta; «Fácil» da el intervalo más largo",
+    section3: "Tarjetas cloze (huecos)",
+    solarHeading: "El sistema solar",
+    solarBody:
+      "El ==Sol== es la estrella en el centro de nuestro sistema solar. El planeta más cercano es ==Mercurio== y el más grande es ==Júpiter==.",
+  },
+
   testDeck: {
     filename: "Decks — Primeros pasos.md",
     title: "Primeros pasos con Decks",
@@ -65,6 +96,7 @@ export const es: Translations = {
     showReleaseNotes: "Mostrar notas de la versión",
     openManager: "Abrir gestor de tarjetas",
     createTestDeck: "Crear mazo de prueba",
+    createCanvasTestDeck: "Crear mazo de prueba en canvas",
     fullResync:
       "Forzar resincronización completa (volver a analizar todos los mazos)",
     openReview: "Abrir ventana de repaso",

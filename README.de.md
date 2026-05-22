@@ -129,7 +129,7 @@ Jeder Listeneintrag ist eine Karte. Das Bild (mit seinen nummerierten Markierung
 
 ### Canvas-Stapel
 
-Erstelle Karten auf einer Obsidian-Canvas-Datei (`.canvas`) statt in einer Markdown-Datei. Jedes Canvas im konfigurierten Ordner wird zu einem Stapel; jeder Textknoten darin wird mit denselben vier Karten-Formaten oben analysiert. Konfiguration unter **Einstellungen → Canvas-Stapel**: Canvas-Ordner und Canvas-Stapel-Tag (Standard `#decks/canvas`). „Quelle öffnen" beim Review öffnet das Canvas und fokussiert den entsprechenden Textknoten. Details in **[docs/CANVAS_DECKS.md](docs/CANVAS_DECKS.md)**.
+Erstelle Karten auf einer Obsidian-Canvas-Datei (`.canvas`) statt in einer Markdown-Datei. Jedes Canvas im konfigurierten Ordner wird zu einem Stapel; jeder Textknoten darin wird mit denselben vier Karten-Formaten oben analysiert. Konfiguration unter **Einstellungen → Canvas-Stapel**: Canvas-Ordner und Canvas-Stapel-Tag (Standard `#decks/canvas`). „Quelle öffnen" beim Review öffnet das Canvas und fokussiert den entsprechenden Textknoten. Beim ersten Installieren (oder Aktualisieren) wird automatisch ein `Decks — Canvas Erste Schritte.canvas` im Ordner `Canvas decks/` erstellt. Details in **[docs/CANVAS_DECKS.md](docs/CANVAS_DECKS.md)**.
 
 ## Was du bekommst
 

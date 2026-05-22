@@ -129,7 +129,7 @@ Thank you.
 
 ### Canvas デッキ
 
-Markdown ファイルの代わりに Obsidian の Canvas (`.canvas`) 上でカードを作成できます。設定したフォルダ内の各 canvas が 1 つのデッキになり、各テキストノードは上記と同じ 4 つのカード形式で解析されます。**設定 → Canvas デッキ** で設定します：フォルダとタグ（既定値 `#decks/canvas`）。復習中の「ソースに移動」は canvas を開き、該当のテキストノードにフォーカスします。詳細は **[docs/CANVAS_DECKS.md](docs/CANVAS_DECKS.md)** を参照。
+Markdown ファイルの代わりに Obsidian の Canvas (`.canvas`) 上でカードを作成できます。設定したフォルダ内の各 canvas が 1 つのデッキになり、各テキストノードは上記と同じ 4 つのカード形式で解析されます。**設定 → Canvas デッキ** で設定します：フォルダとタグ（既定値 `#decks/canvas`）。復習中の「ソースに移動」は canvas を開き、該当のテキストノードにフォーカスします。初回インストール（またはアップグレード）時には、`Canvas decks/` フォルダ内に `Decks — Canvas はじめに.canvas` が自動的に作成されます。詳細は **[docs/CANVAS_DECKS.md](docs/CANVAS_DECKS.md)** を参照。
 
 ## パーソナライズされたスケジュール管理
 

@@ -15,6 +15,37 @@ export const tr: Translations = {
     decks: "Desteler",
   },
 
+  testDeckCanvas: {
+    filename: "Decks — Canvas başlangıç.canvas",
+    title: "Canvas başlangıç",
+    intro:
+      "Bu canvas aynı zamanda bir kart destesidir. Aşağıdaki her metin düğümü bir veya daha fazla kart içerir ve bir Markdown destesi ile aynı biçimlerle ayrıştırılır. Deste etiketi {tag}.",
+    formatsHint:
+      "Düğümleri sürükleyin, metni düzenleyin, yenilerini ekleyin — bu klasördeki .canvas dosyalarının her metin düğümü destenizin bir parçası olur.",
+    section1: "Başlık-paragraf kartları",
+    q1: "Canvas destesi Markdown destesinden nasıl farklıdır?",
+    a1: "Her metin düğümü bağımsız olarak ayrıştırılır. Düğümler arasında biçimleri özgürce karıştırabilirsiniz.",
+    q2: "Eklenti Canvas destelerini nerede arar?",
+    a2:
+      "Ayarlar → Canvas desteleri'nde yapılandırılan klasörün içinde. Bu dosya orada bulunur.",
+    section2: "Tablo kartları",
+    fsrsConceptsHeading: "FSRS kavramları",
+    colFront: "Ön",
+    colBack: "Arka",
+    colNotes: "Notlar",
+    row1Front: "FSRS neyin kısaltmasıdır?",
+    row1Back: "Free Spaced Repetition Scheduler",
+    row1Notes: "Decks'in kartları planlamak için kullandığı algoritma",
+    row2Front: "Dört tekrar derecelendirmesi nelerdir?",
+    row2Back: "Tekrar, Zor, İyi, Kolay",
+    row2Notes:
+      "«Tekrar» kartı sıfırlar; «Kolay» en uzun aralığı verir",
+    section3: "Boşluk doldurma (cloze) kartları",
+    solarHeading: "Güneş sistemi",
+    solarBody:
+      "==Güneş==, güneş sistemimizin merkezindeki yıldızdır. En yakın gezegen ==Merkür== ve en büyük gezegen ==Jüpiter=='dir.",
+  },
+
   testDeck: {
     filename: "Decks — Başlarken.md",
     title: "Decks'e Başlarken",
@@ -64,6 +95,7 @@ export const tr: Translations = {
     showReleaseNotes: "Sürüm notlarını göster",
     openManager: "Bilgi kartı yöneticisini aç",
     createTestDeck: "Test destesi oluştur",
+    createCanvasTestDeck: "Canvas test destesi oluştur",
     fullResync: "Tam eşitlemeye zorla (her desteyi yeniden ayrıştır)",
     openReview: "Tekrar penceresini aç",
   },

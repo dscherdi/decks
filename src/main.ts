@@ -388,6 +388,44 @@ export default class DecksPlugin extends Plugin {
         },
       });
 
+      // Canvas test deck: create on fresh install / first upgrade to a build
+      // that has canvas decks, also available as a command. Auto-points the
+      // canvas-decks setting at the resolved folder if it was empty.
+      const setCanvasFolderIfEmpty = async (folder: string | null) => {
+        if (!folder) return;
+        if (this.settings.canvasDecks.folderPath.trim() !== "") return;
+        this.settings.canvasDecks.folderPath = folder;
+        await this.saveSettings();
+      };
+
+      if (!this.settings.hasCreatedCanvasTestDeck) {
+        this.settings.hasCreatedCanvasTestDeck = true;
+        await this.saveSettings();
+        this.app.workspace.onLayoutReady(() => {
+          testDeckService
+            .createTestCanvasDeck(
+              this.settings.canvasDecks.tagName,
+              this.settings.canvasDecks.folderPath
+            )
+            .then(setCanvasFolderIfEmpty)
+            .catch(console.error);
+        });
+      }
+
+      this.addCommand({
+        id: "create-canvas-test-deck",
+        name: I18n.t.commands.createCanvasTestDeck,
+        callback: () => {
+          testDeckService
+            .createTestCanvasDeck(
+              this.settings.canvasDecks.tagName,
+              this.settings.canvasDecks.folderPath
+            )
+            .then(setCanvasFolderIfEmpty)
+            .catch(console.error);
+        },
+      });
+
       // Force a full resync (bypasses the mtime gate). Defensive lever for
       // the rare "I think the index is wrong" case — normally the gate
       // handles incremental sync correctly and this is unnecessary.

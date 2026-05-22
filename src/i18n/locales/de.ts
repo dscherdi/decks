@@ -15,6 +15,37 @@ export const de: Translations = {
     decks: "Stapel",
   },
 
+  testDeckCanvas: {
+    filename: "Decks — Canvas Erste Schritte.canvas",
+    title: "Canvas — Erste Schritte",
+    intro:
+      "Dieses Canvas ist ebenfalls ein Karteikarten-Stapel. Jeder Textknoten unten enthält eine oder mehrere Karten, die mit den gleichen Formaten wie in einem Markdown-Stapel geparst werden. Das Stapel-Tag ist {tag}.",
+    formatsHint:
+      "Verschiebe die Knoten, bearbeite Text, füge neue hinzu — jeder Textknoten in den .canvas-Dateien dieses Ordners wird Teil deines Stapels.",
+    section1: "Überschrift-Absatz-Karten",
+    q1: "Was unterscheidet einen Canvas-Stapel von einem Markdown-Stapel?",
+    a1: "Jeder Textknoten wird unabhängig geparst. Du kannst Formate frei über mehrere Knoten hinweg mischen.",
+    q2: "Wo sucht das Plugin nach Canvas-Stapeln?",
+    a2:
+      "Im Ordner, der unter Einstellungen → Canvas-Stapel konfiguriert ist. Diese Datei liegt dort.",
+    section2: "Tabellen-Karten",
+    fsrsConceptsHeading: "FSRS-Konzepte",
+    colFront: "Vorderseite",
+    colBack: "Rückseite",
+    colNotes: "Notizen",
+    row1Front: "Wofür steht FSRS?",
+    row1Back: "Free Spaced Repetition Scheduler",
+    row1Notes: "Der Algorithmus, den Decks zum Planen von Karten verwendet",
+    row2Front: "Was sind die vier Bewertungsstufen?",
+    row2Back: "Noch einmal, Schwer, Gut, Einfach",
+    row2Notes:
+      "„Noch einmal“ setzt die Karte zurück; „Einfach“ gibt den längsten Intervall",
+    section3: "Lückentext-Karten (Cloze)",
+    solarHeading: "Das Sonnensystem",
+    solarBody:
+      "Die ==Sonne== ist der Stern im Zentrum unseres Sonnensystems. Der nächste Planet ist der ==Merkur== und der größte Planet ist der ==Jupiter==.",
+  },
+
   testDeck: {
     filename: "Decks — Erste Schritte.md",
     title: "Erste Schritte mit Decks",
@@ -65,6 +96,7 @@ export const de: Translations = {
     showReleaseNotes: "Versionshinweise anzeigen",
     openManager: "Karteikarten-Manager öffnen",
     createTestDeck: "Teststapel erstellen",
+    createCanvasTestDeck: "Canvas-Teststapel erstellen",
     fullResync:
       "Vollständige Neusynchronisierung erzwingen (jeden Stapel neu parsen)",
     openReview: "Wiederholungsfenster öffnen",

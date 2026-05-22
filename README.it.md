@@ -129,7 +129,7 @@ Ogni elemento dell'elenco è una carta. L'immagine (con le sue etichette numerat
 
 ### Mazzi canvas
 
-Crea carte su un file Canvas di Obsidian (`.canvas`) anziché su un file Markdown. Ogni canvas nella cartella configurata diventa un mazzo; ogni nodo di testo viene analizzato con gli stessi quattro formati di carta sopra. Configura tramite **Impostazioni → Mazzi canvas**: cartella ed etichetta (predefinita `#decks/canvas`). "Vai alla sorgente" durante il ripasso apre il canvas e seleziona il nodo di origine. Dettagli in **[docs/CANVAS_DECKS.md](docs/CANVAS_DECKS.md)**.
+Crea carte su un file Canvas di Obsidian (`.canvas`) anziché su un file Markdown. Ogni canvas nella cartella configurata diventa un mazzo; ogni nodo di testo viene analizzato con gli stessi quattro formati di carta sopra. Configura tramite **Impostazioni → Mazzi canvas**: cartella ed etichetta (predefinita `#decks/canvas`). "Vai alla sorgente" durante il ripasso apre il canvas e seleziona il nodo di origine. Alla prima installazione (o aggiornamento) viene creato automaticamente un `Decks — Inizia con canvas.canvas` nella cartella `Canvas decks/`. Dettagli in **[docs/CANVAS_DECKS.md](docs/CANVAS_DECKS.md)**.
 
 ## Pianificazione personalizzata
 

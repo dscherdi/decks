@@ -13,6 +13,36 @@ export const ja: Translations = {
 
   ribbon: { decks: "デッキ" },
 
+  testDeckCanvas: {
+    filename: "Decks — Canvas はじめに.canvas",
+    title: "Canvas — はじめに",
+    intro:
+      "この canvas もフラッシュカードのデッキです。下の各テキストノードには 1 枚または複数枚のカードが含まれ、Markdown デッキと同じフォーマットで解析されます。デッキタグは {tag} です。",
+    formatsHint:
+      "ノードを移動したり、テキストを編集したり、追加したりしてください — このフォルダ内の .canvas ファイルにあるすべてのテキストノードがデッキの一部になります。",
+    section1: "見出し＋段落カード",
+    q1: "Canvas デッキと Markdown デッキの違いは何ですか？",
+    a1: "各テキストノードは独立して解析されます。ノードをまたいで自由にフォーマットを混在できます。",
+    q2: "プラグインは Canvas デッキをどこから探しますか？",
+    a2: "設定 → Canvas デッキで指定したフォルダ内です。このファイルもそこにあります。",
+    section2: "テーブルカード",
+    fsrsConceptsHeading: "FSRS の概念",
+    colFront: "表面",
+    colBack: "裏面",
+    colNotes: "メモ",
+    row1Front: "FSRS は何の略ですか？",
+    row1Back: "Free Spaced Repetition Scheduler",
+    row1Notes: "Decks がカードのスケジュールに使うアルゴリズム",
+    row2Front: "復習の 4 つの評価は何ですか？",
+    row2Back: "もう一度、難しい、良い、簡単",
+    row2Notes:
+      "「もう一度」はカードをリセットします。「簡単」は最も長い間隔を与えます",
+    section3: "穴埋め (Cloze) カード",
+    solarHeading: "太陽系",
+    solarBody:
+      "==太陽==は私たちの太陽系の中心にある恒星です。最も近い惑星は==水星==、最も大きい惑星は==木星==です。",
+  },
+
   testDeck: {
     filename: "Decks — はじめに.md",
     title: "Decks のはじめ方",
@@ -63,6 +93,7 @@ export const ja: Translations = {
     showReleaseNotes: "リリースノートを表示",
     openManager: "カード管理を開く",
     createTestDeck: "テストデッキを作成",
+    createCanvasTestDeck: "Canvas テストデッキを作成",
     fullResync: "完全な再同期を強制（全デッキを再解析）",
     openReview: "復習ウィンドウを開く",
   },

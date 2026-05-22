@@ -129,7 +129,7 @@ Chaque élément de la liste est une carte. L'image (avec ses étiquettes numér
 
 ### Paquets canvas
 
-Créez des cartes sur un canvas Obsidian (`.canvas`) au lieu d'un fichier Markdown. Chaque canvas dans le dossier configuré devient un paquet ; chaque nœud texte est analysé avec les mêmes quatre formats de carte ci-dessus. Configurez via **Paramètres → Paquets canvas** : dossier et étiquette (par défaut `#decks/canvas`). « Aller à la source » depuis la révision ouvre le canvas et met le focus sur le nœud d'origine. Détails dans **[docs/CANVAS_DECKS.md](docs/CANVAS_DECKS.md)**.
+Créez des cartes sur un canvas Obsidian (`.canvas`) au lieu d'un fichier Markdown. Chaque canvas dans le dossier configuré devient un paquet ; chaque nœud texte est analysé avec les mêmes quatre formats de carte ci-dessus. Configurez via **Paramètres → Paquets canvas** : dossier et étiquette (par défaut `#decks/canvas`). « Aller à la source » depuis la révision ouvre le canvas et met le focus sur le nœud d'origine. À la première installation (ou mise à jour), un fichier `Decks — Démarrer avec canvas.canvas` est créé automatiquement dans le dossier `Canvas decks/`. Détails dans **[docs/CANVAS_DECKS.md](docs/CANVAS_DECKS.md)**.
 
 ## Ce que vous obtenez
 

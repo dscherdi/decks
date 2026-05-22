@@ -15,6 +15,35 @@ export const zhTW: Translations = {
     decks: "牌組",
   },
 
+  testDeckCanvas: {
+    filename: "Decks — Canvas 入門.canvas",
+    title: "Canvas 入門",
+    intro:
+      "這個 canvas 也是一個閃卡牌組。下方的每個文字節點都包含一張或多張卡片，使用與 Markdown 牌組相同的格式進行解析。牌組標籤為 {tag}。",
+    formatsHint:
+      "拖動節點、編輯文字、新增更多 —— 此資料夾中 .canvas 檔案裡的每個文字節點都會成為您牌組的一部分。",
+    section1: "標題-段落卡片",
+    q1: "Canvas 牌組與 Markdown 牌組有什麼不同？",
+    a1: "每個文字節點都會被獨立解析。您可以在節點之間自由混合格式。",
+    q2: "外掛在哪裡尋找 Canvas 牌組？",
+    a2: "在「設定 → Canvas 牌組」中設定的資料夾內。此檔案就在那裡。",
+    section2: "表格卡片",
+    fsrsConceptsHeading: "FSRS 概念",
+    colFront: "正面",
+    colBack: "背面",
+    colNotes: "備註",
+    row1Front: "FSRS 是什麼的縮寫？",
+    row1Back: "Free Spaced Repetition Scheduler",
+    row1Notes: "Decks 用來安排卡片的演算法",
+    row2Front: "四個複習評分是什麼？",
+    row2Back: "再次、困難、良好、容易",
+    row2Notes: "「再次」會重置卡片；「容易」給出最長的間隔",
+    section3: "填空卡片",
+    solarHeading: "太陽系",
+    solarBody:
+      "==太陽==是我們太陽系中心的恆星。距離最近的行星是==水星==，最大的行星是==木星==。",
+  },
+
   testDeck: {
     filename: "Decks — 快速入門.md",
     title: "Decks 快速入門",
@@ -63,6 +92,7 @@ export const zhTW: Translations = {
     showReleaseNotes: "顯示版本說明",
     openManager: "開啟閃卡管理器",
     createTestDeck: "建立測試牌組",
+    createCanvasTestDeck: "建立 Canvas 測試牌組",
     fullResync: "強制完全重新同步 (重新解析每個牌組)",
     openReview: "開啟複習視窗",
   },

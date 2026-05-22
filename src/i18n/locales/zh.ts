@@ -13,6 +13,35 @@ export const zh: Translations = {
 
   ribbon: { decks: "牌组" },
 
+  testDeckCanvas: {
+    filename: "Decks — Canvas 入门.canvas",
+    title: "Canvas 入门",
+    intro:
+      "这个 canvas 也是一个卡片牌组。下面的每个文本节点都包含一张或多张卡片，使用与 Markdown 牌组相同的格式解析。牌组标签为 {tag}。",
+    formatsHint:
+      "拖动节点、编辑文本、添加更多 —— 此文件夹中 .canvas 文件里的每个文本节点都会成为你牌组的一部分。",
+    section1: "标题-段落卡片",
+    q1: "Canvas 牌组与 Markdown 牌组有什么不同？",
+    a1: "每个文本节点都会被独立解析。可以在节点之间自由混合格式。",
+    q2: "插件在哪里查找 Canvas 牌组？",
+    a2: "在「设置 → Canvas 牌组」中配置的文件夹里。该文件就在那里。",
+    section2: "表格卡片",
+    fsrsConceptsHeading: "FSRS 概念",
+    colFront: "正面",
+    colBack: "背面",
+    colNotes: "备注",
+    row1Front: "FSRS 代表什么？",
+    row1Back: "Free Spaced Repetition Scheduler",
+    row1Notes: "Decks 用于安排卡片的算法",
+    row2Front: "四个复习评分是什么？",
+    row2Back: "再次、困难、良好、容易",
+    row2Notes: "「再次」会重置卡片；「容易」给出最长的间隔",
+    section3: "填空卡片",
+    solarHeading: "太阳系",
+    solarBody:
+      "==太阳==是我们太阳系中心的恒星。距离最近的行星是==水星==，最大的行星是==木星==。",
+  },
+
   testDeck: {
     filename: "Decks — 快速入门.md",
     title: "Decks 快速入门",
@@ -61,6 +90,7 @@ export const zh: Translations = {
     showReleaseNotes: "显示发行说明",
     openManager: "打开卡片管理器",
     createTestDeck: "创建测试牌组",
+    createCanvasTestDeck: "创建 Canvas 测试牌组",
     fullResync: "强制完全重新同步（重新解析每个牌组）",
     openReview: "打开复习窗口",
   },

@@ -15,6 +15,36 @@ export const ar: Translations = {
     decks: "الرزم",
   },
 
+  testDeckCanvas: {
+    filename: "Decks — البدء مع Canvas.canvas",
+    title: "البدء مع Canvas",
+    intro:
+      "هذا canvas هو أيضًا رزمة بطاقات. كل عقدة نصية في الأسفل تحتوي على بطاقة أو أكثر، تُحلَّل بنفس الصيغ المستخدمة في رزمة Markdown. علامة الرزمة هي {tag}.",
+    formatsHint:
+      "اسحب العقد، حرّر النص، أضف المزيد — كل عقدة نصية في ملفات .canvas داخل هذا المجلد ستصبح جزءًا من رزمتك.",
+    section1: "بطاقات عنوان-فقرة",
+    q1: "ما الذي يجعل رزمة canvas مختلفة عن رزمة Markdown؟",
+    a1: "كل عقدة نصية تُحلَّل بشكل مستقل. يمكنك مزج الصيغ بحرية بين العقد.",
+    q2: "أين تبحث الإضافة عن رزم canvas؟",
+    a2: "داخل المجلد المُعدّ في الإعدادات → رزم Canvas. هذا الملف يقع هناك.",
+    section2: "بطاقات جدول",
+    fsrsConceptsHeading: "مفاهيم FSRS",
+    colFront: "الأمام",
+    colBack: "الخلف",
+    colNotes: "ملاحظات",
+    row1Front: "ماذا تعني FSRS؟",
+    row1Back: "Free Spaced Repetition Scheduler",
+    row1Notes: "الخوارزمية التي يستخدمها Decks لجدولة البطاقات",
+    row2Front: "ما هي تقييمات المراجعة الأربعة؟",
+    row2Back: "مرة أخرى، صعب، جيد، سهل",
+    row2Notes:
+      "«مرة أخرى» يُعيد تعيين البطاقة؛ «سهل» يعطي أطول فاصل زمني",
+    section3: "بطاقات الفراغات (cloze)",
+    solarHeading: "النظام الشمسي",
+    solarBody:
+      "==الشمس== هي النجم في مركز نظامنا الشمسي. أقرب كوكب هو ==عطارد==، وأكبر كوكب هو ==المشتري==.",
+  },
+
   testDeck: {
     filename: "Decks — البدء مع.md",
     title: "البدء مع Decks",
@@ -64,6 +94,7 @@ export const ar: Translations = {
     showReleaseNotes: "إظهار ملاحظات الإصدار",
     openManager: "فتح مدير البطاقات",
     createTestDeck: "إنشاء رزمة اختبار",
+    createCanvasTestDeck: "إنشاء رزمة اختبار canvas",
     fullResync: "فرض إعادة مزامنة كاملة (إعادة تحليل كل الرزم)",
     openReview: "فتح نافذة المراجعة",
   },

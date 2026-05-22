@@ -129,7 +129,7 @@ Cada elemento de la lista es una tarjeta. La imagen (con sus etiquetas numeradas
 
 ### Mazos de canvas
 
-Crea tarjetas en un Canvas de Obsidian (`.canvas`) en lugar de un archivo Markdown. Cada canvas en la carpeta configurada se convierte en un mazo; cada nodo de texto se analiza con los mismos cuatro formatos de tarjeta de arriba. Configúralo en **Ajustes → Mazos de canvas**: carpeta y etiqueta (por defecto `#decks/canvas`). «Ir a la fuente» desde el repaso abre el canvas y enfoca el nodo de origen. Detalles en **[docs/CANVAS_DECKS.md](docs/CANVAS_DECKS.md)**.
+Crea tarjetas en un Canvas de Obsidian (`.canvas`) en lugar de un archivo Markdown. Cada canvas en la carpeta configurada se convierte en un mazo; cada nodo de texto se analiza con los mismos cuatro formatos de tarjeta de arriba. Configúralo en **Ajustes → Mazos de canvas**: carpeta y etiqueta (por defecto `#decks/canvas`). «Ir a la fuente» desde el repaso abre el canvas y enfoca el nodo de origen. En la primera instalación (o actualización) se crea automáticamente un `Decks — Comenzar con canvas.canvas` dentro de la carpeta `Canvas decks/`. Detalles en **[docs/CANVAS_DECKS.md](docs/CANVAS_DECKS.md)**.
 
 ## Lo que obtienes
 
