@@ -121,6 +121,11 @@ export default class DecksPlugin extends Plugin {
   private syncLog: SyncLog;
   private snapshotTimer: number | null = null;
 
+  // Coalesce rapid-fire vault `modify` events (Obsidian autosaves every ~1-2s
+  // during typing) into one trailing-edge sync per deck after the user pauses.
+  private pendingDeckSyncs = new Map<string, ReturnType<typeof setTimeout>>();
+  private static readonly FILE_MODIFY_DEBOUNCE_MS = 3000;
+
   async onload() {
     // Load settings first
     await this.loadSettings();
@@ -722,6 +727,13 @@ export default class DecksPlugin extends Plugin {
    * periodic timer will retry.
    */
   private async flushAndSnapshotIfDirty(): Promise<void> {
+    // Drain any debounced deck syncs first so their DB writes are included
+    // in the snapshot below.
+    try {
+      await this.flushPendingDeckSyncs();
+    } catch (error) {
+      this.logger.debug("flushPendingDeckSyncs failed on blur/pagehide", error as object);
+    }
     try {
       await this.syncLog?.flushNow();
     } catch (error) {
@@ -821,12 +833,11 @@ export default class DecksPlugin extends Plugin {
           await this.db.updateDeck(existingDeck.id, { tag: newTag });
         }
 
-        // Sync flashcards for this specific deck only
-        await yieldToUI();
-        await this.deckSynchronizer.syncDeck(existingDeck.id);
-
-        // Refresh only this specific deck's stats (fastest option)
-        await this.getDecksView()?.refreshStatsById(existingDeck.id);
+        // Defer the heavy parse/diff/DB-write to a trailing-edge debounce per
+        // deck — Obsidian autosaves every ~1-2s during typing, and running the
+        // full pipeline on each save is wasted work. The UI refresh runs after
+        // the sync inside runDebouncedDeckSync().
+        this.scheduleDeckSync(existingDeck.id);
       } else {
         // New file with flashcards tag - create deck for this file only
         const newTag =
@@ -843,6 +854,40 @@ export default class DecksPlugin extends Plugin {
         // For new decks, refresh all stats to show the new deck
         await this.getDecksView()?.refreshStats();
       }
+    }
+  }
+
+  // Schedule a trailing-edge debounced sync for one deck. Repeated calls
+  // for the same deckId within the debounce window collapse into a single
+  // sync that runs after the last call goes quiet.
+  private scheduleDeckSync(deckId: string): void {
+    const existing = this.pendingDeckSyncs.get(deckId);
+    if (existing !== undefined) clearTimeout(existing);
+    const timer = setTimeout(() => {
+      this.pendingDeckSyncs.delete(deckId);
+      void this.runDebouncedDeckSync(deckId);
+    }, DecksPlugin.FILE_MODIFY_DEBOUNCE_MS);
+    this.pendingDeckSyncs.set(deckId, timer);
+  }
+
+  private async runDebouncedDeckSync(deckId: string): Promise<void> {
+    try {
+      await yieldToUI();
+      await this.deckSynchronizer.syncDeck(deckId);
+      await this.getDecksView()?.refreshStatsById(deckId);
+    } catch (error) {
+      this.logger.error(`Debounced sync failed for deck ${deckId}`, error);
+    }
+  }
+
+  // Run any pending debounced deck syncs now. Used on unload so an edit
+  // sitting in the debounce window isn't silently dropped on plugin disable.
+  private async flushPendingDeckSyncs(): Promise<void> {
+    const pending = Array.from(this.pendingDeckSyncs.entries());
+    this.pendingDeckSyncs.clear();
+    for (const [deckId, timer] of pending) {
+      clearTimeout(timer);
+      await this.runDebouncedDeckSync(deckId);
     }
   }
 
