@@ -19,7 +19,6 @@ data.json
 
 # Exclude macOS Finder (System Explorer) View States
 .DS_Store
-package-lock.json
 demo_vault/
 
 # Generated release notes (created by workflow)
