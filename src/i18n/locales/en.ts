@@ -927,6 +927,16 @@ export const en = {
       folderSearchPathDefault: "Scan entire vault (default)",
     },
 
+    canvasDecks: {
+      heading: "Canvas decks",
+      folderPath: "Canvas decks folder",
+      folderPathDesc: "Folder to scan for Obsidian canvas (.canvas) files. Every canvas inside becomes a deck. Each text node is parsed with the same four flashcard formats as markdown files. Leave empty to disable canvas scanning.",
+      folderPathDefault: "Disabled — no canvas scanning",
+      tagName: "Canvas deck tag",
+      tagNameDesc: "Tag applied to every discovered canvas deck. Used for grouping in the Tags view and for profile mapping. Defaults to #decks/canvas.",
+      tagNamePlaceholder: "#decks/canvas",
+    },
+
     ui: {
       heading: "User interface",
       backgroundRefreshInterval: "Background refresh interval",

@@ -127,6 +127,10 @@ Ogni elemento dell'elenco è una carta. L'immagine (con le sue etichette numerat
 
 </details>
 
+### Mazzi canvas
+
+Crea carte su un file Canvas di Obsidian (`.canvas`) anziché su un file Markdown. Ogni canvas nella cartella configurata diventa un mazzo; ogni nodo di testo viene analizzato con gli stessi quattro formati di carta sopra. Configura tramite **Impostazioni → Mazzi canvas**: cartella ed etichetta (predefinita `#decks/canvas`). "Vai alla sorgente" durante il ripasso apre il canvas e seleziona il nodo di origine. Dettagli in **[docs/CANVAS_DECKS.md](docs/CANVAS_DECKS.md)**.
+
 ## Pianificazione personalizzata
 
 FSRS viene fornito con impostazioni predefinite logiche che funzionano benissimo fin da subito. Una volta accumulate circa 100 revisioni, puoi allenare i 21 pesi dell'algoritmo sulla tua cronologia e ottenere pianificazioni personalizzate per la tua specifica curva dell'oblio, proprio come fa Anki per desktop, ma tutto in locale, senza server e senza telemetria.

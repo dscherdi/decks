@@ -25,6 +25,13 @@ export interface DecksSettings {
     deckTag: string; // Base tag used to identify flashcard decks (e.g., "#decks", "#flashcards")
   };
 
+  // Canvas decks: any Obsidian .canvas file inside `folderPath` becomes a
+  // deck tagged with `tagName`. Empty folderPath disables canvas scanning.
+  canvasDecks: {
+    folderPath: string;
+    tagName: string;
+  };
+
   // UI Settings
   ui: {
     enableBackgroundRefresh: boolean;
@@ -108,6 +115,11 @@ export const DEFAULT_SETTINGS: DecksSettings = {
   parsing: {
     folderSearchPath: "", // Default: scan entire vault
     deckTag: "#decks",
+  },
+
+  canvasDecks: {
+    folderPath: "", // Default: canvas scanning disabled
+    tagName: "#decks/canvas",
   },
 
   ui: {

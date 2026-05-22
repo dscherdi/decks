@@ -50,10 +50,14 @@ export class FlashcardWriter {
     const validation = validateEdits(edits);
     if (validation) return validation;
 
+    const isCanvas = file.extension === "canvas";
+
     try {
       const outcome: { value: InternalApply | null } = { value: null };
       await this.app.vault.process(file, (content) => {
-        const result = applyEdit(content, card, edits);
+        const result = isCanvas
+          ? applyCanvasEdit(content, card, edits)
+          : applyEdit(content, card, edits);
         outcome.value = result;
         return result.ok ? result.newContent : content;
       });
@@ -67,6 +71,52 @@ export class FlashcardWriter {
       return fail("write_failed", e instanceof Error ? e.message : String(e));
     }
   }
+}
+
+interface CanvasJsonShape {
+  nodes?: Array<{ id?: unknown; type?: unknown; text?: unknown } & Record<string, unknown>>;
+  [key: string]: unknown;
+}
+
+function applyCanvasEdit(
+  content: string,
+  card: Flashcard,
+  edits: FlashcardEdits,
+): InternalApply {
+  if (!card.sourceNodeId) {
+    return fail("card_not_found", "Canvas card is missing sourceNodeId");
+  }
+
+  let parsed: CanvasJsonShape;
+  try {
+    parsed = JSON.parse(content) as CanvasJsonShape;
+  } catch (e) {
+    return fail("write_failed", `Canvas file is not valid JSON: ${(e as Error).message}`);
+  }
+
+  if (!Array.isArray(parsed.nodes)) {
+    return fail("card_not_found", "Canvas has no nodes array");
+  }
+
+  const node = parsed.nodes.find(
+    (n) => n && n.type === "text" && n.id === card.sourceNodeId,
+  );
+  if (!node) {
+    return fail("card_not_found", `Canvas node ${card.sourceNodeId} not found`);
+  }
+  if (typeof node.text !== "string") {
+    return fail("card_not_found", "Canvas node has no text content");
+  }
+
+  // Delegate to the same per-card edit logic used for markdown — the node's
+  // text is markdown content, just stored as a JSON string value.
+  const inner = applyEdit(node.text, card, edits);
+  if (!inner.ok) return inner;
+  node.text = inner.newContent;
+
+  // Tabs match Obsidian's own canvas serialization style.
+  const newContent = JSON.stringify(parsed, null, "\t");
+  return { ok: true, newContent };
 }
 
 type InternalApply =

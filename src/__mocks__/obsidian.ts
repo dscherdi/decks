@@ -34,6 +34,7 @@ export interface CachedMetadata {
 export class Vault {
   private files: Map<string, string> = new Map();
   private markdownFiles: TFile[] = [];
+  private otherFiles: TFile[] = [];
 
   async read(file: TFile): Promise<string> {
     return this.files.get(file.path) || "";
@@ -54,8 +55,34 @@ export class Vault {
     return this.markdownFiles;
   }
 
+  // Returns markdown files plus any other tracked file (e.g. .canvas).
+  // Mirrors Obsidian's vault.getFiles() which returns all files regardless
+  // of extension.
+  getFiles(): TFile[] {
+    return [...this.markdownFiles, ...this.otherFiles];
+  }
+
   getAbstractFileByPath(path: string): TFile | null {
-    return this.markdownFiles.find((file) => file.path === path) || null;
+    return (
+      this.markdownFiles.find((file) => file.path === path) ||
+      this.otherFiles.find((file) => file.path === path) ||
+      null
+    );
+  }
+
+  getAllFolders(): { path: string }[] {
+    const folders = new Set<string>();
+    const allPaths = [
+      ...this.markdownFiles.map((f) => f.path),
+      ...this.otherFiles.map((f) => f.path),
+    ];
+    for (const p of allPaths) {
+      const parts = p.split("/");
+      for (let i = 1; i < parts.length; i++) {
+        folders.add(parts.slice(0, i).join("/"));
+      }
+    }
+    return Array.from(folders).map((path) => ({ path }));
   }
 
   // Test helper methods
@@ -63,11 +90,15 @@ export class Vault {
     this.files.set(path, content);
     if (path.endsWith(".md")) {
       this.markdownFiles.push(new TFile(path));
+    } else {
+      this.otherFiles.push(new TFile(path));
     }
   }
 
   _updateFileModTime(path: string, mtime: number): void {
-    const file = this.markdownFiles.find((f) => f.path === path);
+    const file =
+      this.markdownFiles.find((f) => f.path === path) ||
+      this.otherFiles.find((f) => f.path === path);
     if (file) {
       file.stat.mtime = mtime;
       file.stat.ctime = mtime;
@@ -77,6 +108,7 @@ export class Vault {
   _clear(): void {
     this.files.clear();
     this.markdownFiles = [];
+    this.otherFiles = [];
   }
 }
 
@@ -209,6 +241,28 @@ export class MarkdownRenderer {
   ): void {
     el.textContent = content;
   }
+}
+
+// Return all tags from a CachedMetadata (both frontmatter and inline).
+// Mirrors Obsidian's getAllTags() — used by DeckManager to discover decks.
+export function getAllTags(metadata: CachedMetadata | null): string[] | null {
+  if (!metadata) return null;
+  const tags: string[] = [];
+  if (metadata.tags) {
+    for (const t of metadata.tags) {
+      tags.push(t.tag.startsWith("#") ? t.tag : "#" + t.tag);
+    }
+  }
+  const fm = metadata.frontmatter?.tags;
+  if (Array.isArray(fm)) {
+    for (const raw of fm) {
+      if (typeof raw !== "string") continue;
+      tags.push(raw.startsWith("#") ? raw : "#" + raw);
+    }
+  } else if (typeof fm === "string") {
+    tags.push(fm.startsWith("#") ? fm : "#" + fm);
+  }
+  return tags;
 }
 
 // normalizePath: trims, collapses repeated slashes, and converts backslashes.

@@ -1029,6 +1029,18 @@ export const es: Translations = {
       folderSearchPathDefault: "Escanear todo el vault (por defecto)",
     },
 
+    canvasDecks: {
+      heading: "Mazos de canvas",
+      folderPath: "Carpeta de mazos de canvas",
+      folderPathDesc:
+        "Carpeta donde buscar archivos canvas (.canvas) de Obsidian. Cada canvas se convierte en un mazo. Cada nodo de texto se analiza con los mismos cuatro formatos de tarjeta que los archivos Markdown. Déjalo vacío para desactivar el escaneo de canvas.",
+      folderPathDefault: "Desactivado — sin escaneo de canvas",
+      tagName: "Etiqueta de mazo de canvas",
+      tagNameDesc:
+        "Etiqueta aplicada a cada mazo de canvas detectado. Se usa para agrupar en la vista de Etiquetas y para asignar perfiles. Por defecto: #decks/canvas.",
+      tagNamePlaceholder: "#decks/canvas",
+    },
+
     ui: {
       heading: "Interfaz",
       backgroundRefreshInterval: "Intervalo de actualización en segundo plano",

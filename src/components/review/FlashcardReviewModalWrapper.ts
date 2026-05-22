@@ -1,4 +1,4 @@
-import { Modal, Component, Notice, MarkdownRenderer, MarkdownView, App, TFile } from "obsidian";
+import { Modal, Component, Notice, MarkdownRenderer, App } from "obsidian";
 import type { Flashcard, DeckOrGroup } from "../../database/types";
 import type { RatingLabel } from "../../algorithm/fsrs";
 import type { Scheduler } from "../../services/Scheduler";
@@ -10,7 +10,7 @@ import type {
 } from "../../types/svelte-components";
 import FlashcardReviewModal from "./FlashcardReviewModal.svelte";
 import { mount, unmount } from "svelte";
-import { findFlashcardLine } from "../../utils/source-navigator";
+import { navigateToFlashcardSource } from "../../utils/flashcard-navigator";
 import { I18n } from "@/i18n/I18n";
 
 export class FlashcardReviewModalWrapper extends Modal {
@@ -84,47 +84,11 @@ export class FlashcardReviewModalWrapper extends Modal {
   }
 
   private async navigateToFlashcardSource(flashcard: Flashcard): Promise<void> {
-    const file = this.app.vault.getAbstractFileByPath(flashcard.sourceFile);
-    if (!(file instanceof TFile)) {
-      new Notice(
-        I18n.format(I18n.t.notices.fileNotFound, { path: flashcard.sourceFile })
-      );
-      return;
+    const leaf = await navigateToFlashcardSource(this.app, flashcard);
+    if (leaf) {
+      this.navigatedToSource = true;
+      this.close();
     }
-
-    const content = await this.app.vault.read(file);
-    const lines = content.split("\n");
-    const lineNumber = findFlashcardLine(lines, flashcard) ?? 0;
-
-    // Check if file is already open in an existing leaf
-    let leaf = this.app.workspace.getLeavesOfType("markdown").find((l) => {
-      const viewState = l.getViewState();
-      return viewState.state?.file === flashcard.sourceFile;
-    });
-
-    if (!leaf) {
-      leaf = this.app.workspace.getLeaf("tab");
-    }
-
-    await leaf.openFile(file, { eState: { line: lineNumber } });
-    this.app.workspace.setActiveLeaf(leaf, { focus: true });
-
-    this.navigatedToSource = true;
-    this.close();
-
-    // Reading mode uses the preview view's native applyScroll which is
-    // line-accurate. Source / Live Preview both delegate through
-    // setEphemeralState so Obsidian's own logic handles CM6 widget
-    // boundaries (table rows render as atomic widgets in Live Preview).
-    setTimeout(() => {
-      const view = leaf.view;
-      if (!(view instanceof MarkdownView)) return;
-      if (view.getMode() === "preview") {
-        view.previewMode.applyScroll(lineNumber);
-      } else {
-        view.setEphemeralState({ line: lineNumber });
-      }
-    }, 100);
   }
 
   onOpen() {

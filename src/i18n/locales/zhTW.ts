@@ -962,6 +962,18 @@ export const zhTW: Translations = {
       folderSearchPathDefault: "掃描整個儲存庫 (預設)",
     },
 
+    canvasDecks: {
+      heading: "Canvas 牌組",
+      folderPath: "Canvas 牌組資料夾",
+      folderPathDesc:
+        "用來掃描 Obsidian Canvas (.canvas) 檔案的資料夾。其中的每個 Canvas 都會成為一個牌組。每個文字節點都會以與 Markdown 檔案相同的四種閃卡格式進行解析。留空可停用 Canvas 掃描。",
+      folderPathDefault: "已停用 — 不掃描 Canvas",
+      tagName: "Canvas 牌組標籤",
+      tagNameDesc:
+        "套用於所有偵測到的 Canvas 牌組的標籤。用於「標籤」檢視中的分組以及設定檔對應。預設值：#decks/canvas。",
+      tagNamePlaceholder: "#decks/canvas",
+    },
+
     ui: {
       heading: "使用者介面",
       backgroundRefreshInterval: "背景重新整理間隔",

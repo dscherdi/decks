@@ -20,13 +20,20 @@ function simpleHash(text: string): number {
 }
 
 /**
- * Generate unique flashcard ID using hash of deck ID and front text
- * @param frontText The front text of the flashcard
- * @param deckId The ID of the deck this card belongs to
- * @returns A deterministic ID in format "card_HASH"
+ * Generate unique flashcard ID using hash of deck ID and front text.
+ *
+ * Canvas cards pass an additional `sourceNodeId` so two text nodes inside
+ * the same canvas with identical front text produce distinct IDs. When
+ * `sourceNodeId` is undefined (markdown), the hash is byte-identical to the
+ * pre-canvas version so existing markdown card IDs stay stable.
  */
-export function generateFlashcardId(frontText: string, deckId: string): string {
-  return `card_${simpleHash(deckId + "::" + frontText).toString(36)}`;
+export function generateFlashcardId(
+  frontText: string,
+  deckId: string,
+  sourceNodeId?: string
+): string {
+  const suffix = sourceNodeId ? "::node:" + sourceNodeId : "";
+  return `card_${simpleHash(deckId + "::" + frontText + suffix).toString(36)}`;
 }
 
 /**
@@ -60,12 +67,17 @@ export function generateDeckGroupId(tag: string): string {
  * Generate unique reverse flashcard ID using hash of deck ID and the original card's front text
  * The ID is based on the original front text (= reverse card's back) so it stays
  * stable when the original card's back content changes.
- * @param originalFrontText The front text of the original (non-reversed) flashcard
- * @param deckId The ID of the deck this card belongs to
- * @returns A deterministic ID in format "rcard_HASH"
+ *
+ * Canvas cards may pass `sourceNodeId` to disambiguate two text nodes with
+ * identical content. Markdown cards omit it for byte-stable hashes.
  */
-export function generateReverseFlashcardId(originalFrontText: string, deckId: string): string {
-  return `rcard_${simpleHash("reverse:" + deckId + "::" + originalFrontText).toString(36)}`;
+export function generateReverseFlashcardId(
+  originalFrontText: string,
+  deckId: string,
+  sourceNodeId?: string
+): string {
+  const suffix = sourceNodeId ? "::node:" + sourceNodeId : "";
+  return `rcard_${simpleHash("reverse:" + deckId + "::" + originalFrontText + suffix).toString(36)}`;
 }
 
 /**
@@ -88,18 +100,18 @@ export function generateCustomDeckCardId(customDeckId: string, flashcardId: stri
 }
 
 /**
- * Generate unique cloze flashcard ID using hash of deck ID, front text, cloze order, and cloze text
- * @param frontText The front text of the flashcard (header or table Front column)
- * @param clozeText The specific cloze text (without == delimiters)
- * @param clozeOrder The ordinal position of this cloze within the back content
- * @param deckId The ID of the deck this card belongs to
- * @returns A deterministic ID in format "ccard_HASH"
+ * Generate unique cloze flashcard ID using hash of deck ID, front text, cloze order, and cloze text.
+ *
+ * Canvas cards may pass `sourceNodeId` to disambiguate two text nodes with
+ * identical content. Markdown cards omit it for byte-stable hashes.
  */
 export function generateClozeFlashcardId(
   frontText: string,
   clozeText: string,
   clozeOrder: number,
-  deckId: string
+  deckId: string,
+  sourceNodeId?: string
 ): string {
-  return `ccard_${simpleHash("cloze:" + deckId + "::" + frontText + "::" + clozeOrder + "::" + clozeText).toString(36)}`;
+  const suffix = sourceNodeId ? "::node:" + sourceNodeId : "";
+  return `ccard_${simpleHash("cloze:" + deckId + "::" + frontText + "::" + clozeOrder + "::" + clozeText + suffix).toString(36)}`;
 }

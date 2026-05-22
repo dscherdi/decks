@@ -15,6 +15,7 @@ function makeCard(overrides: Partial<Flashcard> = {}): Flashcard {
     tags: ["math", "basic"],
     clozeText: null,
     clozeOrder: null,
+    sourceNodeId: null,
     state: "review",
     dueDate: "2026-01-01T00:00:00.000Z",
     interval: 1440,

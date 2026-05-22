@@ -1023,6 +1023,19 @@ export const fr: Translations = {
         "Limite l'analyse à un dossier spécifique. Sélectionne « analyser tout le vault » pour analyser tous les fichiers.",
       folderSearchPathDefault: "Analyser tout le vault (défaut)",
     },
+
+    canvasDecks: {
+      heading: "Paquets canvas",
+      folderPath: "Dossier des paquets canvas",
+      folderPathDesc:
+        "Dossier où chercher les fichiers canvas (.canvas) d'Obsidian. Chaque canvas devient un paquet. Chaque nœud texte est analysé avec les mêmes quatre formats de carte que les fichiers Markdown. Laisser vide pour désactiver l'analyse des canvas.",
+      folderPathDefault: "Désactivé — pas d'analyse des canvas",
+      tagName: "Étiquette de paquet canvas",
+      tagNameDesc:
+        "Étiquette appliquée à chaque paquet canvas découvert. Sert au regroupement dans la vue Étiquettes et à l'association de profil. Par défaut : #decks/canvas.",
+      tagNamePlaceholder: "#decks/canvas",
+    },
+
     ui: {
       heading: "Interface",
       backgroundRefreshInterval: "Intervalle d'actualisation en arrière-plan",

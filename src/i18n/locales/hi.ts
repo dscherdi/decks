@@ -1016,6 +1016,18 @@ export const hi: Translations = {
       folderSearchPathDefault: "पूरा वॉल्ट स्कैन करें (डिफ़ॉल्ट)",
     },
 
+    canvasDecks: {
+      heading: "Canvas डेक",
+      folderPath: "Canvas डेक फ़ोल्डर",
+      folderPathDesc:
+        "Obsidian के Canvas (.canvas) फ़ाइलों के लिए स्कैन किया जाने वाला फ़ोल्डर। अंदर का प्रत्येक canvas एक डेक बन जाता है। प्रत्येक टेक्स्ट नोड को मार्कडाउन फ़ाइलों के समान चार फ़्लैशकार्ड फ़ॉर्मेट में पार्स किया जाता है। Canvas स्कैनिंग बंद करने के लिए खाली छोड़ दें।",
+      folderPathDefault: "बंद — कोई Canvas स्कैनिंग नहीं",
+      tagName: "Canvas डेक टैग",
+      tagNameDesc:
+        "खोजे गए हर Canvas डेक पर लागू किया जाने वाला टैग। टैग दृश्य में समूहीकरण और प्रोफ़ाइल मैपिंग के लिए उपयोग होता है। डिफ़ॉल्ट: #decks/canvas।",
+      tagNamePlaceholder: "#decks/canvas",
+    },
+
     ui: {
       heading: "यूज़र इंटरफ़ेस",
       backgroundRefreshInterval: "बैकग्राउंड रिफ्रेश अंतराल",

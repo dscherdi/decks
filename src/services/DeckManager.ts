@@ -130,6 +130,30 @@ export class DeckManager {
       }
     }
 
+    // Canvas decks: any .canvas file inside the configured folder is auto-tagged
+    // with the configured canvas tag. Empty folderPath disables canvas scanning.
+    const canvasFolderPath = this.settings?.canvasDecks?.folderPath?.trim() || "";
+    if (canvasFolderPath !== "") {
+      const canvasTag = this.settings?.canvasDecks?.tagName?.trim() || "#decks/canvas";
+      const canvasFiles = this.vault
+        .getFiles()
+        .filter((f) => f.extension === "canvas");
+      const canvasFilter = new FileFilter(canvasFolderPath);
+      const filteredCanvas = canvasFilter.filterFiles(canvasFiles);
+      this.debugLog(
+        `Found ${filteredCanvas.length} canvas files in folder "${canvasFolderPath}" for tag ${canvasTag}`,
+      );
+      if (filteredCanvas.length > 0) {
+        if (!decksMap.has(canvasTag)) {
+          decksMap.set(canvasTag, []);
+        }
+        const bucket = decksMap.get(canvasTag);
+        if (bucket) {
+          for (const f of filteredCanvas) bucket.push(f);
+        }
+      }
+    }
+
     this.debugLog(`Found ${decksMap.size} decks:`, Array.from(decksMap.keys()));
     return decksMap;
   }

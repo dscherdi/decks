@@ -1018,6 +1018,18 @@ export const tr: Translations = {
       folderSearchPathDefault: "Tüm kasayı tara (varsayılan)",
     },
 
+    canvasDecks: {
+      heading: "Canvas desteleri",
+      folderPath: "Canvas desteleri klasörü",
+      folderPathDesc:
+        "Obsidian canvas (.canvas) dosyalarının taranacağı klasör. Bu klasördeki her canvas bir deste olur. Her metin düğümü, Markdown dosyalarındaki ile aynı dört bilgi kartı biçimiyle ayrıştırılır. Canvas taramayı devre dışı bırakmak için boş bırakın.",
+      folderPathDefault: "Devre dışı — canvas taranmıyor",
+      tagName: "Canvas deste etiketi",
+      tagNameDesc:
+        "Bulunan her canvas destesine uygulanan etiket. Etiketler görünümünde gruplama ve profil eşleştirme için kullanılır. Varsayılan: #decks/canvas.",
+      tagNamePlaceholder: "#decks/canvas",
+    },
+
     ui: {
       heading: "Kullanıcı arayüzü",
       backgroundRefreshInterval: "Arka plan yenileme aralığı",

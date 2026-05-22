@@ -127,6 +127,18 @@ Each list item is one card. The image (with its numbered labels) shows on the fr
 
 </details>
 
+### Canvas decks
+
+Author cards on an Obsidian Canvas (`.canvas`) instead of a markdown file. Each canvas in the configured folder becomes one deck; each text node inside it is parsed for the same four card formats above (header-paragraph, table, cloze, image occlusion). One text node can hold a whole table of cards, or one cloze sentence, or a single header + paragraph — mix freely across the canvas.
+
+Set it up in **Settings → Canvas decks**:
+- **Canvas decks folder** — every `.canvas` inside this folder becomes a deck.
+- **Canvas deck tag** — applied to all canvas decks for grouping in the Tags view and for profile mapping. Defaults to `#decks/canvas` (which uses the DEFAULT profile unless you map it elsewhere).
+
+Canvas decks behave like file decks everywhere: they show up in the deck list, in the Tags view, can be included in custom decks by filter (`deckTag = #decks/canvas`), are editable from the flashcard manager, and "Go to source" from review opens the canvas and focuses the source text node.
+
+See **[docs/CANVAS_DECKS.md](docs/CANVAS_DECKS.md)** for details.
+
 ## What you get
 
 - Browse mode and timed review sessions with daily limits.

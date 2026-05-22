@@ -1008,6 +1008,19 @@ export const it: Translations = {
         "Limita la scansione a una cartella specifica. Seleziona « scansiona tutto il vault » per scansionare tutti i file.",
       folderSearchPathDefault: "Scansiona tutto il vault (predefinito)",
     },
+
+    canvasDecks: {
+      heading: "Mazzi canvas",
+      folderPath: "Cartella mazzi canvas",
+      folderPathDesc:
+        "Cartella in cui cercare i file canvas (.canvas) di Obsidian. Ogni canvas diventa un mazzo. Ogni nodo di testo è analizzato con gli stessi quattro formati di carta dei file Markdown. Lascia vuoto per disattivare la scansione dei canvas.",
+      folderPathDefault: "Disattivato — nessuna scansione canvas",
+      tagName: "Tag mazzo canvas",
+      tagNameDesc:
+        "Tag applicato a ogni mazzo canvas rilevato. Usato per il raggruppamento nella vista Tag e per la mappatura dei profili. Predefinito: #decks/canvas.",
+      tagNamePlaceholder: "#decks/canvas",
+    },
+
     ui: {
       heading: "Interfaccia",
       backgroundRefreshInterval: "Intervallo di aggiornamento in background",

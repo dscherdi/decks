@@ -1,5 +1,16 @@
 # Decks - Progress Summary
 
+## ✅ Latest: Canvas Decks
+- Author flashcards on Obsidian Canvas (`.canvas`) files alongside markdown.
+- Two new settings: Canvas decks folder, Canvas deck tag (default `#decks/canvas`).
+- Each `.canvas` in the folder is auto-discovered as a deck; each text node is parsed for the four card formats.
+- Go-to-source opens the canvas and focuses the source text node.
+- Card edits write back to the canvas JSON in place.
+- Custom decks pick canvas cards by filter (`deckTag = #decks/canvas`) or selection.
+- Schema v19 adds `source_node_id` so canvas cards can be tracked and edited.
+
+See [docs/CANVAS_DECKS.md](CANVAS_DECKS.md) for details.
+
 ## ✅ Core Features Implemented
 - SQLite database with sql.js for persistence
 - FSRS-4.5 spaced repetition algorithm

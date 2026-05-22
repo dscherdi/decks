@@ -983,6 +983,19 @@ export const ja: Translations = {
         "スキャンを特定のフォルダに限定します。「Vault 全体をスキャン」を選ぶとすべてのファイルがスキャンされます。",
       folderSearchPathDefault: "Vault 全体をスキャン（既定）",
     },
+
+    canvasDecks: {
+      heading: "Canvas デッキ",
+      folderPath: "Canvas デッキフォルダ",
+      folderPathDesc:
+        "Obsidian の Canvas (.canvas) ファイルをスキャンするフォルダ。フォルダ内の各 Canvas が 1 つのデッキになります。各テキストノードは Markdown ファイルと同じ 4 つのフラッシュカード形式で解析されます。空のままにすると Canvas のスキャンが無効になります。",
+      folderPathDefault: "無効 — Canvas をスキャンしません",
+      tagName: "Canvas デッキタグ",
+      tagNameDesc:
+        "検出されたすべての Canvas デッキに付与されるタグ。タグビューでのグループ化およびプロファイルのマッピングに使用されます。既定値: #decks/canvas。",
+      tagNamePlaceholder: "#decks/canvas",
+    },
+
     ui: {
       heading: "ユーザーインターフェース",
       backgroundRefreshInterval: "バックグラウンド更新の間隔",

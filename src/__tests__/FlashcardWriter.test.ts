@@ -60,6 +60,7 @@ function makeCard(partial: Partial<Flashcard>): Flashcard {
     tags: [],
     clozeText: null,
     clozeOrder: null,
+    sourceNodeId: null,
     state: "new",
     dueDate: new Date().toISOString(),
     interval: 0,

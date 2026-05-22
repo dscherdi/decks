@@ -939,6 +939,19 @@ export const zh: Translations = {
         "将扫描限制到特定文件夹。选择「扫描整个 Vault」以扫描所有文件。",
       folderSearchPathDefault: "扫描整个 Vault（默认）",
     },
+
+    canvasDecks: {
+      heading: "Canvas 牌组",
+      folderPath: "Canvas 牌组文件夹",
+      folderPathDesc:
+        "用于扫描 Obsidian Canvas (.canvas) 文件的文件夹。该文件夹内的每个 Canvas 都会成为一个牌组。每个文本节点都会按照与 Markdown 文件相同的四种卡片格式解析。留空可禁用 Canvas 扫描。",
+      folderPathDefault: "已禁用 — 不扫描 Canvas",
+      tagName: "Canvas 牌组标签",
+      tagNameDesc:
+        "应用于所有检测到的 Canvas 牌组的标签。用于「标签」视图中的分组和配置文件映射。默认值：#decks/canvas。",
+      tagNamePlaceholder: "#decks/canvas",
+    },
+
     ui: {
       heading: "用户界面",
       backgroundRefreshInterval: "后台刷新间隔",

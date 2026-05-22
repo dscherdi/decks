@@ -191,6 +191,9 @@ export interface Flashcard {
   tags: string[]; // Tags inherited from header (e.g. "## Heading #math #science")
   clozeText: string | null; // The specific cloze text for this card (without == delimiters)
   clozeOrder: number | null; // Ordinal position of this cloze within the back content
+  // Canvas-only: id of the source canvas text node. NULL/undefined for markdown cards.
+  // Optional so existing test fixtures and pre-canvas call sites don't break.
+  sourceNodeId?: string | null;
 
   state: FlashcardState;
   dueDate: string;

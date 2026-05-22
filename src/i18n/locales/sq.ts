@@ -1030,6 +1030,18 @@ export const sq: Translations = {
       folderSearchPathDefault: "Skano të gjithë Vault-in (paracaktuar)",
     },
 
+    canvasDecks: {
+      heading: "Pako canvas",
+      folderPath: "Dosja e pakove canvas",
+      folderPathDesc:
+        "Dosja për të skanuar skedarë canvas (.canvas) të Obsidian. Çdo canvas brenda saj bëhet një pako. Çdo nyje teksti analizohet me të njëjtat katër formate karte si skedarët Markdown. Lëre bosh për të çaktivizuar skanimin e canvas.",
+      folderPathDefault: "Çaktivizuar — pa skanim canvas",
+      tagName: "Etiketa e pakos canvas",
+      tagNameDesc:
+        "Etiketa që aplikohet në çdo pako canvas të zbuluar. Përdoret për grupimin në pamjen Etiketat dhe për lidhjen me profile. E paracaktuar: #decks/canvas.",
+      tagNamePlaceholder: "#decks/canvas",
+    },
+
     ui: {
       heading: "Ndërfaqja e përdoruesit",
       backgroundRefreshInterval: "Intervali i rifreskimit në sfond",

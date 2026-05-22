@@ -977,6 +977,18 @@ export const ar: Translations = {
       folderSearchPathDefault: "فحص كل الخزنة (الافتراضي)",
     },
 
+    canvasDecks: {
+      heading: "رزم Canvas",
+      folderPath: "مجلد رزم Canvas",
+      folderPathDesc:
+        "المجلد الذي يُفحص بحثًا عن ملفات Obsidian Canvas (.canvas). كل ملف canvas داخل المجلد يصبح رزمة. تُحلَّل كل عقدة نصية بنفس صيغ البطاقات الأربع المستخدمة لملفات Markdown. اتركه فارغًا لتعطيل فحص Canvas.",
+      folderPathDefault: "معطّل — لا فحص لـ Canvas",
+      tagName: "علامة رزمة Canvas",
+      tagNameDesc:
+        "العلامة المُطبَّقة على كل رزمة canvas تُكتشَف. تُستخدم للتجميع في عرض «العلامات» ولربط الملفات الشخصية. الافتراضي: #decks/canvas.",
+      tagNamePlaceholder: "#decks/canvas",
+    },
+
     ui: {
       heading: "واجهة المستخدم",
       backgroundRefreshInterval: "فترة التحديث في الخلفية",

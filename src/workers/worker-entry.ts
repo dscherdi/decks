@@ -479,16 +479,15 @@ class SimpleDatabaseWorker {
     try {
       const result = remoteDb.exec("SELECT * FROM flashcards");
       if (result.length === 0) return;
-      const columns = result[0].columns;
-      const modIndex = columns.indexOf("modified");
-      const idIndex = columns.indexOf("id");
-      const hasNotesColumn = columns.includes("notes");
-      const stateIndex = columns.indexOf("state");
-      const effectiveColumns = hasNotesColumn
-        ? columns
-        : [...columns.slice(0, stateIndex), "notes", ...columns.slice(stateIndex)];
-      const columnList = effectiveColumns.join(",");
-      const placeholders = effectiveColumns.map(() => "?").join(",");
+      const remoteColumns = result[0].columns;
+      const modIndex = remoteColumns.indexOf("modified");
+      const idIndex = remoteColumns.indexOf("id");
+      // Use only the remote's columns in the INSERT. Columns missing on the
+      // remote (e.g., `notes` on pre-v15 DBs, `source_node_id` on pre-v19
+      // DBs) are not listed, so SQLite uses their local DEFAULT (NULL for
+      // source_node_id; '' for notes).
+      const columnList = remoteColumns.join(",");
+      const placeholders = remoteColumns.map(() => "?").join(",");
       const stmt = this.db.prepare(
         `INSERT OR REPLACE INTO flashcards (${columnList}) VALUES (${placeholders})`
       );
@@ -503,10 +502,7 @@ class SimpleDatabaseWorker {
           ? (localRes[0].values[0][0] as string)
           : null;
         if (!localMod || remoteMod > localMod) {
-          const effectiveRow = hasNotesColumn
-            ? row
-            : [...row.slice(0, stateIndex), "", ...row.slice(stateIndex)];
-          stmt.run(effectiveRow);
+          stmt.run(row);
         }
       }
       stmt.free();

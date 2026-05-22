@@ -116,6 +116,10 @@ Emri i skedarit bëhet emri i pakos. Niveli i titullit mund të konfigurohet pë
 
 </details>
 
+### Pako canvas
+
+Krijo karta në një Canvas të Obsidian (`.canvas`) në vend të një skedari Markdown. Çdo canvas brenda dosjes së konfiguruar bëhet një pako; çdo nyje teksti analizohet me të njëjtat katër formate karte më sipër. Konfiguro përmes **Cilësimet → Pako canvas**: dosja dhe etiketa (e paracaktuar `#decks/canvas`). "Shko te burimi" gjatë rishikimit hap canvas-in dhe fokuson nyjen burimore. Detaje në **[docs/CANVAS_DECKS.md](docs/CANVAS_DECKS.md)**.
+
 ## Planifikim i personalizuar
 
 FSRS vjen me parazgjedhje të arsyeshme që funksionojnë shumë mirë që në fillim. Pasi të kesh grumbulluar rreth 100 rishikime, mund të trajnosh 21 peshat e algoritmit me historikun tënd dhe të marrësh planifikime të përshtatura posaçërisht për kurbën tënde të harrimit — e njëjta gjë që bën Anki në desktop, por në pajisjen tënde, pa server, pa gjurmim të dhënash.

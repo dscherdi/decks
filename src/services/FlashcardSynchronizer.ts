@@ -1,4 +1,5 @@
 import { FlashcardParser } from "./FlashcardParser";
+import { CanvasFlashcardExtractor } from "./CanvasFlashcardExtractor";
 import type { Flashcard, FlashcardType, DeckProfile } from "../database/types";
 import type { SqlJsValue } from "../database/sql-types";
 import type { Database } from "sql.js";
@@ -89,7 +90,7 @@ export class FlashcardSynchronizer {
         const updateStmt = this.db.prepare(`
                     UPDATE flashcards
                     SET id = ?, front = ?, back = ?, content_hash = ?, breadcrumb = ?, notes = ?,
-                        type = ?, cloze_text = ?, cloze_order = ?, tags = ?, modified = datetime('now')
+                        type = ?, cloze_text = ?, cloze_order = ?, source_node_id = ?, tags = ?, modified = datetime('now')
                     WHERE id = ?
                 `);
         updateStmt.run([
@@ -102,6 +103,7 @@ export class FlashcardSynchronizer {
           card.type,
           card.clozeText ?? null,
           card.clozeOrder ?? null,
+          card.sourceNodeId ?? null,
           serializeTagsForSql(card.tags),
           op.oldId,
         ]);
@@ -122,10 +124,10 @@ export class FlashcardSynchronizer {
         const stmt = this.db.prepare(`
                     INSERT OR IGNORE INTO flashcards (
                         id, deck_id, front, back, type, source_file, content_hash, breadcrumb, notes,
-                        cloze_text, cloze_order,
+                        cloze_text, cloze_order, source_node_id,
                         state, due_date, interval, repetitions, difficulty, stability,
                         lapses, last_reviewed, created, modified, tags
-                    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, datetime('now'), datetime('now'), ?)
+                    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, datetime('now'), datetime('now'), ?)
                 `);
         stmt.run([
           card.id,
@@ -139,6 +141,7 @@ export class FlashcardSynchronizer {
           card.notes || "",
           card.clozeText,
           card.clozeOrder,
+          card.sourceNodeId ?? null,
           card.state,
           card.dueDate,
           card.interval,
@@ -182,14 +185,25 @@ export class FlashcardSynchronizer {
     progressCallback?: (progress: number, message?: string) => void
   ): SyncResult {
     try {
-      // Parse flashcards from content
+      // Parse flashcards from content. Canvas files have a different on-disk
+      // shape (JSON wrapping markdown text nodes) — branch by extension and
+      // let CanvasFlashcardExtractor stamp each parsed card with its source
+      // text-node id.
       progressCallback?.(10, "Parsing flashcards from file content...");
-      const parsedCards = FlashcardParser.parseFlashcardsFromContent(
-        data.fileContent,
-        data.deckConfig.headerLevel,
-        data.fileTitle,
-        data.clozeEnabled
-      );
+      const isCanvas = data.deckFilepath.toLowerCase().endsWith(".canvas");
+      const parsedCards = isCanvas
+        ? CanvasFlashcardExtractor.extract(
+            data.fileContent,
+            data.deckConfig.headerLevel,
+            data.fileTitle,
+            data.clozeEnabled,
+          )
+        : FlashcardParser.parseFlashcardsFromContent(
+            data.fileContent,
+            data.deckConfig.headerLevel,
+            data.fileTitle,
+            data.clozeEnabled,
+          );
 
       // Expand with reverse cards if enabled (cloze cards are excluded)
       const expandedCards = [...parsedCards];
@@ -204,6 +218,7 @@ export class FlashcardSynchronizer {
               breadcrumb: card.breadcrumb,
               tags: [...card.tags],
               isReverse: true,
+              sourceNodeId: card.sourceNodeId,
             });
           }
         }
@@ -232,6 +247,7 @@ export class FlashcardSynchronizer {
           notes: (row.notes as string) || "",
           clozeText: (row.cloze_text as string) ?? null,
           clozeOrder: (row.cloze_order as number) ?? null,
+          sourceNodeId: (row.source_node_id as string) ?? null,
           state: row.state as "new" | "review",
           dueDate: row.due_date as string,
           interval: row.interval as number,
@@ -269,6 +285,7 @@ export class FlashcardSynchronizer {
           isReverse?: boolean;
           clozeText?: string;
           clozeOrder?: number;
+          sourceNodeId?: string;
         };
         flashcardId: string;
         contentHash: string;
@@ -299,13 +316,16 @@ export class FlashcardSynchronizer {
           );
         }
 
-        // ID generation varies by card type
+        // ID generation varies by card type. For canvas cards, sourceNodeId is
+        // mixed into the hash so two text nodes with identical fronts produce
+        // distinct IDs. For markdown cards (no sourceNodeId), the hash is
+        // byte-identical to the pre-canvas implementation.
         const isClozeType = parsed.type === "cloze" || parsed.type === "image-occlusion";
         const flashcardId = isClozeType
-          ? generateClozeFlashcardId(parsed.front, parsed.clozeText!, parsed.clozeOrder!, data.deckId)
+          ? generateClozeFlashcardId(parsed.front, parsed.clozeText!, parsed.clozeOrder!, data.deckId, parsed.sourceNodeId)
           : parsed.isReverse
-            ? generateReverseFlashcardId(parsed.back, data.deckId)
-            : generateFlashcardId(parsed.front, data.deckId);
+            ? generateReverseFlashcardId(parsed.back, data.deckId, parsed.sourceNodeId)
+            : generateFlashcardId(parsed.front, data.deckId, parsed.sourceNodeId);
         const contentHash = isClozeType
           ? generateContentHash(parsed.back + "::" + parsed.clozeText)
           : generateContentHash(parsed.back);
@@ -403,6 +423,7 @@ export class FlashcardSynchronizer {
                 tags: newCardData.parsed.tags,
                 clozeText: newCardData.parsed.clozeText ?? null,
                 clozeOrder: newCardData.parsed.clozeOrder ?? null,
+                sourceNodeId: newCardData.parsed.sourceNodeId ?? null,
                 state: oldCard.state,
                 dueDate: oldCard.dueDate,
                 interval: oldCard.interval,
@@ -455,6 +476,7 @@ export class FlashcardSynchronizer {
           tags: newCardData.parsed.tags,
           clozeText: newCardData.parsed.clozeText ?? null,
           clozeOrder: newCardData.parsed.clozeOrder ?? null,
+          sourceNodeId: newCardData.parsed.sourceNodeId ?? null,
           state: reviewLogRow ? (reviewLogRow[0] as "new" | "review") : "new",
           dueDate:
             reviewLogRow && reviewLogRow[6] && reviewLogRow[1]
@@ -504,6 +526,7 @@ export class FlashcardSynchronizer {
           tags: newCardData.parsed.tags,
           clozeText: null,
           clozeOrder: null,
+          sourceNodeId: newCardData.parsed.sourceNodeId ?? null,
           state: reviewLogRow ? (reviewLogRow[0] as "new" | "review") : "new",
           dueDate:
             reviewLogRow && reviewLogRow[6] && reviewLogRow[1]

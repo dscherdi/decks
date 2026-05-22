@@ -1037,6 +1037,18 @@ export const de: Translations = {
       folderSearchPathDefault: "Ganzen Vault scannen (Standard)",
     },
 
+    canvasDecks: {
+      heading: "Canvas-Stapel",
+      folderPath: "Canvas-Stapel-Ordner",
+      folderPathDesc:
+        "Ordner, der nach Obsidian-Canvas-Dateien (.canvas) durchsucht wird. Jedes Canvas darin wird zu einem Stapel. Jeder Textknoten wird mit den gleichen vier Karteikarten-Formaten wie Markdown-Dateien analysiert. Leer lassen, um die Canvas-Suche zu deaktivieren.",
+      folderPathDefault: "Deaktiviert – keine Canvas-Suche",
+      tagName: "Canvas-Stapel-Tag",
+      tagNameDesc:
+        "Tag, das jedem gefundenen Canvas-Stapel zugewiesen wird. Wird für die Gruppierung in der Tag-Ansicht und für die Profilzuordnung verwendet. Standard: #decks/canvas.",
+      tagNamePlaceholder: "#decks/canvas",
+    },
+
     ui: {
       heading: "Benutzeroberfläche",
       backgroundRefreshInterval: "Aktualisierungsintervall im Hintergrund",

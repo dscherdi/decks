@@ -73,6 +73,9 @@ export class DecksSettingTab extends PluginSettingTab {
     // Parsing Settings
     this.addParsingSettings(containerEl);
 
+    // Canvas Decks Settings
+    this.addCanvasDecksSettings(containerEl);
+
     // UI Settings
     this.addUISettings(containerEl);
 
@@ -397,6 +400,55 @@ export class DecksSettingTab extends PluginSettingTab {
             await this.saveSettings();
           });
       });
+  }
+
+  private isValidCanvasTag(tag: string): boolean {
+    return /^#[a-z0-9][a-z0-9_/-]*$/.test(tag);
+  }
+
+  private addCanvasDecksSettings(containerEl: HTMLElement): void {
+    new Setting(containerEl)
+      .setName(I18n.t.settings.canvasDecks.heading)
+      .setHeading();
+
+    // Folder picker dropdown reusing the same getAllFolders() pattern.
+    const folderOptions: Record<string, string> = {
+      "": I18n.t.settings.canvasDecks.folderPathDefault,
+    };
+    this.app.vault.getAllFolders().forEach((folder) => {
+      folderOptions[folder.path] = folder.path;
+    });
+
+    new Setting(containerEl)
+      .setName(I18n.t.settings.canvasDecks.folderPath)
+      .setDesc(I18n.t.settings.canvasDecks.folderPathDesc)
+      .addDropdown((dropdown) => {
+        Object.entries(folderOptions).forEach(([value, display]) => {
+          dropdown.addOption(value, display);
+        });
+        dropdown
+          .setValue(normalizePath(this.settings.canvasDecks.folderPath))
+          .onChange(async (value) => {
+            this.settings.canvasDecks.folderPath = normalizePath(value);
+            await this.saveSettings();
+          });
+      });
+
+    new Setting(containerEl)
+      .setName(I18n.t.settings.canvasDecks.tagName)
+      .setDesc(I18n.t.settings.canvasDecks.tagNameDesc)
+      .addText((text) =>
+        text
+          .setPlaceholder(I18n.t.settings.canvasDecks.tagNamePlaceholder)
+          .setValue(this.settings.canvasDecks.tagName)
+          .onChange(async (value) => {
+            const trimmed = value.trim().toLowerCase();
+            if (this.isValidCanvasTag(trimmed)) {
+              this.settings.canvasDecks.tagName = trimmed;
+              await this.saveSettings();
+            }
+          })
+      );
   }
 
   private addUISettings(containerEl: HTMLElement): void {

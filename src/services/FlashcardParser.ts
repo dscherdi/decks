@@ -10,6 +10,9 @@ export interface ParsedFlashcard {
   isReverse?: boolean;
   clozeText?: string;
   clozeOrder?: number;
+  // Canvas-only: id of the source text node this card came from. The canvas
+  // extractor stamps it on each parsed card before the sync pipeline runs.
+  sourceNodeId?: string;
 }
 
 /**

@@ -116,6 +116,10 @@ Listedeki her öğe bir karttır. Görsel ön yüzü oluştururken, ilgili liste
 
 </details>
 
+### Canvas desteleri
+
+Markdown dosyası yerine bir Obsidian Canvas (`.canvas`) dosyasında kart oluşturun. Yapılandırılan klasördeki her canvas bir deste olur; her metin düğümü yukarıdakiyle aynı dört kart biçimiyle ayrıştırılır. **Ayarlar → Canvas desteleri** üzerinden yapılandırın: klasör ve etiket (varsayılan `#decks/canvas`). İnceleme sırasında "Kaynağa git", canvas'ı açar ve kaynak düğümü odaklar. Ayrıntılar için **[docs/CANVAS_DECKS.md](docs/CANVAS_DECKS.md)**.
+
 ## Kişiselleştirilmiş planlama
 
 FSRS, kutudan çıktığı gibi harika çalışan mantıklı varsayılanlarla gelir. Yaklaşık 100 tekrar biriktirdiğinizde, algoritmanın 21 ağırlığını kendi tekrar geçmişinize göre eğitebilir ve unutma eğrinize özel planlamalar elde edebilirsiniz — tıpkı Anki'nin masaüstü sürümünün yaptığı gibi, ancak sunucu veya veri toplama olmadan, tamamen cihazınızda (lokal).
