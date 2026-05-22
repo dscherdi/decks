@@ -451,29 +451,38 @@ async function handleTagMappingUpsert(
   _logger: Logger
 ): Promise<void> {
   if (entry.o !== "tag_mapping_upsert") return;
-  // Newer-wins on (id) AND on UNIQUE(tag). Effective timestamp uses `created`
-  // since tag mappings have no `modified` column.
+  const { id, profileId, tag, created } = entry.p;
+
+  // Conflicts can arise on PK (id) or UNIQUE(tag) — at most two rows. Both
+  // ON CONFLICT(id) and ON CONFLICT(tag) cannot coexist in one UPSERT, so we
+  // resolve them in JS with a single SELECT, then DELETE+INSERT under the
+  // outer transaction (see SyncLog.applyPending). Effective timestamp uses
+  // deleted_at if present (tombstone) else created.
+  const conflicts = await db.querySql<{
+    id: string;
+    created: string;
+    deleted_at: string | null;
+  }>(
+    `SELECT id, created, deleted_at FROM profile_tag_mappings WHERE id = ? OR tag = ?`,
+    [id, tag],
+    { asObject: true }
+  );
+
+  for (const row of conflicts) {
+    const effective = row.deleted_at ?? row.created;
+    if (created <= effective) return;
+  }
+
+  if (conflicts.length > 0) {
+    await db.executeSql(
+      `DELETE FROM profile_tag_mappings WHERE id = ? OR tag = ?`,
+      [id, tag]
+    );
+  }
   await db.executeSql(
     `INSERT INTO profile_tag_mappings (id, profile_id, tag, created, deleted_at)
-     VALUES (?, ?, ?, ?, NULL)
-     ON CONFLICT(id) DO UPDATE SET
-       profile_id = excluded.profile_id,
-       tag = excluded.tag,
-       created = excluded.created,
-       deleted_at = NULL
-     WHERE excluded.created > COALESCE(profile_tag_mappings.deleted_at, profile_tag_mappings.created)`,
-    [entry.p.id, entry.p.profileId, entry.p.tag, entry.p.created]
-  );
-  // A second statement to resolve the UNIQUE(tag) case where a different
-  // device used a different id for the same tag. Replace only if the remote
-  // mapping's created is newer.
-  await db.executeSql(
-    `UPDATE profile_tag_mappings
-     SET id = ?, profile_id = ?, created = ?, deleted_at = NULL
-     WHERE tag = ?
-       AND id != ?
-       AND ? > COALESCE(deleted_at, created)`,
-    [entry.p.id, entry.p.profileId, entry.p.created, entry.p.tag, entry.p.id, entry.p.created]
+     VALUES (?, ?, ?, ?, NULL)`,
+    [id, profileId, tag, created]
   );
 }
 

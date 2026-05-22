@@ -177,6 +177,118 @@ describe("SyncLog handlers - tag mapping ops", () => {
     await applyOp(db, "r", entry(3, del), makeLogger(adapter));
     expect(await db.getProfileIdForTag("#math")).toBeNull();
   });
+
+  it("upsert with different id but same tag resolves UNIQUE(tag) by newer-wins", async () => {
+    // Regression: two devices independently mapped the same tag to a profile,
+    // producing different `id` values for the same `tag`. The remote op must
+    // not throw UNIQUE constraint failed: profile_tag_mappings.tag.
+    const { db, adapter } = await freshDb();
+    await applyOp(
+      db,
+      "r",
+      entry(1, profileUpsertOp("prof_a", "Math", "2030-01-01T00:00:00Z")),
+      makeLogger(adapter)
+    );
+    await applyOp(
+      db,
+      "r",
+      entry(2, profileUpsertOp("prof_b", "Science", "2030-01-01T00:00:00Z")),
+      makeLogger(adapter)
+    );
+
+    const localFirst: TagMappingUpsertOp = {
+      o: "tag_mapping_upsert",
+      p: { id: "m_local", profileId: "prof_a", tag: "#shared", created: "2030-01-02T00:00:00Z" },
+    };
+    await applyOp(db, "r", entry(3, localFirst), makeLogger(adapter));
+
+    // Remote op has a different id, same tag, newer created → remote wins.
+    const remoteNewer: TagMappingUpsertOp = {
+      o: "tag_mapping_upsert",
+      p: { id: "m_remote", profileId: "prof_b", tag: "#shared", created: "2030-01-03T00:00:00Z" },
+    };
+    await applyOp(db, "r", entry(4, remoteNewer), makeLogger(adapter));
+
+    const mappings = await db.getAllTagMappings();
+    const shared = mappings.filter((m) => m.tag === "#shared");
+    expect(shared).toHaveLength(1);
+    expect(shared[0].id).toBe("m_remote");
+    expect(shared[0].profileId).toBe("prof_b");
+  });
+
+  it("upsert with different id but same tag and older created keeps local", async () => {
+    const { db, adapter } = await freshDb();
+    await applyOp(
+      db,
+      "r",
+      entry(1, profileUpsertOp("prof_a", "Math", "2030-01-01T00:00:00Z")),
+      makeLogger(adapter)
+    );
+    await applyOp(
+      db,
+      "r",
+      entry(2, profileUpsertOp("prof_b", "Science", "2030-01-01T00:00:00Z")),
+      makeLogger(adapter)
+    );
+
+    const localNewer: TagMappingUpsertOp = {
+      o: "tag_mapping_upsert",
+      p: { id: "m_local", profileId: "prof_a", tag: "#shared", created: "2030-01-05T00:00:00Z" },
+    };
+    await applyOp(db, "r", entry(3, localNewer), makeLogger(adapter));
+
+    const remoteOlder: TagMappingUpsertOp = {
+      o: "tag_mapping_upsert",
+      p: { id: "m_remote", profileId: "prof_b", tag: "#shared", created: "2030-01-02T00:00:00Z" },
+    };
+    await applyOp(db, "r", entry(4, remoteOlder), makeLogger(adapter));
+
+    const mappings = await db.getAllTagMappings();
+    const shared = mappings.filter((m) => m.tag === "#shared");
+    expect(shared).toHaveLength(1);
+    expect(shared[0].id).toBe("m_local");
+    expect(shared[0].profileId).toBe("prof_a");
+  });
+
+  it("upsert revives a tombstoned mapping when remote created is newer", async () => {
+    const { db, adapter } = await freshDb();
+    await applyOp(
+      db,
+      "r",
+      entry(1, profileUpsertOp("prof_a", "Math", "2030-01-01T00:00:00Z")),
+      makeLogger(adapter)
+    );
+    await applyOp(
+      db,
+      "r",
+      entry(2, {
+        o: "tag_mapping_upsert",
+        p: { id: "m1", profileId: "prof_a", tag: "#math", created: "2030-01-02T00:00:00Z" },
+      } satisfies TagMappingUpsertOp),
+      makeLogger(adapter)
+    );
+    await applyOp(
+      db,
+      "r",
+      entry(3, {
+        o: "tag_mapping_delete",
+        p: { id: "m1", deletedAt: "2030-01-03T00:00:00Z" },
+      } satisfies TagMappingDeleteOp),
+      makeLogger(adapter)
+    );
+    expect(await db.getProfileIdForTag("#math")).toBeNull();
+
+    await applyOp(
+      db,
+      "r",
+      entry(4, {
+        o: "tag_mapping_upsert",
+        p: { id: "m2", profileId: "prof_a", tag: "#math", created: "2030-01-04T00:00:00Z" },
+      } satisfies TagMappingUpsertOp),
+      makeLogger(adapter)
+    );
+    expect(await db.getProfileIdForTag("#math")).toBe("prof_a");
+  });
 });
 
 describe("SyncLog handlers - custom_deck ops", () => {
