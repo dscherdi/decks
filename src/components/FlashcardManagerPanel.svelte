@@ -1476,11 +1476,13 @@
   }
 
   /* Right-pinned Edit column — sticks to the right edge of the horizontal
-   * scroller so the edit button is always reachable without scrolling. */
+   * scroller so the edit button is always reachable without scrolling.
+   * z-index sits above table content (which has no z-index) so the column
+   * cleanly occludes anything scrolling beneath it. */
   .decks-fm-col-edit {
     position: sticky;
     right: 0;
-    z-index: 2;
+    z-index: 5;
     display: flex;
     align-items: center;
     justify-content: center;
@@ -1489,7 +1491,7 @@
   }
   .decks-fm-table-header .decks-fm-col-edit {
     background: var(--background-secondary);
-    z-index: 3;
+    z-index: 6;
   }
   .decks-fm-table-row:hover .decks-fm-col-edit {
     background: var(--background-modifier-hover);
@@ -1497,12 +1499,24 @@
   .decks-fm-row-selected .decks-fm-col-edit {
     background: var(--background-modifier-active-hover);
   }
+  /* Solid pill background on the button itself so it stands out from the
+   * column cell and is never confused with transparent hover state. */
   .decks-fm-edit-button {
     width: 28px !important;
     height: 28px !important;
     min-width: 0 !important;
     min-height: 0 !important;
     padding: 0 !important;
+    background: var(--interactive-normal) !important;
+    border: 1px solid var(--background-modifier-border) !important;
+    border-radius: var(--radius-s);
+    color: var(--text-normal);
+    position: relative;
+    z-index: 1;
+  }
+  .decks-fm-edit-button:hover {
+    background: var(--interactive-hover) !important;
+    border-color: var(--background-modifier-border-hover) !important;
   }
 
   .decks-fm-col-front,
