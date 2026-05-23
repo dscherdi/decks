@@ -17,6 +17,15 @@
   import { StatisticsService } from "@/services/StatisticsService";
   import { Logger } from "@/utils/logging";
   import { I18n } from "@/i18n/I18n";
+  import {
+    BAR_DATASET_DEFAULTS,
+    getCategoryXAxis,
+    getLinearYAxis,
+    getNativeTooltip,
+    getObsidianColor,
+    withAlpha,
+    PALETTE,
+  } from "./chartTheme";
 
   const t = I18n.t;
 
@@ -90,15 +99,19 @@
       (_, i) => `${i.toString().padStart(2, "0")}:00`
     );
 
+    const blueLine = getObsidianColor(PALETTE.blue);
+    const greenLine = getObsidianColor(PALETTE.green);
+
     return {
       labels,
       datasets: [
         {
+          ...BAR_DATASET_DEFAULTS,
           type: "bar" as const,
           label: t.statistics.reviewCountLabel,
           data: hourlyCounts,
-          backgroundColor: "rgba(59, 130, 246, 0.7)",
-          borderColor: "rgb(59, 130, 246)",
+          backgroundColor: withAlpha(PALETTE.blue, 0.7),
+          borderColor: blueLine,
           borderWidth: 1,
           yAxisID: "y",
         },
@@ -106,11 +119,13 @@
           type: "line" as const,
           label: t.statistics.successRatePercent,
           data: successRates,
-          backgroundColor: "rgba(34, 197, 94, 0.7)",
-          borderColor: "rgb(34, 197, 94)",
+          backgroundColor: greenLine,
+          borderColor: greenLine,
           borderWidth: 2,
           fill: false,
-          tension: 0.1,
+          tension: 0.4,
+          pointRadius: 0,
+          pointHoverRadius: 5,
           yAxisID: "y1",
         },
       ],
@@ -134,29 +149,27 @@
         },
         scales: {
           x: {
+            ...getCategoryXAxis(),
             title: {
               display: true,
               text: t.statistics.hourOfDay,
             },
           },
           y: {
+            ...getLinearYAxis(),
             type: "linear",
             display: true,
             position: "left",
-            beginAtZero: true,
             title: {
               display: true,
               text: t.statistics.numberOfReviews,
             },
-            ticks: {
-              precision: 0,
-            },
           },
           y1: {
+            ...getLinearYAxis(),
             type: "linear",
             display: true,
             position: "right",
-            beginAtZero: true,
             max: 100,
             title: {
               display: true,
@@ -164,8 +177,10 @@
             },
             grid: {
               drawOnChartArea: false,
+              drawTicks: false,
             },
             ticks: {
+              precision: 0,
               callback: function (value: string | number) {
                 return value + "%";
               },
@@ -182,6 +197,7 @@
             position: "top",
           },
           tooltip: {
+            ...getNativeTooltip(),
             callbacks: {
               label: function (context: TooltipItem<"bar" | "line">) {
                 const datasetLabel = context.dataset.label || "";

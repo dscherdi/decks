@@ -388,9 +388,9 @@
   }
 
   .decks-nav-button {
-    background: none;
+    background-color: var(--interactive-normal);
     border: 1px solid var(--background-modifier-border);
-    border-radius: 4px;
+    border-radius: var(--radius-s);
     padding: 8px;
     cursor: pointer;
     color: var(--text-muted);
@@ -410,7 +410,7 @@
 
   .decks-nav-button:hover,
   .decks-nav-button:active {
-    background: var(--background-modifier-hover);
+    background-color: var(--interactive-hover);
     color: var(--text-normal);
     border-color: var(--background-modifier-border-hover);
   }
@@ -541,34 +541,31 @@
   }
 
   .decks-day.decks-today {
-    outline: 2px solid var(--interactive-accent);
-    outline-offset: 1px;
+    box-shadow: inset 0 0 0 2px var(--interactive-accent);
   }
 
   .day.today:hover {
-    outline: 2px solid var(--interactive-accent);
-    outline-offset: 1px;
+    box-shadow: inset 0 0 0 2px var(--interactive-accent);
   }
 
-  /* Intensity colors - GitHub style */
   .decks-intensity-0 {
     background-color: var(--background-modifier-border);
   }
 
   .decks-intensity-1 {
-    background-color: #0e4429;
+    background-color: rgba(var(--color-green-rgb), 0.3);
   }
 
   .decks-intensity-2 {
-    background-color: #006d32;
+    background-color: rgba(var(--color-green-rgb), 0.5);
   }
 
   .decks-intensity-3 {
-    background-color: #26a641;
+    background-color: rgba(var(--color-green-rgb), 0.75);
   }
 
   .decks-intensity-4 {
-    background-color: #39d353;
+    background-color: var(--color-green);
   }
 
   .decks-legend {

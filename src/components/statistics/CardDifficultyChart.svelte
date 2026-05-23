@@ -14,6 +14,15 @@
   import { StatisticsService } from "@/services/StatisticsService";
   import { Logger } from "@/utils/logging";
   import { I18n } from "@/i18n/I18n";
+  import {
+    BAR_DATASET_DEFAULTS,
+    getCategoryXAxis,
+    getLinearYAxis,
+    getNativeTooltip,
+    getObsidianColor,
+    interpolateColor,
+    PALETTE,
+  } from "./chartTheme";
 
   const t = I18n.t;
 
@@ -66,14 +75,15 @@
 
   function processChartData() {
     if (!difficultyData || difficultyData.size === 0) {
+      const mutedColor = getObsidianColor("--text-muted");
       return {
         labels: [t.statistics.noData],
         datasets: [
           {
             label: t.statistics.cardPlural,
             data: [0],
-            backgroundColor: "#6b7280",
-            borderColor: "#4b5563",
+            backgroundColor: mutedColor,
+            borderColor: mutedColor,
             borderWidth: 1,
           },
         ],
@@ -106,25 +116,20 @@
       }
     });
 
-    // Create gradient colors from green (easy) to red (difficult)
     const colors = labels.map((_, index) => {
       const ratio = index / Math.max(labels.length - 1, 1);
-      const r = Math.round(34 + (239 - 34) * ratio); // 34 (green) to 239 (red)
-      const g = Math.round(197 - 197 * ratio); // 197 (green) to 0 (red)
-      const b = 94; // Keep blue constant
-      return `rgb(${r}, ${g}, ${b})`;
+      return interpolateColor(PALETTE.green, PALETTE.red, ratio);
     });
 
     return {
       labels,
       datasets: [
         {
+          ...BAR_DATASET_DEFAULTS,
           label: t.statistics.numberOfCards,
           data,
           backgroundColor: colors,
-          borderColor: colors.map((color) =>
-            color.replace("rgb", "rgba").replace(")", ", 0.8)")
-          ),
+          borderColor: colors,
           borderWidth: 1,
         },
       ],
@@ -147,19 +152,17 @@
         maintainAspectRatio: false,
         scales: {
           x: {
+            ...getCategoryXAxis(),
             title: {
               display: true,
               text: t.statistics.cardDifficultyRange,
             },
           },
           y: {
-            beginAtZero: true,
+            ...getLinearYAxis(),
             title: {
               display: true,
               text: t.statistics.numberOfCards,
-            },
-            ticks: {
-              precision: 0,
             },
           },
         },
@@ -173,6 +176,7 @@
             position: "top",
           },
           tooltip: {
+            ...getNativeTooltip(),
             callbacks: {
               label: function (context: TooltipItem<"bar">) {
                 const value = context.parsed.y;

@@ -14,6 +14,15 @@
   import { StatisticsService } from "@/services/StatisticsService";
   import { Logger } from "@/utils/logging";
   import { I18n } from "@/i18n/I18n";
+  import {
+    BAR_DATASET_DEFAULTS,
+    getCategoryXAxis,
+    getLinearYAxis,
+    getNativeTooltip,
+    getObsidianColor,
+    interpolateColor,
+    PALETTE,
+  } from "./chartTheme";
 
   const t = I18n.t;
 
@@ -66,14 +75,15 @@
 
   function processChartData() {
     if (!retrievabilityData || retrievabilityData.size === 0) {
+      const mutedColor = getObsidianColor("--text-muted");
       return {
         labels: [t.statistics.noData],
         datasets: [
           {
             label: t.statistics.reviewsLabel,
             data: [0],
-            backgroundColor: "#6b7280",
-            borderColor: "#4b5563",
+            backgroundColor: mutedColor,
+            borderColor: mutedColor,
             borderWidth: 1,
           },
         ],
@@ -106,25 +116,20 @@
       }
     });
 
-    // Create gradient colors from red (low retrievability) to green (high retrievability)
     const colors = labels.map((_, index) => {
       const ratio = index / Math.max(labels.length - 1, 1);
-      const r = Math.round(239 - (239 - 34) * ratio); // 239 (red) to 34 (green)
-      const g = Math.round(197 * ratio); // 0 (red) to 197 (green)
-      const b = 94; // Keep blue constant
-      return `rgb(${r}, ${g}, ${b})`;
+      return interpolateColor(PALETTE.red, PALETTE.green, ratio);
     });
 
     return {
       labels,
       datasets: [
         {
+          ...BAR_DATASET_DEFAULTS,
           label: t.statistics.numberOfReviews,
           data,
           backgroundColor: colors,
-          borderColor: colors.map((color) =>
-            color.replace("rgb", "rgba").replace(")", ", 0.8)")
-          ),
+          borderColor: colors,
           borderWidth: 1,
         },
       ],
@@ -147,19 +152,17 @@
         maintainAspectRatio: false,
         scales: {
           x: {
+            ...getCategoryXAxis(),
             title: {
               display: true,
               text: t.statistics.retrievabilityRange,
             },
           },
           y: {
-            beginAtZero: true,
+            ...getLinearYAxis(),
             title: {
               display: true,
               text: t.statistics.numberOfReviews,
-            },
-            ticks: {
-              precision: 0,
             },
           },
         },
@@ -173,6 +176,7 @@
             position: "top",
           },
           tooltip: {
+            ...getNativeTooltip(),
             callbacks: {
               label: function (context: TooltipItem<"bar">) {
                 const value = context.parsed.y;

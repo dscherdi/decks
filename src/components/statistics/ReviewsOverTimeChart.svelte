@@ -15,6 +15,14 @@
   import { Logger } from "@/utils/logging";
   import { StatisticsService } from "@/services/StatisticsService";
   import { I18n } from "@/i18n/I18n";
+  import {
+    BAR_DATASET_DEFAULTS,
+    getCategoryXAxis,
+    getLinearYAxis,
+    getNativeTooltip,
+    getObsidianColor,
+    PALETTE,
+  } from "./chartTheme";
 
   const t = I18n.t;
 
@@ -110,35 +118,44 @@
     // Sort dates and prepare data
     const sortedDates = Array.from(reviewData.keys()).sort();
 
+    const redColor = getObsidianColor(PALETTE.red);
+    const orangeColor = getObsidianColor(PALETTE.orange);
+    const greenColor = getObsidianColor(PALETTE.green);
+    const blueColor = getObsidianColor(PALETTE.blue);
+
     return {
       labels: sortedDates,
       datasets: [
         {
+          ...BAR_DATASET_DEFAULTS,
           label: t.statistics.againSeries,
           data: sortedDates.map((date) => reviewData.get(date)!.again),
-          backgroundColor: "#ef4444",
-          borderColor: "#dc2626",
+          backgroundColor: redColor,
+          borderColor: redColor,
           borderWidth: 1,
         },
         {
+          ...BAR_DATASET_DEFAULTS,
           label: t.statistics.hardSeries,
           data: sortedDates.map((date) => reviewData.get(date)!.hard),
-          backgroundColor: "#f97316",
-          borderColor: "#ea580c",
+          backgroundColor: orangeColor,
+          borderColor: orangeColor,
           borderWidth: 1,
         },
         {
+          ...BAR_DATASET_DEFAULTS,
           label: t.statistics.goodSeries,
           data: sortedDates.map((date) => reviewData.get(date)!.good),
-          backgroundColor: "#22c55e",
-          borderColor: "#16a34a",
+          backgroundColor: greenColor,
+          borderColor: greenColor,
           borderWidth: 1,
         },
         {
+          ...BAR_DATASET_DEFAULTS,
           label: t.statistics.easySeries,
           data: sortedDates.map((date) => reviewData.get(date)!.easy),
-          backgroundColor: "#3b82f6",
-          borderColor: "#2563eb",
+          backgroundColor: blueColor,
+          borderColor: blueColor,
           borderWidth: 1,
         },
       ],
@@ -162,6 +179,7 @@
         maintainAspectRatio: false,
         scales: {
           x: {
+            ...getCategoryXAxis(),
             stacked: true,
             title: {
               display: true,
@@ -169,14 +187,11 @@
             },
           },
           y: {
+            ...getLinearYAxis(),
             stacked: true,
-            beginAtZero: true,
             title: {
               display: true,
               text: t.statistics.reviewsLabel,
-            },
-            ticks: {
-              precision: 0,
             },
           },
         },
@@ -190,6 +205,7 @@
             position: "top",
           },
           tooltip: {
+            ...getNativeTooltip(),
             mode: "index",
             intersect: false,
             callbacks: {

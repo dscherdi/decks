@@ -14,6 +14,7 @@
   import FutureDueChart from "./FutureDueChart.svelte";
   import MaturityProgressionChart from "./MaturityProgressionChart.svelte";
   import OverallStatistics from "./OverallStatistics.svelte";
+  import { initChartTheme } from "./chartTheme";
   import type { Statistics } from "../../database/types";
 
   import { StatisticsService } from "../../services/StatisticsService";
@@ -89,6 +90,8 @@
 
   onMount(async () => {
     logger.debug("[StatisticsUI] Starting onMount");
+
+    initChartTheme();
 
     try {
       logger.debug("[StatisticsUI] Loading decks and tags...");

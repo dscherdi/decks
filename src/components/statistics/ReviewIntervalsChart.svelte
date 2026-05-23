@@ -14,6 +14,14 @@
   import { StatisticsService } from "@/services/StatisticsService";
   import { Logger } from "@/utils/logging";
   import { I18n } from "@/i18n/I18n";
+  import {
+    BAR_DATASET_DEFAULTS,
+    getCategoryXAxis,
+    getLinearYAxis,
+    getNativeTooltip,
+    getObsidianColor,
+    PALETTE,
+  } from "./chartTheme";
 
   const t = I18n.t;
 
@@ -64,14 +72,15 @@
 
   function processChartData() {
     if (!intervalData || intervalData.size === 0) {
+      const mutedColor = getObsidianColor("--text-muted");
       return {
         labels: [t.statistics.noData],
         datasets: [
           {
             label: t.statistics.cardPlural,
             data: [0],
-            backgroundColor: "#6b7280",
-            borderColor: "#4b5563",
+            backgroundColor: mutedColor,
+            borderColor: mutedColor,
             borderWidth: 1,
           },
         ],
@@ -104,14 +113,16 @@
       }
     });
 
+    const blue = getObsidianColor(PALETTE.blue);
     return {
       labels,
       datasets: [
         {
+          ...BAR_DATASET_DEFAULTS,
           label: t.statistics.numberOfCards,
           data,
-          backgroundColor: "#3b82f6",
-          borderColor: "#2563eb",
+          backgroundColor: blue,
+          borderColor: blue,
           borderWidth: 1,
         },
       ],
@@ -134,19 +145,17 @@
         maintainAspectRatio: false,
         scales: {
           x: {
+            ...getCategoryXAxis(),
             title: {
               display: true,
               text: t.statistics.intervalRange,
             },
           },
           y: {
-            beginAtZero: true,
+            ...getLinearYAxis(),
             title: {
               display: true,
               text: t.statistics.numberOfCards,
-            },
-            ticks: {
-              precision: 0,
             },
           },
         },
@@ -160,6 +169,7 @@
             position: "top",
           },
           tooltip: {
+            ...getNativeTooltip(),
             callbacks: {
               label: function (context: TooltipItem<"bar">) {
                 const value = context.parsed.y;

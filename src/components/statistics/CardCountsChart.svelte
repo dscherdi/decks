@@ -11,6 +11,11 @@
   import { StatisticsService } from "@/services/StatisticsService";
   import { Logger } from "@/utils/logging";
   import { I18n } from "@/i18n/I18n";
+  import {
+    getNativeTooltip,
+    getObsidianColor,
+    PALETTE,
+  } from "./chartTheme";
 
   const t = I18n.t;
 
@@ -85,25 +90,27 @@
     const backgroundColor = [];
     const borderColor = [];
 
+    const segmentBorder = getObsidianColor("--background-secondary");
+
     if (counts.new > 0) {
       data.push(counts.new);
       labels.push(t.statistics.cardCountsNew);
-      backgroundColor.push("#3b82f6");
-      borderColor.push("#2563eb");
+      backgroundColor.push(getObsidianColor(PALETTE.blue));
+      borderColor.push(segmentBorder);
     }
 
     if (counts.young > 0) {
       data.push(counts.young);
       labels.push(t.statistics.cardCountsYoung);
-      backgroundColor.push("#f59e0b");
-      borderColor.push("#d97706");
+      backgroundColor.push(getObsidianColor(PALETTE.orange));
+      borderColor.push(segmentBorder);
     }
 
     if (counts.mature > 0) {
       data.push(counts.mature);
       labels.push(t.statistics.cardCountsMature);
-      backgroundColor.push("#22c55e");
-      borderColor.push("#16a34a");
+      backgroundColor.push(getObsidianColor(PALETTE.green));
+      borderColor.push(segmentBorder);
     }
 
     return {
@@ -113,7 +120,7 @@
           data,
           backgroundColor,
           borderColor,
-          borderWidth: 1,
+          borderWidth: 2,
         },
       ],
     };
@@ -147,6 +154,7 @@
               position: "bottom",
             },
             tooltip: {
+              ...getNativeTooltip(),
               callbacks: {
                 label: function (context) {
                   const label = context.label || "";
@@ -187,6 +195,7 @@
                 display: true,
                 position: "bottom",
               },
+              tooltip: getNativeTooltip(),
             },
           },
         });

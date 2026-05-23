@@ -23,6 +23,15 @@
   import { Logger } from "@/utils/logging";
   import { toLocalDateString } from "@/utils/date-utils";
   import { I18n } from "@/i18n/I18n";
+  import {
+    LINE_DATASET_DEFAULTS,
+    getCategoryXAxis,
+    getLinearYAxis,
+    getNativeTooltip,
+    getObsidianColor,
+    withAlpha,
+    PALETTE,
+  } from "./chartTheme";
 
   const t = I18n.t;
 
@@ -184,19 +193,19 @@
       .slice(0, displayData.length)
       .map((day) => day.projectedBacklog);
 
+    const greenColor = getObsidianColor(PALETTE.green);
+    const mutedColor = getObsidianColor("--text-muted");
+
     // Create chart datasets - using bar chart with fill
     const datasets = [
       {
+        ...LINE_DATASET_DEFAULTS,
         type: "line" as const,
         label: t.statistics.dueCards,
         data: barData,
-        backgroundColor: "rgba(34, 197, 94, 0.3)",
-        borderColor: "rgb(34, 197, 94)",
-        borderWidth: 2,
-        fill: true,
-        tension: 0.4,
+        backgroundColor: withAlpha(PALETTE.green, 0.25),
+        borderColor: greenColor,
         pointRadius: 2,
-        pointHoverRadius: 5,
         yAxisID: "y",
       },
     ];
@@ -204,18 +213,16 @@
     // Add backlog curve if enabled
     if (showBacklog && backlogData.length > 0) {
       datasets.push({
+        ...LINE_DATASET_DEFAULTS,
         type: "line" as const,
         label: t.statistics.cumulativeSeries,
         data: cumulativeData,
-        backgroundColor: "rgba(156, 163, 175, 0.3)",
-        borderColor: "rgba(156, 163, 175, 0.7)",
-        borderWidth: 2,
-        fill: true,
-        tension: 0.4,
+        backgroundColor: withAlpha("--text-muted", 0.2),
+        borderColor: mutedColor,
         pointRadius: 0,
         pointHoverRadius: 4,
-        pointBackgroundColor: "rgba(156, 163, 175, 0.7)",
-        pointBorderColor: "#ffffff",
+        pointBackgroundColor: mutedColor,
+        pointBorderColor: getObsidianColor("--background-secondary"),
         pointBorderWidth: 2,
         yAxisID: "y1",
       });
@@ -245,41 +252,36 @@
           },
           scales: {
             x: {
+              ...getCategoryXAxis(),
               display: true,
-              grid: {
-                display: false,
-              },
               ticks: {
+                maxRotation: 0,
+                autoSkip: true,
                 maxTicksLimit: 20,
               },
             },
             y: {
+              ...getLinearYAxis(),
               type: "linear",
               display: true,
               position: "left",
-              beginAtZero: true,
               title: {
                 display: true,
                 text: t.statistics.dueCards,
               },
-              ticks: {
-                precision: 0,
-              },
             },
             y1: {
+              ...getLinearYAxis(),
               type: "linear",
               display: showBacklog,
               position: "right",
-              beginAtZero: true,
               title: {
                 display: true,
                 text: t.statistics.cumulativeBacklog,
               },
               grid: {
                 drawOnChartArea: false,
-              },
-              ticks: {
-                precision: 0,
+                drawTicks: false,
               },
             },
           },
@@ -292,6 +294,7 @@
               position: "bottom",
             },
             tooltip: {
+              ...getNativeTooltip(),
               callbacks: {
                 title: function (tooltipItems: TooltipItem<"bar" | "line">[]) {
                   const label = tooltipItems[0].label;
@@ -424,7 +427,7 @@
       </div>
       <div class="stat">
         <span class="stat-label">{t.statistics.dueTomorrow}</span>
-        <span class="stat-value" style="color: #f97316;"
+        <span class="stat-value decks-stat-value-warning"
           >{forecastStats.dueTomorrow}</span
         >
       </div>
@@ -480,7 +483,7 @@
   .backlog-control input[type="checkbox"] {
     width: 16px;
     height: 16px;
-    accent-color: #3b82f6;
+    accent-color: var(--interactive-accent);
   }
 
   .timeframe-controls {
@@ -501,7 +504,11 @@
   .timeframe-controls input[type="radio"] {
     width: 16px;
     height: 16px;
-    accent-color: #3b82f6;
+    accent-color: var(--interactive-accent);
+  }
+
+  .decks-stat-value-warning {
+    color: var(--color-orange);
   }
 
   .chart-wrapper {

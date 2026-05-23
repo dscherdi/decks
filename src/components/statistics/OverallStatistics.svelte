@@ -308,9 +308,10 @@
   }
 
   .decks-stats-section {
-    background: var(--background-secondary);
+    background-color: var(--background-secondary);
+    border: 1px solid var(--background-modifier-border);
+    border-radius: var(--radius-m);
     padding: 20px;
-    border-radius: 10px;
   }
 
   .decks-stats-section h3 {
@@ -327,11 +328,11 @@
   }
 
   .decks-stat-card {
-    background: var(--background-primary);
-    padding: 16px;
-    border-radius: 8px;
-    text-align: center;
+    background-color: var(--background-secondary);
     border: 1px solid var(--background-modifier-border);
+    border-radius: var(--radius-m);
+    padding: 16px;
+    text-align: center;
   }
 
   .decks-stat-value {
@@ -355,10 +356,10 @@
   }
 
   .decks-timeframe-card {
-    background: var(--background-primary);
-    padding: 16px;
-    border-radius: 8px;
+    background-color: var(--background-secondary);
     border: 1px solid var(--background-modifier-border);
+    border-radius: var(--radius-m);
+    padding: 16px;
   }
 
   .decks-timeframe-card h4 {
@@ -398,27 +399,28 @@
   }
 
   .decks-button-stat {
-    background: var(--background-primary);
+    background-color: var(--background-secondary);
+    border: 1px solid var(--background-modifier-border);
+    border-left-width: 3px;
+    border-radius: var(--radius-m);
     padding: 16px;
-    border-radius: 8px;
     text-align: center;
-    border: 2px solid;
   }
 
   .decks-button-stat.again {
-    border-color: #ef4444;
+    border-left-color: var(--color-red);
   }
 
   .decks-button-stat.hard {
-    border-color: #f59e0b;
+    border-left-color: var(--color-orange);
   }
 
   .decks-button-stat.good {
-    border-color: #10b981;
+    border-left-color: var(--color-green);
   }
 
   .decks-button-stat.easy {
-    border-color: #3b82f6;
+    border-left-color: var(--color-blue);
   }
 
   .decks-button-label {

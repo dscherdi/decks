@@ -122,9 +122,9 @@
   .decks-true-retention-table {
     margin: 1rem 0;
     padding: 1rem;
+    background-color: var(--background-secondary);
     border: 1px solid var(--background-modifier-border);
-    border-radius: 8px;
-    background: var(--background-secondary);
+    border-radius: var(--radius-m);
   }
 
   .decks-true-retention-table h4 {
@@ -155,14 +155,17 @@
   .decks-retention-table td {
     padding: 8px 12px;
     text-align: left;
-    border-bottom: 1px solid var(--background-modifier-border);
+    border-bottom: 1px solid var(--background-modifier-border-hover);
   }
 
-  .decks-retention-table th {
-    background: var(--background-primary);
-    font-weight: 600;
-    font-size: 0.9rem;
-    color: var(--text-normal);
+  .decks-retention-table thead th {
+    background-color: transparent;
+    color: var(--text-muted);
+    font-size: 0.85em;
+    font-weight: 500;
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+    border-bottom: 1px solid var(--background-modifier-border);
   }
 
   .decks-retention-table td {
@@ -174,15 +177,15 @@
   }
 
   .decks-card-type.young {
-    color: #f59e0b;
+    color: var(--color-orange);
   }
 
   .decks-card-type.mature {
-    color: #22c55e;
+    color: var(--color-green);
   }
 
   .decks-card-type.all {
-    color: var(--text-accent);
+    color: var(--color-blue);
     font-weight: 600;
   }
 
@@ -197,15 +200,15 @@
   }
 
   .young-rate {
-    color: #f59e0b;
+    color: var(--color-orange);
   }
 
   .mature-rate {
-    color: #22c55e;
+    color: var(--color-green);
   }
 
   .all-rate {
-    color: var(--text-accent);
+    color: var(--color-blue);
     font-size: 1rem;
   }
 

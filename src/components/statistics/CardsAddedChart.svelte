@@ -4,8 +4,10 @@
     Chart,
     CategoryScale,
     LinearScale,
-    BarElement,
-    BarController,
+    LineElement,
+    LineController,
+    PointElement,
+    Filler,
     Title,
     Tooltip,
     Legend,
@@ -14,6 +16,15 @@
   import { StatisticsService } from "@/services/StatisticsService";
   import { Logger } from "@/utils/logging";
   import { I18n } from "@/i18n/I18n";
+  import {
+    LINE_DATASET_DEFAULTS,
+    getCategoryXAxis,
+    getLinearYAxis,
+    getNativeTooltip,
+    getObsidianColor,
+    withAlpha,
+    PALETTE,
+  } from "./chartTheme";
 
   const t = I18n.t;
 
@@ -21,8 +32,10 @@
   Chart.register(
     CategoryScale,
     LinearScale,
-    BarElement,
-    BarController,
+    LineElement,
+    LineController,
+    PointElement,
+    Filler,
     Title,
     Tooltip,
     Legend
@@ -77,15 +90,16 @@
 
   function processChartData() {
     if (!cardsAddedData || cardsAddedData.size === 0) {
+      const mutedColor = getObsidianColor("--text-muted");
       return {
         labels: ["No Data"],
         datasets: [
           {
+            ...LINE_DATASET_DEFAULTS,
             label: "Cards Added",
             data: [0],
-            backgroundColor: "#6b7280",
-            borderColor: "#4b5563",
-            borderWidth: 1,
+            backgroundColor: withAlpha("--text-muted", 0.2),
+            borderColor: mutedColor,
           },
         ],
       };
@@ -106,11 +120,11 @@
       labels,
       datasets: [
         {
+          ...LINE_DATASET_DEFAULTS,
           label: t.statistics.cardsAddedSeries,
           data,
-          backgroundColor: "#10b981",
-          borderColor: "#059669",
-          borderWidth: 1,
+          backgroundColor: withAlpha(PALETTE.green, 0.25),
+          borderColor: getObsidianColor(PALETTE.green),
         },
       ],
     };
@@ -122,26 +136,24 @@
     const data = processChartData();
 
     chart = new Chart(canvas, {
-      type: "bar",
+      type: "line",
       data: data,
       options: {
         responsive: true,
         maintainAspectRatio: false,
         scales: {
           x: {
+            ...getCategoryXAxis(),
             title: {
               display: true,
               text: t.statistics.dateAdded,
             },
           },
           y: {
-            beginAtZero: true,
+            ...getLinearYAxis(),
             title: {
               display: true,
               text: t.statistics.numberOfCards,
-            },
-            ticks: {
-              precision: 0,
             },
           },
         },
@@ -155,8 +167,9 @@
             position: "top",
           },
           tooltip: {
+            ...getNativeTooltip(),
             callbacks: {
-              label: function (context: TooltipItem<"bar">) {
+              label: function (context: TooltipItem<"line">) {
                 const value = context.parsed.y ?? 0;
                 const plural = value === 1 ? t.statistics.cardSingular : t.statistics.cardPlural;
                 return I18n.format(t.statistics.cardsAddedTooltip, {
@@ -165,7 +178,7 @@
                   plural,
                 });
               },
-              afterLabel: function (_context: TooltipItem<"bar">) {
+              afterLabel: function (_context: TooltipItem<"line">) {
                 return t.statistics.basedOnFirstReview;
               },
             },

@@ -15,6 +15,14 @@
   import { StatisticsService } from "@/services/StatisticsService";
   import { Logger } from "@/utils/logging";
   import { I18n } from "@/i18n/I18n";
+  import {
+    getCategoryXAxis,
+    getLinearYAxis,
+    getNativeTooltip,
+    getObsidianColor,
+    withAlpha,
+    PALETTE,
+  } from "./chartTheme";
 
   const t = I18n.t;
 
@@ -236,37 +244,47 @@
     const learningCards = sampledData.map((d) => d.learningCards);
     const matureCards = sampledData.map((d) => d.matureCards);
 
+    const blueColor = getObsidianColor(PALETTE.blue);
+    const orangeColor = getObsidianColor(PALETTE.orange);
+    const greenColor = getObsidianColor(PALETTE.green);
+
     const baseDatasets = [
       {
         label: t.statistics.newCardsLabel,
         data: newCards,
-        backgroundColor: "rgba(59, 130, 246, 0.5)",
-        borderColor: "rgb(59, 130, 246)",
+        backgroundColor: withAlpha(PALETTE.blue, 0.4),
+        borderColor: blueColor,
         borderWidth: 1,
         fill: true,
         tension: 0.4,
+        pointRadius: 0,
+        pointHoverRadius: 5,
         stack: "stack0",
         order: 2,
       },
       {
         label: t.statistics.learningCardsLabel,
         data: learningCards,
-        backgroundColor: "rgba(245, 158, 11, 0.5)",
-        borderColor: "rgb(245, 158, 11)",
+        backgroundColor: withAlpha(PALETTE.orange, 0.4),
+        borderColor: orangeColor,
         borderWidth: 1,
         fill: true,
         tension: 0.4,
+        pointRadius: 0,
+        pointHoverRadius: 5,
         stack: "stack0",
         order: 2,
       },
       {
         label: t.statistics.matureCardsLabel,
         data: matureCards,
-        backgroundColor: "rgba(34, 197, 94, 0.5)",
-        borderColor: "rgb(34, 197, 94)",
+        backgroundColor: withAlpha(PALETTE.green, 0.4),
+        borderColor: greenColor,
         borderWidth: 1,
         fill: true,
         tension: 0.4,
+        pointRadius: 0,
+        pointHoverRadius: 5,
         stack: "stack0",
         order: 2,
       },
@@ -286,16 +304,17 @@
           percent: Math.round(theoreticalMaintenanceLevel),
         }),
         data: standardMaintenanceLine,
-        borderColor: "rgba(168, 85, 247, 1)", // Bright purple for better visibility
-        borderWidth: 3, // Same thickness as user's line
-        borderDash: [4, 8], // Different dash pattern to differentiate
+        backgroundColor: "transparent",
+        borderColor: getObsidianColor(PALETTE.purple),
+        borderWidth: 3,
+        borderDash: [4, 8],
         fill: false,
         tension: 0,
         pointRadius: 0,
         pointHoverRadius: 0,
         yAxisID: "y",
         type: "line",
-        stack: "standard-maintenance", // Separate stack to prevent stacking with card counts
+        stack: "standard-maintenance",
         order: 1,
       });
 
@@ -312,17 +331,18 @@
           percent: Math.round(maintenanceLevel),
         }),
         data: maintenanceLine,
-        borderColor: "rgba(239, 68, 68, 1)", // Fully opaque red dashed line
-        borderWidth: 3, // Thicker line to be more visible
-        borderDash: [8, 4], // Longer dashes for better visibility
+        backgroundColor: "transparent",
+        borderColor: getObsidianColor(PALETTE.red),
+        borderWidth: 3,
+        borderDash: [8, 4],
         fill: false,
         tension: 0,
-        pointRadius: 0, // No points on the line
+        pointRadius: 0,
         pointHoverRadius: 0,
         yAxisID: "y",
         type: "line",
-        stack: "personal-maintenance", // Separate stack to prevent stacking with card counts
-        order: 1, // Draw on top (lower order = drawn later = on top)
+        stack: "personal-maintenance",
+        order: 1,
       });
     }
 
@@ -364,6 +384,7 @@
               position: "bottom",
             },
             tooltip: {
+              ...getNativeTooltip(),
               callbacks: {
                 footer: function (tooltipItems) {
                   if (tooltipItems.length === 0) return "";
@@ -379,21 +400,19 @@
           },
           scales: {
             x: {
+              ...getCategoryXAxis(),
               title: {
                 display: true,
                 text: t.statistics.daysFromNow,
               },
-              ticks: {
-                maxTicksLimit: 12,
-              },
             },
             y: {
+              ...getLinearYAxis(),
               stacked: true,
               title: {
                 display: true,
                 text: t.statistics.numberOfCards,
               },
-              beginAtZero: true,
             },
           },
         },
