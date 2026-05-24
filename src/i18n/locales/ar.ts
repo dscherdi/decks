@@ -877,6 +877,7 @@ export const ar: Translations = {
     typeTable: "جدول",
     typeCloze: "فراغات",
     typeImageOcclusion: "إخفاء الصور",
+    typeSpatial: "مكاني",
     boolTrue: "صحيح",
     boolFalse: "خطأ",
     valuePlaceholder: "القيمة...",

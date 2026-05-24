@@ -917,6 +917,7 @@ export const it: Translations = {
     typeTable: "Tabella",
     typeCloze: "Lacuna",
     typeImageOcclusion: "Occlusione immagine",
+    typeSpatial: "Spaziale",
     boolTrue: "Vero",
     boolFalse: "Falso",
     valuePlaceholder: "Valore...",

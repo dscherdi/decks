@@ -909,6 +909,7 @@ export const ru: Translations = {
     typeTable: "Таблица",
     typeCloze: "Пропуск",
     typeImageOcclusion: "Маскирование изображения",
+    typeSpatial: "Пространственная",
     boolTrue: "Истина",
     boolFalse: "Ложь",
     valuePlaceholder: "Значение...",

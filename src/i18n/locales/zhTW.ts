@@ -862,6 +862,7 @@ export const zhTW: Translations = {
     typeTable: "表格",
     typeCloze: "填空 (Cloze)",
     typeImageOcclusion: "圖片遮罩",
+    typeSpatial: "空間",
     boolTrue: "是",
     boolFalse: "否",
     valuePlaceholder: "數值...",

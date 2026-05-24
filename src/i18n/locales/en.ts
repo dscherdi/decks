@@ -832,6 +832,7 @@ export const en = {
     typeTable: "Table",
     typeCloze: "Cloze",
     typeImageOcclusion: "Image occlusion",
+    typeSpatial: "Spatial",
     boolTrue: "True",
     boolFalse: "False",
     valuePlaceholder: "Value...",

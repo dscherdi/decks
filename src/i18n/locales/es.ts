@@ -924,6 +924,7 @@ export const es: Translations = {
     typeTable: "Tabla",
     typeCloze: "Hueco",
     typeImageOcclusion: "Oclusión de imagen",
+    typeSpatial: "Espacial",
     boolTrue: "Verdadero",
     boolFalse: "Falso",
     valuePlaceholder: "Valor...",

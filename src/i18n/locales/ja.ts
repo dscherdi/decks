@@ -894,6 +894,7 @@ export const ja: Translations = {
     typeTable: "表",
     typeCloze: "穴埋め",
     typeImageOcclusion: "画像隠し",
+    typeSpatial: "空間",
     boolTrue: "真",
     boolFalse: "偽",
     valuePlaceholder: "値...",

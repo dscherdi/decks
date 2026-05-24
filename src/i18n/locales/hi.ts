@@ -912,6 +912,7 @@ export const hi: Translations = {
     typeTable: "तालिका",
     typeCloze: "क्लोज़",
     typeImageOcclusion: "इमेज ऑक्लूज़न",
+    typeSpatial: "स्पेशियल",
     boolTrue: "सही",
     boolFalse: "गलत",
     valuePlaceholder: "मान...",

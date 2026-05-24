@@ -854,6 +854,7 @@ export const zh: Translations = {
     typeTable: "表格",
     typeCloze: "填空",
     typeImageOcclusion: "图像遮挡",
+    typeSpatial: "空间",
     boolTrue: "真",
     boolFalse: "假",
     valuePlaceholder: "值...",

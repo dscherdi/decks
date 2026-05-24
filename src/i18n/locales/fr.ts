@@ -932,6 +932,7 @@ export const fr: Translations = {
     typeTable: "Tableau",
     typeCloze: "Lacune",
     typeImageOcclusion: "Occlusion d'image",
+    typeSpatial: "Spatial",
     boolTrue: "Vrai",
     boolFalse: "Faux",
     valuePlaceholder: "Valeur...",

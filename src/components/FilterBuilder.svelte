@@ -309,6 +309,7 @@
               <option value="table">{fb.typeTable}</option>
               <option value="cloze">{fb.typeCloze}</option>
               <option value="image-occlusion">{fb.typeImageOcclusion}</option>
+              <option value="spatial">{fb.typeSpatial}</option>
             </select>
           {:else if rule.field === "isLeech" || rule.field === "isDense"}
             <select

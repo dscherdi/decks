@@ -914,6 +914,7 @@ export const tr: Translations = {
     typeTable: "Tablo",
     typeCloze: "Boşluk doldurma (Cloze)",
     typeImageOcclusion: "Görsel örtme (Image occlusion)",
+    typeSpatial: "Uzamsal",
     boolTrue: "Doğru",
     boolFalse: "Yanlış",
     valuePlaceholder: "Değer...",

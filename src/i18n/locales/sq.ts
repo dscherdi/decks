@@ -925,6 +925,7 @@ export const sq: Translations = {
     typeTable: "Tabelë",
     typeCloze: "Boshllëk",
     typeImageOcclusion: "Mbulim imazhi",
+    typeSpatial: "Hapësinor",
     boolTrue: "E vërtetë",
     boolFalse: "E rreme",
     valuePlaceholder: "Vlera...",
