@@ -917,11 +917,6 @@
           {/each}
         </div>
       {/if}
-      {#if currentCard.hint && currentCard.hint.length > 0}
-        <div class="decks-card-hint" aria-label="hint">
-          <span class="decks-card-hint-chip">{currentCard.hint}</span>
-        </div>
-      {/if}
     {/if}
     <div class="decks-header-stats">
       {#if browseMode}
@@ -1145,7 +1140,13 @@
         </div>
       </div>
 
-      {#if showAnswer}
+      {#if currentCard?.hint && currentCard.hint.length > 0}
+        <div class="decks-card-edge">
+          <span class="decks-card-edge-line"></span>
+          <span class="decks-card-edge-chip" aria-label={currentCard.hint}>{currentCard.hint}</span>
+          <span class="decks-card-edge-line"></span>
+        </div>
+      {:else if showAnswer}
         <div class="decks-separator"></div>
       {/if}
       <div class="decks-answer-section" class:hidden={!showAnswer}>
@@ -1359,21 +1360,38 @@
     font-size: var(--font-ui-smaller);
   }
 
-  .decks-card-hint {
+  .decks-card-edge {
     display: flex;
-    flex-wrap: wrap;
-    gap: 4px;
-    margin-top: 4px;
+    align-items: center;
+    gap: 8px;
+    margin: 0 auto;
+    width: 100%;
+    max-width: 600px;
   }
 
-  .decks-card-hint-chip {
-    display: inline-block;
-    padding: 1px 8px;
+  .decks-card-edge-line {
+    flex: 1 1 0;
+    min-width: 24px;
+    height: 1px;
+    background: var(--background-modifier-border-hover);
+  }
+
+  .decks-card-edge-chip {
+    flex: 0 1 auto;
+    min-width: 0;
+    max-width: 75%;
+    padding: 2px 10px;
     border-radius: 10px;
     background: var(--background-modifier-border);
     color: var(--text-muted);
-    font-size: var(--font-ui-smaller);
+    font-size: var(--font-ui-small);
     font-style: italic;
+    display: -webkit-box;
+    -webkit-line-clamp: 2;
+    line-clamp: 2;
+    -webkit-box-orient: vertical;
+    overflow: hidden;
+    overflow-wrap: anywhere;
   }
 
   .decks-card-utilities {
