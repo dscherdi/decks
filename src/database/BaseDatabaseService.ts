@@ -204,6 +204,8 @@ export abstract class BaseDatabaseService implements IDatabaseService {
       created: row[22] as string,
       modified: row[23] as string,
       tags,
+      suspendedAt: (row[25] as string) ?? null,
+      buriedUntil: (row[26] as string) ?? null,
     };
   }
 
@@ -833,8 +835,9 @@ export abstract class BaseDatabaseService implements IDatabaseService {
     const sql = `INSERT OR IGNORE INTO flashcards
                  (id, deck_id, front, back, type, source_file, content_hash, breadcrumb, notes,
                   cloze_text, cloze_order, source_node_id, edge_id, hint, state, due_date,
-                  interval, repetitions, difficulty, stability, lapses, last_reviewed, created, modified, tags)
-                 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`;
+                  interval, repetitions, difficulty, stability, lapses, last_reviewed, created, modified, tags,
+                  suspended_at, buried_until)
+                 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`;
 
     await this.executeSql(sql, [
       flashcardWithId.id,
@@ -862,6 +865,8 @@ export abstract class BaseDatabaseService implements IDatabaseService {
       flashcardWithId.created,
       flashcardWithId.modified,
       serializeTags(flashcardWithId.tags),
+      flashcardWithId.suspendedAt ?? null,
+      flashcardWithId.buriedUntil ?? null,
     ]);
   }
 
@@ -996,6 +1001,10 @@ export abstract class BaseDatabaseService implements IDatabaseService {
           updateFields.push("source_node_id = ?");
         } else if (key === "edgeId") {
           updateFields.push("edge_id = ?");
+        } else if (key === "suspendedAt") {
+          updateFields.push("suspended_at = ?");
+        } else if (key === "buriedUntil") {
+          updateFields.push("buried_until = ?");
         } else {
           updateFields.push(`${key} = ?`);
         }
@@ -1066,8 +1075,9 @@ export abstract class BaseDatabaseService implements IDatabaseService {
     const sql = `INSERT OR IGNORE INTO flashcards
                  (id, deck_id, front, back, type, source_file, content_hash, breadcrumb, notes,
                   cloze_text, cloze_order, source_node_id, edge_id, hint, state, due_date,
-                  interval, repetitions, difficulty, stability, lapses, last_reviewed, created, modified, tags)
-                 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`;
+                  interval, repetitions, difficulty, stability, lapses, last_reviewed, created, modified, tags,
+                  suspended_at, buried_until)
+                 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`;
 
     for (const flashcard of flashcards) {
       await this.executeSql(sql, [
@@ -1096,6 +1106,8 @@ export abstract class BaseDatabaseService implements IDatabaseService {
         now,
         now,
         serializeTags(flashcard.tags),
+        flashcard.suspendedAt ?? null,
+        flashcard.buriedUntil ?? null,
       ]);
     }
   }
@@ -1738,6 +1750,148 @@ export abstract class BaseDatabaseService implements IDatabaseService {
     await this.executeSql(SQL_QUERIES.DELETE_REVIEW_SESSIONS_FOR_DECK, [deckId]);
     await this.executeSql(SQL_QUERIES.RESET_DECK_FLASHCARDS, [now, deckId]);
     this.emitSyncOp({ o: "deck_reset", p: { deckId, resetAt: now } });
+  }
+
+  // CARD STATE OVERLAYS (suspend, bury, reset)
+  //
+  // All four operations bump `modified` on the row so the existing
+  // last-writer-wins flashcard merge does the right thing for FSRS state.
+  // `suspended_at` and `buried_until` are intentionally excluded from the
+  // bulk flashcards merge in worker-entry.ts; their cross-device convergence
+  // runs entirely through the dedicated SyncLog ops emitted here.
+
+  async suspendCard(cardId: string): Promise<void> {
+    const now = this.getCurrentTimestamp();
+    await this.executeSql(
+      `UPDATE flashcards SET suspended_at = ?, modified = ? WHERE id = ?`,
+      [now, now, cardId]
+    );
+    this.emitSyncOp({ o: "card_suspend", p: { c: cardId, at: now } });
+  }
+
+  async unsuspendCard(cardId: string): Promise<void> {
+    const now = this.getCurrentTimestamp();
+    await this.executeSql(
+      `UPDATE flashcards SET suspended_at = NULL, modified = ? WHERE id = ?`,
+      [now, cardId]
+    );
+    this.emitSyncOp({ o: "card_unsuspend", p: { c: cardId, at: now } });
+  }
+
+  async batchSuspendCards(cardIds: string[]): Promise<void> {
+    if (cardIds.length === 0) return;
+    const now = this.getCurrentTimestamp();
+    const placeholders = cardIds.map(() => "?").join(",");
+    await this.executeSql(
+      `UPDATE flashcards SET suspended_at = ?, modified = ? WHERE id IN (${placeholders})`,
+      [now, now, ...cardIds]
+    );
+    for (const cardId of cardIds) {
+      this.emitSyncOp({ o: "card_suspend", p: { c: cardId, at: now } });
+    }
+  }
+
+  async batchUnsuspendCards(cardIds: string[]): Promise<void> {
+    if (cardIds.length === 0) return;
+    const now = this.getCurrentTimestamp();
+    const placeholders = cardIds.map(() => "?").join(",");
+    await this.executeSql(
+      `UPDATE flashcards SET suspended_at = NULL, modified = ? WHERE id IN (${placeholders})`,
+      [now, ...cardIds]
+    );
+    for (const cardId of cardIds) {
+      this.emitSyncOp({ o: "card_unsuspend", p: { c: cardId, at: now } });
+    }
+  }
+
+  async buryCard(cardId: string, untilIso: string): Promise<void> {
+    const now = this.getCurrentTimestamp();
+    await this.executeSql(
+      `UPDATE flashcards SET buried_until = ?, modified = ? WHERE id = ?`,
+      [untilIso, now, cardId]
+    );
+    this.emitSyncOp({ o: "card_bury", p: { c: cardId, until: untilIso, at: now } });
+  }
+
+  async unburyCard(cardId: string): Promise<void> {
+    const now = this.getCurrentTimestamp();
+    await this.executeSql(
+      `UPDATE flashcards SET buried_until = NULL, modified = ? WHERE id = ?`,
+      [now, cardId]
+    );
+    this.emitSyncOp({ o: "card_unbury", p: { c: cardId, at: now } });
+  }
+
+  async batchBuryCards(cardIds: string[], untilIso: string): Promise<void> {
+    if (cardIds.length === 0) return;
+    const now = this.getCurrentTimestamp();
+    const placeholders = cardIds.map(() => "?").join(",");
+    await this.executeSql(
+      `UPDATE flashcards SET buried_until = ?, modified = ? WHERE id IN (${placeholders})`,
+      [untilIso, now, ...cardIds]
+    );
+    for (const cardId of cardIds) {
+      this.emitSyncOp({ o: "card_bury", p: { c: cardId, until: untilIso, at: now } });
+    }
+  }
+
+  // Reset is destructive: deletes review_logs for the card (mirrors
+  // resetDeckProgress at a per-card granularity), then resets FSRS columns
+  // to "new" defaults. Suspended/buried flags are intentionally CLEARED on
+  // reset — a user resetting a card is starting it over from scratch, and
+  // would not expect it to remain hidden from the queue.
+  async resetCard(cardId: string): Promise<void> {
+    const now = this.getCurrentTimestamp();
+    await this.executeSql(
+      `DELETE FROM review_logs WHERE flashcard_id = ?`,
+      [cardId]
+    );
+    await this.executeSql(
+      `UPDATE flashcards SET
+         state = 'new',
+         due_date = ?,
+         interval = 0,
+         repetitions = 0,
+         difficulty = 5.0,
+         stability = 0,
+         lapses = 0,
+         last_reviewed = NULL,
+         suspended_at = NULL,
+         buried_until = NULL,
+         modified = ?
+       WHERE id = ?`,
+      [now, now, cardId]
+    );
+    this.emitSyncOp({ o: "card_reset", p: { c: cardId, at: now } });
+  }
+
+  async batchResetCards(cardIds: string[]): Promise<void> {
+    if (cardIds.length === 0) return;
+    const now = this.getCurrentTimestamp();
+    const placeholders = cardIds.map(() => "?").join(",");
+    await this.executeSql(
+      `DELETE FROM review_logs WHERE flashcard_id IN (${placeholders})`,
+      cardIds
+    );
+    await this.executeSql(
+      `UPDATE flashcards SET
+         state = 'new',
+         due_date = ?,
+         interval = 0,
+         repetitions = 0,
+         difficulty = 5.0,
+         stability = 0,
+         lapses = 0,
+         last_reviewed = NULL,
+         suspended_at = NULL,
+         buried_until = NULL,
+         modified = ?
+       WHERE id IN (${placeholders})`,
+      [now, now, ...cardIds]
+    );
+    for (const cardId of cardIds) {
+      this.emitSyncOp({ o: "card_reset", p: { c: cardId, at: now } });
+    }
   }
 
   async resetCustomDeckProgress(customDeckId: string): Promise<void> {

@@ -31,7 +31,12 @@ export type SyncOpV1 =
   | CustomDeckDeleteOp
   | CustomDeckResetOp
   | CustomDeckCardAddOp
-  | CustomDeckCardRemoveOp;
+  | CustomDeckCardRemoveOp
+  | CardSuspendOp
+  | CardUnsuspendOp
+  | CardBuryOp
+  | CardUnburyOp
+  | CardResetOp;
 
 export type SyncLogEntry = SyncLogEntryHeader & SyncOpV1;
 
@@ -273,6 +278,41 @@ export interface CustomDeckCardRemoveOp {
   };
 }
 
+// ---------- Card state overlays (suspend / bury / reset) -------------------
+//
+// These ops are emitted by BaseDatabaseService.{suspend,unsuspend,bury,
+// unbury,reset}Card and applied through SyncLog.handlers. Each carries a
+// wall-clock `at` so the receiving device can apply only-if-newer relative
+// to the local card's `modified` (suspend/bury/unbury) or use it as a
+// reset cutoff like `deck_reset`. `suspended_at` and `buried_until` are
+// excluded from the bulk flashcards merge in worker-entry so their state
+// converges exclusively through these op replays.
+
+export interface CardSuspendOp {
+  o: "card_suspend";
+  p: { c: string; at: string };
+}
+
+export interface CardUnsuspendOp {
+  o: "card_unsuspend";
+  p: { c: string; at: string };
+}
+
+export interface CardBuryOp {
+  o: "card_bury";
+  p: { c: string; until: string; at: string };
+}
+
+export interface CardUnburyOp {
+  o: "card_unbury";
+  p: { c: string; at: string };
+}
+
+export interface CardResetOp {
+  o: "card_reset";
+  p: { c: string; at: string };
+}
+
 // ---------- Type-guard for parsed-but-unvalidated entries -------------------
 
 // All op type names recognized at v=1. Used by the parser to skip unknown
@@ -293,4 +333,9 @@ export const KNOWN_OP_TYPES_V1: ReadonlySet<SyncOpV1["o"]> = new Set([
   "custom_deck_reset",
   "custom_deck_card_add",
   "custom_deck_card_remove",
+  "card_suspend",
+  "card_unsuspend",
+  "card_bury",
+  "card_unbury",
+  "card_reset",
 ]);

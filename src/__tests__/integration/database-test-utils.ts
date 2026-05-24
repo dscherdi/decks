@@ -195,6 +195,8 @@ export class DatabaseTestUtils {
       lastReviewed: null,
       stability: 0,
       difficulty: 5.0,
+      suspendedAt: null,
+      buriedUntil: null,
       ...overrides,
     };
   }

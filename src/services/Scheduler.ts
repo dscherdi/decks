@@ -818,6 +818,8 @@ export class Scheduler {
       created: row[22] as string,
       modified: row[23] as string,
       tags,
+      suspendedAt: (row[25] as string) ?? null,
+      buriedUntil: (row[26] as string) ?? null,
     };
   }
 

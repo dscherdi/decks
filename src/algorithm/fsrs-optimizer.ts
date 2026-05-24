@@ -128,6 +128,8 @@ function makeNewFlashcard(cardId: string): Flashcard {
     stability: 0,
     lapses: 0,
     lastReviewed: null,
+    suspendedAt: null,
+    buriedUntil: null,
     created: "",
     modified: "",
   };

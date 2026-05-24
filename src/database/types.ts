@@ -115,7 +115,8 @@ export type FilterField =
   | "state" | "dueDate" | "difficulty" | "stability"
   | "interval" | "repetitions" | "lapses"
   | "lastReviewed" | "created"
-  | "isLeech" | "isDense";
+  | "isLeech" | "isDense"
+  | "isSuspended" | "isBuried";
 
 export interface FilterRule {
   field: FilterField;
@@ -206,6 +207,13 @@ export interface Flashcard {
   stability: number; // FSRS stability value
   lapses: number; // Number of times card was forgotten
   lastReviewed: string | null; // Last review date
+  // Card-state overlays. Both are nullable; default NULL means "not suspended"
+  // and "not buried". `suspendedAt` is a deliberate user assertion (indefinite
+  // freeze) — preserved across deck-resets. `buriedUntil` is a wall-clock
+  // expiry (typically next-day rollover) and auto-clears via scheduler WHERE
+  // clauses comparing against now.
+  suspendedAt: string | null;
+  buriedUntil: string | null;
   created: string;
   modified: string;
 }
@@ -403,4 +411,23 @@ export function getCardMaturityType(
     return "new";
   }
   return isCardMature(flashcard) ? "mature" : "review";
+}
+
+export function isCardSuspended(card: Pick<Flashcard, "suspendedAt">): boolean {
+  return card.suspendedAt !== null && card.suspendedAt !== undefined;
+}
+
+export function isCardBuried(
+  card: Pick<Flashcard, "buriedUntil">,
+  now: Date
+): boolean {
+  if (!card.buriedUntil) return false;
+  return card.buriedUntil > now.toISOString();
+}
+
+export function isCardAvailable(
+  card: Pick<Flashcard, "suspendedAt" | "buriedUntil">,
+  now: Date
+): boolean {
+  return !isCardSuspended(card) && !isCardBuried(card, now);
 }

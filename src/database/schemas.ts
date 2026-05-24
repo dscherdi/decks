@@ -1,7 +1,7 @@
 import type { Database } from "sql.js";
 
 // Current Schema Version
-export const CURRENT_SCHEMA_VERSION = 20;
+export const CURRENT_SCHEMA_VERSION = 21;
 
 // SQL Table Creation Schema - Used when database file doesn't exist
 export const CREATE_TABLES_SQL = `
@@ -85,6 +85,8 @@ export const CREATE_TABLES_SQL = `
     created TEXT NOT NULL,
     modified TEXT NOT NULL,
     tags TEXT NOT NULL DEFAULT '',
+    suspended_at TEXT,
+    buried_until TEXT,
     FOREIGN KEY (deck_id) REFERENCES decks(id) ON DELETE CASCADE
   );
 
@@ -208,6 +210,8 @@ export const CREATE_TABLES_SQL = `
   CREATE INDEX IF NOT EXISTS idx_decks_tag ON decks(tag);
   CREATE INDEX IF NOT EXISTS idx_flashcards_deck_id ON flashcards(deck_id);
   CREATE INDEX IF NOT EXISTS idx_flashcards_due_date ON flashcards(due_date);
+  CREATE INDEX IF NOT EXISTS idx_flashcards_suspended ON flashcards(suspended_at);
+  CREATE INDEX IF NOT EXISTS idx_flashcards_buried ON flashcards(buried_until);
   CREATE INDEX IF NOT EXISTS idx_review_sessions_deck_id ON review_sessions(deck_id);
   CREATE INDEX IF NOT EXISTS idx_review_logs_flashcard_id ON review_logs(flashcard_id);
   CREATE INDEX IF NOT EXISTS idx_review_logs_session_id ON review_logs(session_id);
@@ -501,6 +505,8 @@ export function buildMigrationSQL(db: Database): string {
       created TEXT NOT NULL,
       modified TEXT NOT NULL,
       tags TEXT NOT NULL DEFAULT '',
+      suspended_at TEXT,
+      buried_until TEXT,
       FOREIGN KEY (deck_id) REFERENCES decks(id) ON DELETE CASCADE
     );
 
@@ -561,6 +567,8 @@ export function buildMigrationSQL(db: Database): string {
     CREATE INDEX IF NOT EXISTS idx_decks_tag ON decks(tag);
     CREATE INDEX IF NOT EXISTS idx_flashcards_deck_id ON flashcards(deck_id);
     CREATE INDEX IF NOT EXISTS idx_flashcards_due_date ON flashcards(due_date);
+    CREATE INDEX IF NOT EXISTS idx_flashcards_suspended ON flashcards(suspended_at);
+    CREATE INDEX IF NOT EXISTS idx_flashcards_buried ON flashcards(buried_until);
     CREATE INDEX IF NOT EXISTS idx_review_sessions_deck_id ON review_sessions(deck_id);
     CREATE INDEX IF NOT EXISTS idx_review_logs_flashcard_id ON review_logs(flashcard_id);
     CREATE INDEX IF NOT EXISTS idx_review_logs_session_id ON review_logs(session_id);
@@ -767,8 +775,9 @@ export const SQL_QUERIES = {
       id, deck_id, front, back, type, source_file, content_hash, breadcrumb, notes,
       cloze_text, cloze_order, source_node_id, edge_id, hint,
       state, due_date, interval, repetitions,
-      difficulty, stability, lapses, last_reviewed, created, modified, tags
-    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+      difficulty, stability, lapses, last_reviewed, created, modified, tags,
+      suspended_at, buried_until
+    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
   `,
 
   DELETE_FLASHCARD: `DELETE FROM flashcards WHERE id = ?`,
@@ -992,6 +1001,7 @@ export const SQL_QUERIES = {
       stability = 0,
       lapses = 0,
       last_reviewed = NULL,
+      buried_until = NULL,
       modified = ?
     WHERE deck_id = ?
   `,
@@ -1108,6 +1118,7 @@ export const SQL_QUERIES = {
       stability = 0,
       lapses = 0,
       last_reviewed = NULL,
+      buried_until = NULL,
       modified = ?
     WHERE id IN (
       SELECT flashcard_id FROM custom_deck_cards WHERE custom_deck_id = ?

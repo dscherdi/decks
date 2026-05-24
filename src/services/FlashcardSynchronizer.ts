@@ -137,8 +137,9 @@ export class FlashcardSynchronizer {
                         id, deck_id, front, back, type, source_file, content_hash, breadcrumb, notes,
                         cloze_text, cloze_order, source_node_id, edge_id, hint,
                         state, due_date, interval, repetitions, difficulty, stability,
-                        lapses, last_reviewed, created, modified, tags
-                    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, datetime('now'), datetime('now'), ?)
+                        lapses, last_reviewed, created, modified, tags,
+                        suspended_at, buried_until
+                    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, datetime('now'), datetime('now'), ?, ?, ?)
                 `);
         stmt.run([
           card.id,
@@ -164,6 +165,8 @@ export class FlashcardSynchronizer {
           card.lapses,
           card.lastReviewed,
           serializeTagsForSql(card.tags),
+          card.suspendedAt ?? null,
+          card.buriedUntil ?? null,
         ]);
         stmt.free();
       } else if (op.type === "update" && op.flashcardId && op.updates) {
@@ -283,6 +286,8 @@ export class FlashcardSynchronizer {
           created: row.created as string,
           modified: row.modified as string,
           tags,
+          suspendedAt: (row.suspended_at as string) ?? null,
+          buriedUntil: (row.buried_until as string) ?? null,
         });
       }
       stmt.free();
@@ -487,6 +492,8 @@ export class FlashcardSynchronizer {
                 stability: oldCard.stability,
                 lapses: oldCard.lapses,
                 lastReviewed: oldCard.lastReviewed,
+                suspendedAt: oldCard.suspendedAt,
+                buriedUntil: oldCard.buriedUntil,
               },
             });
 
@@ -548,6 +555,8 @@ export class FlashcardSynchronizer {
           stability: reviewLogRow ? (reviewLogRow[4] as number) : 2.5,
           lapses: reviewLogRow ? (reviewLogRow[5] as number) : 0,
           lastReviewed: reviewLogRow ? (reviewLogRow[6] as string) : null,
+          suspendedAt: null,
+          buriedUntil: null,
         };
 
         batchOperations.push({
@@ -600,6 +609,8 @@ export class FlashcardSynchronizer {
           stability: reviewLogRow ? (reviewLogRow[4] as number) : 2.5,
           lapses: reviewLogRow ? (reviewLogRow[5] as number) : 0,
           lastReviewed: reviewLogRow ? (reviewLogRow[6] as string) : null,
+          suspendedAt: null,
+          buriedUntil: null,
         };
 
         batchOperations.push({
@@ -653,6 +664,8 @@ export class FlashcardSynchronizer {
           stability: reviewLogRow ? (reviewLogRow[4] as number) : 2.5,
           lapses: reviewLogRow ? (reviewLogRow[5] as number) : 0,
           lastReviewed: reviewLogRow ? (reviewLogRow[6] as string) : null,
+          suspendedAt: null,
+          buriedUntil: null,
         };
 
         batchOperations.push({

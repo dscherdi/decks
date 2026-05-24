@@ -248,6 +248,17 @@ export interface IDatabaseService {
   resetDeckProgress(deckId: string): Promise<void>;
   resetCustomDeckProgress(customDeckId: string): Promise<void>;
 
+  // Card state overlays (suspend / bury / reset)
+  suspendCard(cardId: string): Promise<void>;
+  unsuspendCard(cardId: string): Promise<void>;
+  batchSuspendCards(cardIds: string[]): Promise<void>;
+  batchUnsuspendCards(cardIds: string[]): Promise<void>;
+  buryCard(cardId: string, untilIso: string): Promise<void>;
+  unburyCard(cardId: string): Promise<void>;
+  batchBuryCards(cardIds: string[], untilIso: string): Promise<void>;
+  resetCard(cardId: string): Promise<void>;
+  batchResetCards(cardIds: string[]): Promise<void>;
+
   querySql<T>(
     sql: string,
     params: SqlJsValue[],
