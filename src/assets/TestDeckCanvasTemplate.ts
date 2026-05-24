@@ -3,13 +3,16 @@ import { I18n } from "@/i18n/I18n";
 /**
  * Build the JSON payload for the canvas getting-started deck.
  *
- * Four text nodes laid out in a 2x2 grid. The intro node uses an h1 so it
- * sits ABOVE the configured header level (default 2) and doesn't accidentally
- * parse as a card. The three card nodes (header-paragraph, table, cloze)
- * each use ## headings so they extract cleanly through FlashcardParser.
+ * Layout:
+ *   - 2x2 grid of text nodes demonstrating each standalone parsing format
+ *     (header-paragraph, table, cloze) plus an intro node.
+ *   - A small connected subgraph below it demonstrates **spatial cards**:
+ *     three text nodes wired by two labelled edges. Each edge becomes a
+ *     spatial card (front = from-node text, back = to-node text, hint = edge
+ *     label).
  *
- * Node ids are stable, descriptive strings so the synchronizer's per-node
- * card-id hashing stays deterministic across re-syncs and devices.
+ * Node ids are stable, descriptive strings so the synchronizer's per-edge
+ * and per-node card-id hashing stays deterministic across re-syncs and devices.
  */
 export function getTestDeckCanvasContent(deckTag: string): string {
   const t = I18n.t.testDeckCanvas;
@@ -84,8 +87,65 @@ ${t.solarBody}`;
         width: 560,
         height: 320,
       },
+      // Spatial subgraph: 1 intro node + 3 connected nodes wired into a tiny
+      // graph. The h1 intro keeps itself out of the parser (the four-format
+      // path needs an h2 to start a card); the connected nodes don't go
+      // through that path at all because they're spatial endpoints.
+      {
+        id: "spatial-intro",
+        type: "text",
+        text: t.spatialIntro,
+        x: -640,
+        y: 440,
+        width: 560,
+        height: 200,
+      },
+      {
+        id: "spatial-photosynthesis",
+        type: "text",
+        text: t.spatialNodePhotosynthesis,
+        x: 40,
+        y: 440,
+        width: 200,
+        height: 80,
+      },
+      {
+        id: "spatial-sunlight",
+        type: "text",
+        text: t.spatialNodeSunlight,
+        x: 320,
+        y: 380,
+        width: 200,
+        height: 80,
+      },
+      {
+        id: "spatial-glucose",
+        type: "text",
+        text: t.spatialNodeGlucose,
+        x: 320,
+        y: 540,
+        width: 200,
+        height: 80,
+      },
     ],
-    edges: [],
+    edges: [
+      {
+        id: "edge-spatial-needs",
+        fromNode: "spatial-photosynthesis",
+        fromSide: "right",
+        toNode: "spatial-sunlight",
+        toSide: "left",
+        label: t.spatialEdgeNeeds,
+      },
+      {
+        id: "edge-spatial-produces",
+        fromNode: "spatial-photosynthesis",
+        fromSide: "right",
+        toNode: "spatial-glucose",
+        toSide: "left",
+        label: t.spatialEdgeProduces,
+      },
+    ],
   };
 
   return JSON.stringify(canvas, null, "\t");

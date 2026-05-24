@@ -36,6 +36,13 @@ export const en = {
     section3: "Cloze cards",
     solarHeading: "The solar system",
     solarBody: "The ==Sun== is the star at the center of our solar system. The closest planet is ==Mercury==, and the largest planet is ==Jupiter==.",
+    section4: "Spatial cards",
+    spatialIntro: "# Spatial cards\n\nConnect text nodes with edges. Each edge becomes a card — the from-node is the front, the to-node is the back, the edge label is a hint. Cards in a chain (A → B → C) all generate cards. Standalone (unconnected) nodes still parse with the four formats above.",
+    spatialNodePhotosynthesis: "Photosynthesis",
+    spatialNodeSunlight: "Sunlight",
+    spatialNodeGlucose: "Glucose",
+    spatialEdgeNeeds: "needs",
+    spatialEdgeProduces: "produces",
   },
 
   testDeck: {
@@ -347,6 +354,7 @@ export const en = {
     createButton: "Create",
     colFront: "Front",
     colBack: "Back",
+    colHint: "Hint",
     colNotes: "Notes",
     colFile: "File",
     colBreadcrumb: "Breadcrumb",

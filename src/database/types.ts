@@ -176,7 +176,7 @@ export function isCustomDeck(item: DeckOrGroup): item is CustomDeckGroup {
 
 export type FlashcardState = "new" | "review";
 
-export type FlashcardType = "header-paragraph" | "table" | "cloze" | "image-occlusion";
+export type FlashcardType = "header-paragraph" | "table" | "cloze" | "image-occlusion" | "spatial";
 
 export interface Flashcard {
   id: string;
@@ -189,11 +189,14 @@ export interface Flashcard {
   breadcrumb: string; // Header hierarchy context (e.g., "Chapter 1 > Section 2")
   notes: string; // Optional notes from third table column
   tags: string[]; // Tags inherited from header (e.g. "## Heading #math #science")
+  hint: string; // Optional hint shown on the front (canvas spatial cards use edge label)
   clozeText: string | null; // The specific cloze text for this card (without == delimiters)
   clozeOrder: number | null; // Ordinal position of this cloze within the back content
   // Canvas-only: id of the source canvas text node. NULL/undefined for markdown cards.
   // Optional so existing test fixtures and pre-canvas call sites don't break.
   sourceNodeId?: string | null;
+  // Canvas spatial cards only: id of the canvas edge this card was generated from.
+  edgeId?: string | null;
 
   state: FlashcardState;
   dueDate: string;

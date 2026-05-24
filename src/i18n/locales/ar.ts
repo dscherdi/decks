@@ -43,6 +43,13 @@ export const ar: Translations = {
     solarHeading: "النظام الشمسي",
     solarBody:
       "==الشمس== هي النجم في مركز نظامنا الشمسي. أقرب كوكب هو ==عطارد==، وأكبر كوكب هو ==المشتري==.",
+    section4: "Spatial cards",
+    spatialIntro: "# Spatial cards\n\nConnect text nodes with edges. Each edge becomes a card — the from-node is the front, the to-node is the back, the edge label is a hint. Cards in a chain (A → B → C) all generate cards. Standalone (unconnected) nodes still parse with the four formats above.",
+    spatialNodePhotosynthesis: "Photosynthesis",
+    spatialNodeSunlight: "Sunlight",
+    spatialNodeGlucose: "Glucose",
+    spatialEdgeNeeds: "needs",
+    spatialEdgeProduces: "produces",
   },
 
   testDeck: {
@@ -377,6 +384,7 @@ export const ar: Translations = {
     createButton: "إنشاء",
     colFront: "الوجه",
     colBack: "الظهر",
+    colHint: "تلميح",
     colNotes: "ملاحظات",
     colFile: "الملف",
     colBreadcrumb: "المسار",

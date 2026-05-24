@@ -36,6 +36,25 @@ Mix freely: one text node can be a header-paragraph card, another a table of row
 - Each card ID mixes in the canvas node ID, so two text nodes inside the same canvas with identical front text produce distinct cards — no collisions.
 - If you delete a text node and recreate the same card later in a new node, the synchronizer's rename detection (back content match or front-text fuzzy match) restores the card's FSRS state.
 
+### Spatial cards
+
+Beyond per-node parsing, you can also author **spatial cards** by drawing edges between text nodes:
+
+- **From-node → front, to-node → back, edge label → hint.** The hint is rendered as a small italic chip above the front of the card during review and in the card browser. Front and back are taken as-is (no header parsing); whatever is in the from-node becomes the question text.
+- **Tags on the front.** Any `#tag` in the from-node text is stripped from the front and stored on the card.
+- **Graph patterns.** All of these work naturally:
+  - **One-to-many**: A→B and A→C produce two cards (same front, different backs).
+  - **Many-to-one**: A→C and B→C produce two cards (different fronts, same back).
+  - **Cascade**: A→B→C produces two cards (A→B and B→C). The middle node B is purely a graph endpoint; it does not also get rule-parsed.
+  - **Cycles and self-loops** are allowed; each edge produces a card.
+- **Cloze on the back.** If the to-node contains `==highlight==` markup and cloze is enabled on the deck's profile, the spatial edge expands into one cloze card per highlight (each card has the same edge id, hint, and tags; the cloze hides on the back as usual).
+- **Connected vs standalone.** Any text node that participates in at least one text-to-text edge is treated as a pure spatial endpoint and is **not** rule-parsed. Nodes with no edges fall through to the four standard formats (header-paragraph, table, cloze, image-occlusion) just like before.
+- **Ignored shapes.** Edges that touch a non-text node (file, link, group) are dropped, as are non-text nodes themselves. Only text↔text edges produce spatial cards.
+- **Stable identity.** The card id is derived from the canvas edge id, deck-scoped. Moving the nodes around, relabeling the edge, or renaming the from/to text all preserve the card's id (and therefore its review history).
+- **No reverse.** Reverse-card expansion (set per profile) does not apply to spatial cards — edges are directional by design.
+
+A small example ships with the getting-started canvas: three text nodes ("Photosynthesis", "Sunlight", "Glucose") wired with two labelled edges ("needs", "produces").
+
 ## Working with canvas cards
 
 ### Reviewing
@@ -60,6 +79,7 @@ Custom decks work without changes:
 ## Limitations and notes
 
 - Canvas files don't have markdown frontmatter, so `reverse: true` cannot be set per canvas. If you need reverse cards on canvas decks, file an issue — we'll likely add a setting.
+- Spatial cards are read-only from the plugin's in-place editor; edit them through Obsidian's canvas UI (drag the node, change its text, relabel the edge) and re-sync.
 - Canvas focus on Go-to-source uses Obsidian's internal `CanvasView` API. If a future Obsidian update changes that API shape, focus silently degrades to "open the canvas" — no error, just a slightly less helpful jump.
 - Node IDs in canvas files are stable across edits, so card-to-node mapping survives canvas reorganization. Moving a text node spatially doesn't change its ID.
 - Deleting a text node deletes the cards it owned. Recreate similar cards in a new node and rename detection will reattach FSRS state where possible.
@@ -68,10 +88,11 @@ Custom decks work without changes:
 
 The implementation lives in:
 
-- `src/services/CanvasParser.ts` — JSON shape parser. Returns `{ nodes: { id, text }[] }`.
-- `src/services/CanvasFlashcardExtractor.ts` — runs `FlashcardParser.parseFlashcardsFromContent` per text node and stamps `sourceNodeId` on each card.
+- `src/services/CanvasParser.ts` — JSON shape parser. Returns `{ nodes: { id, text }[], edges: { id, fromNode, toNode, label }[] }`. Edges are pre-filtered to keep only those whose endpoints are both text nodes.
+- `src/services/CanvasFlashcardExtractor.ts` — for each edge, emits a spatial card (or a fan of cloze cards if the back contains highlights and cloze is enabled). For each text node that participates in no edges, runs `FlashcardParser.parseFlashcardsFromContent` and stamps `sourceNodeId` on each card.
 - `src/services/DeckManager.ts` — `scanVaultForDecks` is extended to emit one entry per `.canvas` file in the configured folder under the configured tag.
-- `src/services/FlashcardSynchronizer.ts` — branches on `.canvas` extension to route canvas content through the extractor; threads `sourceNodeId` into card-ID hashing so canvas cards never collide.
+- `src/services/FlashcardSynchronizer.ts` — branches on `.canvas` extension to route canvas content through the extractor; threads `sourceNodeId`/`edgeId` into card-ID hashing so cards never collide. Spatial and spatial-cloze cards skip the reverse-expansion path and the fuzzy rename-detection path since their ids are already deterministic.
 - `src/services/FlashcardWriter.ts` — branches on canvas to rewrite the JSON node's text via `vault.process`.
 - `src/utils/flashcard-navigator.ts` — single source for "go to source" navigation; uses the (undocumented) `CanvasView.canvas.selectOnly` + `zoomToBbox` API with a try/catch fallback.
-- `src/database/schemas.ts` — schema v19 adds `source_node_id TEXT` (nullable) to the `flashcards` table.
+- `src/utils/hash.ts` — `generateSpatialFlashcardId(deckId, edgeId)` and `generateSpatialClozeFlashcardId(deckId, edgeId, clozeText, clozeOrder)` give spatial cards their stable ids.
+- `src/database/schemas.ts` — schema v20 adds `edge_id TEXT` (nullable) and `hint TEXT NOT NULL DEFAULT ''` to the `flashcards` table and adds `'spatial'` to the type CHECK constraint.

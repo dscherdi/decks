@@ -44,6 +44,13 @@ export const de: Translations = {
     solarHeading: "Das Sonnensystem",
     solarBody:
       "Die ==Sonne== ist der Stern im Zentrum unseres Sonnensystems. Der nächste Planet ist der ==Merkur== und der größte Planet ist der ==Jupiter==.",
+    section4: "Spatial cards",
+    spatialIntro: "# Spatial cards\n\nConnect text nodes with edges. Each edge becomes a card — the from-node is the front, the to-node is the back, the edge label is a hint. Cards in a chain (A → B → C) all generate cards. Standalone (unconnected) nodes still parse with the four formats above.",
+    spatialNodePhotosynthesis: "Photosynthesis",
+    spatialNodeSunlight: "Sunlight",
+    spatialNodeGlucose: "Glucose",
+    spatialEdgeNeeds: "needs",
+    spatialEdgeProduces: "produces",
   },
 
   testDeck: {
@@ -403,6 +410,7 @@ export const de: Translations = {
     createButton: "Erstellen",
     colFront: "Vorderseite",
     colBack: "Rückseite",
+    colHint: "Hinweis",
     colNotes: "Notizen",
     colFile: "Datei",
     colBreadcrumb: "Pfad",

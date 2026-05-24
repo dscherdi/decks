@@ -129,7 +129,9 @@ Ogni elemento dell'elenco è una carta. L'immagine (con le sue etichette numerat
 
 ### Mazzi canvas
 
-Crea carte su un file Canvas di Obsidian (`.canvas`) anziché su un file Markdown. Ogni canvas nella cartella configurata diventa un mazzo; ogni nodo di testo viene analizzato con gli stessi quattro formati di carta sopra. Configura tramite **Impostazioni → Mazzi canvas**: cartella ed etichetta (predefinita `#decks/canvas`). "Vai alla sorgente" durante il ripasso apre il canvas e seleziona il nodo di origine. Alla prima installazione (o aggiornamento) viene creato automaticamente un `Decks — Inizia con canvas.canvas` nella cartella `Canvas decks/`. Dettagli in **[docs/CANVAS_DECKS.md](docs/CANVAS_DECKS.md)**.
+Crea carte su un file Canvas di Obsidian (`.canvas`) anziché su un file Markdown. Ogni canvas nella cartella configurata diventa un mazzo; ogni nodo di testo viene analizzato con gli stessi quattro formati di carta sopra. Configura tramite **Impostazioni → Mazzi canvas**: cartella ed etichetta (predefinita `#decks/canvas`). "Vai alla sorgente" durante il ripasso apre il canvas e seleziona il nodo di origine. Alla prima installazione (o aggiornamento) viene creato automaticamente un `Decks — Inizia con canvas.canvas` nella cartella `Canvas decks/`.
+
+**Carte spaziali (Spatial cards)**: collega i nodi di testo con delle frecce — ogni freccia diventa una carta: il nodo di partenza è il fronte (domanda), il nodo di arrivo è il retro (risposta), e l'etichetta della freccia è un suggerimento opzionale. Funzionano catene (A → B → C), relazioni uno-a-molti e molti-a-uno; i nodi non collegati vengono comunque analizzati con i quattro formati sopra. Dettagli in **[docs/CANVAS_DECKS.md](docs/CANVAS_DECKS.md)**.
 
 ## Pianificazione personalizzata
 

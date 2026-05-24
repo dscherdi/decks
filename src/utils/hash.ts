@@ -115,3 +115,24 @@ export function generateClozeFlashcardId(
   const suffix = sourceNodeId ? "::node:" + sourceNodeId : "";
   return `ccard_${simpleHash("cloze:" + deckId + "::" + frontText + "::" + clozeOrder + "::" + clozeText + suffix).toString(36)}`;
 }
+
+/**
+ * Generate ID for a spatial canvas card derived from a single canvas edge.
+ * Deck-scoped so edge ids reused across canvases don't collide.
+ */
+export function generateSpatialFlashcardId(deckId: string, edgeId: string): string {
+  return `scard_${simpleHash(deckId + "::edge:" + edgeId).toString(36)}`;
+}
+
+/**
+ * Generate ID for a spatial canvas card whose back contains a cloze deletion.
+ * One card per cloze in the back, distinguished by clozeOrder + clozeText.
+ */
+export function generateSpatialClozeFlashcardId(
+  deckId: string,
+  edgeId: string,
+  clozeText: string,
+  clozeOrder: number,
+): string {
+  return `sccard_${simpleHash("spatial-cloze:" + deckId + "::edge:" + edgeId + "::" + clozeOrder + "::" + clozeText).toString(36)}`;
+}

@@ -176,7 +176,7 @@ export abstract class BaseDatabaseService implements IDatabaseService {
   }
 
   protected rowToFlashcard(row: (string | number | null)[]): Flashcard {
-    const tagsRaw = (row[22] as string) || "";
+    const tagsRaw = (row[24] as string) || "";
     const tags = tagsRaw === "" ? [] : tagsRaw.split(",").filter((t) => t.length > 0);
     return {
       id: row[0] as string,
@@ -191,16 +191,18 @@ export abstract class BaseDatabaseService implements IDatabaseService {
       clozeText: (row[9] as string) ?? null,
       clozeOrder: (row[10] as number) ?? null,
       sourceNodeId: (row[11] as string) ?? null,
-      state: row[12] as "new" | "review",
-      dueDate: row[13] as string,
-      interval: row[14] as number,
-      repetitions: row[15] as number,
-      difficulty: row[16] as number,
-      stability: row[17] as number,
-      lapses: row[18] as number,
-      lastReviewed: row[19] as string | null,
-      created: row[20] as string,
-      modified: row[21] as string,
+      edgeId: (row[12] as string) ?? null,
+      hint: (row[13] as string) || "",
+      state: row[14] as "new" | "review",
+      dueDate: row[15] as string,
+      interval: row[16] as number,
+      repetitions: row[17] as number,
+      difficulty: row[18] as number,
+      stability: row[19] as number,
+      lapses: row[20] as number,
+      lastReviewed: row[21] as string | null,
+      created: row[22] as string,
+      modified: row[23] as string,
       tags,
     };
   }
@@ -830,9 +832,9 @@ export abstract class BaseDatabaseService implements IDatabaseService {
 
     const sql = `INSERT OR IGNORE INTO flashcards
                  (id, deck_id, front, back, type, source_file, content_hash, breadcrumb, notes,
-                  cloze_text, cloze_order, source_node_id, state, due_date,
+                  cloze_text, cloze_order, source_node_id, edge_id, hint, state, due_date,
                   interval, repetitions, difficulty, stability, lapses, last_reviewed, created, modified, tags)
-                 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`;
+                 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`;
 
     await this.executeSql(sql, [
       flashcardWithId.id,
@@ -847,6 +849,8 @@ export abstract class BaseDatabaseService implements IDatabaseService {
       flashcardWithId.clozeText ?? null,
       flashcardWithId.clozeOrder ?? null,
       flashcardWithId.sourceNodeId ?? null,
+      flashcardWithId.edgeId ?? null,
+      flashcardWithId.hint || "",
       flashcardWithId.state,
       flashcardWithId.dueDate,
       flashcardWithId.interval,
@@ -990,6 +994,8 @@ export abstract class BaseDatabaseService implements IDatabaseService {
           updateFields.push("cloze_order = ?");
         } else if (key === "sourceNodeId") {
           updateFields.push("source_node_id = ?");
+        } else if (key === "edgeId") {
+          updateFields.push("edge_id = ?");
         } else {
           updateFields.push(`${key} = ?`);
         }
@@ -1059,9 +1065,9 @@ export abstract class BaseDatabaseService implements IDatabaseService {
     const now = this.getCurrentTimestamp();
     const sql = `INSERT OR IGNORE INTO flashcards
                  (id, deck_id, front, back, type, source_file, content_hash, breadcrumb, notes,
-                  cloze_text, cloze_order, source_node_id, state, due_date,
+                  cloze_text, cloze_order, source_node_id, edge_id, hint, state, due_date,
                   interval, repetitions, difficulty, stability, lapses, last_reviewed, created, modified, tags)
-                 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`;
+                 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`;
 
     for (const flashcard of flashcards) {
       await this.executeSql(sql, [
@@ -1077,6 +1083,8 @@ export abstract class BaseDatabaseService implements IDatabaseService {
         flashcard.clozeText ?? null,
         flashcard.clozeOrder ?? null,
         flashcard.sourceNodeId ?? null,
+        flashcard.edgeId ?? null,
+        flashcard.hint || "",
         flashcard.state,
         flashcard.dueDate,
         flashcard.interval,

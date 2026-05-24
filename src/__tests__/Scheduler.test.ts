@@ -256,6 +256,8 @@ describe("Scheduler", () => {
         contentHash: "hash123",
         breadcrumb: "",
         notes: "",
+        tags: [],
+        hint: "",
         clozeText: null,
         clozeOrder: null,
         state: "review",
@@ -318,6 +320,8 @@ describe("Scheduler", () => {
         contentHash: "hash_new",
         breadcrumb: "",
         notes: "",
+        tags: [],
+        hint: "",
         clozeText: null,
         clozeOrder: null,
         state: "new",
@@ -333,8 +337,8 @@ describe("Scheduler", () => {
       };
 
       // Mock new card query (getNextNewCard). The positional shape must match
-      // the flashcards table column order — schema v19 inserts source_node_id
-      // between cloze_order and state.
+      // the flashcards table column order — schema v20 inserts source_node_id,
+      // edge_id, and hint between cloze_order and state.
       mockDb.querySql.mockResolvedValueOnce([
         [
           mockNewCard.id,
@@ -349,6 +353,8 @@ describe("Scheduler", () => {
           mockNewCard.clozeText,
           mockNewCard.clozeOrder,
           mockNewCard.sourceNodeId ?? null,
+          mockNewCard.edgeId ?? null,
+          mockNewCard.hint ?? "",
           mockNewCard.state,
           mockNewCard.dueDate,
           mockNewCard.interval,
@@ -420,6 +426,8 @@ describe("Scheduler", () => {
         contentHash: "hash_unlimited",
         breadcrumb: "",
         notes: "",
+        tags: [],
+        hint: "",
         clozeText: null,
         clozeOrder: null,
         state: "new",
@@ -447,6 +455,9 @@ describe("Scheduler", () => {
           mockNewCard.notes,
           mockNewCard.clozeText,
           mockNewCard.clozeOrder,
+          null, // source_node_id
+          null, // edge_id
+          "", // hint
           mockNewCard.state,
           mockNewCard.dueDate,
           mockNewCard.interval,

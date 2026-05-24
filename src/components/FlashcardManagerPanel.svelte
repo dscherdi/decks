@@ -40,6 +40,7 @@
     check: 36,
     front: 240,
     back: 240,
+    hint: 140,
     notes: 200,
     file: 110,
     breadcrumb: 110,
@@ -55,6 +56,7 @@
     "check",
     "front",
     "back",
+    "hint",
     "notes",
     "file",
     "breadcrumb",
@@ -116,6 +118,7 @@
   type SortColumn =
     | "front"
     | "back"
+    | "hint"
     | "notes"
     | "sourceFile"
     | "breadcrumb"
@@ -268,6 +271,8 @@
         return a.front.localeCompare(b.front);
       case "back":
         return a.back.localeCompare(b.back);
+      case "hint":
+        return (a.hint ?? "").localeCompare(b.hint ?? "");
       case "notes":
         return (a.notes ?? "").localeCompare(b.notes ?? "");
       case "sourceFile":
@@ -798,6 +803,11 @@
             <!-- svelte-ignore a11y_no_noninteractive_element_interactions -->
             <div class="decks-fm-col-resize-handle" role="separator" tabindex="-1" on:pointerdown={(e) => handleResizeStart("back", e)} on:click|stopPropagation></div>
           </div>
+          <div class="decks-fm-col-hint decks-fm-col-sortable" role="button" tabindex="0" on:click={() => toggleSort("hint")} on:keydown={(e) => e.key === "Enter" && toggleSort("hint")}>
+            {m.colHint} <span class="decks-fm-sort-glyph">{sortGlyph("hint")}</span>
+            <!-- svelte-ignore a11y_no_noninteractive_element_interactions -->
+            <div class="decks-fm-col-resize-handle" role="separator" tabindex="-1" on:pointerdown={(e) => handleResizeStart("hint", e)} on:click|stopPropagation></div>
+          </div>
           <div class="decks-fm-col-notes decks-fm-col-sortable" role="button" tabindex="0" on:click={() => toggleSort("notes")} on:keydown={(e) => e.key === "Enter" && toggleSort("notes")}>
             {m.colNotes} <span class="decks-fm-sort-glyph">{sortGlyph("notes")}</span>
             <!-- svelte-ignore a11y_no_noninteractive_element_interactions -->
@@ -868,6 +878,9 @@
               </div>
               <div class="decks-fm-col-back" title={card.back}>
                 {truncate(card.back, 50)}
+              </div>
+              <div class="decks-fm-col-hint" title={card.hint ?? ""}>
+                {truncate(card.hint ?? "", 40)}
               </div>
               <div class="decks-fm-col-notes" title={card.notes}>
                 {truncate(card.notes ?? "", 50)}
@@ -1521,6 +1534,7 @@
 
   .decks-fm-col-front,
   .decks-fm-col-back,
+  .decks-fm-col-hint,
   .decks-fm-col-notes,
   .decks-fm-col-file,
   .decks-fm-col-breadcrumb,
@@ -1530,6 +1544,11 @@
     white-space: nowrap;
     display: flex;
     align-items: center;
+  }
+
+  .decks-fm-col-hint {
+    color: var(--text-muted);
+    font-style: italic;
   }
 
   .decks-fm-col-cardtags {

@@ -42,6 +42,13 @@ export const zhTW: Translations = {
     solarHeading: "太陽系",
     solarBody:
       "==太陽==是我們太陽系中心的恆星。距離最近的行星是==水星==，最大的行星是==木星==。",
+    section4: "Spatial cards",
+    spatialIntro: "# Spatial cards\n\nConnect text nodes with edges. Each edge becomes a card — the from-node is the front, the to-node is the back, the edge label is a hint. Cards in a chain (A → B → C) all generate cards. Standalone (unconnected) nodes still parse with the four formats above.",
+    spatialNodePhotosynthesis: "Photosynthesis",
+    spatialNodeSunlight: "Sunlight",
+    spatialNodeGlucose: "Glucose",
+    spatialEdgeNeeds: "needs",
+    spatialEdgeProduces: "produces",
   },
 
   testDeck: {
@@ -367,6 +374,7 @@ export const zhTW: Translations = {
     createButton: "建立",
     colFront: "正面",
     colBack: "背面",
+    colHint: "提示",
     colNotes: "筆記",
     colFile: "檔案",
     colBreadcrumb: "路徑",

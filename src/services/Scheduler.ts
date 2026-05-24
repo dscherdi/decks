@@ -790,7 +790,7 @@ export class Scheduler {
    * Convert database row to Flashcard object (same logic as DatabaseService)
    */
   private rowToFlashcard(row: unknown[]): Flashcard {
-    const tagsRaw = (row[22] as string) || "";
+    const tagsRaw = (row[24] as string) || "";
     const tags = tagsRaw === "" ? [] : tagsRaw.split(",").filter((t) => t.length > 0);
     return {
       id: row[0] as string,
@@ -805,16 +805,18 @@ export class Scheduler {
       clozeText: (row[9] as string) ?? null,
       clozeOrder: (row[10] as number) ?? null,
       sourceNodeId: (row[11] as string) ?? null,
-      state: row[12] as FlashcardState,
-      dueDate: row[13] as string,
-      interval: row[14] as number,
-      repetitions: row[15] as number,
-      difficulty: row[16] as number,
-      stability: row[17] as number,
-      lapses: row[18] as number,
-      lastReviewed: row[19] as string | null,
-      created: row[20] as string,
-      modified: row[21] as string,
+      edgeId: (row[12] as string) ?? null,
+      hint: (row[13] as string) || "",
+      state: row[14] as FlashcardState,
+      dueDate: row[15] as string,
+      interval: row[16] as number,
+      repetitions: row[17] as number,
+      difficulty: row[18] as number,
+      stability: row[19] as number,
+      lapses: row[20] as number,
+      lastReviewed: row[21] as string | null,
+      created: row[22] as string,
+      modified: row[23] as string,
       tags,
     };
   }

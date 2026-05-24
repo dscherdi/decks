@@ -41,6 +41,13 @@ export const ja: Translations = {
     solarHeading: "太陽系",
     solarBody:
       "==太陽==は私たちの太陽系の中心にある恒星です。最も近い惑星は==水星==、最も大きい惑星は==木星==です。",
+    section4: "Spatial cards",
+    spatialIntro: "# Spatial cards\n\nConnect text nodes with edges. Each edge becomes a card — the from-node is the front, the to-node is the back, the edge label is a hint. Cards in a chain (A → B → C) all generate cards. Standalone (unconnected) nodes still parse with the four formats above.",
+    spatialNodePhotosynthesis: "Photosynthesis",
+    spatialNodeSunlight: "Sunlight",
+    spatialNodeGlucose: "Glucose",
+    spatialEdgeNeeds: "needs",
+    spatialEdgeProduces: "produces",
   },
 
   testDeck: {
@@ -382,6 +389,7 @@ export const ja: Translations = {
     createButton: "作成",
     colFront: "表",
     colBack: "裏",
+    colHint: "ヒント",
     colNotes: "ノート",
     colFile: "ファイル",
     colBreadcrumb: "パンくず",

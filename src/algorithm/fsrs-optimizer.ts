@@ -117,6 +117,7 @@ function makeNewFlashcard(cardId: string): Flashcard {
     breadcrumb: "",
     notes: "",
     tags: [],
+    hint: "",
     clozeText: null,
     clozeOrder: null,
     state: "new",

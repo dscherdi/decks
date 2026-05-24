@@ -4,7 +4,7 @@ export interface ParsedFlashcard {
   front: string;
   back: string;
   notes: string;
-  type: "header-paragraph" | "table" | "cloze" | "image-occlusion";
+  type: "header-paragraph" | "table" | "cloze" | "image-occlusion" | "spatial";
   breadcrumb: string;
   tags: string[];
   isReverse?: boolean;
@@ -13,6 +13,10 @@ export interface ParsedFlashcard {
   // Canvas-only: id of the source text node this card came from. The canvas
   // extractor stamps it on each parsed card before the sync pipeline runs.
   sourceNodeId?: string;
+  // Canvas spatial cards only: id of the edge that produced this card and the
+  // edge label rendered as a hint on the front of the card.
+  edgeId?: string;
+  hint?: string;
 }
 
 /**

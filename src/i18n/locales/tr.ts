@@ -44,6 +44,13 @@ export const tr: Translations = {
     solarHeading: "Güneş sistemi",
     solarBody:
       "==Güneş==, güneş sistemimizin merkezindeki yıldızdır. En yakın gezegen ==Merkür== ve en büyük gezegen ==Jüpiter=='dir.",
+    section4: "Spatial cards",
+    spatialIntro: "# Spatial cards\n\nConnect text nodes with edges. Each edge becomes a card — the from-node is the front, the to-node is the back, the edge label is a hint. Cards in a chain (A → B → C) all generate cards. Standalone (unconnected) nodes still parse with the four formats above.",
+    spatialNodePhotosynthesis: "Photosynthesis",
+    spatialNodeSunlight: "Sunlight",
+    spatialNodeGlucose: "Glucose",
+    spatialEdgeNeeds: "needs",
+    spatialEdgeProduces: "produces",
   },
 
   testDeck: {
@@ -387,6 +394,7 @@ export const tr: Translations = {
     createButton: "Oluştur",
     colFront: "Ön",
     colBack: "Arka",
+    colHint: "İpucu",
     colNotes: "Notlar",
     colFile: "Dosya",
     colBreadcrumb: "Yol",

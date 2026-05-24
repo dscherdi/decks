@@ -3,7 +3,14 @@ import { CanvasFlashcardExtractor } from "./CanvasFlashcardExtractor";
 import type { Flashcard, FlashcardType, DeckProfile } from "../database/types";
 import type { SqlJsValue } from "../database/sql-types";
 import type { Database } from "sql.js";
-import { generateFlashcardId, generateContentHash, generateReverseFlashcardId, generateClozeFlashcardId } from "../utils/hash";
+import {
+  generateFlashcardId,
+  generateContentHash,
+  generateReverseFlashcardId,
+  generateClozeFlashcardId,
+  generateSpatialFlashcardId,
+  generateSpatialClozeFlashcardId,
+} from "../utils/hash";
 import { levenshteinSimilarity } from "../utils/string";
 
 export interface FlashcardUpdates {
@@ -14,6 +21,7 @@ export interface FlashcardUpdates {
   contentHash: string;
   breadcrumb: string;
   tags: string[];
+  hint: string;
   clozeText: string | null;
   clozeOrder: number | null;
 }
@@ -90,7 +98,8 @@ export class FlashcardSynchronizer {
         const updateStmt = this.db.prepare(`
                     UPDATE flashcards
                     SET id = ?, front = ?, back = ?, content_hash = ?, breadcrumb = ?, notes = ?,
-                        type = ?, cloze_text = ?, cloze_order = ?, source_node_id = ?, tags = ?, modified = datetime('now')
+                        type = ?, cloze_text = ?, cloze_order = ?, source_node_id = ?, edge_id = ?,
+                        hint = ?, tags = ?, modified = datetime('now')
                     WHERE id = ?
                 `);
         updateStmt.run([
@@ -104,6 +113,8 @@ export class FlashcardSynchronizer {
           card.clozeText ?? null,
           card.clozeOrder ?? null,
           card.sourceNodeId ?? null,
+          card.edgeId ?? null,
+          card.hint || "",
           serializeTagsForSql(card.tags),
           op.oldId,
         ]);
@@ -124,10 +135,10 @@ export class FlashcardSynchronizer {
         const stmt = this.db.prepare(`
                     INSERT OR IGNORE INTO flashcards (
                         id, deck_id, front, back, type, source_file, content_hash, breadcrumb, notes,
-                        cloze_text, cloze_order, source_node_id,
+                        cloze_text, cloze_order, source_node_id, edge_id, hint,
                         state, due_date, interval, repetitions, difficulty, stability,
                         lapses, last_reviewed, created, modified, tags
-                    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, datetime('now'), datetime('now'), ?)
+                    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, datetime('now'), datetime('now'), ?)
                 `);
         stmt.run([
           card.id,
@@ -142,6 +153,8 @@ export class FlashcardSynchronizer {
           card.clozeText,
           card.clozeOrder,
           card.sourceNodeId ?? null,
+          card.edgeId ?? null,
+          card.hint || "",
           card.state,
           card.dueDate,
           card.interval,
@@ -157,7 +170,7 @@ export class FlashcardSynchronizer {
         const stmt = this.db.prepare(`
                     UPDATE flashcards
                     SET front = ?, back = ?, type = ?, content_hash = ?, breadcrumb = ?, notes = ?,
-                        cloze_text = ?, cloze_order = ?, tags = ?, modified = datetime('now')
+                        cloze_text = ?, cloze_order = ?, hint = ?, tags = ?, modified = datetime('now')
                     WHERE id = ?
                 `);
         stmt.run([
@@ -169,6 +182,7 @@ export class FlashcardSynchronizer {
           op.updates.notes || "",
           op.updates.clozeText,
           op.updates.clozeOrder,
+          op.updates.hint || "",
           serializeTagsForSql(op.updates.tags),
           op.flashcardId,
         ]);
@@ -205,11 +219,19 @@ export class FlashcardSynchronizer {
             data.clozeEnabled,
           );
 
-      // Expand with reverse cards if enabled (cloze cards are excluded)
+      // Expand with reverse cards if enabled. Cloze, image-occlusion, and
+      // spatial cards never reverse — spatial edges are directional, and the
+      // cloze/image-occlusion formats don't support a sensible flip either.
       const expandedCards = [...parsedCards];
       if (data.reverseCards) {
         for (const card of parsedCards) {
-          if (card.back && card.type !== "cloze" && card.type !== "image-occlusion") {
+          if (
+            card.back &&
+            card.type !== "cloze" &&
+            card.type !== "image-occlusion" &&
+            card.type !== "spatial" &&
+            !card.edgeId
+          ) {
             expandedCards.push({
               front: card.back,
               back: card.front,
@@ -245,9 +267,11 @@ export class FlashcardSynchronizer {
           contentHash: row.content_hash as string,
           breadcrumb: (row.breadcrumb as string) || "",
           notes: (row.notes as string) || "",
+          hint: (row.hint as string) || "",
           clozeText: (row.cloze_text as string) ?? null,
           clozeOrder: (row.cloze_order as number) ?? null,
           sourceNodeId: (row.source_node_id as string) ?? null,
+          edgeId: (row.edge_id as string) ?? null,
           state: row.state as "new" | "review",
           dueDate: row.due_date as string,
           interval: row.interval as number,
@@ -286,12 +310,15 @@ export class FlashcardSynchronizer {
           clozeText?: string;
           clozeOrder?: number;
           sourceNodeId?: string;
+          edgeId?: string;
+          hint?: string;
         };
         flashcardId: string;
         contentHash: string;
       }
       const cardsToCreate: ParsedCardData[] = [];
       const reverseCardsToCreate: ParsedCardData[] = [];
+      const spatialCardsToCreate: ParsedCardData[] = [];
       const cardsToDelete: Flashcard[] = [];
 
       // Process parsed cards - first pass: identify creates and updates
@@ -316,16 +343,36 @@ export class FlashcardSynchronizer {
           );
         }
 
-        // ID generation varies by card type. For canvas cards, sourceNodeId is
-        // mixed into the hash so two text nodes with identical fronts produce
-        // distinct IDs. For markdown cards (no sourceNodeId), the hash is
+        // ID generation varies by card type:
+        //   - spatial (non-cloze) -> generateSpatialFlashcardId(deckId, edgeId)
+        //   - cloze-with-edgeId (spatial cloze) -> generateSpatialClozeFlashcardId
+        //   - cloze / image-occlusion -> generateClozeFlashcardId
+        //   - reverse -> generateReverseFlashcardId
+        //   - default markdown / spatial standalone -> generateFlashcardId
+        // For canvas cards, sourceNodeId is mixed into the (non-spatial) hash
+        // so identical fronts in different nodes produce distinct IDs. For
+        // markdown cards (no sourceNodeId / no edgeId), the hash is
         // byte-identical to the pre-canvas implementation.
         const isClozeType = parsed.type === "cloze" || parsed.type === "image-occlusion";
-        const flashcardId = isClozeType
-          ? generateClozeFlashcardId(parsed.front, parsed.clozeText!, parsed.clozeOrder!, data.deckId, parsed.sourceNodeId)
-          : parsed.isReverse
-            ? generateReverseFlashcardId(parsed.back, data.deckId, parsed.sourceNodeId)
-            : generateFlashcardId(parsed.front, data.deckId, parsed.sourceNodeId);
+        const isSpatial = parsed.type === "spatial";
+        const hasEdge = !!parsed.edgeId;
+        let flashcardId: string;
+        if (isSpatial && hasEdge) {
+          flashcardId = generateSpatialFlashcardId(data.deckId, parsed.edgeId!);
+        } else if (isClozeType && hasEdge) {
+          flashcardId = generateSpatialClozeFlashcardId(
+            data.deckId,
+            parsed.edgeId!,
+            parsed.clozeText!,
+            parsed.clozeOrder!,
+          );
+        } else if (isClozeType) {
+          flashcardId = generateClozeFlashcardId(parsed.front, parsed.clozeText!, parsed.clozeOrder!, data.deckId, parsed.sourceNodeId);
+        } else if (parsed.isReverse) {
+          flashcardId = generateReverseFlashcardId(parsed.back, data.deckId, parsed.sourceNodeId);
+        } else {
+          flashcardId = generateFlashcardId(parsed.front, data.deckId, parsed.sourceNodeId);
+        }
         const contentHash = isClozeType
           ? generateContentHash(parsed.back + "::" + parsed.clozeText)
           : generateContentHash(parsed.back);
@@ -338,14 +385,15 @@ export class FlashcardSynchronizer {
         processedIds.add(flashcardId);
 
         if (existingCard) {
-          // Update if content, breadcrumb, notes, front, type, or tags changed.
-          // Tags are excluded from contentHash, so they need an explicit comparison.
+          // Update if content, breadcrumb, notes, front, type, tags, or hint changed.
+          // Tags and hint are excluded from contentHash, so they need explicit comparisons.
           if (
             existingCard.contentHash !== contentHash ||
             existingCard.breadcrumb !== parsed.breadcrumb ||
             existingCard.notes !== (parsed.notes || "") ||
             existingCard.front !== parsed.front ||
             existingCard.type !== parsed.type ||
+            (existingCard.hint || "") !== (parsed.hint || "") ||
             !tagsEqual(existingCard.tags, parsed.tags)
           ) {
             batchOperations.push({
@@ -359,14 +407,19 @@ export class FlashcardSynchronizer {
                 contentHash: contentHash,
                 breadcrumb: parsed.breadcrumb,
                 tags: parsed.tags,
+                hint: parsed.hint || "",
                 clozeText: parsed.clozeText ?? null,
                 clozeOrder: parsed.clozeOrder ?? null,
               },
             });
           }
         } else {
-          // Card doesn't exist — route to the appropriate create list
-          if (parsed.isReverse) {
+          // Card doesn't exist — route to the appropriate create list.
+          // Spatial cards (and any card derived from a canvas edge) get a
+          // deterministic id from the edge, so they skip rename fuzzy-match.
+          if (hasEdge) {
+            spatialCardsToCreate.push({ parsed, flashcardId, contentHash });
+          } else if (parsed.isReverse) {
             reverseCardsToCreate.push({ parsed, flashcardId, contentHash });
           } else {
             cardsToCreate.push({ parsed, flashcardId, contentHash });
@@ -421,9 +474,11 @@ export class FlashcardSynchronizer {
                 contentHash: newCardData.contentHash,
                 breadcrumb: newCardData.parsed.breadcrumb,
                 tags: newCardData.parsed.tags,
+                hint: newCardData.parsed.hint || "",
                 clozeText: newCardData.parsed.clozeText ?? null,
                 clozeOrder: newCardData.parsed.clozeOrder ?? null,
                 sourceNodeId: newCardData.parsed.sourceNodeId ?? null,
+                edgeId: newCardData.parsed.edgeId ?? null,
                 state: oldCard.state,
                 dueDate: oldCard.dueDate,
                 interval: oldCard.interval,
@@ -474,9 +529,11 @@ export class FlashcardSynchronizer {
           contentHash: newCardData.contentHash,
           breadcrumb: newCardData.parsed.breadcrumb,
           tags: newCardData.parsed.tags,
+          hint: newCardData.parsed.hint || "",
           clozeText: newCardData.parsed.clozeText ?? null,
           clozeOrder: newCardData.parsed.clozeOrder ?? null,
           sourceNodeId: newCardData.parsed.sourceNodeId ?? null,
+          edgeId: newCardData.parsed.edgeId ?? null,
           state: reviewLogRow ? (reviewLogRow[0] as "new" | "review") : "new",
           dueDate:
             reviewLogRow && reviewLogRow[6] && reviewLogRow[1]
@@ -524,9 +581,64 @@ export class FlashcardSynchronizer {
           contentHash: newCardData.contentHash,
           breadcrumb: newCardData.parsed.breadcrumb,
           tags: newCardData.parsed.tags,
+          hint: "",
           clozeText: null,
           clozeOrder: null,
           sourceNodeId: newCardData.parsed.sourceNodeId ?? null,
+          edgeId: null,
+          state: reviewLogRow ? (reviewLogRow[0] as "new" | "review") : "new",
+          dueDate:
+            reviewLogRow && reviewLogRow[6] && reviewLogRow[1]
+              ? new Date(
+                  new Date(reviewLogRow[6] as string).getTime() +
+                    (reviewLogRow[1] as number) * 60 * 1000
+                ).toISOString()
+              : new Date().toISOString(),
+          interval: reviewLogRow ? (reviewLogRow[1] as number) : 0,
+          repetitions: reviewLogRow ? (reviewLogRow[2] as number) : 0,
+          difficulty: reviewLogRow ? (reviewLogRow[3] as number) : 5.0,
+          stability: reviewLogRow ? (reviewLogRow[4] as number) : 2.5,
+          lapses: reviewLogRow ? (reviewLogRow[5] as number) : 0,
+          lastReviewed: reviewLogRow ? (reviewLogRow[6] as string) : null,
+        };
+
+        batchOperations.push({
+          type: "create",
+          flashcard: flashcard,
+        });
+      }
+
+      // Process spatial cards (never participate in rename detection — IDs are
+      // already deterministic from the canvas edge id).
+      for (const newCardData of spatialCardsToCreate) {
+        const reviewLogStmt = this.db.prepare(`
+                    SELECT new_state, new_interval_minutes, new_repetitions, new_difficulty,
+                           new_stability, new_lapses, reviewed_at
+                    FROM review_logs
+                    WHERE flashcard_id = ?
+                    ORDER BY reviewed_at DESC
+                    LIMIT 1
+                `);
+        reviewLogStmt.bind([newCardData.flashcardId]);
+        const reviewLogRow = reviewLogStmt.step() ? reviewLogStmt.get() : null;
+        reviewLogStmt.free();
+
+        const flashcard: Omit<Flashcard, "created" | "modified"> = {
+          id: newCardData.flashcardId,
+          deckId: data.deckId,
+          front: newCardData.parsed.front,
+          back: newCardData.parsed.back,
+          notes: newCardData.parsed.notes || "",
+          type: newCardData.parsed.type,
+          sourceFile: data.deckFilepath,
+          contentHash: newCardData.contentHash,
+          breadcrumb: newCardData.parsed.breadcrumb,
+          tags: newCardData.parsed.tags,
+          hint: newCardData.parsed.hint || "",
+          clozeText: newCardData.parsed.clozeText ?? null,
+          clozeOrder: newCardData.parsed.clozeOrder ?? null,
+          sourceNodeId: newCardData.parsed.sourceNodeId ?? null,
+          edgeId: newCardData.parsed.edgeId ?? null,
           state: reviewLogRow ? (reviewLogRow[0] as "new" | "review") : "new",
           dueDate:
             reviewLogRow && reviewLogRow[6] && reviewLogRow[1]

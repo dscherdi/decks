@@ -42,6 +42,13 @@ export const ru: Translations = {
     solarHeading: "Солнечная система",
     solarBody:
       "==Солнце== — это звезда в центре нашей солнечной системы. Ближайшая планета — ==Меркурий==, а самая большая — ==Юпитер==.",
+    section4: "Spatial cards",
+    spatialIntro: "# Spatial cards\n\nConnect text nodes with edges. Each edge becomes a card — the from-node is the front, the to-node is the back, the edge label is a hint. Cards in a chain (A → B → C) all generate cards. Standalone (unconnected) nodes still parse with the four formats above.",
+    spatialNodePhotosynthesis: "Photosynthesis",
+    spatialNodeSunlight: "Sunlight",
+    spatialNodeGlucose: "Glucose",
+    spatialEdgeNeeds: "needs",
+    spatialEdgeProduces: "produces",
   },
 
   testDeck: {
@@ -385,6 +392,7 @@ export const ru: Translations = {
     createButton: "Создать",
     colFront: "Лицо",
     colBack: "Оборот",
+    colHint: "Подсказка",
     colNotes: "Заметки",
     colFile: "Файл",
     colBreadcrumb: "Путь",

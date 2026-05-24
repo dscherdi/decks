@@ -118,7 +118,9 @@ Emri i skedarit bëhet emri i pakos. Niveli i titullit mund të konfigurohet pë
 
 ### Pako canvas
 
-Krijo karta në një Canvas të Obsidian (`.canvas`) në vend të një skedari Markdown. Çdo canvas brenda dosjes së konfiguruar bëhet një pako; çdo nyje teksti analizohet me të njëjtat katër formate karte më sipër. Konfiguro përmes **Cilësimet → Pako canvas**: dosja dhe etiketa (e paracaktuar `#decks/canvas`). "Shko te burimi" gjatë rishikimit hap canvas-in dhe fokuson nyjen burimore. Në instalimin e parë (ose përditësimin), brenda dosjes `Canvas decks/` krijohet automatikisht një `Decks — Fillimi me canvas.canvas`. Detaje në **[docs/CANVAS_DECKS.md](docs/CANVAS_DECKS.md)**.
+Krijo karta në një Canvas të Obsidian (`.canvas`) në vend të një skedari Markdown. Çdo canvas brenda dosjes së konfiguruar bëhet një pako; çdo nyje teksti analizohet me të njëjtat katër formate karte më sipër. Konfiguro përmes **Cilësimet → Pako canvas**: dosja dhe etiketa (e paracaktuar `#decks/canvas`). "Shko te burimi" gjatë rishikimit hap canvas-in dhe fokuson nyjen burimore. Në instalimin e parë (ose përditësimin), brenda dosjes `Canvas decks/` krijohet automatikisht një `Decks — Fillimi me canvas.canvas`.
+
+**Karta hapësinore (Spatial cards)**: lidh nyjet e tekstit me brinjë — çdo brinjë bëhet një kartë: nyja e nisjes është pjesa e parme (pyetja), nyja e mbërritjes është pjesa e prapme (përgjigja), dhe etiketa e brinjës është një aluzion opsional. Zinxhirët (A → B → C), një-me-shumë dhe shumë-me-një funksionojnë të gjithë; nyjet e palidhura ende analizohen me katër formatet më sipër. Detaje në **[docs/CANVAS_DECKS.md](docs/CANVAS_DECKS.md)**.
 
 ## Planifikim i personalizuar
 

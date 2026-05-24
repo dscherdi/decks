@@ -42,6 +42,13 @@ export const it: Translations = {
     solarHeading: "Il sistema solare",
     solarBody:
       "Il ==Sole== è la stella al centro del nostro sistema solare. Il pianeta più vicino è ==Mercurio== e il più grande è ==Giove==.",
+    section4: "Spatial cards",
+    spatialIntro: "# Spatial cards\n\nConnect text nodes with edges. Each edge becomes a card — the from-node is the front, the to-node is the back, the edge label is a hint. Cards in a chain (A → B → C) all generate cards. Standalone (unconnected) nodes still parse with the four formats above.",
+    spatialNodePhotosynthesis: "Photosynthesis",
+    spatialNodeSunlight: "Sunlight",
+    spatialNodeGlucose: "Glucose",
+    spatialEdgeNeeds: "needs",
+    spatialEdgeProduces: "produces",
   },
 
   testDeck: {
@@ -387,6 +394,7 @@ export const it: Translations = {
     createButton: "Crea",
     colFront: "Fronte",
     colBack: "Retro",
+    colHint: "Suggerimento",
     colNotes: "Note",
     colFile: "File",
     colBreadcrumb: "Percorso",

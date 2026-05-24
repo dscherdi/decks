@@ -129,7 +129,9 @@ Jeder Listeneintrag ist eine Karte. Das Bild (mit seinen nummerierten Markierung
 
 ### Canvas-Stapel
 
-Erstelle Karten auf einer Obsidian-Canvas-Datei (`.canvas`) statt in einer Markdown-Datei. Jedes Canvas im konfigurierten Ordner wird zu einem Stapel; jeder Textknoten darin wird mit denselben vier Karten-Formaten oben analysiert. Konfiguration unter **Einstellungen → Canvas-Stapel**: Canvas-Ordner und Canvas-Stapel-Tag (Standard `#decks/canvas`). „Quelle öffnen" beim Review öffnet das Canvas und fokussiert den entsprechenden Textknoten. Beim ersten Installieren (oder Aktualisieren) wird automatisch ein `Decks — Canvas Erste Schritte.canvas` im Ordner `Canvas decks/` erstellt. Details in **[docs/CANVAS_DECKS.md](docs/CANVAS_DECKS.md)**.
+Erstelle Karten auf einer Obsidian-Canvas-Datei (`.canvas`) statt in einer Markdown-Datei. Jedes Canvas im konfigurierten Ordner wird zu einem Stapel; jeder Textknoten darin wird mit denselben vier Karten-Formaten oben analysiert. Konfiguration unter **Einstellungen → Canvas-Stapel**: Canvas-Ordner und Canvas-Stapel-Tag (Standard `#decks/canvas`). „Quelle öffnen" beim Review öffnet das Canvas und fokussiert den entsprechenden Textknoten. Beim ersten Installieren (oder Aktualisieren) wird automatisch ein `Decks — Canvas Erste Schritte.canvas` im Ordner `Canvas decks/` erstellt.
+
+**Räumliche Karten (Spatial cards)**: Verbinde Textknoten mit Kanten — jede Kante wird zu einer Karteikarte: der Ausgangsknoten ist die Vorderseite (Frage), der Zielknoten die Rückseite (Antwort), und das Kantenlabel ist ein optionaler Hinweis. Ketten (A → B → C), Eins-zu-viele- und Viele-zu-eins-Verbindungen funktionieren alle; nicht verbundene Knoten werden weiterhin mit den vier obigen Formaten analysiert. Details in **[docs/CANVAS_DECKS.md](docs/CANVAS_DECKS.md)**.
 
 ## Was du bekommst
 

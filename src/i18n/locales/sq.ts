@@ -44,6 +44,13 @@ export const sq: Translations = {
     solarHeading: "Sistemi diellor",
     solarBody:
       "==Dielli== është ylli në qendër të sistemit tonë diellor. Planeti më i afërt është ==Mërkuri==, dhe planeti më i madh është ==Jupiteri==.",
+    section4: "Spatial cards",
+    spatialIntro: "# Spatial cards\n\nConnect text nodes with edges. Each edge becomes a card — the from-node is the front, the to-node is the back, the edge label is a hint. Cards in a chain (A → B → C) all generate cards. Standalone (unconnected) nodes still parse with the four formats above.",
+    spatialNodePhotosynthesis: "Photosynthesis",
+    spatialNodeSunlight: "Sunlight",
+    spatialNodeGlucose: "Glucose",
+    spatialEdgeNeeds: "needs",
+    spatialEdgeProduces: "produces",
   },
 
   testDeck: {
@@ -396,6 +403,7 @@ export const sq: Translations = {
     createButton: "Krijo",
     colFront: "Para",
     colBack: "Prapa",
+    colHint: "Aluzion",
     colNotes: "Shënime",
     colFile: "Skedari",
     colBreadcrumb: "Shtegu",

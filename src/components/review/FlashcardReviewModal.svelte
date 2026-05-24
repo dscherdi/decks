@@ -917,6 +917,11 @@
           {/each}
         </div>
       {/if}
+      {#if currentCard.hint && currentCard.hint.length > 0}
+        <div class="decks-card-hint" aria-label="hint">
+          <span class="decks-card-hint-chip">{currentCard.hint}</span>
+        </div>
+      {/if}
     {/if}
     <div class="decks-header-stats">
       {#if browseMode}
@@ -1352,6 +1357,23 @@
     background: var(--background-modifier-hover);
     color: var(--text-muted);
     font-size: var(--font-ui-smaller);
+  }
+
+  .decks-card-hint {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 4px;
+    margin-top: 4px;
+  }
+
+  .decks-card-hint-chip {
+    display: inline-block;
+    padding: 1px 8px;
+    border-radius: 10px;
+    background: var(--background-modifier-border);
+    color: var(--text-muted);
+    font-size: var(--font-ui-smaller);
+    font-style: italic;
   }
 
   .decks-card-utilities {

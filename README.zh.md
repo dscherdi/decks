@@ -129,7 +129,9 @@ Thank you.
 
 ### Canvas 牌组
 
-在 Obsidian Canvas (`.canvas`) 文件中编写卡片，而不是 Markdown 文件。已配置文件夹中的每个 canvas 都会成为一个牌组；每个文本节点都会按照上述相同的四种卡片格式进行解析。在 **设置 → Canvas 牌组** 中配置：文件夹和标签（默认 `#decks/canvas`）。复习中点击「跳转到源」会打开 canvas 并聚焦到源文本节点。首次安装（或升级）时会在 `Canvas decks/` 文件夹中自动创建一份 `Decks — Canvas 入门.canvas`。详情见 **[docs/CANVAS_DECKS.md](docs/CANVAS_DECKS.md)**。
+在 Obsidian Canvas (`.canvas`) 文件中编写卡片，而不是 Markdown 文件。已配置文件夹中的每个 canvas 都会成为一个牌组；每个文本节点都会按照上述相同的四种卡片格式进行解析。在 **设置 → Canvas 牌组** 中配置：文件夹和标签（默认 `#decks/canvas`）。复习中点击「跳转到源」会打开 canvas 并聚焦到源文本节点。首次安装（或升级）时会在 `Canvas decks/` 文件夹中自动创建一份 `Decks — Canvas 入门.canvas`。
+
+**空间卡片（Spatial cards）**：用连线连接文本节点，每条连线都会变成一张卡片——起始节点是正面（问题），终点节点是反面（答案），连线上的标签作为提示。支持链式连接（A → B → C）、一对多、多对一；没有连线的节点仍按四种格式解析。详情见 **[docs/CANVAS_DECKS.md](docs/CANVAS_DECKS.md)**。
 
 ## 个性化调度
 

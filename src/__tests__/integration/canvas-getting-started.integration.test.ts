@@ -27,7 +27,7 @@ describe("Canvas getting-started integration", () => {
     await teardownTestDatabase();
   });
 
-  it("the shipped template parses cleanly and yields 2 header-paragraph + 2 table + 3 cloze cards", async () => {
+  it("the shipped template parses cleanly and yields 2 header-paragraph + 2 table + 3 cloze + 2 spatial cards", async () => {
     const profile = await db.getDefaultProfile();
     const filepath = "/Canvas decks/Decks — Canvas getting started.canvas";
     const deck: Deck = {
@@ -57,8 +57,8 @@ describe("Canvas getting-started integration", () => {
 
     const cards = await db.getFlashcardsByDeck(deck.id);
 
-    // 2 header-paragraph + 2 table + 3 cloze = 7 cards total.
-    expect(cards).toHaveLength(7);
+    // 2 header-paragraph + 2 table + 3 cloze + 2 spatial = 9 cards total.
+    expect(cards).toHaveLength(9);
 
     const counts: Record<string, number> = {};
     for (const c of cards) {
@@ -67,14 +67,24 @@ describe("Canvas getting-started integration", () => {
     expect(counts["header-paragraph"]).toBe(2);
     expect(counts["table"]).toBe(2);
     expect(counts["cloze"]).toBe(3);
+    expect(counts["spatial"]).toBe(2);
 
-    // Each card is tied to its source node.
+    // Each standalone card is tied to its source node.
     const nodeIds = new Set(cards.map((c) => c.sourceNodeId));
     expect(nodeIds.has("header-paragraph")).toBe(true);
     expect(nodeIds.has("table")).toBe(true);
     expect(nodeIds.has("cloze")).toBe(true);
+    // Spatial cards point at the from-node of each edge.
+    expect(nodeIds.has("spatial-photosynthesis")).toBe(true);
     // Intro node has no cards (level-1 heading, no level-2 inside).
     expect(nodeIds.has("intro")).toBe(false);
+
+    // Both spatial cards share the same from-node, distinct edges & hints.
+    const spatialCards = cards.filter((c) => c.type === "spatial");
+    expect(new Set(spatialCards.map((c) => c.edgeId))).toEqual(
+      new Set(["edge-spatial-needs", "edge-spatial-produces"]),
+    );
+    expect(spatialCards.every((c) => (c.hint ?? "").length > 0)).toBe(true);
   });
 
   it("re-syncing the same content is a no-op on counts", async () => {

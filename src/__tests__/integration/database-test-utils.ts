@@ -182,6 +182,7 @@ export class DatabaseTestUtils {
       breadcrumb: "",
       notes: "",
       tags: [],
+      hint: "",
       clozeText: null,
       clozeOrder: null,
       state: "new",

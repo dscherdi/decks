@@ -6,13 +6,46 @@ describe("getTestDeckCanvasContent", () => {
     const parsed = JSON.parse(raw);
     expect(Array.isArray(parsed.nodes)).toBe(true);
     expect(Array.isArray(parsed.edges)).toBe(true);
-    expect(parsed.nodes).toHaveLength(4);
+    // 4 standalone nodes + 1 spatial intro + 3 connected spatial nodes
+    expect(parsed.nodes).toHaveLength(8);
+    expect(parsed.edges).toHaveLength(2);
   });
 
   it("uses stable node ids that the synchronizer can rely on", () => {
     const parsed = JSON.parse(getTestDeckCanvasContent("#decks/canvas"));
     const ids = parsed.nodes.map((n: { id: string }) => n.id);
-    expect(ids.sort()).toEqual(["cloze", "header-paragraph", "intro", "table"]);
+    expect(ids.sort()).toEqual([
+      "cloze",
+      "header-paragraph",
+      "intro",
+      "spatial-glucose",
+      "spatial-intro",
+      "spatial-photosynthesis",
+      "spatial-sunlight",
+      "table",
+    ]);
+  });
+
+  it("includes two labelled spatial edges between the photosynthesis nodes", () => {
+    const parsed = JSON.parse(getTestDeckCanvasContent("#decks/canvas"));
+    expect(parsed.edges).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          id: "edge-spatial-needs",
+          fromNode: "spatial-photosynthesis",
+          toNode: "spatial-sunlight",
+        }),
+        expect.objectContaining({
+          id: "edge-spatial-produces",
+          fromNode: "spatial-photosynthesis",
+          toNode: "spatial-glucose",
+        }),
+      ]),
+    );
+    for (const edge of parsed.edges) {
+      expect(typeof edge.label).toBe("string");
+      expect(edge.label.length).toBeGreaterThan(0);
+    }
   });
 
   it("every node is a text node with positional fields", () => {

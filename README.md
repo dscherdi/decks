@@ -137,6 +137,8 @@ Set it up in **Settings → Canvas decks**:
 
 Canvas decks behave like file decks everywhere: they show up in the deck list, in the Tags view, can be included in custom decks by filter (`deckTag = #decks/canvas`), are editable from the flashcard manager, and "Go to source" from review opens the canvas and focuses the source text node.
 
+**Spatial cards.** Connect text nodes with edges and each edge becomes a flashcard: the from-node is the question, the to-node is the answer, and the edge label is an optional hint. Chains (A → B → C), one-to-many, and many-to-one all work; unconnected nodes still parse with the four formats above.
+
 A `Decks — Canvas getting started.canvas` is auto-created in a `Canvas decks/` folder on first install (or first upgrade) to show the formats in action.
 
 See **[docs/CANVAS_DECKS.md](docs/CANVAS_DECKS.md)** for details.

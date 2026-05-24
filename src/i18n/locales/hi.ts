@@ -44,6 +44,13 @@ export const hi: Translations = {
     solarHeading: "सौर मंडल",
     solarBody:
       "==सूर्य== हमारे सौर मंडल के केंद्र में स्थित तारा है। सबसे निकट का ग्रह ==बुध== है, और सबसे बड़ा ग्रह ==बृहस्पति== है।",
+    section4: "Spatial cards",
+    spatialIntro: "# Spatial cards\n\nConnect text nodes with edges. Each edge becomes a card — the from-node is the front, the to-node is the back, the edge label is a hint. Cards in a chain (A → B → C) all generate cards. Standalone (unconnected) nodes still parse with the four formats above.",
+    spatialNodePhotosynthesis: "Photosynthesis",
+    spatialNodeSunlight: "Sunlight",
+    spatialNodeGlucose: "Glucose",
+    spatialEdgeNeeds: "needs",
+    spatialEdgeProduces: "produces",
   },
 
   testDeck: {
@@ -390,6 +397,7 @@ export const hi: Translations = {
     createButton: "बनाएं",
     colFront: "सामने",
     colBack: "पीछे",
+    colHint: "संकेत",
     colNotes: "नोट्स",
     colFile: "फ़ाइल",
     colBreadcrumb: "ब्रेडक्रंब",
