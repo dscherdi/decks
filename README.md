@@ -132,6 +132,7 @@ Each list item is one card. The image (with its numbered labels) shows on the fr
 Author cards on an Obsidian Canvas (`.canvas`) instead of a markdown file. Each canvas in the configured folder becomes one deck; each text node inside it is parsed for the same four card formats above (header-paragraph, table, cloze, image occlusion). One text node can hold a whole table of cards, or one cloze sentence, or a single header + paragraph — mix freely across the canvas.
 
 Set it up in **Settings → Canvas decks**:
+
 - **Canvas decks folder** — every `.canvas` inside this folder becomes a deck.
 - **Canvas deck tag** — applied to all canvas decks for grouping in the Tags view and for profile mapping. Defaults to `#decks/canvas` (which uses the DEFAULT profile unless you map it elsewhere).
 
@@ -140,6 +141,8 @@ Canvas decks behave like file decks everywhere: they show up in the deck list, i
 **Spatial cards.** Connect text nodes with edges and each edge becomes a flashcard: the from-node is the question, the to-node is the answer, and the edge label is an optional hint. Chains (A → B → C), one-to-many, and many-to-one all work; unconnected nodes still parse with the four formats above.
 
 A `Decks — Canvas getting started.canvas` is auto-created in a `Canvas decks/` folder on first install (or first upgrade) to show the formats in action.
+
+![Canvas Spatial Cards Demo](./canvas_spatial_cards_demo.gif)
 
 See **[docs/CANVAS_DECKS.md](docs/CANVAS_DECKS.md)** for details.
 

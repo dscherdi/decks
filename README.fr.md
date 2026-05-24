@@ -133,6 +133,8 @@ Créez des cartes sur un canvas Obsidian (`.canvas`) au lieu d'un fichier Markdo
 
 **Cartes spatiales (Spatial cards)** : reliez des nœuds texte par des arêtes — chaque arête devient une carte : le nœud source est le recto (question), le nœud cible est le verso (réponse), et le libellé de l'arête sert d'indice optionnel. Les chaînes (A → B → C), les relations un-vers-plusieurs et plusieurs-vers-un fonctionnent toutes ; les nœuds non connectés continuent d'être analysés avec les quatre formats ci-dessus. Détails dans **[docs/CANVAS_DECKS.md](docs/CANVAS_DECKS.md)**.
 
+![Canvas Spatial Cards Demo](./canvas_spatial_cards_demo.gif)
+
 ## Ce que vous obtenez
 
 - Mode navigation et sessions de révision chronométrées avec limites journalières.

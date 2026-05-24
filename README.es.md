@@ -133,6 +133,8 @@ Crea tarjetas en un Canvas de Obsidian (`.canvas`) en lugar de un archivo Markdo
 
 **Tarjetas espaciales (Spatial cards)**: conecta nodos de texto con aristas y cada arista se convierte en una tarjeta: el nodo de origen es el anverso (pregunta), el nodo de destino es el reverso (respuesta) y la etiqueta de la arista es una pista opcional. Funcionan cadenas (A → B → C), uno-a-muchos y muchos-a-uno; los nodos no conectados se siguen analizando con los cuatro formatos anteriores. Detalles en **[docs/CANVAS_DECKS.md](docs/CANVAS_DECKS.md)**.
 
+![Canvas Spatial Cards Demo](./canvas_spatial_cards_demo.gif)
+
 ## Lo que obtienes
 
 - Modo exploración y sesiones de repaso cronometradas con límites diarios.
