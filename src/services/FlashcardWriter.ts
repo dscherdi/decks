@@ -1,5 +1,6 @@
 import { type App, TFile } from "obsidian";
 import type { Flashcard } from "../database/types";
+import { FlashcardParser } from "./FlashcardParser";
 import { findFlashcardSegment } from "../utils/source-navigator";
 import {
   escapeTableCell,
@@ -10,12 +11,14 @@ import {
 const HEADER_REGEX = /^(#{1,6})\s+(.+)$/;
 const TABLE_ROW_REGEX = /^\|.*\|$/;
 const NUMBERED_LIST_REGEX = /^(\s*)(\d+\.\s+)(.+)$/;
+const TRAILING_TAGS_REGEX = /(\s+#[\w/-]+(?:\s+#[\w/-]+)*)\s*$/;
 
 export type FlashcardEdits =
   | { type: "header-paragraph"; front: string; back: string }
   | { type: "table"; front: string; back: string; notes: string }
   | { type: "cloze"; front: string; sentence: string }
-  | { type: "image-occlusion"; listItem: string };
+  | { type: "image-occlusion"; listItem: string }
+  | { type: "spatial"; front: string; back: string; hint: string };
 
 export type EditFailureCode =
   | "card_not_found"
@@ -75,6 +78,7 @@ export class FlashcardWriter {
 
 interface CanvasJsonShape {
   nodes?: Array<{ id?: unknown; type?: unknown; text?: unknown } & Record<string, unknown>>;
+  edges?: Array<{ id?: unknown; fromNode?: unknown; toNode?: unknown; label?: unknown } & Record<string, unknown>>;
   [key: string]: unknown;
 }
 
@@ -83,10 +87,6 @@ function applyCanvasEdit(
   card: Flashcard,
   edits: FlashcardEdits,
 ): InternalApply {
-  if (!card.sourceNodeId) {
-    return fail("card_not_found", "Canvas card is missing sourceNodeId");
-  }
-
   let parsed: CanvasJsonShape;
   try {
     parsed = JSON.parse(content) as CanvasJsonShape;
@@ -96,6 +96,14 @@ function applyCanvasEdit(
 
   if (!Array.isArray(parsed.nodes)) {
     return fail("card_not_found", "Canvas has no nodes array");
+  }
+
+  if (edits.type === "spatial") {
+    return applySpatialCanvasEdit(parsed, card, edits);
+  }
+
+  if (!card.sourceNodeId) {
+    return fail("card_not_found", "Canvas card is missing sourceNodeId");
   }
 
   const node = parsed.nodes.find(
@@ -113,6 +121,78 @@ function applyCanvasEdit(
   const inner = applyEdit(node.text, card, edits);
   if (!inner.ok) return inner;
   node.text = inner.newContent;
+
+  // Tabs match Obsidian's own canvas serialization style.
+  const newContent = JSON.stringify(parsed, null, "\t");
+  return { ok: true, newContent };
+}
+
+function applySpatialCanvasEdit(
+  parsed: CanvasJsonShape,
+  card: Flashcard,
+  edits: { type: "spatial"; front: string; back: string; hint: string },
+): InternalApply {
+  if (!card.edgeId) {
+    return fail("card_not_found", "Spatial card is missing edgeId");
+  }
+  if (!Array.isArray(parsed.edges)) {
+    return fail("card_not_found", "Canvas has no edges array");
+  }
+
+  const edge = parsed.edges.find((e) => e && e.id === card.edgeId);
+  if (!edge) {
+    return fail("card_not_found", `Canvas edge ${card.edgeId} no longer exists`);
+  }
+  if (typeof edge.fromNode !== "string" || typeof edge.toNode !== "string") {
+    return fail("card_not_found", "Canvas edge is missing fromNode/toNode");
+  }
+
+  const nodes = parsed.nodes!;
+  const fromNode = nodes.find(
+    (n) => n && n.type === "text" && n.id === edge.fromNode,
+  );
+  const toNode = nodes.find(
+    (n) => n && n.type === "text" && n.id === edge.toNode,
+  );
+  if (!fromNode || typeof fromNode.text !== "string") {
+    return fail("card_not_found", "Spatial edge's from-node not found");
+  }
+  if (!toNode || typeof toNode.text !== "string") {
+    return fail("card_not_found", "Spatial edge's to-node not found");
+  }
+
+  // Stale checks. Card values are what the manager loaded; canvas values are
+  // current. Mismatch means the canvas drifted under us — refuse to clobber.
+  const fromText = fromNode.text;
+  const { cleaned: fromCleaned } = FlashcardParser.extractAndStripTags(fromText);
+  if (fromCleaned !== card.front) {
+    return fail("file_changed", "Front node has changed since the manager loaded. Refresh and try again.");
+  }
+  if (toNode.text !== card.back) {
+    return fail("file_changed", "Back node has changed since the manager loaded. Refresh and try again.");
+  }
+  const currentLabel = typeof edge.label === "string" ? edge.label : "";
+  if (currentLabel !== (card.hint ?? "")) {
+    return fail("file_changed", "Edge label has changed since the manager loaded. Refresh and try again.");
+  }
+
+  // Preserve any trailing `#tag #tag2` suffix the user typed onto the from-node
+  // so editing the front text doesn't strip their tags. The parser strips them
+  // for `card.front`, so they're not in the modal — we re-attach them here.
+  const tailMatch = TRAILING_TAGS_REGEX.exec(fromText);
+  const tagsSuffix = tailMatch ? tailMatch[1] : "";
+  fromNode.text = `${edits.front.trim()}${tagsSuffix}`;
+  toNode.text = edits.back;
+
+  // Edge label semantics: keep the field absent when the hint is empty AND the
+  // edge previously had no label, otherwise write the hint (even if empty —
+  // that round-trips as a labelled edge with empty label, which the parser
+  // treats as no hint anyway).
+  if (edits.hint === "" && typeof edge.label !== "string") {
+    // leave as-is
+  } else {
+    edge.label = edits.hint;
+  }
 
   // Tabs match Obsidian's own canvas serialization style.
   const newContent = JSON.stringify(parsed, null, "\t");
@@ -363,6 +443,14 @@ function validateEdits(edits: FlashcardEdits): InternalApply | null {
   if (edits.type === "image-occlusion") {
     if (edits.listItem.trim() === "") {
       return fail("invalid_edit", "List item cannot be empty");
+    }
+  }
+  if (edits.type === "spatial") {
+    if (edits.front.trim() === "") {
+      return fail("invalid_edit", "Front text cannot be empty");
+    }
+    if (edits.back.trim() === "") {
+      return fail("invalid_edit", "Back text cannot be empty");
     }
   }
   return null;

@@ -22,6 +22,9 @@
   let clozeSentence = card.type === "cloze" ? card.back : "";
   let itemText =
     card.type === "image-occlusion" ? extractImageOcclusionItem(card) : "";
+  let spatialFront = card.type === "spatial" ? card.front : "";
+  let spatialBack = card.type === "spatial" ? card.back : "";
+  let spatialHint = card.type === "spatial" ? (card.hint ?? "") : "";
 
   // Per-field mode (edit vs preview). Default: edit. Reassigned (not mutated)
   // on toggle so Svelte tracks it as a reactive dependency in the template.
@@ -82,6 +85,8 @@
         return "Cloze";
       case "image-occlusion":
         return "Image occlusion";
+      case "spatial":
+        return "Spatial";
     }
   }
 
@@ -91,8 +96,11 @@
     card.type !== "header-paragraph" || headerFront.trim().length > 0;
   $: itemValid =
     card.type !== "image-occlusion" || itemText.trim().length > 0;
+  $: spatialValid =
+    card.type !== "spatial" ||
+    (spatialFront.trim().length > 0 && spatialBack.trim().length > 0);
   $: canSave =
-    saveState !== "saving" && clozeValid && headerValid && itemValid;
+    saveState !== "saving" && clozeValid && headerValid && itemValid && spatialValid;
 
   function currentValueFor(key: string): string | null {
     switch (key) {
@@ -104,6 +112,9 @@
       case "clozeFront": return clozeFront;
       case "clozeSentence": return clozeSentence;
       case "itemText": return itemText;
+      case "spatialFront": return spatialFront;
+      case "spatialBack": return spatialBack;
+      case "spatialHint": return spatialHint;
       default: return null;
     }
   }
@@ -132,6 +143,9 @@
   $: void clozeFront;
   $: void clozeSentence;
   $: void itemText;
+  $: void spatialFront;
+  $: void spatialBack;
+  $: void spatialHint;
 
 
   async function handleSave() {
@@ -163,6 +177,9 @@
     if (card.type === "cloze") {
       return { type: "cloze", front: clozeFront, sentence: clozeSentence };
     }
+    if (card.type === "spatial") {
+      return { type: "spatial", front: spatialFront, back: spatialBack, hint: spatialHint };
+    }
     return { type: "image-occlusion", listItem: itemText };
   }
 
@@ -192,6 +209,13 @@
         { key: "clozeSentence", label: "Body" },
       ];
     }
+    if (c.type === "spatial") {
+      return [
+        { key: "spatialFront", label: "Front", isFront: true },
+        { key: "spatialBack", label: "Back" },
+        { key: "spatialHint", label: "Hint" },
+      ];
+    }
     return [{ key: "itemText", label: "Body" }];
   }
 
@@ -205,6 +229,9 @@
       case "clozeFront": clozeFront = value; break;
       case "clozeSentence": clozeSentence = value; break;
       case "itemText": itemText = value; break;
+      case "spatialFront": spatialFront = value; break;
+      case "spatialBack": spatialBack = value; break;
+      case "spatialHint": spatialHint = value; break;
     }
   }
 

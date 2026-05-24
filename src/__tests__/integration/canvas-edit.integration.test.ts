@@ -185,6 +185,7 @@ describe("Canvas edit integration", () => {
         breadcrumb: "",
         notes: "",
         tags: [],
+        hint: "",
         clozeText: null,
         clozeOrder: null,
         sourceNodeId: "does-not-exist",
@@ -206,5 +207,310 @@ describe("Canvas edit integration", () => {
     if (!result.ok) {
       expect(result.failure.code).toBe("card_not_found");
     }
+  });
+});
+
+// -- Spatial card edits --------------------------------------------------------
+// Cards created from a canvas edge between two text nodes. Editing spans the
+// from-node, the to-node, and the edge label simultaneously.
+
+interface SpatialCardFields {
+  front?: string;
+  back?: string;
+  hint?: string;
+  edgeId?: string | null;
+  sourceNodeId?: string | null;
+  sourceFile?: string;
+}
+
+function spatialCard(overrides: SpatialCardFields = {}): Flashcard {
+  // `??` treats null as defaulting; use explicit `in` checks so callers can
+  // pass `edgeId: null` to simulate a card that's missing its edge id.
+  const edgeId = "edgeId" in overrides ? overrides.edgeId : "edge-1";
+  const sourceNodeId = "sourceNodeId" in overrides ? overrides.sourceNodeId : "from-node";
+  return {
+    id: "spatial-test-card",
+    deckId: "deck",
+    front: overrides.front ?? "From front",
+    back: overrides.back ?? "To back",
+    type: "spatial",
+    sourceFile: overrides.sourceFile ?? "/Canvases/spatial.canvas",
+    contentHash: "h",
+    breadcrumb: "",
+    notes: "",
+    tags: [],
+    hint: overrides.hint ?? "edge-label",
+    clozeText: null,
+    clozeOrder: null,
+    sourceNodeId,
+    edgeId,
+    state: "new",
+    dueDate: new Date().toISOString(),
+    interval: 0,
+    repetitions: 0,
+    difficulty: 5,
+    stability: 0,
+    lapses: 0,
+    lastReviewed: null,
+    created: new Date().toISOString(),
+    modified: new Date().toISOString(),
+  };
+}
+
+function spatialCanvas(
+  fromText: string,
+  toText: string,
+  edgeLabel: string | null,
+  extras: { unrelatedNode?: { id: string; text: string }; unrelatedEdge?: { id: string; fromNode: string; toNode: string; label?: string } } = {},
+): string {
+  const nodes: Array<Record<string, unknown>> = [
+    { id: "from-node", type: "text", text: fromText, x: 0, y: 0, width: 200, height: 100 },
+    { id: "to-node", type: "text", text: toText, x: 300, y: 0, width: 200, height: 100, color: "4" },
+  ];
+  if (extras.unrelatedNode) {
+    nodes.push({
+      id: extras.unrelatedNode.id,
+      type: "text",
+      text: extras.unrelatedNode.text,
+      x: 0,
+      y: 400,
+      width: 200,
+      height: 100,
+    });
+  }
+  const edges: Array<Record<string, unknown>> = [
+    {
+      id: "edge-1",
+      fromNode: "from-node",
+      toNode: "to-node",
+      ...(edgeLabel === null ? {} : { label: edgeLabel }),
+    },
+  ];
+  if (extras.unrelatedEdge) {
+    edges.push({ ...extras.unrelatedEdge });
+  }
+  return JSON.stringify({ nodes, edges });
+}
+
+describe("Canvas spatial edit integration", () => {
+  it("edits the front: rewrites only the from-node text", async () => {
+    const filepath = "/Canvases/spatial-front.canvas";
+    const initial = spatialCanvas("From front", "To back", "edge-label", {
+      unrelatedNode: { id: "alone", text: "## standalone\nbody" },
+    });
+    const { app, read } = makeApp(filepath, initial);
+    const writer = new FlashcardWriter(app);
+
+    const result = await writer.editFlashcard(spatialCard({ sourceFile: filepath }), {
+      type: "spatial",
+      front: "New front",
+      back: "To back",
+      hint: "edge-label",
+    });
+    expect(result.ok).toBe(true);
+
+    const after = JSON.parse(read());
+    const fromNode = after.nodes.find((n: { id: string }) => n.id === "from-node");
+    const toNode = after.nodes.find((n: { id: string }) => n.id === "to-node");
+    const alone = after.nodes.find((n: { id: string }) => n.id === "alone");
+    const edge = after.edges.find((e: { id: string }) => e.id === "edge-1");
+    expect(fromNode.text).toBe("New front");
+    expect(toNode.text).toBe("To back");
+    expect(toNode.color).toBe("4"); // unrelated metadata preserved
+    expect(alone.text).toBe("## standalone\nbody");
+    expect(edge.label).toBe("edge-label");
+  });
+
+  it("edits the back: rewrites only the to-node text", async () => {
+    const filepath = "/Canvases/spatial-back.canvas";
+    const initial = spatialCanvas("From front", "To back", "edge-label");
+    const { app, read } = makeApp(filepath, initial);
+    const writer = new FlashcardWriter(app);
+
+    const result = await writer.editFlashcard(spatialCard({ sourceFile: filepath }), {
+      type: "spatial",
+      front: "From front",
+      back: "Updated back text",
+      hint: "edge-label",
+    });
+    expect(result.ok).toBe(true);
+
+    const after = JSON.parse(read());
+    expect(after.nodes.find((n: { id: string }) => n.id === "from-node").text).toBe("From front");
+    expect(after.nodes.find((n: { id: string }) => n.id === "to-node").text).toBe("Updated back text");
+    expect(after.edges.find((e: { id: string }) => e.id === "edge-1").label).toBe("edge-label");
+  });
+
+  it("edits the hint: rewrites only the edge label", async () => {
+    const filepath = "/Canvases/spatial-hint.canvas";
+    const initial = spatialCanvas("From front", "To back", "edge-label");
+    const { app, read } = makeApp(filepath, initial);
+    const writer = new FlashcardWriter(app);
+
+    const result = await writer.editFlashcard(spatialCard({ sourceFile: filepath }), {
+      type: "spatial",
+      front: "From front",
+      back: "To back",
+      hint: "new hint",
+    });
+    expect(result.ok).toBe(true);
+
+    const after = JSON.parse(read());
+    expect(after.nodes.find((n: { id: string }) => n.id === "from-node").text).toBe("From front");
+    expect(after.nodes.find((n: { id: string }) => n.id === "to-node").text).toBe("To back");
+    expect(after.edges.find((e: { id: string }) => e.id === "edge-1").label).toBe("new hint");
+  });
+
+  it("edits front, back, and hint in a single call", async () => {
+    const filepath = "/Canvases/spatial-all.canvas";
+    const initial = spatialCanvas("From front", "To back", "edge-label");
+    const { app, read } = makeApp(filepath, initial);
+    const writer = new FlashcardWriter(app);
+
+    const result = await writer.editFlashcard(spatialCard({ sourceFile: filepath }), {
+      type: "spatial",
+      front: "New front",
+      back: "New back",
+      hint: "new hint",
+    });
+    expect(result.ok).toBe(true);
+
+    const after = JSON.parse(read());
+    expect(after.nodes.find((n: { id: string }) => n.id === "from-node").text).toBe("New front");
+    expect(after.nodes.find((n: { id: string }) => n.id === "to-node").text).toBe("New back");
+    expect(after.edges.find((e: { id: string }) => e.id === "edge-1").label).toBe("new hint");
+  });
+
+  it("preserves trailing #tags on the from-node when the front is edited", async () => {
+    const filepath = "/Canvases/spatial-tags.canvas";
+    const initial = spatialCanvas("What is FSRS? #algo #spaced-repetition", "Free Spaced Repetition Scheduler", "expands");
+    const { app, read } = makeApp(filepath, initial);
+    const writer = new FlashcardWriter(app);
+
+    const result = await writer.editFlashcard(
+      spatialCard({
+        sourceFile: filepath,
+        front: "What is FSRS?",
+        back: "Free Spaced Repetition Scheduler",
+        hint: "expands",
+      }),
+      {
+        type: "spatial",
+        front: "What is FSRS now?",
+        back: "Free Spaced Repetition Scheduler",
+        hint: "expands",
+      },
+    );
+    expect(result.ok).toBe(true);
+
+    const after = JSON.parse(read());
+    expect(after.nodes.find((n: { id: string }) => n.id === "from-node").text).toBe(
+      "What is FSRS now? #algo #spaced-repetition",
+    );
+  });
+
+  it("file_changed: from-node was modified externally", async () => {
+    const filepath = "/Canvases/spatial-stale-from.canvas";
+    const initial = spatialCanvas("Drifted front", "To back", "edge-label");
+    const { app } = makeApp(filepath, initial);
+    const writer = new FlashcardWriter(app);
+
+    const result = await writer.editFlashcard(
+      spatialCard({ sourceFile: filepath, front: "From front" }),
+      { type: "spatial", front: "Anything", back: "To back", hint: "edge-label" },
+    );
+    expect(result.ok).toBe(false);
+    if (!result.ok) expect(result.failure.code).toBe("file_changed");
+  });
+
+  it("file_changed: to-node was modified externally", async () => {
+    const filepath = "/Canvases/spatial-stale-to.canvas";
+    const initial = spatialCanvas("From front", "Drifted back", "edge-label");
+    const { app } = makeApp(filepath, initial);
+    const writer = new FlashcardWriter(app);
+
+    const result = await writer.editFlashcard(
+      spatialCard({ sourceFile: filepath, back: "To back" }),
+      { type: "spatial", front: "From front", back: "Anything", hint: "edge-label" },
+    );
+    expect(result.ok).toBe(false);
+    if (!result.ok) expect(result.failure.code).toBe("file_changed");
+  });
+
+  it("file_changed: edge label was changed externally", async () => {
+    const filepath = "/Canvases/spatial-stale-label.canvas";
+    const initial = spatialCanvas("From front", "To back", "drifted-label");
+    const { app } = makeApp(filepath, initial);
+    const writer = new FlashcardWriter(app);
+
+    const result = await writer.editFlashcard(
+      spatialCard({ sourceFile: filepath, hint: "edge-label" }),
+      { type: "spatial", front: "From front", back: "To back", hint: "new" },
+    );
+    expect(result.ok).toBe(false);
+    if (!result.ok) expect(result.failure.code).toBe("file_changed");
+  });
+
+  it("card_not_found: edgeId is missing on the card", async () => {
+    const filepath = "/Canvases/spatial-no-edge-id.canvas";
+    const initial = spatialCanvas("From front", "To back", "edge-label");
+    const { app } = makeApp(filepath, initial);
+    const writer = new FlashcardWriter(app);
+
+    const result = await writer.editFlashcard(
+      spatialCard({ sourceFile: filepath, edgeId: null }),
+      { type: "spatial", front: "x", back: "y", hint: "z" },
+    );
+    expect(result.ok).toBe(false);
+    if (!result.ok) expect(result.failure.code).toBe("card_not_found");
+  });
+
+  it("card_not_found: edge no longer exists in the canvas", async () => {
+    const filepath = "/Canvases/spatial-edge-gone.canvas";
+    // Canvas has no edges; the card claims edge-1.
+    const initial = JSON.stringify({
+      nodes: [
+        { id: "from-node", type: "text", text: "From front", x: 0, y: 0, width: 200, height: 100 },
+        { id: "to-node", type: "text", text: "To back", x: 300, y: 0, width: 200, height: 100 },
+      ],
+      edges: [],
+    });
+    const { app } = makeApp(filepath, initial);
+    const writer = new FlashcardWriter(app);
+
+    const result = await writer.editFlashcard(
+      spatialCard({ sourceFile: filepath }),
+      { type: "spatial", front: "x", back: "y", hint: "z" },
+    );
+    expect(result.ok).toBe(false);
+    if (!result.ok) expect(result.failure.code).toBe("card_not_found");
+  });
+
+  it("invalid_edit: empty front", async () => {
+    const filepath = "/Canvases/spatial-empty-front.canvas";
+    const initial = spatialCanvas("From front", "To back", "edge-label");
+    const { app } = makeApp(filepath, initial);
+    const writer = new FlashcardWriter(app);
+
+    const result = await writer.editFlashcard(
+      spatialCard({ sourceFile: filepath }),
+      { type: "spatial", front: "   ", back: "To back", hint: "edge-label" },
+    );
+    expect(result.ok).toBe(false);
+    if (!result.ok) expect(result.failure.code).toBe("invalid_edit");
+  });
+
+  it("invalid_edit: empty back", async () => {
+    const filepath = "/Canvases/spatial-empty-back.canvas";
+    const initial = spatialCanvas("From front", "To back", "edge-label");
+    const { app } = makeApp(filepath, initial);
+    const writer = new FlashcardWriter(app);
+
+    const result = await writer.editFlashcard(
+      spatialCard({ sourceFile: filepath }),
+      { type: "spatial", front: "From front", back: "", hint: "edge-label" },
+    );
+    expect(result.ok).toBe(false);
+    if (!result.ok) expect(result.failure.code).toBe("invalid_edit");
   });
 });
