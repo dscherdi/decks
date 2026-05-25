@@ -603,8 +603,10 @@ export class Scheduler {
     let query = `
       SELECT * FROM flashcards
       WHERE deck_id = ? AND due_date <= ? AND state = 'review'
+        AND suspended_at IS NULL
+        AND (buried_until IS NULL OR buried_until <= ?)
     `;
-    const params = [deckId, now.toISOString()];
+    const params = [deckId, now.toISOString(), now.toISOString()];
 
     // Apply review order from deck configuration
     if (deck.profile.reviewOrder === "random") {
@@ -629,11 +631,13 @@ export class Scheduler {
       SELECT MIN(due_date) as next_due
       FROM flashcards
       WHERE deck_id = ? AND due_date > ?
+        AND suspended_at IS NULL
+        AND (buried_until IS NULL OR buried_until <= ?)
       ORDER BY due_date ASC
       LIMIT 1
     `;
 
-    const results = await this.db.querySql(query, [deckId, now.toISOString()]);
+    const results = await this.db.querySql(query, [deckId, now.toISOString(), now.toISOString()]);
     const nextDue = results.length > 0 ? results[0][0] : null;
 
     if (!nextDue) {
@@ -656,8 +660,10 @@ export class Scheduler {
     let query = `
       SELECT * FROM flashcards
       WHERE deck_id = ? AND due_date <= ? AND state = 'review'
+        AND suspended_at IS NULL
+        AND (buried_until IS NULL OR buried_until <= ?)
     `;
-    const params = [deckId, now.toISOString()];
+    const params = [deckId, now.toISOString(), now.toISOString()];
 
     // Apply review order from deck configuration
     if (deck.profile.reviewOrder === "random") {
@@ -673,12 +679,15 @@ export class Scheduler {
   }
 
   private async getNextNewCard(deckId: string): Promise<Flashcard | null> {
+    const now = new Date().toISOString();
     const query = `
       SELECT * FROM flashcards
       WHERE deck_id = ? AND state = 'new'
+        AND suspended_at IS NULL
+        AND (buried_until IS NULL OR buried_until <= ?)
        ORDER BY due_date ASC LIMIT 1
     `;
-    const params = [deckId];
+    const params = [deckId, now];
 
     const results = await this.db.querySql(query, params);
     const flashcards = results.map((row) => this.rowToFlashcard(row));
@@ -765,22 +774,27 @@ export class Scheduler {
     SELECT COUNT(*) as count
     FROM flashcards
     WHERE deck_id = ? AND due_date <= ? AND state = 'review'
+      AND suspended_at IS NULL
+      AND (buried_until IS NULL OR buried_until <= ?)
   `;
     const results = await this.db.querySql<{ count: number }>(
       query,
-      [deckId, sessionEndTime.toISOString()],
+      [deckId, sessionEndTime.toISOString(), now.toISOString()],
       { asObject: true }
     );
     return results[0]?.count || 0;
   }
 
   private async getNewCardCount(deckId: string): Promise<number> {
+    const now = new Date().toISOString();
     const query = `
     SELECT COUNT(*) as count
     FROM flashcards
     WHERE deck_id = ? AND state = 'new'
+      AND suspended_at IS NULL
+      AND (buried_until IS NULL OR buried_until <= ?)
   `;
-    const results = await this.db.querySql<{ count: number }>(query, [deckId], {
+    const results = await this.db.querySql<{ count: number }>(query, [deckId, now], {
       asObject: true,
     });
     return results[0]?.count || 0;
@@ -829,12 +843,15 @@ export class Scheduler {
       WHERE deck_id = ? AND front = ? AND type IN ('cloze', 'image-occlusion')
         AND id != ?
         AND ((state IN ('review', 'relearning') AND due_date <= ?) OR state = 'new')
+        AND suspended_at IS NULL
+        AND (buried_until IS NULL OR buried_until <= ?)
       ORDER BY cloze_order ASC
     `;
     const rows = await this.db.querySql<unknown[]>(query, [
       card.deckId,
       card.front,
       card.id,
+      now.toISOString(),
       now.toISOString(),
     ]);
     return rows.map((row) => this.rowToFlashcard(row as unknown[]));
@@ -918,6 +935,19 @@ export class Scheduler {
     const currentStart = new Date(this.getStudyDayStart(now, nextDayStartsAt));
     currentStart.setDate(currentStart.getDate() + daysFromNow);
     return currentStart.toISOString();
+  }
+
+  /**
+   * ISO timestamp when a card buried "today" should reappear. Always the
+   * start of the next study day per settings.review.nextDayStartsAt — matches
+   * how the rest of the plugin defines a study day for quota counting.
+   */
+  getBuryUntilForNextDay(now: Date = new Date()): string {
+    return this.getStudyDayStartAfterDays(
+      now,
+      1,
+      this.settings.review.nextDayStartsAt
+    );
   }
 
   async startReviewSessionForDeckGroup(
@@ -1035,24 +1065,29 @@ export class Scheduler {
       WHERE deck_id IN (${placeholders})
         AND due_date <= ?
         AND state = 'review'
+        AND suspended_at IS NULL
+        AND (buried_until IS NULL OR buried_until <= ?)
     `;
     const results = await this.db.querySql<{ count: number }>(
       query,
-      [...deckIds, sessionEndTime.toISOString()],
+      [...deckIds, sessionEndTime.toISOString(), now.toISOString()],
       { asObject: true }
     );
     return results[0]?.count || 0;
   }
 
   private async getNewCardCountForDeckGroup(deckIds: string[]): Promise<number> {
+    const now = new Date().toISOString();
     const placeholders = deckIds.map(() => '?').join(',');
     const query = `
       SELECT COUNT(*) as count FROM flashcards
       WHERE deck_id IN (${placeholders}) AND state = 'new'
+        AND suspended_at IS NULL
+        AND (buried_until IS NULL OR buried_until <= ?)
     `;
     const results = await this.db.querySql<{ count: number }>(
       query,
-      deckIds,
+      [...deckIds, now],
       { asObject: true }
     );
     return results[0]?.count || 0;
@@ -1071,8 +1106,10 @@ export class Scheduler {
       WHERE deck_id IN (${placeholders})
         AND due_date <= ?
         AND state = 'review'
+        AND suspended_at IS NULL
+        AND (buried_until IS NULL OR buried_until <= ?)
     `;
-    const params = [...eligibleDeckIds, now.toISOString()];
+    const params = [...eligibleDeckIds, now.toISOString(), now.toISOString()];
 
     if (deckGroup.profile.reviewOrder === "random") {
       query += " ORDER BY RANDOM() LIMIT 1";
@@ -1090,13 +1127,16 @@ export class Scheduler {
     const eligibleDeckIds = await this.getDeckIdsWithNewQuota(deckGroup);
     if (eligibleDeckIds.length === 0) return null;
 
+    const now = new Date().toISOString();
     const placeholders = eligibleDeckIds.map(() => '?').join(',');
     const query = `
       SELECT * FROM flashcards
       WHERE deck_id IN (${placeholders}) AND state = 'new'
+        AND suspended_at IS NULL
+        AND (buried_until IS NULL OR buried_until <= ?)
       ORDER BY due_date ASC LIMIT 1
     `;
-    const results = await this.db.querySql(query, eligibleDeckIds);
+    const results = await this.db.querySql(query, [...eligibleDeckIds, now]);
     return results.length > 0 ? this.rowToFlashcard(results[0]) : null;
   }
 

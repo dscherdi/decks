@@ -482,4 +482,134 @@ describe("Scheduler", () => {
       expect(unlimitedResult?.id).toBe("card_unlimited");
     });
   });
+
+  describe("suspend / bury filtering", () => {
+    // Each test below captures the SQL passed to querySql and asserts the
+    // filter predicates landed in the right WHERE clauses. We don't assert
+    // result content — the row-decoding path is exercised in integration
+    // tests with real SQL.js. Unit tests just lock in the predicate shape.
+
+    beforeEach(() => {
+      mockDb.getDeckWithProfile = jest
+        .fn()
+        .mockResolvedValue(createMockDeckWithProfile("deck_1"));
+      mockDb.getDailyReviewCounts.mockResolvedValue({
+        newCount: 0,
+        reviewCount: 0,
+      });
+    });
+
+    it("getNextDueCard SQL excludes suspended + buried", async () => {
+      mockDb.querySql.mockResolvedValue([]);
+      await scheduler.getNext(new Date(), "deck_1");
+      // First substantive call must be the due-card lookup with the
+      // suspend/bury predicate inline.
+      const dueCardCall = mockDb.querySql.mock.calls.find(
+        (call) =>
+          typeof call[0] === "string" &&
+          call[0].includes("state = 'review'") &&
+          call[0].includes("SELECT * FROM flashcards")
+      );
+      expect(dueCardCall).toBeDefined();
+      expect(dueCardCall![0]).toContain("suspended_at IS NULL");
+      expect(dueCardCall![0]).toContain("buried_until IS NULL OR buried_until <= ?");
+    });
+
+    it("getNextNewCard SQL excludes suspended + buried", async () => {
+      // Force the new-card branch: report zero due cards then capture the
+      // new-card query.
+      mockDb.querySql.mockResolvedValue([]);
+      await scheduler.getNext(new Date(), "deck_1", { allowNew: true });
+      const newCardCall = mockDb.querySql.mock.calls.find(
+        (call) =>
+          typeof call[0] === "string" &&
+          call[0].includes("state = 'new'") &&
+          call[0].includes("SELECT * FROM flashcards")
+      );
+      expect(newCardCall).toBeDefined();
+      expect(newCardCall![0]).toContain("suspended_at IS NULL");
+      expect(newCardCall![0]).toContain("buried_until IS NULL OR buried_until <= ?");
+    });
+
+    it("peekDue SQL excludes suspended + buried", async () => {
+      mockDb.querySql.mockResolvedValue([]);
+      await scheduler.peekDue(new Date(), "deck_1");
+      const peekCall = mockDb.querySql.mock.calls.find(
+        (call) =>
+          typeof call[0] === "string" &&
+          call[0].includes("state = 'review'") &&
+          call[0].includes("SELECT * FROM flashcards")
+      );
+      expect(peekCall).toBeDefined();
+      expect(peekCall![0]).toContain("suspended_at IS NULL");
+      expect(peekCall![0]).toContain("buried_until IS NULL OR buried_until <= ?");
+    });
+
+    it("timeToNext SQL excludes suspended + actively-buried", async () => {
+      mockDb.querySql.mockResolvedValue([]);
+      await scheduler.timeToNext(new Date(), "deck_1");
+      const timeToNextCall = mockDb.querySql.mock.calls.find(
+        (call) =>
+          typeof call[0] === "string" && call[0].includes("MIN(due_date)")
+      );
+      expect(timeToNextCall).toBeDefined();
+      expect(timeToNextCall![0]).toContain("suspended_at IS NULL");
+      expect(timeToNextCall![0]).toContain("buried_until IS NULL OR buried_until <= ?");
+    });
+
+    it("getClozeSiblings SQL excludes suspended + buried", async () => {
+      mockDb.querySql.mockResolvedValue([]);
+      const card: Flashcard = {
+        id: "card_x",
+        deckId: "deck_1",
+        front: "Q",
+        back: "A",
+        type: "cloze",
+        sourceFile: "test.md",
+        contentHash: "h",
+        breadcrumb: "",
+        notes: "",
+        tags: [],
+        hint: "",
+        clozeText: "x",
+        clozeOrder: 0,
+        state: "new",
+        dueDate: new Date().toISOString(),
+        interval: 0,
+        repetitions: 0,
+        difficulty: 5,
+        stability: 0,
+        lapses: 0,
+        lastReviewed: null,
+        suspendedAt: null,
+        buriedUntil: null,
+        created: new Date().toISOString(),
+        modified: new Date().toISOString(),
+      };
+      await scheduler.getClozeSiblings(card, new Date());
+      const siblingsCall = mockDb.querySql.mock.calls.find(
+        (call) =>
+          typeof call[0] === "string" && call[0].includes("cloze_order ASC")
+      );
+      expect(siblingsCall).toBeDefined();
+      expect(siblingsCall![0]).toContain("suspended_at IS NULL");
+      expect(siblingsCall![0]).toContain("buried_until IS NULL OR buried_until <= ?");
+    });
+
+    it("getBuryUntilForNextDay returns next study-day rollover", () => {
+      // nextDayStartsAt = 4 (configured in beforeEach above). A bury at
+      // 2025-06-15 14:00 local should expire at 2025-06-16 04:00 local.
+      const now = new Date(2025, 5, 15, 14, 0, 0); // local 14:00 on Jun 15
+      const untilIso = scheduler.getBuryUntilForNextDay(now);
+      const until = new Date(untilIso);
+      // Day rolls to the next calendar day from `now`, at hour 4 local.
+      expect(until.getHours()).toBe(4);
+      expect(until.getMinutes()).toBe(0);
+      // Either same day (if `now` is before 4am, rare) or next day.
+      const daysDelta = Math.round(
+        (until.getTime() - now.getTime()) / 86400000
+      );
+      expect(daysDelta === 0 || daysDelta === 1).toBe(true);
+    });
+  });
 });

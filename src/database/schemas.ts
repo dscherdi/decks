@@ -788,19 +788,27 @@ export const SQL_QUERIES = {
 
   GET_FLASHCARDS_BY_DECK: `SELECT * FROM flashcards WHERE deck_id = ? ORDER BY created`,
 
-  GET_DUE_FLASHCARDS: `SELECT * FROM flashcards WHERE deck_id = ? AND due_date <= ? ORDER BY due_date`,
+  GET_DUE_FLASHCARDS: `SELECT * FROM flashcards
+    WHERE deck_id = ? AND due_date <= ?
+      AND suspended_at IS NULL
+      AND (buried_until IS NULL OR buried_until <= ?)
+    ORDER BY due_date`,
 
   DELETE_FLASHCARDS_BY_FILE: `DELETE FROM flashcards WHERE source_file = ?`,
 
   GET_NEW_CARDS_FOR_REVIEW: `
     SELECT * FROM flashcards
     WHERE deck_id = ? AND due_date <= ? AND state = 'new'
+      AND suspended_at IS NULL
+      AND (buried_until IS NULL OR buried_until <= ?)
     ORDER BY due_date
   `,
 
   GET_REVIEW_CARDS_FOR_REVIEW: `
     SELECT * FROM flashcards
     WHERE deck_id = ? AND due_date <= ? AND state = 'review'
+      AND suspended_at IS NULL
+      AND (buried_until IS NULL OR buried_until <= ?)
     ORDER BY due_date
   `,
 
@@ -855,27 +863,38 @@ export const SQL_QUERIES = {
       AND rl.old_interval_minutes > 0
   `,
 
-  // Statistics queries
+  // Statistics queries. NB: these counts feed quota / queue UIs and so
+  // exclude suspended + actively-buried cards. The "total" / "mature" /
+  // forecast distributions in GET_CARD_STATS and GET_INTERVAL_DISTRIBUTION
+  // intentionally do not filter, mirroring Anki's behavior.
   COUNT_NEW_CARDS: `
     SELECT COUNT(*) FROM flashcards
     WHERE deck_id = ? AND state = 'new' AND due_date <= ?
+      AND suspended_at IS NULL
+      AND (buried_until IS NULL OR buried_until <= ?)
   `,
 
   COUNT_DUE_CARDS: `
     SELECT COUNT(*) FROM flashcards
     WHERE deck_id = ? AND state = 'review' AND due_date <= ?
+      AND suspended_at IS NULL
+      AND (buried_until IS NULL OR buried_until <= ?)
   `,
 
   COUNT_TOTAL_CARDS: `
     SELECT COUNT(*) FROM flashcards WHERE deck_id = ?
   `,
 
-  // Optimized forecast queries with index-friendly SQL
+  // Optimized forecast queries with index-friendly SQL. Excludes suspended /
+  // actively-buried cards so what the user sees as "upcoming workload" matches
+  // what the review queue will actually surface.
   GET_SCHEDULED_DUE_BY_DAY: `
     SELECT substr(due_date,1,10) AS day, COUNT(*) AS c
     FROM flashcards
     WHERE deck_id = ? AND state='review'
       AND due_date >= ? AND due_date < ?
+      AND suspended_at IS NULL
+      AND (buried_until IS NULL OR buried_until <= ?)
     GROUP BY day
     ORDER BY day
   `,
@@ -884,6 +903,8 @@ export const SQL_QUERIES = {
     SELECT COUNT(*) AS n
     FROM flashcards
     WHERE deck_id = ? AND state='review' AND due_date < ?
+      AND suspended_at IS NULL
+      AND (buried_until IS NULL OR buried_until <= ?)
   `,
 
   GET_DECK_REVIEW_COUNT_RANGE: `
@@ -1081,12 +1102,16 @@ export const SQL_QUERIES = {
     SELECT COUNT(*) FROM flashcards f
     INNER JOIN custom_deck_cards cdc ON f.id = cdc.flashcard_id
     WHERE cdc.custom_deck_id = ? AND f.state = 'new' AND f.due_date <= ?
+      AND f.suspended_at IS NULL
+      AND (f.buried_until IS NULL OR f.buried_until <= ?)
   `,
 
   COUNT_DUE_CARDS_CUSTOM_DECK: `
     SELECT COUNT(*) FROM flashcards f
     INNER JOIN custom_deck_cards cdc ON f.id = cdc.flashcard_id
     WHERE cdc.custom_deck_id = ? AND f.state = 'review' AND f.due_date <= ?
+      AND f.suspended_at IS NULL
+      AND (f.buried_until IS NULL OR f.buried_until <= ?)
   `,
 
   COUNT_TOTAL_CARDS_CUSTOM_DECK: `
@@ -1098,6 +1123,8 @@ export const SQL_QUERIES = {
     SELECT f.* FROM flashcards f
     INNER JOIN custom_deck_cards cdc ON f.id = cdc.flashcard_id
     WHERE cdc.custom_deck_id = ? AND f.due_date <= ? AND f.state = 'review'
+      AND f.suspended_at IS NULL
+      AND (f.buried_until IS NULL OR f.buried_until <= ?)
     ORDER BY f.due_date ASC
   `,
 
@@ -1105,6 +1132,8 @@ export const SQL_QUERIES = {
     SELECT f.* FROM flashcards f
     INNER JOIN custom_deck_cards cdc ON f.id = cdc.flashcard_id
     WHERE cdc.custom_deck_id = ? AND f.due_date <= ? AND f.state = 'new'
+      AND f.suspended_at IS NULL
+      AND (f.buried_until IS NULL OR f.buried_until <= ?)
     ORDER BY f.due_date ASC
   `,
 

@@ -920,8 +920,11 @@ export abstract class BaseDatabaseService implements IDatabaseService {
 
   async getDueFlashcards(deckId: string): Promise<Flashcard[]> {
     const now = this.getCurrentTimestamp();
-    const sql = `SELECT * FROM flashcards WHERE deck_id = ? AND due_date <= ? ORDER BY due_date`;
-    const results = (await this.querySql(sql, [deckId, now])) as (
+    const sql = `SELECT * FROM flashcards WHERE deck_id = ? AND due_date <= ?
+      AND suspended_at IS NULL
+      AND (buried_until IS NULL OR buried_until <= ?)
+      ORDER BY due_date`;
+    const results = (await this.querySql(sql, [deckId, now, now])) as (
       | string
       | number
       | null
@@ -933,8 +936,11 @@ export abstract class BaseDatabaseService implements IDatabaseService {
 
   async getReviewableFlashcards(deckId: string): Promise<Flashcard[]> {
     const now = this.getCurrentTimestamp();
-    const sql = `SELECT * FROM flashcards WHERE deck_id = ? AND (state = 'new' OR due_date <= ?) ORDER BY due_date`;
-    const results = (await this.querySql(sql, [deckId, now])) as (
+    const sql = `SELECT * FROM flashcards WHERE deck_id = ? AND (state = 'new' OR due_date <= ?)
+      AND suspended_at IS NULL
+      AND (buried_until IS NULL OR buried_until <= ?)
+      ORDER BY due_date`;
+    const results = (await this.querySql(sql, [deckId, now, now])) as (
       | string
       | number
       | null
@@ -945,8 +951,12 @@ export abstract class BaseDatabaseService implements IDatabaseService {
   }
 
   async getNewCardsForReview(deckId: string): Promise<Flashcard[]> {
-    const sql = `SELECT * FROM flashcards WHERE deck_id = ? AND state = 'new' ORDER BY created LIMIT 100`;
-    const results = (await this.querySql(sql, [deckId])) as (
+    const now = this.getCurrentTimestamp();
+    const sql = `SELECT * FROM flashcards WHERE deck_id = ? AND state = 'new'
+      AND suspended_at IS NULL
+      AND (buried_until IS NULL OR buried_until <= ?)
+      ORDER BY created LIMIT 100`;
+    const results = (await this.querySql(sql, [deckId, now])) as (
       | string
       | number
       | null
@@ -958,8 +968,11 @@ export abstract class BaseDatabaseService implements IDatabaseService {
 
   async getReviewCardsForReview(deckId: string): Promise<Flashcard[]> {
     const now = this.getCurrentTimestamp();
-    const sql = `SELECT * FROM flashcards WHERE deck_id = ? AND state = 'review' AND due_date <= ? ORDER BY due_date LIMIT 100`;
-    const results = (await this.querySql(sql, [deckId, now])) as (
+    const sql = `SELECT * FROM flashcards WHERE deck_id = ? AND state = 'review' AND due_date <= ?
+      AND suspended_at IS NULL
+      AND (buried_until IS NULL OR buried_until <= ?)
+      ORDER BY due_date LIMIT 100`;
+    const results = (await this.querySql(sql, [deckId, now, now])) as (
       | string
       | number
       | null
@@ -1130,11 +1143,15 @@ export abstract class BaseDatabaseService implements IDatabaseService {
     await this.executeSql(sql, flashcardIds);
   }
 
-  // COUNT OPERATIONS
+  // COUNT OPERATIONS. Queue counts exclude suspended + actively-buried cards;
+  // total/maturity counts (countTotalCards, GET_CARD_STATS) include them.
   async countNewCards(deckId: string): Promise<number> {
+    const now = this.getCurrentTimestamp();
     const sql =
-      "SELECT COUNT(*) as count FROM flashcards WHERE deck_id = ? AND state = 'new'";
-    const results = await this.querySql<CountResult>(sql, [deckId], {
+      `SELECT COUNT(*) as count FROM flashcards WHERE deck_id = ? AND state = 'new'
+       AND suspended_at IS NULL
+       AND (buried_until IS NULL OR buried_until <= ?)`;
+    const results = await this.querySql<CountResult>(sql, [deckId, now], {
       asObject: true,
     });
     return results[0]?.count || 0;
@@ -1142,8 +1159,10 @@ export abstract class BaseDatabaseService implements IDatabaseService {
 
   async countDueCards(deckId: string): Promise<number> {
     const now = this.getCurrentTimestamp();
-    const sql = `SELECT COUNT(*) as count FROM flashcards WHERE deck_id = ? AND state = 'review' AND due_date <= ?`;
-    const results = await this.querySql<CountResult>(sql, [deckId, now], {
+    const sql = `SELECT COUNT(*) as count FROM flashcards WHERE deck_id = ? AND state = 'review' AND due_date <= ?
+      AND suspended_at IS NULL
+      AND (buried_until IS NULL OR buried_until <= ?)`;
+    const results = await this.querySql<CountResult>(sql, [deckId, now, now], {
       asObject: true,
     });
     return results[0]?.count || 0;
@@ -1163,9 +1182,10 @@ export abstract class BaseDatabaseService implements IDatabaseService {
     startDate: string,
     endDate: string
   ): Promise<{ day: string; count: number }[]> {
+    const now = this.getCurrentTimestamp();
     const results = await this.querySql<DateCountRow>(
       SQL_QUERIES.GET_SCHEDULED_DUE_BY_DAY,
-      [deckId, startDate, endDate],
+      [deckId, startDate, endDate, now],
       { asObject: true }
     );
     return results.map((row) => ({
@@ -1181,18 +1201,20 @@ export abstract class BaseDatabaseService implements IDatabaseService {
   ): Promise<{ day: string; count: number }[]> {
     if (deckIds.length === 0) return [];
 
-    // Generate dynamic IN clause
+    const now = this.getCurrentTimestamp();
     const placeholders = deckIds.map(() => "?").join(",");
     const sql = `
       SELECT substr(due_date,1,10) AS day, COUNT(*) AS c
       FROM flashcards
       WHERE deck_id IN (${placeholders}) AND state='review'
         AND due_date >= ? AND due_date < ?
+        AND suspended_at IS NULL
+        AND (buried_until IS NULL OR buried_until <= ?)
       GROUP BY day
       ORDER BY day
     `;
 
-    const results = await this.querySql(sql, [...deckIds, startDate, endDate], {
+    const results = await this.querySql(sql, [...deckIds, startDate, endDate, now], {
       asObject: true,
     });
     return results.map((row: { day: string; c: number }) => ({
@@ -1207,7 +1229,7 @@ export abstract class BaseDatabaseService implements IDatabaseService {
   ): Promise<number> {
     const results = await this.querySql<BacklogRow>(
       SQL_QUERIES.GET_CURRENT_BACKLOG,
-      [deckId, currentDate],
+      [deckId, currentDate, currentDate],
       { asObject: true }
     );
     return results[0]?.n || 0;
@@ -1219,17 +1241,18 @@ export abstract class BaseDatabaseService implements IDatabaseService {
   ): Promise<number> {
     if (deckIds.length === 0) return 0;
 
-    // Generate dynamic IN clause
     const placeholders = deckIds.map(() => "?").join(",");
     const sql = `
       SELECT COUNT(*) as n
       FROM flashcards
       WHERE deck_id IN (${placeholders}) AND state='review' AND due_date < ?
+        AND suspended_at IS NULL
+        AND (buried_until IS NULL OR buried_until <= ?)
     `;
 
     const results = await this.querySql<BacklogRow>(
       sql,
-      [...deckIds, currentDate],
+      [...deckIds, currentDate, currentDate],
       {
         asObject: true,
       }
@@ -2127,13 +2150,16 @@ export abstract class BaseDatabaseService implements IDatabaseService {
 
     if (deck.deckType === 'filter' && deck.filterDefinition) {
       const { sql, params } = this.buildFilterQuery(
-        deck.filterDefinition, "COUNT(*)", "f.state = ? AND f.due_date <= ?", ["new", now]
+        deck.filterDefinition,
+        "COUNT(*)",
+        "f.state = ? AND f.due_date <= ? AND f.suspended_at IS NULL AND (f.buried_until IS NULL OR f.buried_until <= ?)",
+        ["new", now, now]
       );
       const results = (await this.querySql(sql, params)) as (string | number | null)[][];
       return (results[0]?.[0] as number) ?? 0;
     }
 
-    const results = (await this.querySql(SQL_QUERIES.COUNT_NEW_CARDS_CUSTOM_DECK, [customDeckId, now])) as (
+    const results = (await this.querySql(SQL_QUERIES.COUNT_NEW_CARDS_CUSTOM_DECK, [customDeckId, now, now])) as (
       | string | number | null
     )[][];
     return (results[0]?.[0] as number) ?? 0;
@@ -2146,13 +2172,16 @@ export abstract class BaseDatabaseService implements IDatabaseService {
 
     if (deck.deckType === 'filter' && deck.filterDefinition) {
       const { sql, params } = this.buildFilterQuery(
-        deck.filterDefinition, "COUNT(*)", "f.state = ? AND f.due_date <= ?", ["review", now]
+        deck.filterDefinition,
+        "COUNT(*)",
+        "f.state = ? AND f.due_date <= ? AND f.suspended_at IS NULL AND (f.buried_until IS NULL OR f.buried_until <= ?)",
+        ["review", now, now]
       );
       const results = (await this.querySql(sql, params)) as (string | number | null)[][];
       return (results[0]?.[0] as number) ?? 0;
     }
 
-    const results = (await this.querySql(SQL_QUERIES.COUNT_DUE_CARDS_CUSTOM_DECK, [customDeckId, now])) as (
+    const results = (await this.querySql(SQL_QUERIES.COUNT_DUE_CARDS_CUSTOM_DECK, [customDeckId, now, now])) as (
       | string | number | null
     )[][];
     return (results[0]?.[0] as number) ?? 0;
@@ -2181,13 +2210,16 @@ export abstract class BaseDatabaseService implements IDatabaseService {
 
     if (deck.deckType === 'filter' && deck.filterDefinition) {
       const { sql, params } = this.buildFilterQuery(
-        deck.filterDefinition, "f.*", "f.state = ? AND f.due_date <= ?", ["review", now]
+        deck.filterDefinition,
+        "f.*",
+        "f.state = ? AND f.due_date <= ? AND f.suspended_at IS NULL AND (f.buried_until IS NULL OR f.buried_until <= ?)",
+        ["review", now, now]
       );
       const results = (await this.querySql(`${sql} ORDER BY f.due_date ASC`, params)) as (string | number | null)[][];
       return results.map((row) => this.rowToFlashcard(row));
     }
 
-    const results = (await this.querySql(SQL_QUERIES.GET_DUE_CARDS_FOR_CUSTOM_DECK, [customDeckId, now])) as (
+    const results = (await this.querySql(SQL_QUERIES.GET_DUE_CARDS_FOR_CUSTOM_DECK, [customDeckId, now, now])) as (
       | string | number | null
     )[][];
     return results.map((row) => this.rowToFlashcard(row));
@@ -2200,13 +2232,16 @@ export abstract class BaseDatabaseService implements IDatabaseService {
 
     if (deck.deckType === 'filter' && deck.filterDefinition) {
       const { sql, params } = this.buildFilterQuery(
-        deck.filterDefinition, "f.*", "f.state = ? AND f.due_date <= ?", ["new", now]
+        deck.filterDefinition,
+        "f.*",
+        "f.state = ? AND f.due_date <= ? AND f.suspended_at IS NULL AND (f.buried_until IS NULL OR f.buried_until <= ?)",
+        ["new", now, now]
       );
       const results = (await this.querySql(`${sql} ORDER BY f.due_date ASC`, params)) as (string | number | null)[][];
       return results.map((row) => this.rowToFlashcard(row));
     }
 
-    const results = (await this.querySql(SQL_QUERIES.GET_NEW_CARDS_FOR_CUSTOM_DECK, [customDeckId, now])) as (
+    const results = (await this.querySql(SQL_QUERIES.GET_NEW_CARDS_FOR_CUSTOM_DECK, [customDeckId, now, now])) as (
       | string | number | null
     )[][];
     return results.map((row) => this.rowToFlashcard(row));
