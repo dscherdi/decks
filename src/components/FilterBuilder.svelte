@@ -36,6 +36,8 @@
     { value: "created", label: fb.fieldCreated, type: "date" },
     { value: "isLeech", label: fb.fieldIsLeech, type: "boolean" },
     { value: "isDense", label: fb.fieldIsDense, type: "boolean" },
+    { value: "isSuspended", label: fb.fieldIsSuspended, type: "boolean" },
+    { value: "isBuried", label: fb.fieldIsBuried, type: "boolean" },
   ];
 
   function getOperatorsForField(field: FilterField): { value: FilterOperator; label: string }[] {

@@ -353,6 +353,7 @@ export const hi: Translations = {
     suspendSelected: "चयनित को निलंबित करें",
     unsuspendSelected: "चयनित का निलंबन हटाएं",
     burySelected: "चयनित को छिपाएं",
+    unburySelected: "चयनित को प्रकट करें",
     resetSelected: "चयनित को रीसेट करें…",
     suspendedBadge: "निलंबित",
     buriedBadge: "छिपा हुआ",

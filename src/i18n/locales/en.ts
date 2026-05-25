@@ -310,6 +310,7 @@ export const en = {
     suspendSelected: "Suspend selected",
     unsuspendSelected: "Unsuspend selected",
     burySelected: "Bury selected",
+    unburySelected: "Unbury selected",
     resetSelected: "Reset selected…",
     suspendedBadge: "Suspended",
     buriedBadge: "Buried",

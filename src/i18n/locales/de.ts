@@ -366,6 +366,7 @@ export const de: Translations = {
     suspendSelected: "Ausgewählte aussetzen",
     unsuspendSelected: "Aussetzung aufheben",
     burySelected: "Ausgewählte vergraben",
+    unburySelected: "Ausgewählte freigeben",
     resetSelected: "Ausgewählte zurücksetzen…",
     suspendedBadge: "Ausgesetzt",
     buriedBadge: "Vergraben",

@@ -256,6 +256,7 @@ export interface IDatabaseService {
   buryCard(cardId: string, untilIso: string): Promise<void>;
   unburyCard(cardId: string): Promise<void>;
   batchBuryCards(cardIds: string[], untilIso: string): Promise<void>;
+  batchUnburyCards(cardIds: string[]): Promise<void>;
   resetCard(cardId: string): Promise<void>;
   batchResetCards(cardIds: string[]): Promise<void>;
 

@@ -37,7 +37,12 @@ const NUMERIC_FIELDS = new Set([
   "difficulty", "stability", "interval", "repetitions", "lapses",
 ]);
 
-const VIRTUAL_FIELDS = new Set(["isLeech", "isDense"]);
+const VIRTUAL_FIELDS = new Set([
+  "isLeech",
+  "isDense",
+  "isSuspended",
+  "isBuried",
+]);
 
 // Tags are stored as comma-joined ("math,science") in f.tags. To match
 // a single tag exactly within that list, wrap the column and parameter
@@ -74,6 +79,19 @@ function compileVirtualRule(
   if (rule.field === "isDense") {
     params.push(options.denseCardCharThreshold);
     return negated ? `(LENGTH(f.back) >= ?)` : `(LENGTH(f.back) < ?)`;
+  }
+  if (rule.field === "isSuspended") {
+    return negated
+      ? `(f.suspended_at IS NOT NULL)`
+      : `(f.suspended_at IS NULL)`;
+  }
+  if (rule.field === "isBuried") {
+    // "Buried" means an active bury — buried_until is in the future.
+    const now = new Date().toISOString();
+    params.push(now);
+    return negated
+      ? `(f.buried_until IS NOT NULL AND f.buried_until > ?)`
+      : `(f.buried_until IS NULL OR f.buried_until <= ?)`;
   }
   throw new Error(`Unknown virtual field: ${rule.field}`);
 }

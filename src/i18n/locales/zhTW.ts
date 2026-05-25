@@ -330,6 +330,7 @@ export const zhTW: Translations = {
     suspendSelected: "暫停所選卡片",
     unsuspendSelected: "取消暫停所選卡片",
     burySelected: "擱置所選卡片",
+    unburySelected: "取消擱置所選卡片",
     resetSelected: "重設所選卡片…",
     suspendedBadge: "已暫停",
     buriedBadge: "已擱置",

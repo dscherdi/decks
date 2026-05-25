@@ -438,6 +438,7 @@ export class DecksViewModal extends Modal {
         void this.saveSettings();
       },
       this.openEditModal,
+      this.settings,
     );
     this.openWithReturn(modal);
   }

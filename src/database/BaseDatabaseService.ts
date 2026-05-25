@@ -1858,6 +1858,19 @@ export abstract class BaseDatabaseService implements IDatabaseService {
     }
   }
 
+  async batchUnburyCards(cardIds: string[]): Promise<void> {
+    if (cardIds.length === 0) return;
+    const now = this.getCurrentTimestamp();
+    const placeholders = cardIds.map(() => "?").join(",");
+    await this.executeSql(
+      `UPDATE flashcards SET buried_until = NULL, modified = ? WHERE id IN (${placeholders})`,
+      [now, ...cardIds]
+    );
+    for (const cardId of cardIds) {
+      this.emitSyncOp({ o: "card_unbury", p: { c: cardId, at: now } });
+    }
+  }
+
   // Reset is destructive: deletes review_logs for the card (mirrors
   // resetDeckProgress at a per-card granularity), then resets FSRS columns
   // to "new" defaults. Suspended/buried flags are intentionally CLEARED on

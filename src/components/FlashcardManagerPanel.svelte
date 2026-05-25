@@ -13,8 +13,10 @@
   import type { EditTarget, EditCommitPayload } from "./FlashcardManagerEditTypes";
   import FilterBuilder from "./FilterBuilder.svelte";
   import { onMount, onDestroy } from "svelte";
-  import { prepareFuzzySearch } from "obsidian";
+  import { prepareFuzzySearch, Notice } from "obsidian";
+  import type { App } from "obsidian";
   import { I18n } from "@/i18n/I18n";
+  import { ConfirmModal } from "./ConfirmModal";
 
   const t = I18n.t;
   const m = t.manager;
@@ -35,6 +37,31 @@
   export let initialEditTarget: EditTarget | null = null;
   export let leechThreshold = 8;
   export let denseCardCharThreshold = 500;
+  // Obsidian App so the panel can open ConfirmModal directly for destructive
+  // bulk/per-row reset confirmations. Notice() is global to Obsidian, no
+  // separate plumbing needed.
+  export let app: App;
+  // Same study-day rollover hour the scheduler uses for daily quotas; lets
+  // the panel compute bury_until without dragging the full Scheduler in.
+  export let nextDayStartsAt = 4;
+  export let showNotices = true;
+
+  /**
+   * Compute the ISO timestamp where a card buried "today" should reappear.
+   * Mirrors Scheduler.getBuryUntilForNextDay so the manager UI and review
+   * modal converge on the same wall clock.
+   */
+  function getBuryUntilForNextDay(now: Date = new Date()): string {
+    const localMidnight = new Date(now);
+    localMidnight.setHours(0, 0, 0, 0);
+    const studyDayStart = new Date(localMidnight);
+    studyDayStart.setHours(nextDayStartsAt, 0, 0, 0);
+    if (now < studyDayStart) {
+      studyDayStart.setDate(studyDayStart.getDate() - 1);
+    }
+    studyDayStart.setDate(studyDayStart.getDate() + 1);
+    return studyDayStart.toISOString();
+  }
 
   const COLUMN_DEFAULTS: Record<string, number> = {
     check: 36,
@@ -50,7 +77,9 @@
     health: 90,
     dueDate: 80,
     lastReviewed: 80,
-    edit: 48,
+    // Holds both row-action pills (pencil + ⋯) at 28px each with a 6px
+    // gap, plus the cell's horizontal padding (16px).
+    edit: 80,
   };
   const COLUMN_ORDER: string[] = [
     "check",
@@ -71,6 +100,14 @@
   const MIN_COLUMN_WIDTH = 50;
 
   let columnWidths: Record<string, number> = { ...COLUMN_DEFAULTS, ...initialColumnWidths };
+  // Edit column needs to be wide enough to actually contain both pills
+  // (28px pencil + 6px gap + 28px ⋯ + 16px cell padding = 78px). If a
+  // persisted setting from an earlier dev build leaves it narrower, the
+  // pills overflow the sticky cell and look like they scroll with the row.
+  // Clamp local state here; user can still drag wider after.
+  if ((columnWidths.edit ?? 0) < 80) {
+    columnWidths.edit = COLUMN_DEFAULTS.edit;
+  }
   let resizingColumn: string | null = null;
 
   $: gridTemplate = COLUMN_ORDER.map(
@@ -164,6 +201,15 @@
   let newDeckName = "";
   let showNewDeckInput = false;
   let customDeckDropdownEl: HTMLDivElement | null = null;
+
+  // Per-row card-actions menu. Only one row's menu can be open at a time
+  // (the openId is null when nothing's open). Click-outside closes it via
+  // selector match in handleOutsideClick.
+  let openRowActionsId: string | null = null;
+  // Re-evaluated each tick to keep "Suspended"/"Buried" badges fresh as
+  // bury_until expires within an open session.
+  let nowTick: number = Date.now();
+  let nowTickTimer: ReturnType<typeof setInterval> | null = null;
 
   let saveAsDeckMode: "filter" | null = null;
   let saveAsDeckName = "";
@@ -378,6 +424,164 @@
     selectAll = false;
   }
 
+  function isCardSuspended(card: Flashcard): boolean {
+    return !!card.suspendedAt;
+  }
+  function isCardBuried(card: Flashcard, nowMs: number): boolean {
+    return !!card.buriedUntil && new Date(card.buriedUntil).getTime() > nowMs;
+  }
+  // Returns the selected cards as objects (not just ids) so bulk actions
+  // can adapt their label/payload based on current state.
+  function getSelectedCards(): Flashcard[] {
+    return allFlashcards.filter((c) => selectedIds.has(c.id));
+  }
+  // Reactive selection snapshot. Reference both selectedIds and allFlashcards
+  // explicitly in the $: line so Svelte tracks them — referencing them only
+  // inside a called function does NOT register a dependency.
+  $: selectedCardsLive = allFlashcards.filter((c) => selectedIds.has(c.id));
+  // Labels for the suspend/bury bulk buttons flip to "Un…" when every
+  // selected card is already in that state — same nowTick dependency keeps
+  // bury auto-refreshing as buried_until expires.
+  $: bulkSuspendLabel =
+    selectedCardsLive.length > 0 && selectedCardsLive.every((c) => !!c.suspendedAt)
+      ? m.unsuspendSelected
+      : m.suspendSelected;
+  $: bulkBuryLabel =
+    selectedCardsLive.length > 0 &&
+    selectedCardsLive.every(
+      (c) => !!c.buriedUntil && new Date(c.buriedUntil).getTime() > nowTick
+    )
+      ? m.unburySelected
+      : m.burySelected;
+
+  async function reloadCards(): Promise<void> {
+    const rawFlashcards = await db.getAllFlashcards();
+    allFlashcards = rawFlashcards.filter((c) => deckTagMap.has(c.deckId));
+  }
+
+  function toggleRowActions(cardId: string) {
+    openRowActionsId = openRowActionsId === cardId ? null : cardId;
+  }
+
+  async function handleRowAction(
+    card: Flashcard,
+    action: "suspend" | "unsuspend" | "bury" | "unbury" | "reset"
+  ): Promise<void> {
+    openRowActionsId = null;
+    try {
+      if (action === "suspend") {
+        await db.suspendCard(card.id);
+        if (showNotices) new Notice(I18n.t.review.cardSuspended);
+      } else if (action === "unsuspend") {
+        await db.unsuspendCard(card.id);
+        if (showNotices) new Notice(I18n.t.review.cardUnsuspended);
+      } else if (action === "bury") {
+        const until = getBuryUntilForNextDay(new Date());
+        await db.buryCard(card.id, until);
+        if (showNotices) new Notice(I18n.t.review.cardBuried);
+      } else if (action === "unbury") {
+        await db.unburyCard(card.id);
+      } else if (action === "reset") {
+        const confirmed = await new Promise<boolean>((resolve) => {
+          let okClicked = false;
+          const modal = new ConfirmModal(app, {
+            title: I18n.t.review.resetCardConfirmTitle,
+            message: I18n.t.review.resetCardConfirmMessage,
+            isDanger: true,
+            onConfirm: () => {
+              okClicked = true;
+              resolve(true);
+            },
+          });
+          const originalOnClose = modal.onClose.bind(modal);
+          modal.onClose = () => {
+            originalOnClose();
+            if (!okClicked) resolve(false);
+          };
+          modal.open();
+        });
+        if (!confirmed) return;
+        await db.resetCard(card.id);
+        if (showNotices) new Notice(I18n.t.review.cardReset);
+      }
+      await reloadCards();
+    } catch (e) {
+      console.error("Row action failed:", e);
+    }
+  }
+
+  async function handleBulkSuspendOrUnsuspend(): Promise<void> {
+    const selected = getSelectedCards();
+    if (selected.length === 0) return;
+    const allSuspended = selected.every(isCardSuspended);
+    const ids = selected.map((c) => c.id);
+    try {
+      if (allSuspended) {
+        await db.batchUnsuspendCards(ids);
+        if (showNotices) new Notice(I18n.t.review.cardUnsuspended);
+      } else {
+        await db.batchSuspendCards(ids);
+        if (showNotices) new Notice(I18n.t.review.cardSuspended);
+      }
+      await reloadCards();
+    } catch (e) {
+      console.error("Bulk suspend/unsuspend failed:", e);
+    }
+  }
+
+  async function handleBulkBuryOrUnbury(): Promise<void> {
+    const selected = selectedCardsLive;
+    if (selected.length === 0) return;
+    const allBuried = selected.every(
+      (c) => !!c.buriedUntil && new Date(c.buriedUntil).getTime() > nowTick
+    );
+    const ids = selected.map((c) => c.id);
+    try {
+      if (allBuried) {
+        await db.batchUnburyCards(ids);
+      } else {
+        const until = getBuryUntilForNextDay(new Date());
+        await db.batchBuryCards(ids, until);
+        if (showNotices) new Notice(I18n.t.review.cardBuried);
+      }
+      await reloadCards();
+    } catch (e) {
+      console.error("Bulk bury/unbury failed:", e);
+    }
+  }
+
+  async function handleBulkReset(): Promise<void> {
+    const ids = Array.from(selectedIds);
+    if (ids.length === 0) return;
+    const confirmed = await new Promise<boolean>((resolve) => {
+      let okClicked = false;
+      const modal = new ConfirmModal(app, {
+        title: m.resetSelectedConfirmTitle,
+        message: I18n.format(m.resetSelectedConfirmMessage, { count: ids.length }),
+        isDanger: true,
+        onConfirm: () => {
+          okClicked = true;
+          resolve(true);
+        },
+      });
+      const originalOnClose = modal.onClose.bind(modal);
+      modal.onClose = () => {
+        originalOnClose();
+        if (!okClicked) resolve(false);
+      };
+      modal.open();
+    });
+    if (!confirmed) return;
+    try {
+      await db.batchResetCards(ids);
+      if (showNotices) new Notice(I18n.t.review.cardReset);
+      clearSelection();
+      await reloadCards();
+    } catch (e) {
+      console.error("Bulk reset failed:", e);
+    }
+  }
+
   function loadMore() {
     displayLimit += 100;
   }
@@ -410,6 +614,12 @@
   function handleOutsideClick(event: MouseEvent) {
     if (customDeckDropdownEl && !customDeckDropdownEl.contains(event.target as Node)) {
       customDeckDropdownOpen = false;
+    }
+    if (openRowActionsId) {
+      const target = event.target as HTMLElement | null;
+      if (!target?.closest(".decks-fm-row-actions")) {
+        openRowActionsId = null;
+      }
     }
   }
 
@@ -524,6 +734,13 @@
 
   onMount(async () => {
     document.addEventListener("click", handleDocClickPopover);
+    document.addEventListener("click", handleOutsideClick);
+    // Periodically refresh "now" so buried_until expiry visibly clears the
+    // "Buried" badge in long-lived manager sessions without requiring a
+    // user action.
+    nowTickTimer = setInterval(() => {
+      nowTick = Date.now();
+    }, 30_000);
     try {
       if (onCleanupOrphans) {
         try {
@@ -572,6 +789,10 @@
   onDestroy(() => {
     document.removeEventListener("click", handleOutsideClick);
     document.removeEventListener("click", handleDocClickPopover);
+    if (nowTickTimer !== null) {
+      clearInterval(nowTickTimer);
+      nowTickTimer = null;
+    }
   });
 
   // Clean up selection when filter or search changes
@@ -734,6 +955,27 @@
     {#if selectedCount > 0 && !isEditMode}
       <div class="decks-fm-action-bar">
         <span class="decks-fm-selected-count">{I18n.format(m.selectedCount, { count: selectedCount })}</span>
+        <button
+          class="decks-fm-action-btn"
+          on:click={handleBulkSuspendOrUnsuspend}
+          type="button"
+        >
+          {bulkSuspendLabel}
+        </button>
+        <button
+          class="decks-fm-action-btn"
+          on:click={handleBulkBuryOrUnbury}
+          type="button"
+        >
+          {bulkBuryLabel}
+        </button>
+        <button
+          class="decks-fm-action-btn decks-fm-action-danger"
+          on:click={handleBulkReset}
+          type="button"
+        >
+          {m.resetSelected}
+        </button>
         <div class="decks-fm-deck-dropdown-container" bind:this={customDeckDropdownEl}>
             <button
               class="decks-fm-action-btn"
@@ -901,9 +1143,21 @@
                 {/each}
               </div>
               <div class="decks-fm-col-state">
-                <span class="decks-fm-state-badge decks-fm-state-{card.state}">
-                  {card.state === "new" ? m.badgeNew : m.badgeReview}
-                </span>
+                {#if isCardSuspended(card)}
+                  <span
+                    class="decks-fm-state-badge decks-fm-state-suspended"
+                    title={m.suspendedTooltip}
+                  >{m.suspendedBadge}</span>
+                {:else if isCardBuried(card, nowTick)}
+                  <span
+                    class="decks-fm-state-badge decks-fm-state-buried"
+                    title={I18n.format(m.buriedUntilTooltip, { date: card.buriedUntil ?? "" })}
+                  >{m.buriedBadge}</span>
+                {:else}
+                  <span class="decks-fm-state-badge decks-fm-state-{card.state}">
+                    {card.state === "new" ? m.badgeNew : m.badgeReview}
+                  </span>
+                {/if}
               </div>
               <div class="decks-fm-col-health">
                 {#if health.isLeech}
@@ -928,7 +1182,10 @@
               <div class="decks-fm-col-reviewed">
                 {formatRelativeDate(card.lastReviewed)}
               </div>
-              <div class="decks-fm-col-edit">
+              <div
+                class="decks-fm-col-edit"
+                class:decks-fm-col-edit-open={openRowActionsId === card.id}
+              >
                 <button
                   type="button"
                   class="decks-fm-edit-button clickable-icon"
@@ -942,6 +1199,78 @@
                     <path d="M16.5 3.5a2.121 2.121 0 0 1 3 3L7 19l-4 1 1-4Z"></path>
                   </svg>
                 </button>
+                <div class="decks-fm-row-actions">
+                  <button
+                    type="button"
+                    class="decks-fm-row-actions-trigger clickable-icon"
+                    aria-label={m.cardActions}
+                    aria-haspopup="menu"
+                    aria-expanded={openRowActionsId === card.id}
+                    on:click|stopPropagation={() => toggleRowActions(card.id)}
+                  >
+                    <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                      <circle cx="12" cy="5" r="1.5"></circle>
+                      <circle cx="12" cy="12" r="1.5"></circle>
+                      <circle cx="12" cy="19" r="1.5"></circle>
+                    </svg>
+                  </button>
+                  {#if openRowActionsId === card.id}
+                    <div
+                      class="decks-fm-row-actions-menu"
+                      role="menu"
+                      tabindex="-1"
+                      on:click|stopPropagation
+                      on:keydown|stopPropagation
+                    >
+                      {#if isCardSuspended(card)}
+                        <button
+                          type="button"
+                          class="decks-fm-row-actions-item"
+                          role="menuitem"
+                          on:click|stopPropagation={() => handleRowAction(card, "unsuspend")}
+                        >
+                          {t.review.unsuspend}
+                        </button>
+                      {:else}
+                        <button
+                          type="button"
+                          class="decks-fm-row-actions-item"
+                          role="menuitem"
+                          on:click|stopPropagation={() => handleRowAction(card, "suspend")}
+                        >
+                          {t.review.suspend}
+                        </button>
+                      {/if}
+                      {#if isCardBuried(card, nowTick)}
+                        <button
+                          type="button"
+                          class="decks-fm-row-actions-item"
+                          role="menuitem"
+                          on:click|stopPropagation={() => handleRowAction(card, "unbury")}
+                        >
+                          {t.review.unbury}
+                        </button>
+                      {:else}
+                        <button
+                          type="button"
+                          class="decks-fm-row-actions-item"
+                          role="menuitem"
+                          on:click|stopPropagation={() => handleRowAction(card, "bury")}
+                        >
+                          {t.review.bury}
+                        </button>
+                      {/if}
+                      <button
+                        type="button"
+                        class="decks-fm-row-actions-item decks-fm-row-actions-danger"
+                        role="menuitem"
+                        on:click|stopPropagation={() => handleRowAction(card, "reset")}
+                      >
+                        {t.review.reset}
+                      </button>
+                    </div>
+                  {/if}
+                </div>
               </div>
             </div>
           {/each}
@@ -1319,6 +1648,98 @@
     cursor: not-allowed;
   }
 
+  .decks-fm-action-btn.decks-fm-action-danger {
+    border-color: var(--background-modifier-error-hover, var(--background-modifier-error));
+    color: var(--text-error);
+  }
+  .decks-fm-action-btn.decks-fm-action-danger:hover:not(:disabled) {
+    background: var(--background-modifier-error-hover, var(--background-modifier-error));
+    color: var(--text-on-accent);
+  }
+
+  /* Suspended/buried overlay badges occupy the state slot exclusively — a
+   * card that's suspended or actively buried only shows its overlay state,
+   * not the underlying NEW/REVIEW chip, so the cell content stays within
+   * the 70px column width. */
+  .decks-fm-state-badge.decks-fm-state-suspended {
+    background: var(--background-modifier-error);
+    color: var(--text-on-accent);
+  }
+  .decks-fm-state-badge.decks-fm-state-buried {
+    background: var(--background-modifier-border);
+    color: var(--text-muted);
+  }
+
+  .decks-fm-row-actions {
+    position: relative;
+    display: inline-flex;
+    /* This div is a flex item inside .decks-fm-col-edit; pin its size so
+     * the parent flex layout can't squeeze the trigger button to nothing. */
+    flex: 0 0 28px;
+  }
+  /* Matches .decks-fm-edit-button so the two row-action buttons read as a
+   * consistent pair — solid pill, same border, same hover. !important
+   * mirrors how .decks-fm-edit-button defeats Obsidian's clickable-icon
+   * defaults (transparent background + no border). */
+  .decks-fm-row-actions-trigger {
+    flex: 0 0 28px !important;
+    width: 28px !important;
+    height: 28px !important;
+    min-width: 28px !important;
+    min-height: 28px !important;
+    padding: 0 !important;
+    background: var(--interactive-normal) !important;
+    border: 1px solid var(--background-modifier-border) !important;
+    border-radius: var(--radius-s);
+    color: var(--text-normal);
+    cursor: pointer;
+    box-shadow: 0 1px 2px rgba(0, 0, 0, 0.12);
+  }
+  .decks-fm-row-actions-trigger:hover {
+    background: var(--interactive-hover) !important;
+    border-color: var(--background-modifier-border-hover) !important;
+    box-shadow: 0 2px 4px rgba(0, 0, 0, 0.18);
+  }
+  .decks-fm-row-actions-trigger:active {
+    box-shadow: 0 0 0 1px rgba(0, 0, 0, 0.08) inset;
+  }
+  .decks-fm-row-actions-menu {
+    position: absolute;
+    top: 100%;
+    right: 0;
+    z-index: 100;
+    min-width: 160px;
+    background: var(--background-secondary);
+    border: 1px solid var(--background-modifier-border);
+    border-radius: var(--radius-m, 6px);
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.18);
+    padding: 4px 0;
+    margin-top: 4px;
+    display: flex;
+    flex-direction: column;
+  }
+  .decks-fm-row-actions-item {
+    display: block;
+    width: 100%;
+    padding: 6px 12px;
+    background: transparent;
+    border: none;
+    color: var(--text-normal);
+    font-size: 13px;
+    text-align: left;
+    cursor: pointer;
+  }
+  .decks-fm-row-actions-item:hover:not(:disabled) {
+    background: var(--background-modifier-hover);
+  }
+  .decks-fm-row-actions-item:disabled {
+    opacity: 0.5;
+    cursor: not-allowed;
+  }
+  .decks-fm-row-actions-item.decks-fm-row-actions-danger {
+    color: var(--text-error);
+  }
+
   .decks-fm-remove-btn {
     background: var(--background-modifier-error);
     color: var(--text-on-accent);
@@ -1501,26 +1922,44 @@
     display: flex;
     align-items: center;
     justify-content: center;
-    background: var(--background-primary);
+    gap: 6px;
+    padding: 2px 8px;
+    box-sizing: border-box;
+    background: var(--background-secondary);
     border-left: 1px solid var(--background-modifier-border);
   }
+  /* When the per-row actions dropdown is open, lift this cell above every
+   * other body row's sticky cell (z-index 5) and the sticky header (6) so
+   * the inner dropdown's z-index escapes above the entire table — without
+   * this the menu gets occluded by later rows' edit cells, which paint
+   * after in DOM order. */
+  .decks-fm-col-edit.decks-fm-col-edit-open {
+    z-index: 50;
+  }
   .decks-fm-table-header .decks-fm-col-edit {
+    /* Same solid as the body cell — the sticky column reads as one
+     * consistent surface independent of row hover/selection. */
     background: var(--background-secondary);
     z-index: 6;
   }
-  .decks-fm-table-row:hover .decks-fm-col-edit {
-    background: var(--background-modifier-hover);
-  }
-  .decks-fm-row-selected .decks-fm-col-edit {
-    background: var(--background-modifier-active-hover);
-  }
-  /* Solid pill background on the button itself so it stands out from the
-   * column cell and is never confused with transparent hover state. */
+  /* DELIBERATE: no row:hover or row-selected override for the sticky cell.
+   * The row's hover/selected colors are alpha-blended modifier variables
+   * — useful for non-sticky cells where there's no risk of horizontally-
+   * scrolling content reading through, but on the sticky pinned column
+   * that translucency lets text from the body bleed through the buttons.
+   * Keeping a solid --background-secondary regardless of row state guarantees
+   * the column always cleanly occludes scrolling content beneath it. */
+  /* Solid pill background + drop shadow so the buttons visually lift off
+   * the cell. Applied to both row-action pills via the trigger rule below. */
   .decks-fm-edit-button {
+    /* `flex: 0 0 28px` forces fixed 28px width with no grow/shrink even
+     * when the surrounding cell or flex container would otherwise compress
+     * the button. Sibling ⋯ trigger uses the same. */
+    flex: 0 0 28px !important;
     width: 28px !important;
     height: 28px !important;
-    min-width: 0 !important;
-    min-height: 0 !important;
+    min-width: 28px !important;
+    min-height: 28px !important;
     padding: 0 !important;
     background: var(--interactive-normal) !important;
     border: 1px solid var(--background-modifier-border) !important;
@@ -1528,10 +1967,15 @@
     color: var(--text-normal);
     position: relative;
     z-index: 1;
+    box-shadow: 0 1px 2px rgba(0, 0, 0, 0.12);
   }
   .decks-fm-edit-button:hover {
     background: var(--interactive-hover) !important;
     border-color: var(--background-modifier-border-hover) !important;
+    box-shadow: 0 2px 4px rgba(0, 0, 0, 0.18);
+  }
+  .decks-fm-edit-button:active {
+    box-shadow: 0 0 0 1px rgba(0, 0, 0, 0.08) inset;
   }
 
   .decks-fm-col-front,
@@ -1580,6 +2024,7 @@
     font-size: 11px;
     flex-wrap: wrap;
     gap: 2px;
+    overflow: hidden;
   }
 
   .decks-fm-state-badge,

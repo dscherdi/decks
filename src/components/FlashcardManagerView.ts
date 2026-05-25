@@ -111,10 +111,13 @@ export class FlashcardManagerView extends ItemView {
     this.component = mount(FlashcardManagerPanel, {
       target: contentEl,
       props: {
+        app: this.app,
         db: this.db,
         customDeckService: this.customDeckService,
         leechThreshold: this.thresholds.leechThreshold,
         denseCardCharThreshold: this.thresholds.denseCardCharThreshold,
+        nextDayStartsAt: this.settings.review.nextDayStartsAt,
+        showNotices: this.settings.ui?.enableNotices !== false,
         initialEditTarget: this.editingCustomDeck,
         onCleanupOrphans: this.onCleanupOrphans ?? null,
         initialColumnWidths: this.initialColumnWidths,
@@ -279,5 +282,6 @@ export function openFlashcardManager(
     initialColumnWidths,
     onColumnWidthsChange,
     onEditCard,
+    settings,
   ).open();
 }

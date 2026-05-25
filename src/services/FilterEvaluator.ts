@@ -66,17 +66,31 @@ function evaluateRule(
   const denseCharThreshold =
     ctx.thresholds?.denseCardCharThreshold ?? DEFAULT_DENSE_CHAR_THRESHOLD;
 
-  if (rule.field === "isLeech" || rule.field === "isDense") {
+  if (
+    rule.field === "isLeech" ||
+    rule.field === "isDense" ||
+    rule.field === "isSuspended" ||
+    rule.field === "isBuried"
+  ) {
     if (rule.operator !== "equals" && rule.operator !== "not_equals") {
       throw new Error(
         `Field "${rule.field}" only supports equals/not_equals operators`
       );
     }
     const expected = parseBool(rule.value);
-    const actual =
-      rule.field === "isLeech"
-        ? card.lapses >= leechThreshold
-        : (card.back?.length ?? 0) >= denseCharThreshold;
+    let actual: boolean;
+    if (rule.field === "isLeech") {
+      actual = card.lapses >= leechThreshold;
+    } else if (rule.field === "isDense") {
+      actual = (card.back?.length ?? 0) >= denseCharThreshold;
+    } else if (rule.field === "isSuspended") {
+      actual = card.suspendedAt !== null && card.suspendedAt !== undefined;
+    } else {
+      // isBuried: active-bury only — past timestamps don't count.
+      actual =
+        !!card.buriedUntil &&
+        new Date(card.buriedUntil).getTime() > Date.now();
+    }
     return rule.operator === "equals" ? actual === expected : actual !== expected;
   }
 

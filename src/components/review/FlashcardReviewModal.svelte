@@ -1311,7 +1311,7 @@
                   </svg>
                 </button>
                 {#if actionsMenuOpen}
-                  <div class="decks-card-actions-dropdown" role="menu">
+                  <div class="decks-card-actions-dropdown" role="menu" tabindex="-1">
                     <button
                       class="decks-card-actions-item"
                       on:click={() => handleCardAction("bury")}

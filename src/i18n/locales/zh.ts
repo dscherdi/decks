@@ -325,6 +325,7 @@ export const zh: Translations = {
     suspendSelected: "暂停选中",
     unsuspendSelected: "恢复选中",
     burySelected: "隐藏选中",
+    unburySelected: "取消隐藏选中",
     resetSelected: "重置选中…",
     suspendedBadge: "已暂停",
     buriedBadge: "已隐藏",

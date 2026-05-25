@@ -348,6 +348,7 @@ export const ru: Translations = {
     suspendSelected: "Приостановить выбранные",
     unsuspendSelected: "Возобновить выбранные",
     burySelected: "Скрыть выбранные",
+    unburySelected: "Показать выбранные",
     resetSelected: "Сбросить выбранные…",
     suspendedBadge: "Приостановлена",
     buriedBadge: "Скрыта",

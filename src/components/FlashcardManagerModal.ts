@@ -3,6 +3,7 @@ import type { App } from "obsidian";
 import type { IDatabaseService } from "../database/DatabaseFactory";
 import type { CustomDeckService } from "../services/CustomDeckService";
 import type { FilterDefinition, Flashcard } from "../database/types";
+import type { DecksSettings } from "../settings";
 import FlashcardManagerPanel from "./FlashcardManagerPanel.svelte";
 import type {
   EditTarget,
@@ -34,6 +35,7 @@ export class FlashcardManagerModal extends Modal {
   private initialColumnWidths: Record<string, number>;
   private onColumnWidthsChange?: (widths: Record<string, number>) => void;
   private onEditCard?: (card: Flashcard) => Promise<void>;
+  private settings?: DecksSettings;
 
   constructor(
     app: App,
@@ -46,6 +48,7 @@ export class FlashcardManagerModal extends Modal {
     initialColumnWidths: Record<string, number> = {},
     onColumnWidthsChange?: (widths: Record<string, number>) => void,
     onEditCard?: (card: Flashcard) => Promise<void>,
+    settings?: DecksSettings,
   ) {
     super(app);
     this.db = db;
@@ -57,6 +60,7 @@ export class FlashcardManagerModal extends Modal {
     this.initialColumnWidths = initialColumnWidths;
     this.onColumnWidthsChange = onColumnWidthsChange;
     this.onEditCard = onEditCard;
+    this.settings = settings;
   }
 
   onOpen() {
@@ -77,10 +81,13 @@ export class FlashcardManagerModal extends Modal {
     this.component = mount(FlashcardManagerPanel, {
       target: contentEl,
       props: {
+        app: this.app,
         db: this.db,
         customDeckService: this.customDeckService,
         leechThreshold: this.thresholds.leechThreshold,
         denseCardCharThreshold: this.thresholds.denseCardCharThreshold,
+        nextDayStartsAt: this.settings?.review?.nextDayStartsAt ?? 4,
+        showNotices: this.settings?.ui?.enableNotices !== false,
         initialEditTarget: this.editingCustomDeck,
         onCleanupOrphans: this.onCleanupOrphans ?? null,
         initialColumnWidths: this.initialColumnWidths,

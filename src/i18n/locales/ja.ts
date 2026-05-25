@@ -345,6 +345,7 @@ export const ja: Translations = {
     suspendSelected: "選択を保留",
     unsuspendSelected: "選択を解除",
     burySelected: "選択を隠す",
+    unburySelected: "選択の非表示を解除",
     resetSelected: "選択をリセット…",
     suspendedBadge: "保留中",
     buriedBadge: "非表示",

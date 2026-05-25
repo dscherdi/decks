@@ -358,6 +358,7 @@ export const fr: Translations = {
     suspendSelected: "Suspendre la sélection",
     unsuspendSelected: "Reprendre la sélection",
     burySelected: "Enterrer la sélection",
+    unburySelected: "Déterrer la sélection",
     resetSelected: "Réinitialiser la sélection…",
     suspendedBadge: "Suspendue",
     buriedBadge: "Enterrée",
