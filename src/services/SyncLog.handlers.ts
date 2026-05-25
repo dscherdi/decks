@@ -64,6 +64,11 @@ const HANDLERS: Partial<Record<SyncLogEntry["o"], OpHandler>> = {
   session_start: handleSessionStart,
   session_progress: handleSessionProgress,
   session_end: handleSessionEnd,
+  card_suspend: handleCardSuspend,
+  card_unsuspend: handleCardUnsuspend,
+  card_bury: handleCardBury,
+  card_unbury: handleCardUnbury,
+  card_reset: handleCardReset,
 };
 
 /**
@@ -683,5 +688,117 @@ async function handleSessionEnd(
      SET ended_at = ?
      WHERE id = ? AND (ended_at IS NULL OR ended_at < ?)`,
     [entry.p.endedAt, entry.p.id, entry.p.endedAt]
+  );
+}
+
+// ---------- Card state overlays (suspend / bury / reset) ------------------
+//
+// These ops carry an `at` wall-clock that we compare against the row's
+// `modified`. Only-if-newer guards prevent a stale remote op from
+// overwriting a fresher local mutation, while still allowing convergence
+// when this device has not touched the row since the remote op fired.
+// The `mergeFlashcards` bulk merge in worker-entry.ts excludes
+// `suspended_at` and `buried_until` from its INSERT-OR-REPLACE so these
+// op replays are the only path that converges those two columns.
+
+async function handleCardSuspend(
+  db: IDatabaseService,
+  _sourceDeviceId: string,
+  entry: SyncLogEntry,
+  _logger: Logger
+): Promise<void> {
+  if (entry.o !== "card_suspend") return;
+  await db.executeSql(
+    `UPDATE flashcards
+     SET suspended_at = ?, modified = ?
+     WHERE id = ? AND modified < ?`,
+    [entry.p.at, entry.p.at, entry.p.c, entry.p.at]
+  );
+}
+
+async function handleCardUnsuspend(
+  db: IDatabaseService,
+  _sourceDeviceId: string,
+  entry: SyncLogEntry,
+  _logger: Logger
+): Promise<void> {
+  if (entry.o !== "card_unsuspend") return;
+  await db.executeSql(
+    `UPDATE flashcards
+     SET suspended_at = NULL, modified = ?
+     WHERE id = ? AND modified < ?`,
+    [entry.p.at, entry.p.c, entry.p.at]
+  );
+}
+
+async function handleCardBury(
+  db: IDatabaseService,
+  _sourceDeviceId: string,
+  entry: SyncLogEntry,
+  _logger: Logger
+): Promise<void> {
+  if (entry.o !== "card_bury") return;
+  await db.executeSql(
+    `UPDATE flashcards
+     SET buried_until = ?, modified = ?
+     WHERE id = ? AND modified < ?`,
+    [entry.p.until, entry.p.at, entry.p.c, entry.p.at]
+  );
+}
+
+async function handleCardUnbury(
+  db: IDatabaseService,
+  _sourceDeviceId: string,
+  entry: SyncLogEntry,
+  _logger: Logger
+): Promise<void> {
+  if (entry.o !== "card_unbury") return;
+  await db.executeSql(
+    `UPDATE flashcards
+     SET buried_until = NULL, modified = ?
+     WHERE id = ? AND modified < ?`,
+    [entry.p.at, entry.p.c, entry.p.at]
+  );
+}
+
+/**
+ * Apply a remote `card_reset` op. Destructive — mirrors handleDeckReset
+ * scoped to one flashcard:
+ *   - Delete review_logs for the card whose timestamp predates the reset.
+ *   - Reset the card's FSRS state IFF the local `modified` is older than
+ *     the reset's `at`. Newer concurrent rates from other devices win.
+ *   - Clear suspended_at and buried_until on reset (the user is starting
+ *     the card over from scratch).
+ */
+async function handleCardReset(
+  db: IDatabaseService,
+  _sourceDeviceId: string,
+  entry: SyncLogEntry,
+  _logger: Logger
+): Promise<void> {
+  if (entry.o !== "card_reset") return;
+  const { c, at } = entry.p;
+
+  await db.executeSql(
+    `DELETE FROM review_logs
+     WHERE flashcard_id = ? AND reviewed_at <= ?`,
+    [c, at]
+  );
+
+  await db.executeSql(
+    `UPDATE flashcards
+     SET state = 'new',
+         due_date = ?,
+         interval = 0,
+         repetitions = 0,
+         difficulty = 5.0,
+         stability = 0,
+         lapses = 0,
+         last_reviewed = NULL,
+         suspended_at = NULL,
+         buried_until = NULL,
+         modified = ?
+     WHERE id = ? AND modified <= ?`,
+    [at, at, c, at]
   );
 }

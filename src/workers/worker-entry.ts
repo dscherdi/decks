@@ -482,12 +482,27 @@ class SimpleDatabaseWorker {
       const remoteColumns = result[0].columns;
       const modIndex = remoteColumns.indexOf("modified");
       const idIndex = remoteColumns.indexOf("id");
+      // Exclude `suspended_at` and `buried_until` from the bulk merge.
+      // Those columns are converged exclusively by their dedicated SyncLog
+      // op handlers (handleCardSuspend, handleCardBury, etc.) so that a
+      // later rate on a different device cannot accidentally clobber a
+      // remote device's suspend/bury — the rate path does not touch those
+      // columns, but INSERT OR REPLACE on the whole row would overwrite
+      // them with whatever value the rating device happened to have.
+      const skipCols = new Set(["suspended_at", "buried_until"]);
+      const colIndexes: number[] = [];
+      const insertColumns: string[] = [];
+      for (let i = 0; i < remoteColumns.length; i++) {
+        if (skipCols.has(remoteColumns[i])) continue;
+        colIndexes.push(i);
+        insertColumns.push(remoteColumns[i]);
+      }
       // Use only the remote's columns in the INSERT. Columns missing on the
       // remote (e.g., `notes` on pre-v15 DBs, `source_node_id` on pre-v19
       // DBs) are not listed, so SQLite uses their local DEFAULT (NULL for
       // source_node_id; '' for notes).
-      const columnList = remoteColumns.join(",");
-      const placeholders = remoteColumns.map(() => "?").join(",");
+      const columnList = insertColumns.join(",");
+      const placeholders = insertColumns.map(() => "?").join(",");
       const stmt = this.db.prepare(
         `INSERT OR REPLACE INTO flashcards (${columnList}) VALUES (${placeholders})`
       );
@@ -502,7 +517,8 @@ class SimpleDatabaseWorker {
           ? (localRes[0].values[0][0] as string)
           : null;
         if (!localMod || remoteMod > localMod) {
-          stmt.run(row);
+          const projected = colIndexes.map((i) => row[i]);
+          stmt.run(projected);
         }
       }
       stmt.free();

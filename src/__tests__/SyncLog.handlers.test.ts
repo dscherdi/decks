@@ -21,6 +21,7 @@ class FakeDb {
   private logs = new Map<string, ReviewLog>();
   insertReviewLogCalls = 0;
   updateFlashcardCalls: Array<{ id: string; updates: Partial<Flashcard> }> = [];
+  executeSqlCalls: Array<{ sql: string; params: unknown[] }> = [];
 
   seedCard(card: Flashcard): void {
     this.cards.set(card.id, card);
@@ -46,6 +47,12 @@ class FakeDb {
     this.updateFlashcardCalls.push({ id, updates });
     const existing = this.cards.get(id);
     if (existing) this.cards.set(id, { ...existing, ...updates } as Flashcard);
+  }
+  // Card-state overlay handlers (card_suspend etc.) talk to the DB via raw
+  // executeSql. We don't run SQL here — just record the call so tests can
+  // assert the predicate shape (e.g. only-if-newer guard) and params.
+  async executeSql(sql: string, params: unknown[] = []): Promise<void> {
+    this.executeSqlCalls.push({ sql, params });
   }
 
   // Snapshot helpers for assertions.
@@ -357,5 +364,149 @@ describe("SyncLog handlers - rate_undo", () => {
 
     expect(db.updateFlashcardCalls).toHaveLength(0);
     expect(db.getLog("log_orphan")).toBeUndefined();
+  });
+});
+
+describe("card_suspend / card_unsuspend / card_bury / card_unbury / card_reset", () => {
+  function entry<T extends SyncLogEntry["o"]>(
+    op: T,
+    p: Extract<SyncLogEntry, { o: T }>["p"],
+    at = "2026-05-12T00:00:00Z"
+  ): SyncLogEntry {
+    return {
+      hlc: [Date.parse(at), 0, "remote-dev"],
+      s: 1,
+      v: 1,
+      o: op,
+      p,
+    } as SyncLogEntry;
+  }
+
+  it("handleCardSuspend issues only-if-newer UPDATE with the at timestamp", async () => {
+    const db = new FakeDb();
+    await applyOp(
+      asDb(db),
+      "remote-dev",
+      entry("card_suspend", { c: "card_a", at: "2026-05-12T00:00:00Z" }),
+      makeLogger()
+    );
+
+    expect(db.executeSqlCalls).toHaveLength(1);
+    const call = db.executeSqlCalls[0];
+    expect(call.sql).toContain("UPDATE flashcards");
+    expect(call.sql).toContain("suspended_at = ?");
+    expect(call.sql).toContain("modified < ?");
+    expect(call.params).toEqual([
+      "2026-05-12T00:00:00Z",
+      "2026-05-12T00:00:00Z",
+      "card_a",
+      "2026-05-12T00:00:00Z",
+    ]);
+  });
+
+  it("handleCardUnsuspend sets suspended_at to NULL and guards by modified", async () => {
+    const db = new FakeDb();
+    await applyOp(
+      asDb(db),
+      "remote-dev",
+      entry("card_unsuspend", { c: "card_a", at: "2026-05-12T00:00:00Z" }),
+      makeLogger()
+    );
+
+    const call = db.executeSqlCalls[0];
+    expect(call.sql).toContain("suspended_at = NULL");
+    expect(call.sql).toContain("modified < ?");
+    expect(call.params).toEqual([
+      "2026-05-12T00:00:00Z",
+      "card_a",
+      "2026-05-12T00:00:00Z",
+    ]);
+  });
+
+  it("handleCardBury sets buried_until to the until ISO and guards by modified", async () => {
+    const db = new FakeDb();
+    await applyOp(
+      asDb(db),
+      "remote-dev",
+      entry("card_bury", {
+        c: "card_b",
+        until: "2026-05-13T04:00:00Z",
+        at: "2026-05-12T14:00:00Z",
+      }),
+      makeLogger()
+    );
+
+    const call = db.executeSqlCalls[0];
+    expect(call.sql).toContain("buried_until = ?");
+    expect(call.sql).toContain("modified < ?");
+    expect(call.params).toEqual([
+      "2026-05-13T04:00:00Z",
+      "2026-05-12T14:00:00Z",
+      "card_b",
+      "2026-05-12T14:00:00Z",
+    ]);
+  });
+
+  it("handleCardUnbury sets buried_until to NULL", async () => {
+    const db = new FakeDb();
+    await applyOp(
+      asDb(db),
+      "remote-dev",
+      entry("card_unbury", { c: "card_b", at: "2026-05-12T14:00:00Z" }),
+      makeLogger()
+    );
+
+    const call = db.executeSqlCalls[0];
+    expect(call.sql).toContain("buried_until = NULL");
+    expect(call.params).toEqual([
+      "2026-05-12T14:00:00Z",
+      "card_b",
+      "2026-05-12T14:00:00Z",
+    ]);
+  });
+
+  it("handleCardReset issues a scoped DELETE for review_logs + scoped FSRS reset", async () => {
+    const db = new FakeDb();
+    await applyOp(
+      asDb(db),
+      "remote-dev",
+      entry("card_reset", { c: "card_c", at: "2026-05-12T00:00:00Z" }),
+      makeLogger()
+    );
+
+    expect(db.executeSqlCalls).toHaveLength(2);
+    const [del, upd] = db.executeSqlCalls;
+    expect(del.sql).toContain("DELETE FROM review_logs");
+    expect(del.sql).toContain("flashcard_id = ?");
+    expect(del.sql).toContain("reviewed_at <= ?");
+    expect(del.params).toEqual(["card_c", "2026-05-12T00:00:00Z"]);
+
+    expect(upd.sql).toContain("UPDATE flashcards");
+    expect(upd.sql).toContain("state = 'new'");
+    expect(upd.sql).toContain("suspended_at = NULL");
+    expect(upd.sql).toContain("buried_until = NULL");
+    expect(upd.sql).toContain("modified <= ?");
+    expect(upd.params).toEqual([
+      "2026-05-12T00:00:00Z", // due_date = at
+      "2026-05-12T00:00:00Z", // modified = at
+      "card_c",
+      "2026-05-12T00:00:00Z",
+    ]);
+  });
+
+  it("idempotent: replaying card_suspend yields the same SQL twice (no-op via modified guard)", async () => {
+    const db = new FakeDb();
+    const e = entry("card_suspend", {
+      c: "card_a",
+      at: "2026-05-12T00:00:00Z",
+    });
+    await applyOp(asDb(db), "remote-dev", e, makeLogger());
+    await applyOp(asDb(db), "remote-dev", e, makeLogger());
+    // Both calls emit the same UPDATE. The modified-guard inside SQL is what
+    // makes the second a no-op in production. Behavior verified end-to-end
+    // by the suspend-bury-reset integration test.
+    expect(db.executeSqlCalls).toHaveLength(2);
+    expect(db.executeSqlCalls[0].sql).toBe(db.executeSqlCalls[1].sql);
+    expect(db.executeSqlCalls[0].params).toEqual(db.executeSqlCalls[1].params);
   });
 });
