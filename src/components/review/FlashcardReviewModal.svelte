@@ -2662,15 +2662,16 @@
         }
     }*/
 
-  /* Mobile safe area insets - Blocker #9 */
+  /* Mobile safe area insets. padding-top is handled by the modal-scoped
+   * `:global(.modal) .decks-review-modal` rule above so it only adds a
+   * top inset in modal mode; tab-mode review lives inside Obsidian's
+   * workspace which already accounts for safe-area-inset-top, and adding
+   * another top inset there would double up. */
   .decks-review-modal {
     padding-bottom: env(safe-area-inset-bottom);
     padding-left: env(safe-area-inset-left);
     padding-right: env(safe-area-inset-right);
-    padding-top: env(safe-area-inset-top);
     box-sizing: border-box;
-    /*max-width: 100vw;*/
-    /*max-height: 100vh;*/
     overflow-x: hidden;
   }
 
