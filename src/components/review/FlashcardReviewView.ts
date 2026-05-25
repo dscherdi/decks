@@ -18,6 +18,7 @@ import FlashcardReviewModal from "./FlashcardReviewModal.svelte";
 import { mount, unmount } from "svelte";
 import { navigateToFlashcardSource } from "../../utils/flashcard-navigator";
 import { I18n } from "@/i18n/I18n";
+import { ConfirmModal } from "../ConfirmModal";
 
 export const VIEW_TYPE_FLASHCARD_REVIEW = "flashcard-review-view";
 
@@ -160,6 +161,61 @@ export class FlashcardReviewView extends ItemView {
     await navigateToFlashcardSource(this.app, flashcard);
   }
 
+  /**
+   * Tab-mode counterpart to FlashcardReviewModalWrapper.handleCardStateAction.
+   * Same contract: suspend/bury are quietly applied with a Notice; reset is
+   * destructive and gated behind ConfirmModal. Returns true if applied so
+   * the Svelte side advances the queue, false on cancel.
+   */
+  private async handleCardStateAction(
+    card: Flashcard,
+    action: "suspend" | "bury" | "reset"
+  ): Promise<boolean> {
+    const r = I18n.t.review;
+    const showNotice = this.settings?.ui?.enableNotices !== false;
+
+    if (action === "suspend") {
+      await this.db.suspendCard(card.id);
+      if (showNotice) new Notice(r.cardSuspended);
+      return true;
+    }
+
+    if (action === "bury") {
+      const until = this.scheduler.getBuryUntilForNextDay(new Date());
+      await this.db.buryCard(card.id, until);
+      if (showNotice) new Notice(r.cardBuried);
+      return true;
+    }
+
+    return new Promise<boolean>((resolve) => {
+      let confirmed = false;
+      const modal = new ConfirmModal(this.app, {
+        title: r.resetCardConfirmTitle,
+        message: r.resetCardConfirmMessage,
+        isDanger: true,
+        onConfirm: () => {
+          confirmed = true;
+          this.db
+            .resetCard(card.id)
+            .then(() => {
+              if (showNotice) new Notice(r.cardReset);
+              resolve(true);
+            })
+            .catch((error: unknown) => {
+              console.error("resetCard failed:", error);
+              resolve(false);
+            });
+        },
+      });
+      const originalOnClose = modal.onClose.bind(modal);
+      modal.onClose = () => {
+        originalOnClose();
+        if (!confirmed) resolve(false);
+      };
+      modal.open();
+    });
+  }
+
   private mountComponent(): void {
     if (!this.deckOrGroup) return;
 
@@ -229,6 +285,10 @@ export class FlashcardReviewView extends ItemView {
         onNavigateToSource: async (card: Flashcard) => {
           await this.navigateToFlashcardSource(card);
         },
+        onCardStateAction: (
+          card: Flashcard,
+          action: "suspend" | "bury" | "reset"
+        ) => this.handleCardStateAction(card, action),
       },
     }) as FlashcardReviewComponent;
   }
