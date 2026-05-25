@@ -12,6 +12,7 @@ import FlashcardReviewModal from "./FlashcardReviewModal.svelte";
 import { mount, unmount } from "svelte";
 import { navigateToFlashcardSource } from "../../utils/flashcard-navigator";
 import { I18n } from "@/i18n/I18n";
+import { ConfirmModal } from "../ConfirmModal";
 
 export class FlashcardReviewModalWrapper extends Modal {
   private deckOrGroup: DeckOrGroup;
@@ -91,6 +92,70 @@ export class FlashcardReviewModalWrapper extends Modal {
     }
   }
 
+  /**
+   * Apply a per-card state action (suspend / bury / reset). The Svelte
+   * component calls this; we own the confirmation modal (reset only), the
+   * DB write, and the user-facing Notice. Returns true if applied so the
+   * caller advances the review queue; false if the user cancelled.
+   *
+   * Reset is irreversible (it deletes the card's review_logs) so we gate
+   * it behind a ConfirmModal. Suspend/bury are quietly applied — they're
+   * trivially reversible via Unsuspend/Unbury on the manager UI.
+   */
+  private async handleCardStateAction(
+    card: Flashcard,
+    action: "suspend" | "bury" | "reset"
+  ): Promise<boolean> {
+    const r = I18n.t.review;
+    const showNotice = this.settings?.ui?.enableNotices !== false;
+
+    if (action === "suspend") {
+      await this.db.suspendCard(card.id);
+      if (showNotice) new Notice(r.cardSuspended);
+      return true;
+    }
+
+    if (action === "bury") {
+      const until = this.scheduler.getBuryUntilForNextDay(new Date());
+      await this.db.buryCard(card.id, until);
+      if (showNotice) new Notice(r.cardBuried);
+      return true;
+    }
+
+    // action === "reset" — destructive, gate behind ConfirmModal. Returns
+    // true on confirm-then-reset, false on cancel (modal closed without
+    // onConfirm firing).
+    return new Promise<boolean>((resolve) => {
+      let confirmed = false;
+      const modal = new ConfirmModal(this.app, {
+        title: r.resetCardConfirmTitle,
+        message: r.resetCardConfirmMessage,
+        isDanger: true,
+        onConfirm: () => {
+          confirmed = true;
+          this.db
+            .resetCard(card.id)
+            .then(() => {
+              if (showNotice) new Notice(r.cardReset);
+              resolve(true);
+            })
+            .catch((error: unknown) => {
+              console.error("resetCard failed:", error);
+              resolve(false);
+            });
+        },
+      });
+      // Wrap onClose so a dismissal without confirmation settles the
+      // promise as false (otherwise the Svelte caller would hang).
+      const originalOnClose = modal.onClose.bind(modal);
+      modal.onClose = () => {
+        originalOnClose();
+        if (!confirmed) resolve(false);
+      };
+      modal.open();
+    });
+  }
+
   onOpen() {
     const { contentEl } = this;
     contentEl.empty();
@@ -161,6 +226,10 @@ export class FlashcardReviewModalWrapper extends Modal {
         onNavigateToSource: async (card: Flashcard) => {
           await this.navigateToFlashcardSource(card);
         },
+        onCardStateAction: (
+          card: Flashcard,
+          action: "suspend" | "bury" | "reset"
+        ) => this.handleCardStateAction(card, action),
       },
     }) as FlashcardReviewComponent;
 

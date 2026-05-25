@@ -46,6 +46,17 @@
   export let onNavigateToSource:
     | ((card: Flashcard) => Promise<void>)
     | undefined = undefined;
+  // Bury / Suspend / Reset action callback. Returns true if the action was
+  // applied (so the modal advances to the next card), false if cancelled
+  // (e.g. user dismissed the reset confirmation). The wrapper handles the
+  // ConfirmModal, DB call, and user-facing Notice; the Svelte side just
+  // calls this then advances.
+  export let onCardStateAction:
+    | ((
+        card: Flashcard,
+        action: "suspend" | "bury" | "reset"
+      ) => Promise<boolean>)
+    | undefined = undefined;
   export let browseMode = false;
   export let allCards: Flashcard[] = [];
   export let isActive: (() => boolean) | undefined = undefined;
@@ -238,6 +249,11 @@
   let lastEventTime = 0;
   let lastEventType = "";
 
+  // Card-state actions dropdown (bury / suspend / reset). Toggled from the
+  // top-right ⋯ icon and via hotkeys B / S / R. Click-outside closes the menu.
+  let actionsMenuOpen = false;
+  let actionsMenuEl: HTMLElement | undefined;
+
   $: progress = sessionProgress
     ? Math.max(sessionProgress.progress, sessionProgress.doneUnique > 0 ? 1 : 0)
     : 0;
@@ -322,7 +338,17 @@
 
     // Add keydown event listener
     window.addEventListener("keydown", handleKeydown);
+    // Click-outside closes the card-actions dropdown.
+    window.addEventListener("mousedown", handleDocumentMouseDown);
   });
+
+  function handleDocumentMouseDown(event: MouseEvent) {
+    if (!actionsMenuOpen || !actionsMenuEl) return;
+    const target = event.target as Node | null;
+    if (target && !actionsMenuEl.contains(target)) {
+      actionsMenuOpen = false;
+    }
+  }
 
   function handleClozeBlankClick(event: Event) {
     const target = event.target as HTMLElement;
@@ -550,6 +576,100 @@
     }
   }
 
+  /**
+   * Advance to the next card after a non-rating action (bury/suspend/reset).
+   * Mirrors the same fork as handleReview: cloze group → deck group → custom
+   * deck → standard deck. Reset propagates through immediately because the
+   * card is now back in "new" state and the next pick will see it as
+   * available (or another card if scheduler picks one first).
+   */
+  async function advanceToNextCard(): Promise<void> {
+    if (browseMode) {
+      // In browse mode bury/suspend/reset still advance; the underlying
+      // list isn't re-fetched, so we just step to the next index.
+      handleBrowseNext();
+      return;
+    }
+    if (inClozeGroupReview && clozeGroupIndex < clozeGroup.length - 1) {
+      clozeGroupIndex++;
+      currentCard = clozeGroup[clozeGroupIndex];
+      await loadCard();
+      return;
+    }
+    if (inClozeGroupReview) {
+      inClozeGroupReview = false;
+      clozeGroup = [];
+      clozeGroupIndex = 0;
+      clozeGroupTotal = 0;
+    }
+    if (isDeckGroup(deckOrGroup)) {
+      currentCard = await scheduler.getNextForDeckGroup(
+        new Date(),
+        deckOrGroup,
+        { allowNew: true }
+      );
+    } else if (isCustomDeck(deckOrGroup)) {
+      currentCard = await scheduler.getNextForCustomDeck(
+        new Date(),
+        deckOrGroup,
+        { allowNew: true }
+      );
+    } else {
+      currentCard = await scheduler.getNext(new Date(), deckOrGroup.id, {
+        allowNew: true,
+      });
+    }
+    await yieldToUI();
+    if (currentCard) {
+      await loadCard();
+    } else {
+      await endReview();
+    }
+  }
+
+  function toggleActionsMenu() {
+    actionsMenuOpen = !actionsMenuOpen;
+  }
+
+  /**
+   * Apply a per-card state action (suspend / bury / reset). The wrapper's
+   * callback handles the destructive confirmation modal (for reset), the DB
+   * call, and the user-facing Notice. We just close the menu, advance to
+   * the next card if applied, and bookkeep the session/stats the same way
+   * handleReview does.
+   */
+  async function handleCardAction(
+    action: "suspend" | "bury" | "reset"
+  ): Promise<void> {
+    if (!currentCard || isLoading) return;
+    if (!onCardStateAction) {
+      actionsMenuOpen = false;
+      return;
+    }
+    actionsMenuOpen = false;
+    isLoading = true;
+    const targetCard = currentCard;
+    try {
+      const applied = await onCardStateAction(targetCard, action);
+      if (!applied) return;
+      // Notify stats consumers (deck panel etc.) that this card changed.
+      if (onCardReviewed) {
+        await onCardReviewed(targetCard);
+        await yieldToUI();
+      }
+      // Refresh session progress so the goal counter reacts to the card
+      // disappearing from the queue.
+      if (sessionId) {
+        sessionProgress = await scheduler.getSessionProgress(sessionId);
+      }
+      await advanceToNextCard();
+    } catch (error) {
+      console.error("Error applying card action:", error);
+    } finally {
+      isLoading = false;
+    }
+  }
+
   async function handleUndo() {
     if (isLoading || !canUndo || browseMode) return;
     isLoading = true;
@@ -618,6 +738,30 @@
       lastEventType = eventType;
       handleUndo();
       return;
+    }
+
+    // Card-state action hotkeys (B / S / R). Fire on both front and back —
+    // these are meta-actions, not review answers. Gated by enableKeyboardShortcuts
+    // and skipped in browse mode + when modifier keys are held (avoid eating
+    // shortcuts like Cmd+R).
+    if (
+      !browseMode &&
+      currentCard &&
+      settings.review.enableKeyboardShortcuts &&
+      !event.metaKey &&
+      !event.ctrlKey &&
+      !event.altKey
+    ) {
+      const k = event.key.toLowerCase();
+      if (k === "b" || k === "s" || k === "r") {
+        event.preventDefault();
+        lastEventTime = now;
+        lastEventType = eventType;
+        const action: "suspend" | "bury" | "reset" =
+          k === "b" ? "bury" : k === "s" ? "suspend" : "reset";
+        handleCardAction(action);
+        return;
+      }
     }
 
     if (browseMode) {
@@ -792,6 +936,7 @@
   onDestroy(async () => {
     // Clean up keydown event listener
     window.removeEventListener("keydown", handleKeydown);
+    window.removeEventListener("mousedown", handleDocumentMouseDown);
 
     // Clean up session timer (standard mode only)
     if (sessionTimer) {
@@ -1134,6 +1279,69 @@
                   <line x1="10" y1="14" x2="21" y2="3"></line>
                 </svg>
               </button>
+            {/if}
+            {#if onCardStateAction && currentCard && !browseMode}
+              <div
+                class="decks-card-actions-menu"
+                bind:this={actionsMenuEl}
+              >
+                <button
+                  class="decks-card-actions-trigger clickable-icon"
+                  on:click|stopPropagation={toggleActionsMenu}
+                  aria-label={r.cardActions}
+                  aria-haspopup="menu"
+                  aria-expanded={actionsMenuOpen}
+                  type="button"
+                  tabindex="-1"
+                >
+                  <svg
+                    xmlns="http://www.w3.org/2000/svg"
+                    width="14"
+                    height="14"
+                    viewBox="0 0 24 24"
+                    fill="none"
+                    stroke="currentColor"
+                    stroke-width="2"
+                    stroke-linecap="round"
+                    stroke-linejoin="round"
+                  >
+                    <circle cx="12" cy="5" r="1.5"></circle>
+                    <circle cx="12" cy="12" r="1.5"></circle>
+                    <circle cx="12" cy="19" r="1.5"></circle>
+                  </svg>
+                </button>
+                {#if actionsMenuOpen}
+                  <div class="decks-card-actions-dropdown" role="menu">
+                    <button
+                      class="decks-card-actions-item"
+                      on:click={() => handleCardAction("bury")}
+                      role="menuitem"
+                      type="button"
+                    >
+                      <span>{r.bury}</span>
+                      <kbd>B</kbd>
+                    </button>
+                    <button
+                      class="decks-card-actions-item"
+                      on:click={() => handleCardAction("suspend")}
+                      role="menuitem"
+                      type="button"
+                    >
+                      <span>{r.suspend}</span>
+                      <kbd>S</kbd>
+                    </button>
+                    <button
+                      class="decks-card-actions-item decks-card-actions-danger"
+                      on:click={() => handleCardAction("reset")}
+                      role="menuitem"
+                      type="button"
+                    >
+                      <span>{r.reset}</span>
+                      <kbd>R</kbd>
+                    </button>
+                  </div>
+                {/if}
+              </div>
             {/if}
           </div>
           <div class="decks-card-side decks-front" bind:this={frontEl}></div>
@@ -1611,6 +1819,69 @@
     min-width: 0 !important;
     min-height: 0 !important;
     padding: 0 !important;
+  }
+
+  .decks-card-actions-menu {
+    position: relative;
+    display: inline-flex;
+  }
+
+  .decks-card-actions-trigger {
+    width: 24px !important;
+    height: 24px !important;
+    min-width: 0 !important;
+    min-height: 0 !important;
+    padding: 0 !important;
+    color: var(--text-muted);
+  }
+  .decks-card-actions-trigger:hover {
+    color: var(--text-normal);
+  }
+
+  .decks-card-actions-dropdown {
+    position: absolute;
+    top: calc(100% + 4px);
+    right: 0;
+    z-index: var(--layer-popover, 30);
+    min-width: 180px;
+    background: var(--background-secondary);
+    border: 1px solid var(--background-modifier-border);
+    border-radius: var(--radius-m, 6px);
+    box-shadow: var(--shadow-l, 0 4px 12px rgba(0, 0, 0, 0.18));
+    padding: 4px 0;
+    display: flex;
+    flex-direction: column;
+  }
+
+  .decks-card-actions-item {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+    width: 100%;
+    padding: 8px 12px;
+    background: transparent;
+    border: none;
+    cursor: pointer;
+    font-size: 13px;
+    color: var(--text-normal);
+    text-align: left;
+    box-shadow: none;
+  }
+  .decks-card-actions-item:hover {
+    background: var(--background-modifier-hover);
+  }
+  .decks-card-actions-item.decks-card-actions-danger:hover {
+    color: var(--text-error);
+  }
+  .decks-card-actions-item kbd {
+    font-size: 11px;
+    opacity: 0.7;
+    padding: 1px 6px;
+    border: 1px solid var(--background-modifier-border);
+    border-radius: 3px;
+    background: transparent;
+    color: var(--text-muted);
   }
 
   .decks-copy-button {
