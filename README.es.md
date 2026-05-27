@@ -4,7 +4,7 @@
 
 **Convierte tus notas de Obsidian en tarjetas de memoria. Sin sintaxis especial. Sin mazo aparte que construir.**
 
-Etiqueta un archivo con `#decks`. Cada encabezado que hayas escrito se convierte en el anverso de una tarjeta; cada párrafo debajo se convierte en el reverso. Las tablas, la oclusión de imágenes y los resaltados `==cloze==` funcionan de la misma manera. La planificación la gestiona FSRS — el algoritmo moderno de repetición espaciada.
+Etiqueta un archivo con `#decks`. Cada encabezado `##` se convierte en el anverso de una tarjeta; el texto debajo se convierte en el reverso. Las tablas, la oclusión de imágenes y los resaltados `==cloze==` funcionan de la misma manera. La planificación la gestiona FSRS — el algoritmo moderno de repetición espaciada.
 
 ![Demo](./decks_showcase.gif)
 
@@ -12,7 +12,7 @@ Etiqueta un archivo con `#decks`. Cada encabezado que hayas escrito se convierte
 
 ## Por qué Decks
 
-- **Tus notas ya son el mazo.** Etiqueta un archivo: cada encabezado se convierte en un anverso, cada párrafo en un reverso. Si vienes de Anki, no hay nada que escribir dos veces.
+- **Tus notas ya son el mazo.** Etiqueta un archivo: cada encabezado del nivel que elijas se convierte en un anverso y el texto debajo en un reverso. Si vienes de Anki, no hay nada que escribir dos veces.
 - **Cuatro formatos, ninguna sintaxis que aprender.** Encabezados, tablas de dos columnas, oclusión de imágenes y `==cloze==` desde los resaltados que ya usas.
 - **Planificación FSRS nativa.** Tres perfiles (Estándar / Intensivo / Entrenado), objetivos de retención por etiqueta, sin lastre de SM-2.
 - **Ajuste del algoritmo.** El optimizador de un clic entrena los pesos de FSRS con tu propio historial de repasos — mejor planificación para tu curva de olvido, todo del lado del cliente.
@@ -23,18 +23,18 @@ Etiqueta un archivo con `#decks`. Cada encabezado que hayas escrito se convierte
 
 1. Instala **Decks** desde los plugins de la comunidad y actívalo.
 2. Abre cualquier nota. Añade `#decks` a su frontmatter o como etiqueta en línea.
-3. Escribe un encabezado, luego un párrafo debajo. Repite para tantas tarjetas como quieras:
+3. Escribe un encabezado `##`, luego un párrafo debajo. Repite para tantas tarjetas como quieras:
 
    ```markdown
    ---
    tags: [decks/espanol]
    ---
 
-   # ¿Qué significa "Hola"?
+   ## ¿Qué significa "Hola"?
 
    Saludo.
 
-   # ¿Cómo se dice "Gracias" en inglés?
+   ## ¿Cómo se dice "Gracias" en inglés?
 
    Thank you.
    ```
@@ -48,23 +48,23 @@ El nombre de archivo se convierte en el nombre del mazo. Las tarjetas se sincron
 Decks admite cuatro formas de escribir tarjetas. Elige la que coincida con cómo ya escribes notas.
 
 <details>
-<summary><b>Encabezado + párrafo</b> — el formato por defecto. Cada encabezado es un anverso, el cuerpo debajo es el reverso.</summary>
+<summary><b>Encabezado + párrafo</b> — el formato por defecto. Cada encabezado del nivel configurado (H2 por defecto) es un anverso; el cuerpo debajo es el reverso.</summary>
 
 ```markdown
 ---
 tags: [decks/espanol]
 ---
 
-# ¿Qué significa "Hola" en inglés?
+## ¿Qué significa "Hola" en inglés?
 
 Hello.
 
-# ¿Cómo se dice "Gracias" en inglés?
+## ¿Cómo se dice "Gracias" en inglés?
 
 Thank you.
 ```
 
-El nombre de archivo se convierte en el nombre del mazo. El nivel del encabezado se configura por perfil.
+El nombre de archivo se convierte en el nombre del mazo. El nivel del encabezado se configura por perfil (H2 por defecto). Los encabezados por encima del nivel configurado no se convierten en tarjetas: se conservan como una ruta de migas (p. ej. `Capítulo 1 > Sección 2`) adjunta a cada tarjeta para dar contexto.
 
 </details>
 

@@ -4,7 +4,7 @@
 
 **Transformez vos notes Obsidian en cartes mémoire (flashcards). Aucune syntaxe spéciale. Aucun paquet séparé à construire.**
 
-Ajoutez la balise `#decks` à un fichier. Chaque en-tête que vous avez écrit devient le recto d'une carte ; chaque paragraphe en dessous devient le verso. Les tableaux, les images masquées et les textes surlignés `==cloze==` fonctionnent de la même manière. La planification est gérée par FSRS — l'algorithme moderne de répétition espacée.
+Ajoutez la balise `#decks` à un fichier. Chaque en-tête `##` devient le recto d'une carte ; le texte en dessous devient le verso. Les tableaux, les images masquées et les textes surlignés `==cloze==` fonctionnent de la même manière. La planification est gérée par FSRS — l'algorithme moderne de répétition espacée.
 
 ![Demo](./decks_showcase.gif)
 
@@ -12,7 +12,7 @@ Ajoutez la balise `#decks` à un fichier. Chaque en-tête que vous avez écrit d
 
 ## Pourquoi Decks
 
-- **Vos notes sont déjà le paquet.** Balisez un fichier, chaque en-tête devient un recto, chaque paragraphe devient un verso. Si vous venez d'Anki, il n'y a rien à rédiger deux fois.
+- **Vos notes sont déjà le paquet.** Balisez un fichier : chaque en-tête au niveau que vous choisissez devient un recto et le texte en dessous devient un verso. Si vous venez d'Anki, il n'y a rien à rédiger deux fois.
 - **Quatre formats, aucune syntaxe à apprendre.** En-têtes, tableaux à deux colonnes, masquage d'images et textes à trous `==cloze==` à partir des surlignages que vous utilisez déjà.
 - **Planification native FSRS.** Trois profils (Standard / Intensif / Entraîné), cibles de rétention par balise, sans les contraintes de SM-2.
 - **Ajustement de l'algorithme.** L'optimiseur en un clic entraîne les poids FSRS sur votre propre historique de révision — une meilleure planification pour votre courbe d'oubli, le tout côté client.
@@ -23,18 +23,18 @@ Ajoutez la balise `#decks` à un fichier. Chaque en-tête que vous avez écrit d
 
 1. Installez **Decks** depuis les plugins communautaires et activez-le.
 2. Ouvrez n'importe quelle note. Ajoutez `#decks` dans le frontmatter ou comme balise dans le texte.
-3. Écrivez un en-tête, puis un paragraphe en dessous. Répétez l'opération pour autant de cartes que vous le souhaitez :
+3. Écrivez un en-tête `##`, puis un paragraphe en dessous. Répétez l'opération pour autant de cartes que vous le souhaitez :
 
    ```markdown
    ---
    tags: [decks/anglais]
    ---
 
-   # Que signifie "Hola" en anglais ?
+   ## Que signifie "Hola" en anglais ?
 
    Hello.
 
-   # Comment dit-on "Merci" en anglais ?
+   ## Comment dit-on "Merci" en anglais ?
 
    Thank you.
    ```
@@ -48,23 +48,23 @@ Le nom du fichier devient le nom du paquet. Les cartes se synchronisent automati
 Decks propose quatre façons de rédiger vos cartes. Choisissez celle qui correspond le mieux à votre façon d'écrire.
 
 <details>
-<summary><b>En-tête + paragraphe</b> — le format par défaut. Chaque en-tête est un recto, le corps en dessous est le verso.</summary>
+<summary><b>En-tête + paragraphe</b> — le format par défaut. Chaque en-tête au niveau configuré (H2 par défaut) est un recto ; le corps en dessous est le verso.</summary>
 
 ```markdown
 ---
 tags: [decks/anglais]
 ---
 
-# Que signifie "Hola" en anglais ?
+## Que signifie "Hola" en anglais ?
 
 Hello.
 
-# Comment dit-on "Merci" en anglais ?
+## Comment dit-on "Merci" en anglais ?
 
 Thank you.
 ```
 
-Le nom du fichier devient le nom du paquet. Le niveau d'en-tête est configurable par profil.
+Le nom du fichier devient le nom du paquet. Le niveau d'en-tête est configurable par profil (H2 par défaut). Les en-têtes au-dessus du niveau configuré ne deviennent pas des cartes — ils sont conservés sous forme de fil d'Ariane (par ex. `Chapitre 1 > Section 2`) attaché à chaque carte pour le contexte.
 
 </details>
 

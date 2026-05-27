@@ -4,7 +4,7 @@
 
 **Trasforma le tue note di Obsidian in flashcard. Nessuna sintassi speciale. Nessun mazzo separato da costruire.**
 
-Aggiungi il tag `#decks` a un file. Ogni intestazione che hai scritto diventa il fronte di una carta; ogni paragrafo sottostante diventa il retro. Le tabelle, l'occlusione d'immagine e le evidenziazioni `==cloze==` funzionano allo stesso modo. La pianificazione è gestita da FSRS, il moderno algoritmo di ripetizione dilazionata (spaced repetition).
+Aggiungi il tag `#decks` a un file. Ogni intestazione `##` diventa il fronte di una carta; il testo sottostante diventa il retro. Le tabelle, l'occlusione d'immagine e le evidenziazioni `==cloze==` funzionano allo stesso modo. La pianificazione è gestita da FSRS, il moderno algoritmo di ripetizione dilazionata (spaced repetition).
 
 ![Demo](./decks_showcase.gif)
 
@@ -12,7 +12,7 @@ Aggiungi il tag `#decks` a un file. Ogni intestazione che hai scritto diventa il
 
 ## Perché Decks
 
-- **Le tue note sono già il mazzo.** Tagga un file: ogni intestazione diventa un fronte, ogni paragrafo diventa un retro. Se vieni da Anki, non c'è nulla da scrivere due volte.
+- **Le tue note sono già il mazzo.** Tagga un file: ogni intestazione al livello che scegli diventa un fronte e il testo sottostante diventa un retro. Se vieni da Anki, non c'è nulla da scrivere due volte.
 - **Quattro formati, nessuna sintassi da imparare.** Intestazioni, tabelle a due colonne, occlusione d'immagine e spazi vuoti `==cloze==` a partire dalle evidenziazioni che già usi.
 - **Pianificazione nativa FSRS.** Tre profili (Standard / Intensivo / Allenato), target di ritenzione per tag, nessun fardello legato a SM-2.
 - **Ottimizzazione dell'algoritmo.** L'ottimizzatore in un clic allena i pesi di FSRS sulla base della tua cronologia di ripasso: una pianificazione migliore per la tua specifica curva dell'oblio, tutto elaborato localmente (client-side).
@@ -23,18 +23,18 @@ Aggiungi il tag `#decks` a un file. Ogni intestazione che hai scritto diventa il
 
 1. Installa **Decks** dai Plugin della Community e abilitalo.
 2. Apri qualsiasi nota. Aggiungi `#decks` nel suo frontmatter o come tag nel testo.
-3. Scrivi un'intestazione, poi un paragrafo sotto di essa. Ripeti l'operazione per tutte le carte che desideri:
+3. Scrivi un'intestazione `##`, poi un paragrafo sotto di essa. Ripeti l'operazione per tutte le carte che desideri:
 
    ```markdown
    ---
    tags: [decks/inglese]
    ---
 
-   # Cosa significa "Hola" in inglese?
+   ## Cosa significa "Hola" in inglese?
 
    Hello.
 
-   # Come si dice "Grazie" in inglese?
+   ## Come si dice "Grazie" in inglese?
 
    Thank you.
    ```
@@ -48,23 +48,23 @@ Il nome del file diventa il nome del mazzo. Le carte si sincronizzano automatica
 Decks supporta quattro modi per scrivere le carte. Scegli quello che meglio si adatta al tuo modo di prendere appunti.
 
 <details>
-<summary><b>Intestazione + paragrafo</b> — il formato predefinito. Ogni intestazione è un fronte, il corpo sottostante è il retro.</summary>
+<summary><b>Intestazione + paragrafo</b> — il formato predefinito. Ogni intestazione al livello configurato (H2 per impostazione predefinita) è un fronte; il corpo sottostante è il retro.</summary>
 
 ```markdown
 ---
 tags: [decks/inglese]
 ---
 
-# Cosa significa "Hola" in inglese?
+## Cosa significa "Hola" in inglese?
 
 Hello.
 
-# Come si dice "Grazie" in inglese?
+## Come si dice "Grazie" in inglese?
 
 Thank you.
 ```
 
-Il nome del file diventa il nome del mazzo. Il livello di intestazione è configurabile per profilo.
+Il nome del file diventa il nome del mazzo. Il livello di intestazione è configurabile per profilo (H2 per impostazione predefinita). Le intestazioni di livello superiore a quello configurato non diventano carte: vengono mantenute come percorso breadcrumb (es. `Capitolo 1 > Sezione 2`) allegato a ogni carta per il contesto.
 
 </details>
 

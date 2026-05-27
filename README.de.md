@@ -4,7 +4,7 @@
 
 **Verwandle deine Obsidian-Notizen in Karteikarten. Keine spezielle Syntax. Kein separater Stapel zum Aufbauen.**
 
-Markiere eine Datei mit `#decks`. Jede Überschrift, die du geschrieben hast, wird zur Vorderseite einer Karte; jeder Absatz darunter wird zur Rückseite. Tabellen, Bildverdeckung und `==cloze==`-Hervorhebungen funktionieren auf die gleiche Weise. Die Planung übernimmt FSRS — der moderne Algorithmus für räumliche Wiederholung.
+Markiere eine Datei mit `#decks`. Jede `##`-Überschrift wird zur Vorderseite einer Karte; der Text darunter wird zur Rückseite. Tabellen, Bildverdeckung und `==cloze==`-Hervorhebungen funktionieren auf die gleiche Weise. Die Planung übernimmt FSRS — der moderne Algorithmus für räumliche Wiederholung.
 
 ![Demo](./decks_showcase.gif)
 
@@ -12,7 +12,7 @@ Markiere eine Datei mit `#decks`. Jede Überschrift, die du geschrieben hast, wi
 
 ## Warum Decks
 
-- **Deine Notizen sind bereits der Stapel.** Markiere eine Datei — jede Überschrift wird zur Vorderseite, jeder Absatz zur Rückseite. Wer von Anki kommt, muss nichts doppelt schreiben.
+- **Deine Notizen sind bereits der Stapel.** Markiere eine Datei — jede Überschrift auf der gewählten Ebene wird zur Vorderseite und der Text darunter zur Rückseite. Wer von Anki kommt, muss nichts doppelt schreiben.
 - **Vier Formate, keine Syntax zu lernen.** Überschriften, zweispaltige Tabellen, Bildverdeckung und `==cloze==` aus Hervorhebungen, die du bereits verwendest.
 - **FSRS-native Planung.** Drei Profile (Standard / Intensiv / Trainiert), Retentionsziele pro Tag, kein SM-2-Ballast.
 - **Algorithmus-Feinabstimmung.** Ein-Klick-Optimierer trainiert die FSRS-Gewichte auf deinem eigenen Wiederholungsverlauf — bessere Planung für deine persönliche Vergessenskurve, vollständig clientseitig.
@@ -23,18 +23,18 @@ Markiere eine Datei mit `#decks`. Jede Überschrift, die du geschrieben hast, wi
 
 1. Installiere **Decks** aus den Community-Plugins und aktiviere es.
 2. Öffne eine beliebige Notiz. Füge `#decks` in das Frontmatter oder als Inline-Tag ein.
-3. Schreibe eine Überschrift, dann einen Absatz darunter. Wiederhole das für so viele Karten wie du möchtest:
+3. Schreibe eine `##`-Überschrift, dann einen Absatz darunter. Wiederhole das für so viele Karten wie du möchtest:
 
    ```markdown
    ---
    tags: [decks/spanisch]
    ---
 
-   # Was bedeutet "Hola"?
+   ## Was bedeutet "Hola"?
 
    Hallo.
 
-   # Wie sagt man "Danke" auf Spanisch?
+   ## Wie sagt man "Danke" auf Spanisch?
 
    Gracias.
    ```
@@ -48,23 +48,23 @@ Der Dateiname wird zum Stapelnamen. Karten synchronisieren sich automatisch, wen
 Decks unterstützt vier Arten, Karten zu schreiben. Wähle die, die deinem Stil am besten entspricht.
 
 <details>
-<summary><b>Überschrift + Absatz</b> — der Standard. Jede Überschrift ist eine Vorderseite, der darunterliegende Text die Rückseite.</summary>
+<summary><b>Überschrift + Absatz</b> — der Standard. Jede Überschrift auf der konfigurierten Ebene (standardmäßig H2) ist eine Vorderseite; der darunterliegende Text ist die Rückseite.</summary>
 
 ```markdown
 ---
 tags: [decks/spanisch]
 ---
 
-# Was bedeutet "Hola" auf Deutsch?
+## Was bedeutet "Hola" auf Deutsch?
 
 Hallo.
 
-# Wie sagt man "Danke" auf Spanisch?
+## Wie sagt man "Danke" auf Spanisch?
 
 Gracias.
 ```
 
-Der Dateiname wird zum Stapelnamen. Die Überschriftenebene ist pro Profil konfigurierbar.
+Der Dateiname wird zum Stapelnamen. Die Überschriftenebene ist pro Profil konfigurierbar (standardmäßig H2). Überschriften oberhalb der konfigurierten Ebene werden nicht zu Karten — sie werden als Breadcrumb-Pfad (z. B. `Kapitel 1 > Abschnitt 2`) zur Kontextanzeige an jede Karte angehängt.
 
 </details>
 

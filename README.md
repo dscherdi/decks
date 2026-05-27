@@ -4,7 +4,7 @@
 
 **Turn your Obsidian notes into flashcards. No special syntax. No separate deck to build.**
 
-Tag a file with `#decks`. Every header you wrote becomes the front of a card; every paragraph below becomes the back. Tables, image occlusion, and `==cloze==` highlights work the same way. Scheduling is handled by FSRS — the modern spaced-repetition algorithm.
+Tag a file with `#decks`. Each `##` heading becomes the front of a card; the text below becomes the back. Tables, image occlusion, and `==cloze==` highlights work the same way. Scheduling is handled by FSRS — the modern spaced-repetition algorithm.
 
 ![Demo](./decks_showcase.gif)
 
@@ -12,7 +12,7 @@ Tag a file with `#decks`. Every header you wrote becomes the front of a card; ev
 
 ## Why Decks
 
-- **Your notes are already the deck.** Tag a file, every header becomes a front, every paragraph becomes a back. Coming from Anki, there's nothing to author twice.
+- **Your notes are already the deck.** Tag a file; each heading at your chosen level becomes a front and the text below becomes the back. Coming from Anki, there's nothing to author twice.
 - **Four formats, no syntax to learn.** Headers, two-column tables, image occlusion, and `==cloze==` from highlights you already use.
 - **FSRS-native scheduling.** Three profiles (Standard / Intensive / Trained), per-tag retention targets, no SM-2 baggage.
 - **Algorithm tuning.** One-click optimizer trains the FSRS weights on your own review history — better scheduling for your forgetting curve, all client-side.
@@ -23,18 +23,18 @@ Tag a file with `#decks`. Every header you wrote becomes the front of a card; ev
 
 1. Install **Decks** from Community Plugins, enable it.
 2. Open any note. Add `#decks` to its frontmatter or as an inline tag.
-3. Write a header, then a paragraph below it. Repeat for as many cards as you want:
+3. Write a `##` heading, then a paragraph below it. Repeat for as many cards as you want:
 
    ```markdown
    ---
    tags: [decks/spanish]
    ---
 
-   # What does "Hola" mean?
+   ## What does "Hola" mean?
 
    Hello.
 
-   # How do you say "Thank you" in Spanish?
+   ## How do you say "Thank you" in Spanish?
 
    Gracias.
    ```
@@ -48,23 +48,23 @@ The filename becomes the deck name. Cards sync automatically when you save the n
 Decks supports four ways to write cards. Pick whichever matches how you already write notes.
 
 <details>
-<summary><b>Header + paragraph</b> — the default. Each header is a front, the body below is the back.</summary>
+<summary><b>Header + paragraph</b> — the default. Each heading at the configured level (H2 by default) is a front; the body below is the back.</summary>
 
 ```markdown
 ---
 tags: [decks/spanish]
 ---
 
-# What does "Hola" mean in English?
+## What does "Hola" mean in English?
 
 Hello.
 
-# How do you say "Thank you" in Spanish?
+## How do you say "Thank you" in Spanish?
 
 Gracias.
 ```
 
-The filename becomes the deck name. Header level is configurable per profile.
+The filename becomes the deck name. Header level is configurable per profile (H2 by default). Headings above the configured level aren't turned into cards — they're kept as a breadcrumb path (e.g. `Chapter 1 > Section 2`) attached to each card for context.
 
 </details>
 

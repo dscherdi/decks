@@ -4,7 +4,7 @@
 
 **Obsidian notlarınızı bilgi kartlarına (flashcard) dönüştürün. Özel bir sözdizimi yok. Oluşturulacak ayrı bir deste yok.**
 
-Bir dosyayı `#decks` ile etiketleyin. Yazdığınız her başlık kartın ön yüzü, altındaki her paragraf ise arka yüzü olur. Tablolar, görsel örtme (image occlusion) ve `==cloze==` (boşluk doldurma) vurguları da aynı şekilde çalışır. Zamanlama, modern aralıklı tekrar algoritması olan FSRS tarafından yönetilir.
+Bir dosyayı `#decks` ile etiketleyin. Her `##` başlığı kartın ön yüzü, altındaki metin ise arka yüzü olur. Tablolar, görsel örtme (image occlusion) ve `==cloze==` (boşluk doldurma) vurguları da aynı şekilde çalışır. Zamanlama, modern aralıklı tekrar algoritması olan FSRS tarafından yönetilir.
 
 ![Demo](./decks_showcase.gif)
 
@@ -12,7 +12,7 @@ Bir dosyayı `#decks` ile etiketleyin. Yazdığınız her başlık kartın ön y
 
 ## Neden Decks
 
-- **Notlarınız zaten bir destedir.** Bir dosyayı etiketleyin: her başlık ön yüz, her paragraf arka yüz olur. Anki'den geliyorsanız, hiçbir şeyi iki kez yazmanıza gerek kalmaz.
+- **Notlarınız zaten bir destedir.** Bir dosyayı etiketleyin: seçtiğiniz seviyedeki her başlık ön yüz, altındaki metin arka yüz olur. Anki'den geliyorsanız, hiçbir şeyi iki kez yazmanıza gerek kalmaz.
 - **Öğrenilecek sözdizimi yok, 4 farklı format.** Başlıklar, iki sütunlu tablolar, görsel örtme ve halihazırda kullandığınız vurgulardan oluşan `==cloze==` boşlukları.
 - **FSRS tabanlı zamanlama.** Üç farklı profil (Standart / Yoğun / Eğitilmiş), etiket başına akılda tutma hedefleri, SM-2'nin yükü yok.
 - **Algoritma ince ayarı.** Tek tıklamalı optimizasyon aracı, FSRS ağırlıklarını kendi tekrar geçmişinize göre eğitir — tamamen cihazınızda (client-side) gerçekleşen, unutma eğrinize özel daha iyi zamanlamalar.
@@ -23,18 +23,18 @@ Bir dosyayı `#decks` ile etiketleyin. Yazdığınız her başlık kartın ön y
 
 1. Topluluk Eklentilerinden (Community Plugins) **Decks**'i kurun ve etkinleştirin.
 2. Herhangi bir notu açın. Frontmatter'a veya metnin içine `#decks` etiketini ekleyin.
-3. Bir başlık yazın, ardından altına bir paragraf ekleyin. İstediğiniz kadar kart için bunu tekrarlayın:
+3. Bir `##` başlığı yazın, ardından altına bir paragraf ekleyin. İstediğiniz kadar kart için bunu tekrarlayın:
 
    ```markdown
    ---
    tags: [decks/ingilizce]
    ---
 
-   # "Hola" ne anlama gelir?
+   ## "Hola" ne anlama gelir?
 
    Merhaba (Hello).
 
-   # İngilizcede "Teşekkür ederim" nasıl denir?
+   ## İngilizcede "Teşekkür ederim" nasıl denir?
 
    Thank you.
    ```
@@ -48,23 +48,23 @@ Dosya adı deste adı olur. Notu kaydettiğinizde kartlar otomatik olarak senkro
 Decks kart oluşturmak için dört farklı yolu destekler. Not alma alışkanlığınıza en uygun olanı seçin.
 
 <details>
-<summary><b>Başlık + paragraf</b> — varsayılan format. Her başlık ön yüz, altındaki metin arka yüzdür.</summary>
+<summary><b>Başlık + paragraf</b> — varsayılan format. Yapılandırılan seviyedeki her başlık (varsayılan olarak H2) ön yüz, altındaki metin arka yüzdür.</summary>
 
 ```markdown
 ---
 tags: [decks/ingilizce]
 ---
 
-# "Hola" ne anlama gelir?
+## "Hola" ne anlama gelir?
 
 Hello.
 
-# İngilizcede "Teşekkür ederim" nasıl denir?
+## İngilizcede "Teşekkür ederim" nasıl denir?
 
 Thank you.
 ```
 
-Dosya adı deste adı olur. Başlık seviyesi profil bazında ayarlanabilir.
+Dosya adı deste adı olur. Başlık seviyesi profil bazında ayarlanabilir (varsayılan olarak H2). Yapılandırılan seviyenin üzerindeki başlıklar karta dönüştürülmez — bağlam için her karta eklenen bir gezinti yolu (ör. `Bölüm 1 > Kısım 2`) olarak saklanır.
 
 </details>
 

@@ -4,7 +4,7 @@
 
 **Kthe shënimet e tua të Obsidian në karta (flashcards). Asnjë sintaksë e veçantë. Asnjë pako e veçantë për të krijuar.**
 
-Etiketo një skedar me `#decks`. Çdo titull që shkruani bëhet pjesa e përparme e një karte; çdo paragraf më poshtë bëhet pjesa e pasme. Tabelat, mbulimi i imazheve (image occlusion) dhe theksimet `==cloze==` funksionojnë në të njëjtën mënyrë. Planifikimi trajtohet nga FSRS — algoritmi modern i përsëritjes në hapësirë.
+Etiketo një skedar me `#decks`. Çdo titull `##` bëhet pjesa e përparme e një karte; teksti më poshtë bëhet pjesa e pasme. Tabelat, mbulimi i imazheve (image occlusion) dhe theksimet `==cloze==` funksionojnë në të njëjtën mënyrë. Planifikimi trajtohet nga FSRS — algoritmi modern i përsëritjes në hapësirë.
 
 ![Demo](./decks_showcase.gif)
 
@@ -12,7 +12,7 @@ Etiketo një skedar me `#decks`. Çdo titull që shkruani bëhet pjesa e përpar
 
 ## Pse Decks
 
-- **Shënimet tuaja janë tashmë pakoja.** Etiketo një skedar, çdo titull bëhet pjesa e përparme, çdo paragraf bëhet pjesa e pasme. Nëse vjen nga Anki, nuk ka asgjë për të shkruar dy herë.
+- **Shënimet tuaja janë tashmë pakoja.** Etiketo një skedar: çdo titull në nivelin që zgjedh bëhet pjesa e përparme dhe teksti më poshtë bëhet pjesa e pasme. Nëse vjen nga Anki, nuk ka asgjë për të shkruar dy herë.
 - **Katër formate, asnjë sintaksë për të mësuar.** Titujt, tabelat me dy kolona, mbulimi i imazheve dhe `==cloze==` nga theksimet që tashmë përdorni.
 - **Planifikim origjinal me FSRS.** Tre profile (Standard / Intensiv / I Trajnuar), objektiva të mbajtjes mend për çdo etiketë, pa ngarkesën e SM-2.
 - **Rregullimi i algoritmit.** Optimizuesi me një klikim trajnon peshat e FSRS në historikun tuaj të rishikimit — planifikim më i mirë për kurbën tuaj të harrimit, e gjitha në pajisjen tuaj (client-side).
@@ -23,18 +23,18 @@ Etiketo një skedar me `#decks`. Çdo titull që shkruani bëhet pjesa e përpar
 
 1. Instalo **Decks** nga Shtojcat e Komunitetit (Community Plugins) dhe aktivizoje atë.
 2. Hap çdo shënim. Shto `#decks` në frontmatter ose si etiketë brenda tekstit.
-3. Shkruaj një titull, pastaj një paragraf poshtë tij. Përsërite këtë për sa karta të duash:
+3. Shkruaj një titull `##`, pastaj një paragraf poshtë tij. Përsërite këtë për sa karta të duash:
 
    ```markdown
    ---
    tags: [decks/anglisht]
    ---
 
-   # Çfarë do të thotë "Hola" në anglisht?
+   ## Çfarë do të thotë "Hola" në anglisht?
 
    Hello.
 
-   # Si thua "Faleminderit" në anglisht?
+   ## Si thua "Faleminderit" në anglisht?
 
    Thank you.
    ```
@@ -48,23 +48,23 @@ Emri i skedarit bëhet emri i pakos. Kartat sinkronizohen automatikisht kur ruan
 Decks mbështet katër mënyra për të shkruar karta. Zgjidh atë që përshtatet me mënyrën se si shkruan shënimet.
 
 <details>
-<summary><b>Titull + paragraf</b> — formati i paracaktuar. Çdo titull është pjesa e përparme, teksti poshtë është pjesa e pasme.</summary>
+<summary><b>Titull + paragraf</b> — formati i paracaktuar. Çdo titull në nivelin e konfiguruar (H2 si parazgjedhje) është pjesa e përparme; teksti poshtë është pjesa e pasme.</summary>
 
 ```markdown
 ---
 tags: [decks/anglisht]
 ---
 
-# Çfarë do të thotë "Hola" në anglisht?
+## Çfarë do të thotë "Hola" në anglisht?
 
 Hello.
 
-# Si thua "Faleminderit" në anglisht?
+## Si thua "Faleminderit" në anglisht?
 
 Thank you.
 ```
 
-Emri i skedarit bëhet emri i pakos. Niveli i titullit mund të konfigurohet për çdo profil.
+Emri i skedarit bëhet emri i pakos. Niveli i titullit mund të konfigurohet për çdo profil (H2 si parazgjedhje). Titujt mbi nivelin e konfiguruar nuk shndërrohen në karta — ata ruhen si një shteg orientues (p.sh. `Kapitulli 1 > Seksioni 2`) i bashkangjitur çdo karte për kontekst.
 
 </details>
 
