@@ -56,7 +56,6 @@
   let headerLevel = 2;
   let requestRetention = 0.9;
   let fsrsProfile: FSRSProfile = "STANDARD";
-  let useTrainedWeights = false;
   let learningSteps = "1m";
   let relearningSteps = "10m";
   let clozeEnabled = false;
@@ -93,7 +92,6 @@
     headerLevel = profile.headerLevel;
     requestRetention = profile.fsrs.requestRetention;
     fsrsProfile = profile.fsrs.profile;
-    useTrainedWeights = profile.fsrs.useTrainedWeights;
     learningSteps = profile.learningSteps;
     relearningSteps = profile.relearningSteps;
     clozeEnabled = profile.clozeEnabled;
@@ -196,7 +194,6 @@
         fsrs: {
           requestRetention: requestRetention,
           profile: fsrsProfile,
-          useTrainedWeights: useTrainedWeights,
         },
         clozeEnabled: clozeEnabled,
         clozeShowContext: clozeShowContext,
@@ -551,14 +548,14 @@
       const desc = trainedWeightsAvailable
         ? p.fsrsTrainedDesc
         : p.fsrsUntrainedDesc;
+      // TRAINED is only selectable once weights exist; otherwise fall back to Standard.
       const currentValue =
-        fsrsProfile === "STANDARD" && useTrainedWeights ? "TRAINED" : fsrsProfile;
+        fsrsProfile === "TRAINED" && !trainedWeightsAvailable ? "STANDARD" : fsrsProfile;
       new Setting(fsrsProfileContainer)
         .setName(p.fsrsProfileLabel)
         .setDesc(desc)
         .addDropdown((dropdown) => {
           dropdown.addOption("STANDARD", p.fsrsStandardOption);
-          dropdown.addOption("INTENSIVE", p.fsrsIntensiveOption);
           dropdown.addOption(
             "TRAINED",
             trainedWeightsAvailable ? p.fsrsTrainedOption : p.fsrsTrainedUnavailable
@@ -571,13 +568,7 @@
             if (opt) opt.disabled = true;
           }
           dropdown.setValue(currentValue).onChange((value) => {
-            if (value === "TRAINED") {
-              fsrsProfile = "STANDARD";
-              useTrainedWeights = true;
-            } else {
-              fsrsProfile = value as FSRSProfile;
-              useTrainedWeights = false;
-            }
+            fsrsProfile = value as FSRSProfile;
             rebuildSettings();
           });
         });

@@ -1,14 +1,15 @@
 /**
  * FSRS Algorithm Weights Configuration
  *
- * Centralized configuration for FSRS-6 algorithm weights optimized for sub-day intervals.
- * These weights control the initial stability values for new card ratings and various
- * algorithm parameters for difficulty progression and stability updates.
- * 21 weights total (w[0]–w[20]).
+ * Centralized configuration for FSRS-6 algorithm weights. These weights control the
+ * initial stability values for new card ratings and various algorithm parameters for
+ * difficulty progression and stability updates. 21 weights total (w[0]–w[20]).
  */
 
 /**
- * FSRS-6 standard weights (day-based intervals)
+ * FSRS-6 standard weights. FSRS produces continuous floating-point intervals, so a single
+ * profile covers both day-scale and sub-day scheduling — the per-profile minMinutes floor
+ * (always 1 minute) decides how short an interval is honoured.
  */
 export const FSRS_WEIGHTS_STANDARD: number[] = [
   0.212,  1.2931, 2.3065, 8.2956,  // w[0-3]:  initial stability per rating (Again/Hard/Good/Easy)
@@ -21,33 +22,31 @@ export const FSRS_WEIGHTS_STANDARD: number[] = [
 ];
 
 /**
- * FSRS weights optimized for intensive sub-day intervals
- * w[0-3] set to match intensive targets in days: 1m/5m/10m/1day
- */
-export const FSRS_WEIGHTS_SUBDAY: number[] = createSubDayWeights();
-
-/**
  * Default FSRS weights
  */
 export const DEFAULT_FSRS_WEIGHTS: number[] = FSRS_WEIGHTS_STANDARD;
 
 /**
- * FSRS profile configuration
+ * FSRS profile configuration.
+ * - STANDARD: shipped weights.
+ * - TRAINED: the user's globally-optimized weights, injected at runtime by the Scheduler from
+ *   settings.fsrs.trainedWeights. The weights here are the fallback used when no trained
+ *   weights exist yet.
  */
-export type FSRSProfile = "INTENSIVE" | "STANDARD";
+export type FSRSProfile = "STANDARD" | "TRAINED";
 
 /**
  * Profile-specific parameters (hardcoded, not user-editable)
  */
 export const PROFILE_CONFIG = {
-  INTENSIVE: {
-    weights: FSRS_WEIGHTS_SUBDAY,
+  STANDARD: {
+    weights: FSRS_WEIGHTS_STANDARD,
     minMinutes: 1,
     maximumIntervalDays: 36500,
   },
-  STANDARD: {
+  TRAINED: {
     weights: FSRS_WEIGHTS_STANDARD,
-    minMinutes: 1440, // 1 day minimum
+    minMinutes: 1,
     maximumIntervalDays: 36500,
   },
 } as const;
@@ -59,7 +58,7 @@ export const DEFAULT_FSRS_PARAMETERS = {
   w: DEFAULT_FSRS_WEIGHTS,
   requestRetention: 0.9,
   maximumInterval: 36500,
-  minMinutes: 1440,
+  minMinutes: 1,
 } as const;
 
 /**
@@ -105,33 +104,18 @@ export function roundForDisplay(value: number, decimals: number): string {
 }
 
 /**
- * Creates sub-day optimized weights with custom initial intervals
- * @param againMinutes - Target interval for Again rating (default: 1 minute)
- * @param hardMinutes - Target interval for Hard rating (default: 6 minutes)
- * @param goodMinutes - Target interval for Good rating (default: 10 minutes)
- * @param easyMinutes - Target interval for Easy rating (default: 1440 minutes)
- * @returns FSRS weights array optimized for specified intervals
- */
-export function createSubDayWeights(
-  againMinutes = 1,
-  hardMinutes = 6,
-  goodMinutes = 10,
-  easyMinutes = 1440
-): number[] {
-  return [
-    againMinutes / 1440, // w[0] - Again stability
-    hardMinutes / 1440, // w[1] - Hard stability
-    goodMinutes / 1440, // w[2] - Good stability
-    easyMinutes / 1440, // w[3] - Easy stability
-    ...FSRS_WEIGHTS_STANDARD.slice(4), // Keep remaining weights
-  ];
-}
-
-/**
  * Validate FSRS profile
  */
 export function validateProfile(profile: string): profile is FSRSProfile {
-  return profile === "INTENSIVE" || profile === "STANDARD";
+  return profile === "STANDARD" || profile === "TRAINED";
+}
+
+/**
+ * Normalize a stored/legacy profile string to a current FSRSProfile. The only opt-in is
+ * TRAINED; legacy "INTENSIVE" (and any unknown value) collapses to STANDARD.
+ */
+export function normalizeProfile(value: string | null | undefined): FSRSProfile {
+  return value === "TRAINED" ? "TRAINED" : "STANDARD";
 }
 
 /**
@@ -140,11 +124,3 @@ export function validateProfile(profile: string): profile is FSRSProfile {
 export function validateRequestRetention(retention: number): boolean {
   return retention > 0.5 && retention < 0.995;
 }
-
-/**
- * Pre-configured weight sets for different use cases (deprecated)
- */
-export const WEIGHT_PRESETS = {
-  INTENSIVE: FSRS_WEIGHTS_SUBDAY,
-  STANDARD: FSRS_WEIGHTS_STANDARD,
-} as const;

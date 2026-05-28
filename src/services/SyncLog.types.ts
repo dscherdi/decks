@@ -144,7 +144,7 @@ export interface ReviewLogPayload {
   elapsedDays: number;
   retrievability: number;
   requestRetention: number;
-  profile: "STANDARD" | "INTENSIVE";
+  profile: "STANDARD" | "TRAINED" | "INTENSIVE";
   maximumIntervalDays: number;
   minMinutes: number;
   fsrsWeightsVersion: string;
@@ -199,8 +199,10 @@ export interface ProfileUpsertOp {
     learningSteps: string;
     relearningSteps: string;
     fsrsRequestRetention: number;
-    fsrsProfile: "STANDARD" | "INTENSIVE";
-    fsrsUseTrained: boolean;
+    fsrsProfile: "STANDARD" | "TRAINED" | "INTENSIVE";
+    // Deprecated: superseded by the first-class TRAINED profile. Still read from legacy
+    // journals to map an old (STANDARD + trained) op onto the TRAINED profile.
+    fsrsUseTrained?: boolean;
     clozeEnabled: boolean;
     clozeShowContext: "open" | "hidden";
     isDefault: boolean;

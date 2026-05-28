@@ -172,7 +172,7 @@ describe("Large Deck Integration Tests", () => {
           headerLevel: 1, // German files use # header (level 1)
           fsrs: {
             requestRetention: 0.85,
-            profile: "INTENSIVE",
+            profile: "TRAINED",
           },
         });
       }

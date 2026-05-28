@@ -18,6 +18,7 @@
 import type { IDatabaseService } from "../database/DatabaseFactory";
 import type { Logger } from "../utils/logging";
 import type { SyncLogEntry } from "./SyncLog.types";
+import { normalizeProfile } from "../algorithm/fsrs-weights";
 import type { ReviewLog } from "../database/types";
 
 export type OpHandler = (
@@ -382,10 +383,10 @@ async function handleProfileUpsert(
        has_review_cards_limit_enabled, review_cards_per_day,
        header_level, review_order,
        learning_steps, relearning_steps,
-       fsrs_request_retention, fsrs_profile, fsrs_use_trained,
+       fsrs_request_retention, fsrs_profile,
        cloze_enabled, cloze_show_context,
        is_default, created, modified, deleted_at
-     ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, NULL)
+     ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, NULL)
      ON CONFLICT(id) DO UPDATE SET
        name = excluded.name,
        has_new_cards_limit_enabled = excluded.has_new_cards_limit_enabled,
@@ -398,7 +399,6 @@ async function handleProfileUpsert(
        relearning_steps = excluded.relearning_steps,
        fsrs_request_retention = excluded.fsrs_request_retention,
        fsrs_profile = excluded.fsrs_profile,
-       fsrs_use_trained = excluded.fsrs_use_trained,
        cloze_enabled = excluded.cloze_enabled,
        cloze_show_context = excluded.cloze_show_context,
        is_default = excluded.is_default,
@@ -417,8 +417,8 @@ async function handleProfileUpsert(
       p.learningSteps,
       p.relearningSteps,
       p.fsrsRequestRetention,
-      p.fsrsProfile,
-      p.fsrsUseTrained ? 1 : 0,
+      // Legacy journals carry a separate trained flag; collapse it into the profile value.
+      p.fsrsUseTrained ? "TRAINED" : normalizeProfile(p.fsrsProfile),
       p.clozeEnabled ? 1 : 0,
       p.clozeShowContext,
       p.isDefault ? 1 : 0,

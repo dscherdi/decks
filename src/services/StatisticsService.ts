@@ -2441,13 +2441,14 @@ export class StatisticsService {
 
     // Get FSRS parameters from deck config or defaults
     const requestRetention = deckConfig?.fsrs?.requestRetention || 0.9;
-    const profile = deckConfig?.fsrs?.profile || "STANDARD";
-    const minMinutes = profile === "INTENSIVE" ? 1 : 1440;
+    const minMinutes = 1;
     const maxDays = 36500;
 
-    // Performance caps
+    // Performance caps. Sub-day intervals are allowed for every profile now, so a
+    // low-stability card can come due many times a day — cap same-day events so the
+    // forecast simulation stays bounded.
     const maxEventsPerCard = 200;
-    const maxEventsPerDayIntensive = 6;
+    const maxEventsPerDay = 6;
 
     // SimNode interface for heap elements
     interface SimNode {
@@ -2491,11 +2492,11 @@ export class StatisticsService {
         continue;
       }
 
-      // Check intensive profile daily cap
-      if (profile === "INTENSIVE") {
+      // Same-day event cap (sub-day intervals can recur many times per day)
+      {
         const dayKey = new Date(node.nextDue).toISOString().slice(0, 10);
         const todayEvents = dailyEventCounts.get(dayKey) || 0;
-        if (todayEvents >= maxEventsPerDayIntensive) {
+        if (todayEvents >= maxEventsPerDay) {
           continue;
         }
         dailyEventCounts.set(dayKey, todayEvents + 1);

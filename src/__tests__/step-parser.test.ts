@@ -58,25 +58,25 @@ describe("Step Parser", () => {
   describe("validateLearningSteps", () => {
     it("should accept single value with any unit", () => {
       expect(validateLearningSteps("1m", "STANDARD")).toEqual({ valid: true });
-      expect(validateLearningSteps("1m", "INTENSIVE")).toEqual({ valid: true });
-      expect(validateLearningSteps("10m", "INTENSIVE")).toEqual({ valid: true });
+      expect(validateLearningSteps("1m", "TRAINED")).toEqual({ valid: true });
+      expect(validateLearningSteps("10m", "TRAINED")).toEqual({ valid: true });
       expect(validateLearningSteps("1h", "STANDARD")).toEqual({ valid: true });
-      expect(validateLearningSteps("1d", "INTENSIVE")).toEqual({ valid: true });
+      expect(validateLearningSteps("1d", "TRAINED")).toEqual({ valid: true });
     });
 
     it("should reject multiple values", () => {
-      const result = validateLearningSteps("1m 10m", "INTENSIVE");
+      const result = validateLearningSteps("1m 10m", "TRAINED");
       expect(result.valid).toBe(false);
       expect(result.error).toContain("single interval");
     });
 
     it("should accept empty string", () => {
       expect(validateLearningSteps("", "STANDARD")).toEqual({ valid: true });
-      expect(validateLearningSteps("", "INTENSIVE")).toEqual({ valid: true });
+      expect(validateLearningSteps("", "TRAINED")).toEqual({ valid: true });
     });
 
     it("should reject invalid format", () => {
-      const result = validateLearningSteps("abc", "INTENSIVE");
+      const result = validateLearningSteps("abc", "TRAINED");
       expect(result.valid).toBe(false);
       expect(result.error).toContain("Invalid format");
     });
@@ -85,7 +85,7 @@ describe("Step Parser", () => {
   describe("validateRelearningSteps", () => {
     it("should accept single value for both profiles", () => {
       expect(validateRelearningSteps("10m", "STANDARD")).toEqual({ valid: true });
-      expect(validateRelearningSteps("10m", "INTENSIVE")).toEqual({ valid: true });
+      expect(validateRelearningSteps("10m", "TRAINED")).toEqual({ valid: true });
       expect(validateRelearningSteps("1h", "STANDARD")).toEqual({ valid: true });
     });
 
@@ -108,14 +108,14 @@ describe("Step Parser", () => {
 
   describe("getDefaultLearningSteps", () => {
     it("should return 1m for both profiles", () => {
-      expect(getDefaultLearningSteps("INTENSIVE")).toBe("1m");
+      expect(getDefaultLearningSteps("TRAINED")).toBe("1m");
       expect(getDefaultLearningSteps("STANDARD")).toBe("1m");
     });
   });
 
   describe("getDefaultRelearningSteps", () => {
     it("should return 10m for both profiles", () => {
-      expect(getDefaultRelearningSteps("INTENSIVE")).toBe("10m");
+      expect(getDefaultRelearningSteps("TRAINED")).toBe("10m");
       expect(getDefaultRelearningSteps("STANDARD")).toBe("10m");
     });
   });

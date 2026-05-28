@@ -35,7 +35,7 @@ describe("Learning Steps Integration Tests", () => {
   async function createDeckWithSteps(
     learningSteps: string,
     relearningSteps: string,
-    fsrsProfile: "STANDARD" | "INTENSIVE" = "STANDARD"
+    fsrsProfile: "STANDARD" | "TRAINED" = "STANDARD"
   ): Promise<Deck> {
     const profileId = `profile_steps_${Date.now()}`;
     await db.createProfile({
@@ -90,8 +90,8 @@ describe("Learning Steps Integration Tests", () => {
   }
 
   describe("Again interval overrides on new cards for both profiles", () => {
-    it("should override Again interval on new card for INTENSIVE", async () => {
-      const deck = await createDeckWithSteps("1m", "10m", "INTENSIVE");
+    it("should override Again interval on new card via learning steps", async () => {
+      const deck = await createDeckWithSteps("1m", "10m", "TRAINED");
       const card = await createNewCard(deck.id);
 
       const preview = await scheduler.preview(card.id);
@@ -160,7 +160,7 @@ describe("Learning Steps Integration Tests", () => {
     });
 
     it("should preserve FSRS forgetting stability on lapse", async () => {
-      const deck = await createDeckWithSteps("1m", "10m", "INTENSIVE");
+      const deck = await createDeckWithSteps("1m", "10m", "TRAINED");
       const reviewCard = await createReviewCard(deck.id);
       const originalStability = reviewCard.stability;
 
@@ -224,11 +224,11 @@ describe("Learning Steps Integration Tests", () => {
     });
 
     it("should use pure FSRS for Again on review cards when relearning empty", async () => {
-      const deck = await createDeckWithSteps("", "", "INTENSIVE");
+      const deck = await createDeckWithSteps("", "", "TRAINED");
       const reviewCard = await createReviewCard(deck.id);
 
       const deckWithProfile = await db.getDeckWithProfile(deck.id);
-      expect(deckWithProfile!.profile.fsrs.profile).toBe("INTENSIVE");
+      expect(deckWithProfile!.profile.fsrs.profile).toBe("TRAINED");
       expect(deckWithProfile!.profile.relearningSteps).toBe("");
 
       const rated = await scheduler.rate(reviewCard.id, "again");

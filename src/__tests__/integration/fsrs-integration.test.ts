@@ -557,4 +557,55 @@ describe("FSRS Algorithm Integration Tests", () => {
       expect(finalCard!.state).toBe("review");
     });
   });
+
+  describe("Training data selection", () => {
+    function makeLog(
+      flashcardId: string,
+      profile: "STANDARD" | "TRAINED" | "INTENSIVE",
+      reviewedAt: string
+    ) {
+      return {
+        flashcardId,
+        lastReviewedAt: reviewedAt,
+        reviewedAt,
+        rating: 3 as const,
+        ratingLabel: "good" as const,
+        oldState: "review" as const,
+        oldRepetitions: 1,
+        oldLapses: 0,
+        oldStability: 1,
+        oldDifficulty: 5,
+        newState: "review" as const,
+        newRepetitions: 2,
+        newLapses: 0,
+        newStability: 2,
+        newDifficulty: 5,
+        oldIntervalMinutes: 1440,
+        newIntervalMinutes: 2880,
+        oldDueAt: reviewedAt,
+        newDueAt: reviewedAt,
+        elapsedDays: 1,
+        retrievability: 0.9,
+        requestRetention: 0.9,
+        profile,
+        maximumIntervalDays: 36500,
+        minMinutes: 1,
+        fsrsWeightsVersion: "test",
+        schedulerVersion: "test",
+      };
+    }
+
+    it("includes every profile's review logs (STANDARD, TRAINED, and legacy INTENSIVE)", async () => {
+      await db.createReviewLog(makeLog("card_std", "STANDARD", "2025-01-01T10:00:00.000Z"));
+      await db.createReviewLog(makeLog("card_trn", "TRAINED", "2025-01-02T10:00:00.000Z"));
+      await db.createReviewLog(makeLog("card_int", "INTENSIVE", "2025-01-03T10:00:00.000Z"));
+
+      const logs = await db.getReviewLogsForTraining();
+
+      const profiles = logs.map((l) => l.profile).sort();
+      expect(profiles).toEqual(["INTENSIVE", "STANDARD", "TRAINED"]);
+      // Oldest-first ordering for chronological replay.
+      expect(logs[0].reviewedAt < logs[logs.length - 1].reviewedAt).toBe(true);
+    });
+  });
 });

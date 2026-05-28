@@ -3,7 +3,7 @@ import { Flashcard, FlashcardState } from "../database/types";
 
 describe("FSRS Profiles", () => {
   let standardFSRS: FSRS;
-  let intensiveFSRS: FSRS;
+  let trainedFSRS: FSRS;
   let testCard: Flashcard;
 
   beforeEach(() => {
@@ -12,9 +12,11 @@ describe("FSRS Profiles", () => {
       profile: "STANDARD",
     });
 
-    intensiveFSRS = new FSRS({
+    // No trained weights are injected here, so TRAINED falls back to the shipped
+    // standard weights — it should schedule identically to STANDARD.
+    trainedFSRS = new FSRS({
       requestRetention: 0.9,
-      profile: "INTENSIVE",
+      profile: "TRAINED",
     });
 
     testCard = {
@@ -42,79 +44,58 @@ describe("FSRS Profiles", () => {
     };
   });
 
-  describe("INTENSIVE Profile Behavior", () => {
-    test("should produce sub-day intervals for new cards", () => {
-      const scheduling = intensiveFSRS.getSchedulingInfo(testCard);
-
-      // Again should be ~1 minute
-      expect(scheduling.again.interval).toBeGreaterThanOrEqual(1);
-      expect(scheduling.again.interval).toBeLessThan(10);
-
-      // Hard should be ~5 minutes
-      expect(scheduling.hard.interval).toBeGreaterThan(
-        scheduling.again.interval
-      );
-      expect(scheduling.hard.interval).toBeLessThan(30);
-
-      // Good should be ~10 minutes
-      expect(scheduling.good.interval).toBeGreaterThan(
-        scheduling.hard.interval
-      );
-      expect(scheduling.good.interval).toBeLessThan(60);
-
-      // Easy should be ~1 day
-      expect(scheduling.easy.interval).toBeGreaterThan(
-        scheduling.good.interval
-      );
-      expect(scheduling.easy.interval).toBeLessThanOrEqual(1440);
+  describe("Unified profile behavior", () => {
+    test("floors Again at 1 minute (sub-day is allowed for every profile)", () => {
+      // Before the merge, STANDARD floored Again at one day. The single profile now
+      // honors the 1-minute floor, so sub-day scheduling is permitted everywhere.
+      const scheduling = standardFSRS.getSchedulingInfo(testCard);
+      expect(scheduling.again.interval).toBe(1);
     });
 
-    test("should maintain minute granularity throughout", () => {
-      let card = { ...testCard };
-
-      // Simulate multiple reviews
-      for (let i = 0; i < 5; i++) {
-        card = intensiveFSRS.updateCard(card, "good");
-
-        // All intervals should be precise (not rounded to days)
-        expect(card.interval % 1440).not.toBe(0); // Not a multiple of 1440 minutes (1 day)
-      }
-    });
-  });
-
-  describe("STANDARD Profile Behavior", () => {
-    test("should produce day-based intervals for new cards", () => {
+    test("lets FSRS decide day-scale intervals for Hard/Good/Easy on new cards", () => {
       const scheduling = standardFSRS.getSchedulingInfo(testCard);
 
-      // All intervals should be at least 1 day (1440 minutes)
-      expect(scheduling.again.interval).toBeGreaterThanOrEqual(1440);
+      // No hardcoded sub-day overrides remain; these follow pure FSRS and are day-scale.
       expect(scheduling.hard.interval).toBeGreaterThanOrEqual(1440);
-      expect(scheduling.good.interval).toBeGreaterThanOrEqual(1440);
-      expect(scheduling.easy.interval).toBeGreaterThanOrEqual(1440);
-
-      // Should follow Again < Hard < Good < Easy
-      expect(scheduling.again.interval).toBeLessThan(scheduling.hard.interval);
-      expect(scheduling.hard.interval).toBeLessThan(scheduling.good.interval);
-      expect(scheduling.good.interval).toBeLessThan(scheduling.easy.interval);
+      expect(scheduling.hard.interval).toBeGreaterThan(scheduling.again.interval);
+      expect(scheduling.good.interval).toBeGreaterThan(scheduling.hard.interval);
+      expect(scheduling.easy.interval).toBeGreaterThan(scheduling.good.interval);
     });
 
-    test("should maintain day minimum throughout", () => {
-      let card = { ...testCard };
+    test("TRAINED falls back to standard scheduling when no trained weights are injected", () => {
+      const s = standardFSRS.getSchedulingInfo(testCard);
+      const t = trainedFSRS.getSchedulingInfo(testCard);
 
-      // Simulate multiple reviews
-      for (let i = 0; i < 10; i++) {
-        card = standardFSRS.updateCard(card, "good");
+      expect(t.again.interval).toBe(s.again.interval);
+      expect(t.hard.interval).toBeCloseTo(s.hard.interval, 5);
+      expect(t.good.interval).toBeCloseTo(s.good.interval, 5);
+      expect(t.easy.interval).toBeCloseTo(s.easy.interval, 5);
+    });
 
-        // All intervals should be at least 1 day
-        expect(card.interval).toBeGreaterThanOrEqual(1440);
-      }
+    test("honors sub-day intervals for low-stability review cards", () => {
+      // A heavily-lapsed, low-stability card can legitimately come due within minutes.
+      const lowStabilityCard: Flashcard = {
+        ...testCard,
+        state: "review",
+        stability: 0.002, // ~3 minutes
+        difficulty: 9,
+        repetitions: 5,
+        lapses: 4,
+        lastReviewed: new Date().toISOString(),
+      };
+
+      const scheduling = standardFSRS.getSchedulingInfo(lowStabilityCard);
+
+      expect(scheduling.again.interval).toBe(1);
+      expect(scheduling.hard.interval).toBeGreaterThanOrEqual(1);
+      expect(scheduling.hard.interval).toBeLessThan(1440);
     });
   });
 
   describe("Request Retention Scaling", () => {
     test("should scale intervals with request retention", () => {
-      const fsrs90 = new FSRS({ requestRetention: 0.9, profile: "INTENSIVE" });
-      const fsrs80 = new FSRS({ requestRetention: 0.8, profile: "INTENSIVE" });
+      const fsrs90 = new FSRS({ requestRetention: 0.9, profile: "STANDARD" });
+      const fsrs80 = new FSRS({ requestRetention: 0.8, profile: "STANDARD" });
 
       const scheduling90 = fsrs90.getSchedulingInfo(testCard);
       const scheduling80 = fsrs80.getSchedulingInfo(testCard);
@@ -136,28 +117,26 @@ describe("FSRS Profiles", () => {
   });
 
   describe("Profile Switching Behavior", () => {
-    test("should not affect existing card states when switching profiles", () => {
-      // Start with INTENSIVE
-      let card = intensiveFSRS.updateCard(testCard, "good");
+    test("should not mutate stored card state when recomputing scheduling", () => {
+      let card = standardFSRS.updateCard(testCard, "good");
       const originalStability = card.stability;
       const originalDifficulty = card.difficulty;
 
-      // Switch to STANDARD (simulated by creating new FSRS instance)
-      const newScheduling = standardFSRS.getSchedulingInfo(card);
+      // Recompute under a different profile instance (simulating a profile switch)
+      const newScheduling = trainedFSRS.getSchedulingInfo(card);
 
       // Card state should remain unchanged
       expect(card.stability).toBe(originalStability);
       expect(card.difficulty).toBe(originalDifficulty);
 
-      // But new scheduling should use STANDARD rules (minimum 1 day)
-      expect(newScheduling.again.interval).toBeGreaterThanOrEqual(1440);
+      // Scheduling is still produced and respects the 1-minute floor
+      expect(newScheduling.again.interval).toBeGreaterThanOrEqual(1);
     });
   });
 
   describe("Monotonicity", () => {
     test("should maintain rating order: Again < Hard < Good < Easy", () => {
-      // Test both profiles
-      [standardFSRS, intensiveFSRS].forEach((fsrs) => {
+      [standardFSRS, trainedFSRS].forEach((fsrs) => {
         const scheduling = fsrs.getSchedulingInfo(testCard);
 
         expect(scheduling.again.interval).toBeLessThan(
@@ -226,44 +205,7 @@ describe("FSRS Profiles", () => {
   });
 
   describe("Due date calculation", () => {
-    test("should set sub-day dueDate relative to review time for INTENSIVE profile", () => {
-      const now = new Date("2025-06-15T10:00:00.000Z");
-      const fsrs = new FSRS({
-        requestRetention: 0.9,
-        profile: "INTENSIVE",
-        nextDayStartsAt: 4,
-      });
-
-      const scheduling = fsrs.getSchedulingInfo(testCard, now);
-
-      const subDayRatings = ["again", "hard", "good"] as const;
-      for (const rating of subDayRatings) {
-        const due = new Date(scheduling[rating].dueDate);
-        const diffMinutes = (due.getTime() - now.getTime()) / (60 * 1000);
-
-        expect(scheduling[rating].interval).toBeLessThan(1440);
-        expect(diffMinutes).toBeCloseTo(scheduling[rating].interval, 0);
-      }
-    });
-
-    test("should align day-based dueDate to study day boundary for INTENSIVE Easy rating", () => {
-      const now = new Date("2025-06-15T10:00:00.000Z");
-      const fsrs = new FSRS({
-        requestRetention: 0.9,
-        profile: "INTENSIVE",
-        nextDayStartsAt: 4,
-      });
-
-      const scheduling = fsrs.getSchedulingInfo(testCard, now);
-
-      expect(scheduling.easy.interval).toBeGreaterThanOrEqual(1440);
-
-      const easyDue = new Date(scheduling.easy.dueDate);
-      expect(easyDue.getMinutes()).toBe(0);
-      expect(easyDue.getSeconds()).toBe(0);
-    });
-
-    test("should always align dueDate to study day boundary for STANDARD profile", () => {
+    test("sets a sub-day dueDate to the exact minute offset from review time", () => {
       const now = new Date("2025-06-15T10:00:00.000Z");
       const fsrs = new FSRS({
         requestRetention: 0.9,
@@ -273,8 +215,25 @@ describe("FSRS Profiles", () => {
 
       const scheduling = fsrs.getSchedulingInfo(testCard, now);
 
-      const ratings = ["again", "hard", "good", "easy"] as const;
-      for (const rating of ratings) {
+      // Again is the deterministic sub-day case on a new card.
+      const due = new Date(scheduling.again.dueDate);
+      const diffMinutes = (due.getTime() - now.getTime()) / (60 * 1000);
+
+      expect(scheduling.again.interval).toBeLessThan(1440);
+      expect(diffMinutes).toBeCloseTo(scheduling.again.interval, 0);
+    });
+
+    test("aligns day-scale dueDates to the study-day boundary", () => {
+      const now = new Date("2025-06-15T10:00:00.000Z");
+      const fsrs = new FSRS({
+        requestRetention: 0.9,
+        profile: "STANDARD",
+        nextDayStartsAt: 4,
+      });
+
+      const scheduling = fsrs.getSchedulingInfo(testCard, now);
+
+      for (const rating of ["hard", "good", "easy"] as const) {
         expect(scheduling[rating].interval).toBeGreaterThanOrEqual(1440);
 
         const due = new Date(scheduling[rating].dueDate);
@@ -283,15 +242,15 @@ describe("FSRS Profiles", () => {
       }
     });
 
-    test("should set correct sub-day dueDate via updateCard for INTENSIVE profile", () => {
+    test("updateCard sets a sub-day dueDate for the Again rating", () => {
       const now = new Date("2025-06-15T10:00:00.000Z");
       const fsrs = new FSRS({
         requestRetention: 0.9,
-        profile: "INTENSIVE",
+        profile: "STANDARD",
         nextDayStartsAt: 4,
       });
 
-      const updatedCard = fsrs.updateCard(testCard, "good", now);
+      const updatedCard = fsrs.updateCard(testCard, "again", now);
 
       const dueDate = new Date(updatedCard.dueDate);
       const diffMinutes = (dueDate.getTime() - now.getTime()) / (60 * 1000);
@@ -300,43 +259,27 @@ describe("FSRS Profiles", () => {
       expect(diffMinutes).toBeCloseTo(updatedCard.interval, 0);
     });
 
-    test("should transition from sub-day to study-day-aligned dueDate as intervals grow", () => {
+    test("uses exact offset for sub-day and study-day alignment for day-scale", () => {
+      const now = new Date("2025-06-15T10:00:00.000Z");
       const fsrs = new FSRS({
         requestRetention: 0.9,
-        profile: "INTENSIVE",
+        profile: "STANDARD",
         nextDayStartsAt: 4,
       });
 
-      let card = { ...testCard };
-      let hadSubDayInterval = false;
-      let hadDayBasedInterval = false;
+      // Again -> sub-day, exact minute offset.
+      const again = fsrs.updateCard(testCard, "again", now);
+      expect(again.interval).toBeLessThan(1440);
+      const againDiff =
+        (new Date(again.dueDate).getTime() - now.getTime()) / (60 * 1000);
+      expect(againDiff).toBeCloseTo(again.interval, 0);
 
-      for (let i = 0; i < 20; i++) {
-        const reviewTime = card.lastReviewed
-          ? new Date(
-              new Date(card.lastReviewed).getTime() +
-                card.interval * 60 * 1000
-            )
-          : new Date("2025-06-15T10:00:00.000Z");
-
-        card = fsrs.updateCard(card, "good", reviewTime);
-
-        const dueDate = new Date(card.dueDate);
-        const diffMinutes =
-          (dueDate.getTime() - reviewTime.getTime()) / (60 * 1000);
-
-        if (card.interval < 1440) {
-          hadSubDayInterval = true;
-          expect(diffMinutes).toBeCloseTo(card.interval, 0);
-        } else {
-          hadDayBasedInterval = true;
-          expect(dueDate.getMinutes()).toBe(0);
-          expect(dueDate.getSeconds()).toBe(0);
-        }
-      }
-
-      expect(hadSubDayInterval).toBe(true);
-      expect(hadDayBasedInterval).toBe(true);
+      // Good on a new card -> day-scale, aligned to the study-day boundary.
+      const good = fsrs.updateCard(testCard, "good", now);
+      expect(good.interval).toBeGreaterThanOrEqual(1440);
+      const goodDue = new Date(good.dueDate);
+      expect(goodDue.getMinutes()).toBe(0);
+      expect(goodDue.getSeconds()).toBe(0);
     });
   });
 });

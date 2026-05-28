@@ -13,12 +13,12 @@ In Anki's terminology, this is the "Optimize FSRS parameters" feature. We expose
 ### User flow
 
 1. User clicks **Optimize parameters** in the settings tab.
-2. A modal opens. The plugin loads every `review_log` entry attached to a flashcard in a STANDARD-profile deck. INTENSIVE decks are excluded — their `w[0..3]` are sub-day UX choices (1m/6m/10m/1day initial intervals), not learnable parameters.
+2. A modal opens. The plugin loads **every** `review_log` entry regardless of profile — including legacy INTENSIVE-era rows, which are valid observations now that the sub-day weight overrides have been removed.
 3. The optimizer runs for ~100 gradient steps, displaying step progress.
 4. On completion, the modal shows before/after log-loss and an "Apply / Discard" choice.
 5. If applied, the trained weights are saved globally to `settings.fsrs.trainedWeights`.
-6. Each profile decides whether to use them via the **FSRS profile** dropdown (Standard / Intensive / **Trained**). Trained is opt-in per profile and disabled until weights exist.
-7. The Scheduler reads `deck.profile.fsrs.useTrainedWeights` per review and applies the global trained vector when the profile asks for it.
+6. Each deck decides whether to use them via the **FSRS profile** dropdown (Standard / **Trained**). Trained is a first-class profile and is disabled in the dropdown until weights exist.
+7. The Scheduler applies the global trained vector for any deck whose `deck.profile.fsrs.profile` is `TRAINED`.
 
 ### Algorithm internals
 
@@ -126,15 +126,11 @@ A single training run on 5 users (~50 k test reviews) took 198 seconds in our op
 
 A WebAssembly compile of `fsrs-rs` was considered but `fsrs-browser` requires `SharedArrayBuffer` + cross-origin isolation, which Obsidian's `app://` renderer doesn't provide. A custom single-threaded WASM build of `fsrs-rs` is technically viable (the existing `sql.js` asset pipeline could host it) but would near-double the plugin's bundle size.
 
-### 5. INTENSIVE profile is excluded
+### 5. No per-deck override
 
-`w[0..3]` in INTENSIVE encode sub-day initial intervals (1m / 6m / 10m / 1day) that the user explicitly chose. Treating them as learnable parameters would override that choice based on a separate signal (the user's *long-term* recall behavior on their *standard* decks). We deliberately exclude INTENSIVE from training data and never apply trained weights to INTENSIVE-profile decks.
+Trained weights live globally. The opt-in is per deck (via the FSRS profile dropdown's **Trained** option). If two decks should diverge, only one needs to be switched to Trained. There is no separate INTENSIVE profile any more: the former INTENSIVE behaviour (sub-day intervals) is now available to every deck because the unified profile uses a 1-minute interval floor, so all review history is valid training data.
 
-### 6. No per-deck override
-
-Trained weights live globally. The opt-in is per profile (via the FSRS profile dropdown). If two decks share a profile, they share the choice. Users with very different content types should create separate profiles.
-
-### 7. Headline numbers are not directly comparable to published
+### 6. Headline numbers are not directly comparable to published
 
 The published 0.346 LogLoss number is from full 9,999-user benchmark with 5-fold TimeSeriesSplit. We've reproduced the methodology in `--train --kfold 5` mode but at smaller user counts. Our numbers on 5–50 users will always be noisier than the published 9,999-user number.
 

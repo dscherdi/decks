@@ -1,6 +1,12 @@
 # Decks - Progress Summary
 
-## ✅ Latest: Canvas Decks
+## ✅ Latest: Unified profile + first-class Trained (schema v22)
+- The `INTENSIVE` and `STANDARD` profiles are merged into a single **Standard** profile. FSRS produces continuous floating-point intervals, so a separate intensive profile is unnecessary: the unified profile uses `minMinutes = 1`, allowing sub-day (minute-scale) intervals for every deck when FSRS warrants them (Again, lapses, low-stability cards). New-card Hard/Good/Easy are pure FSRS (day-scale); the hardcoded `1m/6m/10m/1day` `w[0..3]` overrides are gone.
+- **Trained** is now a first-class profile value (`FSRSProfile = "STANDARD" | "TRAINED"`); the old `useTrainedWeights` flag is removed. The FSRS profile dropdown is now Standard / Trained.
+- The weight optimizer now trains on **all** review history regardless of profile — STANDARD, TRAINED, and legacy INTENSIVE rows all feed each run.
+- Schema v22 migration: existing `INTENSIVE` deck profiles map to `STANDARD`, `fsrs_use_trained = 1` profiles map to `TRAINED`, and the `fsrs_use_trained` column is dropped. Historical `review_logs.profile` values (including `INTENSIVE`) are preserved for training.
+
+## ✅ Canvas Decks
 - Author flashcards on Obsidian Canvas (`.canvas`) files alongside markdown.
 - Two new settings: Canvas decks folder, Canvas deck tag (default `#decks/canvas`).
 - Each `.canvas` in the folder is auto-discovered as a deck; each text node is parsed for the four card formats.

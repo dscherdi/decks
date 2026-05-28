@@ -10,7 +10,7 @@ import {
 
 /**
  * Orchestrates a global FSRS weight optimization run:
- * - loads review_logs filtered to STANDARD-profile decks via the database service
+ * - loads every review_log via the database service (all profiles train)
  * - delegates training to the pure-function optimizer
  * - returns the result for the caller to display + apply
  *
@@ -29,7 +29,7 @@ export class FsrsOptimizationService {
     options?: Partial<TrainingOptions>
   ): Promise<TrainingResult> {
     this.logger?.debug?.("FsrsOptimizationService.run: loading review logs");
-    const logs = await this.db.getReviewLogsForStandardProfile();
+    const logs = await this.db.getReviewLogsForTraining();
     this.logger?.debug?.(
       `FsrsOptimizationService.run: ${logs.length} review logs loaded`
     );

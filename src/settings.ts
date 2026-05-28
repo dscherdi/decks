@@ -82,9 +82,8 @@ export interface DecksSettings {
     syncLogFolder: string;
   };
 
-  // Global FSRS weight optimization. Whether a STANDARD profile applies these
-  // trained weights is a per-profile choice (DeckProfile.fsrs.useTrainedWeights);
-  // INTENSIVE profiles always ignore them.
+  // Global FSRS weight optimization. A deck applies these trained weights only when
+  // its profile is TRAINED (DeckProfile.fsrs.profile); STANDARD uses shipped weights.
   fsrs: {
     trainedWeights: number[] | null; // null = no trained weights yet
     lastTrainedAt: string | null;

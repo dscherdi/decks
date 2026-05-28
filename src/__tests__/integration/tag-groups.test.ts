@@ -231,7 +231,7 @@ describe("TagGroupService Integration Tests", () => {
         reviewOrder: "random",
         fsrs: {
           requestRetention: 0.9,
-          profile: "INTENSIVE",
+          profile: "TRAINED",
         },
         isDefault: false,
       });
@@ -289,7 +289,7 @@ describe("TagGroupService Integration Tests", () => {
         reviewOrder: "random",
         fsrs: {
           requestRetention: 0.95,
-          profile: "INTENSIVE",
+          profile: "TRAINED",
         },
         isDefault: false,
       });

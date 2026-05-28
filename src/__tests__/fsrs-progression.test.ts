@@ -3,7 +3,7 @@ import { Flashcard } from "../database/types";
 
 describe("FSRS Progression & Explosion Safety", () => {
   let fsrs: FSRS;
-  let intensiveFsrs: FSRS;
+  let trainedFsrs: FSRS;
 
   beforeEach(() => {
     fsrs = new FSRS({
@@ -11,9 +11,10 @@ describe("FSRS Progression & Explosion Safety", () => {
       profile: "STANDARD", // Using STANDARD makes days easier to verify manually
     });
 
-    intensiveFsrs = new FSRS({
+    // No trained weights injected -> TRAINED falls back to the shipped standard weights.
+    trainedFsrs = new FSRS({
       requestRetention: 0.9,
-      profile: "INTENSIVE",
+      profile: "TRAINED",
     });
   });
 
@@ -194,8 +195,10 @@ describe("FSRS Progression & Explosion Safety", () => {
     const preRelearnInterval = card.interval;
     card = fsrs.updateCard(card, "good", relearnTime);
 
-    // The factor after a lapse recovery should be reasonable
-    const postLapseFactor = card.interval / preRelearnInterval;
+    // The post-lapse interval is now sub-day (the 1-minute floor), so normalize the
+    // denominator to a day before measuring growth — otherwise a day-scale recovery
+    // divided by one minute looks like an "explosion" that isn't one.
+    const postLapseFactor = card.interval / Math.max(preRelearnInterval, 1440);
     expect(postLapseFactor).toBeLessThan(20); // Allow some recovery boost, but not explosive
     expect(postLapseFactor).toBeGreaterThan(1.1);
 
@@ -237,7 +240,7 @@ describe("FSRS Progression & Explosion Safety", () => {
 
       expect(Number.isFinite(card.stability)).toBe(true);
       expect(Number.isFinite(card.interval)).toBe(true);
-      expect(card.interval).toBeGreaterThanOrEqual(1440); // STANDARD profile minimum
+      expect(card.interval).toBeGreaterThanOrEqual(1); // minMinutes floor (sub-day allowed after a lapse)
     }
   });
 
@@ -287,13 +290,13 @@ describe("FSRS Progression & Explosion Safety", () => {
       expect(card.stability).toBeGreaterThan(0);
       expect(card.difficulty).toBeGreaterThanOrEqual(1);
       expect(card.difficulty).toBeLessThanOrEqual(10);
-      expect(card.interval).toBeGreaterThanOrEqual(1440); // STANDARD minimum
+      expect(card.interval).toBeGreaterThanOrEqual(1); // minMinutes floor (Again can be sub-day)
     }
 
     // console.table(history);
   });
 
-  it("should handle INTENSIVE profile progression without explosions", () => {
+  it("should handle TRAINED profile progression without explosions", () => {
     let card = createNewCard();
     const history: { rep: number; intervalMinutes: number; factor: number }[] =
       [];
@@ -309,7 +312,7 @@ describe("FSRS Progression & Explosion Safety", () => {
         reviewTime = new Date(lastReviewTime + prevInterval * 60 * 1000);
       }
 
-      card = intensiveFsrs.updateCard(card, "good", reviewTime);
+      card = trainedFsrs.updateCard(card, "good", reviewTime);
 
       let factor = 0;
       if (i > 1 && prevInterval > 0) {
@@ -323,7 +326,7 @@ describe("FSRS Progression & Explosion Safety", () => {
       });
 
       if (i > 1) {
-        // INTENSIVE allows sub-day intervals, so growth factors can be different
+        // Sub-day intervals are allowed, so growth factors can be larger early on.
         expect(factor).toBeLessThan(10.0); // Allow higher growth for small intervals
         if (card.interval < 36500 * 1440) {
           expect(factor).toBeGreaterThan(1.05);
@@ -332,7 +335,7 @@ describe("FSRS Progression & Explosion Safety", () => {
 
       expect(Number.isFinite(card.interval)).toBe(true);
       expect(Number.isFinite(card.stability)).toBe(true);
-      expect(card.interval).toBeGreaterThanOrEqual(1); // INTENSIVE minimum
+      expect(card.interval).toBeGreaterThanOrEqual(1); // minMinutes floor
     }
 
     // console.table(history);

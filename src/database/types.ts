@@ -1,4 +1,6 @@
 import { DEFAULT_FSRS_PARAMETERS } from "../algorithm/fsrs-weights";
+import type { FSRSProfile } from "../algorithm/fsrs-weights";
+export type { FSRSProfile };
 
 export type ReviewOrder = "due-date" | "random";
 export type ClozeShowContext = "open" | "hidden";
@@ -21,8 +23,7 @@ export interface DeckProfile {
 
   fsrs: {
     requestRetention: number;
-    profile: "INTENSIVE" | "STANDARD";
-    useTrainedWeights: boolean;
+    profile: FSRSProfile;
   };
 
   clozeEnabled: boolean;
@@ -49,7 +50,6 @@ export const DEFAULT_DECK_PROFILE: Omit<DeckProfile, 'id' | 'created' | 'modifie
   fsrs: {
     requestRetention: DEFAULT_FSRS_PARAMETERS.requestRetention,
     profile: "STANDARD",
-    useTrainedWeights: false,
   },
   clozeEnabled: true,
   clozeShowContext: "hidden",
@@ -266,9 +266,9 @@ export interface ReviewLog {
   elapsedDays: number; // (reviewedAt - lastReviewedAt) / 86400000
   retrievability: number; // R
 
-  // Config snapshot
+  // Config snapshot (profile is a point-in-time snapshot, so it may carry legacy "INTENSIVE")
   requestRetention: number;
-  profile: "INTENSIVE" | "STANDARD";
+  profile: "INTENSIVE" | "STANDARD" | "TRAINED";
   maximumIntervalDays: number;
   minMinutes: number;
   fsrsWeightsVersion: string; // or weightsHash

@@ -14,6 +14,7 @@ import type {
 import { DEFAULT_PROFILE_ID, deckWithProfile } from "./types";
 import type { FilterDefinition } from "./types";
 import { SQL_QUERIES } from "./schemas";
+import { normalizeProfile } from "../algorithm/fsrs-weights";
 import { compileFilter, type FilterCompileOptions } from "../services/FilterEngine";
 import type { SyncData, SyncResult } from "../services/FlashcardSynchronizer";
 import type {
@@ -143,14 +144,13 @@ export abstract class BaseDatabaseService implements IDatabaseService {
       relearningSteps: (row[9] as string) ?? "10m",
       fsrs: {
         requestRetention: row[10] as number,
-        profile: row[11] as "INTENSIVE" | "STANDARD",
-        useTrainedWeights: Boolean(row[12]),
+        profile: normalizeProfile(row[11] as string),
       },
-      clozeEnabled: Boolean(row[13]),
-      clozeShowContext: (row[14] as "open" | "hidden") ?? "open",
-      isDefault: Boolean(row[15]),
-      created: row[16] as string,
-      modified: row[17] as string,
+      clozeEnabled: Boolean(row[12]),
+      clozeShowContext: (row[13] as "open" | "hidden") ?? "open",
+      isDefault: Boolean(row[14]),
+      created: row[15] as string,
+      modified: row[16] as string,
     };
   }
 
@@ -436,7 +436,6 @@ export abstract class BaseDatabaseService implements IDatabaseService {
       profile.relearningSteps ?? "10m",
       profile.fsrs.requestRetention,
       profile.fsrs.profile,
-      profile.fsrs.useTrainedWeights ? 1 : 0,
       profile.clozeEnabled ? 1 : 0,
       profile.clozeShowContext ?? "open",
       profile.isDefault ? 1 : 0,
@@ -459,7 +458,6 @@ export abstract class BaseDatabaseService implements IDatabaseService {
         relearningSteps: profile.relearningSteps ?? "10m",
         fsrsRequestRetention: profile.fsrs.requestRetention,
         fsrsProfile: profile.fsrs.profile,
-        fsrsUseTrained: profile.fsrs.useTrainedWeights,
         clozeEnabled: profile.clozeEnabled,
         clozeShowContext: profile.clozeShowContext ?? "open",
         isDefault: profile.isDefault,
@@ -558,7 +556,6 @@ export abstract class BaseDatabaseService implements IDatabaseService {
       updated.relearningSteps,
       updated.fsrs.requestRetention,
       updated.fsrs.profile,
-      updated.fsrs.useTrainedWeights ? 1 : 0,
       updated.clozeEnabled ? 1 : 0,
       updated.clozeShowContext ?? "open",
       modifiedAt,
@@ -585,7 +582,6 @@ export abstract class BaseDatabaseService implements IDatabaseService {
         relearningSteps: updated.relearningSteps,
         fsrsRequestRetention: updated.fsrs.requestRetention,
         fsrsProfile: updated.fsrs.profile,
-        fsrsUseTrained: updated.fsrs.useTrainedWeights,
         clozeEnabled: updated.clozeEnabled,
         clozeShowContext: updated.clozeShowContext ?? "open",
         isDefault: updated.isDefault,
@@ -1462,7 +1458,7 @@ export abstract class BaseDatabaseService implements IDatabaseService {
       elapsedDays: row.elapsed_days,
       retrievability: row.retrievability,
       requestRetention: row.request_retention,
-      profile: row.profile as "INTENSIVE" | "STANDARD",
+      profile: row.profile as "INTENSIVE" | "STANDARD" | "TRAINED",
       maximumIntervalDays: row.maximum_interval_days,
       minMinutes: row.min_minutes,
       fsrsWeightsVersion: row.fsrs_weights_version,
@@ -1502,7 +1498,7 @@ export abstract class BaseDatabaseService implements IDatabaseService {
       elapsedDays: row.elapsed_days,
       retrievability: row.retrievability,
       requestRetention: row.request_retention,
-      profile: row.profile as "INTENSIVE" | "STANDARD",
+      profile: row.profile as "INTENSIVE" | "STANDARD" | "TRAINED",
       maximumIntervalDays: row.maximum_interval_days,
       minMinutes: row.min_minutes,
       fsrsWeightsVersion: row.fsrs_weights_version,
@@ -1547,21 +1543,17 @@ export abstract class BaseDatabaseService implements IDatabaseService {
   }
 
   /**
-   * Review logs that were recorded under the STANDARD profile, used by the
-   * global FSRS weight optimizer. INTENSIVE-era reviews are excluded because
-   * their `w[0..3]` are sub-day UX choices, not learnable parameters.
-   *
-   * Filter is on `review_logs.profile` (the snapshot at review time), not on
-   * the deck's current profile — otherwise a user could switch a deck's
-   * profile to STANDARD just before training and pull in INTENSIVE-era reviews.
+   * Every review log, used by the global FSRS weight optimizer. All profiles feed
+   * training — STANDARD, the user's TRAINED reviews (iterative self-improvement), and
+   * legacy INTENSIVE-era rows, which are valid observations now that the sub-day weight
+   * overrides are gone.
    *
    * Returns oldest-first ordering for chronological replay.
    */
-  async getReviewLogsForStandardProfile(): Promise<ReviewLog[]> {
+  async getReviewLogsForTraining(): Promise<ReviewLog[]> {
     const sql = `
       SELECT *
       FROM review_logs
-      WHERE profile = 'STANDARD'
       ORDER BY reviewed_at ASC
     `;
     const results = await this.querySql(sql, [], { asObject: true });
@@ -1621,7 +1613,7 @@ export abstract class BaseDatabaseService implements IDatabaseService {
       elapsedDays: row.elapsed_days,
       retrievability: row.retrievability,
       requestRetention: row.request_retention,
-      profile: row.profile as "INTENSIVE" | "STANDARD",
+      profile: row.profile as "INTENSIVE" | "STANDARD" | "TRAINED",
       maximumIntervalDays: row.maximum_interval_days,
       minMinutes: row.min_minutes,
       fsrsWeightsVersion: row.fsrs_weights_version,

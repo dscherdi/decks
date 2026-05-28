@@ -39,7 +39,7 @@ describe("Profiles Integration Tests", () => {
         reviewOrder: "random",
         fsrs: {
           requestRetention: 0.92,
-          profile: "INTENSIVE",
+          profile: "TRAINED",
         },
         isDefault: false,
       };
@@ -400,7 +400,7 @@ describe("Profiles Integration Tests", () => {
         reviewOrder: "random",
         fsrs: {
           requestRetention: 0.95,
-          profile: "INTENSIVE",
+          profile: "TRAINED",
         },
         isDefault: false,
       };
@@ -671,7 +671,7 @@ describe("Profiles Integration Tests", () => {
         reviewOrder: "random",
         fsrs: {
           requestRetention: 0.95,
-          profile: "INTENSIVE",
+          profile: "TRAINED",
         },
         isDefault: false,
       };
@@ -734,7 +734,7 @@ describe("Profiles Integration Tests", () => {
         reviewOrder: "random",
         fsrs: {
           requestRetention: 0.87,
-          profile: "INTENSIVE",
+          profile: "TRAINED",
         },
         isDefault: false,
       };
@@ -754,7 +754,7 @@ describe("Profiles Integration Tests", () => {
       expect(retrieved?.headerLevel).toBe(4);
       expect(retrieved?.reviewOrder).toBe("random");
       expect(retrieved?.fsrs.requestRetention).toBe(0.87);
-      expect(retrieved?.fsrs.profile).toBe("INTENSIVE");
+      expect(retrieved?.fsrs.profile).toBe("TRAINED");
       expect(retrieved?.isDefault).toBe(false);
       expect(retrieved?.created).toBeDefined();
       expect(retrieved?.modified).toBeDefined();
@@ -886,7 +886,7 @@ describe("Profiles Integration Tests", () => {
         reviewOrder: "due-date",
         fsrs: {
           requestRetention: 0.95,
-          profile: "INTENSIVE",
+          profile: "TRAINED",
         },
         isDefault: false,
       };
@@ -899,7 +899,7 @@ describe("Profiles Integration Tests", () => {
       const retrievedIntensive = await db.getProfileById("profile_intensive");
 
       expect(retrievedStandard?.fsrs.profile).toBe("STANDARD");
-      expect(retrievedIntensive?.fsrs.profile).toBe("INTENSIVE");
+      expect(retrievedIntensive?.fsrs.profile).toBe("TRAINED");
     });
   });
 
@@ -932,7 +932,7 @@ describe("Profiles Integration Tests", () => {
         reviewOrder: "random",
         fsrs: {
           requestRetention: 0.95,
-          profile: "INTENSIVE",
+          profile: "TRAINED",
         },
         isDefault: false,
       };
@@ -1095,7 +1095,7 @@ describe("Profiles Integration Tests", () => {
         reviewOrder: "random",
         fsrs: {
           requestRetention: 0.95,
-          profile: "INTENSIVE",
+          profile: "TRAINED",
         },
         isDefault: false,
       };
@@ -1416,7 +1416,7 @@ describe("Profiles Integration Tests", () => {
         reviewCardsPerDay: 2,
         headerLevel: 3,
         reviewOrder: "random",
-        fsrs: { requestRetention: 0.85, profile: "INTENSIVE" },
+        fsrs: { requestRetention: 0.85, profile: "TRAINED" },
         isDefault: false,
       };
 
@@ -1556,7 +1556,7 @@ describe("Profiles Integration Tests", () => {
         reviewCardsPerDay: 50,
         headerLevel: 3,
         reviewOrder: "random",
-        fsrs: { requestRetention: 0.95, profile: "INTENSIVE" },
+        fsrs: { requestRetention: 0.95, profile: "TRAINED" },
         isDefault: false,
       };
 

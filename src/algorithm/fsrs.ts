@@ -13,7 +13,7 @@ export type RatingLabel = "again" | "hard" | "good" | "easy";
 
 export interface FSRSParameters {
   requestRetention: number; // target retention rate (0,1)
-  profile: FSRSProfile; // "INTENSIVE" | "STANDARD"
+  profile: FSRSProfile; // "STANDARD" | "TRAINED"
   nextDayStartsAt?: number; // Hour (0-23) when study day rolls over (default 4)
   weights?: number[]; // Per-profile trained weights — overrides defaults when set
 }

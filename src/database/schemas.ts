@@ -1,7 +1,7 @@
 import type { Database } from "sql.js";
 
 // Current Schema Version
-export const CURRENT_SCHEMA_VERSION = 21;
+export const CURRENT_SCHEMA_VERSION = 22;
 
 // SQL Table Creation Schema - Used when database file doesn't exist
 export const CREATE_TABLES_SQL = `
@@ -21,8 +21,7 @@ export const CREATE_TABLES_SQL = `
     learning_steps TEXT NOT NULL DEFAULT '1m',
     relearning_steps TEXT NOT NULL DEFAULT '10m',
     fsrs_request_retention REAL NOT NULL DEFAULT 0.9,
-    fsrs_profile TEXT NOT NULL DEFAULT 'STANDARD' CHECK (fsrs_profile IN ('INTENSIVE', 'STANDARD')),
-    fsrs_use_trained INTEGER NOT NULL DEFAULT 0,
+    fsrs_profile TEXT NOT NULL DEFAULT 'STANDARD' CHECK (fsrs_profile IN ('INTENSIVE', 'STANDARD', 'TRAINED')),
     cloze_enabled INTEGER NOT NULL DEFAULT 1,
     cloze_show_context TEXT NOT NULL DEFAULT 'hidden' CHECK (cloze_show_context IN ('open', 'hidden')),
     is_default INTEGER NOT NULL DEFAULT 0,
@@ -128,7 +127,7 @@ export const CREATE_TABLES_SQL = `
     elapsed_days REAL NOT NULL,
     retrievability REAL NOT NULL,
     request_retention REAL NOT NULL,
-    profile TEXT NOT NULL DEFAULT 'STANDARD' CHECK (profile IN ('INTENSIVE', 'STANDARD')),
+    profile TEXT NOT NULL DEFAULT 'STANDARD' CHECK (profile IN ('INTENSIVE', 'STANDARD', 'TRAINED')),
     maximum_interval_days INTEGER NOT NULL,
     min_minutes INTEGER NOT NULL,
     fsrs_weights_version TEXT NOT NULL,
@@ -383,6 +382,60 @@ export function buildMigrationSQL(db: Database): string {
       datetime('now')
     );
 
+    -- Collapse INTENSIVE into STANDARD and promote the trained flag to a first-class
+    -- TRAINED profile. Rebuild is required to change the fsrs_profile CHECK and drop the
+    -- fsrs_use_trained column. The ALTER blocks above guarantee every referenced column
+    -- exists before this SELECT runs.
+    CREATE TABLE deckprofiles_new (
+      id TEXT PRIMARY KEY,
+      name TEXT NOT NULL UNIQUE,
+      has_new_cards_limit_enabled INTEGER NOT NULL DEFAULT 0,
+      new_cards_per_day INTEGER NOT NULL DEFAULT 20,
+      has_review_cards_limit_enabled INTEGER NOT NULL DEFAULT 0,
+      review_cards_per_day INTEGER NOT NULL DEFAULT 100,
+      header_level INTEGER NOT NULL DEFAULT 2,
+      review_order TEXT NOT NULL DEFAULT 'due-date' CHECK (review_order IN ('due-date', 'random')),
+      learning_steps TEXT NOT NULL DEFAULT '1m',
+      relearning_steps TEXT NOT NULL DEFAULT '10m',
+      fsrs_request_retention REAL NOT NULL DEFAULT 0.9,
+      fsrs_profile TEXT NOT NULL DEFAULT 'STANDARD' CHECK (fsrs_profile IN ('INTENSIVE', 'STANDARD', 'TRAINED')),
+      cloze_enabled INTEGER NOT NULL DEFAULT 1,
+      cloze_show_context TEXT NOT NULL DEFAULT 'hidden' CHECK (cloze_show_context IN ('open', 'hidden')),
+      is_default INTEGER NOT NULL DEFAULT 0,
+      created TEXT NOT NULL,
+      modified TEXT NOT NULL,
+      deleted_at TEXT
+    );
+
+    INSERT OR IGNORE INTO deckprofiles_new (
+      id, name,
+      has_new_cards_limit_enabled, new_cards_per_day,
+      has_review_cards_limit_enabled, review_cards_per_day,
+      header_level, review_order,
+      learning_steps, relearning_steps,
+      fsrs_request_retention, fsrs_profile,
+      cloze_enabled, cloze_show_context,
+      is_default, created, modified, deleted_at
+    )
+    SELECT
+      id, name,
+      has_new_cards_limit_enabled, new_cards_per_day,
+      has_review_cards_limit_enabled, review_cards_per_day,
+      header_level, review_order,
+      learning_steps, relearning_steps,
+      fsrs_request_retention,
+      CASE
+        WHEN fsrs_use_trained = 1 THEN 'TRAINED'
+        WHEN fsrs_profile = 'INTENSIVE' THEN 'STANDARD'
+        ELSE fsrs_profile
+      END,
+      cloze_enabled, cloze_show_context,
+      is_default, created, modified, deleted_at
+    FROM deckprofiles;
+
+    DROP TABLE deckprofiles;
+    ALTER TABLE deckprofiles_new RENAME TO deckprofiles;
+
     -- Preserve profile_tag_mappings (recreate with UNIQUE(tag) constraint)
     CREATE TABLE IF NOT EXISTS profile_tag_mappings (
       id TEXT PRIMARY KEY,
@@ -446,7 +499,7 @@ export function buildMigrationSQL(db: Database): string {
       elapsed_days REAL NOT NULL,
       retrievability REAL NOT NULL,
       request_retention REAL NOT NULL,
-      profile TEXT NOT NULL DEFAULT 'STANDARD' CHECK (profile IN ('INTENSIVE', 'STANDARD')),
+      profile TEXT NOT NULL DEFAULT 'STANDARD' CHECK (profile IN ('INTENSIVE', 'STANDARD', 'TRAINED')),
       maximum_interval_days INTEGER NOT NULL,
       min_minutes INTEGER NOT NULL,
       fsrs_weights_version TEXT NOT NULL,
@@ -658,17 +711,17 @@ export const SQL_QUERIES = {
       has_review_cards_limit_enabled, review_cards_per_day,
       header_level, review_order,
       learning_steps, relearning_steps,
-      fsrs_request_retention, fsrs_profile, fsrs_use_trained,
+      fsrs_request_retention, fsrs_profile,
       cloze_enabled, cloze_show_context,
       is_default, created, modified
-    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
   `,
 
   GET_PROFILE_BY_ID: `
     SELECT id, name, has_new_cards_limit_enabled, new_cards_per_day,
       has_review_cards_limit_enabled, review_cards_per_day,
       header_level, review_order, learning_steps, relearning_steps,
-      fsrs_request_retention, fsrs_profile, fsrs_use_trained,
+      fsrs_request_retention, fsrs_profile,
       cloze_enabled, cloze_show_context,
       is_default, created, modified
     FROM deckprofiles WHERE id = ? AND deleted_at IS NULL
@@ -678,7 +731,7 @@ export const SQL_QUERIES = {
     SELECT id, name, has_new_cards_limit_enabled, new_cards_per_day,
       has_review_cards_limit_enabled, review_cards_per_day,
       header_level, review_order, learning_steps, relearning_steps,
-      fsrs_request_retention, fsrs_profile, fsrs_use_trained,
+      fsrs_request_retention, fsrs_profile,
       cloze_enabled, cloze_show_context,
       is_default, created, modified
     FROM deckprofiles WHERE name = ? AND deleted_at IS NULL
@@ -688,7 +741,7 @@ export const SQL_QUERIES = {
     SELECT id, name, has_new_cards_limit_enabled, new_cards_per_day,
       has_review_cards_limit_enabled, review_cards_per_day,
       header_level, review_order, learning_steps, relearning_steps,
-      fsrs_request_retention, fsrs_profile, fsrs_use_trained,
+      fsrs_request_retention, fsrs_profile,
       cloze_enabled, cloze_show_context,
       is_default, created, modified
     FROM deckprofiles
@@ -700,7 +753,7 @@ export const SQL_QUERIES = {
     SELECT id, name, has_new_cards_limit_enabled, new_cards_per_day,
       has_review_cards_limit_enabled, review_cards_per_day,
       header_level, review_order, learning_steps, relearning_steps,
-      fsrs_request_retention, fsrs_profile, fsrs_use_trained,
+      fsrs_request_retention, fsrs_profile,
       cloze_enabled, cloze_show_context,
       is_default, created, modified
     FROM deckprofiles WHERE is_default = 1 AND deleted_at IS NULL LIMIT 1
@@ -713,7 +766,7 @@ export const SQL_QUERIES = {
       has_review_cards_limit_enabled = ?, review_cards_per_day = ?,
       header_level = ?, review_order = ?,
       learning_steps = ?, relearning_steps = ?,
-      fsrs_request_retention = ?, fsrs_profile = ?, fsrs_use_trained = ?,
+      fsrs_request_retention = ?, fsrs_profile = ?,
       cloze_enabled = ?, cloze_show_context = ?,
       modified = ?
     WHERE id = ? AND deleted_at IS NULL
@@ -1191,7 +1244,7 @@ export const BACKUP_TABLES_SQL = `
     elapsed_days REAL NOT NULL,
     retrievability REAL NOT NULL,
     request_retention REAL NOT NULL,
-    profile TEXT NOT NULL DEFAULT 'STANDARD' CHECK (profile IN ('INTENSIVE', 'STANDARD')),
+    profile TEXT NOT NULL DEFAULT 'STANDARD' CHECK (profile IN ('INTENSIVE', 'STANDARD', 'TRAINED')),
     maximum_interval_days INTEGER NOT NULL,
     min_minutes INTEGER NOT NULL,
     fsrs_weights_version TEXT NOT NULL,

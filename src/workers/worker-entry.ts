@@ -539,12 +539,24 @@ class SimpleDatabaseWorker {
     try {
       const result = remoteDb.exec(`SELECT * FROM ${table}`);
       if (result.length === 0) return;
-      const columns = result[0].columns;
-      const idIndex = columns.indexOf("id");
-      const modIndex = columns.indexOf("modified");
-      const deletedIndex = columns.indexOf("deleted_at");
-      const placeholders = columns.map(() => "?").join(",");
-      const columnList = columns.join(",");
+      const remoteColumns = result[0].columns;
+      // Only copy columns that exist locally too. Across an upgrade boundary the two
+      // devices' schemas can differ (e.g. a column was dropped); intersecting avoids an
+      // "INSERT into a non-existent column" failure that would silently skip the merge.
+      const localColumns = new Set(
+        (this.db.exec(`PRAGMA table_info(${table})`)[0]?.values ?? []).map(
+          (info) => info[1] as string
+        )
+      );
+      const useIndexes = remoteColumns
+        .map((name, index) => ({ name, index }))
+        .filter((c) => localColumns.has(c.name));
+
+      const idIndex = remoteColumns.indexOf("id");
+      const modIndex = remoteColumns.indexOf("modified");
+      const deletedIndex = remoteColumns.indexOf("deleted_at");
+      const placeholders = useIndexes.map(() => "?").join(",");
+      const columnList = useIndexes.map((c) => c.name).join(",");
       const stmt = this.db.prepare(
         `INSERT OR REPLACE INTO ${table} (${columnList}) VALUES (${placeholders})`
       );
@@ -562,7 +574,9 @@ class SimpleDatabaseWorker {
           ? (localRes[0].values[0][0] as string)
           : null;
 
-        if (!localEffective || remoteEffective > localEffective) stmt.run(row);
+        if (!localEffective || remoteEffective > localEffective) {
+          stmt.run(useIndexes.map((c) => row[c.index]));
+        }
       }
       stmt.free();
     } catch {

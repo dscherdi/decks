@@ -272,22 +272,21 @@ describe("Scheduler", () => {
         modified: new Date().toISOString(),
       };
 
-      const mockDeckIntensive = createMockDeckWithProfile("deck_1", {
+      const mockDeckTrained = createMockDeckWithProfile("deck_1", {
         fsrs: {
           requestRetention: 0.8,
-          profile: "INTENSIVE",
+          profile: "TRAINED",
         },
       });
 
       mockDb.getFlashcardById.mockResolvedValueOnce(mockCard);
-      mockDb.getDeckWithProfile = jest.fn().mockResolvedValueOnce(mockDeckIntensive);
+      mockDb.getDeckWithProfile = jest.fn().mockResolvedValueOnce(mockDeckTrained);
 
       const preview = await scheduler.preview("card_1");
 
       expect(preview).toBeDefined();
-      // The scheduler should have used INTENSIVE profile settings
-      // This is verified by the fact that preview completed successfully
-      // with the INTENSIVE profile configuration
+      // The scheduler should have used the TRAINED profile settings; with no trained
+      // weights in settings it falls back to standard weights and completes successfully.
     });
 
     it("should check review quota before due cards and new quota before new cards", async () => {

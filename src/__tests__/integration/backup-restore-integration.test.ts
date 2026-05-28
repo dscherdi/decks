@@ -12,7 +12,7 @@ import {
 } from "./database-test-utils";
 import { generateDeckId } from "../../utils/hash";
 import { CURRENT_SCHEMA_VERSION } from "../../database/schemas";
-import { getCurrentSchemaVersion } from "../../database/migrations";
+import { getCurrentSchemaVersion, migrate } from "../../database/migrations";
 import type { Deck, DeckProfile, FilterDefinition } from "../../database/types";
 
 function tableHasColumn(db: Database, table: string, column: string): boolean {
@@ -131,7 +131,7 @@ describe("Backup and restore integration", () => {
         reviewOrder: "random",
         learningSteps: "5m 15m",
         relearningSteps: "20m",
-        fsrs: { requestRetention: 0.85, profile: "INTENSIVE" },
+        fsrs: { requestRetention: 0.85, profile: "TRAINED" },
         clozeEnabled: true,
         clozeShowContext: "open",
         isDefault: false,
@@ -148,7 +148,7 @@ describe("Backup and restore integration", () => {
       const restored = await db.getProfileById(profileId);
       expect(restored).not.toBeNull();
       expect(restored?.name).toBe("Aggressive");
-      expect(restored?.fsrs.profile).toBe("INTENSIVE");
+      expect(restored?.fsrs.profile).toBe("TRAINED");
       expect(restored?.newCardsPerDay).toBe(50);
       expect(restored?.learningSteps).toBe("5m 15m");
     });
@@ -332,6 +332,136 @@ describe("Backup and restore integration", () => {
       const restored = await db.getCustomDeckById("cd_v14");
       expect(restored).not.toBeNull();
       expect(restored?.deckType).toBe("filter");
+    });
+  });
+
+  describe("v22 profile migration (INTENSIVE/trained-flag collapse)", () => {
+    function readProfile(database: Database, id: string): Record<string, unknown> {
+      const stmt = database.prepare(
+        `SELECT fsrs_profile FROM deckprofiles WHERE id = ?`
+      );
+      stmt.bind([id]);
+      stmt.step();
+      const row = stmt.getAsObject();
+      stmt.free();
+      return row;
+    }
+
+    it("maps INTENSIVE -> STANDARD, trained flag -> TRAINED, and drops fsrs_use_trained", async () => {
+      const SQL = await loadSqlJs();
+      const oldDb = new SQL.Database();
+      // Pre-v22 deckprofiles: INTENSIVE in the CHECK and a separate fsrs_use_trained flag.
+      oldDb.run(`
+        PRAGMA foreign_keys = OFF;
+        BEGIN;
+        CREATE TABLE deckprofiles (
+          id TEXT PRIMARY KEY,
+          name TEXT NOT NULL UNIQUE,
+          has_new_cards_limit_enabled INTEGER NOT NULL DEFAULT 0,
+          new_cards_per_day INTEGER NOT NULL DEFAULT 20,
+          has_review_cards_limit_enabled INTEGER NOT NULL DEFAULT 0,
+          review_cards_per_day INTEGER NOT NULL DEFAULT 100,
+          header_level INTEGER NOT NULL DEFAULT 2,
+          review_order TEXT NOT NULL DEFAULT 'due-date',
+          learning_steps TEXT NOT NULL DEFAULT '1m',
+          relearning_steps TEXT NOT NULL DEFAULT '10m',
+          fsrs_request_retention REAL NOT NULL DEFAULT 0.9,
+          fsrs_profile TEXT NOT NULL DEFAULT 'STANDARD' CHECK (fsrs_profile IN ('INTENSIVE', 'STANDARD')),
+          fsrs_use_trained INTEGER NOT NULL DEFAULT 0,
+          cloze_enabled INTEGER NOT NULL DEFAULT 1,
+          cloze_show_context TEXT NOT NULL DEFAULT 'hidden',
+          is_default INTEGER NOT NULL DEFAULT 0,
+          created TEXT NOT NULL,
+          modified TEXT NOT NULL,
+          deleted_at TEXT
+        );
+        INSERT INTO deckprofiles (id, name, fsrs_profile, fsrs_use_trained, is_default, created, modified) VALUES
+          ('profile_default', 'DEFAULT', 'STANDARD', 0, 1, datetime('now'), datetime('now')),
+          ('profile_intensive', 'Intensive', 'INTENSIVE', 0, 0, datetime('now'), datetime('now')),
+          ('profile_trained', 'Trained', 'STANDARD', 1, 0, datetime('now'), datetime('now'));
+        PRAGMA user_version = 21;
+        COMMIT;
+        PRAGMA foreign_keys = ON;
+      `);
+
+      migrate(oldDb);
+
+      expect(getCurrentSchemaVersion(oldDb)).toBe(CURRENT_SCHEMA_VERSION);
+      // The trained flag column is gone.
+      expect(tableHasColumn(oldDb, "deckprofiles", "fsrs_use_trained")).toBe(false);
+      // Values are remapped onto the two surviving profiles.
+      expect(readProfile(oldDb, "profile_default").fsrs_profile).toBe("STANDARD");
+      expect(readProfile(oldDb, "profile_intensive").fsrs_profile).toBe("STANDARD");
+      expect(readProfile(oldDb, "profile_trained").fsrs_profile).toBe("TRAINED");
+
+      oldDb.close();
+    });
+
+    it("preserves legacy INTENSIVE values in review_logs for training", async () => {
+      const SQL = await loadSqlJs();
+      const oldDb = new SQL.Database();
+      oldDb.run(`
+        PRAGMA foreign_keys = OFF;
+        BEGIN;
+        CREATE TABLE review_logs (
+          id TEXT PRIMARY KEY,
+          flashcard_id TEXT NOT NULL,
+          session_id TEXT,
+          last_reviewed_at TEXT NOT NULL,
+          shown_at TEXT,
+          reviewed_at TEXT NOT NULL,
+          rating INTEGER NOT NULL,
+          rating_label TEXT NOT NULL,
+          time_elapsed_ms INTEGER,
+          old_state TEXT NOT NULL,
+          old_repetitions INTEGER NOT NULL DEFAULT 0,
+          old_lapses INTEGER NOT NULL DEFAULT 0,
+          old_stability REAL NOT NULL DEFAULT 0,
+          old_difficulty REAL NOT NULL DEFAULT 5.0,
+          new_state TEXT NOT NULL,
+          new_repetitions INTEGER NOT NULL DEFAULT 0,
+          new_lapses INTEGER NOT NULL DEFAULT 0,
+          new_stability REAL NOT NULL DEFAULT 2.5,
+          new_difficulty REAL NOT NULL DEFAULT 5.0,
+          old_interval_minutes INTEGER NOT NULL,
+          new_interval_minutes INTEGER NOT NULL,
+          old_due_at TEXT NOT NULL,
+          new_due_at TEXT NOT NULL,
+          elapsed_days REAL NOT NULL,
+          retrievability REAL NOT NULL,
+          request_retention REAL NOT NULL,
+          profile TEXT NOT NULL DEFAULT 'STANDARD' CHECK (profile IN ('INTENSIVE', 'STANDARD')),
+          maximum_interval_days INTEGER NOT NULL,
+          min_minutes INTEGER NOT NULL,
+          fsrs_weights_version TEXT NOT NULL,
+          scheduler_version TEXT NOT NULL,
+          note_model_id TEXT,
+          card_template_id TEXT,
+          content_hash TEXT,
+          client TEXT
+        );
+        INSERT INTO review_logs (id, flashcard_id, last_reviewed_at, reviewed_at, rating, rating_label,
+          old_state, new_state, old_interval_minutes, new_interval_minutes, old_due_at, new_due_at,
+          elapsed_days, retrievability, request_retention, profile, maximum_interval_days, min_minutes,
+          fsrs_weights_version, scheduler_version)
+        VALUES ('log_1', 'card_1', datetime('now'), datetime('now'), 3, 'good',
+          'review', 'review', 6, 10, datetime('now'), datetime('now'),
+          0.004, 0.9, 0.9, 'INTENSIVE', 36500, 1, '1.0', '1.0');
+        PRAGMA user_version = 21;
+        COMMIT;
+        PRAGMA foreign_keys = ON;
+      `);
+
+      migrate(oldDb);
+
+      const stmt = oldDb.prepare(`SELECT profile FROM review_logs WHERE id = 'log_1'`);
+      stmt.step();
+      const row = stmt.getAsObject();
+      stmt.free();
+      // Historical review rows keep their snapshot profile so the optimizer can train on them.
+      expect(row.profile).toBe("INTENSIVE");
+
+      oldDb.close();
     });
   });
 });

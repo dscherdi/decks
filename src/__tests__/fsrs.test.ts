@@ -1,15 +1,11 @@
 import { FSRS } from "../algorithm/fsrs";
 import { Flashcard } from "../database/types";
-import {
-  FSRS_WEIGHTS_STANDARD,
-  FSRS_WEIGHTS_SUBDAY,
-} from "../algorithm/fsrs-weights";
 
 describe("FSRS Algorithm - Pure Implementation", () => {
   let fsrs: FSRS;
 
   beforeEach(() => {
-    fsrs = new FSRS({ requestRetention: 0.9, profile: "INTENSIVE" });
+    fsrs = new FSRS({ requestRetention: 0.9, profile: "STANDARD" });
   });
 
   describe("New Card Initialization", () => {
@@ -147,7 +143,7 @@ describe("FSRS Algorithm - Pure Implementation", () => {
 
       expect(againCard.state).toBe("review");
       expect(againCard.repetitions).toBe(4);
-      expect(againCard.interval).toBe(1); // INTENSIVE profile: 1 minute for Again
+      expect(againCard.interval).toBe(1); // Again is floored to 1 minute (minMinutes)
     });
 
     it("should increment lapses when pressing Again on review card", () => {
@@ -240,7 +236,7 @@ describe("FSRS Algorithm - Pure Implementation", () => {
       const againCard = schedulingInfo.again;
 
       // Again rating should result in shorter interval than current
-      // Note: In INTENSIVE profile, Again rating always gives 1 minute minimum
+      // Note: Again rating always gives the 1-minute minimum (minMinutes)
       expect(againCard.interval).toBe(1);
       expect(againCard.state).toBe("review");
     });
@@ -379,10 +375,10 @@ describe("FSRS Algorithm - Pure Implementation", () => {
     });
 
     it("should support sub-day intervals with low stability", () => {
-      // Create FSRS with intensive profile for sub-day intervals
+      // The unified profile allows sub-day intervals (minMinutes = 1).
       const subDayFsrs = new FSRS({
         requestRetention: 0.9,
-        profile: "INTENSIVE", // Sub-day intervals
+        profile: "STANDARD",
       });
 
       const newCard: Flashcard = {
@@ -422,10 +418,9 @@ describe("FSRS Algorithm - Pure Implementation", () => {
     });
 
     it("should support continuous sub-day scheduling workflow", () => {
-      // Create FSRS optimized for sub-day intervals
       const subDayFsrs = new FSRS({
         requestRetention: 0.95, // Higher retention for frequent reviews
-        profile: "INTENSIVE", // Use intensive profile for sub-day intervals
+        profile: "STANDARD",
       });
 
       let card: Flashcard = {
@@ -452,10 +447,11 @@ describe("FSRS Algorithm - Pure Implementation", () => {
         modified: new Date().toISOString(),
       };
 
-      // First review - should create sub-day interval
+      // First review - at high retention (0.95) the FSRS-decided Good interval is sub-day,
+      // which the unified profile now honors instead of flooring to a day.
       card = subDayFsrs.updateCard(card, "good");
       expect(card.interval).toBeGreaterThanOrEqual(1); // >= minMinutes
-      expect(card.interval).toBeLessThan(1440); // Should be sub-day with intensive profile
+      expect(card.interval).toBeLessThan(1440); // sub-day honored
       expect(card.state).toBe("review");
       expect(card.repetitions).toBe(1);
 
@@ -557,7 +553,7 @@ describe("FSRS Algorithm - Pure Implementation", () => {
       }).not.toThrow();
     });
 
-    it("should produce target intervals with sub-day optimized weights", () => {
+    it("should produce day-scale, monotonic intervals for a new card", () => {
       const newCard: Flashcard = {
         id: "subday-target-test",
         deckId: "test-deck",
@@ -584,9 +580,8 @@ describe("FSRS Algorithm - Pure Implementation", () => {
 
       const schedulingInfo = fsrs.getSchedulingInfo(newCard);
 
-      // With intensive profile, should produce sub-day intervals
-      expect(schedulingInfo.good.interval).toBeLessThan(1440); // Sub-day
-      expect(schedulingInfo.good.interval).toBeGreaterThanOrEqual(1); // At least minMinutes
+      // Good on a new card is FSRS-decided and day-scale (no hardcoded sub-day weights).
+      expect(schedulingInfo.good.interval).toBeGreaterThanOrEqual(1440);
 
       // Verify button order: Again < Hard < Good < Easy
       expect(schedulingInfo.again.interval).toBeLessThan(
@@ -1073,10 +1068,10 @@ describe("FSRS Algorithm - Pure Implementation", () => {
     });
 
     describe("Again Rating Minimum Interval", () => {
-      it("should always use minimum interval for Again rating in INTENSIVE profile", () => {
-        const fsrsIntensive = new FSRS({
+      it("should always use minimum interval for Again rating", () => {
+        const fsrsStandard = new FSRS({
           requestRetention: 0.9,
-          profile: "INTENSIVE",
+          profile: "STANDARD",
         });
 
         const reviewCard: Flashcard = {
@@ -1105,15 +1100,15 @@ describe("FSRS Algorithm - Pure Implementation", () => {
           modified: new Date().toISOString(),
         };
 
-        const againSchedule = fsrsIntensive.getSchedulingInfo(reviewCard).again;
+        const againSchedule = fsrsStandard.getSchedulingInfo(reviewCard).again;
 
-        // INTENSIVE profile should always give 1 minute for Again rating
+        // Again rating always gives the 1-minute minimum
         expect(againSchedule.interval).toBe(1);
         expect(againSchedule.state).toBe("review");
         // Note: lapses are tracked internally, not in SchedulingCard interface
       });
 
-      it("should always use minimum interval for Again rating in STANDARD profile", () => {
+      it("should use the 1-minute minimum interval for Again rating", () => {
         const fsrsStandard = new FSRS({
           requestRetention: 0.9,
           profile: "STANDARD",
@@ -1147,16 +1142,16 @@ describe("FSRS Algorithm - Pure Implementation", () => {
 
         const againSchedule = fsrsStandard.getSchedulingInfo(reviewCard).again;
 
-        // STANDARD profile should always give 1440 minutes (1 day) for Again rating
-        expect(againSchedule.interval).toBe(1440);
+        // Sub-day is now allowed for every profile, so Again uses the 1-minute floor.
+        expect(againSchedule.interval).toBe(1);
         expect(againSchedule.state).toBe("review");
         // Note: lapses are tracked internally, not in SchedulingCard interface
       });
 
       it("should use calculated interval for non-Again ratings", () => {
-        const fsrsIntensive = new FSRS({
+        const fsrsStandard = new FSRS({
           requestRetention: 0.9,
-          profile: "INTENSIVE",
+          profile: "STANDARD",
         });
 
         const reviewCard: Flashcard = {
@@ -1185,7 +1180,7 @@ describe("FSRS Algorithm - Pure Implementation", () => {
           modified: new Date().toISOString(),
         };
 
-        const goodSchedule = fsrsIntensive.getSchedulingInfo(reviewCard).good;
+        const goodSchedule = fsrsStandard.getSchedulingInfo(reviewCard).good;
 
         // Good rating should use calculated interval based on stability, not minimum
         expect(goodSchedule.interval).toBeGreaterThan(1); // Should be more than 1 minute
@@ -1194,9 +1189,9 @@ describe("FSRS Algorithm - Pure Implementation", () => {
       });
 
       it("should show correct Again interval in preview for review cards", () => {
-        const fsrsIntensive = new FSRS({
+        const fsrsStandard = new FSRS({
           requestRetention: 0.9,
-          profile: "INTENSIVE",
+          profile: "STANDARD",
         });
 
         const reviewCard: Flashcard = {
@@ -1225,9 +1220,9 @@ describe("FSRS Algorithm - Pure Implementation", () => {
           modified: new Date().toISOString(),
         };
 
-        const schedulingInfo = fsrsIntensive.getSchedulingInfo(reviewCard);
+        const schedulingInfo = fsrsStandard.getSchedulingInfo(reviewCard);
 
-        // INTENSIVE profile should show 1 minute for Again in preview
+        // Again preview shows the 1-minute minimum
         expect(schedulingInfo.again.interval).toBe(1);
 
         // Other ratings should show calculated intervals
@@ -1270,8 +1265,8 @@ describe("FSRS Algorithm - Pure Implementation", () => {
 
         const updatedCard = fsrsStandard.updateCard(reviewCard, "again");
 
-        // STANDARD profile should give 1440 minutes (1 day) for Again
-        expect(updatedCard.interval).toBe(1440);
+        // Sub-day is now allowed for every profile, so Again uses the 1-minute floor.
+        expect(updatedCard.interval).toBe(1);
         expect(updatedCard.state).toBe("review");
       });
     });
@@ -1336,7 +1331,7 @@ describe("FSRS-6 Formula Verification", () => {
 });
 
 describe("FSRS-6 Short-term Scheduling", () => {
-  const fsrs = new FSRS({ requestRetention: 0.9, profile: "INTENSIVE", nextDayStartsAt: 4 });
+  const fsrs = new FSRS({ requestRetention: 0.9, profile: "STANDARD", nextDayStartsAt: 4 });
 
   const makeReviewCard = (lastReviewedAt: Date): Flashcard => ({
     id: "short-term-test",

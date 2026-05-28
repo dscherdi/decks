@@ -715,13 +715,11 @@ export class Scheduler {
   }
 
   private updateFSRSForDeck(deck: DeckWithProfile): void {
-    // Per-profile choice: when the profile opts in to trained weights AND
-    // global trained weights exist, apply them. INTENSIVE never uses trained
-    // (its w[0..3] are sub-day UX choices, not learned).
+    // The TRAINED profile applies the globally-optimized weights when they exist;
+    // if none have been trained yet it falls back to the shipped standard weights.
     const trained = this.settings.fsrs?.trainedWeights ?? null;
-    const isStandard = deck.profile.fsrs.profile === "STANDARD";
     const useTrained =
-      isStandard && trained !== null && deck.profile.fsrs.useTrainedWeights;
+      deck.profile.fsrs.profile === "TRAINED" && trained !== null;
     this.fsrs.updateParameters({
       requestRetention: deck.profile.fsrs.requestRetention,
       profile: deck.profile.fsrs.profile,
@@ -1154,8 +1152,8 @@ export class Scheduler {
    * Override FSRS-calculated interval/dueDate with learning or relearning step intervals.
    * FSRS stability/difficulty are preserved — only interval and dueDate change.
    *
-   * New cards (INTENSIVE only) + Again: learningSteps[0] overrides interval
-   * Review cards + Again (both profiles): relearningSteps[0] overrides interval
+   * New cards + Again: learningSteps[0] overrides interval
+   * Review cards + Again: relearningSteps[0] overrides interval
    * All other combinations: pure FSRS (no override)
    */
   private applyStepOverride(
