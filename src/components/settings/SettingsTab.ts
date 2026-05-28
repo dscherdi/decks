@@ -84,7 +84,8 @@ export class DecksSettingTab extends PluginSettingTab {
     this.addBackupSettings(containerEl);
 
     // FSRS optimization (async: reads the active trained weight set from the DB)
-    this.addFsrsOptimizationSettings(containerEl).catch((e) =>
+    const fsrsContainer = containerEl.createDiv();
+    this.addFsrsOptimizationSettings(fsrsContainer).catch((e) =>
       this.logger?.error?.("Failed to render FSRS settings", e)
     );
 
