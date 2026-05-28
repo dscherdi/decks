@@ -11,6 +11,7 @@ import type { DecksSettings } from "../../settings";
 import { BackupService } from "../../services/BackupService";
 import DecksPlugin from "@/main";
 import type { IDatabaseService } from "@/database/DatabaseFactory";
+import type { FsrsWeightSet } from "@/database/types";
 import { Logger } from "@/utils/logging";
 import { OptimizeFsrsModal } from "./OptimizeFsrsModal";
 import { I18n } from "@/i18n/I18n";
@@ -82,8 +83,10 @@ export class DecksSettingTab extends PluginSettingTab {
     // Backup Settings
     this.addBackupSettings(containerEl);
 
-    // FSRS optimization
-    this.addFsrsOptimizationSettings(containerEl);
+    // FSRS optimization (async: reads the active trained weight set from the DB)
+    this.addFsrsOptimizationSettings(containerEl).catch((e) =>
+      this.logger?.error?.("Failed to render FSRS settings", e)
+    );
 
     // Debug Settings
     this.addDebugSettings(containerEl);
@@ -178,11 +181,11 @@ export class DecksSettingTab extends PluginSettingTab {
       );
   }
 
-  private addFsrsOptimizationSettings(containerEl: HTMLElement): void {
+  private async addFsrsOptimizationSettings(containerEl: HTMLElement): Promise<void> {
     new Setting(containerEl).setName(I18n.t.settings.fsrs.heading).setHeading();
 
-    const fsrs = this.settings.fsrs;
-    const desc = this.formatFsrsDescription();
+    const active = await this.db.getActiveTrainedWeightSet();
+    const desc = this.formatFsrsDescription(active);
 
     const setting = new Setting(containerEl)
       .setName(I18n.t.settings.fsrs.optimize)
@@ -193,29 +196,19 @@ export class DecksSettingTab extends PluginSettingTab {
         .setButtonText(I18n.t.settings.fsrs.optimizeButton)
         .setCta()
         .onClick(() => {
-          new OptimizeFsrsModal(
-            this.app,
-            this.db,
-            this.settings,
-            this.saveSettings,
-            this.logger,
-            () => this.display()
+          new OptimizeFsrsModal(this.app, this.db, this.logger, () =>
+            this.display()
           ).open();
         })
     );
 
-    if (fsrs.trainedWeights !== null) {
+    if (active) {
       setting.addButton((b) =>
         b
           .setButtonText(I18n.t.settings.fsrs.resetButton)
           .setWarning()
           .onClick(async () => {
-            this.settings.fsrs.trainedWeights = null;
-            this.settings.fsrs.lastTrainedAt = null;
-            this.settings.fsrs.lastTrainedReviewCount = 0;
-            this.settings.fsrs.lastBeforeLogLoss = null;
-            this.settings.fsrs.lastAfterLogLoss = null;
-            await this.saveSettings();
+            await this.db.clearTrainedWeights();
             new Notice(I18n.t.notices.trainedParamsCleared);
             this.display();
           })
@@ -223,19 +216,20 @@ export class DecksSettingTab extends PluginSettingTab {
     }
   }
 
-  private formatFsrsDescription(): string {
-    const fsrs = this.settings.fsrs;
-    if (fsrs.trainedWeights === null) {
+  private formatFsrsDescription(active: FsrsWeightSet | null): string {
+    if (!active) {
       return I18n.t.settings.fsrs.descUntrained;
     }
-    const when = fsrs.lastTrainedAt
-      ? new Date(fsrs.lastTrainedAt).toLocaleString()
+    const when = active.trainedAt
+      ? new Date(active.trainedAt).toLocaleString()
       : I18n.t.settings.fsrs.descTrainedUnknownWhen;
-    const before = fsrs.lastBeforeLogLoss?.toFixed(4) ?? I18n.t.settings.fsrs.descTrainedMissingMetric;
-    const after = fsrs.lastAfterLogLoss?.toFixed(4) ?? I18n.t.settings.fsrs.descTrainedMissingMetric;
+    const before =
+      active.beforeLogLoss?.toFixed(4) ?? I18n.t.settings.fsrs.descTrainedMissingMetric;
+    const after =
+      active.afterLogLoss?.toFixed(4) ?? I18n.t.settings.fsrs.descTrainedMissingMetric;
     return I18n.format(I18n.t.settings.fsrs.descTrained, {
       when,
-      count: fsrs.lastTrainedReviewCount.toLocaleString(),
+      count: active.reviewsTrained.toLocaleString(),
       before,
       after,
     });

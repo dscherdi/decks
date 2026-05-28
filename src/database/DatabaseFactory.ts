@@ -12,6 +12,7 @@ import type {
   ReviewSession,
   CustomDeck,
   CustomDeckType,
+  FsrsWeightSet,
 } from "./types";
 import type { SqlJsValue, SqlRecord, SqlRow } from "./sql-types";
 import type { SyncData, SyncResult } from "../services/FlashcardSynchronizer";
@@ -154,6 +155,14 @@ export interface IDatabaseService {
   getReviewLogsByDeck(deckId: string): Promise<ReviewLog[]>;
   getReviewLogsByDecks(deckIds: string[]): Promise<ReviewLog[]>;
   getReviewLogsForTraining(): Promise<ReviewLog[]>;
+
+  // Trained FSRS weight sets
+  saveTrainedWeightSet(
+    input: Omit<FsrsWeightSet, "id" | "created" | "modified" | "deletedAt">
+  ): Promise<string>;
+  getActiveTrainedWeightSet(): Promise<FsrsWeightSet | null>;
+  getAllTrainedWeightSets(): Promise<FsrsWeightSet[]>;
+  clearTrainedWeights(): Promise<void>;
 
   // Review session operations
   createReviewSession(session: Omit<ReviewSession, "id">): Promise<string>;

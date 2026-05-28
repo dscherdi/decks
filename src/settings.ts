@@ -82,16 +82,6 @@ export interface DecksSettings {
     syncLogFolder: string;
   };
 
-  // Global FSRS weight optimization. A deck applies these trained weights only when
-  // its profile is TRAINED (DeckProfile.fsrs.profile); STANDARD uses shipped weights.
-  fsrs: {
-    trainedWeights: number[] | null; // null = no trained weights yet
-    lastTrainedAt: string | null;
-    lastTrainedReviewCount: number;
-    lastBeforeLogLoss: number | null;
-    lastAfterLogLoss: number | null;
-  };
-
   // Internationalization
   i18n: {
     language: LanguagePreference; // "auto" follows Obsidian's getLanguage()
@@ -148,14 +138,6 @@ export const DEFAULT_SETTINGS: DecksSettings = {
     dbFolder: "",
     backupFolder: "",
     syncLogFolder: "",
-  },
-
-  fsrs: {
-    trainedWeights: null,
-    lastTrainedAt: null,
-    lastTrainedReviewCount: 0,
-    lastBeforeLogLoss: null,
-    lastAfterLogLoss: null,
   },
 
   i18n: {

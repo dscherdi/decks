@@ -201,15 +201,16 @@ export class DecksView extends ItemView {
   }
 
   openProfilesManagerModal(): void {
-    new ProfilesManagerModal(
-      this.app,
-      this.db,
-      async () => {
-        await this.refresh();
-      },
-      this.settings.fsrs?.trainedWeights !== null &&
-        this.settings.fsrs?.trainedWeights !== undefined
-    ).open();
+    void this.db.getActiveTrainedWeightSet().then((active) => {
+      new ProfilesManagerModal(
+        this.app,
+        this.db,
+        async () => {
+          await this.refresh();
+        },
+        active !== null
+      ).open();
+    });
   }
 
   openFlashcardManager(): void {

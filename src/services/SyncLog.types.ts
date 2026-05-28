@@ -36,7 +36,8 @@ export type SyncOpV1 =
   | CardUnsuspendOp
   | CardBuryOp
   | CardUnburyOp
-  | CardResetOp;
+  | CardResetOp
+  | WeightSetUpsertOp;
 
 export type SyncLogEntry = SyncLogEntryHeader & SyncOpV1;
 
@@ -153,6 +154,7 @@ export interface ReviewLogPayload {
   cardTemplateId: string | null;
   contentHash: string | null;
   client: "web" | "desktop" | "mobile" | null;
+  fsrsWeightSetId?: string | null;
 }
 
 // ---------- Sessions --------------------------------------------------------
@@ -200,9 +202,6 @@ export interface ProfileUpsertOp {
     relearningSteps: string;
     fsrsRequestRetention: number;
     fsrsProfile: "STANDARD" | "TRAINED" | "INTENSIVE";
-    // Deprecated: superseded by the first-class TRAINED profile. Still read from legacy
-    // journals to map an old (STANDARD + trained) op onto the TRAINED profile.
-    fsrsUseTrained?: boolean;
     clozeEnabled: boolean;
     clozeShowContext: "open" | "hidden";
     isDefault: boolean;
@@ -216,6 +215,29 @@ export interface ProfileDeleteOp {
   p: {
     id: string;
     deletedAt: string;
+  };
+}
+
+// ---------- Trained FSRS weight sets ----------------------------------------
+
+// Upsert (also covers soft-delete via deletedAt) of a trained weight set.
+// Newer-wins by `modified`; rows are otherwise immutable history.
+export interface WeightSetUpsertOp {
+  o: "weight_set_upsert";
+  p: {
+    id: string;
+    weights: string; // JSON array of 21 numbers
+    trainedAt: string;
+    reviewsTrained: number;
+    cardsTrained: number;
+    beforeLogLoss: number | null;
+    afterLogLoss: number | null;
+    steps: number;
+    durationMs: number;
+    weightsVersion: string;
+    created: string;
+    modified: string;
+    deletedAt: string | null;
   };
 }
 

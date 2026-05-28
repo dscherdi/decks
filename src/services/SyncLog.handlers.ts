@@ -70,6 +70,7 @@ const HANDLERS: Partial<Record<SyncLogEntry["o"], OpHandler>> = {
   card_bury: handleCardBury,
   card_unbury: handleCardUnbury,
   card_reset: handleCardReset,
+  weight_set_upsert: handleWeightSetUpsert,
 };
 
 /**
@@ -130,6 +131,7 @@ async function handleRate(
     cardTemplateId: p.log.cardTemplateId ?? undefined,
     contentHash: p.log.contentHash ?? undefined,
     client: p.log.client ?? undefined,
+    fsrsWeightSetId: p.log.fsrsWeightSetId ?? null,
   };
 
   // Step 1: log row. insertReviewLog uses INSERT INTO with the caller's id;
@@ -417,8 +419,7 @@ async function handleProfileUpsert(
       p.learningSteps,
       p.relearningSteps,
       p.fsrsRequestRetention,
-      // Legacy journals carry a separate trained flag; collapse it into the profile value.
-      p.fsrsUseTrained ? "TRAINED" : normalizeProfile(p.fsrsProfile),
+      normalizeProfile(p.fsrsProfile),
       p.clozeEnabled ? 1 : 0,
       p.clozeShowContext,
       p.isDefault ? 1 : 0,
@@ -444,6 +445,48 @@ async function handleProfileDelete(
        AND is_default = 0
        AND (deleted_at IS NULL OR deleted_at < ?)`,
     [entry.p.deletedAt, entry.p.deletedAt, entry.p.id, entry.p.deletedAt]
+  );
+}
+
+// ---------- Trained FSRS weight sets -------------------------------------
+
+/**
+ * Upsert a trained weight set (also applies soft-deletes via deletedAt). Rows are
+ * immutable apart from `modified`/`deleted_at`, so newer-wins by `modified`.
+ */
+async function handleWeightSetUpsert(
+  db: IDatabaseService,
+  _sourceDeviceId: string,
+  entry: SyncLogEntry,
+  _logger: Logger
+): Promise<void> {
+  if (entry.o !== "weight_set_upsert") return;
+  const p = entry.p;
+  await db.executeSql(
+    `INSERT INTO fsrs_weight_sets (
+       id, weights, trained_at, reviews_trained, cards_trained,
+       before_log_loss, after_log_loss, steps, duration_ms, weights_version,
+       created, modified, deleted_at
+     ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+     ON CONFLICT(id) DO UPDATE SET
+       modified = excluded.modified,
+       deleted_at = excluded.deleted_at
+     WHERE excluded.modified > fsrs_weight_sets.modified`,
+    [
+      p.id,
+      p.weights,
+      p.trainedAt,
+      p.reviewsTrained,
+      p.cardsTrained,
+      p.beforeLogLoss,
+      p.afterLogLoss,
+      p.steps,
+      p.durationMs,
+      p.weightsVersion,
+      p.created,
+      p.modified,
+      p.deletedAt,
+    ]
   );
 }
 

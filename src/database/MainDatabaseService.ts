@@ -559,6 +559,19 @@ export class MainDatabaseService extends BaseDatabaseService {
               this.debugLog("Remote DB has no custom_deck_cards table, skipping");
             }
 
+            // Merge trained weight sets by effective timestamp COALESCE(deleted_at, modified).
+            try {
+              this.db.exec(`
+                INSERT OR REPLACE INTO fsrs_weight_sets
+                SELECT remote.* FROM remote.fsrs_weight_sets
+                LEFT JOIN fsrs_weight_sets AS main ON remote.id = main.id
+                WHERE main.id IS NULL
+                   OR COALESCE(remote.deleted_at, remote.modified) > COALESCE(main.deleted_at, main.modified)
+              `);
+            } catch {
+              this.debugLog("Remote DB has no fsrs_weight_sets table, skipping");
+            }
+
             // Commit the transaction
             this.db.exec("COMMIT");
             this.debugLog("Successfully merged data from disk");
@@ -818,6 +831,42 @@ export class MainDatabaseService extends BaseDatabaseService {
               }
             } catch {
               this.debugLog("Remote DB has no custom_deck_cards table, skipping");
+            }
+
+            // Merge trained weight sets by effective timestamp COALESCE(deleted_at, modified).
+            try {
+              const remoteWeightSets = remoteDb.exec("SELECT * FROM fsrs_weight_sets");
+              if (remoteWeightSets.length > 0) {
+                const wsData = remoteWeightSets[0];
+                const idIdx = wsData.columns.indexOf("id");
+                const modIdx = wsData.columns.indexOf("modified");
+                const delIdx = wsData.columns.indexOf("deleted_at");
+                for (const row of wsData.values) {
+                  const id = row[idIdx] as string;
+                  const remoteModified = row[modIdx] as string;
+                  const remoteDeleted =
+                    delIdx >= 0 ? (row[delIdx] as string | null) : null;
+                  const remoteEffective = remoteDeleted || remoteModified;
+
+                  const existing = this.db.exec(
+                    `SELECT COALESCE(deleted_at, modified) FROM fsrs_weight_sets WHERE id = ?`,
+                    [id]
+                  );
+                  const localEffective = existing.length
+                    ? (existing[0]?.values?.[0]?.[0] as string | null)
+                    : null;
+                  if (!localEffective || remoteEffective > localEffective) {
+                    const stmt = this.db.prepare(`
+                      INSERT OR REPLACE INTO fsrs_weight_sets (${wsData.columns.join(",")})
+                      VALUES (${wsData.columns.map(() => "?").join(",")})
+                    `);
+                    stmt.run(row);
+                    stmt.free();
+                  }
+                }
+              }
+            } catch {
+              this.debugLog("Remote DB has no fsrs_weight_sets table, skipping");
             }
 
             // Commit the transaction

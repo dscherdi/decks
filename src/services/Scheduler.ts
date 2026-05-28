@@ -291,7 +291,7 @@ export class Scheduler {
     const deck = await this.db.getDeckWithProfile(card.deckId);
     if (!deck) return null;
 
-    this.updateFSRSForDeck(deck);
+    await this.updateFSRSForDeck(deck);
 
     const ratings: RatingLabel[] = ["again", "hard", "good", "easy"];
     const preview: Partial<SchedulingPreview> = {};
@@ -339,7 +339,7 @@ export class Scheduler {
     this.debugLog(
       `Found card: ${card.front.substring(0, 50)}... in deck: ${deck.name}`
     );
-    this.updateFSRSForDeck(deck);
+    const activeWeightSetId = await this.updateFSRSForDeck(deck);
 
     // Calculate new card state
     const oldCard = { ...card };
@@ -427,6 +427,9 @@ export class Scheduler {
       fsrsWeightsVersion: this.getWeightsHash(deck.profile.fsrs.profile),
       schedulerVersion: "1.0",
 
+      // Trained weight set used (TRAINED profile only)
+      fsrsWeightSetId: activeWeightSetId,
+
       // Content context
       contentHash: card.contentHash,
     };
@@ -501,6 +504,7 @@ export class Scheduler {
             cardTemplateId: reviewLog.cardTemplateId ?? null,
             contentHash: reviewLog.contentHash ?? null,
             client: reviewLog.client ?? null,
+            fsrsWeightSetId: reviewLog.fsrsWeightSetId ?? null,
           },
         },
       };
@@ -714,18 +718,29 @@ export class Scheduler {
     return dailyCounts.reviewCount < deck.profile.reviewCardsPerDay;
   }
 
-  private updateFSRSForDeck(deck: DeckWithProfile): void {
-    // The TRAINED profile applies the globally-optimized weights when they exist;
-    // if none have been trained yet it falls back to the shipped standard weights.
-    const trained = this.settings.fsrs?.trainedWeights ?? null;
-    const useTrained =
-      deck.profile.fsrs.profile === "TRAINED" && trained !== null;
+  /**
+   * Configure the FSRS instance for a deck. The TRAINED profile applies the active
+   * trained weight set (newest live row in the DB); if none exists it falls back to the
+   * shipped standard weights. Returns the active weight-set id (or null) so the caller can
+   * stamp it on the review log.
+   */
+  private async updateFSRSForDeck(deck: DeckWithProfile): Promise<string | null> {
+    let weights: number[] | undefined;
+    let weightSetId: string | null = null;
+    if (deck.profile.fsrs.profile === "TRAINED") {
+      const active = await this.db.getActiveTrainedWeightSet();
+      if (active) {
+        weights = active.weights;
+        weightSetId = active.id;
+      }
+    }
     this.fsrs.updateParameters({
       requestRetention: deck.profile.fsrs.requestRetention,
       profile: deck.profile.fsrs.profile,
-      weights: useTrained ? trained : undefined,
+      weights,
       nextDayStartsAt: this.settings.review.nextDayStartsAt,
     });
+    return weightSetId;
   }
 
   private getElapsedDays(card: Flashcard, now: Date): number {

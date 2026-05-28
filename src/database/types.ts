@@ -279,6 +279,29 @@ export interface ReviewLog {
   cardTemplateId?: string;
   contentHash?: string;
   client?: "web" | "desktop" | "mobile";
+
+  // Trained weight set used for this review (TRAINED profile only; null for shipped weights)
+  fsrsWeightSetId?: string | null;
+}
+
+/**
+ * A single applied FSRS weight-optimization run. The DB keeps every set (history); the
+ * active one is the newest live row by `trainedAt`.
+ */
+export interface FsrsWeightSet {
+  id: string;
+  weights: number[];
+  trainedAt: string;
+  reviewsTrained: number;
+  cardsTrained: number;
+  beforeLogLoss: number | null;
+  afterLogLoss: number | null;
+  steps: number;
+  durationMs: number;
+  weightsVersion: string;
+  created: string;
+  modified: string;
+  deletedAt?: string | null;
 }
 
 export interface DeckStats {
@@ -305,6 +328,7 @@ export interface DatabaseSchema {
   review_sessions: ReviewSession;
   custom_decks: CustomDeck;
   custom_deck_cards: CustomDeckCard;
+  fsrs_weight_sets: FsrsWeightSet;
 }
 
 export interface DailyStats {

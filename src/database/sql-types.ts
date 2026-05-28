@@ -77,6 +77,7 @@ export interface ReviewLogRow {
   fsrs_weights_version: string;
   scheduler_version: string;
   content_hash: string;
+  fsrs_weight_set_id: string | null;
 }
 
 // Review session query results

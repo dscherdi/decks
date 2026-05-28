@@ -1,6 +1,5 @@
 import { App, Modal, Notice, Setting } from "obsidian";
 import type { IDatabaseService } from "../../database/DatabaseFactory";
-import type { DecksSettings } from "../../settings";
 import { FsrsOptimizationService } from "../../services/FsrsOptimizationService";
 import type { TrainingResult } from "../../algorithm/fsrs-optimizer";
 import type { Logger } from "../../utils/logging";
@@ -13,9 +12,7 @@ import { I18n } from "@/i18n/I18n";
  * 3) Shows before/after LogLoss + review count, Apply / Discard buttons
  */
 export class OptimizeFsrsModal extends Modal {
-  private settings: DecksSettings;
   private db: IDatabaseService;
-  private saveSettings: () => Promise<void>;
   private onApplied?: () => void;
   private logger?: Logger;
 
@@ -25,15 +22,11 @@ export class OptimizeFsrsModal extends Modal {
   constructor(
     app: App,
     db: IDatabaseService,
-    settings: DecksSettings,
-    saveSettings: () => Promise<void>,
     logger?: Logger,
     onApplied?: () => void
   ) {
     super(app);
     this.db = db;
-    this.settings = settings;
-    this.saveSettings = saveSettings;
     this.logger = logger;
     this.onApplied = onApplied;
   }
@@ -55,12 +48,11 @@ export class OptimizeFsrsModal extends Modal {
     this.renderProgress(0, 0, I18n.t.modals.optimizeFsrs.loadingHistory);
     const service = new FsrsOptimizationService(this.db, this.logger);
 
-    // Warm-start from the user's current trained weights when present. This
-    // makes "before LogLoss" reflect the user's actual current scheduling
-    // (not shipped defaults) and avoids re-discovering the same optimum on
-    // every retrain.
-    const existing = this.settings.fsrs.trainedWeights;
-    const startOptions = existing ? { initial: existing.slice() } : undefined;
+    // Warm-start from the active trained weight set when present. This makes
+    // "before LogLoss" reflect the user's actual current scheduling (not shipped
+    // defaults) and avoids re-discovering the same optimum on every retrain.
+    const active = await this.db.getActiveTrainedWeightSet();
+    const startOptions = active ? { initial: active.weights.slice() } : undefined;
 
     const result = await service.run((p) => {
       if (this.aborted) return;
@@ -174,12 +166,17 @@ export class OptimizeFsrsModal extends Modal {
   }
 
   private async applyResult(result: TrainingResult): Promise<void> {
-    this.settings.fsrs.trainedWeights = result.weights;
-    this.settings.fsrs.lastTrainedAt = new Date().toISOString();
-    this.settings.fsrs.lastTrainedReviewCount = result.reviewsTrained;
-    this.settings.fsrs.lastBeforeLogLoss = result.beforeLogLoss;
-    this.settings.fsrs.lastAfterLogLoss = result.afterLogLoss;
-    await this.saveSettings();
+    await this.db.saveTrainedWeightSet({
+      weights: result.weights,
+      trainedAt: new Date().toISOString(),
+      reviewsTrained: result.reviewsTrained,
+      cardsTrained: result.cardsTrained,
+      beforeLogLoss: result.beforeLogLoss,
+      afterLogLoss: result.afterLogLoss,
+      steps: result.steps,
+      durationMs: result.durationMs,
+      weightsVersion: "fsrs-6",
+    });
     new Notice(I18n.t.modals.optimizeFsrs.applied);
     this.onApplied?.();
     this.close();

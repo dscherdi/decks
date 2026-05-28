@@ -464,4 +464,53 @@ describe("Backup and restore integration", () => {
       oldDb.close();
     });
   });
+
+  describe("v23 trained weight sets migration", () => {
+    it("creates fsrs_weight_sets and adds review_logs.fsrs_weight_set_id", async () => {
+      const SQL = await loadSqlJs();
+      const oldDb = new SQL.Database();
+      // Minimal pre-v23 DB: a review_logs table without the new column, no weight-sets table.
+      oldDb.run(`
+        PRAGMA foreign_keys = OFF;
+        BEGIN;
+        CREATE TABLE review_logs (
+          id TEXT PRIMARY KEY,
+          flashcard_id TEXT NOT NULL,
+          last_reviewed_at TEXT NOT NULL,
+          reviewed_at TEXT NOT NULL,
+          rating INTEGER NOT NULL,
+          rating_label TEXT NOT NULL,
+          old_state TEXT NOT NULL,
+          new_state TEXT NOT NULL,
+          old_interval_minutes INTEGER NOT NULL,
+          new_interval_minutes INTEGER NOT NULL,
+          old_due_at TEXT NOT NULL,
+          new_due_at TEXT NOT NULL,
+          elapsed_days REAL NOT NULL,
+          retrievability REAL NOT NULL,
+          request_retention REAL NOT NULL,
+          profile TEXT NOT NULL DEFAULT 'STANDARD',
+          maximum_interval_days INTEGER NOT NULL,
+          min_minutes INTEGER NOT NULL,
+          fsrs_weights_version TEXT NOT NULL,
+          scheduler_version TEXT NOT NULL
+        );
+        PRAGMA user_version = 22;
+        COMMIT;
+        PRAGMA foreign_keys = ON;
+      `);
+
+      migrate(oldDb);
+
+      expect(getCurrentSchemaVersion(oldDb)).toBe(CURRENT_SCHEMA_VERSION);
+      expect(tableHasColumn(oldDb, "review_logs", "fsrs_weight_set_id")).toBe(true);
+      // The weight-sets table now exists.
+      const tables = oldDb.exec(
+        `SELECT name FROM sqlite_master WHERE type='table' AND name='fsrs_weight_sets'`
+      );
+      expect(tables.length).toBe(1);
+
+      oldDb.close();
+    });
+  });
 });

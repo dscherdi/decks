@@ -1,7 +1,7 @@
 import type { Database } from "sql.js";
 
 // Current Schema Version
-export const CURRENT_SCHEMA_VERSION = 22;
+export const CURRENT_SCHEMA_VERSION = 23;
 
 // SQL Table Creation Schema - Used when database file doesn't exist
 export const CREATE_TABLES_SQL = `
@@ -135,7 +135,25 @@ export const CREATE_TABLES_SQL = `
     note_model_id TEXT,
     card_template_id TEXT,
     content_hash TEXT,
-    client TEXT
+    client TEXT,
+    fsrs_weight_set_id TEXT
+  );
+
+  -- Trained FSRS weight sets (history of every applied optimization run)
+  CREATE TABLE IF NOT EXISTS fsrs_weight_sets (
+    id TEXT PRIMARY KEY,
+    weights TEXT NOT NULL,
+    trained_at TEXT NOT NULL,
+    reviews_trained INTEGER NOT NULL DEFAULT 0,
+    cards_trained INTEGER NOT NULL DEFAULT 0,
+    before_log_loss REAL,
+    after_log_loss REAL,
+    steps INTEGER NOT NULL DEFAULT 0,
+    duration_ms INTEGER NOT NULL DEFAULT 0,
+    weights_version TEXT NOT NULL DEFAULT 'fsrs-6',
+    created TEXT NOT NULL,
+    modified TEXT NOT NULL,
+    deleted_at TEXT
   );
 
   -- Custom decks table
@@ -229,6 +247,10 @@ export const CREATE_TABLES_SQL = `
   CREATE INDEX IF NOT EXISTS idx_profile_tag_mappings_live ON profile_tag_mappings(deleted_at);
   CREATE INDEX IF NOT EXISTS idx_custom_decks_live ON custom_decks(deleted_at);
 
+  -- Trained weight set indexes (active = newest live by trained_at)
+  CREATE INDEX IF NOT EXISTS idx_fsrs_weight_sets_live ON fsrs_weight_sets(deleted_at);
+  CREATE INDEX IF NOT EXISTS idx_fsrs_weight_sets_trained_at ON fsrs_weight_sets(trained_at);
+
   -- Set schema version
   PRAGMA user_version = ${CURRENT_SCHEMA_VERSION};
 
@@ -314,6 +336,7 @@ export function buildMigrationSQL(db: Database): string {
     col(rl, "card_template_id", null, "NULL"),
     col(rl, "content_hash", null, "NULL"),
     col(rl, "client", null, "NULL"),
+    col(rl, "fsrs_weight_set_id", null, "NULL"),
   ].join(", ");
 
   return `
@@ -507,14 +530,32 @@ export function buildMigrationSQL(db: Database): string {
       note_model_id TEXT,
       card_template_id TEXT,
       content_hash TEXT,
-      client TEXT
+      client TEXT,
+      fsrs_weight_set_id TEXT
     );
 
-    ${reviewLogsExists ? `INSERT OR IGNORE INTO review_logs_new (id, flashcard_id, session_id, last_reviewed_at, shown_at, reviewed_at, rating, rating_label, time_elapsed_ms, old_state, old_repetitions, old_lapses, old_stability, old_difficulty, new_state, new_repetitions, new_lapses, new_stability, new_difficulty, old_interval_minutes, new_interval_minutes, old_due_at, new_due_at, elapsed_days, retrievability, request_retention, profile, maximum_interval_days, min_minutes, fsrs_weights_version, scheduler_version, note_model_id, card_template_id, content_hash, client)
+    ${reviewLogsExists ? `INSERT OR IGNORE INTO review_logs_new (id, flashcard_id, session_id, last_reviewed_at, shown_at, reviewed_at, rating, rating_label, time_elapsed_ms, old_state, old_repetitions, old_lapses, old_stability, old_difficulty, new_state, new_repetitions, new_lapses, new_stability, new_difficulty, old_interval_minutes, new_interval_minutes, old_due_at, new_due_at, elapsed_days, retrievability, request_retention, profile, maximum_interval_days, min_minutes, fsrs_weights_version, scheduler_version, note_model_id, card_template_id, content_hash, client, fsrs_weight_set_id)
     SELECT ${reviewLogsSelect} FROM review_logs;` : ""}
 
     DROP TABLE IF EXISTS review_logs;
     ALTER TABLE review_logs_new RENAME TO review_logs;
+
+    -- Trained FSRS weight sets (idempotent; created on upgrade)
+    CREATE TABLE IF NOT EXISTS fsrs_weight_sets (
+      id TEXT PRIMARY KEY,
+      weights TEXT NOT NULL,
+      trained_at TEXT NOT NULL,
+      reviews_trained INTEGER NOT NULL DEFAULT 0,
+      cards_trained INTEGER NOT NULL DEFAULT 0,
+      before_log_loss REAL,
+      after_log_loss REAL,
+      steps INTEGER NOT NULL DEFAULT 0,
+      duration_ms INTEGER NOT NULL DEFAULT 0,
+      weights_version TEXT NOT NULL DEFAULT 'fsrs-6',
+      created TEXT NOT NULL,
+      modified TEXT NOT NULL,
+      deleted_at TEXT
+    );
 
     -- Drop and recreate decks/flashcards fresh (sync repopulates from vault)
     DROP TABLE IF EXISTS flashcards;
@@ -635,6 +676,8 @@ export function buildMigrationSQL(db: Database): string {
     CREATE INDEX IF NOT EXISTS idx_deckprofiles_live ON deckprofiles(deleted_at);
     CREATE INDEX IF NOT EXISTS idx_profile_tag_mappings_live ON profile_tag_mappings(deleted_at);
     CREATE INDEX IF NOT EXISTS idx_custom_decks_live ON custom_decks(deleted_at);
+    CREATE INDEX IF NOT EXISTS idx_fsrs_weight_sets_live ON fsrs_weight_sets(deleted_at);
+    CREATE INDEX IF NOT EXISTS idx_fsrs_weight_sets_trained_at ON fsrs_weight_sets(trained_at);
 
     -- Set schema version
     PRAGMA user_version = ${CURRENT_SCHEMA_VERSION};
@@ -775,6 +818,38 @@ export const SQL_QUERIES = {
   // Soft delete: refuse to tombstone the default profile, set deleted_at and bump modified.
   // Pass the same ISO timestamp for both ? params.
   DELETE_PROFILE: `UPDATE deckprofiles SET deleted_at = ?, modified = ? WHERE id = ? AND is_default = 0 AND deleted_at IS NULL`,
+
+  // Trained FSRS weight sets
+  INSERT_WEIGHT_SET: `
+    INSERT INTO fsrs_weight_sets (
+      id, weights, trained_at, reviews_trained, cards_trained,
+      before_log_loss, after_log_loss, steps, duration_ms, weights_version,
+      created, modified, deleted_at
+    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, NULL)
+  `,
+
+  // Active set = newest live training run.
+  GET_ACTIVE_WEIGHT_SET: `
+    SELECT id, weights, trained_at, reviews_trained, cards_trained,
+      before_log_loss, after_log_loss, steps, duration_ms, weights_version,
+      created, modified, deleted_at
+    FROM fsrs_weight_sets
+    WHERE deleted_at IS NULL
+    ORDER BY trained_at DESC
+    LIMIT 1
+  `,
+
+  GET_ALL_WEIGHT_SETS: `
+    SELECT id, weights, trained_at, reviews_trained, cards_trained,
+      before_log_loss, after_log_loss, steps, duration_ms, weights_version,
+      created, modified, deleted_at
+    FROM fsrs_weight_sets
+    WHERE deleted_at IS NULL
+    ORDER BY trained_at DESC
+  `,
+
+  // Reset to defaults: soft-delete every live weight set. Same ISO timestamp for both ? params.
+  CLEAR_WEIGHT_SETS: `UPDATE fsrs_weight_sets SET deleted_at = ?, modified = ? WHERE deleted_at IS NULL`,
 
   COUNT_DECKS_USING_PROFILE: `
     SELECT COUNT(*) as count FROM decks WHERE profile_id = ?
@@ -1252,7 +1327,8 @@ export const BACKUP_TABLES_SQL = `
     note_model_id TEXT,
     card_template_id TEXT,
     content_hash TEXT,
-    client TEXT
+    client TEXT,
+    fsrs_weight_set_id TEXT
   );
 
   CREATE TABLE review_sessions (
@@ -1262,5 +1338,21 @@ export const BACKUP_TABLES_SQL = `
     ended_at TEXT,
     goal_total INTEGER NOT NULL,
     done_unique INTEGER NOT NULL DEFAULT 0
+  );
+
+  CREATE TABLE fsrs_weight_sets (
+    id TEXT PRIMARY KEY,
+    weights TEXT NOT NULL,
+    trained_at TEXT NOT NULL,
+    reviews_trained INTEGER NOT NULL DEFAULT 0,
+    cards_trained INTEGER NOT NULL DEFAULT 0,
+    before_log_loss REAL,
+    after_log_loss REAL,
+    steps INTEGER NOT NULL DEFAULT 0,
+    duration_ms INTEGER NOT NULL DEFAULT 0,
+    weights_version TEXT NOT NULL DEFAULT 'fsrs-6',
+    created TEXT NOT NULL,
+    modified TEXT NOT NULL,
+    deleted_at TEXT
   );
 `;

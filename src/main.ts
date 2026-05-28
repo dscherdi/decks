@@ -187,6 +187,9 @@ export default class DecksPlugin extends Plugin {
         new Notice(this.db.migrationNotice, 15000);
       }
 
+      // One-time migration of legacy settings-based trained weights into the DB.
+      await this.migrateLegacyTrainedWeights();
+
       // Initialize deck manager with optimized main-thread approach
       this.deckManager = new DeckManager(
         this.app.vault,
@@ -698,6 +701,46 @@ export default class DecksPlugin extends Plugin {
         this.settings.parsing.deckTag = "#flashcards";
       }
     }
+  }
+
+  /**
+   * Trained FSRS weights used to live in settings (`settings.fsrs`). They now live in the
+   * `fsrs_weight_sets` DB table. On first run after upgrade, import any legacy weights as the
+   * initial (active) weight set, then drop the stale settings block.
+   */
+  private async migrateLegacyTrainedWeights(): Promise<void> {
+    const legacy = (
+      this.settings as unknown as {
+        fsrs?: {
+          trainedWeights?: number[] | null;
+          lastTrainedAt?: string | null;
+          lastTrainedReviewCount?: number | null;
+          lastBeforeLogLoss?: number | null;
+          lastAfterLogLoss?: number | null;
+        };
+      }
+    ).fsrs;
+    if (!legacy) return;
+
+    if (Array.isArray(legacy.trainedWeights) && legacy.trainedWeights.length > 0) {
+      const existing = await this.db.getAllTrainedWeightSets();
+      if (existing.length === 0) {
+        await this.db.saveTrainedWeightSet({
+          weights: legacy.trainedWeights,
+          trainedAt: legacy.lastTrainedAt ?? new Date().toISOString(),
+          reviewsTrained: legacy.lastTrainedReviewCount ?? 0,
+          cardsTrained: 0,
+          beforeLogLoss: legacy.lastBeforeLogLoss ?? null,
+          afterLogLoss: legacy.lastAfterLogLoss ?? null,
+          steps: 0,
+          durationMs: 0,
+          weightsVersion: "fsrs-6",
+        });
+      }
+    }
+
+    delete (this.settings as unknown as Record<string, unknown>).fsrs;
+    await this.saveSettings();
   }
 
   async saveSettings() {

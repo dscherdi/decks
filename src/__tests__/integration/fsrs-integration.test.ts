@@ -8,6 +8,7 @@ import {
   teardownTestDatabase,
 } from "./database-test-utils";
 import { Deck, Flashcard } from "../../database/types";
+import { DEFAULT_PROFILE_ID } from "../../database/types";
 import { DEFAULT_FSRS_PARAMETERS } from "../../algorithm/fsrs-weights";
 
 describe("FSRS Algorithm Integration Tests", () => {
@@ -606,6 +607,82 @@ describe("FSRS Algorithm Integration Tests", () => {
       expect(profiles).toEqual(["INTENSIVE", "STANDARD", "TRAINED"]);
       // Oldest-first ordering for chronological replay.
       expect(logs[0].reviewedAt < logs[logs.length - 1].reviewedAt).toBe(true);
+    });
+  });
+
+  describe("Trained weight sets", () => {
+    const baseSet = {
+      weights: Array.from({ length: 21 }, (_, i) => i * 0.01),
+      reviewsTrained: 500,
+      cardsTrained: 50,
+      beforeLogLoss: 0.36,
+      afterLogLoss: 0.34,
+      steps: 100,
+      durationMs: 1234,
+      weightsVersion: "fsrs-6",
+    };
+
+    it("returns the newest live set as active and supersedes older ones", async () => {
+      await db.saveTrainedWeightSet({ ...baseSet, trainedAt: "2025-01-01T00:00:00.000Z" });
+      const second = await db.saveTrainedWeightSet({
+        ...baseSet,
+        weights: baseSet.weights.map((w) => w + 1),
+        trainedAt: "2025-02-01T00:00:00.000Z",
+      });
+
+      const active = await db.getActiveTrainedWeightSet();
+      expect(active?.id).toBe(second);
+      expect(active?.weights).toHaveLength(21);
+      expect(active?.weights[1]).toBeCloseTo(1.01, 5);
+      expect(await db.getAllTrainedWeightSets()).toHaveLength(2);
+    });
+
+    it("clearTrainedWeights soft-deletes every set so none is active", async () => {
+      await db.saveTrainedWeightSet({ ...baseSet, trainedAt: "2025-01-01T00:00:00.000Z" });
+      await db.clearTrainedWeights();
+
+      expect(await db.getActiveTrainedWeightSet()).toBeNull();
+      expect(await db.getAllTrainedWeightSets()).toHaveLength(0);
+    });
+
+    it("stamps the active weight set id on review logs for a TRAINED deck", async () => {
+      // Flip the default profile to TRAINED so the test deck uses trained weights.
+      const profile = await db.getProfileById(DEFAULT_PROFILE_ID);
+      expect(profile).not.toBeNull();
+      await db.updateProfile(DEFAULT_PROFILE_ID, {
+        fsrs: { requestRetention: profile!.fsrs.requestRetention, profile: "TRAINED" },
+      });
+
+      const setId = await db.saveTrainedWeightSet({
+        ...baseSet,
+        trainedAt: "2025-03-01T00:00:00.000Z",
+      });
+
+      const card = DatabaseTestUtils.createTestFlashcard(testDeck.id, {
+        id: "ws-card-1",
+        state: "new",
+      });
+      await db.createFlashcard(card);
+
+      await scheduler.rate(card.id, "good");
+
+      const log = await db.getLatestReviewLogForFlashcard(card.id);
+      expect(log?.profile).toBe("TRAINED");
+      expect(log?.fsrsWeightSetId).toBe(setId);
+    });
+
+    it("leaves fsrsWeightSetId null for a STANDARD deck", async () => {
+      const card = DatabaseTestUtils.createTestFlashcard(testDeck.id, {
+        id: "std-card-1",
+        state: "new",
+      });
+      await db.createFlashcard(card);
+
+      await scheduler.rate(card.id, "good");
+
+      const log = await db.getLatestReviewLogForFlashcard(card.id);
+      expect(log?.profile).toBe("STANDARD");
+      expect(log?.fsrsWeightSetId ?? null).toBeNull();
     });
   });
 });

@@ -10,6 +10,7 @@ import type {
   ReviewSession,
   CustomDeck,
   CustomDeckType,
+  FsrsWeightSet,
 } from "./types";
 import { DEFAULT_PROFILE_ID, deckWithProfile } from "./types";
 import type { FilterDefinition } from "./types";
@@ -1388,6 +1389,7 @@ export abstract class BaseDatabaseService implements IDatabaseService {
       ["card_template_id", reviewLog.cardTemplateId || null],
       ["content_hash", reviewLog.contentHash || null],
       ["client", reviewLog.client || null],
+      ["fsrs_weight_set_id", reviewLog.fsrsWeightSetId || null],
     ];
 
     // Add all required fields
@@ -1463,6 +1465,7 @@ export abstract class BaseDatabaseService implements IDatabaseService {
       minMinutes: row.min_minutes,
       fsrsWeightsVersion: row.fsrs_weights_version,
       schedulerVersion: row.scheduler_version,
+      fsrsWeightSetId: row.fsrs_weight_set_id ?? null,
     };
   }
 
@@ -1503,6 +1506,7 @@ export abstract class BaseDatabaseService implements IDatabaseService {
       minMinutes: row.min_minutes,
       fsrsWeightsVersion: row.fsrs_weights_version,
       schedulerVersion: row.scheduler_version,
+      fsrsWeightSetId: row.fsrs_weight_set_id ?? null,
     }));
   }
 
@@ -1558,6 +1562,126 @@ export abstract class BaseDatabaseService implements IDatabaseService {
     `;
     const results = await this.querySql(sql, [], { asObject: true });
     return this.mapRowsToReviewLogs(results as ReviewLogRow[]);
+  }
+
+  // ---- Trained FSRS weight sets ------------------------------------------
+
+  private parseWeightSetRow(row: SqlRecord): FsrsWeightSet {
+    let weights: number[] = [];
+    try {
+      const parsed = JSON.parse(String(row.weights));
+      if (Array.isArray(parsed)) weights = parsed as number[];
+    } catch {
+      weights = [];
+    }
+    return {
+      id: row.id as string,
+      weights,
+      trainedAt: row.trained_at as string,
+      reviewsTrained: (row.reviews_trained as number) ?? 0,
+      cardsTrained: (row.cards_trained as number) ?? 0,
+      beforeLogLoss: (row.before_log_loss as number | null) ?? null,
+      afterLogLoss: (row.after_log_loss as number | null) ?? null,
+      steps: (row.steps as number) ?? 0,
+      durationMs: (row.duration_ms as number) ?? 0,
+      weightsVersion: (row.weights_version as string) ?? "fsrs-6",
+      created: row.created as string,
+      modified: row.modified as string,
+      deletedAt: (row.deleted_at as string | null) ?? null,
+    };
+  }
+
+  /**
+   * Persist a trained weight set as a new (immutable) history row and return its id.
+   * The active set is always the newest live row, so inserting one makes it active.
+   */
+  async saveTrainedWeightSet(
+    input: Omit<FsrsWeightSet, "id" | "created" | "modified" | "deletedAt">
+  ): Promise<string> {
+    const id = `ws_${Date.now()}_${Math.random().toString(36).substring(2, 11)}`;
+    const now = this.getCurrentTimestamp();
+    const weightsJson = JSON.stringify(input.weights);
+    await this.executeSql(SQL_QUERIES.INSERT_WEIGHT_SET, [
+      id,
+      weightsJson,
+      input.trainedAt,
+      input.reviewsTrained,
+      input.cardsTrained,
+      input.beforeLogLoss,
+      input.afterLogLoss,
+      input.steps,
+      input.durationMs,
+      input.weightsVersion,
+      now,
+      now,
+    ]);
+
+    this.emitSyncOp({
+      o: "weight_set_upsert",
+      p: {
+        id,
+        weights: weightsJson,
+        trainedAt: input.trainedAt,
+        reviewsTrained: input.reviewsTrained,
+        cardsTrained: input.cardsTrained,
+        beforeLogLoss: input.beforeLogLoss,
+        afterLogLoss: input.afterLogLoss,
+        steps: input.steps,
+        durationMs: input.durationMs,
+        weightsVersion: input.weightsVersion,
+        created: now,
+        modified: now,
+        deletedAt: null,
+      },
+    });
+
+    return id;
+  }
+
+  async getActiveTrainedWeightSet(): Promise<FsrsWeightSet | null> {
+    const results = await this.querySql<SqlRecord>(
+      SQL_QUERIES.GET_ACTIVE_WEIGHT_SET,
+      [],
+      { asObject: true }
+    );
+    return results.length > 0 ? this.parseWeightSetRow(results[0]) : null;
+  }
+
+  async getAllTrainedWeightSets(): Promise<FsrsWeightSet[]> {
+    const results = await this.querySql<SqlRecord>(
+      SQL_QUERIES.GET_ALL_WEIGHT_SETS,
+      [],
+      { asObject: true }
+    );
+    return results.map((row) => this.parseWeightSetRow(row));
+  }
+
+  /** Reset to defaults: soft-delete every live weight set (TRAINED decks then use shipped weights). */
+  async clearTrainedWeights(): Promise<void> {
+    const live = await this.getAllTrainedWeightSets();
+    if (live.length === 0) return;
+    const now = this.getCurrentTimestamp();
+    await this.executeSql(SQL_QUERIES.CLEAR_WEIGHT_SETS, [now, now]);
+    for (const set of live) {
+      this.emitSyncOp({
+        o: "weight_set_upsert",
+        p: {
+          id: set.id,
+          weights: JSON.stringify(set.weights),
+          trainedAt: set.trainedAt,
+          reviewsTrained: set.reviewsTrained,
+          cardsTrained: set.cardsTrained,
+          beforeLogLoss: set.beforeLogLoss,
+          afterLogLoss: set.afterLogLoss,
+          steps: set.steps,
+          durationMs: set.durationMs,
+          weightsVersion: set.weightsVersion,
+          created: set.created,
+          modified: now,
+          deletedAt: now,
+        },
+      });
+    }
   }
 
   async getLatestReviewLogForSession(
@@ -1618,6 +1742,7 @@ export abstract class BaseDatabaseService implements IDatabaseService {
       minMinutes: row.min_minutes,
       fsrsWeightsVersion: row.fsrs_weights_version,
       schedulerVersion: row.scheduler_version,
+      fsrsWeightSetId: row.fsrs_weight_set_id ?? null,
     }));
   }
 
@@ -2539,6 +2664,42 @@ export abstract class BaseDatabaseService implements IDatabaseService {
         }
       } catch {
         this.debugLog("Backup does not contain custom_deck_cards table, skipping");
+      }
+
+      // Restore trained weight sets (column-intersection; backups predating the table are skipped)
+      try {
+        const currentWeightSetColumns = new Set(
+          (await this.querySql("PRAGMA table_info(fsrs_weight_sets)") as SqlJsValue[][])
+            .map(row => row[1] as string)
+        );
+
+        const backupWeightSetCols = (await this.queryBackupDatabase(
+          backupDb, "PRAGMA table_info(fsrs_weight_sets)"
+        )).map(row => row[1] as string);
+
+        const wsMapping: { backupIndex: number; currentName: string }[] = [];
+        for (let i = 0; i < backupWeightSetCols.length; i++) {
+          const col = backupWeightSetCols[i];
+          if (currentWeightSetColumns.has(col)) {
+            wsMapping.push({ backupIndex: i, currentName: col });
+          }
+        }
+
+        if (wsMapping.length > 0) {
+          const sets = await this.queryBackupDatabase(
+            backupDb, "SELECT * FROM fsrs_weight_sets"
+          );
+          const columns = wsMapping.map(m => m.currentName);
+          const placeholders = columns.map(() => "?").join(", ");
+          const insertSql = `INSERT OR IGNORE INTO fsrs_weight_sets (${columns.join(", ")}) VALUES (${placeholders})`;
+
+          for (const set of sets) {
+            const values = wsMapping.map(m => set[m.backupIndex]);
+            await this.executeSql(insertSql, values);
+          }
+        }
+      } catch {
+        this.debugLog("Backup does not contain fsrs_weight_sets table, skipping");
       }
 
       await this.closeBackupDatabaseInstance(backupDb);

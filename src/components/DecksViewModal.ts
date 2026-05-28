@@ -343,17 +343,18 @@ export class DecksViewModal extends Modal {
   }
 
   private openProfilesManagerModal(): void {
-    const modal = new ProfilesManagerModal(
-      this.app,
-      this.db,
-      async () => {
-        const view = this.getDecksView();
-        if (view) await view.refresh();
-      },
-      this.settings.fsrs?.trainedWeights !== null &&
-        this.settings.fsrs?.trainedWeights !== undefined
-    );
-    this.openWithReturn(modal);
+    void this.db.getActiveTrainedWeightSet().then((active) => {
+      const modal = new ProfilesManagerModal(
+        this.app,
+        this.db,
+        async () => {
+          const view = this.getDecksView();
+          if (view) await view.refresh();
+        },
+        active !== null
+      );
+      this.openWithReturn(modal);
+    });
   }
 
   private openDeckConfigModal(deck: DeckWithProfile): void {

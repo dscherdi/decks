@@ -364,6 +364,8 @@ class SimpleDatabaseWorker {
       this.mergeAppendOnly(remoteDb, "profile_tag_mappings");
       this.mergeCustomDecks(remoteDb);
       this.mergeAppendOnly(remoteDb, "custom_deck_cards");
+      // Trained weight sets: immutable history + soft-delete, newer-wins by effective ts.
+      this.mergeByEffectiveTimestamp(remoteDb, "fsrs_weight_sets");
 
       this.db.exec("COMMIT");
       self.postMessage({ type: "dbg", message: "Sync with disk completed" });
