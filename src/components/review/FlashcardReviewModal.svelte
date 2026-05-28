@@ -710,7 +710,7 @@
       const hours = Math.round(minutes / 60);
       return `${hours}h`;
     } else {
-      const days = Math.round(minutes / 1440);
+      const days = Math.ceil(minutes / 1440);
       return `${days}d`;
     }
   }

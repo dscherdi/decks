@@ -730,7 +730,7 @@ export class FSRS {
 
     const days = hours / 24;
     if (days < 30) {
-      return `${Math.round(days)}d`;
+      return `${Math.ceil(days)}d`;
     }
 
     const months = days / 30;
