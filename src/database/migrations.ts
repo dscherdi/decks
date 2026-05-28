@@ -61,10 +61,11 @@ export function migrate(
   );
 
   try {
-    // Create tables if they don't exist
-    db.run(CREATE_TABLES_SQL);
+    // Migrate existing tables first (rebuilds old schemas to new shape)
     const migrationSQL = buildMigrationSQL(db);
     db.run(migrationSQL);
+    // Then create any tables/indexes that didn't exist before migration
+    db.run(CREATE_TABLES_SQL);
     log(`✅ Migration completed successfully`);
   } catch (error) {
     log(`❌ Migration failed: ${String(error)}`);

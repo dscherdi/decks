@@ -362,7 +362,8 @@ export function buildMigrationSQL(db: Database): string {
       cloze_show_context TEXT NOT NULL DEFAULT 'open' CHECK (cloze_show_context IN ('open', 'hidden')),
       is_default INTEGER NOT NULL DEFAULT 0,
       created TEXT NOT NULL,
-      modified TEXT NOT NULL
+      modified TEXT NOT NULL,
+      deleted_at TEXT
     );
 
     ${needsLearningSteps ? `
@@ -612,7 +613,8 @@ export function buildMigrationSQL(db: Database): string {
       filter_definition TEXT,
       last_reviewed TEXT,
       created TEXT NOT NULL,
-      modified TEXT NOT NULL
+      modified TEXT NOT NULL,
+      deleted_at TEXT
     );
 
     ${needsDeckType ? `
