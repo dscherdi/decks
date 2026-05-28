@@ -4,7 +4,7 @@
 
 **Trasforma le tue note di Obsidian in flashcard. Nessuna sintassi speciale. Nessun mazzo separato da costruire.**
 
-Aggiungi il tag `#decks` a un file. Ogni intestazione `##` diventa il fronte di una carta; il testo sottostante diventa il retro. Le tabelle, l'occlusione d'immagine e le evidenziazioni `==cloze==` funzionano allo stesso modo. La pianificazione è gestita da FSRS, il moderno algoritmo di ripetizione dilazionata (spaced repetition).
+Aggiungi il tag `#decks` a un file. Ogni intestazione `##` diventa il fronte di una carta; il testo sottostante diventa il retro. Le tabelle, l'occlusione d'immagine e le evidenziazioni `==cloze==` funzionano allo stesso modo. La pianificazione è gestita da FSRS-6, il moderno algoritmo di ripetizione dilazionata (spaced repetition).
 
 ![Demo](./decks_showcase.gif)
 

@@ -4,7 +4,7 @@
 
 **Convierte tus notas de Obsidian en tarjetas de memoria. Sin sintaxis especial. Sin mazo aparte que construir.**
 
-Etiqueta un archivo con `#decks`. Cada encabezado `##` se convierte en el anverso de una tarjeta; el texto debajo se convierte en el reverso. Las tablas, la oclusión de imágenes y los resaltados `==cloze==` funcionan de la misma manera. La planificación la gestiona FSRS — el algoritmo moderno de repetición espaciada.
+Etiqueta un archivo con `#decks`. Cada encabezado `##` se convierte en el anverso de una tarjeta; el texto debajo se convierte en el reverso. Las tablas, la oclusión de imágenes y los resaltados `==cloze==` funcionan de la misma manera. La planificación la gestiona FSRS-6 — el algoritmo moderno de repetición espaciada.
 
 ![Demo](./decks_showcase.gif)
 

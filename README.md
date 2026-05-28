@@ -4,7 +4,7 @@
 
 **Turn your Obsidian notes into flashcards. No special syntax. No separate deck to build.**
 
-Tag a file with `#decks`. Each `##` heading becomes the front of a card; the text below becomes the back. Tables, image occlusion, and `==cloze==` highlights work the same way. Scheduling is handled by FSRS — the modern spaced-repetition algorithm.
+Tag a file with `#decks`. Each `##` heading becomes the front of a card; the text below becomes the back. Tables, image occlusion, and `==cloze==` highlights work the same way. Scheduling is handled by FSRS-6 — the modern spaced-repetition algorithm.
 
 ![Demo](./decks_showcase.gif)
 
