@@ -29,6 +29,14 @@
 
   const t = I18n.t;
 
+  let tableBodyWidth = 0;
+  let panelWidth = 0;
+  let tabDropdownOpen = false;
+  let headerOverflowOpen = false;
+
+  $: isTabsCompact   = panelWidth > 0 && panelWidth < 380;
+  $: isHeaderCompact = panelWidth > 0 && panelWidth < 320;
+
   let decks: DeckWithProfile[] = [];
   let allDecks: DeckWithProfile[] = [];
   let stats = new Map<string, DeckStats>();
@@ -1037,43 +1045,47 @@
   });
 </script>
 
-<div class="decks-deck-list-panel">
+<svelte:window on:click={() => { tabDropdownOpen = false; headerOverflowOpen = false; }} />
+
+<div class="decks-deck-list-panel" bind:clientWidth={panelWidth}>
   <div class="decks-panel-header">
     <div class="decks-panel-title">{t.deckList.title}</div>
     <div class="decks-header-buttons">
-      <button
-        class="clickable-icon"
-        on:click={onOpenDeckConfig}
-        title={t.deckList.configureDeck}
-        disabled={allDecks.length === 0}
-        aria-label={t.deckList.configureDeck}
-      >
-        <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 20h9"></path><path d="M16.5 3.5a2.121 2.121 0 0 1 3 3L7 19l-4 1 1-4L16.5 3.5z"></path></svg>
-      </button>
-      <button
-        class="clickable-icon"
-        on:click={onOpenProfilesManager}
-        title={t.deckList.profiles}
-        aria-label={t.deckList.profiles}
-      >
-        <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12.22 2h-.44a2 2 0 0 0-2 2v.18a2 2 0 0 1-1 1.73l-.43.25a2 2 0 0 1-2 0l-.15-.08a2 2 0 0 0-2.73.73l-.22.38a2 2 0 0 0 .73 2.73l.15.1a2 2 0 0 1 1 1.72v.51a2 2 0 0 1-1 1.74l-.15.09a2 2 0 0 0-.73 2.73l.22.38a2 2 0 0 0 2.73.73l.15-.08a2 2 0 0 1 2 0l.43.25a2 2 0 0 1 1 1.73V20a2 2 0 0 0 2 2h.44a2 2 0 0 0 2-2v-.18a2 2 0 0 1 1-1.73l.43-.25a2 2 0 0 1 2 0l.15.08a2 2 0 0 0 2.73-.73l.22-.39a2 2 0 0 0-.73-2.73l-.15-.08a2 2 0 0 1-1-1.74v-.5a2 2 0 0 1 1-1.74l.15-.09a2 2 0 0 0 .73-2.73l-.22-.38a2 2 0 0 0-2.73-.73l-.15.08a2 2 0 0 1-2 0l-.43-.25a2 2 0 0 1-1-1.73V4a2 2 0 0 0-2-2z"></path><circle cx="12" cy="12" r="3"></circle></svg>
-      </button>
-      <button
-        class="clickable-icon"
-        on:click={openFlashcardManager}
-        title={t.deckList.openManager}
-        aria-label={t.deckList.openManager}
-      >
-        <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="7" height="7"></rect><rect x="14" y="3" width="7" height="7"></rect><rect x="14" y="14" width="7" height="7"></rect><rect x="3" y="14" width="7" height="7"></rect></svg>
-      </button>
-      <button
-        class="clickable-icon"
-        on:click={onOpenStatistics}
-        title={t.deckList.statistics}
-        aria-label={t.deckList.statistics}
-      >
-        <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 3v18h18"></path><path d="M18 17V9"></path><path d="M13 17V5"></path><path d="M8 17v-3"></path></svg>
-      </button>
+      {#if !isHeaderCompact}
+        <button
+          class="clickable-icon"
+          on:click={onOpenDeckConfig}
+          title={t.deckList.configureDeck}
+          disabled={allDecks.length === 0}
+          aria-label={t.deckList.configureDeck}
+        >
+          <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 20h9"></path><path d="M16.5 3.5a2.121 2.121 0 0 1 3 3L7 19l-4 1 1-4L16.5 3.5z"></path></svg>
+        </button>
+        <button
+          class="clickable-icon"
+          on:click={onOpenProfilesManager}
+          title={t.deckList.profiles}
+          aria-label={t.deckList.profiles}
+        >
+          <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12.22 2h-.44a2 2 0 0 0-2 2v.18a2 2 0 0 1-1 1.73l-.43.25a2 2 0 0 1-2 0l-.15-.08a2 2 0 0 0-2.73.73l-.22.38a2 2 0 0 0 .73 2.73l.15.1a2 2 0 0 1 1 1.72v.51a2 2 0 0 1-1 1.74l-.15.09a2 2 0 0 0-.73 2.73l.22.38a2 2 0 0 0 2.73.73l.15-.08a2 2 0 0 1 2 0l.43.25a2 2 0 0 1 1 1.73V20a2 2 0 0 0 2 2h.44a2 2 0 0 0 2-2v-.18a2 2 0 0 1 1-1.73l.43-.25a2 2 0 0 1 2 0l.15.08a2 2 0 0 0 2.73-.73l.22-.39a2 2 0 0 0-.73-2.73l-.15-.08a2 2 0 0 1-1-1.74v-.5a2 2 0 0 1 1-1.74l.15-.09a2 2 0 0 0 .73-2.73l-.22-.38a2 2 0 0 0-2.73-.73l-.15.08a2 2 0 0 1-2 0l-.43-.25a2 2 0 0 1-1-1.73V4a2 2 0 0 0-2-2z"></path><circle cx="12" cy="12" r="3"></circle></svg>
+        </button>
+        <button
+          class="clickable-icon"
+          on:click={openFlashcardManager}
+          title={t.deckList.openManager}
+          aria-label={t.deckList.openManager}
+        >
+          <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="7" height="7"></rect><rect x="14" y="3" width="7" height="7"></rect><rect x="14" y="14" width="7" height="7"></rect><rect x="3" y="14" width="7" height="7"></rect></svg>
+        </button>
+        <button
+          class="clickable-icon"
+          on:click={onOpenStatistics}
+          title={t.deckList.statistics}
+          aria-label={t.deckList.statistics}
+        >
+          <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 3v18h18"></path><path d="M18 17V9"></path><path d="M13 17V5"></path><path d="M8 17v-3"></path></svg>
+        </button>
+      {/if}
       <button
         class="clickable-icon"
         class:decks-refreshing={isRefreshing || isSyncing}
@@ -1084,37 +1096,127 @@
       >
         <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M23 4v6h-6"></path><path d="M1 20v-6h6"></path><path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15"></path></svg>
       </button>
+      {#if isHeaderCompact}
+        <div class="decks-overflow-container">
+          <button
+            class="clickable-icon"
+            on:click|stopPropagation={() => (headerOverflowOpen = !headerOverflowOpen)}
+            title={t.deckList.moreActions ?? "More actions"}
+            aria-label={t.deckList.moreActions ?? "More actions"}
+            aria-expanded={headerOverflowOpen}
+          >
+            <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="5" cy="12" r="1"/><circle cx="12" cy="12" r="1"/><circle cx="19" cy="12" r="1"/></svg>
+          </button>
+          {#if headerOverflowOpen}
+            <div class="decks-overflow-menu decks-overflow-menu-header">
+              <button
+                class="decks-overflow-item"
+                on:click={() => { onOpenDeckConfig(); headerOverflowOpen = false; }}
+                disabled={allDecks.length === 0}
+              >
+                <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 20h9"></path><path d="M16.5 3.5a2.121 2.121 0 0 1 3 3L7 19l-4 1 1-4L16.5 3.5z"></path></svg>
+                {t.deckList.configureDeck}
+              </button>
+              <button
+                class="decks-overflow-item"
+                on:click={() => { onOpenProfilesManager(); headerOverflowOpen = false; }}
+              >
+                <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12.22 2h-.44a2 2 0 0 0-2 2v.18a2 2 0 0 1-1 1.73l-.43.25a2 2 0 0 1-2 0l-.15-.08a2 2 0 0 0-2.73.73l-.22.38a2 2 0 0 0 .73 2.73l.15.1a2 2 0 0 1 1 1.72v.51a2 2 0 0 1-1 1.74l-.15.09a2 2 0 0 0-.73 2.73l.22.38a2 2 0 0 0 2.73.73l.15-.08a2 2 0 0 1 2 0l.43.25a2 2 0 0 1 1 1.73V20a2 2 0 0 0 2 2h.44a2 2 0 0 0 2-2v-.18a2 2 0 0 1 1-1.73l.43-.25a2 2 0 0 1 2 0l.15.08a2 2 0 0 0 2.73-.73l.22-.39a2 2 0 0 0-.73-2.73l-.15-.08a2 2 0 0 1-1-1.74v-.5a2 2 0 0 1 1-1.74l.15-.09a2 2 0 0 0 .73-2.73l-.22-.38a2 2 0 0 0-2.73-.73l-.15.08a2 2 0 0 1-2 0l-.43-.25a2 2 0 0 1-1-1.73V4a2 2 0 0 0-2-2z"></path><circle cx="12" cy="12" r="3"></circle></svg>
+                {t.deckList.profiles}
+              </button>
+              <button
+                class="decks-overflow-item"
+                on:click={() => { openFlashcardManager(); headerOverflowOpen = false; }}
+              >
+                <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="7" height="7"></rect><rect x="14" y="3" width="7" height="7"></rect><rect x="14" y="14" width="7" height="7"></rect><rect x="3" y="14" width="7" height="7"></rect></svg>
+                {t.deckList.openManager}
+              </button>
+              <button
+                class="decks-overflow-item"
+                on:click={() => { onOpenStatistics(); headerOverflowOpen = false; }}
+              >
+                <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 3v18h18"></path><path d="M18 17V9"></path><path d="M13 17V5"></path><path d="M8 17v-3"></path></svg>
+                {t.deckList.statistics}
+              </button>
+            </div>
+          {/if}
+        </div>
+      {/if}
     </div>
   </div>
 
   <div class="decks-deck-content">
     <div class="decks-tab-switcher">
-      <div class="decks-tab-group">
-        <button
-          class="decks-tab-button"
-          class:decks-tab-active={viewMode === "files"}
-          title="{t.deckList.tabFiles} ({allDecks.length})"
-          on:click={() => (viewMode = "files")}
-        >
-          {t.deckList.tabFiles} ({allDecks.length})
-        </button>
-        <button
-          class="decks-tab-button"
-          class:decks-tab-active={viewMode === "tags"}
-          title="{t.deckList.tabTags} ({deckGroups.length})"
-          on:click={() => (viewMode = "tags")}
-        >
-          {t.deckList.tabTags} ({deckGroups.length})
-        </button>
-        <button
-          class="decks-tab-button"
-          class:decks-tab-active={viewMode === "custom"}
-          title="{t.deckList.tabCustom} ({customDeckGroups.length})"
-          on:click={() => { viewMode = "custom"; loadCustomDecks(); }}
-        >
-          {t.deckList.tabCustom} ({customDeckGroups.length})
-        </button>
-      </div>
+      {#if isTabsCompact}
+        <div class="decks-tab-compact-container">
+          <button
+            class="decks-tab-compact-btn"
+            on:click|stopPropagation={() => (tabDropdownOpen = !tabDropdownOpen)}
+            aria-expanded={tabDropdownOpen}
+          >
+            <span>
+              {viewMode === "files"
+                ? `${t.deckList.tabFiles} (${allDecks.length})`
+                : viewMode === "tags"
+                ? `${t.deckList.tabTags} (${deckGroups.length})`
+                : `${t.deckList.tabCustom} (${customDeckGroups.length})`}
+            </span>
+            <svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9"/></svg>
+          </button>
+          {#if tabDropdownOpen}
+            <div class="decks-overflow-menu decks-overflow-menu-tabs">
+              <button
+                class="decks-overflow-item"
+                class:decks-overflow-item-active={viewMode === "files"}
+                on:click={() => { viewMode = "files"; tabDropdownOpen = false; }}
+              >
+                {t.deckList.tabFiles} ({allDecks.length})
+              </button>
+              <button
+                class="decks-overflow-item"
+                class:decks-overflow-item-active={viewMode === "tags"}
+                on:click={() => { viewMode = "tags"; tabDropdownOpen = false; }}
+              >
+                {t.deckList.tabTags} ({deckGroups.length})
+              </button>
+              <button
+                class="decks-overflow-item"
+                class:decks-overflow-item-active={viewMode === "custom"}
+                on:click={() => { viewMode = "custom"; loadCustomDecks(); tabDropdownOpen = false; }}
+              >
+                {t.deckList.tabCustom} ({customDeckGroups.length})
+              </button>
+            </div>
+          {/if}
+        </div>
+      {:else}
+        <div class="decks-tab-group">
+          <button
+            class="decks-tab-button"
+            class:decks-tab-active={viewMode === "files"}
+            title="{t.deckList.tabFiles} ({allDecks.length})"
+            on:click={() => (viewMode = "files")}
+          >
+            <span>{t.deckList.tabFiles} ({allDecks.length})</span>
+          </button>
+          <button
+            class="decks-tab-button"
+            class:decks-tab-active={viewMode === "tags"}
+            title="{t.deckList.tabTags} ({deckGroups.length})"
+            on:click={() => (viewMode = "tags")}
+          >
+            <span>{t.deckList.tabTags} ({deckGroups.length})</span>
+          </button>
+          <button
+            class="decks-tab-button"
+            class:decks-tab-active={viewMode === "custom"}
+            title="{t.deckList.tabCustom} ({customDeckGroups.length})"
+            on:click={() => { viewMode = "custom"; loadCustomDecks(); }}
+          >
+            <span>{t.deckList.tabCustom} ({customDeckGroups.length})</span>
+          </button>
+        </div>
+      {/if}
       <button
         class="clickable-icon"
         class:decks-search-toggle-active={searchOpen}
@@ -1167,7 +1269,12 @@
       </div>
     {:else}
       <div class="decks-deck-table">
-        <div class="decks-table-body">
+        <div
+          class="decks-table-body"
+          class:decks-table-compact={tableBodyWidth > 0 && tableBodyWidth < 250}
+          class:decks-stat-labels-trimmed={tableBodyWidth > 0 && tableBodyWidth < 420}
+          bind:clientWidth={tableBodyWidth}
+        >
           <div class="decks-table-header">
             <button
               type="button"
@@ -1438,14 +1545,19 @@
   .decks-tab-group {
     display: flex;
     flex: 1;
+    min-width: 0;
+    overflow: hidden;
     background-color: var(--background-modifier-hover);
     border-radius: var(--radius-s);
     padding: 2px;
   }
 
   .decks-tab-button {
-    flex: 1;
+    flex: 1 1 0;
     min-width: 0;
+    display: flex;
+    align-items: center;
+    justify-content: center;
     padding: var(--size-4-1) var(--size-4-2);
     border: none;
     border-radius: var(--radius-s);
@@ -1455,9 +1567,14 @@
     font-size: var(--font-ui-smaller);
     font-weight: var(--font-medium);
     transition: all 0.15s ease;
-    white-space: nowrap;
+  }
+
+  .decks-tab-button span {
+    display: block;
+    min-width: 0;
     overflow: hidden;
     text-overflow: ellipsis;
+    white-space: nowrap;
   }
 
   .decks-tab-button:hover {
@@ -1620,6 +1737,15 @@
     align-content: start;
   }
 
+  .decks-table-compact {
+    grid-template-columns: 1fr 36px;
+    column-gap: 16px;
+  }
+
+  .decks-table-compact .decks-col-stat {
+    display: none;
+  }
+
   .decks-deck-row {
     grid-column: 1 / -1;
     display: grid;
@@ -1682,6 +1808,17 @@
     font-size: var(--font-ui-small);
     color: var(--text-faint);
     font-variant-numeric: tabular-nums;
+  }
+
+  .decks-col-stat-label {
+    display: block;
+    white-space: nowrap;
+  }
+
+  .decks-stat-labels-trimmed .decks-col-stat-label {
+    max-width: 4ch;
+    overflow: hidden;
+    text-overflow: ellipsis;
   }
 
   .decks-col-stat.has-cards {
@@ -1885,5 +2022,89 @@
     .decks-row-action {
       opacity: 1;
     }
+
+    .decks-table-body {
+      column-gap: 8px;
+    }
   }
+
+  /* ── Overflow menus (header + tabs compact) ── */
+  .decks-overflow-container {
+    position: relative;
+  }
+
+  .decks-overflow-menu {
+    position: absolute;
+    top: 100%;
+    right: 0;
+    min-width: 160px;
+    background: var(--background-primary);
+    border: 1px solid var(--background-modifier-border);
+    border-radius: var(--radius-s);
+    box-shadow: var(--shadow-s);
+    z-index: 100;
+    display: flex;
+    flex-direction: column;
+    padding: var(--size-4-1);
+  }
+
+  .decks-overflow-item {
+    display: flex;
+    align-items: center;
+    gap: var(--size-4-2);
+    padding: var(--size-4-1) var(--size-4-2);
+    background: none;
+    border: none;
+    border-radius: var(--radius-s);
+    color: var(--text-normal);
+    font-size: var(--font-ui-small);
+    cursor: pointer;
+    text-align: left;
+    width: 100%;
+  }
+
+  .decks-overflow-item:hover {
+    background: var(--background-modifier-hover);
+  }
+
+  .decks-overflow-item-active {
+    color: var(--text-accent);
+    font-weight: var(--font-semibold);
+  }
+
+  /* Tab compact trigger */
+  .decks-tab-compact-container {
+    position: relative;
+    flex: 1;
+    min-width: 0;
+  }
+
+  .decks-tab-compact-btn {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: var(--size-4-1);
+    width: 100%;
+    padding: var(--size-4-1) var(--size-4-2);
+    background: var(--background-modifier-hover);
+    border: none;
+    border-radius: var(--radius-s);
+    color: var(--text-normal);
+    font-size: var(--font-ui-smaller);
+    font-weight: var(--font-semibold);
+    cursor: pointer;
+  }
+
+  .decks-tab-compact-btn span {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  .decks-overflow-menu-tabs {
+    right: auto;
+    left: 0;
+    min-width: 100%;
+  }
+
 </style>

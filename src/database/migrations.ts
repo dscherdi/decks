@@ -1,9 +1,6 @@
 import type { Database } from "sql.js";
-import {
-  CREATE_TABLES_SQL,
-  CURRENT_SCHEMA_VERSION,
-  buildMigrationSQL,
-} from "./schemas";
+import { CREATE_TABLES_SQL, CURRENT_SCHEMA_VERSION } from "@decks/core";
+import { buildMigrationSQL } from "./schemas";
 
 // Migration helper functions
 export function getCurrentSchemaVersion(db: Database): number {

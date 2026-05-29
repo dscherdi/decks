@@ -28,6 +28,8 @@ module.exports = {
   moduleNameMapper: {
     // Mock Obsidian API but allow real database operations
     "^obsidian$": "<rootDir>/src/__mocks__/obsidian.ts",
+    // Resolve @decks/core to TypeScript source for jest compilation
+    "^@decks/core$": "<rootDir>/../../packages/decks-core/src/index.ts",
     // Handle @ alias
     "^@/(.*)$": "<rootDir>/src/$1",
   },

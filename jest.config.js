@@ -38,6 +38,8 @@ module.exports = {
     // Mock Svelte runtime and components
     "^svelte$": "<rootDir>/src/__mocks__/svelte.ts",
     "\\.svelte$": "<rootDir>/src/__mocks__/svelte-component.ts",
+    // Resolve @decks/core to TypeScript source for jest compilation
+    "^@decks/core$": "<rootDir>/../../packages/decks-core/src/index.ts",
     // Handle @ alias - DO NOT mock sql.js, use real implementation
     "^@/(.*)$": "<rootDir>/src/$1",
   },

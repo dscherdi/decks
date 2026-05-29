@@ -24,24 +24,46 @@ jobs:
             echo "value=${GITHUB_REF#refs/tags/}" >> "$GITHUB_OUTPUT"
           fi
 
-      - name: Checkout repo
-        uses: actions/checkout@v3
+      - name: Checkout plugin
+        uses: actions/checkout@v4
         with:
           ref: ${{ steps.tag.outputs.value }}
+          path: apps/obsidian-plugin
+
+      - name: Checkout decks-core
+        uses: actions/checkout@v4
+        with:
+          repository: dscherdi/decks-core
+          path: packages/decks-core
+
+      - name: Create workspace glue
+        run: |
+          cat > pnpm-workspace.yaml << 'EOF'
+          packages:
+            - 'apps/*'
+            - 'packages/*'
+          EOF
+          echo '{"name":"ci-workspace","private":true}' > package.json
+
+      - uses: pnpm/action-setup@v4
+        with:
+          version: latest
 
       - name: Set up Node
-        uses: actions/setup-node@v3
+        uses: actions/setup-node@v4
         with:
-          node-version: 20
+          node-version: 22
+          cache: 'pnpm'
 
       - name: Install dependencies
-        run: npm ci
+        run: pnpm install
 
       - name: Run tests
-        run: npm test
+        run: pnpm --filter decks test:all
 
       - name: Build and package release
-        run: npm run build:release
+        working-directory: apps/obsidian-plugin
+        run: pnpm build:release
 
       - name: Resolve release notes file
         id: release-notes
