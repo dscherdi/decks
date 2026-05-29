@@ -439,6 +439,7 @@ export const it: Translations = {
     footerInDeck: "{total} schede in «{name}»",
     footerShowingOf: "Mostrate {shown} di {total} schede",
     footerTotal: "{total} schede",
+    loadMore: "Carica altri ({remaining} rimanenti)",
   },
 
   config: {
@@ -1029,6 +1030,16 @@ export const it: Translations = {
     },
     flashcardManager: { title: "Gestore schede" },
     decksView: { title: "Mazzi" },
+    editFlashcard: {
+      title: "Modifica scheda",
+      fieldHeader: "Intestazione",
+      fieldBody: "Contenuto",
+      fieldFront: "Fronte",
+      fieldBack: "Retro",
+      fieldNotes: "Note",
+      fieldHint: "Suggerimento",
+      fieldImage: "Immagine",
+    },
   },
 
   settings: {

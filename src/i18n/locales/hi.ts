@@ -444,6 +444,7 @@ export const hi: Translations = {
     footerInDeck: '"{name}" में {total} कार्ड',
     footerShowingOf: "{total} फ़्लैशकार्ड में से {shown} दिखाए जा रहे हैं",
     footerTotal: "{total} फ़्लैशकार्ड",
+    loadMore: "अधिक लोड करें ({remaining} शेष)",
   },
 
   config: {
@@ -1033,6 +1034,16 @@ export const hi: Translations = {
     },
     decksView: {
       title: "डेक्स",
+    },
+    editFlashcard: {
+      title: "कार्ड संपादित करें",
+      fieldHeader: "शीर्षक",
+      fieldBody: "सामग्री",
+      fieldFront: "सामने",
+      fieldBack: "पीछे",
+      fieldNotes: "नोट्स",
+      fieldHint: "संकेत",
+      fieldImage: "चित्र",
     },
   },
 

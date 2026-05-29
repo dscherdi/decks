@@ -449,6 +449,7 @@ export const fr: Translations = {
     footerInDeck: "{total} cartes dans « {name} »",
     footerShowingOf: "Affichage de {shown} sur {total} cartes",
     footerTotal: "{total} cartes",
+    loadMore: "Charger plus ({remaining} restants)",
   },
 
   config: {
@@ -1044,6 +1045,16 @@ export const fr: Translations = {
     },
     flashcardManager: { title: "Gestionnaire de cartes" },
     decksView: { title: "Paquets" },
+    editFlashcard: {
+      title: "Modifier la carte",
+      fieldHeader: "En-tête",
+      fieldBody: "Contenu",
+      fieldFront: "Recto",
+      fieldBack: "Verso",
+      fieldNotes: "Notes",
+      fieldHint: "Indice",
+      fieldImage: "Image",
+    },
   },
 
   settings: {

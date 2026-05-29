@@ -438,6 +438,7 @@ export const tr: Translations = {
     footerInDeck: '"{name}" destesinde {total} kart',
     footerShowingOf: "{total} kartın {shown} kadarı gösteriliyor",
     footerTotal: "Toplam {total} kart",
+    loadMore: "Daha fazla yükle ({remaining} kalan)",
   },
 
   config: {
@@ -1033,6 +1034,16 @@ export const tr: Translations = {
     },
     decksView: {
       title: "Desteler",
+    },
+    editFlashcard: {
+      title: "Kartı düzenle",
+      fieldHeader: "Başlık",
+      fieldBody: "İçerik",
+      fieldFront: "Ön",
+      fieldBack: "Arka",
+      fieldNotes: "Notlar",
+      fieldHint: "İpucu",
+      fieldImage: "Resim",
     },
   },
 

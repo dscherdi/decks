@@ -2,6 +2,7 @@
   import { tick } from "svelte";
   import type { Flashcard } from "../database/types";
   import type { FlashcardEdits, EditResult } from "../services/FlashcardWriter";
+  import { I18n } from "@/i18n/I18n";
 
   export let card: Flashcard;
   export let onSave: (edits: FlashcardEdits) => Promise<EditResult>;
@@ -190,33 +191,34 @@
   }
   $: fields = computeFields(card);
   function computeFields(c: Flashcard): FieldDef[] {
+    const ef = I18n.t.modals.editFlashcard;
     if (c.type === "header-paragraph") {
       return [
-        { key: "headerFront", label: "Header", isFront: true },
-        { key: "headerBody", label: "Body" },
+        { key: "headerFront", label: ef.fieldHeader, isFront: true },
+        { key: "headerBody", label: ef.fieldBody },
       ];
     }
     if (c.type === "table") {
       return [
-        { key: "tableFront", label: "Front", isFront: true },
-        { key: "tableBack", label: "Back" },
-        { key: "tableNotes", label: "Notes" },
+        { key: "tableFront", label: ef.fieldFront, isFront: true },
+        { key: "tableBack", label: ef.fieldBack },
+        { key: "tableNotes", label: ef.fieldNotes },
       ];
     }
     if (c.type === "cloze") {
       return [
-        { key: "clozeFront", label: "Header", isFront: true },
-        { key: "clozeSentence", label: "Body" },
+        { key: "clozeFront", label: ef.fieldHeader, isFront: true },
+        { key: "clozeSentence", label: ef.fieldBody },
       ];
     }
     if (c.type === "spatial") {
       return [
-        { key: "spatialFront", label: "Front", isFront: true },
-        { key: "spatialBack", label: "Back" },
-        { key: "spatialHint", label: "Hint" },
+        { key: "spatialFront", label: ef.fieldFront, isFront: true },
+        { key: "spatialBack", label: ef.fieldBack },
+        { key: "spatialHint", label: ef.fieldHint },
       ];
     }
-    return [{ key: "itemText", label: "Body" }];
+    return [{ key: "itemText", label: ef.fieldBody }];
   }
 
   function setFieldValue(key: string, value: string) {
@@ -257,7 +259,7 @@
 
 <div class="decks-edit-modal">
   <div class="decks-edit-header">
-    <h3>Edit flashcard</h3>
+    <h3>{I18n.t.modals.editFlashcard.title}</h3>
     <div class="decks-edit-breadcrumb">
       {typeLabel}{card.breadcrumb ? ` · ${card.breadcrumb}` : ""}
     </div>
@@ -266,7 +268,7 @@
   <div class="decks-edit-content">
     {#if card.type === "image-occlusion"}
       <div class="decks-edit-field">
-        <span class="decks-edit-label">Image</span>
+        <span class="decks-edit-label">{I18n.t.modals.editFlashcard.fieldImage}</span>
         <div class="decks-edit-wrap">
           <div
             class="decks-edit-box decks-edit-image-preview"
@@ -340,7 +342,7 @@
     <button
       type="button"
       on:click={onClose}
-      disabled={saveState === "saving"}>Cancel</button
+      disabled={saveState === "saving"}>{I18n.t.modals.editFlashcard.cancel}</button
     >
     <button
       type="button"
@@ -348,7 +350,7 @@
       on:click={handleSave}
       disabled={!canSave}
     >
-      {saveState === "saving" ? "Saving…" : "Save"}
+      {saveState === "saving" ? I18n.t.modals.editFlashcard.saving : I18n.t.modals.editFlashcard.save}
     </button>
   </div>
 </div>

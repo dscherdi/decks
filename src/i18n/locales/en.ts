@@ -398,6 +398,7 @@ export const en = {
     footerInDeck: "{total} cards in \"{name}\"",
     footerShowingOf: "Showing {shown} of {total} flashcards",
     footerTotal: "{total} flashcards",
+    loadMore: "Load more ({remaining} remaining)",
   },
 
   config: {
@@ -947,6 +948,19 @@ export const en = {
     },
     decksView: {
       title: "Decks",
+    },
+    editFlashcard: {
+      title: "Edit flashcard",
+      fieldHeader: "Header",
+      fieldBody: "Body",
+      fieldFront: "Front",
+      fieldBack: "Back",
+      fieldNotes: "Notes",
+      fieldHint: "Hint",
+      fieldImage: "Image",
+      cancel: "Cancel",
+      save: "Save",
+      saving: "Saving…",
     },
   },
 

@@ -413,6 +413,7 @@ export const zh: Translations = {
     footerInDeck: "「{name}」中有 {total} 张卡片",
     footerShowingOf: "显示 {shown} / {total} 张卡片",
     footerTotal: "{total} 张卡片",
+    loadMore: "加载更多（剩余 {remaining} 张）",
   },
 
   config: {
@@ -961,6 +962,16 @@ export const zh: Translations = {
     },
     flashcardManager: { title: "卡片管理器" },
     decksView: { title: "牌组" },
+    editFlashcard: {
+      title: "编辑卡片",
+      fieldHeader: "标题",
+      fieldBody: "内容",
+      fieldFront: "正面",
+      fieldBack: "背面",
+      fieldNotes: "备注",
+      fieldHint: "提示",
+      fieldImage: "图片",
+    },
   },
 
   settings: {

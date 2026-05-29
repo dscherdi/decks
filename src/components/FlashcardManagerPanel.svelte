@@ -1295,7 +1295,7 @@
       </span>
       {#if hasMore}
         <button class="decks-fm-load-more" on:click={loadMore}>
-          Load more ({sortedFlashcards.length - displayLimit} remaining)
+          {I18n.format(I18n.t.manager.loadMore, { remaining: sortedFlashcards.length - displayLimit })}
         </button>
       {/if}
     </div>

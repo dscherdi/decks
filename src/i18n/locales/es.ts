@@ -447,6 +447,7 @@ export const es: Translations = {
     footerInDeck: '{total} tarjetas en "{name}"',
     footerShowingOf: "Mostrando {shown} de {total} tarjetas",
     footerTotal: "{total} tarjetas",
+    loadMore: "Cargar más ({remaining} restantes)",
   },
 
   config: {
@@ -1046,6 +1047,16 @@ export const es: Translations = {
     },
     decksView: {
       title: "Mazos",
+    },
+    editFlashcard: {
+      title: "Editar tarjeta",
+      fieldHeader: "Encabezado",
+      fieldBody: "Contenido",
+      fieldFront: "Anverso",
+      fieldBack: "Reverso",
+      fieldNotes: "Notas",
+      fieldHint: "Pista",
+      fieldImage: "Imagen",
     },
   },
 

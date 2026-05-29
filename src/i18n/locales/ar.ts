@@ -426,6 +426,7 @@ export const ar: Translations = {
     footerInDeck: '{total} بطاقات في "{name}"',
     footerShowingOf: "عرض {shown} من {total} بطاقات",
     footerTotal: "{total} بطاقات",
+    loadMore: "تحميل المزيد ({remaining} متبقية)",
   },
 
   config: {
@@ -994,6 +995,16 @@ export const ar: Translations = {
     },
     decksView: {
       title: "الرزم",
+    },
+    editFlashcard: {
+      title: "تعديل البطاقة",
+      fieldHeader: "عنوان",
+      fieldBody: "المحتوى",
+      fieldFront: "الوجه",
+      fieldBack: "الظهر",
+      fieldNotes: "ملاحظات",
+      fieldHint: "تلميح",
+      fieldImage: "صورة",
     },
   },
 

@@ -433,6 +433,7 @@ export const ja: Translations = {
     footerInDeck: "「{name}」の {total} 枚のカード",
     footerShowingOf: "{total} 枚中 {shown} 枚を表示",
     footerTotal: "{total} 枚のカード",
+    loadMore: "さらに読み込む（残り {remaining} 件）",
   },
 
   config: {
@@ -1005,6 +1006,16 @@ export const ja: Translations = {
     },
     flashcardManager: { title: "カード管理" },
     decksView: { title: "デッキ" },
+    editFlashcard: {
+      title: "カードを編集",
+      fieldHeader: "見出し",
+      fieldBody: "本文",
+      fieldFront: "表面",
+      fieldBack: "裏面",
+      fieldNotes: "メモ",
+      fieldHint: "ヒント",
+      fieldImage: "画像",
+    },
   },
 
   settings: {

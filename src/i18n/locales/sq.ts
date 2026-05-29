@@ -448,6 +448,7 @@ export const sq: Translations = {
     footerInDeck: '{total} karta në "{name}"',
     footerShowingOf: "Duke shfaqur {shown} nga {total} karta",
     footerTotal: "{total} karta",
+    loadMore: "Ngarko më shumë ({remaining} të mbetura)",
   },
 
   config: {
@@ -1047,6 +1048,16 @@ export const sq: Translations = {
     },
     decksView: {
       title: "Pakot",
+    },
+    editFlashcard: {
+      title: "Redakto kartën",
+      fieldHeader: "Titull",
+      fieldBody: "Përmbajtje",
+      fieldFront: "Para",
+      fieldBack: "Prapa",
+      fieldNotes: "Shënime",
+      fieldHint: "Aluzion",
+      fieldImage: "Imazh",
     },
   },
 

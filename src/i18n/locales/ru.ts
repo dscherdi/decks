@@ -437,6 +437,7 @@ export const ru: Translations = {
     footerInDeck: "{total} карточек в «{name}»",
     footerShowingOf: "Показано {shown} из {total} карточек",
     footerTotal: "{total} карточек",
+    loadMore: "Загрузить ещё ({remaining} осталось)",
   },
 
   config: {
@@ -1020,6 +1021,19 @@ export const ru: Translations = {
     },
     flashcardManager: { title: "Менеджер карточек" },
     decksView: { title: "Колоды" },
+    editFlashcard: {
+      title: "Редактировать карточку",
+      fieldHeader: "Заголовок",
+      fieldBody: "Содержание",
+      fieldFront: "Лицевая сторона",
+      fieldBack: "Обратная сторона",
+      fieldNotes: "Заметки",
+      fieldHint: "Подсказка",
+      fieldImage: "Изображение",
+      cancel: "Отмена",
+      save: "Сохранить",
+      saving: "Сохранение…",
+    },
   },
 
   settings: {

@@ -456,6 +456,7 @@ export const de: Translations = {
     footerInDeck: '{total} Karten in „{name}"',
     footerShowingOf: "{shown} von {total} Karteikarten angezeigt",
     footerTotal: "{total} Karteikarten",
+    loadMore: "Mehr laden ({remaining} verbleibend)",
   },
 
   config: {
@@ -1054,6 +1055,16 @@ export const de: Translations = {
     },
     decksView: {
       title: "Stapel",
+    },
+    editFlashcard: {
+      title: "Karte bearbeiten",
+      fieldHeader: "Überschrift",
+      fieldBody: "Inhalt",
+      fieldFront: "Vorderseite",
+      fieldBack: "Rückseite",
+      fieldNotes: "Notizen",
+      fieldHint: "Hinweis",
+      fieldImage: "Bild",
     },
   },
 

@@ -1043,8 +1043,7 @@
     <div class="decks-header-buttons">
       <button
         class="clickable-icon"
-        on:click={(e) => handleTouchClick(onOpenDeckConfig, e)}
-        on:touchend={(e) => handleTouchClick(onOpenDeckConfig, e)}
+        on:click={onOpenDeckConfig}
         title={t.deckList.configureDeck}
         disabled={allDecks.length === 0}
         aria-label={t.deckList.configureDeck}
@@ -1053,8 +1052,7 @@
       </button>
       <button
         class="clickable-icon"
-        on:click={(e) => handleTouchClick(onOpenProfilesManager, e)}
-        on:touchend={(e) => handleTouchClick(onOpenProfilesManager, e)}
+        on:click={onOpenProfilesManager}
         title={t.deckList.profiles}
         aria-label={t.deckList.profiles}
       >
@@ -1062,8 +1060,7 @@
       </button>
       <button
         class="clickable-icon"
-        on:click={(e) => handleTouchClick(openFlashcardManager, e)}
-        on:touchend={(e) => handleTouchClick(openFlashcardManager, e)}
+        on:click={openFlashcardManager}
         title={t.deckList.openManager}
         aria-label={t.deckList.openManager}
       >
@@ -1071,8 +1068,7 @@
       </button>
       <button
         class="clickable-icon"
-        on:click={(e) => handleTouchClick(onOpenStatistics, e)}
-        on:touchend={(e) => handleTouchClick(onOpenStatistics, e)}
+        on:click={onOpenStatistics}
         title={t.deckList.statistics}
         aria-label={t.deckList.statistics}
       >
@@ -1081,8 +1077,7 @@
       <button
         class="clickable-icon"
         class:decks-refreshing={isRefreshing || isSyncing}
-        on:click={(e) => handleTouchClick(() => void handleRefresh(), e)}
-        on:touchend={(e) => handleTouchClick(() => void handleRefresh(), e)}
+        on:click={() => void handleRefresh()}
         disabled={isRefreshing}
         title={isSyncing ? t.deckList.syncing : t.deckList.refresh}
         aria-label={t.deckList.refresh}
@@ -1098,6 +1093,7 @@
         <button
           class="decks-tab-button"
           class:decks-tab-active={viewMode === "files"}
+          title="{t.deckList.tabFiles} ({allDecks.length})"
           on:click={() => (viewMode = "files")}
         >
           {t.deckList.tabFiles} ({allDecks.length})
@@ -1105,6 +1101,7 @@
         <button
           class="decks-tab-button"
           class:decks-tab-active={viewMode === "tags"}
+          title="{t.deckList.tabTags} ({deckGroups.length})"
           on:click={() => (viewMode = "tags")}
         >
           {t.deckList.tabTags} ({deckGroups.length})
@@ -1112,6 +1109,7 @@
         <button
           class="decks-tab-button"
           class:decks-tab-active={viewMode === "custom"}
+          title="{t.deckList.tabCustom} ({customDeckGroups.length})"
           on:click={() => { viewMode = "custom"; loadCustomDecks(); }}
         >
           {t.deckList.tabCustom} ({customDeckGroups.length})
@@ -1188,7 +1186,7 @@
               on:click={() => void clickSortColumn("new")}
               aria-label={t.deckList.sortByNewCardCount}
             >
-              <span>{t.deckList.columnNew}</span>
+              <span class="decks-col-stat-label">{t.deckList.columnNew}</span>
               <span class="decks-sort-arrow" use:sortIconAction={newArrow}></span>
             </button>
             <button
@@ -1198,7 +1196,7 @@
               on:click={() => void clickSortColumn("due")}
               aria-label={t.deckList.sortByDueCardCount}
             >
-              <span>{t.deckList.columnDue}</span>
+              <span class="decks-col-stat-label">{t.deckList.columnDue}</span>
               <span class="decks-sort-arrow" use:sortIconAction={dueArrow}></span>
             </button>
             <div class="decks-col-config"></div>
@@ -1447,6 +1445,7 @@
 
   .decks-tab-button {
     flex: 1;
+    min-width: 0;
     padding: var(--size-4-1) var(--size-4-2);
     border: none;
     border-radius: var(--radius-s);
@@ -1456,6 +1455,9 @@
     font-size: var(--font-ui-smaller);
     font-weight: var(--font-medium);
     transition: all 0.15s ease;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
   }
 
   .decks-tab-button:hover {
@@ -1530,9 +1532,9 @@
   }
 
   .decks-table-header {
+    grid-column: 1 / -1;
     display: grid;
-    grid-template-columns: 1fr 44px 44px 36px;
-    gap: 20px;
+    grid-template-columns: subgrid;
     padding: var(--size-4-1) var(--size-4-3);
     font-size: var(--font-ui-smaller);
     font-weight: var(--font-semibold);
@@ -1582,7 +1584,8 @@
   }
 
   /* Stat columns are right-aligned — keep the same alignment when the
-     header becomes a sortable button. */
+     header becomes a sortable button. Columns auto-size via subgrid so no
+     truncation is needed. */
   .decks-col-stat.decks-col-sortable {
     justify-content: flex-end;
   }
@@ -1611,13 +1614,16 @@
     overflow-y: scroll;
     overflow-x: hidden;
     max-height: calc(100vh - 240px);
+    display: grid;
+    grid-template-columns: 1fr auto auto 36px;
+    column-gap: 20px;
+    align-content: start;
   }
 
-
   .decks-deck-row {
+    grid-column: 1 / -1;
     display: grid;
-    grid-template-columns: 1fr 44px 44px 36px;
-    gap: 20px;
+    grid-template-columns: subgrid;
     padding: var(--size-4-1) var(--size-4-3);
     align-items: center;
     border-radius: var(--radius-s);

@@ -418,6 +418,7 @@ export const zhTW: Translations = {
     footerInDeck: "「{name}」中共有 {total} 張卡片",
     footerShowingOf: "正在顯示 {shown} / {total} 張閃卡",
     footerTotal: "共 {total} 張閃卡",
+    loadMore: "載入更多（剩餘 {remaining} 張）",
   },
 
   config: {
@@ -980,6 +981,16 @@ export const zhTW: Translations = {
     },
     decksView: {
       title: "牌組",
+    },
+    editFlashcard: {
+      title: "編輯卡片",
+      fieldHeader: "標題",
+      fieldBody: "內容",
+      fieldFront: "正面",
+      fieldBack: "背面",
+      fieldNotes: "備註",
+      fieldHint: "提示",
+      fieldImage: "圖片",
     },
   },
 
