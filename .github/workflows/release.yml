@@ -53,7 +53,6 @@ jobs:
         uses: actions/setup-node@v4
         with:
           node-version: 22
-          cache: 'pnpm'
 
       - name: Install dependencies
         run: pnpm install
@@ -67,12 +66,13 @@ jobs:
 
       - name: Resolve release notes file
         id: release-notes
+        working-directory: apps/obsidian-plugin
         run: |
           VERSION=$(node -p "require('./manifest.json').version")
           FILENAME=$(echo "$VERSION" | tr '.' '-').md
           FILEPATH="release-notes/$FILENAME"
           if [[ -f "$FILEPATH" ]]; then
-            echo "path=$FILEPATH" >> "$GITHUB_OUTPUT"
+            echo "path=apps/obsidian-plugin/$FILEPATH" >> "$GITHUB_OUTPUT"
             echo "Found release notes: $FILEPATH"
           else
             echo "No release notes file found at $FILEPATH"
@@ -80,6 +80,7 @@ jobs:
           fi
 
       - name: Validate release files
+        working-directory: apps/obsidian-plugin
         run: |
           echo "Validating release files..."
           required_files=(
@@ -113,10 +114,10 @@ jobs:
           tag_name: ${{ steps.tag.outputs.value }}
           body_path: ${{ steps.release-notes.outputs.path }}
           files: |
-            ./dist/main.js
-            ./dist/styles.css
-            ./dist/manifest.json
-            ./dist/README.md
-            ./dist/LICENSE
+            apps/obsidian-plugin/dist/main.js
+            apps/obsidian-plugin/dist/styles.css
+            apps/obsidian-plugin/dist/manifest.json
+            apps/obsidian-plugin/dist/README.md
+            apps/obsidian-plugin/dist/LICENSE
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
