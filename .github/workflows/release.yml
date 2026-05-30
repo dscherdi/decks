@@ -42,6 +42,10 @@ jobs:
           packages:
             - 'apps/*'
             - 'packages/*'
+          allowBuilds:
+            esbuild: true
+            svelte-preprocess: true
+            unrs-resolver: true
           EOF
           echo '{"name":"ci-workspace","private":true}' > package.json
 
