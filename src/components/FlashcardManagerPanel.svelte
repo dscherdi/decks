@@ -15,7 +15,7 @@
   import { onMount, onDestroy } from "svelte";
   import { prepareFuzzySearch, Notice } from "obsidian";
   import type { App } from "obsidian";
-  import { I18n } from "@/i18n/I18n";
+  import { I18n } from "@decks/core";
   import { ConfirmModal } from "./ConfirmModal";
 
   const t = I18n.t;
@@ -33,6 +33,8 @@
   export let initialColumnWidths: Record<string, number> = {};
   export let onColumnWidthsChange: ((widths: Record<string, number>) => void) | null = null;
   export let onEditCard: ((card: Flashcard) => Promise<void>) | null = null;
+  export let aiEnabled = false;
+  export let onBatchRefactor: ((cards: Flashcard[]) => Promise<void>) | null = null;
   let editInFlightId: string | null = null;
   export let initialEditTarget: EditTarget | null = null;
   export let leechThreshold = 8;
@@ -550,6 +552,14 @@
     }
   }
 
+  async function handleBulkRefactor(): Promise<void> {
+    if (!onBatchRefactor) return;
+    const selected = getSelectedCards();
+    if (selected.length === 0) return;
+    await onBatchRefactor(selected);
+    await reloadCards();
+  }
+
   async function handleBulkReset(): Promise<void> {
     const ids = Array.from(selectedIds);
     if (ids.length === 0) return;
@@ -976,6 +986,15 @@
         >
           {m.resetSelected}
         </button>
+        {#if aiEnabled && onBatchRefactor}
+          <button
+            class="decks-fm-action-btn"
+            on:click={handleBulkRefactor}
+            type="button"
+          >
+            {t.modals.aiBatch.bulkButton}
+          </button>
+        {/if}
         <div class="decks-fm-deck-dropdown-container" bind:this={customDeckDropdownEl}>
             <button
               class="decks-fm-action-btn"

@@ -1,6 +1,6 @@
 import { Modal, Setting } from "obsidian";
 import type { App } from "obsidian";
-import { I18n } from "@/i18n/I18n";
+import { I18n } from "@decks/core";
 
 export class RenameCustomDeckModal extends Modal {
   private newName: string;

@@ -9,7 +9,7 @@ import { MainDatabaseService } from "../../database/MainDatabaseService";
 import { InMemoryAdapter } from "./database-test-utils";
 import { setupRealSqlJs } from "./setup-real-sql";
 import { Logger } from "../../utils/logging";
-import { applyOp } from "../../services/SyncLog.handlers";
+import { applyOp } from "@decks/core";
 import { DEFAULT_PROFILE_ID } from "../../database/types";
 import type { Flashcard } from "../../database/types";
 import type {
@@ -27,7 +27,7 @@ import type {
   SessionEndOp,
   DeckResetOp,
   CustomDeckResetOp,
-} from "../../services/SyncLog.types";
+} from "@decks/core";
 import type { HLCValue } from "../../services/HLC";
 
 const HLC: HLCValue = [1_000_000, 0, "remote-dev"];

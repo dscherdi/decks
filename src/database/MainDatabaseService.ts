@@ -9,7 +9,7 @@ import {
   CREATE_TABLES_SQL,
   buildMigrationSQL,
   CURRENT_SCHEMA_VERSION,
-} from "./schemas";
+} from "@decks/core";
 import type { Database, InitSqlJsStatic } from "sql.js";
 import { FlashcardSynchronizer } from "../services/FlashcardSynchronizer";
 import type { SyncData, SyncResult } from "../services/FlashcardSynchronizer";
@@ -322,7 +322,7 @@ export class MainDatabaseService extends BaseDatabaseService {
 
     // Convert SQL.js result format to array of row arrays
     const resultData = result[0];
-    return (resultData.values || []) as (string | number | null)[][];
+    return (resultData.values || []);
   }
 
   async closeBackupDatabaseInstance(backupDb: Database): Promise<void> {

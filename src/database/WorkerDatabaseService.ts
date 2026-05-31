@@ -413,6 +413,7 @@ export class WorkerDatabaseService extends BaseDatabaseService {
       success: typedResult.success,
       parsedCount: typedResult.parsedCount,
       operationsCount: typedResult.operationsCount,
+      duplicatesSkipped: typedResult.duplicatesSkipped,
     };
   }
 
@@ -438,6 +439,7 @@ export class WorkerDatabaseService extends BaseDatabaseService {
         success: typedResult.success,
         parsedCount: typedResult.parsedCount,
         operationsCount: typedResult.operationsCount,
+        duplicatesSkipped: typedResult.duplicatesSkipped,
       };
     } catch (error) {
       console.error("Worker sync failed:", error);

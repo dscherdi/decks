@@ -20,7 +20,7 @@ import type { DecksSettings } from "../settings";
 import { BackupService } from "./BackupService";
 import { parseSteps } from "../utils/step-parser";
 import type { SyncLog } from "./SyncLog";
-import type { RateOp } from "./SyncLog.types";
+import type { RateOp } from "@decks/core";
 
 export interface SchedulerOptions {
   allowNew?: boolean;

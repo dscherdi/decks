@@ -2,7 +2,7 @@
   import { onMount } from "svelte";
   import { StatisticsService } from "@/services/StatisticsService";
   import { Logger } from "@/utils/logging";
-  import { I18n } from "@/i18n/I18n";
+  import { I18n } from "@decks/core";
 
   const t = I18n.t;
   const YOUNG_MATURE_THRESHOLD = 21;

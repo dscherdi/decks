@@ -27,7 +27,7 @@ import {
   CREATE_TABLES_SQL,
   CURRENT_SCHEMA_VERSION,
   buildMigrationSQL,
-} from "../database/schemas";
+} from "@decks/core";
 
 export interface QueryConfig {
   asObject?: boolean;

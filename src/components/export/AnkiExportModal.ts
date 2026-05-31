@@ -7,7 +7,7 @@ import type {
 } from "../../types/svelte-components";
 import AnkiExportUI from "./AnkiExportUI.svelte";
 import { mount, unmount } from "svelte";
-import { I18n } from "@/i18n/I18n";
+import { I18n } from "@decks/core";
 
 export class AnkiExportModal extends Modal {
   private deck: Deck;

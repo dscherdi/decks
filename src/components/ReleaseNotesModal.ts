@@ -1,6 +1,6 @@
 import { Modal, App, MarkdownRenderer, Component } from "obsidian";
 import RELEASE_NOTES_DATA from "../assets/ReleaseNotesData";
-import { I18n } from "@/i18n/I18n";
+import { I18n } from "@decks/core";
 
 export class ReleaseNotesModal extends Modal {
   private markdownComponents: Component[] = [];

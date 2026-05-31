@@ -26,7 +26,7 @@ import { ProgressTracker } from "@/utils/progress";
 import type { DeckListPanelComponent } from "../types/svelte-components";
 import type { IDatabaseService } from "../database/DatabaseFactory";
 import type { DeckListSortMode } from "@/settings";
-import { I18n } from "@/i18n/I18n";
+import { I18n } from "@decks/core";
 
 export class DecksView extends ItemView {
   private db: IDatabaseService;
@@ -43,6 +43,7 @@ export class DecksView extends ItemView {
   private logger: Logger;
   private saveSettings: () => Promise<void>;
   private openEditModal?: (card: Flashcard) => Promise<void>;
+  private openBatchRefactor?: (cards: Flashcard[]) => Promise<void>;
 
   constructor(
     leaf: WorkspaceLeaf,
@@ -57,6 +58,7 @@ export class DecksView extends ItemView {
     logger: Logger,
     saveSettings: () => Promise<void>,
     openEditModal?: (card: Flashcard) => Promise<void>,
+    openBatchRefactor?: (cards: Flashcard[]) => Promise<void>,
   ) {
     super(leaf);
     this.db = database;
@@ -70,6 +72,7 @@ export class DecksView extends ItemView {
     this.logger = logger;
     this.saveSettings = saveSettings;
     this.openEditModal = openEditModal;
+    this.openBatchRefactor = openBatchRefactor;
 
     this.progressTracker = progressTracker;
   }
@@ -129,7 +132,7 @@ export class DecksView extends ItemView {
 
     // Create and mount Svelte component using Svelte 5 API
     this.deckListPanelComponent = mount(DeckListPanel, {
-      target: container as HTMLElement,
+      target: container,
       props: {
         statisticsService: this.statisticsService,
         db: this.db,
@@ -208,7 +211,8 @@ export class DecksView extends ItemView {
         async () => {
           await this.refresh();
         },
-        active !== null
+        active !== null,
+        this.settings.ai.enabled
       ).open();
     });
   }
@@ -229,6 +233,7 @@ export class DecksView extends ItemView {
         void this.saveSettings();
       },
       this.openEditModal,
+      this.openBatchRefactor,
     );
   }
 

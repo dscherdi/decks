@@ -3,7 +3,6 @@ import {
   type Statistics,
   type ReviewLog,
   type Flashcard,
-  type FlashcardState,
   type DeckProfile,
   type DeckStats,
   type DeckGroup,
@@ -1980,7 +1979,7 @@ export class StatisticsService {
         const cardAsFlashcard: Partial<Flashcard> = {
           id: cardState.id,
           deckId: cardState.deckId,
-          state: "review" as FlashcardState,
+          state: "review",
           stability: cardState.stability,
           difficulty: cardState.difficulty,
           repetitions: cardState.repetitions,
@@ -2028,7 +2027,7 @@ export class StatisticsService {
         const cardAsFlashcard: Partial<Flashcard> = {
           id: cardState.id,
           deckId: cardState.deckId,
-          state: "new" as FlashcardState,
+          state: "new",
           stability: cardState.stability,
           difficulty: cardState.difficulty,
           repetitions: cardState.repetitions,

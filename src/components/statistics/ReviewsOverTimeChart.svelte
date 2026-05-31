@@ -14,7 +14,7 @@
   import "chartjs-adapter-date-fns";
   import { Logger } from "@/utils/logging";
   import { StatisticsService } from "@/services/StatisticsService";
-  import { I18n } from "@/i18n/I18n";
+  import { I18n } from "@decks/core";
   import {
     BAR_DATASET_DEFAULTS,
     getCategoryXAxis,
@@ -115,8 +115,9 @@
       };
     }
 
+    const rd = reviewData;
     // Sort dates and prepare data
-    const sortedDates = Array.from(reviewData.keys()).sort();
+    const sortedDates = Array.from(rd.keys()).sort();
 
     const redColor = getObsidianColor(PALETTE.red);
     const orangeColor = getObsidianColor(PALETTE.orange);
@@ -129,7 +130,7 @@
         {
           ...BAR_DATASET_DEFAULTS,
           label: t.statistics.againSeries,
-          data: sortedDates.map((date) => reviewData.get(date)!.again),
+          data: sortedDates.map((date) => rd.get(date)!.again),
           backgroundColor: redColor,
           borderColor: redColor,
           borderWidth: 1,
@@ -137,7 +138,7 @@
         {
           ...BAR_DATASET_DEFAULTS,
           label: t.statistics.hardSeries,
-          data: sortedDates.map((date) => reviewData.get(date)!.hard),
+          data: sortedDates.map((date) => rd.get(date)!.hard),
           backgroundColor: orangeColor,
           borderColor: orangeColor,
           borderWidth: 1,
@@ -145,7 +146,7 @@
         {
           ...BAR_DATASET_DEFAULTS,
           label: t.statistics.goodSeries,
-          data: sortedDates.map((date) => reviewData.get(date)!.good),
+          data: sortedDates.map((date) => rd.get(date)!.good),
           backgroundColor: greenColor,
           borderColor: greenColor,
           borderWidth: 1,
@@ -153,7 +154,7 @@
         {
           ...BAR_DATASET_DEFAULTS,
           label: t.statistics.easySeries,
-          data: sortedDates.map((date) => reviewData.get(date)!.easy),
+          data: sortedDates.map((date) => rd.get(date)!.easy),
           backgroundColor: blueColor,
           borderColor: blueColor,
           borderWidth: 1,
@@ -220,7 +221,7 @@
 
                 const percentage =
                   total > 0
-                    ? ((context.parsed.y / total) * 100).toFixed(1)
+                    ? (((context.parsed.y ?? 0) / total) * 100).toFixed(1)
                     : "0";
                 return `${percentage}%`;
               },

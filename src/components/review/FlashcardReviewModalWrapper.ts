@@ -11,7 +11,7 @@ import type {
 import FlashcardReviewModal from "./FlashcardReviewModal.svelte";
 import { mount, unmount } from "svelte";
 import { navigateToFlashcardSource } from "../../utils/flashcard-navigator";
-import { I18n } from "@/i18n/I18n";
+import { I18n } from "@decks/core";
 import { ConfirmModal } from "../ConfirmModal";
 
 export class FlashcardReviewModalWrapper extends Modal {

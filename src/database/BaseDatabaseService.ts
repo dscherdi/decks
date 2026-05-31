@@ -14,7 +14,7 @@ import type {
 } from "./types";
 import { DEFAULT_PROFILE_ID, deckWithProfile } from "./types";
 import type { FilterDefinition } from "./types";
-import { SQL_QUERIES } from "./schemas";
+import { SQL_QUERIES } from "@decks/core";
 import { normalizeProfile } from "../algorithm/fsrs-weights";
 import { compileFilter, type FilterCompileOptions } from "../services/FilterEngine";
 import type { SyncData, SyncResult } from "../services/FlashcardSynchronizer";
@@ -29,7 +29,7 @@ import type {
 } from "./sql-types";
 import type { IDatabaseService, JournalStateRow } from "./DatabaseFactory";
 import type { SyncLog } from "../services/SyncLog";
-import type { SyncOpV1 } from "../services/SyncLog.types";
+import type { SyncOpV1 } from "@decks/core";
 import { generateFlashcardId, generateCustomDeckId, generateCustomDeckCardId } from "../utils/hash";
 
 export interface QueryConfig {
@@ -152,6 +152,7 @@ export abstract class BaseDatabaseService implements IDatabaseService {
       isDefault: Boolean(row[14]),
       created: row[15] as string,
       modified: row[16] as string,
+      refactorPrompt: (row[17] as string) ?? "",
     };
   }
 
@@ -439,6 +440,7 @@ export abstract class BaseDatabaseService implements IDatabaseService {
       profile.fsrs.profile,
       profile.clozeEnabled ? 1 : 0,
       profile.clozeShowContext ?? "open",
+      profile.refactorPrompt ?? "",
       profile.isDefault ? 1 : 0,
       now,
       now,
@@ -461,6 +463,7 @@ export abstract class BaseDatabaseService implements IDatabaseService {
         fsrsProfile: profile.fsrs.profile,
         clozeEnabled: profile.clozeEnabled,
         clozeShowContext: profile.clozeShowContext ?? "open",
+        refactorPrompt: profile.refactorPrompt ?? "",
         isDefault: profile.isDefault,
         created: now,
         modified: now,
@@ -559,6 +562,7 @@ export abstract class BaseDatabaseService implements IDatabaseService {
       updated.fsrs.profile,
       updated.clozeEnabled ? 1 : 0,
       updated.clozeShowContext ?? "open",
+      updated.refactorPrompt ?? "",
       modifiedAt,
       id,
     ]);
@@ -585,6 +589,7 @@ export abstract class BaseDatabaseService implements IDatabaseService {
         fsrsProfile: updated.fsrs.profile,
         clozeEnabled: updated.clozeEnabled,
         clozeShowContext: updated.clozeShowContext ?? "open",
+        refactorPrompt: updated.refactorPrompt ?? "",
         isDefault: updated.isDefault,
         created: updated.created,
         modified: modifiedAt,
@@ -1420,7 +1425,7 @@ export abstract class BaseDatabaseService implements IDatabaseService {
     const sql = `INSERT INTO review_logs (${columns.join(
       ", "
     )}) VALUES (${placeholders.join(", ")})`;
-    await this.querySql(sql, params as (string | number | null)[]);
+    await this.querySql(sql, params);
   }
 
   async getLatestReviewLogForFlashcard(
@@ -2384,7 +2389,7 @@ export abstract class BaseDatabaseService implements IDatabaseService {
   ): Promise<Record<string, SqlJsValue>[] | SqlJsValue[][]> {
     return (await this.querySql(
       sql,
-      params as (string | number | null)[],
+      params,
       config
     ));
   }

@@ -17,7 +17,7 @@ import type {
 import FlashcardReviewModal from "./FlashcardReviewModal.svelte";
 import { mount, unmount } from "svelte";
 import { navigateToFlashcardSource } from "../../utils/flashcard-navigator";
-import { I18n } from "@/i18n/I18n";
+import { I18n } from "@decks/core";
 import { ConfirmModal } from "../ConfirmModal";
 
 export const VIEW_TYPE_FLASHCARD_REVIEW = "flashcard-review-view";
@@ -85,7 +85,8 @@ export class FlashcardReviewView extends ItemView {
     this.refreshStatsById = refreshStatsById;
 
     // Update the tab title
-    this.leaf.updateHeader();
+    // updateHeader() exists at runtime but isn't in the obsidian typings.
+    (this.leaf as unknown as { updateHeader?: () => void }).updateHeader?.();
 
     this.mountComponent();
   }

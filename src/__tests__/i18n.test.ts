@@ -1,14 +1,6 @@
-import { I18n } from "@/i18n/I18n";
+import { I18n } from "@decks/core";
 import type { DecksSettings } from "@/settings";
 import { DEFAULT_SETTINGS } from "@/settings";
-
-// Mock obsidian's getLanguage so we can drive the auto-detection path.
-jest.mock("obsidian", () => ({
-  getLanguage: jest.fn(),
-}));
-
-import { getLanguage } from "obsidian";
-const getLanguageMock = getLanguage as jest.MockedFunction<typeof getLanguage>;
 
 function settingsWith(language: DecksSettings["i18n"]["language"]): DecksSettings {
   return {
@@ -18,10 +10,6 @@ function settingsWith(language: DecksSettings["i18n"]["language"]): DecksSetting
 }
 
 describe("I18n", () => {
-  beforeEach(() => {
-    getLanguageMock.mockReset();
-  });
-
   describe("init() with explicit language preference", () => {
     it("selects German when language is 'de'", () => {
       I18n.init(settingsWith("de"));
@@ -42,30 +30,26 @@ describe("I18n", () => {
     });
   });
 
-  describe("init() with auto", () => {
-    it("falls back to Obsidian's getLanguage() when 'auto'", () => {
-      getLanguageMock.mockReturnValue("fr");
-      I18n.init(settingsWith("auto"));
+  // With 'auto', core resolves from the systemLanguage argument the host passes
+  // (the plugin passes Obsidian's getLanguage()); resolution itself is platform-agnostic.
+  describe("init() with auto + systemLanguage", () => {
+    it("uses the system language when 'auto'", () => {
+      I18n.init(settingsWith("auto"), "fr");
       expect(I18n.code).toBe("fr");
     });
 
     it("strips region codes (zh-TW → zh)", () => {
-      getLanguageMock.mockReturnValue("zh-TW");
-      I18n.init(settingsWith("auto"));
+      I18n.init(settingsWith("auto"), "zh-TW");
       expect(I18n.code).toBe("zh");
     });
 
     it("falls back to English for unsupported codes", () => {
-      getLanguageMock.mockReturnValue("pt");
-      I18n.init(settingsWith("auto"));
+      I18n.init(settingsWith("auto"), "pt");
       expect(I18n.code).toBe("en");
     });
 
-    it("falls back to English when getLanguage() throws", () => {
-      getLanguageMock.mockImplementation(() => {
-        throw new Error("not available");
-      });
-      I18n.init(settingsWith("auto"));
+    it("falls back to English when no system language is provided", () => {
+      I18n.init(settingsWith("auto"), undefined);
       expect(I18n.code).toBe("en");
     });
   });

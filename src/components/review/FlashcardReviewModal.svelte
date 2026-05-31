@@ -17,7 +17,7 @@
   import { yieldToUI } from "@/utils/ui";
   import { prepareFuzzySearch } from "obsidian";
   import { computeCardHealth } from "../../services/CardHealth";
-  import { I18n } from "@/i18n/I18n";
+  import { I18n } from "@decks/core";
 
   const t = I18n.t;
   const r = t.review;
@@ -202,7 +202,8 @@
   let clozeGroupTotal = 0;
   let inClozeGroupReview = false;
 
-  $: clozeShowContext = deckOrGroup.profile?.clozeShowContext ?? "open";
+  $: clozeShowContext =
+    ("profile" in deckOrGroup ? deckOrGroup.profile : undefined)?.clozeShowContext ?? "open";
 
   // Browse mode variables
   let browseCardIndex = 0;

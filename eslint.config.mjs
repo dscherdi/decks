@@ -127,10 +127,10 @@ export default [
     rules: {
       ...sveltePlugin.configs.recommended.rules,
       ...tsPlugin.configs.recommended.rules,
-      "@typescript-eslint/no-unused-vars": [
-        "error",
-        { argsIgnorePattern: "^_" },
-      ],
+      // Disabled for .svelte: @typescript-eslint/no-unused-vars crashes the
+      // svelte-eslint-parser on some constructs (reactive declarations,
+      // computed-key destructuring). svelte-check already reports unused vars.
+      "@typescript-eslint/no-unused-vars": "off",
       "@typescript-eslint/explicit-function-return-type": "off",
       "@typescript-eslint/no-explicit-any": "warn",
       "@typescript-eslint/no-inferrable-types": "error",

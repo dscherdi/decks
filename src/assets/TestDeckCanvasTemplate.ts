@@ -1,4 +1,4 @@
-import { I18n } from "@/i18n/I18n";
+import { I18n } from "@decks/core";
 
 /**
  * Build the JSON payload for the canvas getting-started deck.

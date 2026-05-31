@@ -5,6 +5,7 @@ import {
   Notice,
   TAbstractFile,
   getAllTags,
+  getLanguage,
 } from "obsidian";
 
 import {
@@ -26,6 +27,15 @@ import { BackupService } from "./services/BackupService";
 import { StatisticsService } from "./services/StatisticsService";
 import { FlashcardWriter, type FlashcardEdits } from "./services/FlashcardWriter";
 import { FlashcardEditModalWrapper } from "./components/FlashcardEditModalWrapper";
+import { AiRefactoringService, type RefactorFieldSet } from "@decks/core";
+import { AiKeyStore } from "./services/AiKeyStore";
+import { ObsidianHttpClient } from "./services/ObsidianHttpClient";
+import {
+  AiRefactorController,
+  cardToRefactorFieldSet,
+  fieldSetToEdits,
+} from "./services/AiRefactorController";
+import { AiBatchRefactorModalWrapper } from "./components/AiBatchRefactorModalWrapper";
 import type { Flashcard } from "./database/types";
 import { yieldToUI } from "./utils/ui";
 import { Logger, formatTime } from "./utils/logging";
@@ -34,7 +44,7 @@ import { generateDeckId } from "./utils/hash";
 
 import { type DecksSettings, DEFAULT_SETTINGS } from "./settings";
 import { DecksSettingTab } from "./components/settings/SettingsTab";
-import { I18n } from "./i18n/I18n";
+import { I18n } from "@decks/core";
 
 import { DecksView } from "./components/DecksView";
 import { DecksViewModal } from "./components/DecksViewModal";
@@ -113,6 +123,8 @@ export default class DecksPlugin extends Plugin {
   private statisticsService: StatisticsService;
   private customDeckService: CustomDeckService;
   private flashcardWriter: FlashcardWriter;
+  public aiKeyStore: AiKeyStore;
+  public aiRefactorController: AiRefactorController;
   public settings: DecksSettings;
   private logger: Logger;
   private progressTracker: ProgressTracker;
@@ -132,8 +144,9 @@ export default class DecksPlugin extends Plugin {
     // Load settings first
     await this.loadSettings();
 
-    // Resolve the active UI language before any view, command, or notice is registered
-    I18n.init(this.settings);
+    // Resolve the active UI language before any view, command, or notice is registered.
+    // Pass Obsidian's UI language into core's platform-agnostic resolver.
+    I18n.init(this.settings, getLanguage());
 
     // Initialize utilities
     const pluginFolderName = this.manifest.dir?.split('/').pop() || this.manifest.id;
@@ -239,6 +252,17 @@ export default class DecksPlugin extends Plugin {
       this.customDeckService = new CustomDeckService(this.db);
       this.flashcardWriter = new FlashcardWriter(this.app);
 
+      // AI refactoring. API keys live in a non-synced file under the plugin
+      // dir (AiKeyStore) — never in data.json. HTTP goes through Obsidian's
+      // requestUrl (ObsidianHttpClient) to bypass CORS.
+      this.aiKeyStore = new AiKeyStore(adapter, pluginDir);
+      this.aiRefactorController = new AiRefactorController(
+        new AiRefactoringService(new ObsidianHttpClient(), this.logger),
+        this.db,
+        this.settings,
+        this.aiKeyStore,
+      );
+
       // Apply current filter compile thresholds (leech / dense) to db + service
       this.applyFilterCompileOptions();
 
@@ -289,6 +313,7 @@ export default class DecksPlugin extends Plugin {
             this.logger,
             () => this.saveSettings(),
             (card) => this.openEditFlashcardModal(card),
+            (cards) => this.openBatchRefactorModal(cards),
           )
       );
 
@@ -331,6 +356,7 @@ export default class DecksPlugin extends Plugin {
           () => this.getDecksView(),
           () => this.saveSettings(),
           (card) => this.openEditFlashcardModal(card),
+          (cards) => this.openBatchRefactorModal(cards),
         ).open();
       });
 
@@ -374,6 +400,7 @@ export default class DecksPlugin extends Plugin {
               void this.saveSettings();
             },
             (card) => this.openEditFlashcardModal(card),
+            (cards) => this.openBatchRefactorModal(cards),
           );
         },
       });
@@ -484,6 +511,7 @@ export default class DecksPlugin extends Plugin {
             () => this.getDecksView(),
             () => this.saveSettings(),
             (card) => this.openEditFlashcardModal(card),
+            (cards) => this.openBatchRefactorModal(cards),
           ).open();
         },
       });
@@ -694,7 +722,7 @@ export default class DecksPlugin extends Plugin {
         !rawParsing ||
         typeof rawParsing !== "object" ||
         !Object.prototype.hasOwnProperty.call(
-          rawParsing as Record<string, unknown>,
+          rawParsing,
           "deckTag"
         )
       ) {
@@ -894,6 +922,45 @@ export default class DecksPlugin extends Plugin {
           return result;
         },
         settle,
+        {
+          aiEnabled: this.aiRefactorController.isEnabled(),
+          onRefactor: (current, signal) =>
+            this.aiRefactorController.refactorCard(card, current, signal),
+        },
+      );
+      wrapper.open();
+    });
+  }
+
+  async openBatchRefactorModal(cards: Flashcard[]): Promise<void> {
+    return new Promise((resolve) => {
+      const wrapper = new AiBatchRefactorModalWrapper(
+        this.app,
+        {
+          cards,
+          run: (card) =>
+            this.aiRefactorController.refactorCard(
+              card,
+              cardToRefactorFieldSet(card),
+            ),
+          apply: async (card, accepted) => {
+            const merged = {
+              ...(cardToRefactorFieldSet(card) as Record<string, unknown>),
+            };
+            for (const p of accepted) merged[p.key] = p.after;
+            const edits = fieldSetToEdits(merged as unknown as RefactorFieldSet);
+            const result = await this.flashcardWriter.editFlashcard(card, edits);
+            if (result.ok) {
+              const file = this.app.vault.getAbstractFileByPath(card.sourceFile);
+              if (file instanceof TFile) {
+                await this.handleFileChange(file);
+              }
+              return { ok: true };
+            }
+            return { ok: false, error: result.failure.message };
+          },
+        },
+        () => resolve(),
       );
       wrapper.open();
     });

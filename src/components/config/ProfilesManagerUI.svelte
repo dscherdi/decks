@@ -3,15 +3,14 @@
   import { Setting, Notice } from "obsidian";
   import type { DeckProfile, ProfileTagMapping, ClozeShowContext } from "../../database/types";
   import type { IDatabaseService } from "../../database/DatabaseFactory";
-  import type { ReviewOrder } from "../../types/ReviewOrder";
-  import type { FSRSProfile } from "../../database/types";
+  import type { ReviewOrder, FSRSProfile } from "../../database/types";
   import {
     validateLearningSteps,
     validateRelearningSteps,
     getDefaultLearningSteps,
     getDefaultRelearningSteps,
   } from "../../utils/step-parser";
-  import { I18n } from "@/i18n/I18n";
+  import { I18n } from "@decks/core";
 
   const t = I18n.t;
   const p = t.profiles;
@@ -20,6 +19,7 @@
   export let initialProfiles: DeckProfile[];
   export let onclose: () => void;
   export let trainedWeightsAvailable = false;
+  export let aiEnabled = false;
 
   let profiles: DeckProfile[] = initialProfiles;
   let selectedProfileId = "";
@@ -41,6 +41,7 @@
   let relearningStepsContainer: HTMLElement;
   let clozeEnabledContainer: HTMLElement;
   let clozeShowContextContainer: HTMLElement;
+  let refactorPromptContainer: HTMLElement;
   let deckCountContainer: HTMLElement;
   let tagMappingsContainer: HTMLElement;
 
@@ -60,6 +61,7 @@
   let relearningSteps = "10m";
   let clozeEnabled = false;
   let clozeShowContext: ClozeShowContext = "open";
+  let refactorPrompt = "";
 
   // Validation error tracking
   let nameError = false;
@@ -96,6 +98,7 @@
     relearningSteps = profile.relearningSteps;
     clozeEnabled = profile.clozeEnabled;
     clozeShowContext = profile.clozeShowContext;
+    refactorPrompt = profile.refactorPrompt ?? "";
 
     // Reset validation errors
     nameError = false;
@@ -197,6 +200,7 @@
         },
         clozeEnabled: clozeEnabled,
         clozeShowContext: clozeShowContext,
+        refactorPrompt: refactorPrompt,
         modified: new Date().toISOString(),
       };
 
@@ -301,6 +305,8 @@
 
   function rebuildSettings() {
     if (!selectedProfile) return;
+    // Capture as a const so narrowing survives inside the callbacks below.
+    const profile = selectedProfile;
 
     // Profile name
     if (profileNameContainer) {
@@ -311,10 +317,10 @@
         .addText((text) => {
           text
             .setValue(profileName)
-            .setDisabled(selectedProfile.isDefault)
+            .setDisabled(profile.isDefault)
             .onChange((value) => {
               profileName = value;
-              if (!selectedProfile.isDefault && value.trim().length === 0) {
+              if (!profile.isDefault && value.trim().length === 0) {
                 nameError = true;
                 text.inputEl.addClass("decks-input-error");
               } else {
@@ -453,6 +459,26 @@
               }
             });
         });
+    }
+
+    // AI refactor prompt (only when AI features are enabled)
+    if (aiEnabled && refactorPromptContainer) {
+      refactorPromptContainer.empty();
+      new Setting(refactorPromptContainer)
+        .setName(p.refactorPromptLabel)
+        .setDesc(p.refactorPromptDesc)
+        .addTextArea((text) => {
+          text
+            .setValue(refactorPrompt)
+            .setPlaceholder(p.refactorPromptPlaceholder)
+            .onChange((value) => {
+              refactorPrompt = value;
+            });
+          text.inputEl.rows = 4;
+          text.inputEl.addClass("decks-profile-prompt-input");
+        });
+    } else if (refactorPromptContainer) {
+      refactorPromptContainer.empty();
     }
 
     // Header level
@@ -655,6 +681,13 @@
           <div bind:this={clozeEnabledContainer}></div>
           <div bind:this={clozeShowContextContainer}></div>
         </div>
+
+        {#if aiEnabled}
+          <div class="decks-settings-section">
+            <h4>{p.sectionAiRefactor}</h4>
+            <div bind:this={refactorPromptContainer}></div>
+          </div>
+        {/if}
 
         <div class="decks-settings-section">
           <h4>{p.sectionReviewSettings}</h4>

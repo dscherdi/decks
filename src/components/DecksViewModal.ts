@@ -35,7 +35,7 @@ import type { DeckListPanelComponent } from "../types/svelte-components";
 import type { IDatabaseService } from "../database/DatabaseFactory";
 import type { DecksView } from "./DecksView";
 import type { DeckListSortMode } from "@/settings";
-import { I18n } from "@/i18n/I18n";
+import { I18n } from "@decks/core";
 
 export class DecksViewModal extends Modal {
   private db: IDatabaseService;
@@ -52,6 +52,7 @@ export class DecksViewModal extends Modal {
   private getDecksView: () => DecksView | null;
   private saveSettings: () => Promise<void>;
   private openEditModal?: (card: Flashcard) => Promise<void>;
+  private openBatchRefactor?: (cards: Flashcard[]) => Promise<void>;
 
   constructor(
     app: App,
@@ -66,6 +67,7 @@ export class DecksViewModal extends Modal {
     getDecksView: () => DecksView | null,
     saveSettings: () => Promise<void>,
     openEditModal?: (card: Flashcard) => Promise<void>,
+    openBatchRefactor?: (cards: Flashcard[]) => Promise<void>,
   ) {
     super(app);
     this.db = db;
@@ -80,6 +82,7 @@ export class DecksViewModal extends Modal {
     this.getDecksView = getDecksView;
     this.saveSettings = saveSettings;
     this.openEditModal = openEditModal;
+    this.openBatchRefactor = openBatchRefactor;
   }
 
   private async togglePin(id: string): Promise<void> {
@@ -351,7 +354,8 @@ export class DecksViewModal extends Modal {
           const view = this.getDecksView();
           if (view) await view.refresh();
         },
-        active !== null
+        active !== null,
+        this.settings.ai.enabled
       );
       this.openWithReturn(modal);
     });
@@ -415,6 +419,7 @@ export class DecksViewModal extends Modal {
           void this.saveSettings();
         },
         this.openEditModal,
+        this.openBatchRefactor,
       );
       return;
     }
@@ -440,6 +445,7 @@ export class DecksViewModal extends Modal {
       },
       this.openEditModal,
       this.settings,
+      this.openBatchRefactor,
     );
     this.openWithReturn(modal);
   }

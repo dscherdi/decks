@@ -1,4 +1,5 @@
-import type { LanguagePreference } from "@/i18n/locales";
+import type { LanguagePreference } from "@decks/core";
+import type { AiProviderId } from "@decks/core";
 
 export type DeckListSortMode =
   | "name-asc"
@@ -87,6 +88,17 @@ export interface DecksSettings {
     language: LanguagePreference; // "auto" follows Obsidian's getLanguage()
   };
 
+  // AI features (global). Refactor prompts are per-DeckProfile; this section is
+  // the global toggle + active provider/model. API keys are NOT stored here —
+  // they live in a separate non-synced file (see AiKeyStore) so secrets never
+  // land in data.json.
+  ai: {
+    enabled: boolean;
+    provider: AiProviderId;
+    models: Record<AiProviderId, string>;
+    localBaseUrl: string; // for the openai-compatible provider
+  };
+
   // Internal tracking
   hasCreatedTestDeck: boolean;
   hasCreatedCanvasTestDeck: boolean;
@@ -142,6 +154,18 @@ export const DEFAULT_SETTINGS: DecksSettings = {
 
   i18n: {
     language: "auto",
+  },
+
+  ai: {
+    enabled: false,
+    provider: "openai",
+    models: {
+      gemini: "gemini-2.0-flash",
+      openai: "gpt-4o-mini",
+      claude: "claude-3-5-haiku-latest",
+      "openai-compatible": "gemma3",
+    },
+    localBaseUrl: "http://localhost:11434/v1",
   },
 
   hasCreatedTestDeck: false,

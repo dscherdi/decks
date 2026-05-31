@@ -1,6 +1,6 @@
 <script lang="ts">
   import type { Statistics } from "@/database/types";
-  import { I18n } from "@/i18n/I18n";
+  import { I18n } from "@decks/core";
 
   const t = I18n.t;
 
@@ -35,10 +35,9 @@
   } | null = null;
 
   function getDueToday(): number {
-    if (!statistics?.dailyStats) return 0;
+    if (!statistics?.forecast) return 0;
     const today = new Date().toISOString().split("T")[0];
-    const todayStat = statistics.dailyStats.find((s) => s.date === today);
-    return todayStat?.dueCards || 0;
+    return statistics.forecast.find((f) => f.date === today)?.dueCount ?? 0;
   }
 
   function formatTime(seconds: number): string {
@@ -58,7 +57,7 @@
   }
 
   function formatPercentage(value: number): string {
-    return `${Math.round(value, 2)}%`;
+    return `${Math.round(value)}%`;
   }
 </script>
 
@@ -116,7 +115,7 @@
       </div>
       <div class="decks-stat-card">
         <div class="decks-stat-value">
-          {statistics?.totalReviews || 0}
+          {statistics?.reviewStats.totalReviews || 0}
         </div>
         <div class="decks-stat-label">{t.statistics.totalReviews}</div>
       </div>

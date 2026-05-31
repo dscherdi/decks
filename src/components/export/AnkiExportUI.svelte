@@ -2,7 +2,7 @@
   import { createEventDispatcher, onMount } from "svelte";
   import { Setting } from "obsidian";
   import type { Deck, AnkiExportConfig } from "../../database/types";
-  import { I18n } from "@/i18n/I18n";
+  import { I18n } from "@decks/core";
 
   const t = I18n.t;
 

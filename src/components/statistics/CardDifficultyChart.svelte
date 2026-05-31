@@ -13,7 +13,7 @@
   } from "chart.js";
   import { StatisticsService } from "@/services/StatisticsService";
   import { Logger } from "@/utils/logging";
-  import { I18n } from "@/i18n/I18n";
+  import { I18n } from "@decks/core";
   import {
     BAR_DATASET_DEFAULTS,
     getCategoryXAxis,
@@ -90,6 +90,7 @@
       };
     }
 
+    const dd = difficultyData;
     // Define bucket ranges to match database aggregation
     const bucketRanges = [
       "0-10%",
@@ -109,7 +110,7 @@
     const data: number[] = [];
 
     bucketRanges.forEach((label) => {
-      const count = difficultyData.get(label) || 0;
+      const count = dd.get(label) || 0;
       if (count > 0) {
         labels.push(label);
         data.push(count);
@@ -186,7 +187,7 @@
                   0
                 );
                 const percentage =
-                  total > 0 ? ((value / total) * 100).toFixed(1) : "0";
+                  total > 0 ? (((value ?? 0) / total) * 100).toFixed(1) : "0";
                 return I18n.format(t.statistics.cardCountsTooltip, {
                   label: dataset.label ?? "",
                   count: value ?? 0,

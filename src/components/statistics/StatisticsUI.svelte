@@ -19,13 +19,15 @@
 
   import { StatisticsService } from "../../services/StatisticsService";
   import { Logger } from "@/utils/logging";
-  import { I18n } from "@/i18n/I18n";
+  import { I18n } from "@decks/core";
 
   const t = I18n.t;
 
   export let statisticsService: StatisticsService;
   export let logger: Logger;
   export let onClose: (() => void) | undefined = undefined;
+  // Optional initial deck filter (e.g. when opened scoped to a single deck).
+  export let deckFilter = "";
 
   const dispatch = createEventDispatcher();
 
@@ -40,7 +42,7 @@
 
   let loading = false; // Don't load by default
   let statistics: Statistics | null = null;
-  let selectedDeckFilter = ""; // Start with no selection
+  let selectedDeckFilter = deckFilter; // Seeded from the optional deckFilter prop
   let selectedTimeframe = "12months"; // "12months" or "all"
   let availableDecks: { id: string; name: string; tag: string }[] = [];
   let availableTags: string[] = [];
@@ -259,14 +261,15 @@
       logger.error("[StatisticsUI] Error loading statistics:", error);
       statistics = {
         dailyStats: [],
-        cardStats: { new: 0, review: 0, mature: 0 },
+        cardStats: { new: 0, review: 0, mature: 0, total: 0 },
+        reviewStats: { totalReviews: 0, totalTimeMs: 0 },
         answerButtons: { again: 0, hard: 0, good: 0, easy: 0 },
         retentionRate: 0,
         intervals: [],
         forecast: [],
         averagePace: 0,
         totalReviewTime: 0,
-      } as Statistics;
+      };
 
       // Set empty derived stats on error
       todayStats = null;

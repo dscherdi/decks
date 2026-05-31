@@ -1,7 +1,7 @@
 import { App } from "obsidian";
 import { getTestDeckContent } from "../assets/TestDeckTemplate";
 import { getTestDeckCanvasContent } from "../assets/TestDeckCanvasTemplate";
-import { I18n } from "@/i18n/I18n";
+import { I18n } from "@decks/core";
 
 const DEFAULT_CANVAS_DECKS_FOLDER = "Canvas decks";
 

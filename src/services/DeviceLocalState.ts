@@ -54,7 +54,7 @@ export class DeviceLocalState {
   private hlc: HLCState;
 
   constructor(storage?: LocalStorageLike) {
-    this.storage = storage ?? (window.localStorage as LocalStorageLike);
+    this.storage = storage ?? (window.localStorage);
     this.deviceId = this.loadDeviceId();
     const persistedSeq = this.loadSeq();
     // Skip ahead so a hard kill that lost the last in-memory increments

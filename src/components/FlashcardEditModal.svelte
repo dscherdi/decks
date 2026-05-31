@@ -2,14 +2,25 @@
   import { tick } from "svelte";
   import type { Flashcard } from "../database/types";
   import type { FlashcardEdits, EditResult } from "../services/FlashcardWriter";
-  import { I18n } from "@/i18n/I18n";
+  import type { RefactorFieldSet, RefactorResult } from "@decks/core";
+  import { wordDiff } from "../utils/word-diff";
+  import { I18n } from "@decks/core";
 
   export let card: Flashcard;
   export let onSave: (edits: FlashcardEdits) => Promise<EditResult>;
   export let onClose: () => void;
   export let renderMarkdown: (source: string, el: HTMLElement) => void;
+  export let aiEnabled = false;
+  export let onRefactor:
+    | ((current: RefactorFieldSet, signal?: AbortSignal) => Promise<RefactorResult>)
+    | undefined = undefined;
 
   type Mode = "edit" | "preview";
+
+  let refactorState: "idle" | "running" | "error" = "idle";
+  let refactorError = "";
+  // Pending AI proposals, keyed by refactor field key (front/back/notes/...).
+  let proposals: Record<string, string> = {};
 
   let saveState: "idle" | "saving" | "error" = "idle";
   let errorMessage = "";
@@ -188,37 +199,97 @@
     key: string;
     label: string;
     isFront?: boolean;
+    // Corresponding key in the core RefactorFieldSet for this card type.
+    refKey: string;
   }
   $: fields = computeFields(card);
   function computeFields(c: Flashcard): FieldDef[] {
     const ef = I18n.t.modals.editFlashcard;
     if (c.type === "header-paragraph") {
       return [
-        { key: "headerFront", label: ef.fieldHeader, isFront: true },
-        { key: "headerBody", label: ef.fieldBody },
+        { key: "headerFront", label: ef.fieldHeader, isFront: true, refKey: "front" },
+        { key: "headerBody", label: ef.fieldBody, refKey: "back" },
       ];
     }
     if (c.type === "table") {
       return [
-        { key: "tableFront", label: ef.fieldFront, isFront: true },
-        { key: "tableBack", label: ef.fieldBack },
-        { key: "tableNotes", label: ef.fieldNotes },
+        { key: "tableFront", label: ef.fieldFront, isFront: true, refKey: "front" },
+        { key: "tableBack", label: ef.fieldBack, refKey: "back" },
+        { key: "tableNotes", label: ef.fieldNotes, refKey: "notes" },
       ];
     }
     if (c.type === "cloze") {
       return [
-        { key: "clozeFront", label: ef.fieldHeader, isFront: true },
-        { key: "clozeSentence", label: ef.fieldBody },
+        { key: "clozeFront", label: ef.fieldHeader, isFront: true, refKey: "front" },
+        { key: "clozeSentence", label: ef.fieldBody, refKey: "sentence" },
       ];
     }
     if (c.type === "spatial") {
       return [
-        { key: "spatialFront", label: ef.fieldFront, isFront: true },
-        { key: "spatialBack", label: ef.fieldBack },
-        { key: "spatialHint", label: ef.fieldHint },
+        { key: "spatialFront", label: ef.fieldFront, isFront: true, refKey: "front" },
+        { key: "spatialBack", label: ef.fieldBack, refKey: "back" },
+        { key: "spatialHint", label: ef.fieldHint, refKey: "hint" },
       ];
     }
-    return [{ key: "itemText", label: ef.fieldBody }];
+    return [{ key: "itemText", label: ef.fieldBody, refKey: "listItem" }];
+  }
+
+  function currentFieldSet(): RefactorFieldSet {
+    if (card.type === "header-paragraph") {
+      return { type: "header-paragraph", front: headerFront, back: headerBody };
+    }
+    if (card.type === "table") {
+      return { type: "table", front: tableFront, back: tableBack, notes: tableNotes };
+    }
+    if (card.type === "cloze") {
+      return { type: "cloze", front: clozeFront, sentence: clozeSentence };
+    }
+    if (card.type === "spatial") {
+      return { type: "spatial", front: spatialFront, back: spatialBack, hint: spatialHint };
+    }
+    return { type: "image-occlusion", listItem: itemText };
+  }
+
+  async function handleRefactor() {
+    if (!onRefactor || refactorState === "running") return;
+    refactorState = "running";
+    refactorError = "";
+    proposals = {};
+    try {
+      const result = await onRefactor(currentFieldSet());
+      const next: Record<string, string> = {};
+      for (const p of result.proposals) {
+        next[p.key] = p.after;
+      }
+      proposals = next;
+      refactorState = "idle";
+      if (Object.keys(next).length === 0) {
+        refactorError = I18n.t.modals.editFlashcard.aiNoChanges;
+        refactorState = "error";
+      }
+    } catch (e) {
+      refactorState = "error";
+      refactorError = e instanceof Error ? e.message : String(e);
+    }
+  }
+
+  function clearProposal(refKey: string) {
+    const next: Record<string, string> = {};
+    for (const k of Object.keys(proposals)) {
+      if (k !== refKey) next[k] = proposals[k];
+    }
+    proposals = next;
+  }
+
+  function acceptProposal(field: FieldDef) {
+    const after = proposals[field.refKey];
+    if (after === undefined) return;
+    setFieldValue(field.key, after);
+    clearProposal(field.refKey);
+  }
+
+  function declineProposal(field: FieldDef) {
+    clearProposal(field.refKey);
   }
 
   function setFieldValue(key: string, value: string) {
@@ -320,6 +391,25 @@
             ></div>
           {/if}
         </div>
+        {#if proposals[field.refKey] !== undefined}
+          {@const ops = wordDiff(currentValueFor(field.key) ?? "", proposals[field.refKey])}
+          <div class="decks-ai-diff">
+            <div class="decks-ai-diff-head">
+              <span class="decks-ai-diff-label">{I18n.t.modals.editFlashcard.aiSuggestion}</span>
+              <div class="decks-ai-diff-actions">
+                <button type="button" class="mod-cta" on:click={() => acceptProposal(field)}>
+                  {I18n.t.modals.editFlashcard.aiAccept}
+                </button>
+                <button type="button" on:click={() => declineProposal(field)}>
+                  {I18n.t.modals.editFlashcard.aiDecline}
+                </button>
+              </div>
+            </div>
+            <div class="decks-ai-diff-text">
+              {#each ops as op}<span class="decks-ai-diff-{op.type}">{op.text}</span>{/each}
+            </div>
+          </div>
+        {/if}
       </div>
     {/each}
 
@@ -333,12 +423,28 @@
       <div class="decks-edit-hint">Editing the item resets FSRS progress for this card.</div>
     {/if}
 
+    {#if refactorState === "error"}
+      <div class="decks-edit-error">{refactorError}</div>
+    {/if}
     {#if saveState === "error"}
       <div class="decks-edit-error">{errorMessage}</div>
     {/if}
   </div>
 
   <div class="decks-edit-footer">
+    {#if aiEnabled && onRefactor}
+      <button
+        type="button"
+        class="decks-ai-refactor-button"
+        on:click={handleRefactor}
+        disabled={refactorState === "running" || saveState === "saving"}
+      >
+        {refactorState === "running"
+          ? I18n.t.modals.editFlashcard.aiRefactoring
+          : I18n.t.modals.editFlashcard.aiRefactor}
+      </button>
+      <span class="decks-edit-footer-spacer"></span>
+    {/if}
     <button
       type="button"
       on:click={onClose}
@@ -521,5 +627,57 @@
     gap: 8px;
     padding-top: 12px;
     border-top: 1px solid var(--background-modifier-border);
+  }
+  .decks-edit-footer-spacer {
+    flex: 1 1 auto;
+  }
+  /* Per-field AI suggestion diff */
+  .decks-ai-diff {
+    flex: 0 0 auto;
+    margin-top: 6px;
+    border: 1px solid var(--background-modifier-border);
+    border-radius: var(--radius-m);
+    background: var(--background-secondary);
+    padding: 8px 10px;
+  }
+  .decks-ai-diff-head {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 8px;
+    margin-bottom: 6px;
+  }
+  .decks-ai-diff-label {
+    font-size: 11px;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+    color: var(--text-accent);
+    font-weight: 600;
+  }
+  .decks-ai-diff-actions {
+    display: flex;
+    gap: 6px;
+  }
+  .decks-ai-diff-text {
+    font-family: var(--font-text);
+    font-size: 14px;
+    line-height: 1.6;
+    white-space: pre-wrap;
+    overflow-wrap: anywhere;
+    word-break: break-word;
+  }
+  .decks-ai-diff-equal {
+    color: var(--text-normal);
+  }
+  .decks-ai-diff-add {
+    background: var(--background-modifier-success);
+    color: var(--text-normal);
+    border-radius: 2px;
+  }
+  .decks-ai-diff-remove {
+    background: var(--background-modifier-error);
+    color: var(--text-muted);
+    text-decoration: line-through;
+    border-radius: 2px;
   }
 </style>

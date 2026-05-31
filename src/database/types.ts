@@ -29,6 +29,9 @@ export interface DeckProfile {
   clozeEnabled: boolean;
   clozeShowContext: ClozeShowContext;
 
+  /** Per-profile prompt template guiding AI refactoring. Empty = use built-in default. */
+  refactorPrompt: string;
+
   isDefault: boolean;
   created: string;
   modified: string;
@@ -53,6 +56,7 @@ export const DEFAULT_DECK_PROFILE: Omit<DeckProfile, 'id' | 'created' | 'modifie
   },
   clozeEnabled: true,
   clozeShowContext: "hidden",
+  refactorPrompt: "",
   isDefault: true,
 };
 

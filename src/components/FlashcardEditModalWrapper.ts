@@ -1,15 +1,25 @@
 import { Modal, Component, MarkdownRenderer } from "obsidian";
 import type { App } from "obsidian";
+import type { RefactorFieldSet, RefactorResult } from "@decks/core";
 import type { Flashcard } from "../database/types";
 import type { FlashcardEdits, EditResult } from "../services/FlashcardWriter";
 import FlashcardEditModal from "./FlashcardEditModal.svelte";
 import { mount, unmount } from "svelte";
 import type { Svelte5MountedComponent } from "../types/svelte-components";
 
+export interface FlashcardEditAiOptions {
+  aiEnabled: boolean;
+  onRefactor: (
+    current: RefactorFieldSet,
+    signal?: AbortSignal,
+  ) => Promise<RefactorResult>;
+}
+
 export class FlashcardEditModalWrapper extends Modal {
   private card: Flashcard;
   private onSave: (edits: FlashcardEdits) => Promise<EditResult>;
   private onClosed?: () => void;
+  private aiOptions?: FlashcardEditAiOptions;
   private component: Svelte5MountedComponent | null = null;
   private markdownComponents: Component[] = [];
   private resizeHandler?: () => void;
@@ -19,11 +29,13 @@ export class FlashcardEditModalWrapper extends Modal {
     card: Flashcard,
     onSave: (edits: FlashcardEdits) => Promise<EditResult>,
     onClosed?: () => void,
+    aiOptions?: FlashcardEditAiOptions,
   ) {
     super(app);
     this.card = card;
     this.onSave = onSave;
     this.onClosed = onClosed;
+    this.aiOptions = aiOptions;
   }
 
   private renderMarkdown(content: string, el: HTMLElement): void {
@@ -76,6 +88,8 @@ export class FlashcardEditModalWrapper extends Modal {
         renderMarkdown: (source: string, el: HTMLElement) => {
           this.renderMarkdown(source, el);
         },
+        aiEnabled: this.aiOptions?.aiEnabled ?? false,
+        onRefactor: this.aiOptions?.onRefactor,
       },
     }) as Svelte5MountedComponent;
   }
