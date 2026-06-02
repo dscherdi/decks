@@ -924,8 +924,18 @@ export default class DecksPlugin extends Plugin {
         settle,
         {
           aiEnabled: this.aiRefactorController.isEnabled(),
-          onRefactor: (current, signal) =>
-            this.aiRefactorController.refactorCard(card, current, signal),
+          onRefactor: (current, options, signal) =>
+            this.aiRefactorController.refactorCard(
+              card,
+              current,
+              {
+                instructions: options.instructions,
+                targetKeys: options.targetKeys,
+                sourceContext: options.sourceContext,
+                images: options.images,
+              },
+              signal,
+            ),
         },
       );
       wrapper.open();

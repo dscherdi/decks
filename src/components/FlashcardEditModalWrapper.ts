@@ -1,16 +1,29 @@
 import { Modal, Component, MarkdownRenderer } from "obsidian";
 import type { App } from "obsidian";
-import type { RefactorFieldSet, RefactorResult } from "@decks/core";
+import type {
+  RefactorFieldSet,
+  RefactorImage,
+  RefactorResult,
+} from "@decks/core";
 import type { Flashcard } from "../database/types";
 import type { FlashcardEdits, EditResult } from "../services/FlashcardWriter";
 import FlashcardEditModal from "./FlashcardEditModal.svelte";
 import { mount, unmount } from "svelte";
 import type { Svelte5MountedComponent } from "../types/svelte-components";
 
+/** Per-refactor options resolved by the AI drawer (context already built). */
+export interface RefactorUiOptions {
+  instructions?: string;
+  targetKeys?: string[];
+  sourceContext?: string;
+  images?: RefactorImage[];
+}
+
 export interface FlashcardEditAiOptions {
   aiEnabled: boolean;
   onRefactor: (
     current: RefactorFieldSet,
+    options: RefactorUiOptions,
     signal?: AbortSignal,
   ) => Promise<RefactorResult>;
 }
@@ -83,6 +96,7 @@ export class FlashcardEditModalWrapper extends Modal {
       target: contentEl,
       props: {
         card: this.card,
+        app: this.app,
         onSave: this.onSave,
         onClose: () => this.close(),
         renderMarkdown: (source: string, el: HTMLElement) => {

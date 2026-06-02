@@ -2,6 +2,7 @@ import type {
   AiProviderConfig,
   AiRefactoringService,
   RefactorFieldSet,
+  RefactorImage,
   RefactorResult,
 } from "@decks/core";
 import type { Flashcard } from "../database/types";
@@ -135,10 +136,30 @@ export class AiRefactorController {
   async refactorCard(
     card: Flashcard,
     current: RefactorFieldSet,
+    options?: {
+      instructions?: string;
+      targetKeys?: string[];
+      sourceContext?: string;
+      images?: RefactorImage[];
+    },
     signal?: AbortSignal,
   ): Promise<RefactorResult> {
     const config = await this.buildConfig();
     const prompt = await this.resolvePrompt(card);
-    return this.service.refactorCard(config, { prompt, current }, signal);
+    return this.service.refactorCard(
+      config,
+      {
+        prompt,
+        current,
+        instructions: options?.instructions,
+        targetKeys: options?.targetKeys,
+        sourceContext: options?.sourceContext,
+        images: options?.images,
+        // When debug logging is on, ask core to attach the prompt + raw response
+        // so the modal can show a "Last request / response" panel.
+        debug: this.settings.debug.enableLogging,
+      },
+      signal,
+    );
   }
 }

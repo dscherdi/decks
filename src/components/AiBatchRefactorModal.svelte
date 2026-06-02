@@ -1,7 +1,7 @@
 <script lang="ts">
   import type { Flashcard } from "../database/types";
   import type { RefactorProposal, RefactorResult } from "@decks/core";
-  import { wordDiff } from "../utils/word-diff";
+  import FieldStack from "./FieldStack.svelte";
   import { I18n } from "@decks/core";
 
   export let cards: Flashcard[];
@@ -43,6 +43,10 @@
 
   function fieldLabel(key: string): string {
     return I18n.format(b.suggestionFor, { field: key });
+  }
+
+  function afterFor(st: CardState, key: string): string {
+    return st.proposals.find((p) => p.key === key)?.after ?? "";
   }
 
   function toggle(cardId: string, propKey: string) {
@@ -156,23 +160,20 @@
           </span>
         </div>
         {#if st.status === "done"}
-          {#each st.proposals as p (p.key)}
-            {@const ops = wordDiff(p.before, p.after)}
+          <FieldStack
+            zones={st.proposals.map((p) => ({ key: p.key, label: fieldLabel(p.key) }))}
+            let:z
+          >
             <label class="decks-ai-batch-field">
               <input
                 type="checkbox"
-                checked={accepted.has(keyOf(st.card.id, p.key))}
-                on:change={() => toggle(st.card.id, p.key)}
+                checked={accepted.has(keyOf(st.card.id, z.key))}
+                on:change={() => toggle(st.card.id, z.key)}
                 disabled={phase !== "review"}
               />
-              <span class="decks-ai-batch-field-body">
-                <span class="decks-ai-batch-field-label">{fieldLabel(p.key)}</span>
-                <span class="decks-ai-batch-diff"
-                  >{#each ops as op}<span class="decks-ai-diff-{op.type}">{op.text}</span>{/each}</span
-                >
-              </span>
+              <span class="decks-ai-batch-proposed">{afterFor(st, z.key)}</span>
             </label>
-          {/each}
+          </FieldStack>
         {/if}
       </div>
     {/each}
@@ -263,17 +264,16 @@
     padding: 4px 0;
   }
   .decks-ai-batch-card {
-    border: 1px solid var(--background-modifier-border);
-    border-radius: var(--radius-m);
-    padding: 8px 10px;
-    background: var(--background-secondary);
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
   }
   .decks-ai-batch-card-head {
     display: flex;
     align-items: center;
     justify-content: space-between;
     gap: 8px;
-    margin-bottom: 4px;
+    padding: 0 2px;
   }
   .decks-ai-batch-card-title {
     font-weight: 600;
@@ -294,41 +294,16 @@
     display: flex;
     gap: 8px;
     align-items: flex-start;
-    padding: 4px 0;
     cursor: pointer;
   }
-  .decks-ai-batch-field-body {
-    display: flex;
-    flex-direction: column;
-    gap: 2px;
-    min-width: 0;
-  }
-  .decks-ai-batch-field-label {
-    font-size: 11px;
-    text-transform: uppercase;
-    letter-spacing: 0.05em;
-    color: var(--text-accent);
-  }
-  .decks-ai-batch-diff {
-    font-size: 13px;
+  .decks-ai-batch-proposed {
+    font-size: 14px;
     line-height: 1.5;
     white-space: pre-wrap;
     overflow-wrap: anywhere;
     word-break: break-word;
-  }
-  .decks-ai-diff-equal {
     color: var(--text-normal);
-  }
-  .decks-ai-diff-add {
-    background: var(--background-modifier-success);
-    color: var(--text-normal);
-    border-radius: 2px;
-  }
-  .decks-ai-diff-remove {
-    background: var(--background-modifier-error);
-    color: var(--text-muted);
-    text-decoration: line-through;
-    border-radius: 2px;
+    min-width: 0;
   }
   .decks-ai-batch-footer {
     flex: 0 0 auto;
