@@ -16,6 +16,8 @@
   import {
     type ContextItem,
     buildContextPayload,
+    readNoteText,
+    savePastedImage,
     IMAGE_EXTENSIONS,
   } from "../utils/attachments";
   import { FilePickerModal } from "../utils/file-picker";
@@ -34,21 +36,30 @@
           targetKeys?: string[];
           sourceContext?: string;
           images?: RefactorImage[];
+          split?: boolean;
         },
         signal?: AbortSignal,
       ) => Promise<RefactorResult>)
     | undefined = undefined;
+  export let onSplit:
+    | ((cards: RefactorFieldSet[]) => Promise<EditResult>)
+    | undefined = undefined;
 
   type Mode = "edit" | "preview";
 
+  // Card types whose source format can be split into multiple cards.
+  const SPLITTABLE = new Set(["header-paragraph", "table", "cloze"]);
+  $: splitAvailable = SPLITTABLE.has(card.type);
+  let splitOn = false;
+  $: if (!splitAvailable) splitOn = false;
+
   let refactorState: "idle" | "running" | "error" = "idle";
   let refactorError = "";
-  // A stream of AI suggestions: each Generate appends one full proposed card.
-  interface Suggestion {
-    id: number;
-    proposed: RefactorFieldSet;
-    changed: string[];
-  }
+  // A stream of AI suggestions: a normal refactor (one full proposed card) or a
+  // split (the card broken into several new cards).
+  type Suggestion =
+    | { id: number; kind: "refactor"; proposed: RefactorFieldSet; changed: string[] }
+    | { id: number; kind: "split"; cards: RefactorFieldSet[] };
   let suggestions: Suggestion[] = [];
   let suggestionSeq = 0;
 
@@ -80,6 +91,31 @@
 
   function removeContext(id: string) {
     contexts = contexts.filter((c) => c.id !== id);
+  }
+
+  // @-mention: notes referenced inline in the prompt. `mentionedAll` only grows;
+  // a mention counts only while its @token is still present in the text.
+  const mentionItems = app.vault
+    .getMarkdownFiles()
+    .map((f) => ({ path: f.path, label: f.basename }));
+  let mentionedAll: ContextItem[] = [];
+  $: activeMentions = mentionedAll.filter((m) => prompt.includes(`@${m.label}`));
+  $: mentionLabels = activeMentions.map((m) => m.label);
+
+  function addMention(item: { path: string; label: string }) {
+    const id = `note:${item.path}`;
+    if (mentionedAll.some((m) => m.id === id)) return;
+    mentionedAll = [
+      ...mentionedAll,
+      { id, kind: "note", path: item.path, label: item.label },
+    ];
+  }
+
+  async function pasteImages(files: File[]) {
+    for (const file of files) {
+      const saved = await savePastedImage(app, card.sourceFile, file);
+      if (saved) addContext("image", saved.path, saved.name);
+    }
   }
 
   function addNote() {
@@ -381,18 +417,44 @@
     refactorState = "running";
     refactorError = "";
     try {
+      // Pill attachments → source-context block + images (vision).
       const { sourceContext, images } = await buildContextPayload(
         app,
         card,
         contexts,
       );
+      // @-mentions are expanded inline into the prompt itself (their content
+      // replaces the @token), not added to the separate context block.
+      let instructions = prompt.trim();
+      for (const m of activeMentions) {
+        const text = await readNoteText(app, m.path);
+        if (text !== null) {
+          instructions = instructions
+            .split(`@${m.label}`)
+            .join(`\n\n[[${m.label}]]\n${text}\n`);
+        }
+      }
       const result = await onRefactor(currentFieldSet(), {
-        instructions: prompt.trim() || undefined,
+        instructions: instructions || undefined,
         sourceContext,
         images,
+        split: splitOn,
       });
       lastDebug = result.debug ?? null;
       refactorState = "idle";
+      if (splitOn) {
+        const cards = result.splitCards ?? [];
+        if (cards.length === 0) {
+          refactorError = I18n.t.modals.editFlashcard.aiNoChanges;
+          refactorState = "error";
+          return;
+        }
+        suggestions = [
+          ...suggestions,
+          { id: ++suggestionSeq, kind: "split", cards },
+        ];
+        return;
+      }
       if (result.proposals.length === 0) {
         refactorError = I18n.t.modals.editFlashcard.aiNoChanges;
         refactorState = "error";
@@ -402,6 +464,7 @@
         ...suggestions,
         {
           id: ++suggestionSeq,
+          kind: "refactor",
           proposed: result.proposed,
           changed: result.proposals.map((p) => p.key),
         },
@@ -417,12 +480,39 @@
     suggestions = suggestions.filter((s) => s.id !== id);
   }
 
-  function acceptSuggestion(suggestion: Suggestion) {
+  function acceptSuggestion(
+    suggestion: Extract<Suggestion, { kind: "refactor" }>,
+  ) {
     for (const refKey of suggestion.changed) {
       const field = fields.find((f) => f.refKey === refKey);
       if (field) setFieldValue(field.key, proposedValueFor(suggestion.proposed, refKey));
     }
     dismissSuggestion(suggestion.id);
+  }
+
+  function toggleSplit() {
+    splitOn = !splitOn;
+  }
+
+  async function acceptSplit(
+    suggestion: Extract<Suggestion, { kind: "split" }>,
+  ) {
+    if (!onSplit || refactorState === "running") return;
+    refactorState = "running";
+    refactorError = "";
+    try {
+      const result = await onSplit(suggestion.cards);
+      refactorState = "idle";
+      if (result.ok) {
+        onClose();
+      } else {
+        refactorState = "error";
+        refactorError = result.failure.message;
+      }
+    } catch (e) {
+      refactorState = "error";
+      refactorError = e instanceof Error ? e.message : String(e);
+    }
   }
 
   /** Read a proposed field value by its refactor key, type-safely. */
@@ -496,11 +586,10 @@
       : []),
     ...fields.map((f) => ({ key: f.key, label: f.label, isFront: f.isFront })),
   ];
-  // Zones for an AI suggestion card: every field (so it reads as a full card),
-  // keyed by refKey. Which fields changed is read from the suggestion in markup.
-  function suggestionZonesFor(s: Suggestion) {
+  // Zones for one proposed card: its non-empty fields, keyed by refKey.
+  function cardZones(p: RefactorFieldSet) {
     return fields
-      .filter((f) => proposedValueFor(s.proposed, f.refKey).trim() !== "")
+      .filter((f) => proposedValueFor(p, f.refKey).trim() !== "")
       .map((f) => ({ key: f.refKey, isFront: f.isFront }));
   }
 </script>
@@ -559,27 +648,59 @@
     </FieldStack>
 
     {#each suggestions as s (s.id)}
-      <div class="decks-edit-suggestion">
-        <div class="decks-edit-suggestion-header">
-          <span class="decks-edit-suggestion-spark">✨</span>
-          <span class="decks-edit-suggestion-title">{I18n.t.modals.editFlashcard.aiSuggestion}</span>
+      {#if s.kind === "split"}
+        <div class="decks-edit-suggestion">
+          <div class="decks-edit-suggestion-header">
+            <span class="decks-edit-suggestion-spark">✨</span>
+            <span class="decks-edit-suggestion-title">
+              {I18n.format(I18n.t.modals.editFlashcard.aiSplitTitle, { count: s.cards.length })}
+            </span>
+          </div>
+          <div class="decks-edit-split-list">
+            {#each s.cards as splitCard, i (i)}
+              <div class="decks-edit-split-card">
+                <FieldStack zones={cardZones(splitCard)} let:z>
+                  <div
+                    class="decks-edit-proposed"
+                    class:is-front={z.isFront}
+                    use:renderMd={proposedValueFor(splitCard, z.key)}
+                  ></div>
+                </FieldStack>
+              </div>
+            {/each}
+          </div>
+          <div class="decks-edit-suggestion-actions">
+            <button type="button" on:click={() => dismissSuggestion(s.id)}>
+              {I18n.t.modals.editFlashcard.aiDismiss}
+            </button>
+            <button type="button" class="mod-cta" on:click={() => acceptSplit(s)}>
+              {I18n.t.modals.editFlashcard.aiAcceptSplit}
+            </button>
+          </div>
         </div>
-        <FieldStack zones={suggestionZonesFor(s)} let:z>
-          <div
-            class="decks-edit-proposed"
-            class:is-front={z.isFront}
-            use:renderMd={proposedValueFor(s.proposed, z.key)}
-          ></div>
-        </FieldStack>
-        <div class="decks-edit-suggestion-actions">
-          <button type="button" on:click={() => dismissSuggestion(s.id)}>
-            {I18n.t.modals.editFlashcard.aiDismiss}
-          </button>
-          <button type="button" class="mod-cta" on:click={() => acceptSuggestion(s)}>
-            {I18n.t.modals.editFlashcard.aiAcceptVersion}
-          </button>
+      {:else}
+        <div class="decks-edit-suggestion">
+          <div class="decks-edit-suggestion-header">
+            <span class="decks-edit-suggestion-spark">✨</span>
+            <span class="decks-edit-suggestion-title">{I18n.t.modals.editFlashcard.aiSuggestion}</span>
+          </div>
+          <FieldStack zones={cardZones(s.proposed)} let:z>
+            <div
+              class="decks-edit-proposed"
+              class:is-front={z.isFront}
+              use:renderMd={proposedValueFor(s.proposed, z.key)}
+            ></div>
+          </FieldStack>
+          <div class="decks-edit-suggestion-actions">
+            <button type="button" on:click={() => dismissSuggestion(s.id)}>
+              {I18n.t.modals.editFlashcard.aiDismiss}
+            </button>
+            <button type="button" class="mod-cta" on:click={() => acceptSuggestion(s)}>
+              {I18n.t.modals.editFlashcard.aiAcceptVersion}
+            </button>
+          </div>
         </div>
-      </div>
+      {/if}
     {/each}
 
     {#if card.type === "cloze"}
@@ -603,9 +724,16 @@
         bind:prompt
         {contexts}
         submitting={refactorState === "running"}
+        {splitOn}
+        {splitAvailable}
+        {mentionItems}
+        {mentionLabels}
         onAddNote={addNote}
         onAddImage={addImage}
         onRemoveContext={removeContext}
+        onToggleSplit={toggleSplit}
+        onMention={addMention}
+        onPasteImages={pasteImages}
         onSubmit={handleRefactor}
       />
 
@@ -794,8 +922,9 @@
     display: flex;
     flex-direction: column;
     gap: 8px;
-    max-height: 45%;
-    overflow-y: auto;
+    /* No overflow clip here: the textarea is height-capped instead, so the
+     * @-mention dropdown can float above the box without being clipped. */
+    overflow: visible;
     padding: 12px 0;
     border-top: 1px solid var(--background-modifier-border);
   }
@@ -865,6 +994,27 @@
     padding: 14px 24px;
     border-top: 1px solid var(--background-modifier-border-hover);
     background: var(--background-secondary);
+  }
+  /* Split preview: each resulting card as its own bordered mini-stack. */
+  .decks-edit-split-list {
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+    padding: 12px 16px;
+  }
+  .decks-edit-split-card {
+    border: 1px solid var(--background-modifier-border-hover);
+    border-radius: var(--radius-s);
+    overflow: hidden;
+  }
+  .decks-edit-split-card :global(.decks-field-stack) {
+    border: none;
+    border-radius: 0;
+    box-shadow: none;
+    background: transparent;
+  }
+  .decks-edit-split-card :global(.decks-field-zone) {
+    padding: 12px 16px;
   }
   .decks-ai-debug {
     margin-top: 6px;

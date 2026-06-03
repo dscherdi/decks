@@ -187,6 +187,17 @@
       : { version: 1, logic: "AND", rules: [] };
 
   let searchQuery = "";
+  // Debounced mirror of searchQuery — the input stays bound to searchQuery for
+  // instant text, but the heavy filter/rank/sort runs off this after a pause.
+  let debouncedSearchQuery = "";
+  let searchDebounce: ReturnType<typeof setTimeout> | undefined;
+  $: scheduleSearch(searchQuery);
+  function scheduleSearch(q: string) {
+    clearTimeout(searchDebounce);
+    searchDebounce = setTimeout(() => {
+      debouncedSearchQuery = q;
+    }, 200);
+  }
   let filterPopoverOpen = false;
   let filterPopoverContainer: HTMLDivElement | null = null;
 
@@ -223,8 +234,8 @@
     deckTagMap,
     thresholds
   );
-  $: searchedFlashcards = applySearchRanking(ruleFilteredFlashcards, searchQuery);
-  $: sortedFlashcards = searchQuery.trim()
+  $: searchedFlashcards = applySearchRanking(ruleFilteredFlashcards, debouncedSearchQuery);
+  $: sortedFlashcards = debouncedSearchQuery.trim()
     ? searchedFlashcards
     : sortCards(searchedFlashcards, sortColumn, sortDirection, originalDeckCards);
   $: displayedFlashcards = sortedFlashcards.slice(0, displayLimit);
@@ -721,7 +732,9 @@
   }
 
   function clearSearch() {
+    clearTimeout(searchDebounce);
     searchQuery = "";
+    debouncedSearchQuery = "";
   }
 
   function toggleFilterPopover() {
@@ -799,6 +812,7 @@
   onDestroy(() => {
     document.removeEventListener("click", handleOutsideClick);
     document.removeEventListener("click", handleDocClickPopover);
+    clearTimeout(searchDebounce);
     if (nowTickTimer !== null) {
       clearInterval(nowTickTimer);
       nowTickTimer = null;

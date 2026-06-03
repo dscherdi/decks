@@ -916,6 +916,13 @@ export default class DecksPlugin extends Plugin {
             const file = this.app.vault.getAbstractFileByPath(card.sourceFile);
             if (file instanceof TFile) {
               await this.handleFileChange(file);
+              // handleFileChange only schedules a debounced sync for markdown
+              // decks; run it now so the manager sees the edit immediately when
+              // it reloads after this modal closes. (Canvas is synced inline by
+              // handleFileChange.)
+              if (file.extension !== "canvas") {
+                await this.flushDeckSync(card.deckId);
+              }
             }
             new Notice("Card updated");
           }
@@ -933,9 +940,25 @@ export default class DecksPlugin extends Plugin {
                 targetKeys: options.targetKeys,
                 sourceContext: options.sourceContext,
                 images: options.images,
+                split: options.split,
               },
               signal,
             ),
+          onSplit: async (cards) => {
+            const edits = cards.map((c) => fieldSetToEdits(c));
+            const result = await this.flashcardWriter.splitFlashcard(card, edits);
+            if (result.ok) {
+              const file = this.app.vault.getAbstractFileByPath(card.sourceFile);
+              if (file instanceof TFile) {
+                await this.handleFileChange(file);
+                if (file.extension !== "canvas") {
+                  await this.flushDeckSync(card.deckId);
+                }
+              }
+              new Notice(`Split into ${cards.length} cards`);
+            }
+            return result;
+          },
         },
       );
       wrapper.open();
@@ -1049,6 +1072,18 @@ export default class DecksPlugin extends Plugin {
       void this.runDebouncedDeckSync(deckId);
     }, DecksPlugin.FILE_MODIFY_DEBOUNCE_MS);
     this.pendingDeckSyncs.set(deckId, timer);
+  }
+
+  // Run a deck's sync immediately (awaited), cancelling any pending debounce.
+  // Used after an interactive edit so callers can rely on the DB being current
+  // before they reload (e.g. reopening the edit modal from the manager).
+  private async flushDeckSync(deckId: string): Promise<void> {
+    const timer = this.pendingDeckSyncs.get(deckId);
+    if (timer !== undefined) {
+      clearTimeout(timer);
+      this.pendingDeckSyncs.delete(deckId);
+    }
+    await this.runDebouncedDeckSync(deckId);
   }
 
   private async runDebouncedDeckSync(deckId: string): Promise<void> {

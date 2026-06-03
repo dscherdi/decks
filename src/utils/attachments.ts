@@ -27,6 +27,35 @@ export function imageMime(ext: string): string | null {
   return IMAGE_MIME[ext.toLowerCase()] ?? null;
 }
 
+/** File extension for an image MIME type, or null when unsupported. */
+export function extForMime(mimeType: string): string | null {
+  const mime = mimeType.toLowerCase();
+  for (const [ext, m] of Object.entries(IMAGE_MIME)) {
+    if (m === mime) return ext;
+  }
+  return null;
+}
+
+/**
+ * Save a pasted/dropped image into the vault's configured attachments folder
+ * and return its path + name. Returns null for unsupported (non-image) data.
+ */
+export async function savePastedImage(
+  app: App,
+  sourcePath: string,
+  file: File,
+): Promise<{ path: string; name: string } | null> {
+  const ext = extForMime(file.type);
+  if (!ext) return null;
+  const target = await app.fileManager.getAvailablePathForAttachment(
+    `pasted-image.${ext}`,
+    sourcePath,
+  );
+  await app.vault.createBinary(target, await file.arrayBuffer());
+  const name = target.split("/").pop() ?? target;
+  return { path: target, name };
+}
+
 /** Read an image file as a base64 RefactorImage, or null if missing/unsupported. */
 export async function readImageAsBase64(
   app: App,

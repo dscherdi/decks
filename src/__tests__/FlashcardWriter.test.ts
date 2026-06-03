@@ -191,10 +191,10 @@ describe("FlashcardWriter", () => {
       expect(currentContent()).toContain("| Q1 | A1 | n1 |");
     });
 
-    it("rejects notes on a 2-column table", async () => {
+    it("adds a Notes column when notes are set on a 2-column table", async () => {
       const source =
-        "## Vocab\n| Front | Back |\n|---|---|\n| Q1 | A1 |";
-      const { app } = mockApp("test.md", source);
+        "## Vocab\n| Front | Back |\n| --- | --- |\n| Q1 | A1 |\n| Q2 | A2 |";
+      const { app, currentContent } = mockApp("test.md", source);
       const writer = new FlashcardWriter(app as never);
       const card = makeCard({
         front: "Q1",
@@ -206,10 +206,32 @@ describe("FlashcardWriter", () => {
         type: "table",
         front: "Q1",
         back: "A1",
-        notes: "trying to add notes",
+        notes: "a note",
       });
-      expect(result.ok).toBe(false);
-      if (!result.ok) expect(result.failure.code).toBe("invalid_edit");
+      expect(result).toEqual({ ok: true });
+      expect(currentContent()).toBe(
+        "## Vocab\n| Front | Back | Notes |\n| --- | --- | --- |\n| Q1 | A1 | a note |\n| Q2 | A2 |  |",
+      );
+    });
+
+    it("escapes pipes/newlines in the note when adding a Notes column", async () => {
+      const source = "## Vocab\n| Front | Back |\n| --- | --- |\n| Q1 | A1 |";
+      const { app, currentContent } = mockApp("test.md", source);
+      const writer = new FlashcardWriter(app as never);
+      const card = makeCard({
+        front: "Q1",
+        back: "A1",
+        type: "table",
+        breadcrumb: "Vocab",
+      });
+      const result = await writer.editFlashcard(card, {
+        type: "table",
+        front: "Q1",
+        back: "A1",
+        notes: "x|y\nz",
+      });
+      expect(result).toEqual({ ok: true });
+      expect(currentContent()).toContain("| Q1 | A1 | x\\|y<br>z |");
     });
 
     it("escapes pipes as \\| in cell content", async () => {
@@ -368,6 +390,134 @@ describe("FlashcardWriter", () => {
       });
       expect(result.ok).toBe(false);
       if (!result.ok) expect(result.failure.code).toBe("file_changed");
+    });
+  });
+
+  describe("splitFlashcard", () => {
+    it("splits a header-paragraph card into multiple blocks in place", async () => {
+      const source = "# Top\n## Question?\nold answer\n## Next\nother";
+      const { app, currentContent } = mockApp("test.md", source);
+      const writer = new FlashcardWriter(app as never);
+      const card = makeCard({
+        front: "Question?",
+        back: "old answer",
+        type: "header-paragraph",
+        breadcrumb: "Top",
+      });
+      const result = await writer.splitFlashcard(card, [
+        { type: "header-paragraph", front: "Q1", back: "a1" },
+        { type: "header-paragraph", front: "Q2", back: "a2" },
+      ]);
+      expect(result).toEqual({ ok: true });
+      expect(currentContent()).toBe(
+        "# Top\n## Q1\na1\n\n## Q2\na2\n## Next\nother",
+      );
+    });
+
+    it("splits a table row into multiple rows under the same table", async () => {
+      const source =
+        "## Vocab\n| Front | Back | Notes |\n|---|---|---|\n| Q1 | A1 | n1 |\n| Q2 | A2 | n2 |";
+      const { app, currentContent } = mockApp("test.md", source);
+      const writer = new FlashcardWriter(app as never);
+      const card = makeCard({
+        front: "Q1",
+        back: "A1",
+        notes: "n1",
+        type: "table",
+        breadcrumb: "Vocab",
+      });
+      const result = await writer.splitFlashcard(card, [
+        { type: "table", front: "Qa", back: "Aa", notes: "na" },
+        { type: "table", front: "Qb", back: "Ab", notes: "nb" },
+      ]);
+      expect(result).toEqual({ ok: true });
+      const content = currentContent();
+      expect(content).toContain("| Qa | Aa | na |");
+      expect(content).toContain("| Qb | Ab | nb |");
+      // The original Q1 row is replaced; Q2 is untouched.
+      expect(content).not.toContain("| Q1 | A1 | n1 |");
+      expect(content).toContain("| Q2 | A2 | n2 |");
+      // Still a single table (no extra blank lines splitting it).
+      const rows = content
+        .split("\n")
+        .filter((l: string) => l.trim().startsWith("|"));
+      expect(rows.length).toBe(5); // header, separator, Qa, Qb, Q2
+    });
+
+    it("splits a header-hosted cloze card into multiple blocks", async () => {
+      const source = "## Topic\nThe ==a== and ==b== facts.";
+      const { app, currentContent } = mockApp("test.md", source);
+      const writer = new FlashcardWriter(app as never);
+      const card = makeCard({
+        front: "Topic",
+        back: "The ==a== and ==b== facts.",
+        type: "cloze",
+        clozeText: "a",
+        clozeOrder: 0,
+      });
+      const result = await writer.splitFlashcard(card, [
+        { type: "cloze", front: "Topic A", sentence: "The ==a== fact." },
+        { type: "cloze", front: "Topic B", sentence: "The ==b== fact." },
+      ]);
+      expect(result).toEqual({ ok: true });
+      expect(currentContent()).toBe(
+        "## Topic A\nThe ==a== fact.\n\n## Topic B\nThe ==b== fact.",
+      );
+    });
+
+    it("returns file_changed when the source no longer matches", async () => {
+      const { app } = mockApp("test.md", "## Q\ncurrent body");
+      const writer = new FlashcardWriter(app as never);
+      const card = makeCard({
+        front: "Q",
+        back: "stale body",
+        type: "header-paragraph",
+      });
+      const result = await writer.splitFlashcard(card, [
+        { type: "header-paragraph", front: "Q1", back: "a1" },
+      ]);
+      expect(result.ok).toBe(false);
+      if (!result.ok) expect(result.failure.code).toBe("file_changed");
+    });
+
+    it("rejects an empty edit list", async () => {
+      const { app } = mockApp("test.md", "## Q\nbody");
+      const writer = new FlashcardWriter(app as never);
+      const card = makeCard({ front: "Q", back: "body", type: "header-paragraph" });
+      const result = await writer.splitFlashcard(card, []);
+      expect(result.ok).toBe(false);
+      if (!result.ok) expect(result.failure.code).toBe("invalid_edit");
+    });
+
+    it("rejects a split card whose type differs from the source card", async () => {
+      const { app } = mockApp("test.md", "## Q\nbody");
+      const writer = new FlashcardWriter(app as never);
+      const card = makeCard({ front: "Q", back: "body", type: "header-paragraph" });
+      const result = await writer.splitFlashcard(card, [
+        { type: "table", front: "Q", back: "body", notes: "" },
+      ]);
+      expect(result.ok).toBe(false);
+      if (!result.ok) expect(result.failure.code).toBe("invalid_edit");
+    });
+
+    it("refuses to split unsupported (image-occlusion) card types", async () => {
+      const source =
+        "## Diagram\n![[brain.png]]\n1. ==Hippocampus==\n2. ==Amygdala==";
+      const { app } = mockApp("test.md", source);
+      const writer = new FlashcardWriter(app as never);
+      const card = makeCard({
+        front: "![[brain.png]]",
+        type: "image-occlusion",
+        breadcrumb: "Diagram",
+        clozeText: "Amygdala",
+        clozeOrder: 1,
+      });
+      const result = await writer.splitFlashcard(card, [
+        { type: "image-occlusion", listItem: "==a==" },
+        { type: "image-occlusion", listItem: "==b==" },
+      ]);
+      expect(result.ok).toBe(false);
+      if (!result.ok) expect(result.failure.code).toBe("invalid_edit");
     });
   });
 

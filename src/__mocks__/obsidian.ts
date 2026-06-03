@@ -275,6 +275,10 @@ export function normalizePath(path: string): string {
     .replace(/^\/+|\/+$/g, "");
 }
 
+export function arrayBufferToBase64(buffer: ArrayBuffer): string {
+  return Buffer.from(buffer).toString("base64");
+}
+
 // Tests run in Node; treat them as a Linux desktop. DeviceLocalState only
 // embeds the platform prefix in deviceId strings, so this default is harmless.
 export const Platform = {

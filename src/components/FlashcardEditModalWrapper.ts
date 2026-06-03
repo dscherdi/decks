@@ -17,6 +17,7 @@ export interface RefactorUiOptions {
   targetKeys?: string[];
   sourceContext?: string;
   images?: RefactorImage[];
+  split?: boolean;
 }
 
 export interface FlashcardEditAiOptions {
@@ -26,6 +27,8 @@ export interface FlashcardEditAiOptions {
     options: RefactorUiOptions,
     signal?: AbortSignal,
   ) => Promise<RefactorResult>;
+  /** Write a split: replace the card with the given new cards. */
+  onSplit: (cards: RefactorFieldSet[]) => Promise<EditResult>;
 }
 
 export class FlashcardEditModalWrapper extends Modal {
@@ -104,6 +107,7 @@ export class FlashcardEditModalWrapper extends Modal {
         },
         aiEnabled: this.aiOptions?.aiEnabled ?? false,
         onRefactor: this.aiOptions?.onRefactor,
+        onSplit: this.aiOptions?.onSplit,
       },
     }) as Svelte5MountedComponent;
   }

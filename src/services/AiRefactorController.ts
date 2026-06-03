@@ -141,6 +141,7 @@ export class AiRefactorController {
       targetKeys?: string[];
       sourceContext?: string;
       images?: RefactorImage[];
+      split?: boolean;
     },
     signal?: AbortSignal,
   ): Promise<RefactorResult> {
@@ -155,6 +156,7 @@ export class AiRefactorController {
         targetKeys: options?.targetKeys,
         sourceContext: options?.sourceContext,
         images: options?.images,
+        split: options?.split,
         // When debug logging is on, ask core to attach the prompt + raw response
         // so the modal can show a "Last request / response" panel.
         debug: this.settings.debug.enableLogging,
