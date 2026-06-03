@@ -971,10 +971,12 @@ export default class DecksPlugin extends Plugin {
         this.app,
         {
           cards,
-          run: (card) =>
+          run: (card, options, signal) =>
             this.aiRefactorController.refactorCard(
               card,
               cardToRefactorFieldSet(card),
+              options,
+              signal,
             ),
           apply: async (card, accepted) => {
             const merged = {
@@ -987,6 +989,24 @@ export default class DecksPlugin extends Plugin {
               const file = this.app.vault.getAbstractFileByPath(card.sourceFile);
               if (file instanceof TFile) {
                 await this.handleFileChange(file);
+                if (file.extension !== "canvas") {
+                  await this.flushDeckSync(card.deckId);
+                }
+              }
+              return { ok: true };
+            }
+            return { ok: false, error: result.failure.message };
+          },
+          applySplit: async (card, fieldSets) => {
+            const edits = fieldSets.map((c) => fieldSetToEdits(c));
+            const result = await this.flashcardWriter.splitFlashcard(card, edits);
+            if (result.ok) {
+              const file = this.app.vault.getAbstractFileByPath(card.sourceFile);
+              if (file instanceof TFile) {
+                await this.handleFileChange(file);
+                if (file.extension !== "canvas") {
+                  await this.flushDeckSync(card.deckId);
+                }
               }
               return { ok: true };
             }

@@ -110,3 +110,33 @@ export async function buildContextPayload(
     images,
   };
 }
+
+/**
+ * Build the full AI request extras from the composer state: pill attachments
+ * become `sourceContext` text + base64 `images`, and each `@<label>` mention is
+ * expanded inline into the instructions (its note content replaces the token).
+ * Shared by the single-card and batch refactor modals.
+ */
+export async function buildComposerRequest(
+  app: App,
+  card: Flashcard,
+  prompt: string,
+  contexts: ContextItem[],
+  mentions: ContextItem[],
+): Promise<{
+  instructions?: string;
+  sourceContext?: string;
+  images: RefactorImage[];
+}> {
+  const { sourceContext, images } = await buildContextPayload(app, card, contexts);
+  let instructions = prompt.trim();
+  for (const m of mentions) {
+    const text = await readNoteText(app, m.path);
+    if (text !== null) {
+      instructions = instructions
+        .split(`@${m.label}`)
+        .join(`\n\n[[${m.label}]]\n${text}\n`);
+    }
+  }
+  return { instructions: instructions || undefined, sourceContext, images };
+}

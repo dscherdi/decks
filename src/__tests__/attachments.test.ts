@@ -5,6 +5,7 @@ import {
   extForMime,
   savePastedImage,
   buildContextPayload,
+  buildComposerRequest,
   readImageAsBase64,
   readNoteText,
 } from "../utils/attachments";
@@ -191,6 +192,40 @@ describe("buildContextPayload", () => {
     const app = mockVaultApp([]);
     const { sourceContext, images } = await buildContextPayload(app, card, []);
     expect(sourceContext).toBeUndefined();
+    expect(images).toEqual([]);
+  });
+});
+
+describe("buildComposerRequest", () => {
+  it("expands @mentions inline into instructions and assembles pills", async () => {
+    const app = mockVaultApp([
+      { path: "ref.md", ext: "md", text: "Reference content" },
+      { path: "pic.png", ext: "png", bytes: [1, 2, 3] },
+    ]);
+    const { instructions, sourceContext, images } = await buildComposerRequest(
+      app,
+      card,
+      "Use @ref to improve.",
+      [ctx("image", "pic.png", "pic.png")],
+      [ctx("note", "ref.md", "ref")],
+    );
+    expect(instructions).toBe(
+      "Use \n\n[[ref]]\nReference content\n to improve.",
+    );
+    expect(sourceContext).toBeUndefined(); // pills here are image-only
+    expect(images).toEqual([{ mimeType: "image/png", dataBase64: "AQID" }]);
+  });
+
+  it("returns undefined instructions for an empty prompt and no mentions", async () => {
+    const app = mockVaultApp([]);
+    const { instructions, images } = await buildComposerRequest(
+      app,
+      card,
+      "   ",
+      [],
+      [],
+    );
+    expect(instructions).toBeUndefined();
     expect(images).toEqual([]);
   });
 });

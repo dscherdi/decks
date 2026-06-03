@@ -15,8 +15,7 @@
   import { I18n } from "@decks/core";
   import {
     type ContextItem,
-    buildContextPayload,
-    readNoteText,
+    buildComposerRequest,
     savePastedImage,
     IMAGE_EXTENSIONS,
   } from "../utils/attachments";
@@ -417,25 +416,15 @@
     refactorState = "running";
     refactorError = "";
     try {
-      // Pill attachments → source-context block + images (vision).
-      const { sourceContext, images } = await buildContextPayload(
+      const { instructions, sourceContext, images } = await buildComposerRequest(
         app,
         card,
+        prompt,
         contexts,
+        activeMentions,
       );
-      // @-mentions are expanded inline into the prompt itself (their content
-      // replaces the @token), not added to the separate context block.
-      let instructions = prompt.trim();
-      for (const m of activeMentions) {
-        const text = await readNoteText(app, m.path);
-        if (text !== null) {
-          instructions = instructions
-            .split(`@${m.label}`)
-            .join(`\n\n[[${m.label}]]\n${text}\n`);
-        }
-      }
       const result = await onRefactor(currentFieldSet(), {
-        instructions: instructions || undefined,
+        instructions,
         sourceContext,
         images,
         split: splitOn,
@@ -938,8 +927,8 @@
     gap: 0;
     overflow: hidden;
     background: var(--background-primary);
-    border: 1px solid var(--background-modifier-border-hover);
-    border-left: 3px solid var(--interactive-accent);
+    border: 2px solid var(--background-modifier-border-hover);
+    border-left: 4px solid var(--interactive-accent);
     border-radius: var(--radius-m);
     box-shadow:
       0 1px 2px rgba(0, 0, 0, 0.08),

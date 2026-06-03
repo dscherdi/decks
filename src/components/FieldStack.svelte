@@ -30,7 +30,7 @@
     width: 100%;
     box-sizing: border-box;
     background: var(--background-primary);
-    border: 1px solid var(--background-modifier-border-hover);
+    border: 2px solid var(--background-modifier-border-hover);
     border-radius: var(--radius-m);
     box-shadow:
       0 1px 2px rgba(0, 0, 0, 0.08),
