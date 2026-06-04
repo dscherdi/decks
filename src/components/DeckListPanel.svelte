@@ -286,7 +286,7 @@
   export function updateStatsById(deckId: string, newStats: DeckStats) {
     isUpdatingStats = true;
     stats.set(deckId, newStats);
-    // eslint-disable-next-line no-self-assign
+    // eslint-disable-next-line no-self-assign -- self-assignment triggers Svelte reactivity
     decks = decks;
     loadStudyStats().catch(console.error);
     isUpdatingStats = false;
@@ -298,14 +298,14 @@
   // values returned by customDeckStats in getDeckStats().
   export function updateCustomDeckStatsById(deckId: string, newStats: DeckStats) {
     customDeckStats.set(deckId, newStats);
-    // eslint-disable-next-line no-self-assign
+    // eslint-disable-next-line no-self-assign -- self-assignment triggers Svelte reactivity
     customDeckStats = customDeckStats;
   }
   // Function to force UI update when stats change
   export function updateStats(newStats: Map<string, DeckStats>) {
     isUpdatingStats = true;
     stats = newStats;
-    // eslint-disable-next-line no-self-assign
+    // eslint-disable-next-line no-self-assign -- self-assignment triggers Svelte reactivity
     decks = decks;
     isUpdatingStats = false;
   }

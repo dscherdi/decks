@@ -94,6 +94,12 @@ export default [
         "error",
         "@typescript-eslint/no-explicit-any",
       ],
+      // Every eslint-disable directive must explain why (matches the Obsidian
+      // plugin validator's stricter check).
+      "@eslint-community/eslint-comments/require-description": [
+        "error",
+        { ignore: [] },
+      ],
       // Obsidian plugin rules
       "obsidianmd/hardcoded-config-path": "error",
       "obsidianmd/no-forbidden-elements": "error",
@@ -152,6 +158,12 @@ export default [
       "@eslint-community/eslint-comments/no-restricted-disable": [
         "error",
         "@typescript-eslint/no-explicit-any",
+      ],
+      // Every eslint-disable directive must explain why (matches the Obsidian
+      // plugin validator's stricter check).
+      "@eslint-community/eslint-comments/require-description": [
+        "error",
+        { ignore: [] },
       ],
       // Obsidian plugin rules
       "obsidianmd/hardcoded-config-path": "error",

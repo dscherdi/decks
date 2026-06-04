@@ -91,7 +91,7 @@ export class FlashcardManagerView extends ItemView {
     this.mountComponent();
   }
 
-  // eslint-disable-next-line @typescript-eslint/require-await
+  // eslint-disable-next-line @typescript-eslint/require-await -- Obsidian's ItemView onOpen/onClose are async by contract; this override has no await
   async onOpen(): Promise<void> {
     const { contentEl } = this;
     contentEl.empty();
@@ -99,7 +99,7 @@ export class FlashcardManagerView extends ItemView {
     this.mountComponent();
   }
 
-  // eslint-disable-next-line @typescript-eslint/require-await
+  // eslint-disable-next-line @typescript-eslint/require-await -- Obsidian's ItemView onOpen/onClose are async by contract; this override has no await
   async onClose(): Promise<void> {
     this.unmountComponent();
     this.contentEl.empty();
