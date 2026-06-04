@@ -25,6 +25,17 @@ const outDir = prod
   ? path.join(__dirname, "dist")
   : path.join(__dirname, "demo_vault/.obsidian/plugins/decks");
 const srcDir = path.join(__dirname, "src");
+// Resolve @decks/core to its TypeScript source (like jest does) so the bundle
+// never depends on a pre-built packages/decks-core/dist — no build ordering.
+const DECKS_CORE = path.join(
+  __dirname,
+  "..",
+  "..",
+  "packages",
+  "decks-core",
+  "src",
+  "index.ts",
+);
 
 // Ensure output directory exists
 if (!fs.existsSync(outDir)) {
@@ -39,6 +50,7 @@ console.log(
 const workerBuildOptions = {
   entryPoints: [path.join(srcDir, "workers", "worker-entry.ts")],
   bundle: true,
+  alias: { "@decks/core": DECKS_CORE },
   format: "iife",
   target: "es2019",
   platform: "browser",
@@ -53,6 +65,7 @@ const buildOptions = {
   },
   entryPoints: [path.join(srcDir, "main.ts")],
   bundle: true,
+  alias: { "@decks/core": DECKS_CORE },
   external: [
     "obsidian",
     "electron",

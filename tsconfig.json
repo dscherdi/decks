@@ -15,7 +15,8 @@
 
         "allowSyntheticDefaultImports": true,
         "paths": {
-            "@/*": ["src/*"]
+            "@/*": ["src/*"],
+            "@decks/core": ["../../packages/decks-core/src/index.ts"]
         },
         "types": ["node"],
         "esModuleInterop": true,
