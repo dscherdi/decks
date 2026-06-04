@@ -1,4 +1,4 @@
-import { FlashcardParser } from "../services/FlashcardParser";
+import { FlashcardParser } from "@decks/core";
 
 describe("Image Occlusion Parser", () => {
   describe("basic image occlusion detection", () => {

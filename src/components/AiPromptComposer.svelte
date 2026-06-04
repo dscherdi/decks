@@ -33,6 +33,12 @@
   export let onMention: (item: MentionItem) => void = () => {};
   export let onPasteImages: (files: File[]) => void = () => {};
   export let onSubmit: () => void = () => {};
+  // Optional label overrides so non-refactor callers (e.g. the generator) can
+  // relabel the submit button. Default to the refactor wording.
+  export let submitLabel: string | null = null;
+  export let submittingLabel: string | null = null;
+  // Optional prompt placeholder override (defaults to the refactor wording).
+  export let placeholder: string | null = null;
 
   const t = I18n.t.modals.editFlashcard;
 
@@ -233,7 +239,7 @@
     <textarea
       class="decks-ai-composer-input"
       rows="3"
-      placeholder={t.aiPromptPlaceholder}
+      placeholder={placeholder ?? t.aiPromptPlaceholder}
       bind:value={prompt}
       bind:this={textareaEl}
       use:autoResize={prompt}
@@ -283,7 +289,11 @@
       on:click={onSubmit}
       disabled={submitting || submitDisabled}
     >
-      {submitting ? t.aiRefactoring : splitOn ? t.aiSplit : t.aiSend}
+      {submitting
+        ? (submittingLabel ?? t.aiRefactoring)
+        : splitOn
+          ? t.aiSplit
+          : (submitLabel ?? t.aiSend)}
     </button>
   </div>
 </div>

@@ -43,6 +43,7 @@ export class DecksView extends ItemView {
   private saveSettings: () => Promise<void>;
   private openEditModal?: (card: Flashcard) => Promise<void>;
   private openBatchRefactor?: (cards: Flashcard[]) => Promise<void>;
+  private openAiGenerator?: () => void;
 
   constructor(
     leaf: WorkspaceLeaf,
@@ -58,6 +59,7 @@ export class DecksView extends ItemView {
     saveSettings: () => Promise<void>,
     openEditModal?: (card: Flashcard) => Promise<void>,
     openBatchRefactor?: (cards: Flashcard[]) => Promise<void>,
+    openAiGenerator?: () => void,
   ) {
     super(leaf);
     this.db = database;
@@ -72,6 +74,7 @@ export class DecksView extends ItemView {
     this.saveSettings = saveSettings;
     this.openEditModal = openEditModal;
     this.openBatchRefactor = openBatchRefactor;
+    this.openAiGenerator = openAiGenerator;
 
     this.progressTracker = progressTracker;
   }
@@ -151,6 +154,7 @@ export class DecksView extends ItemView {
         openProfilesManagerModal: () => this.openProfilesManagerModal(),
         openDeckConfigModal: (deck: DeckWithProfile) => this.openDeckConfigModal(deck),
         openFlashcardManager: () => this.openFlashcardManager(),
+        openAiGeneratorModal: () => this.openAiGenerator?.(),
         deckTag: this.settings.parsing.deckTag,
         pinnedDeckIds: this.settings.ui.pinnedDeckIds,
         onTogglePin: (id: string) => this.togglePin(id),

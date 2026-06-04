@@ -52,6 +52,7 @@ export class DecksViewModal extends Modal {
   private saveSettings: () => Promise<void>;
   private openEditModal?: (card: Flashcard) => Promise<void>;
   private openBatchRefactor?: (cards: Flashcard[]) => Promise<void>;
+  private openAiGenerator?: () => void;
 
   constructor(
     app: App,
@@ -67,6 +68,7 @@ export class DecksViewModal extends Modal {
     saveSettings: () => Promise<void>,
     openEditModal?: (card: Flashcard) => Promise<void>,
     openBatchRefactor?: (cards: Flashcard[]) => Promise<void>,
+    openAiGenerator?: () => void,
   ) {
     super(app);
     this.db = db;
@@ -82,6 +84,7 @@ export class DecksViewModal extends Modal {
     this.saveSettings = saveSettings;
     this.openEditModal = openEditModal;
     this.openBatchRefactor = openBatchRefactor;
+    this.openAiGenerator = openAiGenerator;
   }
 
   private async togglePin(id: string): Promise<void> {
@@ -155,6 +158,7 @@ export class DecksViewModal extends Modal {
         openDeckConfigModal: (deck: DeckWithProfile) =>
           this.openDeckConfigModal(deck),
         openFlashcardManager: () => this.openFlashcardManager(),
+        openAiGeneratorModal: () => this.openAiGenerator?.(),
         deckTag: this.settings.parsing.deckTag,
         pinnedDeckIds: this.settings.ui.pinnedDeckIds,
         onTogglePin: (id: string) => this.togglePin(id),

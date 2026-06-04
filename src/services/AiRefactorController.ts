@@ -9,6 +9,7 @@ import type { Flashcard } from "../database/types";
 import type { IDatabaseService } from "../database/DatabaseFactory";
 import type { DecksSettings } from "../settings";
 import type { AiKeyStore } from "./AiKeyStore";
+import { buildAiConfig } from "./ai-config";
 import type { FlashcardEdits } from "./FlashcardWriter";
 
 /** Fallback used when a DeckProfile has no custom refactor prompt. */
@@ -109,13 +110,7 @@ export class AiRefactorController {
   }
 
   async buildConfig(): Promise<AiProviderConfig> {
-    const provider = this.settings.ai.provider;
-    return {
-      provider,
-      model: this.settings.ai.models[provider],
-      apiKey: await this.keyStore.get(provider),
-      baseUrl: this.settings.ai.localBaseUrl,
-    };
+    return buildAiConfig(this.settings, this.keyStore);
   }
 
   async resolvePrompt(card: Flashcard): Promise<string> {

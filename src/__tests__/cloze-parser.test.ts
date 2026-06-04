@@ -1,4 +1,4 @@
-import { FlashcardParser } from "../services/FlashcardParser";
+import { FlashcardParser } from "@decks/core";
 
 describe("Cloze Parser", () => {
   describe("header-paragraph cloze cards", () => {

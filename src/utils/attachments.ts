@@ -140,3 +140,43 @@ export async function buildComposerRequest(
   }
   return { instructions: instructions || undefined, sourceContext, images };
 }
+
+/**
+ * Composer request for AI generation: like {@link buildComposerRequest} but with
+ * no source card, so every note attachment is read in full. The expanded prompt
+ * (with `@<label>` mentions inlined) becomes the generation instruction.
+ */
+export async function buildGenerationComposerRequest(
+  app: App,
+  prompt: string,
+  contexts: ContextItem[],
+  mentions: ContextItem[],
+): Promise<{ prompt: string; sourceContext?: string; images: RefactorImage[] }> {
+  const textParts: string[] = [];
+  const images: RefactorImage[] = [];
+  for (const item of contexts) {
+    if (item.kind === "image") {
+      const image = await readImageAsBase64(app, item.path);
+      if (image) images.push(image);
+      continue;
+    }
+    const text = await readNoteText(app, item.path);
+    if (text) textParts.push(`# ${item.label}\n${text}`);
+  }
+
+  let instruction = prompt.trim();
+  for (const m of mentions) {
+    const text = await readNoteText(app, m.path);
+    if (text !== null) {
+      instruction = instruction
+        .split(`@${m.label}`)
+        .join(`\n\n[[${m.label}]]\n${text}\n`);
+    }
+  }
+
+  return {
+    prompt: instruction,
+    sourceContext: textParts.length ? textParts.join("\n\n---\n\n") : undefined,
+    images,
+  };
+}

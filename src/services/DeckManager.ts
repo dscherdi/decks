@@ -4,7 +4,7 @@ import type { IDatabaseService } from "../database/DatabaseFactory";
 import { generateDeckGroupId, generateDeckId, yieldToUI } from "@decks/core";
 import { Logger, formatTime } from "../utils/logging";
 import { FileFilter } from "../utils/fileFilter";
-import { FlashcardParser, type ParsedFlashcard } from "./FlashcardParser";
+import { FlashcardParser, type ParsedFlashcard } from "@decks/core";
 import { ProgressTracker } from "../utils/progress";
 import { TagGroupService } from "./TagGroupService";
 import type { DecksSettings } from "../settings";

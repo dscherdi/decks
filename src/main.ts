@@ -27,7 +27,7 @@ import { BackupService } from "./services/BackupService";
 import { StatisticsService } from "./services/StatisticsService";
 import { FlashcardWriter, type FlashcardEdits } from "./services/FlashcardWriter";
 import { FlashcardEditModalWrapper } from "./components/FlashcardEditModalWrapper";
-import { AiRefactoringService, generateDeckId, I18n, type RefactorFieldSet, yieldToUI } from "@decks/core";
+import { AiGenerationService, AiRefactoringService, type GeneratedCard, generateDeckId, I18n, type RefactorFieldSet, yieldToUI } from "@decks/core";
 import { AiKeyStore } from "./services/AiKeyStore";
 import { ObsidianHttpClient } from "./services/ObsidianHttpClient";
 import {
@@ -35,7 +35,11 @@ import {
   cardToRefactorFieldSet,
   fieldSetToEdits,
 } from "./services/AiRefactorController";
+import { AiGeneratorController } from "./services/AiGeneratorController";
+import { FlashcardComposer } from "./services/FlashcardComposer";
 import { AiBatchRefactorModalWrapper } from "./components/AiBatchRefactorModalWrapper";
+import { AiGeneratorModalWrapper } from "./components/AiGeneratorModalWrapper";
+import type { GeneratorSaveRequest } from "./components/generator-save";
 import type { Flashcard } from "./database/types";
 import { Logger, formatTime } from "./utils/logging";
 import { ProgressTracker } from "./utils/progress";
@@ -120,8 +124,10 @@ export default class DecksPlugin extends Plugin {
   private statisticsService: StatisticsService;
   private customDeckService: CustomDeckService;
   private flashcardWriter: FlashcardWriter;
+  private flashcardComposer: FlashcardComposer;
   public aiKeyStore: AiKeyStore;
   public aiRefactorController: AiRefactorController;
+  public aiGeneratorController: AiGeneratorController;
   public settings: DecksSettings;
   private logger: Logger;
   private progressTracker: ProgressTracker;
@@ -259,6 +265,12 @@ export default class DecksPlugin extends Plugin {
         this.settings,
         this.aiKeyStore,
       );
+      this.aiGeneratorController = new AiGeneratorController(
+        new AiGenerationService(new ObsidianHttpClient(), this.logger),
+        this.settings,
+        this.aiKeyStore,
+      );
+      this.flashcardComposer = new FlashcardComposer(this.app);
 
       // Apply current filter compile thresholds (leech / dense) to db + service
       this.applyFilterCompileOptions();
@@ -311,6 +323,7 @@ export default class DecksPlugin extends Plugin {
             () => this.saveSettings(),
             (card) => this.openEditFlashcardModal(card),
             (cards) => this.openBatchRefactorModal(cards),
+            () => this.openAiGeneratorModal(),
           )
       );
 
@@ -354,6 +367,7 @@ export default class DecksPlugin extends Plugin {
           () => this.saveSettings(),
           (card) => this.openEditFlashcardModal(card),
           (cards) => this.openBatchRefactorModal(cards),
+          () => this.openAiGeneratorModal(),
         ).open();
       });
 
@@ -363,6 +377,15 @@ export default class DecksPlugin extends Plugin {
         name: I18n.t.commands.showPanel,
         callback: () => {
           void this.activateView();
+        },
+      });
+
+      // Add command to open the AI flashcard generator
+      this.addCommand({
+        id: "open-ai-generator",
+        name: I18n.t.commands.openAiGenerator,
+        callback: () => {
+          this.openAiGeneratorModal();
         },
       });
 
@@ -509,6 +532,7 @@ export default class DecksPlugin extends Plugin {
             () => this.saveSettings(),
             (card) => this.openEditFlashcardModal(card),
             (cards) => this.openBatchRefactorModal(cards),
+            () => this.openAiGeneratorModal(),
           ).open();
         },
       });
@@ -1014,6 +1038,99 @@ export default class DecksPlugin extends Plugin {
       );
       wrapper.open();
     });
+  }
+
+  openAiGeneratorModal(): void {
+    const wrapper = new AiGeneratorModalWrapper(this.app, {
+      generate: (options, handlers, signal) =>
+        this.aiGeneratorController.generateStream(options, handlers, signal),
+      save: (cards, request) => this.saveGeneratedCards(cards, request),
+      loadProfiles: async () =>
+        (await this.db.getAllProfiles()).map((p) => ({
+          id: p.id,
+          name: p.name,
+        })),
+      loadDecks: async () =>
+        (await this.db.getAllDecks()).map((d) => ({
+          id: d.id,
+          name: d.name,
+          isCanvas: d.filepath.endsWith(".canvas"),
+        })),
+      defaultFolder: this.settings.parsing.folderSearchPath || "",
+      canvasFolder: this.settings.canvasDecks.folderPath || "",
+      deckTag: this.settings.parsing.deckTag,
+    });
+    wrapper.open();
+  }
+
+  // Write the kept generated cards to disk, then register/sync the deck so the
+  // new cards appear. Returns a result the modal surfaces to the user.
+  private async saveGeneratedCards(
+    cards: GeneratedCard[],
+    request: GeneratorSaveRequest,
+  ): Promise<{ ok: boolean; error?: string; count?: number }> {
+    try {
+      if (request.kind === "new-file") {
+        const profile =
+          (await this.db.getProfileById(request.profileId)) ??
+          (await this.db.getDefaultProfile());
+        const { filePath } = await this.flashcardComposer.saveGenerated(cards, {
+          kind: "new-file",
+          format: request.format,
+          folder: request.folder,
+          name: request.name,
+          tag: request.tag,
+          level: profile.headerLevel,
+        });
+        const tag =
+          request.format === "canvas"
+            ? this.settings.canvasDecks.tagName || request.tag
+            : request.tag;
+        await this.registerGeneratedDeck(filePath, tag, request.profileId);
+      } else {
+        const deck = await this.db.getDeckById(request.deckId);
+        if (!deck) return { ok: false, error: "Deck not found" };
+        const profile =
+          (await this.db.getProfileById(deck.profileId)) ??
+          (await this.db.getDefaultProfile());
+        await this.flashcardComposer.saveGenerated(cards, {
+          kind: "append",
+          format: request.format,
+          filePath: deck.filepath,
+          level: profile.headerLevel,
+        });
+        const file = this.app.vault.getAbstractFileByPath(deck.filepath);
+        if (file instanceof TFile) {
+          await this.handleFileChange(file);
+          await this.deckSynchronizer.syncDeck(deck.id);
+        }
+      }
+      return { ok: true, count: cards.length };
+    } catch (e) {
+      this.logger.error("Failed to save generated cards", e);
+      return { ok: false, error: e instanceof Error ? e.message : String(e) };
+    }
+  }
+
+  // Ensure a deck row exists for a freshly created file, associate the chosen
+  // profile, and parse its cards. Idempotent with the file-create handler.
+  private async registerGeneratedDeck(
+    filePath: string,
+    tag: string,
+    profileId: string,
+  ): Promise<void> {
+    let deck = await this.db.getDeckByFilepath(filePath);
+    if (!deck) {
+      await this.deckSynchronizer.createDeckForFile(filePath, tag);
+      await yieldToUI();
+      deck = await this.db.getDeckByFilepath(filePath);
+    }
+    if (!deck) return;
+    if (profileId && deck.profileId !== profileId) {
+      await this.db.updateDeck(deck.id, { profileId });
+    }
+    await this.deckSynchronizer.syncDeck(deck.id);
+    await this.getDecksView()?.refreshStats();
   }
 
   async handleFileChange(file: TFile) {

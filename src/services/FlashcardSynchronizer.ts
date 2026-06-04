@@ -1,4 +1,4 @@
-import { FlashcardParser } from "./FlashcardParser";
+import { FlashcardParser } from "@decks/core";
 import { CanvasFlashcardExtractor } from "./CanvasFlashcardExtractor";
 import type { Flashcard, FlashcardType, DeckProfile } from "../database/types";
 import type { SqlJsValue } from "../database/sql-types";

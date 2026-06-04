@@ -1,4 +1,4 @@
-import { FlashcardParser, type ParsedFlashcard } from "./FlashcardParser";
+import { FlashcardParser, type ParsedFlashcard } from "@decks/core";
 import { CanvasParser, type CanvasTextEdge, type CanvasTextNode } from "./CanvasParser";
 
 /**

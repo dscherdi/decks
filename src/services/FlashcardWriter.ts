@@ -1,6 +1,6 @@
 import { type App, TFile } from "obsidian";
 import type { Flashcard } from "../database/types";
-import { FlashcardParser } from "./FlashcardParser";
+import { FlashcardParser } from "@decks/core";
 import { findFlashcardSegment } from "../utils/source-navigator";
 import {
   escapeTableCell,

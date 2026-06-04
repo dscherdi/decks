@@ -1,5 +1,5 @@
 import type { Flashcard } from "../database/types";
-import { FlashcardParser } from "../services/FlashcardParser";
+import { FlashcardParser } from "@decks/core";
 import { splitTableLine, unescapeTableCell } from "@decks/core";
 
 const HEADER_REGEX = /^(#{1,6})\s+(.+)$/;

@@ -1,7 +1,8 @@
 <script lang="ts">
   // A minimized flashcard view for the batch sidebar: status badge + the card's
-  // front and back rendered as markdown, clamped so it stays compact.
-  import type { Flashcard } from "../database/types";
+  // front and back rendered as markdown, clamped so it stays compact. The card
+  // is structural (front + optional back) so both stored Flashcards and
+  // AI-generated cards can be rendered here.
 
   type RowStatus =
     | "pending"
@@ -11,7 +12,7 @@
     | "empty"
     | "error";
 
-  export let card: Flashcard;
+  export let card: { front: string; back?: string };
   export let status: RowStatus;
   export let selected = false;
   export let renderMarkdown: (source: string, el: HTMLElement) => void;
