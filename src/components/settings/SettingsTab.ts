@@ -15,9 +15,7 @@ import type { IDatabaseService } from "@/database/DatabaseFactory";
 import type { FsrsWeightSet } from "@/database/types";
 import { Logger } from "@/utils/logging";
 import { OptimizeFsrsModal } from "./OptimizeFsrsModal";
-import { I18n } from "@decks/core";
-import { SUPPORTED_LANGUAGES, type LanguagePreference } from "@decks/core";
-import type { AiProviderId } from "@decks/core";
+import { type AiProviderId, I18n, type LanguagePreference, SUPPORTED_LANGUAGES } from "@decks/core";
 
 export class DecksSettingTab extends PluginSettingTab {
   private settings: DecksSettings;

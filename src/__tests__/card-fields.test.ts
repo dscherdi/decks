@@ -1,5 +1,4 @@
-import type { RefactorFieldSet } from "@decks/core";
-import { cardFieldDefs, fieldSetValue } from "../utils/card-fields";
+import { cardFieldDefs, fieldSetValue, type RefactorFieldSet } from "@decks/core";
 
 describe("cardFieldDefs", () => {
   it("returns front/back for header-paragraph (front marked)", () => {

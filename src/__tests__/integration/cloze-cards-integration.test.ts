@@ -5,7 +5,7 @@ import {
   setupTestDatabase,
   teardownTestDatabase,
 } from "./database-test-utils";
-import { generateDeckId } from "../../utils/hash";
+import { generateDeckId } from "@decks/core";
 import type { Deck, DeckProfile } from "../../database/types";
 
 describe("Cloze Cards Integration Tests", () => {

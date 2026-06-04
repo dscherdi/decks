@@ -1,4 +1,4 @@
-import { splitTableLine, unescapeTableCell } from "../utils/markdown-table";
+import { splitTableLine, unescapeTableCell } from "@decks/core";
 
 export interface ParsedFlashcard {
   front: string;

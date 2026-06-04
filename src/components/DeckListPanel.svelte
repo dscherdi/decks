@@ -8,7 +8,7 @@
     DeckOrGroup,
   } from "../database/types";
   import { isDeckGroup, isFileDeck, isCustomDeck } from "../database/types";
-  import { generateDeckGroupId } from "../utils/hash";
+  import { filterByMinCount, generateDeckGroupId, I18n, sortDeckList } from "@decks/core";
 
   import ReviewHeatmap from "./statistics/ReviewHeatmap.svelte";
   import { AnkiExportModal } from "./export/AnkiExportModal";
@@ -23,9 +23,7 @@
   import { ConfirmModal } from "./ConfirmModal";
   import { Notice, setIcon } from "obsidian";
   import type { App } from "obsidian";
-  import { sortDeckList, filterByMinCount } from "@/utils/deck-sort";
   import type { DeckListSortMode } from "@/settings";
-  import { I18n } from "@decks/core";
 
   const t = I18n.t;
 

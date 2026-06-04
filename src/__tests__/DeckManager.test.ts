@@ -1,4 +1,4 @@
-import { generateFlashcardId } from "../utils/hash";
+import { generateFlashcardId } from "@decks/core";
 
 describe("DeckManager", () => {
   describe("flashcard ID generation", () => {

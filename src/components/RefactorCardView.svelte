@@ -2,9 +2,8 @@
   // Read-only display of a flashcard's fields as the seamless FieldStack card,
   // markdown-rendered. Used for both the current card and an AI proposal — it
   // shows the full card (no diff highlighting).
-  import type { RefactorCardType, RefactorFieldSet } from "@decks/core";
+  import { cardFieldDefs, fieldSetValue, type RefactorCardType, type RefactorFieldSet } from "@decks/core";
   import FieldStack from "./FieldStack.svelte";
-  import { cardFieldDefs, fieldSetValue } from "../utils/card-fields";
 
   export let cardType: RefactorCardType;
   export let fieldset: RefactorFieldSet;

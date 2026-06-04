@@ -5,7 +5,7 @@ import {
   getDefaultLearningSteps,
   getDefaultRelearningSteps,
   formatStepInterval,
-} from "../utils/step-parser";
+} from "@decks/core";
 
 describe("Step Parser", () => {
   describe("parseSteps", () => {

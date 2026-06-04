@@ -9,25 +9,9 @@ import { MainDatabaseService } from "../../database/MainDatabaseService";
 import { InMemoryAdapter } from "./database-test-utils";
 import { setupRealSqlJs } from "./setup-real-sql";
 import { Logger } from "../../utils/logging";
-import { applyOp } from "@decks/core";
+import { applyOp, type CustomDeckCardAddOp, type CustomDeckCardRemoveOp, type CustomDeckDeleteOp, type CustomDeckResetOp, type CustomDeckUpsertOp, type DeckResetOp, type ProfileDeleteOp, type ProfileUpsertOp, type SessionEndOp, type SessionProgressOp, type SessionStartOp, type SyncLogEntry, type TagMappingDeleteOp, type TagMappingUpsertOp } from "@decks/core";
 import { DEFAULT_PROFILE_ID } from "../../database/types";
 import type { Flashcard } from "../../database/types";
-import type {
-  SyncLogEntry,
-  ProfileUpsertOp,
-  ProfileDeleteOp,
-  TagMappingUpsertOp,
-  TagMappingDeleteOp,
-  CustomDeckUpsertOp,
-  CustomDeckDeleteOp,
-  CustomDeckCardAddOp,
-  CustomDeckCardRemoveOp,
-  SessionStartOp,
-  SessionProgressOp,
-  SessionEndOp,
-  DeckResetOp,
-  CustomDeckResetOp,
-} from "@decks/core";
 import type { HLCValue } from "../../services/HLC";
 
 const HLC: HLCValue = [1_000_000, 0, "remote-dev"];

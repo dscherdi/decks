@@ -18,7 +18,7 @@ import { MainDatabaseService } from "../../database/MainDatabaseService";
 import { Scheduler } from "../../services/Scheduler";
 import { StatisticsService } from "../../services/StatisticsService";
 import { setupTestDatabase, teardownTestDatabase } from "./database-test-utils";
-import { generateDeckId } from "../../utils/hash";
+import { generateDeckId } from "@decks/core";
 import type { Deck } from "../../database/types";
 import type { DecksSettings } from "../../settings";
 import { promises as fs } from "node:fs";

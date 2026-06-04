@@ -1,6 +1,6 @@
 import type { IDatabaseService } from "../database/DatabaseFactory";
 import type { Logger } from "../utils/logging";
-import { yieldToUI } from "../utils/ui";
+import { yieldToUI } from "@decks/core";
 import {
   optimizeWeights,
   type TrainingOptions,

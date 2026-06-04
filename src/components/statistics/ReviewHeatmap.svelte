@@ -1,7 +1,6 @@
 <script lang="ts">
   import { onMount } from "svelte";
-  import { toLocalDateString } from "@/utils/date-utils";
-  import { I18n } from "@decks/core";
+  import { I18n, toLocalDateString } from "@decks/core";
 
   const t = I18n.t;
 

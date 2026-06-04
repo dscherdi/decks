@@ -2,13 +2,7 @@
   import { onMount, onDestroy } from "svelte";
   import type { App } from "obsidian";
   import type { Flashcard } from "../database/types";
-  import type {
-    RefactorFieldSet,
-    RefactorImage,
-    RefactorProposal,
-    RefactorResult,
-  } from "@decks/core";
-  import { I18n } from "@decks/core";
+  import { acceptAllStates, applyBatch, type BatchCardState, cardResultPatch, discardAllStates, effectiveSplit, I18n, type RefactorFieldSet, type RefactorImage, type RefactorProposal, type RefactorResult, setCardStatus } from "@decks/core";
   import AiPromptComposer from "./AiPromptComposer.svelte";
   import RefactorCardView from "./RefactorCardView.svelte";
   import BatchCardRow from "./BatchCardRow.svelte";
@@ -49,28 +43,7 @@
   const b = I18n.t.modals.aiBatch;
   const ef = I18n.t.modals.editFlashcard;
 
-  // Card types whose source format can be split into multiple cards; others
-  // fall back to a normal refactor when split mode is on.
-  const SPLITTABLE = new Set(["header-paragraph", "table", "cloze"]);
-
-  type Status =
-    | "pending"
-    | "running"
-    | "ready"
-    | "accepted"
-    | "empty"
-    | "error";
-  interface CardState {
-    card: Flashcard;
-    status: Status;
-    mode: "refactor" | "split";
-    proposed?: RefactorFieldSet;
-    proposals: RefactorProposal[];
-    splitCards?: RefactorFieldSet[];
-    error?: string;
-  }
-
-  function freshStates(): CardState[] {
+  function freshStates(): BatchCardState<Flashcard>[] {
     return cards.map((card) => ({
       card,
       status: "pending",
@@ -79,7 +52,7 @@
     }));
   }
 
-  let states: CardState[] = freshStates();
+  let states: BatchCardState<Flashcard>[] = freshStates();
   let phase: "idle" | "running" | "review" | "applying" | "summary" = "idle";
   let processed = 0;
   let applyResult = { applied: 0, skipped: 0, failed: 0 };
@@ -162,19 +135,8 @@
     splitOn = !splitOn;
   }
 
-  // Store a run's result onto a card state (split → splitCards, else proposals).
-  function setResult(st: CardState, res: RefactorResult, isSplit: boolean) {
-    if (isSplit) {
-      st.mode = "split";
-      st.splitCards = res.splitCards ?? [];
-      st.proposals = [];
-      st.status = (res.splitCards?.length ?? 0) > 0 ? "ready" : "empty";
-    } else {
-      st.mode = "refactor";
-      st.proposed = res.proposed;
-      st.proposals = res.proposals;
-      st.status = res.proposals.length > 0 ? "ready" : "empty";
-    }
+  function setResult(st: BatchCardState<Flashcard>, res: RefactorResult, isSplit: boolean) {
+    Object.assign(st, cardResultPatch(res, isSplit));
   }
 
   async function startBatch() {
@@ -206,14 +168,14 @@
       if (cancelled) break;
       states[i].status = "running";
       states = [...states];
-      const effectiveSplit = split && SPLITTABLE.has(states[i].card.type);
+      const cardSplit = effectiveSplit(split, states[i].card.type);
       try {
         const res = await run(
           states[i].card,
-          { ...options, split: effectiveSplit },
+          { ...options, split: cardSplit },
           signal,
         );
-        setResult(states[i], res, effectiveSplit);
+        setResult(states[i], res, cardSplit);
       } catch (e) {
         if (cancelled) {
           // Interrupted mid-request — leave this card unprocessed and stop.
@@ -245,14 +207,14 @@
     states[idx].status = "running";
     states[idx].error = undefined;
     states = [...states];
-    const effectiveSplit = lastSplitOn && SPLITTABLE.has(card.type);
+    const cardSplit = effectiveSplit(lastSplitOn, card.type);
     try {
       const res = await run(
         card,
-        { ...lastReq, split: effectiveSplit },
+        { ...lastReq, split: cardSplit },
         new AbortController().signal,
       );
-      setResult(states[idx], res, effectiveSplit);
+      setResult(states[idx], res, cardSplit);
     } catch (e) {
       states[idx].status = "error";
       states[idx].error = e instanceof Error ? e.message : String(e);
@@ -264,50 +226,27 @@
     selectedId = selectedId === id ? null : id;
   }
   function acceptCard(id: string) {
-    states = states.map((s) =>
-      s.card.id === id && s.status === "ready" ? { ...s, status: "accepted" } : s,
-    );
+    states = setCardStatus(states, id, "ready", "accepted");
   }
   function dismissCard(id: string) {
-    states = states.map((s) =>
-      s.card.id === id && s.status === "accepted" ? { ...s, status: "ready" } : s,
-    );
+    states = setCardStatus(states, id, "accepted", "ready");
   }
   function acceptAll() {
-    states = states.map((s) =>
-      s.status === "ready" ? { ...s, status: "accepted" } : s,
-    );
+    states = acceptAllStates(states);
   }
   function discardAll() {
-    states = states.map((s) =>
-      s.status === "accepted" ? { ...s, status: "ready" } : s,
-    );
+    states = discardAllStates(states);
   }
 
   async function applyAll() {
     phase = "applying";
-    let applied = 0;
-    let skipped = 0;
-    let failed = 0;
-    for (const st of states) {
-      if (st.status !== "accepted") {
-        skipped++;
-        continue;
-      }
-      const r =
-        st.mode === "split"
-          ? await applySplit(st.card, st.splitCards ?? [])
-          : await apply(st.card, st.proposals);
-      if (r.ok) {
-        applied++;
-      } else {
-        failed++;
-        st.status = "error";
-        st.error = r.error;
-        states = [...states];
-      }
-    }
-    applyResult = { applied, skipped, failed };
+    const result = await applyBatch(states, { apply, applySplit });
+    states = result.states;
+    applyResult = {
+      applied: result.applied,
+      skipped: result.skipped,
+      failed: result.failed,
+    };
     phase = "summary";
   }
 </script>

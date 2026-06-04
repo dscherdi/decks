@@ -27,7 +27,7 @@ import { BackupService } from "./services/BackupService";
 import { StatisticsService } from "./services/StatisticsService";
 import { FlashcardWriter, type FlashcardEdits } from "./services/FlashcardWriter";
 import { FlashcardEditModalWrapper } from "./components/FlashcardEditModalWrapper";
-import { AiRefactoringService, type RefactorFieldSet } from "@decks/core";
+import { AiRefactoringService, generateDeckId, I18n, type RefactorFieldSet, yieldToUI } from "@decks/core";
 import { AiKeyStore } from "./services/AiKeyStore";
 import { ObsidianHttpClient } from "./services/ObsidianHttpClient";
 import {
@@ -37,14 +37,11 @@ import {
 } from "./services/AiRefactorController";
 import { AiBatchRefactorModalWrapper } from "./components/AiBatchRefactorModalWrapper";
 import type { Flashcard } from "./database/types";
-import { yieldToUI } from "./utils/ui";
 import { Logger, formatTime } from "./utils/logging";
 import { ProgressTracker } from "./utils/progress";
-import { generateDeckId } from "./utils/hash";
 
 import { type DecksSettings, DEFAULT_SETTINGS } from "./settings";
 import { DecksSettingTab } from "./components/settings/SettingsTab";
-import { I18n } from "@decks/core";
 
 import { DecksView } from "./components/DecksView";
 import { DecksViewModal } from "./components/DecksViewModal";

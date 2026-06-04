@@ -22,9 +22,7 @@ import type { IDatabaseService } from "../database/DatabaseFactory";
 import type { Logger } from "../utils/logging";
 import { DeviceLocalState } from "./DeviceLocalState";
 import { hlcReceive, hlcSend, hlcParse, type HLCValue } from "./HLC";
-import { KNOWN_OP_TYPES_V1 } from "@decks/core";
-import type { SyncOpV1, SyncLogEntry } from "@decks/core";
-import { applyOp } from "@decks/core";
+import { applyOp, KNOWN_OP_TYPES_V1, type SyncLogEntry, type SyncOpV1 } from "@decks/core";
 import { safeRename } from "../utils/adapter";
 
 const FLUSH_DEBOUNCE_MS = 2000;

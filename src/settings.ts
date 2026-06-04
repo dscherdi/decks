@@ -1,5 +1,4 @@
-import type { LanguagePreference } from "@decks/core";
-import type { AiProviderId } from "@decks/core";
+import { type AiProviderId, type LanguagePreference } from "@decks/core";
 
 export type DeckListSortMode =
   | "name-asc"

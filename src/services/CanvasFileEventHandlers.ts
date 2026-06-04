@@ -2,7 +2,7 @@ import type { TFile } from "obsidian";
 import type { DecksSettings } from "../settings";
 import type { IDatabaseService } from "../database/DatabaseFactory";
 import type { DeckSynchronizer } from "./DeckSynchronizer";
-import { generateDeckId } from "../utils/hash";
+import { generateDeckId } from "@decks/core";
 import type { Logger } from "../utils/logging";
 
 export interface CanvasFileEventDeps {

@@ -1,4 +1,4 @@
-import { sortDeckList } from "../utils/deck-sort";
+import { sortDeckList } from "@decks/core";
 
 interface Item {
   id: string;

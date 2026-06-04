@@ -5,7 +5,7 @@ import {
   setupTestDatabase,
   teardownTestDatabase,
 } from "./database-test-utils";
-import { generateDeckId } from "../../utils/hash";
+import { generateDeckId } from "@decks/core";
 import { getTestDeckCanvasContent } from "../../assets/TestDeckCanvasTemplate";
 import type { Deck } from "../../database/types";
 

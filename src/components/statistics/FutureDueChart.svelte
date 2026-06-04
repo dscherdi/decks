@@ -22,8 +22,7 @@
     type BacklogForecastData,
   } from "../../services/StatisticsService";
   import { Logger } from "@/utils/logging";
-  import { toLocalDateString } from "@/utils/date-utils";
-  import { I18n } from "@decks/core";
+  import { I18n, toLocalDateString } from "@decks/core";
   import {
     LINE_DATASET_DEFAULTS,
     getCategoryXAxis,

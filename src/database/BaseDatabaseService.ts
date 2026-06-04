@@ -14,7 +14,7 @@ import type {
 } from "./types";
 import { DEFAULT_PROFILE_ID, deckWithProfile } from "./types";
 import type { FilterDefinition } from "./types";
-import { SQL_QUERIES } from "@decks/core";
+import { generateCustomDeckCardId, generateCustomDeckId, generateFlashcardId, SQL_QUERIES, type SyncOpV1 } from "@decks/core";
 import { normalizeProfile } from "../algorithm/fsrs-weights";
 import { compileFilter, type FilterCompileOptions } from "../services/FilterEngine";
 import type { SyncData, SyncResult } from "../services/FlashcardSynchronizer";
@@ -29,8 +29,6 @@ import type {
 } from "./sql-types";
 import type { IDatabaseService, JournalStateRow } from "./DatabaseFactory";
 import type { SyncLog } from "../services/SyncLog";
-import type { SyncOpV1 } from "@decks/core";
-import { generateFlashcardId, generateCustomDeckId, generateCustomDeckCardId } from "../utils/hash";
 
 export interface QueryConfig {
   asObject?: boolean;

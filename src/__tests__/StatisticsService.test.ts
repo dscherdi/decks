@@ -10,7 +10,7 @@ import type {
   Flashcard,
   DailyStats,
 } from "../database/types";
-import { toLocalDateString } from "../utils/date-utils";
+import { toLocalDateString } from "@decks/core";
 
 // Mock implementations
 class MockDatabaseService implements Partial<IDatabaseService> {

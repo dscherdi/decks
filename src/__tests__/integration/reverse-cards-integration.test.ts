@@ -6,7 +6,7 @@ import {
   setupTestDatabase,
   teardownTestDatabase,
 } from "./database-test-utils";
-import { generateDeckId, generateReverseFlashcardId } from "../../utils/hash";
+import { generateDeckId, generateReverseFlashcardId } from "@decks/core";
 import type { Deck, DeckProfile } from "../../database/types";
 
 describe("Reverse Cards Integration Tests", () => {

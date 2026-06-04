@@ -1,6 +1,6 @@
 import type { Flashcard } from "../database/types";
 import { FlashcardParser } from "../services/FlashcardParser";
-import { splitTableLine, unescapeTableCell } from "./markdown-table";
+import { splitTableLine, unescapeTableCell } from "@decks/core";
 
 const HEADER_REGEX = /^(#{1,6})\s+(.+)$/;
 const TABLE_ROW_REGEX = /^\|.*\|$/;

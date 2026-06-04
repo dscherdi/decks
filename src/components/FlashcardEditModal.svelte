@@ -4,15 +4,9 @@
   import type { App } from "obsidian";
   import type { Flashcard } from "../database/types";
   import type { FlashcardEdits, EditResult } from "../services/FlashcardWriter";
-  import type {
-    RefactorFieldSet,
-    RefactorResult,
-    RefactorDebugInfo,
-    RefactorImage,
-  } from "@decks/core";
+  import { I18n, type RefactorDebugInfo, type RefactorFieldSet, type RefactorImage, type RefactorResult } from "@decks/core";
   import FieldStack from "./FieldStack.svelte";
   import AiPromptComposer from "./AiPromptComposer.svelte";
-  import { I18n } from "@decks/core";
   import {
     type ContextItem,
     buildComposerRequest,

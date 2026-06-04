@@ -4,13 +4,7 @@
   import type { DeckProfile, ProfileTagMapping, ClozeShowContext } from "../../database/types";
   import type { IDatabaseService } from "../../database/DatabaseFactory";
   import type { ReviewOrder, FSRSProfile } from "../../database/types";
-  import {
-    validateLearningSteps,
-    validateRelearningSteps,
-    getDefaultLearningSteps,
-    getDefaultRelearningSteps,
-  } from "../../utils/step-parser";
-  import { I18n } from "@decks/core";
+  import { getDefaultLearningSteps, getDefaultRelearningSteps, I18n, validateLearningSteps, validateRelearningSteps } from "@decks/core";
 
   const t = I18n.t;
   const p = t.profiles;

@@ -10,7 +10,7 @@ import type {
 import { DeckSynchronizer } from "@/services/DeckSynchronizer";
 import { DeckManager } from "@/services/DeckManager";
 import type { DecksSettings } from "@/settings";
-import { yieldToUI } from "@/utils/ui";
+import { I18n, yieldToUI } from "@decks/core";
 import { Logger } from "@/utils/logging";
 import { Modal, Notice, WorkspaceLeaf } from "obsidian";
 import type { App } from "obsidian";
@@ -35,7 +35,6 @@ import type { DeckListPanelComponent } from "../types/svelte-components";
 import type { IDatabaseService } from "../database/DatabaseFactory";
 import type { DecksView } from "./DecksView";
 import type { DeckListSortMode } from "@/settings";
-import { I18n } from "@decks/core";
 
 export class DecksViewModal extends Modal {
   private db: IDatabaseService;

@@ -1,7 +1,7 @@
 import {
   generateSpatialFlashcardId,
   generateSpatialClozeFlashcardId,
-} from "../utils/hash";
+} from "@decks/core";
 
 describe("hash spatial ID generators", () => {
   describe("generateSpatialFlashcardId", () => {

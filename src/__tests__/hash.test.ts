@@ -4,7 +4,7 @@ import {
   generateClozeFlashcardId,
   generateContentHash,
   generateDeckId,
-} from "../utils/hash";
+} from "@decks/core";
 
 describe("hash utilities", () => {
   describe("generateReverseFlashcardId", () => {

@@ -1,4 +1,4 @@
-import { filterByMinCount } from "../utils/deck-sort";
+import { filterByMinCount } from "@decks/core";
 
 interface Item {
   id: string;

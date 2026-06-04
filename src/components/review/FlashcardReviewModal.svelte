@@ -14,10 +14,9 @@
     SchedulingPreview,
     SessionProgress,
   } from "../../services/Scheduler";
-  import { yieldToUI } from "@/utils/ui";
+  import { I18n, yieldToUI } from "@decks/core";
   import { prepareFuzzySearch } from "obsidian";
   import { computeCardHealth } from "../../services/CardHealth";
-  import { I18n } from "@decks/core";
 
   const t = I18n.t;
   const r = t.review;

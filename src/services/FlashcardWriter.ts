@@ -6,7 +6,7 @@ import {
   escapeTableCell,
   splitTableLine,
   unescapeTableCell,
-} from "../utils/markdown-table";
+} from "@decks/core";
 
 const HEADER_REGEX = /^(#{1,6})\s+(.+)$/;
 const TABLE_ROW_REGEX = /^\|.*\|$/;

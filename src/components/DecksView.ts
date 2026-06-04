@@ -3,7 +3,7 @@ import { VIEW_TYPE_DECKS } from "@/main";
 import { DeckSynchronizer } from "@/services/DeckSynchronizer";
 import { DeckManager } from "@/services/DeckManager";
 import type { DecksSettings } from "@/settings";
-import { yieldToUI } from "@/utils/ui";
+import { I18n, yieldToUI } from "@decks/core";
 import { Logger } from "@/utils/logging";
 import { ItemView, WorkspaceLeaf, Notice } from "obsidian";
 import { Scheduler } from "@/services/Scheduler";
@@ -26,7 +26,6 @@ import { ProgressTracker } from "@/utils/progress";
 import type { DeckListPanelComponent } from "../types/svelte-components";
 import type { IDatabaseService } from "../database/DatabaseFactory";
 import type { DeckListSortMode } from "@/settings";
-import { I18n } from "@decks/core";
 
 export class DecksView extends ItemView {
   private db: IDatabaseService;

@@ -14,13 +14,11 @@ import {
   getMaxIntervalDaysForProfile,
   type FSRSProfile,
 } from "../algorithm/fsrs-weights";
-import { yieldToUI } from "../utils/ui";
+import { parseSteps, type RateOp, yieldToUI } from "@decks/core";
 import type { Logger } from "../utils/logging";
 import type { DecksSettings } from "../settings";
 import { BackupService } from "./BackupService";
-import { parseSteps } from "../utils/step-parser";
 import type { SyncLog } from "./SyncLog";
-import type { RateOp } from "@decks/core";
 
 export interface SchedulerOptions {
   allowNew?: boolean;

@@ -13,7 +13,7 @@ import {
   setupTestDatabase,
   teardownTestDatabase,
 } from "./database-test-utils";
-import { toLocalDateString } from "../../utils/date-utils";
+import { toLocalDateString } from "@decks/core";
 
 describe("StatisticsService Integration Tests", () => {
   let db: MainDatabaseService;

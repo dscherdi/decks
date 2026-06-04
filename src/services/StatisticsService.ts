@@ -13,13 +13,7 @@ import {
 import type { DecksSettings } from "../settings";
 import { FSRS, type RatingLabel } from "../algorithm/fsrs";
 import { Logger } from "../utils/logging";
-import { MinHeap } from "../utils/min-heap";
-import {
-  toLocalDateString,
-  getLocalDateSQL,
-  getLocalHourSQL,
-} from "../utils/date-utils";
-import { yieldToUI } from "../utils/ui";
+import { getLocalDateSQL, getLocalHourSQL, MinHeap, toLocalDateString, yieldToUI } from "@decks/core";
 import type {
   DailyStatsRow,
   AnswerButtonStatsRow,
@@ -2694,7 +2688,7 @@ export class StatisticsService {
       totalMature += stats.matureCount;
     }
 
-    const { generateDeckGroupId } = await import("../utils/hash");
+    const { generateDeckGroupId } = await import("@decks/core");
     return {
       deckId: generateDeckGroupId(deckGroup.tag),
       newCount: totalNew,
