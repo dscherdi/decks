@@ -1,5 +1,5 @@
 import { MainDatabaseService } from "../../database/MainDatabaseService";
-import { CustomDeckService } from "../../services/CustomDeckService";
+import { CustomDeckService } from "@decks/core";
 import { Scheduler } from "../../services/Scheduler";
 import type { Deck, Flashcard, FilterDefinition, CustomDeckGroup } from "../../database/types";
 import {

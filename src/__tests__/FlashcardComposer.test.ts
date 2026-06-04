@@ -6,7 +6,7 @@ import {
   headingHashes,
 } from "../services/FlashcardComposer";
 import { FlashcardParser } from "@decks/core";
-import { CanvasFlashcardExtractor } from "../services/CanvasFlashcardExtractor";
+import { CanvasFlashcardExtractor } from "@decks/core";
 import type { GeneratedCard } from "@decks/core";
 
 jest.mock("obsidian", () => jest.requireActual("../__mocks__/obsidian"));

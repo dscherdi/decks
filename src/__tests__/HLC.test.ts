@@ -6,7 +6,7 @@ import {
   hlcParse,
   type HLCState,
   type HLCValue,
-} from "../services/HLC";
+} from "@decks/core";
 
 function freshState(): HLCState {
   return { pt: 0, lc: 0 };

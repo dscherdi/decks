@@ -1,4 +1,4 @@
-import { CanvasParser } from "../services/CanvasParser";
+import { CanvasParser } from "@decks/core";
 
 describe("CanvasParser edge extraction", () => {
   function canvas(nodes: object[], edges: object[] = []): string {

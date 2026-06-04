@@ -66,6 +66,8 @@ Gracias.
 
 The filename becomes the deck name. Header level is configurable per profile (H2 by default). Headings above the configured level aren't turned into cards — they're kept as a breadcrumb path (e.g. `Chapter 1 > Section 2`) attached to each card for context.
 
+Add optional **notes** to a header-paragraph card with an Obsidian comment (`%%a hint or mnemonic%%`) anywhere in the body, or by putting the note after a `---` divider at the end of the body. Notes are shown on demand (press **N**) during review, just like the table notes column.
+
 </details>
 
 <details>
@@ -155,6 +157,19 @@ See **[docs/CANVAS_DECKS.md](docs/CANVAS_DECKS.md)** for details.
 - Anki export, automatic backups, multi-device merge sync.
 - Keyboard shortcuts: **Space** to flip, **1–4** to rate.
 
+## AI assistance (optional)
+
+Decks has optional AI features that are **off until you add an API key** in **Settings → AI**:
+
+- **Generate** — describe a topic (and optionally attach notes/images) and stream new flashcards into an inbox; keep the ones you want and save them to a new file or append to an existing deck, as header+paragraph, table, or canvas.
+- **Refactor** — rewrite a single card, or batch-refactor a selection, to improve clarity and fix grammar; or **split** one dense card into several atomic ones. You review every change before it's applied.
+
+**Providers.** Bring your own key for OpenAI, Anthropic (Claude), Google (Gemini), or any OpenAI-compatible endpoint (including local servers like Ollama / LM Studio). You pick the provider and model in settings.
+
+**Where your key lives.** Keys are stored locally in `ai-keys.json` inside the plugin folder and are **never** written to `data.json` — so they never leave your device through Obsidian Sync or any vault file-sync.
+
+**Transparency — what is sent, and when.** Nothing is sent to a provider unless you explicitly trigger an AI action. When you do, the request contains only: a built-in instruction prompt describing how Decks cards work, your typed instructions, and the relevant content for that action — the card's fields (for refactor) or your topic/prompt (for generate), plus any notes or images you chose to attach. The plugin makes no background or telemetry calls; the only network requests are the ones you start, sent directly to the provider you configured.
+
 ## Multi-device sync
 
 Decks syncs alongside your vault — iCloud Drive, Obsidian Sync, Dropbox, Syncthing, anything that shares the vault folder works.
@@ -218,6 +233,10 @@ Open **Settings → Decks** for daily limits, retention targets, search paths, s
 - **Discuss on Discord** — [join the server](https://discord.com/channels/686053708261228577/1497268419861418035).
 - **Support development** — [Buy me a coffee](https://www.buymeacoffee.com/dscherdil0).
 - **Translation Guide** - [Translation Guide](./docs/TRANSLATING.md).
+
+## Built on
+
+Decks is built on **[`@decks/core`](https://github.com/dscherdi/decks-core)** — the open-source (MIT) engine that implements the parsing, FSRS scheduling, sync log, and AI orchestration. The plugin is the Obsidian-specific shell around it.
 
 ## License
 

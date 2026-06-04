@@ -24,8 +24,8 @@ import { StatisticsModal } from "./settings/StatisticsModal";
 import { ProfilesManagerModal } from "./config/ProfilesManagerModal";
 import { DeckConfigModal } from "./config/DeckConfigModal";
 import { StatisticsService } from "@/services/StatisticsService";
-import { TagGroupService } from "@/services/TagGroupService";
-import { CustomDeckService } from "@/services/CustomDeckService";
+import { TagGroupService } from "@decks/core";
+import { CustomDeckService } from "@decks/core";
 import { FlashcardManagerModal } from "./FlashcardManagerModal";
 import { openFlashcardManager } from "./FlashcardManagerView";
 
@@ -357,8 +357,7 @@ export class DecksViewModal extends Modal {
           const view = this.getDecksView();
           if (view) await view.refresh();
         },
-        active !== null,
-        this.settings.ai.enabled
+        active !== null
       );
       this.openWithReturn(modal);
     });

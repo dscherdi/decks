@@ -66,6 +66,9 @@ Thank you.
 
 Il nome del file diventa il nome del mazzo. Il livello di intestazione è configurabile per profilo (H2 per impostazione predefinita). Le intestazioni di livello superiore a quello configurato non diventano carte: vengono mantenute come percorso breadcrumb (es. `Capitolo 1 > Sezione 2`) allegato a ogni carta per il contesto.
 
+
+Aggiungi **note** opzionali a una carta intestazione+paragrafo con un commento di Obsidian (`%%un suggerimento%%`) ovunque nel corpo, o dopo un separatore `---` alla fine. Le note vengono mostrate su richiesta (tasto **N**) durante il ripasso.
+
 </details>
 
 <details>
@@ -147,6 +150,19 @@ FSRS viene fornito con impostazioni predefinite logiche che funzionano benissimo
 - **Partecipa su Discord** — [unisciti al server](https://discord.com/channels/686053708261228577/1497268419861418035).
 - **Sostieni lo sviluppo** — [Offrimi un caffè](https://www.buymeacoffee.com/dscherdil0).
 - **Guida alla traduzione** - [Guida alla traduzione](./docs/TRANSLATING.md).
+
+## Assistenza IA (opzionale)
+
+Funzioni IA opzionali, **disattivate finché non aggiungi una chiave del provider in Impostazioni → IA**:
+
+- **Genera** — crea carte da un prompt (e note/immagini opzionali) e salvale in un nuovo file o in un mazzo esistente come intestazione+paragrafo, tabella o canvas.
+- **Rielabora** una carta o un'intera selezione, oppure **dividi** una carta in più carte — rivedi ogni modifica prima di applicarla.
+
+Usa la tua chiave per OpenAI, Anthropic (Claude), Google (Gemini) o un endpoint compatibile con OpenAI/locale. Le chiavi sono salvate localmente in `ai-keys.json` e non vengono mai scritte in `data.json`, quindi non lasciano il dispositivo tramite la sincronizzazione. Nulla viene inviato a un provider se non avvii un'azione; ogni richiesta contiene solo un prompt integrato su come funziona Decks, le tue istruzioni e il contenuto di quell'azione.
+
+## Basato su
+
+Decks è basato su **[`@decks/core`](https://github.com/dscherdi/decks-core)** — il motore open source (MIT) che implementa il parsing, la pianificazione FSRS, la sincronizzazione e l'orchestrazione IA. Il plugin è il guscio specifico per Obsidian che lo avvolge.
 
 ## Licenza
 

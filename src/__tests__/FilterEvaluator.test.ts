@@ -1,4 +1,4 @@
-import { evaluateFilter } from "../services/FilterEvaluator";
+import { evaluateFilter } from "@decks/core";
 import type { Flashcard, FilterDefinition } from "../database/types";
 
 function makeCard(overrides: Partial<Flashcard> = {}): Flashcard {

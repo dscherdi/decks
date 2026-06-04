@@ -1,7 +1,7 @@
 import { Modal, Notice } from "obsidian";
 import type { App } from "obsidian";
 import type { IDatabaseService } from "../database/DatabaseFactory";
-import type { CustomDeckService } from "../services/CustomDeckService";
+import type { CustomDeckService } from "@decks/core";
 import type { FilterDefinition, Flashcard } from "../database/types";
 import type { DecksSettings } from "../settings";
 import FlashcardManagerPanel from "./FlashcardManagerPanel.svelte";

@@ -1,4 +1,4 @@
-import { compileFilter } from "../services/FilterEngine";
+import { compileFilter } from "@decks/core";
 import type { FilterDefinition } from "../database/types";
 
 describe("FilterEngine", () => {

@@ -8,7 +8,7 @@
   } from "../../database/types";
   import { isDeckGroup, isCustomDeck } from "../../database/types";
   import type { DecksSettings } from "../../settings";
-  import { type RatingLabel } from "../../algorithm/fsrs";
+  import { type RatingLabel } from "@decks/core";
   import type {
     Scheduler,
     SchedulingPreview,
@@ -16,7 +16,7 @@
   } from "../../services/Scheduler";
   import { I18n, yieldToUI } from "@decks/core";
   import { prepareFuzzySearch } from "obsidian";
-  import { computeCardHealth } from "../../services/CardHealth";
+  import { computeCardHealth } from "@decks/core";
 
   const t = I18n.t;
   const r = t.review;

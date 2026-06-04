@@ -8,12 +8,12 @@ import type {
   CustomDeckGroup,
 } from "../database/types";
 import type { IDatabaseService } from "../database/DatabaseFactory";
-import { FSRS, type RatingLabel, type SchedulingCard } from "../algorithm/fsrs";
+import { FSRS, type RatingLabel, type SchedulingCard } from "@decks/core";
 import {
   getMinMinutesForProfile,
   getMaxIntervalDaysForProfile,
   type FSRSProfile,
-} from "../algorithm/fsrs-weights";
+} from "@decks/core";
 import { parseSteps, type RateOp, yieldToUI } from "@decks/core";
 import type { Logger } from "../utils/logging";
 import type { DecksSettings } from "../settings";

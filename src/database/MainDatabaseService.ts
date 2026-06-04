@@ -9,7 +9,7 @@ import { buildMigrationSQL, CREATE_TABLES_SQL, CURRENT_SCHEMA_VERSION, yieldToUI
 import type { Database, InitSqlJsStatic } from "sql.js";
 import { FlashcardSynchronizer } from "../services/FlashcardSynchronizer";
 import type { SyncData, SyncResult } from "../services/FlashcardSynchronizer";
-import type { SqlJsValue } from "./sql-types";
+import type { SqlJsValue } from "@decks/core";
 import { getEmbeddedAssets } from "./embedded-assets";
 
 export class MainDatabaseService extends BaseDatabaseService {

@@ -1,7 +1,7 @@
 import { App, Modal, Notice, Setting } from "obsidian";
 import type { IDatabaseService } from "../../database/DatabaseFactory";
-import { FsrsOptimizationService } from "../../services/FsrsOptimizationService";
-import type { TrainingResult } from "../../algorithm/fsrs-optimizer";
+import { FsrsOptimizationService } from "@decks/core";
+import type { TrainingResult } from "@decks/core";
 import type { Logger } from "../../utils/logging";
 import { I18n } from "@decks/core";
 

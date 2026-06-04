@@ -8,7 +8,7 @@
 // storage on disk; Capacitor/WKWebView is sandboxed per app per device).
 
 import { Platform } from "obsidian";
-import type { HLCState } from "./HLC";
+import type { HLCState } from "@decks/core";
 
 const KEY_DEVICE_ID = "decks_device_id";
 const KEY_SEQ = "decks_sync_seq";

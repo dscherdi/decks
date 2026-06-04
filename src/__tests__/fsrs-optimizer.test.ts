@@ -1,11 +1,11 @@
 import type { Flashcard, ReviewLog } from "../database/types";
-import { FSRS, type RatingLabel } from "../algorithm/fsrs";
+import { FSRS, type RatingLabel } from "@decks/core";
 import {
   optimizeWeights,
   DEFAULT_TRAINING_OPTIONS,
-} from "../algorithm/fsrs-optimizer";
-import { FSRS_WEIGHTS_STANDARD } from "../algorithm/fsrs-weights";
-import { LOWER_BOUNDS, UPPER_BOUNDS } from "../algorithm/fsrs-bounds";
+} from "@decks/core";
+import { FSRS_WEIGHTS_STANDARD } from "@decks/core";
+import { LOWER_BOUNDS, UPPER_BOUNDS } from "@decks/core";
 
 function lcgRng(seed: number): () => number {
   let s = seed >>> 0;

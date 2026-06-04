@@ -56,7 +56,7 @@ import {
   openFlashcardManager,
 } from "./components/FlashcardManagerView";
 import { TestDeckService } from "./services/TestDeckService";
-import { CustomDeckService } from "./services/CustomDeckService";
+import { CustomDeckService } from "@decks/core";
 import {
   FlashcardReviewView,
   VIEW_TYPE_FLASHCARD_REVIEW,
@@ -261,7 +261,6 @@ export default class DecksPlugin extends Plugin {
       this.aiKeyStore = new AiKeyStore(adapter, pluginDir);
       this.aiRefactorController = new AiRefactorController(
         new AiRefactoringService(new ObsidianHttpClient(), this.logger),
-        this.db,
         this.settings,
         this.aiKeyStore,
       );

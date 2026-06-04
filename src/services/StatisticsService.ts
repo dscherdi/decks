@@ -11,7 +11,7 @@ import {
   type MaturityProgressionResult,
 } from "../database/types";
 import type { DecksSettings } from "../settings";
-import { FSRS, type RatingLabel } from "../algorithm/fsrs";
+import { FSRS, type RatingLabel } from "@decks/core";
 import { Logger } from "../utils/logging";
 import { getLocalDateSQL, getLocalHourSQL, MinHeap, toLocalDateString, yieldToUI } from "@decks/core";
 import type {
@@ -20,7 +20,7 @@ import type {
   PaceStatsRow,
   ForecastRow,
   CountResult,
-} from "../database/sql-types";
+} from "@decks/core";
 
 export interface TimeframeStats {
   reviews: number;

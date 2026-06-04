@@ -11,7 +11,7 @@ import {
 } from "@decks/core";
 import { MainDatabaseService } from "../../database/MainDatabaseService";
 import { FlashcardComposer } from "../../services/FlashcardComposer";
-import { CanvasFlashcardExtractor } from "../../services/CanvasFlashcardExtractor";
+import { CanvasFlashcardExtractor } from "@decks/core";
 import { setupTestDatabase, teardownTestDatabase } from "./database-test-utils";
 import type { Deck, DeckProfile } from "../../database/types";
 

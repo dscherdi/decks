@@ -1,7 +1,7 @@
 import { FlashcardParser } from "@decks/core";
-import { CanvasFlashcardExtractor } from "./CanvasFlashcardExtractor";
+import { CanvasFlashcardExtractor } from "@decks/core";
 import type { Flashcard, FlashcardType, DeckProfile } from "../database/types";
-import type { SqlJsValue } from "../database/sql-types";
+import type { SqlJsValue } from "@decks/core";
 import type { Database } from "sql.js";
 import { generateClozeFlashcardId, generateContentHash, generateFlashcardId, generateReverseFlashcardId, generateSpatialClozeFlashcardId, generateSpatialFlashcardId, levenshteinSimilarity } from "@decks/core";
 

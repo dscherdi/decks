@@ -66,6 +66,9 @@ Thank you.
 
 El nombre de archivo se convierte en el nombre del mazo. El nivel del encabezado se configura por perfil (H2 por defecto). Los encabezados por encima del nivel configurado no se convierten en tarjetas: se conservan como una ruta de migas (p. ej. `Capítulo 1 > Sección 2`) adjunta a cada tarjeta para dar contexto.
 
+
+Añade **notas** opcionales a una tarjeta de encabezado+párrafo con un comentario de Obsidian (`%%una pista%%`) en cualquier parte del cuerpo, o tras un divisor `---` al final. Las notas se muestran a demanda (tecla **N**) durante el repaso.
+
 </details>
 
 <details>
@@ -207,6 +210,19 @@ Abre **Ajustes → Decks** para límites diarios, objetivos de retención, rutas
 - **Discusión en Discord** — [únete al servidor](https://discord.com/channels/686053708261228577/1497268419861418035).
 - **Apoya el desarrollo** — [Invítame a un café](https://www.buymeacoffee.com/dscherdil0).
 - **Guía de traducción** - [Guía de traducción](./docs/TRANSLATING.md).
+
+## Asistencia con IA (opcional)
+
+Funciones de IA opcionales, **desactivadas hasta que añadas una clave de proveedor en Ajustes → IA**:
+
+- **Generar** — crea tarjetas a partir de una indicación (y notas/imágenes opcionales) y guárdalas en un archivo nuevo o un mazo existente como encabezado+párrafo, tabla o lienzo.
+- **Refactorizar** una tarjeta o una selección entera, o **dividir** una tarjeta en varias — revisas cada cambio antes de aplicarlo.
+
+Usa tu propia clave de OpenAI, Anthropic (Claude), Google (Gemini) o un endpoint compatible con OpenAI/local. Las claves se guardan localmente en `ai-keys.json` y nunca se escriben en `data.json`, así que no salen de tu dispositivo por la sincronización. No se envía nada a un proveedor salvo que inicies una acción; cada petición contiene solo una indicación interna sobre cómo funciona Decks, tus instrucciones y el contenido de esa acción.
+
+## Basado en
+
+Decks está construido sobre **[`@decks/core`](https://github.com/dscherdi/decks-core)** — el motor de código abierto (MIT) que implementa el análisis, la planificación FSRS, la sincronización y la orquestación de IA. El complemento es la capa específica de Obsidian a su alrededor.
 
 ## Licencia
 

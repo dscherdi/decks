@@ -21,7 +21,7 @@ import type { DataAdapter } from "obsidian";
 import type { IDatabaseService } from "../database/DatabaseFactory";
 import type { Logger } from "../utils/logging";
 import { DeviceLocalState } from "./DeviceLocalState";
-import { hlcReceive, hlcSend, hlcParse, type HLCValue } from "./HLC";
+import { hlcReceive, hlcSend, hlcParse, type HLCValue } from "@decks/core";
 import { applyOp, KNOWN_OP_TYPES_V1, type SyncLogEntry, type SyncOpV1 } from "@decks/core";
 import { safeRename } from "../utils/adapter";
 

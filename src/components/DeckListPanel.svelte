@@ -16,8 +16,8 @@
   import type { StatisticsService } from "@/services/StatisticsService";
   import type { DeckSynchronizer } from "@/services/DeckSynchronizer";
   import type { IDatabaseService } from "@/database/DatabaseFactory";
-  import type { TagGroupService } from "@/services/TagGroupService";
-  import type { CustomDeckService } from "@/services/CustomDeckService";
+  import type { TagGroupService } from "@decks/core";
+  import type { CustomDeckService } from "@decks/core";
   import type { CustomDeckGroup } from "../database/types";
   import { RenameCustomDeckModal } from "./RenameCustomDeckModal";
   import { ConfirmModal } from "./ConfirmModal";

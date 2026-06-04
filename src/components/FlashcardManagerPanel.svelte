@@ -6,9 +6,9 @@
     FilterRule,
   } from "../database/types";
   import type { IDatabaseService } from "../database/DatabaseFactory";
-  import type { CustomDeckService } from "../services/CustomDeckService";
-  import { evaluateFilter } from "../services/FilterEvaluator";
-  import { computeCardHealth } from "../services/CardHealth";
+  import type { CustomDeckService } from "@decks/core";
+  import { evaluateFilter } from "@decks/core";
+  import { computeCardHealth } from "@decks/core";
   import { formatBadgeParts } from "../services/FilterBadgeFormatter";
   import type { EditTarget, EditCommitPayload } from "./FlashcardManagerEditTypes";
   import FilterBuilder from "./FilterBuilder.svelte";

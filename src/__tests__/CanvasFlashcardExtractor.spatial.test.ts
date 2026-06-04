@@ -1,4 +1,4 @@
-import { CanvasFlashcardExtractor } from "../services/CanvasFlashcardExtractor";
+import { CanvasFlashcardExtractor } from "@decks/core";
 
 describe("CanvasFlashcardExtractor spatial extraction", () => {
   type Node = { id: string; text: string };

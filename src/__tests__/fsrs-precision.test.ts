@@ -1,6 +1,6 @@
-import { FSRS } from "../algorithm/fsrs";
+import { FSRS } from "@decks/core";
 import { Flashcard } from "../database/types";
-import { DEFAULT_FSRS_PARAMETERS } from "../algorithm/fsrs-weights";
+import { DEFAULT_FSRS_PARAMETERS } from "@decks/core";
 
 describe("FSRS Numeric Precision Tests", () => {
   let fsrs: FSRS;

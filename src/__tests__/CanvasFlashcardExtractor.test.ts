@@ -1,4 +1,4 @@
-import { CanvasFlashcardExtractor } from "../services/CanvasFlashcardExtractor";
+import { CanvasFlashcardExtractor } from "@decks/core";
 
 describe("CanvasFlashcardExtractor", () => {
   it("extracts header-paragraph cards from a single text node", () => {

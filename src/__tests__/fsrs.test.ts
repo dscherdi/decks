@@ -1,4 +1,4 @@
-import { FSRS } from "../algorithm/fsrs";
+import { FSRS } from "@decks/core";
 import { Flashcard } from "../database/types";
 
 describe("FSRS Algorithm - Pure Implementation", () => {

@@ -1,6 +1,6 @@
 import { Modal, Component, Notice, MarkdownRenderer, App } from "obsidian";
 import type { Flashcard, DeckOrGroup } from "../../database/types";
-import type { RatingLabel } from "../../algorithm/fsrs";
+import type { RatingLabel } from "@decks/core";
 import type { Scheduler } from "../../services/Scheduler";
 import type { DecksSettings } from "../../settings";
 import type { IDatabaseService } from "../../database/DatabaseFactory";
