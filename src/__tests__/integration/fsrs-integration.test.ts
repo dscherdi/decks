@@ -1,5 +1,5 @@
 import { MainDatabaseService } from "../../database/MainDatabaseService";
-import { FSRS } from "../../algorithm/fsrs";
+import { FSRS } from "@decks/core";
 import { Scheduler } from "../../services/Scheduler";
 import { BackupService } from "../../services/BackupService";
 import {
@@ -9,7 +9,7 @@ import {
 } from "./database-test-utils";
 import { Deck, Flashcard } from "../../database/types";
 import { DEFAULT_PROFILE_ID } from "../../database/types";
-import { DEFAULT_FSRS_PARAMETERS } from "../../algorithm/fsrs-weights";
+import { DEFAULT_FSRS_PARAMETERS } from "@decks/core";
 
 describe("FSRS Algorithm Integration Tests", () => {
   let db: MainDatabaseService;

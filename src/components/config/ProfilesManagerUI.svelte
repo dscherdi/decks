@@ -3,15 +3,8 @@
   import { Setting, Notice } from "obsidian";
   import type { DeckProfile, ProfileTagMapping, ClozeShowContext } from "../../database/types";
   import type { IDatabaseService } from "../../database/DatabaseFactory";
-  import type { ReviewOrder } from "../../types/ReviewOrder";
-  import type { FSRSProfile } from "../../database/types";
-  import {
-    validateLearningSteps,
-    validateRelearningSteps,
-    getDefaultLearningSteps,
-    getDefaultRelearningSteps,
-  } from "../../utils/step-parser";
-  import { I18n } from "@/i18n/I18n";
+  import type { ReviewOrder, FSRSProfile } from "../../database/types";
+  import { getDefaultLearningSteps, getDefaultRelearningSteps, I18n, validateLearningSteps, validateRelearningSteps } from "@decks/core";
 
   const t = I18n.t;
   const p = t.profiles;
@@ -301,6 +294,8 @@
 
   function rebuildSettings() {
     if (!selectedProfile) return;
+    // Capture as a const so narrowing survives inside the callbacks below.
+    const profile = selectedProfile;
 
     // Profile name
     if (profileNameContainer) {
@@ -311,10 +306,10 @@
         .addText((text) => {
           text
             .setValue(profileName)
-            .setDisabled(selectedProfile.isDefault)
+            .setDisabled(profile.isDefault)
             .onChange((value) => {
               profileName = value;
-              if (!selectedProfile.isDefault && value.trim().length === 0) {
+              if (!profile.isDefault && value.trim().length === 0) {
                 nameError = true;
                 text.inputEl.addClass("decks-input-error");
               } else {

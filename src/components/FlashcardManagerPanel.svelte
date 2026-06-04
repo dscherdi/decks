@@ -6,16 +6,16 @@
     FilterRule,
   } from "../database/types";
   import type { IDatabaseService } from "../database/DatabaseFactory";
-  import type { CustomDeckService } from "../services/CustomDeckService";
-  import { evaluateFilter } from "../services/FilterEvaluator";
-  import { computeCardHealth } from "../services/CardHealth";
+  import type { CustomDeckService } from "@decks/core";
+  import { evaluateFilter } from "@decks/core";
+  import { computeCardHealth } from "@decks/core";
   import { formatBadgeParts } from "../services/FilterBadgeFormatter";
   import type { EditTarget, EditCommitPayload } from "./FlashcardManagerEditTypes";
   import FilterBuilder from "./FilterBuilder.svelte";
   import { onMount, onDestroy } from "svelte";
   import { prepareFuzzySearch, Notice } from "obsidian";
   import type { App } from "obsidian";
-  import { I18n } from "@/i18n/I18n";
+  import { I18n } from "@decks/core";
   import { ConfirmModal } from "./ConfirmModal";
 
   const t = I18n.t;
@@ -33,6 +33,8 @@
   export let initialColumnWidths: Record<string, number> = {};
   export let onColumnWidthsChange: ((widths: Record<string, number>) => void) | null = null;
   export let onEditCard: ((card: Flashcard) => Promise<void>) | null = null;
+  export let aiEnabled = false;
+  export let onBatchRefactor: ((cards: Flashcard[]) => Promise<void>) | null = null;
   let editInFlightId: string | null = null;
   export let initialEditTarget: EditTarget | null = null;
   export let leechThreshold = 8;
@@ -185,6 +187,17 @@
       : { version: 1, logic: "AND", rules: [] };
 
   let searchQuery = "";
+  // Debounced mirror of searchQuery — the input stays bound to searchQuery for
+  // instant text, but the heavy filter/rank/sort runs off this after a pause.
+  let debouncedSearchQuery = "";
+  let searchDebounce: ReturnType<typeof setTimeout> | undefined;
+  $: scheduleSearch(searchQuery);
+  function scheduleSearch(q: string) {
+    clearTimeout(searchDebounce);
+    searchDebounce = setTimeout(() => {
+      debouncedSearchQuery = q;
+    }, 200);
+  }
   let filterPopoverOpen = false;
   let filterPopoverContainer: HTMLDivElement | null = null;
 
@@ -221,8 +234,8 @@
     deckTagMap,
     thresholds
   );
-  $: searchedFlashcards = applySearchRanking(ruleFilteredFlashcards, searchQuery);
-  $: sortedFlashcards = searchQuery.trim()
+  $: searchedFlashcards = applySearchRanking(ruleFilteredFlashcards, debouncedSearchQuery);
+  $: sortedFlashcards = debouncedSearchQuery.trim()
     ? searchedFlashcards
     : sortCards(searchedFlashcards, sortColumn, sortDirection, originalDeckCards);
   $: displayedFlashcards = sortedFlashcards.slice(0, displayLimit);
@@ -550,6 +563,14 @@
     }
   }
 
+  async function handleBulkRefactor(): Promise<void> {
+    if (!onBatchRefactor) return;
+    const selected = getSelectedCards();
+    if (selected.length === 0) return;
+    await onBatchRefactor(selected);
+    await reloadCards();
+  }
+
   async function handleBulkReset(): Promise<void> {
     const ids = Array.from(selectedIds);
     if (ids.length === 0) return;
@@ -711,7 +732,9 @@
   }
 
   function clearSearch() {
+    clearTimeout(searchDebounce);
     searchQuery = "";
+    debouncedSearchQuery = "";
   }
 
   function toggleFilterPopover() {
@@ -789,6 +812,7 @@
   onDestroy(() => {
     document.removeEventListener("click", handleOutsideClick);
     document.removeEventListener("click", handleDocClickPopover);
+    clearTimeout(searchDebounce);
     if (nowTickTimer !== null) {
       clearInterval(nowTickTimer);
       nowTickTimer = null;
@@ -976,6 +1000,15 @@
         >
           {m.resetSelected}
         </button>
+        {#if aiEnabled && onBatchRefactor}
+          <button
+            class="decks-fm-action-btn"
+            on:click={handleBulkRefactor}
+            type="button"
+          >
+            {t.modals.aiBatch.bulkButton}
+          </button>
+        {/if}
         <div class="decks-fm-deck-dropdown-container" bind:this={customDeckDropdownEl}>
             <button
               class="decks-fm-action-btn"

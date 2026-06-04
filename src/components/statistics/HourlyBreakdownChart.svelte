@@ -16,7 +16,7 @@
   } from "chart.js";
   import { StatisticsService } from "@/services/StatisticsService";
   import { Logger } from "@/utils/logging";
-  import { I18n } from "@/i18n/I18n";
+  import { I18n } from "@decks/core";
   import {
     BAR_DATASET_DEFAULTS,
     getCategoryXAxis,
@@ -84,13 +84,15 @@
 
   function processChartData() {
     // Create array of counts for each hour (0-23)
-    const hourlyCounts = hourlyData
-      ? Array.from({ length: 24 }, (_, hour) => hourlyData.get(hour) || 0)
+    const hd = hourlyData;
+    const hourlyCounts = hd
+      ? Array.from({ length: 24 }, (_, hour) => hd.get(hour) || 0)
       : new Array(24).fill(0);
 
     // Create array of success rates for each hour (0-23)
-    const successRates = successRatesData
-      ? Array.from({ length: 24 }, (_, hour) => successRatesData.get(hour) || 0)
+    const sr = successRatesData;
+    const successRates = sr
+      ? Array.from({ length: 24 }, (_, hour) => sr.get(hour) || 0)
       : new Array(24).fill(0);
 
     // Prepare chart data

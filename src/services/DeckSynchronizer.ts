@@ -1,5 +1,5 @@
 import { DeckManager } from "./DeckManager";
-import { yieldToUI } from "../utils/ui";
+import { yieldToUI } from "@decks/core";
 import { Logger, formatTime } from "../utils/logging";
 import type { DecksSettings } from "../settings";
 import type { DataAdapter } from "obsidian";

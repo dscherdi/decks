@@ -1,6 +1,6 @@
 import { Modal } from "obsidian";
 import type { App } from "obsidian";
-import { I18n } from "@/i18n/I18n";
+import { I18n } from "@decks/core";
 
 export class ConfirmModal extends Modal {
   private title: string;

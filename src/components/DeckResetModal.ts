@@ -1,7 +1,7 @@
 import { App, Modal, Notice } from "obsidian";
 import type { DeckWithProfile } from "../database/types";
 import type { IDatabaseService } from "../database/DatabaseFactory";
-import { I18n } from "@/i18n/I18n";
+import { I18n } from "@decks/core";
 
 export class DeckResetModal extends Modal {
   private deck: DeckWithProfile;

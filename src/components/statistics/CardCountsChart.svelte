@@ -10,7 +10,7 @@
   } from "chart.js";
   import { StatisticsService } from "@/services/StatisticsService";
   import { Logger } from "@/utils/logging";
-  import { I18n } from "@/i18n/I18n";
+  import { I18n } from "@decks/core";
   import {
     getNativeTooltip,
     getObsidianColor,
@@ -33,7 +33,7 @@
       Tooltip,
       Legend
     );
-    // eslint-disable-next-line @typescript-eslint/no-unused-vars
+     
   } catch (_e) {
     logger.debug("[CardCountsChart] First registration, skip unregister");
   }

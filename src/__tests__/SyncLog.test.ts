@@ -4,7 +4,7 @@ import {
   type LocalStorageLike,
 } from "../services/DeviceLocalState";
 import type { Logger } from "../utils/logging";
-import type { SyncOpV1 } from "../services/SyncLog.types";
+import type { SyncOpV1 } from "@decks/core";
 
 class InMemoryStorage implements LocalStorageLike {
   private store = new Map<string, string>();

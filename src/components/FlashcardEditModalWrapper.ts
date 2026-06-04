@@ -1,15 +1,41 @@
 import { Modal, Component, MarkdownRenderer } from "obsidian";
 import type { App } from "obsidian";
+import type {
+  RefactorFieldSet,
+  RefactorImage,
+  RefactorResult,
+} from "@decks/core";
 import type { Flashcard } from "../database/types";
 import type { FlashcardEdits, EditResult } from "../services/FlashcardWriter";
 import FlashcardEditModal from "./FlashcardEditModal.svelte";
 import { mount, unmount } from "svelte";
 import type { Svelte5MountedComponent } from "../types/svelte-components";
 
+/** Per-refactor options resolved by the AI drawer (context already built). */
+export interface RefactorUiOptions {
+  instructions?: string;
+  targetKeys?: string[];
+  sourceContext?: string;
+  images?: RefactorImage[];
+  split?: boolean;
+}
+
+export interface FlashcardEditAiOptions {
+  aiEnabled: boolean;
+  onRefactor: (
+    current: RefactorFieldSet,
+    options: RefactorUiOptions,
+    signal?: AbortSignal,
+  ) => Promise<RefactorResult>;
+  /** Write a split: replace the card with the given new cards. */
+  onSplit: (cards: RefactorFieldSet[]) => Promise<EditResult>;
+}
+
 export class FlashcardEditModalWrapper extends Modal {
   private card: Flashcard;
   private onSave: (edits: FlashcardEdits) => Promise<EditResult>;
   private onClosed?: () => void;
+  private aiOptions?: FlashcardEditAiOptions;
   private component: Svelte5MountedComponent | null = null;
   private markdownComponents: Component[] = [];
   private resizeHandler?: () => void;
@@ -19,11 +45,13 @@ export class FlashcardEditModalWrapper extends Modal {
     card: Flashcard,
     onSave: (edits: FlashcardEdits) => Promise<EditResult>,
     onClosed?: () => void,
+    aiOptions?: FlashcardEditAiOptions,
   ) {
     super(app);
     this.card = card;
     this.onSave = onSave;
     this.onClosed = onClosed;
+    this.aiOptions = aiOptions;
   }
 
   private renderMarkdown(content: string, el: HTMLElement): void {
@@ -71,11 +99,15 @@ export class FlashcardEditModalWrapper extends Modal {
       target: contentEl,
       props: {
         card: this.card,
+        app: this.app,
         onSave: this.onSave,
         onClose: () => this.close(),
         renderMarkdown: (source: string, el: HTMLElement) => {
           this.renderMarkdown(source, el);
         },
+        aiEnabled: this.aiOptions?.aiEnabled ?? false,
+        onRefactor: this.aiOptions?.onRefactor,
+        onSplit: this.aiOptions?.onSplit,
       },
     }) as Svelte5MountedComponent;
   }

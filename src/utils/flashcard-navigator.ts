@@ -1,7 +1,7 @@
 import { App, MarkdownView, Notice, TFile, WorkspaceLeaf } from "obsidian";
 import type { Flashcard } from "../database/types";
 import { findFlashcardLine } from "./source-navigator";
-import { I18n } from "@/i18n/I18n";
+import { I18n } from "@decks/core";
 
 /**
  * Shape of Obsidian's canvas view internals we rely on for focus-on-node.

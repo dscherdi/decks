@@ -443,6 +443,12 @@
   max-height: 85vh;
 }
 
+/* The batch refactor modal is a split-pane workspace — wider on desktop. */
+.decks-ai-batch-modal {
+  width: 80vw;
+  max-width: 1100px;
+}
+
 .decks-modal-mobile {
   height: 100% !important;
   max-height: 100vh !important;

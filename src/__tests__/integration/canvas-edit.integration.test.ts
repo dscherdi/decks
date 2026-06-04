@@ -7,7 +7,7 @@ import {
   teardownTestDatabase,
 } from "./database-test-utils";
 import { MainDatabaseService } from "../../database/MainDatabaseService";
-import { generateDeckId } from "../../utils/hash";
+import { generateDeckId } from "@decks/core";
 import type { Deck, DeckProfile, Flashcard } from "../../database/types";
 
 /**

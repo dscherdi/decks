@@ -1,4 +1,4 @@
-import { FSRS, RatingLabel } from "../algorithm/fsrs";
+import { FSRS, RatingLabel } from "@decks/core";
 import { Flashcard, FlashcardState } from "../database/types";
 
 describe("FSRS Profiles", () => {

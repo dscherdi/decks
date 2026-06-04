@@ -1,13 +1,12 @@
 import { TFile, Vault, MetadataCache, Notice, getAllTags } from "obsidian";
 import { type Deck, type Flashcard, type DeckStats, type DeckGroup, DEFAULT_PROFILE_ID } from "../database/types";
 import type { IDatabaseService } from "../database/DatabaseFactory";
-import { yieldToUI } from "../utils/ui";
+import { generateDeckGroupId, generateDeckId, yieldToUI } from "@decks/core";
 import { Logger, formatTime } from "../utils/logging";
 import { FileFilter } from "../utils/fileFilter";
-import { FlashcardParser, type ParsedFlashcard } from "./FlashcardParser";
+import { FlashcardParser, type ParsedFlashcard } from "@decks/core";
 import { ProgressTracker } from "../utils/progress";
-import { generateDeckId, generateDeckGroupId } from "../utils/hash";
-import { TagGroupService } from "./TagGroupService";
+import { TagGroupService } from "@decks/core";
 import type { DecksSettings } from "../settings";
 
 // Maximum number of flashcards to process per deck for performance

@@ -2,7 +2,7 @@ import {
   computeCardHealth,
   isCardLeech,
   isCardDense,
-} from "../services/CardHealth";
+} from "@decks/core";
 
 const thresholds = { leechThreshold: 8, denseCardCharThreshold: 500 };
 

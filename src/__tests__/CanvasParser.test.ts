@@ -1,4 +1,4 @@
-import { CanvasParser, CanvasParseError } from "../services/CanvasParser";
+import { CanvasParser, CanvasParseError } from "@decks/core";
 
 describe("CanvasParser", () => {
   describe("parseCanvas", () => {

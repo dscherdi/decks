@@ -14,6 +14,7 @@
     Legend,
     Filler,
     type TooltipItem,
+    type ChartDataset,
   } from "chart.js";
   import type { Statistics } from "../../database/types";
   import {
@@ -21,8 +22,7 @@
     type BacklogForecastData,
   } from "../../services/StatisticsService";
   import { Logger } from "@/utils/logging";
-  import { toLocalDateString } from "@/utils/date-utils";
-  import { I18n } from "@/i18n/I18n";
+  import { I18n, toLocalDateString } from "@decks/core";
   import {
     LINE_DATASET_DEFAULTS,
     getCategoryXAxis,
@@ -197,7 +197,7 @@
     const mutedColor = getObsidianColor("--text-muted");
 
     // Create chart datasets - using bar chart with fill
-    const datasets = [
+    const datasets: ChartDataset<"bar" | "line">[] = [
       {
         ...LINE_DATASET_DEFAULTS,
         type: "line" as const,

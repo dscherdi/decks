@@ -29,3 +29,7 @@ GITHUB_RELEASE_NOTES.md
 benchmark/data
 benchmark/results/*
 !benchmark/results/.gitkeep
+
+# AI provider API keys (non-synced, never commit)
+ai-keys.json
+**/ai-keys.json

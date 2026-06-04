@@ -1,5 +1,4 @@
-import { applyOp } from "../services/SyncLog.handlers";
-import type { SyncLogEntry, RateOp } from "../services/SyncLog.types";
+import { applyOp, type RateOp, type SyncLogEntry } from "@decks/core";
 import type { Flashcard, ReviewLog } from "../database/types";
 import type { Logger } from "../utils/logging";
 import type { IDatabaseService } from "../database/DatabaseFactory";

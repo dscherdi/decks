@@ -1,4 +1,4 @@
-import { formatTime, formatPace } from "../utils/formatting";
+import { formatTime, formatPace } from "@decks/core";
 
 describe("Formatting Utilities", () => {
   describe("formatTime", () => {

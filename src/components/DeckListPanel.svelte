@@ -8,7 +8,7 @@
     DeckOrGroup,
   } from "../database/types";
   import { isDeckGroup, isFileDeck, isCustomDeck } from "../database/types";
-  import { generateDeckGroupId } from "../utils/hash";
+  import { filterByMinCount, generateDeckGroupId, I18n, sortDeckList } from "@decks/core";
 
   import ReviewHeatmap from "./statistics/ReviewHeatmap.svelte";
   import { AnkiExportModal } from "./export/AnkiExportModal";
@@ -16,16 +16,14 @@
   import type { StatisticsService } from "@/services/StatisticsService";
   import type { DeckSynchronizer } from "@/services/DeckSynchronizer";
   import type { IDatabaseService } from "@/database/DatabaseFactory";
-  import type { TagGroupService } from "@/services/TagGroupService";
-  import type { CustomDeckService } from "@/services/CustomDeckService";
+  import type { TagGroupService } from "@decks/core";
+  import type { CustomDeckService } from "@decks/core";
   import type { CustomDeckGroup } from "../database/types";
   import { RenameCustomDeckModal } from "./RenameCustomDeckModal";
   import { ConfirmModal } from "./ConfirmModal";
   import { Notice, setIcon } from "obsidian";
   import type { App } from "obsidian";
-  import { sortDeckList, filterByMinCount } from "@/utils/deck-sort";
   import type { DeckListSortMode } from "@/settings";
-  import { I18n } from "@/i18n/I18n";
 
   const t = I18n.t;
 
@@ -78,6 +76,7 @@
   export let openProfilesManagerModal: () => void;
   export let openDeckConfigModal: (deck: DeckWithProfile) => void;
   export let openFlashcardManager: () => void;
+  export let openAiGeneratorModal: () => void = () => {};
   export let customDeckService: CustomDeckService;
   export let deckTag = "#decks";
   // Synced via data.json — pin/unpin on one device shows up on all others
@@ -1088,6 +1087,14 @@
       {/if}
       <button
         class="clickable-icon"
+        on:click={() => openAiGeneratorModal()}
+        title={t.deckList.aiGenerate}
+        aria-label={t.deckList.aiGenerate}
+      >
+        <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M15 4V2"></path><path d="M15 16v-2"></path><path d="M8 9h2"></path><path d="M20 9h2"></path><path d="M17.8 11.8 19 13"></path><path d="M15 9h.01"></path><path d="M17.8 6.2 19 5"></path><path d="m3 21 9-9"></path><path d="M12.2 6.2 11 5"></path></svg>
+      </button>
+      <button
+        class="clickable-icon"
         class:decks-refreshing={isRefreshing || isSyncing}
         on:click={() => void handleRefresh()}
         disabled={isRefreshing}
@@ -1109,6 +1116,13 @@
           </button>
           {#if headerOverflowOpen}
             <div class="decks-overflow-menu decks-overflow-menu-header">
+              <button
+                class="decks-overflow-item"
+                on:click={() => { openAiGeneratorModal(); headerOverflowOpen = false; }}
+              >
+                <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M15 4V2"></path><path d="M15 16v-2"></path><path d="M8 9h2"></path><path d="M20 9h2"></path><path d="M17.8 11.8 19 13"></path><path d="M15 9h.01"></path><path d="M17.8 6.2 19 5"></path><path d="m3 21 9-9"></path><path d="M12.2 6.2 11 5"></path></svg>
+                {t.deckList.aiGenerate}
+              </button>
               <button
                 class="decks-overflow-item"
                 on:click={() => { onOpenDeckConfig(); headerOverflowOpen = false; }}

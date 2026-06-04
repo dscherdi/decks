@@ -10,8 +10,7 @@ import {
   teardownTestDatabase,
   InMemoryAdapter,
 } from "./database-test-utils";
-import { generateDeckId } from "../../utils/hash";
-import { CURRENT_SCHEMA_VERSION } from "../../database/schemas";
+import { CURRENT_SCHEMA_VERSION, generateDeckId } from "@decks/core";
 import { getCurrentSchemaVersion, migrate } from "../../database/migrations";
 import type { Deck, DeckProfile, FilterDefinition } from "../../database/types";
 

@@ -15,7 +15,7 @@
   } from "chart.js";
   import { StatisticsService } from "@/services/StatisticsService";
   import { Logger } from "@/utils/logging";
-  import { I18n } from "@/i18n/I18n";
+  import { I18n } from "@decks/core";
   import {
     LINE_DATASET_DEFAULTS,
     getCategoryXAxis,
@@ -105,8 +105,9 @@
       };
     }
 
+    const cd = cardsAddedData;
     // Sort dates and prepare chart data
-    const sortedDates = Array.from(cardsAddedData.keys()).sort();
+    const sortedDates = Array.from(cd.keys()).sort();
     const labels = sortedDates.map((date) => {
       const d = new Date(date);
       return d.toLocaleDateString("en-US", {
@@ -114,7 +115,7 @@
         day: "numeric",
       });
     });
-    const data = sortedDates.map((date) => cardsAddedData.get(date) || 0);
+    const data = sortedDates.map((date) => cd.get(date) || 0);
 
     return {
       labels,

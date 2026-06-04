@@ -66,6 +66,9 @@ Gracias.
 
 Der Dateiname wird zum Stapelnamen. Die Überschriftenebene ist pro Profil konfigurierbar (standardmäßig H2). Überschriften oberhalb der konfigurierten Ebene werden nicht zu Karten — sie werden als Breadcrumb-Pfad (z. B. `Kapitel 1 > Abschnitt 2`) zur Kontextanzeige an jede Karte angehängt.
 
+
+Füge einer Überschrift-Absatz-Karte optionale **Notizen** hinzu — mit einem Obsidian-Kommentar (`%%ein Hinweis%%`) irgendwo im Text oder nach einem `---`-Trenner am Ende. Notizen werden bei Bedarf (Taste **N**) während der Wiederholung angezeigt.
+
 </details>
 
 <details>
@@ -207,6 +210,19 @@ Die Implementierung wurde gegen die veröffentlichte FSRS-6-Spezifikation validi
 - **Diskutiere auf Discord** — [tritt dem Server bei](https://discord.com/channels/686053708261228577/1497268419861418035).
 - **Unterstütze die Entwicklung** — [Spendier mir einen Kaffee](https://www.buymeacoffee.com/dscherdil0).
 - **Übersetzungsleitfaden** - [Übersetzungsleitfaden](./docs/TRANSLATING.md).
+
+## KI-Unterstützung (optional)
+
+Optionale KI-Funktionen, **deaktiviert, bis du in Einstellungen → KI einen Anbieter-Schlüssel hinterlegst**:
+
+- **Generieren** — neue Karten aus einem Prompt (und optionalen Notizen/Bildern) erzeugen und in einer neuen Datei oder einem vorhandenen Stapel als Überschrift+Absatz, Tabelle oder Canvas speichern.
+- **Überarbeiten** einer Karte oder einer ganzen Auswahl, oder **Aufteilen** einer Karte in mehrere — jede Änderung prüfst du vor dem Anwenden.
+
+Verwende deinen eigenen Schlüssel für OpenAI, Anthropic (Claude), Google (Gemini) oder einen OpenAI-kompatiblen/lokalen Endpunkt. Schlüssel liegen lokal in `ai-keys.json` und werden nie in `data.json` geschrieben — sie verlassen dein Gerät also nicht über die Synchronisierung. Es wird nichts an einen Anbieter gesendet, solange du keine Aktion auslöst; jede Anfrage enthält nur einen eingebauten Prompt darüber, wie Decks funktioniert, deine Anweisungen und den Inhalt dieser Aktion.
+
+## Basiert auf
+
+Decks basiert auf **[`@decks/core`](https://github.com/dscherdi/decks-core)** — der quelloffenen (MIT) Engine für Parsing, FSRS-Planung, Synchronisierung und KI-Orchestrierung. Das Plugin ist die Obsidian-spezifische Hülle darum.
 
 ## Lizenz
 

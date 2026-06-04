@@ -1,7 +1,7 @@
 import { MainDatabaseService } from "../../database/MainDatabaseService";
-import { TagGroupService } from "../../services/TagGroupService";
+import { TagGroupService } from "@decks/core";
 import type { DeckWithProfile, DeckProfile, Deck } from "../../database/types";
-import { generateDeckGroupId } from "../../utils/hash";
+import { generateDeckGroupId } from "@decks/core";
 import {
   setupTestDatabase,
   teardownTestDatabase,

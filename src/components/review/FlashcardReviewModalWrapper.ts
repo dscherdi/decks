@@ -1,6 +1,6 @@
 import { Modal, Component, Notice, MarkdownRenderer, App } from "obsidian";
 import type { Flashcard, DeckOrGroup } from "../../database/types";
-import type { RatingLabel } from "../../algorithm/fsrs";
+import type { RatingLabel } from "@decks/core";
 import type { Scheduler } from "../../services/Scheduler";
 import type { DecksSettings } from "../../settings";
 import type { IDatabaseService } from "../../database/DatabaseFactory";
@@ -11,7 +11,7 @@ import type {
 import FlashcardReviewModal from "./FlashcardReviewModal.svelte";
 import { mount, unmount } from "svelte";
 import { navigateToFlashcardSource } from "../../utils/flashcard-navigator";
-import { I18n } from "@/i18n/I18n";
+import { I18n } from "@decks/core";
 import { ConfirmModal } from "../ConfirmModal";
 
 export class FlashcardReviewModalWrapper extends Modal {

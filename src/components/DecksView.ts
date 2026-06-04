@@ -3,7 +3,7 @@ import { VIEW_TYPE_DECKS } from "@/main";
 import { DeckSynchronizer } from "@/services/DeckSynchronizer";
 import { DeckManager } from "@/services/DeckManager";
 import type { DecksSettings } from "@/settings";
-import { yieldToUI } from "@/utils/ui";
+import { I18n, yieldToUI } from "@decks/core";
 import { Logger } from "@/utils/logging";
 import { ItemView, WorkspaceLeaf, Notice } from "obsidian";
 import { Scheduler } from "@/services/Scheduler";
@@ -16,8 +16,8 @@ import { StatisticsModal } from "./settings/StatisticsModal";
 import { ProfilesManagerModal } from "./config/ProfilesManagerModal";
 import { DeckConfigModal } from "./config/DeckConfigModal";
 import { StatisticsService } from "@/services/StatisticsService";
-import { TagGroupService } from "@/services/TagGroupService";
-import { CustomDeckService } from "@/services/CustomDeckService";
+import { TagGroupService } from "@decks/core";
+import { CustomDeckService } from "@decks/core";
 import { openFlashcardManager } from "./FlashcardManagerView";
 
 import DeckListPanel from "./DeckListPanel.svelte";
@@ -26,7 +26,6 @@ import { ProgressTracker } from "@/utils/progress";
 import type { DeckListPanelComponent } from "../types/svelte-components";
 import type { IDatabaseService } from "../database/DatabaseFactory";
 import type { DeckListSortMode } from "@/settings";
-import { I18n } from "@/i18n/I18n";
 
 export class DecksView extends ItemView {
   private db: IDatabaseService;
@@ -43,6 +42,8 @@ export class DecksView extends ItemView {
   private logger: Logger;
   private saveSettings: () => Promise<void>;
   private openEditModal?: (card: Flashcard) => Promise<void>;
+  private openBatchRefactor?: (cards: Flashcard[]) => Promise<void>;
+  private openAiGenerator?: () => void;
 
   constructor(
     leaf: WorkspaceLeaf,
@@ -57,6 +58,8 @@ export class DecksView extends ItemView {
     logger: Logger,
     saveSettings: () => Promise<void>,
     openEditModal?: (card: Flashcard) => Promise<void>,
+    openBatchRefactor?: (cards: Flashcard[]) => Promise<void>,
+    openAiGenerator?: () => void,
   ) {
     super(leaf);
     this.db = database;
@@ -70,6 +73,8 @@ export class DecksView extends ItemView {
     this.logger = logger;
     this.saveSettings = saveSettings;
     this.openEditModal = openEditModal;
+    this.openBatchRefactor = openBatchRefactor;
+    this.openAiGenerator = openAiGenerator;
 
     this.progressTracker = progressTracker;
   }
@@ -129,7 +134,7 @@ export class DecksView extends ItemView {
 
     // Create and mount Svelte component using Svelte 5 API
     this.deckListPanelComponent = mount(DeckListPanel, {
-      target: container as HTMLElement,
+      target: container,
       props: {
         statisticsService: this.statisticsService,
         db: this.db,
@@ -149,6 +154,7 @@ export class DecksView extends ItemView {
         openProfilesManagerModal: () => this.openProfilesManagerModal(),
         openDeckConfigModal: (deck: DeckWithProfile) => this.openDeckConfigModal(deck),
         openFlashcardManager: () => this.openFlashcardManager(),
+        openAiGeneratorModal: () => this.openAiGenerator?.(),
         deckTag: this.settings.parsing.deckTag,
         pinnedDeckIds: this.settings.ui.pinnedDeckIds,
         onTogglePin: (id: string) => this.togglePin(id),
@@ -229,6 +235,7 @@ export class DecksView extends ItemView {
         void this.saveSettings();
       },
       this.openEditModal,
+      this.openBatchRefactor,
     );
   }
 

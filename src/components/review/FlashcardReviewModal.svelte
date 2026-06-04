@@ -8,16 +8,15 @@
   } from "../../database/types";
   import { isDeckGroup, isCustomDeck } from "../../database/types";
   import type { DecksSettings } from "../../settings";
-  import { type RatingLabel } from "../../algorithm/fsrs";
+  import { type RatingLabel } from "@decks/core";
   import type {
     Scheduler,
     SchedulingPreview,
     SessionProgress,
   } from "../../services/Scheduler";
-  import { yieldToUI } from "@/utils/ui";
+  import { I18n, yieldToUI } from "@decks/core";
   import { prepareFuzzySearch } from "obsidian";
-  import { computeCardHealth } from "../../services/CardHealth";
-  import { I18n } from "@/i18n/I18n";
+  import { computeCardHealth } from "@decks/core";
 
   const t = I18n.t;
   const r = t.review;
@@ -202,7 +201,8 @@
   let clozeGroupTotal = 0;
   let inClozeGroupReview = false;
 
-  $: clozeShowContext = deckOrGroup.profile?.clozeShowContext ?? "open";
+  $: clozeShowContext =
+    ("profile" in deckOrGroup ? deckOrGroup.profile : undefined)?.clozeShowContext ?? "open";
 
   // Browse mode variables
   let browseCardIndex = 0;

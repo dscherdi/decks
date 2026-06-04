@@ -6,6 +6,7 @@ import {
   Modal,
   DropdownComponent,
   normalizePath,
+  getLanguage,
 } from "obsidian";
 import type { DecksSettings } from "../../settings";
 import { BackupService } from "../../services/BackupService";
@@ -14,8 +15,7 @@ import type { IDatabaseService } from "@/database/DatabaseFactory";
 import type { FsrsWeightSet } from "@/database/types";
 import { Logger } from "@/utils/logging";
 import { OptimizeFsrsModal } from "./OptimizeFsrsModal";
-import { I18n } from "@/i18n/I18n";
-import { SUPPORTED_LANGUAGES, type LanguagePreference } from "@/i18n/locales";
+import { type AiProviderId, I18n, type LanguagePreference, SUPPORTED_LANGUAGES } from "@decks/core";
 
 export class DecksSettingTab extends PluginSettingTab {
   private settings: DecksSettings;
@@ -80,6 +80,9 @@ export class DecksSettingTab extends PluginSettingTab {
     // UI Settings
     this.addUISettings(containerEl);
 
+    // AI features
+    this.addAiSettings(containerEl);
+
     // Backup Settings
     this.addBackupSettings(containerEl);
 
@@ -97,6 +100,101 @@ export class DecksSettingTab extends PluginSettingTab {
 
     // Database Management Settings
     this.addDatabaseSettings(containerEl);
+  }
+
+  private addAiSettings(containerEl: HTMLElement): void {
+    const s = I18n.t.settings.ai;
+    new Setting(containerEl).setName(s.heading).setHeading();
+
+    // The provider/model/key fields render into their own container so toggling
+    // "enabled" (or switching provider) rebuilds ONLY that container instead of
+    // the whole settings tab.
+    const subContainer = containerEl.createDiv();
+
+    new Setting(containerEl)
+      .setName(s.enabled)
+      .setDesc(s.enabledDesc)
+      .addToggle((toggle) =>
+        toggle.setValue(this.settings.ai.enabled).onChange(async (value) => {
+          if (value === this.settings.ai.enabled) return;
+          this.settings.ai.enabled = value;
+          await this.saveSettings();
+          this.renderAiProviderSettings(subContainer);
+        })
+      );
+
+    this.renderAiProviderSettings(subContainer);
+  }
+
+  private renderAiProviderSettings(containerEl: HTMLElement): void {
+    containerEl.empty();
+    if (!this.settings.ai.enabled) return;
+
+    const s = I18n.t.settings.ai;
+    const provider = this.settings.ai.provider;
+
+    new Setting(containerEl)
+      .setName(s.provider)
+      .setDesc(s.providerDesc)
+      .addDropdown((dd) =>
+        dd
+          .addOption("gemini", s.providerGemini)
+          .addOption("openai", s.providerOpenai)
+          .addOption("claude", s.providerClaude)
+          .addOption("openai-compatible", s.providerLocal)
+          .setValue(provider)
+          .onChange(async (value) => {
+            if (value === this.settings.ai.provider) return;
+            this.settings.ai.provider = value as AiProviderId;
+            await this.saveSettings();
+            // Rebuild only this sub-container (shows/hides the local URL field).
+            this.renderAiProviderSettings(containerEl);
+          })
+      );
+
+    new Setting(containerEl)
+      .setName(s.model)
+      .setDesc(s.modelDesc)
+      .addText((text) =>
+        text
+          .setValue(this.settings.ai.models[provider] ?? "")
+          .onChange(async (value) => {
+            this.settings.ai.models[provider] = value.trim();
+            await this.saveSettings();
+          })
+      );
+
+    if (provider === "openai-compatible") {
+      new Setting(containerEl)
+        .setName(s.localBaseUrl)
+        .setDesc(s.localBaseUrlDesc)
+        .addText((text) =>
+          text
+            .setValue(this.settings.ai.localBaseUrl)
+            .onChange(async (value) => {
+              this.settings.ai.localBaseUrl = value.trim();
+              await this.saveSettings();
+            })
+        );
+    }
+
+    // API key lives in the non-synced AiKeyStore, never in data.json.
+    new Setting(containerEl)
+      .setName(s.apiKey)
+      .setDesc(s.apiKeyDesc)
+      .addText((text) => {
+        text.setPlaceholder(s.apiKeyPlaceholder).onChange(async (value) => {
+          await this.plugin.aiKeyStore.set(provider, value);
+        });
+        text.inputEl.type = "password";
+        // Block body is required: TextComponent.setValue() returns `this`, and
+        // Obsidian components are thenables (BaseComponent.then). Returning the
+        // component from a .then callback makes the Promise adopt it and recurse
+        // through .then forever (hard freeze). The block returns undefined.
+        void this.plugin.aiKeyStore.get(provider).then((k) => {
+          text.setValue(k);
+        });
+      });
   }
 
   private addLanguageSettings(containerEl: HTMLElement): void {
@@ -119,7 +217,7 @@ export class DecksSettingTab extends PluginSettingTab {
             // so the user sees the change confirmed in the new language.
             // Other already-mounted views (deck list, review modal, commands)
             // still need a plugin reload to pick it up.
-            I18n.init(this.settings);
+            I18n.init(this.settings, getLanguage());
             new Notice(I18n.t.notices.languageChanged);
             this.display();
           });
@@ -783,8 +881,9 @@ export class DecksSettingTab extends PluginSettingTab {
         }
       );
       progressNotice.hide();
-      if (this.plugin.view) {
-        await this.plugin.view.refresh(true);
+      const decksView = this.plugin.getDecksView();
+      if (decksView) {
+        await decksView.refresh({ skipSync: true });
       }
     } catch (error) {
       progressNotice.hide();
@@ -879,8 +978,9 @@ export class DecksSettingTab extends PluginSettingTab {
 
       progressNotice.hide();
 
-      if (this.plugin.view) {
-        await this.plugin.view.refresh(true);
+      const decksView = this.plugin.getDecksView();
+      if (decksView) {
+        await decksView.refresh({ skipSync: true });
       }
     } catch (error) {
       progressNotice.hide();

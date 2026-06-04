@@ -1,6 +1,6 @@
 import { MainDatabaseService } from "../../database/MainDatabaseService";
 import { DeckManager } from "../../services/DeckManager";
-import { TagGroupService } from "../../services/TagGroupService";
+import { TagGroupService } from "@decks/core";
 import type { DeckGroup, DeckWithProfile } from "../../database/types";
 import {
   setupTestDatabase,

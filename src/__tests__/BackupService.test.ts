@@ -1,6 +1,6 @@
 import { BackupService } from "../services/BackupService";
 import { IDatabaseService } from "../database/DatabaseFactory";
-import { toLocalDateString } from "../utils/date-utils";
+import { toLocalDateString } from "@decks/core";
 
 // Helper function to create a complete mock database
 function createMockDatabase() {
@@ -137,8 +137,9 @@ jest.mock("obsidian", () => ({
   Notice: jest.fn(),
 }));
 
-// Mock yieldToUI
-jest.mock("@/utils/ui", () => ({
+// Mock yieldToUI only; keep the rest of @decks/core real.
+jest.mock("@decks/core", () => ({
+  ...jest.requireActual("@decks/core"),
   yieldToUI: jest.fn().mockResolvedValue(undefined),
 }));
 

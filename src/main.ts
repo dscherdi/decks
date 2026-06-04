@@ -5,6 +5,7 @@ import {
   Notice,
   TAbstractFile,
   getAllTags,
+  getLanguage,
 } from "obsidian";
 
 import {
@@ -26,15 +27,25 @@ import { BackupService } from "./services/BackupService";
 import { StatisticsService } from "./services/StatisticsService";
 import { FlashcardWriter, type FlashcardEdits } from "./services/FlashcardWriter";
 import { FlashcardEditModalWrapper } from "./components/FlashcardEditModalWrapper";
+import { AiGenerationService, AiRefactoringService, type GeneratedCard, generateDeckId, I18n, type RefactorFieldSet, yieldToUI } from "@decks/core";
+import { AiKeyStore } from "./services/AiKeyStore";
+import { ObsidianHttpClient } from "./services/ObsidianHttpClient";
+import {
+  AiRefactorController,
+  cardToRefactorFieldSet,
+  fieldSetToEdits,
+} from "./services/AiRefactorController";
+import { AiGeneratorController } from "./services/AiGeneratorController";
+import { FlashcardComposer } from "./services/FlashcardComposer";
+import { AiBatchRefactorModalWrapper } from "./components/AiBatchRefactorModalWrapper";
+import { AiGeneratorModalWrapper } from "./components/AiGeneratorModalWrapper";
+import type { GeneratorSaveRequest } from "./components/generator-save";
 import type { Flashcard } from "./database/types";
-import { yieldToUI } from "./utils/ui";
 import { Logger, formatTime } from "./utils/logging";
 import { ProgressTracker } from "./utils/progress";
-import { generateDeckId } from "./utils/hash";
 
 import { type DecksSettings, DEFAULT_SETTINGS } from "./settings";
 import { DecksSettingTab } from "./components/settings/SettingsTab";
-import { I18n } from "./i18n/I18n";
 
 import { DecksView } from "./components/DecksView";
 import { DecksViewModal } from "./components/DecksViewModal";
@@ -45,7 +56,7 @@ import {
   openFlashcardManager,
 } from "./components/FlashcardManagerView";
 import { TestDeckService } from "./services/TestDeckService";
-import { CustomDeckService } from "./services/CustomDeckService";
+import { CustomDeckService } from "@decks/core";
 import {
   FlashcardReviewView,
   VIEW_TYPE_FLASHCARD_REVIEW,
@@ -113,6 +124,10 @@ export default class DecksPlugin extends Plugin {
   private statisticsService: StatisticsService;
   private customDeckService: CustomDeckService;
   private flashcardWriter: FlashcardWriter;
+  private flashcardComposer: FlashcardComposer;
+  public aiKeyStore: AiKeyStore;
+  public aiRefactorController: AiRefactorController;
+  public aiGeneratorController: AiGeneratorController;
   public settings: DecksSettings;
   private logger: Logger;
   private progressTracker: ProgressTracker;
@@ -132,8 +147,9 @@ export default class DecksPlugin extends Plugin {
     // Load settings first
     await this.loadSettings();
 
-    // Resolve the active UI language before any view, command, or notice is registered
-    I18n.init(this.settings);
+    // Resolve the active UI language before any view, command, or notice is registered.
+    // Pass Obsidian's UI language into core's platform-agnostic resolver.
+    I18n.init(this.settings, getLanguage());
 
     // Initialize utilities
     const pluginFolderName = this.manifest.dir?.split('/').pop() || this.manifest.id;
@@ -239,6 +255,22 @@ export default class DecksPlugin extends Plugin {
       this.customDeckService = new CustomDeckService(this.db);
       this.flashcardWriter = new FlashcardWriter(this.app);
 
+      // AI refactoring. API keys live in a non-synced file under the plugin
+      // dir (AiKeyStore) — never in data.json. HTTP goes through Obsidian's
+      // requestUrl (ObsidianHttpClient) to bypass CORS.
+      this.aiKeyStore = new AiKeyStore(adapter, pluginDir);
+      this.aiRefactorController = new AiRefactorController(
+        new AiRefactoringService(new ObsidianHttpClient(), this.logger),
+        this.settings,
+        this.aiKeyStore,
+      );
+      this.aiGeneratorController = new AiGeneratorController(
+        new AiGenerationService(new ObsidianHttpClient(), this.logger),
+        this.settings,
+        this.aiKeyStore,
+      );
+      this.flashcardComposer = new FlashcardComposer(this.app);
+
       // Apply current filter compile thresholds (leech / dense) to db + service
       this.applyFilterCompileOptions();
 
@@ -289,6 +321,8 @@ export default class DecksPlugin extends Plugin {
             this.logger,
             () => this.saveSettings(),
             (card) => this.openEditFlashcardModal(card),
+            (cards) => this.openBatchRefactorModal(cards),
+            () => this.openAiGeneratorModal(),
           )
       );
 
@@ -331,6 +365,8 @@ export default class DecksPlugin extends Plugin {
           () => this.getDecksView(),
           () => this.saveSettings(),
           (card) => this.openEditFlashcardModal(card),
+          (cards) => this.openBatchRefactorModal(cards),
+          () => this.openAiGeneratorModal(),
         ).open();
       });
 
@@ -340,6 +376,15 @@ export default class DecksPlugin extends Plugin {
         name: I18n.t.commands.showPanel,
         callback: () => {
           void this.activateView();
+        },
+      });
+
+      // Add command to open the AI flashcard generator
+      this.addCommand({
+        id: "open-ai-generator",
+        name: I18n.t.commands.openAiGenerator,
+        callback: () => {
+          this.openAiGeneratorModal();
         },
       });
 
@@ -374,6 +419,7 @@ export default class DecksPlugin extends Plugin {
               void this.saveSettings();
             },
             (card) => this.openEditFlashcardModal(card),
+            (cards) => this.openBatchRefactorModal(cards),
           );
         },
       });
@@ -484,6 +530,8 @@ export default class DecksPlugin extends Plugin {
             () => this.getDecksView(),
             () => this.saveSettings(),
             (card) => this.openEditFlashcardModal(card),
+            (cards) => this.openBatchRefactorModal(cards),
+            () => this.openAiGeneratorModal(),
           ).open();
         },
       });
@@ -694,7 +742,7 @@ export default class DecksPlugin extends Plugin {
         !rawParsing ||
         typeof rawParsing !== "object" ||
         !Object.prototype.hasOwnProperty.call(
-          rawParsing as Record<string, unknown>,
+          rawParsing,
           "deckTag"
         )
       ) {
@@ -888,15 +936,200 @@ export default class DecksPlugin extends Plugin {
             const file = this.app.vault.getAbstractFileByPath(card.sourceFile);
             if (file instanceof TFile) {
               await this.handleFileChange(file);
+              // handleFileChange only schedules a debounced sync for markdown
+              // decks; run it now so the manager sees the edit immediately when
+              // it reloads after this modal closes. (Canvas is synced inline by
+              // handleFileChange.)
+              if (file.extension !== "canvas") {
+                await this.flushDeckSync(card.deckId);
+              }
             }
             new Notice("Card updated");
           }
           return result;
         },
         settle,
+        {
+          aiEnabled: this.aiRefactorController.isEnabled(),
+          onRefactor: (current, options, signal) =>
+            this.aiRefactorController.refactorCard(
+              card,
+              current,
+              {
+                instructions: options.instructions,
+                targetKeys: options.targetKeys,
+                sourceContext: options.sourceContext,
+                images: options.images,
+                split: options.split,
+              },
+              signal,
+            ),
+          onSplit: async (cards) => {
+            const edits = cards.map((c) => fieldSetToEdits(c));
+            const result = await this.flashcardWriter.splitFlashcard(card, edits);
+            if (result.ok) {
+              const file = this.app.vault.getAbstractFileByPath(card.sourceFile);
+              if (file instanceof TFile) {
+                await this.handleFileChange(file);
+                if (file.extension !== "canvas") {
+                  await this.flushDeckSync(card.deckId);
+                }
+              }
+              new Notice(`Split into ${cards.length} cards`);
+            }
+            return result;
+          },
+        },
       );
       wrapper.open();
     });
+  }
+
+  async openBatchRefactorModal(cards: Flashcard[]): Promise<void> {
+    return new Promise((resolve) => {
+      const wrapper = new AiBatchRefactorModalWrapper(
+        this.app,
+        {
+          cards,
+          run: (card, options, signal) =>
+            this.aiRefactorController.refactorCard(
+              card,
+              cardToRefactorFieldSet(card),
+              options,
+              signal,
+            ),
+          apply: async (card, accepted) => {
+            const merged = {
+              ...(cardToRefactorFieldSet(card) as Record<string, unknown>),
+            };
+            for (const p of accepted) merged[p.key] = p.after;
+            const edits = fieldSetToEdits(merged as unknown as RefactorFieldSet);
+            const result = await this.flashcardWriter.editFlashcard(card, edits);
+            if (result.ok) {
+              const file = this.app.vault.getAbstractFileByPath(card.sourceFile);
+              if (file instanceof TFile) {
+                await this.handleFileChange(file);
+                if (file.extension !== "canvas") {
+                  await this.flushDeckSync(card.deckId);
+                }
+              }
+              return { ok: true };
+            }
+            return { ok: false, error: result.failure.message };
+          },
+          applySplit: async (card, fieldSets) => {
+            const edits = fieldSets.map((c) => fieldSetToEdits(c));
+            const result = await this.flashcardWriter.splitFlashcard(card, edits);
+            if (result.ok) {
+              const file = this.app.vault.getAbstractFileByPath(card.sourceFile);
+              if (file instanceof TFile) {
+                await this.handleFileChange(file);
+                if (file.extension !== "canvas") {
+                  await this.flushDeckSync(card.deckId);
+                }
+              }
+              return { ok: true };
+            }
+            return { ok: false, error: result.failure.message };
+          },
+        },
+        () => resolve(),
+      );
+      wrapper.open();
+    });
+  }
+
+  openAiGeneratorModal(): void {
+    const wrapper = new AiGeneratorModalWrapper(this.app, {
+      generate: (options, handlers, signal) =>
+        this.aiGeneratorController.generateStream(options, handlers, signal),
+      save: (cards, request) => this.saveGeneratedCards(cards, request),
+      loadProfiles: async () =>
+        (await this.db.getAllProfiles()).map((p) => ({
+          id: p.id,
+          name: p.name,
+        })),
+      loadDecks: async () =>
+        (await this.db.getAllDecks()).map((d) => ({
+          id: d.id,
+          name: d.name,
+          isCanvas: d.filepath.endsWith(".canvas"),
+        })),
+      defaultFolder: this.settings.parsing.folderSearchPath || "",
+      canvasFolder: this.settings.canvasDecks.folderPath || "",
+      deckTag: this.settings.parsing.deckTag,
+    });
+    wrapper.open();
+  }
+
+  // Write the kept generated cards to disk, then register/sync the deck so the
+  // new cards appear. Returns a result the modal surfaces to the user.
+  private async saveGeneratedCards(
+    cards: GeneratedCard[],
+    request: GeneratorSaveRequest,
+  ): Promise<{ ok: boolean; error?: string; count?: number }> {
+    try {
+      if (request.kind === "new-file") {
+        const profile =
+          (await this.db.getProfileById(request.profileId)) ??
+          (await this.db.getDefaultProfile());
+        const { filePath } = await this.flashcardComposer.saveGenerated(cards, {
+          kind: "new-file",
+          format: request.format,
+          folder: request.folder,
+          name: request.name,
+          tag: request.tag,
+          level: profile.headerLevel,
+        });
+        const tag =
+          request.format === "canvas"
+            ? this.settings.canvasDecks.tagName || request.tag
+            : request.tag;
+        await this.registerGeneratedDeck(filePath, tag, request.profileId);
+      } else {
+        const deck = await this.db.getDeckById(request.deckId);
+        if (!deck) return { ok: false, error: "Deck not found" };
+        const profile =
+          (await this.db.getProfileById(deck.profileId)) ??
+          (await this.db.getDefaultProfile());
+        await this.flashcardComposer.saveGenerated(cards, {
+          kind: "append",
+          format: request.format,
+          filePath: deck.filepath,
+          level: profile.headerLevel,
+        });
+        const file = this.app.vault.getAbstractFileByPath(deck.filepath);
+        if (file instanceof TFile) {
+          await this.handleFileChange(file);
+          await this.deckSynchronizer.syncDeck(deck.id);
+        }
+      }
+      return { ok: true, count: cards.length };
+    } catch (e) {
+      this.logger.error("Failed to save generated cards", e);
+      return { ok: false, error: e instanceof Error ? e.message : String(e) };
+    }
+  }
+
+  // Ensure a deck row exists for a freshly created file, associate the chosen
+  // profile, and parse its cards. Idempotent with the file-create handler.
+  private async registerGeneratedDeck(
+    filePath: string,
+    tag: string,
+    profileId: string,
+  ): Promise<void> {
+    let deck = await this.db.getDeckByFilepath(filePath);
+    if (!deck) {
+      await this.deckSynchronizer.createDeckForFile(filePath, tag);
+      await yieldToUI();
+      deck = await this.db.getDeckByFilepath(filePath);
+    }
+    if (!deck) return;
+    if (profileId && deck.profileId !== profileId) {
+      await this.db.updateDeck(deck.id, { profileId });
+    }
+    await this.deckSynchronizer.syncDeck(deck.id);
+    await this.getDecksView()?.refreshStats();
   }
 
   async handleFileChange(file: TFile) {
@@ -972,6 +1205,18 @@ export default class DecksPlugin extends Plugin {
       void this.runDebouncedDeckSync(deckId);
     }, DecksPlugin.FILE_MODIFY_DEBOUNCE_MS);
     this.pendingDeckSyncs.set(deckId, timer);
+  }
+
+  // Run a deck's sync immediately (awaited), cancelling any pending debounce.
+  // Used after an interactive edit so callers can rely on the DB being current
+  // before they reload (e.g. reopening the edit modal from the manager).
+  private async flushDeckSync(deckId: string): Promise<void> {
+    const timer = this.pendingDeckSyncs.get(deckId);
+    if (timer !== undefined) {
+      clearTimeout(timer);
+      this.pendingDeckSyncs.delete(deckId);
+    }
+    await this.runDebouncedDeckSync(deckId);
   }
 
   private async runDebouncedDeckSync(deckId: string): Promise<void> {

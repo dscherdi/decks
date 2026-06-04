@@ -1,12 +1,12 @@
 import { type App, TFile } from "obsidian";
 import type { Flashcard } from "../database/types";
-import { FlashcardParser } from "./FlashcardParser";
+import { FlashcardParser } from "@decks/core";
 import { findFlashcardSegment } from "../utils/source-navigator";
 import {
   escapeTableCell,
   splitTableLine,
   unescapeTableCell,
-} from "../utils/markdown-table";
+} from "@decks/core";
 
 const HEADER_REGEX = /^(#{1,6})\s+(.+)$/;
 const TABLE_ROW_REGEX = /^\|.*\|$/;
@@ -61,6 +61,59 @@ export class FlashcardWriter {
         const result = isCanvas
           ? applyCanvasEdit(content, card, edits)
           : applyEdit(content, card, edits);
+        outcome.value = result;
+        return result.ok ? result.newContent : content;
+      });
+      const settled = outcome.value;
+      if (settled === null) {
+        return fail("write_failed", "Vault process did not run");
+      }
+      if (!settled.ok) return settled;
+      return { ok: true };
+    } catch (e) {
+      return fail("write_failed", e instanceof Error ? e.message : String(e));
+    }
+  }
+
+  /**
+   * Replace one card with multiple cards of the same type in its source file.
+   * Markdown text cards only (header-paragraph, table, cloze). The new cards are
+   * re-parsed into separate flashcards on the next sync.
+   */
+  async splitFlashcard(
+    card: Flashcard,
+    edits: FlashcardEdits[],
+  ): Promise<EditResult> {
+    if (edits.length === 0) {
+      return fail("invalid_edit", "No cards to split into");
+    }
+    if (
+      card.type !== "header-paragraph" &&
+      card.type !== "table" &&
+      card.type !== "cloze"
+    ) {
+      return fail("invalid_edit", `Split is not supported for ${card.type} cards`);
+    }
+    for (const e of edits) {
+      if (e.type !== card.type) {
+        return fail("invalid_edit", "Split produced a card of a different type");
+      }
+      const validation = validateEdits(e);
+      if (validation) return validation;
+    }
+
+    const file = this.app.vault.getAbstractFileByPath(card.sourceFile);
+    if (!(file instanceof TFile)) {
+      return fail("file_missing", `File not found: ${card.sourceFile}`);
+    }
+    if (file.extension === "canvas") {
+      return fail("invalid_edit", "Split is only supported for markdown cards");
+    }
+
+    try {
+      const outcome: { value: InternalApply | null } = { value: null };
+      await this.app.vault.process(file, (content) => {
+        const result = applySplit(content, card, edits);
         outcome.value = result;
         return result.ok ? result.newContent : content;
       });
@@ -218,6 +271,17 @@ function applyEdit(
   const staleCheck = checkStale(card, segLines, segment.start, lines);
   if (staleCheck) return staleCheck;
 
+  // Setting Notes on a table that only has Front/Back columns requires adding a
+  // Notes column to the whole table, not just this row.
+  if (
+    card.type === "table" &&
+    edits.type === "table" &&
+    edits.notes.trim() !== "" &&
+    dataColumnCount(segLines[0]) < 3
+  ) {
+    return addNotesColumn(lines, segment.start, card, edits);
+  }
+
   const replacement = buildReplacement(lines, segment, card, edits);
   if (replacement.ok === false) return replacement;
 
@@ -225,6 +289,95 @@ function applyEdit(
     ...lines.slice(0, segment.start),
     ...replacement.lines,
     ...lines.slice(segment.end),
+  ];
+  return { ok: true, newContent: newLines.join("\n") };
+}
+
+const TABLE_SEPARATOR_REGEX = /^\|[\s-]+\|(?:[\s-]+\|)+$/;
+
+/** Number of data columns in a table row (excludes the surrounding pipes). */
+function dataColumnCount(rowLine: string): number {
+  const cells = splitTableRow(rowLine);
+  return cells ? Math.max(0, cells.length - 2) : 0;
+}
+
+/** The trimmed data cells of a table row (drops the surrounding empties). */
+function tableDataCells(rowLine: string): string[] {
+  const cells = splitTableRow(rowLine);
+  if (!cells) return [];
+  return cells.slice(1, -1).map((c) => c.trim());
+}
+
+function tableRowFromCells(cells: string[]): string {
+  return `| ${cells.join(" | ")} |`;
+}
+
+function tableSeparatorRow(columns: number): string {
+  return `| ${Array(columns).fill("---").join(" | ")} |`;
+}
+
+/**
+ * Add a "Notes" column to the whole table that hosts `card`'s row, setting the
+ * target row's notes to the edited value and leaving every other row's notes
+ * empty. Rewrites the header, separator, and all data rows.
+ */
+function addNotesColumn(
+  lines: string[],
+  rowIndex: number,
+  card: Flashcard,
+  edits: { front: string; back: string; notes: string },
+): InternalApply {
+  // Walk up to the first contiguous table line (the header), down to the last.
+  let headerIndex = rowIndex;
+  while (
+    headerIndex - 1 >= 0 &&
+    TABLE_ROW_REGEX.test(lines[headerIndex - 1].trim())
+  ) {
+    headerIndex--;
+  }
+  const separatorIndex = headerIndex + 1;
+  if (
+    separatorIndex >= lines.length ||
+    !TABLE_SEPARATOR_REGEX.test(lines[separatorIndex].trim())
+  ) {
+    return fail(
+      "invalid_edit",
+      "Could not find the table separator row to add a Notes column",
+    );
+  }
+  const dataStart = separatorIndex + 1;
+  let dataEnd = rowIndex;
+  while (
+    dataEnd + 1 < lines.length &&
+    TABLE_ROW_REGEX.test(lines[dataEnd + 1].trim())
+  ) {
+    dataEnd++;
+  }
+
+  const headerCells = tableDataCells(lines[headerIndex]);
+  const newBlock: string[] = [
+    tableRowFromCells([...headerCells, "Notes"]),
+    tableSeparatorRow(headerCells.length + 1),
+  ];
+  for (let i = dataStart; i <= dataEnd; i++) {
+    if (i === rowIndex) {
+      newBlock.push(
+        tableRowFromCells([
+          escapeTableCell(edits.front.trim()),
+          escapeTableCell(edits.back.trim()),
+          escapeTableCell(edits.notes.trim()),
+        ]),
+      );
+    } else {
+      // Preserve the existing (already-escaped) front/back; add an empty note.
+      newBlock.push(tableRowFromCells([...tableDataCells(lines[i]), ""]));
+    }
+  }
+
+  const newLines = [
+    ...lines.slice(0, headerIndex),
+    ...newBlock,
+    ...lines.slice(dataEnd + 1),
   ];
   return { ok: true, newContent: newLines.join("\n") };
 }
@@ -297,6 +450,61 @@ function checkStale(
   }
 
   return null;
+}
+
+function applySplit(
+  content: string,
+  card: Flashcard,
+  edits: FlashcardEdits[],
+): InternalApply {
+  const lines = content.split("\n");
+  const segment = findFlashcardSegment(lines, card);
+  if (!segment) {
+    return fail("card_not_found", "Could not locate card in source markdown");
+  }
+
+  const segLines = lines.slice(segment.start, segment.end);
+  const staleCheck = checkStale(card, segLines, segment.start, lines);
+  if (staleCheck) return staleCheck;
+
+  // Table rows (and table-hosted cloze) stack directly under the existing table
+  // header above the segment; header blocks are separated by a blank line.
+  const isRowType =
+    card.type === "table" ||
+    (card.type === "cloze" && !HEADER_REGEX.test(segLines[0]));
+
+  const groups: string[][] = [];
+  for (const edit of edits) {
+    const built = buildReplacement(lines, segment, card, edit);
+    if (built.ok === false) return built;
+    groups.push(built.lines);
+  }
+
+  let replacement: string[];
+  if (isRowType) {
+    replacement = groups.flat();
+  } else {
+    replacement = [];
+    groups.forEach((group, i) => {
+      const trimmed = [...group];
+      while (trimmed.length > 0 && trimmed[trimmed.length - 1].trim() === "") {
+        trimmed.pop();
+      }
+      if (i > 0) replacement.push("");
+      replacement.push(...trimmed);
+    });
+    // Preserve a trailing blank line if the original block had one.
+    if (segLines.length > 0 && segLines[segLines.length - 1].trim() === "") {
+      replacement.push("");
+    }
+  }
+
+  const newLines = [
+    ...lines.slice(0, segment.start),
+    ...replacement,
+    ...lines.slice(segment.end),
+  ];
+  return { ok: true, newContent: newLines.join("\n") };
 }
 
 function buildReplacement(

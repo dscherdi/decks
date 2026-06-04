@@ -21,10 +21,8 @@ import type { DataAdapter } from "obsidian";
 import type { IDatabaseService } from "../database/DatabaseFactory";
 import type { Logger } from "../utils/logging";
 import { DeviceLocalState } from "./DeviceLocalState";
-import { hlcReceive, hlcSend, hlcParse, type HLCValue } from "./HLC";
-import { KNOWN_OP_TYPES_V1 } from "./SyncLog.types";
-import type { SyncOpV1, SyncLogEntry } from "./SyncLog.types";
-import { applyOp } from "./SyncLog.handlers";
+import { hlcReceive, hlcSend, hlcParse, type HLCValue } from "@decks/core";
+import { applyOp, KNOWN_OP_TYPES_V1, type SyncLogEntry, type SyncOpV1 } from "@decks/core";
 import { safeRename } from "../utils/adapter";
 
 const FLUSH_DEBOUNCE_MS = 2000;
@@ -399,7 +397,7 @@ export class SyncLog {
           obj &&
           typeof obj === "object" &&
           "hlc" in obj &&
-          Array.isArray((obj as { hlc: unknown }).hlc) &&
+          Array.isArray((obj).hlc) &&
           typeof (obj as { hlc: number[] }).hlc[0] === "number"
         ) {
           parsedTs = (obj as { hlc: number[] }).hlc[0];
@@ -532,7 +530,7 @@ function parseEntry(line: string): SyncLogEntry {
   ) {
     throw new Error("missing required fields");
   }
-  const rec = obj as { hlc: unknown; s: unknown; v: unknown; o: unknown; p: unknown };
+  const rec = obj;
   if (typeof rec.s !== "number") throw new Error("s must be number");
   if (rec.v !== 1) throw new Error(`unsupported v=${String(rec.v)}`);
   if (typeof rec.o !== "string") throw new Error("o must be string");

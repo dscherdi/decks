@@ -66,6 +66,9 @@ Thank you.
 
 Emri i skedarit bëhet emri i pakos. Niveli i titullit mund të konfigurohet për çdo profil (H2 si parazgjedhje). Titujt mbi nivelin e konfiguruar nuk shndërrohen në karta — ata ruhen si një shteg orientues (p.sh. `Kapitulli 1 > Seksioni 2`) i bashkangjitur çdo karte për kontekst.
 
+
+Shto **shënime** opsionale në një kartë titull+paragraf me një koment Obsidian (`%%një ndihmesë%%`) kudo në trup, ose pas një ndarësi `---` në fund. Shënimet shfaqen sipas kërkesës (tasti **N**) gjatë rishikimit.
+
 </details>
 
 <details>
@@ -136,6 +139,19 @@ FSRS vjen me parazgjedhje të arsyeshme që funksionojnë shumë mirë që në f
 - **Diskuto në Discord** — [bashkohu në server](https://discord.com/channels/686053708261228577/1497268419861418035).
 - **Mbështet zhvillimin** — [Më bli një kafe](https://www.buymeacoffee.com/dscherdil0).
 - **Udhëzuesi i përkthimit** - [Udhëzuesi i përkthimit](./docs/TRANSLATING.md).
+
+## Ndihma me IA (opsionale)
+
+Veçori opsionale me IA, **të çaktivizuara derisa të shtosh një çelës ofruesi te Cilësimet → IA**:
+
+- **Krijo** — krijo karta nga një udhëzim (dhe shënime/imazhe opsionale) dhe ruaji në një skedar të ri ose në një kuvertë ekzistuese si titull+paragraf, tabelë ose kanavacë.
+- **Ripërpuno** një kartë ose një përzgjedhje të tërë, ose **ndaj** një kartë në disa — çdo ndryshim e shqyrton para se të zbatohet.
+
+Përdor çelësin tënd për OpenAI, Anthropic (Claude), Google (Gemini) ose një pikë-fundore të pajtueshme me OpenAI/lokale. Çelësat ruhen lokalisht në `ai-keys.json` dhe nuk shkruhen kurrë në `data.json`, ndaj nuk largohen nga pajisja jote përmes sinkronizimit. Asgjë nuk dërgohet te një ofrues nëse nuk nis një veprim; çdo kërkesë përmban vetëm një udhëzim të brendshëm se si funksionon Decks, udhëzimet e tua dhe përmbajtjen e atij veprimi.
+
+## Ndërtuar mbi
+
+Decks është ndërtuar mbi **[`@decks/core`](https://github.com/dscherdi/decks-core)** — motorin me kod të hapur (MIT) që zbaton analizimin, planifikimin FSRS, sinkronizimin dhe orkestrimin e IA-së. Shtojca është mbështjellësi specifik për Obsidian rreth tij.
 
 ## Licenca
 

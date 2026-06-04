@@ -3,14 +3,14 @@ import {
   TimeframeStats,
 } from "../services/StatisticsService";
 import type { IDatabaseService } from "../database/DatabaseFactory";
-import { FSRS } from "../algorithm/fsrs";
+import { FSRS } from "@decks/core";
 import type {
   Statistics,
   ReviewLog,
   Flashcard,
   DailyStats,
 } from "../database/types";
-import { toLocalDateString } from "../utils/date-utils";
+import { toLocalDateString } from "@decks/core";
 
 // Mock implementations
 class MockDatabaseService implements Partial<IDatabaseService> {

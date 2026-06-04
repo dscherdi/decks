@@ -8,19 +8,17 @@ import type {
   CustomDeckGroup,
 } from "../database/types";
 import type { IDatabaseService } from "../database/DatabaseFactory";
-import { FSRS, type RatingLabel, type SchedulingCard } from "../algorithm/fsrs";
+import { FSRS, type RatingLabel, type SchedulingCard } from "@decks/core";
 import {
   getMinMinutesForProfile,
   getMaxIntervalDaysForProfile,
   type FSRSProfile,
-} from "../algorithm/fsrs-weights";
-import { yieldToUI } from "../utils/ui";
+} from "@decks/core";
+import { parseSteps, type RateOp, yieldToUI } from "@decks/core";
 import type { Logger } from "../utils/logging";
 import type { DecksSettings } from "../settings";
 import { BackupService } from "./BackupService";
-import { parseSteps } from "../utils/step-parser";
 import type { SyncLog } from "./SyncLog";
-import type { RateOp } from "./SyncLog.types";
 
 export interface SchedulerOptions {
   allowNew?: boolean;

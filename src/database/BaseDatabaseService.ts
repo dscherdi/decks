@@ -14,9 +14,9 @@ import type {
 } from "./types";
 import { DEFAULT_PROFILE_ID, deckWithProfile } from "./types";
 import type { FilterDefinition } from "./types";
-import { SQL_QUERIES } from "./schemas";
-import { normalizeProfile } from "../algorithm/fsrs-weights";
-import { compileFilter, type FilterCompileOptions } from "../services/FilterEngine";
+import { generateCustomDeckCardId, generateCustomDeckId, generateFlashcardId, SQL_QUERIES, type SyncOpV1 } from "@decks/core";
+import { normalizeProfile } from "@decks/core";
+import { compileFilter, type FilterCompileOptions } from "@decks/core";
 import type { SyncData, SyncResult } from "../services/FlashcardSynchronizer";
 import type {
   SqlJsValue,
@@ -26,11 +26,9 @@ import type {
   DateCountRow,
   SqlRecord,
   SqlRow,
-} from "./sql-types";
+} from "@decks/core";
 import type { IDatabaseService, JournalStateRow } from "./DatabaseFactory";
 import type { SyncLog } from "../services/SyncLog";
-import type { SyncOpV1 } from "../services/SyncLog.types";
-import { generateFlashcardId, generateCustomDeckId, generateCustomDeckCardId } from "../utils/hash";
 
 export interface QueryConfig {
   asObject?: boolean;
@@ -1420,7 +1418,7 @@ export abstract class BaseDatabaseService implements IDatabaseService {
     const sql = `INSERT INTO review_logs (${columns.join(
       ", "
     )}) VALUES (${placeholders.join(", ")})`;
-    await this.querySql(sql, params as (string | number | null)[]);
+    await this.querySql(sql, params);
   }
 
   async getLatestReviewLogForFlashcard(
@@ -2384,7 +2382,7 @@ export abstract class BaseDatabaseService implements IDatabaseService {
   ): Promise<Record<string, SqlJsValue>[] | SqlJsValue[][]> {
     return (await this.querySql(
       sql,
-      params as (string | number | null)[],
+      params,
       config
     ));
   }

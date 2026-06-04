@@ -2,7 +2,7 @@ import {
   generateFlashcardId,
   generateReverseFlashcardId,
   generateClozeFlashcardId,
-} from "../utils/hash";
+} from "@decks/core";
 
 describe("hash ID generators with sourceNodeId", () => {
   describe("generateFlashcardId", () => {

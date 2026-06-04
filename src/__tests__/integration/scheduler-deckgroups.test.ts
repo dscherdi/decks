@@ -1,6 +1,6 @@
 import { MainDatabaseService } from "../../database/MainDatabaseService";
 import { Scheduler } from "../../services/Scheduler";
-import { TagGroupService } from "../../services/TagGroupService";
+import { TagGroupService } from "@decks/core";
 import type { DeckGroup, DeckWithProfile, Flashcard } from "../../database/types";
 import {
   setupTestDatabase,

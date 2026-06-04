@@ -5,16 +5,11 @@
 import type { DataAdapter } from "obsidian";
 import { BaseDatabaseService } from "./BaseDatabaseService";
 import type { QueryConfig } from "./BaseDatabaseService";
-import {
-  CREATE_TABLES_SQL,
-  buildMigrationSQL,
-  CURRENT_SCHEMA_VERSION,
-} from "./schemas";
+import { buildMigrationSQL, CREATE_TABLES_SQL, CURRENT_SCHEMA_VERSION, yieldToUI } from "@decks/core";
 import type { Database, InitSqlJsStatic } from "sql.js";
 import { FlashcardSynchronizer } from "../services/FlashcardSynchronizer";
 import type { SyncData, SyncResult } from "../services/FlashcardSynchronizer";
-import type { SqlJsValue } from "./sql-types";
-import { yieldToUI } from "../utils/ui";
+import type { SqlJsValue } from "@decks/core";
 import { getEmbeddedAssets } from "./embedded-assets";
 
 export class MainDatabaseService extends BaseDatabaseService {
@@ -322,7 +317,7 @@ export class MainDatabaseService extends BaseDatabaseService {
 
     // Convert SQL.js result format to array of row arrays
     const resultData = result[0];
-    return (resultData.values || []) as (string | number | null)[][];
+    return (resultData.values || []);
   }
 
   async closeBackupDatabaseInstance(backupDb: Database): Promise<void> {

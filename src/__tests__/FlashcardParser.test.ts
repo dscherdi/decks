@@ -1,4 +1,4 @@
-import { FlashcardParser, ParsedFlashcard } from "../services/FlashcardParser";
+import { FlashcardParser, ParsedFlashcard } from "@decks/core";
 
 describe("FlashcardParser", () => {
   describe("parseFlashcardsFromContent", () => {
@@ -1020,6 +1020,148 @@ Content
       const result = FlashcardParser.parseFlashcardsFromContent(content, 3);
       expect(result).toHaveLength(1);
       expect(result[0].tags).toEqual(["only"]);
+    });
+  });
+
+  describe("header-paragraph notes", () => {
+    const parse = (content: string, cloze = false) =>
+      FlashcardParser.parseFlashcardsFromContent(content, 2, undefined, cloze);
+
+    it("extracts notes from a single-line %%comment%%", () => {
+      const content = `
+## What is X?
+
+X is a thing. %%supplementary detail%%
+`;
+      const [card] = parse(content);
+      expect(card.back).toBe("X is a thing.");
+      expect(card.notes).toBe("supplementary detail");
+    });
+
+    it("extracts notes from a multi-line %%comment%%", () => {
+      const content = `
+## What is X?
+
+X is a thing.
+%%line one
+line two%%
+`;
+      const [card] = parse(content);
+      expect(card.back).toBe("X is a thing.");
+      expect(card.notes).toBe("line one\nline two");
+    });
+
+    it("extracts notes after a trailing --- delimiter", () => {
+      const content = `
+## What is X?
+
+X is a thing.
+
+---
+
+extra context here
+`;
+      const [card] = parse(content);
+      expect(card.back).toBe("X is a thing.");
+      expect(card.notes).toBe("extra context here");
+    });
+
+    it("supports *** and ___ as the delimiter", () => {
+      const star = parse(`
+## A
+
+body
+
+***
+
+star note
+`);
+      expect(star[0].notes).toBe("star note");
+      const under = parse(`
+## A
+
+body
+
+___
+
+under note
+`);
+      expect(under[0].notes).toBe("under note");
+    });
+
+    it("combines a comment and a trailing-HR note", () => {
+      const content = `
+## What is X?
+
+Body text. %%comment note%%
+
+---
+
+hr note
+`;
+      const [card] = parse(content);
+      expect(card.back).toBe("Body text.");
+      expect(card.notes).toBe("comment note\n\nhr note");
+    });
+
+    it("leaves notes empty when there is no comment or delimiter", () => {
+      const [card] = parse(`
+## What is X?
+
+Just a plain answer.
+`);
+      expect(card.back).toBe("Just a plain answer.");
+      expect(card.notes).toBe("");
+    });
+
+    it("keeps a trailing --- in the back when nothing follows it", () => {
+      const [card] = parse(`
+## What is X?
+
+Answer line.
+
+---
+`);
+      expect(card.notes).toBe("");
+      expect(card.back).toContain("---");
+    });
+
+    it("strips heading tags while still extracting notes", () => {
+      const [card] = parse(`
+## What is X? #biology
+
+Answer.
+
+---
+
+a note
+`);
+      expect(card.front).toBe("What is X?");
+      expect(card.tags).toEqual(["biology"]);
+      expect(card.notes).toBe("a note");
+    });
+
+    it("carries notes through cloze expansion", () => {
+      const cards = parse(
+        `
+## Capital
+
+The capital of France is ==Paris==.
+
+---
+
+European city
+`,
+        true,
+      );
+      expect(cards).toHaveLength(1);
+      expect(cards[0]).toMatchObject({
+        type: "cloze",
+        front: "Capital",
+        notes: "European city",
+      });
+      expect(cards[0].back).toContain("==Paris==");
+      expect(cards[0].back).not.toContain("European city");
     });
   });
 });

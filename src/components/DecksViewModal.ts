@@ -10,7 +10,7 @@ import type {
 import { DeckSynchronizer } from "@/services/DeckSynchronizer";
 import { DeckManager } from "@/services/DeckManager";
 import type { DecksSettings } from "@/settings";
-import { yieldToUI } from "@/utils/ui";
+import { I18n, yieldToUI } from "@decks/core";
 import { Logger } from "@/utils/logging";
 import { Modal, Notice, WorkspaceLeaf } from "obsidian";
 import type { App } from "obsidian";
@@ -24,8 +24,8 @@ import { StatisticsModal } from "./settings/StatisticsModal";
 import { ProfilesManagerModal } from "./config/ProfilesManagerModal";
 import { DeckConfigModal } from "./config/DeckConfigModal";
 import { StatisticsService } from "@/services/StatisticsService";
-import { TagGroupService } from "@/services/TagGroupService";
-import { CustomDeckService } from "@/services/CustomDeckService";
+import { TagGroupService } from "@decks/core";
+import { CustomDeckService } from "@decks/core";
 import { FlashcardManagerModal } from "./FlashcardManagerModal";
 import { openFlashcardManager } from "./FlashcardManagerView";
 
@@ -35,7 +35,6 @@ import type { DeckListPanelComponent } from "../types/svelte-components";
 import type { IDatabaseService } from "../database/DatabaseFactory";
 import type { DecksView } from "./DecksView";
 import type { DeckListSortMode } from "@/settings";
-import { I18n } from "@/i18n/I18n";
 
 export class DecksViewModal extends Modal {
   private db: IDatabaseService;
@@ -52,6 +51,8 @@ export class DecksViewModal extends Modal {
   private getDecksView: () => DecksView | null;
   private saveSettings: () => Promise<void>;
   private openEditModal?: (card: Flashcard) => Promise<void>;
+  private openBatchRefactor?: (cards: Flashcard[]) => Promise<void>;
+  private openAiGenerator?: () => void;
 
   constructor(
     app: App,
@@ -66,6 +67,8 @@ export class DecksViewModal extends Modal {
     getDecksView: () => DecksView | null,
     saveSettings: () => Promise<void>,
     openEditModal?: (card: Flashcard) => Promise<void>,
+    openBatchRefactor?: (cards: Flashcard[]) => Promise<void>,
+    openAiGenerator?: () => void,
   ) {
     super(app);
     this.db = db;
@@ -80,6 +83,8 @@ export class DecksViewModal extends Modal {
     this.getDecksView = getDecksView;
     this.saveSettings = saveSettings;
     this.openEditModal = openEditModal;
+    this.openBatchRefactor = openBatchRefactor;
+    this.openAiGenerator = openAiGenerator;
   }
 
   private async togglePin(id: string): Promise<void> {
@@ -153,6 +158,7 @@ export class DecksViewModal extends Modal {
         openDeckConfigModal: (deck: DeckWithProfile) =>
           this.openDeckConfigModal(deck),
         openFlashcardManager: () => this.openFlashcardManager(),
+        openAiGeneratorModal: () => this.openAiGenerator?.(),
         deckTag: this.settings.parsing.deckTag,
         pinnedDeckIds: this.settings.ui.pinnedDeckIds,
         onTogglePin: (id: string) => this.togglePin(id),
@@ -415,6 +421,7 @@ export class DecksViewModal extends Modal {
           void this.saveSettings();
         },
         this.openEditModal,
+        this.openBatchRefactor,
       );
       return;
     }
@@ -440,6 +447,7 @@ export class DecksViewModal extends Modal {
       },
       this.openEditModal,
       this.settings,
+      this.openBatchRefactor,
     );
     this.openWithReturn(modal);
   }

@@ -1,9 +1,9 @@
 import { App, Modal, Notice, Setting } from "obsidian";
 import type { IDatabaseService } from "../../database/DatabaseFactory";
-import { FsrsOptimizationService } from "../../services/FsrsOptimizationService";
-import type { TrainingResult } from "../../algorithm/fsrs-optimizer";
+import { FsrsOptimizationService } from "@decks/core";
+import type { TrainingResult } from "@decks/core";
 import type { Logger } from "../../utils/logging";
-import { I18n } from "@/i18n/I18n";
+import { I18n } from "@decks/core";
 
 /**
  * Train-then-confirm FSRS weight optimization modal.

@@ -1,7 +1,7 @@
 import { ItemView, Notice, WorkspaceLeaf } from "obsidian";
 import type { App } from "obsidian";
 import type { IDatabaseService } from "../database/DatabaseFactory";
-import type { CustomDeckService } from "../services/CustomDeckService";
+import type { CustomDeckService } from "@decks/core";
 import type { FilterDefinition, Flashcard } from "../database/types";
 import type { DecksSettings } from "../settings";
 import FlashcardManagerPanel from "./FlashcardManagerPanel.svelte";
@@ -15,7 +15,7 @@ import {
   type FlashcardManagerComponent,
   type FlashcardManagerThresholds,
 } from "./FlashcardManagerModal";
-import { I18n } from "@/i18n/I18n";
+import { I18n } from "@decks/core";
 
 export const VIEW_TYPE_FLASHCARD_MANAGER = "flashcard-manager-view";
 
@@ -31,6 +31,7 @@ export class FlashcardManagerView extends ItemView {
   private initialColumnWidths: Record<string, number> = {};
   private onColumnWidthsChange?: (widths: Record<string, number>) => void;
   private onEditCard?: (card: Flashcard) => Promise<void>;
+  private onBatchRefactor?: (cards: Flashcard[]) => Promise<void>;
 
   private component: FlashcardManagerComponent | null = null;
 
@@ -75,6 +76,7 @@ export class FlashcardManagerView extends ItemView {
     initialColumnWidths: Record<string, number> = {},
     onColumnWidthsChange?: (widths: Record<string, number>) => void,
     onEditCard?: (card: Flashcard) => Promise<void>,
+    onBatchRefactor?: (cards: Flashcard[]) => Promise<void>,
   ): void {
     this.thresholds = thresholds;
     this.editingCustomDeck = editingCustomDeck;
@@ -83,7 +85,9 @@ export class FlashcardManagerView extends ItemView {
     this.initialColumnWidths = initialColumnWidths;
     this.onColumnWidthsChange = onColumnWidthsChange;
     this.onEditCard = onEditCard;
-    this.leaf.updateHeader();
+    this.onBatchRefactor = onBatchRefactor;
+    // updateHeader() exists at runtime but isn't in the obsidian typings.
+    (this.leaf as unknown as { updateHeader?: () => void }).updateHeader?.();
     this.mountComponent();
   }
 
@@ -123,6 +127,8 @@ export class FlashcardManagerView extends ItemView {
         initialColumnWidths: this.initialColumnWidths,
         onColumnWidthsChange: this.onColumnWidthsChange ?? null,
         onEditCard: this.onEditCard ?? null,
+        aiEnabled: this.settings.ai.enabled,
+        onBatchRefactor: this.onBatchRefactor ?? null,
         onCommitEdit: async (
           target: EditTarget,
           payload: EditCommitPayload,
@@ -238,6 +244,7 @@ export function openFlashcardManager(
   onCleanupOrphans?: () => Promise<void>,
   onColumnWidthsChange?: (widths: Record<string, number>) => void,
   onEditCard?: (card: Flashcard) => Promise<void>,
+  onBatchRefactor?: (cards: Flashcard[]) => Promise<void>,
 ): void {
   const thresholds: FlashcardManagerThresholds = {
     leechThreshold: settings.review.leechThreshold,
@@ -263,6 +270,7 @@ export function openFlashcardManager(
             initialColumnWidths,
             onColumnWidthsChange,
             onEditCard,
+            onBatchRefactor,
           );
         }
         void workspace.revealLeaf(leaf);
@@ -283,5 +291,6 @@ export function openFlashcardManager(
     onColumnWidthsChange,
     onEditCard,
     settings,
+    onBatchRefactor,
   ).open();
 }

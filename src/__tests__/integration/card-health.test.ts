@@ -1,6 +1,6 @@
 import { MainDatabaseService } from "../../database/MainDatabaseService";
-import { CustomDeckService } from "../../services/CustomDeckService";
-import { computeCardHealth } from "../../services/CardHealth";
+import { CustomDeckService } from "@decks/core";
+import { computeCardHealth } from "@decks/core";
 import type { Deck, Flashcard, FilterDefinition } from "../../database/types";
 import {
   setupTestDatabase,

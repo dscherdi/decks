@@ -3,7 +3,6 @@ import {
   type Statistics,
   type ReviewLog,
   type Flashcard,
-  type FlashcardState,
   type DeckProfile,
   type DeckStats,
   type DeckGroup,
@@ -12,22 +11,16 @@ import {
   type MaturityProgressionResult,
 } from "../database/types";
 import type { DecksSettings } from "../settings";
-import { FSRS, type RatingLabel } from "../algorithm/fsrs";
+import { FSRS, type RatingLabel } from "@decks/core";
 import { Logger } from "../utils/logging";
-import { MinHeap } from "../utils/min-heap";
-import {
-  toLocalDateString,
-  getLocalDateSQL,
-  getLocalHourSQL,
-} from "../utils/date-utils";
-import { yieldToUI } from "../utils/ui";
+import { getLocalDateSQL, getLocalHourSQL, MinHeap, toLocalDateString, yieldToUI } from "@decks/core";
 import type {
   DailyStatsRow,
   AnswerButtonStatsRow,
   PaceStatsRow,
   ForecastRow,
   CountResult,
-} from "../database/sql-types";
+} from "@decks/core";
 
 export interface TimeframeStats {
   reviews: number;
@@ -1980,7 +1973,7 @@ export class StatisticsService {
         const cardAsFlashcard: Partial<Flashcard> = {
           id: cardState.id,
           deckId: cardState.deckId,
-          state: "review" as FlashcardState,
+          state: "review",
           stability: cardState.stability,
           difficulty: cardState.difficulty,
           repetitions: cardState.repetitions,
@@ -2028,7 +2021,7 @@ export class StatisticsService {
         const cardAsFlashcard: Partial<Flashcard> = {
           id: cardState.id,
           deckId: cardState.deckId,
-          state: "new" as FlashcardState,
+          state: "new",
           stability: cardState.stability,
           difficulty: cardState.difficulty,
           repetitions: cardState.repetitions,
@@ -2695,7 +2688,7 @@ export class StatisticsService {
       totalMature += stats.matureCount;
     }
 
-    const { generateDeckGroupId } = await import("../utils/hash");
+    const { generateDeckGroupId } = await import("@decks/core");
     return {
       deckId: generateDeckGroupId(deckGroup.tag),
       newCount: totalNew,

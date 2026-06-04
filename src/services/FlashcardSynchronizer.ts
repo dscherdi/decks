@@ -1,17 +1,9 @@
-import { FlashcardParser } from "./FlashcardParser";
-import { CanvasFlashcardExtractor } from "./CanvasFlashcardExtractor";
+import { FlashcardParser } from "@decks/core";
+import { CanvasFlashcardExtractor } from "@decks/core";
 import type { Flashcard, FlashcardType, DeckProfile } from "../database/types";
-import type { SqlJsValue } from "../database/sql-types";
+import type { SqlJsValue } from "@decks/core";
 import type { Database } from "sql.js";
-import {
-  generateFlashcardId,
-  generateContentHash,
-  generateReverseFlashcardId,
-  generateClozeFlashcardId,
-  generateSpatialFlashcardId,
-  generateSpatialClozeFlashcardId,
-} from "../utils/hash";
-import { levenshteinSimilarity } from "../utils/string";
+import { generateClozeFlashcardId, generateContentHash, generateFlashcardId, generateReverseFlashcardId, generateSpatialClozeFlashcardId, generateSpatialFlashcardId, levenshteinSimilarity } from "@decks/core";
 
 export interface FlashcardUpdates {
   front: string;

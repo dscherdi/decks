@@ -51,6 +51,18 @@ export class Vault {
     return next;
   }
 
+  // Create a new file (markdown or other) and return its TFile.
+  async create(path: string, content: string): Promise<TFile> {
+    this._addFile(path, content);
+    return this.getAbstractFileByPath(path) as TFile;
+  }
+
+  // Minimal DataAdapter surface used by file writers (folder creation).
+  adapter = {
+    exists: async (_path: string): Promise<boolean> => false,
+    mkdir: async (_path: string): Promise<void> => undefined,
+  };
+
   getMarkdownFiles(): TFile[] {
     return this.markdownFiles;
   }
@@ -273,6 +285,10 @@ export function normalizePath(path: string): string {
     .replace(/\\/g, "/")
     .replace(/\/{2,}/g, "/")
     .replace(/^\/+|\/+$/g, "");
+}
+
+export function arrayBufferToBase64(buffer: ArrayBuffer): string {
+  return Buffer.from(buffer).toString("base64");
 }
 
 // Tests run in Node; treat them as a Linux desktop. DeviceLocalState only

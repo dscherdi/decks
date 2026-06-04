@@ -11,10 +11,11 @@
     Title,
     Tooltip,
     Legend,
+    type ChartDataset,
   } from "chart.js";
   import { StatisticsService } from "@/services/StatisticsService";
   import { Logger } from "@/utils/logging";
-  import { I18n } from "@/i18n/I18n";
+  import { I18n } from "@decks/core";
   import {
     getCategoryXAxis,
     getLinearYAxis,
@@ -128,7 +129,7 @@
       equilibriumDay = result.equilibriumDetectedAt;
       totalCards = result.totalCards;
       lapseRate = result.empiricalLapseRate * 100; // Convert to percentage for display
-      theoreticalMaintenanceLevel = result.theoreticalMaintenanceLevel;
+      theoreticalMaintenanceLevel = result.theoreticalMaintenanceLevel ?? 0;
 
       // Calculate days to maturity (when all cards are mature)
       daysToMaturity = calculateDaysToMaturity(fullMaturityData);
@@ -248,7 +249,7 @@
     const orangeColor = getObsidianColor(PALETTE.orange);
     const greenColor = getObsidianColor(PALETTE.green);
 
-    const baseDatasets = [
+    const baseDatasets: ChartDataset<"bar" | "line">[] = [
       {
         label: t.statistics.newCardsLabel,
         data: newCards,

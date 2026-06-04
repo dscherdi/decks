@@ -19,15 +19,15 @@ declare const initSqlJs: InitSqlJsStatic;
 // Web Worker API declaration
 declare function importScripts(...urls: string[]): void;
 
-import { FlashcardParser } from "../services/FlashcardParser";
-import type { ParsedFlashcard } from "../services/FlashcardParser";
+import { FlashcardParser } from "@decks/core";
+import type { ParsedFlashcard } from "@decks/core";
 import { FlashcardSynchronizer } from "../services/FlashcardSynchronizer";
 import type { SyncResult, SyncData } from "../services/FlashcardSynchronizer";
 import {
   CREATE_TABLES_SQL,
   CURRENT_SCHEMA_VERSION,
   buildMigrationSQL,
-} from "../database/schemas";
+} from "@decks/core";
 
 export interface QueryConfig {
   asObject?: boolean;

@@ -1,6 +1,6 @@
 <script lang="ts">
   import type { FilterDefinition, FilterRule, FilterField, FilterOperator, FilterLogic } from "../database/types";
-  import { I18n } from "@/i18n/I18n";
+  import { I18n } from "@decks/core";
 
   const t = I18n.t;
   const fb = t.filterBuilder;
