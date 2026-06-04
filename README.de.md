@@ -66,7 +66,6 @@ Gracias.
 
 Der Dateiname wird zum Stapelnamen. Die Überschriftenebene ist pro Profil konfigurierbar (standardmäßig H2). Überschriften oberhalb der konfigurierten Ebene werden nicht zu Karten — sie werden als Breadcrumb-Pfad (z. B. `Kapitel 1 > Abschnitt 2`) zur Kontextanzeige an jede Karte angehängt.
 
-
 Füge einer Überschrift-Absatz-Karte optionale **Notizen** hinzu — mit einem Obsidian-Kommentar (`%%ein Hinweis%%`) irgendwo im Text oder nach einem `---`-Trenner am Ende. Notizen werden bei Bedarf (Taste **N**) während der Wiederholung angezeigt.
 
 </details>
@@ -219,6 +218,8 @@ Optionale KI-Funktionen, **deaktiviert, bis du in Einstellungen → KI einen Anb
 - **Überarbeiten** einer Karte oder einer ganzen Auswahl, oder **Aufteilen** einer Karte in mehrere — jede Änderung prüfst du vor dem Anwenden.
 
 Verwende deinen eigenen Schlüssel für OpenAI, Anthropic (Claude), Google (Gemini) oder einen OpenAI-kompatiblen/lokalen Endpunkt. Schlüssel liegen lokal in `ai-keys.json` und werden nie in `data.json` geschrieben — sie verlassen dein Gerät also nicht über die Synchronisierung. Es wird nichts an einen Anbieter gesendet, solange du keine Aktion auslöst; jede Anfrage enthält nur einen eingebauten Prompt darüber, wie Decks funktioniert, deine Anweisungen und den Inhalt dieser Aktion.
+
+![Decks AI Generator](./decks_ai_generate.gif)
 
 ## Basiert auf
 

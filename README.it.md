@@ -66,7 +66,6 @@ Thank you.
 
 Il nome del file diventa il nome del mazzo. Il livello di intestazione è configurabile per profilo (H2 per impostazione predefinita). Le intestazioni di livello superiore a quello configurato non diventano carte: vengono mantenute come percorso breadcrumb (es. `Capitolo 1 > Sezione 2`) allegato a ogni carta per il contesto.
 
-
 Aggiungi **note** opzionali a una carta intestazione+paragrafo con un commento di Obsidian (`%%un suggerimento%%`) ovunque nel corpo, o dopo un separatore `---` alla fine. Le note vengono mostrate su richiesta (tasto **N**) durante il ripasso.
 
 </details>
@@ -159,6 +158,8 @@ Funzioni IA opzionali, **disattivate finché non aggiungi una chiave del provide
 - **Rielabora** una carta o un'intera selezione, oppure **dividi** una carta in più carte — rivedi ogni modifica prima di applicarla.
 
 Usa la tua chiave per OpenAI, Anthropic (Claude), Google (Gemini) o un endpoint compatibile con OpenAI/locale. Le chiavi sono salvate localmente in `ai-keys.json` e non vengono mai scritte in `data.json`, quindi non lasciano il dispositivo tramite la sincronizzazione. Nulla viene inviato a un provider se non avvii un'azione; ogni richiesta contiene solo un prompt integrato su come funziona Decks, le tue istruzioni e il contenuto di quell'azione.
+
+![Decks AI Generator](./decks_ai_generate.gif)
 
 ## Basato su
 

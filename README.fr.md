@@ -66,7 +66,6 @@ Thank you.
 
 Le nom du fichier devient le nom du paquet. Le niveau d'en-tête est configurable par profil (H2 par défaut). Les en-têtes au-dessus du niveau configuré ne deviennent pas des cartes — ils sont conservés sous forme de fil d'Ariane (par ex. `Chapitre 1 > Section 2`) attaché à chaque carte pour le contexte.
 
-
 Ajoutez des **notes** facultatives à une carte titre+paragraphe avec un commentaire Obsidian (`%%un indice%%`) n'importe où dans le corps, ou après un séparateur `---` à la fin. Les notes s'affichent à la demande (touche **N**) pendant la révision.
 
 </details>
@@ -168,6 +167,8 @@ Fonctions IA facultatives, **désactivées tant que vous n'ajoutez pas une clé 
 - **Refactoriser** une carte ou une sélection entière, ou **scinder** une carte en plusieurs — vous validez chaque changement avant son application.
 
 Utilisez votre propre clé OpenAI, Anthropic (Claude), Google (Gemini) ou un point d'accès compatible OpenAI/local. Les clés sont stockées localement dans `ai-keys.json` et ne sont jamais écrites dans `data.json` : elles ne quittent donc pas votre appareil via la synchronisation. Rien n'est envoyé à un fournisseur tant que vous ne lancez pas une action ; chaque requête ne contient qu'une consigne intégrée sur le fonctionnement de Decks, vos instructions et le contenu de cette action.
+
+![Decks AI Generator](./decks_ai_generate.gif)
 
 ## Construit sur
 

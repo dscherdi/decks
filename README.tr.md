@@ -66,7 +66,6 @@ Thank you.
 
 Dosya adı deste adı olur. Başlık seviyesi profil bazında ayarlanabilir (varsayılan olarak H2). Yapılandırılan seviyenin üzerindeki başlıklar karta dönüştürülmez — bağlam için her karta eklenen bir gezinti yolu (ör. `Bölüm 1 > Kısım 2`) olarak saklanır.
 
-
 Başlık+paragraf kartına isteğe bağlı **notlar** ekleyin: gövdenin herhangi bir yerine bir Obsidian yorumu (`%%bir ipucu%%`) yazarak ya da sonuna bir `---` ayırıcısından sonra. Notlar, inceleme sırasında istek üzerine (**N** tuşu) gösterilir.
 
 </details>
@@ -148,6 +147,8 @@ FSRS, kutudan çıktığı gibi harika çalışan mantıklı varsayılanlarla ge
 - Bir kartı veya tüm bir seçimi **yeniden düzenleyin**, ya da bir kartı birkaç karta **bölün** — her değişikliği uygulamadan önce gözden geçirirsiniz.
 
 Kendi OpenAI, Anthropic (Claude), Google (Gemini) anahtarınızı ya da OpenAI uyumlu/yerel bir uç noktayı kullanın. Anahtarlar yerel olarak `ai-keys.json` içinde tutulur ve asla `data.json` dosyasına yazılmaz; böylece senkronizasyon yoluyla cihazınızdan çıkmaz. Bir eylem başlatmadıkça sağlayıcıya hiçbir şey gönderilmez; her istek yalnızca Decks'in nasıl çalıştığına dair yerleşik bir komut, talimatlarınız ve o eylemin içeriğini barındırır.
+
+![Decks AI Generator](./decks_ai_generate.gif)
 
 ## Üzerine kurulu
 

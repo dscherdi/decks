@@ -66,7 +66,6 @@ Thank you.
 
 El nombre de archivo se convierte en el nombre del mazo. El nivel del encabezado se configura por perfil (H2 por defecto). Los encabezados por encima del nivel configurado no se convierten en tarjetas: se conservan como una ruta de migas (p. ej. `Capítulo 1 > Sección 2`) adjunta a cada tarjeta para dar contexto.
 
-
 Añade **notas** opcionales a una tarjeta de encabezado+párrafo con un comentario de Obsidian (`%%una pista%%`) en cualquier parte del cuerpo, o tras un divisor `---` al final. Las notas se muestran a demanda (tecla **N**) durante el repaso.
 
 </details>
@@ -219,6 +218,8 @@ Funciones de IA opcionales, **desactivadas hasta que añadas una clave de provee
 - **Refactorizar** una tarjeta o una selección entera, o **dividir** una tarjeta en varias — revisas cada cambio antes de aplicarlo.
 
 Usa tu propia clave de OpenAI, Anthropic (Claude), Google (Gemini) o un endpoint compatible con OpenAI/local. Las claves se guardan localmente en `ai-keys.json` y nunca se escriben en `data.json`, así que no salen de tu dispositivo por la sincronización. No se envía nada a un proveedor salvo que inicies una acción; cada petición contiene solo una indicación interna sobre cómo funciona Decks, tus instrucciones y el contenido de esa acción.
+
+![Decks AI Generator](./decks_ai_generate.gif)
 
 ## Basado en
 

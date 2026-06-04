@@ -66,7 +66,6 @@ Thank you.
 
 Emri i skedarit bëhet emri i pakos. Niveli i titullit mund të konfigurohet për çdo profil (H2 si parazgjedhje). Titujt mbi nivelin e konfiguruar nuk shndërrohen në karta — ata ruhen si një shteg orientues (p.sh. `Kapitulli 1 > Seksioni 2`) i bashkangjitur çdo karte për kontekst.
 
-
 Shto **shënime** opsionale në një kartë titull+paragraf me një koment Obsidian (`%%një ndihmesë%%`) kudo në trup, ose pas një ndarësi `---` në fund. Shënimet shfaqen sipas kërkesës (tasti **N**) gjatë rishikimit.
 
 </details>
@@ -148,6 +147,8 @@ Veçori opsionale me IA, **të çaktivizuara derisa të shtosh një çelës ofru
 - **Ripërpuno** një kartë ose një përzgjedhje të tërë, ose **ndaj** një kartë në disa — çdo ndryshim e shqyrton para se të zbatohet.
 
 Përdor çelësin tënd për OpenAI, Anthropic (Claude), Google (Gemini) ose një pikë-fundore të pajtueshme me OpenAI/lokale. Çelësat ruhen lokalisht në `ai-keys.json` dhe nuk shkruhen kurrë në `data.json`, ndaj nuk largohen nga pajisja jote përmes sinkronizimit. Asgjë nuk dërgohet te një ofrues nëse nuk nis një veprim; çdo kërkesë përmban vetëm një udhëzim të brendshëm se si funksionon Decks, udhëzimet e tua dhe përmbajtjen e atij veprimi.
+
+![Decks AI Generator](./decks_ai_generate.gif)
 
 ## Ndërtuar mbi
 
