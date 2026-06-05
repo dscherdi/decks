@@ -747,7 +747,7 @@
     flex: 1;
     padding: 10px;
     background: var(--interactive-accent);
-    color: white;
+    color: var(--text-on-accent);
     border: none;
     border-radius: 4px;
     cursor: pointer;
@@ -766,7 +766,7 @@
   .decks-btn-delete {
     padding: 10px 20px;
     background: var(--text-error);
-    color: white;
+    color: var(--text-on-accent);
     border: none;
     border-radius: 4px;
     cursor: pointer;
@@ -827,7 +827,10 @@
     border-top: 1px solid var(--background-modifier-border);
   }
 
-  .decks-modal-footer button {
+  /* Only the direct-child Close button gets the neutral footer styling; the
+     accent Save / Delete buttons live inside .decks-profile-actions and keep
+     their own styles (a descendant selector here would override them). */
+  .decks-modal-footer > button {
     padding: 8px 16px;
     border: 1px solid var(--background-modifier-border);
     border-radius: 4px;
@@ -835,7 +838,7 @@
     cursor: pointer;
   }
 
-  .decks-modal-footer button:hover {
+  .decks-modal-footer > button:hover {
     background: var(--background-modifier-hover);
   }
 

@@ -335,7 +335,7 @@
 
   .decks-btn-primary {
     background: var(--interactive-accent);
-    color: white;
+    color: var(--text-on-accent);
     border: none;
   }
 
