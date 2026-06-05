@@ -28,7 +28,7 @@ export async function safeRename(
       // a missing parent directory) bubbles immediately so we don't mask
       // genuine bugs as flakiness.
       if (!/EPERM|EBUSY|ENOENT|locked|in use/i.test(msg)) throw error;
-      await new Promise((resolve) => setTimeout(resolve, 50 * (attempt + 1)));
+      await new Promise((resolve) => window.setTimeout(resolve, 50 * (attempt + 1)));
     }
   }
 }

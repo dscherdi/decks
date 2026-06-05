@@ -95,7 +95,7 @@ export class DeckConfigModal extends Modal {
 
       this.close();
 
-      setTimeout(() => {
+      window.setTimeout(() => {
         void this.onRefreshDecksAndStats();
       }, 0);
     } catch (error) {

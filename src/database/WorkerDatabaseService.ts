@@ -139,7 +139,7 @@ export class WorkerDatabaseService extends BaseDatabaseService {
 
       // Wait for worker to be ready
       await new Promise((resolve, reject) => {
-        const timeout = setTimeout(
+        const timeout = window.setTimeout(
           () => reject(new Error("Worker initialization timeout")),
           10000
         );
@@ -148,13 +148,13 @@ export class WorkerDatabaseService extends BaseDatabaseService {
         if (this.worker) {
           this.worker.onmessage = (event) => {
             if (event.data.type === "ready") {
-              clearTimeout(timeout);
+              window.clearTimeout(timeout);
               if (this.worker) {
                 this.worker.onmessage = originalHandler;
               }
               resolve(void 0);
             } else if (event.data.type === "initError") {
-              clearTimeout(timeout);
+              window.clearTimeout(timeout);
               reject(new Error(event.data.error));
             } else if (originalHandler) {
               originalHandler.call(this.worker, event);

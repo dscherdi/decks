@@ -181,7 +181,7 @@ export class PluginSettingTab {
   constructor(app: any, plugin: Plugin) {
     this.app = app;
     this.plugin = plugin;
-    this.containerEl = document.createElement("div");
+    this.containerEl = activeDocument.createElement("div");
   }
 
   display(): void {}
@@ -194,7 +194,7 @@ export class Modal {
 
   constructor(app: any) {
     this.app = app;
-    this.contentEl = document.createElement("div");
+    this.contentEl = activeDocument.createElement("div");
   }
 
   open(): void {}
@@ -207,8 +207,8 @@ export class ItemView {
   contentEl: HTMLElement;
 
   constructor(leaf: any) {
-    this.containerEl = document.createElement("div");
-    this.contentEl = document.createElement("div");
+    this.containerEl = activeDocument.createElement("div");
+    this.contentEl = activeDocument.createElement("div");
   }
 
   onOpen(): Promise<void> {

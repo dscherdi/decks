@@ -88,7 +88,7 @@ export class DeckSynchronizer {
         this.progressTracker.update(progress.message, progress.percentage);
         if (progress.percentage === 100) {
           this.logger.debug("Sync complete, hiding progress notice");
-          setTimeout(() => this.progressTracker.hide(), 3000);
+          window.setTimeout(() => this.progressTracker.hide(), 3000);
         }
       },
     });
@@ -98,7 +98,7 @@ export class DeckSynchronizer {
         "❌ Sync failed - check console for details",
         0
       );
-      setTimeout(() => this.progressTracker.hide(), 5000);
+      window.setTimeout(() => this.progressTracker.hide(), 5000);
       throw result.error;
     }
   }
@@ -111,7 +111,7 @@ export class DeckSynchronizer {
       this.logger.debug("Starting initial sync...");
 
       // Add delay to ensure workspace is fully ready
-      await new Promise((resolve) => setTimeout(resolve, 5000));
+      await new Promise((resolve) => window.setTimeout(resolve, 5000));
 
       // await this.performSync({ forceSync: false, showProgress: true });
 

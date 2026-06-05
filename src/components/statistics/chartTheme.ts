@@ -18,7 +18,7 @@ interface RgbParts {
 let initialized = false;
 
 function readVar(varName: string): string {
-  return getComputedStyle(document.body).getPropertyValue(varName).trim();
+  return getComputedStyle(activeDocument.body).getPropertyValue(varName).trim();
 }
 
 export function getObsidianColor(varName: string): string {

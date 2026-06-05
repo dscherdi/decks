@@ -81,7 +81,7 @@
       chart.destroy();
     }
     if (updateTimeout !== null) {
-      clearTimeout(updateTimeout);
+      window.clearTimeout(updateTimeout);
     }
   });
 
@@ -104,7 +104,7 @@
         prevShowBacklog = showBacklog;
 
         if (updateTimeout !== null) {
-          clearTimeout(updateTimeout);
+          window.clearTimeout(updateTimeout);
         }
         updateTimeout = window.setTimeout(() => {
           void updateChart();

@@ -150,13 +150,13 @@
   }
 
   function buildPinDropdownOption(id: string): HTMLDivElement {
-    const option = document.createElement("div");
+    const option = activeDocument.createElement("div");
     option.className = "decks-dropdown-option";
     const isPinned = pinnedIds.has(id);
-    const labelEl = document.createElement("span");
+    const labelEl = activeDocument.createElement("span");
     labelEl.className = "decks-dropdown-option-label";
     labelEl.textContent = isPinned ? t.deckList.unpinFromTop : t.deckList.pinToTop;
-    const iconEl = document.createElement("span");
+    const iconEl = activeDocument.createElement("span");
     iconEl.className = "decks-dropdown-option-icon";
     setIcon(iconEl, isPinned ? "pin-off" : "pin");
     option.appendChild(iconEl);
@@ -502,10 +502,10 @@
     closeActiveDropdown();
 
     // Create dropdown menu
-    const dropdown = document.createElement("div");
+    const dropdown = activeDocument.createElement("div");
     dropdown.className = "decks-deck-config-dropdown";
 
-    const browseOption = document.createElement("div");
+    const browseOption = activeDocument.createElement("div");
     browseOption.className = "decks-dropdown-option";
     browseOption.textContent = t.deckList.browseAllCards;
     browseOption.onclick = () => {
@@ -513,7 +513,7 @@
       onBrowseDeckGroup(group);
     };
 
-    const exportOption = document.createElement("div");
+    const exportOption = activeDocument.createElement("div");
     exportOption.className = "decks-dropdown-option";
     exportOption.textContent = t.deckList.exportToAnki;
     exportOption.onclick = () => {
@@ -521,7 +521,7 @@
       openAnkiExportForGroup(group);
     };
 
-    const configOption = document.createElement("div");
+    const configOption = activeDocument.createElement("div");
     configOption.className = "decks-dropdown-option";
     configOption.textContent = t.deckList.configureProfile;
     configOption.onclick = () => {
@@ -548,7 +548,7 @@
     dropdown.addClass("decks-context-menu");
 
     // Temporarily append to measure dimensions
-    document.body.appendChild(dropdown);
+    activeDocument.body.appendChild(dropdown);
     const dropdownRect = dropdown.getBoundingClientRect();
 
     // Calculate optimal position
@@ -590,9 +590,9 @@
     dropdownEventListeners.resize = closeActiveDropdown;
 
     // Add event listeners with slight delay to prevent immediate closure
-    setTimeout(() => {
+    window.setTimeout(() => {
       if (dropdownEventListeners.click) {
-        document.addEventListener("click", dropdownEventListeners.click);
+        activeDocument.addEventListener("click", dropdownEventListeners.click);
       }
       if (dropdownEventListeners.scroll) {
         window.addEventListener("scroll", dropdownEventListeners.scroll, true);
@@ -616,10 +616,10 @@
     closeActiveDropdown();
 
     // Create dropdown menu
-    const dropdown = document.createElement("div");
+    const dropdown = activeDocument.createElement("div");
     dropdown.className = "decks-deck-config-dropdown";
 
-    const browseOption = document.createElement("div");
+    const browseOption = activeDocument.createElement("div");
     browseOption.className = "decks-dropdown-option";
     browseOption.textContent = t.deckList.browseAllCards;
     browseOption.onclick = () => {
@@ -627,7 +627,7 @@
       onBrowseDeck(deck);
     };
 
-    const exportOption = document.createElement("div");
+    const exportOption = activeDocument.createElement("div");
     exportOption.className = "decks-dropdown-option";
     exportOption.textContent = t.deckList.exportToAnki;
     exportOption.onclick = () => {
@@ -635,7 +635,7 @@
       openAnkiExport(deck);
     };
 
-    const configOption = document.createElement("div");
+    const configOption = activeDocument.createElement("div");
     configOption.className = "decks-dropdown-option";
     configOption.textContent = t.deckList.configureProfile;
     configOption.onclick = () => {
@@ -643,7 +643,7 @@
       openDeckConfigModal(deck);
     };
 
-    const resetOption = document.createElement("div");
+    const resetOption = activeDocument.createElement("div");
     resetOption.className = "decks-dropdown-option decks-dropdown-option-danger";
     resetOption.textContent = t.deckList.resetProgress;
     resetOption.onclick = () => {
@@ -668,7 +668,7 @@
     dropdown.addClass("decks-context-menu");
 
     // Temporarily append to measure dimensions
-    document.body.appendChild(dropdown);
+    activeDocument.body.appendChild(dropdown);
     const dropdownRect = dropdown.getBoundingClientRect();
 
     // Calculate optimal position
@@ -710,9 +710,9 @@
     dropdownEventListeners.resize = closeActiveDropdown;
 
     // Add event listeners with slight delay to prevent immediate closure
-    setTimeout(() => {
+    window.setTimeout(() => {
       if (dropdownEventListeners.click) {
-        document.addEventListener("click", dropdownEventListeners.click);
+        activeDocument.addEventListener("click", dropdownEventListeners.click);
       }
       if (dropdownEventListeners.scroll) {
         window.addEventListener("scroll", dropdownEventListeners.scroll, true);
@@ -733,10 +733,10 @@
 
     closeActiveDropdown();
 
-    const dropdown = document.createElement("div");
+    const dropdown = activeDocument.createElement("div");
     dropdown.className = "decks-deck-config-dropdown";
 
-    const browseOption = document.createElement("div");
+    const browseOption = activeDocument.createElement("div");
     browseOption.className = "decks-dropdown-option";
     browseOption.textContent = t.deckList.browseAllCards;
     browseOption.onclick = () => {
@@ -744,7 +744,7 @@
       onBrowseCustomDeck(customDeck);
     };
 
-    const exportOption = document.createElement("div");
+    const exportOption = activeDocument.createElement("div");
     exportOption.className = "decks-dropdown-option";
     exportOption.textContent = t.deckList.exportToAnki;
     exportOption.onclick = () => {
@@ -752,7 +752,7 @@
       openAnkiExportForCustomDeck(customDeck);
     };
 
-    const renameOption = document.createElement("div");
+    const renameOption = activeDocument.createElement("div");
     renameOption.className = "decks-dropdown-option";
     renameOption.textContent = t.deckList.rename;
     renameOption.onclick = () => {
@@ -760,7 +760,7 @@
       renameCustomDeck(customDeck);
     };
 
-    const resetOption = document.createElement("div");
+    const resetOption = activeDocument.createElement("div");
     resetOption.className = "decks-dropdown-option decks-dropdown-option-danger";
     resetOption.textContent = t.deckList.resetProgress;
     resetOption.onclick = () => {
@@ -768,7 +768,7 @@
       resetCustomDeckProgress(customDeck);
     };
 
-    const deleteOption = document.createElement("div");
+    const deleteOption = activeDocument.createElement("div");
     deleteOption.className = "decks-dropdown-option decks-dropdown-option-danger";
     deleteOption.textContent = t.deckList.delete;
     deleteOption.onclick = () => {
@@ -776,7 +776,7 @@
       deleteCustomDeck(customDeck);
     };
 
-    const editOption = document.createElement("div");
+    const editOption = activeDocument.createElement("div");
     editOption.className = "decks-dropdown-option";
     editOption.textContent = customDeck.deckType === "filter" ? t.deckList.editFilter : t.deckList.editCards;
     editOption.onclick = () => {
@@ -801,7 +801,7 @@
 
     dropdown.addClass("decks-context-menu");
 
-    document.body.appendChild(dropdown);
+    activeDocument.body.appendChild(dropdown);
     const dropdownRect = dropdown.getBoundingClientRect();
 
     let top = rect.bottom + 5;
@@ -835,9 +835,9 @@
     dropdownEventListeners.scroll = closeActiveDropdown;
     dropdownEventListeners.resize = closeActiveDropdown;
 
-    setTimeout(() => {
+    window.setTimeout(() => {
       if (dropdownEventListeners.click) {
-        document.addEventListener("click", dropdownEventListeners.click);
+        activeDocument.addEventListener("click", dropdownEventListeners.click);
       }
       if (dropdownEventListeners.scroll) {
         window.addEventListener("scroll", dropdownEventListeners.scroll, true);
@@ -943,7 +943,7 @@
 
       // Clean up all event listeners
       if (dropdownEventListeners.click) {
-        document.removeEventListener("click", dropdownEventListeners.click);
+        activeDocument.removeEventListener("click", dropdownEventListeners.click);
       }
       if (dropdownEventListeners.scroll) {
         window.removeEventListener(

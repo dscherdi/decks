@@ -92,7 +92,7 @@ export class ProfilesManagerModal extends Modal {
     contentEl.empty();
 
     // Defer refresh to avoid blocking the close handler
-    setTimeout(() => {
+    window.setTimeout(() => {
       void this.onProfilesChanged();
     }, 0);
   }

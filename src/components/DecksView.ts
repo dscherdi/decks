@@ -422,7 +422,7 @@ export class DecksView extends ItemView {
   stopBackgroundRefresh() {
     if (this.backgroundRefreshInterval) {
       this.logger.debug("Stopping background refresh job");
-      clearInterval(this.backgroundRefreshInterval);
+      window.clearInterval(this.backgroundRefreshInterval);
       this.backgroundRefreshInterval = null;
     }
   }

@@ -240,7 +240,7 @@
 
   onMount(() => {
     // Initial setup with proper timing
-    setTimeout(() => {
+    window.setTimeout(() => {
       updateContainerWidth();
       refresh();
     }, 100);

@@ -835,10 +835,10 @@ export class DecksSettingTab extends PluginSettingTab {
    * before being applied.
    */
   private pickAndRestoreFromFile(): void {
-    const input = document.createElement("input");
+    const input = activeDocument.createElement("input");
     input.type = "file";
     input.accept = ".db,application/octet-stream";
-    // Hidden from the document — we only need it as a programmatic file
+    // Hidden from the activeDocument — we only need it as a programmatic file
     // picker trigger. The setCssProps helper avoids ESLint's no-inline-
     // style rule while keeping the element invisible.
     input.setCssProps({ display: "none" });
@@ -853,10 +853,10 @@ export class DecksSettingTab extends PluginSettingTab {
         );
       });
     });
-    document.body.appendChild(input);
+    activeDocument.body.appendChild(input);
     input.click();
     // Detach after the picker fires; some browsers leak the element otherwise.
-    setTimeout(() => input.remove(), 60_000);
+    window.setTimeout(() => input.remove(), 60_000);
   }
 
   private async restoreFromFileBytes(file: File): Promise<void> {
@@ -1084,7 +1084,7 @@ class DatabasePurgeModal extends Modal {
 
           // Update the notice
           notice.setMessage(I18n.t.notices.databasePurged);
-          setTimeout(() => notice.hide(), 3000);
+          window.setTimeout(() => notice.hide(), 3000);
 
           // Refresh the view
           await this.refreshViewStats();

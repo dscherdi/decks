@@ -131,12 +131,6 @@ function summarize(name: string, diffs: Diff[], cases: number): FormulaResult {
   return { name, cases, maxAbsDelta, maxRelDelta, examples, divergent: diffs.length };
 }
 
-function range(start: number, stop: number, step: number): number[] {
-  const out: number[] = [];
-  for (let v = start; v <= stop + 1e-9; v += step) out.push(v);
-  return out;
-}
-
 function main(): void {
   const fsrs = new FSRS({ profile: "STANDARD", requestRetention: 0.9 });
   const ours = fsrs as unknown as FsrsPrivate;

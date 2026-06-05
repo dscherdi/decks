@@ -33,7 +33,7 @@ const MS_PER_DAY = 24 * 60 * 60 * 1000;
 
 export class SyncLog {
   private buffer: string[] = [];
-  private flushTimer: ReturnType<typeof setTimeout> | null = null;
+  private flushTimer: number | null = null;
   private flushing = false;
   private applying = false;
 
@@ -95,7 +95,7 @@ export class SyncLog {
 
   private scheduleFlush(): void {
     if (this.flushTimer !== null) return;
-    this.flushTimer = setTimeout(() => {
+    this.flushTimer = window.setTimeout(() => {
       this.flushTimer = null;
       void this.flushNow();
     }, FLUSH_DEBOUNCE_MS);
@@ -113,7 +113,7 @@ export class SyncLog {
    */
   async flushNow(): Promise<void> {
     if (this.flushTimer !== null) {
-      clearTimeout(this.flushTimer);
+      window.clearTimeout(this.flushTimer);
       this.flushTimer = null;
     }
     if (this.flushing) return;

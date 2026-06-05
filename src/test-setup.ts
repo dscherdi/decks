@@ -16,3 +16,13 @@ if (typeof global.performance === "undefined") {
     now: () => Date.now(),
   } as Performance;
 }
+
+// Obsidian injects `window` (and the popout-aware `activeWindow`) at runtime;
+// the Node test environment doesn't, so source that now calls window.setTimeout
+// etc. (popout-window compatibility) would throw. Point them at the Node global.
+if (typeof window === "undefined") {
+  const nodeGlobal = global as Window & typeof globalThis;
+  (global as { window?: Window & typeof globalThis }).window = nodeGlobal;
+  (global as { activeWindow?: Window & typeof globalThis }).activeWindow =
+    nodeGlobal;
+}

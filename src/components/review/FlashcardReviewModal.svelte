@@ -243,7 +243,7 @@
   // Session timer variables
   let sessionStartTime = 0;
   let sessionTimeRemaining = 0;
-  let sessionTimer: ReturnType<typeof setInterval> | null = null;
+  let sessionTimer: number | null = null;
 
   // Track last event to prevent double execution
   let lastEventTime = 0;
@@ -368,14 +368,14 @@
     if (currentCard.type === "image-occlusion") {
       const allActive = container.querySelectorAll(".decks-cloze-active");
       allActive.forEach((el) => {
-        const span = document.createElement("span");
+        const span = activeDocument.createElement("span");
         span.className = "decks-cloze-revealed";
         span.textContent =
           el.getAttribute("data-decks-cloze-text") || el.textContent || "";
         el.replaceWith(span);
       });
     } else {
-      const span = document.createElement("span");
+      const span = activeDocument.createElement("span");
       span.className = "decks-cloze-revealed";
       span.textContent =
         target.getAttribute("data-decks-cloze-text") || currentCard.clozeText;
@@ -940,7 +940,7 @@
 
     // Clean up session timer (standard mode only)
     if (sessionTimer) {
-      clearInterval(sessionTimer);
+      window.clearInterval(sessionTimer);
       sessionTimer = null;
     }
 
@@ -967,7 +967,7 @@
 
     // Clean up session timer
     if (sessionTimer) {
-      clearInterval(sessionTimer);
+      window.clearInterval(sessionTimer);
       sessionTimer = null;
     }
 
@@ -993,7 +993,7 @@
     sessionTimeRemaining = sessionDurationMs;
 
     // Update timer every second
-    sessionTimer = setInterval(() => {
+    sessionTimer = window.setInterval(() => {
       const elapsed = Date.now() - sessionStartTime;
       sessionTimeRemaining = Math.max(0, sessionDurationMs - elapsed);
 

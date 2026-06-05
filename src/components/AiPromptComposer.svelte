@@ -249,7 +249,7 @@
       on:keydown={onPromptKeydown}
       on:paste={onPromptPaste}
       on:scroll={syncHighlightScroll}
-      on:blur={() => setTimeout(() => (mentionOpen = false), 120)}
+      on:blur={() => window.setTimeout(() => (mentionOpen = false), 120)}
     ></textarea>
   </div>
 

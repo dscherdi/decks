@@ -6,7 +6,7 @@ export class ProgressTracker {
   private settings: DecksSettings;
   private lastUpdateTime = 0;
   private pendingMessage: string | null = null;
-  private pendingTimer: ReturnType<typeof setTimeout> | null = null;
+  private pendingTimer: number | null = null;
   private static readonly THROTTLE_MS = 150;
 
   constructor(settings: DecksSettings) {
@@ -33,7 +33,7 @@ export class ProgressTracker {
       this.pendingMessage = formatted;
       if (!this.pendingTimer) {
         const remaining = ProgressTracker.THROTTLE_MS - (now - this.lastUpdateTime);
-        this.pendingTimer = setTimeout(() => this.flushPending(), remaining);
+        this.pendingTimer = window.setTimeout(() => this.flushPending(), remaining);
       }
     }
   }
@@ -50,7 +50,7 @@ export class ProgressTracker {
 
   private flushPending(): void {
     if (this.pendingTimer) {
-      clearTimeout(this.pendingTimer);
+      window.clearTimeout(this.pendingTimer);
       this.pendingTimer = null;
     }
     if (this.pendingMessage && this.progressNotice) {

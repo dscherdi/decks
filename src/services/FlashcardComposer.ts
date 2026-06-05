@@ -61,7 +61,7 @@ export function buildHeaderParagraphCard(card: GeneratedCard, level: number): st
   return block;
 }
 
-/** Full header+paragraph document body for a list of cards. */
+/** Full header+paragraph activeDocument body for a list of cards. */
 export function buildHeaderParagraphContent(
   cards: GeneratedCard[],
   level: number,

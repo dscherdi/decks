@@ -140,7 +140,7 @@ export default class DecksPlugin extends Plugin {
 
   // Coalesce rapid-fire vault `modify` events (Obsidian autosaves every ~1-2s
   // during typing) into one trailing-edge sync per deck after the user pauses.
-  private pendingDeckSyncs = new Map<string, ReturnType<typeof setTimeout>>();
+  private pendingDeckSyncs = new Map<string, number>();
   private static readonly FILE_MODIFY_DEBOUNCE_MS = 3000;
 
   async onload() {
@@ -651,7 +651,7 @@ export default class DecksPlugin extends Plugin {
           const text = mark.textContent || "";
           const currentIndex = markCount;
           markCount++;
-          const span = document.createElement("span");
+          const span = activeDocument.createElement("span");
 
           if (currentIndex >= activeIndex && currentIndex < activeEnd) {
             if (revealed) {
@@ -1199,8 +1199,8 @@ export default class DecksPlugin extends Plugin {
   // sync that runs after the last call goes quiet.
   private scheduleDeckSync(deckId: string): void {
     const existing = this.pendingDeckSyncs.get(deckId);
-    if (existing !== undefined) clearTimeout(existing);
-    const timer = setTimeout(() => {
+    if (existing !== undefined) window.clearTimeout(existing);
+    const timer = window.setTimeout(() => {
       this.pendingDeckSyncs.delete(deckId);
       void this.runDebouncedDeckSync(deckId);
     }, DecksPlugin.FILE_MODIFY_DEBOUNCE_MS);
@@ -1213,7 +1213,7 @@ export default class DecksPlugin extends Plugin {
   private async flushDeckSync(deckId: string): Promise<void> {
     const timer = this.pendingDeckSyncs.get(deckId);
     if (timer !== undefined) {
-      clearTimeout(timer);
+      window.clearTimeout(timer);
       this.pendingDeckSyncs.delete(deckId);
     }
     await this.runDebouncedDeckSync(deckId);
@@ -1235,7 +1235,7 @@ export default class DecksPlugin extends Plugin {
     const pending = Array.from(this.pendingDeckSyncs.entries());
     this.pendingDeckSyncs.clear();
     for (const [deckId, timer] of pending) {
-      clearTimeout(timer);
+      window.clearTimeout(timer);
       await this.runDebouncedDeckSync(deckId);
     }
   }

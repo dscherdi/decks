@@ -87,7 +87,7 @@ async function openMarkdownAndScrollToLine(
   await leaf.openFile(file, { eState: { line: lineNumber } });
   app.workspace.setActiveLeaf(leaf, { focus: true });
 
-  setTimeout(() => {
+  window.setTimeout(() => {
     const view = leaf.view;
     if (!(view instanceof MarkdownView)) return;
     if (view.getMode() === "preview") {
@@ -118,7 +118,7 @@ async function openCanvasAndFocusNode(
   if (!sourceNodeId) return leaf;
 
   // Defer until the canvas view has mounted and parsed its nodes Map.
-  setTimeout(() => {
+  window.setTimeout(() => {
     try {
       const view = leaf.view as unknown as CanvasViewLike;
       const canvas = view?.canvas;

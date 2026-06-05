@@ -16,6 +16,7 @@ export default [
     ignores: [
       "dist/",
       "node_modules/",
+      "benchmark/",
       "**/__tests__/**",
       "**/__mocks__/**",
       "**/*.test.ts",
@@ -43,6 +44,9 @@ export default [
         NodeJS: "readonly",
         Transferable: "readonly",
         FrameRequestCallback: "readonly",
+        // Obsidian-injected globals (popout-window compatibility).
+        activeDocument: "readonly",
+        activeWindow: "readonly",
       },
     },
     plugins: {
@@ -122,6 +126,9 @@ export default [
         ...globals.browser,
         ...globals.es2020,
         ...globals.node,
+        // Obsidian-injected globals (popout-window compatibility).
+        activeDocument: "readonly",
+        activeWindow: "readonly",
       },
     },
     plugins: {

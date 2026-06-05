@@ -190,11 +190,11 @@
   // Debounced mirror of searchQuery — the input stays bound to searchQuery for
   // instant text, but the heavy filter/rank/sort runs off this after a pause.
   let debouncedSearchQuery = "";
-  let searchDebounce: ReturnType<typeof setTimeout> | undefined;
+  let searchDebounce: number | undefined;
   $: scheduleSearch(searchQuery);
   function scheduleSearch(q: string) {
-    clearTimeout(searchDebounce);
-    searchDebounce = setTimeout(() => {
+    window.clearTimeout(searchDebounce);
+    searchDebounce = window.setTimeout(() => {
       debouncedSearchQuery = q;
     }, 200);
   }
@@ -222,7 +222,7 @@
   // Re-evaluated each tick to keep "Suspended"/"Buried" badges fresh as
   // bury_until expires within an open session.
   let nowTick: number = Date.now();
-  let nowTickTimer: ReturnType<typeof setInterval> | null = null;
+  let nowTickTimer: number | null = null;
 
   let saveAsDeckMode: "filter" | null = null;
   let saveAsDeckName = "";
@@ -732,7 +732,7 @@
   }
 
   function clearSearch() {
-    clearTimeout(searchDebounce);
+    window.clearTimeout(searchDebounce);
     searchQuery = "";
     debouncedSearchQuery = "";
   }
@@ -756,12 +756,12 @@
   }
 
   onMount(async () => {
-    document.addEventListener("click", handleDocClickPopover);
-    document.addEventListener("click", handleOutsideClick);
+    activeDocument.addEventListener("click", handleDocClickPopover);
+    activeDocument.addEventListener("click", handleOutsideClick);
     // Periodically refresh "now" so buried_until expiry visibly clears the
     // "Buried" badge in long-lived manager sessions without requiring a
     // user action.
-    nowTickTimer = setInterval(() => {
+    nowTickTimer = window.setInterval(() => {
       nowTick = Date.now();
     }, 30_000);
     try {
@@ -810,11 +810,11 @@
   });
 
   onDestroy(() => {
-    document.removeEventListener("click", handleOutsideClick);
-    document.removeEventListener("click", handleDocClickPopover);
-    clearTimeout(searchDebounce);
+    activeDocument.removeEventListener("click", handleOutsideClick);
+    activeDocument.removeEventListener("click", handleDocClickPopover);
+    window.clearTimeout(searchDebounce);
     if (nowTickTimer !== null) {
-      clearInterval(nowTickTimer);
+      window.clearInterval(nowTickTimer);
       nowTickTimer = null;
     }
   });

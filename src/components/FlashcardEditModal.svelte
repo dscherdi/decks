@@ -825,7 +825,7 @@
     overflow-x: hidden;
   }
   /* Field bodies inside the shared FieldStack card are transparent/borderless
-   * so the whole stack reads as one document. */
+   * so the whole stack reads as one activeDocument. */
   .decks-edit-zone-input {
     width: 100%;
     box-sizing: border-box;
@@ -856,7 +856,7 @@
     min-height: 1.65em;
   }
   /* Front fields (Header / table Front): emphasized but left-aligned so they
-   * sit naturally at the top of the single document. */
+   * sit naturally at the top of the single activeDocument. */
   .decks-edit-front-card {
     font-size: 22px;
     font-weight: 600;
