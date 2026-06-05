@@ -33,6 +33,12 @@
   export let onMention: (item: MentionItem) => void = () => {};
   export let onPasteImages: (files: File[]) => void = () => {};
   export let onSubmit: () => void = () => {};
+  // Optional include-context toggle (used by the generator) rendered as an
+  // icon button beside the attach buttons.
+  export let includeAvailable = false;
+  export let includeOn = false;
+  export let includeLabel: string | null = null;
+  export let onToggleInclude: () => void = () => {};
   // Optional label overrides so non-refactor callers (e.g. the generator) can
   // relabel the submit button. Default to the refactor wording.
   export let submitLabel: string | null = null;
@@ -270,6 +276,18 @@
       use:icon={"image"}
       on:click={onAddImage}
     ></button>
+    {#if includeAvailable}
+      <button
+        type="button"
+        class="clickable-icon decks-ai-composer-add"
+        class:is-active={includeOn}
+        aria-pressed={includeOn}
+        title={includeLabel}
+        aria-label={includeLabel}
+        use:icon={"copy-plus"}
+        on:click={onToggleInclude}
+      ></button>
+    {/if}
     {#if splitAvailable}
       <button
         type="button"
@@ -478,6 +496,10 @@
     display: flex;
     align-items: center;
     gap: 4px;
+  }
+  .decks-ai-composer-add.is-active {
+    color: var(--text-on-accent);
+    background: var(--interactive-accent);
   }
   .decks-ai-composer-split {
     display: inline-flex;

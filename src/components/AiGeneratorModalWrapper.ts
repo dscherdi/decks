@@ -19,7 +19,7 @@ export interface AiGeneratorOptions {
   save: (
     cards: GeneratedCard[],
     request: GeneratorSaveRequest,
-  ) => Promise<{ ok: boolean; error?: string; count?: number }>;
+  ) => Promise<{ ok: boolean; error?: string; count?: number; deckId?: string }>;
   loadProfiles: () => Promise<ProfileOpt[]>;
   loadDecks: () => Promise<DeckOpt[]>;
   defaultFolder: string;

@@ -159,6 +159,7 @@ export class DecksViewModal extends Modal {
           this.openDeckConfigModal(deck),
         openFlashcardManager: () => this.openFlashcardManager(),
         openAiGeneratorModal: () => this.openAiGenerator?.(),
+        aiEnabled: this.settings.ai.enabled,
         deckTag: this.settings.parsing.deckTag,
         pinnedDeckIds: this.settings.ui.pinnedDeckIds,
         onTogglePin: (id: string) => this.togglePin(id),

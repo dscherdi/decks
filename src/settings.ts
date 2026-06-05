@@ -39,6 +39,7 @@ export interface DecksSettings {
     enableNotices: boolean;
     reviewDisplayMode: "modal" | "tab";
     flashcardManagerDisplayMode: "modal" | "tab";
+    aiGeneratorDisplayMode: "modal" | "tab";
     // Deck / group / custom-deck ids the user has pinned to the top of
     // the deck list. Synced across devices via data.json.
     pinnedDeckIds: string[];
@@ -129,6 +130,7 @@ export const DEFAULT_SETTINGS: DecksSettings = {
     enableNotices: false,
     reviewDisplayMode: "modal",
     flashcardManagerDisplayMode: "modal",
+    aiGeneratorDisplayMode: "modal",
     pinnedDeckIds: [],
     deckListSort: "name-asc",
     minDeckCardCount: 0,

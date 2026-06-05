@@ -38,7 +38,14 @@ import {
 import { AiGeneratorController } from "./services/AiGeneratorController";
 import { FlashcardComposer } from "./services/FlashcardComposer";
 import { AiBatchRefactorModalWrapper } from "./components/AiBatchRefactorModalWrapper";
-import { AiGeneratorModalWrapper } from "./components/AiGeneratorModalWrapper";
+import {
+  AiGeneratorModalWrapper,
+  type AiGeneratorOptions,
+} from "./components/AiGeneratorModalWrapper";
+import {
+  AiGeneratorView,
+  VIEW_TYPE_AI_GENERATOR,
+} from "./components/AiGeneratorView";
 import type { GeneratorSaveRequest } from "./components/generator-save";
 import type { Flashcard } from "./database/types";
 import { Logger, formatTime } from "./utils/logging";
@@ -348,6 +355,12 @@ export default class DecksPlugin extends Plugin {
             this.customDeckService,
             this.settings,
           ),
+      );
+
+      // Register the AI generator tab view
+      this.registerView(
+        VIEW_TYPE_AI_GENERATOR,
+        (leaf) => new AiGeneratorView(leaf),
       );
 
       // Add ribbon icon
@@ -1040,7 +1053,7 @@ export default class DecksPlugin extends Plugin {
   }
 
   openAiGeneratorModal(): void {
-    const wrapper = new AiGeneratorModalWrapper(this.app, {
+    const options: AiGeneratorOptions = {
       generate: (options, handlers, signal) =>
         this.aiGeneratorController.generateStream(options, handlers, signal),
       save: (cards, request) => this.saveGeneratedCards(cards, request),
@@ -1058,8 +1071,26 @@ export default class DecksPlugin extends Plugin {
       defaultFolder: this.settings.parsing.folderSearchPath || "",
       canvasFolder: this.settings.canvasDecks.folderPath || "",
       deckTag: this.settings.parsing.deckTag,
-    });
-    wrapper.open();
+    };
+
+    if (this.settings.ui.aiGeneratorDisplayMode === "tab") {
+      const { workspace } = this.app;
+      const existing = workspace.getLeavesOfType(VIEW_TYPE_AI_GENERATOR);
+      const leaf = existing.length > 0 ? existing[0] : workspace.getLeaf("tab");
+      void leaf
+        .setViewState({ type: VIEW_TYPE_AI_GENERATOR, active: true })
+        .then(() => {
+          const view = leaf.view;
+          if (view instanceof AiGeneratorView) {
+            view.setOptions(options);
+          }
+          void workspace.revealLeaf(leaf);
+        })
+        .catch(console.error);
+      return;
+    }
+
+    new AiGeneratorModalWrapper(this.app, options).open();
   }
 
   // Write the kept generated cards to disk, then register/sync the deck so the
@@ -1067,7 +1098,7 @@ export default class DecksPlugin extends Plugin {
   private async saveGeneratedCards(
     cards: GeneratedCard[],
     request: GeneratorSaveRequest,
-  ): Promise<{ ok: boolean; error?: string; count?: number }> {
+  ): Promise<{ ok: boolean; error?: string; count?: number; deckId?: string }> {
     try {
       if (request.kind === "new-file") {
         const profile =
@@ -1085,7 +1116,12 @@ export default class DecksPlugin extends Plugin {
           request.format === "canvas"
             ? this.settings.canvasDecks.tagName || request.tag
             : request.tag;
-        await this.registerGeneratedDeck(filePath, tag, request.profileId);
+        const deckId = await this.registerGeneratedDeck(
+          filePath,
+          tag,
+          request.profileId,
+        );
+        return { ok: true, count: cards.length, deckId };
       } else {
         const deck = await this.db.getDeckById(request.deckId);
         if (!deck) return { ok: false, error: "Deck not found" };
@@ -1103,33 +1139,39 @@ export default class DecksPlugin extends Plugin {
           await this.handleFileChange(file);
           await this.deckSynchronizer.syncDeck(deck.id);
         }
+        return { ok: true, count: cards.length, deckId: deck.id };
       }
-      return { ok: true, count: cards.length };
     } catch (e) {
       this.logger.error("Failed to save generated cards", e);
-      return { ok: false, error: e instanceof Error ? e.message : String(e) };
+      const message = e instanceof Error && e.message ? e.message : String(e);
+      return {
+        ok: false,
+        error: message || I18n.t.modals.aiGenerator.saveFailed,
+      };
     }
   }
 
   // Ensure a deck row exists for a freshly created file, associate the chosen
   // profile, and parse its cards. Idempotent with the file-create handler.
+  // Returns the deck id when resolvable so the caller can select it.
   private async registerGeneratedDeck(
     filePath: string,
     tag: string,
     profileId: string,
-  ): Promise<void> {
+  ): Promise<string | undefined> {
     let deck = await this.db.getDeckByFilepath(filePath);
     if (!deck) {
       await this.deckSynchronizer.createDeckForFile(filePath, tag);
       await yieldToUI();
       deck = await this.db.getDeckByFilepath(filePath);
     }
-    if (!deck) return;
+    if (!deck) return undefined;
     if (profileId && deck.profileId !== profileId) {
       await this.db.updateDeck(deck.id, { profileId });
     }
     await this.deckSynchronizer.syncDeck(deck.id);
     await this.getDecksView()?.refreshStats();
+    return deck.id;
   }
 
   async handleFileChange(file: TFile) {

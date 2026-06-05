@@ -630,6 +630,20 @@ export class DecksSettingTab extends PluginSettingTab {
       );
 
     new Setting(containerEl)
+      .setName(I18n.t.settings.ui.aiGeneratorDisplayMode)
+      .setDesc(I18n.t.settings.ui.aiGeneratorDisplayModeDesc)
+      .addDropdown((dropdown) =>
+        dropdown
+          .addOption("modal", I18n.t.settings.ui.displayModeModal)
+          .addOption("tab", I18n.t.settings.ui.displayModeTab)
+          .setValue(this.settings.ui.aiGeneratorDisplayMode)
+          .onChange(async (value) => {
+            this.settings.ui.aiGeneratorDisplayMode = value as "modal" | "tab";
+            await this.saveSettings();
+          })
+      );
+
+    new Setting(containerEl)
       .setName(I18n.t.settings.ui.minDeckCardCount)
       .setDesc(I18n.t.settings.ui.minDeckCardCountDesc)
       .addText((text) =>

@@ -27,7 +27,7 @@
   export let save: (
     cards: GeneratedCard[],
     request: GeneratorSaveRequest,
-  ) => Promise<{ ok: boolean; error?: string; count?: number }>;
+  ) => Promise<{ ok: boolean; error?: string; count?: number; deckId?: string }>;
   export let loadProfiles: () => Promise<ProfileOpt[]>;
   export let loadDecks: () => Promise<DeckOpt[]>;
   export let defaultFolder = "";
@@ -54,18 +54,22 @@
     id: string;
     card: GeneratedCard;
     keep: boolean;
+    saved: boolean;
   }
 
-  let phase: "idle" | "streaming" | "review" | "saving" | "summary" = "idle";
+  let phase: "idle" | "streaming" | "review" | "saving" = "idle";
   let rows: GenRow[] = [];
   let partial: GeneratedCard | null = null;
   let selectedId: string | null = null;
   let genError: string | null = null;
   let abortController: AbortController | null = null;
   let rowCounter = 0;
+  let includeGenerated = false;
+  let hasSaved = false;
 
   $: selected = rows.find((r) => r.id === selectedId) ?? null;
-  $: keptCount = rows.filter((r) => r.keep).length;
+  $: keptCount = rows.filter((r) => r.keep && !r.saved).length;
+  $: savedCount = rows.filter((r) => r.saved).length;
 
   // Mobile: show either the list or the detail.
   let mobile = false;
@@ -127,6 +131,17 @@
   }
 
   // --- Generation ---
+  function serializeCardsForContext(): string | null {
+    if (rows.length === 0) return null;
+    const list = rows
+      .map(
+        (r, i) =>
+          `${i + 1}. FRONT: ${r.card.front}\n   BACK: ${r.card.back}`,
+      )
+      .join("\n");
+    return `${g.existingCardsHeading}\n\n${list}\n\n${g.avoidDuplicatesInstruction}`;
+  }
+
   async function startGenerate() {
     if (phase === "streaming" || !prompt.trim()) return;
     const req = await buildGenerationComposerRequest(
@@ -135,16 +150,21 @@
       contexts,
       activeMentions,
     );
-    rows = [];
+    // Put already-generated cards above the user's instruction so the prompt
+    // remains the last, most salient thing the model reads.
+    let promptText = req.prompt;
+    if (includeGenerated) {
+      const cardsCtx = serializeCardsForContext();
+      if (cardsCtx) promptText = `${cardsCtx}\n\n${promptText}`;
+    }
     partial = null;
     genError = null;
-    selectedId = null;
     phase = "streaming";
     abortController = new AbortController();
     const handlers: GenerateHandlers = {
       onCard: (card) => {
         const id = `gen-${rowCounter++}`;
-        rows = [...rows, { id, card, keep: true }];
+        rows = [...rows, { id, card, keep: true, saved: false }];
         if (!selectedId) selectedId = id;
       },
       onPartial: (card) => {
@@ -153,12 +173,13 @@
     };
     try {
       await generate(
-        { prompt: req.prompt, sourceContext: req.sourceContext, images: req.images },
+        { prompt: promptText, sourceContext: req.sourceContext, images: req.images },
         handlers,
         abortController.signal,
       );
     } catch (e) {
-      genError = e instanceof Error ? e.message : String(e);
+      const msg = e instanceof Error ? e.message : String(e);
+      genError = msg.trim() ? msg : g.generateFailed;
     } finally {
       partial = null;
       phase = rows.length > 0 ? "review" : "idle";
@@ -187,7 +208,6 @@
   let decks: DeckOpt[] = [];
   let deckId = "";
   let saveError: string | null = null;
-  let saveResult: { count: number } | null = null;
 
   async function initSaveDefaults() {
     folder = defaultFolder;
@@ -234,18 +254,28 @@
     saveError = null;
     const request = buildRequest();
     if (!request) return;
-    const kept = rows.filter((r) => r.keep).map((r) => r.card);
-    if (kept.length === 0) {
+    const kept = rows.filter((r) => r.keep && !r.saved);
+    const cards = kept.map((r) => r.card);
+    if (cards.length === 0) {
       saveError = g.noKept;
       return;
     }
+    const savedIds = new Set(kept.map((r) => r.id));
     phase = "saving";
-    const result = await save(kept, request);
+    const result = await save(cards, request);
     if (result.ok) {
-      saveResult = { count: result.count ?? kept.length };
-      phase = "summary";
+      rows = rows.map((r) =>
+        savedIds.has(r.id) ? { ...r, saved: true } : r,
+      );
+      // Further saves this session append to the deck we just wrote, so refresh
+      // the deck list (it now includes any newly created deck) and lock to append.
+      hasSaved = true;
+      decks = await loadDecks();
+      deckId = result.deckId ?? deckId;
+      saveMode = "append";
+      phase = "review";
     } else {
-      saveError = result.error ?? g.saveFailed;
+      saveError = result.error?.trim() ? result.error : g.saveFailed;
       phase = "review";
     }
   }
@@ -265,10 +295,14 @@
     {#if !(mobile && selectedId)}
       <div class="decks-ai-gen-sidebar">
         {#each rows as row (row.id)}
-          <div class="decks-ai-gen-rowwrap" class:is-dropped={!row.keep}>
+          <div
+            class="decks-ai-gen-rowwrap"
+            class:is-dropped={!row.keep && !row.saved}
+            class:is-saved={row.saved}
+          >
             <BatchCardRow
               card={row.card}
-              status={row.keep ? "ready" : "empty"}
+              status={row.saved ? "accepted" : row.keep ? "ready" : "empty"}
               selected={row.id === selectedId}
               {renderMarkdown}
               onSelect={() => select(row.id)}
@@ -313,9 +347,13 @@
             {/if}
           </div>
           <div class="decks-ai-gen-card-actions">
-            <button type="button" on:click={() => toggleKeep(selected.id)}>
-              {selected.keep ? g.discard : g.keep}
-            </button>
+            {#if selected.saved}
+              <span class="decks-ai-gen-saved-badge">{g.savedBadge}</span>
+            {:else}
+              <button type="button" on:click={() => toggleKeep(selected.id)}>
+                {selected.keep ? g.discard : g.keep}
+              </button>
+            {/if}
           </div>
         {:else}
           <div class="decks-ai-gen-note">{g.selectPrompt}</div>
@@ -326,16 +364,18 @@
 
   {#if phase === "review" || phase === "saving"}
     <div class="decks-ai-gen-save">
-      <div class="decks-ai-gen-save-modes">
-        <label>
-          <input type="radio" value="new-file" bind:group={saveMode} />
-          {g.modeNew}
-        </label>
-        <label>
-          <input type="radio" value="append" bind:group={saveMode} />
-          {g.modeAppend}
-        </label>
-      </div>
+      {#if !hasSaved}
+        <div class="decks-ai-gen-save-modes">
+          <label>
+            <input type="radio" value="new-file" bind:group={saveMode} />
+            {g.modeNew}
+          </label>
+          <label>
+            <input type="radio" value="append" bind:group={saveMode} />
+            {g.modeAppend}
+          </label>
+        </div>
+      {/if}
 
       {#if saveMode === "new-file"}
         <div class="decks-ai-gen-save-grid">
@@ -416,6 +456,10 @@
         onMention={addMention}
         onPasteImages={pasteImages}
         onSubmit={startGenerate}
+        includeAvailable={rows.length > 0}
+        includeOn={includeGenerated}
+        includeLabel={g.includeGenerated}
+        onToggleInclude={() => (includeGenerated = !includeGenerated)}
       />
     </div>
   {/if}
@@ -429,14 +473,13 @@
       <button type="button" class="mod-warning" on:click={interrupt}>{g.stop}</button>
     {:else if phase === "saving"}
       <span class="decks-ai-gen-footer-info">{g.saving}</span>
-    {:else if phase === "summary"}
-      <span class="decks-ai-gen-footer-info">
-        {I18n.format(g.saved, { count: saveResult?.count ?? 0 })}
-      </span>
-      <span class="decks-ai-gen-footer-spacer"></span>
-      <button type="button" class="mod-cta" on:click={onClose}>{g.close}</button>
     {:else}
-      <button type="button" on:click={onClose}>{g.cancel}</button>
+      <button type="button" on:click={onClose}>{savedCount > 0 ? g.close : g.cancel}</button>
+      {#if savedCount > 0}
+        <span class="decks-ai-gen-footer-info">
+          {I18n.format(g.savedNotice, { count: savedCount })}
+        </span>
+      {/if}
       <span class="decks-ai-gen-footer-spacer"></span>
       {#if phase === "review"}
         <button
@@ -498,6 +541,16 @@
   }
   .decks-ai-gen-rowwrap.is-streaming {
     opacity: 0.8;
+  }
+  .decks-ai-gen-rowwrap.is-saved {
+    background: var(--background-modifier-success-hover, transparent);
+  }
+  .decks-ai-gen-saved-badge {
+    font-size: 11px;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
+    color: var(--color-green, var(--text-success));
   }
   .decks-ai-gen-detail {
     flex: 1 1 auto;
