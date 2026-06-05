@@ -15,6 +15,9 @@ export async function buildAiConfig(
     provider,
     model: settings.ai.models[provider],
     apiKey: await keyStore.get(provider),
-    baseUrl: settings.ai.localBaseUrl,
+    baseUrl:
+      provider === "decks-cloud"
+        ? settings.ai.decksCloudBaseUrl
+        : settings.ai.localBaseUrl,
   };
 }

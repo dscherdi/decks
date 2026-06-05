@@ -15,7 +15,7 @@ import type { IDatabaseService } from "@/database/DatabaseFactory";
 import type { FsrsWeightSet } from "@/database/types";
 import { Logger } from "@/utils/logging";
 import { OptimizeFsrsModal } from "./OptimizeFsrsModal";
-import { type AiProviderId, I18n, type LanguagePreference, PROVIDER_MODELS, SUPPORTED_LANGUAGES } from "@decks/core";
+import { type AiProviderId, DECKS_CLOUD_DEFAULT_BASE_URL, I18n, type LanguagePreference, PROVIDER_MODELS, SUPPORTED_LANGUAGES } from "@decks/core";
 
 export class DecksSettingTab extends PluginSettingTab {
   private settings: DecksSettings;
@@ -148,6 +148,7 @@ export class DecksSettingTab extends PluginSettingTab {
           .addOption("openai", s.providerOpenai)
           .addOption("claude", s.providerClaude)
           .addOption("openai-compatible", s.providerLocal)
+          .addOption("decks-cloud", s.providerDecksCloud)
           .setValue(provider)
           .onChange(async (value) => {
             if (value === this.settings.ai.provider) return;
@@ -175,14 +176,33 @@ export class DecksSettingTab extends PluginSettingTab {
         );
     }
 
-    // API key lives in the non-synced AiKeyStore, never in data.json.
+    if (provider === "decks-cloud") {
+      new Setting(containerEl)
+        .setName(s.serverUrl)
+        .setDesc(s.serverUrlDesc)
+        .addText((text) =>
+          text
+            .setPlaceholder(DECKS_CLOUD_DEFAULT_BASE_URL)
+            .setValue(this.settings.ai.decksCloudBaseUrl)
+            .onChange(async (value) => {
+              this.settings.ai.decksCloudBaseUrl = value.trim();
+              await this.saveSettings();
+            })
+        );
+    }
+
+    // Credential lives in the non-synced AiKeyStore, never in data.json. For the
+    // hosted decks-cloud provider this field holds the license key.
+    const isCloud = provider === "decks-cloud";
     new Setting(containerEl)
-      .setName(s.apiKey)
-      .setDesc(s.apiKeyDesc)
+      .setName(isCloud ? s.licenseKey : s.apiKey)
+      .setDesc(isCloud ? s.licenseKeyDesc : s.apiKeyDesc)
       .addText((text) => {
-        text.setPlaceholder(s.apiKeyPlaceholder).onChange(async (value) => {
-          await this.plugin.aiKeyStore.set(provider, value);
-        });
+        text
+          .setPlaceholder(isCloud ? s.licenseKeyPlaceholder : s.apiKeyPlaceholder)
+          .onChange(async (value) => {
+            await this.plugin.aiKeyStore.set(provider, value);
+          });
         text.inputEl.type = "password";
         // Block body is required: TextComponent.setValue() returns `this`, and
         // Obsidian components are thenables (BaseComponent.then). Returning the
