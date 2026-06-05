@@ -15,7 +15,7 @@ import type { IDatabaseService } from "@/database/DatabaseFactory";
 import type { FsrsWeightSet } from "@/database/types";
 import { Logger } from "@/utils/logging";
 import { OptimizeFsrsModal } from "./OptimizeFsrsModal";
-import { type AiProviderId, I18n, type LanguagePreference, SUPPORTED_LANGUAGES } from "@decks/core";
+import { type AiProviderId, I18n, type LanguagePreference, PROVIDER_MODELS, SUPPORTED_LANGUAGES } from "@decks/core";
 
 export class DecksSettingTab extends PluginSettingTab {
   private settings: DecksSettings;
@@ -30,6 +30,9 @@ export class DecksSettingTab extends PluginSettingTab {
   private plugin: DecksPlugin;
   private db: IDatabaseService;
   private logger: Logger;
+  // Tracks when the user explicitly chose "Custom…" in the model picker so the
+  // free-text field stays open even while the typed id matches no preset.
+  private aiModelCustom = false;
 
   constructor(
     app: App,
@@ -108,8 +111,9 @@ export class DecksSettingTab extends PluginSettingTab {
 
     // The provider/model/key fields render into their own container so toggling
     // "enabled" (or switching provider) rebuilds ONLY that container instead of
-    // the whole settings tab.
-    const subContainer = containerEl.createDiv();
+    // the whole settings tab. The enable toggle leads the block; the container
+    // is appended after it so the provider fields render below.
+    let subContainer: HTMLElement;
 
     new Setting(containerEl)
       .setName(s.enabled)
@@ -124,6 +128,7 @@ export class DecksSettingTab extends PluginSettingTab {
         })
       );
 
+    subContainer = containerEl.createDiv();
     this.renderAiProviderSettings(subContainer);
   }
 
@@ -147,23 +152,14 @@ export class DecksSettingTab extends PluginSettingTab {
           .onChange(async (value) => {
             if (value === this.settings.ai.provider) return;
             this.settings.ai.provider = value as AiProviderId;
+            this.aiModelCustom = false;
             await this.saveSettings();
             // Rebuild only this sub-container (shows/hides the local URL field).
             this.renderAiProviderSettings(containerEl);
           })
       );
 
-    new Setting(containerEl)
-      .setName(s.model)
-      .setDesc(s.modelDesc)
-      .addText((text) =>
-        text
-          .setValue(this.settings.ai.models[provider] ?? "")
-          .onChange(async (value) => {
-            this.settings.ai.models[provider] = value.trim();
-            await this.saveSettings();
-          })
-      );
+    this.renderModelSetting(containerEl, provider);
 
     if (provider === "openai-compatible") {
       new Setting(containerEl)
@@ -196,6 +192,66 @@ export class DecksSettingTab extends PluginSettingTab {
           text.setValue(k);
         });
       });
+  }
+
+  // The local (openai-compatible) provider keeps a free-text model field since
+  // its ids depend on the running server; hosted providers get a curated
+  // dropdown plus a "Custom…" option that reveals a free-text field.
+  private renderModelSetting(
+    containerEl: HTMLElement,
+    provider: AiProviderId,
+  ): void {
+    const s = I18n.t.settings.ai;
+    const current = this.settings.ai.models[provider] ?? "";
+
+    if (provider === "openai-compatible") {
+      new Setting(containerEl)
+        .setName(s.model)
+        .setDesc(s.modelDesc)
+        .addText((text) =>
+          text.setValue(current).onChange(async (value) => {
+            this.settings.ai.models[provider] = value.trim();
+            await this.saveSettings();
+          }),
+        );
+      return;
+    }
+
+    const CUSTOM = "__custom__";
+    const presets = PROVIDER_MODELS[provider];
+    const presetIds = presets.map((m) => m.id);
+    const showCustom = this.aiModelCustom || !presetIds.includes(current);
+
+    new Setting(containerEl)
+      .setName(s.model)
+      .setDesc(s.modelDesc)
+      .addDropdown((dd) => {
+        for (const m of presets) dd.addOption(m.id, m.name);
+        dd.addOption(CUSTOM, s.modelCustom);
+        dd.setValue(showCustom ? CUSTOM : current);
+        dd.onChange(async (value) => {
+          if (value === CUSTOM) {
+            this.aiModelCustom = true;
+            this.renderAiProviderSettings(containerEl);
+            return;
+          }
+          this.aiModelCustom = false;
+          this.settings.ai.models[provider] = value;
+          await this.saveSettings();
+          this.renderAiProviderSettings(containerEl.parentElement as HTMLElement);
+        });
+      });
+
+    if (showCustom) {
+      new Setting(containerEl)
+        .setName(s.modelCustomLabel)
+        .addText((text) =>
+          text.setValue(current).onChange(async (value) => {
+            this.settings.ai.models[provider] = value.trim();
+            await this.saveSettings();
+          }),
+        );
+    }
   }
 
   private addLanguageSettings(containerEl: HTMLElement): void {

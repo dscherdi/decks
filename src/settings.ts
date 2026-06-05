@@ -161,9 +161,9 @@ export const DEFAULT_SETTINGS: DecksSettings = {
     enabled: false,
     provider: "openai",
     models: {
-      gemini: "gemini-2.0-flash",
-      openai: "gpt-4o-mini",
-      claude: "claude-3-5-haiku-latest",
+      gemini: "gemini-3.5-flash",
+      openai: "gpt-5.4-mini",
+      claude: "claude-haiku-4-5-20251001",
       "openai-compatible": "gemma3",
     },
     localBaseUrl: "http://localhost:11434/v1",
