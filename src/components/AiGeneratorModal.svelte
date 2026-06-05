@@ -71,17 +71,21 @@
   $: keptCount = rows.filter((r) => r.keep && !r.saved).length;
   $: savedCount = rows.filter((r) => r.saved).length;
 
-  // Mobile: show either the list or the detail.
+  // Mobile: show either the list or the detail. Driven by the component's own
+  // width (via ResizeObserver) so it reacts to the pane size in tab mode, not
+  // just the window — and catches pane-splitter drags that fire no resize event.
   let mobile = false;
-  function updateMobile() {
-    mobile = window.innerWidth <= 768;
-  }
+  let rootEl: HTMLElement;
+  let resizeObserver: ResizeObserver | null = null;
   onMount(() => {
-    updateMobile();
-    window.addEventListener("resize", updateMobile);
+    mobile = rootEl.clientWidth <= 768;
+    resizeObserver = new ResizeObserver((entries) => {
+      mobile = entries[0].contentRect.width <= 768;
+    });
+    resizeObserver.observe(rootEl);
     void initSaveDefaults();
   });
-  onDestroy(() => window.removeEventListener("resize", updateMobile));
+  onDestroy(() => resizeObserver?.disconnect());
 
   // --- Composer state ---
   let prompt = "";
@@ -281,13 +285,13 @@
   }
 </script>
 
-<div class="decks-ai-gen">
+<div class="decks-ai-gen" bind:this={rootEl}>
   <div class="decks-ai-gen-header">
     <h3>{g.title}</h3>
     <div class="decks-ai-gen-sub">{g.intro}</div>
   </div>
 
-  {#if genError}
+  {#if genError?.trim()}
     <div class="decks-edit-error">{genError}</div>
   {/if}
 
@@ -432,7 +436,7 @@
         </div>
       {/if}
 
-      {#if saveError}
+      {#if saveError?.trim()}
         <div class="decks-edit-error">{saveError}</div>
       {/if}
     </div>
@@ -660,11 +664,14 @@
     flex: 1 1 auto;
   }
   .decks-edit-error {
-    color: var(--text-error);
+    color: var(--text-normal);
     background: var(--background-modifier-error);
     padding: 6px 10px;
     border-radius: var(--radius-s);
     font-size: 12px;
+    white-space: pre-wrap;
+    max-height: 8em;
+    overflow-y: auto;
   }
   :global(.decks-modal-mobile) .decks-ai-gen-sidebar {
     flex: 1 1 auto;

@@ -874,7 +874,7 @@
   }
   .decks-edit-error {
     flex: 0 0 auto;
-    color: var(--text-error);
+    color: var(--text-normal);
     background: var(--background-modifier-error);
     padding: 6px 10px;
     border-radius: var(--radius-s);

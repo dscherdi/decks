@@ -636,7 +636,7 @@
     flex: 1 1 auto;
   }
   .decks-edit-error {
-    color: var(--text-error);
+    color: var(--text-normal);
     background: var(--background-modifier-error);
     padding: 6px 10px;
     border-radius: var(--radius-s);

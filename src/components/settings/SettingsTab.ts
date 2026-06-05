@@ -238,7 +238,7 @@ export class DecksSettingTab extends PluginSettingTab {
           this.aiModelCustom = false;
           this.settings.ai.models[provider] = value;
           await this.saveSettings();
-          this.renderAiProviderSettings(containerEl.parentElement as HTMLElement);
+          this.renderAiProviderSettings(containerEl);
         });
       });
 
