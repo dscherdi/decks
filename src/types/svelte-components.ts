@@ -73,6 +73,9 @@ export type DeckListPanelComponent = (
   updateSortMode?(mode: DeckListSortMode): void;
   // Push a new min-card-count threshold in after settings change.
   updateMinDeckCardCount?(value: number): void;
+  // Push the AI-enabled toggle in after a settings change so the generate
+  // button enables/disables without remounting.
+  updateAiEnabled?(enabled: boolean): void;
 };
 
 // Constructor interface for DeckListPanel

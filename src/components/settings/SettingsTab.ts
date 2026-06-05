@@ -119,6 +119,7 @@ export class DecksSettingTab extends PluginSettingTab {
           if (value === this.settings.ai.enabled) return;
           this.settings.ai.enabled = value;
           await this.saveSettings();
+          this.plugin.getDecksView()?.applyAiEnabledUpdate(value);
           this.renderAiProviderSettings(subContainer);
         })
       );

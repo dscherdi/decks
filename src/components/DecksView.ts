@@ -115,6 +115,11 @@ export class DecksView extends ItemView {
     this.deckListPanelComponent?.updateMinDeckCardCount?.(value);
   }
 
+  applyAiEnabledUpdate(enabled: boolean): void {
+    this.settings.ai.enabled = enabled;
+    this.deckListPanelComponent?.updateAiEnabled?.(enabled);
+  }
+
   getViewType(): string {
     return VIEW_TYPE_DECKS;
   }

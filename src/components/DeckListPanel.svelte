@@ -116,6 +116,12 @@
     minDeckCardCount = value;
   }
 
+  // Push the AI-enabled toggle in after a settings change so the generate
+  // button enables/disables without remounting the panel.
+  export function updateAiEnabled(enabled: boolean): void {
+    aiEnabled = enabled;
+  }
+
   /**
    * Click handler for sortable column headers. Cycles asc/desc on the same
    * column, otherwise starts fresh at ascending. Calls into the parent so
