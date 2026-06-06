@@ -853,6 +853,7 @@ export class DecksSettingTab extends PluginSettingTab {
 
     let selectedBackup = "";
     const backupSetting = new Setting(containerEl)
+      .setClass("decks-backup-restore-setting")
       .setName(I18n.t.settings.backup.availableBackups)
       .setDesc(I18n.t.settings.backup.availableBackupsDesc)
       .addDropdown((dropdown) => {
@@ -891,10 +892,45 @@ export class DecksSettingTab extends PluginSettingTab {
           })
       );
 
+    new Setting(containerEl)
+      .setName(I18n.t.settings.backup.rebuildState)
+      .setDesc(I18n.t.settings.backup.rebuildStateDesc)
+      .addButton((button) =>
+        button
+          .setButtonText(I18n.t.settings.backup.rebuildStateButton)
+          .onClick(async () => {
+            await this.rebuildCardStateFromReviewLogs();
+          })
+      );
+
     // Initial load of backup list
     this.refreshBackupList(backupSetting).catch((error) => {
       this.logger.debug("Failed to load initial backup list:", error);
     });
+  }
+
+  /**
+   * Recovery action: rebuild card scheduling state from review history for cards
+   * that show as new but have logs. Takes a safety backup first.
+   */
+  private async rebuildCardStateFromReviewLogs(): Promise<void> {
+    const notice = new Notice(I18n.t.notices.creatingBackup, 0);
+    try {
+      await this.backupService.createBackup(this.db);
+      const count = await this.db.rebuildCardStateFromReviewLogs();
+      await this.db.save();
+      notice.hide();
+      new Notice(I18n.format(I18n.t.notices.cardsRebuilt, { count }), 6000);
+    } catch (error) {
+      notice.hide();
+      new Notice(
+        I18n.format(I18n.t.notices.restoreFailed, {
+          message: (error as Error).message,
+        }),
+        8000
+      );
+      this.logger.debug("Rebuild from review history failed:", error);
+    }
   }
 
   /**

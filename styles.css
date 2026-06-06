@@ -633,6 +633,13 @@
   margin-top: 10px;
 }
 
+/* Restore row has a dropdown + several buttons; let them wrap instead of
+   overflowing the settings container (notably with longer translated labels). */
+.decks-backup-restore-setting .setting-item-control {
+  flex-wrap: wrap;
+  justify-content: flex-end;
+}
+
 div.decks-card-content
   > div.decks-answer-section
   > div.decks-card-side.decks-back

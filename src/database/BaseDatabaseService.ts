@@ -1890,6 +1890,55 @@ export abstract class BaseDatabaseService implements IDatabaseService {
     this.emitSyncOp({ o: "deck_reset", p: { deckId, resetAt: now } });
   }
 
+  /**
+   * Recovery: rebuild each card's FSRS scheduling state from its most recent
+   * review log. Used to recover cards that show "New" despite having review
+   * history (e.g. after an older migration dropped card state but preserved
+   * logs). Returns the number of cards restored.
+   */
+  async rebuildCardStateFromReviewLogs(): Promise<number> {
+    const now = this.getCurrentTimestamp();
+
+    // Cards we can restore: those with at least one review log.
+    const countRows = await this.querySql<{ count: number }>(
+      `SELECT COUNT(*) as count
+       FROM flashcards f
+       WHERE EXISTS (SELECT 1 FROM review_logs rl WHERE rl.flashcard_id = f.id)`,
+      [],
+      { asObject: true }
+    );
+    const restored = countRows[0]?.count ?? 0;
+    if (restored === 0) return 0;
+
+    await this.executeSql(
+      `UPDATE flashcards
+       SET state = latest.new_state,
+           stability = latest.new_stability,
+           difficulty = latest.new_difficulty,
+           repetitions = latest.new_repetitions,
+           lapses = latest.new_lapses,
+           interval = latest.new_interval_minutes,
+           last_reviewed = latest.reviewed_at,
+           due_date = strftime('%Y-%m-%dT%H:%M:%fZ', latest.reviewed_at, '+' || latest.new_interval_minutes || ' minutes'),
+           modified = ?
+       FROM (
+         SELECT rl.flashcard_id,
+                rl.new_state, rl.new_stability, rl.new_difficulty,
+                rl.new_repetitions, rl.new_lapses, rl.new_interval_minutes, rl.reviewed_at
+         FROM review_logs rl
+         JOIN (
+           SELECT flashcard_id, MAX(reviewed_at) AS max_reviewed
+           FROM review_logs
+           GROUP BY flashcard_id
+         ) m ON m.flashcard_id = rl.flashcard_id AND m.max_reviewed = rl.reviewed_at
+       ) AS latest
+       WHERE flashcards.id = latest.flashcard_id`,
+      [now]
+    );
+
+    return restored;
+  }
+
   // CARD STATE OVERLAYS (suspend, bury, reset)
   //
   // All four operations bump `modified` on the row so the existing
