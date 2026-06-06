@@ -9,6 +9,7 @@ import {
   setupTestDatabase,
   teardownTestDatabase,
   InMemoryAdapter,
+  DatabaseTestUtils,
 } from "./database-test-utils";
 import { CURRENT_SCHEMA_VERSION, generateDeckId } from "@decks/core";
 import { getCurrentSchemaVersion, migrate } from "../../database/migrations";
@@ -396,7 +397,7 @@ describe("Backup and restore integration", () => {
       oldDb.close();
     });
 
-    it("preserves legacy INTENSIVE values in review_logs for training", async () => {
+    it("normalizes legacy INTENSIVE values in review_logs to STANDARD (preserving the row)", async () => {
       const SQL = await loadSqlJs();
       const oldDb = new SQL.Database();
       oldDb.run(`
@@ -457,10 +458,165 @@ describe("Backup and restore integration", () => {
       stmt.step();
       const row = stmt.getAsObject();
       stmt.free();
-      // Historical review rows keep their snapshot profile so the optimizer can train on them.
-      expect(row.profile).toBe("INTENSIVE");
+      // INTENSIVE was removed from the runtime; the migration normalizes the legacy
+      // snapshot to STANDARD (the row is preserved, not dropped) so the optimizer and
+      // scheduler never see an unsupported profile.
+      expect(row.profile).toBe("STANDARD");
 
       oldDb.close();
+    });
+  });
+
+  describe("review_logs normalization (no silent row loss)", () => {
+    it("coerces constraint-violating legacy rows instead of dropping them", async () => {
+      const SQL = await loadSqlJs();
+      const oldDb = new SQL.Database();
+      // A pre-26 review_logs table with relaxed constraints, holding values that
+      // the rebuilt strict table would reject: capitalized rating_label, an
+      // out-of-range rating, the removed INTENSIVE profile, an invalid state, and
+      // a NULL in a now-NOT NULL numeric column.
+      oldDb.run(`
+        PRAGMA foreign_keys = OFF;
+        BEGIN;
+        CREATE TABLE review_logs (
+          id TEXT PRIMARY KEY,
+          flashcard_id TEXT NOT NULL,
+          session_id TEXT,
+          last_reviewed_at TEXT NOT NULL,
+          shown_at TEXT,
+          reviewed_at TEXT NOT NULL,
+          rating INTEGER NOT NULL,
+          rating_label TEXT NOT NULL,
+          time_elapsed_ms INTEGER,
+          old_state TEXT NOT NULL,
+          old_repetitions INTEGER NOT NULL DEFAULT 0,
+          old_lapses INTEGER NOT NULL DEFAULT 0,
+          old_stability REAL NOT NULL DEFAULT 0,
+          old_difficulty REAL NOT NULL DEFAULT 5.0,
+          new_state TEXT NOT NULL,
+          new_repetitions INTEGER NOT NULL DEFAULT 0,
+          new_lapses INTEGER NOT NULL DEFAULT 0,
+          new_stability REAL NOT NULL DEFAULT 2.5,
+          new_difficulty REAL NOT NULL DEFAULT 5.0,
+          old_interval_minutes INTEGER NOT NULL,
+          new_interval_minutes INTEGER NOT NULL,
+          old_due_at TEXT NOT NULL,
+          new_due_at TEXT NOT NULL,
+          elapsed_days REAL,
+          retrievability REAL,
+          request_retention REAL NOT NULL,
+          profile TEXT NOT NULL,
+          maximum_interval_days INTEGER NOT NULL,
+          min_minutes INTEGER NOT NULL,
+          fsrs_weights_version TEXT NOT NULL,
+          scheduler_version TEXT NOT NULL,
+          note_model_id TEXT,
+          card_template_id TEXT,
+          content_hash TEXT,
+          client TEXT
+        );
+        INSERT INTO review_logs (id, flashcard_id, last_reviewed_at, reviewed_at, rating, rating_label,
+          old_state, new_state, old_interval_minutes, new_interval_minutes, old_due_at, new_due_at,
+          elapsed_days, retrievability, request_retention, profile, maximum_interval_days, min_minutes,
+          fsrs_weights_version, scheduler_version)
+        VALUES
+          ('log_bad', 'card_1', datetime('now'), datetime('now'), 5, 'EASY',
+           'learning', 'graduated', 6, 10, datetime('now'), datetime('now'),
+           NULL, NULL, 0.9, 'INTENSIVE', 36500, 1, '1.0', '1.0'),
+          ('log_ok', 'card_2', datetime('now'), datetime('now'), 3, 'good',
+           'review', 'review', 6, 10, datetime('now'), datetime('now'),
+           1.0, 0.9, 0.9, 'STANDARD', 36500, 1, '1.0', '1.0');
+        PRAGMA user_version = 21;
+        COMMIT;
+        PRAGMA foreign_keys = ON;
+      `);
+
+      migrate(oldDb);
+
+      // No rows dropped — the whole point of the fix.
+      const countStmt = oldDb.prepare(`SELECT COUNT(*) AS c FROM review_logs`);
+      countStmt.step();
+      expect((countStmt.getAsObject() as { c: number }).c).toBe(2);
+      countStmt.free();
+
+      // The bad row was coerced into valid values, not discarded.
+      const stmt = oldDb.prepare(`SELECT * FROM review_logs WHERE id = 'log_bad'`);
+      stmt.step();
+      const row = stmt.getAsObject() as Record<string, unknown>;
+      stmt.free();
+      expect(row.rating).toBe(3); // 5 -> default 3
+      expect(row.rating_label).toBe("easy"); // 'EASY' -> lowercased
+      expect(row.profile).toBe("STANDARD"); // INTENSIVE -> STANDARD
+      expect(row.old_state).toBe("new"); // 'learning' -> 'new'
+      expect(row.new_state).toBe("review"); // 'graduated' -> 'review'
+      expect(row.elapsed_days).toBe(1.0); // NULL -> default
+      expect(row.retrievability).toBe(0.9); // NULL -> default
+
+      expect(getCurrentSchemaVersion(oldDb)).toBe(CURRENT_SCHEMA_VERSION);
+      oldDb.close();
+    });
+  });
+
+  describe("rebuildCardStateFromReviewLogs (recovery)", () => {
+    it("restores New-stated cards from their latest review log", async () => {
+      const { deck } = await createTestDeck("rebuild");
+      await db.createFlashcard(
+        DatabaseTestUtils.createTestFlashcard(deck.id, {
+          id: "card_new",
+          state: "new",
+          dueDate: new Date().toISOString(),
+          interval: 0,
+          stability: 0,
+          repetitions: 0,
+        })
+      );
+      // A review log proving the card was previously reviewed.
+      await db.insertReviewLog(
+        DatabaseTestUtils.createTestReviewLog("card_new", {
+          newState: "review",
+          newStability: 7.5,
+          newDifficulty: 6.1,
+          newRepetitions: 4,
+          newLapses: 1,
+          newIntervalMinutes: 1440,
+        })
+      );
+
+      const restored = await db.rebuildCardStateFromReviewLogs();
+      expect(restored).toBe(1);
+
+      const card = await db.getFlashcardById("card_new");
+      expect(card?.state).toBe("review");
+      expect(card?.stability).toBeCloseTo(7.5);
+      expect(card?.difficulty).toBeCloseTo(6.1);
+      expect(card?.repetitions).toBe(4);
+      expect(card?.lapses).toBe(1);
+      expect(card?.interval).toBe(1440);
+    });
+
+    it("leaves cards with no review logs untouched (e.g. after a reset)", async () => {
+      const { deck } = await createTestDeck("rebuild-reset");
+      await db.createFlashcard(
+        DatabaseTestUtils.createTestFlashcard(deck.id, {
+          id: "card_reset",
+          state: "review",
+          dueDate: new Date().toISOString(),
+          interval: 1440,
+        })
+      );
+      await db.insertReviewLog(
+        DatabaseTestUtils.createTestReviewLog("card_reset", {
+          newState: "review",
+          newStability: 5.0,
+        })
+      );
+      // Reset the card — this deletes its review logs, leaving nothing to rebuild from.
+      await db.resetCard("card_reset");
+
+      const restored = await db.rebuildCardStateFromReviewLogs();
+      expect(restored).toBe(0);
+      const card = await db.getFlashcardById("card_reset");
+      expect(card?.state).toBe("new");
     });
   });
 
