@@ -12,7 +12,13 @@ import type {
 
 export interface AiGeneratorOptions {
   generate: (
-    options: { prompt: string; sourceContext?: string; images?: RefactorImage[] },
+    options: {
+      prompt: string;
+      sourceContext?: string;
+      images?: RefactorImage[];
+      maxBatches?: number;
+      existingCards?: GeneratedCard[];
+    },
     handlers: GenerateHandlers,
     signal: AbortSignal,
   ) => Promise<unknown>;

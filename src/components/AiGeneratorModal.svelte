@@ -20,7 +20,13 @@
 
   export let app: App;
   export let generate: (
-    options: { prompt: string; sourceContext?: string; images?: unknown[] },
+    options: {
+      prompt: string;
+      sourceContext?: string;
+      images?: unknown[];
+      maxBatches?: number;
+      existingCards?: GeneratedCard[];
+    },
     handlers: GenerateHandlers,
     signal: AbortSignal,
   ) => Promise<unknown>;
@@ -37,6 +43,11 @@
   export let onClose: () => void;
 
   const g = I18n.t.modals.aiGenerator;
+
+  // Upper bound on generation rounds per Generate click. The controller feeds
+  // each round's cards back to the model and stops early once a round adds
+  // nothing new, so this is just a safety cap.
+  const MAX_BATCHES = 5;
 
   // Markdown render action for the detail pane (mirrors BatchCardRow).
   function md(node: HTMLElement, content: string) {
@@ -135,17 +146,6 @@
   }
 
   // --- Generation ---
-  function serializeCardsForContext(): string | null {
-    if (rows.length === 0) return null;
-    const list = rows
-      .map(
-        (r, i) =>
-          `${i + 1}. FRONT: ${r.card.front}\n   BACK: ${r.card.back}`,
-      )
-      .join("\n");
-    return `${g.existingCardsHeading}\n\n${list}\n\n${g.avoidDuplicatesInstruction}`;
-  }
-
   async function startGenerate() {
     if (phase === "streaming" || !prompt.trim()) return;
     const req = await buildGenerationComposerRequest(
@@ -154,13 +154,9 @@
       contexts,
       activeMentions,
     );
-    // Put already-generated cards above the user's instruction so the prompt
-    // remains the last, most salient thing the model reads.
-    let promptText = req.prompt;
-    if (includeGenerated) {
-      const cardsCtx = serializeCardsForContext();
-      if (cardsCtx) promptText = `${cardsCtx}\n\n${promptText}`;
-    }
+    // Cards from earlier runs to feed back (dedup + context) when the toggle is
+    // on; the controller skips re-emitting them. Captured before streaming.
+    const existingCards = includeGenerated ? rows.map((r) => r.card) : undefined;
     partial = null;
     genError = null;
     phase = "streaming";
@@ -177,7 +173,13 @@
     };
     try {
       await generate(
-        { prompt: promptText, sourceContext: req.sourceContext, images: req.images },
+        {
+          prompt: req.prompt,
+          sourceContext: req.sourceContext,
+          images: req.images,
+          maxBatches: MAX_BATCHES,
+          existingCards,
+        },
         handlers,
         abortController.signal,
       );
