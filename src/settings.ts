@@ -97,7 +97,7 @@ export interface DecksSettings {
     provider: AiProviderId;
     models: Record<AiProviderId, string>;
     localBaseUrl: string; // for the openai-compatible provider
-    decksCloudBaseUrl: string; // for the hosted decks-cloud provider (empty = default)
+    decksProBaseUrl: string; // for the hosted decks-pro provider (empty = default)
   };
 
   // Internal tracking
@@ -166,10 +166,10 @@ export const DEFAULT_SETTINGS: DecksSettings = {
       openai: "gpt-5.4-mini",
       claude: "claude-haiku-4-5-20251001",
       "openai-compatible": "gemma3",
-      "decks-cloud": "deepseek/deepseek-r1",
+      "decks-pro": "deepseek/deepseek-v4-flash",
     },
     localBaseUrl: "http://localhost:11434/v1",
-    decksCloudBaseUrl: "",
+    decksProBaseUrl: "",
   },
 
   hasCreatedTestDeck: false,
