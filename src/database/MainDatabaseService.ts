@@ -265,21 +265,42 @@ export class MainDatabaseService extends BaseDatabaseService {
         this.debugLog(
           `Migrating database from version ${currentVersion} to ${CURRENT_SCHEMA_VERSION}`
         );
+        const reviewLogsBefore = this.getReviewLogsCount();
         const migrationSQL = buildMigrationSQL(this.db);
         this.db.exec(migrationSQL);
         this.debugLog(`Database migrated to version ${CURRENT_SCHEMA_VERSION}`);
+
+        // Guard against silent review-history loss.
+        const dropped = reviewLogsBefore - this.getReviewLogsCount();
+        if (dropped > 0) {
+          this.migrationNotice = `Database upgraded, but ${dropped} review log ${
+            dropped === 1 ? "entry" : "entries"
+          } could not be migrated and were skipped.`;
+        }
       }
     } catch (error) {
       console.error("Schema migration failed:", error);
+      // Do NOT drop tables or recreate a fresh database — that is what destroyed
+      // review history before. Roll back the partial migration and leave the
+      // user's existing data untouched so they can restore/upgrade.
       try {
         this.db.exec("ROLLBACK");
       } catch {
         // Transaction may not be open
       }
-      this.db.exec("DROP TABLE IF EXISTS flashcards");
-      this.db.exec("DROP TABLE IF EXISTS decks");
-      this.db.exec(CREATE_TABLES_SQL);
-      this.migrationNotice = "Database migration failed. A fresh database was created — please restore from a backup to recover your review history.";
+      this.migrationNotice =
+        "Database migration failed. Your existing data was left untouched — no cards or review history were deleted. Please update the plugin or restore a recent backup.";
+    }
+  }
+
+  // Count review_logs rows, tolerating the table not existing yet.
+  private getReviewLogsCount(): number {
+    if (!this.db) return 0;
+    try {
+      const result = this.db.exec("SELECT COUNT(*) FROM review_logs");
+      return Number(result[0]?.values[0]?.[0]) || 0;
+    } catch {
+      return 0;
     }
   }
 

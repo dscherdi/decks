@@ -1,4 +1,5 @@
 import { FSRS } from "@decks/core";
+import type { FSRSProfile } from "@decks/core";
 import { Flashcard } from "../database/types";
 
 describe("FSRS Algorithm - Pure Implementation", () => {
@@ -1413,5 +1414,55 @@ describe("FSRS-6 Short-term Scheduling", () => {
       sameDayScheduling.good.stability,
       3
     );
+  });
+});
+
+describe("FSRS - legacy INTENSIVE profile compatibility", () => {
+  // Simulate a profile value read from old data; INTENSIVE was removed from the type.
+  const legacyIntensive = "INTENSIVE" as FSRSProfile;
+
+  it("does not throw when constructed with a legacy INTENSIVE profile", () => {
+    expect(() => new FSRS({ profile: legacyIntensive })).not.toThrow();
+  });
+
+  it("does not throw when updateParameters receives a legacy INTENSIVE profile", () => {
+    const fsrs = new FSRS({ profile: "STANDARD" });
+    expect(() => fsrs.updateParameters({ profile: legacyIntensive })).not.toThrow();
+  });
+
+  it("treats a legacy INTENSIVE profile identically to STANDARD", () => {
+    const card: Flashcard = {
+      id: "c1",
+      deckId: "d1",
+      front: "q",
+      back: "a",
+      type: "header-paragraph",
+      sourceFile: "x.md",
+      contentHash: "h",
+      breadcrumb: "",
+      notes: "",
+      hint: "",
+      tags: "",
+      clozeText: null,
+      clozeOrder: null,
+      sourceNodeId: null,
+      edgeId: null,
+      state: "new",
+      dueDate: new Date().toISOString(),
+      interval: 0,
+      repetitions: 0,
+      difficulty: 5.0,
+      stability: 0,
+      lapses: 0,
+      lastReviewed: null,
+      suspendedAt: null,
+      buriedUntil: null,
+      created: new Date().toISOString(),
+      modified: new Date().toISOString(),
+    };
+    const now = new Date();
+    const intensive = new FSRS({ profile: legacyIntensive }).getSchedulingInfo(card, now);
+    const standard = new FSRS({ profile: "STANDARD" }).getSchedulingInfo(card, now);
+    expect(intensive.good.stability).toBeCloseTo(standard.good.stability, 6);
   });
 });

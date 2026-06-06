@@ -233,6 +233,17 @@ class SimpleDatabaseWorker {
     }
   }
 
+  // Count review_logs rows, tolerating the table not existing yet.
+  private getReviewLogsCount(): number {
+    if (!this.db) return 0;
+    try {
+      const result = this.db.exec("SELECT COUNT(*) FROM review_logs");
+      return Number(result[0]?.values[0]?.[0]) || 0;
+    } catch {
+      return 0;
+    }
+  }
+
   // Check if migration is needed and execute it directly
   checkMigrationNeeded(): void {
     if (!this.db) throw new Error("Database not initialized");
@@ -243,26 +254,41 @@ class SimpleDatabaseWorker {
       const currentVersion = Number(versionResult[0]?.values[0]?.[0]) || 0;
 
       if (currentVersion < CURRENT_SCHEMA_VERSION) {
+        const reviewLogsBefore = this.getReviewLogsCount();
         try {
           const migrationSQL = buildMigrationSQL(this.db);
           this.db.exec(migrationSQL);
+
+          // Guard against silent review-history loss: if the rebuild dropped any
+          // rows (an unforeseen value the normalization didn't cover), surface it
+          // instead of failing quietly.
+          const dropped = reviewLogsBefore - this.getReviewLogsCount();
           self.postMessage({
             type: "migrationComplete",
             success: true,
+            ...(dropped > 0
+              ? {
+                  migrationNotice: `Database upgraded, but ${dropped} review log ${
+                    dropped === 1 ? "entry" : "entries"
+                  } could not be migrated and were skipped.`,
+                }
+              : {}),
           });
-        } catch {
+        } catch (migrationError) {
+          // Do NOT drop tables or recreate a fresh database — that is what
+          // destroyed review history before. Roll back the partial migration and
+          // leave the user's existing data untouched so they can restore/upgrade.
           try {
             this.db.exec("ROLLBACK");
           } catch {
             // Transaction may not be open
           }
-          this.db.exec("DROP TABLE IF EXISTS flashcards");
-          this.db.exec("DROP TABLE IF EXISTS decks");
-          this.db.exec(CREATE_TABLES_SQL);
           self.postMessage({
             type: "migrationComplete",
-            success: true,
-            migrationNotice: "Database migration failed. A fresh database was created — please restore from a backup to recover your review history.",
+            success: false,
+            migrationNotice:
+              "Database migration failed. Your existing data was left untouched — no cards or review history were deleted. Please update the plugin or restore a recent backup.",
+            error: (migrationError as Error).message,
           });
         }
       } else {
