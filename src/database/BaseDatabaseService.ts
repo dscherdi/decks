@@ -29,6 +29,7 @@ import type {
 } from "@decks/core";
 import type { IDatabaseService, JournalStateRow } from "./DatabaseFactory";
 import type { SyncLog } from "../services/SyncLog";
+import { generateOldFlashcardId } from "@decks/core";
 
 export interface QueryConfig {
   asObject?: boolean;
@@ -1890,16 +1891,45 @@ export abstract class BaseDatabaseService implements IDatabaseService {
     this.emitSyncOp({ o: "deck_reset", p: { deckId, resetAt: now } });
   }
 
-  /**
-   * Recovery: rebuild each card's FSRS scheduling state from its most recent
-   * review log. Used to recover cards that show "New" despite having review
-   * history (e.g. after an older migration dropped card state but preserved
-   * logs). Returns the number of cards restored.
+ /**
+   * Recovery: Migrates orphaned review logs by reverse-computing old IDs from 
+   * the current flashcard text, then rebuilds each card's FSRS scheduling 
+   * state from its most recent review log.
    */
   async rebuildCardStateFromReviewLogs(): Promise<number> {
     const now = this.getCurrentTimestamp();
 
-    // Cards we can restore: those with at least one review log.
+    // 1. Fetch current cards to compute what their old IDs used to be
+    // Assuming 'id' is the new ID, and we have 'front'
+    const cards = await this.querySql<{ id: string, front: string, back: string }>(
+      `SELECT id, front FROM flashcards`,
+      [],
+      { asObject: true }
+    );
+
+    // 2. Compute the ID migrations in TypeScript
+    const idMigrations: { oldId: string, newId: string }[] = [];
+    for (const card of cards) {
+      // NOTE: Replace this with your exact old hash generation function call
+      const oldId = generateOldFlashcardId(card.front); 
+      
+      if (oldId !== card.id) {
+        idMigrations.push({ oldId, newId: card.id });
+      }
+    }
+
+    // 3. Re-link the orphaned review logs to the new flashcard IDs
+    // If your DB wrapper supports transactions, wrap this loop in one for speed
+    for (const { oldId, newId } of idMigrations) {
+      await this.executeSql(
+        `UPDATE review_logs 
+         SET flashcard_id = ? 
+         WHERE flashcard_id = ?`,
+        [newId, oldId]
+      );
+    }
+
+    // 4. Count how many cards we can now successfully restore
     const countRows = await this.querySql<{ count: number }>(
       `SELECT COUNT(*) as count
        FROM flashcards f
@@ -1908,8 +1938,10 @@ export abstract class BaseDatabaseService implements IDatabaseService {
       { asObject: true }
     );
     const restored = countRows[0]?.count ?? 0;
+    
     if (restored === 0) return 0;
 
+    // 5. Rebuild the FSRS state from the newly linked logs
     await this.executeSql(
       `UPDATE flashcards
        SET state = latest.new_state,
