@@ -97,7 +97,6 @@ export interface DecksSettings {
     provider: AiProviderId;
     models: Record<AiProviderId, string>;
     localBaseUrl: string; // for the openai-compatible provider
-    decksProBaseUrl: string; // for the hosted decks-pro provider (empty = default)
   };
 
   // Internal tracking
@@ -169,7 +168,6 @@ export const DEFAULT_SETTINGS: DecksSettings = {
       "decks-pro": "deepseek/deepseek-v4-flash",
     },
     localBaseUrl: "http://localhost:11434/v1",
-    decksProBaseUrl: "",
   },
 
   hasCreatedTestDeck: false,

@@ -803,3 +803,92 @@ div.decks-card-content
   font-size: 0.85em;
   white-space: pre-wrap;
 }
+
+/* AI generator: footer button that toggles the destination form */
+.decks-ai-gen-dest-toggle {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+.decks-ai-gen-dest-toggle.is-active {
+  background: var(--interactive-accent);
+  color: var(--text-on-accent);
+}
+.decks-ai-gen-dest-toggle-icon {
+  display: inline-flex;
+}
+
+/* Segmented control (new-file / append) */
+.decks-seg {
+  display: flex;
+  gap: 2px;
+  padding: 3px;
+  margin-bottom: 10px;
+  background: var(--background-secondary-alt);
+  border-radius: var(--radius-m);
+}
+.decks-seg-btn {
+  flex: 1;
+  padding: 6px 10px;
+  border: none;
+  box-shadow: none;
+  border-radius: calc(var(--radius-m) - 2px);
+  background: transparent;
+  color: var(--text-muted);
+  font-size: var(--font-ui-small);
+  cursor: pointer;
+}
+.decks-seg-btn:hover {
+  color: var(--text-normal);
+}
+.decks-seg-btn.is-active {
+  background: var(--interactive-accent);
+  color: var(--text-on-accent);
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.15);
+  font-weight: var(--font-medium);
+}
+.decks-seg-btn.is-active:hover {
+  color: var(--text-on-accent);
+}
+
+/* Searchable deck field — looks like an input, opens the fuzzy picker */
+.decks-ai-gen-deck-search {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  width: 100%;
+  padding: var(--size-4-1) var(--size-4-2);
+  text-align: left;
+  background: var(--background-modifier-form-field);
+  border: none;
+  border-radius: var(--radius-s);
+  color: var(--text-normal);
+  cursor: pointer;
+}
+.decks-ai-gen-deck-search:focus {
+  outline: none;
+  box-shadow: 0 0 0 2px var(--interactive-accent);
+}
+.decks-ai-gen-deck-search .is-placeholder {
+  color: var(--text-faint);
+}
+.decks-deck-search-icon {
+  display: inline-flex;
+  color: var(--text-muted);
+}
+
+/* Destination form inputs — borderless with a soft resting fill (global so it
+   wins over Obsidian's default input/select styling). */
+.decks-ai-gen-save-row input,
+.decks-ai-gen-save-row select {
+  width: 100%;
+  border: none;
+  background: var(--background-modifier-form-field);
+  border-radius: var(--radius-s);
+  padding: var(--size-4-1) var(--size-4-2);
+}
+.decks-ai-gen-save-row input:focus,
+.decks-ai-gen-save-row select:focus {
+  outline: none;
+  box-shadow: 0 0 0 2px var(--interactive-accent);
+}

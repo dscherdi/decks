@@ -74,7 +74,6 @@ export class AiGeneratorView extends ItemView {
         generate: this.options.generate,
         save: this.options.save,
         loadProfiles: this.options.loadProfiles,
-        loadDecks: this.options.loadDecks,
         defaultFolder: this.options.defaultFolder,
         canvasFolder: this.options.canvasFolder,
         deckTag: this.options.deckTag,

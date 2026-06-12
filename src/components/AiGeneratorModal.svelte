@@ -1,10 +1,11 @@
 <script lang="ts">
   import { onMount, onDestroy } from "svelte";
-  import type { App } from "obsidian";
+  import { type App, type TFile, setIcon } from "obsidian";
   import { I18n, type GeneratedCard, type GenerateHandlers } from "@decks/core";
   import AiPromptComposer from "./AiPromptComposer.svelte";
   import BatchCardRow from "./BatchCardRow.svelte";
   import { FilePickerModal } from "../utils/file-picker";
+  import { FolderPickerModal } from "../utils/folder-picker";
   import {
     type ContextItem,
     buildGenerationComposerRequest,
@@ -12,11 +13,7 @@
     IMAGE_EXTENSIONS,
   } from "../utils/attachments";
   import type { SaveFormat } from "../services/FlashcardComposer";
-  import type {
-    DeckOpt,
-    GeneratorSaveRequest,
-    ProfileOpt,
-  } from "./generator-save";
+  import type { GeneratorSaveRequest, ProfileOpt } from "./generator-save";
 
   export let app: App;
   export let generate: (
@@ -33,9 +30,14 @@
   export let save: (
     cards: GeneratedCard[],
     request: GeneratorSaveRequest,
-  ) => Promise<{ ok: boolean; error?: string; count?: number; deckId?: string }>;
+  ) => Promise<{
+    ok: boolean;
+    error?: string;
+    count?: number;
+    deckId?: string;
+    filePath?: string;
+  }>;
   export let loadProfiles: () => Promise<ProfileOpt[]>;
-  export let loadDecks: () => Promise<DeckOpt[]>;
   export let defaultFolder = "";
   export let canvasFolder = "";
   export let deckTag = "#decks";
@@ -94,7 +96,9 @@
       mobile = entries[0].contentRect.width <= 768;
     });
     resizeObserver.observe(rootEl);
-    void initSaveDefaults();
+    initSaveDefaults().catch((e) =>
+      console.error("AI generator: failed to load decks/profiles", e),
+    );
   });
   onDestroy(() => resizeObserver?.disconnect());
 
@@ -205,42 +209,87 @@
 
   // --- Save panel ---
   let saveMode: "new-file" | "append" = "new-file";
-  let format: SaveFormat = "header-paragraph";
+  let format: SaveFormat = "header-paragraph"; // new-file format (user choice)
+  let appendFormat: SaveFormat = "header-paragraph"; // append format (target file kind)
   let fileName = "";
   let folder = "";
   let tag = "#decks";
   let profiles: ProfileOpt[] = [];
   let profileId = "";
-  let decks: DeckOpt[] = [];
-  let deckId = "";
+  let appendFile: TFile | null = null; // vault file to append to
   let saveError: string | null = null;
+  let showDestination = true;
 
   async function initSaveDefaults() {
     folder = defaultFolder;
     tag = deckTag;
     profiles = await loadProfiles();
     profileId = profiles[0]?.id ?? "";
-    decks = await loadDecks();
-    deckId = decks[0]?.id ?? "";
   }
 
-  $: selectedDeck = decks.find((d) => d.id === deckId) ?? null;
+  // Drop the chosen file if it no longer matches the format's file kind
+  // (canvas format ↔ .canvas file; markdown formats ↔ .md file).
+  $: if (
+    appendFile &&
+    (appendFormat === "canvas") !== (appendFile.extension === "canvas")
+  ) {
+    appendFile = null;
+  }
+  // Human label for the append format (used in the read-only locked view).
+  $: appendFormatLabel =
+    appendFormat === "table"
+      ? g.formatTable
+      : appendFormat === "canvas"
+        ? g.formatCanvas
+        : g.formatHeader;
+
+  // Render a native Obsidian icon into an element.
+  function icon(node: HTMLElement, name: string) {
+    setIcon(node, name);
+  }
+
+  // Pick the append target from the vault: any .md file for markdown formats,
+  // any .canvas file for the canvas format.
+  function openFilePicker() {
+    const files =
+      appendFormat === "canvas"
+        ? app.vault.getFiles().filter((f) => f.extension === "canvas")
+        : app.vault.getMarkdownFiles();
+    new FilePickerModal(
+      app,
+      files,
+      (file) => {
+        appendFile = file;
+      },
+      g.deckSearchPlaceholder,
+    ).open();
+  }
+
+  // Pick the destination folder for a new file ("" = vault root).
+  function openFolderPicker() {
+    const folders = Array.from(
+      new Set(["", ...app.vault.getAllFolders().map((f) => f.path)]),
+    );
+    new FolderPickerModal(
+      app,
+      folders,
+      (path) => {
+        folder = path;
+      },
+      g.folder,
+    ).open();
+  }
   // Canvas new files must land in the canvas-decks folder; default it there.
   $: if (saveMode === "new-file" && format === "canvas" && folder === defaultFolder) {
     folder = canvasFolder || defaultFolder;
   }
-  // When appending, the deck's file type fixes the format.
-  $: if (saveMode === "append" && selectedDeck) {
-    format = selectedDeck.isCanvas ? "canvas" : format === "canvas" ? "header-paragraph" : format;
-  }
-
   function buildRequest(): GeneratorSaveRequest | null {
     if (saveMode === "append") {
-      if (!deckId) {
+      if (!appendFile) {
         saveError = g.deckRequired;
         return null;
       }
-      return { kind: "append", format, deckId };
+      return { kind: "append", format: appendFormat, filePath: appendFile.path };
     }
     if (!fileName.trim()) {
       saveError = g.nameRequired;
@@ -273,11 +322,18 @@
       rows = rows.map((r) =>
         savedIds.has(r.id) ? { ...r, saved: true } : r,
       );
-      // Further saves this session append to the deck we just wrote, so refresh
-      // the deck list (it now includes any newly created deck) and lock to append.
+      // Further saves this session append to the file we just wrote, so lock the
+      // target to it.
       hasSaved = true;
-      decks = await loadDecks();
-      deckId = result.deckId ?? deckId;
+      const savedPath =
+        result.filePath ??
+        (request.kind === "append" ? request.filePath : undefined);
+      const savedFile = savedPath
+        ? app.vault.getAbstractFileByPath(savedPath)
+        : null;
+      appendFile =
+        savedFile && "extension" in savedFile ? (savedFile as TFile) : appendFile;
+      appendFormat = request.format; // lock consecutive generations to this target
       saveMode = "append";
       phase = "review";
     } else {
@@ -368,18 +424,31 @@
     {/if}
   </div>
 
-  {#if phase === "review" || phase === "saving"}
+  {#if (phase === "review" || phase === "saving") && (showDestination || saveError?.trim())}
     <div class="decks-ai-gen-save">
+      {#if showDestination}
       {#if !hasSaved}
-        <div class="decks-ai-gen-save-modes">
-          <label>
-            <input type="radio" value="new-file" bind:group={saveMode} />
+        <div class="decks-seg" role="tablist">
+          <button
+            type="button"
+            class="decks-seg-btn"
+            class:is-active={saveMode === "new-file"}
+            role="tab"
+            aria-selected={saveMode === "new-file"}
+            on:click={() => (saveMode = "new-file")}
+          >
             {g.modeNew}
-          </label>
-          <label>
-            <input type="radio" value="append" bind:group={saveMode} />
+          </button>
+          <button
+            type="button"
+            class="decks-seg-btn"
+            class:is-active={saveMode === "append"}
+            role="tab"
+            aria-selected={saveMode === "append"}
+            on:click={() => (saveMode = "append")}
+          >
             {g.modeAppend}
-          </label>
+          </button>
         </div>
       {/if}
 
@@ -399,7 +468,16 @@
           </label>
           <label class="decks-ai-gen-save-row">
             <span>{g.folder}</span>
-            <input type="text" bind:value={folder} placeholder={g.folderPlaceholder} />
+            <button
+              type="button"
+              class="decks-ai-gen-deck-search"
+              on:click={openFolderPicker}
+            >
+              <span class="decks-deck-search-icon" use:icon={"folder"}></span>
+              <span class:is-placeholder={!folder}>
+                {folder || g.folderPlaceholder}
+              </span>
+            </button>
           </label>
           {#if format !== "canvas"}
             <label class="decks-ai-gen-save-row">
@@ -419,23 +497,36 @@
       {:else}
         <div class="decks-ai-gen-save-grid">
           <label class="decks-ai-gen-save-row">
-            <span>{g.deck}</span>
-            <select bind:value={deckId}>
-              {#each decks as d (d.id)}
-                <option value={d.id}>{d.name}{d.isCanvas ? " (canvas)" : ""}</option>
-              {/each}
-            </select>
-          </label>
-          {#if selectedDeck && !selectedDeck.isCanvas}
-            <label class="decks-ai-gen-save-row">
-              <span>{g.format}</span>
-              <select bind:value={format}>
+            <span>{g.format}</span>
+            {#if hasSaved}
+              <span class="decks-ai-gen-readonly">{appendFormatLabel}</span>
+            {:else}
+              <select bind:value={appendFormat}>
                 <option value="header-paragraph">{g.formatHeader}</option>
                 <option value="table">{g.formatTable}</option>
+                <option value="canvas">{g.formatCanvas}</option>
               </select>
-            </label>
-          {/if}
+            {/if}
+          </label>
+          <label class="decks-ai-gen-save-row">
+            <span>{g.deck}</span>
+            {#if hasSaved}
+              <span class="decks-ai-gen-readonly">{appendFile?.path ?? ""}</span>
+            {:else}
+              <button
+                type="button"
+                class="decks-ai-gen-deck-search"
+                on:click={openFilePicker}
+              >
+                <span class="decks-deck-search-icon" use:icon={"search"}></span>
+                <span class:is-placeholder={!appendFile}>
+                  {appendFile ? appendFile.path : g.deckSearchPlaceholder}
+                </span>
+              </button>
+            {/if}
+          </label>
         </div>
+      {/if}
       {/if}
 
       {#if saveError?.trim()}
@@ -488,6 +579,17 @@
       {/if}
       <span class="decks-ai-gen-footer-spacer"></span>
       {#if phase === "review"}
+        <button
+          type="button"
+          class="decks-ai-gen-dest-toggle"
+          class:is-active={showDestination}
+          aria-pressed={showDestination}
+          aria-label={g.destination}
+          on:click={() => (showDestination = !showDestination)}
+        >
+          <span class="decks-ai-gen-dest-toggle-icon" use:icon={"sliders-horizontal"}></span>
+          {g.destination}
+        </button>
         <button
           type="button"
           class="mod-cta"
@@ -618,17 +720,6 @@
     flex-direction: column;
     gap: 10px;
   }
-  .decks-ai-gen-save-modes {
-    display: flex;
-    gap: 18px;
-    font-size: 13px;
-  }
-  .decks-ai-gen-save-modes label {
-    display: inline-flex;
-    align-items: center;
-    gap: 6px;
-    cursor: pointer;
-  }
   .decks-ai-gen-save-grid {
     display: grid;
     grid-template-columns: 1fr 1fr;
@@ -637,13 +728,23 @@
   .decks-ai-gen-save-row {
     display: flex;
     flex-direction: column;
-    gap: 3px;
-    font-size: 12px;
+    gap: 4px;
+    font-size: var(--font-ui-small);
+    color: var(--text-normal);
+  }
+  .decks-ai-gen-save-row > span {
+    font-size: 0.85em;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
     color: var(--text-muted);
   }
-  .decks-ai-gen-save-row input,
-  .decks-ai-gen-save-row select {
-    width: 100%;
+  /* A locked, non-editable value (format/deck after the first save). */
+  .decks-ai-gen-save-row > span.decks-ai-gen-readonly {
+    font-size: 1em;
+    text-transform: none;
+    letter-spacing: normal;
+    color: var(--text-normal);
+    padding: var(--size-4-1) 0;
   }
   .decks-ai-gen-composer {
     flex: 0 0 auto;

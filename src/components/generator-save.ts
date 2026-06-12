@@ -6,13 +6,6 @@ export interface ProfileOpt {
   name: string;
 }
 
-/** An existing deck choice for the "append" save mode. */
-export interface DeckOpt {
-  id: string;
-  name: string;
-  isCanvas: boolean;
-}
-
 /** What the generator modal emits when the user saves the kept cards. */
 export type GeneratorSaveRequest =
   | {
@@ -23,4 +16,4 @@ export type GeneratorSaveRequest =
       tag: string;
       profileId: string;
     }
-  | { kind: "append"; format: SaveFormat; deckId: string };
+  | { kind: "append"; format: SaveFormat; filePath: string };

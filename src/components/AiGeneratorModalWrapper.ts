@@ -4,11 +4,7 @@ import type { GeneratedCard, GenerateHandlers, RefactorImage } from "@decks/core
 import { mount, unmount } from "svelte";
 import type { Svelte5MountedComponent } from "../types/svelte-components";
 import AiGeneratorModal from "./AiGeneratorModal.svelte";
-import type {
-  DeckOpt,
-  GeneratorSaveRequest,
-  ProfileOpt,
-} from "./generator-save";
+import type { GeneratorSaveRequest, ProfileOpt } from "./generator-save";
 
 export interface AiGeneratorOptions {
   generate: (
@@ -25,9 +21,14 @@ export interface AiGeneratorOptions {
   save: (
     cards: GeneratedCard[],
     request: GeneratorSaveRequest,
-  ) => Promise<{ ok: boolean; error?: string; count?: number; deckId?: string }>;
+  ) => Promise<{
+    ok: boolean;
+    error?: string;
+    count?: number;
+    deckId?: string;
+    filePath?: string;
+  }>;
   loadProfiles: () => Promise<ProfileOpt[]>;
-  loadDecks: () => Promise<DeckOpt[]>;
   defaultFolder: string;
   canvasFolder: string;
   deckTag: string;
@@ -85,7 +86,6 @@ export class AiGeneratorModalWrapper extends Modal {
         generate: this.options.generate,
         save: this.options.save,
         loadProfiles: this.options.loadProfiles,
-        loadDecks: this.options.loadDecks,
         defaultFolder: this.options.defaultFolder,
         canvasFolder: this.options.canvasFolder,
         deckTag: this.options.deckTag,

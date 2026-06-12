@@ -15,7 +15,7 @@ import type { IDatabaseService } from "@/database/DatabaseFactory";
 import type { FsrsWeightSet } from "@/database/types";
 import { Logger } from "@/utils/logging";
 import { OptimizeFsrsModal } from "./OptimizeFsrsModal";
-import { type AiProviderId, DECKS_PRO_DEFAULT_BASE_URL, I18n, type LanguagePreference, PROVIDER_MODELS, SUPPORTED_LANGUAGES } from "@decks/core";
+import { type AiProviderId, I18n, type LanguagePreference, PROVIDER_MODELS, SUPPORTED_LANGUAGES } from "@decks/core";
 
 export class DecksSettingTab extends PluginSettingTab {
   private settings: DecksSettings;
@@ -176,20 +176,6 @@ export class DecksSettingTab extends PluginSettingTab {
         );
     }
 
-    if (provider === "decks-pro") {
-      new Setting(containerEl)
-        .setName(s.serverUrl)
-        .setDesc(s.serverUrlDesc)
-        .addText((text) =>
-          text
-            .setPlaceholder(DECKS_PRO_DEFAULT_BASE_URL)
-            .setValue(this.settings.ai.decksProBaseUrl)
-            .onChange(async (value) => {
-              this.settings.ai.decksProBaseUrl = value.trim();
-              await this.saveSettings();
-            })
-        );
-    }
 
     // Credential lives in the non-synced AiKeyStore, never in data.json. For the
     // hosted decks-pro provider this field holds the license key.

@@ -1062,12 +1062,6 @@ export default class DecksPlugin extends Plugin {
           id: p.id,
           name: p.name,
         })),
-      loadDecks: async () =>
-        (await this.db.getAllDecks()).map((d) => ({
-          id: d.id,
-          name: d.name,
-          isCanvas: d.filepath.endsWith(".canvas"),
-        })),
       defaultFolder: this.settings.parsing.folderSearchPath || "",
       canvasFolder: this.settings.canvasDecks.folderPath || "",
       deckTag: this.settings.parsing.deckTag,
@@ -1098,7 +1092,13 @@ export default class DecksPlugin extends Plugin {
   private async saveGeneratedCards(
     cards: GeneratedCard[],
     request: GeneratorSaveRequest,
-  ): Promise<{ ok: boolean; error?: string; count?: number; deckId?: string }> {
+  ): Promise<{
+    ok: boolean;
+    error?: string;
+    count?: number;
+    deckId?: string;
+    filePath?: string;
+  }> {
     try {
       if (request.kind === "new-file") {
         const profile =
@@ -1121,25 +1121,37 @@ export default class DecksPlugin extends Plugin {
           tag,
           request.profileId,
         );
-        return { ok: true, count: cards.length, deckId };
+        return { ok: true, count: cards.length, deckId, filePath };
       } else {
-        const deck = await this.db.getDeckById(request.deckId);
-        if (!deck) return { ok: false, error: "Deck not found" };
+        // Append to any vault file. Use the existing deck's profile if the file
+        // is already a deck, otherwise the default profile; then register/sync.
+        const existing = await this.db.getDeckByFilepath(request.filePath);
+        const profileId =
+          existing?.profileId ?? (await this.db.getDefaultProfile()).id;
         const profile =
-          (await this.db.getProfileById(deck.profileId)) ??
+          (await this.db.getProfileById(profileId)) ??
           (await this.db.getDefaultProfile());
         await this.flashcardComposer.saveGenerated(cards, {
           kind: "append",
           format: request.format,
-          filePath: deck.filepath,
+          filePath: request.filePath,
           level: profile.headerLevel,
         });
-        const file = this.app.vault.getAbstractFileByPath(deck.filepath);
-        if (file instanceof TFile) {
-          await this.handleFileChange(file);
-          await this.deckSynchronizer.syncDeck(deck.id);
-        }
-        return { ok: true, count: cards.length, deckId: deck.id };
+        const tag =
+          request.format === "canvas"
+            ? this.settings.canvasDecks.tagName || this.settings.parsing.deckTag
+            : this.settings.parsing.deckTag;
+        const deckId = await this.registerGeneratedDeck(
+          request.filePath,
+          tag,
+          profileId,
+        );
+        return {
+          ok: true,
+          count: cards.length,
+          deckId,
+          filePath: request.filePath,
+        };
       }
     } catch (e) {
       this.logger.error("Failed to save generated cards", e);

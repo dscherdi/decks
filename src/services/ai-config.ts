@@ -15,9 +15,8 @@ export async function buildAiConfig(
     provider,
     model: settings.ai.models[provider],
     apiKey: await keyStore.get(provider),
+    // Only the local provider takes a base URL; decks-pro uses its baked-in default.
     baseUrl:
-      provider === "decks-pro"
-        ? settings.ai.decksProBaseUrl
-        : settings.ai.localBaseUrl,
+      provider === "openai-compatible" ? settings.ai.localBaseUrl : undefined,
   };
 }
