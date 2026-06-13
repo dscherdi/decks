@@ -27,6 +27,10 @@ export interface GenerateOptions {
    * deduplication and the model's context, without re-emitting them via onCard.
    */
   existingCards?: GeneratedCard[];
+  /** Override the model for this run only (per-prompt picker); falls back to settings. */
+  modelOverride?: string;
+  /** Force attaching the request payload + raw response; falls back to the debug setting. */
+  debug?: boolean;
 }
 
 /** Normalized key for in-session dedup (no deck exists yet to hash against). */
@@ -57,6 +61,7 @@ export class AiGeneratorController {
     signal?: AbortSignal,
   ): Promise<GenerateResult> {
     const config = await buildAiConfig(this.settings, this.keyStore);
+    if (options.modelOverride) config.model = options.modelOverride;
     const maxBatches = Math.max(1, options.maxBatches ?? 1);
 
     // Cards we feed back to the model each round (prior run + this run's output).
@@ -88,7 +93,7 @@ export class AiGeneratorController {
         sourceContext: options.sourceContext,
         images: options.images,
         generatedSoFar: priorContext.length ? [...priorContext] : undefined,
-        debug: this.settings.debug.enableLogging,
+        debug: options.debug ?? this.settings.debug.enableLogging,
       };
 
       try {

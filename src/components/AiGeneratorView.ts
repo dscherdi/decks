@@ -77,6 +77,9 @@ export class AiGeneratorView extends ItemView {
         defaultFolder: this.options.defaultFolder,
         canvasFolder: this.options.canvasFolder,
         deckTag: this.options.deckTag,
+        aiProvider: this.options.aiProvider,
+        defaultModel: this.options.defaultModel,
+        debugEnabled: this.options.debugEnabled,
         renderMarkdown: (source: string, el: HTMLElement) => {
           this.renderMarkdown(source, el);
         },

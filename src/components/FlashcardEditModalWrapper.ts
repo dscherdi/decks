@@ -1,6 +1,7 @@
 import { Modal, Component, MarkdownRenderer } from "obsidian";
 import type { App } from "obsidian";
 import type {
+  AiProviderId,
   RefactorFieldSet,
   RefactorImage,
   RefactorResult,
@@ -18,10 +19,13 @@ export interface RefactorUiOptions {
   sourceContext?: string;
   images?: RefactorImage[];
   split?: boolean;
+  model?: string;
 }
 
 export interface FlashcardEditAiOptions {
   aiEnabled: boolean;
+  aiProvider: AiProviderId;
+  defaultModel: string;
   onRefactor: (
     current: RefactorFieldSet,
     options: RefactorUiOptions,
@@ -106,6 +110,8 @@ export class FlashcardEditModalWrapper extends Modal {
           this.renderMarkdown(source, el);
         },
         aiEnabled: this.aiOptions?.aiEnabled ?? false,
+        aiProvider: this.aiOptions?.aiProvider ?? "openai",
+        defaultModel: this.aiOptions?.defaultModel ?? "",
         onRefactor: this.aiOptions?.onRefactor,
         onSplit: this.aiOptions?.onSplit,
       },

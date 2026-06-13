@@ -5,7 +5,7 @@
   // come from the parent via props/callbacks.
   import { tick } from "svelte";
   import { setIcon } from "obsidian";
-  import { I18n } from "@decks/core";
+  import { I18n, type AiModelOption } from "@decks/core";
 
   interface ComposerContext {
     id: string;
@@ -45,6 +45,11 @@
   export let submittingLabel: string | null = null;
   // Optional prompt placeholder override (defaults to the refactor wording).
   export let placeholder: string | null = null;
+  // Optional per-prompt model picker: when more than one option is available it
+  // renders a native select beside the send button that overrides the model for
+  // this prompt only. Bound to `selectedModel` by the parent.
+  export let modelOptions: AiModelOption[] = [];
+  export let selectedModel = "";
 
   const t = I18n.t.modals.editFlashcard;
 
@@ -301,6 +306,17 @@
         {t.aiSplit}
       </button>
     {/if}
+    {#if modelOptions.length > 1}
+      <select
+        class="decks-ai-composer-model"
+        aria-label={t.aiModel}
+        bind:value={selectedModel}
+      >
+        {#each modelOptions as opt (opt.id)}
+          <option value={opt.id}>{opt.name}</option>
+        {/each}
+      </select>
+    {/if}
     <button
       type="button"
       class="mod-cta decks-ai-composer-send"
@@ -529,5 +545,20 @@
   }
   .decks-ai-composer-send {
     margin-left: auto;
+  }
+  .decks-ai-composer-model {
+    margin-left: auto;
+    max-width: 40%;
+    padding: 4px 8px;
+    border-radius: 4px;
+    border: 1px solid var(--background-modifier-border);
+    background: var(--background-primary);
+    color: var(--text-normal);
+    font-size: 12px;
+  }
+  /* When the model select is present it owns the auto margin; keep the send
+     button next to it with a small gap instead of pushing it away again. */
+  .decks-ai-composer-model + .decks-ai-composer-send {
+    margin-left: 8px;
   }
 </style>

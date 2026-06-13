@@ -108,12 +108,15 @@ export class AiRefactorController {
       sourceContext?: string;
       images?: RefactorImage[];
       split?: boolean;
+      model?: string;
     },
     signal?: AbortSignal,
   ): Promise<RefactorResult> {
     const config = await this.buildConfig();
+    // Per-prompt model picker overrides the settings model for this run only.
+    const cfg = options?.model ? { ...config, model: options.model } : config;
     return this.service.refactorCard(
-      config,
+      cfg,
       {
         current,
         instructions: options?.instructions,

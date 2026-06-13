@@ -50,6 +50,7 @@ import type { GeneratorSaveRequest } from "./components/generator-save";
 import type { Flashcard } from "./database/types";
 import { Logger, formatTime } from "./utils/logging";
 import { ProgressTracker } from "./utils/progress";
+import { resolveModelId } from "./utils/ai-model-options";
 
 import { type DecksSettings, DEFAULT_SETTINGS } from "./settings";
 import { DecksSettingTab } from "./components/settings/SettingsTab";
@@ -964,6 +965,8 @@ export default class DecksPlugin extends Plugin {
         settle,
         {
           aiEnabled: this.aiRefactorController.isEnabled(),
+          aiProvider: this.settings.ai.provider,
+          defaultModel: this.aiDefaultModel(),
           onRefactor: (current, options, signal) =>
             this.aiRefactorController.refactorCard(
               card,
@@ -974,6 +977,7 @@ export default class DecksPlugin extends Plugin {
                 sourceContext: options.sourceContext,
                 images: options.images,
                 split: options.split,
+                model: options.model,
               },
               signal,
             ),
@@ -1004,6 +1008,8 @@ export default class DecksPlugin extends Plugin {
         this.app,
         {
           cards,
+          aiProvider: this.settings.ai.provider,
+          defaultModel: this.aiDefaultModel(),
           run: (card, options, signal) =>
             this.aiRefactorController.refactorCard(
               card,
@@ -1052,10 +1058,24 @@ export default class DecksPlugin extends Plugin {
     });
   }
 
+  /** The model the in-prompt picker defaults to: the configured one, with retired ids reset. */
+  private aiDefaultModel(): string {
+    const provider = this.settings.ai.provider;
+    return resolveModelId(
+      provider,
+      this.settings.ai.models[provider],
+      this.settings.ai.customModel?.[provider] ?? false,
+    );
+  }
+
   openAiGeneratorModal(): void {
     const options: AiGeneratorOptions = {
-      generate: (options, handlers, signal) =>
-        this.aiGeneratorController.generateStream(options, handlers, signal),
+      generate: ({ model, ...rest }, handlers, signal) =>
+        this.aiGeneratorController.generateStream(
+          { ...rest, modelOverride: model },
+          handlers,
+          signal,
+        ),
       save: (cards, request) => this.saveGeneratedCards(cards, request),
       loadProfiles: async () =>
         (await this.db.getAllProfiles()).map((p) => ({
@@ -1065,6 +1085,9 @@ export default class DecksPlugin extends Plugin {
       defaultFolder: this.settings.parsing.folderSearchPath || "",
       canvasFolder: this.settings.canvasDecks.folderPath || "",
       deckTag: this.settings.parsing.deckTag,
+      aiProvider: this.settings.ai.provider,
+      defaultModel: this.aiDefaultModel(),
+      debugEnabled: this.settings.debug.enableLogging,
     };
 
     if (this.settings.ui.aiGeneratorDisplayMode === "tab") {

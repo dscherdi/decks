@@ -96,6 +96,10 @@ export interface DecksSettings {
     enabled: boolean;
     provider: AiProviderId;
     models: Record<AiProviderId, string>;
+    // True when the stored model for a provider is an intentional free-text
+    // custom value (vs a curated preset). Lets us reset retired presets to the
+    // default while preserving genuine custom entries.
+    customModel: Partial<Record<AiProviderId, boolean>>;
     localBaseUrl: string; // for the openai-compatible provider
   };
 
@@ -167,6 +171,7 @@ export const DEFAULT_SETTINGS: DecksSettings = {
       "openai-compatible": "gemma3",
       "decks-pro": "deepseek/deepseek-v4-flash",
     },
+    customModel: {},
     localBaseUrl: "http://localhost:11434/v1",
   },
 

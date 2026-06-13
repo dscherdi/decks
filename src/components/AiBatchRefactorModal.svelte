@@ -2,8 +2,9 @@
   import { onMount, onDestroy } from "svelte";
   import type { App } from "obsidian";
   import type { Flashcard } from "../database/types";
-  import { acceptAllStates, applyBatch, type BatchCardState, cardResultPatch, discardAllStates, effectiveSplit, I18n, type RefactorFieldSet, type RefactorImage, type RefactorProposal, type RefactorResult, setCardStatus } from "@decks/core";
+  import { acceptAllStates, type AiProviderId, applyBatch, type BatchCardState, cardResultPatch, discardAllStates, effectiveSplit, I18n, type RefactorFieldSet, type RefactorImage, type RefactorProposal, type RefactorResult, setCardStatus } from "@decks/core";
   import AiPromptComposer from "./AiPromptComposer.svelte";
+  import { buildModelOptions } from "../utils/ai-model-options";
   import RefactorCardView from "./RefactorCardView.svelte";
   import BatchCardRow from "./BatchCardRow.svelte";
   import { cardToRefactorFieldSet } from "../services/AiRefactorController";
@@ -20,6 +21,7 @@
     sourceContext?: string;
     images?: RefactorImage[];
     split?: boolean;
+    model?: string;
   }
 
   export let app: App;
@@ -39,9 +41,15 @@
   ) => Promise<{ ok: boolean; error?: string }>;
   export let renderMarkdown: (source: string, el: HTMLElement) => void;
   export let onClose: () => void;
+  export let aiProvider: AiProviderId;
+  export let defaultModel = "";
 
   const b = I18n.t.modals.aiBatch;
   const ef = I18n.t.modals.editFlashcard;
+
+  // Per-prompt model picker: defaults to the global model, overrides this run only.
+  const modelOptions = buildModelOptions(aiProvider, defaultModel);
+  let selectedModel = defaultModel;
 
   function freshStates(): BatchCardState<Flashcard>[] {
     return cards.map((card) => ({
@@ -172,7 +180,7 @@
       try {
         const res = await run(
           states[i].card,
-          { ...options, split: cardSplit },
+          { ...options, split: cardSplit, model: selectedModel },
           signal,
         );
         setResult(states[i], res, cardSplit);
@@ -386,6 +394,8 @@
       {mentionLabels}
       {splitOn}
       splitAvailable={true}
+      {modelOptions}
+      bind:selectedModel
       submitting={phase === "running"}
       onAddNote={addNote}
       onAddImage={addImage}

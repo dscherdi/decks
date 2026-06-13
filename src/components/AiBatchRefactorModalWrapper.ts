@@ -1,6 +1,7 @@
 import { Modal, Component, MarkdownRenderer } from "obsidian";
 import type { App } from "obsidian";
 import type {
+  AiProviderId,
   RefactorFieldSet,
   RefactorImage,
   RefactorProposal,
@@ -13,6 +14,8 @@ import type { Svelte5MountedComponent } from "../types/svelte-components";
 
 export interface AiBatchRefactorOptions {
   cards: Flashcard[];
+  aiProvider: AiProviderId;
+  defaultModel: string;
   run: (
     card: Flashcard,
     options?: {
@@ -20,6 +23,7 @@ export interface AiBatchRefactorOptions {
       sourceContext?: string;
       images?: RefactorImage[];
       split?: boolean;
+      model?: string;
     },
     signal?: AbortSignal,
   ) => Promise<RefactorResult>;
@@ -87,6 +91,8 @@ export class AiBatchRefactorModalWrapper extends Modal {
       props: {
         app: this.app,
         cards: this.options.cards,
+        aiProvider: this.options.aiProvider,
+        defaultModel: this.options.defaultModel,
         run: this.options.run,
         apply: this.options.apply,
         applySplit: this.options.applySplit,

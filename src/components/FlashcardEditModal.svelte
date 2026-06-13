@@ -4,9 +4,10 @@
   import type { App } from "obsidian";
   import type { Flashcard } from "../database/types";
   import type { FlashcardEdits, EditResult } from "../services/FlashcardWriter";
-  import { I18n, type RefactorDebugInfo, type RefactorFieldSet, type RefactorImage, type RefactorResult } from "@decks/core";
+  import { I18n, type AiProviderId, type RefactorDebugInfo, type RefactorFieldSet, type RefactorImage, type RefactorResult } from "@decks/core";
   import FieldStack from "./FieldStack.svelte";
   import AiPromptComposer from "./AiPromptComposer.svelte";
+  import { buildModelOptions } from "../utils/ai-model-options";
   import {
     type ContextItem,
     buildComposerRequest,
@@ -30,6 +31,7 @@
           sourceContext?: string;
           images?: RefactorImage[];
           split?: boolean;
+          model?: string;
         },
         signal?: AbortSignal,
       ) => Promise<RefactorResult>)
@@ -37,6 +39,12 @@
   export let onSplit:
     | ((cards: RefactorFieldSet[]) => Promise<EditResult>)
     | undefined = undefined;
+  export let aiProvider: AiProviderId = "openai";
+  export let defaultModel = "";
+
+  // Per-prompt model picker: defaults to the global model, overrides this run only.
+  const modelOptions = buildModelOptions(aiProvider, defaultModel);
+  let selectedModel = defaultModel;
 
   type Mode = "edit" | "preview";
 
@@ -422,6 +430,7 @@
         sourceContext,
         images,
         split: splitOn,
+        model: selectedModel,
       });
       lastDebug = result.debug ?? null;
       refactorState = "idle";
@@ -709,6 +718,8 @@
         submitting={refactorState === "running"}
         {splitOn}
         {splitAvailable}
+        {modelOptions}
+        bind:selectedModel
         {mentionItems}
         {mentionLabels}
         onAddNote={addNote}

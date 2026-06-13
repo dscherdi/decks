@@ -1,8 +1,9 @@
 <script lang="ts">
   import { onMount, onDestroy } from "svelte";
   import { type App, type TFile, setIcon } from "obsidian";
-  import { I18n, type GeneratedCard, type GenerateHandlers } from "@decks/core";
+  import { I18n, type AiProviderId, type GeneratedCard, type GenerateHandlers, type GenerateResult } from "@decks/core";
   import AiPromptComposer from "./AiPromptComposer.svelte";
+  import { buildModelOptions } from "../utils/ai-model-options";
   import BatchCardRow from "./BatchCardRow.svelte";
   import { FilePickerModal } from "../utils/file-picker";
   import { FolderPickerModal } from "../utils/folder-picker";
@@ -23,10 +24,12 @@
       images?: unknown[];
       maxBatches?: number;
       existingCards?: GeneratedCard[];
+      model?: string;
+      debug?: boolean;
     },
     handlers: GenerateHandlers,
     signal: AbortSignal,
-  ) => Promise<unknown>;
+  ) => Promise<GenerateResult>;
   export let save: (
     cards: GeneratedCard[],
     request: GeneratorSaveRequest,
@@ -43,8 +46,28 @@
   export let deckTag = "#decks";
   export let renderMarkdown: (source: string, el: HTMLElement) => void;
   export let onClose: () => void;
+  export let aiProvider: AiProviderId;
+  export let defaultModel = "";
+  export let debugEnabled = false;
 
   const g = I18n.t.modals.aiGenerator;
+
+  // Last generation's request payload + raw response, shown in the debug panel.
+  let lastDebug: GenerateResult["debug"] | null = null;
+  // Debug panel is collapsed by default; toggled from the header button.
+  let showDebug = false;
+
+  function toggleDebug() {
+    showDebug = !showDebug;
+    // Widen the modal only while the panel is open (no-op in tab mode).
+    rootEl
+      ?.closest(".modal")
+      ?.classList.toggle("decks-ai-gen-has-debug", showDebug);
+  }
+
+  // Per-prompt model picker: defaults to the global model, overrides this run only.
+  const modelOptions = buildModelOptions(aiProvider, defaultModel);
+  let selectedModel = defaultModel;
 
   // Upper bound on generation rounds per Generate click. The controller feeds
   // each round's cards back to the model and stops early once a round adds
@@ -163,6 +186,7 @@
     const existingCards = includeGenerated ? rows.map((r) => r.card) : undefined;
     partial = null;
     genError = null;
+    if (debugEnabled) lastDebug = null;
     phase = "streaming";
     abortController = new AbortController();
     const handlers: GenerateHandlers = {
@@ -176,17 +200,20 @@
       },
     };
     try {
-      await generate(
+      const result = await generate(
         {
           prompt: req.prompt,
           sourceContext: req.sourceContext,
           images: req.images,
           maxBatches: MAX_BATCHES,
           existingCards,
+          model: selectedModel,
+          debug: debugEnabled,
         },
         handlers,
         abortController.signal,
       );
+      if (debugEnabled) lastDebug = result.debug ?? lastDebug;
     } catch (e) {
       const msg = e instanceof Error ? e.message : String(e);
       genError = msg.trim() ? msg : g.generateFailed;
@@ -343,10 +370,25 @@
   }
 </script>
 
+<div class="decks-ai-gen-layout">
 <div class="decks-ai-gen" bind:this={rootEl}>
   <div class="decks-ai-gen-header">
-    <h3>{g.title}</h3>
-    <div class="decks-ai-gen-sub">{g.intro}</div>
+    <div class="decks-ai-gen-header-text">
+      <h3>{g.title}</h3>
+      <div class="decks-ai-gen-sub">{g.intro}</div>
+    </div>
+    {#if debugEnabled}
+      <button
+        type="button"
+        class="clickable-icon decks-ai-gen-debug-toggle"
+        class:is-active={showDebug}
+        aria-pressed={showDebug}
+        aria-label={g.debugToggle}
+        title={g.debugToggle}
+        use:icon={"bug"}
+        on:click={toggleDebug}
+      ></button>
+    {/if}
   </div>
 
   {#if genError?.trim()}
@@ -543,6 +585,8 @@
         {mentionItems}
         {mentionLabels}
         splitAvailable={false}
+        {modelOptions}
+        bind:selectedModel
         submitting={phase === "streaming"}
         submitLabel={g.generate}
         submittingLabel={g.generating}
@@ -602,20 +646,121 @@
     {/if}
   </div>
 </div>
+{#if debugEnabled && showDebug}
+  <aside class="decks-ai-gen-debug">
+    <div class="decks-ai-gen-debug-title">{g.debugTitle}</div>
+    {#if lastDebug}
+      <div class="decks-ai-gen-debug-meta">
+        {lastDebug.provider} · {lastDebug.model}
+      </div>
+      <div class="decks-ai-debug-label">{g.debugSystem}</div>
+      <pre class="decks-ai-debug-pre">{lastDebug.system}</pre>
+      <div class="decks-ai-debug-label">{g.debugUser}</div>
+      <pre class="decks-ai-debug-pre">{lastDebug.user}</pre>
+      {#if lastDebug.priorAssistant}
+        <div class="decks-ai-debug-label">{g.debugPriorAssistant}</div>
+        <pre class="decks-ai-debug-pre">{lastDebug.priorAssistant}</pre>
+      {/if}
+      {#if lastDebug.followupUser}
+        <div class="decks-ai-debug-label">{g.debugFollowup}</div>
+        <pre class="decks-ai-debug-pre">{lastDebug.followupUser}</pre>
+      {/if}
+      {#if lastDebug.imageCount > 0}
+        <div class="decks-ai-gen-debug-meta">
+          {g.debugImages}: {lastDebug.imageCount}
+        </div>
+      {/if}
+      <div class="decks-ai-debug-label">{g.debugResponse}</div>
+      <pre class="decks-ai-debug-pre">{lastDebug.raw}</pre>
+    {:else}
+      <div class="decks-ai-gen-debug-empty">{g.debugEmpty}</div>
+    {/if}
+  </aside>
+{/if}
+</div>
 
 <style>
+  .decks-ai-gen-layout {
+    display: flex;
+    height: 100%;
+    width: 100%;
+    min-height: 0;
+  }
   .decks-ai-gen {
     display: flex;
     flex-direction: column;
     height: 100%;
-    width: 100%;
+    flex: 1;
+    min-width: 0;
     min-height: 0;
     padding: 16px 20px;
     box-sizing: border-box;
   }
+  .decks-ai-gen-debug {
+    flex: 0 0 340px;
+    min-height: 0;
+    overflow-y: auto;
+    border-left: 1px solid var(--background-modifier-border);
+    padding: 16px;
+    box-sizing: border-box;
+  }
+  .decks-ai-gen-debug-title {
+    font-size: 13px;
+    font-weight: 600;
+    color: var(--text-normal);
+    margin-bottom: 8px;
+  }
+  .decks-ai-gen-debug-meta {
+    font-size: 11px;
+    color: var(--text-muted);
+    margin-top: 6px;
+    font-family: var(--font-monospace);
+  }
+  .decks-ai-gen-debug-empty {
+    font-size: 12px;
+    color: var(--text-faint);
+  }
+  .decks-ai-debug-label {
+    margin-top: 6px;
+    font-size: 10px;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+    color: var(--text-faint);
+    font-weight: 600;
+  }
+  .decks-ai-debug-pre {
+    margin: 2px 0 0 0;
+    max-height: 200px;
+    overflow: auto;
+    white-space: pre-wrap;
+    overflow-wrap: anywhere;
+    word-break: break-word;
+    user-select: text;
+    font-family: var(--font-monospace);
+    font-size: 11px;
+    line-height: 1.45;
+    background: var(--background-primary-alt);
+    border: 1px solid var(--background-modifier-border);
+    border-radius: var(--radius-s);
+    padding: 6px 8px;
+  }
   .decks-ai-gen-header {
     flex: 0 0 auto;
     padding-bottom: 10px;
+    display: flex;
+    align-items: flex-start;
+    justify-content: space-between;
+    gap: 8px;
+  }
+  .decks-ai-gen-header-text {
+    min-width: 0;
+  }
+  .decks-ai-gen-debug-toggle {
+    flex: 0 0 auto;
+  }
+  .decks-ai-gen-debug-toggle.is-active {
+    color: var(--text-on-accent);
+    background: var(--interactive-accent);
   }
   .decks-ai-gen-header h3 {
     margin: 0 0 4px 0;

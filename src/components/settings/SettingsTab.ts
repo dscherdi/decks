@@ -15,6 +15,7 @@ import type { IDatabaseService } from "@/database/DatabaseFactory";
 import type { FsrsWeightSet } from "@/database/types";
 import { Logger } from "@/utils/logging";
 import { OptimizeFsrsModal } from "./OptimizeFsrsModal";
+import { resolveModelId } from "@/utils/ai-model-options";
 import { type AiProviderId, I18n, type LanguagePreference, PROVIDER_MODELS, SUPPORTED_LANGUAGES } from "@decks/core";
 
 export class DecksSettingTab extends PluginSettingTab {
@@ -30,9 +31,6 @@ export class DecksSettingTab extends PluginSettingTab {
   private plugin: DecksPlugin;
   private db: IDatabaseService;
   private logger: Logger;
-  // Tracks when the user explicitly chose "Custom…" in the model picker so the
-  // free-text field stays open even while the typed id matches no preset.
-  private aiModelCustom = false;
 
   constructor(
     app: App,
@@ -153,7 +151,6 @@ export class DecksSettingTab extends PluginSettingTab {
           .onChange(async (value) => {
             if (value === this.settings.ai.provider) return;
             this.settings.ai.provider = value as AiProviderId;
-            this.aiModelCustom = false;
             await this.saveSettings();
             // Rebuild only this sub-container (shows/hides the local URL field).
             this.renderAiProviderSettings(containerEl);
@@ -225,30 +222,44 @@ export class DecksSettingTab extends PluginSettingTab {
 
     const CUSTOM = "__custom__";
     const presets = PROVIDER_MODELS[provider];
-    const presetIds = presets.map((m) => m.id);
-    const showCustom = this.aiModelCustom || !presetIds.includes(current);
+    // Decks Pro is a fixed curated list — no custom free-text model allowed.
+    const allowCustom = provider !== "decks-pro";
+    this.settings.ai.customModel ??= {};
+    const isCustom = allowCustom && (this.settings.ai.customModel[provider] ?? false);
+
+    // Retirement: a non-custom stored id that is no longer offered (a model we
+    // removed in an update) falls back to the first preset; persist so saved
+    // state matches the dropdown.
+    const selectedId = resolveModelId(provider, current, isCustom);
+    if (selectedId !== current) {
+      this.settings.ai.models[provider] = selectedId;
+      this.settings.ai.customModel[provider] = false;
+      void this.saveSettings();
+    }
 
     new Setting(containerEl)
       .setName(s.model)
       .setDesc(s.modelDesc)
       .addDropdown((dd) => {
         for (const m of presets) dd.addOption(m.id, m.name);
-        dd.addOption(CUSTOM, s.modelCustom);
-        dd.setValue(showCustom ? CUSTOM : current);
+        if (allowCustom) dd.addOption(CUSTOM, s.modelCustom);
+        dd.setValue(isCustom ? CUSTOM : selectedId);
         dd.onChange(async (value) => {
+          this.settings.ai.customModel ??= {};
           if (value === CUSTOM) {
-            this.aiModelCustom = true;
+            this.settings.ai.customModel[provider] = true;
+            await this.saveSettings();
             this.renderAiProviderSettings(containerEl);
             return;
           }
-          this.aiModelCustom = false;
+          this.settings.ai.customModel[provider] = false;
           this.settings.ai.models[provider] = value;
           await this.saveSettings();
           this.renderAiProviderSettings(containerEl);
         });
       });
 
-    if (showCustom) {
+    if (isCustom) {
       new Setting(containerEl)
         .setName(s.modelCustomLabel)
         .addText((text) =>

@@ -449,6 +449,11 @@
   max-width: 1100px;
 }
 
+/* Widen the generator modal to fit the debug side panel (~340px) alongside it. */
+.decks-ai-batch-modal.decks-ai-gen-has-debug {
+  max-width: 1440px;
+}
+
 .decks-modal-mobile {
   height: 100% !important;
   max-height: 100vh !important;

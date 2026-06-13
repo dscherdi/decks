@@ -1,6 +1,6 @@
 import { Modal, Component, MarkdownRenderer } from "obsidian";
 import type { App } from "obsidian";
-import type { GeneratedCard, GenerateHandlers, RefactorImage } from "@decks/core";
+import type { AiProviderId, GeneratedCard, GenerateHandlers, GenerateResult, RefactorImage } from "@decks/core";
 import { mount, unmount } from "svelte";
 import type { Svelte5MountedComponent } from "../types/svelte-components";
 import AiGeneratorModal from "./AiGeneratorModal.svelte";
@@ -14,10 +14,12 @@ export interface AiGeneratorOptions {
       images?: RefactorImage[];
       maxBatches?: number;
       existingCards?: GeneratedCard[];
+      model?: string;
+      debug?: boolean;
     },
     handlers: GenerateHandlers,
     signal: AbortSignal,
-  ) => Promise<unknown>;
+  ) => Promise<GenerateResult>;
   save: (
     cards: GeneratedCard[],
     request: GeneratorSaveRequest,
@@ -32,6 +34,9 @@ export interface AiGeneratorOptions {
   defaultFolder: string;
   canvasFolder: string;
   deckTag: string;
+  aiProvider: AiProviderId;
+  defaultModel: string;
+  debugEnabled: boolean;
 }
 
 export class AiGeneratorModalWrapper extends Modal {
@@ -67,6 +72,8 @@ export class AiGeneratorModalWrapper extends Modal {
     if (modalEl instanceof HTMLElement) {
       modalEl.addClass("decks-modal");
       modalEl.addClass("decks-ai-batch-modal");
+      // The debug panel starts collapsed; the modal widens via
+      // `decks-ai-gen-has-debug` only when the user opens it from the header.
     }
     contentEl.addClass("decks-ai-batch-modal-content");
 
@@ -89,6 +96,9 @@ export class AiGeneratorModalWrapper extends Modal {
         defaultFolder: this.options.defaultFolder,
         canvasFolder: this.options.canvasFolder,
         deckTag: this.options.deckTag,
+        aiProvider: this.options.aiProvider,
+        defaultModel: this.options.defaultModel,
+        debugEnabled: this.options.debugEnabled,
         renderMarkdown: (source: string, el: HTMLElement) => {
           this.renderMarkdown(source, el);
         },
