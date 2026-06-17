@@ -80,6 +80,8 @@ export class AiGeneratorView extends ItemView {
         aiProvider: this.options.aiProvider,
         defaultModel: this.options.defaultModel,
         debugEnabled: this.options.debugEnabled,
+        pdfAvailable: this.options.pdfAvailable,
+        pdfOcr: this.options.pdfOcr,
         renderMarkdown: (source: string, el: HTMLElement) => {
           this.renderMarkdown(source, el);
         },

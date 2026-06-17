@@ -15,6 +15,7 @@ interface PathsSettings {
   dbFolder: string;
   backupFolder: string;
   syncLogFolder: string;
+  pdfCacheFolder: string;
 }
 
 interface PathContext {
@@ -66,6 +67,17 @@ export function resolveBackupFolder(paths: PathsSettings, ctx: PathContext): str
  */
 export function resolveSyncLogFolder(paths: PathsSettings): string {
   return normalizeFolder(paths.syncLogFolder);
+}
+
+/**
+ * Folder holding cached per-page PDF OCR text. Empty falls back to the plugin
+ * folder + "/pdf-ocr". Read on demand by PdfOcrCache so changes take effect
+ * without a restart.
+ */
+export function resolvePdfCacheFolder(paths: PathsSettings, ctx: PathContext): string {
+  const folder = normalizeFolder(paths.pdfCacheFolder);
+  if (folder === "") return `${pluginFolder(ctx)}/pdf-ocr`;
+  return folder;
 }
 
 // Re-exported for tests.

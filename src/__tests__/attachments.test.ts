@@ -6,6 +6,7 @@ import {
   savePastedImage,
   buildContextPayload,
   buildComposerRequest,
+  buildGenerationComposerRequest,
   readImageAsBase64,
   readNoteText,
 } from "../utils/attachments";
@@ -226,6 +227,40 @@ describe("buildComposerRequest", () => {
       [],
     );
     expect(instructions).toBeUndefined();
+    expect(images).toEqual([]);
+  });
+});
+
+describe("buildGenerationComposerRequest with PDF items", () => {
+  const pdfCtx: ContextItem = {
+    id: "pdf:abc",
+    kind: "pdf",
+    path: "book.pdf",
+    label: "book.pdf",
+  };
+
+  it("ignores pdf context items (resolved separately by the modal)", async () => {
+    const app = mockVaultApp([{ path: "a.md", ext: "md", text: "Alpha" }]);
+    const { sourceContext, images } = await buildGenerationComposerRequest(
+      app,
+      "Make cards",
+      [ctx("note", "a.md", "a.md"), pdfCtx],
+      [],
+    );
+    // The PDF contributes nothing here; only the note text lands in sourceContext.
+    expect(sourceContext).toBe("# a.md\nAlpha");
+    expect(images).toEqual([]);
+  });
+
+  it("yields undefined sourceContext when only a pdf is attached", async () => {
+    const app = mockVaultApp([]);
+    const { sourceContext, images } = await buildGenerationComposerRequest(
+      app,
+      "Make cards",
+      [pdfCtx],
+      [],
+    );
+    expect(sourceContext).toBeUndefined();
     expect(images).toEqual([]);
   });
 });

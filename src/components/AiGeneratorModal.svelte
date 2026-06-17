@@ -1,8 +1,9 @@
 <script lang="ts">
   import { onMount, onDestroy } from "svelte";
-  import { type App, type TFile, setIcon } from "obsidian";
-  import { I18n, type AiProviderId, type GeneratedCard, type GenerateHandlers, type GenerateResult } from "@decks/core";
+  import { type App, type TFile, Menu, setIcon } from "obsidian";
+  import { I18n, type AiProviderId, type GeneratedCard, type GenerateHandlers, type GenerateResult, ocrSentinelForTier } from "@decks/core";
   import AiPromptComposer from "./AiPromptComposer.svelte";
+  import ChapterPanel from "./ChapterPanel.svelte";
   import { buildModelOptions } from "../utils/ai-model-options";
   import BatchCardRow from "./BatchCardRow.svelte";
   import { FilePickerModal } from "../utils/file-picker";
@@ -12,9 +13,26 @@
     buildGenerationComposerRequest,
     savePastedImage,
     IMAGE_EXTENSIONS,
+    PDF_MAX_BYTES,
   } from "../utils/attachments";
+  import {
+    type ChapterNode,
+    type PdfDoc,
+    loadPdf,
+    extractOutline,
+    buildSectionContent,
+    pagesForSelection,
+    hashPdf,
+  } from "../utils/pdf";
+  import type { OcrDebugEntry, OcrProgress, PdfOcrCache } from "../services/PdfOcrCache";
   import type { SaveFormat } from "../services/FlashcardComposer";
   import type { GeneratorSaveRequest, ProfileOpt } from "./generator-save";
+  import type {
+    GenRow,
+    MentionItem,
+    PdfAttachment,
+    PdfTab,
+  } from "./ai-generator-types";
 
   export let app: App;
   export let generate: (
@@ -49,11 +67,16 @@
   export let aiProvider: AiProviderId;
   export let defaultModel = "";
   export let debugEnabled = false;
+  export let pdfAvailable = false;
+  export let pdfOcr: PdfOcrCache | null = null;
 
   const g = I18n.t.modals.aiGenerator;
 
   // Last generation's request payload + raw response, shown in the debug panel.
   let lastDebug: GenerateResult["debug"] | null = null;
+  // Per-page OCR exchanges (image + transcription) for the debug panel; capped.
+  let ocrDebug: OcrDebugEntry[] = [];
+  const OCR_DEBUG_MAX = 12;
   // Debug panel is collapsed by default; toggled from the header button.
   let showDebug = false;
 
@@ -69,10 +92,13 @@
   const modelOptions = buildModelOptions(aiProvider, defaultModel);
   let selectedModel = defaultModel;
 
-  // Upper bound on generation rounds per Generate click. The controller feeds
-  // each round's cards back to the model and stops early once a round adds
-  // nothing new, so this is just a safety cap.
-  const MAX_BATCHES = 5;
+  // One generation round per click. Continuation is manual: after a round the
+  // Generate button switches to "Continue generating" (see canContinue) until a
+  // round adds nothing new and isn't truncated.
+  const MAX_BATCHES = 1;
+  // True after a round that may have more to produce (cards were added, or the
+  // response was cut off by the output-token limit) → offer "Continue generating".
+  let canContinue = false;
 
   // Markdown render action for the detail pane (mirrors BatchCardRow).
   function md(node: HTMLElement, content: string) {
@@ -84,13 +110,6 @@
         renderMarkdown(next, node);
       },
     };
-  }
-
-  interface GenRow {
-    id: string;
-    card: GeneratedCard;
-    keep: boolean;
-    saved: boolean;
   }
 
   let phase: "idle" | "streaming" | "review" | "saving" = "idle";
@@ -128,20 +147,25 @@
   // --- Composer state ---
   let prompt = "";
   let contexts: ContextItem[] = [];
-  const mentionItems = app.vault
+  const mentionItems: MentionItem[] = app.vault
     .getMarkdownFiles()
     .map((f) => ({ path: f.path, label: f.basename }));
   let mentionedAll: ContextItem[] = [];
   $: activeMentions = mentionedAll.filter((m) => prompt.includes(`@${m.label}`));
   $: mentionLabels = activeMentions.map((m) => m.label);
 
-  function addContext(kind: "note" | "image", path: string, label: string) {
+  function addContext(kind: "note" | "image" | "pdf", path: string, label: string) {
     const id = `${kind}:${path}`;
     if (contexts.some((c) => c.id === id)) return;
     contexts = [...contexts, { id, kind, path, label }];
   }
   function removeContext(id: string) {
     contexts = contexts.filter((c) => c.id !== id);
+    if (pdfs.some((p) => p.contextId === id)) {
+      pdfs = pdfs.filter((p) => p.contextId !== id);
+      if (activePdfId === id) activePdfId = pdfs[0]?.contextId ?? null;
+      if (pdfs.length === 0) showChapters = false;
+    }
   }
   function addMention(item: { path: string; label: string }) {
     const id = `note:${item.path}`;
@@ -172,23 +196,236 @@
     }
   }
 
+  // --- PDF attachment (Decks Pro) ---
+  // Multiple PDFs can be attached; the chapter panel shows one at a time via
+  // tabs. Each carries its own chapter selection + parse mode.
+  let pdfs: PdfAttachment[] = [];
+  let activePdfId: string | null = null;
+  let showChapters = false;
+  let ocrProgress: OcrProgress | null = null;
+  // Unified per-page progress while PDFs are resolved to text (text reads + OCR).
+  let pdfProgress: { done: number; total: number } | null = null;
+  let pdfInputEl: HTMLInputElement;
+
+  $: activePdf = pdfs.find((p) => p.contextId === activePdfId) ?? pdfs[0] ?? null;
+  $: pdfTabs = pdfs.map((p): PdfTab => ({ id: p.contextId, label: p.label }));
+  $: pdfPct = pdfProgress
+    ? Math.round((pdfProgress.done / Math.max(1, pdfProgress.total)) * 100)
+    : 0;
+
+  // Patch the active PDF's selection/mode immutably (so reactivity fires).
+  function updateActivePdf(patch: Partial<PdfAttachment>): void {
+    pdfs = pdfs.map((p) =>
+      p.contextId === activePdfId ? { ...p, ...patch } : p,
+    );
+  }
+
+  function collectAllChapterIds(nodes: ChapterNode[], acc: string[] = []): string[] {
+    for (const n of nodes) {
+      acc.push(n.id);
+      collectAllChapterIds(n.children, acc);
+    }
+    return acc;
+  }
+
+  // Offer both attach sources: a vault PDF or one from the user's computer.
+  function addPdf(e?: MouseEvent) {
+    const menu = new Menu();
+    menu.addItem((i) =>
+      i
+        .setTitle(g.pdfFromVault)
+        .setIcon("folder")
+        .onClick(() => pickVaultPdf()),
+    );
+    menu.addItem((i) =>
+      i
+        .setTitle(g.pdfFromComputer)
+        .setIcon("monitor")
+        .onClick(() => pdfInputEl?.click()),
+    );
+    if (e) menu.showAtMouseEvent(e);
+    else menu.showAtPosition({ x: 0, y: 0 });
+  }
+
+  function pickVaultPdf() {
+    const pdfs = app.vault
+      .getFiles()
+      .filter((f) => f.extension.toLowerCase() === "pdf");
+    new FilePickerModal(
+      app,
+      pdfs,
+      (f) => {
+        void app.vault
+          .readBinary(f)
+          .then((bytes) => attachPdf(bytes, f.name))
+          .catch((err) => (genError = String(err)));
+      },
+      g.addPdf,
+    ).open();
+  }
+
+  function onPdfInputChange() {
+    const file = pdfInputEl?.files?.[0];
+    if (file) {
+      void file
+        .arrayBuffer()
+        .then((bytes) => attachPdf(bytes, file.name))
+        .catch((err) => (genError = String(err)));
+    }
+    if (pdfInputEl) pdfInputEl.value = "";
+  }
+
+  function pastePdfs(files: File[]) {
+    const file = files[0];
+    if (!file) return;
+    void file
+      .arrayBuffer()
+      .then((bytes) => attachPdf(bytes, file.name))
+      .catch((err) => (genError = String(err)));
+  }
+
+  async function attachPdf(bytes: ArrayBuffer, label: string) {
+    genError = null;
+    if (bytes.byteLength > PDF_MAX_BYTES) {
+      genError = I18n.format(g.pdfTooLarge, {
+        max: Math.round(PDF_MAX_BYTES / (1024 * 1024)),
+      });
+      return;
+    }
+    try {
+      // Hash before loadPdf: pdf.js detaches the buffer it's given, so hashing
+      // must happen while `bytes` is still intact.
+      const hash = hashPdf(bytes);
+      const contextId = `pdf:${hash}`;
+      // Already attached → just activate its tab and reopen the panel.
+      if (pdfs.some((p) => p.contextId === contextId)) {
+        activePdfId = contextId;
+        showChapters = true;
+        return;
+      }
+      const doc = await loadPdf(bytes);
+      const chapters = await extractOutline(doc);
+      const attachment: PdfAttachment = {
+        contextId,
+        label,
+        doc,
+        hash,
+        chapters,
+        selectedIds: new Set(collectAllChapterIds(chapters)),
+      };
+      pdfs = [...pdfs, attachment];
+      activePdfId = contextId;
+      // Use the attachment's contextId as the pill id (don't go through
+      // addContext, which would prefix it again) so the composer pill and the
+      // chapter panel remove the same PDF.
+      contexts = [...contexts, { id: contextId, kind: "pdf", path: label, label }];
+      showChapters = true;
+    } catch (e) {
+      genError = e instanceof Error ? e.message : String(e);
+    }
+  }
+
+  // Resolve every attached PDF's selected chapters into source text. The parse
+  // path is provider-determined: Decks Pro renders pages and OCRs them (the
+  // selected tier's OCR model); any other provider uses free pdf.js text
+  // extraction. Each PDF's text is prefixed with a `# <label>` heading. Progress
+  // is a single counter spanning all PDFs' pages.
+  async function resolvePdfSource(signal: AbortSignal): Promise<string> {
+    const plans = pdfs
+      .map((p) => ({ pdf: p, pages: pagesForSelection(p.chapters, p.selectedIds) }))
+      .filter((x) => x.pages.length > 0);
+    const total = plans.reduce((sum, x) => sum + x.pages.length, 0);
+    if (total === 0) return "";
+
+    // OCR is the Decks Pro path; everyone else gets free text extraction.
+    const mode = aiProvider === "decks-pro" ? "ocr" : "text";
+    const ocrModel = ocrSentinelForTier(selectedModel);
+
+    pdfProgress = { done: 0, total };
+    let done = 0;
+    const tick = () => (pdfProgress = { done: ++done, total });
+    const parts: string[] = [];
+    try {
+      for (const { pdf: p, pages } of plans) {
+        const ocrRunner = (ocrPages: number[], onEach?: () => void) => {
+          if (!pdfOcr) return Promise.resolve(new Map<number, string>());
+          return pdfOcr.runOcr(
+            p.doc,
+            p.hash,
+            ocrModel,
+            ocrPages,
+            (prog) => {
+              ocrProgress = prog;
+              onEach?.();
+            },
+            signal,
+            debugEnabled
+              ? (entry) => {
+                  ocrDebug = [...ocrDebug, entry].slice(-OCR_DEBUG_MAX);
+                }
+              : undefined,
+          );
+        };
+        const text = await buildSectionContent(
+          p.doc,
+          pages,
+          mode,
+          ocrRunner,
+          () => tick(),
+        );
+        if (text) parts.push(`# ${p.label}\n${text}`);
+      }
+      return parts.join("\n\n---\n\n");
+    } finally {
+      ocrProgress = null;
+      pdfProgress = null;
+    }
+  }
+
   // --- Generation ---
   async function startGenerate() {
-    if (phase === "streaming" || !prompt.trim()) return;
+    if (phase === "streaming") return;
+    // Continue rounds may run without a prompt (source + prior cards drive them);
+    // a fresh run still needs one.
+    const continuing = canContinue;
+    if (!continuing && !prompt.trim()) return;
     const req = await buildGenerationComposerRequest(
       app,
       prompt,
       contexts,
       activeMentions,
     );
-    // Cards from earlier runs to feed back (dedup + context) when the toggle is
-    // on; the controller skips re-emitting them. Captured before streaming.
-    const existingCards = includeGenerated ? rows.map((r) => r.card) : undefined;
+    // Continue always feeds prior cards back (dedup + context); a fresh run does
+    // so only when the include toggle is on. The controller skips re-emitting them.
+    const existingCards =
+      continuing || includeGenerated ? rows.map((r) => r.card) : undefined;
     partial = null;
     genError = null;
-    if (debugEnabled) lastDebug = null;
+    if (debugEnabled) {
+      lastDebug = null;
+      ocrDebug = [];
+    }
     phase = "streaming";
     abortController = new AbortController();
+
+    // Resolve any attached PDF into source text first (OCR'ing scanned pages),
+    // then merge it with the note/image-derived source context.
+    let sourceContext = req.sourceContext;
+    try {
+      const pdfText = await resolvePdfSource(abortController.signal);
+      if (pdfText) {
+        sourceContext = [req.sourceContext, pdfText]
+          .filter(Boolean)
+          .join("\n\n---\n\n");
+      }
+    } catch (e) {
+      if (!abortController.signal.aborted) {
+        genError = e instanceof Error ? e.message : String(e);
+      }
+      phase = rows.length > 0 ? "review" : "idle";
+      return;
+    }
+
     const handlers: GenerateHandlers = {
       onCard: (card) => {
         const id = `gen-${rowCounter++}`;
@@ -203,7 +440,7 @@
       const result = await generate(
         {
           prompt: req.prompt,
-          sourceContext: req.sourceContext,
+          sourceContext,
           images: req.images,
           maxBatches: MAX_BATCHES,
           existingCards,
@@ -214,6 +451,9 @@
         abortController.signal,
       );
       if (debugEnabled) lastDebug = result.debug ?? lastDebug;
+      // Offer "Continue generating" when this round produced cards or was cut off
+      // by the output-token limit; otherwise the model is done.
+      canContinue = (result.cards?.length ?? 0) > 0 || (result.truncated ?? false);
     } catch (e) {
       const msg = e instanceof Error ? e.message : String(e);
       genError = msg.trim() ? msg : g.generateFailed;
@@ -377,22 +617,67 @@
       <h3>{g.title}</h3>
       <div class="decks-ai-gen-sub">{g.intro}</div>
     </div>
-    {#if debugEnabled}
-      <button
-        type="button"
-        class="clickable-icon decks-ai-gen-debug-toggle"
-        class:is-active={showDebug}
-        aria-pressed={showDebug}
-        aria-label={g.debugToggle}
-        title={g.debugToggle}
-        use:icon={"bug"}
-        on:click={toggleDebug}
-      ></button>
-    {/if}
+    <div class="decks-ai-gen-header-actions">
+      {#if pdfs.length}
+        <button
+          type="button"
+          class="clickable-icon decks-ai-gen-debug-toggle"
+          class:is-active={showChapters}
+          aria-pressed={showChapters}
+          aria-label={g.pdfChapters}
+          title={g.pdfChapters}
+          use:icon={"list-tree"}
+          on:click={() => (showChapters = !showChapters)}
+        ></button>
+      {/if}
+      {#if debugEnabled}
+        <button
+          type="button"
+          class="clickable-icon decks-ai-gen-debug-toggle"
+          class:is-active={showDebug}
+          aria-pressed={showDebug}
+          aria-label={g.debugToggle}
+          title={g.debugToggle}
+          use:icon={"bug"}
+          on:click={toggleDebug}
+        ></button>
+      {/if}
+    </div>
   </div>
+  <input
+    class="decks-pdf-file-input"
+    type="file"
+    accept="application/pdf"
+    bind:this={pdfInputEl}
+    on:change={onPdfInputChange}
+  />
 
   {#if genError?.trim()}
     <div class="decks-edit-error">{genError}</div>
+  {/if}
+
+  {#if pdfProgress}
+    <div class="decks-ai-gen-pdf-progress" role="status" aria-live="polite">
+      <div class="decks-ai-gen-pdf-progress-label">
+        <span
+          >{I18n.format(g.pdfOcrProgress, {
+            done: pdfProgress.done,
+            total: pdfProgress.total,
+          })}</span
+        >
+        {#if ocrProgress && !ocrProgress.fromCache}
+          <span class="decks-ai-gen-pdf-ocr-tag">{g.pdfModeOcr}</span>
+        {:else if ocrProgress?.fromCache}
+          <span class="decks-pdf-cached-badge">{g.pdfCached}</span>
+        {/if}
+      </div>
+      <div class="decks-ai-gen-pdf-progress-track">
+        <div
+          class="decks-ai-gen-pdf-progress-fill"
+          style:width={`${pdfPct}%`}
+        ></div>
+      </div>
+    </div>
   {/if}
 
   <div class="decks-ai-gen-body" class:has-detail={!!selectedId}>
@@ -416,6 +701,12 @@
         {#if partial}
           <div class="decks-ai-gen-rowwrap is-streaming">
             <BatchCardRow card={partial} status="running" {renderMarkdown} />
+          </div>
+        {/if}
+        {#if phase === "streaming" && rows.length === 0 && !partial && !pdfProgress}
+          <div class="decks-ai-gen-loading">
+            <span class="decks-ai-gen-spinner" aria-hidden="true"></span>
+            <span>{g.generating}</span>
           </div>
         {/if}
         {#if rows.length === 0 && !partial && phase !== "streaming"}
@@ -588,11 +879,14 @@
         {modelOptions}
         bind:selectedModel
         submitting={phase === "streaming"}
-        submitLabel={g.generate}
+        submitLabel={canContinue ? g.continueGenerating : g.generate}
         submittingLabel={g.generating}
         placeholder={g.promptPlaceholder}
         onAddNote={addNote}
         onAddImage={addImage}
+        {pdfAvailable}
+        onAddPdf={addPdf}
+        onAddPdfFiles={pastePdfs}
         onRemoveContext={removeContext}
         onMention={addMention}
         onPasteImages={pasteImages}
@@ -608,7 +902,14 @@
   <div class="decks-ai-gen-footer">
     {#if phase === "streaming"}
       <span class="decks-ai-gen-footer-info">
-        {I18n.format(g.streaming, { count: rows.length })}
+        {#if pdfProgress}
+          {I18n.format(g.pdfOcrProgress, {
+            done: pdfProgress.done,
+            total: pdfProgress.total,
+          })}
+        {:else}
+          {I18n.format(g.streaming, { count: rows.length })}
+        {/if}
       </span>
       <span class="decks-ai-gen-footer-spacer"></span>
       <button type="button" class="mod-warning" on:click={interrupt}>{g.stop}</button>
@@ -646,9 +947,40 @@
     {/if}
   </div>
 </div>
+{#if activePdf && showChapters}
+  {#key activePdf.contextId}
+    <ChapterPanel
+      title={activePdf.label}
+      chapters={activePdf.chapters}
+      selectedIds={activePdf.selectedIds}
+      {ocrProgress}
+      tabs={pdfTabs}
+      activeTabId={activePdfId}
+      onSelectTab={(id) => (activePdfId = id)}
+      onCloseTab={removeContext}
+      onSelectionChange={(ids) => updateActivePdf({ selectedIds: ids })}
+      onClose={() => (showChapters = false)}
+    />
+  {/key}
+{/if}
 {#if debugEnabled && showDebug}
   <aside class="decks-ai-gen-debug">
     <div class="decks-ai-gen-debug-title">{g.debugTitle}</div>
+    {#if ocrDebug.length > 0}
+      <div class="decks-ai-debug-label">{g.debugOcr}</div>
+      <div class="decks-ai-gen-debug-meta">{ocrDebug[0].model}</div>
+      <div class="decks-ai-debug-label">{g.debugSystem}</div>
+      <pre class="decks-ai-debug-pre">{ocrDebug[0].system}</pre>
+      <div class="decks-ai-debug-label">{g.debugUser}</div>
+      <pre class="decks-ai-debug-pre">{ocrDebug[0].user}</pre>
+      {#each ocrDebug as entry (entry.page)}
+        <div class="decks-ai-debug-label">
+          {I18n.format(g.debugOcrPage, { page: entry.page })}
+        </div>
+        <img class="decks-ai-debug-img" src={entry.imageDataUrl} alt="" />
+        <pre class="decks-ai-debug-pre">{entry.raw}</pre>
+      {/each}
+    {/if}
     {#if lastDebug}
       <div class="decks-ai-gen-debug-meta">
         {lastDebug.provider} · {lastDebug.model}
@@ -672,7 +1004,7 @@
       {/if}
       <div class="decks-ai-debug-label">{g.debugResponse}</div>
       <pre class="decks-ai-debug-pre">{lastDebug.raw}</pre>
-    {:else}
+    {:else if ocrDebug.length === 0}
       <div class="decks-ai-gen-debug-empty">{g.debugEmpty}</div>
     {/if}
   </aside>
@@ -728,6 +1060,14 @@
     color: var(--text-faint);
     font-weight: 600;
   }
+  .decks-ai-debug-img {
+    display: block;
+    max-width: 100%;
+    height: auto;
+    margin: 2px 0 0 0;
+    border: 1px solid var(--background-modifier-border);
+    border-radius: var(--radius-s);
+  }
   .decks-ai-debug-pre {
     margin: 2px 0 0 0;
     max-height: 200px;
@@ -754,6 +1094,12 @@
   }
   .decks-ai-gen-header-text {
     min-width: 0;
+  }
+  .decks-ai-gen-header-actions {
+    flex: 0 0 auto;
+    display: flex;
+    align-items: center;
+    gap: 4px;
   }
   .decks-ai-gen-debug-toggle {
     flex: 0 0 auto;
@@ -852,6 +1198,27 @@
     display: flex;
     justify-content: flex-end;
   }
+  .decks-ai-gen-loading {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    color: var(--text-muted);
+    font-size: 13px;
+    padding: 12px 4px;
+  }
+  .decks-ai-gen-spinner {
+    width: 14px;
+    height: 14px;
+    border: 2px solid var(--background-modifier-border);
+    border-top-color: var(--interactive-accent);
+    border-radius: 50%;
+    animation: decks-ai-gen-spin 0.7s linear infinite;
+  }
+  @keyframes decks-ai-gen-spin {
+    to {
+      transform: rotate(360deg);
+    }
+  }
   .decks-ai-gen-note {
     color: var(--text-muted);
     font-size: 13px;
@@ -924,5 +1291,51 @@
   :global(.decks-modal-mobile) .decks-ai-gen-sidebar {
     flex: 1 1 auto;
     border-right: none;
+  }
+  .decks-pdf-file-input {
+    display: none;
+  }
+  .decks-ai-gen-pdf-progress {
+    flex: 0 0 auto;
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+    padding: 8px 10px;
+    margin-bottom: 8px;
+    background: var(--background-secondary);
+    border: 1px solid var(--background-modifier-border);
+    border-radius: var(--radius-s);
+  }
+  .decks-ai-gen-pdf-progress-label {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    font-size: 12px;
+    color: var(--text-muted);
+  }
+  .decks-ai-gen-pdf-ocr-tag {
+    font-size: 9px;
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
+    color: var(--text-accent);
+    font-weight: 600;
+  }
+  .decks-pdf-cached-badge {
+    font-size: 9px;
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
+    color: var(--color-green, var(--text-success));
+    font-weight: 600;
+  }
+  .decks-ai-gen-pdf-progress-track {
+    height: 4px;
+    border-radius: 2px;
+    background: var(--background-modifier-border);
+    overflow: hidden;
+  }
+  .decks-ai-gen-pdf-progress-fill {
+    height: 100%;
+    background: var(--interactive-accent);
+    transition: width 0.2s ease;
   }
 </style>

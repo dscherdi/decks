@@ -6,10 +6,13 @@ import { extractSourceContext } from "./source-context";
 /** A context attachment shown as a pill in the AI composer. */
 export interface ContextItem {
   id: string;
-  kind: "note" | "image";
+  kind: "note" | "image" | "pdf";
   path: string;
   label: string;
 }
+
+/** Maximum raw PDF size accepted for AI generation (before base64 inflation). */
+export const PDF_MAX_BYTES = 10 * 1024 * 1024;
 
 const IMAGE_MIME: Record<string, string> = {
   png: "image/png",
@@ -93,6 +96,7 @@ export async function buildContextPayload(
   const images: RefactorImage[] = [];
 
   for (const item of contexts) {
+    if (item.kind === "pdf") continue; // resolved separately by the caller
     if (item.kind === "image") {
       const image = await readImageAsBase64(app, item.path);
       if (image) images.push(image);
@@ -155,6 +159,7 @@ export async function buildGenerationComposerRequest(
   const textParts: string[] = [];
   const images: RefactorImage[] = [];
   for (const item of contexts) {
+    if (item.kind === "pdf") continue; // resolved separately by the caller
     if (item.kind === "image") {
       const image = await readImageAsBase64(app, item.path);
       if (image) images.push(image);

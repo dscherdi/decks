@@ -5,6 +5,7 @@ import { mount, unmount } from "svelte";
 import type { Svelte5MountedComponent } from "../types/svelte-components";
 import AiGeneratorModal from "./AiGeneratorModal.svelte";
 import type { GeneratorSaveRequest, ProfileOpt } from "./generator-save";
+import type { PdfOcrCache } from "../services/PdfOcrCache";
 
 export interface AiGeneratorOptions {
   generate: (
@@ -37,6 +38,10 @@ export interface AiGeneratorOptions {
   aiProvider: AiProviderId;
   defaultModel: string;
   debugEnabled: boolean;
+  /** Whether PDF attachment is offered (Decks Pro only for the initial rollout). */
+  pdfAvailable: boolean;
+  /** OCR-text cache used to resolve scanned PDF pages; null when unavailable. */
+  pdfOcr: PdfOcrCache | null;
 }
 
 export class AiGeneratorModalWrapper extends Modal {
@@ -99,6 +104,8 @@ export class AiGeneratorModalWrapper extends Modal {
         aiProvider: this.options.aiProvider,
         defaultModel: this.options.defaultModel,
         debugEnabled: this.options.debugEnabled,
+        pdfAvailable: this.options.pdfAvailable,
+        pdfOcr: this.options.pdfOcr,
         renderMarkdown: (source: string, el: HTMLElement) => {
           this.renderMarkdown(source, el);
         },

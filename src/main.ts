@@ -22,6 +22,7 @@ import {
   resolveDbPath,
   resolveBackupFolder,
   resolveSyncLogFolder,
+  resolvePdfCacheFolder,
 } from "./utils/paths";
 import { BackupService } from "./services/BackupService";
 import { StatisticsService } from "./services/StatisticsService";
@@ -36,6 +37,8 @@ import {
   fieldSetToEdits,
 } from "./services/AiRefactorController";
 import { AiGeneratorController } from "./services/AiGeneratorController";
+import { PdfOcrCache } from "./services/PdfOcrCache";
+import { buildAiConfig } from "./services/ai-config";
 import { FlashcardComposer } from "./services/FlashcardComposer";
 import { AiBatchRefactorModalWrapper } from "./components/AiBatchRefactorModalWrapper";
 import {
@@ -136,6 +139,7 @@ export default class DecksPlugin extends Plugin {
   public aiKeyStore: AiKeyStore;
   public aiRefactorController: AiRefactorController;
   public aiGeneratorController: AiGeneratorController;
+  public pdfOcrCache: PdfOcrCache;
   public settings: DecksSettings;
   private logger: Logger;
   private progressTracker: ProgressTracker;
@@ -276,6 +280,20 @@ export default class DecksPlugin extends Plugin {
         new AiGenerationService(new ObsidianHttpClient(), this.logger),
         this.settings,
         this.aiKeyStore,
+      );
+      // PDF → OCR text cache for the generator's two-stage PDF pipeline. Folder
+      // resolved on demand so a settings change takes effect without a restart.
+      this.pdfOcrCache = new PdfOcrCache(
+        this.app,
+        () =>
+          resolvePdfCacheFolder(this.settings.paths, {
+            manifestDir: this.manifest.dir,
+            manifestId: this.manifest.id,
+            vaultConfigDir: this.app.vault.configDir,
+          }),
+        () => buildAiConfig(this.settings, this.aiKeyStore),
+        new ObsidianHttpClient(),
+        this.logger,
       );
       this.flashcardComposer = new FlashcardComposer(this.app);
 
@@ -1088,6 +1106,10 @@ export default class DecksPlugin extends Plugin {
       aiProvider: this.settings.ai.provider,
       defaultModel: this.aiDefaultModel(),
       debugEnabled: this.settings.debug.enableLogging,
+      // PDF attach is available to all providers: Decks Pro OCRs the pages,
+      // any other provider uses free pdf.js text extraction.
+      pdfAvailable: this.settings.ai.enabled,
+      pdfOcr: this.pdfOcrCache,
     };
 
     if (this.settings.ui.aiGeneratorDisplayMode === "tab") {

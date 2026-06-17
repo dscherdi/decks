@@ -6,20 +6,11 @@
   import { tick } from "svelte";
   import { setIcon } from "obsidian";
   import { I18n, type AiModelOption } from "@decks/core";
-
-  interface ComposerContext {
-    id: string;
-    kind: "note" | "image";
-    label: string;
-  }
-
-  interface MentionItem {
-    path: string;
-    label: string;
-  }
+  import type { ContextItem } from "../utils/attachments";
+  import type { MentionItem } from "./ai-generator-types";
 
   export let prompt = "";
-  export let contexts: ComposerContext[] = [];
+  export let contexts: ContextItem[] = [];
   export let submitting = false;
   export let submitDisabled = false;
   export let splitOn = false;
@@ -33,6 +24,11 @@
   export let onMention: (item: MentionItem) => void = () => {};
   export let onPasteImages: (files: File[]) => void = () => {};
   export let onSubmit: () => void = () => {};
+  // Optional PDF attachment (Decks Pro). When `pdfAvailable`, an add-PDF button
+  // is shown and dropped/pasted PDFs are routed to `onAddPdfFiles`.
+  export let pdfAvailable = false;
+  export let onAddPdf: () => void = () => {};
+  export let onAddPdfFiles: (files: File[]) => void = () => {};
   // Optional include-context toggle (used by the generator) rendered as an
   // icon button beside the attach buttons.
   export let includeAvailable = false;
@@ -157,18 +153,47 @@
   function onPromptPaste(e: ClipboardEvent) {
     const items = e.clipboardData?.items;
     if (!items) return;
-    const files: File[] = [];
+    const images: File[] = [];
+    const pdfs: File[] = [];
     for (let i = 0; i < items.length; i++) {
       const item = items[i];
-      if (item.kind === "file" && item.type.startsWith("image/")) {
-        const file = item.getAsFile();
-        if (file) files.push(file);
-      }
+      if (item.kind !== "file") continue;
+      const file = item.getAsFile();
+      if (!file) continue;
+      if (item.type.startsWith("image/")) images.push(file);
+      else if (pdfAvailable && item.type === "application/pdf") pdfs.push(file);
     }
-    if (files.length > 0) {
-      e.preventDefault();
-      onPasteImages(files);
+    if (images.length === 0 && pdfs.length === 0) return;
+    e.preventDefault();
+    if (images.length > 0) onPasteImages(images);
+    if (pdfs.length > 0) onAddPdfFiles(pdfs);
+  }
+
+  // Drag/drop onto the composer: route images and (when enabled) PDFs.
+  let dragActive = false;
+  function onDragOver(e: DragEvent) {
+    if (!e.dataTransfer) return;
+    e.preventDefault();
+    dragActive = true;
+  }
+  function onDragLeave() {
+    dragActive = false;
+  }
+  function onDrop(e: DragEvent) {
+    dragActive = false;
+    const list = e.dataTransfer?.files;
+    if (!list || list.length === 0) return;
+    const images: File[] = [];
+    const pdfs: File[] = [];
+    for (let i = 0; i < list.length; i++) {
+      const file = list[i];
+      if (file.type.startsWith("image/")) images.push(file);
+      else if (pdfAvailable && file.type === "application/pdf") pdfs.push(file);
     }
+    if (images.length === 0 && pdfs.length === 0) return;
+    e.preventDefault();
+    if (images.length > 0) onPasteImages(images);
+    if (pdfs.length > 0) onAddPdfFiles(pdfs);
   }
 
   function icon(node: HTMLElement, name: string) {
@@ -199,7 +224,14 @@
   }
 </script>
 
-<div class="decks-ai-composer">
+<div
+  class="decks-ai-composer"
+  class:is-drag-active={dragActive}
+  on:dragover={onDragOver}
+  on:dragleave={onDragLeave}
+  on:drop={onDrop}
+  role="group"
+>
   {#if mentionOpen && mentionMatches.length > 0}
     <ul class="decks-ai-mention-list">
       {#each mentionMatches as item, i (item.path)}
@@ -220,10 +252,18 @@
   {#if contexts.length > 0}
     <div class="decks-ai-composer-pills">
       {#each contexts as ctx (ctx.id)}
-        <span class="decks-ai-context-pill" class:is-image={ctx.kind === "image"}>
+        <span
+          class="decks-ai-context-pill"
+          class:is-image={ctx.kind === "image"}
+          class:is-pdf={ctx.kind === "pdf"}
+        >
           <span
             class="decks-ai-context-pill-icon"
-            use:icon={ctx.kind === "image" ? "image" : "file-text"}
+            use:icon={ctx.kind === "image"
+              ? "image"
+              : ctx.kind === "pdf"
+                ? "book-open"
+                : "file-text"}
           ></span>
           <span class="decks-ai-context-pill-label">{ctx.label}</span>
           <button
@@ -281,6 +321,16 @@
       use:icon={"image"}
       on:click={onAddImage}
     ></button>
+    {#if pdfAvailable}
+      <button
+        type="button"
+        class="clickable-icon decks-ai-composer-add"
+        aria-label={t.aiAddPdf}
+        title={t.aiAddPdf}
+        use:icon={"book-open"}
+        on:click={onAddPdf}
+      ></button>
+    {/if}
     {#if includeAvailable}
       <button
         type="button"
@@ -323,6 +373,9 @@
       on:click={onSubmit}
       disabled={submitting || submitDisabled}
     >
+      {#if submitting}
+        <span class="decks-ai-composer-spinner" aria-hidden="true"></span>
+      {/if}
       {submitting
         ? (submittingLabel ?? t.aiRefactoring)
         : splitOn
@@ -479,6 +532,13 @@
   .decks-ai-context-pill.is-image {
     background: var(--background-modifier-success-hover, var(--background-modifier-hover));
   }
+  .decks-ai-context-pill.is-pdf {
+    background: var(--background-modifier-active-hover, var(--background-modifier-hover));
+  }
+  .decks-ai-composer.is-drag-active {
+    border-color: var(--interactive-accent);
+    box-shadow: 0 0 0 2px var(--interactive-accent);
+  }
   .decks-ai-context-pill-icon {
     display: inline-flex;
     align-items: center;
@@ -545,6 +605,23 @@
   }
   .decks-ai-composer-send {
     margin-left: auto;
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+  }
+  .decks-ai-composer-spinner {
+    width: 12px;
+    height: 12px;
+    border: 2px solid var(--text-on-accent);
+    border-top-color: transparent;
+    border-radius: 50%;
+    animation: decks-ai-composer-spin 0.7s linear infinite;
+    flex: 0 0 auto;
+  }
+  @keyframes decks-ai-composer-spin {
+    to {
+      transform: rotate(360deg);
+    }
   }
   .decks-ai-composer-model {
     margin-left: auto;

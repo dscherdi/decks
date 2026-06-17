@@ -81,6 +81,9 @@ export interface DecksSettings {
     // Folder for the per-device .deckssynclog files. Default: vault root.
     // Changes require a restart to take effect.
     syncLogFolder: string;
+    // Folder holding cached per-page PDF OCR text (reused across runs so the
+    // same PDF is never OCR'd twice). Default: plugin folder + "/pdf-ocr".
+    pdfCacheFolder: string;
   };
 
   // Internationalization
@@ -155,6 +158,7 @@ export const DEFAULT_SETTINGS: DecksSettings = {
     dbFolder: "",
     backupFolder: "",
     syncLogFolder: "",
+    pdfCacheFolder: "",
   },
 
   i18n: {
@@ -169,7 +173,7 @@ export const DEFAULT_SETTINGS: DecksSettings = {
       openai: "gpt-5.4-mini",
       claude: "claude-haiku-4-5-20251001",
       "openai-compatible": "gemma3",
-      "decks-pro": "deepseek/deepseek-v4-flash",
+      "decks-pro": "decks-tier-fast",
     },
     customModel: {},
     localBaseUrl: "http://localhost:11434/v1",

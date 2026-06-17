@@ -7,6 +7,7 @@ import {
   DropdownComponent,
   normalizePath,
   getLanguage,
+  requestUrl,
 } from "obsidian";
 import type { DecksSettings } from "../../settings";
 import { BackupService } from "../../services/BackupService";
@@ -16,7 +17,7 @@ import type { FsrsWeightSet } from "@/database/types";
 import { Logger } from "@/utils/logging";
 import { OptimizeFsrsModal } from "./OptimizeFsrsModal";
 import { resolveModelId } from "@/utils/ai-model-options";
-import { type AiProviderId, I18n, type LanguagePreference, PROVIDER_MODELS, SUPPORTED_LANGUAGES } from "@decks/core";
+import { type AiProviderId, DECKS_PRO_DEFAULT_BASE_URL, I18n, type LanguagePreference, PROVIDER_MODELS, SUPPORTED_LANGUAGES } from "@decks/core";
 
 export class DecksSettingTab extends PluginSettingTab {
   private settings: DecksSettings;
@@ -111,8 +112,6 @@ export class DecksSettingTab extends PluginSettingTab {
     // "enabled" (or switching provider) rebuilds ONLY that container instead of
     // the whole settings tab. The enable toggle leads the block; the container
     // is appended after it so the provider fields render below.
-    let subContainer: HTMLElement;
-
     new Setting(containerEl)
       .setName(s.enabled)
       .setDesc(s.enabledDesc)
@@ -126,7 +125,7 @@ export class DecksSettingTab extends PluginSettingTab {
         })
       );
 
-    subContainer = containerEl.createDiv();
+    const subContainer = containerEl.createDiv();
     this.renderAiProviderSettings(subContainer);
   }
 
@@ -195,6 +194,63 @@ export class DecksSettingTab extends PluginSettingTab {
           text.setValue(k);
         });
       });
+
+    // Decks Pro: surface the remaining monthly token quota (auto-loaded, with a
+    // manual refresh). Read-only call to the worker's /api/usage endpoint.
+    if (isPro) {
+      const usage = new Setting(containerEl)
+        .setName(s.tokenUsage)
+        .setDesc(s.tokenUsageLoading);
+      usage.addButton((button) =>
+        button
+          .setButtonText(s.tokenUsageRefresh)
+          .onClick(() => void this.loadProUsage(usage.descEl)),
+      );
+      void this.loadProUsage(usage.descEl);
+    }
+  }
+
+  // Fetch and render the Decks Pro monthly token quota into a description el.
+  private async loadProUsage(descEl: HTMLElement): Promise<void> {
+    const s = I18n.t.settings.ai;
+    descEl.setText(s.tokenUsageLoading);
+    try {
+      const key = (await this.plugin.aiKeyStore.get("decks-pro")).trim();
+      if (!key) {
+        descEl.setText(s.tokenUsageDesc);
+        return;
+      }
+      // Decks Pro always uses the hosted backend; localBaseUrl is the local
+      // (openai-compatible) provider's URL and must not be used here.
+      const base = DECKS_PRO_DEFAULT_BASE_URL.replace(/\/+$/, "");
+      const res = await requestUrl({
+        url: `${base}/api/usage`,
+        method: "GET",
+        headers: { Authorization: `Bearer ${key}` },
+        throw: false,
+      });
+      if (res.status !== 200) {
+        this.logger.debug(
+          `Decks Pro usage request failed: ${res.status} ${res.text?.slice(0, 200) ?? ""}`,
+        );
+        descEl.setText(s.tokenUsageError);
+        return;
+      }
+      const data = res.json as { remaining?: number; limit?: number };
+      if (typeof data?.remaining !== "number" || typeof data?.limit !== "number") {
+        descEl.setText(s.tokenUsageError);
+        return;
+      }
+      descEl.setText(
+        I18n.format(s.tokenUsageFormat, {
+          remaining: data.remaining.toLocaleString(),
+          limit: data.limit.toLocaleString(),
+        }),
+      );
+    } catch (e) {
+      this.logger.debug(`Failed to fetch Decks Pro usage: ${String(e)}`);
+      descEl.setText(s.tokenUsageError);
+    }
   }
 
   // The local (openai-compatible) provider keeps a free-text model field since
@@ -222,8 +278,10 @@ export class DecksSettingTab extends PluginSettingTab {
 
     const CUSTOM = "__custom__";
     const presets = PROVIDER_MODELS[provider];
-    // Decks Pro is a fixed curated list — no custom free-text model allowed.
-    const allowCustom = provider !== "decks-pro";
+    // Decks Pro exposes generation *tiers* (no raw model / custom field); the
+    // dropdown is labelled "Tier" and the worker maps the tier to a real model.
+    const isPro = provider === "decks-pro";
+    const allowCustom = !isPro;
     this.settings.ai.customModel ??= {};
     const isCustom = allowCustom && (this.settings.ai.customModel[provider] ?? false);
 
@@ -238,8 +296,8 @@ export class DecksSettingTab extends PluginSettingTab {
     }
 
     new Setting(containerEl)
-      .setName(s.model)
-      .setDesc(s.modelDesc)
+      .setName(isPro ? s.tier : s.model)
+      .setDesc(isPro ? s.tierDesc : s.modelDesc)
       .addDropdown((dd) => {
         for (const m of presets) dd.addOption(m.id, m.name);
         if (allowCustom) dd.addOption(CUSTOM, s.modelCustom);
@@ -349,6 +407,23 @@ export class DecksSettingTab extends PluginSettingTab {
           .setValue(this.settings.paths.syncLogFolder)
           .onChange(async (value) => {
             this.settings.paths.syncLogFolder = value.trim();
+            await this.saveSettings();
+          })
+      );
+
+    new Setting(containerEl)
+      .setName(I18n.t.settings.paths.pdfCacheFolder)
+      .setDesc(I18n.format(I18n.t.settings.paths.pdfCacheFolderDesc, { pluginFolder }))
+      .addText((text) =>
+        text
+          .setPlaceholder(
+            I18n.format(I18n.t.settings.paths.pdfCacheFolderPlaceholder, {
+              pluginFolder,
+            })
+          )
+          .setValue(this.settings.paths.pdfCacheFolder)
+          .onChange(async (value) => {
+            this.settings.paths.pdfCacheFolder = value.trim();
             await this.saveSettings();
           })
       );
