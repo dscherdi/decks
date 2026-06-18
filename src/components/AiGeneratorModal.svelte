@@ -1,7 +1,7 @@
 <script lang="ts">
   import { onMount, onDestroy } from "svelte";
   import { type App, type TFile, Menu, setIcon } from "obsidian";
-  import { I18n, type AiProviderId, type GeneratedCard, type GenerateHandlers, type GenerateResult, ocrSentinelForTier } from "@decks/core";
+  import { I18n, type AiProviderId, type GeneratedCard, type GenerateHandlers, type GenerateResult, type RefactorImage, ocrSentinelForTier } from "@decks/core";
   import AiPromptComposer from "./AiPromptComposer.svelte";
   import ChapterPanel from "./ChapterPanel.svelte";
   import { buildModelOptions } from "../utils/ai-model-options";
@@ -24,7 +24,7 @@
     pagesForSelection,
     hashPdf,
   } from "../utils/pdf";
-  import type { OcrDebugEntry, OcrProgress, PdfOcrCache } from "../services/PdfOcrCache";
+  import type { OcrDebugEntry, OcrProgress, PdfOcrCache } from "@decks/core";
   import type { SaveFormat } from "../services/FlashcardComposer";
   import type { GeneratorSaveRequest, ProfileOpt } from "./generator-save";
   import type {
@@ -393,6 +393,33 @@
     }
   }
 
+  // OCR attached images to text (Decks Pro) so they feed classification and the
+  // routed text model. Each image is cached by content, so re-runs don't re-OCR.
+  async function resolveImageSource(
+    images: RefactorImage[],
+    signal: AbortSignal,
+  ): Promise<string> {
+    if (!pdfOcr || images.length === 0) return "";
+    const ocrModel = ocrSentinelForTier(selectedModel);
+    const onDebug = debugEnabled
+      ? (entry: OcrDebugEntry) => {
+          ocrDebug = [...ocrDebug, entry].slice(-OCR_DEBUG_MAX);
+        }
+      : undefined;
+    pdfProgress = { done: 0, total: images.length };
+    const parts: string[] = [];
+    try {
+      for (let i = 0; i < images.length; i++) {
+        const text = await pdfOcr.ocrImageToText(images[i], ocrModel, signal, onDebug);
+        if (text) parts.push(`# Image ${i + 1}\n${text}`);
+        pdfProgress = { done: i + 1, total: images.length };
+      }
+      return parts.join("\n\n---\n\n");
+    } finally {
+      pdfProgress = null;
+    }
+  }
+
   // --- Generation ---
   async function startGenerate() {
     if (phase === "streaming") return;
@@ -422,12 +449,20 @@
     // Resolve any attached PDF into source text first (OCR'ing scanned pages),
     // then merge it with the note/image-derived source context.
     let sourceContext = req.sourceContext;
+    let images = req.images;
     try {
       const pdfText = await resolvePdfSource(abortController.signal);
       if (pdfText) {
-        sourceContext = [req.sourceContext, pdfText]
-          .filter(Boolean)
-          .join("\n\n---\n\n");
+        sourceContext = [sourceContext, pdfText].filter(Boolean).join("\n\n---\n\n");
+      }
+      // Decks Pro: OCR attached images to text and drop the raw image blocks, so
+      // they feed classification and the routed (possibly text-only) model.
+      if (aiProvider === "decks-pro" && pdfOcr && images.length > 0) {
+        const imageText = await resolveImageSource(images, abortController.signal);
+        if (imageText) {
+          sourceContext = [sourceContext, imageText].filter(Boolean).join("\n\n---\n\n");
+        }
+        images = [];
       }
     } catch (e) {
       if (!abortController.signal.aborted) {
@@ -452,7 +487,7 @@
         {
           prompt: req.prompt,
           sourceContext,
-          images: req.images,
+          images,
           maxBatches: MAX_BATCHES,
           existingCards,
           model: selectedModel,

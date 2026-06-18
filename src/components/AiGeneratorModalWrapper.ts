@@ -5,7 +5,7 @@ import { mount, unmount } from "svelte";
 import type { Svelte5MountedComponent } from "../types/svelte-components";
 import AiGeneratorModal from "./AiGeneratorModal.svelte";
 import type { GeneratorSaveRequest, ProfileOpt } from "./generator-save";
-import type { PdfOcrCache } from "../services/PdfOcrCache";
+import type { PdfOcrCache } from "@decks/core";
 
 export interface AiGeneratorOptions {
   generate: (

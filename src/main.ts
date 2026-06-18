@@ -37,7 +37,9 @@ import {
   fieldSetToEdits,
 } from "./services/AiRefactorController";
 import { AiGeneratorController } from "./services/AiGeneratorController";
-import { PdfOcrCache } from "./services/PdfOcrCache";
+import { PdfOcrCache } from "@decks/core";
+import { ObsidianFileStore } from "./services/ObsidianFileStore";
+import { renderPageImage } from "./utils/pdf";
 import { buildAiConfig } from "./services/ai-config";
 import { FlashcardComposer } from "./services/FlashcardComposer";
 import { AiBatchRefactorModalWrapper } from "./components/AiBatchRefactorModalWrapper";
@@ -284,7 +286,7 @@ export default class DecksPlugin extends Plugin {
       // PDF → OCR text cache for the generator's two-stage PDF pipeline. Folder
       // resolved on demand so a settings change takes effect without a restart.
       this.pdfOcrCache = new PdfOcrCache(
-        this.app,
+        new ObsidianFileStore(this.app),
         () =>
           resolvePdfCacheFolder(this.settings.paths, {
             manifestDir: this.manifest.dir,
@@ -293,6 +295,7 @@ export default class DecksPlugin extends Plugin {
           }),
         () => buildAiConfig(this.settings, this.aiKeyStore),
         new ObsidianHttpClient(),
+        renderPageImage,
         this.logger,
       );
       this.flashcardComposer = new FlashcardComposer(this.app);
