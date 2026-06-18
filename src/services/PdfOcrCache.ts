@@ -44,7 +44,7 @@ export interface OcrProgress {
 /** Per-page OCR exchange surfaced to the debug panel (only on a cache miss). */
 export interface OcrDebugEntry {
   page: number;
-  /** Client-sent OCR sentinel (`decks-ocr-*`; the real model is server-side). */
+  /** OCR sentinel (`decks-ocr-*`) sent to the backend. */
   model: string;
   system: string;
   user: string;
@@ -55,9 +55,9 @@ export interface OcrDebugEntry {
 
 /**
  * Vault-backed per-page OCR text store. Renders selected PDF pages to images and
- * transcribes them with the tier's OCR model (chosen server-side via the
- * `ocrModel` sentinel), caching each page's text on disk under
- * `<pdfHash>/<ocrModel>/<page>.md` — so the two Decks Pro tiers cache separately.
+ * transcribes them with the tier's OCR model (the `ocrModel` sentinel), caching
+ * each page's text on disk under
+ * `<pdfHash>/<ocrModel>/<page>.md` — so each tier caches separately.
  * A second run over the same PDF/pages/tier reads from disk and never calls the
  * model again.
  */
@@ -138,7 +138,7 @@ export class PdfOcrCache {
           signal,
           json: false,
         });
-        return sanitizeOcrText(raw);
+        return raw.trim();
       } catch (e) {
         // Empty model output is a valid blank page (the OCR prompt says "output
         // nothing" for blanks); don't treat it as an error.
@@ -241,24 +241,6 @@ export class PdfOcrCache {
     await Promise.all(Array.from({ length: poolSize }, () => worker()));
     return out;
   }
-}
-
-/**
- * Clean a single page's raw OCR output before it is cached. Runs exactly once per
- * page (on the fresh-OCR path only) — it is NOT idempotent, since halving slashes a
- * second time would corrupt valid LaTeX (`\gamma` → `gamma`).
- *
- * Some OCR models (e.g. Mistral) double-escape every backslash, emitting
- * `\\gamma \\frac{a}{b}` where the source is `\gamma \frac{a}{b}`. Collapsing each
- * doubled backslash restores LaTeX commands, and a genuine row-break `\\\\` (4)
- * collapses to `\\` (2). An outer code fence the model may have wrapped the page in
- * (the prompt forbids it) is stripped defensively.
- */
-export function sanitizeOcrText(raw: string): string {
-  let text = raw.trim();
-  const fence = text.match(/^```(?:[a-zA-Z]+)?\n([\s\S]*?)\n```$/);
-  if (fence) text = fence[1].trim();
-  return text.replace(/\\\\/g, "\\");
 }
 
 /** Whether an error is worth retrying (rate limit / 5xx / transient network). */

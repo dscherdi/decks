@@ -196,7 +196,7 @@ export class DecksSettingTab extends PluginSettingTab {
       });
 
     // Decks Pro: surface the remaining monthly token quota (auto-loaded, with a
-    // manual refresh). Read-only call to the worker's /api/usage endpoint.
+    // manual refresh). Read-only call to the backend's /api/usage endpoint.
     if (isPro) {
       const usage = new Setting(containerEl)
         .setName(s.tokenUsage)
@@ -279,7 +279,7 @@ export class DecksSettingTab extends PluginSettingTab {
     const CUSTOM = "__custom__";
     const presets = PROVIDER_MODELS[provider];
     // Decks Pro exposes generation *tiers* (no raw model / custom field); the
-    // dropdown is labelled "Tier" and the worker maps the tier to a real model.
+    // dropdown is labelled "Tier".
     const isPro = provider === "decks-pro";
     const allowCustom = !isPro;
     this.settings.ai.customModel ??= {};

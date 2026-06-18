@@ -96,6 +96,9 @@
   // Generate button switches to "Continue generating" (see canContinue) until a
   // round adds nothing new and isn't truncated.
   const MAX_BATCHES = 1;
+  // Caps on attached context (bounds payload size / token cost / memory).
+  const MAX_CONTEXT_NOTES = 10;
+  const MAX_CONTEXT_IMAGES = 10;
   // True after a round that may have more to produce (cards were added, or the
   // response was cut off by the output-token limit) → offer "Continue generating".
   let canContinue = false;
@@ -157,6 +160,14 @@
   function addContext(kind: "note" | "image" | "pdf", path: string, label: string) {
     const id = `${kind}:${path}`;
     if (contexts.some((c) => c.id === id)) return;
+    if (kind === "note" && contexts.filter((c) => c.kind === "note").length >= MAX_CONTEXT_NOTES) {
+      genError = I18n.format(g.tooManyNotes, { max: MAX_CONTEXT_NOTES });
+      return;
+    }
+    if (kind === "image" && contexts.filter((c) => c.kind === "image").length >= MAX_CONTEXT_IMAGES) {
+      genError = I18n.format(g.tooManyImages, { max: MAX_CONTEXT_IMAGES });
+      return;
+    }
     contexts = [...contexts, { id, kind, path, label }];
   }
   function removeContext(id: string) {

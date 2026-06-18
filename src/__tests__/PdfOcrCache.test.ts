@@ -1,6 +1,6 @@
 import type { App } from "obsidian";
 import type { AiProviderConfig, HttpClient } from "@decks/core";
-import { PdfOcrCache, sanitizeOcrText } from "../services/PdfOcrCache";
+import { PdfOcrCache } from "../services/PdfOcrCache";
 import type { PdfDoc } from "../utils/pdf";
 
 /** In-memory DataAdapter-backed App for exercising the cache's file I/O. */
@@ -85,35 +85,5 @@ describe("PdfOcrCache.runOcr", () => {
     expect(result.size).toBe(20);
     for (const p of pages) expect(result.get(p)).toBe(`page-${p}`);
     expect(done).toBe(20);
-  });
-});
-
-describe("sanitizeOcrText", () => {
-  it("collapses doubled backslashes in LaTeX commands", () => {
-    expect(sanitizeOcrText("\\\\gamma \\\\frac{a}{b}")).toBe("\\gamma \\frac{a}{b}");
-  });
-
-  it("de-escapes a full double-escaped formula", () => {
-    const dirty =
-      "\\\\gamma_{\\\\lambda,r}(x) := \\\\frac{\\\\lambda^r}{\\\\Gamma(r)} x^{r-1} e^{-\\\\lambda x}, \\\\qquad x \\\\geq 0.";
-    expect(sanitizeOcrText(dirty)).toBe(
-      "\\gamma_{\\lambda,r}(x) := \\frac{\\lambda^r}{\\Gamma(r)} x^{r-1} e^{-\\lambda x}, \\qquad x \\geq 0.",
-    );
-  });
-
-  it("preserves a genuine LaTeX row break (4 backslashes → 2)", () => {
-    expect(sanitizeOcrText("a \\\\\\\\ b")).toBe("a \\\\ b");
-  });
-
-  it("strips an outer markdown code fence", () => {
-    expect(sanitizeOcrText("```markdown\n# Title\n\nbody\n```")).toBe("# Title\n\nbody");
-  });
-
-  it("leaves already-clean text unchanged", () => {
-    expect(sanitizeOcrText("Plain text with no math.")).toBe("Plain text with no math.");
-  });
-
-  it("trims surrounding whitespace", () => {
-    expect(sanitizeOcrText("  hello  ")).toBe("hello");
   });
 });
