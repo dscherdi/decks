@@ -4,6 +4,8 @@
 
 **Turn your Obsidian notes into flashcards. No special syntax. No separate deck to build.**
 
+> **Coming from the Spaced Repetition plugin?** Jump to Decks without losing your progress — the built-in one-click migrator converts your `::` cards into structural Markdown and carries over your review history, so you pick up your reviews right where you left off. See [Coming from Spaced Repetition](#coming-from-spaced-repetition).
+
 Tag a file with `#decks`. Each `##` heading becomes the front of a card; the text below becomes the back. Tables, image occlusion, and `==cloze==` highlights work the same way. Scheduling is handled by FSRS-6 — the modern spaced-repetition algorithm.
 
 ![Demo](./decks_showcase.gif)
@@ -229,6 +231,25 @@ Open **Settings → Decks** for daily limits, retention targets, search paths, s
 
 </details>
 
+## Coming from Spaced Repetition
+
+Already using the **Spaced Repetition** plugin? You can switch to Decks **without losing your cards or your review history** — and continue your reviews exactly where you left off.
+
+Open the migrator from the deck panel toolbar (the cube icon) or run the **"Migrate from Spaced Repetition plugin"** command.
+
+**How it works**
+
+1. **Pick a source folder** to scan (or leave it empty to scan the whole vault). Decks finds every note with legacy cards — single-line (`Front :: Back`), reversed (`Front ::: Back`), multi-line (`?` / `??`) — and whole-note reviews (the `#review` tag).
+2. **It rewrites each note into Decks format** in a target folder you choose, mirroring your original folder structure. Your tags are preserved — the legacy base tag (e.g. `#flashcards`) is translated to your configured Decks tag. Reversed cards are emitted into a companion file with `reverse: true`, so both directions are scheduled independently.
+3. **Nested structure is flattened into context.** SR treats ancestor headings and nested list bullets as a card's context. Decks captures that whole path into the card's front — e.g. a deeply nested `Function :: Powerhouse` becomes `Cell Anatomy > Mitochondria > … > Function` — rendered at your profile's single header level (a lone note-title H1 is omitted). Pick any level via the preinstalled **Heading 1–6** profiles.
+4. **Smart auto-routing picks the best layout.** Short single-line cards become rows in a compact **table** (no endless scrolling for vocabulary); multi-line cards — with code blocks, lists, or math — become **headers** so their formatting survives. You can override this to *all headers* or *all tables* in the dialog.
+4. **Whole-note reviews migrate too.** Notes you reviewed as a whole (the `#review` tag) become Decks **title-mode** cards (filename = front, the whole note = back) under a dedicated `…/review` profile. Their schedule is read from the note's `sr-*` frontmatter or its end-of-file marker.
+5. **Your scheduling state is translated to FSRS-6.** Decks reads the legacy `<!--SR:-->` metadata — SM-2 (`due, interval, ease`) or already FSRS — and maps it to a stability/difficulty/due state. Reversed cards keep **two separate** histories (reading vs. recall), exactly as the original plugin stored them.
+6. **A review log is written for every migrated card**, so the moment the cards appear in Decks they're already due on the right date with the right interval — you resume, you don't restart.
+7. **Optionally (irreversible), replace the originals with links.** If you enable this, Decks strips the legacy metadata from your source notes and replaces each card with a **block-reference** link to its new home (immune to heading punctuation and duplicates). A `.bak` copy of every original is written first, just in case. (Replace-with-links always uses the header layout so every card has a linkable anchor.)
+
+Pick a profile in the dialog (or use the default) — its header level and scheduling settings are applied to the migrated decks.
+
 ## Release notes & support
 
 - **Release notes** for each version are in [`release-notes/`](./release-notes/).
@@ -239,6 +260,12 @@ Open **Settings → Decks** for daily limits, retention targets, search paths, s
 ## Built on
 
 Decks is built on **[`@decks/core`](https://github.com/dscherdi/decks-core)** — the open-source (MIT) engine that implements the parsing, FSRS scheduling, sync log, and AI orchestration. The plugin is the Obsidian-specific shell around it.
+
+## Acknowledgements & alternatives
+
+A huge thank you to the original [Spaced Repetition](https://github.com/st3v3nmw/obsidian-spaced-repetition) plugin by **st3v3nmw**. It pioneered flashcards within Obsidian and remains an excellent choice for users who prefer writing inline `::` cards.
+
+Decks was built as an alternative for users who want a different architectural approach: purely structural Markdown (no special syntax) and conflict-free syncing via a local SQLite database. If you are coming from the original plugin and want to try this approach, use the Decks one-click migrator to bring your cards and review history with you!
 
 ## License
 

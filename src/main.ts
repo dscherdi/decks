@@ -57,6 +57,8 @@ import { DecksSettingTab } from "./components/settings/SettingsTab";
 import { DecksView } from "./components/DecksView";
 import { DecksViewModal } from "./components/DecksViewModal";
 import { ReleaseNotesModal } from "./components/ReleaseNotesModal";
+import { SrMigrationController } from "./services/SrMigrationController";
+import { SrMigrationModalWrapper } from "./components/migration/SrMigrationModalWrapper";
 import {
   FlashcardManagerView,
   VIEW_TYPE_FLASHCARD_MANAGER,
@@ -407,6 +409,15 @@ export default class DecksPlugin extends Plugin {
         name: I18n.t.commands.showReleaseNotes,
         callback: () => {
           new ReleaseNotesModal(this.app).open();
+        },
+      });
+
+      // Add command to open the legacy SR migration modal
+      this.addCommand({
+        id: "migrate-from-sr",
+        name: I18n.t.commands.migrateFromSr,
+        callback: () => {
+          this.openSrMigrationModal();
         },
       });
 
@@ -1091,6 +1102,24 @@ export default class DecksPlugin extends Plugin {
     }
 
     new AiGeneratorModalWrapper(this.app, options).open();
+  }
+
+  openSrMigrationModal(): void {
+    const controller = new SrMigrationController(
+      this.app,
+      this.db,
+      this.deckSynchronizer,
+      this.settings,
+      this.logger,
+    );
+    new SrMigrationModalWrapper(
+      this.app,
+      this.db,
+      controller,
+      async () => {
+        await this.getDecksView()?.refresh();
+      },
+    ).open();
   }
 
   // Write the kept generated cards to disk, then register/sync the deck so the

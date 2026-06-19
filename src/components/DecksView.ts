@@ -15,6 +15,8 @@ import {
 import { StatisticsModal } from "./settings/StatisticsModal";
 import { ProfilesManagerModal } from "./config/ProfilesManagerModal";
 import { DeckConfigModal } from "./config/DeckConfigModal";
+import { SrMigrationModalWrapper } from "./migration/SrMigrationModalWrapper";
+import { SrMigrationController } from "@/services/SrMigrationController";
 import { StatisticsService } from "@/services/StatisticsService";
 import { TagGroupService } from "@decks/core";
 import { CustomDeckService } from "@decks/core";
@@ -157,6 +159,7 @@ export class DecksView extends ItemView {
         onRefresh: () => this.refresh(),
         openStatisticsModal: () => this.openStatisticsModal(),
         openProfilesManagerModal: () => this.openProfilesManagerModal(),
+        openSrMigrationModal: () => this.openSrMigrationModal(),
         openDeckConfigModal: (deck: DeckWithProfile) => this.openDeckConfigModal(deck),
         openFlashcardManager: () => this.openFlashcardManager(),
         openAiGeneratorModal: () => this.openAiGenerator?.(),
@@ -223,6 +226,24 @@ export class DecksView extends ItemView {
         active !== null
       ).open();
     });
+  }
+
+  openSrMigrationModal(): void {
+    const controller = new SrMigrationController(
+      this.app,
+      this.db,
+      this.deckSynchronizer,
+      this.settings,
+      this.logger
+    );
+    new SrMigrationModalWrapper(
+      this.app,
+      this.db,
+      controller,
+      async () => {
+        await this.refresh();
+      }
+    ).open();
   }
 
   openFlashcardManager(): void {

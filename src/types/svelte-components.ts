@@ -46,6 +46,8 @@ export type ProfilesManagerComponent = Svelte5MountedComponent & {
   loadProfiles?(): Promise<void>;
 };
 
+export type SrMigrationComponent = Svelte5MountedComponent;
+
 // DeckListPanel component - supports both Svelte 4 and Svelte 5 APIs
 export type DeckListPanelComponent = (
   | SvelteComponentInstance
