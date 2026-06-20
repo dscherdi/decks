@@ -417,6 +417,34 @@ describe("SyncLog", () => {
       expect(kept.s).toBe(3);
     });
 
+    it("succeeds when the rename target already exists (Obsidian-style adapter)", async () => {
+      // Obsidian's adapter.rename throws if the destination already exists.
+      // compact() must clear the destination (and any stale temp) first.
+      class StrictRenameAdapter extends FakeAdapter {
+        async rename(from: string, to: string): Promise<void> {
+          if (this.files.has(to)) {
+            throw new Error("Destination file already exists!");
+          }
+          await super.rename(from, to);
+        }
+      }
+      const adapter = new StrictRenameAdapter();
+      const { log, state } = makeSyncLog(adapter);
+      const path = `${state.getDeviceId()}.deckssynclog`;
+      const now = Date.now();
+      const old = now - 60 * 24 * 60 * 60 * 1000;
+      adapter.files.set(path, makeLine(old, 1) + makeLine(now, 2));
+      // Leave a stale temp behind from a prior interrupted compaction.
+      adapter.files.set(`${path}.compact-tmp`, "stale\n");
+
+      const result = await log.compact(30);
+      expect(result.before).toBe(2);
+      expect(result.after).toBe(1);
+      expect(adapter.files.get(path)!.split("\n").filter(Boolean)).toHaveLength(1);
+      // Running compact again must not error even though the file now exists.
+      await expect(log.compact(30)).resolves.toBeDefined();
+    });
+
     it("is a no-op when nothing is older than the cutoff", async () => {
       const adapter = new FakeAdapter();
       const { log, state } = makeSyncLog(adapter);

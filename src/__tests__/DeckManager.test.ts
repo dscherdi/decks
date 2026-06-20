@@ -1,6 +1,62 @@
 import { generateFlashcardId } from "@decks/core";
+import { DeckManager } from "../services/DeckManager";
+import type { IDatabaseService } from "../database/DatabaseFactory";
+import { TFile, type MetadataCache, type Vault } from "obsidian";
 
 describe("DeckManager", () => {
+  describe("getStaleDeckIds", () => {
+    function makeManager(
+      meta: { id: string; filepath: string; lastSyncedMtime: number }[],
+      fileMtimes: Record<string, number | undefined>
+    ): DeckManager {
+      const db = {
+        getAllDeckSyncMeta: jest.fn(async () => meta),
+      } as unknown as IDatabaseService;
+      const vault = {
+        getAbstractFileByPath: (path: string) => {
+          const mtime = fileMtimes[path];
+          if (mtime === undefined) return null;
+          const f = new TFile(path);
+          f.stat = { mtime, ctime: mtime, size: 0 };
+          return f;
+        },
+      } as unknown as Vault;
+      const metadataCache = {} as unknown as MetadataCache;
+      return new DeckManager(vault, metadataCache, db);
+    }
+
+    it("returns decks whose file mtime exceeds last_synced_mtime", async () => {
+      const mgr = makeManager(
+        [
+          { id: "fresh", filepath: "fresh.md", lastSyncedMtime: 1000 },
+          { id: "changed", filepath: "changed.md", lastSyncedMtime: 1000 },
+        ],
+        { "fresh.md": 1000, "changed.md": 2000 }
+      );
+      const stale = await mgr.getStaleDeckIds();
+      expect(stale.has("changed")).toBe(true);
+      expect(stale.has("fresh")).toBe(false);
+    });
+
+    it("treats never-synced (mtime 0) decks as stale", async () => {
+      const mgr = makeManager(
+        [{ id: "new", filepath: "new.md", lastSyncedMtime: 0 }],
+        { "new.md": 1234 }
+      );
+      const stale = await mgr.getStaleDeckIds();
+      expect(stale.has("new")).toBe(true);
+    });
+
+    it("treats decks with a missing file as stale (so a re-scan reconciles)", async () => {
+      const mgr = makeManager(
+        [{ id: "gone", filepath: "gone.md", lastSyncedMtime: 1000 }],
+        {}
+      );
+      const stale = await mgr.getStaleDeckIds();
+      expect(stale.has("gone")).toBe(true);
+    });
+  });
+
   describe("flashcard ID generation", () => {
     it("should generate consistent IDs for same content and deck", () => {
       const id1 = generateFlashcardId("What is 2+2?", "deck_abc");

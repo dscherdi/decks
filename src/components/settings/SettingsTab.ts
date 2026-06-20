@@ -113,8 +113,6 @@ export class DecksSettingTab extends PluginSettingTab {
     // "enabled" (or switching provider) rebuilds ONLY that container instead of
     // the whole settings tab. The enable toggle leads the block; the container
     // is appended after it so the provider fields render below.
-    let subContainer: HTMLElement;
-
     new Setting(containerEl)
       .setName(s.enabled)
       .setDesc(s.enabledDesc)
@@ -128,7 +126,7 @@ export class DecksSettingTab extends PluginSettingTab {
         })
       );
 
-    subContainer = containerEl.createDiv();
+    const subContainer = containerEl.createDiv();
     this.renderAiProviderSettings(subContainer);
   }
 

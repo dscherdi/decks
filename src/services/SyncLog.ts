@@ -421,7 +421,16 @@ export class SyncLog {
     const newContent = kept.length > 0 ? kept.join("\n") + "\n" : "";
     const tmpPath = `${path}.compact-tmp`;
     try {
+      // Clear a leftover temp from a previous interrupted compaction.
+      if (await this.adapter.exists(tmpPath)) {
+        await this.adapter.remove(tmpPath);
+      }
       await this.adapter.write(tmpPath, newContent);
+      // `adapter.rename` throws if the destination exists, so free it first
+      // (the temp still holds the data if interrupted in this tiny window).
+      if (await this.adapter.exists(path)) {
+        await this.adapter.remove(path);
+      }
       await safeRename(this.adapter, tmpPath, path);
       this.logger.debug(
         `SyncLog.compact: ${path} ${beforeCount} → ${kept.length} entries (dropped ${droppedCount} older than ${retentionDays}d)`

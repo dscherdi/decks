@@ -9,6 +9,7 @@ import {
   generateDeckId,
   generateFlashcardId,
   generateReverseFlashcardId,
+  generateClozeFlashcardId,
 } from "@decks/core";
 import type { DeckProfile, MigrationDeckItem } from "@decks/core";
 
@@ -51,6 +52,7 @@ describe("SR migration pipeline (integration)", () => {
       deckConfig: profile,
       fileContent: content,
       reverseCards,
+      clozeEnabled: profile.clozeEnabled,
     });
     return deckId;
   }
@@ -301,6 +303,35 @@ describe("SR migration pipeline (integration)", () => {
     expect(card!.stability).toBe(7);
   });
 
+  it("migrates a cloze note: N cloze cards under generateClozeFlashcardId with injected state", async () => {
+    const source =
+      "The capital is ==Paris== in {{c1::France}}.\n<!--SR:!2024-06-18,4,250!2024-06-19,9,250-->";
+    const { dbRecords } = LegacySrMigrator.processFile(source, {
+      srBaseTag: "#flashcards",
+      decksBaseTag: "#decks",
+      noteTitle: "Geo",
+    });
+    expect(dbRecords[0].clozes).toBeDefined();
+    const [rendered] = LegacySrMigrator.renderDecksFiles(dbRecords, "#decks", profile.headerLevel);
+
+    const deckId = await syncFile("Decks/geo.md", rendered.content);
+    const cards = await db.getFlashcardsByDeck(deckId);
+    expect(cards).toHaveLength(2); // one cloze card per highlight
+    expect(cards.every((c) => c.type === "cloze")).toBe(true);
+
+    const { injected } = await SrHistoryImporter.importHistory(
+      db,
+      [{ deckId, profileFsrs: profileFsrs(), cards: rendered.cards }]
+    );
+    expect(injected).toBe(2);
+
+    const front = dbRecords[0].front;
+    const parisId = generateClozeFlashcardId(front, "Paris", 0, deckId);
+    const franceId = generateClozeFlashcardId(front, "France", 1, deckId);
+    expect((await db.getFlashcardById(parisId))!.stability).toBe(4);
+    expect((await db.getFlashcardById(franceId))!.stability).toBe(9);
+  });
+
   it("migrates a whole-note review as a single title-mode card with restored state", async () => {
     const titleProfile: Omit<DeckProfile, "created" | "modified"> = {
       ...profile,
@@ -323,10 +354,15 @@ describe("SR migration pipeline (integration)", () => {
       "## Section A",
       "Body content with its own headings.",
     ].join("\n");
+    // The review note is migrated IN PLACE: tag rewritten to decks/review, SR
+    // metadata stripped. The same file (its original path) becomes the deck.
     const card = LegacySrMigrator.processWholeNote(note, "Photosynthesis");
-    const content = LegacySrMigrator.renderTitleModeFile(card, "#decks/review");
+    const rewritten = LegacySrMigrator.rewriteReviewNote(note, "decks/review");
+    expect(rewritten).toContain("- decks/review");
+    expect(rewritten).toContain("- review"); // original SR review tag preserved
+    expect(rewritten).not.toContain("sr-due");
 
-    const filepath = "Decks/review/Photosynthesis.md";
+    const filepath = "Notes/Photosynthesis.md"; // original location — no duplicate
     const deckId = generateDeckId(filepath);
     await db.createDeck({
       id: deckId,
@@ -341,7 +377,7 @@ describe("SR migration pipeline (integration)", () => {
       deckName: filepath,
       deckFilepath: filepath,
       deckConfig: { ...titleProfile, created: "", modified: "" },
-      fileContent: content,
+      fileContent: rewritten,
       fileTitle: "Photosynthesis",
     });
     expect(result.parsedCount).toBe(1); // one card per whole note, headings not split

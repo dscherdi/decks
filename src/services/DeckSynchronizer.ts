@@ -34,6 +34,14 @@ export class DeckSynchronizer {
   private db: IDatabaseService;
   private deckManager: DeckManager;
   private isSyncing = false;
+  // True while a migration is writing many files. Vault create/modify event
+  // handlers skip their auto-sync so the per-file events don't collide with each
+  // other or the migration's own single forced sync.
+  isMigrating = false;
+  // Single-flight coalescing: the in-flight run and the one trailing run queued
+  // behind it (concurrent callers reuse `queued`).
+  private current: Promise<SyncResult> | null = null;
+  private queued: Promise<SyncResult> | null = null;
   private logger: Logger;
   private progressTracker: ProgressTracker;
   // Wall-clock ms when the most recent sync completed successfully. Used by
@@ -123,15 +131,31 @@ export class DeckSynchronizer {
   }
 
   /**
-   * Main sync operation - coordinates deck discovery and flashcard synchronization
+   * Main sync operation. Concurrent calls are coalesced: while a run is in
+   * flight, callers get a single trailing run that executes once the current
+   * one finishes — so vault create/modify events never throw "already in
+   * progress", and a fresh run still picks up the latest changes.
    */
   async sync(options: SyncOptions = {}): Promise<SyncResult> {
-    const { showProgress = false, onProgress, force = false } = options;
-
-    if (this.isSyncing) {
-      this.logger.debug("Sync already in progress, skipping...");
-      throw new Error("Sync already in progress");
+    if (this.current) {
+      if (!this.queued) {
+        this.queued = this.current
+          .catch(() => undefined)
+          .then(() => {
+            this.queued = null;
+            return this.runSync(options);
+          });
+      }
+      return this.queued;
     }
+    this.current = this.runSync(options).finally(() => {
+      this.current = null;
+    });
+    return this.current;
+  }
+
+  private async runSync(options: SyncOptions = {}): Promise<SyncResult> {
+    const { showProgress = false, onProgress, force = false } = options;
 
     this.isSyncing = true;
     const syncStartTime = performance.now();
@@ -170,13 +194,20 @@ export class DeckSynchronizer {
         });
       }
 
-      // Step 3: Sync flashcards for each deck
+      // Step 3: Sync flashcards for each deck.
+      // Skip unchanged decks up front (one bulk DB read + cheap mtime checks)
+      // so they incur no per-deck worker round-trips. `force` bypasses the gate.
       let totalFlashcards = 0;
       const flashcardSyncStartTime = performance.now();
+      const stale = force ? null : await this.deckManager.getStaleDeckIds();
+      let syncedDeckCount = 0;
 
       for (let i = 0; i < decks.length; i++) {
         const deck = decks[i];
+
+        if (stale && !stale.has(deck.id)) continue;
         const deckStartTime = performance.now();
+        syncedDeckCount++;
 
         // Update progress
         if (showProgress && onProgress) {
@@ -200,34 +231,37 @@ export class DeckSynchronizer {
         );
         await yieldToUI();
 
-        // Track performance metrics
-        const totalCardCount = await this.db.countTotalCards(deck.id);
-        totalFlashcards += totalCardCount;
         const deckTime = performance.now() - deckStartTime;
-
         this.logger.performance(
-          `Deck ${deck.name} processed in ${formatTime(
-            deckTime
-          )} - ${totalCardCount} flashcards`
+          `Deck ${deck.name} processed in ${formatTime(deckTime)}`
         );
       }
 
-      // Step 4: Save database
-      if (showProgress && onProgress) {
-        onProgress({
-          message: "💾 Saving database...",
-          percentage: 95,
-        });
+      // Step 4: Save database — only when something actually changed. A no-op
+      // sync (every deck unchanged) leaves the DB clean, so we skip the
+      // expensive full serialize + disk write.
+      let saveTime = 0;
+      if (this.db.isDirty()) {
+        if (showProgress && onProgress) {
+          onProgress({
+            message: "💾 Saving database...",
+            percentage: 95,
+          });
+        }
+
+        this.logger.debug("Saving database after processing all decks...");
+        const saveStartTime = performance.now();
+
+        await yieldToUI();
+        await this.db.save();
+        await yieldToUI();
+
+        saveTime = performance.now() - saveStartTime;
+      } else {
+        this.logger.debug("No changes detected — skipping database save.");
       }
-
-      this.logger.debug("Saving database after processing all decks...");
-      const saveStartTime = performance.now();
-
-      await yieldToUI();
-      await this.db.save();
-      await yieldToUI();
-
-      const saveTime = performance.now() - saveStartTime;
+      // Report total cards once (aggregate) rather than per-deck round-trips.
+      totalFlashcards = syncedDeckCount > 0 ? await this.db.countAllCards() : 0;
 
       this.logger.performance(
         `Database saved in ${formatTime(saveTime)} after processing ${

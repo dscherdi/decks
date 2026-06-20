@@ -152,6 +152,14 @@ export default class DecksPlugin extends Plugin {
   private pendingDeckSyncs = new Map<string, number>();
   private static readonly FILE_MODIFY_DEBOUNCE_MS = 3000;
 
+  // Coalesce bursts of `create` events (bulk file creation / import) into a
+  // single trailing-edge full sync, instead of one full vault scan per file.
+  private pendingFullSync: number | null = null;
+  private static readonly FULL_SYNC_DEBOUNCE_MS = 1000;
+  // Coalesce per-file UI stat refreshes (e.g. bulk delete) into one repaint.
+  private pendingStatsRefresh: number | null = null;
+  private static readonly STATS_REFRESH_DEBOUNCE_MS = 300;
+
   async onload() {
     // Load settings first
     await this.loadSettings();
@@ -245,6 +253,8 @@ export default class DecksPlugin extends Plugin {
         deckSynchronizer: this.deckSynchronizer,
         logger: this.logger,
         scheduleDeckSync: (deckId: string) => this.scheduleDeckSync(deckId),
+        scheduleFullSync: () => this.scheduleFullSync(),
+        scheduleStatsRefresh: () => this.scheduleStatsRefresh(),
         refreshStats: async () => {
           await this.getDecksView()?.refreshStats();
         },
@@ -648,9 +658,9 @@ export default class DecksPlugin extends Plugin {
       // metadataCache's own "changed" event the FIRST time it fires for the
       // file. Canvas files have no metadata to wait for — handled inline.
       this.registerEvent(
-        this.app.vault.on("create", async (file) => {
+        this.app.vault.on("create", (file) => {
           if (file instanceof TFile && (file.extension === "md" || file.extension === "canvas")) {
-            await this.handleFileCreate(file);
+            this.handleFileCreate(file);
           }
         })
       );
@@ -741,6 +751,16 @@ export default class DecksPlugin extends Plugin {
 
   onunload() {
     this.logger.debug("Unloading Decks plugin");
+
+    // Cancel pending debounced timers so they can't fire after teardown.
+    if (this.pendingFullSync !== null) {
+      window.clearTimeout(this.pendingFullSync);
+      this.pendingFullSync = null;
+    }
+    if (this.pendingStatsRefresh !== null) {
+      window.clearTimeout(this.pendingStatsRefresh);
+      this.pendingStatsRefresh = null;
+    }
 
     // Drain any buffered sync-log ops + persist the DB snapshot before
     // tearing down. Plugin disable / reload would otherwise lose the last
@@ -1204,6 +1224,9 @@ export default class DecksPlugin extends Plugin {
   }
 
   async handleFileChange(file: TFile) {
+    // Skipped during migration (delete-mode rewrites originals) — its forced
+    // sync covers everything, so skip the per-file auto-sync.
+    if (this.deckSynchronizer.isMigrating) return;
     if (file.extension === "canvas") {
       await this.canvasFileEvents.onModified(file);
       return;
@@ -1278,6 +1301,36 @@ export default class DecksPlugin extends Plugin {
     this.pendingDeckSyncs.set(deckId, timer);
   }
 
+  // Debounced full vault sync: a burst of create events collapses into one
+  // trailing full sync + UI refresh after things settle.
+  private scheduleFullSync(): void {
+    if (this.pendingFullSync !== null) window.clearTimeout(this.pendingFullSync);
+    this.pendingFullSync = window.setTimeout(() => {
+      this.pendingFullSync = null;
+      void this.runDebouncedFullSync();
+    }, DecksPlugin.FULL_SYNC_DEBOUNCE_MS);
+  }
+
+  private async runDebouncedFullSync(): Promise<void> {
+    try {
+      await this.deckSynchronizer.sync();
+      await this.getDecksView()?.refresh({ skipSync: true });
+    } catch (error) {
+      this.logger.error("Debounced full sync failed", error);
+    }
+  }
+
+  // Debounced UI stats refresh: a burst of deletes collapses into one repaint.
+  private scheduleStatsRefresh(): void {
+    if (this.pendingStatsRefresh !== null) {
+      window.clearTimeout(this.pendingStatsRefresh);
+    }
+    this.pendingStatsRefresh = window.setTimeout(() => {
+      this.pendingStatsRefresh = null;
+      void this.getDecksView()?.refreshStats();
+    }, DecksPlugin.STATS_REFRESH_DEBOUNCE_MS);
+  }
+
   // Run a deck's sync immediately (awaited), cancelling any pending debounce.
   // Used after an interactive edit so callers can rely on the DB being current
   // before they reload (e.g. reopening the edit modal from the manager).
@@ -1308,6 +1361,13 @@ export default class DecksPlugin extends Plugin {
     for (const [deckId, timer] of pending) {
       window.clearTimeout(timer);
       await this.runDebouncedDeckSync(deckId);
+    }
+    // Drain a pending full sync (e.g. a bulk create sitting in the debounce
+    // window) so it isn't dropped on blur/pagehide/unload.
+    if (this.pendingFullSync !== null) {
+      window.clearTimeout(this.pendingFullSync);
+      this.pendingFullSync = null;
+      await this.runDebouncedFullSync();
     }
   }
 
@@ -1342,8 +1402,8 @@ export default class DecksPlugin extends Plugin {
     // Remove the deck and all associated flashcards/review logs
     await this.db.deleteDeckByFilepath(file.path);
 
-    // Just refresh stats to remove deleted deck from UI (much faster than full sync)
-    await this.getDecksView()?.refreshStats();
+    // Debounced stats refresh so a bulk delete repaints the UI once.
+    this.scheduleStatsRefresh();
   }
 
   /**
@@ -1353,38 +1413,37 @@ export default class DecksPlugin extends Plugin {
    * metadata cache a beat later; defer once via metadataCache "changed"
    * if needed.
    */
-  async handleFileCreate(file: TFile): Promise<void> {
+  handleFileCreate(file: TFile): void {
+    // The migration writes many files at once and runs its own single sync;
+    // skip the per-file auto-sync to avoid "Sync already in progress" collisions.
+    if (this.deckSynchronizer.isMigrating) return;
     if (file.extension === "canvas") {
-      await this.canvasFileEvents.onCreated(file);
+      this.canvasFileEvents.onCreated(file);
       return;
     }
     const baseTag = this.settings.parsing.deckTag;
-    const checkAndSync = async (): Promise<boolean> => {
+    const checkAndSync = (): boolean => {
       const metadata = this.app.metadataCache.getFileCache(file);
       if (!metadata) return false;
       const tags = getAllTags(metadata) || [];
       const hasTag = tags.some((t) => t.startsWith(baseTag));
       if (!hasTag) return true; // metadata seen, definitely no tag — stop deferring
       this.logger.debug(`New tagged file detected: ${file.path}`);
-      // Full discovery sync creates the deck and parses cards; the mtime
-      // gate guarantees only the new file is parsed, not every existing deck.
-      try {
-        await this.deckSynchronizer.sync();
-        await this.getDecksView()?.refresh();
-      } catch (error) {
-        this.logger.error(`Failed to sync newly-created file ${file.path}`, error);
-      }
+      // Debounced full discovery sync: a burst of new files collapses into a
+      // single trailing sync. The mtime gate guarantees only changed/new files
+      // are parsed, not every existing deck.
+      this.scheduleFullSync();
       return true;
     };
 
-    if (await checkAndSync()) return;
+    if (checkAndSync()) return;
 
     // Metadata not yet ready — defer until metadataCache fires "changed"
     // for this file. Self-unregistering one-shot listener.
     const ref = this.app.metadataCache.on("changed", (changedFile) => {
       if (changedFile !== file) return;
       this.app.metadataCache.offref(ref);
-      void checkAndSync();
+      checkAndSync();
     });
     this.registerEvent(ref);
   }

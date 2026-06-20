@@ -1357,7 +1357,10 @@
       {:else if showAnswer}
         <div class="decks-separator"></div>
       {/if}
-      <div class="decks-answer-section" class:hidden={!showAnswer}>
+      <div
+        class="decks-answer-section"
+        class:hidden={!showAnswer && !(currentCard && isClozeType(currentCard.type))}
+      >
         <div class="decks-back-wrapper">
           {#if currentCard}
             <button

@@ -22,6 +22,7 @@
   let srReviewTag = "#review";
   let inlineSep = "::";
   let multiSep = "?";
+  let clozeSep = ";;";
   let profileId = "";
   let format: MigrationFormat = "smart";
   let deleteMode = false;
@@ -31,6 +32,8 @@
   let migrating = false;
   let scanned: { files: number; cards: number; history: number } | null = null;
   let summary: SrMigrateSummary | null = null;
+  let progressPct = 0;
+  let progressLabel = "";
 
   let settingsContainer: HTMLElement;
 
@@ -45,6 +48,7 @@
     const seps = await controller.readSrSeparators();
     inlineSep = seps.inlineSep;
     multiSep = seps.multiSep;
+    clozeSep = seps.clozeSep;
     buildSettings();
   }
 
@@ -93,6 +97,16 @@
       .addText((text) =>
         text.setValue(multiSep).onChange((v) => {
           multiSep = v;
+          scanned = null;
+        })
+      );
+
+    new Setting(settingsContainer)
+      .setName(t.clozeSepName)
+      .setDesc(t.clozeSepDesc)
+      .addText((text) =>
+        text.setValue(clozeSep).onChange((v) => {
+          clozeSep = v;
           scanned = null;
         })
       );
@@ -147,6 +161,7 @@
         srReviewTag,
         inlineSep,
         multiSep,
+        clozeSep,
       });
       scanned = {
         files: result.fileCount,
@@ -164,18 +179,32 @@
   async function handleMigrate(): Promise<void> {
     if (!profileId) return;
     migrating = true;
+    progressPct = 0;
+    progressLabel = "";
     try {
-      summary = await controller.migrate({
-        sourceFolder,
-        targetFolder,
-        srBaseTag,
-        srReviewTag,
-        inlineSep,
-        multiSep,
-        profileId,
-        format,
-        deleteMode,
-      });
+      summary = await controller.migrate(
+        {
+          sourceFolder,
+          targetFolder,
+          srBaseTag,
+          srReviewTag,
+          inlineSep,
+          multiSep,
+          clozeSep,
+          profileId,
+          format,
+          deleteMode,
+        },
+        (done, total, phase, detail) => {
+          progressPct = total > 0 ? (done / total) * 100 : 0;
+          progressLabel =
+            phase === "write"
+              ? I18n.format(t.progressWriting, { file: detail ?? "" })
+              : phase === "sync"
+                ? t.progressSyncing
+                : t.progressRestoring;
+        }
+      );
       new Notice(
         I18n.format(t.successNotice, {
           files: summary.filesCreated,
@@ -198,54 +227,82 @@
 </script>
 
 <div class="decks-sr-migration-ui">
-  <h2>{t.title}</h2>
-  <p class="decks-sr-migration-intro">{t.description}</p>
+  <div class="decks-sr-migration-body">
+    <h2>{t.title}</h2>
+    <p class="decks-sr-migration-intro">{t.description}</p>
 
-  <div class="decks-sr-migration-settings" bind:this={settingsContainer}></div>
+    <div class="decks-sr-migration-settings" bind:this={settingsContainer}></div>
 
-  {#if deleteMode}
-    <p class="decks-sr-migration-warning">{t.deleteWarning}</p>
-  {:else if format === "tables"}
-    <p class="decks-sr-migration-warning">{t.formatTablesWarning}</p>
-  {/if}
+    {#if deleteMode}
+      <p class="decks-sr-migration-warning">{t.deleteWarning}</p>
+    {:else if format === "tables"}
+      <p class="decks-sr-migration-warning">{t.formatTablesWarning}</p>
+    {/if}
 
-  {#if scanned}
-    <p class="decks-sr-migration-scan">
-      {I18n.format(t.scanSummary, {
-        files: scanned.files,
-        cards: scanned.cards,
-        history: scanned.history,
-      })}
-    </p>
-  {/if}
+    {#if scanned}
+      <p class="decks-sr-migration-scan">
+        {I18n.format(t.scanSummary, {
+          files: scanned.files,
+          cards: scanned.cards,
+          history: scanned.history,
+        })}
+      </p>
+    {/if}
 
-  {#if summary}
-    <p class="decks-sr-migration-done">
-      {I18n.format(t.doneSummary, {
-        files: summary.filesCreated,
-        cards: summary.cardsMigrated,
-        history: summary.withHistory,
-      })}
-    </p>
-  {/if}
+    {#if summary}
+      <p class="decks-sr-migration-done">
+        {I18n.format(t.doneSummary, {
+          files: summary.filesCreated,
+          cards: summary.cardsMigrated,
+          history: summary.withHistory,
+        })}
+      </p>
+    {/if}
+  </div>
 
   <div class="decks-modal-footer">
-    <button on:click={() => void handleScan()} disabled={scanning || migrating}>
-      {scanning ? t.scanning : t.scanButton}
-    </button>
-    <button
-      class="mod-cta"
-      on:click={() => void handleMigrate()}
-      disabled={migrating || scanning || !profileId || (scanned !== null && scanned.files === 0)}
-    >
-      {migrating ? t.migrating : t.migrateButton}
-    </button>
-    <button on:click={handleCancel} disabled={migrating}>{t.cancel}</button>
+    {#if migrating}
+      <div class="decks-sr-migration-progress-row">
+        <div class="decks-sr-migration-progress">
+          <div class="decks-progress-fill" style="width: {progressPct}%"></div>
+        </div>
+        <span class="decks-sr-migration-progress-label">{progressLabel}</span>
+      </div>
+    {/if}
+    <div class="decks-sr-migration-actions">
+      <button on:click={() => void handleScan()} disabled={scanning || migrating}>
+        {scanning ? t.scanning : t.scanButton}
+      </button>
+      <button
+        class="mod-cta"
+        on:click={() => void handleMigrate()}
+        disabled={migrating || scanning || !profileId || (scanned !== null && scanned.files === 0)}
+      >
+        {migrating ? t.migrating : t.migrateButton}
+      </button>
+      <button on:click={handleCancel} disabled={migrating}>{t.cancel}</button>
+    </div>
   </div>
 </div>
 
 <style>
+  :global(.decks-sr-migration-container) {
+    display: flex;
+    flex-direction: column;
+    height: 100%;
+    overflow: hidden;
+    padding: 0;
+  }
   .decks-sr-migration-ui {
+    display: flex;
+    flex-direction: column;
+    height: 100%;
+  }
+  .decks-sr-migration-body {
+    flex: 1;
+    overflow-y: auto;
+    overflow-x: hidden;
+    min-height: 0;
     padding: 20px;
   }
   .decks-sr-migration-intro {
@@ -264,35 +321,59 @@
   }
   .decks-modal-footer {
     display: flex;
+    flex-direction: column;
+    gap: 10px;
+    flex-shrink: 0;
+    padding: 15px 20px;
+    border-top: 1px solid var(--background-modifier-border);
+  }
+  .decks-sr-migration-progress-row {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+  }
+  .decks-sr-migration-progress {
+    height: 4px;
+    background: var(--background-modifier-border);
+    border-radius: 2px;
+    overflow: hidden;
+  }
+  .decks-progress-fill {
+    height: 100%;
+    background: var(--interactive-accent);
+    transition: width 0.2s ease;
+  }
+  .decks-sr-migration-progress-label {
+    font-size: 12px;
+    color: var(--text-muted);
+  }
+  .decks-sr-migration-actions {
+    display: flex;
     justify-content: flex-end;
     gap: 8px;
-    margin-top: 20px;
   }
-  .decks-modal-footer button {
+  .decks-sr-migration-actions button {
     padding: 8px 16px;
   }
 
   @media (max-width: 768px) {
-    .decks-sr-migration-ui {
+    .decks-sr-migration-body {
       padding: 16px;
     }
     .decks-modal-footer {
+      padding: 15px;
+    }
+    .decks-sr-migration-actions {
       flex-direction: column-reverse;
     }
-    .decks-modal-footer button {
+    .decks-sr-migration-actions button {
       width: 100%;
     }
   }
 
   @media (max-width: 480px) {
-    .decks-sr-migration-ui {
+    .decks-sr-migration-body {
       padding: 12px;
-    }
-  }
-
-  @media (max-width: 390px) {
-    .decks-sr-migration-ui {
-      padding: 10px;
     }
   }
 </style>

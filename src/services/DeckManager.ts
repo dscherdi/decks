@@ -318,6 +318,31 @@ export class DeckManager {
    * event and every unrelated UI refresh would re-read + re-parse every
    * tagged file in the vault.
    */
+  /**
+   * Return the ids of decks whose source file has changed since the last sync,
+   * computed in one bulk DB read + cheap synchronous mtime checks on the main
+   * thread. Lets the synchronizer skip unchanged decks without a per-deck worker
+   * round-trip. A deck is stale if its file's mtime exceeds the stored
+   * last_synced_mtime, if it was never synced (mtime 0), or if its file is
+   * missing (so a re-scan can reconcile). Mirrors the gate in
+   * `syncFlashcardsForDeck`.
+   */
+  async getStaleDeckIds(): Promise<Set<string>> {
+    const meta = await this.db.getAllDeckSyncMeta();
+    const stale = new Set<string>();
+    for (const { id, filepath, lastSyncedMtime } of meta) {
+      const file = this.vault.getAbstractFileByPath(filepath);
+      if (!(file instanceof TFile)) {
+        stale.add(id);
+        continue;
+      }
+      if (lastSyncedMtime <= 0 || file.stat.mtime > lastSyncedMtime) {
+        stale.add(id);
+      }
+    }
+    return stale;
+  }
+
   async syncFlashcardsForDeck(
     deckId: string,
     progressTracker?: ProgressTracker,

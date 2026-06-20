@@ -1172,6 +1172,17 @@ export abstract class BaseDatabaseService implements IDatabaseService {
     return results[0]?.count || 0;
   }
 
+  // Aggregate card count across all decks in one query (sync perf metric),
+  // avoiding a per-deck count round-trip.
+  async countAllCards(): Promise<number> {
+    const results = await this.querySql<CountResult>(
+      "SELECT COUNT(*) as count FROM flashcards",
+      [],
+      { asObject: true }
+    );
+    return results[0]?.count || 0;
+  }
+
   // FORECAST OPERATIONS (optimized SQL)
   async getScheduledDueByDay(
     deckId: string,
@@ -2856,6 +2867,25 @@ export abstract class BaseDatabaseService implements IDatabaseService {
     if (rows.length === 0) return 0;
     const value = rows[0][0];
     return typeof value === "number" ? value : 0;
+  }
+
+  /**
+   * Bulk fetch of every deck's id, filepath and last-synced mtime in one query.
+   * Lets the synchronizer gate unchanged decks on the main thread (comparing
+   * against the file's stat.mtime) without a per-deck worker round-trip.
+   */
+  async getAllDeckSyncMeta(): Promise<
+    { id: string; filepath: string; lastSyncedMtime: number }[]
+  > {
+    const rows = (await this.querySql(
+      "SELECT id, filepath, COALESCE(last_synced_mtime, 0) FROM decks",
+      []
+    )) as Array<[string, string, number]>;
+    return rows.map((row) => ({
+      id: String(row[0]),
+      filepath: String(row[1]),
+      lastSyncedMtime: typeof row[2] === "number" ? row[2] : 0,
+    }));
   }
 
   async setDeckLastSyncedMtime(deckId: string, mtime: number): Promise<void> {
