@@ -22,6 +22,7 @@ import type {
   MigrationDeckItem,
   MigrationFormat,
   MigrationProfileFsrs,
+  WholeNoteOptions,
 } from "@decks/core";
 import type { DecksSettings } from "@/settings";
 import type { DeckSynchronizer } from "@/services/DeckSynchronizer";
@@ -46,8 +47,11 @@ export interface SrMigrateOptions {
   clozeSep: string; // cloze separator (default ";;")
   profileId: string;
   format: MigrationFormat;
-  deleteMode: boolean; // irreversible: rewrite originals with block-ref links
+  sameFolder: boolean; // true = outputs beside the source note; false = under targetFolder
+  archiveOriginals: boolean; // backup location: true → _Legacy_SR_Archive, false → <path>.md.bak
 }
+
+const ARCHIVE_FOLDER = "_Legacy_SR_Archive";
 
 export interface SrSeparators {
   inlineSep: string;
@@ -98,6 +102,30 @@ export class SrMigrationController {
 
   private get reviewSubtag(): string {
     return `${this.decksBaseTag}/review`;
+  }
+
+  // Migrated decks are namespaced under a `migration` subtag so the chosen profile
+  // is mapped only to them — never the user's own `#decks` decks/mapping.
+  private get migrationSubtag(): string {
+    return `${this.decksBaseTag}/migration`;
+  }
+
+  private get migrationReviewSubtag(): string {
+    return `${this.decksBaseTag}/review/migration`;
+  }
+
+  // Insert `/migration` after the base in a no-# deck tag (e.g. deriveDeckTag's
+  // `decks` / `decks/x` → `decks/migration` / `decks/migration/x`).
+  private toMigrationTag(deckTag: string): string {
+    const base = this.decksBaseTag.replace(/^#/, "");
+    return `${base}/migration${deckTag.slice(base.length)}`;
+  }
+
+  // Insert `/migration` after `decks/review` (deriveReviewTag's `decks/review` /
+  // `decks/review/x` → `decks/review/migration` / `decks/review/migration/x`).
+  private toMigrationReviewTag(reviewTag: string): string {
+    const reviewBase = `${this.decksBaseTag.replace(/^#/, "")}/review`;
+    return `${reviewBase}/migration${reviewTag.slice(reviewBase.length)}`;
   }
 
   /**
@@ -192,7 +220,10 @@ export class SrMigrationController {
 
   private candidateFiles(sourceFolder: string): TFile[] {
     const folder = normalizePath(sourceFolder.trim());
-    const all = this.app.vault.getMarkdownFiles();
+    // Never re-scan our own archive of previously-migrated originals.
+    const all = this.app.vault
+      .getMarkdownFiles()
+      .filter((f) => !f.path.startsWith(`${ARCHIVE_FOLDER}/`));
     if (!folder || folder === "/") return all;
     const prefix = folder.endsWith("/") ? folder : folder + "/";
     return all.filter((f) => f.path === folder || f.path.startsWith(prefix));
@@ -253,10 +284,12 @@ export class SrMigrationController {
           file,
           kind: "inline",
           cards: dbRecords,
-          deckTag: LegacySrMigrator.deriveDeckTag(fileTags, {
-            srBaseTag: opts.srBaseTag,
-            decksBaseTag: this.decksBaseTag,
-          }),
+          deckTag: this.toMigrationTag(
+            LegacySrMigrator.deriveDeckTag(fileTags, {
+              srBaseTag: opts.srBaseTag,
+              decksBaseTag: this.decksBaseTag,
+            })
+          ),
         });
         sourceFiles.add(file.path);
       }
@@ -282,10 +315,8 @@ export class SrMigrationController {
               dateFormat,
             }),
           ],
-          reviewTag: LegacySrMigrator.deriveReviewTag(
-            fileTags,
-            opts.srReviewTag,
-            this.decksBaseTag
+          reviewTag: this.toMigrationReviewTag(
+            LegacySrMigrator.deriveReviewTag(fileTags, opts.srReviewTag, this.decksBaseTag)
           ),
           properties,
           userTags,
@@ -309,164 +340,243 @@ export class SrMigrationController {
       requestRetention: profile?.fsrs.requestRetention ?? 0.9,
       profile: profile?.fsrs.profile ?? "STANDARD",
     };
-    const format: MigrationFormat = opts.format;
+    const dateFormat = await this.readSrDateFormat();
 
-    // Skip per-file vault auto-sync while we write the migrated files; our
-    // single forced sync below is the only sync.
     this.deckSynchronizer.isMigrating = true;
     try {
-    const scan = await this.scan(opts);
-    const hasWhole = scan.entries.some((e) => e.kind === "whole");
-    const total = scan.entries.length + 2; // + sync + import phases
+      const files = this.candidateFiles(opts.sourceFolder).filter(
+        (f) => this.hasSrTag(f, opts.srBaseTag) || this.hasReviewTag(f, opts.srReviewTag)
+      );
+      const total = files.length + 2; // + sync + import phases
 
-    await this.db.applyProfileToTag(opts.profileId, this.decksBaseTag);
-    if (hasWhole) {
+      // Map the chosen/review profiles to the migration subtags only — never the
+      // user's own `#decks` tag/decks. The forced sync resolves the new decks.
+      await this.db.createTagMapping(opts.profileId, this.migrationSubtag);
       const reviewProfileId = await this.ensureReviewProfile();
-      await this.db.applyProfileToTag(reviewProfileId, this.reviewSubtag);
-    }
+      await this.db.createTagMapping(reviewProfileId, this.migrationReviewSubtag);
 
-    const deckItems: MigrationDeckItem[] = [];
-    let filesCreated = 0;
-    // Files that are ALSO whole-note reviews: the whole-note path owns the
-    // original (duplicate + optional delete), so inline delete-mode
-    // link-replacement is skipped for them.
-    const reviewFilePaths = new Set(
-      scan.entries.filter((e) => e.kind === "whole").map((e) => e.file.path)
-    );
+      const deckItems: MigrationDeckItem[] = [];
+      let filesMigrated = 0;
+      let filesCreated = 0;
+      let cardsMigrated = 0;
 
-    for (let i = 0; i < scan.entries.length; i++) {
-      const entry = scan.entries[i];
-      onProgress?.(i + 1, total, "write", entry.file.basename);
-
-      const basePath = this.targetBasePath(entry.file, opts);
-      await this.ensureFolderFor(basePath);
-      if (entry.kind === "whole") {
-        filesCreated += await this.migrateWholeNote(
-          entry,
-          basePath,
-          opts,
-          profileFsrs,
-          deckItems
-        );
-      } else {
-        filesCreated += await this.migrateInline(
-          entry,
-          basePath,
-          opts,
-          headerLevel,
-          format,
-          profileFsrs,
-          deckItems,
-          reviewFilePaths.has(entry.file.path)
-        );
+      for (let i = 0; i < files.length; i++) {
+        const file = files[i];
+        onProgress?.(i + 1, total, "write", file.basename);
+        try {
+          const r = await this.migrateSingleFile(file, opts, headerLevel, profileFsrs, dateFormat, deckItems);
+          if (r.migrated) {
+            filesMigrated++;
+            filesCreated += r.created;
+            cardsMigrated += r.cards;
+          }
+        } catch (error) {
+          // Atomic order: the original is copied before any write, so a failure
+          // here leaves it untouched. Log and continue with the next file.
+          this.logger.error(`SR migration failed for ${file.path}`, error);
+        }
+        await yieldToUI();
       }
-      await yieldToUI();
-    }
 
-    // The new files are brand new, so the mtime gate never skips them.
-    onProgress?.(scan.entries.length + 1, total, "sync");
-    await this.deckSynchronizer.sync({ force: true });
+      onProgress?.(files.length + 1, total, "sync");
+      await this.deckSynchronizer.sync({ force: true });
 
-    onProgress?.(total, total, "import");
-    const { injected, suspended } = await SrHistoryImporter.importHistory(this.db, deckItems);
+      onProgress?.(total, total, "import");
+      const { injected, suspended } = await SrHistoryImporter.importHistory(this.db, deckItems);
 
-    return {
-      filesMigrated: scan.fileCount,
-      filesCreated,
-      cardsMigrated: scan.cardCount,
-      withHistory: injected,
-      suspended,
-      deleted: opts.deleteMode,
-    };
+      return {
+        filesMigrated,
+        filesCreated,
+        cardsMigrated,
+        withHistory: injected,
+        suspended,
+        deleted: opts.archiveOriginals,
+      };
     } finally {
       this.deckSynchronizer.isMigrating = false;
     }
   }
 
-  private async migrateInline(
-    entry: ScanEntry,
-    basePath: string,
+  // Migrate one legacy note: split into a readable review note and/or an
+  // extracted cards file by what's actually inside, then dispose of the original
+  // safely (copy-backup first, then modify-in-place or create+trash).
+  private async migrateSingleFile(
+    file: TFile,
     opts: SrMigrateOptions,
     headerLevel: number,
-    format: MigrationFormat,
     profileFsrs: MigrationProfileFsrs,
-    deckItems: MigrationDeckItem[],
-    alsoReview = false
-  ): Promise<number> {
-    const rendered = LegacySrMigrator.renderDecksFiles(entry.cards, this.decksBaseTag, headerLevel, {
-      withBlockRefs: opts.deleteMode,
-      format,
-      noteTitle: this.basename(basePath),
-      deckTag: entry.deckTag,
+    dateFormat: string | undefined,
+    deckItems: MigrationDeckItem[]
+  ): Promise<{ migrated: boolean; created: number; cards: number }> {
+    const content = await this.app.vault.cachedRead(file);
+    const fm = this.app.metadataCache.getFileCache(file)?.frontmatter;
+    const isReviewNote =
+      this.hasReviewTag(file, opts.srReviewTag) ||
+      !!(fm && ("sr-due" in fm || "review" in fm));
+    const fileTags = this.fileTags(file);
+    const t = I18n.t.srMigration;
+
+    const { dbRecords, hasProse } = LegacySrMigrator.processFile(content, {
+      srBaseTag: opts.srBaseTag,
+      decksBaseTag: this.decksBaseTag,
+      inlineSep: opts.inlineSep,
+      multiSep: opts.multiSep,
+      clozeSep: opts.clozeSep,
+      noteTitle: file.basename,
+      hintLabel: t.hintLabel,
+      dateFormat,
     });
+    const cards = LegacySrMigrator.expandReverseCards(dbRecords);
+    const hasCards = cards.length > 0;
+    if (!hasCards && !isReviewNote) return { migrated: false, created: 0, cards: 0 };
 
-    const written = new Map<boolean, string>(); // reverse -> basename
-    let created = 0;
-    for (const file of rendered) {
-      const outPath = await this.writeUnique(basePath + file.suffix, file.content);
-      created++;
-      written.set(file.reverse, this.basename(outPath));
-      deckItems.push({ deckId: generateDeckId(outPath), profileFsrs, cards: file.cards });
+    // Output base path (no extension). Same-folder reuses the source path; custom
+    // folder mirrors the relative path under the target.
+    const reviewBaseNoExt = opts.sameFolder
+      ? file.path.replace(/\.md$/i, "")
+      : this.targetBasePath(file, opts);
+    const reviewPath = `${reviewBaseNoExt}.md`;
+    const safeSuffix = this.sanitizePathString(t.flashcardsSuffix);
+    const cardsBasename = this.basename(reviewBaseNoExt) + safeSuffix;
+
+    const wantReview = !hasCards || isReviewNote || hasProse; // CASE A or C
+    // Pure cards (CASE B) take the base name; mixed/review (C) suffix the cards file.
+    const cardsOutPath = wantReview ? `${reviewBaseNoExt}${safeSuffix}.md` : reviewPath;
+
+    const wholeOpts: WholeNoteOptions = {
+      srBaseTag: opts.srBaseTag,
+      srReviewTag: opts.srReviewTag,
+      dateFormat,
+      inlineSep: opts.inlineSep,
+      multiSep: opts.multiSep,
+      clozeSep: opts.clozeSep,
+      hintLabel: t.hintLabel,
+    };
+
+    // A back-link to the original is only safe when the original survives in
+    // place (additive). Use its full relative path — the target deck shares the
+    // basename, so a bare `[[name]]` would be ambiguous.
+    const keepsOriginal = !opts.sameFolder && !opts.archiveOriginals;
+    const sourceLine = keepsOriginal
+      ? `${t.sourceProperty}: "[[${file.path.replace(/\.md$/i, "")}]]"`
+      : "";
+
+    let cardsText: string | null = null;
+    let cardsCards: MigratedCard[] = [];
+    if (hasCards) {
+      const rendered = LegacySrMigrator.renderDecksFiles(cards, this.decksBaseTag, headerLevel, {
+        format: opts.format,
+        noteTitle: this.basename(reviewBaseNoExt),
+        deckTag: this.toMigrationTag(
+          LegacySrMigrator.deriveDeckTag(fileTags, {
+            srBaseTag: opts.srBaseTag,
+            decksBaseTag: this.decksBaseTag,
+          })
+        ),
+        properties: sourceLine || undefined,
+      })[0];
+      cardsText = rendered?.content ?? null;
+      cardsCards = rendered?.cards ?? [];
     }
 
-    // Delete mode rewrites the original with links — but for a review-bearing
-    // original the whole-note path handles removal (it's fully duplicated), so
-    // skip inline link-replacement to avoid double-touching the file.
-    if (opts.deleteMode && !alsoReview) {
-      const original = await this.app.vault.read(entry.file);
-      await this.backup(entry.file, original);
-      const mainBasename = written.get(false) ?? entry.file.basename;
-      const reversedBasename = written.get(true) ?? mainBasename;
-      const replaced = LegacySrMigrator.buildLinkReplacedOriginal(
-        original,
-        entry.cards,
-        mainBasename,
-        reversedBasename
+    let reviewText: string | null = null;
+    let reviewCard: MigratedCard | null = null;
+    if (wantReview) {
+      reviewCard = LegacySrMigrator.processWholeNote(content, file.basename, wholeOpts);
+      const { properties, userTags } = this.extractReviewFrontmatter(
+        file,
+        opts.srBaseTag,
+        opts.srReviewTag
       );
-      await this.app.vault.process(entry.file, () => replaced);
+      // Frontmatter links: review → its extracted cards, and → the original.
+      const links = [
+        hasCards ? `${t.flashcardsProperty}: "[[${cardsBasename}]]"` : "",
+        sourceLine,
+      ].filter((s) => s.length > 0);
+      const mergedProps = [properties, ...links].filter((s) => s.length > 0).join("\n");
+      const reviewTag = this.toMigrationReviewTag(
+        LegacySrMigrator.deriveReviewTag(fileTags, opts.srReviewTag, this.decksBaseTag)
+      );
+      reviewText = LegacySrMigrator.renderTitleModeFile(reviewCard, reviewTag, {
+        extraTags: userTags,
+        properties: mergedProps,
+      });
     }
-    return created;
+
+    // --- Atomic file ops ---
+    let created = 0;
+    if (opts.sameFolder) {
+      // The original's slot is reused, so back it up first (copy keeps links
+      // frozen): archive → _Legacy_SR_Archive, else a sibling .md.bak. Then
+      // overwrite the source in place and create the sibling cards file.
+      if (opts.archiveOriginals) {
+        await this.copyToArchive(file);
+      } else {
+        await this.app.vault.copy(file, await this.uniquePath(`${file.path}.bak`));
+      }
+      if (cardsText && reviewText) {
+        await this.createOrOverwrite(cardsOutPath, cardsText);
+        await this.app.vault.modify(file, reviewText);
+        created = 2;
+      } else if (reviewText) {
+        await this.app.vault.modify(file, reviewText);
+        created = 1;
+      } else if (cardsText) {
+        await this.app.vault.modify(file, cardsText);
+        created = 1;
+      }
+    } else {
+      // Separate folder: write the new files there. The original stays put
+      // (additive) unless archiving, which copies it out then trashes it.
+      // No .bak — the original isn't overwritten here.
+      if (cardsText) {
+        await this.createOrOverwrite(cardsOutPath, cardsText);
+        created++;
+      }
+      if (reviewText) {
+        await this.createOrOverwrite(reviewPath, reviewText);
+        created++;
+      }
+      if (opts.archiveOriginals) {
+        await this.copyToArchive(file);
+        await this.app.fileManager.trashFile(file);
+      }
+    }
+
+    // History: review deck (title-mode) + cards deck. Ids derive from the paths.
+    if (reviewText && reviewCard) {
+      reviewCard.front = this.basename(reviewPath);
+      deckItems.push({ deckId: generateDeckId(reviewPath), profileFsrs, cards: [reviewCard] });
+    }
+    if (cardsText) {
+      deckItems.push({ deckId: generateDeckId(cardsOutPath), profileFsrs, cards: cardsCards });
+    }
+
+    return { migrated: true, created, cards: cards.length };
   }
 
-  // Whole-note reviews are DUPLICATED into a new title-mode file (tagged
-  // `<base>/review`); the original is never modified in additive mode. In delete
-  // mode the original is backed up and removed (the duplicate is a full copy).
-  private async migrateWholeNote(
-    entry: ScanEntry,
-    basePath: string,
-    opts: SrMigrateOptions,
-    profileFsrs: MigrationProfileFsrs,
-    deckItems: MigrationDeckItem[]
-  ): Promise<number> {
-    const card = entry.cards[0];
-    const reviewTag = entry.reviewTag ?? this.reviewSubtag;
-    const content = LegacySrMigrator.renderTitleModeFile(card, reviewTag, {
-      extraTags: entry.userTags,
-      properties: entry.properties,
-    });
+  // Copy (never move) the original into the archive folder, preserving relative
+  // path — copy leaves the vault's link graph untouched.
+  private async copyToArchive(file: TFile): Promise<void> {
+    const archivePath = await this.uniquePath(`${ARCHIVE_FOLDER}/${file.path}`);
+    await this.ensureFolderFor(archivePath.replace(/\.md$/i, ""));
+    await this.app.vault.copy(file, archivePath);
+  }
 
-    // If an inline file from the same source already claimed basePath (the
-    // "both" case), suffix the review duplicate so the title-mode front stays
-    // the note's title rather than a numbered collision.
-    let target = basePath;
-    if (await this.app.vault.adapter.exists(normalizePath(basePath + ".md"))) {
-      target = `${basePath} (review)`;
-    }
-    const outPath = await this.writeUnique(target, content);
+  // Remove characters illegal in a vault path (a translated suffix may contain them).
+  private sanitizePathString(value: string): string {
+    return value.replace(/[\\/:*?"<>|]/g, "");
+  }
 
-    // Title mode: the filename is the card front — keep them in sync so the
-    // injected id matches what the parser computes after sync.
-    card.front = this.basename(outPath);
-    deckItems.push({ deckId: generateDeckId(outPath), profileFsrs, cards: [card] });
-
-    if (opts.deleteMode) {
-      const original = await this.app.vault.read(entry.file);
-      await this.backup(entry.file, original);
-      // Trash (not hard-delete) so it respects the user's deletion preference
-      // and stays recoverable — the duplicate is a full copy regardless.
-      await this.app.fileManager.trashFile(entry.file);
-    }
-    return 1;
+  // Write content, overwriting an existing file in place (so re-migration is
+  // idempotent and links to an existing path are preserved).
+  private async createOrOverwrite(path: string, content: string): Promise<string> {
+    const norm = normalizePath(path);
+    await this.ensureFolderFor(norm.replace(/\.md$/i, ""));
+    const existing = this.app.vault.getAbstractFileByPath(norm);
+    if (existing instanceof TFile) await this.app.vault.modify(existing, content);
+    else await this.app.vault.create(norm, content);
+    return norm;
   }
 
   // The title-mode review profile ships preinstalled in the DB; resolve it by
@@ -487,11 +597,6 @@ export class SrMigrationController {
     });
   }
 
-  private async backup(file: TFile, content: string): Promise<void> {
-    const backupPath = await this.uniquePath(file.path + ".bak");
-    await this.app.vault.create(backupPath, content);
-  }
-
   private targetBasePath(file: TFile, opts: SrMigrateOptions): string {
     const folder = normalizePath(opts.sourceFolder.trim());
     let relative = file.path;
@@ -508,12 +613,6 @@ export class SrMigrationController {
     const file = path.replace(/\.md$/i, "");
     const slash = file.lastIndexOf("/");
     return slash >= 0 ? file.slice(slash + 1) : file;
-  }
-
-  private async writeUnique(basePathNoExt: string, content: string): Promise<string> {
-    const path = await this.uniquePath(basePathNoExt + ".md");
-    await this.app.vault.create(path, content);
-    return path;
   }
 
   private async uniquePath(path: string): Promise<string> {

@@ -25,7 +25,8 @@
   let clozeSep = ";;";
   let profileId = "";
   let format: MigrationFormat = "smart";
-  let deleteMode = false;
+  let sameFolder = false;
+  let archiveOriginals = false;
 
   let profiles: DeckProfile[] = [];
   let scanning = false;
@@ -66,6 +67,8 @@
         })
       );
 
+    // v1: target-folder output only. The "same folder" mode is implemented but
+    // hidden until v2 (sameFolder stays false).
     new Setting(settingsContainer)
       .setName(t.targetFolderName)
       .setDesc(t.targetFolderDesc)
@@ -143,12 +146,8 @@
         dropdown.onChange((v) => (format = v as MigrationFormat));
       });
 
-    new Setting(settingsContainer)
-      .setName(t.deleteModeName)
-      .setDesc(t.deleteModeDesc)
-      .addToggle((toggle) =>
-        toggle.setValue(deleteMode).onChange((v) => (deleteMode = v))
-      );
+    // v1: originals are always left in place (additive). "Archive originals" is
+    // implemented but hidden until v2 (archiveOriginals stays false).
   }
 
   async function handleScan(): Promise<void> {
@@ -193,7 +192,8 @@
           clozeSep,
           profileId,
           format,
-          deleteMode,
+          sameFolder,
+          archiveOriginals,
         },
         (done, total, phase, detail) => {
           progressPct = total > 0 ? (done / total) * 100 : 0;
@@ -230,10 +230,11 @@
   <div class="decks-sr-migration-body">
     <h2>{t.title}</h2>
     <p class="decks-sr-migration-intro">{t.description}</p>
+    <p class="decks-sr-migration-howto">{t.howItWorks}</p>
 
     <div class="decks-sr-migration-settings" bind:this={settingsContainer}></div>
 
-    {#if deleteMode}
+    {#if archiveOriginals}
       <p class="decks-sr-migration-warning">{t.deleteWarning}</p>
     {:else if format === "tables"}
       <p class="decks-sr-migration-warning">{t.formatTablesWarning}</p>
@@ -307,6 +308,16 @@
   }
   .decks-sr-migration-intro {
     color: var(--text-muted);
+    margin-bottom: 8px;
+  }
+  .decks-sr-migration-howto {
+    color: var(--text-muted);
+    font-size: var(--font-ui-smaller);
+    line-height: 1.5;
+    background: var(--background-secondary);
+    border-left: 3px solid var(--interactive-accent);
+    border-radius: var(--radius-s);
+    padding: 10px 12px;
     margin-bottom: 16px;
   }
   .decks-sr-migration-warning {

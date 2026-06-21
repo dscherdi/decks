@@ -237,6 +237,38 @@ describe("Profiles Integration Tests", () => {
       expect(mappings.some((m) => m.tag === "#science")).toBe(true);
     });
 
+    it("resolves a migration subtag to its own profile without disturbing #decks", async () => {
+      const mk = (id: string): Omit<DeckProfile, "created" | "modified"> => ({
+        id,
+        name: id,
+        hasNewCardsLimitEnabled: false,
+        newCardsPerDay: 20,
+        hasReviewCardsLimitEnabled: false,
+        reviewCardsPerDay: 100,
+        headerLevel: 2,
+        reviewOrder: "due-date",
+        fsrs: { requestRetention: 0.9, profile: "STANDARD" },
+        isDefault: false,
+      });
+      await db.createProfile(mk("profile_user"));
+      await db.createProfile(mk("profile_migration"));
+
+      // User already has a profile on #decks.
+      await db.applyProfileToTag("profile_user", "#decks");
+      // Migration maps the chosen profile only to the migration subtag.
+      await db.createTagMapping("profile_migration", "#decks/migration");
+      await db.save();
+
+      // Migrated deck resolves to the migration profile (most-specific wins);
+      // a normal #decks deck still resolves to the user's profile.
+      expect(await db.getProfileIdForTag("#decks/migration/cleancode")).toBe("profile_migration");
+      expect(await db.getProfileIdForTag("#decks/notes")).toBe("profile_user");
+
+      // The user's #decks mapping is untouched.
+      const userMappings = await db.getTagMappingsForProfile("profile_user");
+      expect(userMappings.some((m) => m.tag === "#decks")).toBe(true);
+    });
+
     it("should delete tag mappings when profile is deleted", async () => {
       const profile: Omit<DeckProfile, "created" | "modified"> = {
         id: "profile_tagdel",
