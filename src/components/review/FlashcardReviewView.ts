@@ -10,6 +10,7 @@ import type { RatingLabel } from "@decks/core";
 import type { Scheduler } from "../../services/Scheduler";
 import type { DecksSettings } from "../../settings";
 import type { IDatabaseService } from "../../database/DatabaseFactory";
+import type { DeckSynchronizer } from "../../services/DeckSynchronizer";
 import type {
   FlashcardReviewComponent,
   CompleteEventDetail,
@@ -38,6 +39,7 @@ export class FlashcardReviewView extends ItemView {
 
   private refreshStats: (() => Promise<void>) | null = null;
   private refreshStatsById: ((deckId: string) => Promise<void>) | null = null;
+  private deckSynchronizer: DeckSynchronizer | null = null;
 
   constructor(
     leaf: WorkspaceLeaf,
@@ -75,7 +77,8 @@ export class FlashcardReviewView extends ItemView {
     cards: Flashcard[],
     browseMode: boolean,
     refreshStats: () => Promise<void>,
-    refreshStatsById: (deckId: string) => Promise<void>
+    refreshStatsById: (deckId: string) => Promise<void>,
+    deckSynchronizer: DeckSynchronizer
   ): void {
     this.deckOrGroup = deckOrGroup;
     this.allCards = cards;
@@ -83,6 +86,9 @@ export class FlashcardReviewView extends ItemView {
     this.initialCard = cards.length > 0 ? cards[0] : null;
     this.refreshStats = refreshStats;
     this.refreshStatsById = refreshStatsById;
+    this.deckSynchronizer = deckSynchronizer;
+    // Pause background syncs while this review tab is open.
+    deckSynchronizer.isReviewing = true;
 
     // Update the tab title
     // updateHeader() exists at runtime but isn't in the obsidian typings.
@@ -102,10 +108,12 @@ export class FlashcardReviewView extends ItemView {
     }
   }
 
-  // eslint-disable-next-line @typescript-eslint/require-await -- Obsidian's ItemView onOpen/onClose are async by contract; this override has no await
   async onClose(): Promise<void> {
+    // Review tab closed — let background syncs resume.
+    if (this.deckSynchronizer) this.deckSynchronizer.isReviewing = false;
     this.unmountComponent();
     this.contentEl.empty();
+    if (this.refreshStats) await this.refreshStats();
   }
 
   private showExpiredMessage(): void {
@@ -146,14 +154,12 @@ export class FlashcardReviewView extends ItemView {
     timeElapsed?: number,
     shownAt?: Date
   ): Promise<void> {
-    await this.scheduler.rate(flashcard.id, difficulty, timeElapsed, shownAt);
+    await this.scheduler.rate(flashcard, difficulty, timeElapsed, shownAt);
     await this.db.updateDeckLastReviewed(
       flashcard.deckId,
       new Date().toISOString()
     );
-    if (this.refreshStatsById) {
-      await this.refreshStatsById(flashcard.deckId);
-    }
+    // No per-rating stats refresh — onClose handles it.
   }
 
   private async navigateToFlashcardSource(
@@ -258,11 +264,9 @@ export class FlashcardReviewView extends ItemView {
         },
         settings: this.settings,
         scheduler: this.scheduler,
-        onCardReviewed: async (reviewedCard: Flashcard) => {
-          if (reviewedCard && this.refreshStatsById) {
-            await this.refreshStatsById(reviewedCard.deckId);
-          }
-        },
+        // Deliberately no per-rating stats refresh (see reviewFlashcard).
+        onCardReviewed: undefined,
+        // eslint-disable-next-line @typescript-eslint/require-await -- callback typed Promise<void> by the component contract; stats refresh now lives in onClose
         onComplete: async (_event: CompleteEventDetail) => {
           if (generation !== this.mountGeneration) return;
 
@@ -278,10 +282,7 @@ export class FlashcardReviewView extends ItemView {
               })
             );
           }
-          if (this.refreshStats) {
-            await this.refreshStats();
-          }
-          this.leaf.detach();
+          this.leaf.detach(); // onClose refreshes stats once
         },
         onNavigateToSource: async (card: Flashcard) => {
           await this.navigateToFlashcardSource(card);

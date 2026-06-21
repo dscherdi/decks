@@ -16,6 +16,7 @@ import {
 } from "@decks/core";
 import { parseSteps, type RateOp, yieldToUI } from "@decks/core";
 import type { Logger } from "../utils/logging";
+import { formatTime } from "../utils/logging";
 import type { DecksSettings } from "../settings";
 import { BackupService } from "./BackupService";
 import type { SyncLog } from "./SyncLog";
@@ -55,6 +56,8 @@ export class Scheduler {
   private backupService: BackupService;
   private settings: DecksSettings;
   private syncLog: SyncLog | null = null;
+  // Per-session deck+profile cache (constant during a session); cleared at session boundaries.
+  private deckCache = new Map<string, DeckWithProfile>();
 
   constructor(
     db: IDatabaseService,
@@ -80,6 +83,10 @@ export class Scheduler {
 
   private debugLog(message: string, data?: unknown): void {
     this.logger?.debug(message, data);
+  }
+
+  private perfLog(label: string, start: number): void {
+    this.logger?.performance(`${label} in ${formatTime(performance.now() - start)}`);
   }
 
   /**
@@ -178,6 +185,7 @@ export class Scheduler {
    * End a review session
    */
   async endReviewSession(sessionId: string): Promise<void> {
+    this.deckCache.clear();
     await this.db.endReviewSession(sessionId);
 
     // Save db
@@ -212,7 +220,7 @@ export class Scheduler {
       now,
       sessionDurationMinutes
     );
-    this.currentSessionId = newSession.sessionId;
+    this.setCurrentSession(newSession.sessionId);
 
     return newSession;
   }
@@ -221,6 +229,7 @@ export class Scheduler {
    * Set the current active session for tracking
    */
   setCurrentSession(sessionId: string | null): void {
+    this.deckCache.clear(); // session boundary — re-read config next session
     this.currentSessionId = sessionId;
   }
 
@@ -239,18 +248,33 @@ export class Scheduler {
     deckId: string,
     options: { allowNew?: boolean } = {}
   ): Promise<Flashcard | null> {
+    const getNextPerfStart = performance.now();
     this.debugLog(
       `Getting next card for deck: ${deckId}, allowNew: ${options.allowNew}`
     );
 
     const { allowNew = true } = options;
 
+    // Load deck + daily counts once, then reuse for quota checks and selection.
+    const deck = await this.getCachedDeck(deckId);
+    if (!deck) return null;
+    const needsCounts =
+      deck.profile.hasReviewCardsLimitEnabled ||
+      deck.profile.hasNewCardsLimitEnabled;
+    const dailyCounts = needsCounts
+      ? await this.db.getDailyReviewCounts(
+          deckId,
+          this.settings.review.nextDayStartsAt
+        )
+      : null;
+
     // First check for due cards with quota
-    if (await this.hasReviewCardQuota(deckId)) {
+    if (this.hasReviewCardQuota(deck, dailyCounts)) {
       this.debugLog(`Checking for due cards for deck: ${deckId}`);
-      const dueCard = await this.getNextDueCard(now, deckId);
+      const dueCard = await this.getNextDueCard(now, deckId, deck);
       if (dueCard) {
         this.debugLog(`Found due card: ${dueCard.id}`);
+        this.perfLog("Scheduler.getNext", getNextPerfStart);
         return dueCard;
       }
       this.debugLog(`No due cards found for deck: ${deckId}`);
@@ -260,7 +284,7 @@ export class Scheduler {
 
     // If no due cards and new cards allowed, get next new card
     // Then check for new cards with quota
-    if (allowNew && (await this.hasNewCardQuota(deckId))) {
+    if (allowNew && this.hasNewCardQuota(deck, dailyCounts)) {
       this.debugLog(`Checking for new cards for deck: ${deckId}`);
       const newCard = await this.getNextNewCard(deckId);
       if (newCard) {
@@ -268,6 +292,7 @@ export class Scheduler {
       } else {
         this.debugLog(`No new cards found for deck: ${deckId}`);
       }
+      this.perfLog("Scheduler.getNext", getNextPerfStart);
       return newCard;
     } else if (!allowNew) {
       this.debugLog(`New cards not allowed for this request`);
@@ -276,17 +301,21 @@ export class Scheduler {
     }
 
     this.debugLog(`No cards available for deck: ${deckId}`);
+    this.perfLog("Scheduler.getNext", getNextPerfStart);
     return null;
   }
 
   /**
    * Preview scheduling outcomes for all four ratings without mutations
    */
-  async preview(cardId: string): Promise<SchedulingPreview | null> {
-    const card = await this.db.getFlashcardById(cardId);
+  async preview(cardOrId: string | Flashcard): Promise<SchedulingPreview | null> {
+    const card =
+      typeof cardOrId === "string"
+        ? await this.db.getFlashcardById(cardOrId)
+        : cardOrId;
     if (!card) return null;
 
-    const deck = await this.db.getDeckWithProfile(card.deckId);
+    const deck = await this.getCachedDeck(card.deckId);
     if (!deck) return null;
 
     await this.updateFSRSForDeck(deck);
@@ -315,20 +344,25 @@ export class Scheduler {
    * Rate a card and update its state atomically with session tracking
    */
   async rate(
-    cardId: string,
+    cardOrId: string | Flashcard,
     rating: RatingLabel,
     timeElapsed?: number,
     shownAt?: Date
   ): Promise<Flashcard> {
+    const ratePerfStart = performance.now();
     const now = new Date();
+    const cardId = typeof cardOrId === "string" ? cardOrId : cardOrId.id;
     this.debugLog(`Rating card ${cardId} with rating: ${rating}`);
-    const card = await this.db.getFlashcardById(cardId);
+    const card =
+      typeof cardOrId === "string"
+        ? await this.db.getFlashcardById(cardOrId)
+        : cardOrId;
     if (!card) {
       this.debugLog(`Error: Card not found: ${cardId}`);
       throw new Error(`Card not found: ${cardId}`);
     }
 
-    const deck = await this.db.getDeckWithProfile(card.deckId);
+    const deck = await this.getCachedDeck(card.deckId);
     if (!deck) {
       this.debugLog(`Error: Deck not found: ${card.deckId}`);
       throw new Error(`Deck not found: ${card.deckId}`);
@@ -509,6 +543,7 @@ export class Scheduler {
       this.syncLog.append(op);
     }
 
+    this.perfLog("Scheduler.rate", ratePerfStart);
     return updatedCard;
   }
 
@@ -652,11 +687,23 @@ export class Scheduler {
 
   // Private helper methods
 
+  // Deck+profile, reusing the per-session cache (only while a session is active).
+  private async getCachedDeck(deckId: string): Promise<DeckWithProfile | null> {
+    if (this.currentSessionId) {
+      const cached = this.deckCache.get(deckId);
+      if (cached) return cached;
+    }
+    const deck = await this.db.getDeckWithProfile(deckId);
+    if (deck && this.currentSessionId) this.deckCache.set(deckId, deck);
+    return deck;
+  }
+
   private async getNextDueCard(
     now: Date,
-    deckId: string
+    deckId: string,
+    preloadedDeck?: DeckWithProfile
   ): Promise<Flashcard | null> {
-    const deck = await this.db.getDeckWithProfile(deckId);
+    const deck = preloadedDeck ?? (await this.getCachedDeck(deckId));
     if (!deck) return null;
 
     let query = `
@@ -696,24 +743,21 @@ export class Scheduler {
     return flashcards.length > 0 ? flashcards[0] : null;
   }
 
-  private async hasNewCardQuota(deckId: string): Promise<boolean> {
-    const deck = await this.db.getDeckWithProfile(deckId);
-    if (!deck) return false;
-
+  // Pure given the deck + day's counts; dailyCounts is null when no limit is set.
+  private hasNewCardQuota(
+    deck: DeckWithProfile,
+    dailyCounts: { newCount: number; reviewCount: number } | null
+  ): boolean {
     if (!deck.profile.hasNewCardsLimitEnabled) return true; // unlimited
-
-    const dailyCounts = await this.db.getDailyReviewCounts(deckId, this.settings.review.nextDayStartsAt);
-    return dailyCounts.newCount < deck.profile.newCardsPerDay;
+    return (dailyCounts?.newCount ?? 0) < deck.profile.newCardsPerDay;
   }
 
-  private async hasReviewCardQuota(deckId: string): Promise<boolean> {
-    const deck = await this.db.getDeckWithProfile(deckId);
-    if (!deck) return false;
-
+  private hasReviewCardQuota(
+    deck: DeckWithProfile,
+    dailyCounts: { newCount: number; reviewCount: number } | null
+  ): boolean {
     if (!deck.profile.hasReviewCardsLimitEnabled) return true; // unlimited
-
-    const dailyCounts = await this.db.getDailyReviewCounts(deckId, this.settings.review.nextDayStartsAt);
-    return dailyCounts.reviewCount < deck.profile.reviewCardsPerDay;
+    return (dailyCounts?.reviewCount ?? 0) < deck.profile.reviewCardsPerDay;
   }
 
   /**
@@ -1231,7 +1275,7 @@ export class Scheduler {
       doneUnique: 0,
     });
 
-    this.currentSessionId = sessionId;
+    this.setCurrentSession(sessionId);
     this.debugLog(
       `Review session created for custom deck: ${sessionId}, goal: ${goalTotal}`
     );

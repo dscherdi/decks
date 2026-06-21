@@ -4,6 +4,7 @@ import type { RatingLabel } from "@decks/core";
 import type { Scheduler } from "../../services/Scheduler";
 import type { DecksSettings } from "../../settings";
 import type { IDatabaseService } from "../../database/DatabaseFactory";
+import type { DeckSynchronizer } from "../../services/DeckSynchronizer";
 import type {
   FlashcardReviewComponent,
   CompleteEventDetail,
@@ -21,6 +22,7 @@ export class FlashcardReviewModalWrapper extends Modal {
   private scheduler: Scheduler;
   private settings: DecksSettings;
   private db: IDatabaseService;
+  private deckSynchronizer: DeckSynchronizer;
   private refreshStats: () => Promise<void>;
   private refreshStatsById: (deckId: string) => Promise<void>;
   private browseMode: boolean;
@@ -48,6 +50,7 @@ export class FlashcardReviewModalWrapper extends Modal {
     scheduler: Scheduler,
     settings: DecksSettings,
     db: IDatabaseService,
+    deckSynchronizer: DeckSynchronizer,
     refreshStats: () => Promise<void>,
     refreshStatsById: (deckId: string) => Promise<void>,
     browseMode = false
@@ -59,6 +62,7 @@ export class FlashcardReviewModalWrapper extends Modal {
     this.scheduler = scheduler;
     this.settings = settings;
     this.db = db;
+    this.deckSynchronizer = deckSynchronizer;
     this.refreshStats = refreshStats;
     this.refreshStatsById = refreshStatsById;
     this.browseMode = browseMode;
@@ -71,17 +75,12 @@ export class FlashcardReviewModalWrapper extends Modal {
     timeElapsed?: number,
     shownAt?: Date
   ): Promise<void> {
-    // Use unified scheduler for rating
-    await this.scheduler.rate(flashcard.id, difficulty, timeElapsed, shownAt);
-
-    // Update deck last reviewed
+    await this.scheduler.rate(flashcard, difficulty, timeElapsed, shownAt);
     await this.db.updateDeckLastReviewed(
       flashcard.deckId,
       new Date().toISOString()
     );
-
-    // Refresh stats for this specific deck
-    await this.refreshStatsById(flashcard.deckId);
+    // No per-rating stats refresh — onClose handles it.
   }
 
   private async navigateToFlashcardSource(flashcard: Flashcard): Promise<void> {
@@ -157,6 +156,8 @@ export class FlashcardReviewModalWrapper extends Modal {
   }
 
   onOpen() {
+    this.deckSynchronizer.isReviewing = true; // pause background syncs during review
+
     const { contentEl } = this;
     contentEl.empty();
 
@@ -200,12 +201,7 @@ export class FlashcardReviewModalWrapper extends Modal {
         },
         settings: this.settings,
         scheduler: this.scheduler,
-        onCardReviewed: async (reviewedCard: Flashcard) => {
-          // Refresh stats for the specific deck being reviewed (more efficient)
-          if (reviewedCard) {
-            await this.refreshStatsById(reviewedCard.deckId);
-          }
-        },
+        onCardReviewed: undefined,
         onComplete: async (_event: CompleteEventDetail) => {
           if (this.browseMode) {
             this.close();
@@ -250,6 +246,8 @@ export class FlashcardReviewModalWrapper extends Modal {
   }
 
   onClose() {
+    this.deckSynchronizer.isReviewing = false;
+
     // Clean up resize handler
     if (this.resizeHandler) {
       window.removeEventListener("resize", this.resizeHandler);

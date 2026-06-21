@@ -2721,33 +2721,33 @@ export class StatisticsService {
     pastMonthHours: number;
     pastWeekHours: number;
   }> {
-    const allLogs = await this.db.getAllReviewLogs();
     const oneMonthAgo = new Date();
     oneMonthAgo.setMonth(oneMonthAgo.getMonth() - 1);
     const oneWeekAgo = new Date();
     oneWeekAgo.setDate(oneWeekAgo.getDate() - 7);
 
-    let totalMs = 0;
-    let monthMs = 0;
-    let weekMs = 0;
-
-    allLogs.forEach((log) => {
-      const timeElapsed = log.timeElapsedMs || 0;
-      totalMs += timeElapsed;
-
-      const reviewDate = new Date(log.reviewedAt);
-      if (reviewDate >= oneMonthAgo) {
-        monthMs += timeElapsed;
-      }
-      if (reviewDate >= oneWeekAgo) {
-        weekMs += timeElapsed;
-      }
+    // Aggregate in SQL (reviewed_at is ISO text, so string >= works) instead of
+    // loading the whole review_logs table into JS.
+    const sql = `
+      SELECT
+        COALESCE(SUM(time_elapsed_ms), 0) AS total_ms,
+        COALESCE(SUM(CASE WHEN reviewed_at >= ? THEN time_elapsed_ms ELSE 0 END), 0) AS month_ms,
+        COALESCE(SUM(CASE WHEN reviewed_at >= ? THEN time_elapsed_ms ELSE 0 END), 0) AS week_ms
+      FROM review_logs
+    `;
+    const rows = await this.db.querySql<{
+      total_ms: number;
+      month_ms: number;
+      week_ms: number;
+    }>(sql, [oneMonthAgo.toISOString(), oneWeekAgo.toISOString()], {
+      asObject: true,
     });
-
+    const r = rows[0] ?? { total_ms: 0, month_ms: 0, week_ms: 0 };
+    const HOUR_MS = 1000 * 60 * 60;
     return {
-      totalHours: totalMs / (1000 * 60 * 60),
-      pastMonthHours: monthMs / (1000 * 60 * 60),
-      pastWeekHours: weekMs / (1000 * 60 * 60),
+      totalHours: (r.total_ms || 0) / HOUR_MS,
+      pastMonthHours: (r.month_ms || 0) / HOUR_MS,
+      pastWeekHours: (r.week_ms || 0) / HOUR_MS,
     };
   }
 }

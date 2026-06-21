@@ -318,15 +318,7 @@ export class DeckManager {
    * event and every unrelated UI refresh would re-read + re-parse every
    * tagged file in the vault.
    */
-  /**
-   * Return the ids of decks whose source file has changed since the last sync,
-   * computed in one bulk DB read + cheap synchronous mtime checks on the main
-   * thread. Lets the synchronizer skip unchanged decks without a per-deck worker
-   * round-trip. A deck is stale if its file's mtime exceeds the stored
-   * last_synced_mtime, if it was never synced (mtime 0), or if its file is
-   * missing (so a re-scan can reconcile). Mirrors the gate in
-   * `syncFlashcardsForDeck`.
-   */
+  // Deck ids whose file changed since last sync (mtime gate, one bulk read). Stale = newer mtime, never-synced, or missing file.
   async getStaleDeckIds(): Promise<Set<string>> {
     const meta = await this.db.getAllDeckSyncMeta();
     const stale = new Set<string>();
@@ -571,10 +563,9 @@ export class DeckManager {
     const totalCards = await this.db.countTotalCards(deckId);
     const newCards = await this.db.countNewCards(deckId);
     const dueCards = await this.db.countDueCards(deckId);
-    const matureCards = await this.db.getFlashcardsByDeck(deckId);
-    const matureCount = matureCards.filter(
-      (card) => card.state === "review" && card.interval > 30240
-    ).length;
+    // Count mature cards via SQL — avoids serializing every card across the
+    // worker boundary just to filter by state/interval.
+    const matureCount = await this.db.countMatureCards(deckId);
 
     let finalNewCount = newCards;
     let finalDueCount = dueCards;

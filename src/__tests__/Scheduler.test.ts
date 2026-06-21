@@ -375,6 +375,27 @@ describe("Scheduler", () => {
       expect(result).toBeDefined();
       expect(result?.id).toBe("card_new");
       expect(result?.state).toBe("new");
+
+      // getNext loads the deck/profile and daily counts ONCE each (no redundant
+      // per-quota-check round-trips).
+      expect(mockDb.getDeckWithProfile).toHaveBeenCalledTimes(1);
+      expect(mockDb.getDailyReviewCounts).toHaveBeenCalledTimes(1);
+    });
+
+    it("skips the daily-counts query entirely when no limit is enabled", async () => {
+      const mockDeck = createMockDeckWithProfile("deck_1", {
+        hasNewCardsLimitEnabled: false,
+        hasReviewCardsLimitEnabled: false,
+      });
+      mockDb.getDeckWithProfile = jest.fn().mockResolvedValue(mockDeck);
+      mockDb.getDailyReviewCounts = jest.fn().mockResolvedValue({ newCount: 0, reviewCount: 0 });
+      // No due or new cards.
+      mockDb.querySql.mockResolvedValue([]);
+
+      await scheduler.getNext(new Date(), "deck_1", { allowNew: true });
+
+      expect(mockDb.getDeckWithProfile).toHaveBeenCalledTimes(1);
+      expect(mockDb.getDailyReviewCounts).not.toHaveBeenCalled();
     });
 
     it("should treat 0 as no cards and -1 as unlimited", async () => {
@@ -609,6 +630,60 @@ describe("Scheduler", () => {
         (until.getTime() - now.getTime()) / 86400000
       );
       expect(daysDelta === 0 || daysDelta === 1).toBe(true);
+    });
+  });
+
+  describe("per-card round-trip reductions", () => {
+    it("preview(card) does not re-fetch the card; preview(id) does", async () => {
+      const deck = createMockDeckWithProfile("deck_1");
+      mockDb.getDeckWithProfile = jest.fn().mockResolvedValue(deck);
+      const card = {
+        id: "card_1",
+        deckId: "deck_1",
+        front: "Q",
+        back: "A",
+        type: "header-paragraph",
+        state: "new",
+        dueDate: new Date().toISOString(),
+        interval: 0,
+        repetitions: 0,
+        difficulty: 0,
+        stability: 0,
+        lapses: 0,
+        lastReviewed: null,
+        tags: [],
+      } as unknown as Flashcard;
+      mockDb.getFlashcardById = jest.fn().mockResolvedValue(card);
+
+      await scheduler.preview(card);
+      expect(mockDb.getFlashcardById).not.toHaveBeenCalled();
+
+      await scheduler.preview("card_1");
+      expect(mockDb.getFlashcardById).toHaveBeenCalledTimes(1);
+    });
+
+    it("caches the deck/profile within a session and clears it at session boundaries", async () => {
+      const deck = createMockDeckWithProfile("deck_1");
+      mockDb.getDeckWithProfile = jest.fn().mockResolvedValue(deck);
+      mockDb.querySql = jest.fn().mockResolvedValue([]); // no due/new cards
+
+      // No active session → no caching: each getNext re-fetches.
+      await scheduler.getNext(new Date(), "deck_1", { allowNew: true });
+      await scheduler.getNext(new Date(), "deck_1", { allowNew: true });
+      expect((mockDb.getDeckWithProfile as jest.Mock).mock.calls.length).toBe(2);
+
+      // Active session → deck fetched once, then served from cache.
+      (mockDb.getDeckWithProfile as jest.Mock).mockClear();
+      scheduler.setCurrentSession("session_x");
+      await scheduler.getNext(new Date(), "deck_1", { allowNew: true });
+      await scheduler.getNext(new Date(), "deck_1", { allowNew: true });
+      expect((mockDb.getDeckWithProfile as jest.Mock).mock.calls.length).toBe(1);
+
+      // Session boundary clears the cache.
+      (mockDb.getDeckWithProfile as jest.Mock).mockClear();
+      scheduler.setCurrentSession(null);
+      await scheduler.getNext(new Date(), "deck_1", { allowNew: true });
+      expect((mockDb.getDeckWithProfile as jest.Mock).mock.calls.length).toBe(1);
     });
   });
 });

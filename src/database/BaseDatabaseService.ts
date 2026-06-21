@@ -1172,12 +1172,21 @@ export abstract class BaseDatabaseService implements IDatabaseService {
     return results[0]?.count || 0;
   }
 
-  // Aggregate card count across all decks in one query (sync perf metric),
-  // avoiding a per-deck count round-trip.
+  // Total cards across all decks in one query.
   async countAllCards(): Promise<number> {
     const results = await this.querySql<CountResult>(
       "SELECT COUNT(*) as count FROM flashcards",
       [],
+      { asObject: true }
+    );
+    return results[0]?.count || 0;
+  }
+
+  // Mature = review state with interval > 21 days (30240 min).
+  async countMatureCards(deckId: string): Promise<number> {
+    const results = await this.querySql<CountResult>(
+      "SELECT COUNT(*) as count FROM flashcards WHERE deck_id = ? AND state = 'review' AND interval > 30240",
+      [deckId],
       { asObject: true }
     );
     return results[0]?.count || 0;
@@ -2869,11 +2878,7 @@ export abstract class BaseDatabaseService implements IDatabaseService {
     return typeof value === "number" ? value : 0;
   }
 
-  /**
-   * Bulk fetch of every deck's id, filepath and last-synced mtime in one query.
-   * Lets the synchronizer gate unchanged decks on the main thread (comparing
-   * against the file's stat.mtime) without a per-deck worker round-trip.
-   */
+  // Every deck's id, filepath and last-synced mtime in one query (for the stale gate).
   async getAllDeckSyncMeta(): Promise<
     { id: string; filepath: string; lastSyncedMtime: number }[]
   > {

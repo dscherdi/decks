@@ -486,6 +486,8 @@
     }
     if (singleDeckId && singleDeckStats) {
       updateStatsById(singleDeckId, singleDeckStats);
+      // single-deck update: skip the global dashboard recompute below
+      if (!newDecks && !newStats) return;
     }
     refreshHeatmap();
     await loadStudyStats();

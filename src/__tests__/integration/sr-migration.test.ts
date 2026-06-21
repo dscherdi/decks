@@ -354,15 +354,15 @@ describe("SR migration pipeline (integration)", () => {
       "## Section A",
       "Body content with its own headings.",
     ].join("\n");
-    // The review note is migrated IN PLACE: tag rewritten to decks/review, SR
-    // metadata stripped. The same file (its original path) becomes the deck.
+    // The review note is DUPLICATED into a new title-mode file (tag
+    // decks/review, SR metadata stripped); the original is untouched.
     const card = LegacySrMigrator.processWholeNote(note, "Photosynthesis");
-    const rewritten = LegacySrMigrator.rewriteReviewNote(note, "decks/review");
-    expect(rewritten).toContain("- decks/review");
-    expect(rewritten).toContain("- review"); // original SR review tag preserved
-    expect(rewritten).not.toContain("sr-due");
+    const duplicate = LegacySrMigrator.renderTitleModeFile(card, "decks/review");
+    expect(duplicate).toContain("- decks/review");
+    expect(duplicate).not.toContain("sr-due");
+    expect(duplicate).toContain("Body content with its own headings.");
 
-    const filepath = "Notes/Photosynthesis.md"; // original location — no duplicate
+    const filepath = "Decks/Photosynthesis.md"; // new duplicate location
     const deckId = generateDeckId(filepath);
     await db.createDeck({
       id: deckId,
@@ -377,7 +377,7 @@ describe("SR migration pipeline (integration)", () => {
       deckName: filepath,
       deckFilepath: filepath,
       deckConfig: { ...titleProfile, created: "", modified: "" },
-      fileContent: rewritten,
+      fileContent: duplicate,
       fileTitle: "Photosynthesis",
     });
     expect(result.parsedCount).toBe(1); // one card per whole note, headings not split
@@ -393,5 +393,26 @@ describe("SR migration pipeline (integration)", () => {
     expect(restored).not.toBeNull();
     expect(restored!.state).toBe("review");
     expect(restored!.stability).toBe(20);
+  });
+
+  it("does not create false cards from a fenced code block (end-to-end)", async () => {
+    const source = [
+      "Here is a real card. :: It syncs.",
+      "",
+      "```js",
+      "const x = a ? b : c;",
+      "// not a card :: really",
+      "```",
+    ].join("\n");
+    const { dbRecords } = LegacySrMigrator.processFile(source, {
+      srBaseTag: "#flashcards",
+      decksBaseTag: "#decks",
+    });
+    expect(dbRecords).toHaveLength(1); // only the real card, none from the code
+
+    const [rendered] = LegacySrMigrator.renderDecksFiles(dbRecords, "#decks", profile.headerLevel);
+    const deckId = await syncFile("Decks/code.md", rendered.content);
+    const total = await db.countTotalCards(deckId);
+    expect(total).toBe(1);
   });
 });

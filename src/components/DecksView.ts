@@ -440,6 +440,8 @@ export class DecksView extends ItemView {
 
     this.backgroundRefreshInterval = this.registerInterval(
       window.setInterval(() => {
+        if (this.deckSynchronizer.isReviewing) return; // don't sync during review
+
         this.logger.debug("Background refresh tick");
         void this.refresh();
       }, this.settings.ui.backgroundRefreshInterval * 1000)
@@ -490,6 +492,7 @@ export class DecksView extends ItemView {
         this.scheduler,
         this.settings,
         this.db,
+        this.deckSynchronizer,
         this.refreshDecksAndStats.bind(this),
         this.refreshStatsById.bind(this),
         browseMode
@@ -527,7 +530,8 @@ export class DecksView extends ItemView {
             cards,
             browseMode,
             this.refreshDecksAndStats.bind(this),
-            this.refreshStatsById.bind(this)
+            this.refreshStatsById.bind(this),
+            this.deckSynchronizer
           );
         }
         void workspace.revealLeaf(leaf);
@@ -535,12 +539,20 @@ export class DecksView extends ItemView {
       .catch(console.error);
   }
 
+  // Sync only the decks whose file changed (one bulk meta query + mtime checks).
+  private async syncStaleDecks(deckIds: string[]): Promise<void> {
+    const stale = await this.deckManager.getStaleDeckIds();
+    for (const id of deckIds) {
+      if (stale.has(id)) {
+        await this.deckSynchronizer.syncDeck(id, { force: true });
+        await yieldToUI();
+      }
+    }
+  }
+
   async startReview(deck: DeckWithProfile) {
     try {
-      // First sync flashcards for this specific deck
-      this.logger.debug(`Syncing cards for deck before review: ${deck.name}`);
-      await this.deckSynchronizer.syncDeck(deck.id);
-      await yieldToUI();
+      await this.syncStaleDecks([deck.id]);
       // Get daily review counts to show remaining allowance
       const dailyCounts = await this.db.getDailyReviewCounts(deck.id, this.settings.review.nextDayStartsAt);
 
@@ -677,11 +689,8 @@ export class DecksView extends ItemView {
     try {
       this.logger.debug(`Starting review for deck group: ${deckGroup.name}`);
 
-      // Sync all decks in the group
-      for (const deckId of deckGroup.deckIds) {
-        await this.deckSynchronizer.syncDeck(deckId);
-        await yieldToUI();
-      }
+      // Sync only the decks in the group whose files changed (else instant).
+      await this.syncStaleDecks(deckGroup.deckIds);
 
       // Check for available cards
       const nextCard = await this.scheduler.getNextForDeckGroup(
@@ -714,8 +723,7 @@ export class DecksView extends ItemView {
   async startBrowse(deck: DeckWithProfile) {
     try {
       this.logger.debug(`Starting browse mode for deck: ${deck.name}`);
-      await this.deckSynchronizer.syncDeck(deck.id);
-      await yieldToUI();
+      await this.syncStaleDecks([deck.id]);
 
       const allCards = await this.db.getFlashcardsByDeck(deck.id);
 
@@ -741,10 +749,7 @@ export class DecksView extends ItemView {
     try {
       this.logger.debug(`Starting browse mode for deck group: ${deckGroup.name}`);
 
-      for (const deckId of deckGroup.deckIds) {
-        await this.deckSynchronizer.syncDeck(deckId);
-        await yieldToUI();
-      }
+      await this.syncStaleDecks(deckGroup.deckIds);
 
       const allCards: Flashcard[] = [];
       for (const deckId of deckGroup.deckIds) {

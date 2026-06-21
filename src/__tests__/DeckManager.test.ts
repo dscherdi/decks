@@ -57,6 +57,33 @@ describe("DeckManager", () => {
     });
   });
 
+  describe("getDeckStats", () => {
+    it("counts mature cards via countMatureCards, not by fetching all cards", async () => {
+      const db = {
+        countTotalCards: jest.fn(async () => 100),
+        countNewCards: jest.fn(async () => 5),
+        countDueCards: jest.fn(async () => 9),
+        countMatureCards: jest.fn(async () => 42),
+        getFlashcardsByDeck: jest.fn(async () => []),
+        getDeckWithProfile: jest.fn(async () => null),
+        getDailyReviewCounts: jest.fn(async () => ({ newCount: 0, reviewCount: 0 })),
+      } as unknown as IDatabaseService;
+      const mgr = new DeckManager(
+        {} as unknown as Vault,
+        {} as unknown as MetadataCache,
+        db
+      );
+
+      const stats = await mgr.getDeckStats("deck_1", false);
+
+      expect(stats.matureCount).toBe(42);
+      expect(stats.totalCount).toBe(100);
+      expect(db.countMatureCards).toHaveBeenCalledWith("deck_1");
+      // The expensive all-cards fetch must NOT be used for stats.
+      expect(db.getFlashcardsByDeck).not.toHaveBeenCalled();
+    });
+  });
+
   describe("flashcard ID generation", () => {
     it("should generate consistent IDs for same content and deck", () => {
       const id1 = generateFlashcardId("What is 2+2?", "deck_abc");

@@ -410,7 +410,7 @@
     }
 
     try {
-      schedulingInfo = await scheduler.preview(currentCard.id);
+      schedulingInfo = await scheduler.preview(currentCard);
     } catch (error) {
       console.error("Error getting scheduling preview:", error);
       schedulingInfo = null;
@@ -510,6 +510,7 @@
     if (!currentCard || isLoading) return;
 
     isLoading = true;
+    const reviewPerfStart = performance.now();
     try {
       const timeElapsed = Date.now() - cardStartTime;
       const shownAt = new Date(cardStartTime);
@@ -573,6 +574,13 @@
       console.error("Error reviewing card:", error);
     } finally {
       isLoading = false;
+      if (settings?.debug?.performanceLogs) {
+        console.debug(
+          `[Decks Performance] Review turn (rate + next card) in ${(
+            performance.now() - reviewPerfStart
+          ).toFixed(1)}ms`
+        );
+      }
     }
   }
 

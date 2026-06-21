@@ -260,8 +260,9 @@ export class SrMigrationController {
 
     const deckItems: MigrationDeckItem[] = [];
     let filesCreated = 0;
-    // Files that are ALSO whole-note reviews: their original stays in place as
-    // the review, so inline delete-mode link-replacement is skipped for them.
+    // Files that are ALSO whole-note reviews: the whole-note path owns the
+    // original (duplicate + optional delete), so inline delete-mode
+    // link-replacement is skipped for them.
     const reviewFilePaths = new Set(
       scan.entries.filter((e) => e.kind === "whole").map((e) => e.file.path)
     );
@@ -270,11 +271,17 @@ export class SrMigrationController {
       const entry = scan.entries[i];
       onProgress?.(i + 1, total, "write", entry.file.basename);
 
+      const basePath = this.targetBasePath(entry.file, opts);
+      await this.ensureFolderFor(basePath);
       if (entry.kind === "whole") {
-        await this.migrateWholeNote(entry, profileFsrs, deckItems);
+        filesCreated += await this.migrateWholeNote(
+          entry,
+          basePath,
+          opts,
+          profileFsrs,
+          deckItems
+        );
       } else {
-        const basePath = this.targetBasePath(entry.file, opts);
-        await this.ensureFolderFor(basePath);
         filesCreated += await this.migrateInline(
           entry,
           basePath,
@@ -335,8 +342,9 @@ export class SrMigrationController {
       deckItems.push({ deckId: generateDeckId(outPath), profileFsrs, cards: file.cards });
     }
 
-    // Delete mode rewrites the original with links — but a review-bearing
-    // original must stay in place (the review IS the note), so skip it there.
+    // Delete mode rewrites the original with links — but for a review-bearing
+    // original the whole-note path handles removal (it's fully duplicated), so
+    // skip inline link-replacement to avoid double-touching the file.
     if (opts.deleteMode && !alsoReview) {
       const original = await this.app.vault.read(entry.file);
       await this.backup(entry.file, original);
@@ -353,26 +361,42 @@ export class SrMigrationController {
     return created;
   }
 
-  // Whole-note reviews are migrated IN PLACE: the original note's tag is set to
-  // `<base>/review` (title-mode deck) and its SR metadata stripped — no new file.
+  // Whole-note reviews are DUPLICATED into a new title-mode file (tagged
+  // `<base>/review`); the original is never modified in additive mode. In delete
+  // mode the original is backed up and removed (the duplicate is a full copy).
   private async migrateWholeNote(
     entry: ScanEntry,
+    basePath: string,
+    opts: SrMigrateOptions,
     profileFsrs: MigrationProfileFsrs,
     deckItems: MigrationDeckItem[]
-  ): Promise<void> {
+  ): Promise<number> {
     const card = entry.cards[0];
-    // In title mode the filename is the card front — keep them in sync so the
-    // injected id matches what the parser computes after sync.
-    card.front = entry.file.basename;
     const reviewTag = entry.reviewTag ?? this.reviewSubtag;
-    await this.app.vault.process(entry.file, (content) =>
-      LegacySrMigrator.rewriteReviewNote(content, reviewTag)
-    );
-    deckItems.push({
-      deckId: generateDeckId(entry.file.path),
-      profileFsrs,
-      cards: [card],
-    });
+    const content = LegacySrMigrator.renderTitleModeFile(card, reviewTag);
+
+    // If an inline file from the same source already claimed basePath (the
+    // "both" case), suffix the review duplicate so the title-mode front stays
+    // the note's title rather than a numbered collision.
+    let target = basePath;
+    if (await this.app.vault.adapter.exists(normalizePath(basePath + ".md"))) {
+      target = `${basePath} (review)`;
+    }
+    const outPath = await this.writeUnique(target, content);
+
+    // Title mode: the filename is the card front — keep them in sync so the
+    // injected id matches what the parser computes after sync.
+    card.front = this.basename(outPath);
+    deckItems.push({ deckId: generateDeckId(outPath), profileFsrs, cards: [card] });
+
+    if (opts.deleteMode) {
+      const original = await this.app.vault.read(entry.file);
+      await this.backup(entry.file, original);
+      // Trash (not hard-delete) so it respects the user's deletion preference
+      // and stays recoverable — the duplicate is a full copy regardless.
+      await this.app.fileManager.trashFile(entry.file);
+    }
+    return 1;
   }
 
   // The title-mode review profile ships preinstalled in the DB; resolve it by

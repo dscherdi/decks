@@ -143,6 +143,7 @@ export default class DecksPlugin extends Plugin {
   private lastKnownDatabaseMtime = 0;
   private lastReloadFromDiskAt = 0;
   private reloadFromDiskInFlight = false;
+  private static readonly RELOAD_FROM_DISK_THROTTLE_MS = 60_000;
   private deviceLocalState: DeviceLocalState;
   private syncLog: SyncLog;
   private snapshotTimer: number | null = null;
@@ -570,21 +571,10 @@ export default class DecksPlugin extends Plugin {
         },
       });
 
-      // Reload from disk on window/leaf focus so the user sees other-device
-      // changes that iCloud (or Obsidian Sync, Dropbox, ...) just delivered.
-      // syncWithDisk() merges remote into in-memory only — it does NOT write
-      // back, which avoids the iCloud feedback loop where every read triggers
-      // another upload.
+      // On window focus, pull other-device changes from disk (throttled, never on pane focus).
       this.registerDomEvent(window, "focus", () => {
         void this.reloadFromDiskIfNewer();
       });
-      this.registerEvent(
-        this.app.workspace.on("active-leaf-change", (leaf) => {
-          if (leaf?.view.getViewType() === VIEW_TYPE_DECKS) {
-            void this.reloadFromDiskIfNewer();
-          }
-        })
-      );
 
       // Flush any buffered sync-log ops to disk + persist the in-memory DB
       // snapshot before the window loses focus or the app backgrounds.
@@ -943,14 +933,18 @@ export default class DecksPlugin extends Plugin {
   private async reloadFromDiskIfNewer(): Promise<void> {
     if (!this.db) return;
     if (this.reloadFromDiskInFlight) return;
+    if (this.deckSynchronizer?.isReviewing) return;
     const now = Date.now();
-    if (now - this.lastReloadFromDiskAt < 2000) return;
+    if (now - this.lastReloadFromDiskAt < DecksPlugin.RELOAD_FROM_DISK_THROTTLE_MS) {
+      return;
+    }
     this.lastReloadFromDiskAt = now;
     this.reloadFromDiskInFlight = true;
     try {
       await this.db.syncWithDisk();
       await this.syncLog?.applyPending();
-      await this.getDecksView()?.refresh();
+      // Repaint from the merged DB — no vault scan needed.
+      await this.getDecksView()?.refreshDecksAndStats();
     } catch (error) {
       this.logger.debug("reloadFromDiskIfNewer failed", error as object);
     } finally {

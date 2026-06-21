@@ -469,6 +469,7 @@ export class DecksViewModal extends Modal {
         this.scheduler,
         this.settings,
         this.db,
+        this.deckSynchronizer,
         this.refreshDecksAndStats.bind(this),
         this.refreshStatsById.bind(this),
         browseMode
@@ -507,7 +508,8 @@ export class DecksViewModal extends Modal {
             cards,
             browseMode,
             this.refreshDecksAndStats.bind(this),
-            this.refreshStatsById.bind(this)
+            this.refreshStatsById.bind(this),
+            this.deckSynchronizer
           );
         }
         void workspace.revealLeaf(leaf);

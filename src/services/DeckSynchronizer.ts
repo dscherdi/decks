@@ -38,6 +38,8 @@ export class DeckSynchronizer {
   // handlers skip their auto-sync so the per-file events don't collide with each
   // other or the migration's own single forced sync.
   isMigrating = false;
+  // True while a review modal/tab is open; background syncs skip themselves.
+  isReviewing = false;
   // Single-flight coalescing: the in-flight run and the one trailing run queued
   // behind it (concurrent callers reuse `queued`).
   private current: Promise<SyncResult> | null = null;
