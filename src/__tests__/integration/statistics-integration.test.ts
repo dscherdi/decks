@@ -226,6 +226,33 @@ describe("StatisticsService Integration Tests", () => {
     });
   });
 
+  describe("getReviewCountsByDate window", () => {
+    it("all-time (days<=0) counts old reviews that the 366-day window excludes", async () => {
+      const card = DatabaseTestUtils.createTestFlashcard(testDeck.id, {
+        id: "card-old",
+        state: "review",
+      });
+      await db.createFlashcard(card);
+
+      const twoYearsAgo = new Date(Date.now() - 730 * 86400000);
+      await db.createReviewLog(
+        DatabaseTestUtils.createTestReviewLog(card.id, {
+          id: "log-old",
+          rating: 3,
+          ratingLabel: "good",
+          reviewedAt: twoYearsAgo.toISOString(),
+        })
+      );
+
+      const key = toLocalDateString(twoYearsAgo);
+      const windowed = await statsService.getReviewCountsByDate(366);
+      expect(windowed.get(key)).toBeUndefined();
+
+      const allTime = await statsService.getReviewCountsByDate(0);
+      expect(allTime.get(key)).toBe(1);
+    });
+  });
+
   describe("getStudyStats", () => {
     it("sums review time into total/month/week hours via SQL", async () => {
       const card = DatabaseTestUtils.createTestFlashcard(testDeck.id, {

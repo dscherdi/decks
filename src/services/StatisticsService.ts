@@ -486,6 +486,9 @@ export class StatisticsService {
     days: number,
     deckIds: string[] = []
   ): Promise<Map<string, number>> {
+    // days <= 0 → all-time (no lower bound), so the heatmap can show historical
+    // (e.g. migrated) reviews when navigating to past years.
+    const allTime = days <= 0;
     const startDate = new Date();
     startDate.setDate(startDate.getDate() - days);
 
@@ -496,20 +499,20 @@ export class StatisticsService {
       sql = `
         SELECT ${getLocalDateSQL("reviewed_at")} as date, COUNT(*) as count
         FROM review_logs
-        WHERE reviewed_at >= ?
+        ${allTime ? "" : "WHERE reviewed_at >= ?"}
         GROUP BY ${getLocalDateSQL("reviewed_at")}
       `;
-      params = [startDate.toISOString()];
+      params = allTime ? [] : [startDate.toISOString()];
     } else {
       const placeholders = deckIds.map(() => "?").join(",");
       sql = `
         SELECT ${getLocalDateSQL("rl.reviewed_at")} as date, COUNT(*) as count
         FROM review_logs rl
         JOIN flashcards f ON rl.flashcard_id = f.id
-        WHERE f.deck_id IN (${placeholders}) AND rl.reviewed_at >= ?
+        WHERE f.deck_id IN (${placeholders})${allTime ? "" : " AND rl.reviewed_at >= ?"}
         GROUP BY ${getLocalDateSQL("rl.reviewed_at")}
       `;
-      params = [...deckIds, startDate.toISOString()];
+      params = allTime ? [...deckIds] : [...deckIds, startDate.toISOString()];
     }
 
     const results = await this.db.querySql(sql, params);

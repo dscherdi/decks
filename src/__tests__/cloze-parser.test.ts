@@ -151,6 +151,62 @@ describe("Cloze Parser", () => {
     });
   });
 
+  describe("1-column / empty-back table cloze cards", () => {
+    it("treats a 1-column table cell as a front-only cloze (front holds the sentence)", () => {
+      const content = `## Planets\n\n| Front |\n|-------|\n| The largest planet is ==Jupiter==. |`;
+      const cards = FlashcardParser.parseFlashcardsFromContent(content, 2, undefined, true);
+
+      expect(cards).toHaveLength(1);
+      expect(cards[0].type).toBe("cloze");
+      expect(cards[0].front).toBe("The largest planet is ==Jupiter==.");
+      expect(cards[0].back).toBe("");
+      expect(cards[0].clozeText).toBe("Jupiter");
+      expect(cards[0].clozeOrder).toBe(0);
+    });
+
+    it("treats a 2-column row with an empty back as a front cloze", () => {
+      const content = `## Planets\n\n| Front | Back |\n|-------|------|\n| Closest to the sun is ==Mercury==. |  |`;
+      const cards = FlashcardParser.parseFlashcardsFromContent(content, 2, undefined, true);
+
+      expect(cards).toHaveLength(1);
+      expect(cards[0].type).toBe("cloze");
+      expect(cards[0].front).toBe("Closest to the sun is ==Mercury==.");
+      expect(cards[0].back).toBe("");
+      expect(cards[0].clozeText).toBe("Mercury");
+    });
+
+    it("expands multiple clozes from the front, in order", () => {
+      const content = `## Facts\n\n| Front |\n|-------|\n| ==Sputnik 1== launched in ==1957==. |`;
+      const cards = FlashcardParser.parseFlashcardsFromContent(content, 2, undefined, true);
+
+      expect(cards.map((c) => [c.clozeText, c.clozeOrder])).toEqual([
+        ["Sputnik 1", 0],
+        ["1957", 1],
+      ]);
+      expect(cards.every((c) => c.back === "")).toBe(true);
+    });
+
+    it("ignores a non-cloze row with no back (incomplete row)", () => {
+      const content = `## Vocab\n\n| Front | Back |\n|-------|------|\n| Lonely front |  |`;
+      const cards = FlashcardParser.parseFlashcardsFromContent(content, 2, undefined, true);
+
+      expect(cards).toHaveLength(0);
+    });
+
+    it("mixes 2-column QA rows and front-only cloze rows in one table", () => {
+      const content = `## Mixed\n\n| Front | Back |\n|-------|------|\n| New York | Albany |\n| The capital is ==Paris==. |  |`;
+      const cards = FlashcardParser.parseFlashcardsFromContent(content, 2, undefined, true);
+
+      expect(cards).toHaveLength(2);
+      expect(cards[0].type).toBe("table");
+      expect(cards[0].front).toBe("New York");
+      expect(cards[0].back).toBe("Albany");
+      expect(cards[1].type).toBe("cloze");
+      expect(cards[1].front).toBe("The capital is ==Paris==.");
+      expect(cards[1].clozeText).toBe("Paris");
+    });
+  });
+
   describe("title mode cloze", () => {
     it("should generate cloze cards in title mode (headerLevel=0)", () => {
       const content = `The answer is ==Paris==.`;

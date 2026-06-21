@@ -139,30 +139,34 @@
   transition: transform 0.1s ease;
 }
 
-.decks-card-side.decks-back > p > span > div.markdown-preview-view {
-  display: inherit !important;
-  width: inherit !important;
-  min-height: inherit !important;
-  padding: inherit !important;
-  margin: 0px !important;
+/* Embedded notes (![[Note]]): render like a normal markdown document — single
+   column, full width, with normal left padding. Hide the embedded note's filename
+   title (it otherwise renders as a left "column"), and neutralize Obsidian's
+   reading-view sizer/pusher (fixed width + large padding → columnar + extra space). */
+.decks-card-side .markdown-embed-title,
+.decks-card-side .markdown-embed-link {
+  display: none !important;
 }
-.decks-card-side.decks-back
-  > p
-  > span
-  > div.markdown-preview-view
-  > :is(h1, h2, h3, h4, h5, h6):first-child {
-  display: none;
+.decks-card-side .markdown-embed,
+.decks-card-side .internal-embed,
+.decks-card-side .markdown-embed .markdown-embed-content,
+.decks-card-side .markdown-embed .markdown-preview-view {
+  display: block !important;
+  width: 100% !important;
+  max-width: 100% !important;
+}
+.decks-card-side .markdown-embed .markdown-preview-sizer {
+  width: 100% !important;
+  max-width: 100% !important;
+  min-height: 0 !important;
+  margin: 0 !important;
+  padding: 0 0 0 1em !important;
+}
+.decks-card-side .markdown-embed .markdown-preview-pusher {
+  display: none !important;
 }
 
-.decks-card-side.decks-back > p {
-  margin-block: 0px !important;
-}
-
-.decks-card-side.decks-back > p > span {
-  border-inline-start: unset !important;
-}
-
-.decks-card-side.decks-back .MathJax {
+.decks-card-side .MathJax {
   overflow-x: auto !important;
 }
 

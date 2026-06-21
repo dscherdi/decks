@@ -415,4 +415,129 @@ describe("SR migration pipeline (integration)", () => {
     const total = await db.countTotalCards(deckId);
     expect(total).toBe(1);
   });
+
+  it("bundles QA cards under a heading: each row syncs with its own-front id + state", async () => {
+    const source = [
+      "## State Capitals",
+      "New York :: Albany <!--SR:!2024-06-18,4,250-->",
+      "",
+      "Texas :: Austin <!--SR:!2024-06-19,9,250-->",
+    ].join("\n");
+    const { dbRecords } = LegacySrMigrator.processFile(source, {
+      srBaseTag: "#flashcards",
+      decksBaseTag: "#decks",
+    });
+    const [rendered] = LegacySrMigrator.renderDecksFiles(dbRecords, "#decks", profile.headerLevel, {
+      format: "smart",
+    });
+    expect(rendered.content).toContain("## State Capitals");
+    expect(rendered.content.split("| Front | Back | Notes |").length - 1).toBe(1);
+
+    const deckId = await syncFile("Decks/caps.md", rendered.content);
+    const cards = await db.getFlashcardsByDeck(deckId);
+    expect(cards.map((c) => c.front).sort()).toEqual(["New York", "Texas"]);
+
+    const { injected } = await SrHistoryImporter.importHistory(
+      db,
+      [{ deckId, profileFsrs: profileFsrs(), cards: rendered.cards }]
+    );
+    expect(injected).toBe(2);
+
+    const nyId = generateFlashcardId("New York", deckId);
+    const txId = generateFlashcardId("Texas", deckId);
+    expect((await db.getFlashcardById(nyId))!.stability).toBe(4);
+    expect((await db.getFlashcardById(txId))!.stability).toBe(9);
+  });
+
+  it("bundles single-line clozes into a 1-column table that syncs to front-only cloze cards", async () => {
+    const source = [
+      "## Planets",
+      "- The largest planet is ==Jupiter==. <!--SR:!2024-06-18,4,250-->",
+      "- Closest to the sun is ==Mercury==. <!--SR:!2024-06-19,9,250-->",
+    ].join("\n");
+    const { dbRecords } = LegacySrMigrator.processFile(source, {
+      srBaseTag: "#flashcards",
+      decksBaseTag: "#decks",
+    });
+    const [rendered] = LegacySrMigrator.renderDecksFiles(dbRecords, "#decks", profile.headerLevel, {
+      format: "smart",
+    });
+    expect(rendered.content).toContain("| Front |");
+    expect(rendered.content).not.toContain("| Front | Back | Notes |");
+
+    const deckId = await syncFile("Decks/planets.md", rendered.content);
+    const cards = await db.getFlashcardsByDeck(deckId);
+    expect(cards).toHaveLength(2);
+    expect(cards.every((c) => c.type === "cloze")).toBe(true);
+    expect(cards.every((c) => c.back === "")).toBe(true);
+    expect(cards.map((c) => c.front).sort()).toEqual([
+      "Closest to the sun is ==Mercury==.",
+      "The largest planet is ==Jupiter==.",
+    ]);
+
+    const { injected } = await SrHistoryImporter.importHistory(
+      db,
+      [{ deckId, profileFsrs: profileFsrs(), cards: rendered.cards }]
+    );
+    expect(injected).toBe(2);
+
+    const jupId = generateClozeFlashcardId("The largest planet is ==Jupiter==.", "Jupiter", 0, deckId);
+    const merId = generateClozeFlashcardId("Closest to the sun is ==Mercury==.", "Mercury", 0, deckId);
+    expect((await db.getFlashcardById(jupId))!.stability).toBe(4);
+    expect((await db.getFlashcardById(merId))!.stability).toBe(9);
+  });
+
+  it("DD-MM-YYYY whole-note review still injects history (fixes heatmap-0)", async () => {
+    const note = ["---", "sr-due: 18-06-2024", "sr-interval: 20", "sr-ease: 250", "---", "", "Body."].join("\n");
+    const card = LegacySrMigrator.processWholeNote(note, "Note");
+    expect(card.fsrsData).toBeDefined(); // DD-MM-YYYY now parsed, not dropped
+    const duplicate = LegacySrMigrator.renderTitleModeFile(card, "decks/review");
+
+    const filepath = "Decks/ddmm.md";
+    const deckId = generateDeckId(filepath);
+    await db.createDeck({
+      id: deckId,
+      name: filepath,
+      filepath,
+      tag: "#decks/review",
+      lastReviewed: null,
+      profileId: profile.id,
+    });
+    await db.syncFlashcardsForDeck({
+      deckId,
+      deckName: filepath,
+      deckFilepath: filepath,
+      deckConfig: { ...profile, headerLevel: 0, clozeEnabled: false },
+      fileContent: duplicate,
+      fileTitle: "Note",
+    });
+    card.front = "Note";
+    const { injected } = await SrHistoryImporter.importHistory(
+      db,
+      [{ deckId, profileFsrs: profileFsrs(), cards: [card] }]
+    );
+    expect(injected).toBe(1);
+    // A review_log row exists → the heatmap (which counts review_logs) is no longer empty.
+    const logs = await db.getReviewLogsByDeck(deckId);
+    expect(logs.length).toBe(1);
+    expect((await db.getFlashcardById(generateFlashcardId("Note", deckId)))!.stability).toBe(20);
+  });
+
+  it("preserves user frontmatter properties + tags and drops SR tags on the review file", () => {
+    const card = LegacySrMigrator.processWholeNote("Body.\n", "Note");
+    const userTags = LegacySrMigrator.reviewUserTags(["review", "flashcards/x", "biology"], {
+      srBaseTag: "#flashcards",
+      srReviewTag: "#review",
+      decksBaseTag: "#decks",
+    });
+    const out = LegacySrMigrator.renderTitleModeFile(card, "decks/review", {
+      extraTags: userTags,
+      properties: "author: Jane",
+    });
+    expect(out).toContain("author: Jane");
+    expect(out).toContain("  - decks/review");
+    expect(out).toContain("  - biology");
+    expect(out).not.toContain("flashcards/x");
+    expect(out).not.toContain("- review\n");
+  });
 });

@@ -72,6 +72,16 @@
     return type === "cloze" || type === "image-occlusion";
   }
 
+  // A front-only cloze (bundled 1-column table) keeps the sentence in the front
+  // with an empty back; fall back to the front so the blank/reveal logic works.
+  function clozeContent(card: Flashcard): string {
+    return card.back && card.back.trim().length > 0 ? card.back : card.front;
+  }
+
+  function isFrontOnlyCloze(card: Flashcard): boolean {
+    return isClozeType(card.type) && !(card.back && card.back.trim().length > 0);
+  }
+
   function prepareImageOcclusionBack(
     back: string,
     activeIndex: number
@@ -116,7 +126,7 @@
   function handleCopyBack() {
     if (currentCard) {
       const text = isClozeType(currentCard.type)
-        ? currentCard.back.replace(/==((?:(?!==).)+)==/g, "$1")
+        ? clozeContent(currentCard).replace(/==((?:(?!==).)+)==/g, "$1")
         : currentCard.back;
       navigator.clipboard.writeText(text).catch(console.error);
     }
@@ -212,6 +222,8 @@
   let searchMode = false;
   let searchQuery = "";
   let searchInputEl: HTMLInputElement | undefined;
+
+  $: frontOnlyClozeCard = !!currentCard && isFrontOnlyCloze(currentCard);
 
   $: searchResults =
     searchMode && searchQuery.trim()
@@ -383,6 +395,25 @@
     }
 
     container.setAttribute("data-decks-cloze-revealed", "true");
+    // Revealing the blank also surfaces the rating buttons.
+    showAnswer = true;
+  }
+
+  // Render a cloze card into a target element, blanked or revealed.
+  function renderClozeInto(
+    el: HTMLElement,
+    card: Flashcard,
+    revealed: boolean
+  ): void {
+    el.empty();
+    if (card.type === "image-occlusion" && card.clozeOrder !== null) {
+      const prepared = prepareImageOcclusionBack(card.back, card.clozeOrder);
+      setClozeAttributes(el, prepared.markStart, clozeShowContext, revealed, prepared.markEnd);
+      renderMarkdown(prepared.content, el, deckFilePath);
+    } else {
+      setClozeAttributes(el, card.clozeOrder ?? 0, clozeShowContext, revealed);
+      renderMarkdown(clozeContent(card), el, deckFilePath);
+    }
   }
 
   async function loadCard() {
@@ -417,39 +448,25 @@
     }
     cardStartTime = Date.now();
 
-    // Render front side
+    // Render front side. A front-only cloze (no back) shows its sentence here,
+    // in a single container, so the back area stays empty.
     if (frontEl) {
       frontEl.empty();
-      renderMarkdown(currentCard.front, frontEl, deckFilePath);
+      if (isFrontOnlyCloze(currentCard)) {
+        renderClozeInto(frontEl, currentCard, false);
+      } else {
+        renderMarkdown(currentCard.front, frontEl, deckFilePath);
+      }
     }
 
     // Pre-render back side but keep it hidden
     tick().then(() => {
       if (backEl && currentCard) {
         backEl.empty();
-        if (isClozeType(currentCard.type) && currentCard.clozeOrder !== null) {
-          if (currentCard.type === "image-occlusion") {
-            const prepared = prepareImageOcclusionBack(
-              currentCard.back,
-              currentCard.clozeOrder
-            );
-            setClozeAttributes(
-              backEl,
-              prepared.markStart,
-              clozeShowContext,
-              false,
-              prepared.markEnd
-            );
-            renderMarkdown(prepared.content, backEl, deckFilePath);
-          } else {
-            setClozeAttributes(
-              backEl,
-              currentCard.clozeOrder,
-              clozeShowContext,
-              false
-            );
-            renderMarkdown(currentCard.back, backEl, deckFilePath);
-          }
+        if (isFrontOnlyCloze(currentCard)) {
+          clearClozeAttributes(backEl);
+        } else if (isClozeType(currentCard.type) && currentCard.clozeOrder !== null) {
+          renderClozeInto(backEl, currentCard, false);
         } else {
           clearClozeAttributes(backEl);
           renderMarkdown(currentCard.back, backEl, deckFilePath);
@@ -461,31 +478,16 @@
   function revealAnswer() {
     showAnswer = true;
     tick().then(() => {
-      if (backEl && currentCard) {
+      if (!currentCard) return;
+      // Front-only cloze: reveal the active blank in the front container.
+      if (isFrontOnlyCloze(currentCard) && frontEl) {
+        renderClozeInto(frontEl, currentCard, true);
+        return;
+      }
+      if (backEl) {
         backEl.empty();
         if (isClozeType(currentCard.type) && currentCard.clozeOrder !== null) {
-          if (currentCard.type === "image-occlusion") {
-            const prepared = prepareImageOcclusionBack(
-              currentCard.back,
-              currentCard.clozeOrder
-            );
-            setClozeAttributes(
-              backEl,
-              prepared.markStart,
-              clozeShowContext,
-              false,
-              prepared.markEnd
-            );
-            renderMarkdown(prepared.content, backEl, deckFilePath);
-          } else {
-            setClozeAttributes(
-              backEl,
-              currentCard.clozeOrder,
-              clozeShowContext,
-              false
-            );
-            renderMarkdown(currentCard.back, backEl, deckFilePath);
-          }
+          renderClozeInto(backEl, currentCard, true);
         } else {
           clearClozeAttributes(backEl);
           renderMarkdown(currentCard.back, backEl, deckFilePath);
@@ -750,10 +752,8 @@
 
     // Card-state action hotkeys (B / S / R). Fire on both front and back —
     // these are meta-actions, not review answers. Gated by enableKeyboardShortcuts
-    // and skipped in browse mode + when modifier keys are held (avoid eating
-    // shortcuts like Cmd+R).
+    // and skipped when modifier keys are held (avoid eating shortcuts like Cmd+R).
     if (
-      !browseMode &&
       currentCard &&
       settings.review.enableKeyboardShortcuts &&
       !event.metaKey &&
@@ -1288,7 +1288,7 @@
                 </svg>
               </button>
             {/if}
-            {#if onCardStateAction && currentCard && !browseMode}
+            {#if onCardStateAction && currentCard}
               <div
                 class="decks-card-actions-menu"
                 bind:this={actionsMenuEl}
@@ -1352,7 +1352,12 @@
               </div>
             {/if}
           </div>
-          <div class="decks-card-side decks-front" bind:this={frontEl}></div>
+          <!-- svelte-ignore a11y-click-events-have-key-events a11y-no-static-element-interactions -->
+          <div
+            class="decks-card-side decks-front markdown-rendered"
+            bind:this={frontEl}
+            on:click={handleClozeBlankClick}
+          ></div>
         </div>
       </div>
 
@@ -1367,7 +1372,8 @@
       {/if}
       <div
         class="decks-answer-section"
-        class:hidden={!showAnswer && !(currentCard && isClozeType(currentCard.type))}
+        class:hidden={frontOnlyClozeCard ||
+          (!showAnswer && !(currentCard && isClozeType(currentCard.type)))}
       >
         <div class="decks-back-wrapper">
           {#if currentCard}
@@ -1397,7 +1403,7 @@
           {/if}
           <!-- svelte-ignore a11y-click-events-have-key-events a11y-no-static-element-interactions -->
           <div
-            class="decks-card-side decks-back"
+            class="decks-card-side decks-back markdown-rendered"
             bind:this={backEl}
             on:click={handleClozeBlankClick}
           ></div>
@@ -1429,7 +1435,7 @@
         </div>
         {#if showNotes && currentCard?.notes}
           <div class="decks-notes-wrapper">
-            <div class="decks-card-side decks-notes" bind:this={notesEl}></div>
+            <div class="decks-card-side decks-notes markdown-rendered" bind:this={notesEl}></div>
           </div>
         {/if}
       </div>
@@ -2274,51 +2280,46 @@
   }
 
   /* Markdown content styling */
-  :global(.card-side h1),
-  :global(.card-side h2),
-  :global(.card-side h3),
-  :global(.card-side h4),
-  :global(.card-side h5),
-  :global(.card-side h6) {
+  :global(.decks-card-side h1),
+  :global(.decks-card-side h2),
+  :global(.decks-card-side h3),
+  :global(.decks-card-side h4),
+  :global(.decks-card-side h5),
+  :global(.decks-card-side h6) {
     margin-top: 0;
     margin-bottom: 16px;
   }
 
-  :global(.card-side p) {
+  :global(.decks-card-side p) {
     margin-bottom: 16px;
   }
 
-  :global(.card-side p:last-child) {
+  :global(.decks-card-side p:last-child) {
     margin-bottom: 0;
   }
 
-  :global(.card-side > *:first-child) {
+  :global(.decks-card-side > *:first-child) {
     margin-top: 0;
   }
 
-  :global(.card-side ul),
-  :global(.card-side ol) {
+  :global(.decks-card-side ul),
+  :global(.decks-card-side ol) {
     margin-bottom: 16px;
     padding-left: 24px;
   }
 
-  :global(.card-side code) {
+  /* Inline code only — block code (pre > code) is styled by Obsidian's
+     markdown-rendered theme styles. */
+  :global(.decks-card-side code) {
+    font-size: 0.9em;
+  }
+  :global(.decks-card-side :not(pre) > code) {
     background: var(--code-background);
     padding: 2px 4px;
     border-radius: 3px;
-    font-size: 0.9em;
   }
 
-  :global(.card-side pre) {
-    background: var(--code-background);
-    padding: 16px;
-    border-radius: 6px;
-    overflow-x: auto;
-    margin-bottom: 16px;
-    max-width: 100%;
-  }
-
-  :global(.card-side blockquote) {
+  :global(.decks-card-side blockquote) {
     border-left: 3px solid var(--blockquote-border);
     padding-left: 16px;
     margin-left: 0;

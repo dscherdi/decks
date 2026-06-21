@@ -226,7 +226,9 @@
   export async function refresh() {
     let newCounts: Map<string, number>;
     try {
-      newCounts = await getReviewCounts(366);
+      // All-time (0): the grid renders a calendar year and filters by currentYear,
+      // so the year selector can reach historical (e.g. migrated) reviews.
+      newCounts = await getReviewCounts(0);
     } catch (error) {
       console.error("Failed to load review counts:", error);
       isLoading = false;

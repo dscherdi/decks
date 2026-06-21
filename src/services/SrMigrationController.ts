@@ -1,4 +1,11 @@
-import { App, TFile, normalizePath, getAllTags } from "obsidian";
+import {
+  App,
+  TFile,
+  normalizePath,
+  getAllTags,
+  parseFrontMatterTags,
+  stringifyYaml,
+} from "obsidian";
 import {
   LegacySrMigrator,
   SrHistoryImporter,
@@ -56,6 +63,8 @@ interface ScanEntry {
   cards: MigratedCard[]; // inline: many; whole: a single title-mode card
   deckTag?: string; // inline only: the single derived deck tag (e.g. decks/cleancode/comments)
   reviewTag?: string; // whole only: the derived review tag (e.g. decks/review/spanish)
+  properties?: string; // whole only: serialized non-SR frontmatter to carry over
+  userTags?: string[]; // whole only: non-SR frontmatter tags to carry over
 }
 
 export interface SrScanResult {
@@ -138,6 +147,49 @@ export class SrMigrationController {
     return undefined;
   }
 
+  // SR's note due-date format (best-effort; absent in most versions → auto-detect).
+  private async readSrDateFormat(): Promise<string | undefined> {
+    try {
+      const path = normalizePath(
+        `${this.app.vault.configDir}/plugins/${SR_PLUGIN_ID}/data.json`
+      );
+      if (!(await this.app.vault.adapter.exists(path))) return undefined;
+      const data: unknown = JSON.parse(await this.app.vault.adapter.read(path));
+      return (
+        this.readStringField(data, "dueDateFormat") ??
+        this.readStringField(data, "dateFormat")
+      );
+    } catch (error) {
+      this.logger.debug("Could not read Spaced Repetition date format", error);
+      return undefined;
+    }
+  }
+
+  // Non-SR frontmatter (properties + tags) to carry onto a migrated review file.
+  private extractReviewFrontmatter(
+    file: TFile,
+    srBaseTag: string,
+    srReviewTag: string
+  ): { properties: string; userTags: string[] } {
+    const fm = this.app.metadataCache.getFileCache(file)?.frontmatter;
+    if (!fm) return { properties: "", userTags: [] };
+    const rest: Record<string, unknown> = {};
+    for (const [key, value] of Object.entries(fm)) {
+      const lower = key.toLowerCase();
+      if (lower === "tags" || lower === "tag" || lower === "position") continue;
+      if (/^sr-/i.test(key)) continue;
+      rest[key] = value;
+    }
+    const properties = Object.keys(rest).length > 0 ? stringifyYaml(rest).trim() : "";
+    const fmTags = (parseFrontMatterTags(fm) ?? []).map((t) => t.replace(/^#/, ""));
+    const userTags = LegacySrMigrator.reviewUserTags(fmTags, {
+      srBaseTag,
+      srReviewTag,
+      decksBaseTag: this.decksBaseTag,
+    });
+    return { properties, userTags };
+  }
+
   private candidateFiles(sourceFolder: string): TFile[] {
     const folder = normalizePath(sourceFolder.trim());
     const all = this.app.vault.getMarkdownFiles();
@@ -173,6 +225,7 @@ export class SrMigrationController {
   ): Promise<SrScanResult> {
     const entries: ScanEntry[] = [];
     const sourceFiles = new Set<string>();
+    const dateFormat = await this.readSrDateFormat();
 
     for (const file of this.candidateFiles(opts.sourceFolder)) {
       // Only parse files that the SR plugin would treat as flashcards/review —
@@ -193,6 +246,7 @@ export class SrMigrationController {
         clozeSep: opts.clozeSep,
         noteTitle: file.basename,
         hintLabel: I18n.t.srMigration.hintLabel,
+        dateFormat,
       });
       if (dbRecords.length > 0) {
         entries.push({
@@ -213,15 +267,28 @@ export class SrMigrationController {
       const isWholeReview =
         isReview || (dbRecords.length === 0 && !!LegacySrMigrator.parseFileLevelState(content));
       if (isWholeReview) {
+        const { properties, userTags } = this.extractReviewFrontmatter(
+          file,
+          opts.srBaseTag,
+          opts.srReviewTag
+        );
         entries.push({
           file,
           kind: "whole",
-          cards: [LegacySrMigrator.processWholeNote(content, file.basename)],
+          cards: [
+            LegacySrMigrator.processWholeNote(content, file.basename, {
+              srBaseTag: opts.srBaseTag,
+              srReviewTag: opts.srReviewTag,
+              dateFormat,
+            }),
+          ],
           reviewTag: LegacySrMigrator.deriveReviewTag(
             fileTags,
             opts.srReviewTag,
             this.decksBaseTag
           ),
+          properties,
+          userTags,
         });
         sourceFiles.add(file.path);
       }
@@ -373,7 +440,10 @@ export class SrMigrationController {
   ): Promise<number> {
     const card = entry.cards[0];
     const reviewTag = entry.reviewTag ?? this.reviewSubtag;
-    const content = LegacySrMigrator.renderTitleModeFile(card, reviewTag);
+    const content = LegacySrMigrator.renderTitleModeFile(card, reviewTag, {
+      extraTags: entry.userTags,
+      properties: entry.properties,
+    });
 
     // If an inline file from the same source already claimed basePath (the
     // "both" case), suffix the review duplicate so the title-mode front stays

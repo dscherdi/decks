@@ -277,6 +277,41 @@ export function getAllTags(metadata: CachedMetadata | null): string[] | null {
   return tags;
 }
 
+// parseFrontMatterTags: frontmatter-only tags (with leading #), or null.
+// Mirrors Obsidian's helper (reads `tags`/`tag`, accepts array or string).
+export function parseFrontMatterTags(
+  frontmatter: Record<string, unknown> | null | undefined
+): string[] | null {
+  if (!frontmatter) return null;
+  const raw = frontmatter["tags"] ?? frontmatter["tag"];
+  const list: string[] = [];
+  if (Array.isArray(raw)) {
+    for (const t of raw) if (typeof t === "string") list.push(t);
+  } else if (typeof raw === "string") {
+    list.push(...raw.split(/[,\s]+/));
+  }
+  const tags = list
+    .map((t) => t.trim())
+    .filter((t) => t.length > 0)
+    .map((t) => (t.startsWith("#") ? t : "#" + t));
+  return tags.length > 0 ? tags : null;
+}
+
+// Minimal YAML emitter for tests: scalars `key: value`, arrays as block lists.
+// Sufficient for the migration controller's frontmatter round-trip.
+export function stringifyYaml(obj: Record<string, unknown>): string {
+  const lines: string[] = [];
+  for (const [key, value] of Object.entries(obj)) {
+    if (Array.isArray(value)) {
+      lines.push(`${key}:`);
+      for (const item of value) lines.push(`  - ${String(item)}`);
+    } else {
+      lines.push(`${key}: ${String(value)}`);
+    }
+  }
+  return lines.join("\n") + "\n";
+}
+
 // normalizePath: trims, collapses repeated slashes, and converts backslashes.
 // Mirrors Obsidian's behavior closely enough for path-resolver unit tests.
 export function normalizePath(path: string): string {
