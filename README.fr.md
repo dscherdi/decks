@@ -152,6 +152,28 @@ FSRS est livré avec des paramètres par défaut judicieux qui fonctionnent trè
 
 **Paramètres → Ajustement de l'algorithme → Optimiser les paramètres.** L'entraînement s'exécute en quelques secondes pour les paquets typiques ; vous verrez une comparaison de perte logarithmique (log-loss) avant/après. Cliquez sur Appliquer pour utiliser les poids entraînés ou Ignorer pour conserver les valeurs par défaut.
 
+## Migration depuis Spaced Repetition
+
+Vous utilisez déjà le plugin **Spaced Repetition** ? Vous pouvez passer à Decks **sans perdre vos cartes ni votre historique de révision** — et continuer vos révisions exactement là où vous vous étiez arrêté.
+
+Ouvrez l'outil de migration depuis la barre d'outils du panneau des paquets (l'icône en forme de cube) ou exécutez la commande **« Migrer depuis le plugin Spaced Repetition »**.
+
+**Vos notes d'origine ne sont jamais modifiées.** La migration est additive : elle écrit de nouveaux fichiers dans un dossier cible que vous choisissez (en reproduisant votre structure) et laisse vos notes sources exactement telles qu'elles sont. Relancer l'outil de migration écrase simplement les fichiers qu'il a générés.
+
+**Comment ça marche**
+
+1. **Choisissez un dossier source** à analyser (ou laissez-le vide pour analyser tout le coffre), ainsi qu'un dossier cible pour la sortie. Decks trouve toutes les notes contenant d'anciennes cartes — sur une seule ligne (`Front :: Back`), inversées (`Front ::: Back`), multi-lignes (`?` / `??`), à trous (`==…==` / `{{…}}`) — et les révisions de notes entières (le tag `#review`).
+2. **Chaque note est scindée en deux fichiers propres.** Un **paquet de cartes** (`<Note> (Cartes)`) contient les cartes extraites au format standard de Decks, et une **note lisible** conserve le texte — avec la syntaxe des cartes *décodée* en texte normal (`::` / `:::` deviennent « — », `?` / `??` réunissent question et réponse, et les trous `==…==` / `{{…}}` sont restaurés vers leur réponse). Vos séparateurs configurés sont respectés, donc cela fonctionne même si vous les avez personnalisés. Rien n'est supprimé — votre note de lecture reste complète.
+3. **Les fichiers sont liés entre eux dans le frontmatter.** La note lisible reçoit une propriété `Cartes` pointant vers son paquet et une propriété `Note d'origine` renvoyant vers l'original ; le paquet reçoit lui aussi une propriété `Note d'origine`. Si une note utilise déjà l'un de ces noms de propriété, l'outil de migration l'écrase plutôt que de créer un doublon. Vos tags sont préservés — l'ancien tag de base (par ex. `#flashcards`) est traduit vers votre tag Decks configuré.
+4. **Les cartes inversées deviennent deux cartes.** Une carte `Front ::: Back` est développée en une carte directe et une carte inversée dans le **même** fichier de paquet, de sorte que chaque sens est planifié indépendamment.
+5. **La structure imbriquée est aplatie en contexte.** SR considère les titres ancêtres et les puces de liste imbriquées comme le contexte d'une carte. Decks capture tout ce chemin dans le recto de la carte — par ex. un `Function :: Powerhouse` profondément imbriqué devient `Cell Anatomy > Mitochondria > … > Function` — rendu au niveau de titre unique de votre profil (un H1 isolé correspondant au titre de la note est omis). Choisissez n'importe quel niveau via les profils préinstallés **Heading 1–6**.
+6. **Un routage automatique intelligent choisit la meilleure disposition.** Les cartes courtes sur une seule ligne deviennent des lignes dans un **tableau** compact (plus de défilement interminable pour le vocabulaire) ; les cartes multi-lignes — avec blocs de code, listes ou formules mathématiques — deviennent des **titres** afin que leur mise en forme soit préservée. Vous pouvez remplacer ce choix par *tout en titres* ou *tout en tableaux* dans la boîte de dialogue.
+7. **Les révisions de notes entières migrent aussi.** Les notes que vous révisiez dans leur ensemble (le tag `#review`) deviennent des cartes Decks en **mode titre** (nom de fichier = recto, note entière = verso) sous un profil `…/review` dédié. Leur planification est lue depuis le frontmatter `sr-*` de la note ou son marqueur en fin de fichier.
+8. **Votre état de planification est traduit vers FSRS-6.** Decks lit les métadonnées héritées `<!--SR:-->` — SM-2 (`due, interval, ease`) ou déjà FSRS — et les associe à un état de stabilité/difficulté/échéance. Les cartes inversées conservent **deux historiques distincts** (lecture vs. rappel), exactement comme le plugin d'origine les stockait.
+9. **Un journal de révision est écrit pour chaque carte migrée**, de sorte qu'au moment où les cartes apparaissent dans Decks elles sont déjà dues à la bonne date avec le bon intervalle — vous reprenez, vous ne recommencez pas.
+
+Choisissez un profil dans la boîte de dialogue (ou utilisez celui par défaut) — son niveau de titre et ses paramètres de planification sont appliqués aux paquets migrés.
+
 ## Notes de version & Support
 
 - Les **Notes de version** pour chaque mise à jour se trouvent dans [`release-notes/`](./release-notes/).

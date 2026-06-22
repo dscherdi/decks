@@ -132,6 +132,28 @@ FSRS, kutudan çıktığı gibi harika çalışan mantıklı varsayılanlarla ge
 
 **Ayarlar → Algoritma ince ayarı → Parametreleri optimize et.** Eğitim, tipik desteler için saniyeler içinde tamamlanır; öncesi/sonrası bir "log-loss" karşılaştırması göreceksiniz. Eğitilmiş ağırlıkları kullanmak için "Uygula"ya tıklayın.
 
+## Spaced Repetition'dan geçiş
+
+Halihazırda **Spaced Repetition** eklentisini mi kullanıyorsunuz? Decks'e **kartlarınızı veya tekrar geçmişinizi kaybetmeden** geçebilir — ve tekrarlarınıza tam da bıraktığınız yerden devam edebilirsiniz.
+
+Geçiş aracını deste paneli araç çubuğundan (küp simgesi) açın veya **"Spaced Repetition eklentisinden geçiş yap"** komutunu çalıştırın.
+
+**Orijinal notlarınıza asla dokunulmaz.** Geçiş eklemelidir: seçtiğiniz bir hedef klasöre yeni dosyalar yazar (yapınızı yansıtarak) ve kaynak notlarınızı oldukları gibi bırakır. Geçiş aracını yeniden çalıştırmak, yalnızca ürettiği dosyaların üzerine yazar.
+
+**Nasıl çalışır**
+
+1. **Taranacak bir kaynak klasör** seçin (veya tüm kasayı taramak için boş bırakın) ve çıktı için bir hedef klasör belirleyin. Decks, eski kartları olan her notu bulur — tek satırlık (`Front :: Back`), ters (`Front ::: Back`), çok satırlı (`?` / `??`), boşluk doldurmalı (`==…==` / `{{…}}`) — ve tüm notu kapsayan tekrarları (`#review` etiketi).
+2. **Her not iki temiz dosyaya bölünür.** Bir **kart destesi** (`<Not> (Kartlar)`) ayıklanan kartları standart Decks biçiminde tutar; bir **okunabilir not** ise düz metni saklar — kart söz dizimi normal metne *çözülür* (`::` / `:::` " — " olur, `?` / `??` soru ile cevabı birleştirir ve `==…==` / `{{…}}` boşlukları cevaplarına geri döndürülür). Yapılandırdığınız ayraçlar dikkate alınır, böylece bunları özelleştirmiş olsanız bile çalışır. Hiçbir şey çıkarılmaz — okuma notunuz eksiksiz kalır.
+3. **Dosyalar frontmatter'da çapraz bağlanır.** Okunabilir not, destesine işaret eden bir `Kartlar` özelliği ve orijinale geri işaret eden bir `Köken notu` özelliği alır; deste de bir `Köken notu` özelliği alır. Bir not zaten bu özellik adlarından birini kullanıyorsa, geçiş aracı kopya oluşturmak yerine üzerine yazar. Etiketleriniz korunur — eski temel etiket (örn. `#flashcards`) yapılandırdığınız Decks etiketine çevrilir.
+4. **Ters kartlar iki karta dönüşür.** Bir `Front ::: Back` kartı, **aynı** deste dosyasında bir ileri kart ve bir takaslı kart olarak genişletilir; böylece her yön bağımsız olarak planlanır.
+5. **İç içe yapı bağlama düzleştirilir.** SR, üst başlıkları ve iç içe liste maddelerini bir kartın bağlamı olarak ele alır. Decks bu yolun tamamını kartın ön yüzüne aktarır — örn. derin iç içe bir `Function :: Powerhouse`, `Cell Anatomy > Mitochondria > … > Function` olur — profilinizin tek başlık düzeyinde işlenir (yalnızca not başlığı olan bir H1 atlanır). Önceden yüklenmiş **Heading 1–6** profilleri aracılığıyla herhangi bir düzeyi seçin.
+6. **Akıllı otomatik yönlendirme en iyi düzeni seçer.** Kısa tek satırlık kartlar derli toplu bir **tabloda** satır olur (kelime dağarcığı için sonsuz kaydırma yok); kod blokları, listeler veya matematik içeren çok satırlı kartlar, biçimlendirmelerinin korunması için **başlık** olur. Bunu iletişim kutusunda *tümü başlık* veya *tümü tablo* olarak geçersiz kılabilirsiniz.
+7. **Tüm notu kapsayan tekrarlar da geçer.** Bir bütün olarak gözden geçirdiğiniz notlar (`#review` etiketi), özel bir `…/review` profili altında Decks **başlık modu** kartlarına dönüşür (dosya adı = ön yüz, tüm not = arka yüz). Planlamaları, notun `sr-*` frontmatter'ından veya dosya sonu işaretçisinden okunur.
+8. **Planlama durumunuz FSRS-6'ya çevrilir.** Decks eski `<!--SR:-->` meta verilerini okur — SM-2 (`due, interval, ease`) veya zaten FSRS — ve bunları bir stabilite/zorluk/vade durumuna eşler. Ters kartlar, tıpkı orijinal eklentinin sakladığı gibi **iki ayrı** geçmiş tutar (okuma ile hatırlama).
+9. **Geçirilen her kart için bir tekrar günlüğü yazılır**, böylece kartlar Decks'te belirdiği an doğru tarihte doğru aralıkla zaten vadesi gelmiş olur — yeniden başlamazsınız, devam edersiniz.
+
+İletişim kutusunda bir profil seçin (veya varsayılanı kullanın) — başlık düzeyi ve planlama ayarları geçirilen destelere uygulanır.
+
 ## Sürüm notları & Destek
 
 - Her sürüm için **Sürüm notları** [`release-notes/`](./release-notes/) klasöründedir.

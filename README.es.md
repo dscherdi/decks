@@ -203,6 +203,28 @@ Abre **Ajustes → Decks** para límites diarios, objetivos de retención, rutas
 
 </details>
 
+## Migrar desde Spaced Repetition
+
+¿Ya usas el plugin **Spaced Repetition**? Puedes cambiar a Decks **sin perder tus tarjetas ni tu historial de repaso**, y continuar tus repasos exactamente donde los dejaste.
+
+Abre el migrador desde la barra de herramientas del panel de mazos (el icono del cubo) o ejecuta el comando **"Migrar desde el plugin Spaced Repetition"**.
+
+**Tus notas originales nunca se tocan.** La migración es aditiva: escribe archivos nuevos en una carpeta de destino que tú eliges (replicando tu estructura) y deja tus notas de origen exactamente como están. Volver a ejecutar el migrador simplemente sobrescribe los archivos que generó.
+
+**Cómo funciona**
+
+1. **Elige una carpeta de origen** para escanear (o déjala vacía para escanear todo el vault) y una carpeta de destino para la salida. Decks encuentra cada nota con tarjetas heredadas: de una sola línea (`Front :: Back`), invertidas (`Front ::: Back`), de varias líneas (`?` / `??`), clozes (`==…==` / `{{…}}`) y repasos de nota completa (la etiqueta `#review`).
+2. **Cada nota se divide en dos archivos limpios.** Un **mazo de tarjetas** (`<Nota> (Tarjetas)`) contiene las tarjetas extraídas en el formato estándar de Decks, y una **nota legible** conserva el texto, con la sintaxis de tarjetas *convertida* a texto normal (`::` / `:::` se convierten en " — ", `?` / `??` unen pregunta y respuesta, y los clozes `==…==` / `{{…}}` se restauran a su respuesta). Se respetan los separadores que hayas configurado, así que esto funciona incluso si los personalizaste. No se elimina nada: tu nota de lectura queda completa.
+3. **Los archivos se enlazan entre sí en el frontmatter.** La nota legible recibe una propiedad `Tarjetas` que apunta a su mazo y una propiedad `Nota de origen` que apunta de vuelta al original; el mazo también recibe una propiedad `Nota de origen`. Si una nota ya usa uno de esos nombres de propiedad, el migrador lo sobrescribe en lugar de crear un duplicado. Tus etiquetas se conservan: la etiqueta base heredada (p. ej. `#flashcards`) se traduce a tu etiqueta de Decks configurada.
+4. **Las tarjetas invertidas se convierten en dos tarjetas.** Una tarjeta `Front ::: Back` se expande en una tarjeta directa y una tarjeta invertida en el **mismo** archivo de mazo, de modo que cada dirección se programa de forma independiente.
+5. **La estructura anidada se aplana en contexto.** SR trata los encabezados ancestros y los puntos de lista anidados como el contexto de una tarjeta. Decks captura toda esa ruta en el anverso de la tarjeta; p. ej. un `Function :: Powerhouse` profundamente anidado se convierte en `Cell Anatomy > Mitochondria > … > Function`, renderizado en el único nivel de encabezado de tu perfil (se omite un H1 solitario de título de nota). Elige cualquier nivel mediante los perfiles preinstalados **Heading 1–6**.
+6. **El enrutamiento automático inteligente elige el mejor diseño.** Las tarjetas cortas de una sola línea se convierten en filas de una **tabla** compacta (sin desplazamiento interminable para el vocabulario); las tarjetas de varias líneas (con bloques de código, listas o fórmulas) se convierten en **encabezados** para que su formato sobreviva. Puedes anular esto a *todos encabezados* o *todas tablas* en el diálogo.
+7. **Los repasos de nota completa también se migran.** Las notas que repasabas como un todo (la etiqueta `#review`) se convierten en tarjetas de **modo título** de Decks (nombre de archivo = anverso, la nota completa = reverso) bajo un perfil dedicado `…/review`. Su programación se lee del frontmatter `sr-*` de la nota o de su marcador al final del archivo.
+8. **Tu estado de programación se traduce a FSRS-6.** Decks lee los metadatos heredados `<!--SR:-->` —SM-2 (`due, interval, ease`) o ya FSRS— y los asigna a un estado de estabilidad/dificultad/vencimiento. Las tarjetas invertidas mantienen **dos historiales separados** (lectura vs. recuerdo), exactamente como los almacenaba el plugin original.
+9. **Se escribe un registro de repaso para cada tarjeta migrada**, de modo que en el momento en que las tarjetas aparecen en Decks ya están vencidas en la fecha correcta con el intervalo correcto: reanudas, no reinicias.
+
+Elige un perfil en el diálogo (o usa el predeterminado): su nivel de encabezado y su configuración de programación se aplican a los mazos migrados.
+
 ## Notas de versión y soporte
 
 - **Notas de versión** de cada versión en [`release-notes/`](./release-notes/).

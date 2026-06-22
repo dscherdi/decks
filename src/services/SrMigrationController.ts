@@ -87,6 +87,32 @@ export interface SrMigrateSummary {
   deleted: boolean;
 }
 
+// Serialize a note's non-SR frontmatter for a migrated review file, injecting
+// cross-link properties. Injected keys overwrite any existing property of the
+// same name (case-insensitive) so a key the user already has (e.g. an "Origin
+// note" or "Flashcards" property) is replaced, never duplicated — duplicate
+// YAML keys can break frontmatter parsing.
+export function buildReviewProperties(
+  frontmatter: Record<string, unknown> | undefined,
+  inject: Record<string, string>
+): string {
+  const rest: Record<string, unknown> = {};
+  for (const [key, value] of Object.entries(frontmatter ?? {})) {
+    const lower = key.toLowerCase();
+    if (lower === "tags" || lower === "tag" || lower === "position") continue;
+    if (/^sr-/i.test(key)) continue;
+    rest[key] = value;
+  }
+  for (const [label, value] of Object.entries(inject)) {
+    const lower = label.toLowerCase();
+    for (const existing of Object.keys(rest)) {
+      if (existing.toLowerCase() === lower) delete rest[existing];
+    }
+    rest[label] = value;
+  }
+  return Object.keys(rest).length > 0 ? stringifyYaml(rest).trim() : "";
+}
+
 export class SrMigrationController {
   constructor(
     private readonly app: App,
@@ -194,22 +220,16 @@ export class SrMigrationController {
   }
 
   // Non-SR frontmatter (properties + tags) to carry onto a migrated review file.
+  // `inject` adds/overwrites cross-link properties (see buildReviewProperties).
   private extractReviewFrontmatter(
     file: TFile,
     srBaseTag: string,
-    srReviewTag: string
+    srReviewTag: string,
+    inject?: Record<string, string>
   ): { properties: string; userTags: string[] } {
     const fm = this.app.metadataCache.getFileCache(file)?.frontmatter;
-    if (!fm) return { properties: "", userTags: [] };
-    const rest: Record<string, unknown> = {};
-    for (const [key, value] of Object.entries(fm)) {
-      const lower = key.toLowerCase();
-      if (lower === "tags" || lower === "tag" || lower === "position") continue;
-      if (/^sr-/i.test(key)) continue;
-      rest[key] = value;
-    }
-    const properties = Object.keys(rest).length > 0 ? stringifyYaml(rest).trim() : "";
-    const fmTags = (parseFrontMatterTags(fm) ?? []).map((t) => t.replace(/^#/, ""));
+    const properties = buildReviewProperties(fm, inject ?? {});
+    const fmTags = (parseFrontMatterTags(fm ?? {}) ?? []).map((t) => t.replace(/^#/, ""));
     const userTags = LegacySrMigrator.reviewUserTags(fmTags, {
       srBaseTag,
       srReviewTag,
@@ -483,23 +503,24 @@ export class SrMigrationController {
     let reviewCard: MigratedCard | null = null;
     if (wantReview) {
       reviewCard = LegacySrMigrator.processWholeNote(content, file.basename, wholeOpts);
+      // Frontmatter links: review → its extracted cards, and → the original.
+      // Merged at the object level so an existing user property of the same name
+      // is overwritten, never duplicated.
+      const inject: Record<string, string> = {};
+      if (hasCards) inject[t.flashcardsProperty] = `[[${cardsBasename}]]`;
+      if (keepsOriginal) inject[t.sourceProperty] = `[[${file.path.replace(/\.md$/i, "")}]]`;
       const { properties, userTags } = this.extractReviewFrontmatter(
         file,
         opts.srBaseTag,
-        opts.srReviewTag
+        opts.srReviewTag,
+        inject
       );
-      // Frontmatter links: review → its extracted cards, and → the original.
-      const links = [
-        hasCards ? `${t.flashcardsProperty}: "[[${cardsBasename}]]"` : "",
-        sourceLine,
-      ].filter((s) => s.length > 0);
-      const mergedProps = [properties, ...links].filter((s) => s.length > 0).join("\n");
       const reviewTag = this.toMigrationReviewTag(
         LegacySrMigrator.deriveReviewTag(fileTags, opts.srReviewTag, this.decksBaseTag)
       );
       reviewText = LegacySrMigrator.renderTitleModeFile(reviewCard, reviewTag, {
         extraTags: userTags,
-        properties: mergedProps,
+        properties,
       });
     }
 

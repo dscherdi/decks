@@ -132,6 +132,28 @@ FSRS vjen me parazgjedhje të arsyeshme që funksionojnë shumë mirë që në f
 
 **Cilësimet → Rregullimi i algoritmit → Optimizo parametrat.** Trajnimi zhvillohet në pak sekonda; do të shohësh një krahasim "log-loss" (para/pas). Kliko "Apliko" për të përdorur peshat e trajnuara.
 
+## Po vini nga Spaced Repetition
+
+A jeni duke përdorur tashmë shtojcën **Spaced Repetition**? Mund të kaloni te Decks **pa humbur kartat tuaja ose historikun tuaj të rishikimeve** — dhe të vazhdoni rishikimet tuaja pikërisht aty ku i latë.
+
+Hapni migruesin nga shiriti i mjeteve i panelit të kuvertave (ikona e kubit) ose ekzekutoni komandën **"Migro nga shtojca Spaced Repetition"**.
+
+**Shënimet tuaja origjinale nuk preken kurrë.** Migrimi është shtues: shkruan skedarë të rinj në një dosje të synuar që zgjidhni ju (duke pasqyruar strukturën tuaj) dhe i lë shënimet tuaja burimore pikërisht ashtu siç janë. Riekzekutimi i migruesit thjesht mbishkruan skedarët që ai gjeneroi.
+
+**Si funksionon**
+
+1. **Zgjidhni një dosje burimore** për të skanuar (ose lëreni bosh për të skanuar të gjithë kasafortën), dhe një dosje të synuar për rezultatin. Decks gjen çdo shënim me karta të vjetra — një rresht (`Front :: Back`), të kthyera (`Front ::: Back`), shumë rreshta (`?` / `??`), kloze (`==…==` / `{{…}}`) — dhe rishikime të të gjithë shënimit (etiketa `#review`).
+2. **Çdo shënim ndahet në dy skedarë të pastër.** Një **kuvertë kartash** (`<Shënimi> (Kartat)`) mban kartat e nxjerra në formatin standard të Decks, dhe një **shënim i lexueshëm** ruan tekstin — me sintaksën e kartave të *de-sheqerosur* në tekst normal (`::` / `:::` bëhen " — ", `?` / `??` bashkojnë pyetjen dhe përgjigjen, dhe klozet `==…==` / `{{…}}` rikthehen te përgjigja e tyre). Ndarësit tuaj të konfiguruar respektohen, kështu që kjo funksionon edhe nëse i keni personalizuar ato. Asgjë nuk hiqet — shënimi juaj i leximit mbetet i plotë.
+3. **Skedarët ndërlidhen me njëri-tjetrin në frontmatter.** Shënimi i lexueshëm merr një veti `Kartat` që tregon te kuverta e tij dhe një veti `Shënimi i origjinës` që tregon mbrapsht te origjinali; kuverta merr gjithashtu një veti `Shënimi i origjinës`. Nëse një shënim përdor tashmë një nga ato emra vetish, migruesi e mbishkruan atë në vend që të krijojë një dublikatë. Etiketat tuaja ruhen — etiketa bazë e vjetër (p.sh. `#flashcards`) përkthehet në etiketën tuaj të konfiguruar të Decks.
+4. **Kartat e kthyera bëhen dy karta.** Një kartë `Front ::: Back` zgjerohet në një kartë përpara dhe një kartë të shkëmbyer në **të njëjtin** skedar kuverte, kështu që çdo drejtim planifikohet në mënyrë të pavarur.
+5. **Struktura e ndërthurur sheshohet në kontekst.** SR i trajton kokat paraardhëse dhe pikat e listave të ndërthurura si kontekstin e një karte. Decks e kap të gjithë atë shteg në pjesën e përparme të kartës — p.sh. një `Function :: Powerhouse` thellësisht i ndërthurur bëhet `Cell Anatomy > Mitochondria > … > Function` — i renderuar në nivelin e vetëm të kokës të profilit tuaj (një H1 i vetëm i titullit të shënimit hiqet). Zgjidhni çdo nivel përmes profileve të parainstaluara **Heading 1–6**.
+6. **Rrugëzimi automatik inteligjent zgjedh paraqitjen më të mirë.** Kartat e shkurtra me një rresht bëhen rreshta në një **tabelë** kompakte (pa rrëshqitje të pafundme për fjalorin); kartat me shumë rreshta — me blloqe kodi, lista ose matematikë — bëhen **koka** që formatimi i tyre të mbijetojë. Mund ta anuloni këtë te *të gjitha kokat* ose *të gjitha tabelat* në dialog.
+7. **Rishikimet e të gjithë shënimit migrojnë gjithashtu.** Shënimet që i rishikuat si një të tërë (etiketa `#review`) bëhen karta të **modalitetit-titull** të Decks (emri i skedarit = pjesa e përparme, i gjithë shënimi = pjesa e pasme) nën një profil të dedikuar `…/review`. Plani i tyre lexohet nga frontmatter `sr-*` i shënimit ose shënuesi i tij në fund të skedarit.
+8. **Gjendja juaj e planifikimit përkthehet në FSRS-6.** Decks lexon metadatat e vjetra `<!--SR:-->` — SM-2 (`due, interval, ease`) ose tashmë FSRS — dhe i hartëzon ato në një gjendje stabiliteti/vështirësie/afati. Kartat e kthyera mbajnë **dy historikë të veçantë** (leximi kundrejt kujtimit), pikërisht ashtu siç i ruante shtojca origjinale.
+9. **Një ditar rishikimi shkruhet për çdo kartë të migruar**, kështu që në çastin që kartat shfaqen në Decks, ato janë tashmë në afat në datën e duhur me intervalin e duhur — ju rifilloni, nuk e nisni nga fillimi.
+
+Zgjidhni një profil në dialog (ose përdorni atë të parazgjedhurin) — niveli i tij i kokës dhe cilësimet e planifikimit zbatohen te kuvertat e migruara.
+
 ## Shënimet e versionit & Mbështetja
 
 - **Shënimet e versionit** për çdo përditësim ndodhen në [`release-notes/`](./release-notes/).

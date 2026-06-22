@@ -4,7 +4,7 @@
 
 **Turn your Obsidian notes into flashcards. No special syntax. No separate deck to build.**
 
-> **Coming from the Spaced Repetition plugin?** Jump to Decks without losing your progress — the built-in one-click migrator converts your `::` cards into structural Markdown and carries over your review history, so you pick up your reviews right where you left off. See [Coming from Spaced Repetition](#coming-from-spaced-repetition).
+> **Coming from the Spaced Repetition plugin?** Jump to Decks without losing your progress — the built-in one-click migrator extracts your `::` cards into clean Decks decks, rewrites each note into readable prose, and carries over your review history, all while leaving your original notes untouched. You pick up your reviews right where you left off. See [Coming from Spaced Repetition](#coming-from-spaced-repetition).
 
 Tag a file with `#decks`. Each `##` heading becomes the front of a card; the text below becomes the back. Tables, image occlusion, and `==cloze==` highlights work the same way. Scheduling is handled by FSRS-6 — the modern spaced-repetition algorithm.
 
@@ -237,16 +237,19 @@ Already using the **Spaced Repetition** plugin? You can switch to Decks **withou
 
 Open the migrator from the deck panel toolbar (the cube icon) or run the **"Migrate from Spaced Repetition plugin"** command.
 
+**Your original notes are never touched.** Migration is additive: it writes new files into a target folder you choose (mirroring your structure) and leaves your source notes exactly as they are. Re-running the migrator simply overwrites the files it generated.
+
 **How it works**
 
-1. **Pick a source folder** to scan (or leave it empty to scan the whole vault). Decks finds every note with legacy cards — single-line (`Front :: Back`), reversed (`Front ::: Back`), multi-line (`?` / `??`) — and whole-note reviews (the `#review` tag).
-2. **It rewrites each note into Decks format** in a target folder you choose, mirroring your original folder structure. Your tags are preserved — the legacy base tag (e.g. `#flashcards`) is translated to your configured Decks tag. Reversed cards are emitted into a companion file with `reverse: true`, so both directions are scheduled independently.
-3. **Nested structure is flattened into context.** SR treats ancestor headings and nested list bullets as a card's context. Decks captures that whole path into the card's front — e.g. a deeply nested `Function :: Powerhouse` becomes `Cell Anatomy > Mitochondria > … > Function` — rendered at your profile's single header level (a lone note-title H1 is omitted). Pick any level via the preinstalled **Heading 1–6** profiles.
-4. **Smart auto-routing picks the best layout.** Short single-line cards become rows in a compact **table** (no endless scrolling for vocabulary); multi-line cards — with code blocks, lists, or math — become **headers** so their formatting survives. You can override this to *all headers* or *all tables* in the dialog.
-4. **Whole-note reviews migrate too.** Notes you reviewed as a whole (the `#review` tag) become Decks **title-mode** cards (filename = front, the whole note = back) under a dedicated `…/review` profile. Their schedule is read from the note's `sr-*` frontmatter or its end-of-file marker.
-5. **Your scheduling state is translated to FSRS-6.** Decks reads the legacy `<!--SR:-->` metadata — SM-2 (`due, interval, ease`) or already FSRS — and maps it to a stability/difficulty/due state. Reversed cards keep **two separate** histories (reading vs. recall), exactly as the original plugin stored them.
-6. **A review log is written for every migrated card**, so the moment the cards appear in Decks they're already due on the right date with the right interval — you resume, you don't restart.
-7. **Optionally (irreversible), replace the originals with links.** If you enable this, Decks strips the legacy metadata from your source notes and replaces each card with a **block-reference** link to its new home (immune to heading punctuation and duplicates). A `.bak` copy of every original is written first, just in case. (Replace-with-links always uses the header layout so every card has a linkable anchor.)
+1. **Pick a source folder** to scan (or leave it empty to scan the whole vault), and a target folder for the output. Decks finds every note with legacy cards — single-line (`Front :: Back`), reversed (`Front ::: Back`), multi-line (`?` / `??`), clozes (`==…==` / `{{…}}`) — and whole-note reviews (the `#review` tag).
+2. **Each note is split into two clean files.** A **flashcards deck** (`<Note> (Flashcards)`) holds the extracted cards in standard Decks format, and a **readable note** keeps the prose — with the card syntax *de-sugared* into normal text (`::` / `:::` become " — ", `?` / `??` join question and answer, and `==…==` / `{{…}}` clozes are restored to their answer). Your configured separators are honored, so this works even if you customized them. Nothing is stripped away — your reading note stays complete.
+3. **The files are cross-linked in frontmatter.** The readable note gets a `Flashcards` property pointing at its deck and an `Origin note` property pointing back at the original; the deck gets an `Origin note` property too. If a note already uses one of those property names, the migrator overwrites it rather than creating a duplicate. Your tags are preserved — the legacy base tag (e.g. `#flashcards`) is translated to your configured Decks tag.
+4. **Reversed cards become two cards.** A `Front ::: Back` card is expanded into a forward card and a swapped card in the **same** deck file, so each direction is scheduled independently.
+5. **Nested structure is flattened into context.** SR treats ancestor headings and nested list bullets as a card's context. Decks captures that whole path into the card's front — e.g. a deeply nested `Function :: Powerhouse` becomes `Cell Anatomy > Mitochondria > … > Function` — rendered at your profile's single header level (a lone note-title H1 is omitted). Pick any level via the preinstalled **Heading 1–6** profiles.
+6. **Smart auto-routing picks the best layout.** Short single-line cards become rows in a compact **table** (no endless scrolling for vocabulary); multi-line cards — with code blocks, lists, or math — become **headers** so their formatting survives. You can override this to *all headers* or *all tables* in the dialog.
+7. **Whole-note reviews migrate too.** Notes you reviewed as a whole (the `#review` tag) become Decks **title-mode** cards (filename = front, the whole note = back) under a dedicated `…/review` profile. Their schedule is read from the note's `sr-*` frontmatter or its end-of-file marker.
+8. **Your scheduling state is translated to FSRS-6.** Decks reads the legacy `<!--SR:-->` metadata — SM-2 (`due, interval, ease`) or already FSRS — and maps it to a stability/difficulty/due state. Reversed cards keep **two separate** histories (reading vs. recall), exactly as the original plugin stored them.
+9. **A review log is written for every migrated card**, so the moment the cards appear in Decks they're already due on the right date with the right interval — you resume, you don't restart.
 
 Pick a profile in the dialog (or use the default) — its header level and scheduling settings are applied to the migrated decks.
 

@@ -203,6 +203,28 @@ Die Implementierung wurde gegen die veröffentlichte FSRS-6-Spezifikation validi
 
 </details>
 
+## Umstieg von Spaced Repetition
+
+Du nutzt bereits das **Spaced Repetition**-Plugin? Du kannst zu Decks wechseln, **ohne deine Karten oder deinen Wiederholungsverlauf zu verlieren** — und genau dort weiterlernen, wo du aufgehört hast.
+
+Öffne den Migrationsassistenten über die Werkzeugleiste des Stapel-Panels (das Würfel-Symbol) oder führe den Befehl **„Migrate from Spaced Repetition plugin“** aus.
+
+**Deine ursprünglichen Notizen werden nie verändert.** Die Migration ist additiv: Sie schreibt neue Dateien in einen von dir gewählten Zielordner (und bildet deine Struktur nach) und lässt deine Quellnotizen genau so, wie sie sind. Ein erneutes Ausführen des Assistenten überschreibt einfach die von ihm erzeugten Dateien.
+
+**So funktioniert es**
+
+1. **Wähle einen Quellordner** zum Durchsuchen (oder lass ihn leer, um den gesamten Vault zu durchsuchen) und einen Zielordner für die Ausgabe. Decks findet jede Notiz mit alten Karten — einzeilig (`Front :: Back`), umgekehrt (`Front ::: Back`), mehrzeilig (`?` / `??`), Lückentexte (`==…==` / `{{…}}`) — und Ganz-Notiz-Wiederholungen (das `#review`-Tag).
+2. **Jede Notiz wird in zwei saubere Dateien aufgeteilt.** Ein **Lernkarten-Stapel** (`<Notiz> (Lernkarten)`) enthält die extrahierten Karten im Standard-Decks-Format, und eine **lesbare Notiz** bewahrt den Fließtext — wobei die Karten-Syntax in normalen Text *aufgelöst* wird (`::` / `:::` werden zu „ — “, `?` / `??` verbinden Frage und Antwort, und `==…==` / `{{…}}`-Lückentexte werden auf ihre Antwort zurückgesetzt). Deine konfigurierten Trennzeichen werden berücksichtigt, sodass dies auch dann funktioniert, wenn du sie angepasst hast. Nichts wird entfernt — deine Lese-Notiz bleibt vollständig.
+3. **Die Dateien werden im Frontmatter gegenseitig verlinkt.** Die lesbare Notiz erhält eine `Lernkarten`-Eigenschaft, die auf ihren Stapel zeigt, und eine `Ursprungsnotiz`-Eigenschaft, die auf das Original zurückverweist; der Stapel erhält ebenfalls eine `Ursprungsnotiz`-Eigenschaft. Falls eine Notiz bereits einen dieser Eigenschaftsnamen verwendet, überschreibt der Assistent ihn, anstatt ein Duplikat zu erstellen. Deine Tags bleiben erhalten — das alte Basis-Tag (z. B. `#flashcards`) wird in dein konfiguriertes Decks-Tag übersetzt.
+4. **Umgekehrte Karten werden zu zwei Karten.** Eine `Front ::: Back`-Karte wird in eine Vorwärtskarte und eine vertauschte Karte in **derselben** Stapeldatei aufgeteilt, sodass jede Richtung unabhängig geplant wird.
+5. **Verschachtelte Strukturen werden in Kontext überführt.** SR behandelt übergeordnete Überschriften und verschachtelte Listenpunkte als Kontext einer Karte. Decks erfasst diesen gesamten Pfad in der Vorderseite der Karte — z. B. wird ein tief verschachteltes `Function :: Powerhouse` zu `Cell Anatomy > Mitochondria > … > Function` — dargestellt auf der einzelnen Überschriftsebene deines Profils (eine alleinstehende Notiztitel-H1 wird weggelassen). Wähle eine beliebige Ebene über die vorinstallierten **Heading 1–6**-Profile.
+6. **Intelligentes Auto-Routing wählt das beste Layout.** Kurze einzeilige Karten werden zu Zeilen in einer kompakten **Tabelle** (kein endloses Scrollen bei Vokabeln); mehrzeilige Karten — mit Codeblöcken, Listen oder Mathematik — werden zu **Überschriften**, damit ihre Formatierung erhalten bleibt. Du kannst dies im Dialog auf *nur Überschriften* oder *nur Tabellen* umstellen.
+7. **Auch Ganz-Notiz-Wiederholungen werden migriert.** Notizen, die du als Ganzes wiederholt hast (das `#review`-Tag), werden zu Decks-Karten im **Titelmodus** (Dateiname = Vorderseite, die gesamte Notiz = Rückseite) unter einem eigenen `…/review`-Profil. Ihr Zeitplan wird aus dem `sr-*`-Frontmatter der Notiz oder ihrer Markierung am Dateiende gelesen.
+8. **Dein Planungszustand wird in FSRS-6 übersetzt.** Decks liest die alten `<!--SR:-->`-Metadaten — SM-2 (`due, interval, ease`) oder bereits FSRS — und ordnet sie einem Stabilitäts-/Schwierigkeits-/Fälligkeitszustand zu. Umgekehrte Karten behalten **zwei getrennte** Verläufe (Lesen vs. Abruf), genau so, wie das ursprüngliche Plugin sie gespeichert hat.
+9. **Für jede migrierte Karte wird ein Wiederholungsprotokoll geschrieben**, sodass die Karten in dem Moment, in dem sie in Decks erscheinen, bereits am richtigen Datum mit dem richtigen Intervall fällig sind — du machst weiter, du fängst nicht von vorne an.
+
+Wähle im Dialog ein Profil (oder verwende das Standardprofil) — seine Überschriftsebene und Planungseinstellungen werden auf die migrierten Stapel angewendet.
+
 ## Versionshinweise & Support
 
 - **Versionshinweise** für jede Version findest du in [`release-notes/`](./release-notes/).

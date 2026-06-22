@@ -143,6 +143,28 @@ FSRS viene fornito con impostazioni predefinite logiche che funzionano benissimo
 
 **Impostazioni → Ottimizzazione dell'algoritmo → Ottimizza parametri.** L'allenamento richiede pochi secondi per mazzi tipici; vedrai un confronto "log-loss" (prima e dopo). Clicca su "Applica" per usare i pesi allenati o "Scarta" per mantenere le impostazioni predefinite.
 
+## Migrazione da Spaced Repetition
+
+Usi già il plugin **Spaced Repetition**? Puoi passare a Decks **senza perdere le tue carte o la cronologia delle ripetizioni** — e continuare le ripetizioni esattamente da dove le avevi lasciate.
+
+Apri il migratore dalla barra degli strumenti del pannello dei mazzi (l'icona del cubo) oppure esegui il comando **"Migrate from Spaced Repetition plugin"**.
+
+**Le tue note originali non vengono mai toccate.** La migrazione è additiva: scrive nuovi file in una cartella di destinazione che scegli tu (rispecchiando la tua struttura) e lascia le note di origine esattamente come sono. Rieseguire il migratore si limita a sovrascrivere i file che ha generato.
+
+**Come funziona**
+
+1. **Scegli una cartella di origine** da analizzare (oppure lasciala vuota per analizzare l'intero vault) e una cartella di destinazione per l'output. Decks trova ogni nota con carte legacy — su riga singola (`Front :: Back`), invertite (`Front ::: Back`), su più righe (`?` / `??`), cloze (`==…==` / `{{…}}`) — e le ripetizioni dell'intera nota (il tag `#review`).
+2. **Ogni nota viene suddivisa in due file puliti.** Un **mazzo di flashcard** (`<Nota> (Flashcard)`) contiene le carte estratte nel formato standard di Decks, mentre una **nota leggibile** conserva il testo — con la sintassi delle carte *normalizzata* in testo normale (`::` / `:::` diventano " — ", `?` / `??` uniscono domanda e risposta e le cloze `==…==` / `{{…}}` vengono ripristinate alla loro risposta). I separatori che hai configurato vengono rispettati, quindi funziona anche se li hai personalizzati. Nulla viene rimosso — la tua nota di lettura resta completa.
+3. **I file vengono collegati tra loro nel frontmatter.** La nota leggibile riceve una proprietà `Flashcard` che punta al suo mazzo e una proprietà `Nota di origine` che rimanda all'originale; anche il mazzo riceve una proprietà `Nota di origine`. Se una nota usa già uno di quei nomi di proprietà, il migratore lo sovrascrive invece di creare un duplicato. I tuoi tag vengono preservati — il tag base legacy (es. `#flashcards`) viene tradotto nel tag Decks che hai configurato.
+4. **Le carte invertite diventano due carte.** Una carta `Front ::: Back` viene espansa in una carta diretta e una carta invertita nello **stesso** file del mazzo, così ogni direzione viene pianificata in modo indipendente.
+5. **La struttura annidata viene appiattita in contesto.** SR tratta le intestazioni superiori e gli elenchi puntati annidati come contesto di una carta. Decks cattura l'intero percorso nel fronte della carta — ad esempio una `Function :: Powerhouse` profondamente annidata diventa `Cell Anatomy > Mitochondria > … > Function` — visualizzato al singolo livello di intestazione del tuo profilo (un H1 isolato che è il titolo della nota viene omesso). Scegli qualsiasi livello tramite i profili preinstallati **Heading 1–6**.
+6. **L'instradamento automatico intelligente sceglie il layout migliore.** Le carte brevi su riga singola diventano righe in una **tabella** compatta (niente scorrimento infinito per il vocabolario); le carte su più righe — con blocchi di codice, elenchi o formule matematiche — diventano **intestazioni** così che la loro formattazione sopravviva. Puoi forzare *tutte intestazioni* o *tutte tabelle* nella finestra di dialogo.
+7. **Anche le ripetizioni dell'intera nota vengono migrate.** Le note che hai ripetuto nella loro interezza (il tag `#review`) diventano carte Decks in **modalità titolo** (nome del file = fronte, intera nota = retro) sotto un profilo dedicato `…/review`. La loro pianificazione viene letta dal frontmatter `sr-*` della nota o dal suo marcatore a fine file.
+8. **Il tuo stato di pianificazione viene tradotto in FSRS-6.** Decks legge i metadati legacy `<!--SR:-->` — SM-2 (`due, interval, ease`) o già FSRS — e li mappa in uno stato di stabilità/difficoltà/scadenza. Le carte invertite mantengono **due cronologie separate** (lettura vs. richiamo), esattamente come le memorizzava il plugin originale.
+9. **Un log di ripetizione viene scritto per ogni carta migrata**, così nel momento in cui le carte compaiono in Decks sono già in scadenza alla data corretta con l'intervallo corretto — riprendi, non ricominci.
+
+Scegli un profilo nella finestra di dialogo (o usa quello predefinito) — il suo livello di intestazione e le sue impostazioni di pianificazione vengono applicati ai mazzi migrati.
+
 ## Note di rilascio e Supporto
 
 - Le **Note di rilascio** per ogni versione si trovano in [`release-notes/`](./release-notes/).
