@@ -59,6 +59,8 @@ import { DecksViewModal } from "./components/DecksViewModal";
 import { ReleaseNotesModal } from "./components/ReleaseNotesModal";
 import { SrMigrationController } from "./services/SrMigrationController";
 import { SrMigrationModalWrapper } from "./components/migration/SrMigrationModalWrapper";
+import { AnkiImportController } from "./services/AnkiImportController";
+import { AnkiImportModalWrapper } from "./components/migration/AnkiImportModalWrapper";
 import {
   FlashcardManagerView,
   VIEW_TYPE_FLASHCARD_MANAGER,
@@ -429,6 +431,15 @@ export default class DecksPlugin extends Plugin {
         name: I18n.t.commands.migrateFromSr,
         callback: () => {
           this.openSrMigrationModal();
+        },
+      });
+
+      // Add command to open the Anki import modal
+      this.addCommand({
+        id: "import-from-anki",
+        name: I18n.t.commands.importFromAnki,
+        callback: () => {
+          this.openAnkiImportModal();
         },
       });
 
@@ -1127,6 +1138,24 @@ export default class DecksPlugin extends Plugin {
       this.logger,
     );
     new SrMigrationModalWrapper(
+      this.app,
+      this.db,
+      controller,
+      async () => {
+        await this.getDecksView()?.refresh();
+      },
+    ).open();
+  }
+
+  openAnkiImportModal(): void {
+    const controller = new AnkiImportController(
+      this.app,
+      this.db,
+      this.deckSynchronizer,
+      this.settings,
+      this.logger,
+    );
+    new AnkiImportModalWrapper(
       this.app,
       this.db,
       controller,
