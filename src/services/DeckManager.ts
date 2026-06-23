@@ -1,5 +1,11 @@
 import { TFile, Vault, MetadataCache, Notice, getAllTags } from "obsidian";
-import { type Deck, type Flashcard, type DeckStats, type DeckGroup, DEFAULT_PROFILE_ID } from "../database/types";
+import {
+  type Deck,
+  type Flashcard,
+  type DeckStats,
+  type DeckGroup,
+  DEFAULT_PROFILE_ID,
+} from "../database/types";
 import type { IDatabaseService } from "../database/DatabaseFactory";
 import { generateDeckGroupId, generateDeckId, yieldToUI } from "@decks/core";
 import { Logger, formatTime } from "../utils/logging";
@@ -112,9 +118,7 @@ export class DeckManager {
       }
 
       const baseTag = this.settings?.parsing.deckTag || "#decks";
-      const flashcardTags = allTags.filter((tag) =>
-        tag.startsWith(baseTag)
-      );
+      const flashcardTags = allTags.filter((tag) => tag.startsWith(baseTag));
       this.debugLog(`All tags for ${file.path}:`, allTags);
       this.debugLog(`Flashcard tags for ${file.path}:`, flashcardTags);
 
@@ -131,16 +135,18 @@ export class DeckManager {
 
     // Canvas decks: any .canvas file inside the configured folder is auto-tagged
     // with the configured canvas tag. Empty folderPath disables canvas scanning.
-    const canvasFolderPath = this.settings?.canvasDecks?.folderPath?.trim() || "";
+    const canvasFolderPath =
+      this.settings?.canvasDecks?.folderPath?.trim() || "";
     if (canvasFolderPath !== "") {
-      const canvasTag = this.settings?.canvasDecks?.tagName?.trim() || "#decks/canvas";
+      const canvasTag =
+        this.settings?.canvasDecks?.tagName?.trim() || "#decks/canvas";
       const canvasFiles = this.vault
         .getFiles()
         .filter((f) => f.extension === "canvas");
       const canvasFilter = new FileFilter(canvasFolderPath);
       const filteredCanvas = canvasFilter.filterFiles(canvasFiles);
       this.debugLog(
-        `Found ${filteredCanvas.length} canvas files in folder "${canvasFolderPath}" for tag ${canvasTag}`,
+        `Found ${filteredCanvas.length} canvas files in folder "${canvasFolderPath}" for tag ${canvasTag}`
       );
       if (filteredCanvas.length > 0) {
         if (!decksMap.has(canvasTag)) {
@@ -195,9 +201,11 @@ export class DeckManager {
 
           if (existingDeck) {
             // Re-resolve profileId from tag mapping to ensure it's current
-            const resolvedProfileId = await this.db.getProfileIdForTag(tag) || DEFAULT_PROFILE_ID;
+            const resolvedProfileId =
+              (await this.db.getProfileIdForTag(tag)) || DEFAULT_PROFILE_ID;
             const needsTagUpdate = existingDeck.tag !== tag;
-            const needsProfileUpdate = existingDeck.profileId !== resolvedProfileId;
+            const needsProfileUpdate =
+              existingDeck.profileId !== resolvedProfileId;
 
             if (needsTagUpdate || needsProfileUpdate) {
               this.debugLog(
@@ -272,7 +280,7 @@ export class DeckManager {
    */
   async parseFlashcardsFromFile(
     file: TFile,
-    headerLevel = 2
+    headerLevel: number | number[] = 2
   ): Promise<ParsedFlashcard[]> {
     const parseStartTime = performance.now();
 
@@ -302,10 +310,15 @@ export class DeckManager {
    */
   parseFlashcardsFromContent(
     content: string,
-    headerLevel = 2,
+    headerLevel: number | number[] = 2,
     clozeEnabled = false
   ): ParsedFlashcard[] {
-    return FlashcardParser.parseFlashcardsFromContent(content, headerLevel, undefined, clozeEnabled);
+    return FlashcardParser.parseFlashcardsFromContent(
+      content,
+      headerLevel,
+      undefined,
+      clozeEnabled
+    );
   }
 
   /**
@@ -666,7 +679,9 @@ export class DeckManager {
     const decksWithProfiles = await this.db.getAllDecksWithProfiles();
     const tagGroups = await tagGroupService.aggregateByTag(decksWithProfiles);
     const groupStatsPairs = await Promise.all(
-      tagGroups.map(async (g) => [g.tag, await this.getDeckGroupStats(g)] as const)
+      tagGroups.map(
+        async (g) => [g.tag, await this.getDeckGroupStats(g)] as const
+      )
     );
     for (const [, stats] of groupStatsPairs) statsMap.set(stats.deckId, stats);
 

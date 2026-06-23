@@ -3,7 +3,7 @@
   import { Setting, Notice } from "obsidian";
   import type { Deck, DeckProfile } from "../../database/types";
   import type { IDatabaseService } from "../../database/DatabaseFactory";
-  import { I18n } from "@decks/core";
+  import { I18n, normalizeHeaderLevels } from "@decks/core";
 
   const t = I18n.t;
 
@@ -38,6 +38,17 @@
 
   function loadProfileSettings(profile: DeckProfile) {
     selectedProfile = profile;
+  }
+
+  function headerLevelsLabel(profile: DeckProfile): string {
+    const levels = normalizeHeaderLevels(
+      profile.headerLevels ?? profile.headerLevel,
+      profile.headerLevel
+    );
+    if (levels.includes(0)) return t.config.headerTitle;
+    return levels
+      .map((level) => I18n.format(t.config.headerH, { level }))
+      .join(", ");
   }
 
   async function handleSave() {
@@ -169,7 +180,9 @@
       .setClass("decks-config-readonly");
 
     const reviewCardsDesc = selectedProfile.hasReviewCardsLimitEnabled
-      ? I18n.format(t.config.perDay, { count: selectedProfile.reviewCardsPerDay })
+      ? I18n.format(t.config.perDay, {
+          count: selectedProfile.reviewCardsPerDay,
+        })
       : t.config.unlimited;
     new Setting(profileDetailsContainer)
       .setName(t.config.reviewCardsLimitLabel)
@@ -179,9 +192,7 @@
     // Header level
     new Setting(profileDetailsContainer)
       .setName(t.config.headerLevelLabel)
-      .setDesc(selectedProfile.headerLevel === 0
-        ? t.config.headerTitle
-        : I18n.format(t.config.headerH, { level: selectedProfile.headerLevel }))
+      .setDesc(headerLevelsLabel(selectedProfile))
       .setClass("decks-config-readonly");
 
     // Review order
@@ -197,13 +208,16 @@
     // Cloze deletions
     new Setting(profileDetailsContainer)
       .setName(t.config.clozeDeletions)
-      .setDesc(selectedProfile.clozeEnabled
-        ? I18n.format(t.config.clozeEnabled, {
-            mode: selectedProfile.clozeShowContext === "open"
-              ? t.config.clozeShowOthers
-              : t.config.clozeHideAll,
-          })
-        : t.config.clozeDisabled)
+      .setDesc(
+        selectedProfile.clozeEnabled
+          ? I18n.format(t.config.clozeEnabled, {
+              mode:
+                selectedProfile.clozeShowContext === "open"
+                  ? t.config.clozeShowOthers
+                  : t.config.clozeHideAll,
+            })
+          : t.config.clozeDisabled
+      )
       .setClass("decks-config-readonly");
 
     // FSRS settings

@@ -1,10 +1,22 @@
 <script lang="ts">
   import { onMount } from "svelte";
   import { Setting, Notice } from "obsidian";
-  import type { DeckProfile, ProfileTagMapping, ClozeShowContext } from "../../database/types";
+  import type {
+    DeckProfile,
+    ProfileTagMapping,
+    ClozeShowContext,
+  } from "../../database/types";
   import type { IDatabaseService } from "../../database/DatabaseFactory";
   import type { ReviewOrder, FSRSProfile } from "../../database/types";
-  import { getDefaultLearningSteps, getDefaultRelearningSteps, I18n, validateLearningSteps, validateRelearningSteps } from "@decks/core";
+  import {
+    getDefaultLearningSteps,
+    getDefaultRelearningSteps,
+    I18n,
+    normalizeHeaderLevels,
+    primaryHeaderLevel,
+    validateLearningSteps,
+    validateRelearningSteps,
+  } from "@decks/core";
 
   const t = I18n.t;
   const p = t.profiles;
@@ -47,6 +59,7 @@
   let enableReviewCardsLimit = false;
   let reviewOrder: ReviewOrder = "due-date";
   let headerLevel = 2;
+  let headerLevels: number[] = [2];
   let requestRetention = 0.9;
   let fsrsProfile: FSRSProfile = "STANDARD";
   let learningSteps = "1m";
@@ -62,11 +75,31 @@
   let learningStepsError = false;
   let relearningStepsError = false;
 
-  $: hasErrors = nameError || newCardsError || reviewCardsError || retentionError || learningStepsError || relearningStepsError;
+  $: hasErrors =
+    nameError ||
+    newCardsError ||
+    reviewCardsError ||
+    retentionError ||
+    learningStepsError ||
+    relearningStepsError;
 
   // Track last event to prevent double execution
   let lastEventTime = 0;
   let lastEventType = "";
+
+  function setHeaderLevelSelected(level: number, selected: boolean): void {
+    if (level === 0) {
+      headerLevels = selected ? [0] : [2];
+    } else {
+      const withoutTitle = headerLevels.filter((existing) => existing !== 0);
+      const next = selected
+        ? [...withoutTitle, level]
+        : withoutTitle.filter((existing) => existing !== level);
+      headerLevels = normalizeHeaderLevels(next.length > 0 ? next : [2], 2);
+    }
+    headerLevel = primaryHeaderLevel(headerLevels, headerLevel);
+    rebuildSettings();
+  }
 
   async function selectProfile(profileId: string) {
     selectedProfileId = profileId;
@@ -82,7 +115,11 @@
     enableNewCardsLimit = profile.hasNewCardsLimitEnabled;
     enableReviewCardsLimit = profile.hasReviewCardsLimitEnabled;
     reviewOrder = profile.reviewOrder;
-    headerLevel = profile.headerLevel;
+    headerLevels = normalizeHeaderLevels(
+      profile.headerLevels ?? profile.headerLevel,
+      profile.headerLevel
+    );
+    headerLevel = primaryHeaderLevel(headerLevels, profile.headerLevel);
     requestRetention = profile.fsrs.requestRetention;
     fsrsProfile = profile.fsrs.profile;
     learningSteps = profile.learningSteps;
@@ -142,17 +179,29 @@
         saving = false;
         return;
       }
-      if (enableNewCardsLimit && (isNaN(newCardsLimit) || newCardsLimit < 1 || newCardsLimit > 9999)) {
+      if (
+        enableNewCardsLimit &&
+        (isNaN(newCardsLimit) || newCardsLimit < 1 || newCardsLimit > 9999)
+      ) {
         new Notice(p.noticeNewCardsRange);
         saving = false;
         return;
       }
-      if (enableReviewCardsLimit && (isNaN(reviewCardsLimit) || reviewCardsLimit < 1 || reviewCardsLimit > 9999)) {
+      if (
+        enableReviewCardsLimit &&
+        (isNaN(reviewCardsLimit) ||
+          reviewCardsLimit < 1 ||
+          reviewCardsLimit > 9999)
+      ) {
         new Notice(p.noticeReviewCardsRange);
         saving = false;
         return;
       }
-      if (isNaN(requestRetention) || requestRetention < 0.5 || requestRetention > 0.995) {
+      if (
+        isNaN(requestRetention) ||
+        requestRetention < 0.5 ||
+        requestRetention > 0.995
+      ) {
         new Notice(p.noticeRequestRetentionRange);
         saving = false;
         return;
@@ -181,7 +230,8 @@
         hasNewCardsLimitEnabled: enableNewCardsLimit,
         hasReviewCardsLimitEnabled: enableReviewCardsLimit,
         reviewOrder: reviewOrder,
-        headerLevel: headerLevel,
+        headerLevel: primaryHeaderLevel(headerLevels, headerLevel),
+        headerLevels: normalizeHeaderLevels(headerLevels, headerLevel),
         learningSteps: learningSteps,
         relearningSteps: relearningSteps,
         fsrs: {
@@ -455,16 +505,23 @@
       headerLevelContainer.empty();
       new Setting(headerLevelContainer)
         .setName(p.headerLevelLabel)
-        .setDesc(p.headerLevelDescParsing)
-        .addDropdown((dropdown) => {
-          dropdown.addOption("0", t.config.headerTitle);
-          for (let i = 1; i <= 6; i++) {
-            dropdown.addOption(i.toString(), I18n.format(t.config.headerH, { level: i }));
-          }
-          dropdown.setValue(headerLevel.toString()).onChange((value) => {
-            headerLevel = parseInt(value);
-          });
+        .setDesc(p.headerLevelDescParsing);
+      new Setting(headerLevelContainer)
+        .setName(t.config.headerTitle)
+        .addToggle((toggle) => {
+          toggle
+            .setValue(headerLevels.includes(0))
+            .onChange((value) => setHeaderLevelSelected(0, value));
         });
+      for (let i = 1; i <= 6; i++) {
+        new Setting(headerLevelContainer)
+          .setName(I18n.format(t.config.headerH, { level: i }))
+          .addToggle((toggle) => {
+            toggle
+              .setValue(headerLevels.includes(i))
+              .onChange((value) => setHeaderLevelSelected(i, value));
+          });
+      }
     }
 
     // Cloze enabled toggle
@@ -545,7 +602,9 @@
         : p.fsrsUntrainedDesc;
       // TRAINED is only selectable once weights exist; otherwise fall back to Standard.
       const currentValue =
-        fsrsProfile === "TRAINED" && !trainedWeightsAvailable ? "STANDARD" : fsrsProfile;
+        fsrsProfile === "TRAINED" && !trainedWeightsAvailable
+          ? "STANDARD"
+          : fsrsProfile;
       new Setting(fsrsProfileContainer)
         .setName(p.fsrsProfileLabel)
         .setDesc(desc)
@@ -553,7 +612,9 @@
           dropdown.addOption("STANDARD", p.fsrsStandardOption);
           dropdown.addOption(
             "TRAINED",
-            trainedWeightsAvailable ? p.fsrsTrainedOption : p.fsrsTrainedUnavailable
+            trainedWeightsAvailable
+              ? p.fsrsTrainedOption
+              : p.fsrsTrainedUnavailable
           );
           if (!trainedWeightsAvailable) {
             const selectEl = dropdown.selectEl as HTMLSelectElement;
@@ -587,9 +648,8 @@
           cls: "decks-button-container",
         });
 
-        const mappingsDiv = tagMappingsContainer.createDiv(
-          "decks-tag-mappings"
-        );
+        const mappingsDiv =
+          tagMappingsContainer.createDiv("decks-tag-mappings");
         for (const mapping of tagMappings) {
           const item = mappingsDiv.createDiv("decks-tag-mapping-item");
           item.createSpan({ text: `🏷️ ${mapping.tag}` });
@@ -667,7 +727,6 @@
           <div bind:this={deckCountContainer}></div>
           <div bind:this={tagMappingsContainer}></div>
         </div>
-
       </div>
     {/if}
   </div>
