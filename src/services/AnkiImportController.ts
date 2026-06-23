@@ -10,6 +10,7 @@ import {
 import type {
   AnkiParseResult,
   AnkiDeckItem,
+  AnkiFormat,
   MigrationProfileFsrs,
   RawDatabase,
 } from "@decks/core";
@@ -19,6 +20,7 @@ import type { DeckSynchronizer } from "@/services/DeckSynchronizer";
 import type { IDatabaseService } from "@/database/DatabaseFactory";
 import type { Logger } from "@/utils/logging";
 import { loadSqlJsMainThread } from "@/database/loadSqlJsMainThread";
+import { htmlToMarkdown } from "@/utils/htmlToMarkdown";
 
 export type AnkiProgressPhase = "read" | "write" | "sync" | "import";
 export type AnkiProgress = (
@@ -31,6 +33,7 @@ export type AnkiProgress = (
 export interface AnkiImportOptions {
   targetFolder: string; // vault folder the imported decks are written under
   profileId: string;
+  format: AnkiFormat;
 }
 
 export interface AnkiScanResult {
@@ -81,7 +84,7 @@ export class AnkiImportController {
   async scan(bytes: Uint8Array): Promise<AnkiScanResult> {
     const loaded = await this.loadCollection(bytes);
     try {
-      const parsed = AnkiCollectionParser.parse(loaded.db, { hintLabel: "hint" });
+      const parsed = AnkiCollectionParser.parse(loaded.db, { hintLabel: "hint", htmlToMarkdown });
       return {
         deckCount: parsed.deckNames.length,
         cardCount: parsed.cardCount,
@@ -112,8 +115,8 @@ export class AnkiImportController {
 
     this.deckSynchronizer.isMigrating = true;
     try {
-      const parsed = AnkiCollectionParser.parse(rawDb, { hintLabel: "hint" });
-      const decks = AnkiDeckRenderer.render(parsed.cards, this.ankiSubtag, headerLevel);
+      const parsed = AnkiCollectionParser.parse(rawDb, { hintLabel: "hint", htmlToMarkdown });
+      const decks = AnkiDeckRenderer.render(parsed.cards, this.ankiSubtag, headerLevel, opts.format);
       const total = decks.length + 2; // + sync + import
 
       await this.db.createTagMapping(opts.profileId, this.ankiSubtag);
@@ -147,6 +150,7 @@ export class AnkiImportController {
       const { injected, reviews } = await AnkiHistoryImporter.importHistory(this.db, deckItems, {
         collectionCreatedMs: AnkiCollectionParser.readCollectionCreatedMs(rawDb),
         revlogByCard: AnkiCollectionParser.readRevlog(rawDb),
+        format: opts.format,
       });
 
       return {

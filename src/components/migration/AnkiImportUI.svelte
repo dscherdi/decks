@@ -2,7 +2,7 @@
   import { onMount } from "svelte";
   import { Setting, Notice } from "obsidian";
   import { I18n } from "@decks/core";
-  import type { DeckProfile } from "@decks/core";
+  import type { DeckProfile, AnkiFormat } from "@decks/core";
   import type { IDatabaseService } from "@/database/DatabaseFactory";
   import type {
     AnkiImportController,
@@ -19,6 +19,7 @@
 
   let targetFolder = "Anki Import";
   let profileId = "";
+  let format: AnkiFormat = "header-paragraph";
   let profiles: DeckProfile[] = [];
 
   let fileBytes: Uint8Array | null = null;
@@ -61,6 +62,16 @@
           dropdown.addOption(profile.id, profile.name);
         }
         dropdown.setValue(profileId).onChange((v) => (profileId = v));
+      });
+
+    new Setting(settingsContainer)
+      .setName(t.formatName)
+      .setDesc(t.formatDesc)
+      .addDropdown((dropdown) => {
+        dropdown.addOption("header-paragraph", t.formatHeaderParagraph);
+        dropdown.addOption("table", t.formatTable);
+        dropdown.setValue(format);
+        dropdown.onChange((v) => (format = v as AnkiFormat));
       });
   }
 
@@ -107,7 +118,7 @@
     try {
       summary = await controller.import(
         fileBytes,
-        { targetFolder, profileId },
+        { targetFolder, profileId, format },
         (done, total, phase, detail) => {
           progressPct = total > 0 ? (done / total) * 100 : 0;
           progressLabel =
@@ -160,6 +171,10 @@
     </div>
 
     <div class="decks-sr-migration-settings" bind:this={settingsContainer}></div>
+
+    {#if format === "table"}
+      <p class="decks-sr-migration-warning">{t.formatTableWarning}</p>
+    {/if}
 
     {#if scanned}
       <p class="decks-sr-migration-scan">
@@ -248,6 +263,11 @@
     color: var(--text-muted);
     font-size: var(--font-ui-smaller);
     margin-top: 6px;
+  }
+  .decks-sr-migration-warning {
+    color: var(--text-error);
+    font-weight: 600;
+    margin-top: 12px;
   }
   .decks-sr-migration-scan,
   .decks-sr-migration-done {

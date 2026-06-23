@@ -94,6 +94,20 @@ describeIf("Anki import pipeline (integration)", () => {
     expect(result.reviews).toBe(0);
   });
 
+  it("renders table format that the real parser can sync", async () => {
+    const parsed = AnkiCollectionParser.parse(loadCollection());
+    const decks = AnkiDeckRenderer.render(parsed.cards, "decks/anki", profile.headerLevel, "table");
+
+    const largest = decks.reduce((a, b) => (b.cards.length > a.cards.length ? b : a));
+    expect(largest.content).toContain("| Front | Back");
+
+    const filepath = `Anki Import/${largest.relativePath}.md`;
+    const deckId = await syncDeck(filepath, largest);
+    const cards = await db.getFlashcardsByDeck(deckId);
+    expect(cards.length).toBeGreaterThan(0);
+    expect(cards.every((c) => c.front.trim().length > 0)).toBe(true);
+  });
+
   async function syncDeck(filepath: string, deck: AnkiRenderedDeck): Promise<string> {
     const deckId = generateDeckId(filepath);
     await db.createDeck({
