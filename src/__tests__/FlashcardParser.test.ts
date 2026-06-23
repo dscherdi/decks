@@ -101,6 +101,42 @@ This content should be ignored since we're targeting H3.
       });
     });
 
+    it("should parse multiple header levels in document order", () => {
+      const content = `
+## H2 Question
+
+H2 answer.
+
+### H3 Question
+
+H3 answer.
+
+#### H4 Ignored
+
+H4 answer.
+
+## Second H2 Question
+
+Second H2 answer.
+      `;
+
+      const result = FlashcardParser.parseFlashcardsFromContent(
+        content,
+        [2, 3]
+      );
+
+      expect(result.map((card) => card.front)).toEqual([
+        "H2 Question",
+        "H3 Question",
+        "Second H2 Question",
+      ]);
+      expect(result.map((card) => card.back)).toEqual([
+        "H2 answer.",
+        "H3 answer.",
+        "Second H2 answer.",
+      ]);
+    });
+
     it("should handle mixed table and header-paragraph flashcards", () => {
       const content = `
 ## What is JavaScript?
@@ -715,7 +751,11 @@ This is content under an H4 directly after H2.
 
 It has multiple paragraphs.`;
 
-      const result = FlashcardParser.parseFlashcardsFromContent(content, 0, "My Note");
+      const result = FlashcardParser.parseFlashcardsFromContent(
+        content,
+        0,
+        "My Note"
+      );
 
       expect(result).toHaveLength(1);
       expect(result[0]).toEqual({
@@ -734,7 +774,11 @@ tags: flashcards
 ---
 The actual content here.`;
 
-      const result = FlashcardParser.parseFlashcardsFromContent(content, 0, "Frontmatter File");
+      const result = FlashcardParser.parseFlashcardsFromContent(
+        content,
+        0,
+        "Frontmatter File"
+      );
 
       expect(result).toHaveLength(1);
       expect(result[0].front).toBe("Frontmatter File");
@@ -754,7 +798,11 @@ The actual content here.`;
 tags: flashcards
 ---`;
 
-      const result = FlashcardParser.parseFlashcardsFromContent(content, 0, "Empty File");
+      const result = FlashcardParser.parseFlashcardsFromContent(
+        content,
+        0,
+        "Empty File"
+      );
 
       expect(result).toHaveLength(1);
       expect(result[0].front).toBe("Empty File");
@@ -820,7 +868,11 @@ This is the answer.
 Content
 `;
       const result = FlashcardParser.parseFlashcardsFromContent(content);
-      expect(result[0].tags).toEqual(["math/algebra", "high-priority", "snake_case"]);
+      expect(result[0].tags).toEqual([
+        "math/algebra",
+        "high-priority",
+        "snake_case",
+      ]);
     });
 
     it("should not treat pure-numeric '#123' as a tag", () => {
@@ -876,7 +928,12 @@ Content
 
 The ==capital== of France is ==Paris==.
 `;
-      const result = FlashcardParser.parseFlashcardsFromContent(content, 2, undefined, true);
+      const result = FlashcardParser.parseFlashcardsFromContent(
+        content,
+        2,
+        undefined,
+        true
+      );
       expect(result.length).toBeGreaterThan(0);
       for (const card of result) {
         expect(card.tags).toEqual(["science"]);
@@ -1002,7 +1059,12 @@ Content
 
 The ==capital== of France is ==Paris==.
 `;
-      const result = FlashcardParser.parseFlashcardsFromContent(content, 3, undefined, true);
+      const result = FlashcardParser.parseFlashcardsFromContent(
+        content,
+        3,
+        undefined,
+        true
+      );
       expect(result.length).toBeGreaterThan(0);
       for (const card of result) {
         expect(card.tags).toEqual(["science"]);
@@ -1152,7 +1214,7 @@ The capital of France is ==Paris==.
 
 European city
 `,
-        true,
+        true
       );
       expect(cards).toHaveLength(1);
       expect(cards[0]).toMatchObject({

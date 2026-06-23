@@ -14,7 +14,17 @@ import type {
 } from "./types";
 import { DEFAULT_PROFILE_ID, deckWithProfile } from "./types";
 import type { FilterDefinition } from "./types";
-import { generateCustomDeckCardId, generateCustomDeckId, generateFlashcardId, SQL_QUERIES, type SyncOpV1 } from "@decks/core";
+import {
+  generateCustomDeckCardId,
+  generateCustomDeckId,
+  generateFlashcardId,
+  normalizeHeaderLevels,
+  parseHeaderLevels,
+  primaryHeaderLevel,
+  serializeHeaderLevels,
+  SQL_QUERIES,
+  type SyncOpV1,
+} from "@decks/core";
 import { normalizeProfile } from "@decks/core";
 import { compileFilter, type FilterCompileOptions } from "@decks/core";
 import type { SyncData, SyncResult } from "../services/FlashcardSynchronizer";
@@ -131,6 +141,8 @@ export abstract class BaseDatabaseService implements IDatabaseService {
   }
 
   protected parseProfileRow(row: (string | number | null)[]): DeckProfile {
+    const headerLevel = row[6] as number;
+    const headerLevels = parseHeaderLevels(row[7], headerLevel);
     return {
       id: row[0] as string,
       name: row[1] as string,
@@ -138,23 +150,26 @@ export abstract class BaseDatabaseService implements IDatabaseService {
       newCardsPerDay: row[3] as number,
       hasReviewCardsLimitEnabled: Boolean(row[4]),
       reviewCardsPerDay: row[5] as number,
-      headerLevel: row[6] as number,
-      reviewOrder: row[7] as "due-date" | "random",
-      learningSteps: (row[8] as string) ?? "1m",
-      relearningSteps: (row[9] as string) ?? "10m",
+      headerLevel: primaryHeaderLevel(headerLevels, headerLevel),
+      headerLevels,
+      reviewOrder: row[8] as "due-date" | "random",
+      learningSteps: (row[9] as string) ?? "1m",
+      relearningSteps: (row[10] as string) ?? "10m",
       fsrs: {
-        requestRetention: row[10] as number,
-        profile: normalizeProfile(row[11] as string),
+        requestRetention: row[11] as number,
+        profile: normalizeProfile(row[12] as string),
       },
-      clozeEnabled: Boolean(row[12]),
-      clozeShowContext: (row[13] as "open" | "hidden") ?? "open",
-      isDefault: Boolean(row[14]),
-      created: row[15] as string,
-      modified: row[16] as string,
+      clozeEnabled: Boolean(row[13]),
+      clozeShowContext: (row[14] as "open" | "hidden") ?? "open",
+      isDefault: Boolean(row[15]),
+      created: row[16] as string,
+      modified: row[17] as string,
     };
   }
 
-  protected parseTagMappingRow(row: (string | number | null)[]): ProfileTagMapping {
+  protected parseTagMappingRow(
+    row: (string | number | null)[]
+  ): ProfileTagMapping {
     return {
       id: row[0] as string,
       profileId: row[1] as string,
@@ -167,7 +182,7 @@ export abstract class BaseDatabaseService implements IDatabaseService {
     return {
       id: row[0] as string,
       name: row[1] as string,
-      deckType: (row[2] as string as CustomDeckType) ?? 'manual',
+      deckType: (row[2] as string as CustomDeckType) ?? "manual",
       filterDefinition: row[3] as string | null,
       lastReviewed: row[4] as string | null,
       created: row[5] as string,
@@ -177,7 +192,8 @@ export abstract class BaseDatabaseService implements IDatabaseService {
 
   protected rowToFlashcard(row: (string | number | null)[]): Flashcard {
     const tagsRaw = (row[24] as string) || "";
-    const tags = tagsRaw === "" ? [] : tagsRaw.split(",").filter((t) => t.length > 0);
+    const tags =
+      tagsRaw === "" ? [] : tagsRaw.split(",").filter((t) => t.length > 0);
     return {
       id: row[0] as string,
       deckId: row[1] as string,
@@ -241,7 +257,12 @@ export abstract class BaseDatabaseService implements IDatabaseService {
   }
 
   // DECK OPERATIONS - Implemented using abstract SQL methods
-  async createDeck(deck: Omit<Deck, "created" | "modified" | "profileId"> & { id?: string; profileId?: string }): Promise<string> {
+  async createDeck(
+    deck: Omit<Deck, "created" | "modified" | "profileId"> & {
+      id?: string;
+      profileId?: string;
+    }
+  ): Promise<string> {
     const now = this.getCurrentTimestamp();
 
     // If no profileId provided, check for tag mapping, else use DEFAULT
@@ -282,20 +303,16 @@ export abstract class BaseDatabaseService implements IDatabaseService {
   }
 
   async getDeckByFilepath(filepath: string): Promise<Deck | null> {
-    const results = (await this.querySql(SQL_QUERIES.GET_DECK_BY_FILEPATH, [filepath])) as (
-      | string
-      | number
-      | null
-    )[][];
+    const results = (await this.querySql(SQL_QUERIES.GET_DECK_BY_FILEPATH, [
+      filepath,
+    ])) as (string | number | null)[][];
     return results.length > 0 ? this.parseDeckRow(results[0]) : null;
   }
 
   async getDeckByTag(tag: string): Promise<Deck | null> {
-    const results = (await this.querySql(SQL_QUERIES.GET_DECK_BY_TAG, [tag])) as (
-      | string
-      | number
-      | null
-    )[][];
+    const results = (await this.querySql(SQL_QUERIES.GET_DECK_BY_TAG, [
+      tag,
+    ])) as (string | number | null)[][];
     return results.length > 0 ? this.parseDeckRow(results[0]) : null;
   }
 
@@ -397,23 +414,28 @@ export abstract class BaseDatabaseService implements IDatabaseService {
   }
 
   async getDecksByTag(tag: string): Promise<Deck[]> {
-    const results = (await this.querySql(SQL_QUERIES.GET_DECKS_BY_TAG, [tag])) as (
-      | string
-      | number
-      | null
-    )[][];
+    const results = (await this.querySql(SQL_QUERIES.GET_DECKS_BY_TAG, [
+      tag,
+    ])) as (string | number | null)[][];
     return results.map((row) => this.parseDeckRow(row));
   }
 
   // PROFILE OPERATIONS
-  async createProfile(profile: Omit<DeckProfile, 'created' | 'modified'>): Promise<string> {
+  async createProfile(
+    profile: Omit<DeckProfile, "created" | "modified">
+  ): Promise<string> {
     const now = this.getCurrentTimestamp();
+    const headerLevels = normalizeHeaderLevels(
+      profile.headerLevels ?? profile.headerLevel,
+      profile.headerLevel
+    );
+    const headerLevel = primaryHeaderLevel(headerLevels, profile.headerLevel);
 
     // Prevent creating additional DEFAULT profiles
     if (profile.isDefault) {
       const existing = await this.getDefaultProfile();
       if (existing) {
-        throw new Error('A DEFAULT profile already exists');
+        throw new Error("A DEFAULT profile already exists");
       }
     }
 
@@ -430,7 +452,8 @@ export abstract class BaseDatabaseService implements IDatabaseService {
       profile.newCardsPerDay,
       profile.hasReviewCardsLimitEnabled ? 1 : 0,
       profile.reviewCardsPerDay,
-      profile.headerLevel,
+      headerLevel,
+      serializeHeaderLevels(headerLevels, headerLevel),
       profile.reviewOrder,
       profile.learningSteps ?? "1m",
       profile.relearningSteps ?? "10m",
@@ -452,7 +475,8 @@ export abstract class BaseDatabaseService implements IDatabaseService {
         newCardsPerDay: profile.newCardsPerDay,
         hasReviewCardsLimitEnabled: profile.hasReviewCardsLimitEnabled,
         reviewCardsPerDay: profile.reviewCardsPerDay,
-        headerLevel: profile.headerLevel,
+        headerLevel,
+        headerLevels,
         reviewOrder: profile.reviewOrder,
         learningSteps: profile.learningSteps ?? "1m",
         relearningSteps: profile.relearningSteps ?? "10m",
@@ -470,20 +494,16 @@ export abstract class BaseDatabaseService implements IDatabaseService {
   }
 
   async getProfileById(id: string): Promise<DeckProfile | null> {
-    const results = (await this.querySql(SQL_QUERIES.GET_PROFILE_BY_ID, [id])) as (
-      | string
-      | number
-      | null
-    )[][];
+    const results = (await this.querySql(SQL_QUERIES.GET_PROFILE_BY_ID, [
+      id,
+    ])) as (string | number | null)[][];
     return results.length > 0 ? this.parseProfileRow(results[0]) : null;
   }
 
   async getProfileByName(name: string): Promise<DeckProfile | null> {
-    const results = (await this.querySql(SQL_QUERIES.GET_PROFILE_BY_NAME, [name])) as (
-      | string
-      | number
-      | null
-    )[][];
+    const results = (await this.querySql(SQL_QUERIES.GET_PROFILE_BY_NAME, [
+      name,
+    ])) as (string | number | null)[][];
     return results.length > 0 ? this.parseProfileRow(results[0]) : null;
   }
 
@@ -497,26 +517,30 @@ export abstract class BaseDatabaseService implements IDatabaseService {
   }
 
   async getDefaultProfile(): Promise<DeckProfile> {
-    const results = (await this.querySql(SQL_QUERIES.GET_DEFAULT_PROFILE, [])) as (
-      | string
-      | number
-      | null
-    )[][];
+    const results = (await this.querySql(
+      SQL_QUERIES.GET_DEFAULT_PROFILE,
+      []
+    )) as (string | number | null)[][];
     if (results.length === 0) {
-      throw new Error('DEFAULT profile not found in database');
+      throw new Error("DEFAULT profile not found in database");
     }
     return this.parseProfileRow(results[0]);
   }
 
-  async updateProfile(id: string, updates: Partial<Omit<DeckProfile, 'id' | 'created' | 'modified' | 'isDefault'>>): Promise<void> {
+  async updateProfile(
+    id: string,
+    updates: Partial<
+      Omit<DeckProfile, "id" | "created" | "modified" | "isDefault">
+    >
+  ): Promise<void> {
     const current = await this.getProfileById(id);
     if (!current) {
       throw new Error(`Profile not found: ${id}`);
     }
 
     // Cannot modify DEFAULT profile name
-    if (current.isDefault && updates.name && updates.name !== 'DEFAULT') {
-      throw new Error('Cannot rename DEFAULT profile');
+    if (current.isDefault && updates.name && updates.name !== "DEFAULT") {
+      throw new Error("Cannot rename DEFAULT profile");
     }
 
     // Check for duplicate names
@@ -532,6 +556,14 @@ export abstract class BaseDatabaseService implements IDatabaseService {
       ...updates,
       fsrs: updates.fsrs ? { ...current.fsrs, ...updates.fsrs } : current.fsrs,
     };
+    updated.headerLevels = normalizeHeaderLevels(
+      updated.headerLevels ?? updated.headerLevel,
+      updated.headerLevel
+    );
+    updated.headerLevel = primaryHeaderLevel(
+      updated.headerLevels,
+      updated.headerLevel
+    );
 
     // If a field that affects MARKDOWN PARSING changed, every deck pointing
     // at this profile needs to be re-parsed (the parser interprets headers
@@ -541,6 +573,11 @@ export abstract class BaseDatabaseService implements IDatabaseService {
     // fast-path on the next refresh.
     const parsingAffected =
       updated.headerLevel !== current.headerLevel ||
+      serializeHeaderLevels(updated.headerLevels, updated.headerLevel) !==
+        serializeHeaderLevels(
+          current.headerLevels ?? current.headerLevel,
+          current.headerLevel
+        ) ||
       updated.clozeEnabled !== current.clozeEnabled;
 
     const modifiedAt = this.getCurrentTimestamp();
@@ -551,6 +588,7 @@ export abstract class BaseDatabaseService implements IDatabaseService {
       updated.hasReviewCardsLimitEnabled ? 1 : 0,
       updated.reviewCardsPerDay,
       updated.headerLevel,
+      serializeHeaderLevels(updated.headerLevels, updated.headerLevel),
       updated.reviewOrder,
       updated.learningSteps,
       updated.relearningSteps,
@@ -577,6 +615,7 @@ export abstract class BaseDatabaseService implements IDatabaseService {
         hasReviewCardsLimitEnabled: updated.hasReviewCardsLimitEnabled,
         reviewCardsPerDay: updated.reviewCardsPerDay,
         headerLevel: updated.headerLevel,
+        headerLevels: updated.headerLevels,
         reviewOrder: updated.reviewOrder,
         learningSteps: updated.learningSteps,
         relearningSteps: updated.relearningSteps,
@@ -617,9 +656,15 @@ export abstract class BaseDatabaseService implements IDatabaseService {
     // devices see the cascade rather than guessing it from the profile
     // tombstone alone.
     const ownedMappings = await this.getTagMappingsForProfile(id);
-    await this.executeSql(SQL_QUERIES.DELETE_TAG_MAPPINGS_FOR_PROFILE, [now, id]);
+    await this.executeSql(SQL_QUERIES.DELETE_TAG_MAPPINGS_FOR_PROFILE, [
+      now,
+      id,
+    ]);
     for (const m of ownedMappings) {
-      this.emitSyncOp({ o: "tag_mapping_delete", p: { id: m.id, deletedAt: now } });
+      this.emitSyncOp({
+        o: "tag_mapping_delete",
+        p: { id: m.id, deletedAt: now },
+      });
     }
 
     // Soft delete profile
@@ -628,21 +673,18 @@ export abstract class BaseDatabaseService implements IDatabaseService {
   }
 
   async getDeckCountForProfile(profileId: string): Promise<number> {
-    const results = (await this.querySql(SQL_QUERIES.COUNT_DECKS_USING_PROFILE, [profileId])) as (
-      | string
-      | number
-      | null
-    )[][];
+    const results = (await this.querySql(
+      SQL_QUERIES.COUNT_DECKS_USING_PROFILE,
+      [profileId]
+    )) as (string | number | null)[][];
     if (results.length === 0) return 0;
     return (results[0][0] as number) || 0;
   }
 
   async getDecksByProfile(profileId: string): Promise<Deck[]> {
-    const results = (await this.querySql(SQL_QUERIES.GET_DECKS_BY_PROFILE, [profileId])) as (
-      | string
-      | number
-      | null
-    )[][];
+    const results = (await this.querySql(SQL_QUERIES.GET_DECKS_BY_PROFILE, [
+      profileId,
+    ])) as (string | number | null)[][];
     return results.map((row) => this.parseDeckRow(row));
   }
 
@@ -666,12 +708,13 @@ export abstract class BaseDatabaseService implements IDatabaseService {
     return id;
   }
 
-  async getTagMappingsForProfile(profileId: string): Promise<ProfileTagMapping[]> {
-    const results = (await this.querySql(SQL_QUERIES.GET_TAG_MAPPINGS_FOR_PROFILE, [profileId])) as (
-      | string
-      | number
-      | null
-    )[][];
+  async getTagMappingsForProfile(
+    profileId: string
+  ): Promise<ProfileTagMapping[]> {
+    const results = (await this.querySql(
+      SQL_QUERIES.GET_TAG_MAPPINGS_FOR_PROFILE,
+      [profileId]
+    )) as (string | number | null)[][];
     return results.map((row) => this.parseTagMappingRow(row));
   }
 
@@ -686,11 +729,9 @@ export abstract class BaseDatabaseService implements IDatabaseService {
 
   async getProfileIdForTag(tag: string): Promise<string | null> {
     // Get all tag mappings
-    const allMappings = await this.querySql(SQL_QUERIES.GET_ALL_TAG_MAPPINGS) as (
-      | string
-      | number
-      | null
-    )[][];
+    const allMappings = (await this.querySql(
+      SQL_QUERIES.GET_ALL_TAG_MAPPINGS
+    )) as (string | number | null)[][];
 
     if (allMappings.length === 0) return null;
 
@@ -706,8 +747,11 @@ export abstract class BaseDatabaseService implements IDatabaseService {
       // Example: deck tag "#flashcards/math", mapping tag "#flashcards/math" -> matches
       // Example: deck tag "#flashcards", mapping tag "#flashcards/math" -> does NOT match
 
-      if (tag === mapping.tag || tag.startsWith(mapping.tag + '/')) {
-        matchingMappings.push({ profileId: mapping.profileId, tag: mapping.tag });
+      if (tag === mapping.tag || tag.startsWith(mapping.tag + "/")) {
+        matchingMappings.push({
+          profileId: mapping.profileId,
+          tag: mapping.tag,
+        });
       }
     }
 
@@ -730,7 +774,7 @@ export abstract class BaseDatabaseService implements IDatabaseService {
     if (profileId === DEFAULT_PROFILE_ID) {
       // Remove explicit mapping so the tag inherits from its parent
       const existingMappings = await this.getAllTagMappings();
-      const existing = existingMappings.find(m => m.tag === tag);
+      const existing = existingMappings.find((m) => m.tag === tag);
       if (existing) {
         await this.deleteTagMapping(existing.id);
       }
@@ -741,13 +785,14 @@ export abstract class BaseDatabaseService implements IDatabaseService {
 
     const allDecks = await this.getAllDecks();
     const allMappings = await this.getAllTagMappings();
-    const mappedTags = new Set(allMappings.map(m => m.tag));
+    const mappedTags = new Set(allMappings.map((m) => m.tag));
     let count = 0;
 
     for (const deck of allDecks) {
       if (deck.tag === tag) {
         // Exact match — always update
-        const resolvedProfileId = await this.getProfileIdForTag(deck.tag) || DEFAULT_PROFILE_ID;
+        const resolvedProfileId =
+          (await this.getProfileIdForTag(deck.tag)) || DEFAULT_PROFILE_ID;
         if (deck.profileId !== resolvedProfileId) {
           await this.updateDeck(deck.id, { profileId: resolvedProfileId });
           // The new profile may have a different headerLevel / clozeEnabled,
@@ -756,10 +801,11 @@ export abstract class BaseDatabaseService implements IDatabaseService {
           await this.setDeckLastSyncedMtime(deck.id, 0);
           count++;
         }
-      } else if (deck.tag.startsWith(tag + '/')) {
+      } else if (deck.tag.startsWith(tag + "/")) {
         // Child tag — skip if it has its own explicit tag mapping
         if (!mappedTags.has(deck.tag)) {
-          const resolvedProfileId = await this.getProfileIdForTag(deck.tag) || DEFAULT_PROFILE_ID;
+          const resolvedProfileId =
+            (await this.getProfileIdForTag(deck.tag)) || DEFAULT_PROFILE_ID;
           if (deck.profileId !== resolvedProfileId) {
             await this.updateDeck(deck.id, { profileId: resolvedProfileId });
             await this.setDeckLastSyncedMtime(deck.id, 0);
@@ -780,7 +826,9 @@ export abstract class BaseDatabaseService implements IDatabaseService {
     let profile = await this.getProfileById(deck.profileId);
     if (!profile) {
       // Profile not found - fall back to DEFAULT profile
-      console.warn(`Profile ${deck.profileId} not found for deck ${deck.id}. Reverting to DEFAULT profile.`);
+      console.warn(
+        `Profile ${deck.profileId} not found for deck ${deck.id}. Reverting to DEFAULT profile.`
+      );
       profile = await this.getDefaultProfile();
 
       // Update deck to use DEFAULT profile
@@ -794,7 +842,7 @@ export abstract class BaseDatabaseService implements IDatabaseService {
   async getAllDecksWithProfiles(): Promise<DeckWithProfile[]> {
     const decks = await this.getAllDecks();
     const profiles = await this.getAllProfiles();
-    const profileMap = new Map(profiles.map(p => [p.id, p]));
+    const profileMap = new Map(profiles.map((p) => [p.id, p]));
     const defaultProfile = await this.getDefaultProfile();
 
     const result: DeckWithProfile[] = [];
@@ -802,7 +850,9 @@ export abstract class BaseDatabaseService implements IDatabaseService {
       let profile = profileMap.get(deck.profileId);
       if (!profile) {
         // Profile not found - fall back to DEFAULT profile
-        console.warn(`Profile ${deck.profileId} not found for deck ${deck.id}. Reverting to DEFAULT profile.`);
+        console.warn(
+          `Profile ${deck.profileId} not found for deck ${deck.id}. Reverting to DEFAULT profile.`
+        );
         profile = defaultProfile;
 
         // Update deck to use DEFAULT profile
@@ -820,7 +870,8 @@ export abstract class BaseDatabaseService implements IDatabaseService {
   ): Promise<void> {
     const now = this.getCurrentTimestamp();
     // Use provided ID first, then generate from front text
-    const flashcardId = flashcard.id || generateFlashcardId(flashcard.front, flashcard.deckId);
+    const flashcardId =
+      flashcard.id || generateFlashcardId(flashcard.front, flashcard.deckId);
     const flashcardWithId = {
       ...flashcard,
       id: flashcardId,
@@ -902,7 +953,11 @@ export abstract class BaseDatabaseService implements IDatabaseService {
 
   async getAllFlashcardTags(): Promise<string[]> {
     const sql = `SELECT DISTINCT tags FROM flashcards WHERE tags != ''`;
-    const results = (await this.querySql(sql, [])) as (string | number | null)[][];
+    const results = (await this.querySql(sql, [])) as (
+      | string
+      | number
+      | null
+    )[][];
     const tagSet = new Set<string>();
     for (const row of results) {
       const tagStr = (row[0] as string) || "";
@@ -1020,7 +1075,9 @@ export abstract class BaseDatabaseService implements IDatabaseService {
         if (key === "tags") {
           params.push(serializeTags(updates.tags));
         } else {
-          params.push(updates[key as keyof Flashcard] as string | number | null ?? null);
+          params.push(
+            (updates[key as keyof Flashcard] as string | number | null) ?? null
+          );
         }
       }
     });
@@ -1054,7 +1111,16 @@ export abstract class BaseDatabaseService implements IDatabaseService {
       `UPDATE flashcards
              SET id = ?, front = ?, back = ?, content_hash = ?, notes = ?, tags = ?, modified = ?
              WHERE id = ?`,
-      [newCard.id, newCard.front, newCard.back, newCard.contentHash, newCard.notes || "", serializeTags(newCard.tags), now, oldId]
+      [
+        newCard.id,
+        newCard.front,
+        newCard.back,
+        newCard.contentHash,
+        newCard.notes || "",
+        serializeTags(newCard.tags),
+        now,
+        oldId,
+      ]
     );
 
     // Migrate review_logs to new ID (critical since FK removed)
@@ -1143,8 +1209,7 @@ export abstract class BaseDatabaseService implements IDatabaseService {
   // total/maturity counts (countTotalCards, GET_CARD_STATS) include them.
   async countNewCards(deckId: string): Promise<number> {
     const now = this.getCurrentTimestamp();
-    const sql =
-      `SELECT COUNT(*) as count FROM flashcards WHERE deck_id = ? AND state = 'new'
+    const sql = `SELECT COUNT(*) as count FROM flashcards WHERE deck_id = ? AND state = 'new'
        AND suspended_at IS NULL
        AND (buried_until IS NULL OR buried_until <= ?)`;
     const results = await this.querySql<CountResult>(sql, [deckId, now], {
@@ -1230,9 +1295,13 @@ export abstract class BaseDatabaseService implements IDatabaseService {
       ORDER BY day
     `;
 
-    const results = await this.querySql(sql, [...deckIds, startDate, endDate, now], {
-      asObject: true,
-    });
+    const results = await this.querySql(
+      sql,
+      [...deckIds, startDate, endDate, now],
+      {
+        asObject: true,
+      }
+    );
     return results.map((row: { day: string; c: number }) => ({
       day: row.day,
       count: row.c || 0,
@@ -1289,7 +1358,10 @@ export abstract class BaseDatabaseService implements IDatabaseService {
     return results[0]?.n || 0;
   }
 
-  async countNewCardsToday(deckId: string, nextDayStartsAt = 4): Promise<number> {
+  async countNewCardsToday(
+    deckId: string,
+    nextDayStartsAt = 4
+  ): Promise<number> {
     const now = new Date();
     const studyDayStart = this.getStudyDayStart(now, nextDayStartsAt);
     const studyDayEnd = this.getStudyDayEnd(now, nextDayStartsAt);
@@ -1301,13 +1373,20 @@ export abstract class BaseDatabaseService implements IDatabaseService {
                    AND r.reviewed_at >= ?
                    AND r.reviewed_at < ?
                    AND r.old_state = 'new'`;
-    const results = await this.querySql<CountResult>(sql, [deckId, studyDayStart, studyDayEnd], {
-      asObject: true,
-    });
+    const results = await this.querySql<CountResult>(
+      sql,
+      [deckId, studyDayStart, studyDayEnd],
+      {
+        asObject: true,
+      }
+    );
     return results[0]?.count || 0;
   }
 
-  async countReviewCardsToday(deckId: string, nextDayStartsAt = 4): Promise<number> {
+  async countReviewCardsToday(
+    deckId: string,
+    nextDayStartsAt = 4
+  ): Promise<number> {
     const now = new Date();
     const studyDayStart = this.getStudyDayStart(now, nextDayStartsAt);
     const studyDayEnd = this.getStudyDayEnd(now, nextDayStartsAt);
@@ -1319,9 +1398,13 @@ export abstract class BaseDatabaseService implements IDatabaseService {
                    AND r.reviewed_at >= ?
                    AND r.reviewed_at < ?
                    AND r.old_state = 'review'`;
-    const results = await this.querySql<CountResult>(sql, [deckId, studyDayStart, studyDayEnd], {
-      asObject: true,
-    });
+    const results = await this.querySql<CountResult>(
+      sql,
+      [deckId, studyDayStart, studyDayEnd],
+      {
+        asObject: true,
+      }
+    );
     return results[0]?.count || 0;
   }
 
@@ -1890,7 +1973,10 @@ export abstract class BaseDatabaseService implements IDatabaseService {
     nextDayStartsAt = 4
   ): Promise<{ newCount: number; reviewCount: number }> {
     const newCount = await this.countNewCardsToday(deckId, nextDayStartsAt);
-    const reviewCount = await this.countReviewCardsToday(deckId, nextDayStartsAt);
+    const reviewCount = await this.countReviewCardsToday(
+      deckId,
+      nextDayStartsAt
+    );
 
     return { newCount, reviewCount };
   }
@@ -1906,14 +1992,16 @@ export abstract class BaseDatabaseService implements IDatabaseService {
   async resetDeckProgress(deckId: string): Promise<void> {
     const now = new Date().toISOString();
     await this.executeSql(SQL_QUERIES.DELETE_REVIEW_LOGS_FOR_DECK, [deckId]);
-    await this.executeSql(SQL_QUERIES.DELETE_REVIEW_SESSIONS_FOR_DECK, [deckId]);
+    await this.executeSql(SQL_QUERIES.DELETE_REVIEW_SESSIONS_FOR_DECK, [
+      deckId,
+    ]);
     await this.executeSql(SQL_QUERIES.RESET_DECK_FLASHCARDS, [now, deckId]);
     this.emitSyncOp({ o: "deck_reset", p: { deckId, resetAt: now } });
   }
 
- /**
-   * Recovery: Migrates orphaned review logs by reverse-computing old IDs from 
-   * the current flashcard text, then rebuilds each card's FSRS scheduling 
+  /**
+   * Recovery: Migrates orphaned review logs by reverse-computing old IDs from
+   * the current flashcard text, then rebuilds each card's FSRS scheduling
    * state from its most recent review log.
    */
   async rebuildCardStateFromReviewLogs(): Promise<number> {
@@ -1921,18 +2009,18 @@ export abstract class BaseDatabaseService implements IDatabaseService {
 
     // 1. Fetch current cards to compute what their old IDs used to be
     // Assuming 'id' is the new ID, and we have 'front'
-    const cards = await this.querySql<{ id: string, front: string, back: string }>(
-      `SELECT id, front FROM flashcards`,
-      [],
-      { asObject: true }
-    );
+    const cards = await this.querySql<{
+      id: string;
+      front: string;
+      back: string;
+    }>(`SELECT id, front FROM flashcards`, [], { asObject: true });
 
     // 2. Compute the ID migrations in TypeScript
-    const idMigrations: { oldId: string, newId: string }[] = [];
+    const idMigrations: { oldId: string; newId: string }[] = [];
     for (const card of cards) {
       // NOTE: Replace this with your exact old hash generation function call
-      const oldId = generateOldFlashcardId(card.front); 
-      
+      const oldId = generateOldFlashcardId(card.front);
+
       if (oldId !== card.id) {
         idMigrations.push({ oldId, newId: card.id });
       }
@@ -1958,7 +2046,7 @@ export abstract class BaseDatabaseService implements IDatabaseService {
       { asObject: true }
     );
     const restored = countRows[0]?.count ?? 0;
-    
+
     if (restored === 0) return 0;
 
     // 5. Rebuild the FSRS state from the newly linked logs
@@ -2049,7 +2137,10 @@ export abstract class BaseDatabaseService implements IDatabaseService {
       `UPDATE flashcards SET buried_until = ?, modified = ? WHERE id = ?`,
       [untilIso, now, cardId]
     );
-    this.emitSyncOp({ o: "card_bury", p: { c: cardId, until: untilIso, at: now } });
+    this.emitSyncOp({
+      o: "card_bury",
+      p: { c: cardId, until: untilIso, at: now },
+    });
   }
 
   async unburyCard(cardId: string): Promise<void> {
@@ -2070,7 +2161,10 @@ export abstract class BaseDatabaseService implements IDatabaseService {
       [untilIso, now, ...cardIds]
     );
     for (const cardId of cardIds) {
-      this.emitSyncOp({ o: "card_bury", p: { c: cardId, until: untilIso, at: now } });
+      this.emitSyncOp({
+        o: "card_bury",
+        p: { c: cardId, until: untilIso, at: now },
+      });
     }
   }
 
@@ -2094,10 +2188,9 @@ export abstract class BaseDatabaseService implements IDatabaseService {
   // would not expect it to remain hidden from the queue.
   async resetCard(cardId: string): Promise<void> {
     const now = this.getCurrentTimestamp();
-    await this.executeSql(
-      `DELETE FROM review_logs WHERE flashcard_id = ?`,
-      [cardId]
-    );
+    await this.executeSql(`DELETE FROM review_logs WHERE flashcard_id = ?`, [
+      cardId,
+    ]);
     await this.executeSql(
       `UPDATE flashcards SET
          state = 'new',
@@ -2151,7 +2244,7 @@ export abstract class BaseDatabaseService implements IDatabaseService {
     if (!deck) return;
     const now = new Date().toISOString();
 
-    if (deck.deckType === 'filter' && deck.filterDefinition) {
+    if (deck.deckType === "filter" && deck.filterDefinition) {
       const cardIds = await this.getFlashcardIdsForCustomDeck(customDeckId);
       if (cardIds.length === 0) return;
       const placeholders = cardIds.map(() => "?").join(", ");
@@ -2163,22 +2256,43 @@ export abstract class BaseDatabaseService implements IDatabaseService {
         `UPDATE flashcards SET state = 'new', due_date = ?, interval = 0, repetitions = 0, difficulty = 5.0, stability = 0, lapses = 0, last_reviewed = NULL, modified = ? WHERE id IN (${placeholders})`,
         [now, now, ...cardIds]
       );
-      this.emitSyncOp({ o: "custom_deck_reset", p: { customDeckId, resetAt: now } });
+      this.emitSyncOp({
+        o: "custom_deck_reset",
+        p: { customDeckId, resetAt: now },
+      });
       return;
     }
 
-    await this.executeSql(SQL_QUERIES.DELETE_REVIEW_LOGS_FOR_CUSTOM_DECK, [customDeckId]);
-    await this.executeSql(SQL_QUERIES.RESET_CUSTOM_DECK_FLASHCARDS, [now, customDeckId]);
-    this.emitSyncOp({ o: "custom_deck_reset", p: { customDeckId, resetAt: now } });
+    await this.executeSql(SQL_QUERIES.DELETE_REVIEW_LOGS_FOR_CUSTOM_DECK, [
+      customDeckId,
+    ]);
+    await this.executeSql(SQL_QUERIES.RESET_CUSTOM_DECK_FLASHCARDS, [
+      now,
+      customDeckId,
+    ]);
+    this.emitSyncOp({
+      o: "custom_deck_reset",
+      p: { customDeckId, resetAt: now },
+    });
   }
 
   // CUSTOM DECK OPERATIONS
 
-  async createCustomDeck(name: string, deckType: CustomDeckType = 'manual', filterDefinition: string | null = null): Promise<string> {
+  async createCustomDeck(
+    name: string,
+    deckType: CustomDeckType = "manual",
+    filterDefinition: string | null = null
+  ): Promise<string> {
     const id = generateCustomDeckId(name);
     const now = new Date().toISOString();
     await this.executeSql(SQL_QUERIES.INSERT_CUSTOM_DECK, [
-      id, name, deckType, filterDefinition, null, now, now,
+      id,
+      name,
+      deckType,
+      filterDefinition,
+      null,
+      now,
+      now,
     ]);
     this.emitSyncOp({
       o: "custom_deck_upsert",
@@ -2196,32 +2310,40 @@ export abstract class BaseDatabaseService implements IDatabaseService {
   }
 
   async getCustomDeckById(id: string): Promise<CustomDeck | null> {
-    const results = (await this.querySql(SQL_QUERIES.GET_CUSTOM_DECK_BY_ID, [id])) as (
-      | string | number | null
-    )[][];
+    const results = (await this.querySql(SQL_QUERIES.GET_CUSTOM_DECK_BY_ID, [
+      id,
+    ])) as (string | number | null)[][];
     return results.length > 0 ? this.parseCustomDeckRow(results[0]) : null;
   }
 
   async getCustomDeckByName(name: string): Promise<CustomDeck | null> {
-    const results = (await this.querySql(SQL_QUERIES.GET_CUSTOM_DECK_BY_NAME, [name])) as (
-      | string | number | null
-    )[][];
+    const results = (await this.querySql(SQL_QUERIES.GET_CUSTOM_DECK_BY_NAME, [
+      name,
+    ])) as (string | number | null)[][];
     return results.length > 0 ? this.parseCustomDeckRow(results[0]) : null;
   }
 
   async getAllCustomDecks(): Promise<CustomDeck[]> {
     const results = (await this.querySql(SQL_QUERIES.GET_ALL_CUSTOM_DECKS)) as (
-      | string | number | null
+      | string
+      | number
+      | null
     )[][];
     return results.map((row) => this.parseCustomDeckRow(row));
   }
 
-  async updateCustomDeck(id: string, updates: { name?: string; filterDefinition?: string | null }): Promise<void> {
+  async updateCustomDeck(
+    id: string,
+    updates: { name?: string; filterDefinition?: string | null }
+  ): Promise<void> {
     const existing = await this.getCustomDeckById(id);
     if (!existing) return;
     const now = new Date().toISOString();
     const newName = updates.name ?? existing.name;
-    const newFilter = updates.filterDefinition !== undefined ? updates.filterDefinition : existing.filterDefinition;
+    const newFilter =
+      updates.filterDefinition !== undefined
+        ? updates.filterDefinition
+        : existing.filterDefinition;
     await this.executeSql(SQL_QUERIES.UPDATE_CUSTOM_DECK, [
       newName,
       newFilter,
@@ -2242,10 +2364,15 @@ export abstract class BaseDatabaseService implements IDatabaseService {
     });
   }
 
-  async updateCustomDeckLastReviewed(id: string, timestamp: string): Promise<void> {
+  async updateCustomDeckLastReviewed(
+    id: string,
+    timestamp: string
+  ): Promise<void> {
     const now = new Date().toISOString();
     await this.executeSql(SQL_QUERIES.UPDATE_CUSTOM_DECK_LAST_REVIEWED, [
-      timestamp, now, id,
+      timestamp,
+      now,
+      id,
     ]);
     // last_reviewed updates are user-local and high-churn; intentionally not
     // emitted on the sync log to keep log size bounded. Other devices will
@@ -2258,12 +2385,18 @@ export abstract class BaseDatabaseService implements IDatabaseService {
     this.emitSyncOp({ o: "custom_deck_delete", p: { id, deletedAt: now } });
   }
 
-  async addCardsToCustomDeck(customDeckId: string, flashcardIds: string[]): Promise<void> {
+  async addCardsToCustomDeck(
+    customDeckId: string,
+    flashcardIds: string[]
+  ): Promise<void> {
     const now = new Date().toISOString();
     for (const flashcardId of flashcardIds) {
       const id = generateCustomDeckCardId(customDeckId, flashcardId);
       await this.executeSql(SQL_QUERIES.INSERT_CUSTOM_DECK_CARD, [
-        id, customDeckId, flashcardId, now,
+        id,
+        customDeckId,
+        flashcardId,
+        now,
       ]);
       // Clear any local tombstone for this pair — the user just re-added it.
       await this.executeSql(
@@ -2277,11 +2410,15 @@ export abstract class BaseDatabaseService implements IDatabaseService {
     }
   }
 
-  async removeCardsFromCustomDeck(customDeckId: string, flashcardIds: string[]): Promise<void> {
+  async removeCardsFromCustomDeck(
+    customDeckId: string,
+    flashcardIds: string[]
+  ): Promise<void> {
     const now = new Date().toISOString();
     for (const flashcardId of flashcardIds) {
       await this.executeSql(SQL_QUERIES.DELETE_CUSTOM_DECK_CARD, [
-        customDeckId, flashcardId,
+        customDeckId,
+        flashcardId,
       ]);
       // Local tombstone so a stale remote `_add` op can't resurrect this row.
       await this.executeSql(
@@ -2302,7 +2439,9 @@ export abstract class BaseDatabaseService implements IDatabaseService {
     // Read membership first so each removed pair gets a tombstone +
     // sync op, matching the per-card removeCardsFromCustomDeck pattern.
     const cardIds = await this.getFlashcardIdsForCustomDeck(customDeckId);
-    await this.executeSql(SQL_QUERIES.DELETE_ALL_CUSTOM_DECK_CARDS, [customDeckId]);
+    await this.executeSql(SQL_QUERIES.DELETE_ALL_CUSTOM_DECK_CARDS, [
+      customDeckId,
+    ]);
     if (cardIds.length === 0) return;
     const now = new Date().toISOString();
     for (const flashcardId of cardIds) {
@@ -2320,7 +2459,12 @@ export abstract class BaseDatabaseService implements IDatabaseService {
     }
   }
 
-  private buildFilterQuery(filterDef: string, selectClause: string, extraWhere?: string, extraParams?: SqlJsValue[]): { sql: string; params: SqlJsValue[] } {
+  private buildFilterQuery(
+    filterDef: string,
+    selectClause: string,
+    extraWhere?: string,
+    extraParams?: SqlJsValue[]
+  ): { sql: string; params: SqlJsValue[] } {
     const definition: FilterDefinition = JSON.parse(filterDef);
     const compiled = compileFilter(definition, this.filterCompileOptions);
     const from = compiled.requiresDeckJoin
@@ -2330,29 +2474,42 @@ export abstract class BaseDatabaseService implements IDatabaseService {
       ? `(${compiled.whereClause}) AND (${extraWhere})`
       : compiled.whereClause;
     const params = [...compiled.params, ...(extraParams ?? [])];
-    return { sql: `SELECT ${selectClause} FROM ${from} WHERE ${where}`, params };
+    return {
+      sql: `SELECT ${selectClause} FROM ${from} WHERE ${where}`,
+      params,
+    };
   }
 
   async getFlashcardsForCustomDeck(customDeckId: string): Promise<Flashcard[]> {
     const deck = await this.getCustomDeckById(customDeckId);
     if (!deck) return [];
 
-    if (deck.deckType === 'filter' && deck.filterDefinition) {
-      const { sql, params } = this.buildFilterQuery(deck.filterDefinition, "f.*", undefined, undefined);
-      const results = (await this.querySql(`${sql} ORDER BY f.created`, params)) as (string | number | null)[][];
+    if (deck.deckType === "filter" && deck.filterDefinition) {
+      const { sql, params } = this.buildFilterQuery(
+        deck.filterDefinition,
+        "f.*",
+        undefined,
+        undefined
+      );
+      const results = (await this.querySql(
+        `${sql} ORDER BY f.created`,
+        params
+      )) as (string | number | null)[][];
       return results.map((row) => this.rowToFlashcard(row));
     }
 
-    const results = (await this.querySql(SQL_QUERIES.GET_FLASHCARDS_FOR_CUSTOM_DECK, [customDeckId])) as (
-      | string | number | null
-    )[][];
+    const results = (await this.querySql(
+      SQL_QUERIES.GET_FLASHCARDS_FOR_CUSTOM_DECK,
+      [customDeckId]
+    )) as (string | number | null)[][];
     return results.map((row) => this.rowToFlashcard(row));
   }
 
   async getCustomDecksForFlashcard(flashcardId: string): Promise<CustomDeck[]> {
-    const results = (await this.querySql(SQL_QUERIES.GET_CUSTOM_DECKS_FOR_FLASHCARD, [flashcardId])) as (
-      | string | number | null
-    )[][];
+    const results = (await this.querySql(
+      SQL_QUERIES.GET_CUSTOM_DECKS_FOR_FLASHCARD,
+      [flashcardId]
+    )) as (string | number | null)[][];
     return results.map((row) => this.parseCustomDeckRow(row));
   }
 
@@ -2360,15 +2517,23 @@ export abstract class BaseDatabaseService implements IDatabaseService {
     const deck = await this.getCustomDeckById(customDeckId);
     if (!deck) return [];
 
-    if (deck.deckType === 'filter' && deck.filterDefinition) {
-      const { sql, params } = this.buildFilterQuery(deck.filterDefinition, "f.id");
-      const results = (await this.querySql(sql, params)) as (string | number | null)[][];
+    if (deck.deckType === "filter" && deck.filterDefinition) {
+      const { sql, params } = this.buildFilterQuery(
+        deck.filterDefinition,
+        "f.id"
+      );
+      const results = (await this.querySql(sql, params)) as (
+        | string
+        | number
+        | null
+      )[][];
       return results.map((row) => row[0] as string);
     }
 
-    const results = (await this.querySql(SQL_QUERIES.GET_FLASHCARD_IDS_FOR_CUSTOM_DECK, [customDeckId])) as (
-      | string | number | null
-    )[][];
+    const results = (await this.querySql(
+      SQL_QUERIES.GET_FLASHCARD_IDS_FOR_CUSTOM_DECK,
+      [customDeckId]
+    )) as (string | number | null)[][];
     return results.map((row) => row[0] as string);
   }
 
@@ -2377,20 +2542,25 @@ export abstract class BaseDatabaseService implements IDatabaseService {
     if (!deck) return 0;
     const now = new Date().toISOString();
 
-    if (deck.deckType === 'filter' && deck.filterDefinition) {
+    if (deck.deckType === "filter" && deck.filterDefinition) {
       const { sql, params } = this.buildFilterQuery(
         deck.filterDefinition,
         "COUNT(*)",
         "f.state = ? AND f.due_date <= ? AND f.suspended_at IS NULL AND (f.buried_until IS NULL OR f.buried_until <= ?)",
         ["new", now, now]
       );
-      const results = (await this.querySql(sql, params)) as (string | number | null)[][];
+      const results = (await this.querySql(sql, params)) as (
+        | string
+        | number
+        | null
+      )[][];
       return (results[0]?.[0] as number) ?? 0;
     }
 
-    const results = (await this.querySql(SQL_QUERIES.COUNT_NEW_CARDS_CUSTOM_DECK, [customDeckId, now, now])) as (
-      | string | number | null
-    )[][];
+    const results = (await this.querySql(
+      SQL_QUERIES.COUNT_NEW_CARDS_CUSTOM_DECK,
+      [customDeckId, now, now]
+    )) as (string | number | null)[][];
     return (results[0]?.[0] as number) ?? 0;
   }
 
@@ -2399,20 +2569,25 @@ export abstract class BaseDatabaseService implements IDatabaseService {
     if (!deck) return 0;
     const now = new Date().toISOString();
 
-    if (deck.deckType === 'filter' && deck.filterDefinition) {
+    if (deck.deckType === "filter" && deck.filterDefinition) {
       const { sql, params } = this.buildFilterQuery(
         deck.filterDefinition,
         "COUNT(*)",
         "f.state = ? AND f.due_date <= ? AND f.suspended_at IS NULL AND (f.buried_until IS NULL OR f.buried_until <= ?)",
         ["review", now, now]
       );
-      const results = (await this.querySql(sql, params)) as (string | number | null)[][];
+      const results = (await this.querySql(sql, params)) as (
+        | string
+        | number
+        | null
+      )[][];
       return (results[0]?.[0] as number) ?? 0;
     }
 
-    const results = (await this.querySql(SQL_QUERIES.COUNT_DUE_CARDS_CUSTOM_DECK, [customDeckId, now, now])) as (
-      | string | number | null
-    )[][];
+    const results = (await this.querySql(
+      SQL_QUERIES.COUNT_DUE_CARDS_CUSTOM_DECK,
+      [customDeckId, now, now]
+    )) as (string | number | null)[][];
     return (results[0]?.[0] as number) ?? 0;
   }
 
@@ -2420,15 +2595,23 @@ export abstract class BaseDatabaseService implements IDatabaseService {
     const deck = await this.getCustomDeckById(customDeckId);
     if (!deck) return 0;
 
-    if (deck.deckType === 'filter' && deck.filterDefinition) {
-      const { sql, params } = this.buildFilterQuery(deck.filterDefinition, "COUNT(*)");
-      const results = (await this.querySql(sql, params)) as (string | number | null)[][];
+    if (deck.deckType === "filter" && deck.filterDefinition) {
+      const { sql, params } = this.buildFilterQuery(
+        deck.filterDefinition,
+        "COUNT(*)"
+      );
+      const results = (await this.querySql(sql, params)) as (
+        | string
+        | number
+        | null
+      )[][];
       return (results[0]?.[0] as number) ?? 0;
     }
 
-    const results = (await this.querySql(SQL_QUERIES.COUNT_TOTAL_CARDS_CUSTOM_DECK, [customDeckId])) as (
-      | string | number | null
-    )[][];
+    const results = (await this.querySql(
+      SQL_QUERIES.COUNT_TOTAL_CARDS_CUSTOM_DECK,
+      [customDeckId]
+    )) as (string | number | null)[][];
     return (results[0]?.[0] as number) ?? 0;
   }
 
@@ -2437,20 +2620,24 @@ export abstract class BaseDatabaseService implements IDatabaseService {
     if (!deck) return [];
     const now = new Date().toISOString();
 
-    if (deck.deckType === 'filter' && deck.filterDefinition) {
+    if (deck.deckType === "filter" && deck.filterDefinition) {
       const { sql, params } = this.buildFilterQuery(
         deck.filterDefinition,
         "f.*",
         "f.state = ? AND f.due_date <= ? AND f.suspended_at IS NULL AND (f.buried_until IS NULL OR f.buried_until <= ?)",
         ["review", now, now]
       );
-      const results = (await this.querySql(`${sql} ORDER BY f.due_date ASC`, params)) as (string | number | null)[][];
+      const results = (await this.querySql(
+        `${sql} ORDER BY f.due_date ASC`,
+        params
+      )) as (string | number | null)[][];
       return results.map((row) => this.rowToFlashcard(row));
     }
 
-    const results = (await this.querySql(SQL_QUERIES.GET_DUE_CARDS_FOR_CUSTOM_DECK, [customDeckId, now, now])) as (
-      | string | number | null
-    )[][];
+    const results = (await this.querySql(
+      SQL_QUERIES.GET_DUE_CARDS_FOR_CUSTOM_DECK,
+      [customDeckId, now, now]
+    )) as (string | number | null)[][];
     return results.map((row) => this.rowToFlashcard(row));
   }
 
@@ -2459,20 +2646,24 @@ export abstract class BaseDatabaseService implements IDatabaseService {
     if (!deck) return [];
     const now = new Date().toISOString();
 
-    if (deck.deckType === 'filter' && deck.filterDefinition) {
+    if (deck.deckType === "filter" && deck.filterDefinition) {
       const { sql, params } = this.buildFilterQuery(
         deck.filterDefinition,
         "f.*",
         "f.state = ? AND f.due_date <= ? AND f.suspended_at IS NULL AND (f.buried_until IS NULL OR f.buried_until <= ?)",
         ["new", now, now]
       );
-      const results = (await this.querySql(`${sql} ORDER BY f.due_date ASC`, params)) as (string | number | null)[][];
+      const results = (await this.querySql(
+        `${sql} ORDER BY f.due_date ASC`,
+        params
+      )) as (string | number | null)[][];
       return results.map((row) => this.rowToFlashcard(row));
     }
 
-    const results = (await this.querySql(SQL_QUERIES.GET_NEW_CARDS_FOR_CUSTOM_DECK, [customDeckId, now, now])) as (
-      | string | number | null
-    )[][];
+    const results = (await this.querySql(
+      SQL_QUERIES.GET_NEW_CARDS_FOR_CUSTOM_DECK,
+      [customDeckId, now, now]
+    )) as (string | number | null)[][];
     return results.map((row) => this.rowToFlashcard(row));
   }
 
@@ -2481,11 +2672,7 @@ export abstract class BaseDatabaseService implements IDatabaseService {
     params: SqlJsValue[] = [],
     config?: QueryConfig
   ): Promise<Record<string, SqlJsValue>[] | SqlJsValue[][]> {
-    return (await this.querySql(
-      sql,
-      params,
-      config
-    ));
+    return await this.querySql(sql, params, config);
   }
 
   // BACKUP OPERATIONS - Concrete implementations using abstract db methods
@@ -2546,26 +2733,39 @@ export abstract class BaseDatabaseService implements IDatabaseService {
 
       // Get current schema column names
       const currentLogColumns = new Set(
-        (await this.querySql("PRAGMA table_info(review_logs)") as SqlJsValue[][])
-          .map(row => row[1] as string)
+        (
+          (await this.querySql(
+            "PRAGMA table_info(review_logs)"
+          )) as SqlJsValue[][]
+        ).map((row) => row[1] as string)
       );
       const currentSessionColumns = new Set(
-        (await this.querySql("PRAGMA table_info(review_sessions)") as SqlJsValue[][])
-          .map(row => row[1] as string)
+        (
+          (await this.querySql(
+            "PRAGMA table_info(review_sessions)"
+          )) as SqlJsValue[][]
+        ).map((row) => row[1] as string)
       );
 
       // Restore deckprofiles
       try {
         const currentProfileColumns = new Set(
-          (await this.querySql("PRAGMA table_info(deckprofiles)") as SqlJsValue[][])
-            .map(row => row[1] as string)
+          (
+            (await this.querySql(
+              "PRAGMA table_info(deckprofiles)"
+            )) as SqlJsValue[][]
+          ).map((row) => row[1] as string)
         );
 
-        const backupProfileCols = (await this.queryBackupDatabase(
-          backupDb, "PRAGMA table_info(deckprofiles)"
-        )).map(row => row[1] as string);
+        const backupProfileCols = (
+          await this.queryBackupDatabase(
+            backupDb,
+            "PRAGMA table_info(deckprofiles)"
+          )
+        ).map((row) => row[1] as string);
 
-        const profileMapping: { backupIndex: number; currentName: string }[] = [];
+        const profileMapping: { backupIndex: number; currentName: string }[] =
+          [];
         for (let i = 0; i < backupProfileCols.length; i++) {
           const col = backupProfileCols[i];
           if (currentProfileColumns.has(col)) {
@@ -2575,9 +2775,10 @@ export abstract class BaseDatabaseService implements IDatabaseService {
 
         if (profileMapping.length > 0) {
           const profiles = await this.queryBackupDatabase(
-            backupDb, "SELECT * FROM deckprofiles"
+            backupDb,
+            "SELECT * FROM deckprofiles"
           );
-          const columns = profileMapping.map(m => m.currentName);
+          const columns = profileMapping.map((m) => m.currentName);
           const placeholders = columns.map(() => "?").join(", ");
           const insertIgnoreSql = `INSERT OR IGNORE INTO deckprofiles (${columns.join(", ")}) VALUES (${placeholders})`;
           const insertReplaceSql = `INSERT OR REPLACE INTO deckprofiles (${columns.join(", ")}) VALUES (${placeholders})`;
@@ -2585,9 +2786,13 @@ export abstract class BaseDatabaseService implements IDatabaseService {
           const isDefaultIndex = backupProfileCols.indexOf("is_default");
 
           for (const profile of profiles) {
-            const values = profileMapping.map(m => profile[m.backupIndex]);
-            const isDefault = isDefaultIndex >= 0 && Boolean(profile[isDefaultIndex]);
-            await this.executeSql(isDefault ? insertIgnoreSql : insertReplaceSql, values);
+            const values = profileMapping.map((m) => profile[m.backupIndex]);
+            const isDefault =
+              isDefaultIndex >= 0 && Boolean(profile[isDefaultIndex]);
+            await this.executeSql(
+              isDefault ? insertIgnoreSql : insertReplaceSql,
+              values
+            );
           }
         }
       } catch {
@@ -2597,15 +2802,24 @@ export abstract class BaseDatabaseService implements IDatabaseService {
       // Restore profile_tag_mappings
       try {
         const currentTagMappingColumns = new Set(
-          (await this.querySql("PRAGMA table_info(profile_tag_mappings)") as SqlJsValue[][])
-            .map(row => row[1] as string)
+          (
+            (await this.querySql(
+              "PRAGMA table_info(profile_tag_mappings)"
+            )) as SqlJsValue[][]
+          ).map((row) => row[1] as string)
         );
 
-        const backupTagMappingCols = (await this.queryBackupDatabase(
-          backupDb, "PRAGMA table_info(profile_tag_mappings)"
-        )).map(row => row[1] as string);
+        const backupTagMappingCols = (
+          await this.queryBackupDatabase(
+            backupDb,
+            "PRAGMA table_info(profile_tag_mappings)"
+          )
+        ).map((row) => row[1] as string);
 
-        const tagMappingMapping: { backupIndex: number; currentName: string }[] = [];
+        const tagMappingMapping: {
+          backupIndex: number;
+          currentName: string;
+        }[] = [];
         for (let i = 0; i < backupTagMappingCols.length; i++) {
           const col = backupTagMappingCols[i];
           if (currentTagMappingColumns.has(col)) {
@@ -2615,28 +2829,35 @@ export abstract class BaseDatabaseService implements IDatabaseService {
 
         if (tagMappingMapping.length > 0) {
           const mappings = await this.queryBackupDatabase(
-            backupDb, "SELECT * FROM profile_tag_mappings"
+            backupDb,
+            "SELECT * FROM profile_tag_mappings"
           );
-          const columns = tagMappingMapping.map(m => m.currentName);
+          const columns = tagMappingMapping.map((m) => m.currentName);
           const placeholders = columns.map(() => "?").join(", ");
           const insertSql = `INSERT OR REPLACE INTO profile_tag_mappings (${columns.join(", ")}) VALUES (${placeholders})`;
 
           for (const mapping of mappings) {
-            const values = tagMappingMapping.map(m => mapping[m.backupIndex]);
+            const values = tagMappingMapping.map((m) => mapping[m.backupIndex]);
             await this.executeSql(insertSql, values);
           }
         }
       } catch {
-        this.debugLog("Backup does not contain profile_tag_mappings table, skipping");
+        this.debugLog(
+          "Backup does not contain profile_tag_mappings table, skipping"
+        );
       }
 
       // Restore review_sessions (schema is stable across versions)
       try {
-        const backupSessionCols = (await this.queryBackupDatabase(
-          backupDb, "PRAGMA table_info(review_sessions)"
-        )).map(row => row[1] as string);
+        const backupSessionCols = (
+          await this.queryBackupDatabase(
+            backupDb,
+            "PRAGMA table_info(review_sessions)"
+          )
+        ).map((row) => row[1] as string);
 
-        const sessionMapping: { backupIndex: number; currentName: string }[] = [];
+        const sessionMapping: { backupIndex: number; currentName: string }[] =
+          [];
         for (let i = 0; i < backupSessionCols.length; i++) {
           const col = backupSessionCols[i];
           if (currentSessionColumns.has(col)) {
@@ -2646,26 +2867,32 @@ export abstract class BaseDatabaseService implements IDatabaseService {
 
         if (sessionMapping.length > 0) {
           const sessions = await this.queryBackupDatabase(
-            backupDb, "SELECT * FROM review_sessions"
+            backupDb,
+            "SELECT * FROM review_sessions"
           );
-          const columns = sessionMapping.map(m => m.currentName);
+          const columns = sessionMapping.map((m) => m.currentName);
           const placeholders = columns.map(() => "?").join(", ");
           const insertSql = `INSERT OR IGNORE INTO review_sessions (${columns.join(", ")}) VALUES (${placeholders})`;
 
           for (const session of sessions) {
-            const values = sessionMapping.map(m => session[m.backupIndex]);
+            const values = sessionMapping.map((m) => session[m.backupIndex]);
             await this.executeSql(insertSql, values);
           }
         }
       } catch {
-        this.debugLog("Backup does not contain review_sessions table, skipping");
+        this.debugLog(
+          "Backup does not contain review_sessions table, skipping"
+        );
       }
 
       // Restore review_logs (handles column renames across schema versions)
       try {
-        const backupLogCols = (await this.queryBackupDatabase(
-          backupDb, "PRAGMA table_info(review_logs)"
-        )).map(row => row[1] as string);
+        const backupLogCols = (
+          await this.queryBackupDatabase(
+            backupDb,
+            "PRAGMA table_info(review_logs)"
+          )
+        ).map((row) => row[1] as string);
 
         const logMapping: { backupIndex: number; currentName: string }[] = [];
         for (let i = 0; i < backupLogCols.length; i++) {
@@ -2678,14 +2905,15 @@ export abstract class BaseDatabaseService implements IDatabaseService {
 
         if (logMapping.length > 0) {
           const logs = await this.queryBackupDatabase(
-            backupDb, "SELECT * FROM review_logs"
+            backupDb,
+            "SELECT * FROM review_logs"
           );
-          const columns = logMapping.map(m => m.currentName);
+          const columns = logMapping.map((m) => m.currentName);
           const placeholders = columns.map(() => "?").join(", ");
           const insertSql = `INSERT OR IGNORE INTO review_logs (${columns.join(", ")}) VALUES (${placeholders})`;
 
           for (const log of logs) {
-            const values = logMapping.map(m => log[m.backupIndex]);
+            const values = logMapping.map((m) => log[m.backupIndex]);
             await this.executeSql(insertSql, values);
           }
         }
@@ -2696,15 +2924,24 @@ export abstract class BaseDatabaseService implements IDatabaseService {
       // Restore custom_decks
       try {
         const currentCustomDeckColumns = new Set(
-          (await this.querySql("PRAGMA table_info(custom_decks)") as SqlJsValue[][])
-            .map(row => row[1] as string)
+          (
+            (await this.querySql(
+              "PRAGMA table_info(custom_decks)"
+            )) as SqlJsValue[][]
+          ).map((row) => row[1] as string)
         );
 
-        const backupCustomDeckCols = (await this.queryBackupDatabase(
-          backupDb, "PRAGMA table_info(custom_decks)"
-        )).map(row => row[1] as string);
+        const backupCustomDeckCols = (
+          await this.queryBackupDatabase(
+            backupDb,
+            "PRAGMA table_info(custom_decks)"
+          )
+        ).map((row) => row[1] as string);
 
-        const customDeckMapping: { backupIndex: number; currentName: string }[] = [];
+        const customDeckMapping: {
+          backupIndex: number;
+          currentName: string;
+        }[] = [];
         for (let i = 0; i < backupCustomDeckCols.length; i++) {
           const col = backupCustomDeckCols[i];
           if (currentCustomDeckColumns.has(col)) {
@@ -2714,14 +2951,15 @@ export abstract class BaseDatabaseService implements IDatabaseService {
 
         if (customDeckMapping.length > 0) {
           const customDecks = await this.queryBackupDatabase(
-            backupDb, "SELECT * FROM custom_decks"
+            backupDb,
+            "SELECT * FROM custom_decks"
           );
-          const columns = customDeckMapping.map(m => m.currentName);
+          const columns = customDeckMapping.map((m) => m.currentName);
           const placeholders = columns.map(() => "?").join(", ");
           const insertSql = `INSERT OR REPLACE INTO custom_decks (${columns.join(", ")}) VALUES (${placeholders})`;
 
           for (const deck of customDecks) {
-            const values = customDeckMapping.map(m => deck[m.backupIndex]);
+            const values = customDeckMapping.map((m) => deck[m.backupIndex]);
             await this.executeSql(insertSql, values);
           }
         }
@@ -2732,13 +2970,19 @@ export abstract class BaseDatabaseService implements IDatabaseService {
       // Restore custom_deck_cards
       try {
         const currentCardColumns = new Set(
-          (await this.querySql("PRAGMA table_info(custom_deck_cards)") as SqlJsValue[][])
-            .map(row => row[1] as string)
+          (
+            (await this.querySql(
+              "PRAGMA table_info(custom_deck_cards)"
+            )) as SqlJsValue[][]
+          ).map((row) => row[1] as string)
         );
 
-        const backupCardCols = (await this.queryBackupDatabase(
-          backupDb, "PRAGMA table_info(custom_deck_cards)"
-        )).map(row => row[1] as string);
+        const backupCardCols = (
+          await this.queryBackupDatabase(
+            backupDb,
+            "PRAGMA table_info(custom_deck_cards)"
+          )
+        ).map((row) => row[1] as string);
 
         const cardMapping: { backupIndex: number; currentName: string }[] = [];
         for (let i = 0; i < backupCardCols.length; i++) {
@@ -2750,31 +2994,40 @@ export abstract class BaseDatabaseService implements IDatabaseService {
 
         if (cardMapping.length > 0) {
           const cards = await this.queryBackupDatabase(
-            backupDb, "SELECT * FROM custom_deck_cards"
+            backupDb,
+            "SELECT * FROM custom_deck_cards"
           );
-          const columns = cardMapping.map(m => m.currentName);
+          const columns = cardMapping.map((m) => m.currentName);
           const placeholders = columns.map(() => "?").join(", ");
           const insertSql = `INSERT OR IGNORE INTO custom_deck_cards (${columns.join(", ")}) VALUES (${placeholders})`;
 
           for (const card of cards) {
-            const values = cardMapping.map(m => card[m.backupIndex]);
+            const values = cardMapping.map((m) => card[m.backupIndex]);
             await this.executeSql(insertSql, values);
           }
         }
       } catch {
-        this.debugLog("Backup does not contain custom_deck_cards table, skipping");
+        this.debugLog(
+          "Backup does not contain custom_deck_cards table, skipping"
+        );
       }
 
       // Restore trained weight sets (column-intersection; backups predating the table are skipped)
       try {
         const currentWeightSetColumns = new Set(
-          (await this.querySql("PRAGMA table_info(fsrs_weight_sets)") as SqlJsValue[][])
-            .map(row => row[1] as string)
+          (
+            (await this.querySql(
+              "PRAGMA table_info(fsrs_weight_sets)"
+            )) as SqlJsValue[][]
+          ).map((row) => row[1] as string)
         );
 
-        const backupWeightSetCols = (await this.queryBackupDatabase(
-          backupDb, "PRAGMA table_info(fsrs_weight_sets)"
-        )).map(row => row[1] as string);
+        const backupWeightSetCols = (
+          await this.queryBackupDatabase(
+            backupDb,
+            "PRAGMA table_info(fsrs_weight_sets)"
+          )
+        ).map((row) => row[1] as string);
 
         const wsMapping: { backupIndex: number; currentName: string }[] = [];
         for (let i = 0; i < backupWeightSetCols.length; i++) {
@@ -2786,19 +3039,22 @@ export abstract class BaseDatabaseService implements IDatabaseService {
 
         if (wsMapping.length > 0) {
           const sets = await this.queryBackupDatabase(
-            backupDb, "SELECT * FROM fsrs_weight_sets"
+            backupDb,
+            "SELECT * FROM fsrs_weight_sets"
           );
-          const columns = wsMapping.map(m => m.currentName);
+          const columns = wsMapping.map((m) => m.currentName);
           const placeholders = columns.map(() => "?").join(", ");
           const insertSql = `INSERT OR IGNORE INTO fsrs_weight_sets (${columns.join(", ")}) VALUES (${placeholders})`;
 
           for (const set of sets) {
-            const values = wsMapping.map(m => set[m.backupIndex]);
+            const values = wsMapping.map((m) => set[m.backupIndex]);
             await this.executeSql(insertSql, values);
           }
         }
       } catch {
-        this.debugLog("Backup does not contain fsrs_weight_sets table, skipping");
+        this.debugLog(
+          "Backup does not contain fsrs_weight_sets table, skipping"
+        );
       }
 
       await this.closeBackupDatabaseInstance(backupDb);
@@ -2863,16 +3119,20 @@ export abstract class BaseDatabaseService implements IDatabaseService {
          last_applied_seq = excluded.last_applied_seq,
          last_applied_hlc = excluded.last_applied_hlc,
          last_applied_at = excluded.last_applied_at`,
-      [row.sourceDeviceId, row.lastAppliedSeq, row.lastAppliedHlc, row.lastAppliedAt]
+      [
+        row.sourceDeviceId,
+        row.lastAppliedSeq,
+        row.lastAppliedHlc,
+        row.lastAppliedAt,
+      ]
     );
   }
 
   // mtime gate accessors. Local-per-device (excluded from cross-device merge).
   async getDeckLastSyncedMtime(deckId: string): Promise<number> {
-    const rows = (await this.querySql(
-      SQL_QUERIES.GET_DECK_LAST_SYNCED_MTIME,
-      [deckId]
-    )) as Array<[number]>;
+    const rows = (await this.querySql(SQL_QUERIES.GET_DECK_LAST_SYNCED_MTIME, [
+      deckId,
+    ])) as Array<[number]>;
     if (rows.length === 0) return 0;
     const value = rows[0][0];
     return typeof value === "number" ? value : 0;
@@ -2894,10 +3154,15 @@ export abstract class BaseDatabaseService implements IDatabaseService {
   }
 
   async setDeckLastSyncedMtime(deckId: string, mtime: number): Promise<void> {
-    await this.executeSql(SQL_QUERIES.UPDATE_DECK_LAST_SYNCED_MTIME, [mtime, deckId]);
+    await this.executeSql(SQL_QUERIES.UPDATE_DECK_LAST_SYNCED_MTIME, [
+      mtime,
+      deckId,
+    ]);
   }
 
   async clearLastSyncedMtimeForProfile(profileId: string): Promise<void> {
-    await this.executeSql(SQL_QUERIES.CLEAR_LAST_SYNCED_MTIME_BY_PROFILE, [profileId]);
+    await this.executeSql(SQL_QUERIES.CLEAR_LAST_SYNCED_MTIME_BY_PROFILE, [
+      profileId,
+    ]);
   }
 }

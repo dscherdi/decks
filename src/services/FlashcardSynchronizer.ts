@@ -3,7 +3,15 @@ import { CanvasFlashcardExtractor } from "@decks/core";
 import type { Flashcard, FlashcardType, DeckProfile } from "../database/types";
 import type { SqlJsValue } from "@decks/core";
 import type { Database } from "sql.js";
-import { generateClozeFlashcardId, generateContentHash, generateFlashcardId, generateReverseFlashcardId, generateSpatialClozeFlashcardId, generateSpatialFlashcardId, levenshteinSimilarity } from "@decks/core";
+import {
+  generateClozeFlashcardId,
+  generateContentHash,
+  generateFlashcardId,
+  generateReverseFlashcardId,
+  generateSpatialClozeFlashcardId,
+  generateSpatialFlashcardId,
+  levenshteinSimilarity,
+} from "@decks/core";
 
 export interface FlashcardUpdates {
   front: string;
@@ -75,12 +83,16 @@ export class FlashcardSynchronizer {
       if (op.type === "migrate" && op.oldId && op.flashcard) {
         // Safety check: if target ID already exists (hash collision), just delete the old card
         const card = op.flashcard;
-        const checkStmt = this.db.prepare("SELECT id FROM flashcards WHERE id = ?");
+        const checkStmt = this.db.prepare(
+          "SELECT id FROM flashcards WHERE id = ?"
+        );
         checkStmt.bind([card.id]);
         const targetExists = checkStmt.step();
         checkStmt.free();
         if (targetExists) {
-          const deleteStmt = this.db.prepare("DELETE FROM flashcards WHERE id = ?");
+          const deleteStmt = this.db.prepare(
+            "DELETE FROM flashcards WHERE id = ?"
+          );
           deleteStmt.run([op.oldId]);
           deleteStmt.free();
           continue;
@@ -200,18 +212,20 @@ export class FlashcardSynchronizer {
       // text-node id.
       progressCallback?.(10, "Parsing flashcards from file content...");
       const isCanvas = data.deckFilepath.toLowerCase().endsWith(".canvas");
+      const headerLevels =
+        data.deckConfig.headerLevels ?? data.deckConfig.headerLevel;
       const parsedCards = isCanvas
         ? CanvasFlashcardExtractor.extract(
             data.fileContent,
-            data.deckConfig.headerLevel,
+            headerLevels,
             data.fileTitle,
-            data.clozeEnabled,
+            data.clozeEnabled
           )
         : FlashcardParser.parseFlashcardsFromContent(
             data.fileContent,
-            data.deckConfig.headerLevel,
+            headerLevels,
             data.fileTitle,
-            data.clozeEnabled,
+            data.clozeEnabled
           );
 
       // Expand with reverse cards if enabled. Cloze, image-occlusion, and
@@ -251,7 +265,8 @@ export class FlashcardSynchronizer {
       while (stmt.step()) {
         const row = stmt.getAsObject() as Record<string, SqlJsValue>;
         const tagsRaw = (row.tags as string) || "";
-        const tags = tagsRaw === "" ? [] : tagsRaw.split(",").filter((t) => t.length > 0);
+        const tags =
+          tagsRaw === "" ? [] : tagsRaw.split(",").filter((t) => t.length > 0);
         existingFlashcards.push({
           id: row.id as string,
           deckId: row.deck_id as string,
@@ -350,7 +365,8 @@ export class FlashcardSynchronizer {
         // so identical fronts in different nodes produce distinct IDs. For
         // markdown cards (no sourceNodeId / no edgeId), the hash is
         // byte-identical to the pre-canvas implementation.
-        const isClozeType = parsed.type === "cloze" || parsed.type === "image-occlusion";
+        const isClozeType =
+          parsed.type === "cloze" || parsed.type === "image-occlusion";
         const isSpatial = parsed.type === "spatial";
         const hasEdge = !!parsed.edgeId;
         let flashcardId: string;
@@ -361,14 +377,28 @@ export class FlashcardSynchronizer {
             data.deckId,
             parsed.edgeId!,
             parsed.clozeText!,
-            parsed.clozeOrder!,
+            parsed.clozeOrder!
           );
         } else if (isClozeType) {
-          flashcardId = generateClozeFlashcardId(parsed.front, parsed.clozeText!, parsed.clozeOrder!, data.deckId, parsed.sourceNodeId);
+          flashcardId = generateClozeFlashcardId(
+            parsed.front,
+            parsed.clozeText!,
+            parsed.clozeOrder!,
+            data.deckId,
+            parsed.sourceNodeId
+          );
         } else if (parsed.isReverse) {
-          flashcardId = generateReverseFlashcardId(parsed.back, data.deckId, parsed.sourceNodeId);
+          flashcardId = generateReverseFlashcardId(
+            parsed.back,
+            data.deckId,
+            parsed.sourceNodeId
+          );
         } else {
-          flashcardId = generateFlashcardId(parsed.front, data.deckId, parsed.sourceNodeId);
+          flashcardId = generateFlashcardId(
+            parsed.front,
+            data.deckId,
+            parsed.sourceNodeId
+          );
         }
         const contentHash = isClozeType
           ? generateContentHash(parsed.back + "::" + parsed.clozeText)
