@@ -15,7 +15,7 @@ const TRAILING_TAGS_REGEX = /(\s+#[\w/-]+(?:\s+#[\w/-]+)*)\s*$/;
 
 export type FlashcardEdits =
   | { type: "header-paragraph"; front: string; back: string }
-  | { type: "table"; front: string; back: string; notes: string }
+  | { type: "table"; front: string; back: string; notes: string; columns?: string[] }
   | { type: "cloze"; front: string; sentence: string }
   | { type: "image-occlusion"; listItem: string }
   | { type: "spatial"; front: string; back: string; hint: string };
@@ -276,6 +276,7 @@ function applyEdit(
   if (
     card.type === "table" &&
     edits.type === "table" &&
+    !edits.columns &&
     edits.notes.trim() !== "" &&
     dataColumnCount(segLines[0]) < 3
   ) {
@@ -575,7 +576,7 @@ function buildHeaderParagraph(
 
 function buildTableRow(
   rowLine: string,
-  edits: { front: string; back: string; notes: string },
+  edits: { front: string; back: string; notes: string; columns?: string[] },
 ): { ok: true; lines: string[] } | { ok: false; failure: EditFailure } {
   const cells = splitTableRow(rowLine);
   if (!cells) return fail("invalid_edit", "Not a valid table row");
@@ -583,6 +584,17 @@ function buildTableRow(
   // pipes; data columns are cells[1..cells.length-2]. A 2-column table has
   // length 4, a 3-column has length 5.
   const dataCount = Math.max(0, cells.length - 2);
+
+  // Template cards edit the whole row: write each existing data cell from the
+  // matching `columns[i]` (extra columns beyond the row's width are ignored).
+  if (edits.columns) {
+    const next = [...cells];
+    for (let i = 0; i < dataCount; i++) {
+      next[i + 1] = ` ${escapeTableCell((edits.columns[i] ?? "").trim())} `;
+    }
+    return { ok: true, lines: [next.join("|")] };
+  }
+
   if (dataCount < 3 && edits.notes.trim() !== "") {
     return fail(
       "invalid_edit",
@@ -647,6 +659,11 @@ function validateEdits(edits: FlashcardEdits): InternalApply | null {
     }
     // Newlines in the header are silently collapsed to spaces by
     // buildHeaderParagraph — a header line must be single-line in markdown.
+  }
+  if (edits.type === "table" && edits.columns) {
+    if ((edits.columns[0] ?? "").trim() === "") {
+      return fail("invalid_edit", "The first column cannot be empty");
+    }
   }
   if (edits.type === "image-occlusion") {
     if (edits.listItem.trim() === "") {

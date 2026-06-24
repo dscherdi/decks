@@ -807,3 +807,83 @@ div.decks-card-content
   font-size: 0.85em;
   white-space: pre-wrap;
 }
+
+/* Table template engine: settings editor + card viewer */
+.decks-template-textarea {
+  width: 100%;
+  min-height: 5em;
+  font-family: var(--font-monospace);
+  resize: vertical;
+}
+
+.decks-template-preview {
+  margin: 8px 0 16px;
+  padding: 12px;
+  border: 1px solid var(--background-modifier-border);
+  border-radius: 6px;
+  background-color: var(--background-secondary);
+}
+
+.decks-flashcard-viewer .decks-viewer-divider {
+  margin: 10px 0;
+  border: none;
+  border-top: 1px solid var(--background-modifier-border);
+}
+
+.decks-flashcard-viewer .decks-viewer-notes-label {
+  margin-top: 10px;
+  font-size: 0.8em;
+  color: var(--text-muted);
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+}
+
+/* Shadow-DOM host for sanitized HTML template cards. The card's own CSS is
+   trapped inside the shadow root; this host only reserves layout space. */
+.decks-template-host {
+  display: block;
+}
+
+/* Template card editor: one native input per table column */
+.decks-edit-template-hint {
+  font-size: 0.85em;
+  color: var(--text-muted);
+  margin-bottom: 8px;
+}
+.decks-edit-columns {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+.decks-edit-column {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+.decks-edit-column-label {
+  font-size: 0.8em;
+  font-weight: 600;
+  color: var(--text-muted);
+}
+.decks-edit-column-input {
+  width: 100%;
+}
+
+/* Live preview of a template-face codeblock inside a template file */
+.decks-template-preview-block {
+  border: 1px solid var(--background-modifier-border);
+  border-radius: 6px;
+  margin: 6px 0;
+  overflow: hidden;
+}
+.decks-template-preview-label {
+  font-family: var(--font-monospace);
+  font-size: 0.75em;
+  color: var(--text-muted);
+  background-color: var(--background-secondary);
+  padding: 4px 8px;
+  border-bottom: 1px solid var(--background-modifier-border);
+}
+.decks-template-preview-body {
+  padding: 12px;
+}

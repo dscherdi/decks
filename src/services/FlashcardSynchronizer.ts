@@ -1,6 +1,6 @@
 import { FlashcardParser } from "@decks/core";
 import { CanvasFlashcardExtractor } from "@decks/core";
-import type { Flashcard, FlashcardType, DeckProfile } from "../database/types";
+import type { Flashcard, FlashcardType, DeckProfile, TemplateRow } from "../database/types";
 import type { SqlJsValue } from "@decks/core";
 import type { Database } from "sql.js";
 import { generateClozeFlashcardId, generateContentHash, generateFlashcardId, generateReverseFlashcardId, generateSpatialClozeFlashcardId, generateSpatialFlashcardId, levenshteinSimilarity } from "@decks/core";
@@ -16,6 +16,11 @@ export interface FlashcardUpdates {
   hint: string;
   clozeText: string | null;
   clozeOrder: number | null;
+  templateRow: TemplateRow | null;
+}
+
+function serializeTemplateRow(row: TemplateRow | null | undefined): string | null {
+  return row ? JSON.stringify(row) : null;
 }
 
 function serializeTagsForSql(tags: string[] | undefined): string {
@@ -91,7 +96,7 @@ export class FlashcardSynchronizer {
                     UPDATE flashcards
                     SET id = ?, front = ?, back = ?, content_hash = ?, breadcrumb = ?, notes = ?,
                         type = ?, cloze_text = ?, cloze_order = ?, source_node_id = ?, edge_id = ?,
-                        hint = ?, tags = ?, modified = datetime('now')
+                        hint = ?, tags = ?, template_row = ?, modified = datetime('now')
                     WHERE id = ?
                 `);
         updateStmt.run([
@@ -108,6 +113,7 @@ export class FlashcardSynchronizer {
           card.edgeId ?? null,
           card.hint || "",
           serializeTagsForSql(card.tags),
+          serializeTemplateRow(card.templateRow),
           op.oldId,
         ]);
         updateStmt.free();
@@ -130,8 +136,8 @@ export class FlashcardSynchronizer {
                         cloze_text, cloze_order, source_node_id, edge_id, hint,
                         state, due_date, interval, repetitions, difficulty, stability,
                         lapses, last_reviewed, created, modified, tags,
-                        suspended_at, buried_until
-                    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, datetime('now'), datetime('now'), ?, ?, ?)
+                        suspended_at, buried_until, template_row
+                    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, datetime('now'), datetime('now'), ?, ?, ?, ?)
                 `);
         stmt.run([
           card.id,
@@ -159,13 +165,15 @@ export class FlashcardSynchronizer {
           serializeTagsForSql(card.tags),
           card.suspendedAt ?? null,
           card.buriedUntil ?? null,
+          serializeTemplateRow(card.templateRow),
         ]);
         stmt.free();
       } else if (op.type === "update" && op.flashcardId && op.updates) {
         const stmt = this.db.prepare(`
                     UPDATE flashcards
                     SET front = ?, back = ?, type = ?, content_hash = ?, breadcrumb = ?, notes = ?,
-                        cloze_text = ?, cloze_order = ?, hint = ?, tags = ?, modified = datetime('now')
+                        cloze_text = ?, cloze_order = ?, hint = ?, tags = ?, template_row = ?,
+                        modified = datetime('now')
                     WHERE id = ?
                 `);
         stmt.run([
@@ -179,6 +187,7 @@ export class FlashcardSynchronizer {
           op.updates.clozeOrder,
           op.updates.hint || "",
           serializeTagsForSql(op.updates.tags),
+          serializeTemplateRow(op.updates.templateRow),
           op.flashcardId,
         ]);
         stmt.free();
@@ -267,6 +276,9 @@ export class FlashcardSynchronizer {
           clozeOrder: (row.cloze_order as number) ?? null,
           sourceNodeId: (row.source_node_id as string) ?? null,
           edgeId: (row.edge_id as string) ?? null,
+          templateRow: row.template_row
+            ? (JSON.parse(row.template_row as string) as TemplateRow)
+            : null,
           state: row.state as "new" | "review",
           dueDate: row.due_date as string,
           interval: row.interval as number,
@@ -309,6 +321,7 @@ export class FlashcardSynchronizer {
           sourceNodeId?: string;
           edgeId?: string;
           hint?: string;
+          templateRow?: TemplateRow;
         };
         flashcardId: string;
         contentHash: string;
@@ -370,7 +383,11 @@ export class FlashcardSynchronizer {
         } else {
           flashcardId = generateFlashcardId(parsed.front, data.deckId, parsed.sourceNodeId);
         }
-        const contentHash = isClozeType
+        // Table rows fold their full cells into the hash so editing any column
+        // (even ones only a template reads) triggers a re-sync of the card.
+        const contentHash = parsed.templateRow
+          ? generateContentHash(parsed.back + "::row::" + JSON.stringify(parsed.templateRow.cells))
+          : isClozeType
           ? generateContentHash(parsed.back + "::" + parsed.clozeText)
           : generateContentHash(parsed.back);
         const existingCard = existingById.get(flashcardId);
@@ -407,6 +424,7 @@ export class FlashcardSynchronizer {
                 hint: parsed.hint || "",
                 clozeText: parsed.clozeText ?? null,
                 clozeOrder: parsed.clozeOrder ?? null,
+                templateRow: parsed.templateRow ?? null,
               },
             });
           }
@@ -476,6 +494,7 @@ export class FlashcardSynchronizer {
                 clozeOrder: newCardData.parsed.clozeOrder ?? null,
                 sourceNodeId: newCardData.parsed.sourceNodeId ?? null,
                 edgeId: newCardData.parsed.edgeId ?? null,
+                templateRow: newCardData.parsed.templateRow ?? null,
                 state: oldCard.state,
                 dueDate: oldCard.dueDate,
                 interval: oldCard.interval,
@@ -533,6 +552,7 @@ export class FlashcardSynchronizer {
           clozeOrder: newCardData.parsed.clozeOrder ?? null,
           sourceNodeId: newCardData.parsed.sourceNodeId ?? null,
           edgeId: newCardData.parsed.edgeId ?? null,
+          templateRow: newCardData.parsed.templateRow ?? null,
           state: reviewLogRow ? (reviewLogRow[0] as "new" | "review") : "new",
           dueDate:
             reviewLogRow && reviewLogRow[6] && reviewLogRow[1]
@@ -587,6 +607,7 @@ export class FlashcardSynchronizer {
           clozeOrder: null,
           sourceNodeId: newCardData.parsed.sourceNodeId ?? null,
           edgeId: null,
+          templateRow: null,
           state: reviewLogRow ? (reviewLogRow[0] as "new" | "review") : "new",
           dueDate:
             reviewLogRow && reviewLogRow[6] && reviewLogRow[1]
@@ -642,6 +663,7 @@ export class FlashcardSynchronizer {
           clozeOrder: newCardData.parsed.clozeOrder ?? null,
           sourceNodeId: newCardData.parsed.sourceNodeId ?? null,
           edgeId: newCardData.parsed.edgeId ?? null,
+          templateRow: newCardData.parsed.templateRow ?? null,
           state: reviewLogRow ? (reviewLogRow[0] as "new" | "review") : "new",
           dueDate:
             reviewLogRow && reviewLogRow[6] && reviewLogRow[1]

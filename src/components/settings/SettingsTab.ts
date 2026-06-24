@@ -33,6 +33,7 @@ export class DecksSettingTab extends PluginSettingTab {
   // Tracks when the user explicitly chose "Custom…" in the model picker so the
   // free-text field stays open even while the typed id matches no preset.
   private aiModelCustom = false;
+  private resyncTemplates: () => Promise<void>;
 
   constructor(
     app: App,
@@ -47,10 +48,12 @@ export class DecksSettingTab extends PluginSettingTab {
     startBackgroundRefresh: () => void,
     stopBackgroundRefresh: () => void,
     purgeDatabase: () => Promise<void>,
-    backupService: BackupService
+    backupService: BackupService,
+    resyncTemplates: () => Promise<void>
   ) {
     super(app, plugin);
     this.plugin = plugin;
+    this.resyncTemplates = resyncTemplates;
     this.settings = settings;
     this.db = db;
     this.logger = logger;
@@ -76,6 +79,9 @@ export class DecksSettingTab extends PluginSettingTab {
 
     // Parsing Settings
     this.addParsingSettings(containerEl);
+
+    // Card templates (folder → deck_templates cache)
+    this.addTemplateSettings(containerEl);
 
     // Canvas Decks Settings
     this.addCanvasDecksSettings(containerEl);
@@ -103,6 +109,42 @@ export class DecksSettingTab extends PluginSettingTab {
 
     // Database Management Settings
     this.addDatabaseSettings(containerEl);
+  }
+
+  // Template folder picker. Changing it rebuilds the template cache so cards
+  // bind without a reload. The live preview of template faces lives in the
+  // template file itself (a markdown codeblock postprocessor).
+  private addTemplateSettings(containerEl: HTMLElement): void {
+    const t = I18n.t.settings.templates;
+    new Setting(containerEl).setName(t.heading).setHeading();
+
+    if (!this.settings.templates) this.settings.templates = { templateFolder: "" };
+
+    const folderOptions: Record<string, string> = { "": t.folderDefault };
+    this.app.vault.getAllFolders().forEach((folder) => {
+      folderOptions[folder.path] = folder.path;
+    });
+
+    new Setting(containerEl)
+      .setName(t.folder)
+      .setDesc(t.folderDesc)
+      .addDropdown((dropdown) => {
+        Object.entries(folderOptions).forEach(([value, display]) => {
+          dropdown.addOption(value, display);
+        });
+        dropdown
+          .setValue(normalizePath(this.settings.templates?.templateFolder || ""))
+          .onChange(async (value) => {
+            if (!this.settings.templates) {
+              this.settings.templates = { templateFolder: "" };
+            }
+            this.settings.templates.templateFolder = value
+              ? normalizePath(value)
+              : "";
+            await this.saveSettings();
+            await this.resyncTemplates();
+          });
+      });
   }
 
   private addAiSettings(containerEl: HTMLElement): void {

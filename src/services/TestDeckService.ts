@@ -1,5 +1,8 @@
 import { App } from "obsidian";
-import { getTestDeckContent } from "../assets/TestDeckTemplate";
+import {
+  getTestDeckContent,
+  getTemplateShowcaseContent,
+} from "../assets/TestDeckTemplate";
 import { getTestDeckCanvasContent } from "../assets/TestDeckCanvasTemplate";
 import { I18n } from "@decks/core";
 
@@ -24,6 +27,34 @@ export class TestDeckService {
 
     const content = getTestDeckContent(deckTag);
     await this.app.vault.create(filename, content);
+  }
+
+  /**
+   * Create the sample template file used by the getting-started "Templates"
+   * section. Dropped into `currentTemplateFolder` if set, else the default
+   * "Decks Templates/" folder (created if missing). Returns the resolved folder
+   * so the caller can persist it as the template-folder setting, or null if the
+   * file already existed.
+   */
+  async createTemplateShowcase(
+    currentTemplateFolder: string,
+  ): Promise<string | null> {
+    const folder =
+      currentTemplateFolder.trim() !== ""
+        ? currentTemplateFolder.trim().replace(/\/$/, "")
+        : I18n.t.testDeck.templateFolderName;
+    const filename = `${folder}/${I18n.t.testDeck.templateFileName}`;
+
+    if (await this.app.vault.adapter.exists(filename)) {
+      return null;
+    }
+
+    if (!(await this.app.vault.adapter.exists(folder))) {
+      await this.app.vault.adapter.mkdir(folder);
+    }
+
+    await this.app.vault.create(filename, getTemplateShowcaseContent());
+    return folder;
   }
 
   /**

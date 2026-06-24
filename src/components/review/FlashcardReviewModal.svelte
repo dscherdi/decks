@@ -14,9 +14,10 @@
     SchedulingPreview,
     SessionProgress,
   } from "../../services/Scheduler";
-  import { I18n, yieldToUI } from "@decks/core";
+  import { I18n, yieldToUI, type ResolvedRender } from "@decks/core";
   import { prepareFuzzySearch } from "obsidian";
   import { computeCardHealth } from "@decks/core";
+  import { renderCardSide } from "../../utils/html-template-render";
 
   const t = I18n.t;
   const r = t.review;
@@ -34,6 +35,8 @@
     el: HTMLElement,
     deckFilePath: string | undefined
   ) => void;
+  // Resolves a card's tag-bound template (or null to render the default columns).
+  export let resolveTemplate: (card: Flashcard) => ResolvedRender | null = () => null;
   export let settings: DecksSettings;
   export let scheduler: Scheduler;
   export let onCardReviewed:
@@ -190,6 +193,10 @@
   let frontEl: HTMLElement;
   let backEl: HTMLElement;
   let notesEl: HTMLElement;
+  // Template resolved for the currently displayed card (null = default columns).
+  let currentResolved: ResolvedRender | null = null;
+  // Notes may come from the card's own column OR a bound template.
+  $: hasNotes = !!(currentCard?.notes || currentResolved?.notes);
   let schedulingInfo: SchedulingPreview | null = null;
   let reviewedCount = 0;
   let cardStartTime = 0;
@@ -448,6 +455,9 @@
     }
     cardStartTime = Date.now();
 
+    // Resolve any tag-bound template for this card (null → default columns).
+    currentResolved = resolveTemplate(currentCard);
+
     // Render front side. A front-only cloze (no back) shows its sentence here,
     // in a single container, so the back area stays empty.
     if (frontEl) {
@@ -455,7 +465,13 @@
       if (isFrontOnlyCloze(currentCard)) {
         renderClozeInto(frontEl, currentCard, false);
       } else {
-        renderMarkdown(currentCard.front, frontEl, deckFilePath);
+        renderCardSide(
+          frontEl,
+          currentResolved ? currentResolved.front : currentCard.front,
+          currentResolved ? currentResolved.frontType : null,
+          renderMarkdown,
+          deckFilePath
+        );
       }
     }
 
@@ -469,7 +485,13 @@
           renderClozeInto(backEl, currentCard, false);
         } else {
           clearClozeAttributes(backEl);
-          renderMarkdown(currentCard.back, backEl, deckFilePath);
+          renderCardSide(
+            backEl,
+            currentResolved ? currentResolved.back : currentCard.back,
+            currentResolved ? currentResolved.backType : null,
+            renderMarkdown,
+            deckFilePath
+          );
         }
       }
     });
@@ -490,7 +512,13 @@
           renderClozeInto(backEl, currentCard, true);
         } else {
           clearClozeAttributes(backEl);
-          renderMarkdown(currentCard.back, backEl, deckFilePath);
+          renderCardSide(
+            backEl,
+            currentResolved ? currentResolved.back : currentCard.back,
+            currentResolved ? currentResolved.backType : null,
+            renderMarkdown,
+            deckFilePath
+          );
         }
       }
     });
@@ -500,9 +528,18 @@
     showNotes = !showNotes;
     if (showNotes) {
       tick().then(() => {
-        if (notesEl && currentCard?.notes) {
+        const notesContent = currentResolved?.notes ?? currentCard?.notes;
+        if (notesEl && notesContent) {
           notesEl.empty();
-          renderMarkdown(currentCard.notes, notesEl, deckFilePath);
+          renderCardSide(
+            notesEl,
+            notesContent,
+            currentResolved?.notes !== undefined
+              ? currentResolved.notesType ?? "md"
+              : null,
+            renderMarkdown,
+            deckFilePath
+          );
         }
       });
     }
@@ -795,7 +832,7 @@
           handleBrowsePrevious();
         } else if (
           (event.key === "n" || event.key === "N") &&
-          currentCard?.notes
+          hasNotes
         ) {
           event.preventDefault();
           toggleNotes();
@@ -815,7 +852,7 @@
       lastEventTime = now;
       lastEventType = eventType;
 
-      if ((event.key === "n" || event.key === "N") && currentCard?.notes) {
+      if ((event.key === "n" || event.key === "N") && hasNotes) {
         event.preventDefault();
         toggleNotes();
         return;
@@ -1407,7 +1444,7 @@
             bind:this={backEl}
             on:click={handleClozeBlankClick}
           ></div>
-          {#if currentCard?.notes}
+          {#if hasNotes}
             <button
               class="decks-notes-button clickable-icon"
               class:decks-notes-active={showNotes}
@@ -1433,7 +1470,7 @@
             </button>
           {/if}
         </div>
-        {#if showNotes && currentCard?.notes}
+        {#if showNotes && hasNotes}
           <div class="decks-notes-wrapper">
             <div class="decks-card-side decks-notes markdown-rendered" bind:this={notesEl}></div>
           </div>

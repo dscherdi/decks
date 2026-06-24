@@ -382,6 +382,10 @@ export class DeckManager {
       const fileMeta = this.metadataCache.getFileCache(file);
       const reverseCards = fileMeta?.frontmatter?.reverse === true;
 
+      // Persist the deck file's tags for file-level (Tier 2) template binding.
+      const fileTags = getAllTags(fileMeta ?? { frontmatter: undefined }) ?? [];
+      await this.db.setDeckFileTags(deck.id, fileTags);
+
       const result = await this.db.syncFlashcardsForDeck(
         {
           deckId: deck.id,
