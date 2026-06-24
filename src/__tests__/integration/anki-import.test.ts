@@ -12,16 +12,23 @@ import {
 } from "@decks/core";
 import type { AnkiDeckItem, AnkiRenderedDeck, DeckProfile, RawDatabase } from "@decks/core";
 
-// The 18MB sample lives at the repo root (not committed as a fixture). Skip
-// gracefully when it is absent so CI without the file still passes.
-const APKG_PATH = resolve(__dirname, "../../../../../test-anki-deck.apkg");
+// The sample decks live at the repo root (not committed as fixtures). Skip
+// gracefully when absent so CI without the files still passes.
+const REPO_ROOT = resolve(__dirname, "../../../../..");
+const APKG_PATH = resolve(REPO_ROOT, "test-anki-deck.apkg");
+const TEMPLATES_APKG_PATH = resolve(REPO_ROOT, "test-anki-templates.apkg");
 const HAS_APKG = existsSync(APKG_PATH);
 const describeIf = HAS_APKG ? describe : describe.skip;
+const describeIfTemplates = existsSync(TEMPLATES_APKG_PATH) ? describe : describe.skip;
 
-function loadCollection(): RawDatabase {
-  const entries = unzipSync(new Uint8Array(readFileSync(APKG_PATH)));
+function loadFrom(path: string): RawDatabase {
+  const entries = unzipSync(new Uint8Array(readFileSync(path)));
   const bytes = entries["collection.anki21"] ?? entries["collection.anki2"];
   return createRealDatabase(bytes) as unknown as RawDatabase;
+}
+
+function loadCollection(): RawDatabase {
+  return loadFrom(APKG_PATH);
 }
 
 describeIf("Anki import pipeline (integration)", () => {
@@ -44,12 +51,14 @@ describeIf("Anki import pipeline (integration)", () => {
     expect(parsed.deckNames.some((name) => /German/i.test(name))).toBe(true);
     expect(parsed.mediaFiles.some((name) => name.endsWith(".mp3"))).toBe(true);
 
-    const forward = parsed.cards.find((c) => c.front === "Das Wetter ist heute schön.");
+    // Templates are rendered in full now, so the front/back contain (not equal)
+    // the key text alongside any other template content.
+    const forward = parsed.cards.find((c) => c.front.includes("Das Wetter ist heute schön."));
     expect(forward).toBeDefined();
     expect(forward?.back).toContain("The weather is nice today.");
 
     // The reverse template yields an independent card with swapped roles.
-    const reverse = parsed.cards.find((c) => c.front === "The weather is nice today.");
+    const reverse = parsed.cards.find((c) => c.front.includes("The weather is nice today."));
     expect(reverse).toBeDefined();
     expect(reverse?.back).toContain("Das Wetter ist heute schön.");
   });
@@ -129,4 +138,29 @@ describeIf("Anki import pipeline (integration)", () => {
     });
     return deckId;
   }
+});
+
+// The templates deck exercises the deterministic engine: Basic/Cloze models +
+// 7 image-occlusion models that must be skipped.
+describeIfTemplates("Anki template engine (integration, templates deck)", () => {
+  // Initialize SQL.js (createRealDatabase needs the module loaded).
+  beforeAll(async () => {
+    await setupTestDatabase();
+  });
+  afterAll(async () => {
+    await teardownTestDatabase();
+  });
+
+  it("renders Basic models cleanly and skips image-occlusion notes", () => {
+    const parsed = AnkiCollectionParser.parse(loadFrom(TEMPLATES_APKG_PATH));
+    expect(parsed.cardCount).toBeGreaterThan(1000);
+
+    // No card should carry image-occlusion script/markup (those models are skipped).
+    expect(parsed.cards.some((c) => /io-overlay|io-original/.test(c.front + c.back))).toBe(false);
+
+    // Basic cards have non-empty front + back, with the answer side resolved.
+    const basics = parsed.cards.filter((c) => !c.isCloze);
+    expect(basics.length).toBeGreaterThan(0);
+    expect(basics.every((c) => c.front.trim().length > 0)).toBe(true);
+  });
 });
