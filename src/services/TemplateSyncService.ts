@@ -36,20 +36,34 @@ export class TemplateSyncService {
   }
 
   /**
-   * Read the template's binding tags from its normal `tags` frontmatter, parsed
-   * directly from file content (deterministic — avoids metadataCache timing on
-   * load). Returns normalized `#tag` strings.
+   * Read the template's binding tags from its content (deterministic — avoids
+   * metadataCache timing on load). Mirrors Obsidian's "file tags": frontmatter
+   * `tags` PLUS inline `#tags` in the body (e.g. a `## Heading #example`). Code
+   * fences are stripped first so CSS colors like `#fff` aren't treated as tags.
+   * Returns normalized `#tag` strings.
    */
   private readTags(content: string): string[] {
-    const match = content.match(/^---\n([\s\S]*?)\n---/);
-    if (!match) return [];
-    try {
-      const fm = parseYaml(match[1]) as Record<string, unknown> | null;
-      if (!fm) return [];
-      return (parseFrontMatterTags(fm) ?? []).filter((t) => t.length > 0);
-    } catch {
-      return [];
+    const out = new Set<string>();
+
+    const fmMatch = content.match(/^---\n([\s\S]*?)\n---/);
+    let body = content;
+    if (fmMatch) {
+      body = content.slice(fmMatch[0].length);
+      try {
+        const fm = parseYaml(fmMatch[1]) as Record<string, unknown> | null;
+        for (const tag of (fm && parseFrontMatterTags(fm)) ?? []) out.add(tag);
+      } catch {
+        // ignore malformed frontmatter
+      }
     }
+
+    // Inline tags from the prose (not inside code fences).
+    const prose = body.replace(/```[\s\S]*?```/g, "").replace(/~~~[\s\S]*?~~~/g, "");
+    const tagRe = /(?:^|\s)#([A-Za-z][A-Za-z0-9_/-]*)/g;
+    let m: RegExpExecArray | null;
+    while ((m = tagRe.exec(prose)) !== null) out.add("#" + m[1]);
+
+    return Array.from(out).filter((t) => t.length > 1);
   }
 
   /** Parse a template file and upsert it into the cache. */
@@ -59,13 +73,16 @@ export class TemplateSyncService {
       const set = parseTemplateFile(content);
       if (!set || !set.front) {
         // No usable template — drop any stale cache row for this file.
+        console.debug(`[decks-templates] no template in ${file.path} (dropping)`);
         await this.db.deleteDeckTemplateByFile(file.path);
         return;
       }
+      const tags = this.readTags(content);
+      console.debug(`[decks-templates] sync ${file.path} tags=${JSON.stringify(tags)} front=${set.front.engine} back=${set.back?.engine ?? "-"}`);
       await this.db.upsertDeckTemplate({
         id: this.templateId(file.path),
         sourceFile: file.path,
-        tags: this.readTags(content),
+        tags,
         frontTemplate: set.front.template,
         frontType: set.front.engine,
         backTemplate: set.back?.template ?? "",
@@ -109,10 +126,14 @@ export class TemplateSyncService {
   /** Rebuild the whole cache from the template folder (called on load). */
   async syncAll(): Promise<void> {
     const folder = this.getTemplateFolder().trim();
-    if (!folder) return;
+    if (!folder) {
+      console.debug("[decks-templates] syncAll skipped: no template folder set");
+      return;
+    }
     const files = this.app.vault
       .getMarkdownFiles()
       .filter((f) => this.isTemplateFile(f));
+    console.debug(`[decks-templates] syncAll folder="${folder}" files=${files.length}`);
     for (const file of files) await this.syncFile(file);
   }
 }

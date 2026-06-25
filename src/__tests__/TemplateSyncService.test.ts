@@ -84,6 +84,32 @@ describe("TemplateSyncService", () => {
     });
   });
 
+  it("reads an inline/header tag (## Heading #example) with no frontmatter", async () => {
+    const content = [
+      "## Human Anatomy Overview  #example ",
+      "",
+      "| Structure | Function |",
+      "| --- | --- |",
+      "| Cornea | Refracts light |",
+      "",
+      "```decks-html-front",
+      '<div style="color: #fff;">{{Structure}}</div>',
+      "```",
+      "```decks-html-back",
+      "{{Function}}",
+      "```",
+    ].join("\n");
+    const { db, upserts } = makeDb();
+    const svc = new TemplateSyncService(makeApp(content), db, () => "Templates");
+
+    await svc.syncFile(file);
+
+    expect(upserts).toHaveLength(1);
+    // The header tag binds; the CSS color #fff inside the codeblock is NOT a tag.
+    expect(upserts[0].tags).toEqual(["#example"]);
+    expect(upserts[0]).toMatchObject({ frontType: "html", backType: "html" });
+  });
+
   it("isTemplateFile only matches markdown files under the folder", () => {
     const { db } = makeDb();
     const svc = new TemplateSyncService(makeApp(""), db, () => "Templates");

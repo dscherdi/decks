@@ -1,4 +1,4 @@
-import { Scheduler } from "../services/Scheduler";
+import { Scheduler } from "@decks/core";
 import { MainDatabaseService } from "../database/MainDatabaseService";
 import { BackupService } from "../services/BackupService";
 import { Flashcard, Deck, DeckWithProfile, DeckProfile } from "../database/types";

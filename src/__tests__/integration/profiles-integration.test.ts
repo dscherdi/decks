@@ -8,7 +8,7 @@
 import { MainDatabaseService } from "../../database/MainDatabaseService";
 import type { DeckProfile } from "../../database/types";
 import { DEFAULT_PROFILE_ID } from "../../database/types";
-import { Scheduler } from "../../services/Scheduler";
+import { Scheduler } from "@decks/core";
 import {
   DatabaseTestUtils,
   setupTestDatabase,

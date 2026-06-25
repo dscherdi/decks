@@ -14,7 +14,7 @@ import { I18n, yieldToUI } from "@decks/core";
 import { Logger } from "@/utils/logging";
 import { Modal, Notice, WorkspaceLeaf } from "obsidian";
 import type { App } from "obsidian";
-import { Scheduler } from "@/services/Scheduler";
+import { Scheduler } from "@decks/core";
 import { FlashcardReviewModalWrapper } from "./review/FlashcardReviewModalWrapper";
 import {
   FlashcardReviewView,

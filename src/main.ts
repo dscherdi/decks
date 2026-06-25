@@ -19,7 +19,7 @@ import { DeckManager } from "./services/DeckManager";
 import { TemplateSyncService } from "./services/TemplateSyncService";
 import { DeckSynchronizer } from "./services/DeckSynchronizer";
 import { CanvasFileEventHandlers } from "./services/CanvasFileEventHandlers";
-import { Scheduler } from "./services/Scheduler";
+import { Scheduler } from "@decks/core";
 import { DeviceLocalState } from "./services/DeviceLocalState";
 import { SyncLog } from "./services/SyncLog";
 import {

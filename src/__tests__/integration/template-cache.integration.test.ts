@@ -8,6 +8,18 @@ import {
 import { generateDeckId, resolveCardTemplate, FlashcardParser } from "@decks/core";
 import type { Deck, DeckProfile } from "../../database/types";
 import { FlashcardWriter } from "../../services/FlashcardWriter";
+import { Scheduler } from "@decks/core";
+
+/* eslint-disable @typescript-eslint/no-explicit-any */
+function makeScheduler(db: MainDatabaseService): Scheduler {
+  const settings = {
+    review: { nextDayStartsAt: 4, showProgress: true, enableKeyboardShortcuts: true, sessionDuration: 25 },
+    backup: { enableAutoBackup: false, maxBackups: 3 },
+    debug: { enableLogging: false, performanceLogs: false },
+  } as any;
+  return new Scheduler(db, settings, { createBackup: jest.fn() } as any);
+}
+/* eslint-enable @typescript-eslint/no-explicit-any */
 
 /** In-memory app stand-in: the writer only uses getAbstractFileByPath + process. */
 function makeWritableApp(filepath: string, initialContent: string) {
@@ -213,5 +225,27 @@ describe("Tag-driven template cache (integration)", () => {
     const reparsed = FlashcardParser.parseFlashcardsFromContent(getContent(), 2);
     expect(reparsed[0].templateRow?.cells).toEqual(["火", "ひらがな", "flame"]);
     expect(getContent()).toContain("| 火 | ひらがな | flame |");
+  });
+
+  it("a card fetched via the Scheduler carries templateRow (review path)", async () => {
+    const { deck, profile } = await createDeck("sched");
+    await db.syncFlashcardsForDeck({
+      deckId: deck.id,
+      deckName: deck.name,
+      deckFilepath: deck.filepath,
+      deckConfig: profile,
+      fileContent: TABLE,
+    });
+
+    const scheduler = makeScheduler(db);
+    const next = await scheduler.getNext(new Date(), deck.id);
+    expect(next).not.toBeNull();
+    // Regression: the Scheduler's positional row mapper must read template_row
+    // (index 27) so render-time template binding works in review.
+    expect(next!.templateRow).toEqual({
+      headers: ["Word", "Definition"],
+      cells: ["Bonjour", "Hello"],
+    });
+    expect(next!.tags).toContain("chemistry");
   });
 });

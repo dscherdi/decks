@@ -1,5 +1,5 @@
 import { MainDatabaseService } from "../../database/MainDatabaseService";
-import { Scheduler } from "../../services/Scheduler";
+import { Scheduler } from "@decks/core";
 import {
   DatabaseTestUtils,
   setupTestDatabase,

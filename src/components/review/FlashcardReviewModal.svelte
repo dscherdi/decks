@@ -13,7 +13,7 @@
     Scheduler,
     SchedulingPreview,
     SessionProgress,
-  } from "../../services/Scheduler";
+  } from "@decks/core";
   import { I18n, yieldToUI, type ResolvedRender } from "@decks/core";
   import { prepareFuzzySearch } from "obsidian";
   import { computeCardHealth } from "@decks/core";

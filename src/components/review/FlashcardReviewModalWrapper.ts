@@ -1,7 +1,11 @@
 import { Modal, Component, Notice, MarkdownRenderer, App } from "obsidian";
-import type { Flashcard, DeckOrGroup, DeckTemplate } from "../../database/types";
-import { type RatingLabel, resolveCardTemplate, type ResolvedRender } from "@decks/core";
-import type { Scheduler } from "../../services/Scheduler";
+import type { Flashcard, DeckOrGroup } from "../../database/types";
+import { type RatingLabel, type ResolvedRender } from "@decks/core";
+import {
+  loadTemplateCache,
+  makeTemplateResolver,
+} from "../../utils/template-resolver";
+import type { Scheduler } from "@decks/core";
 import type { DecksSettings } from "../../settings";
 import type { IDatabaseService } from "../../database/DatabaseFactory";
 import type { DeckSynchronizer } from "../../services/DeckSynchronizer";
@@ -30,33 +34,8 @@ export class FlashcardReviewModalWrapper extends Modal {
   private markdownComponents: Component[] = [];
   private resizeHandler?: () => void;
   public navigatedToSource = false;
-  // Template cache + per-deck file tags, loaded once before mount so cards can
-  // resolve their tag-bound template at render time.
-  private deckTemplates: DeckTemplate[] = [];
-  private fileTagsByDeck = new Map<string, string[]>();
-
-  private async loadTemplateCache(): Promise<void> {
-    try {
-      const [templates, decks] = await Promise.all([
-        this.db.getAllDeckTemplates(),
-        this.db.getAllDecks(),
-      ]);
-      this.deckTemplates = templates;
-      this.fileTagsByDeck = new Map(decks.map((d) => [d.id, d.fileTags ?? []]));
-    } catch (error) {
-      console.error("Failed to load template cache:", error);
-    }
-  }
-
-  private resolveTemplate(card: Flashcard): ResolvedRender | null {
-    if (this.deckTemplates.length === 0) return null;
-    return resolveCardTemplate(
-      card.tags,
-      this.fileTagsByDeck.get(card.deckId) ?? [],
-      card.templateRow ?? null,
-      this.deckTemplates
-    );
-  }
+  // Per-card template resolver, built from a cache loaded once before mount.
+  private resolveTemplate: (card: Flashcard) => ResolvedRender | null = () => null;
 
   private renderMarkdown(content: string, el: HTMLElement): void {
     try {
@@ -206,7 +185,7 @@ export class FlashcardReviewModalWrapper extends Modal {
   }
 
   private async preloadThenMount(contentEl: HTMLElement): Promise<void> {
-    await this.loadTemplateCache();
+    this.resolveTemplate = makeTemplateResolver(await loadTemplateCache(this.db));
 
     this.component = mount(FlashcardReviewModal, {
       target: contentEl,

@@ -6,7 +6,7 @@ import type { DecksSettings } from "@/settings";
 import { I18n, yieldToUI } from "@decks/core";
 import { Logger } from "@/utils/logging";
 import { ItemView, WorkspaceLeaf, Notice } from "obsidian";
-import { Scheduler } from "@/services/Scheduler";
+import { Scheduler } from "@decks/core";
 import { FlashcardReviewModalWrapper } from "./review/FlashcardReviewModalWrapper";
 import {
   FlashcardReviewView,
