@@ -272,4 +272,10 @@ Decks was built as an alternative for users who want a different architectural a
 
 ## License
 
-See [LICENSE](./LICENSE).
+This project is licensed under the **GNU Affero General Public License v3.0 or later** (AGPL-3.0-or-later).
+
+In short: you are free to use, modify, and distribute this software. However, if you modify it and distribute
+your changes — or modify it and offer it to users over a network — you must make your modified source code
+publicly available under the same AGPL-3.0 license.
+
+Copyright (C) 2026 Xherdi Lika. See the [LICENSE](./LICENSE) file for the full text.
