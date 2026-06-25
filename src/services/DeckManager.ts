@@ -1,4 +1,11 @@
-import { TFile, Vault, MetadataCache, Notice, getAllTags } from "obsidian";
+import {
+  TFile,
+  Vault,
+  MetadataCache,
+  Notice,
+  getAllTags,
+  parseFrontMatterTags,
+} from "obsidian";
 import { type Deck, type Flashcard, type DeckStats, type DeckGroup, DEFAULT_PROFILE_ID } from "../database/types";
 import type { IDatabaseService } from "../database/DatabaseFactory";
 import { generateDeckGroupId, generateDeckId, yieldToUI } from "@decks/core";
@@ -383,7 +390,10 @@ export class DeckManager {
       const reverseCards = fileMeta?.frontmatter?.reverse === true;
 
       // Persist the deck file's tags for file-level (Tier 2) template binding.
-      const fileTags = getAllTags(fileMeta ?? { frontmatter: undefined }) ?? [];
+      // Only frontmatter tags are deck-wide; inline #tags on a section stay
+      // scoped to that section's cards (Tier 1), so a tag on one header doesn't
+      // bind its template to the whole file's tables.
+      const fileTags = parseFrontMatterTags(fileMeta?.frontmatter ?? null) ?? [];
       await this.db.setDeckFileTags(deck.id, fileTags);
 
       const result = await this.db.syncFlashcardsForDeck(

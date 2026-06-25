@@ -456,6 +456,30 @@ Some paragraph content here.
       expect(result[2].notes).toBe("");
       expect(result[2].breadcrumb).toBe("");
     });
+
+    it("does not emit a header card for a table section followed by a --- separator (cloze on)", () => {
+      const content = [
+        "## Kanji vocabulary #vocab",
+        "",
+        "| Word | Reading | Meaning |",
+        "| ---- | ------- | ------- |",
+        "| 火 | ひ | fire |",
+        "| 水 | みず | water |",
+        "",
+        "---",
+        "",
+      ].join("\n");
+
+      const cards = FlashcardParser.parseFlashcardsFromContent(
+        content,
+        2,
+        undefined,
+        true
+      );
+
+      expect(cards).toHaveLength(2);
+      expect(cards.map((c) => c.front).sort()).toEqual(["水", "火"].sort());
+    });
   });
 
   describe("three-column table parsing", () => {

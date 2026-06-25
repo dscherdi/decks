@@ -204,6 +204,15 @@
   $: hasNotes = currentResolved
     ? !!currentResolved.notes
     : !!currentCard?.notes;
+  // HTML-template sides render seamless inside a shell (cloze always stays on
+  // the boxed markdown path). Each side is independent.
+  $: frontIsHtml =
+    currentResolved?.frontType === "html" &&
+    !(currentCard && isClozeType(currentCard.type));
+  $: backIsHtml =
+    currentResolved?.backType === "html" &&
+    !(currentCard && isClozeType(currentCard.type));
+  $: notesIsHtml = currentResolved?.notesType === "html";
   let schedulingInfo: SchedulingPreview | null = null;
   let reviewedCount = 0;
   let cardStartTime = 0;
@@ -464,6 +473,10 @@
 
     // Resolve any tag-bound template for this card (null → default columns).
     currentResolved = resolveTemplate(currentCard);
+
+    // Let the per-side html/markdown branch swap before rendering, so frontEl
+    // points at the freshly-mounted container (template layer vs boxed side).
+    await tick();
 
     // Render front side. A front-only cloze (no back) shows its sentence here,
     // in a single container, so the back area stays empty.
@@ -1253,11 +1266,10 @@
       on:touchstart|passive={handleTouchStart}
       on:touchend|passive={handleTouchEnd}
     >
-      <div class="decks-question-section">
-        <div class="decks-front-wrapper">
+      {#snippet frontControls()}
           {#if canUndo && !browseMode}
             <button
-              class="decks-undo-button clickable-icon"
+              class="decks-undo-button decks-icon-btn clickable-icon"
               on:click={handleUndo}
               disabled={isLoading}
               title={r.undoTooltip}
@@ -1283,7 +1295,7 @@
           <div class="decks-card-utilities">
             {#if cardHealth && (cardHealth.isLeech || cardHealth.isDense)}
               <button
-                class="clickable-icon decks-warning-icon"
+                class="clickable-icon decks-warning-icon decks-icon-btn"
                 type="button"
                 tabindex="-1"
                 aria-label={cardHealth.isLeech && cardHealth.isDense
@@ -1313,7 +1325,7 @@
             {/if}
             {#if onNavigateToSource && currentCard}
               <button
-                class="decks-go-to-file-button clickable-icon"
+                class="decks-go-to-file-button decks-icon-btn clickable-icon"
                 on:click={handleNavigateToSource}
                 aria-label={r.openSourceFile}
                 type="button"
@@ -1344,7 +1356,7 @@
                 bind:this={actionsMenuEl}
               >
                 <button
-                  class="decks-card-actions-trigger clickable-icon"
+                  class="decks-card-actions-trigger decks-icon-btn clickable-icon"
                   on:click|stopPropagation={toggleActionsMenu}
                   aria-label={r.cardActions}
                   aria-haspopup="menu"
@@ -1402,13 +1414,26 @@
               </div>
             {/if}
           </div>
-          <!-- svelte-ignore a11y-click-events-have-key-events a11y-no-static-element-interactions -->
-          <div
-            class="decks-card-side decks-front markdown-rendered"
-            bind:this={frontEl}
-            on:click={handleClozeBlankClick}
-          ></div>
-        </div>
+      {/snippet}
+      <div class="decks-question-section">
+        {#if frontIsHtml}
+          <div class="decks-card-shell">
+            <div class="decks-template-layer decks-front" bind:this={frontEl}></div>
+            <div class="decks-controls-layer">{@render frontControls()}</div>
+          </div>
+        {:else}
+          <div class="decks-front-wrapper">
+            {@render frontControls()}
+            <div class="decks-card-side decks-front">
+              <!-- svelte-ignore a11y-click-events-have-key-events a11y-no-static-element-interactions -->
+              <div
+                class="decks-card-text markdown-rendered"
+                bind:this={frontEl}
+                on:click={handleClozeBlankClick}
+              ></div>
+            </div>
+          </div>
+        {/if}
       </div>
 
       {#if currentCard?.hint && currentCard.hint.length > 0}
@@ -1425,10 +1450,10 @@
         class:hidden={frontOnlyClozeCard ||
           (!showAnswer && !(currentCard && isClozeType(currentCard.type)))}
       >
-        <div class="decks-back-wrapper">
+        {#snippet backTopControls()}
           {#if currentCard}
             <button
-              class="decks-copy-button clickable-icon"
+              class="decks-copy-button decks-icon-btn clickable-icon"
               on:click={handleCopyBack}
               title={r.copyContent}
               type="button"
@@ -1451,15 +1476,11 @@
               </svg>
             </button>
           {/if}
-          <!-- svelte-ignore a11y-click-events-have-key-events a11y-no-static-element-interactions -->
-          <div
-            class="decks-card-side decks-back markdown-rendered"
-            bind:this={backEl}
-            on:click={handleClozeBlankClick}
-          ></div>
+        {/snippet}
+        {#snippet backBottomControls()}
           {#if hasNotes}
             <button
-              class="decks-notes-button clickable-icon"
+              class="decks-notes-button decks-icon-btn clickable-icon"
               class:decks-notes-active={showNotes}
               on:click={toggleNotes}
               title={r.toggleNotes}
@@ -1482,11 +1503,41 @@
               </svg>
             </button>
           {/if}
-        </div>
-        {#if showNotes && hasNotes}
-          <div class="decks-notes-wrapper">
-            <div class="decks-card-side decks-notes markdown-rendered" bind:this={notesEl}></div>
+        {/snippet}
+        {#if backIsHtml}
+          <div class="decks-card-shell">
+            <div class="decks-template-layer decks-back" bind:this={backEl}></div>
+            <div class="decks-controls-layer">
+              {@render backTopControls()}
+              {@render backBottomControls()}
+            </div>
           </div>
+        {:else}
+          <div class="decks-back-wrapper">
+            {@render backTopControls()}
+            <div class="decks-card-side decks-back">
+              <!-- svelte-ignore a11y-click-events-have-key-events a11y-no-static-element-interactions -->
+              <div
+                class="decks-card-text markdown-rendered"
+                bind:this={backEl}
+                on:click={handleClozeBlankClick}
+              ></div>
+            </div>
+            {@render backBottomControls()}
+          </div>
+        {/if}
+        {#if showNotes && hasNotes}
+          {#if notesIsHtml}
+            <div class="decks-card-shell decks-notes-shell">
+              <div class="decks-template-layer decks-notes" bind:this={notesEl}></div>
+            </div>
+          {:else}
+            <div class="decks-notes-wrapper">
+              <div class="decks-card-side decks-notes">
+                <div class="decks-card-text markdown-rendered" bind:this={notesEl}></div>
+              </div>
+            </div>
+          {/if}
         {/if}
       </div>
     </div>
@@ -1820,18 +1871,33 @@
     justify-content: center;
   }
 
+  /* Markdown / fallback face — shares the physical look of .decks-card-shell so
+     HTML-template and markdown faces read as a cohesive set. */
   .decks-card-side {
-    background: var(--background-secondary);
+    background: var(--background-primary);
     border: 1px solid var(--background-modifier-border);
-    border-radius: var(--radius-m);
-    padding: 24px;
-    min-height: 100px;
+    border-radius: 12px;
+    box-shadow: 0 4px 16px rgba(0, 0, 0, 0.05);
+    padding: 2rem;
+    min-height: 250px;
     width: 100%;
     max-width: 900px;
     box-sizing: border-box;
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+    align-items: center;
     word-wrap: break-word;
     overflow-wrap: anywhere;
     overflow-x: auto;
+  }
+
+  /* Shrink-wrap centering: the inner box hugs short content (so the card
+     centers it) but grows to full width for long content (so text-align:left
+     reads naturally). text-align is inherited from the per-face rule. */
+  .decks-card-text {
+    width: fit-content;
+    max-width: 100%;
   }
 
   .decks-front-wrapper,
@@ -1839,6 +1905,60 @@
     position: relative;
     width: 100%;
     max-width: 900px;
+  }
+
+  /* Physical card shell — HTML-template sides only. The plugin enforces the
+     card frame (border, background, shadow, rounded corners); the in-flow
+     template layer fills it and the controls layer floats on top without
+     blocking selection/clicks in the template. */
+  .decks-card-shell {
+    position: relative;
+    display: flex;
+    width: 100%;
+    max-width: 900px;
+    min-height: 250px;
+    border-radius: 12px;
+    overflow: hidden;
+    border: 1px solid var(--background-modifier-border);
+    background-color: var(--background-primary);
+    box-shadow: 0 4px 16px rgba(0, 0, 0, 0.05);
+  }
+
+  /* In-flow layer: fills the shell and holds the Shadow DOM host. */
+  .decks-template-layer {
+    flex: 1 1 auto;
+    display: flex;
+    flex-direction: column;
+    width: 100%;
+    min-width: 0;
+  }
+
+  /* Overlay layer anchored exactly to the shell; never blocks the template. */
+  .decks-controls-layer {
+    position: absolute;
+    inset: 0;
+    z-index: 10;
+    pointer-events: none;
+  }
+
+  .decks-controls-layer .decks-undo-button,
+  .decks-controls-layer .decks-copy-button,
+  .decks-controls-layer .decks-notes-button,
+  .decks-controls-layer .decks-card-utilities,
+  .decks-controls-layer .decks-card-actions-menu,
+  .decks-controls-layer .decks-card-actions-dropdown {
+    pointer-events: auto;
+  }
+
+  /* Frosted-glass treatment so floating controls stay readable over any
+     template background (template cards only — scoped to the controls layer). */
+  .decks-controls-layer .decks-icon-btn {
+    pointer-events: auto;
+    color: var(--text-normal);
+    background-color: var(--background-modifier-form-field);
+    backdrop-filter: blur(4px);
+    -webkit-backdrop-filter: blur(4px);
+    border-radius: 6px;
   }
 
   .decks-card-side.decks-front {
@@ -1878,6 +1998,11 @@
     font-size: 14px;
     line-height: 1.5;
     color: var(--text-muted);
+    /* Notes keeps the white chrome but hugs its content (no 250px floor) and
+       stays a left-aligned, top annotation rather than centered. */
+    min-height: 0;
+    justify-content: flex-start;
+    align-items: flex-start;
   }
 
   .decks-go-to-file-button {
@@ -2348,7 +2473,7 @@
     margin-bottom: 0;
   }
 
-  :global(.decks-card-side > *:first-child) {
+  :global(.decks-card-text > *:first-child) {
     margin-top: 0;
   }
 

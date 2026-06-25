@@ -94,9 +94,14 @@ const THEME_VARS = [
   "--font-text",
   "--font-monospace",
   "--font-text-size",
+  "--line-height-normal",
   "--code-background",
 ];
 
+// Copy Obsidian's theme custom properties onto the wrapper so the template
+// resolves them inside the shadow. Only the variables are pinned — concrete
+// background/color/font come from the baseline sheet's API (see BASELINE_RESET)
+// so a template can override them via :host{--bg/--padding/...}.
 function applyThemeVars(wrapper: HTMLElement): void {
   const computed = getComputedStyle(document.body);
   const props: Record<string, string> = {};
@@ -104,11 +109,58 @@ function applyThemeVars(wrapper: HTMLElement): void {
     const value = computed.getPropertyValue(name);
     if (value) props[name] = value.trim();
   }
-  // Base look so bare cards inherit the theme; templates can override freely.
-  props["background-color"] = "var(--background-primary)";
-  props["color"] = "var(--text-normal)";
-  props["font-family"] = "var(--font-text, inherit)";
   wrapper.setCssProps(props);
+}
+
+// Baseline reset injected ahead of user content. Exposes a CSS variable API on
+// :host (padding/align/justify/bg) with sensible defaults; a template's own
+// <style> (mounted after, so it wins the cascade) can override them, e.g.
+// :host{--padding:0} for edge-to-edge. --bg defaults transparent so the shell's
+// themed background shows through.
+const BASELINE_RESET =
+  ":host{display:block;width:100%;height:100%;" +
+  "--padding:2rem;--align:center;--justify:center;--bg:transparent}" +
+  ".decks-template-wrapper{width:100%;min-height:100%;box-sizing:border-box;" +
+  "padding:var(--padding);display:flex;flex-direction:column;" +
+  "align-items:var(--align);justify-content:var(--justify);background:var(--bg);" +
+  "font-family:var(--font-text);font-size:var(--font-text-size);" +
+  "line-height:var(--line-height-normal);color:var(--text-normal);text-align:center}" +
+  ".decks-template-wrapper>*:first-child{margin-top:0}" +
+  "img,svg,video{max-width:100%;height:auto}" +
+  "img{display:block;margin-inline:auto}";
+
+// Class-based theme support inside the shadow: the host body carries
+// `theme-dark`/`theme-light`, so we mirror it onto each wrapper so templates
+// authoring `.theme-dark .x {}` resolve. A single observer on the active
+// document body keeps every live wrapper in sync and self-disposes when none
+// remain (no teardown hook exists, so the set prunes detached wrappers).
+const themeWrappers = new Set<HTMLElement>();
+let themeObserver: MutationObserver | null = null;
+
+function applyThemeClass(wrapper: HTMLElement): void {
+  const isDark = activeDocument.body.classList.contains("theme-dark");
+  wrapper.removeClass(isDark ? "theme-light" : "theme-dark");
+  wrapper.addClass(isDark ? "theme-dark" : "theme-light");
+}
+
+function registerThemeWrapper(wrapper: HTMLElement): void {
+  applyThemeClass(wrapper);
+  themeWrappers.add(wrapper);
+  if (themeObserver) return;
+  themeObserver = new MutationObserver(() => {
+    for (const w of themeWrappers) {
+      if (w.isConnected) applyThemeClass(w);
+      else themeWrappers.delete(w);
+    }
+    if (themeWrappers.size === 0 && themeObserver) {
+      themeObserver.disconnect();
+      themeObserver = null;
+    }
+  });
+  themeObserver.observe(activeDocument.body, {
+    attributes: true,
+    attributeFilter: ["class"],
+  });
 }
 
 /**
@@ -126,8 +178,9 @@ export function renderHtmlIntoShadow(
   const shadow = host.attachShadow({ mode: "open" });
 
   const wrapper = document.createElement("div");
-  wrapper.className = "decks-template-shadow-root";
+  wrapper.className = "decks-template-wrapper markdown-rendered";
   applyThemeVars(wrapper);
+  registerThemeWrapper(wrapper);
 
   const html = resolve ? embedWikiImages(rawHtml, resolve) : rawHtml;
   const clean = DOMPurify.sanitize(html, {
@@ -139,13 +192,13 @@ export function renderHtmlIntoShadow(
   const parsed = new DOMParser().parseFromString(clean, "text/html");
   wrapper.append(...Array.from(parsed.body.childNodes));
 
-  // Base rules so embedded media stays within the card. Appended before the
-  // template's own <style> (which lives inside the wrapper) so source order
-  // lets a template override these if it wants to.
-  const baseStyle = document.createElement("style");
-  baseStyle.textContent =
-    "img,svg,video{max-width:100%;height:auto}img{display:block;margin-inline:auto}";
-  shadow.appendChild(baseStyle);
+  // Baseline reset via a constructable stylesheet: adopted sheets sit below the
+  // template's own in-tree <style> in the cascade, so a template still overrides
+  // these defaults. (A <style> element isn't usable here — styles.css can't
+  // pierce the shadow root, and creating <style> nodes is disallowed.)
+  const baseSheet = new CSSStyleSheet();
+  baseSheet.replaceSync(BASELINE_RESET);
+  shadow.adoptedStyleSheets = [baseSheet];
   shadow.appendChild(wrapper);
 }
 
