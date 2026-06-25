@@ -20,10 +20,6 @@ export async function loadTemplateCache(
       db.getAllDeckTemplates(),
       db.getAllDecks(),
     ]);
-    console.debug(
-      `[decks-templates] cache loaded: ${templates.length} template(s)`,
-      templates.map((t) => ({ src: t.sourceFile, tags: t.tags }))
-    );
     return {
       templates,
       fileTagsByDeck: new Map(decks.map((d) => [d.id, d.fileTags ?? []])),
@@ -40,18 +36,11 @@ export function makeTemplateResolver(
 ): (card: Flashcard) => ResolvedRender | null {
   return (card: Flashcard) => {
     if (cache.templates.length === 0) return null;
-    const fileTags = cache.fileTagsByDeck.get(card.deckId) ?? [];
-    const result = resolveCardTemplate(
+    return resolveCardTemplate(
       card.tags,
-      fileTags,
+      cache.fileTagsByDeck.get(card.deckId) ?? [],
       card.templateRow ?? null,
       cache.templates
     );
-    if (!result) {
-      console.debug(
-        `[decks-templates] no match for "${card.front}": cardTags=${JSON.stringify(card.tags)} fileTags=${JSON.stringify(fileTags)} hasRow=${!!card.templateRow} templateTags=${JSON.stringify(cache.templates.map((t) => t.tags))}`
-      );
-    }
-    return result;
   };
 }

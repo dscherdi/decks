@@ -276,6 +276,10 @@ export class FlashcardReviewView extends ItemView {
           this.renderMarkdown(content, el);
         },
         resolveTemplate: (card: Flashcard) => this.resolveTemplate(card),
+        resolveEmbed: (linkpath: string, sourcePath: string) => {
+          const dest = this.app.metadataCache.getFirstLinkpathDest(linkpath, sourcePath);
+          return dest ? this.app.vault.getResourcePath(dest) : null;
+        },
         settings: this.settings,
         scheduler: this.scheduler,
         // Deliberately no per-rating stats refresh (see reviewFlashcard).

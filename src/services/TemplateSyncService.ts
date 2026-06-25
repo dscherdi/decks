@@ -73,16 +73,13 @@ export class TemplateSyncService {
       const set = parseTemplateFile(content);
       if (!set || !set.front) {
         // No usable template — drop any stale cache row for this file.
-        console.debug(`[decks-templates] no template in ${file.path} (dropping)`);
         await this.db.deleteDeckTemplateByFile(file.path);
         return;
       }
-      const tags = this.readTags(content);
-      console.debug(`[decks-templates] sync ${file.path} tags=${JSON.stringify(tags)} front=${set.front.engine} back=${set.back?.engine ?? "-"}`);
       await this.db.upsertDeckTemplate({
         id: this.templateId(file.path),
         sourceFile: file.path,
-        tags,
+        tags: this.readTags(content),
         frontTemplate: set.front.template,
         frontType: set.front.engine,
         backTemplate: set.back?.template ?? "",
@@ -126,14 +123,10 @@ export class TemplateSyncService {
   /** Rebuild the whole cache from the template folder (called on load). */
   async syncAll(): Promise<void> {
     const folder = this.getTemplateFolder().trim();
-    if (!folder) {
-      console.debug("[decks-templates] syncAll skipped: no template folder set");
-      return;
-    }
+    if (!folder) return;
     const files = this.app.vault
       .getMarkdownFiles()
       .filter((f) => this.isTemplateFile(f));
-    console.debug(`[decks-templates] syncAll folder="${folder}" files=${files.length}`);
     for (const file of files) await this.syncFile(file);
   }
 }

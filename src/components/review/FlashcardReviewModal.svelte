@@ -37,6 +37,9 @@
   ) => void;
   // Resolves a card's tag-bound template (or null to render the default columns).
   export let resolveTemplate: (card: Flashcard) => ResolvedRender | null = () => null;
+  // Resolves an Obsidian image linkpath to a renderable URL (for HTML template
+  // faces, where ![[img]] embeds must become native <img> tags).
+  export let resolveEmbed: (linkpath: string, sourcePath: string) => string | null = () => null;
   export let settings: DecksSettings;
   export let scheduler: Scheduler;
   export let onCardReviewed:
@@ -195,8 +198,12 @@
   let notesEl: HTMLElement;
   // Template resolved for the currently displayed card (null = default columns).
   let currentResolved: ResolvedRender | null = null;
-  // Notes may come from the card's own column OR a bound template.
-  $: hasNotes = !!(currentCard?.notes || currentResolved?.notes);
+  // When a template is bound, notes come ONLY from the template (table columns
+  // are template data, not a separate notes field). Otherwise use the card's
+  // own notes column (default 3-column behavior).
+  $: hasNotes = currentResolved
+    ? !!currentResolved.notes
+    : !!currentCard?.notes;
   let schedulingInfo: SchedulingPreview | null = null;
   let reviewedCount = 0;
   let cardStartTime = 0;
@@ -470,7 +477,8 @@
           currentResolved ? currentResolved.front : currentCard.front,
           currentResolved ? currentResolved.frontType : null,
           renderMarkdown,
-          deckFilePath
+          deckFilePath,
+          (lp) => resolveEmbed(lp, currentCard?.sourceFile ?? "")
         );
       }
     }
@@ -490,7 +498,8 @@
             currentResolved ? currentResolved.back : currentCard.back,
             currentResolved ? currentResolved.backType : null,
             renderMarkdown,
-            deckFilePath
+            deckFilePath,
+            (lp) => resolveEmbed(lp, currentCard?.sourceFile ?? "")
           );
         }
       }
@@ -517,7 +526,8 @@
             currentResolved ? currentResolved.back : currentCard.back,
             currentResolved ? currentResolved.backType : null,
             renderMarkdown,
-            deckFilePath
+            deckFilePath,
+            (lp) => resolveEmbed(lp, currentCard?.sourceFile ?? "")
           );
         }
       }
@@ -528,7 +538,9 @@
     showNotes = !showNotes;
     if (showNotes) {
       tick().then(() => {
-        const notesContent = currentResolved?.notes ?? currentCard?.notes;
+        const notesContent = currentResolved
+          ? currentResolved.notes
+          : currentCard?.notes;
         if (notesEl && notesContent) {
           notesEl.empty();
           renderCardSide(
@@ -538,7 +550,8 @@
               ? currentResolved.notesType ?? "md"
               : null,
             renderMarkdown,
-            deckFilePath
+            deckFilePath,
+            (lp) => resolveEmbed(lp, currentCard?.sourceFile ?? "")
           );
         }
       });

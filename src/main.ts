@@ -751,7 +751,10 @@ export default class DecksPlugin extends Plugin {
           block.createDiv({ cls: "decks-template-preview-label", text: lang });
           const body = block.createDiv({ cls: "decks-template-preview-body markdown-rendered" });
           if (isHtml) {
-            renderHtmlIntoShadow(body, source);
+            renderHtmlIntoShadow(body, source, (linkpath) => {
+              const dest = this.app.metadataCache.getFirstLinkpathDest(linkpath, ctx.sourcePath);
+              return dest ? this.app.vault.getResourcePath(dest) : null;
+            });
           } else {
             const child = new MarkdownRenderChild(body);
             ctx.addChild(child);

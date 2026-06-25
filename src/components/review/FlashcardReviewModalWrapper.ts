@@ -212,6 +212,10 @@ export class FlashcardReviewModalWrapper extends Modal {
           this.renderMarkdown(content, el);
         },
         resolveTemplate: (card: Flashcard) => this.resolveTemplate(card),
+        resolveEmbed: (linkpath: string, sourcePath: string) => {
+          const dest = this.app.metadataCache.getFirstLinkpathDest(linkpath, sourcePath);
+          return dest ? this.app.vault.getResourcePath(dest) : null;
+        },
         settings: this.settings,
         scheduler: this.scheduler,
         onCardReviewed: undefined,
