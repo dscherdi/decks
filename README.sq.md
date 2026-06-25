@@ -126,6 +126,24 @@ Krijo karta në një Canvas të Obsidian (`.canvas`) në vend të një skedari M
 
 ![Canvas Spatial Cards Demo](./canvas_spatial_cards_demo.gif)
 
+## Shabllonet
+
+Shfaq rreshtat e një tabele përmes një dizajni karte që e krijon një herë. Shkruaje në HTML/CSS ose Markdown,
+vendos mbajtëse `{{Column}}` dhe lidhe me tabelat e tua përmes një etikete — një shabllon i jep stil çdo
+rreshti që përputhet.
+
+```decks-html-front
+<ruby>{{Word}}<rt>{{Reading}}</rt></ruby>
+```
+
+Te **Cilësimet → Shabllonet** zgjidh një dosje, etiketo skedarin e shabllonit dhe titullin e tabelës me të
+njëjtën etiketë — gati. Shabllonet mbështesin anët ballë/prapa/shënime në HTML ose Markdown, shfaqen në një
+mjedis të izoluar, të pastruar dhe të ndërgjegjshëm për temën, dhe ekspozojnë variabla CSS (`--padding`,
+`--align`, `--bg`, …) për kontroll të plotë të paraqitjes — nga karta të rehatshme leximi te dizajne të
+personalizuara buzë-më-buzë. Tabelat pa një shabllon që përputhet përdorin përsëri kolonat normale.
+
+Shih **[docs/TEMPLATES.md](docs/TEMPLATES.md)** për udhëzuesin e plotë dhe shembuj.
+
 ## Planifikim i personalizuar
 
 FSRS vjen me parazgjedhje të arsyeshme që funksionojnë shumë mirë që në fillim. Pasi të kesh grumbulluar rreth 100 rishikime, mund të trajnosh 21 peshat e algoritmit me historikun tënd dhe të marrësh planifikime të përshtatura posaçërisht për kurbën tënde të harrimit — e njëjta gjë që bën Anki në desktop, por në pajisjen tënde, pa server, pa gjurmim të dhënash.
@@ -178,8 +196,14 @@ Decks është ndërtuar mbi **[`@decks/core`](https://github.com/dscherdi/decks-
 
 ## Licenca
 
-Shiko [LICENSE](./LICENSE).
+Ky projekt licencohet sipas **GNU Affero General Public License v3.0 ose më vonë** (AGPL-3.0-or-later).
+
+Shkurt: je i lirë ta përdorësh, ta modifikosh dhe ta shpërndash këtë softuer. Megjithatë, nëse e modifikon dhe
+shpërndan ndryshimet e tua — ose e modifikon dhe ua ofron përdoruesve përmes një rrjeti — duhet ta bësh kodin
+burim të modifikuar publikisht të disponueshëm sipas së njëjtës licencë AGPL-3.0.
+
+Copyright (C) 2026 Xherdi Lika. Shih skedarin [LICENSE](./LICENSE) për tekstin e plotë.
 
 ---
 
-> Ky përkthim është një draft — kërkesat për tërheqje (Pull Requests) nga folësit amtarë janë të mirëseardhura.
+> Ky përkthim është një draft — korrigjimet dhe sugjerimet janë të mirëseardhura te issue tracker.

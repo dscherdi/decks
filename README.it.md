@@ -137,6 +137,24 @@ Crea carte su un file Canvas di Obsidian (`.canvas`) anziché su un file Markdow
 
 ![Canvas Spatial Cards Demo](./canvas_spatial_cards_demo.gif)
 
+## Modelli
+
+Renderizza le righe di una tabella tramite un design di carta che crei una sola volta. Scrivilo in HTML/CSS o
+Markdown, inserisci i segnaposto `{{Column}}` e collegalo alle tue tabelle con un tag: un modello dà stile a
+ogni riga corrispondente.
+
+```decks-html-front
+<ruby>{{Word}}<rt>{{Reading}}</rt></ruby>
+```
+
+In **Impostazioni → Modelli** scegli una cartella, poi assegna lo stesso tag al file del modello e
+all'intestazione della tabella: fatto. I modelli supportano le facce fronte/retro/note in HTML o Markdown,
+vengono renderizzati in un ambiente isolato, sanificato e consapevole del tema, ed espongono variabili CSS
+(`--padding`, `--align`, `--bg`, …) per il pieno controllo del layout — da comode carte di lettura a design
+personalizzati a tutto campo. Le tabelle senza un modello corrispondente usano le colonne normali.
+
+Vedi **[docs/TEMPLATES.md](docs/TEMPLATES.md)** per la guida completa ed esempi.
+
 ## Pianificazione personalizzata
 
 FSRS viene fornito con impostazioni predefinite logiche che funzionano benissimo fin da subito. Una volta accumulate circa 100 revisioni, puoi allenare i 21 pesi dell'algoritmo sulla tua cronologia e ottenere pianificazioni personalizzate per la tua specifica curva dell'oblio, proprio come fa Anki per desktop, ma tutto in locale, senza server e senza telemetria.
@@ -189,8 +207,15 @@ Decks è basato su **[`@decks/core`](https://github.com/dscherdi/decks-core)** �
 
 ## Licenza
 
-Vedi [LICENSE](./LICENSE).
+Questo progetto è rilasciato sotto la **GNU Affero General Public License v3.0 o successiva**
+(AGPL-3.0-or-later).
+
+In breve: sei libero di usare, modificare e distribuire questo software. Tuttavia, se lo modifichi e
+distribuisci le tue modifiche — o lo modifichi e lo offri agli utenti tramite una rete — devi rendere il tuo
+codice sorgente modificato pubblicamente disponibile sotto la stessa licenza AGPL-3.0.
+
+Copyright (C) 2026 Xherdi Lika. Vedi il file [LICENSE](./LICENSE) per il testo completo.
 
 ---
 
-> Questa traduzione è una bozza — le Pull Request da parte di madrelingua sono ben accette.
+> Questa traduzione è una bozza — correzioni e suggerimenti sono benvenuti nell'issue tracker.

@@ -125,7 +125,7 @@ fork. To request a new or corrected language upstream, please open an issue
 
 - [docs/DEVELOPMENT.md](./docs/DEVELOPMENT.md) — extended setup, file layout, debugging
 - [docs/INTEGRATION_TESTING_GUIDE.md](./docs/INTEGRATION_TESTING_GUIDE.md) — testing strategy & patterns
-- [docs/CANVAS_DECKS.md](./docs/CANVAS_DECKS.md), [docs/CLOZE.md](./docs/CLOZE.md), [docs/IMAGE_OCCLUSION.md](./docs/IMAGE_OCCLUSION.md) — feature docs
+- [docs/CANVAS_DECKS.md](./docs/CANVAS_DECKS.md), [docs/CLOZE.md](./docs/CLOZE.md), [docs/IMAGE_OCCLUSION.md](./docs/IMAGE_OCCLUSION.md), [docs/TEMPLATES.md](./docs/TEMPLATES.md) — feature docs
 - [docs/FSRS_OPTIMIZER.md](./docs/FSRS_OPTIMIZER.md) — algorithm validation & benchmarking
 - [docs/TRANSLATING.md](./docs/TRANSLATING.md) — i18n contribution guide
 - [CLAUDE.md](./CLAUDE.md) — comprehensive architectural overview

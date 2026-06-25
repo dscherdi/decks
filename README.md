@@ -150,6 +150,23 @@ A `Decks — Canvas getting started.canvas` is auto-created in a `Canvas decks/`
 
 See **[docs/CANVAS_DECKS.md](docs/CANVAS_DECKS.md)** for details.
 
+## Templates
+
+Render the rows of a table through a card design you author once. Write it in HTML/CSS or Markdown, drop in
+`{{Column}}` placeholders, and bind it to your tables with a tag — one template styles every matching row.
+
+```decks-html-front
+<ruby>{{Word}}<rt>{{Reading}}</rt></ruby>
+```
+
+Point **Settings → Templates** at a folder, tag a template file and the table's heading with the same tag,
+and you're set. Templates support front/back/notes faces in HTML or Markdown, render in a sanitized,
+theme-aware sandbox, and expose CSS variables (`--padding`, `--align`, `--bg`, …) for full layout control —
+from comfortable reading cards to edge-to-edge custom designs. Tables with no matching template fall back to
+the normal columns.
+
+See **[docs/TEMPLATES.md](docs/TEMPLATES.md)** for the full guide and examples.
+
 ## What you get
 
 - Browse mode and timed review sessions with daily limits.

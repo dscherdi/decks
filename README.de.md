@@ -137,6 +137,24 @@ Erstelle Karten auf einer Obsidian-Canvas-Datei (`.canvas`) statt in einer Markd
 
 ![Canvas Spatial Cards Demo](./canvas_spatial_cards_demo.gif)
 
+## Vorlagen
+
+Rendere die Zeilen einer Tabelle über ein Kartendesign, das du einmal erstellst. Schreibe es in HTML/CSS oder
+Markdown, setze `{{Column}}`-Platzhalter ein und binde es per Tag an deine Tabellen — eine Vorlage gestaltet
+jede passende Zeile.
+
+```decks-html-front
+<ruby>{{Word}}<rt>{{Reading}}</rt></ruby>
+```
+
+Wähle unter **Einstellungen → Vorlagen** einen Ordner und versieh eine Vorlagendatei sowie die Überschrift
+der Tabelle mit demselben Tag — fertig. Vorlagen unterstützen Vorder-/Rück-/Notizseiten in HTML oder
+Markdown, werden in einer bereinigten, themenbewussten Sandbox gerendert und stellen CSS-Variablen
+(`--padding`, `--align`, `--bg`, …) für die volle Layout-Kontrolle bereit — von angenehmen Lesekarten bis zu
+randlosen eigenen Designs. Tabellen ohne passende Vorlage verwenden weiterhin die normalen Spalten.
+
+Siehe **[docs/TEMPLATES.md](docs/TEMPLATES.md)** für die vollständige Anleitung und Beispiele.
+
 ## Was du bekommst
 
 - Durchsuchen-Modus und zeitlich begrenzte Wiederholungssitzungen mit Tageslimits.
@@ -249,8 +267,14 @@ Decks basiert auf **[`@decks/core`](https://github.com/dscherdi/decks-core)** �
 
 ## Lizenz
 
-Siehe [LICENSE](./LICENSE).
+Dieses Projekt steht unter der **GNU Affero General Public License v3.0 oder höher** (AGPL-3.0-or-later).
+
+Kurz gesagt: Du darfst diese Software frei verwenden, verändern und weitergeben. Wenn du sie jedoch
+veränderst und deine Änderungen weitergibst — oder sie veränderst und Nutzern über ein Netzwerk anbietest —
+musst du deinen geänderten Quellcode unter derselben AGPL-3.0-Lizenz öffentlich verfügbar machen.
+
+Copyright (C) 2026 Xherdi Lika. Siehe die Datei [LICENSE](./LICENSE) für den vollständigen Text.
 
 ---
 
-> Diese Übersetzung ist ein Entwurf — Pull Requests von Muttersprachlern sind willkommen.
+> Diese Übersetzung ist ein Entwurf — Korrekturen und Verbesserungen sind im Issue-Tracker willkommen.

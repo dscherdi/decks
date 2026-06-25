@@ -126,6 +126,24 @@ Markdown dosyası yerine bir Obsidian Canvas (`.canvas`) dosyasında kart oluşt
 
 ![Canvas Spatial Cards Demo](./canvas_spatial_cards_demo.gif)
 
+## Şablonlar
+
+Bir tablonun satırlarını, bir kez tasarladığınız bir kart tasarımıyla işleyin. Tasarımı HTML/CSS veya Markdown
+ile yazın, `{{Column}}` yer tutucularını yerleştirin ve bir etiketle tablolarınıza bağlayın — tek bir şablon,
+eşleşen her satıra biçim verir.
+
+```decks-html-front
+<ruby>{{Word}}<rt>{{Reading}}</rt></ruby>
+```
+
+**Ayarlar → Şablonlar** bölümünden bir klasör seçin, şablon dosyasını ve tablonun başlığını aynı etiketle
+etiketleyin — hazırsınız. Şablonlar HTML veya Markdown ile ön/arka/not yüzlerini destekler; arındırılmış,
+temaya duyarlı ve yalıtılmış bir alanda işlenir ve tam düzen denetimi için CSS değişkenleri (`--padding`,
+`--align`, `--bg`, …) sunar — rahat okuma kartlarından kenardan kenara özel tasarımlara kadar. Eşleşen şablonu
+olmayan tablolar yine normal sütunları kullanır.
+
+Tam kılavuz ve örnekler için **[docs/TEMPLATES.md](docs/TEMPLATES.md)** bölümüne bakın.
+
 ## Kişiselleştirilmiş planlama
 
 FSRS, kutudan çıktığı gibi harika çalışan mantıklı varsayılanlarla gelir. Yaklaşık 100 tekrar biriktirdiğinizde, algoritmanın 21 ağırlığını kendi tekrar geçmişinize göre eğitebilir ve unutma eğrinize özel planlamalar elde edebilirsiniz — tıpkı Anki'nin masaüstü sürümünün yaptığı gibi, ancak sunucu veya veri toplama olmadan, tamamen cihazınızda (lokal).
@@ -178,8 +196,14 @@ Decks, ayrıştırma, FSRS planlama, senkronizasyon ve yapay zekâ orkestrasyonu
 
 ## Lisans
 
-Bkz. [LICENSE](./LICENSE).
+Bu proje **GNU Affero General Public License v3.0 veya sonrası** (AGPL-3.0-or-later) ile lisanslanmıştır.
+
+Kısacası: bu yazılımı kullanmakta, değiştirmekte ve dağıtmakta özgürsünüz. Ancak yazılımı değiştirip
+değişikliklerinizi dağıtırsanız — ya da değiştirip kullanıcılara bir ağ üzerinden sunarsanız — değiştirdiğiniz
+kaynak kodu aynı AGPL-3.0 lisansı altında kamuya açık hâle getirmelisiniz.
+
+Copyright (C) 2026 Xherdi Lika. Tam metin için [LICENSE](./LICENSE) dosyasına bakın.
 
 ---
 
-> Bu çeviri bir taslaktır — anadili Türkçe olanlardan gelecek Pull Request'ler memnuniyetle karşılanır.
+> Bu çeviri bir taslaktır — düzeltmeler ve öneriler için issue tracker'a katkıda bulunabilirsiniz.

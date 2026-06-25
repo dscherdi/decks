@@ -137,6 +137,25 @@ Créez des cartes sur un canvas Obsidian (`.canvas`) au lieu d'un fichier Markdo
 
 ![Canvas Spatial Cards Demo](./canvas_spatial_cards_demo.gif)
 
+## Modèles
+
+Affichez les lignes d'un tableau via un design de carte que vous créez une seule fois. Écrivez-le en HTML/CSS
+ou en Markdown, insérez des espaces réservés `{{Column}}` et liez-le à vos tableaux par une étiquette : un
+modèle met en forme chaque ligne correspondante.
+
+```decks-html-front
+<ruby>{{Word}}<rt>{{Reading}}</rt></ruby>
+```
+
+Dans **Paramètres → Modèles**, choisissez un dossier, puis ajoutez la même étiquette au fichier de modèle et
+au titre du tableau — c'est tout. Les modèles prennent en charge les faces recto/verso/notes en HTML ou
+Markdown, s'affichent dans un bac à sable isolé, assaini et adapté au thème, et exposent des variables CSS
+(`--padding`, `--align`, `--bg`, …) pour un contrôle total de la mise en page — des cartes de lecture
+confortables aux designs personnalisés pleine largeur. Les tableaux sans modèle correspondant utilisent les
+colonnes habituelles.
+
+Voir **[docs/TEMPLATES.md](docs/TEMPLATES.md)** pour le guide complet et des exemples.
+
 ## Ce que vous obtenez
 
 - Mode navigation et sessions de révision chronométrées avec limites journalières.
@@ -198,8 +217,14 @@ Decks est construit sur **[`@decks/core`](https://github.com/dscherdi/decks-core
 
 ## Licence
 
-Voir [LICENSE](./LICENSE).
+Ce projet est sous licence **GNU Affero General Public License v3.0 ou ultérieure** (AGPL-3.0-or-later).
+
+En bref : vous êtes libre d'utiliser, de modifier et de distribuer ce logiciel. Cependant, si vous le
+modifiez et distribuez vos modifications — ou si vous le modifiez et le proposez aux utilisateurs via un
+réseau — vous devez rendre votre code source modifié publiquement disponible sous la même licence AGPL-3.0.
+
+Copyright (C) 2026 Xherdi Lika. Voir le fichier [LICENSE](./LICENSE) pour le texte complet.
 
 ---
 
-> Cette traduction est une ébauche — les Pull Requests de locuteurs natifs sont les bienvenues.
+> Cette traduction est une ébauche — corrections et suggestions sont les bienvenues dans le suivi des tickets (issues).
