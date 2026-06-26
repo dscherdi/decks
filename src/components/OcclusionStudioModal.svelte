@@ -1,6 +1,8 @@
 <script lang="ts">
   import { onMount } from "svelte";
-  import type { OcclusionMask } from "@decks/core";
+  import { I18n, type OcclusionMask } from "@decks/core";
+
+  const o = I18n.t.occlusion;
 
   export let imageSrc: string | null = null;
   export let imageLabel = "";
@@ -200,8 +202,8 @@
 
 <div class="decks-occlusion-studio">
   <div class="decks-occlusion-studio-header">
-    <span class="decks-occlusion-studio-title">Edit image occlusion</span>
-    <span class="decks-occlusion-studio-hint">Drag on the image to draw a box</span>
+    <span class="decks-occlusion-studio-title">{o.studioTitle}</span>
+    <span class="decks-occlusion-studio-hint">{o.drawHint}</span>
   </div>
 
   <div class="decks-occlusion-studio-body">
@@ -218,7 +220,7 @@
         {#if imageSrc}
           <img class="decks-occlusion-image" src={imageSrc} alt={imageLabel} draggable="false" />
         {:else}
-          <div class="decks-occlusion-missing">Image not found: {imageLabel}</div>
+          <div class="decks-occlusion-missing">{I18n.format(o.imageNotFound, { name: imageLabel })}</div>
         {/if}
 
         {#each masks as mask (mask.id)}
@@ -236,7 +238,7 @@
             <button
               type="button"
               class="decks-occlusion-mask-delete"
-              aria-label="Delete box"
+              aria-label={o.deleteBox}
               on:pointerdown|stopPropagation
               on:click|stopPropagation={() => deleteMask(mask.id)}
             >×</button>
@@ -245,7 +247,7 @@
               on:pointerdown={(e) => onHandlePointerDown(e, mask)}
               role="button"
               tabindex="-1"
-              aria-label="Resize"
+              aria-label={o.resize}
             ></div>
           </div>
         {/each}
@@ -254,9 +256,9 @@
 
     <div class="decks-occlusion-inspector">
       <div class="decks-occlusion-inspector-scroll">
-        <div class="decks-occlusion-list-label">Boxes</div>
+        <div class="decks-occlusion-list-label">{o.boxes}</div>
         {#if masks.length === 0}
-          <div class="decks-occlusion-empty">No boxes yet. Drag on the image to draw one.</div>
+          <div class="decks-occlusion-empty">{o.noBoxes}</div>
         {:else}
           <div class="decks-occlusion-box-list">
             {#each masks as mask, i (mask.id)}
@@ -274,7 +276,7 @@
                   class="decks-occlusion-box-item-answer"
                   class:decks-occlusion-box-item-empty={mask.answer.trim().length === 0}
                 >
-                  {mask.answer.trim() || "Empty"}
+                  {mask.answer.trim() || o.emptyAnswer}
                 </span>
               </button>
             {/each}
@@ -284,27 +286,27 @@
         {#if selected}
           <div class="decks-occlusion-editor">
             <label class="decks-occlusion-editor-label" for="decks-occ-answer">
-              Answer (Markdown / LaTeX)
+              {o.answerLabel}
             </label>
             <textarea
               id="decks-occ-answer"
               class="decks-occlusion-answer-input"
               use:autogrow={selected.answer}
               bind:value={selected.answer}
-              placeholder="Leave empty for a deletion-only box"
+              placeholder={o.answerPlaceholder}
             ></textarea>
             {#if selected.answer.trim().length > 0}
               <div class="decks-occlusion-preview markdown-rendered" bind:this={previewEl}></div>
             {/if}
           </div>
         {:else if masks.length > 0}
-          <div class="decks-occlusion-empty">Select a box to add its answer.</div>
+          <div class="decks-occlusion-empty">{o.selectBox}</div>
         {/if}
       </div>
 
       <div class="decks-occlusion-studio-actions">
-        <button type="button" on:click={onClose}>Cancel</button>
-        <button type="button" class="mod-cta" on:click={save}>Save</button>
+        <button type="button" on:click={onClose}>{o.cancel}</button>
+        <button type="button" class="mod-cta" on:click={save}>{o.save}</button>
       </div>
     </div>
   </div>

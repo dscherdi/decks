@@ -102,7 +102,33 @@ Shto **shënime** opsionale në një kartë titull+paragraf me një koment Obsid
 </details>
 
 <details>
-<summary><b>Mbulimi i imazhit (Image occlusion)</b> — një imazh plus një listë e numëruar.</summary>
+<summary><b>Mbulimi i imazhit (Image occlusion)</b> — fshih zona të një imazhi dhe kujto çfarë ndodhet poshtë. Dy mënyra: interaktive (vizato kuti) ose një listë e numëruar.</summary>
+
+**Interaktive (e rekomanduar).** Ekzekuto komandën **«Krijo okluzion imazhi te kursori»**, zgjidh një imazh dhe pastaj vizato kuti drejtpërdrejt në redaktues. Shkruaj një përgjigje Markdown/LaTeX për çdo kuti, ose lëre bosh për të fshehur thjesht një etiketë të integruar. Ruhet si një bllok kodi `decks-occlusion` i vetëmjaftueshëm (koordinatat janë në përqindje, kështu që përshtatet në çdo pajisje):
+
+````markdown
+```decks-occlusion
+image: "[[heart.png]]"
+version: 2
+masks:
+  - id: m1
+    x: 12.5
+    y: 30
+    w: 18
+    h: 9.5
+    answer: "**Ventrikuli** i majtë"
+  - id: m2
+    x: 55
+    y: 22
+    w: 14
+    h: 8
+    answer: ""
+```
+````
+
+Çdo kuti është një kartë. Gjatë përsëritjes, kutia është e fshehur përpara dhe zbulohet prapa (me përgjigjen e saj); në pamjen e leximit sheh diagramin plotësisht të etiketuar. Mund të modifikohet kurdoherë nga butoni **Modifiko** i bllokut ose nga menaxheri i kartave.
+
+**Listë e numëruar (e thjeshtë).** Një imazh i integruar i ndjekur nga një listë e numëruar gjithashtu funksionon:
 
 ```markdown
 ## Kockat e krahut
@@ -114,7 +140,9 @@ Shto **shënime** opsionale në një kartë titull+paragraf me një koment Obsid
 3. ==Bërrylori (Ulna)==
 ```
 
-Çdo element i listës është një kartë. Imazhi shfaqet përpara; elementi që përputhet fshihet prapa. Bazohet në tiparin "cloze".
+Çdo element i listës është një kartë; imazhi shfaqet përpara dhe elementi që përputhet fshihet prapa.
+
+Të dyja bazohen në tiparin "cloze", prandaj cloze duhet të jetë i aktivizuar në profil dhe blloku duhet të jetë nën një titull që analizohet.
 
 </details>
 

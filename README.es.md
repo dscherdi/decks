@@ -102,7 +102,33 @@ Cada resaltado se convierte en una tarjeta. Durante el repaso, el hueco activo a
 </details>
 
 <details>
-<summary><b>Oclusión de imágenes</b> — una imagen más una lista numerada. Los números en la imagen se mapean con la lista.</summary>
+<summary><b>Oclusión de imágenes</b> — oculta regiones de una imagen y recuerda lo que hay debajo. Dos formas: interactiva (dibujar cuadros) o una lista numerada.</summary>
+
+**Interactiva (recomendada).** Ejecuta el comando **«Crear oclusión de imagen en el cursor»**, elige una imagen y dibuja cuadros sobre ella directamente en el editor. Escribe una respuesta en Markdown/LaTeX para cada cuadro, o déjalo vacío para solo ocultar una etiqueta incrustada. Se guarda como un bloque de código `decks-occlusion` autónomo (las coordenadas son porcentajes, así que se adapta a cualquier dispositivo):
+
+````markdown
+```decks-occlusion
+image: "[[heart.png]]"
+version: 2
+masks:
+  - id: m1
+    x: 12.5
+    y: 30
+    w: 18
+    h: 9.5
+    answer: "**Ventrículo** izquierdo"
+  - id: m2
+    x: 55
+    y: 22
+    w: 14
+    h: 8
+    answer: ""
+```
+````
+
+Cada cuadro es una tarjeta. En el repaso, el cuadro se oculta en el anverso y se revela en el reverso (con su respuesta); en la vista de lectura ves el diagrama totalmente etiquetado. Edítalo cuando quieras desde el botón **Editar** del bloque o el gestor de tarjetas.
+
+**Lista numerada (sencilla).** Una imagen incrustada seguida de una lista numerada también funciona:
 
 ```markdown
 ## Huesos del brazo
@@ -114,7 +140,9 @@ Cada resaltado se convierte en una tarjeta. Durante el repaso, el hueco activo a
 3. ==Cúbito==
 ```
 
-Cada elemento de la lista es una tarjeta. La imagen (con sus etiquetas numeradas) se muestra en el anverso; el elemento correspondiente se oculta en el reverso. Se basa en los huecos, por lo que cloze debe estar activado en el perfil.
+Cada elemento de la lista es una tarjeta; la imagen se muestra en el anverso y el elemento correspondiente se oculta en el reverso.
+
+Ambas se basan en los huecos, por lo que cloze debe estar activado en el perfil y el bloque debe estar bajo un encabezado analizado.
 
 </details>
 

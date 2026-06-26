@@ -102,7 +102,33 @@ Chaque surlignage devient une carte. Pendant la révision, le trou actif s'affic
 </details>
 
 <details>
-<summary><b>Masquage d'image</b> — une image et une liste numérotée. Les numéros sur l'image correspondent à la liste.</summary>
+<summary><b>Masquage d'image</b> — masquez des zones d'une image et retrouvez ce qu'il y a dessous. Deux méthodes : interactive (dessiner des zones) ou une liste numérotée.</summary>
+
+**Interactive (recommandée).** Exécutez la commande **« Créer une occlusion d'image au curseur »**, choisissez une image, puis dessinez des zones directement dans l'éditeur. Saisissez une réponse Markdown/LaTeX pour chaque zone, ou laissez-la vide pour simplement masquer une étiquette intégrée. C'est enregistré comme un bloc de code `decks-occlusion` autonome (les coordonnées sont en pourcentages, donc cela s'adapte à tout appareil) :
+
+````markdown
+```decks-occlusion
+image: "[[heart.png]]"
+version: 2
+masks:
+  - id: m1
+    x: 12.5
+    y: 30
+    w: 18
+    h: 9.5
+    answer: "**Ventricule** gauche"
+  - id: m2
+    x: 55
+    y: 22
+    w: 14
+    h: 8
+    answer: ""
+```
+````
+
+Chaque zone est une carte. En révision, la zone est masquée au recto et révélée au verso (avec sa réponse) ; en mode lecture, vous voyez le schéma entièrement annoté. Modifiable à tout moment depuis le bouton **Modifier** du bloc ou le gestionnaire de cartes.
+
+**Liste numérotée (simple).** Une image intégrée suivie d'une liste numérotée fonctionne aussi :
 
 ```markdown
 ## Os du bras
@@ -114,7 +140,9 @@ Chaque surlignage devient une carte. Pendant la révision, le trou actif s'affic
 3. ==Ulna (Cubitus)==
 ```
 
-Chaque élément de la liste est une carte. L'image (avec ses étiquettes numérotées) s'affiche au recto ; l'élément correspondant est masqué au verso. Cette fonctionnalité s'appuie sur les textes à trous (cloze), qui doivent donc être activés sur le profil.
+Chaque élément de la liste est une carte ; l'image s'affiche au recto et l'élément correspondant est masqué au verso.
+
+Les deux s'appuient sur les textes à trous (cloze), qui doivent donc être activés sur le profil, et le bloc doit se trouver sous un en-tête analysé.
 
 </details>
 

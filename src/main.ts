@@ -6,12 +6,16 @@ import {
   TAbstractFile,
   MarkdownRenderChild,
   MarkdownRenderer,
+  MarkdownView,
   getAllTags,
   getLanguage,
+  type Editor,
 } from "obsidian";
 import { renderHtmlIntoShadow } from "./utils/html-template-render";
 import { renderOcclusion } from "./utils/occlusion-render";
 import { OcclusionStudioModalWrapper } from "./components/OcclusionStudioModalWrapper";
+import { FilePickerModal } from "./utils/file-picker";
+import { IMAGE_EXTENSIONS } from "./utils/attachments";
 
 import {
   DatabaseFactory,
@@ -33,7 +37,7 @@ import { BackupService } from "./services/BackupService";
 import { StatisticsService } from "./services/StatisticsService";
 import { FlashcardWriter, type FlashcardEdits } from "./services/FlashcardWriter";
 import { FlashcardEditModalWrapper } from "./components/FlashcardEditModalWrapper";
-import { AiGenerationService, AiRefactoringService, type GeneratedCard, generateDeckId, I18n, type RefactorFieldSet, resolveCardTemplate, yieldToUI, OcclusionV2Parser, type OcclusionDoc, isOcclusionV2, parseOcclusionBack } from "@decks/core";
+import { AiGenerationService, AiRefactoringService, type GeneratedCard, generateDeckId, I18n, type RefactorFieldSet, resolveCardTemplate, yieldToUI, OcclusionV2Parser, type OcclusionDoc, OCCLUSION_V2_VERSION, isOcclusionV2, parseOcclusionBack } from "@decks/core";
 import { AiKeyStore } from "./services/AiKeyStore";
 import { ObsidianHttpClient } from "./services/ObsidianHttpClient";
 import {
@@ -430,6 +434,30 @@ export default class DecksPlugin extends Plugin {
         },
       });
 
+      // Insert an image-occlusion block at the cursor and open the studio.
+      this.addCommand({
+        id: "insert-image-occlusion",
+        name: I18n.t.commands.insertImageOcclusion,
+        editorCallback: (editor, view) => {
+          if (!(view instanceof MarkdownView) || !view.file) return;
+          const images = this.app.vault
+            .getFiles()
+            .filter((f) => IMAGE_EXTENSIONS.includes(f.extension.toLowerCase()));
+          if (images.length === 0) {
+            new Notice(I18n.t.occlusion.noImages);
+            return;
+          }
+          new FilePickerModal(
+            this.app,
+            images,
+            (file) => {
+              void this.insertOcclusionAtCursor(editor, view, file);
+            },
+            I18n.t.occlusion.pickImage
+          ).open();
+        },
+      });
+
       // Add command to show release notes
       this.addCommand({
         id: "show-release-notes",
@@ -775,7 +803,7 @@ export default class DecksPlugin extends Plugin {
         if (!result.ok) {
           root.createDiv({
             cls: "decks-occlusion-error",
-            text: `Image occlusion error: ${result.error}`,
+            text: I18n.format(I18n.t.occlusion.parseError, { error: result.error }),
           });
         } else {
           const viewer = root.createDiv();
@@ -800,7 +828,7 @@ export default class DecksPlugin extends Plugin {
         const toolbar = root.createDiv({ cls: "decks-occlusion-toolbar" });
         const editBtn = toolbar.createEl("button", {
           cls: "decks-occlusion-edit-btn",
-          text: "Edit",
+          text: I18n.t.occlusion.edit,
         });
         editBtn.onclick = () => {
           const info = ctx.getSectionInfo(el);
@@ -1688,6 +1716,31 @@ export default class DecksPlugin extends Plugin {
       }
     }
     return null;
+  }
+
+  /** Insert a `decks-occlusion` block for `file` at the cursor, then open the studio. */
+  private async insertOcclusionAtCursor(
+    editor: Editor,
+    view: MarkdownView,
+    file: TFile,
+  ): Promise<void> {
+    const sourcePath = view.file?.path;
+    if (!sourcePath) return;
+    const linktext = this.app.metadataCache.fileToLinktext(file, sourcePath);
+    const doc: OcclusionDoc = {
+      __v: OCCLUSION_V2_VERSION,
+      image: `[[${linktext}]]`,
+      masks: [],
+    };
+    const fenced = "```decks-occlusion\n" + OcclusionV2Parser.toYaml(doc).trimEnd() + "\n```";
+    const cursor = editor.getCursor();
+    const atLineStart = cursor.ch === 0;
+    editor.replaceSelection((atLineStart ? "" : "\n") + fenced + "\n");
+    // Persist so the studio's vault.process sees the new block.
+    await view.save();
+    const openLine = atLineStart ? cursor.line : cursor.line + 1;
+    const closeLine = openLine + fenced.split("\n").length - 1;
+    this.openOcclusionStudio(sourcePath, doc, openLine, closeLine, doc.image);
   }
 
   /** Open the image-occlusion studio for a `decks-occlusion` block in a note. */

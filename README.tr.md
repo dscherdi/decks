@@ -102,7 +102,33 @@ Her vurgu kendi başına bir kart olur. Tekrar sırasında aktif boşluk `[...]`
 </details>
 
 <details>
-<summary><b>Görsel örtme (Image occlusion)</b> — bir görsel ve numaralandırılmış liste.</summary>
+<summary><b>Görsel örtme (Image occlusion)</b> — bir görselin bölgelerini gizleyip altında ne olduğunu hatırlayın. İki yol: etkileşimli (kutu çizme) veya numaralandırılmış liste.</summary>
+
+**Etkileşimli (önerilir).** **"İmleç konumunda görüntü gizleme oluştur"** komutunu çalıştırın, bir görsel seçin ve doğrudan düzenleyicide üzerine kutular çizin. Her kutu için bir Markdown/LaTeX cevabı yazın veya görselde gömülü bir etiketi yalnızca gizlemek için boş bırakın. Bağımsız bir `decks-occlusion` kod bloğu olarak kaydedilir (koordinatlar yüzde olduğundan her cihaza uyum sağlar):
+
+````markdown
+```decks-occlusion
+image: "[[heart.png]]"
+version: 2
+masks:
+  - id: m1
+    x: 12.5
+    y: 30
+    w: 18
+    h: 9.5
+    answer: "Sol **ventrikül**"
+  - id: m2
+    x: 55
+    y: 22
+    w: 14
+    h: 8
+    answer: ""
+```
+````
+
+Her kutu bir karttır. Tekrarda kutu ön yüzde gizlenir ve arka yüzde (cevabıyla) açığa çıkar; okuma görünümünde tamamen etiketli diyagramı görürsünüz. Bloğun **Düzenle** düğmesinden veya kart yöneticisinden istediğiniz zaman düzenlenebilir.
+
+**Numaralandırılmış liste (basit).** Gömülü bir görselin ardından numaralandırılmış bir liste de çalışır:
 
 ```markdown
 ## Kol kemikleri
@@ -114,7 +140,9 @@ Her vurgu kendi başına bir kart olur. Tekrar sırasında aktif boşluk `[...]`
 3. ==Ulna==
 ```
 
-Listedeki her öğe bir karttır. Görsel ön yüzü oluştururken, ilgili liste öğesi arka yüzünde gizlenir. Boşluk doldurma (cloze) özelliğini temel alır.
+Listedeki her öğe bir karttır; görsel ön yüzde gösterilir ve ilgili öğe arka yüzde gizlenir.
+
+İkisi de boşluk doldurma (cloze) özelliğine dayanır; bu nedenle profilde cloze etkin olmalı ve blok ayrıştırılan bir başlığın altında bulunmalıdır.
 
 </details>
 

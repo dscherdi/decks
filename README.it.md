@@ -102,7 +102,33 @@ Ogni testo evidenziato diventa una carta. Durante il ripasso, lo spazio vuoto at
 </details>
 
 <details>
-<summary><b>Occlusione d'immagine</b> — un'immagine più un elenco numerato. I numeri sull'immagine corrispondono all'elenco.</summary>
+<summary><b>Occlusione d'immagine</b> — nascondi regioni di un'immagine e ricorda cosa c'è sotto. Due modi: interattivo (disegnare riquadri) o un elenco numerato.</summary>
+
+**Interattivo (consigliato).** Esegui il comando **«Crea occlusione immagine al cursore»**, scegli un'immagine, poi disegna i riquadri direttamente nell'editor. Inserisci una risposta in Markdown/LaTeX per ogni riquadro, oppure lascialo vuoto per nascondere solo un'etichetta già presente nell'immagine. Viene salvato come un blocco di codice `decks-occlusion` autonomo (le coordinate sono in percentuale, quindi si adatta a qualsiasi dispositivo):
+
+````markdown
+```decks-occlusion
+image: "[[heart.png]]"
+version: 2
+masks:
+  - id: m1
+    x: 12.5
+    y: 30
+    w: 18
+    h: 9.5
+    answer: "**Ventricolo** sinistro"
+  - id: m2
+    x: 55
+    y: 22
+    w: 14
+    h: 8
+    answer: ""
+```
+````
+
+Ogni riquadro è una carta. Durante il ripasso, il riquadro è nascosto sul fronte e rivelato sul retro (con la sua risposta); nella vista di lettura vedi il diagramma completamente etichettato. Modificabile in qualsiasi momento dal pulsante **Modifica** del blocco o dal gestore delle carte.
+
+**Elenco numerato (semplice).** Anche un'immagine incorporata seguita da un elenco numerato funziona:
 
 ```markdown
 ## Ossa del braccio
@@ -114,7 +140,9 @@ Ogni testo evidenziato diventa una carta. Durante il ripasso, lo spazio vuoto at
 3. ==Ulna==
 ```
 
-Ogni elemento dell'elenco è una carta. L'immagine (con le sue etichette numerate) viene mostrata sul fronte; l'elemento corrispondente viene oscurato sul retro. Si basa sugli spazi vuoti (cloze), quindi questa funzione deve essere abilitata nel profilo.
+Ogni elemento dell'elenco è una carta; l'immagine viene mostrata sul fronte e l'elemento corrispondente viene oscurato sul retro.
+
+Entrambi si basano sugli spazi vuoti (cloze), quindi cloze deve essere abilitato nel profilo e il blocco deve trovarsi sotto un'intestazione analizzata.
 
 </details>
 

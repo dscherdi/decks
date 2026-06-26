@@ -1,6 +1,7 @@
 import { Modal, Component, MarkdownRenderer, Notice, TFile } from "obsidian";
 import type { App } from "obsidian";
 import {
+  I18n,
   OcclusionV2Parser,
   occlusionImageLinkpath,
   OCCLUSION_V2_VERSION,
@@ -58,7 +59,7 @@ export class OcclusionStudioModalWrapper extends Modal {
   private persist(masks: OcclusionMask[]): void {
     const file = this.app.vault.getAbstractFileByPath(this.options.sourcePath);
     if (!(file instanceof TFile)) {
-      new Notice("Could not find the note to save the occlusion.");
+      new Notice(I18n.t.occlusion.saveFileNotFound);
       return;
     }
     const newDoc: OcclusionDoc = {
@@ -85,7 +86,7 @@ export class OcclusionStudioModalWrapper extends Modal {
       })
       .then(() => {
         if (!located) {
-          new Notice("Could not locate the occlusion block — it may have moved.");
+          new Notice(I18n.t.occlusion.blockMoved);
           return;
         }
         this.options.onSaved?.();
@@ -93,7 +94,7 @@ export class OcclusionStudioModalWrapper extends Modal {
       })
       .catch((e) => {
         console.error("Failed to write occlusion block:", e);
-        new Notice("Failed to save the occlusion.");
+        new Notice(I18n.t.occlusion.saveFailed);
       });
   }
 

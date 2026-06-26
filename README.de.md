@@ -102,7 +102,33 @@ Jede Hervorhebung wird zu einer Karte. Während der Wiederholung wird die aktive
 </details>
 
 <details>
-<summary><b>Bildverdeckung</b> — ein Bild plus eine nummerierte Liste. Nummern auf dem Bild sind mit der Liste verknüpft.</summary>
+<summary><b>Bildverdeckung</b> — verdecke Bereiche eines Bildes und rufe ab, was darunter liegt. Zwei Wege: interaktiv (Felder zeichnen) oder eine nummerierte Liste.</summary>
+
+**Interaktiv (empfohlen).** Führe den Befehl **„Bildverdeckung an Cursorposition erstellen"** aus, wähle ein Bild und zeichne dann direkt im Editor Felder darauf. Gib für jedes Feld eine Markdown/LaTeX-Antwort ein oder lasse es leer, um nur eine im Bild enthaltene Beschriftung zu verdecken. Es wird als eigenständiger `decks-occlusion`-Codeblock gespeichert (Koordinaten in Prozent, daher auf jedem Gerät skalierbar):
+
+````markdown
+```decks-occlusion
+image: "[[heart.png]]"
+version: 2
+masks:
+  - id: m1
+    x: 12.5
+    y: 30
+    w: 18
+    h: 9.5
+    answer: "Linke **Herzkammer**"
+  - id: m2
+    x: 55
+    y: 22
+    w: 14
+    h: 8
+    answer: ""
+```
+````
+
+Jedes Feld ist eine Karte. Bei der Wiederholung ist das Feld auf der Vorderseite verdeckt und auf der Rückseite aufgedeckt (mit seiner Antwort); in der Leseansicht siehst du das vollständig beschriftete Diagramm. Jederzeit über die **Bearbeiten**-Schaltfläche des Blocks oder den Karteikarten-Manager bearbeitbar.
+
+**Nummerierte Liste (einfach).** Ein Bild-Embed gefolgt von einer nummerierten Liste funktioniert ebenfalls:
 
 ```markdown
 ## Knochen des Arms
@@ -114,7 +140,9 @@ Jede Hervorhebung wird zu einer Karte. Während der Wiederholung wird die aktive
 3. ==Elle==
 ```
 
-Jeder Listeneintrag ist eine Karte. Das Bild (mit seinen nummerierten Markierungen) wird auf der Vorderseite gezeigt; der passende Eintrag ist auf der Rückseite ausgeblendet. Baut auf Lückentexten auf, daher muss Cloze im Profil aktiviert sein.
+Jeder Listeneintrag ist eine Karte; das Bild wird auf der Vorderseite gezeigt und der passende Eintrag auf der Rückseite ausgeblendet.
+
+Beides baut auf Lückentexten auf – Cloze muss also im Profil aktiviert sein und der Block muss unter einer ausgewerteten Überschrift stehen.
 
 </details>
 

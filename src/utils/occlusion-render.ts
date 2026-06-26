@@ -1,4 +1,4 @@
-import { occlusionImageLinkpath, type OcclusionDoc } from "@decks/core";
+import { I18n, occlusionImageLinkpath, type OcclusionDoc } from "@decks/core";
 
 export interface OcclusionRenderOptions {
   doc: OcclusionDoc;
@@ -37,7 +37,7 @@ export function renderOcclusion(container: HTMLElement, opts: OcclusionRenderOpt
   } else {
     stage.createDiv({
       cls: "decks-occlusion-missing",
-      text: `Image not found: ${linkpath}`,
+      text: I18n.format(I18n.t.occlusion.imageNotFound, { name: linkpath }),
     });
   }
 
