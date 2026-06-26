@@ -4,18 +4,28 @@ import {
   WorkspaceLeaf,
   Notice,
   TAbstractFile,
+  MarkdownRenderChild,
+  MarkdownRenderer,
+  MarkdownView,
   getAllTags,
   getLanguage,
+  type Editor,
 } from "obsidian";
+import { renderHtmlIntoShadow } from "./utils/html-template-render";
+import { renderOcclusion } from "./utils/occlusion-render";
+import { OcclusionStudioModalWrapper } from "./components/OcclusionStudioModalWrapper";
+import { FilePickerModal } from "./utils/file-picker";
+import { IMAGE_EXTENSIONS } from "./utils/attachments";
 
 import {
   DatabaseFactory,
   type IDatabaseService,
 } from "./database/DatabaseFactory";
 import { DeckManager } from "./services/DeckManager";
+import { TemplateSyncService } from "./services/TemplateSyncService";
 import { DeckSynchronizer } from "./services/DeckSynchronizer";
 import { CanvasFileEventHandlers } from "./services/CanvasFileEventHandlers";
-import { Scheduler } from "./services/Scheduler";
+import { Scheduler } from "@decks/core";
 import { DeviceLocalState } from "./services/DeviceLocalState";
 import { SyncLog } from "./services/SyncLog";
 import {
@@ -27,7 +37,7 @@ import { BackupService } from "./services/BackupService";
 import { StatisticsService } from "./services/StatisticsService";
 import { FlashcardWriter, type FlashcardEdits } from "./services/FlashcardWriter";
 import { FlashcardEditModalWrapper } from "./components/FlashcardEditModalWrapper";
-import { AiGenerationService, AiRefactoringService, type GeneratedCard, generateDeckId, I18n, type RefactorFieldSet, yieldToUI } from "@decks/core";
+import { AiGenerationService, AiRefactoringService, type GeneratedCard, generateDeckId, I18n, type RefactorFieldSet, resolveCardTemplate, yieldToUI, OcclusionV2Parser, type OcclusionDoc, OCCLUSION_V2_VERSION, isOcclusionV2, parseOcclusionBack } from "@decks/core";
 import { AiKeyStore } from "./services/AiKeyStore";
 import { ObsidianHttpClient } from "./services/ObsidianHttpClient";
 import {
@@ -129,6 +139,7 @@ export default class DecksPlugin extends Plugin {
   private db: IDatabaseService;
   public deckManager: DeckManager;
   private deckSynchronizer: DeckSynchronizer;
+  private templateSyncService: TemplateSyncService;
   private canvasFileEvents: CanvasFileEventHandlers;
   private scheduler: Scheduler;
   private backupService: BackupService;
@@ -246,6 +257,15 @@ export default class DecksPlugin extends Plugin {
         this.app.vault.adapter,
         this.app.vault.configDir
       );
+
+      // Template cache sync (folder → deck_templates). Rebuild once on load.
+      this.templateSyncService = new TemplateSyncService(
+        this.app,
+        this.db,
+        () => this.settings.templates?.templateFolder ?? "",
+        this.logger
+      );
+      void this.templateSyncService.syncAll();
 
       // Canvas file events route through their own handler module — the
       // markdown-tag-based handlers don't apply to .canvas files (no
@@ -416,6 +436,30 @@ export default class DecksPlugin extends Plugin {
         },
       });
 
+      // Insert an image-occlusion block at the cursor and open the studio.
+      this.addCommand({
+        id: "insert-image-occlusion",
+        name: I18n.t.commands.insertImageOcclusion,
+        editorCallback: (editor, view) => {
+          if (!(view instanceof MarkdownView) || !view.file) return;
+          const images = this.app.vault
+            .getFiles()
+            .filter((f) => IMAGE_EXTENSIONS.includes(f.extension.toLowerCase()));
+          if (images.length === 0) {
+            new Notice(I18n.t.occlusion.noImages);
+            return;
+          }
+          new FilePickerModal(
+            this.app,
+            images,
+            (file) => {
+              void this.insertOcclusionAtCursor(editor, view, file);
+            },
+            I18n.t.occlusion.pickImage
+          ).open();
+        },
+      });
+
       // Add command to show release notes
       this.addCommand({
         id: "show-release-notes",
@@ -473,30 +517,41 @@ export default class DecksPlugin extends Plugin {
       // Test deck: create on fresh install, also available as a command
       const testDeckService = new TestDeckService(this.app);
 
+      // Create the sample template file for the getting-started demo, and point
+      // the template folder at it if the user hasn't configured one yet (then
+      // rebuild the cache so the example renders immediately).
+      const setTemplateFolderIfEmpty = async (folder: string | null) => {
+        if (!folder) return;
+        if (this.settings.templates.templateFolder.trim() !== "") return;
+        this.settings.templates.templateFolder = folder;
+        await this.saveSettings();
+        await this.templateSyncService.syncAll();
+      };
+      const createTestDeckWithTemplate = () => {
+        testDeckService
+          .createTestDeck(
+            this.settings.parsing.deckTag,
+            this.settings.parsing.folderSearchPath
+          )
+          .then(() =>
+            testDeckService.createTemplateShowcase(
+              this.settings.templates.templateFolder
+            )
+          )
+          .then(setTemplateFolderIfEmpty)
+          .catch(console.error);
+      };
+
       if (!this.settings.hasCreatedTestDeck) {
         this.settings.hasCreatedTestDeck = true;
         await this.saveSettings();
-        this.app.workspace.onLayoutReady(() => {
-          testDeckService
-            .createTestDeck(
-              this.settings.parsing.deckTag,
-              this.settings.parsing.folderSearchPath
-            )
-            .catch(console.error);
-        });
+        this.app.workspace.onLayoutReady(createTestDeckWithTemplate);
       }
 
       this.addCommand({
         id: "create-test-deck",
         name: I18n.t.commands.createTestDeck,
-        callback: () => {
-          testDeckService
-            .createTestDeck(
-              this.settings.parsing.deckTag,
-              this.settings.parsing.folderSearchPath
-            )
-            .catch(console.error);
-        },
+        callback: createTestDeckWithTemplate,
       });
 
       // Canvas test deck: create on fresh install / first upgrade to a build
@@ -631,6 +686,9 @@ export default class DecksPlugin extends Plugin {
       this.registerEvent(
         this.app.vault.on("modify", async (file) => {
           if (file instanceof TFile && (file.extension === "md" || file.extension === "canvas")) {
+            if (this.templateSyncService.isTemplateFile(file)) {
+              await this.templateSyncService.syncFile(file);
+            }
             await this.handleFileChange(file);
           }
         })
@@ -639,6 +697,9 @@ export default class DecksPlugin extends Plugin {
       this.registerEvent(
         this.app.vault.on("delete", async (file) => {
           if (file instanceof TFile && (file.extension === "md" || file.extension === "canvas")) {
+            if (file.extension === "md") {
+              await this.templateSyncService.handleDelete(file.path);
+            }
             await this.handleFileDelete(file);
           }
         })
@@ -647,6 +708,9 @@ export default class DecksPlugin extends Plugin {
       this.registerEvent(
         this.app.vault.on("rename", async (file, oldPath) => {
           if (file instanceof TFile && (file.extension === "md" || file.extension === "canvas")) {
+            if (file.extension === "md") {
+              await this.templateSyncService.handleRename(file, oldPath);
+            }
             await this.handleFileRename(file, oldPath);
           }
         })
@@ -661,6 +725,9 @@ export default class DecksPlugin extends Plugin {
       this.registerEvent(
         this.app.vault.on("create", (file) => {
           if (file instanceof TFile && (file.extension === "md" || file.extension === "canvas")) {
+            if (file.extension === "md" && this.templateSyncService.isTemplateFile(file)) {
+              void this.templateSyncService.syncFile(file);
+            }
             this.handleFileCreate(file);
           }
         })
@@ -711,6 +778,83 @@ export default class DecksPlugin extends Plugin {
         container.setAttribute("data-decks-cloze-counter", String(markCount));
       });
 
+      // Live preview of template-face codeblocks when viewing a template file.
+      // Each `decks-[html|md]-[front|back|notes]` block renders its content so
+      // authors see the face (placeholders like {{Word}} render literally).
+      const templateLangs = [
+        "decks-html-front", "decks-html-back", "decks-html-notes",
+        "decks-md-front", "decks-md-back", "decks-md-notes",
+      ];
+      for (const lang of templateLangs) {
+        const isHtml = lang.startsWith("decks-html-");
+        this.registerMarkdownCodeBlockProcessor(lang, (source, el, ctx) => {
+          const block = el.createDiv({ cls: "decks-template-preview-block" });
+          block.createDiv({ cls: "decks-template-preview-label", text: lang });
+          const body = block.createDiv({ cls: "decks-template-preview-body markdown-rendered" });
+          if (isHtml) {
+            renderHtmlIntoShadow(body, source, (linkpath) => {
+              const dest = this.app.metadataCache.getFirstLinkpathDest(linkpath, ctx.sourcePath);
+              return dest ? this.app.vault.getResourcePath(dest) : null;
+            });
+          } else {
+            const child = new MarkdownRenderChild(body);
+            ctx.addChild(child);
+            void MarkdownRenderer.render(this.app, source, body, ctx.sourcePath, child);
+          }
+        });
+      }
+
+      // Interactive image occlusion (V2) blocks: render the image with its mask
+      // overlay in reading view and offer an Edit button into the studio.
+      this.registerMarkdownCodeBlockProcessor("decks-occlusion", (source, el, ctx) => {
+        el.empty();
+        const root = el.createDiv({ cls: "decks-occlusion-block" });
+        const result = OcclusionV2Parser.parseOcclusionBlock(source);
+
+        if (!result.ok) {
+          root.createDiv({
+            cls: "decks-occlusion-error",
+            text: I18n.format(I18n.t.occlusion.parseError, { error: result.error }),
+          });
+        } else {
+          const viewer = root.createDiv();
+          renderOcclusion(viewer, {
+            doc: result.doc,
+            activeMaskId: null,
+            revealed: false,
+            showContext: "hidden",
+            showAnswers: true,
+            resolveImage: (linkpath) => {
+              const dest = this.app.metadataCache.getFirstLinkpathDest(linkpath, ctx.sourcePath);
+              return dest ? this.app.vault.getResourcePath(dest) : null;
+            },
+            renderMarkdown: (content, target) => {
+              const child = new MarkdownRenderChild(target);
+              ctx.addChild(child);
+              void MarkdownRenderer.render(this.app, content, target, ctx.sourcePath, child);
+            },
+          });
+        }
+
+        const toolbar = root.createDiv({ cls: "decks-occlusion-toolbar" });
+        const editBtn = toolbar.createEl("button", {
+          cls: "decks-occlusion-edit-btn",
+          text: I18n.t.occlusion.edit,
+        });
+        editBtn.onclick = () => {
+          const info = ctx.getSectionInfo(el);
+          const doc: OcclusionDoc = result.ok
+            ? result.doc
+            : { __v: 2, image: "", masks: [] };
+          this.openOcclusionStudio(
+            ctx.sourcePath,
+            doc,
+            info?.lineStart,
+            info?.lineEnd,
+          );
+        };
+      });
+
       // Add settings tab
       this.addSettingTab(
         new DecksSettingTab(
@@ -734,7 +878,8 @@ export default class DecksPlugin extends Plugin {
             this.getDecksView()?.stopBackgroundRefresh();
           },
           this.db.purgeDatabase.bind(this.db),
-          this.backupService
+          this.backupService,
+          () => this.resyncTemplates()
         )
       );
 
@@ -969,6 +1114,15 @@ export default class DecksPlugin extends Plugin {
    * the affected deck before resolving.
    */
   async openEditFlashcardModal(card: Flashcard): Promise<void> {
+    // V2 occlusion cards are edited visually in the studio, not as text fields.
+    if (isOcclusionV2(card)) {
+      const doc = parseOcclusionBack(card.back);
+      if (doc) {
+        this.openOcclusionStudio(card.sourceFile, doc, undefined, undefined, doc.image);
+        return;
+      }
+    }
+    const templateColumns = await this.resolveTemplateColumns(card);
     return new Promise((resolve) => {
       let resolved = false;
       const settle = () => {
@@ -1029,9 +1183,40 @@ export default class DecksPlugin extends Plugin {
             return result;
           },
         },
+        templateColumns,
       );
       wrapper.open();
     });
+  }
+
+  /** Rebuild the deck_templates cache from the template folder (e.g. after the
+   * folder setting changes), so bindings update without a reload. */
+  async resyncTemplates(): Promise<void> {
+    await this.templateSyncService.syncAll();
+  }
+
+  /**
+   * For a table card whose row binds a template, return its row columns so the
+   * editor can show one input per column. Returns null otherwise (default editor).
+   */
+  private async resolveTemplateColumns(
+    card: Flashcard,
+  ): Promise<{ headers: string[]; cells: string[] } | null> {
+    if (card.type !== "table" || !card.templateRow) return null;
+    const templates = await this.db.getAllDeckTemplates();
+    if (templates.length === 0) return null;
+    const deck = await this.db.getDeckById(card.deckId);
+    const bound = resolveCardTemplate(
+      card.tags,
+      deck?.fileTags ?? [],
+      card.templateRow,
+      templates,
+    );
+    if (!bound) return null;
+    return {
+      headers: card.templateRow.headers,
+      cells: card.templateRow.cells,
+    };
   }
 
   async openBatchRefactorModal(cards: Flashcard[]): Promise<void> {
@@ -1560,6 +1745,56 @@ export default class DecksPlugin extends Plugin {
       }
     }
     return null;
+  }
+
+  /** Insert a `decks-occlusion` block for `file` at the cursor, then open the studio. */
+  private async insertOcclusionAtCursor(
+    editor: Editor,
+    view: MarkdownView,
+    file: TFile,
+  ): Promise<void> {
+    const sourcePath = view.file?.path;
+    if (!sourcePath) return;
+    const linktext = this.app.metadataCache.fileToLinktext(file, sourcePath);
+    const doc: OcclusionDoc = {
+      __v: OCCLUSION_V2_VERSION,
+      image: `[[${linktext}]]`,
+      masks: [],
+    };
+    const fenced = "```decks-occlusion\n" + OcclusionV2Parser.toYaml(doc).trimEnd() + "\n```";
+    const cursor = editor.getCursor();
+    const atLineStart = cursor.ch === 0;
+    editor.replaceSelection((atLineStart ? "" : "\n") + fenced + "\n");
+    // Persist so the studio's vault.process sees the new block.
+    await view.save();
+    const openLine = atLineStart ? cursor.line : cursor.line + 1;
+    const closeLine = openLine + fenced.split("\n").length - 1;
+    this.openOcclusionStudio(sourcePath, doc, openLine, closeLine, doc.image);
+  }
+
+  /** Open the image-occlusion studio for a `decks-occlusion` block in a note. */
+  openOcclusionStudio(
+    sourcePath: string,
+    doc: OcclusionDoc,
+    lineStart?: number,
+    lineEnd?: number,
+    matchImage?: string,
+  ): void {
+    new OcclusionStudioModalWrapper(this.app, {
+      sourcePath,
+      doc,
+      lineStart,
+      lineEnd,
+      matchImage,
+      onSaved: () => {
+        const file = this.app.vault.getAbstractFileByPath(sourcePath);
+        if (file instanceof TFile) {
+          this.handleFileChange(file).catch((e) =>
+            this.logger.debug("occlusion re-sync failed", e as object),
+          );
+        }
+      },
+    }).open();
   }
 
   private async checkForDatabaseChanges(databasePath: string): Promise<void> {

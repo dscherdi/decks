@@ -312,6 +312,43 @@ export function stringifyYaml(obj: Record<string, unknown>): string {
   return lines.join("\n") + "\n";
 }
 
+// Minimal YAML parser for tests: scalars `key: value`, inline arrays
+// `key: [a, b]`, and block lists (`key:` followed by `  - item`). Enough for
+// template/deck frontmatter round-trips.
+export function parseYaml(input: string): Record<string, unknown> {
+  const out: Record<string, unknown> = {};
+  const lines = input.split("\n");
+  let currentKey: string | null = null;
+  for (const line of lines) {
+    if (/^\s*-\s+/.test(line) && currentKey) {
+      const item = line.replace(/^\s*-\s+/, "").trim().replace(/^["']|["']$/g, "");
+      const arr = (out[currentKey] as unknown[]) ?? [];
+      arr.push(item);
+      out[currentKey] = arr;
+      continue;
+    }
+    const m = line.match(/^([A-Za-z0-9_-]+):\s*(.*)$/);
+    if (!m) continue;
+    const key = m[1];
+    const val = m[2].trim();
+    if (val === "") {
+      currentKey = key;
+      if (out[key] === undefined) out[key] = [];
+    } else if (val.startsWith("[") && val.endsWith("]")) {
+      out[key] = val
+        .slice(1, -1)
+        .split(",")
+        .map((s) => s.trim().replace(/^["']|["']$/g, ""))
+        .filter((s) => s.length > 0);
+      currentKey = null;
+    } else {
+      out[key] = val.replace(/^["']|["']$/g, "");
+      currentKey = null;
+    }
+  }
+  return out;
+}
+
 // normalizePath: trims, collapses repeated slashes, and converts backslashes.
 // Mirrors Obsidian's behavior closely enough for path-resolver unit tests.
 export function normalizePath(path: string): string {

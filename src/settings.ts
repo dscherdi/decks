@@ -99,6 +99,12 @@ export interface DecksSettings {
     localBaseUrl: string; // for the openai-compatible provider
   };
 
+  // Table template engine. Templates are authored as markdown files inside
+  // `templateFolder` and synced to the deck_templates DB cache; empty disables.
+  templates: {
+    templateFolder: string;
+  };
+
   // Internal tracking
   hasCreatedTestDeck: boolean;
   hasCreatedCanvasTestDeck: boolean;
@@ -167,6 +173,10 @@ export const DEFAULT_SETTINGS: DecksSettings = {
       "openai-compatible": "gemma3",
     },
     localBaseUrl: "http://localhost:11434/v1",
+  },
+
+  templates: {
+    templateFolder: "",
   },
 
   hasCreatedTestDeck: false,

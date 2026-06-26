@@ -36,6 +36,7 @@ export class FlashcardEditModalWrapper extends Modal {
   private onSave: (edits: FlashcardEdits) => Promise<EditResult>;
   private onClosed?: () => void;
   private aiOptions?: FlashcardEditAiOptions;
+  private templateColumns: { headers: string[]; cells: string[] } | null;
   private component: Svelte5MountedComponent | null = null;
   private markdownComponents: Component[] = [];
   private resizeHandler?: () => void;
@@ -46,12 +47,14 @@ export class FlashcardEditModalWrapper extends Modal {
     onSave: (edits: FlashcardEdits) => Promise<EditResult>,
     onClosed?: () => void,
     aiOptions?: FlashcardEditAiOptions,
+    templateColumns?: { headers: string[]; cells: string[] } | null,
   ) {
     super(app);
     this.card = card;
     this.onSave = onSave;
     this.onClosed = onClosed;
     this.aiOptions = aiOptions;
+    this.templateColumns = templateColumns ?? null;
   }
 
   private renderMarkdown(content: string, el: HTMLElement): void {
@@ -108,6 +111,7 @@ export class FlashcardEditModalWrapper extends Modal {
         aiEnabled: this.aiOptions?.aiEnabled ?? false,
         onRefactor: this.aiOptions?.onRefactor,
         onSplit: this.aiOptions?.onSplit,
+        templateColumns: this.templateColumns,
       },
     }) as Svelte5MountedComponent;
   }

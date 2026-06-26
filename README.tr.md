@@ -102,7 +102,33 @@ Her vurgu kendi başına bir kart olur. Tekrar sırasında aktif boşluk `[...]`
 </details>
 
 <details>
-<summary><b>Görsel örtme (Image occlusion)</b> — bir görsel ve numaralandırılmış liste.</summary>
+<summary><b>Görsel örtme (Image occlusion)</b> — bir görselin bölgelerini gizleyip altında ne olduğunu hatırlayın. İki yol: etkileşimli (kutu çizme) veya numaralandırılmış liste.</summary>
+
+**Etkileşimli (önerilir).** **"İmleç konumunda görüntü gizleme oluştur"** komutunu çalıştırın, bir görsel seçin ve doğrudan düzenleyicide üzerine kutular çizin. Her kutu için bir Markdown/LaTeX cevabı yazın veya görselde gömülü bir etiketi yalnızca gizlemek için boş bırakın. Bağımsız bir `decks-occlusion` kod bloğu olarak kaydedilir (koordinatlar yüzde olduğundan her cihaza uyum sağlar):
+
+````markdown
+```decks-occlusion
+image: "[[heart.png]]"
+version: 2
+masks:
+  - id: m1
+    x: 12.5
+    y: 30
+    w: 18
+    h: 9.5
+    answer: "Sol **ventrikül**"
+  - id: m2
+    x: 55
+    y: 22
+    w: 14
+    h: 8
+    answer: ""
+```
+````
+
+Her kutu bir karttır. Tekrarda kutu ön yüzde gizlenir ve arka yüzde (cevabıyla) açığa çıkar; okuma görünümünde tamamen etiketli diyagramı görürsünüz. Bloğun **Düzenle** düğmesinden veya kart yöneticisinden istediğiniz zaman düzenlenebilir.
+
+**Numaralandırılmış liste (basit).** Gömülü bir görselin ardından numaralandırılmış bir liste de çalışır:
 
 ```markdown
 ## Kol kemikleri
@@ -114,7 +140,9 @@ Her vurgu kendi başına bir kart olur. Tekrar sırasında aktif boşluk `[...]`
 3. ==Ulna==
 ```
 
-Listedeki her öğe bir karttır. Görsel ön yüzü oluştururken, ilgili liste öğesi arka yüzünde gizlenir. Boşluk doldurma (cloze) özelliğini temel alır.
+Listedeki her öğe bir karttır; görsel ön yüzde gösterilir ve ilgili öğe arka yüzde gizlenir.
+
+İkisi de boşluk doldurma (cloze) özelliğine dayanır; bu nedenle profilde cloze etkin olmalı ve blok ayrıştırılan bir başlığın altında bulunmalıdır.
 
 </details>
 
@@ -125,6 +153,24 @@ Markdown dosyası yerine bir Obsidian Canvas (`.canvas`) dosyasında kart oluşt
 **Uzamsal kartlar (Spatial cards)**: metin düğümlerini kenarlarla birbirine bağlayın — her kenar bir karta dönüşür: kaynak düğüm ön yüz (soru), hedef düğüm arka yüz (cevap), kenar etiketi ise isteğe bağlı bir ipucudur. Zincirler (A → B → C), bire-çok ve çoğa-bir ilişkilerin tümü çalışır; bağlanmamış düğümler yine yukarıdaki dört biçimle ayrıştırılır. Ayrıntılar için **[docs/CANVAS_DECKS.md](docs/CANVAS_DECKS.md)**.
 
 ![Canvas Spatial Cards Demo](./canvas_spatial_cards_demo.gif)
+
+## Şablonlar
+
+Bir tablonun satırlarını, bir kez tasarladığınız bir kart tasarımıyla işleyin. Tasarımı HTML/CSS veya Markdown
+ile yazın, `{{Column}}` yer tutucularını yerleştirin ve bir etiketle tablolarınıza bağlayın — tek bir şablon,
+eşleşen her satıra biçim verir.
+
+```decks-html-front
+<ruby>{{Word}}<rt>{{Reading}}</rt></ruby>
+```
+
+**Ayarlar → Şablonlar** bölümünden bir klasör seçin, şablon dosyasını ve tablonun başlığını aynı etiketle
+etiketleyin — hazırsınız. Şablonlar HTML veya Markdown ile ön/arka/not yüzlerini destekler; arındırılmış,
+temaya duyarlı ve yalıtılmış bir alanda işlenir ve tam düzen denetimi için CSS değişkenleri (`--padding`,
+`--align`, `--bg`, …) sunar — rahat okuma kartlarından kenardan kenara özel tasarımlara kadar. Eşleşen şablonu
+olmayan tablolar yine normal sütunları kullanır.
+
+Tam kılavuz ve örnekler için **[docs/TEMPLATES.md](docs/TEMPLATES.md)** bölümüne bakın.
 
 ## Kişiselleştirilmiş planlama
 
@@ -178,8 +224,14 @@ Decks, ayrıştırma, FSRS planlama, senkronizasyon ve yapay zekâ orkestrasyonu
 
 ## Lisans
 
-Bkz. [LICENSE](./LICENSE).
+Bu proje **GNU Affero General Public License v3.0 veya sonrası** (AGPL-3.0-or-later) ile lisanslanmıştır.
+
+Kısacası: bu yazılımı kullanmakta, değiştirmekte ve dağıtmakta özgürsünüz. Ancak yazılımı değiştirip
+değişikliklerinizi dağıtırsanız — ya da değiştirip kullanıcılara bir ağ üzerinden sunarsanız — değiştirdiğiniz
+kaynak kodu aynı AGPL-3.0 lisansı altında kamuya açık hâle getirmelisiniz.
+
+Copyright (C) 2026 Xherdi Lika. Tam metin için [LICENSE](./LICENSE) dosyasına bakın.
 
 ---
 
-> Bu çeviri bir taslaktır — anadili Türkçe olanlardan gelecek Pull Request'ler memnuniyetle karşılanır.
+> Bu çeviri bir taslaktır — düzeltmeler ve öneriler için issue tracker'a katkıda bulunabilirsiniz.

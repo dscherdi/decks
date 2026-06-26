@@ -1,8 +1,20 @@
 # Contributing to Decks
 
-Thanks for thinking about contributing! Bug reports, translations, and pull
-requests are all welcome. Start by skimming the [issue tracker](https://github.com/dscherdi/decks/issues)
+Thank you for your interest! We actively encourage and welcome community
+involvement through **bug reports, feature requests, and discussions** in the
+[issue tracker](https://github.com/dscherdi/decks/issues). Start by skimming it
 to see what's open or already discussed.
+
+## Pull requests
+
+To maintain strict copyright ownership over the core logic (for future
+dual-licensing purposes), we **do not accept external pull requests**.
+
+You are, however, completely free to **fork the repository, modify the code, and
+experiment on your own** under the terms of the AGPLv3 — see [LICENSE](./LICENSE).
+
+The setup, scripts, code-style, and testing notes below are here to help you
+work in your own fork.
 
 ## Prerequisites
 
@@ -68,23 +80,25 @@ the linter enforces — keep these in mind when you write new code:
 Add a unit test for new logic; reach for an integration test when the
 change touches schema, sync, or query SQL.
 
-## Submitting a pull request
+## Checks (for your fork)
 
-1. Branch off `main`.
-2. Make focused commits — one logical change each.
-3. Before pushing, run the gate locally:
-   ```bash
-   npm run lint && npm run check && npm run test:all
-   ```
-4. Open a PR against `main` and link the issue you're closing.
-5. Keep the PR description short: what changed, why, how to verify.
+Working in your own fork? The same gate the project uses before a release is:
+
+```bash
+npm run lint && npm run check && npm run test:all
+```
+
+Running it keeps your fork green and makes it easy to rebase on future upstream
+releases.
 
 ## Translations
 
 i18n is in `src/i18n/locales/`. The `Translations` type widens from `en.ts`,
 so every locale must satisfy the same shape — adding a new English key fails
 the build until you add it (in some form) to all 13 other locales. The
-[Translation Guide](./docs/TRANSLATING.md) walks through the workflow.
+[Translation Guide](./docs/TRANSLATING.md) walks through the workflow for your
+fork. To request a new or corrected language upstream, please open an issue
+(we don't accept external pull requests — see [Pull requests](#pull-requests)).
 
 ## Release process (maintainers)
 
@@ -111,8 +125,13 @@ the build until you add it (in some form) to all 13 other locales. The
 
 - [docs/DEVELOPMENT.md](./docs/DEVELOPMENT.md) — extended setup, file layout, debugging
 - [docs/INTEGRATION_TESTING_GUIDE.md](./docs/INTEGRATION_TESTING_GUIDE.md) — testing strategy & patterns
-- [docs/CANVAS_DECKS.md](./docs/CANVAS_DECKS.md), [docs/CLOZE.md](./docs/CLOZE.md), [docs/IMAGE_OCCLUSION.md](./docs/IMAGE_OCCLUSION.md) — feature docs
+- [docs/CANVAS_DECKS.md](./docs/CANVAS_DECKS.md), [docs/CLOZE.md](./docs/CLOZE.md), [docs/IMAGE_OCCLUSION.md](./docs/IMAGE_OCCLUSION.md), [docs/TEMPLATES.md](./docs/TEMPLATES.md) — feature docs
 - [docs/FSRS_OPTIMIZER.md](./docs/FSRS_OPTIMIZER.md) — algorithm validation & benchmarking
 - [docs/TRANSLATING.md](./docs/TRANSLATING.md) — i18n contribution guide
 - [CLAUDE.md](./CLAUDE.md) — comprehensive architectural overview
   (written for AI assistants but a fine deep-dive for humans)
+
+---
+
+Copyright (C) 2026 Xherdi Lika. Licensed under the GNU Affero General Public
+License v3.0 or later (AGPL-3.0-or-later). See [LICENSE](./LICENSE).

@@ -102,7 +102,33 @@ Chaque surlignage devient une carte. Pendant la révision, le trou actif s'affic
 </details>
 
 <details>
-<summary><b>Masquage d'image</b> — une image et une liste numérotée. Les numéros sur l'image correspondent à la liste.</summary>
+<summary><b>Masquage d'image</b> — masquez des zones d'une image et retrouvez ce qu'il y a dessous. Deux méthodes : interactive (dessiner des zones) ou une liste numérotée.</summary>
+
+**Interactive (recommandée).** Exécutez la commande **« Créer une occlusion d'image au curseur »**, choisissez une image, puis dessinez des zones directement dans l'éditeur. Saisissez une réponse Markdown/LaTeX pour chaque zone, ou laissez-la vide pour simplement masquer une étiquette intégrée. C'est enregistré comme un bloc de code `decks-occlusion` autonome (les coordonnées sont en pourcentages, donc cela s'adapte à tout appareil) :
+
+````markdown
+```decks-occlusion
+image: "[[heart.png]]"
+version: 2
+masks:
+  - id: m1
+    x: 12.5
+    y: 30
+    w: 18
+    h: 9.5
+    answer: "**Ventricule** gauche"
+  - id: m2
+    x: 55
+    y: 22
+    w: 14
+    h: 8
+    answer: ""
+```
+````
+
+Chaque zone est une carte. En révision, la zone est masquée au recto et révélée au verso (avec sa réponse) ; en mode lecture, vous voyez le schéma entièrement annoté. Modifiable à tout moment depuis le bouton **Modifier** du bloc ou le gestionnaire de cartes.
+
+**Liste numérotée (simple).** Une image intégrée suivie d'une liste numérotée fonctionne aussi :
 
 ```markdown
 ## Os du bras
@@ -114,7 +140,9 @@ Chaque surlignage devient une carte. Pendant la révision, le trou actif s'affic
 3. ==Ulna (Cubitus)==
 ```
 
-Chaque élément de la liste est une carte. L'image (avec ses étiquettes numérotées) s'affiche au recto ; l'élément correspondant est masqué au verso. Cette fonctionnalité s'appuie sur les textes à trous (cloze), qui doivent donc être activés sur le profil.
+Chaque élément de la liste est une carte ; l'image s'affiche au recto et l'élément correspondant est masqué au verso.
+
+Les deux s'appuient sur les textes à trous (cloze), qui doivent donc être activés sur le profil, et le bloc doit se trouver sous un en-tête analysé.
 
 </details>
 
@@ -136,6 +164,25 @@ Créez des cartes sur un canvas Obsidian (`.canvas`) au lieu d'un fichier Markdo
 **Cartes spatiales (Spatial cards)** : reliez des nœuds texte par des arêtes — chaque arête devient une carte : le nœud source est le recto (question), le nœud cible est le verso (réponse), et le libellé de l'arête sert d'indice optionnel. Les chaînes (A → B → C), les relations un-vers-plusieurs et plusieurs-vers-un fonctionnent toutes ; les nœuds non connectés continuent d'être analysés avec les quatre formats ci-dessus. Détails dans **[docs/CANVAS_DECKS.md](docs/CANVAS_DECKS.md)**.
 
 ![Canvas Spatial Cards Demo](./canvas_spatial_cards_demo.gif)
+
+## Modèles
+
+Affichez les lignes d'un tableau via un design de carte que vous créez une seule fois. Écrivez-le en HTML/CSS
+ou en Markdown, insérez des espaces réservés `{{Column}}` et liez-le à vos tableaux par une étiquette : un
+modèle met en forme chaque ligne correspondante.
+
+```decks-html-front
+<ruby>{{Word}}<rt>{{Reading}}</rt></ruby>
+```
+
+Dans **Paramètres → Modèles**, choisissez un dossier, puis ajoutez la même étiquette au fichier de modèle et
+au titre du tableau — c'est tout. Les modèles prennent en charge les faces recto/verso/notes en HTML ou
+Markdown, s'affichent dans un bac à sable isolé, assaini et adapté au thème, et exposent des variables CSS
+(`--padding`, `--align`, `--bg`, …) pour un contrôle total de la mise en page — des cartes de lecture
+confortables aux designs personnalisés pleine largeur. Les tableaux sans modèle correspondant utilisent les
+colonnes habituelles.
+
+Voir **[docs/TEMPLATES.md](docs/TEMPLATES.md)** pour le guide complet et des exemples.
 
 ## Ce que vous obtenez
 
@@ -198,8 +245,14 @@ Decks est construit sur **[`@decks/core`](https://github.com/dscherdi/decks-core
 
 ## Licence
 
-Voir [LICENSE](./LICENSE).
+Ce projet est sous licence **GNU Affero General Public License v3.0 ou ultérieure** (AGPL-3.0-or-later).
+
+En bref : vous êtes libre d'utiliser, de modifier et de distribuer ce logiciel. Cependant, si vous le
+modifiez et distribuez vos modifications — ou si vous le modifiez et le proposez aux utilisateurs via un
+réseau — vous devez rendre votre code source modifié publiquement disponible sous la même licence AGPL-3.0.
+
+Copyright (C) 2026 Xherdi Lika. Voir le fichier [LICENSE](./LICENSE) pour le texte complet.
 
 ---
 
-> Cette traduction est une ébauche — les Pull Requests de locuteurs natifs sont les bienvenues.
+> Cette traduction est une ébauche — corrections et suggestions sont les bienvenues dans le suivi des tickets (issues).

@@ -104,7 +104,33 @@ Each highlight becomes one card. During review the active blank shows as `[...]`
 </details>
 
 <details>
-<summary><b>Image occlusion</b> — an image plus a numbered list. Numbers on the image map to the list.</summary>
+<summary><b>Image occlusion</b> — hide regions of an image and recall what's underneath. Two ways: interactive (draw boxes) or a numbered list.</summary>
+
+**Interactive (recommended).** Run the command **"Create image occlusion at cursor"**, pick an image, then draw boxes right on it in the editor. Type a Markdown/LaTeX answer for each box, or leave it empty to just hide a baked-in label. It saves as a self-contained `decks-occlusion` code block (coordinates are percentages, so it scales on any device):
+
+````markdown
+```decks-occlusion
+image: "[[anatomy/heart.png]]"
+version: 2
+masks:
+  - id: m1
+    x: 12.5
+    y: 30
+    w: 18
+    h: 9.5
+    answer: "Left **ventricle**"
+  - id: m2
+    x: 55
+    y: 22
+    w: 14
+    h: 8
+    answer: ""
+```
+````
+
+Each box is one card. In review, the box is hidden on the front and revealed on the back (with its answer); in reading view you see the fully answered diagram. Re-edit any time from the block's **Edit** button or the flashcard manager.
+
+**Numbered list (simple).** An image embed followed by a numbered list also works:
 
 ```markdown
 ## Bones of the arm
@@ -116,7 +142,9 @@ Each highlight becomes one card. During review the active blank shows as `[...]`
 3. ==Ulna==
 ```
 
-Each list item is one card. The image (with its numbered labels) shows on the front; the matching item is blanked on the back. Builds on cloze, so cloze must be enabled on the profile.
+Each list item is one card; the image shows on the front and the matching item is blanked on the back.
+
+Both builds on cloze, so cloze must be enabled on the profile and the block must sit under a parsed header.
 
 </details>
 
@@ -149,6 +177,23 @@ A `Decks — Canvas getting started.canvas` is auto-created in a `Canvas decks/`
 ![Canvas Spatial Cards Demo](./canvas_spatial_cards_demo.gif)
 
 See **[docs/CANVAS_DECKS.md](docs/CANVAS_DECKS.md)** for details.
+
+## Templates
+
+Render the rows of a table through a card design you author once. Write it in HTML/CSS or Markdown, drop in
+`{{Column}}` placeholders, and bind it to your tables with a tag — one template styles every matching row.
+
+```decks-html-front
+<ruby>{{Word}}<rt>{{Reading}}</rt></ruby>
+```
+
+Point **Settings → Templates** at a folder, tag a template file and the table's heading with the same tag,
+and you're set. Templates support front/back/notes faces in HTML or Markdown, render in a sanitized,
+theme-aware sandbox, and expose CSS variables (`--padding`, `--align`, `--bg`, …) for full layout control —
+from comfortable reading cards to edge-to-edge custom designs. Tables with no matching template fall back to
+the normal columns.
+
+See **[docs/TEMPLATES.md](docs/TEMPLATES.md)** for the full guide and examples.
 
 ## What you get
 
@@ -272,4 +317,10 @@ Decks was built as an alternative for users who want a different architectural a
 
 ## License
 
-See [LICENSE](./LICENSE).
+This project is licensed under the **GNU Affero General Public License v3.0 or later** (AGPL-3.0-or-later).
+
+In short: you are free to use, modify, and distribute this software. However, if you modify it and distribute
+your changes — or modify it and offer it to users over a network — you must make your modified source code
+publicly available under the same AGPL-3.0 license.
+
+Copyright (C) 2026 Xherdi Lika. See the [LICENSE](./LICENSE) file for the full text.

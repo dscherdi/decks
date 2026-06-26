@@ -102,7 +102,33 @@ Shto **shënime** opsionale në një kartë titull+paragraf me një koment Obsid
 </details>
 
 <details>
-<summary><b>Mbulimi i imazhit (Image occlusion)</b> — një imazh plus një listë e numëruar.</summary>
+<summary><b>Mbulimi i imazhit (Image occlusion)</b> — fshih zona të një imazhi dhe kujto çfarë ndodhet poshtë. Dy mënyra: interaktive (vizato kuti) ose një listë e numëruar.</summary>
+
+**Interaktive (e rekomanduar).** Ekzekuto komandën **«Krijo okluzion imazhi te kursori»**, zgjidh një imazh dhe pastaj vizato kuti drejtpërdrejt në redaktues. Shkruaj një përgjigje Markdown/LaTeX për çdo kuti, ose lëre bosh për të fshehur thjesht një etiketë të integruar. Ruhet si një bllok kodi `decks-occlusion` i vetëmjaftueshëm (koordinatat janë në përqindje, kështu që përshtatet në çdo pajisje):
+
+````markdown
+```decks-occlusion
+image: "[[heart.png]]"
+version: 2
+masks:
+  - id: m1
+    x: 12.5
+    y: 30
+    w: 18
+    h: 9.5
+    answer: "**Ventrikuli** i majtë"
+  - id: m2
+    x: 55
+    y: 22
+    w: 14
+    h: 8
+    answer: ""
+```
+````
+
+Çdo kuti është një kartë. Gjatë përsëritjes, kutia është e fshehur përpara dhe zbulohet prapa (me përgjigjen e saj); në pamjen e leximit sheh diagramin plotësisht të etiketuar. Mund të modifikohet kurdoherë nga butoni **Modifiko** i bllokut ose nga menaxheri i kartave.
+
+**Listë e numëruar (e thjeshtë).** Një imazh i integruar i ndjekur nga një listë e numëruar gjithashtu funksionon:
 
 ```markdown
 ## Kockat e krahut
@@ -114,7 +140,9 @@ Shto **shënime** opsionale në një kartë titull+paragraf me një koment Obsid
 3. ==Bërrylori (Ulna)==
 ```
 
-Çdo element i listës është një kartë. Imazhi shfaqet përpara; elementi që përputhet fshihet prapa. Bazohet në tiparin "cloze".
+Çdo element i listës është një kartë; imazhi shfaqet përpara dhe elementi që përputhet fshihet prapa.
+
+Të dyja bazohen në tiparin "cloze", prandaj cloze duhet të jetë i aktivizuar në profil dhe blloku duhet të jetë nën një titull që analizohet.
 
 </details>
 
@@ -125,6 +153,24 @@ Krijo karta në një Canvas të Obsidian (`.canvas`) në vend të një skedari M
 **Karta hapësinore (Spatial cards)**: lidh nyjet e tekstit me brinjë — çdo brinjë bëhet një kartë: nyja e nisjes është pjesa e parme (pyetja), nyja e mbërritjes është pjesa e prapme (përgjigja), dhe etiketa e brinjës është një aluzion opsional. Zinxhirët (A → B → C), një-me-shumë dhe shumë-me-një funksionojnë të gjithë; nyjet e palidhura ende analizohen me katër formatet më sipër. Detaje në **[docs/CANVAS_DECKS.md](docs/CANVAS_DECKS.md)**.
 
 ![Canvas Spatial Cards Demo](./canvas_spatial_cards_demo.gif)
+
+## Shabllonet
+
+Shfaq rreshtat e një tabele përmes një dizajni karte që e krijon një herë. Shkruaje në HTML/CSS ose Markdown,
+vendos mbajtëse `{{Column}}` dhe lidhe me tabelat e tua përmes një etikete — një shabllon i jep stil çdo
+rreshti që përputhet.
+
+```decks-html-front
+<ruby>{{Word}}<rt>{{Reading}}</rt></ruby>
+```
+
+Te **Cilësimet → Shabllonet** zgjidh një dosje, etiketo skedarin e shabllonit dhe titullin e tabelës me të
+njëjtën etiketë — gati. Shabllonet mbështesin anët ballë/prapa/shënime në HTML ose Markdown, shfaqen në një
+mjedis të izoluar, të pastruar dhe të ndërgjegjshëm për temën, dhe ekspozojnë variabla CSS (`--padding`,
+`--align`, `--bg`, …) për kontroll të plotë të paraqitjes — nga karta të rehatshme leximi te dizajne të
+personalizuara buzë-më-buzë. Tabelat pa një shabllon që përputhet përdorin përsëri kolonat normale.
+
+Shih **[docs/TEMPLATES.md](docs/TEMPLATES.md)** për udhëzuesin e plotë dhe shembuj.
 
 ## Planifikim i personalizuar
 
@@ -178,8 +224,14 @@ Decks është ndërtuar mbi **[`@decks/core`](https://github.com/dscherdi/decks-
 
 ## Licenca
 
-Shiko [LICENSE](./LICENSE).
+Ky projekt licencohet sipas **GNU Affero General Public License v3.0 ose më vonë** (AGPL-3.0-or-later).
+
+Shkurt: je i lirë ta përdorësh, ta modifikosh dhe ta shpërndash këtë softuer. Megjithatë, nëse e modifikon dhe
+shpërndan ndryshimet e tua — ose e modifikon dhe ua ofron përdoruesve përmes një rrjeti — duhet ta bësh kodin
+burim të modifikuar publikisht të disponueshëm sipas së njëjtës licencë AGPL-3.0.
+
+Copyright (C) 2026 Xherdi Lika. Shih skedarin [LICENSE](./LICENSE) për tekstin e plotë.
 
 ---
 
-> Ky përkthim është një draft — kërkesat për tërheqje (Pull Requests) nga folësit amtarë janë të mirëseardhura.
+> Ky përkthim është një draft — korrigjimet dhe sugjerimet janë të mirëseardhura te issue tracker.

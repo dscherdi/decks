@@ -6,8 +6,12 @@ import {
   MarkdownRenderer,
 } from "obsidian";
 import type { Flashcard, DeckOrGroup } from "../../database/types";
-import type { RatingLabel } from "@decks/core";
-import type { Scheduler } from "../../services/Scheduler";
+import type { RatingLabel, ResolvedRender } from "@decks/core";
+import {
+  loadTemplateCache,
+  makeTemplateResolver,
+} from "../../utils/template-resolver";
+import type { Scheduler } from "@decks/core";
 import type { DecksSettings } from "../../settings";
 import type { IDatabaseService } from "../../database/DatabaseFactory";
 import type { DeckSynchronizer } from "../../services/DeckSynchronizer";
@@ -36,6 +40,8 @@ export class FlashcardReviewView extends ItemView {
   private component: FlashcardReviewComponent | null = null;
   private markdownComponents: Component[] = [];
   private mountGeneration = 0;
+  // Per-card template resolver, rebuilt from the cache before each mount.
+  private resolveTemplate: (card: Flashcard) => ResolvedRender | null = () => null;
 
   private refreshStats: (() => Promise<void>) | null = null;
   private refreshStatsById: ((deckId: string) => Promise<void>) | null = null;
@@ -94,6 +100,13 @@ export class FlashcardReviewView extends ItemView {
     // updateHeader() exists at runtime but isn't in the obsidian typings.
     (this.leaf as unknown as { updateHeader?: () => void }).updateHeader?.();
 
+    // Load the template cache before mounting so the first card resolves its
+    // template (same preload-before-mount behavior as the modal wrapper).
+    void this.preloadThenMount();
+  }
+
+  private async preloadThenMount(): Promise<void> {
+    this.resolveTemplate = makeTemplateResolver(await loadTemplateCache(this.db));
     this.mountComponent();
   }
 
@@ -261,6 +274,11 @@ export class FlashcardReviewView extends ItemView {
         },
         renderMarkdown: (content: string, el: HTMLElement) => {
           this.renderMarkdown(content, el);
+        },
+        resolveTemplate: (card: Flashcard) => this.resolveTemplate(card),
+        resolveEmbed: (linkpath: string, sourcePath: string) => {
+          const dest = this.app.metadataCache.getFirstLinkpathDest(linkpath, sourcePath);
+          return dest ? this.app.vault.getResourcePath(dest) : null;
         },
         settings: this.settings,
         scheduler: this.scheduler,

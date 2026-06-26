@@ -1,7 +1,11 @@
 import { Modal, Component, Notice, MarkdownRenderer, App } from "obsidian";
 import type { Flashcard, DeckOrGroup } from "../../database/types";
-import type { RatingLabel } from "@decks/core";
-import type { Scheduler } from "../../services/Scheduler";
+import { type RatingLabel, type ResolvedRender } from "@decks/core";
+import {
+  loadTemplateCache,
+  makeTemplateResolver,
+} from "../../utils/template-resolver";
+import type { Scheduler } from "@decks/core";
 import type { DecksSettings } from "../../settings";
 import type { IDatabaseService } from "../../database/DatabaseFactory";
 import type { DeckSynchronizer } from "../../services/DeckSynchronizer";
@@ -30,6 +34,8 @@ export class FlashcardReviewModalWrapper extends Modal {
   private markdownComponents: Component[] = [];
   private resizeHandler?: () => void;
   public navigatedToSource = false;
+  // Per-card template resolver, built from a cache loaded once before mount.
+  private resolveTemplate: (card: Flashcard) => ResolvedRender | null = () => null;
 
   private renderMarkdown(content: string, el: HTMLElement): void {
     try {
@@ -175,6 +181,12 @@ export class FlashcardReviewModalWrapper extends Modal {
 
     contentEl.addClass("decks-review-modal-container");
 
+    void this.preloadThenMount(contentEl);
+  }
+
+  private async preloadThenMount(contentEl: HTMLElement): Promise<void> {
+    this.resolveTemplate = makeTemplateResolver(await loadTemplateCache(this.db));
+
     this.component = mount(FlashcardReviewModal, {
       target: contentEl,
       props: {
@@ -198,6 +210,11 @@ export class FlashcardReviewModalWrapper extends Modal {
         },
         renderMarkdown: (content: string, el: HTMLElement) => {
           this.renderMarkdown(content, el);
+        },
+        resolveTemplate: (card: Flashcard) => this.resolveTemplate(card),
+        resolveEmbed: (linkpath: string, sourcePath: string) => {
+          const dest = this.app.metadataCache.getFirstLinkpathDest(linkpath, sourcePath);
+          return dest ? this.app.vault.getResourcePath(dest) : null;
         },
         settings: this.settings,
         scheduler: this.scheduler,

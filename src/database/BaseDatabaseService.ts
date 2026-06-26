@@ -11,13 +11,16 @@ import type {
   CustomDeck,
   CustomDeckType,
   FsrsWeightSet,
+  TemplateRow,
+  DeckTemplate,
+  TemplateFaceType,
 } from "./types";
 import { DEFAULT_PROFILE_ID, deckWithProfile } from "./types";
 import type { FilterDefinition } from "./types";
 import { generateCustomDeckCardId, generateCustomDeckId, generateFlashcardId, SQL_QUERIES, type SyncOpV1 } from "@decks/core";
 import { normalizeProfile } from "@decks/core";
 import { compileFilter, type FilterCompileOptions } from "@decks/core";
-import type { SyncData, SyncResult } from "../services/FlashcardSynchronizer";
+import type { SyncData, SyncResult } from "@decks/core";
 import type {
   SqlJsValue,
   ReviewLogRow,
@@ -127,7 +130,19 @@ export abstract class BaseDatabaseService implements IDatabaseService {
       profileId: row[5] as string,
       created: row[6] as string,
       modified: row[7] as string,
+      fileTags: this.parseJsonTags(row[9]),
     };
+  }
+
+  /** Parse a JSON-array tag column, tolerating null/blank/malformed values. */
+  private parseJsonTags(value: string | number | null): string[] {
+    if (typeof value !== "string" || value.trim() === "") return [];
+    try {
+      const parsed = JSON.parse(value);
+      return Array.isArray(parsed) ? (parsed as string[]) : [];
+    } catch {
+      return [];
+    }
   }
 
   protected parseProfileRow(row: (string | number | null)[]): DeckProfile {
@@ -206,6 +221,9 @@ export abstract class BaseDatabaseService implements IDatabaseService {
       tags,
       suspendedAt: (row[25] as string) ?? null,
       buriedUntil: (row[26] as string) ?? null,
+      templateRow: row[27]
+        ? (JSON.parse(row[27] as string) as TemplateRow)
+        : null,
     };
   }
 
@@ -218,6 +236,87 @@ export abstract class BaseDatabaseService implements IDatabaseService {
       goalTotal: row[4] as number,
       doneUnique: row[5] as number,
     };
+  }
+
+  // DECK TEMPLATE CACHE OPERATIONS
+  // Templates are authored as files in the template folder and synced here.
+  // All paths go through executeSql/querySql, so both Worker and Main inherit.
+
+  protected parseDeckTemplateRow(
+    row: (string | number | null)[]
+  ): DeckTemplate {
+    const tagsRaw = (row[2] as string) || "[]";
+    let tags: string[] = [];
+    try {
+      const parsed = JSON.parse(tagsRaw);
+      if (Array.isArray(parsed)) tags = parsed as string[];
+    } catch {
+      tags = [];
+    }
+    return {
+      id: row[0] as string,
+      sourceFile: row[1] as string,
+      tags,
+      frontTemplate: (row[3] as string) || "",
+      frontType: (row[4] as TemplateFaceType) || "md",
+      backTemplate: (row[5] as string) || "",
+      backType: (row[6] as TemplateFaceType) || "md",
+      notesTemplate: (row[7] as string) ?? null,
+      notesType: (row[8] as TemplateFaceType) ?? null,
+      created: row[9] as string,
+      modified: row[10] as string,
+    };
+  }
+
+  async getAllDeckTemplates(): Promise<DeckTemplate[]> {
+    const rows = (await this.querySql(
+      SQL_QUERIES.GET_ALL_DECK_TEMPLATES,
+      []
+    )) as (string | number | null)[][];
+    return rows.map((row) => this.parseDeckTemplateRow(row));
+  }
+
+  async upsertDeckTemplate(
+    template: Omit<DeckTemplate, "created" | "modified">
+  ): Promise<void> {
+    const now = this.getCurrentTimestamp();
+    await this.executeSql(SQL_QUERIES.UPSERT_DECK_TEMPLATE, [
+      template.id,
+      template.sourceFile,
+      JSON.stringify(template.tags ?? []),
+      template.frontTemplate,
+      template.frontType,
+      template.backTemplate,
+      template.backType,
+      template.notesTemplate,
+      template.notesType,
+      now,
+      now,
+    ]);
+  }
+
+  async deleteDeckTemplateByFile(sourceFile: string): Promise<void> {
+    await this.executeSql(SQL_QUERIES.DELETE_DECK_TEMPLATE_BY_FILE, [sourceFile]);
+  }
+
+  async renameDeckTemplate(
+    oldSourceFile: string,
+    newSourceFile: string,
+    newId: string
+  ): Promise<void> {
+    await this.executeSql(SQL_QUERIES.UPDATE_DECK_TEMPLATE_SOURCE_FILE, [
+      newId,
+      newSourceFile,
+      this.getCurrentTimestamp(),
+      oldSourceFile,
+    ]);
+  }
+
+  async setDeckFileTags(deckId: string, fileTags: string[]): Promise<void> {
+    await this.executeSql(SQL_QUERIES.UPDATE_DECK_FILE_TAGS, [
+      JSON.stringify(fileTags ?? []),
+      deckId,
+    ]);
   }
 
   // Utility methods

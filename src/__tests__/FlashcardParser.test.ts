@@ -15,7 +15,7 @@ describe("FlashcardParser", () => {
       const result = FlashcardParser.parseFlashcardsFromContent(content);
 
       expect(result).toHaveLength(2);
-      expect(result[0]).toEqual({
+      expect(result[0]).toMatchObject({
         front: "What is 2+2?",
         back: "4",
         notes: "",
@@ -23,7 +23,7 @@ describe("FlashcardParser", () => {
         breadcrumb: "Study Topics",
         tags: [],
       });
-      expect(result[1]).toEqual({
+      expect(result[1]).toMatchObject({
         front: "Capital of France",
         back: "Paris",
         notes: "",
@@ -216,7 +216,7 @@ Some more content here.
       const result = FlashcardParser.parseFlashcardsFromContent(content);
 
       expect(result).toHaveLength(1);
-      expect(result[0]).toEqual({
+      expect(result[0]).toMatchObject({
         front: "Complete question",
         back: "Complete answer",
         notes: "",
@@ -263,7 +263,7 @@ Key features:
       const result = FlashcardParser.parseFlashcardsFromContent(content);
 
       expect(result).toHaveLength(1);
-      expect(result[0]).toEqual({
+      expect(result[0]).toMatchObject({
         front: "Whitespace question",
         back: "Whitespace answer",
         notes: "",
@@ -359,7 +359,7 @@ Some regular content here.
       // Test with headerLevel 2 - should only parse table under ## header
       const h2Result = FlashcardParser.parseFlashcardsFromContent(content, 2);
       expect(h2Result).toHaveLength(2);
-      expect(h2Result[0]).toEqual({
+      expect(h2Result[0]).toMatchObject({
         front: "What is 2+2?",
         back: "4",
         notes: "",
@@ -367,7 +367,7 @@ Some regular content here.
         breadcrumb: "Main Title > Level 2 Header",
         tags: [],
       });
-      expect(h2Result[1]).toEqual({
+      expect(h2Result[1]).toMatchObject({
         front: "What is 3+3?",
         back: "6",
         notes: "",
@@ -379,7 +379,7 @@ Some regular content here.
       // Test with headerLevel 3 - should only parse table under ### header
       const h3Result = FlashcardParser.parseFlashcardsFromContent(content, 3);
       expect(h3Result).toHaveLength(1);
-      expect(h3Result[0]).toEqual({
+      expect(h3Result[0]).toMatchObject({
         front: "What is 5+5?",
         back: "10",
         notes: "",
@@ -431,7 +431,7 @@ Some paragraph content here.
       expect(result).toHaveLength(3);
 
       // First two should be table flashcards
-      expect(result[0]).toEqual({
+      expect(result[0]).toMatchObject({
         front: "What is 5+5?",
         back: "10",
         notes: "",
@@ -439,7 +439,7 @@ Some paragraph content here.
         breadcrumb: "Pure Table Header",
         tags: [],
       });
-      expect(result[1]).toEqual({
+      expect(result[1]).toMatchObject({
         front: "What is 6+6?",
         back: "12",
         notes: "",
@@ -455,6 +455,30 @@ Some paragraph content here.
       expect(result[2].type).toBe("header-paragraph");
       expect(result[2].notes).toBe("");
       expect(result[2].breadcrumb).toBe("");
+    });
+
+    it("does not emit a header card for a table section followed by a --- separator (cloze on)", () => {
+      const content = [
+        "## Kanji vocabulary #vocab",
+        "",
+        "| Word | Reading | Meaning |",
+        "| ---- | ------- | ------- |",
+        "| 火 | ひ | fire |",
+        "| 水 | みず | water |",
+        "",
+        "---",
+        "",
+      ].join("\n");
+
+      const cards = FlashcardParser.parseFlashcardsFromContent(
+        content,
+        2,
+        undefined,
+        true
+      );
+
+      expect(cards).toHaveLength(2);
+      expect(cards.map((c) => c.front).sort()).toEqual(["水", "火"].sort());
     });
   });
 
@@ -472,7 +496,7 @@ Some paragraph content here.
       const result = FlashcardParser.parseFlashcardsFromContent(content);
 
       expect(result).toHaveLength(2);
-      expect(result[0]).toEqual({
+      expect(result[0]).toMatchObject({
         front: "What is 2+2?",
         back: "4",
         notes: "Basic arithmetic",
@@ -480,7 +504,7 @@ Some paragraph content here.
         breadcrumb: "Study Topics",
         tags: [],
       });
-      expect(result[1]).toEqual({
+      expect(result[1]).toMatchObject({
         front: "Capital of France",
         back: "Paris",
         notes: "European geography",
@@ -525,7 +549,7 @@ Some paragraph content here.
       const result = FlashcardParser.parseFlashcardsFromContent(content);
 
       expect(result).toHaveLength(2);
-      expect(result[0]).toEqual({
+      expect(result[0]).toMatchObject({
         front: "Q1",
         back: "A1",
         notes: "",
@@ -533,7 +557,7 @@ Some paragraph content here.
         breadcrumb: "Two Columns",
         tags: [],
       });
-      expect(result[1]).toEqual({
+      expect(result[1]).toMatchObject({
         front: "Q2",
         back: "A2",
         notes: "Note here",

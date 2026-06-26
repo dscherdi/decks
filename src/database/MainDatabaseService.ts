@@ -5,11 +5,9 @@
 import type { DataAdapter } from "obsidian";
 import { BaseDatabaseService } from "./BaseDatabaseService";
 import type { QueryConfig } from "./BaseDatabaseService";
-import { buildMigrationSQL, CREATE_TABLES_SQL, CURRENT_SCHEMA_VERSION, yieldToUI } from "@decks/core";
+import { buildMigrationSQL, CREATE_TABLES_SQL, CURRENT_SCHEMA_VERSION, yieldToUI, FlashcardSynchronizer } from "@decks/core";
 import type { Database, InitSqlJsStatic } from "sql.js";
-import { FlashcardSynchronizer } from "../services/FlashcardSynchronizer";
-import type { SyncData, SyncResult } from "../services/FlashcardSynchronizer";
-import type { SqlJsValue } from "@decks/core";
+import type { SyncData, SyncResult, SqlJsValue } from "@decks/core";
 import { getEmbeddedAssets } from "./embedded-assets";
 
 export class MainDatabaseService extends BaseDatabaseService {

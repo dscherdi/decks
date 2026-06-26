@@ -15,7 +15,7 @@
 jest.unmock("sql.js");
 
 import { MainDatabaseService } from "../../database/MainDatabaseService";
-import { Scheduler } from "../../services/Scheduler";
+import { Scheduler } from "@decks/core";
 import { StatisticsService } from "../../services/StatisticsService";
 import { setupTestDatabase, teardownTestDatabase } from "./database-test-utils";
 import { generateDeckId } from "@decks/core";

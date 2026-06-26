@@ -1,10 +1,9 @@
 import type { DataAdapter } from "obsidian";
 import { BaseDatabaseService } from "./BaseDatabaseService";
 import type { QueryConfig } from "./BaseDatabaseService";
-import type { SqlJsValue } from "@decks/core";
+import type { SqlJsValue, SyncData, SyncResult } from "@decks/core";
 import type { DatabaseWorkerMessage } from "../workers/worker-entry";
 import { ProgressTracker } from "../utils/progress";
-import type { SyncData, SyncResult } from "../services/FlashcardSynchronizer";
 import { getEmbeddedAssets } from "./embedded-assets";
 
 export class WorkerDatabaseService extends BaseDatabaseService {

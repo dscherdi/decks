@@ -102,7 +102,33 @@ Ogni testo evidenziato diventa una carta. Durante il ripasso, lo spazio vuoto at
 </details>
 
 <details>
-<summary><b>Occlusione d'immagine</b> — un'immagine più un elenco numerato. I numeri sull'immagine corrispondono all'elenco.</summary>
+<summary><b>Occlusione d'immagine</b> — nascondi regioni di un'immagine e ricorda cosa c'è sotto. Due modi: interattivo (disegnare riquadri) o un elenco numerato.</summary>
+
+**Interattivo (consigliato).** Esegui il comando **«Crea occlusione immagine al cursore»**, scegli un'immagine, poi disegna i riquadri direttamente nell'editor. Inserisci una risposta in Markdown/LaTeX per ogni riquadro, oppure lascialo vuoto per nascondere solo un'etichetta già presente nell'immagine. Viene salvato come un blocco di codice `decks-occlusion` autonomo (le coordinate sono in percentuale, quindi si adatta a qualsiasi dispositivo):
+
+````markdown
+```decks-occlusion
+image: "[[heart.png]]"
+version: 2
+masks:
+  - id: m1
+    x: 12.5
+    y: 30
+    w: 18
+    h: 9.5
+    answer: "**Ventricolo** sinistro"
+  - id: m2
+    x: 55
+    y: 22
+    w: 14
+    h: 8
+    answer: ""
+```
+````
+
+Ogni riquadro è una carta. Durante il ripasso, il riquadro è nascosto sul fronte e rivelato sul retro (con la sua risposta); nella vista di lettura vedi il diagramma completamente etichettato. Modificabile in qualsiasi momento dal pulsante **Modifica** del blocco o dal gestore delle carte.
+
+**Elenco numerato (semplice).** Anche un'immagine incorporata seguita da un elenco numerato funziona:
 
 ```markdown
 ## Ossa del braccio
@@ -114,7 +140,9 @@ Ogni testo evidenziato diventa una carta. Durante il ripasso, lo spazio vuoto at
 3. ==Ulna==
 ```
 
-Ogni elemento dell'elenco è una carta. L'immagine (con le sue etichette numerate) viene mostrata sul fronte; l'elemento corrispondente viene oscurato sul retro. Si basa sugli spazi vuoti (cloze), quindi questa funzione deve essere abilitata nel profilo.
+Ogni elemento dell'elenco è una carta; l'immagine viene mostrata sul fronte e l'elemento corrispondente viene oscurato sul retro.
+
+Entrambi si basano sugli spazi vuoti (cloze), quindi cloze deve essere abilitato nel profilo e il blocco deve trovarsi sotto un'intestazione analizzata.
 
 </details>
 
@@ -136,6 +164,24 @@ Crea carte su un file Canvas di Obsidian (`.canvas`) anziché su un file Markdow
 **Carte spaziali (Spatial cards)**: collega i nodi di testo con delle frecce — ogni freccia diventa una carta: il nodo di partenza è il fronte (domanda), il nodo di arrivo è il retro (risposta), e l'etichetta della freccia è un suggerimento opzionale. Funzionano catene (A → B → C), relazioni uno-a-molti e molti-a-uno; i nodi non collegati vengono comunque analizzati con i quattro formati sopra. Dettagli in **[docs/CANVAS_DECKS.md](docs/CANVAS_DECKS.md)**.
 
 ![Canvas Spatial Cards Demo](./canvas_spatial_cards_demo.gif)
+
+## Modelli
+
+Renderizza le righe di una tabella tramite un design di carta che crei una sola volta. Scrivilo in HTML/CSS o
+Markdown, inserisci i segnaposto `{{Column}}` e collegalo alle tue tabelle con un tag: un modello dà stile a
+ogni riga corrispondente.
+
+```decks-html-front
+<ruby>{{Word}}<rt>{{Reading}}</rt></ruby>
+```
+
+In **Impostazioni → Modelli** scegli una cartella, poi assegna lo stesso tag al file del modello e
+all'intestazione della tabella: fatto. I modelli supportano le facce fronte/retro/note in HTML o Markdown,
+vengono renderizzati in un ambiente isolato, sanificato e consapevole del tema, ed espongono variabili CSS
+(`--padding`, `--align`, `--bg`, …) per il pieno controllo del layout — da comode carte di lettura a design
+personalizzati a tutto campo. Le tabelle senza un modello corrispondente usano le colonne normali.
+
+Vedi **[docs/TEMPLATES.md](docs/TEMPLATES.md)** per la guida completa ed esempi.
 
 ## Pianificazione personalizzata
 
@@ -189,8 +235,15 @@ Decks è basato su **[`@decks/core`](https://github.com/dscherdi/decks-core)** �
 
 ## Licenza
 
-Vedi [LICENSE](./LICENSE).
+Questo progetto è rilasciato sotto la **GNU Affero General Public License v3.0 o successiva**
+(AGPL-3.0-or-later).
+
+In breve: sei libero di usare, modificare e distribuire questo software. Tuttavia, se lo modifichi e
+distribuisci le tue modifiche — o lo modifichi e lo offri agli utenti tramite una rete — devi rendere il tuo
+codice sorgente modificato pubblicamente disponibile sotto la stessa licenza AGPL-3.0.
+
+Copyright (C) 2026 Xherdi Lika. Vedi il file [LICENSE](./LICENSE) per il testo completo.
 
 ---
 
-> Questa traduzione è una bozza — le Pull Request da parte di madrelingua sono ben accette.
+> Questa traduzione è una bozza — correzioni e suggerimenti sono benvenuti nell'issue tracker.

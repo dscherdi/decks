@@ -102,7 +102,33 @@ Jede Hervorhebung wird zu einer Karte. Während der Wiederholung wird die aktive
 </details>
 
 <details>
-<summary><b>Bildverdeckung</b> — ein Bild plus eine nummerierte Liste. Nummern auf dem Bild sind mit der Liste verknüpft.</summary>
+<summary><b>Bildverdeckung</b> — verdecke Bereiche eines Bildes und rufe ab, was darunter liegt. Zwei Wege: interaktiv (Felder zeichnen) oder eine nummerierte Liste.</summary>
+
+**Interaktiv (empfohlen).** Führe den Befehl **„Bildverdeckung an Cursorposition erstellen"** aus, wähle ein Bild und zeichne dann direkt im Editor Felder darauf. Gib für jedes Feld eine Markdown/LaTeX-Antwort ein oder lasse es leer, um nur eine im Bild enthaltene Beschriftung zu verdecken. Es wird als eigenständiger `decks-occlusion`-Codeblock gespeichert (Koordinaten in Prozent, daher auf jedem Gerät skalierbar):
+
+````markdown
+```decks-occlusion
+image: "[[heart.png]]"
+version: 2
+masks:
+  - id: m1
+    x: 12.5
+    y: 30
+    w: 18
+    h: 9.5
+    answer: "Linke **Herzkammer**"
+  - id: m2
+    x: 55
+    y: 22
+    w: 14
+    h: 8
+    answer: ""
+```
+````
+
+Jedes Feld ist eine Karte. Bei der Wiederholung ist das Feld auf der Vorderseite verdeckt und auf der Rückseite aufgedeckt (mit seiner Antwort); in der Leseansicht siehst du das vollständig beschriftete Diagramm. Jederzeit über die **Bearbeiten**-Schaltfläche des Blocks oder den Karteikarten-Manager bearbeitbar.
+
+**Nummerierte Liste (einfach).** Ein Bild-Embed gefolgt von einer nummerierten Liste funktioniert ebenfalls:
 
 ```markdown
 ## Knochen des Arms
@@ -114,7 +140,9 @@ Jede Hervorhebung wird zu einer Karte. Während der Wiederholung wird die aktive
 3. ==Elle==
 ```
 
-Jeder Listeneintrag ist eine Karte. Das Bild (mit seinen nummerierten Markierungen) wird auf der Vorderseite gezeigt; der passende Eintrag ist auf der Rückseite ausgeblendet. Baut auf Lückentexten auf, daher muss Cloze im Profil aktiviert sein.
+Jeder Listeneintrag ist eine Karte; das Bild wird auf der Vorderseite gezeigt und der passende Eintrag auf der Rückseite ausgeblendet.
+
+Beides baut auf Lückentexten auf – Cloze muss also im Profil aktiviert sein und der Block muss unter einer ausgewerteten Überschrift stehen.
 
 </details>
 
@@ -136,6 +164,24 @@ Erstelle Karten auf einer Obsidian-Canvas-Datei (`.canvas`) statt in einer Markd
 **Räumliche Karten (Spatial cards)**: Verbinde Textknoten mit Kanten — jede Kante wird zu einer Karteikarte: der Ausgangsknoten ist die Vorderseite (Frage), der Zielknoten die Rückseite (Antwort), und das Kantenlabel ist ein optionaler Hinweis. Ketten (A → B → C), Eins-zu-viele- und Viele-zu-eins-Verbindungen funktionieren alle; nicht verbundene Knoten werden weiterhin mit den vier obigen Formaten analysiert. Details in **[docs/CANVAS_DECKS.md](docs/CANVAS_DECKS.md)**.
 
 ![Canvas Spatial Cards Demo](./canvas_spatial_cards_demo.gif)
+
+## Vorlagen
+
+Rendere die Zeilen einer Tabelle über ein Kartendesign, das du einmal erstellst. Schreibe es in HTML/CSS oder
+Markdown, setze `{{Column}}`-Platzhalter ein und binde es per Tag an deine Tabellen — eine Vorlage gestaltet
+jede passende Zeile.
+
+```decks-html-front
+<ruby>{{Word}}<rt>{{Reading}}</rt></ruby>
+```
+
+Wähle unter **Einstellungen → Vorlagen** einen Ordner und versieh eine Vorlagendatei sowie die Überschrift
+der Tabelle mit demselben Tag — fertig. Vorlagen unterstützen Vorder-/Rück-/Notizseiten in HTML oder
+Markdown, werden in einer bereinigten, themenbewussten Sandbox gerendert und stellen CSS-Variablen
+(`--padding`, `--align`, `--bg`, …) für die volle Layout-Kontrolle bereit — von angenehmen Lesekarten bis zu
+randlosen eigenen Designs. Tabellen ohne passende Vorlage verwenden weiterhin die normalen Spalten.
+
+Siehe **[docs/TEMPLATES.md](docs/TEMPLATES.md)** für die vollständige Anleitung und Beispiele.
 
 ## Was du bekommst
 
@@ -249,8 +295,14 @@ Decks basiert auf **[`@decks/core`](https://github.com/dscherdi/decks-core)** �
 
 ## Lizenz
 
-Siehe [LICENSE](./LICENSE).
+Dieses Projekt steht unter der **GNU Affero General Public License v3.0 oder höher** (AGPL-3.0-or-later).
+
+Kurz gesagt: Du darfst diese Software frei verwenden, verändern und weitergeben. Wenn du sie jedoch
+veränderst und deine Änderungen weitergibst — oder sie veränderst und Nutzern über ein Netzwerk anbietest —
+musst du deinen geänderten Quellcode unter derselben AGPL-3.0-Lizenz öffentlich verfügbar machen.
+
+Copyright (C) 2026 Xherdi Lika. Siehe die Datei [LICENSE](./LICENSE) für den vollständigen Text.
 
 ---
 
-> Diese Übersetzung ist ein Entwurf — Pull Requests von Muttersprachlern sind willkommen.
+> Diese Übersetzung ist ein Entwurf — Korrekturen und Verbesserungen sind im Issue-Tracker willkommen.
