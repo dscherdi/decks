@@ -17,7 +17,9 @@
   import { I18n, yieldToUI, type ResolvedRender } from "@decks/core";
   import { prepareFuzzySearch } from "obsidian";
   import { computeCardHealth } from "@decks/core";
+  import { isOcclusionV2, parseOcclusionBack, activeMaskIdForCard } from "@decks/core";
   import { renderCardSide } from "../../utils/html-template-render";
+  import { renderOcclusion } from "../../utils/occlusion-render";
 
   const t = I18n.t;
   const r = t.review;
@@ -75,7 +77,7 @@
   }
 
   function isClozeType(type: FlashcardType): boolean {
-    return type === "cloze" || type === "image-occlusion";
+    return type === "cloze" || type === "image-occlusion" || type === "image-occlusion-v2";
   }
 
   // A front-only cloze (bundled 1-column table) keeps the sentence in the front
@@ -247,6 +249,17 @@
   let searchInputEl: HTMLInputElement | undefined;
 
   $: frontOnlyClozeCard = !!currentCard && isFrontOnlyCloze(currentCard);
+
+  // V2 occlusion: whether the active mask has answer text. A deletion-only mask
+  // (no answer) reveals in place on the image and shows no back panel.
+  $: currentV2Answered =
+    !!currentCard &&
+    isOcclusionV2(currentCard) &&
+    (() => {
+      const doc = parseOcclusionBack(currentCard!.back);
+      const active = doc?.masks.find((m) => m.id === activeMaskIdForCard(currentCard!));
+      return !!active && active.answer.trim().length > 0;
+    })();
 
   $: searchResults =
     searchMode && searchQuery.trim()
@@ -422,6 +435,38 @@
     showAnswer = true;
   }
 
+  // Render a V2 occlusion image (with mask overlay) into a target element. The
+  // active mask reveals in place on the front; the answer text renders
+  // separately into the answer section.
+  function renderOcclusionV2Into(
+    el: HTMLElement,
+    card: Flashcard,
+    revealed: boolean
+  ): void {
+    const doc = parseOcclusionBack(card.back);
+    if (!doc) {
+      el.empty();
+      return;
+    }
+    renderOcclusion(el, {
+      doc,
+      activeMaskId: activeMaskIdForCard(card),
+      revealed,
+      showContext: clozeShowContext,
+      resolveImage: (lp) => resolveEmbed(lp, card.sourceFile ?? ""),
+    });
+  }
+
+  function renderOcclusionAnswerInto(el: HTMLElement, card: Flashcard): void {
+    el.empty();
+    const doc = parseOcclusionBack(card.back);
+    const activeId = activeMaskIdForCard(card);
+    const active = doc?.masks.find((m) => m.id === activeId);
+    if (active && active.answer.trim().length > 0) {
+      renderMarkdown(active.answer, el, deckFilePath);
+    }
+  }
+
   // Render a cloze card into a target element, blanked or revealed.
   function renderClozeInto(
     el: HTMLElement,
@@ -484,6 +529,8 @@
       frontEl.empty();
       if (isFrontOnlyCloze(currentCard)) {
         renderClozeInto(frontEl, currentCard, false);
+      } else if (isOcclusionV2(currentCard)) {
+        renderOcclusionV2Into(frontEl, currentCard, false);
       } else {
         renderCardSide(
           frontEl,
@@ -501,6 +548,10 @@
       if (backEl && currentCard) {
         backEl.empty();
         if (isFrontOnlyCloze(currentCard)) {
+          clearClozeAttributes(backEl);
+        } else if (isOcclusionV2(currentCard)) {
+          // The image reveals in place on the front; keep the answer hidden
+          // until the user reveals it.
           clearClozeAttributes(backEl);
         } else if (isClozeType(currentCard.type) && currentCard.clozeOrder !== null) {
           renderClozeInto(backEl, currentCard, false);
@@ -526,6 +577,16 @@
       // Front-only cloze: reveal the active blank in the front container.
       if (isFrontOnlyCloze(currentCard) && frontEl) {
         renderClozeInto(frontEl, currentCard, true);
+        return;
+      }
+      // V2 occlusion: uncover the active mask in place on the front, and render
+      // its answer text into the answer section.
+      if (isOcclusionV2(currentCard)) {
+        if (frontEl) renderOcclusionV2Into(frontEl, currentCard, true);
+        if (backEl) {
+          clearClozeAttributes(backEl);
+          renderOcclusionAnswerInto(backEl, currentCard);
+        }
         return;
       }
       if (backEl) {
@@ -1442,13 +1503,15 @@
           <span class="decks-card-edge-chip" aria-label={currentCard.hint}>{currentCard.hint}</span>
           <span class="decks-card-edge-line"></span>
         </div>
-      {:else if showAnswer}
+      {:else if showAnswer && !(!!currentCard && isOcclusionV2(currentCard) && !currentV2Answered)}
         <div class="decks-separator"></div>
       {/if}
       <div
         class="decks-answer-section"
         class:hidden={frontOnlyClozeCard ||
-          (!showAnswer && !(currentCard && isClozeType(currentCard.type)))}
+          (!!currentCard && isOcclusionV2(currentCard) && !currentV2Answered) ||
+          (!showAnswer &&
+            !(currentCard && isClozeType(currentCard.type) && !isOcclusionV2(currentCard)))}
       >
         {#snippet backTopControls()}
           {#if currentCard}
@@ -1793,6 +1856,10 @@
 
   .decks-modal-header h3 {
     margin: 0;
+    display: flex;
+    align-items: baseline;
+    flex-wrap: wrap;
+    gap: 8px;
     font-size: 18px;
     font-weight: 600;
     color: var(--text-normal);
@@ -2994,6 +3061,5 @@
     font-size: 12px;
     font-weight: 400;
     color: var(--text-muted);
-    margin-left: 8px;
   }
 </style>

@@ -890,3 +890,354 @@ div.decks-card-content
 .decks-template-preview-body {
   padding: 12px;
 }
+
+/* ===== Image occlusion (V2) ===== */
+.decks-occlusion-block {
+  margin: 8px 0;
+}
+.decks-occlusion-stage {
+  position: relative;
+  display: inline-block;
+  max-width: 100%;
+  line-height: 0;
+  touch-action: none;
+}
+.decks-occlusion-image {
+  display: block;
+  max-width: 100%;
+  height: auto;
+  -webkit-user-select: none;
+  user-select: none;
+}
+.decks-occlusion-mask {
+  position: absolute;
+  box-sizing: border-box;
+  background-color: var(--background-secondary-alt, #4b5563);
+  /* Subtle white border so the box stays visible on true-black images
+     (X-rays, dark screenshots); the dark fill already shows on light images. */
+  border: 1px solid rgba(255, 255, 255, 0.2);
+  border-radius: 4px;
+}
+/* The mask being asked: fully opaque (hides the region) and highlighted with an
+   accent border/ring — never see-through, so the answer can't leak on the front. */
+.decks-occlusion-mask-active {
+  background-color: var(--background-secondary-alt, #4b5563);
+  border: 3px solid var(--interactive-accent);
+  box-shadow: 0 0 0 2px var(--interactive-accent);
+  opacity: 1;
+}
+/* Active mask once revealed: see-through with a thin frame so it never covers
+   the (possibly off-center, hand-drawn) uncovered content. */
+.decks-occlusion-mask-revealed {
+  background-color: transparent;
+  border: 1px solid var(--interactive-accent);
+}
+/* Non-active masks when the profile shows context (clozeShowContext "open"). */
+.decks-occlusion-mask-context {
+  background-color: transparent;
+  border: 1px dashed var(--background-modifier-border);
+}
+/* Reading view: a mask with an answer renders as a readable label box. */
+.decks-occlusion-mask-labeled {
+  background-color: var(--background-primary);
+  border: 1px solid var(--background-modifier-border);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  overflow: hidden;
+  padding: 2px 4px;
+}
+.decks-occlusion-mask-answer {
+  font-size: 0.8em;
+  line-height: 1.15;
+  text-align: center;
+  color: var(--text-normal);
+  overflow: hidden;
+}
+.decks-occlusion-mask-answer p {
+  margin: 0;
+}
+/* Reading view: a deletion-only mask reveals the image underneath. */
+.decks-occlusion-mask-shown {
+  background-color: transparent;
+  border: 1px solid var(--background-modifier-border);
+}
+.decks-occlusion-answer {
+  margin-top: 10px;
+  line-height: normal;
+}
+.decks-occlusion-missing,
+.decks-occlusion-error {
+  padding: 10px 12px;
+  border: 1px solid var(--background-modifier-border);
+  border-radius: 6px;
+  color: var(--text-error);
+  background-color: var(--background-secondary);
+  font-size: 0.85em;
+  line-height: normal;
+}
+.decks-occlusion-toolbar {
+  margin-top: 6px;
+  display: flex;
+  justify-content: flex-end;
+}
+.decks-occlusion-edit-btn {
+  font-size: 0.8em;
+}
+
+/* ----- Studio ----- */
+/* Wider modal box for the split view; padding so content clears the corners. */
+.decks-occlusion-studio-modal {
+  width: min(900px, 92vw);
+  max-width: 92vw;
+  min-width: 0;
+}
+.decks-occlusion-studio-modal > .modal-content {
+  padding: 14px;
+}
+.decks-occlusion-studio {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  width: 100%;
+  height: 100%;
+  box-sizing: border-box;
+}
+.decks-occlusion-studio-header {
+  flex: none;
+  display: flex;
+  align-items: baseline;
+  gap: 12px;
+}
+.decks-occlusion-studio-title {
+  font-weight: var(--font-weight-bold, 600);
+}
+.decks-occlusion-studio-hint {
+  color: var(--text-muted);
+  font-size: var(--font-ui-smaller);
+}
+/* Split view: canvas (left) + inspector (right). Collapses to a column below. */
+.decks-occlusion-studio-body {
+  flex: 1 1 auto;
+  min-height: 0;
+  display: flex;
+  flex-direction: row;
+  gap: 16px;
+}
+.decks-occlusion-studio-canvas {
+  flex: 1 1 auto;
+  min-width: 0;
+  min-height: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  overflow: hidden;
+}
+.decks-occlusion-studio-stage {
+  max-width: 100%;
+  max-height: 100%;
+  cursor: crosshair;
+  border: 1px solid var(--background-modifier-border);
+  border-radius: var(--radius-s);
+}
+.decks-occlusion-studio-stage .decks-occlusion-image {
+  max-width: 100%;
+  max-height: 72vh;
+  width: auto;
+  height: auto;
+}
+/* Editing masks: light/translucent so the image stays legible. Inherits the
+   base light border + dark ring so it stays visible over dark images too. */
+.decks-occlusion-studio-mask {
+  cursor: move;
+  background-color: var(--background-modifier-hover);
+}
+.decks-occlusion-studio-mask.decks-occlusion-mask-selected {
+  background-color: hsla(var(--accent-h), var(--accent-s), var(--accent-l), 0.2);
+  border: 2px solid var(--interactive-accent);
+  outline: none;
+  z-index: 2;
+}
+.decks-occlusion-mask-delete {
+  position: absolute;
+  top: -8px;
+  right: -8px;
+  width: 16px;
+  height: 16px;
+  padding: 0;
+  border: none;
+  border-radius: 50%;
+  background-color: var(--background-modifier-error, #c0392b);
+  color: #fff;
+  font-size: 12px;
+  line-height: 1;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  box-shadow: 0 0 0 1px var(--background-primary);
+  z-index: 3;
+}
+.decks-occlusion-mask-delete:hover {
+  background-color: var(--text-error, #e03131);
+}
+/* Subtle square resize handle (replaces the heavy circle). */
+.decks-occlusion-resize-handle {
+  position: absolute;
+  right: -5px;
+  bottom: -5px;
+  width: 10px;
+  height: 10px;
+  border-radius: 2px;
+  background-color: var(--background-primary);
+  border: 1px solid var(--background-modifier-border);
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.3);
+  cursor: nwse-resize;
+  touch-action: none;
+}
+/* Right inspector: scrollable list + editor, pinned action footer.
+   The left border is the vertical divider between the two columns. */
+.decks-occlusion-inspector {
+  flex: 0 0 300px;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+  padding-left: 16px;
+  border-left: 1px solid var(--background-modifier-border);
+}
+/* Column: label (fixed) + scrolling box list (flexible) + editor (fixed), so
+   the answer textarea stays visible no matter how many boxes there are. */
+.decks-occlusion-inspector-scroll {
+  flex: 1 1 auto;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+.decks-occlusion-list-label {
+  font-size: var(--font-ui-smaller);
+  color: var(--text-muted);
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+}
+.decks-occlusion-box-list {
+  flex: 1 1 auto;
+  min-height: 120px;
+  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+}
+/* Ancestor + element selectors so these beat Obsidian's themed `button` rules. */
+.decks-occlusion-box-list button.decks-occlusion-box-item {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  width: 100%;
+  text-align: left;
+  padding: 5px 8px;
+  border: none;
+  border-radius: var(--radius-s);
+  background-color: transparent;
+  box-shadow: none;
+  color: var(--text-normal);
+  cursor: pointer;
+}
+.decks-occlusion-box-list button.decks-occlusion-box-item:hover {
+  background-color: var(--background-modifier-hover);
+}
+.decks-occlusion-box-list button.decks-occlusion-box-item-active,
+.decks-occlusion-box-list button.decks-occlusion-box-item-active:hover {
+  background-color: hsla(var(--accent-h), var(--accent-s), var(--accent-l), 0.25);
+  box-shadow: inset 3px 0 0 var(--interactive-accent);
+}
+.decks-occlusion-box-item-index {
+  flex: none;
+  min-width: 1.4em;
+  color: var(--text-muted);
+  font-size: var(--font-ui-smaller);
+}
+.decks-occlusion-box-item-answer {
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+.decks-occlusion-box-item-empty {
+  color: var(--text-muted);
+  font-style: italic;
+}
+.decks-occlusion-empty {
+  color: var(--text-muted);
+  font-size: var(--font-ui-smaller);
+  padding: 8px 4px;
+}
+.decks-occlusion-editor {
+  flex: 0 0 auto;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding-top: 8px;
+  border-top: 1px solid var(--background-modifier-border);
+}
+.decks-occlusion-editor-label {
+  font-size: var(--font-ui-smaller);
+  color: var(--text-muted);
+}
+.decks-occlusion-answer-input {
+  width: 100%;
+  min-height: 64px;
+  max-height: 28vh;
+  resize: none;
+  overflow-y: auto;
+  padding: 6px 8px;
+  color: var(--text-normal);
+  background-color: var(--background-modifier-form-field);
+  border: 1px solid var(--background-modifier-border);
+  border-radius: var(--input-radius, var(--radius-s));
+}
+.decks-occlusion-answer-input:focus {
+  outline: none;
+  border-color: var(--background-modifier-border-focus);
+  box-shadow: 0 0 0 2px var(--background-modifier-border-focus);
+}
+.decks-occlusion-preview {
+  max-height: 22vh;
+  overflow-y: auto;
+  padding: 6px 8px;
+  border-radius: var(--radius-s);
+  background-color: var(--background-secondary);
+}
+.decks-occlusion-preview p {
+  margin: 0;
+}
+/* Action footer pinned at the bottom of the inspector. */
+.decks-occlusion-studio-actions {
+  flex: none;
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+  padding-top: 10px;
+  margin-top: 10px;
+  border-top: 1px solid var(--background-modifier-border);
+}
+/* Mobile / narrow: stack canvas over inspector; footer stays pinned. */
+.decks-modal-mobile .decks-occlusion-studio-body {
+  flex-direction: column;
+}
+.decks-modal-mobile .decks-occlusion-studio-canvas {
+  flex: 0 0 auto;
+  max-height: 45vh;
+}
+.decks-modal-mobile .decks-occlusion-studio-stage .decks-occlusion-image {
+  max-height: 45vh;
+}
+.decks-modal-mobile .decks-occlusion-inspector {
+  flex: 1 1 auto;
+  /* Stacked: the divider becomes a top border. */
+  border-left: none;
+  padding-left: 0;
+  border-top: 1px solid var(--background-modifier-border);
+  padding-top: 12px;
+}

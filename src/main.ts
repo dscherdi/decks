@@ -10,6 +10,8 @@ import {
   getLanguage,
 } from "obsidian";
 import { renderHtmlIntoShadow } from "./utils/html-template-render";
+import { renderOcclusion } from "./utils/occlusion-render";
+import { OcclusionStudioModalWrapper } from "./components/OcclusionStudioModalWrapper";
 
 import {
   DatabaseFactory,
@@ -31,7 +33,7 @@ import { BackupService } from "./services/BackupService";
 import { StatisticsService } from "./services/StatisticsService";
 import { FlashcardWriter, type FlashcardEdits } from "./services/FlashcardWriter";
 import { FlashcardEditModalWrapper } from "./components/FlashcardEditModalWrapper";
-import { AiGenerationService, AiRefactoringService, type GeneratedCard, generateDeckId, I18n, type RefactorFieldSet, resolveCardTemplate, yieldToUI } from "@decks/core";
+import { AiGenerationService, AiRefactoringService, type GeneratedCard, generateDeckId, I18n, type RefactorFieldSet, resolveCardTemplate, yieldToUI, OcclusionV2Parser, type OcclusionDoc, isOcclusionV2, parseOcclusionBack } from "@decks/core";
 import { AiKeyStore } from "./services/AiKeyStore";
 import { ObsidianHttpClient } from "./services/ObsidianHttpClient";
 import {
@@ -763,6 +765,57 @@ export default class DecksPlugin extends Plugin {
         });
       }
 
+      // Interactive image occlusion (V2) blocks: render the image with its mask
+      // overlay in reading view and offer an Edit button into the studio.
+      this.registerMarkdownCodeBlockProcessor("decks-occlusion", (source, el, ctx) => {
+        el.empty();
+        const root = el.createDiv({ cls: "decks-occlusion-block" });
+        const result = OcclusionV2Parser.parseOcclusionBlock(source);
+
+        if (!result.ok) {
+          root.createDiv({
+            cls: "decks-occlusion-error",
+            text: `Image occlusion error: ${result.error}`,
+          });
+        } else {
+          const viewer = root.createDiv();
+          renderOcclusion(viewer, {
+            doc: result.doc,
+            activeMaskId: null,
+            revealed: false,
+            showContext: "hidden",
+            showAnswers: true,
+            resolveImage: (linkpath) => {
+              const dest = this.app.metadataCache.getFirstLinkpathDest(linkpath, ctx.sourcePath);
+              return dest ? this.app.vault.getResourcePath(dest) : null;
+            },
+            renderMarkdown: (content, target) => {
+              const child = new MarkdownRenderChild(target);
+              ctx.addChild(child);
+              void MarkdownRenderer.render(this.app, content, target, ctx.sourcePath, child);
+            },
+          });
+        }
+
+        const toolbar = root.createDiv({ cls: "decks-occlusion-toolbar" });
+        const editBtn = toolbar.createEl("button", {
+          cls: "decks-occlusion-edit-btn",
+          text: "Edit",
+        });
+        editBtn.onclick = () => {
+          const info = ctx.getSectionInfo(el);
+          const doc: OcclusionDoc = result.ok
+            ? result.doc
+            : { __v: 2, image: "", masks: [] };
+          this.openOcclusionStudio(
+            ctx.sourcePath,
+            doc,
+            info?.lineStart,
+            info?.lineEnd,
+          );
+        };
+      });
+
       // Add settings tab
       this.addSettingTab(
         new DecksSettingTab(
@@ -1022,6 +1075,14 @@ export default class DecksPlugin extends Plugin {
    * the affected deck before resolving.
    */
   async openEditFlashcardModal(card: Flashcard): Promise<void> {
+    // V2 occlusion cards are edited visually in the studio, not as text fields.
+    if (isOcclusionV2(card)) {
+      const doc = parseOcclusionBack(card.back);
+      if (doc) {
+        this.openOcclusionStudio(card.sourceFile, doc, undefined, undefined, doc.image);
+        return;
+      }
+    }
     const templateColumns = await this.resolveTemplateColumns(card);
     return new Promise((resolve) => {
       let resolved = false;
@@ -1627,6 +1688,31 @@ export default class DecksPlugin extends Plugin {
       }
     }
     return null;
+  }
+
+  /** Open the image-occlusion studio for a `decks-occlusion` block in a note. */
+  openOcclusionStudio(
+    sourcePath: string,
+    doc: OcclusionDoc,
+    lineStart?: number,
+    lineEnd?: number,
+    matchImage?: string,
+  ): void {
+    new OcclusionStudioModalWrapper(this.app, {
+      sourcePath,
+      doc,
+      lineStart,
+      lineEnd,
+      matchImage,
+      onSaved: () => {
+        const file = this.app.vault.getAbstractFileByPath(sourcePath);
+        if (file instanceof TFile) {
+          this.handleFileChange(file).catch((e) =>
+            this.logger.debug("occlusion re-sync failed", e as object),
+          );
+        }
+      },
+    }).open();
   }
 
   private async checkForDatabaseChanges(databasePath: string): Promise<void> {

@@ -157,10 +157,13 @@ Promise.all([esbuild.build(workerBuildOptions), esbuild.build(buildOptions)])
       sqlJsCode: sqlJsCode
     });
 
-    // Replace the placeholder string in the bundled code
+    // Replace the placeholder string in the bundled code. Use a function
+    // replacement so `$`-sequences in the injected JSON (e.g. js-yaml's `$`
+    // regexes) are inserted literally rather than treated as replacement
+    // patterns ($&, $`, $', $<name>).
     mainJsContent = mainJsContent.replace(
       /"__DECKS_EMBEDDED_ASSETS_PLACEHOLDER__"/g,
-      embeddedAssetsJson
+      () => embeddedAssetsJson
     );
 
     // Inject release notes for the current minor version series into bundle
@@ -192,9 +195,12 @@ Promise.all([esbuild.build(workerBuildOptions), esbuild.build(buildOptions)])
       ? { version: latestVersion, content: combinedContent }
       : null;
 
+    const releaseNotesJson = JSON.stringify(
+      latestNote ? JSON.stringify([latestNote]) : "[]"
+    );
     mainJsContent = mainJsContent.replace(
       /"__DECKS_RELEASE_NOTES_JSON__"/g,
-      JSON.stringify(latestNote ? JSON.stringify([latestNote]) : "[]")
+      () => releaseNotesJson
     );
 
     fs.writeFileSync(mainJsPath, mainJsContent);

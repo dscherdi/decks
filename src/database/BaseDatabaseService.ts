@@ -20,7 +20,7 @@ import type { FilterDefinition } from "./types";
 import { generateCustomDeckCardId, generateCustomDeckId, generateFlashcardId, SQL_QUERIES, type SyncOpV1 } from "@decks/core";
 import { normalizeProfile } from "@decks/core";
 import { compileFilter, type FilterCompileOptions } from "@decks/core";
-import type { SyncData, SyncResult } from "../services/FlashcardSynchronizer";
+import type { SyncData, SyncResult } from "@decks/core";
 import type {
   SqlJsValue,
   ReviewLogRow,
