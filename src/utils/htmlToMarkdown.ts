@@ -15,6 +15,35 @@ function getService(): TurndownService {
   // Decks markdown tokens already injected upstream (![[…]], ==…==, $…$) must
   // pass through untouched — disable turndown's markdown escaping.
   created.escape = (text: string) => text;
+  // Markdown can't express these; keep them as raw inline HTML (Obsidian renders
+  // it) so we don't lose sub/super-scripts, tables, etc.
+  created.keep([
+    "sub",
+    "sup",
+    "u",
+    "kbd",
+    "mark",
+    "ins",
+    "del",
+    "table",
+    "thead",
+    "tbody",
+    "tfoot",
+    "tr",
+    "td",
+    "th",
+    "caption",
+  ]);
+  // Keep colored/styled <span>/<font> (drop plain wrappers to avoid Anki's noise).
+  const keepStyled = {
+    filter: (node: HTMLElement): boolean => {
+      const name = node.nodeName.toLowerCase();
+      if (name !== "span" && name !== "font") return false;
+      return !!node.getAttribute("color") || /color\s*:/i.test(node.getAttribute("style") ?? "");
+    },
+    replacement: (_content: string, node: Node): string => (node as HTMLElement).outerHTML,
+  };
+  created.addRule("decks-keep-styled", keepStyled);
   service = created;
   return created;
 }

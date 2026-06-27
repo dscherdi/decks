@@ -216,46 +216,106 @@ export const SAMPLE = {
   collectionCreatedMs: COLLECTION_CREATED_SECONDS * 1000,
 } as const;
 
+// Note/card/revlog tables + rows are identical across schemas; only the model/deck
+// storage differs (col JSON vs normalized tables).
+type RawDb = ReturnType<typeof createRealDatabase>;
+function createNoteCardRevlogTables(db: RawDb): void {
+  db.run("CREATE TABLE notes (id integer primary key, mid integer, flds text);");
+  db.run(
+    "CREATE TABLE cards (id integer primary key, nid integer, did integer, ord integer, " +
+      "type integer, queue integer, due integer, ivl integer, factor integer, reps integer, " +
+      "lapses integer, data text);"
+  );
+  db.run(
+    "CREATE TABLE revlog (id integer primary key, cid integer, ease integer, ivl integer, " +
+      "lastIvl integer, factor integer);"
+  );
+}
+function insertNoteCardRevlogRows(db: RawDb): void {
+  for (const n of NOTES) {
+    db.run("INSERT INTO notes (id, mid, flds) VALUES (?, ?, ?);", [n.id, n.mid, n.flds.join(FIELD_SEP)]);
+  }
+  for (const c of CARDS) {
+    db.run(
+      "INSERT INTO cards (id, nid, did, ord, type, queue, due, ivl, factor, reps, lapses, data) " +
+        "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?);",
+      [c.id, c.nid, c.did, c.ord, c.type, c.queue, c.due, c.ivl, c.factor, c.reps, c.lapses, c.data]
+    );
+  }
+  for (const r of REVLOG) {
+    db.run("INSERT INTO revlog (id, cid, ease, ivl, lastIvl, factor) VALUES (?, ?, ?, ?, ?, ?);", [
+      r.id,
+      r.cid,
+      r.ease,
+      r.ivl,
+      r.lastIvl,
+      r.factor,
+    ]);
+  }
+}
+
+// Legacy schema (≤11): models/decks live in the `col` JSON blobs.
 function buildCollectionBytes(): Uint8Array {
   const db = createRealDatabase();
   try {
     db.run("CREATE TABLE col (id integer primary key, crt integer, models text, decks text);");
-    db.run("CREATE TABLE notes (id integer primary key, mid integer, flds text);");
-    db.run(
-      "CREATE TABLE cards (id integer primary key, nid integer, did integer, ord integer, " +
-        "type integer, queue integer, due integer, ivl integer, factor integer, reps integer, " +
-        "lapses integer, data text);"
-    );
-    db.run(
-      "CREATE TABLE revlog (id integer primary key, cid integer, ease integer, ivl integer, " +
-        "lastIvl integer, factor integer);"
-    );
-
+    createNoteCardRevlogTables(db);
     db.run("INSERT INTO col (id, crt, models, decks) VALUES (1, ?, ?, ?);", [
       COLLECTION_CREATED_SECONDS,
       JSON.stringify(MODELS),
       JSON.stringify(DECKS),
     ]);
-    for (const n of NOTES) {
-      db.run("INSERT INTO notes (id, mid, flds) VALUES (?, ?, ?);", [n.id, n.mid, n.flds.join(FIELD_SEP)]);
-    }
-    for (const c of CARDS) {
-      db.run(
-        "INSERT INTO cards (id, nid, did, ord, type, queue, due, ivl, factor, reps, lapses, data) " +
-          "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?);",
-        [c.id, c.nid, c.did, c.ord, c.type, c.queue, c.due, c.ivl, c.factor, c.reps, c.lapses, c.data]
-      );
-    }
-    for (const r of REVLOG) {
-      db.run("INSERT INTO revlog (id, cid, ease, ivl, lastIvl, factor) VALUES (?, ?, ?, ?, ?, ?);", [
-        r.id,
-        r.cid,
-        r.ease,
-        r.ivl,
-        r.lastIvl,
-        r.factor,
+    insertNoteCardRevlogRows(db);
+    return db.export();
+  } finally {
+    db.close();
+  }
+}
+
+// Modern schema (18): `col.models`/`col.decks` are empty; note types live in
+// `notetypes`/`fields`/`templates` (protobuf configs) and decks in `decks`
+// (hierarchy joined by \x1f). Mirrors `collection.anki21b`.
+function buildCollectionBytesV18(): Uint8Array {
+  const db = createRealDatabase();
+  try {
+    db.run("CREATE TABLE col (id integer primary key, crt integer, ver integer, models text, decks text, conf text);");
+    db.run("CREATE TABLE notetypes (id integer primary key, name text, config blob);");
+    db.run("CREATE TABLE fields (ntid integer, ord integer, name text, config blob);");
+    db.run("CREATE TABLE templates (ntid integer, ord integer, name text, config blob);");
+    db.run("CREATE TABLE decks (id integer primary key, name text);");
+    createNoteCardRevlogTables(db);
+
+    db.run("INSERT INTO col (id, crt, ver, models, decks, conf) VALUES (1, ?, 18, '', '', '');", [
+      COLLECTION_CREATED_SECONDS,
+    ]);
+    for (const m of Object.values(MODELS)) {
+      db.run("INSERT INTO notetypes (id, name, config) VALUES (?, ?, ?);", [
+        Number(m.id),
+        m.name,
+        notetypeConfig(m.type, m.css),
       ]);
+      for (const f of m.flds) {
+        db.run("INSERT INTO fields (ntid, ord, name, config) VALUES (?, ?, ?, ?);", [
+          Number(m.id),
+          f.ord,
+          f.name,
+          new Uint8Array(),
+        ]);
+      }
+      for (const t of m.tmpls) {
+        db.run("INSERT INTO templates (ntid, ord, name, config) VALUES (?, ?, ?, ?);", [
+          Number(m.id),
+          t.ord,
+          t.name,
+          tmplConfig(t.qfmt, t.afmt),
+        ]);
+      }
     }
+    for (const d of Object.values(DECKS)) {
+      // Store hierarchy with \x1f (schema 18) so the parser's \x1f → :: conversion is exercised.
+      db.run("INSERT INTO decks (id, name) VALUES (?, ?);", [d.id, d.name.replace(/::/g, "\x1f")]);
+    }
+    insertNoteCardRevlogRows(db);
     return db.export();
   } finally {
     db.close();
@@ -289,10 +349,46 @@ export function buildSampleApkgNewFormat(): Uint8Array {
     .sort((a, b) => Number(a) - Number(b))
     .map((k) => MEDIA_NAMES[k]);
   return zipSync({
+    // Mirror a real modern export: the authoritative data is zstd anki21b, with a
+    // legacy anki2 "please update" stub for old clients (must be ignored).
     "collection.anki21b": zstdRawFrame(buildCollectionBytes()),
+    "collection.anki2": strToU8("legacy stub — please update to the latest Anki version"),
     media: protobufMediaManifest(names),
     ...mediaBlobs(),
   });
+}
+
+/**
+ * Fully modern `.apkg`: schema-18 collection (`col.models`/`decks` empty; data in
+ * `notetypes`/`fields`/`templates`/`decks` with protobuf configs) zstd-compressed
+ * as `collection.anki21b`, plus a protobuf media manifest and a legacy stub.
+ */
+export function buildSampleApkgV18(): Uint8Array {
+  const names = Object.keys(MEDIA_NAMES)
+    .sort((a, b) => Number(a) - Number(b))
+    .map((k) => MEDIA_NAMES[k]);
+  return zipSync({
+    "collection.anki21b": zstdRawFrame(buildCollectionBytesV18()),
+    "collection.anki2": strToU8("legacy stub — please update to the latest Anki version"),
+    media: protobufMediaManifest(names),
+    ...mediaBlobs(),
+  });
+}
+
+// CardTemplateConfig: field 1 = qfmt, field 2 = afmt.
+function tmplConfig(qfmt: string, afmt: string): Uint8Array {
+  return new Uint8Array([...protoString(1, qfmt), ...protoString(2, afmt)]);
+}
+// NotetypeConfig: field 1 = kind (1 = cloze, omitted ⇒ normal), field 3 = css.
+function notetypeConfig(kind: number, css: string): Uint8Array {
+  return new Uint8Array([...(kind ? protoInt(1, kind) : []), ...protoString(3, css)]);
+}
+function protoString(field: number, value: string): number[] {
+  const bytes = [...new TextEncoder().encode(value)];
+  return [(field << 3) | 2, ...protoVarint(bytes.length), ...bytes];
+}
+function protoInt(field: number, value: number): number[] {
+  return [(field << 3) | 0, ...protoVarint(value)];
 }
 
 // A zstd frame carrying the data in raw (uncompressed) blocks. Single-segment,

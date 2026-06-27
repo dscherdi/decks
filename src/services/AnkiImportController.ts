@@ -24,6 +24,7 @@ import type { Logger } from "@/utils/logging";
 import { loadSqlJsMainThread } from "@/database/loadSqlJsMainThread";
 import { htmlToMarkdown } from "@/utils/htmlToMarkdown";
 import { decompressZstd } from "@/utils/zstd";
+import { pickAnkiCollection } from "@/utils/ankiCollection";
 
 export type AnkiProgressPhase = "read" | "write" | "sync" | "import";
 export type AnkiProgress = (
@@ -222,19 +223,10 @@ export class AnkiImportController {
 
   private async loadCollection(bytes: Uint8Array): Promise<LoadedCollection> {
     const entries = unzipSync(bytes);
-    const collectionBytes = AnkiImportController.pickCollection(entries);
+    const collectionBytes = pickAnkiCollection(entries);
     const SQL = await loadSqlJsMainThread();
     const db = new SQL.Database(collectionBytes);
     return { db, mediaByName: AnkiImportController.readMediaMap(entries), entries };
-  }
-
-  // Prefer the uncompressed `collection.anki21`/`anki2`; otherwise decompress the
-  // newer zstd `collection.anki21b`.
-  private static pickCollection(entries: Record<string, Uint8Array>): Uint8Array {
-    if (entries["collection.anki21"]) return entries["collection.anki21"];
-    if (entries["collection.anki2"]) return entries["collection.anki2"];
-    if (entries["collection.anki21b"]) return decompressZstd(entries["collection.anki21b"]);
-    throw new Error("No Anki collection found in the .apkg file.");
   }
 
   // The `media` entry maps zip entry keys (numbers) to filenames — a legacy JSON

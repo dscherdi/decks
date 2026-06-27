@@ -2,9 +2,14 @@ import { unzipSync } from "fflate";
 import { MainDatabaseService } from "../../database/MainDatabaseService";
 import { setupTestDatabase, teardownTestDatabase } from "./database-test-utils";
 import { createRealDatabase } from "./setup-real-sql";
-import { buildSampleApkg, buildSampleApkgNewFormat, SAMPLE } from "./fixtures/anki-sample-apkg";
+import {
+  buildSampleApkg,
+  buildSampleApkgNewFormat,
+  buildSampleApkgV18,
+  SAMPLE,
+} from "./fixtures/anki-sample-apkg";
 import { isZstd, parseMediaManifest } from "@decks/core";
-import { decompressZstd } from "../../utils/zstd";
+import { pickAnkiCollection } from "../../utils/ankiCollection";
 import {
   AnkiCollectionParser,
   AnkiDeckRenderer,
@@ -58,22 +63,30 @@ describe("Anki import pipeline (integration)", () => {
     expect(parsed.mediaFiles.some((name) => name.endsWith(".mp3"))).toBe(true);
 
     const byKind = (k: string) => parsed.cards.filter((c) => c.kind === k);
-    expect(byKind("basic").length).toBe(1);
-    expect(byKind("template").length).toBe(2); // German + PeriodicTable
+    // German (multi-field, no layout CSS) imports as a basic card; only the
+    // CSS-layout PeriodicTable model uses a template.
+    expect(byKind("basic").length).toBe(2); // Basic + German
+    expect(byKind("template").length).toBe(1); // PeriodicTable (rich CSS)
     expect(byKind("cloze").length).toBe(1);
     expect(byKind("occlusion").length).toBe(1);
   });
 
-  it("imports a multi-field model as a template row carrying every field", () => {
+  it("imports a multi-field model without layout CSS as a clean basic card", () => {
     const parsed = AnkiCollectionParser.parse(loadCollection(), { getMediaText: getMediaText() });
 
-    const card = parsed.cards.find((c) =>
-      c.templateRow?.cells.some((cell) => cell.includes(SAMPLE.germanFront))
-    );
+    const card = parsed.cards.find((c) => c.front.includes(SAMPLE.germanFront));
     expect(card).toBeDefined();
-    expect(card?.kind).toBe("template");
+    expect(card?.kind).toBe("basic"); // no rich CSS → basic markdown, not a template
+    expect(card?.back).toContain(SAMPLE.germanBack);
+    expect(card?.templateRow).toBeUndefined();
+  });
+
+  it("imports a CSS-layout multi-field model as a template row carrying every field", () => {
+    const parsed = AnkiCollectionParser.parse(loadCollection(), { getMediaText: getMediaText() });
+    const card = parsed.cards.find((c) => c.kind === "template");
+    expect(card).toBeDefined();
     expect(card?.templateRow?.headers.length).toBeGreaterThan(2);
-    expect(card?.templateRow?.cells.some((cell) => cell.includes(SAMPLE.germanBack))).toBe(true);
+    expect(card?.templateTag).toBeTruthy();
   });
 
   it("generates HTML + cloze template files and injects model CSS", () => {
@@ -210,12 +223,14 @@ describe("Anki import — modern format (zstd + protobuf media)", () => {
     await teardownTestDatabase();
   });
 
-  it("decompresses collection.anki21b and reads the protobuf media manifest", () => {
+  it("picks anki21b over the legacy stub and reads the protobuf media manifest", () => {
     const entries = unzipSync(buildSampleApkgNewFormat());
-    expect(entries["collection.anki21"]).toBeUndefined();
+    // Mirrors a real modern export: zstd anki21b + a legacy anki2 "please update" stub.
     expect(isZstd(entries["collection.anki21b"])).toBe(true);
+    expect(entries["collection.anki2"]).toBeDefined();
 
-    const collectionBytes = decompressZstd(entries["collection.anki21b"]);
+    // pickAnkiCollection must prefer anki21b, not the stub.
+    const collectionBytes = pickAnkiCollection(entries);
     const collection = createRealDatabase(collectionBytes) as unknown as RawDatabase;
 
     // Protobuf manifest resolves the occlusion SVG so masks extract end-to-end.
@@ -233,5 +248,26 @@ describe("Anki import — modern format (zstd + protobuf media)", () => {
     expect(occ.length).toBe(1);
     expect(occ[0].masks?.length).toBeGreaterThan(0);
     expect(occ[0].imagePath).toBe(SAMPLE.occlusionImage);
+  });
+
+  it("parses a schema-18 collection (models/decks in normalized protobuf tables)", () => {
+    const entries = unzipSync(buildSampleApkgV18());
+    const collection = createRealDatabase(pickAnkiCollection(entries)) as unknown as RawDatabase;
+    const mediaByName = parseMediaManifest(entries["media"]);
+    const mediaText = (name: string): string | undefined => {
+      const key = mediaByName.get(name);
+      return key && entries[key] ? new TextDecoder().decode(entries[key]) : undefined;
+    };
+
+    const parsed = AnkiCollectionParser.parse(collection, { getMediaText: mediaText });
+    expect(parsed.cardCount).toBe(SAMPLE.cardCount); // models reconstructed from notetypes/templates/fields
+    expect(parsed.deckNames.some((name) => SAMPLE.germanDeckMatch.test(name))).toBe(true);
+    expect(parsed.mediaFiles.some((name) => name.endsWith(".mp3"))).toBe(true);
+
+    const occ = parsed.cards.filter((c) => c.kind === "occlusion");
+    expect(occ.length).toBe(1);
+    expect(occ[0].masks?.length).toBeGreaterThan(0);
+    // Cloze model (kind=1 from protobuf) still routes to a cloze card.
+    expect(parsed.cards.some((c) => c.kind === "cloze")).toBe(true);
   });
 });
