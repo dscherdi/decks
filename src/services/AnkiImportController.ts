@@ -6,7 +6,6 @@ import {
   AnkiHistoryImporter,
   generateDeckId,
   isZstd,
-  parseMediaManifest,
   yieldToUI,
 } from "@decks/core";
 import type {
@@ -24,7 +23,7 @@ import type { Logger } from "@/utils/logging";
 import { loadSqlJsMainThread } from "@/database/loadSqlJsMainThread";
 import { htmlToMarkdown } from "@/utils/htmlToMarkdown";
 import { decompressZstd } from "@/utils/zstd";
-import { pickAnkiCollection } from "@/utils/ankiCollection";
+import { pickAnkiCollection, readAnkiMediaMap } from "@/utils/ankiCollection";
 
 export type AnkiProgressPhase = "read" | "write" | "sync" | "import";
 export type AnkiProgress = (
@@ -229,10 +228,10 @@ export class AnkiImportController {
     return { db, mediaByName: AnkiImportController.readMediaMap(entries), entries };
   }
 
-  // The `media` entry maps zip entry keys (numbers) to filenames — a legacy JSON
-  // object or the newer protobuf manifest, both handled in core.
+  // The `media` entry maps zip entry keys (numbers) to filenames — legacy JSON or
+  // the newer (possibly zstd-compressed) protobuf manifest, handled in the util.
   private static readMediaMap(entries: Record<string, Uint8Array>): Map<string, string> {
-    return parseMediaManifest(entries["media"] ?? new Uint8Array());
+    return readAnkiMediaMap(entries);
   }
 
   private async copyMedia(

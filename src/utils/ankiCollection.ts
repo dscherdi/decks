@@ -1,3 +1,4 @@
+import { isZstd, parseMediaManifest } from "@decks/core";
 import { decompressZstd } from "./zstd";
 
 /**
@@ -14,4 +15,14 @@ export function pickAnkiCollection(entries: Record<string, Uint8Array>): Uint8Ar
   if (entries["collection.anki21"]) return entries["collection.anki21"];
   if (entries["collection.anki2"]) return entries["collection.anki2"];
   throw new Error("No Anki collection found in the .apkg file.");
+}
+
+/**
+ * Parse the `media` manifest (filename → entry key). Modern exports zstd-compress
+ * the manifest itself (like the collection), so decompress before parsing.
+ */
+export function readAnkiMediaMap(entries: Record<string, Uint8Array>): Map<string, string> {
+  let raw = entries["media"] ?? new Uint8Array();
+  if (isZstd(raw)) raw = decompressZstd(raw);
+  return parseMediaManifest(raw);
 }

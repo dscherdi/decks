@@ -370,7 +370,8 @@ export function buildSampleApkgV18(): Uint8Array {
   return zipSync({
     "collection.anki21b": zstdRawFrame(buildCollectionBytesV18()),
     "collection.anki2": strToU8("legacy stub — please update to the latest Anki version"),
-    media: protobufMediaManifest(names),
+    // Modern exports zstd-compress the media manifest too.
+    media: zstdRawFrame(protobufMediaManifest(names)),
     ...mediaBlobs(),
   });
 }

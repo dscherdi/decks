@@ -8,8 +8,8 @@ import {
   buildSampleApkgV18,
   SAMPLE,
 } from "./fixtures/anki-sample-apkg";
-import { isZstd, parseMediaManifest } from "@decks/core";
-import { pickAnkiCollection } from "../../utils/ankiCollection";
+import { isZstd } from "@decks/core";
+import { pickAnkiCollection, readAnkiMediaMap } from "../../utils/ankiCollection";
 import {
   AnkiCollectionParser,
   AnkiDeckRenderer,
@@ -234,7 +234,7 @@ describe("Anki import — modern format (zstd + protobuf media)", () => {
     const collection = createRealDatabase(collectionBytes) as unknown as RawDatabase;
 
     // Protobuf manifest resolves the occlusion SVG so masks extract end-to-end.
-    const mediaByName = parseMediaManifest(entries["media"]);
+    const mediaByName = readAnkiMediaMap(entries);
     const mediaText = (name: string): string | undefined => {
       const key = mediaByName.get(name);
       return key && entries[key] ? new TextDecoder().decode(entries[key]) : undefined;
@@ -253,7 +253,9 @@ describe("Anki import — modern format (zstd + protobuf media)", () => {
   it("parses a schema-18 collection (models/decks in normalized protobuf tables)", () => {
     const entries = unzipSync(buildSampleApkgV18());
     const collection = createRealDatabase(pickAnkiCollection(entries)) as unknown as RawDatabase;
-    const mediaByName = parseMediaManifest(entries["media"]);
+    // The v18 media manifest is zstd-compressed; readAnkiMediaMap decompresses it.
+    const mediaByName = readAnkiMediaMap(entries);
+    expect(mediaByName.size).toBeGreaterThan(0);
     const mediaText = (name: string): string | undefined => {
       const key = mediaByName.get(name);
       return key && entries[key] ? new TextDecoder().decode(entries[key]) : undefined;

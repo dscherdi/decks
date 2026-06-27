@@ -1,5 +1,24 @@
 import { strToU8 } from "fflate";
-import { pickAnkiCollection } from "@/utils/ankiCollection";
+import { pickAnkiCollection, readAnkiMediaMap } from "@/utils/ankiCollection";
+
+// A zstd frame carrying `data` in raw (uncompressed) blocks — a valid frame
+// fzstd decodes, with no compressor needed.
+function zstdRawFrame(data: Uint8Array): Uint8Array {
+  const out: number[] = [0x28, 0xb5, 0x2f, 0xfd, 0xa0];
+  const size = data.length;
+  out.push(size & 0xff, (size >>> 8) & 0xff, (size >>> 16) & 0xff, (size >>> 24) & 0xff);
+  let off = 0;
+  do {
+    const bs = Math.min(data.length - off, 128 * 1024 - 1);
+    const last = off + bs >= data.length ? 1 : 0;
+    const h = (bs << 3) | last;
+    out.push(h & 0xff, (h >>> 8) & 0xff, (h >>> 16) & 0xff);
+    for (let i = 0; i < bs; i++) out.push(data[off + i]);
+    off += bs;
+    if (last) break;
+  } while (off < data.length);
+  return new Uint8Array(out);
+}
 
 // A real zstd frame (CLI-generated, base64) decoding to PLAINTEXT — proves the
 // anki21b branch actually decompresses. Shared with zstd.test.ts.
@@ -39,5 +58,24 @@ describe("pickAnkiCollection", () => {
 
   it("throws when no collection is present", () => {
     expect(() => pickAnkiCollection({ media: strToU8("{}") })).toThrow(/No Anki collection/);
+  });
+});
+
+describe("readAnkiMediaMap", () => {
+  it("reads an uncompressed JSON manifest (legacy)", () => {
+    const entries = { media: strToU8(JSON.stringify({ "0": "a.png", "1": "b.svg" })) };
+    const map = readAnkiMediaMap(entries);
+    expect(map.get("a.png")).toBe("0");
+    expect(map.get("b.svg")).toBe("1");
+  });
+
+  it("decompresses a zstd-compressed manifest before parsing (modern)", () => {
+    const entries = { media: zstdRawFrame(strToU8(JSON.stringify({ "0": "img one.png" }))) };
+    const map = readAnkiMediaMap(entries);
+    expect(map.get("img one.png")).toBe("0");
+  });
+
+  it("returns an empty map when there is no media entry", () => {
+    expect(readAnkiMediaMap({}).size).toBe(0);
   });
 });
