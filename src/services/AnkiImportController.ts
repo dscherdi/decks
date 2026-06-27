@@ -5,12 +5,14 @@ import {
   AnkiDeckRenderer,
   AnkiHistoryImporter,
   generateDeckId,
+  isZstd,
+  parseMediaManifest,
   yieldToUI,
 } from "@decks/core";
 import type {
   AnkiParseResult,
   AnkiDeckItem,
-  AnkiFormat,
+  AnkiTemplateFile,
   MigrationProfileFsrs,
   RawDatabase,
 } from "@decks/core";
@@ -21,6 +23,7 @@ import type { IDatabaseService } from "@/database/DatabaseFactory";
 import type { Logger } from "@/utils/logging";
 import { loadSqlJsMainThread } from "@/database/loadSqlJsMainThread";
 import { htmlToMarkdown } from "@/utils/htmlToMarkdown";
+import { decompressZstd } from "@/utils/zstd";
 
 export type AnkiProgressPhase = "read" | "write" | "sync" | "import";
 export type AnkiProgress = (
@@ -33,7 +36,6 @@ export type AnkiProgress = (
 export interface AnkiImportOptions {
   targetFolder: string; // vault folder the imported decks are written under
   profileId: string;
-  format: AnkiFormat;
 }
 
 export interface AnkiScanResult {
@@ -50,6 +52,7 @@ export interface AnkiImportSummary {
   mediaCopied: number;
   reviewsImported: number;
   withHistory: number;
+  templatesWritten: number;
 }
 
 const MEDIA_SUBFOLDER = "media";
@@ -71,7 +74,11 @@ export class AnkiImportController {
     private readonly db: IDatabaseService,
     private readonly deckSynchronizer: DeckSynchronizer,
     private readonly settings: DecksSettings,
-    private readonly logger: Logger
+    private readonly logger: Logger,
+    // Optional: rebuild the template cache + persist the template folder after
+    // generated templates are written (so multi-field cards render immediately).
+    private readonly templateSyncService?: { syncAll(): Promise<void> },
+    private readonly saveSettings?: () => Promise<void>
   ) {}
 
   // Migrated Anki decks nest under a `/anki` subtag so the chosen profile maps
@@ -84,7 +91,11 @@ export class AnkiImportController {
   async scan(bytes: Uint8Array): Promise<AnkiScanResult> {
     const loaded = await this.loadCollection(bytes);
     try {
-      const parsed = AnkiCollectionParser.parse(loaded.db, { hintLabel: "hint", htmlToMarkdown });
+      const parsed = AnkiCollectionParser.parse(loaded.db, {
+        hintLabel: "hint",
+        htmlToMarkdown,
+        getMediaText: (name) => AnkiImportController.mediaText(loaded, name),
+      });
       return {
         deckCount: parsed.deckNames.length,
         cardCount: parsed.cardCount,
@@ -115,8 +126,12 @@ export class AnkiImportController {
 
     this.deckSynchronizer.isMigrating = true;
     try {
-      const parsed = AnkiCollectionParser.parse(rawDb, { hintLabel: "hint", htmlToMarkdown });
-      const decks = AnkiDeckRenderer.render(parsed.cards, this.ankiSubtag, headerLevel, opts.format);
+      const parsed = AnkiCollectionParser.parse(rawDb, {
+        hintLabel: "hint",
+        htmlToMarkdown,
+        getMediaText: (name) => AnkiImportController.mediaText(loaded, name),
+      });
+      const decks = AnkiDeckRenderer.render(parsed.cards, this.ankiSubtag, headerLevel);
       const total = decks.length + 2; // + sync + import
 
       await this.db.createTagMapping(opts.profileId, this.ankiSubtag);
@@ -142,6 +157,7 @@ export class AnkiImportController {
       }
 
       const mediaCopied = await this.copyMedia(parsed, loaded, base);
+      const templatesWritten = await this.writeTemplates(parsed.templateFiles, base);
 
       onProgress?.(decks.length + 1, total, "sync");
       await this.deckSynchronizer.sync({ force: true });
@@ -150,7 +166,6 @@ export class AnkiImportController {
       const { injected, reviews } = await AnkiHistoryImporter.importHistory(this.db, deckItems, {
         collectionCreatedMs: AnkiCollectionParser.readCollectionCreatedMs(rawDb),
         revlogByCard: AnkiCollectionParser.readRevlog(rawDb),
-        format: opts.format,
       });
 
       return {
@@ -159,11 +174,48 @@ export class AnkiImportController {
         mediaCopied,
         reviewsImported: reviews,
         withHistory: injected,
+        templatesWritten,
       };
     } finally {
       loaded.db.close();
       this.deckSynchronizer.isMigrating = false;
     }
+  }
+
+  // Write the generated per-model HTML templates into the template folder (auto-
+  // configuring it on first use), then rebuild the template cache so multi-field
+  // cards render via their template right away.
+  private async writeTemplates(templateFiles: AnkiTemplateFile[], base: string): Promise<number> {
+    if (templateFiles.length === 0) return 0;
+    const folder = await this.ensureTemplateFolder(base);
+    let written = 0;
+    for (const file of templateFiles) {
+      try {
+        await this.createOrOverwrite(normalizePath(`${folder}/${file.relativePath}`), file.content);
+        written++;
+      } catch (error) {
+        this.logger.error(`Anki import: failed to write template ${file.relativePath}`, error);
+      }
+      await yieldToUI();
+    }
+    await this.templateSyncService?.syncAll();
+    return written;
+  }
+
+  private async ensureTemplateFolder(base: string): Promise<string> {
+    const configured = this.settings.templates?.templateFolder?.trim();
+    if (configured) return configured;
+    const folder = normalizePath(`${base}/_anki-templates`);
+    this.settings.templates.templateFolder = folder;
+    await this.saveSettings?.();
+    return folder;
+  }
+
+  private static mediaText(loaded: LoadedCollection, filename: string): string | undefined {
+    const key = loaded.mediaByName.get(filename);
+    let bytes = key ? loaded.entries[key] : undefined;
+    if (bytes && isZstd(bytes)) bytes = decompressZstd(bytes);
+    return bytes ? new TextDecoder().decode(bytes) : undefined;
   }
 
   // --- collection loading ---
@@ -176,34 +228,19 @@ export class AnkiImportController {
     return { db, mediaByName: AnkiImportController.readMediaMap(entries), entries };
   }
 
-  // Prefer the modern `collection.anki21`; fall back to legacy `collection.anki2`.
+  // Prefer the uncompressed `collection.anki21`/`anki2`; otherwise decompress the
+  // newer zstd `collection.anki21b`.
   private static pickCollection(entries: Record<string, Uint8Array>): Uint8Array {
     if (entries["collection.anki21"]) return entries["collection.anki21"];
     if (entries["collection.anki2"]) return entries["collection.anki2"];
-    if (entries["collection.anki21b"]) {
-      throw new Error(
-        "This export uses a newer compressed format. In Anki, re-export with “Support older Anki versions” enabled."
-      );
-    }
+    if (entries["collection.anki21b"]) return decompressZstd(entries["collection.anki21b"]);
     throw new Error("No Anki collection found in the .apkg file.");
   }
 
-  // The `media` entry maps zip entry keys (numbers) to original filenames.
+  // The `media` entry maps zip entry keys (numbers) to filenames — a legacy JSON
+  // object or the newer protobuf manifest, both handled in core.
   private static readMediaMap(entries: Record<string, Uint8Array>): Map<string, string> {
-    const byName = new Map<string, string>();
-    const raw = entries["media"];
-    if (!raw) return byName;
-    try {
-      const json: unknown = JSON.parse(new TextDecoder().decode(raw));
-      if (json && typeof json === "object") {
-        for (const [key, value] of Object.entries(json as Record<string, unknown>)) {
-          if (typeof value === "string") byName.set(value, key);
-        }
-      }
-    } catch {
-      // Newer protobuf media index — unsupported; no media copied.
-    }
-    return byName;
+    return parseMediaManifest(entries["media"] ?? new Uint8Array());
   }
 
   private async copyMedia(
@@ -216,8 +253,9 @@ export class AnkiImportController {
     let copied = 0;
     for (const name of parsed.mediaFiles) {
       const entryKey = loaded.mediaByName.get(name);
-      const data = entryKey ? loaded.entries[entryKey] : undefined;
+      let data = entryKey ? loaded.entries[entryKey] : undefined;
       if (!data) continue;
+      if (isZstd(data)) data = decompressZstd(data);
       const target = normalizePath(`${folder}/${name}`);
       try {
         await this.ensureFolderFor(target);

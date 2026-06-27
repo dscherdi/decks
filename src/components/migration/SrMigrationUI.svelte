@@ -25,8 +25,8 @@
   let clozeSep = ";;";
   let profileId = "";
   let format: MigrationFormat = "smart";
-  let sameFolder = false;
-  let archiveOriginals = false;
+  const sameFolder = false;
+  const archiveOriginals = false;
 
   let profiles: DeckProfile[] = [];
   let scanning = false;

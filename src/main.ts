@@ -1339,6 +1339,8 @@ export default class DecksPlugin extends Plugin {
       this.deckSynchronizer,
       this.settings,
       this.logger,
+      this.templateSyncService,
+      () => this.saveSettings(),
     );
     new AnkiImportModalWrapper(
       this.app,

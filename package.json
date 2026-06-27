@@ -39,6 +39,7 @@
     "chartjs-adapter-date-fns": "^3.0.0",
     "date-fns": "^4.1.0",
     "fflate": "^0.8.3",
+    "fzstd": "^0.1.1",
     "dompurify": "^3.4.11",
     "svelte": "^5.46.1",
     "tslib": "^2.8.1",

@@ -1,9 +1,10 @@
-import { existsSync, readFileSync } from "node:fs";
-import { resolve } from "node:path";
 import { unzipSync } from "fflate";
 import { MainDatabaseService } from "../../database/MainDatabaseService";
 import { setupTestDatabase, teardownTestDatabase } from "./database-test-utils";
 import { createRealDatabase } from "./setup-real-sql";
+import { buildSampleApkg, buildSampleApkgNewFormat, SAMPLE } from "./fixtures/anki-sample-apkg";
+import { isZstd, parseMediaManifest } from "@decks/core";
+import { decompressZstd } from "../../utils/zstd";
 import {
   AnkiCollectionParser,
   AnkiDeckRenderer,
@@ -12,74 +13,143 @@ import {
 } from "@decks/core";
 import type { AnkiDeckItem, AnkiRenderedDeck, DeckProfile, RawDatabase } from "@decks/core";
 
-// The sample decks live at the repo root (not committed as fixtures). Skip
-// gracefully when absent so CI without the files still passes.
-const REPO_ROOT = resolve(__dirname, "../../../../..");
-const APKG_PATH = resolve(REPO_ROOT, "test-anki-deck.apkg");
-const TEMPLATES_APKG_PATH = resolve(REPO_ROOT, "test-anki-templates.apkg");
-const HAS_APKG = existsSync(APKG_PATH);
-const describeIf = HAS_APKG ? describe : describe.skip;
-const describeIfTemplates = existsSync(TEMPLATES_APKG_PATH) ? describe : describe.skip;
+// A tiny self-contained `.apkg` built in memory from representative samples —
+// no dependency on any local Anki export. See fixtures/anki-sample-apkg.ts.
+let APKG: Uint8Array;
+let ENTRIES: Record<string, Uint8Array>;
 
-function loadFrom(path: string): RawDatabase {
-  const entries = unzipSync(new Uint8Array(readFileSync(path)));
-  const bytes = entries["collection.anki21"] ?? entries["collection.anki2"];
+function loadCollection(): RawDatabase {
+  const bytes = ENTRIES["collection.anki21"] ?? ENTRIES["collection.anki2"];
   return createRealDatabase(bytes) as unknown as RawDatabase;
 }
 
-function loadCollection(): RawDatabase {
-  return loadFrom(APKG_PATH);
+function getMediaText(): (name: string) => string | undefined {
+  const map = JSON.parse(new TextDecoder().decode(ENTRIES["media"])) as Record<string, string>;
+  const byName = new Map<string, string>();
+  for (const [key, name] of Object.entries(map)) byName.set(name, key);
+  return (name: string): string | undefined => {
+    const key = byName.get(name);
+    return key && ENTRIES[key] ? new TextDecoder().decode(ENTRIES[key]) : undefined;
+  };
 }
 
-describeIf("Anki import pipeline (integration)", () => {
+describe("Anki import pipeline (integration)", () => {
   let db: MainDatabaseService;
   let profile: DeckProfile;
 
   beforeEach(async () => {
     db = await setupTestDatabase();
     profile = await db.getDefaultProfile();
+    // sql.js is initialized by setupTestDatabase, so build the fixture now.
+    APKG = buildSampleApkg();
+    ENTRIES = unzipSync(APKG);
   });
 
   afterEach(async () => {
     await teardownTestDatabase();
   });
 
-  it("parses notes/cards and resolves field roles", () => {
-    const parsed = AnkiCollectionParser.parse(loadCollection());
-    expect(parsed.cardCount).toBeGreaterThan(400);
-    expect(parsed.noteCount).toBeGreaterThan(200);
-    expect(parsed.deckNames.some((name) => /German/i.test(name))).toBe(true);
+  it("parses every model kind into the expected cards, decks, and media", () => {
+    const parsed = AnkiCollectionParser.parse(loadCollection(), { getMediaText: getMediaText() });
+    expect(parsed.cardCount).toBe(SAMPLE.cardCount);
+    expect(parsed.noteCount).toBe(SAMPLE.noteCount);
+    expect(parsed.withHistory).toBe(SAMPLE.withHistory);
+    expect(parsed.deckNames.some((name) => SAMPLE.germanDeckMatch.test(name))).toBe(true);
     expect(parsed.mediaFiles.some((name) => name.endsWith(".mp3"))).toBe(true);
 
-    // Templates are rendered in full now, so the front/back contain (not equal)
-    // the key text alongside any other template content.
-    const forward = parsed.cards.find((c) => c.front.includes("Das Wetter ist heute schön."));
-    expect(forward).toBeDefined();
-    expect(forward?.back).toContain("The weather is nice today.");
-
-    // The reverse template yields an independent card with swapped roles.
-    const reverse = parsed.cards.find((c) => c.front.includes("The weather is nice today."));
-    expect(reverse).toBeDefined();
-    expect(reverse?.back).toContain("Das Wetter ist heute schön.");
+    const byKind = (k: string) => parsed.cards.filter((c) => c.kind === k);
+    expect(byKind("basic").length).toBe(1);
+    expect(byKind("template").length).toBe(2); // German + PeriodicTable
+    expect(byKind("cloze").length).toBe(1);
+    expect(byKind("occlusion").length).toBe(1);
   });
 
-  it("renders header-paragraph markdown that the real parser can sync", async () => {
-    const parsed = AnkiCollectionParser.parse(loadCollection());
+  it("imports a multi-field model as a template row carrying every field", () => {
+    const parsed = AnkiCollectionParser.parse(loadCollection(), { getMediaText: getMediaText() });
+
+    const card = parsed.cards.find((c) =>
+      c.templateRow?.cells.some((cell) => cell.includes(SAMPLE.germanFront))
+    );
+    expect(card).toBeDefined();
+    expect(card?.kind).toBe("template");
+    expect(card?.templateRow?.headers.length).toBeGreaterThan(2);
+    expect(card?.templateRow?.cells.some((cell) => cell.includes(SAMPLE.germanBack))).toBe(true);
+  });
+
+  it("generates HTML + cloze template files and injects model CSS", () => {
+    const parsed = AnkiCollectionParser.parse(loadCollection(), { getMediaText: getMediaText() });
+    expect(parsed.templateFiles.length).toBeGreaterThan(0);
+    // Multi-field models export an HTML template; the cloze-with-extras a markdown one.
+    expect(parsed.templateFiles.some((t) => t.content.includes("```decks-html-front"))).toBe(true);
+    expect(parsed.templateFiles.some((t) => t.content.includes("```decks-md-notes"))).toBe(true);
+    // The PeriodicTable model ships CSS → a <style> block in its template.
+    expect(parsed.templateFiles.some((t) => t.content.includes("<style>"))).toBe(true);
+  });
+
+  it("gives cloze cards a real sentence front (never a 'Cloze <id>' fallback)", () => {
+    const parsed = AnkiCollectionParser.parse(loadCollection(), { getMediaText: getMediaText() });
+    const cloze = parsed.cards.filter((c) => c.kind === "cloze");
+    expect(cloze.length).toBe(1);
+    expect(cloze.every((c) => !/^Cloze \d+$/.test(c.front))).toBe(true);
+    expect(cloze[0].clozeBody).toBe(SAMPLE.clozeSentence);
+  });
+
+  it("extracts occlusion masks as percentages from the real mask SVG", () => {
+    const parsed = AnkiCollectionParser.parse(loadCollection(), { getMediaText: getMediaText() });
+    const occ = parsed.cards.filter((c) => c.kind === "occlusion");
+    expect(occ.length).toBe(1);
+    expect(occ[0].imagePath).toBe(SAMPLE.occlusionImage);
+    expect(occ[0].masks?.length).toBeGreaterThan(0);
+    const mask = occ[0].masks![0];
+    expect(mask.x).toBeGreaterThanOrEqual(0);
+    expect(mask.x).toBeLessThanOrEqual(100);
+  });
+
+  it("renders markdown the real parser can sync across every deck", async () => {
+    const parsed = AnkiCollectionParser.parse(loadCollection(), { getMediaText: getMediaText() });
     const decks = AnkiDeckRenderer.render(parsed.cards, "decks/anki", profile.headerLevel);
     expect(decks.length).toBeGreaterThan(1);
 
-    // Sync the largest deck and confirm cards land in the database.
-    const largest = decks.reduce((a, b) => (b.cards.length > a.cards.length ? b : a));
-    const filepath = `Anki Import/${largest.relativePath}.md`;
-    const deckId = await syncDeck(filepath, largest);
+    let total = 0;
+    for (const deck of decks) {
+      const deckId = await syncDeck(`Anki Import/${deck.relativePath}.md`, deck);
+      const cards = await db.getFlashcardsByDeck(deckId);
+      total += cards.length;
+      expect(cards.every((c) => c.front.trim().length > 0)).toBe(true);
+    }
+    expect(total).toBeGreaterThan(0);
+  });
 
+  it("escalates the compact basic card into an aggregated table", async () => {
+    const parsed = AnkiCollectionParser.parse(loadCollection(), { getMediaText: getMediaText() });
+    const decks = AnkiDeckRenderer.render(parsed.cards, "decks/anki", profile.headerLevel);
+
+    // The single basic card (single-paragraph answer) escalates to a table.
+    const basicDeck = decks.find((d) => d.cards.some((c) => c.kind === "basic"));
+    expect(basicDeck).toBeDefined();
+    expect(basicDeck!.content).toContain("| Front | Back |");
+
+    const deckId = await syncDeck(`Anki Import/${basicDeck!.relativePath}.md`, basicDeck!);
     const cards = await db.getFlashcardsByDeck(deckId);
     expect(cards.length).toBeGreaterThan(0);
     expect(cards.every((c) => c.front.trim().length > 0)).toBe(true);
   });
 
-  it("runs history import without injecting state for an all-new deck", async () => {
-    const parsed = AnkiCollectionParser.parse(loadCollection());
+  it("renders occlusion blocks the real OcclusionV2 parser can sync", async () => {
+    const parsed = AnkiCollectionParser.parse(loadCollection(), { getMediaText: getMediaText() });
+    const occ = parsed.cards.filter((c) => c.kind === "occlusion");
+    const decks = AnkiDeckRenderer.render(occ, "decks/anki", profile.headerLevel);
+    const target = decks.find((d) => d.content.includes("```decks-occlusion"));
+    expect(target).toBeDefined();
+
+    const deckId = await syncDeck(`Anki Import/${target!.relativePath}.md`, target!);
+    const cards = await db.getFlashcardsByDeck(deckId);
+    expect(cards.length).toBeGreaterThan(0);
+    expect(cards.every((c) => c.type === "image-occlusion-v2")).toBe(true);
+  });
+
+  it("imports review history for the reviewed card, idempotently", async () => {
+    const parsed = AnkiCollectionParser.parse(loadCollection(), { getMediaText: getMediaText() });
     const decks = AnkiDeckRenderer.render(parsed.cards, "decks/anki", profile.headerLevel);
 
     const items: AnkiDeckItem[] = [];
@@ -94,30 +164,20 @@ describeIf("Anki import pipeline (integration)", () => {
     }
 
     const collection = loadCollection();
-    const result = await AnkiHistoryImporter.importHistory(db, items, {
+    const options = {
       collectionCreatedMs: AnkiCollectionParser.readCollectionCreatedMs(collection),
       revlogByCard: AnkiCollectionParser.readRevlog(collection),
-    });
-    // The sample deck is entirely new (empty revlog), so nothing is injected.
-    expect(result.injected).toBe(0);
-    expect(result.reviews).toBe(0);
+    };
+    const first = await AnkiHistoryImporter.importHistory(db, items, options);
+    expect(first.injected).toBe(SAMPLE.withHistory);
+    expect(first.reviews).toBe(SAMPLE.reviewCount);
+
+    // Re-running imports nothing new (deterministic ids → idempotent).
+    const second = await AnkiHistoryImporter.importHistory(db, items, options);
+    expect(second.injected).toBe(0);
   });
 
-  it("renders table format that the real parser can sync", async () => {
-    const parsed = AnkiCollectionParser.parse(loadCollection());
-    const decks = AnkiDeckRenderer.render(parsed.cards, "decks/anki", profile.headerLevel, "table");
-
-    const largest = decks.reduce((a, b) => (b.cards.length > a.cards.length ? b : a));
-    expect(largest.content).toContain("| Front | Back");
-
-    const filepath = `Anki Import/${largest.relativePath}.md`;
-    const deckId = await syncDeck(filepath, largest);
-    const cards = await db.getFlashcardsByDeck(deckId);
-    expect(cards.length).toBeGreaterThan(0);
-    expect(cards.every((c) => c.front.trim().length > 0)).toBe(true);
-  });
-
-  async function syncDeck(filepath: string, deck: AnkiRenderedDeck): Promise<string> {
+  async function syncDeck(filepath: string, deck: AnkiRenderedDeck | { content: string; relativePath?: string }): Promise<string> {
     const deckId = generateDeckId(filepath);
     await db.createDeck({
       id: deckId,
@@ -140,27 +200,38 @@ describeIf("Anki import pipeline (integration)", () => {
   }
 });
 
-// The templates deck exercises the deterministic engine: Basic/Cloze models +
-// 7 image-occlusion models that must be skipped.
-describeIfTemplates("Anki template engine (integration, templates deck)", () => {
-  // Initialize SQL.js (createRealDatabase needs the module loaded).
-  beforeAll(async () => {
-    await setupTestDatabase();
+// The modern export ships a zstd `collection.anki21b` + a protobuf media
+// manifest. Mirror the controller's pickCollection/readMediaMap decode path.
+describe("Anki import — modern format (zstd + protobuf media)", () => {
+  beforeEach(async () => {
+    await setupTestDatabase(); // initializes sql.js for createRealDatabase
   });
-  afterAll(async () => {
+  afterEach(async () => {
     await teardownTestDatabase();
   });
 
-  it("renders Basic models cleanly and skips image-occlusion notes", () => {
-    const parsed = AnkiCollectionParser.parse(loadFrom(TEMPLATES_APKG_PATH));
-    expect(parsed.cardCount).toBeGreaterThan(1000);
+  it("decompresses collection.anki21b and reads the protobuf media manifest", () => {
+    const entries = unzipSync(buildSampleApkgNewFormat());
+    expect(entries["collection.anki21"]).toBeUndefined();
+    expect(isZstd(entries["collection.anki21b"])).toBe(true);
 
-    // No card should carry image-occlusion script/markup (those models are skipped).
-    expect(parsed.cards.some((c) => /io-overlay|io-original/.test(c.front + c.back))).toBe(false);
+    const collectionBytes = decompressZstd(entries["collection.anki21b"]);
+    const collection = createRealDatabase(collectionBytes) as unknown as RawDatabase;
 
-    // Basic cards have non-empty front + back, with the answer side resolved.
-    const basics = parsed.cards.filter((c) => !c.isCloze);
-    expect(basics.length).toBeGreaterThan(0);
-    expect(basics.every((c) => c.front.trim().length > 0)).toBe(true);
+    // Protobuf manifest resolves the occlusion SVG so masks extract end-to-end.
+    const mediaByName = parseMediaManifest(entries["media"]);
+    const mediaText = (name: string): string | undefined => {
+      const key = mediaByName.get(name);
+      return key && entries[key] ? new TextDecoder().decode(entries[key]) : undefined;
+    };
+
+    const parsed = AnkiCollectionParser.parse(collection, { getMediaText: mediaText });
+    expect(parsed.cardCount).toBe(SAMPLE.cardCount);
+    expect(parsed.mediaFiles.some((name) => name.endsWith(".mp3"))).toBe(true);
+
+    const occ = parsed.cards.filter((c) => c.kind === "occlusion");
+    expect(occ.length).toBe(1);
+    expect(occ[0].masks?.length).toBeGreaterThan(0);
+    expect(occ[0].imagePath).toBe(SAMPLE.occlusionImage);
   });
 });

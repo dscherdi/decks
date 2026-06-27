@@ -916,6 +916,38 @@ Content
       const result = FlashcardParser.parseFlashcardsFromContent(content);
       expect(result[0].tags).toEqual([]);
     });
+
+    it("treats a cloze in a table's front cell as a front-only cloze carrying templateRow", () => {
+      const content = `
+## Deck #anki-tpl-cloze/basic
+
+| Text | Extra |
+| --- | --- |
+| Du trinkst ==jeden Tag== Bier. | extra note |
+`;
+      const result = FlashcardParser.parseFlashcardsFromContent(content, 2, undefined, true);
+      expect(result).toHaveLength(1);
+      expect(result[0].type).toBe("cloze");
+      expect(result[0].front).toBe("Du trinkst ==jeden Tag== Bier."); // cloze on the front
+      expect(result[0].back).toBe(""); // front-only
+      expect(result[0].templateRow?.headers).toEqual(["Text", "Extra"]);
+      expect(result[0].templateRow?.cells).toEqual(["Du trinkst ==jeden Tag== Bier.", "extra note"]);
+    });
+
+    it("keeps a normal | Front | Back | table as front+back (no cloze in front)", () => {
+      const content = `
+## Deck
+
+| Front | Back |
+| --- | --- |
+| Question | Answer |
+`;
+      const result = FlashcardParser.parseFlashcardsFromContent(content, 2, undefined, true);
+      expect(result).toHaveLength(1);
+      expect(result[0].type).toBe("table");
+      expect(result[0].front).toBe("Question");
+      expect(result[0].back).toBe("Answer");
+    });
   });
 
   describe("parent header tag inheritance", () => {

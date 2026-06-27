@@ -261,6 +261,14 @@
       return !!active && active.answer.trim().length > 0;
     })();
 
+  // A front-only cloze keeps the cloze on the front (empty back); its Notes
+  // button lives on the front card, so the answer section only appears to host
+  // the Extra panel once the user toggles notes open.
+  $: answerSectionHidden = frontOnlyClozeCard
+    ? !(showNotes && hasNotes)
+    : (!!currentCard && isOcclusionV2(currentCard) && !currentV2Answered) ||
+      (!showAnswer && !(currentCard && isClozeType(currentCard.type) && !isOcclusionV2(currentCard)));
+
   $: searchResults =
     searchMode && searchQuery.trim()
       ? (() => {
@@ -1476,6 +1484,33 @@
             {/if}
           </div>
       {/snippet}
+      {#snippet notesButton()}
+        {#if hasNotes}
+          <button
+            class="decks-notes-button decks-icon-btn clickable-icon"
+            class:decks-notes-active={showNotes}
+            on:click={toggleNotes}
+            title={r.toggleNotes}
+            type="button"
+          >
+            <svg
+              xmlns="http://www.w3.org/2000/svg"
+              width="12"
+              height="12"
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              stroke-width="2"
+              stroke-linecap="round"
+              stroke-linejoin="round"
+            >
+              <circle cx="12" cy="12" r="10"></circle>
+              <line x1="12" y1="16" x2="12" y2="12"></line>
+              <line x1="12" y1="8" x2="12.01" y2="8"></line>
+            </svg>
+          </button>
+        {/if}
+      {/snippet}
       <div class="decks-question-section">
         {#if frontIsHtml}
           <div class="decks-card-shell">
@@ -1493,6 +1528,11 @@
                 on:click={handleClozeBlankClick}
               ></div>
             </div>
+            <!-- Front-only cloze: surface the Extra's Notes button on the front card
+                 itself (like the back card's button) once the cloze is revealed. -->
+            {#if frontOnlyClozeCard && showAnswer}
+              {@render notesButton()}
+            {/if}
           </div>
         {/if}
       </div>
@@ -1503,16 +1543,10 @@
           <span class="decks-card-edge-chip" aria-label={currentCard.hint}>{currentCard.hint}</span>
           <span class="decks-card-edge-line"></span>
         </div>
-      {:else if showAnswer && !(!!currentCard && isOcclusionV2(currentCard) && !currentV2Answered)}
+      {:else if showAnswer && !(!!currentCard && isOcclusionV2(currentCard) && !currentV2Answered) && !(frontOnlyClozeCard && !showNotes)}
         <div class="decks-separator"></div>
       {/if}
-      <div
-        class="decks-answer-section"
-        class:hidden={frontOnlyClozeCard ||
-          (!!currentCard && isOcclusionV2(currentCard) && !currentV2Answered) ||
-          (!showAnswer &&
-            !(currentCard && isClozeType(currentCard.type) && !isOcclusionV2(currentCard)))}
-      >
+      <div class="decks-answer-section" class:hidden={answerSectionHidden}>
         {#snippet backTopControls()}
           {#if currentCard}
             <button
@@ -1540,54 +1574,29 @@
             </button>
           {/if}
         {/snippet}
-        {#snippet backBottomControls()}
-          {#if hasNotes}
-            <button
-              class="decks-notes-button decks-icon-btn clickable-icon"
-              class:decks-notes-active={showNotes}
-              on:click={toggleNotes}
-              title={r.toggleNotes}
-              type="button"
-            >
-              <svg
-                xmlns="http://www.w3.org/2000/svg"
-                width="12"
-                height="12"
-                viewBox="0 0 24 24"
-                fill="none"
-                stroke="currentColor"
-                stroke-width="2"
-                stroke-linecap="round"
-                stroke-linejoin="round"
-              >
-                <circle cx="12" cy="12" r="10"></circle>
-                <line x1="12" y1="16" x2="12" y2="12"></line>
-                <line x1="12" y1="8" x2="12.01" y2="8"></line>
-              </svg>
-            </button>
-          {/if}
-        {/snippet}
-        {#if backIsHtml}
-          <div class="decks-card-shell">
-            <div class="decks-template-layer decks-back" bind:this={backEl}></div>
-            <div class="decks-controls-layer">
+        {#if !frontOnlyClozeCard}
+          {#if backIsHtml}
+            <div class="decks-card-shell">
+              <div class="decks-template-layer decks-back" bind:this={backEl}></div>
+              <div class="decks-controls-layer">
+                {@render backTopControls()}
+                {@render notesButton()}
+              </div>
+            </div>
+          {:else}
+            <div class="decks-back-wrapper">
               {@render backTopControls()}
-              {@render backBottomControls()}
+              <div class="decks-card-side decks-back">
+                <!-- svelte-ignore a11y-click-events-have-key-events a11y-no-static-element-interactions -->
+                <div
+                  class="decks-card-text markdown-rendered"
+                  bind:this={backEl}
+                  on:click={handleClozeBlankClick}
+                ></div>
+              </div>
+              {@render notesButton()}
             </div>
-          </div>
-        {:else}
-          <div class="decks-back-wrapper">
-            {@render backTopControls()}
-            <div class="decks-card-side decks-back">
-              <!-- svelte-ignore a11y-click-events-have-key-events a11y-no-static-element-interactions -->
-              <div
-                class="decks-card-text markdown-rendered"
-                bind:this={backEl}
-                on:click={handleClozeBlankClick}
-              ></div>
-            </div>
-            {@render backBottomControls()}
-          </div>
+          {/if}
         {/if}
         {#if showNotes && hasNotes}
           {#if notesIsHtml}
