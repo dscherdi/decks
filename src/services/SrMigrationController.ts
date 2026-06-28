@@ -399,7 +399,9 @@ export class SrMigrationController {
       }
 
       onProgress?.(files.length + 1, total, "sync");
-      await this.deckSynchronizer.sync({ force: true });
+      // Non-force: only the newly written decks are stale, so unchanged decks
+      // elsewhere in the vault aren't needlessly re-parsed.
+      await this.deckSynchronizer.sync();
 
       onProgress?.(total, total, "import");
       const { injected, suspended } = await SrHistoryImporter.importHistory(this.db, deckItems);

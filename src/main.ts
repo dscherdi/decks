@@ -758,7 +758,8 @@ export default class DecksPlugin extends Plugin {
           if (currentIndex >= activeIndex && currentIndex < activeEnd) {
             if (revealed) {
               span.className = "decks-cloze-revealed";
-              span.textContent = text;
+              // Keep rendered children (MathJax, formatting) instead of flattening.
+              while (mark.firstChild) span.appendChild(mark.firstChild);
             } else {
               span.className = "decks-cloze-active";
               span.textContent = "[...]";
@@ -769,7 +770,8 @@ export default class DecksPlugin extends Plugin {
             span.textContent = "[...]";
           } else {
             span.className = "decks-cloze-context";
-            span.textContent = text;
+            // Keep rendered children (MathJax, formatting) instead of flattening.
+            while (mark.firstChild) span.appendChild(mark.firstChild);
           }
 
           mark.replaceWith(span);

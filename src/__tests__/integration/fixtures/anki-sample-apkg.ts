@@ -220,7 +220,7 @@ export const SAMPLE = {
 // storage differs (col JSON vs normalized tables).
 type RawDb = ReturnType<typeof createRealDatabase>;
 function createNoteCardRevlogTables(db: RawDb): void {
-  db.run("CREATE TABLE notes (id integer primary key, mid integer, flds text);");
+  db.run("CREATE TABLE notes (id integer primary key, mid integer, flds text, tags text not null default '');");
   db.run(
     "CREATE TABLE cards (id integer primary key, nid integer, did integer, ord integer, " +
       "type integer, queue integer, due integer, ivl integer, factor integer, reps integer, " +

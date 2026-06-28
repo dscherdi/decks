@@ -17,7 +17,7 @@
   import { I18n, yieldToUI, type ResolvedRender } from "@decks/core";
   import { prepareFuzzySearch } from "obsidian";
   import { computeCardHealth } from "@decks/core";
-  import { isOcclusionV2, parseOcclusionBack, activeMaskIdForCard } from "@decks/core";
+  import { isOcclusionV2, parseOcclusionBack, activeMaskIdForCard, prepareClozeMath } from "@decks/core";
   import { renderCardSide } from "../../utils/html-template-render";
   import { renderOcclusion } from "../../utils/occlusion-render";
 
@@ -487,8 +487,17 @@
       setClozeAttributes(el, prepared.markStart, clozeShowContext, revealed, prepared.markEnd);
       renderMarkdown(prepared.content, el, deckFilePath);
     } else {
-      setClozeAttributes(el, card.clozeOrder ?? 0, clozeShowContext, revealed);
-      renderMarkdown(clozeContent(card), el, deckFilePath);
+      // Clozes inside MathJax can't become <mark> (MathJax owns the $…$ span),
+      // so rewrite those to LaTeX up front; out-of-math clozes stay ==…== for the
+      // post-processor, with the active index remapped to them.
+      const { markdown, markActiveIndex } = prepareClozeMath(
+        clozeContent(card),
+        card.clozeOrder ?? 0,
+        clozeShowContext,
+        revealed
+      );
+      setClozeAttributes(el, markActiveIndex, clozeShowContext, revealed);
+      renderMarkdown(markdown, el, deckFilePath);
     }
   }
 
@@ -504,15 +513,21 @@
     showAnswer = false;
     showNotes = false;
 
-    // Build cloze group when first encountering a cloze card
-    if (isClozeType(currentCard.type) && !inClozeGroupReview) {
+    // Cloze indicator count for the current card (recomputed every card so it's
+    // never stale; 0 for non-cloze cards hides the indicator).
+    clozeGroupTotal = isClozeType(currentCard.type)
+      ? await scheduler.getClozeGroupSize(currentCard)
+      : 0;
+
+    // Build the sequential cloze group only in review mode (browse navigates
+    // every card individually, so it must not enter group-review state).
+    if (!browseMode && isClozeType(currentCard.type) && !inClozeGroupReview) {
       const siblings = await scheduler.getClozeSiblings(
         currentCard,
         new Date()
       );
       clozeGroup = [currentCard, ...siblings];
       clozeGroupIndex = 0;
-      clozeGroupTotal = await scheduler.getClozeGroupSize(currentCard);
       inClozeGroupReview = true;
     }
 
@@ -1156,7 +1171,7 @@
   <div class="decks-modal-header">
     <h3>
       {browseMode ? "Browse" : "Review session"} - {deckOrGroup.name}
-      {#if inClozeGroupReview && currentCard}
+      {#if currentCard && isClozeType(currentCard.type) && clozeGroupTotal > 0}
         <span class="decks-cloze-indicator"
           >Cloze {(currentCard.clozeOrder ?? clozeGroupIndex) + 1}/{clozeGroupTotal}</span
         >

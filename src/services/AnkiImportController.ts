@@ -24,6 +24,7 @@ import { loadSqlJsMainThread } from "@/database/loadSqlJsMainThread";
 import { htmlToMarkdown } from "@/utils/htmlToMarkdown";
 import { decompressZstd } from "@/utils/zstd";
 import { pickAnkiCollection, readAnkiMediaMap } from "@/utils/ankiCollection";
+import { imageDimensions } from "@/utils/imageDimensions";
 
 export type AnkiProgressPhase = "read" | "write" | "sync" | "import";
 export type AnkiProgress = (
@@ -95,6 +96,7 @@ export class AnkiImportController {
         hintLabel: "hint",
         htmlToMarkdown,
         getMediaText: (name) => AnkiImportController.mediaText(loaded, name),
+        getMediaSize: (name) => AnkiImportController.mediaSize(loaded, name),
       });
       return {
         deckCount: parsed.deckNames.length,
@@ -130,6 +132,7 @@ export class AnkiImportController {
         hintLabel: "hint",
         htmlToMarkdown,
         getMediaText: (name) => AnkiImportController.mediaText(loaded, name),
+        getMediaSize: (name) => AnkiImportController.mediaSize(loaded, name),
       });
       const decks = AnkiDeckRenderer.render(parsed.cards, this.ankiSubtag, headerLevel);
       const total = decks.length + 2; // + sync + import
@@ -160,7 +163,10 @@ export class AnkiImportController {
       const templatesWritten = await this.writeTemplates(parsed.templateFiles, base);
 
       onProgress?.(decks.length + 1, total, "sync");
-      await this.deckSynchronizer.sync({ force: true });
+      // Non-force: only the newly written/overwritten decks are stale (new decks
+      // register with lastSyncedMtime 0, overwrites bump mtime), so unchanged
+      // decks elsewhere in the vault aren't needlessly re-parsed.
+      await this.deckSynchronizer.sync();
 
       onProgress?.(total, total, "import");
       const { injected, reviews } = await AnkiHistoryImporter.importHistory(this.db, deckItems, {
@@ -216,6 +222,16 @@ export class AnkiImportController {
     let bytes = key ? loaded.entries[key] : undefined;
     if (bytes && isZstd(bytes)) bytes = decompressZstd(bytes);
     return bytes ? new TextDecoder().decode(bytes) : undefined;
+  }
+
+  private static mediaSize(
+    loaded: LoadedCollection,
+    filename: string
+  ): { width: number; height: number } | undefined {
+    const key = loaded.mediaByName.get(filename);
+    let bytes = key ? loaded.entries[key] : undefined;
+    if (bytes && isZstd(bytes)) bytes = decompressZstd(bytes);
+    return bytes ? imageDimensions(bytes) : undefined;
   }
 
   // --- collection loading ---
