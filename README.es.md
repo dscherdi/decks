@@ -271,6 +271,25 @@ Abre el migrador desde la barra de herramientas del panel de mazos (el icono del
 
 Elige un perfil en el diálogo (o usa el predeterminado): su nivel de encabezado y su configuración de programación se aplican a los mazos migrados.
 
+## Migrar desde Anki
+
+¿Cambias desde Anki? Puedes traer toda tu colección a Decks **sin perder tarjetas, multimedia ni historial de repaso** — y seguir estudiando con FSRS-6.
+
+En Anki, exporta tu mazo (o toda la colección) como **`.apkg`** (**Archivo → Exportar**, formato *Paquete de mazo de Anki*, con **Incluir multimedia** e **Incluir información de programación** marcados). Luego abre el importador desde la barra de herramientas del panel de mazos o ejecuta el comando **«Import from Anki»**, elige el archivo y una carpeta de destino, e importa. Funcionan tanto las exportaciones `.apkg` antiguas como las nuevas (comprimidas).
+
+**Tu colección de Anki nunca se modifica.** La importación es aditiva: escribe archivos nuevos en una carpeta de destino que elijas, anidada bajo la etiqueta `#decks/anki`, y deja el `.apkg` de origen tal cual. Reimportar el mismo archivo sobrescribe los archivos que generó y actualiza su multimedia, así que puedes repetirlo cuando quieras.
+
+**Cómo funciona**
+
+1. **Elige el `.apkg` y una carpeta de destino.** Decks lo descomprime en memoria, lee la colección de Anki incrustada (formato antiguo o el nuevo comprimido) y copia cada archivo multimedia referenciado a una carpeta `media/` de tu bóveda. La jerarquía original de mazos de Anki (`Padre::Hijo`) se conserva como carpetas.
+2. **Cada tipo de nota se convierte en una tarjeta limpia de Decks.** Las notas básicas alternan automáticamente entre una **tabla** compacta y **encabezados**; las oclusiones **cloze** se convierten en resaltados `==…==` — incluidas las cloze dentro de MathJax `$…$`; las notas **multicampo / con plantilla** obtienen una plantilla generada automáticamente; y las tarjetas de **oclusión de imagen** de Anki llegan como oclusión nativa de Decks.
+3. **Multimedia, matemáticas y etiquetas se conservan.** El audio y las imágenes se incrustan y se reproducen/renderizan en el repaso; las imágenes mantienen su tamaño original; se conserva LaTeX/MathJax; tus etiquetas de Anki se agrupan y ordenan en secciones legibles.
+4. **Tu estado de programación se traduce a FSRS-6.** La fecha de vencimiento, el intervalo y la facilidad de cada tarjeta — más su historial completo de repaso de Anki — se asignan a un estado de estabilidad/dificultad/vencimiento y se escriben como registro de repaso, de modo que las tarjetas aparecen **ya vencidas en la fecha correcta con el intervalo correcto**. Continúas, no reinicias.
+5. **Los mazos grandes y con mucha multimedia siguen siendo ágiles.** Un mazo grande se divide automáticamente en archivos limitados y organizados en subcarpetas — según el número de tarjetas y de incrustaciones multimedia — para que un mazo con miles de clips de audio siga abriéndose rápido en Obsidian. Los mazos más pequeños quedan en un solo archivo.
+6. **Lo ves suceder.** Una barra de progreso sigue cada fase — leer la colección, escribir mazos, copiar multimedia, sincronizar e importar el historial de repaso — para que ni siquiera una importación grande parezca atascada.
+
+Elige un perfil en el diálogo (o usa el predeterminado): su nivel de encabezado y su configuración de programación se aplican a los mazos importados, que se anidan bajo la etiqueta `#decks/anki`.
+
 ## Notas de versión y soporte
 
 - **Notas de versión** de cada versión en [`release-notes/`](./release-notes/).

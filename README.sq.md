@@ -200,6 +200,25 @@ Hapni migruesin nga shiriti i mjeteve i panelit të kuvertave (ikona e kubit) os
 
 Zgjidhni një profil në dialog (ose përdorni atë të parazgjedhurin) — niveli i tij i kokës dhe cilësimet e planifikimit zbatohen te kuvertat e migruara.
 
+## Po vini nga Anki
+
+Po kaloni nga Anki? Mund ta sillni gjithë koleksionin tuaj në Decks **pa humbur karta, media apo historik përsëritjesh** — dhe të vazhdoni me FSRS-6.
+
+Në Anki, eksportoni tufën (ose gjithë koleksionin) si **`.apkg`** (**Skedar → Eksporto**, formati *Paketë tufe Anki*, me **Përfshi mediat** dhe **Përfshi informacionin e planifikimit** të zgjedhura). Pastaj hapni importuesin nga shiriti i veglave i panelit të tufave ose ekzekutoni komandën **„Import from Anki"**, zgjidhni skedarin dhe një dosje destinacioni dhe importoni. Funksionojnë si eksportet `.apkg` të vjetra ashtu edhe ato të reja (të ngjeshura).
+
+**Koleksioni juaj i Anki-t nuk preket kurrë.** Importimi është shtues: shkruan skedarë të rinj në një dosje destinacioni që zgjidhni ju, të vendosur nën etiketën `#decks/anki`, dhe e lë `.apkg`-në burim ashtu siç është. Riimportimi i të njëjtit skedar mbishkruan skedarët e gjeneruar dhe rifreskon mediat e tyre — pra mund ta ribëni kurdoherë.
+
+**Si funksionon**
+
+1. **Zgjidhni `.apkg`-në dhe një dosje destinacioni.** Decks e shpaketon në memorie, lexon koleksionin e brendshëm të Anki-t (formati i vjetër ose i riu i ngjeshur) dhe kopjon çdo skedar media të referuar në një dosje `media/` në kasafortën tuaj. Hierarkia origjinale e tufave të Anki-t (`Prind::Fëmijë`) ruhet si dosje.
+2. **Çdo lloj shënimi bëhet një kartë e pastër Decks.** Shënimet bazë kalojnë automatikisht mes një **tabele** kompakte dhe **titujve**; boshllëqet **cloze** bëhen theksime `==…==` — përfshirë cloze-t brenda MathJax `$…$`; shënimet **shumëfushëshe / me shabllon** marrin një shabllon të gjeneruar automatikisht; dhe kartat e **mbulimit të figurës** të Anki-t vijnë si mbulim vendës i Decks.
+3. **Media, matematika dhe etiketat barten.** Audio dhe figurat ngulizen dhe luhen/renderohen gjatë përsëritjes; figurat ruajnë madhësinë origjinale; LaTeX/MathJax ruhet; etiketat tuaja të Anki-t grupohen dhe renditen në seksione të lexueshme.
+4. **Gjendja juaj e planifikimit përkthehet në FSRS-6.** Data e afatit, intervali dhe lehtësia e çdo karte — plus gjithë historiku i përsëritjeve të Anki-t — hartohen në një gjendje qëndrueshmëri/vështirësi/afat dhe shkruhen si regjistër përsëritjeje, kështu që kartat shfaqen **tashmë me afat në datën e duhur me intervalin e duhur**. Ju vazhdoni, nuk rifilloni.
+5. **Tufat e mëdha, të pasura me media, mbeten të rrjedhshme.** Një tufë e madhe ndahet automatikisht në skedarë të kufizuar, në nëndosje — sipas numrit të kartave dhe numrit të ngulizimeve të medias — kështu që një tufë me mijëra klipe audio hapet shpejt në Obsidian. Tufat më të vogla mbeten një skedar i vetëm.
+6. **E shihni duke ndodhur.** Një shirit progresi ndjek çdo fazë — leximi i koleksionit, shkrimi i tufave, kopjimi i medias, sinkronizimi dhe importimi i historikut të përsëritjeve — kështu që edhe një import i madh nuk duket kurrë i ngecur.
+
+Zgjidhni një profil në dialog (ose përdorni atë të parazgjedhur) — niveli i titullit dhe cilësimet e planifikimit zbatohen te tufat e importuara, të vendosura nën etiketën `#decks/anki`.
+
 ## Shënimet e versionit & Mbështetja
 
 - **Shënimet e versionit** për çdo përditësim ndodhen në [`release-notes/`](./release-notes/).

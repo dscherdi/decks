@@ -200,6 +200,25 @@ Geçiş aracını deste paneli araç çubuğundan (küp simgesi) açın veya **"
 
 İletişim kutusunda bir profil seçin (veya varsayılanı kullanın) — başlık düzeyi ve planlama ayarları geçirilen destelere uygulanır.
 
+## Anki'den geçiş
+
+Anki'den mi geçiyorsun? Tüm koleksiyonunu Decks'e taşıyabilirsin — **kartlarını, medyanı veya tekrar geçmişini kaybetmeden** — ve FSRS-6 ile çalışmaya devam edebilirsin.
+
+Anki'de destenizi (veya tüm koleksiyonu) **`.apkg`** olarak dışa aktarın (**Dosya → Dışa Aktar**, biçim *Anki Deste Paketi*, **Medyayı dahil et** ve **Planlama bilgilerini dahil et** işaretli). Ardından deste panelinin araç çubuğundan içe aktarıcıyı açın veya **„Import from Anki"** komutunu çalıştırın, dosyayı ve bir hedef klasörü seçip içe aktarın. Hem eski hem de yeni (sıkıştırılmış) `.apkg` dışa aktarımları çalışır.
+
+**Anki koleksiyonunuza asla dokunulmaz.** İçe aktarma eklemelidir: seçtiğiniz, `#decks/anki` etiketi altına yerleştirilen bir hedef klasöre yeni dosyalar yazar ve kaynak `.apkg`'yi olduğu gibi bırakır. Aynı dosyayı yeniden içe aktarmak, ürettiği dosyaların üzerine yazar ve medyalarını tazeler — yani istediğiniz zaman yeniden çalıştırabilirsiniz.
+
+**Nasıl çalışır**
+
+1. **`.apkg`'yi ve bir hedef klasörü seçin.** Decks onu bellekte açar, gömülü Anki koleksiyonunu (eski veya yeni sıkıştırılmış biçim) okur ve başvurulan her medya dosyasını kasanızdaki bir `media/` klasörüne kopyalar. Özgün Anki deste hiyerarşisi (`Üst::Alt`) klasörler olarak korunur.
+2. **Her not türü temiz bir Decks kartına dönüşür.** Temel notlar kompakt bir **tablo** ile **başlıklar** arasında otomatik geçiş yapar; **cloze** boşlukları `==…==` vurgularına dönüşür — `$…$` MathJax içindeki cloze'lar dahil; **çok alanlı / şablonlu** notlar otomatik oluşturulan bir şablon alır; ve Anki **resim örtme** kartları yerel Decks örtmesi olarak gelir.
+3. **Medya, matematik ve etiketler taşınır.** Ses ve görseller gömülür ve tekrarda oynatılır/işlenir; görseller özgün boyutunu korur; LaTeX/MathJax korunur; Anki etiketleriniz gruplanıp okunabilir bölümler halinde sıralanır.
+4. **Planlama durumunuz FSRS-6'ya çevrilir.** Her kartın vade tarihi, aralığı ve kolaylığı — artı tüm Anki tekrar geçmişi — bir kararlılık/zorluk/vade durumuna eşlenir ve tekrar günlüğü olarak yazılır; böylece kartlar **doğru tarihte doğru aralıkla zaten vadesi gelmiş** görünür. Devam edersiniz, baştan başlamazsınız.
+5. **Büyük, medya ağırlıklı desteler akıcı kalır.** Büyük bir deste otomatik olarak sınırlı, alt klasörlere ayrılmış dosyalara bölünür — hem kart sayısına hem de medya gömme sayısına göre — böylece binlerce ses klibi olan bir deste Obsidian'da yine de hızlı açılır. Daha küçük desteler tek dosya olarak kalır.
+6. **Olup biteni izlersiniz.** Bir ilerleme çubuğu her aşamayı izler — koleksiyonu okuma, desteleri yazma, medyayı kopyalama, eşitleme ve tekrar geçmişini içe aktarma — böylece büyük bir içe aktarma bile asla takılmış görünmez.
+
+İletişim kutusunda bir profil seçin (veya varsayılanı kullanın) — başlık düzeyi ve planlama ayarları, `#decks/anki` etiketi altına yerleştirilen içe aktarılan destelere uygulanır.
+
 ## Sürüm notları & Destek
 
 - Her sürüm için **Sürüm notları** [`release-notes/`](./release-notes/) klasöründedir.

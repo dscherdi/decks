@@ -365,6 +365,7 @@ export default class DecksPlugin extends Plugin {
             (card) => this.openEditFlashcardModal(card),
             (cards) => this.openBatchRefactorModal(cards),
             () => this.openAiGeneratorModal(),
+            () => this.openAnkiImportModal(),
           )
       );
 
@@ -415,6 +416,7 @@ export default class DecksPlugin extends Plugin {
           (card) => this.openEditFlashcardModal(card),
           (cards) => this.openBatchRefactorModal(cards),
           () => this.openAiGeneratorModal(),
+          () => this.openAnkiImportModal(),
         ).open();
       });
 

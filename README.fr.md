@@ -221,6 +221,25 @@ Ouvrez l'outil de migration depuis la barre d'outils du panneau des paquets (l'i
 
 Choisissez un profil dans la boîte de dialogue (ou utilisez celui par défaut) — son niveau de titre et ses paramètres de planification sont appliqués aux paquets migrés.
 
+## Migration depuis Anki
+
+Vous passez d'Anki ? Vous pouvez importer toute votre collection dans Decks **sans perdre vos cartes, vos médias ni votre historique de révision** — et continuer avec FSRS-6.
+
+Dans Anki, exportez votre paquet (ou toute la collection) au format **`.apkg`** (**Fichier → Exporter**, format *Paquet de cartes Anki*, avec **Inclure les médias** et **Inclure les informations de planification** cochés). Ouvrez ensuite l'importateur depuis la barre d'outils du panneau des paquets ou lancez la commande **« Import from Anki »**, choisissez le fichier et un dossier de destination, puis importez. Les exports `.apkg` anciens comme récents (compressés) fonctionnent.
+
+**Votre collection Anki n'est jamais modifiée.** L'import est additif : il écrit de nouveaux fichiers dans un dossier de destination que vous choisissez, imbriqué sous l'étiquette `#decks/anki`, et laisse le `.apkg` source tel quel. Réimporter le même fichier écrase les fichiers générés et rafraîchit leurs médias — vous pouvez donc le relancer à tout moment.
+
+**Comment ça marche**
+
+1. **Choisissez le `.apkg` et un dossier de destination.** Decks le décompresse en mémoire, lit la collection Anki intégrée (ancien format ou nouveau format compressé) et copie chaque fichier média référencé dans un dossier `media/` de votre coffre. La hiérarchie d'origine des paquets Anki (`Parent::Enfant`) est conservée sous forme de dossiers.
+2. **Chaque type de note devient une carte Decks propre.** Les notes basiques alternent automatiquement entre un **tableau** compact et des **titres** ; les **clozes** deviennent des surlignages `==…==` — y compris les clozes à l'intérieur de MathJax `$…$` ; les notes **multi-champs / à modèle** reçoivent un modèle généré automatiquement ; et les cartes d'**occlusion d'image** d'Anki arrivent en occlusion native de Decks.
+3. **Médias, maths et étiquettes sont conservés.** L'audio et les images sont intégrés et lus/rendus en révision ; les images gardent leur taille d'origine ; LaTeX/MathJax est préservé ; vos étiquettes Anki sont regroupées et triées en sections lisibles.
+4. **Votre état de planification est traduit en FSRS-6.** La date d'échéance, l'intervalle et la facilité de chaque carte — plus son historique de révision Anki complet — sont mappés vers un état stabilité/difficulté/échéance et écrits comme journal de révision, de sorte que les cartes apparaissent **déjà dues à la bonne date avec le bon intervalle**. Vous reprenez, vous ne recommencez pas.
+5. **Les gros paquets riches en médias restent fluides.** Un grand paquet est automatiquement découpé en fichiers plafonnés et rangés en sous-dossiers — selon le nombre de cartes et le nombre d'intégrations média — pour qu'un paquet avec des milliers de clips audio s'ouvre encore rapidement dans Obsidian. Les paquets plus petits restent un seul fichier.
+6. **Vous le voyez se faire.** Une barre de progression suit chaque phase — lecture de la collection, écriture des paquets, copie des médias, synchronisation et import de l'historique de révision — pour qu'un import même volumineux ne paraisse jamais bloqué.
+
+Choisissez un profil dans la boîte de dialogue (ou utilisez celui par défaut) — son niveau de titre et ses réglages de planification s'appliquent aux paquets importés, imbriqués sous l'étiquette `#decks/anki`.
+
 ## Notes de version & Support
 
 - Les **Notes de version** pour chaque mise à jour se trouvent dans [`release-notes/`](./release-notes/).

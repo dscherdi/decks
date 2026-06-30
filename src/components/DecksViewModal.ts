@@ -53,6 +53,7 @@ export class DecksViewModal extends Modal {
   private openEditModal?: (card: Flashcard) => Promise<void>;
   private openBatchRefactor?: (cards: Flashcard[]) => Promise<void>;
   private openAiGenerator?: () => void;
+  private openAnkiImport?: () => void;
 
   constructor(
     app: App,
@@ -69,6 +70,7 @@ export class DecksViewModal extends Modal {
     openEditModal?: (card: Flashcard) => Promise<void>,
     openBatchRefactor?: (cards: Flashcard[]) => Promise<void>,
     openAiGenerator?: () => void,
+    openAnkiImport?: () => void,
   ) {
     super(app);
     this.db = db;
@@ -85,6 +87,7 @@ export class DecksViewModal extends Modal {
     this.openEditModal = openEditModal;
     this.openBatchRefactor = openBatchRefactor;
     this.openAiGenerator = openAiGenerator;
+    this.openAnkiImport = openAnkiImport;
   }
 
   private async togglePin(id: string): Promise<void> {
@@ -159,6 +162,7 @@ export class DecksViewModal extends Modal {
           this.openDeckConfigModal(deck),
         openFlashcardManager: () => this.openFlashcardManager(),
         openAiGeneratorModal: () => this.openAiGenerator?.(),
+        openAnkiImportModal: () => this.openAnkiImport?.(),
         aiEnabled: this.settings.ai.enabled,
         deckTag: this.settings.parsing.deckTag,
         pinnedDeckIds: this.settings.ui.pinnedDeckIds,

@@ -33,7 +33,9 @@
   let headerOverflowOpen = false;
 
   $: isTabsCompact   = panelWidth > 0 && panelWidth < 380;
-  $: isHeaderCompact = panelWidth > 0 && panelWidth < 320;
+  // Collapse the action icons into the "…" overflow menu below this width — the
+  // inline toolbar has enough buttons (incl. Anki import) to crowd a narrow panel.
+  $: isHeaderCompact = panelWidth > 0 && panelWidth < 450;
 
   let decks: DeckWithProfile[] = [];
   let allDecks: DeckWithProfile[] = [];
@@ -75,6 +77,7 @@
   export let openStatisticsModal: () => void;
   export let openProfilesManagerModal: () => void;
   export let openSrMigrationModal: () => void = () => {};
+  export let openAnkiImportModal: () => void = () => {};
   export let openDeckConfigModal: (deck: DeckWithProfile) => void;
   export let openFlashcardManager: () => void;
   export let openAiGeneratorModal: () => void = () => {};
@@ -223,6 +226,9 @@
   };
   const onOpenSrMigration = () => {
     openSrMigrationModal();
+  };
+  const onOpenAnkiImport = () => {
+    openAnkiImportModal();
   };
   const onOpenDeckConfig = () => {
     if (allDecks.length > 0) {
@@ -1099,6 +1105,14 @@
         </button>
         <button
           class="clickable-icon"
+          on:click={onOpenAnkiImport}
+          title={t.deckList.ankiImport}
+          aria-label={t.deckList.ankiImport}
+        >
+          <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3v12"></path><path d="m8 11 4 4 4-4"></path><path d="M8 5H4a2 2 0 0 0-2 2v10a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2V7a2 2 0 0 0-2-2h-4"></path></svg>
+        </button>
+        <button
+          class="clickable-icon"
           on:click={onOpenStatistics}
           title={t.deckList.statistics}
           aria-label={t.deckList.statistics}
@@ -1166,6 +1180,13 @@
               >
                 <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z"></path><polyline points="3.27 6.96 12 12.01 20.73 6.96"></polyline><line x1="12" y1="22.08" x2="12" y2="12"></line></svg>
                 {t.deckList.srMigration}
+              </button>
+              <button
+                class="decks-overflow-item"
+                on:click={() => { onOpenAnkiImport(); headerOverflowOpen = false; }}
+              >
+                <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3v12"></path><path d="m8 11 4 4 4-4"></path><path d="M8 5H4a2 2 0 0 0-2 2v10a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2V7a2 2 0 0 0-2-2h-4"></path></svg>
+                {t.deckList.ankiImport}
               </button>
               <button
                 class="decks-overflow-item"

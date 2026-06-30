@@ -271,6 +271,25 @@ Du nutzt bereits das **Spaced Repetition**-Plugin? Du kannst zu Decks wechseln, 
 
 Wähle im Dialog ein Profil (oder verwende das Standardprofil) — seine Überschriftsebene und Planungseinstellungen werden auf die migrierten Stapel angewendet.
 
+## Umstieg von Anki
+
+Wechselst du von Anki? Du kannst deine gesamte Sammlung in Decks übernehmen — **ohne Karten, Medien oder Lernverlauf zu verlieren** — und mit FSRS-6 weiterlernen.
+
+Exportiere in Anki deinen Stapel (oder die ganze Sammlung) als **`.apkg`** (**Datei → Exportieren**, Format *Anki-Kartenstapel-Paket*, mit aktivierten Optionen **Medien einschließen** und **Planungsinformationen einschließen**). Öffne dann den Importer über die Symbolleiste des Stapel-Panels oder führe den Befehl **„Import from Anki"** aus, wähle die Datei und einen Zielordner und importiere. Sowohl alte als auch neue (komprimierte) `.apkg`-Exporte funktionieren.
+
+**Deine Anki-Sammlung wird nie verändert.** Der Import ist additiv: Er schreibt neue Dateien in einen von dir gewählten Zielordner, verschachtelt unter dem Tag `#decks/anki`, und lässt die Quell-`.apkg` unangetastet. Ein erneuter Import derselben Datei überschreibt die erzeugten Dateien und aktualisiert ihre Medien — du kannst ihn also jederzeit wiederholen.
+
+**So funktioniert's**
+
+1. **Wähle die `.apkg` und einen Zielordner.** Decks entpackt sie im Speicher, liest die eingebettete Anki-Sammlung (altes oder neueres komprimiertes Format) und kopiert jede referenzierte Mediendatei in einen `media/`-Ordner in deinem Tresor. Die ursprüngliche Anki-Hierarchie (`Eltern::Kind`) bleibt als Ordner erhalten.
+2. **Jeder Notiztyp wird zu einer sauberen Decks-Karte.** Einfache Notizen wechseln automatisch zwischen einer kompakten **Tabelle** und **Überschriften**; **Cloze**-Lücken werden zu `==…==`-Hervorhebungen — auch Clozes innerhalb von `$…$`-MathJax; **mehrfeldige/templatebasierte** Notizen erhalten ein automatisch erzeugtes Template; und Anki-**Bildverdeckungs**karten kommen als native Decks-Verdeckung herüber.
+3. **Medien, Mathematik und Tags kommen mit.** Audio und Bilder werden eingebettet und im Review abgespielt/gerendert; Bilder behalten ihre Originalgröße; LaTeX/MathJax bleibt erhalten; deine Anki-Tags werden gruppiert und in lesbare Abschnitte sortiert.
+4. **Dein Planungszustand wird zu FSRS-6 übersetzt.** Fälligkeitsdatum, Intervall und Ease jeder Karte — plus ihr vollständiger Anki-Lernverlauf — werden auf einen Stabilitäts-/Schwierigkeits-/Fälligkeitszustand abgebildet und als Lernprotokoll geschrieben, sodass Karten **bereits am richtigen Tag mit dem richtigen Intervall fällig** sind. Du machst weiter, du fängst nicht von vorn an.
+5. **Große, medienreiche Stapel bleiben flüssig.** Ein großer Stapel wird automatisch in begrenzte, in Unterordnern abgelegte Dateien aufgeteilt — nach Kartenanzahl und Anzahl der Medieneinbettungen — sodass ein Stapel mit Tausenden Audioclips in Obsidian weiterhin schnell öffnet. Kleinere Stapel bleiben eine einzige Datei.
+6. **Du siehst dabei zu.** Ein Fortschrittsbalken verfolgt jede Phase — Sammlung lesen, Stapel schreiben, Medien kopieren, synchronisieren und Lernverlauf importieren — sodass selbst ein großer Import nie hängend wirkt.
+
+Wähle im Dialog ein Profil (oder nutze die Vorgabe) — seine Überschriftenebene und Planungseinstellungen werden auf die importierten Stapel angewendet, die unter dem Tag `#decks/anki` verschachtelt sind.
+
 ## Versionshinweise & Support
 
 - **Versionshinweise** für jede Version findest du in [`release-notes/`](./release-notes/).

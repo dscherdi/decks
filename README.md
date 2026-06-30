@@ -6,6 +6,8 @@
 
 > **Coming from the Spaced Repetition plugin?** Jump to Decks without losing your progress — the built-in one-click migrator extracts your `::` cards into clean Decks decks, rewrites each note into readable prose, and carries over your review history, all while leaving your original notes untouched. You pick up your reviews right where you left off. See [Coming from Spaced Repetition](#coming-from-spaced-repetition).
 
+> **Coming from Anki?** Import an Anki `.apkg` export in one click — your decks, cards, media, and review history come with you, and your cards resume on FSRS-6 right where Anki left them. See [Coming from Anki](#coming-from-anki).
+
 Tag a file with `#decks`. Each `##` heading becomes the front of a card; the text below becomes the back. Tables, image occlusion, and `==cloze==` highlights work the same way. Scheduling is handled by FSRS-6 — the modern spaced-repetition algorithm.
 
 ![Demo](./decks_showcase.gif)
@@ -201,7 +203,7 @@ See **[docs/TEMPLATES.md](docs/TEMPLATES.md)** for the full guide and examples.
 - Per-tag profiles (Standard / Intensive FSRS, retention target, daily quotas).
 - Custom decks built from filter rules — e.g., every card tagged `#high-school`.
 - Statistics: heatmap, retention, future-due forecast, intervals, hourly breakdown, answer-button stats.
-- Anki export, automatic backups, multi-device merge sync.
+- Anki import and export, automatic backups, multi-device merge sync.
 - Keyboard shortcuts: **Space** to flip, **1–4** to rate.
 
 ## AI assistance (optional)
@@ -297,6 +299,25 @@ Open the migrator from the deck panel toolbar (the cube icon) or run the **"Migr
 9. **A review log is written for every migrated card**, so the moment the cards appear in Decks they're already due on the right date with the right interval — you resume, you don't restart.
 
 Pick a profile in the dialog (or use the default) — its header level and scheduling settings are applied to the migrated decks.
+
+## Coming from Anki
+
+Switching from Anki? You can bring your whole collection into Decks **without losing cards, media, or review history** — and keep studying with FSRS-6.
+
+In Anki, export your deck (or whole collection) as a **`.apkg`** (**File → Export**, format *Anki Deck Package*, with **Include media** and **Include scheduling information** checked). Then open the importer from the deck panel toolbar or run the **"Import from Anki"** command, pick the file and a target folder, and import. Both legacy and modern (compressed) `.apkg` exports work.
+
+**Your Anki collection is never touched.** The import is additive: it writes new files into a target folder you choose, nested under the `#decks/anki` tag, and leaves the source `.apkg` as-is. Re-importing the same file overwrites the files it generated and refreshes their media — so you can re-run it any time.
+
+**How it works**
+
+1. **Pick the `.apkg` and a target folder.** Decks unzips it in memory, reads the embedded Anki collection (legacy or the newer compressed format), and copies every referenced media file into a `media/` folder in your vault. The original Anki deck hierarchy (`Parent::Child`) is preserved as folders.
+2. **Every note type becomes a clean Decks card.** Basic notes auto-route between a compact **table** and **headers** (the same smart layout as the rest of Decks); **cloze** deletions become `==…==` highlights — including clozes written inside `$…$` MathJax; **multi-field / templated** notes get an auto-generated template so they render the way you designed them; and Anki **image-occlusion** cards come across as native Decks occlusion.
+3. **Media, math, and tags carry over.** Audio and images are embedded and play / render in review; images keep their original size instead of being blown up; LaTeX/MathJax is preserved; your Anki tags are grouped and sorted into readable sections.
+4. **Your scheduling state is translated to FSRS-6.** Each card's due date, interval, and ease — plus its full Anki review history — are mapped to a stability/difficulty/due state and written as a review log, so cards appear **already due on the right date with the right interval**. You resume, you don't restart.
+5. **Big, media-heavy decks stay smooth.** A large deck is automatically split into capped, subfoldered files — by both card count and number of media embeds — so a deck with thousands of audio clips still opens quickly in Obsidian. Smaller decks stay a single file.
+6. **You watch it happen.** A progress bar tracks each phase — reading the collection, writing decks, copying media, syncing, and importing review history — so even a large import never looks stuck.
+
+Pick a profile in the dialog (or use the default) — its header level and scheduling settings are applied to the imported decks, which nest under the `#decks/anki` tag.
 
 ## Release notes & support
 

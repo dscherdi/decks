@@ -46,6 +46,7 @@ export class DecksView extends ItemView {
   private openEditModal?: (card: Flashcard) => Promise<void>;
   private openBatchRefactor?: (cards: Flashcard[]) => Promise<void>;
   private openAiGenerator?: () => void;
+  private openAnkiImport?: () => void;
 
   constructor(
     leaf: WorkspaceLeaf,
@@ -62,6 +63,7 @@ export class DecksView extends ItemView {
     openEditModal?: (card: Flashcard) => Promise<void>,
     openBatchRefactor?: (cards: Flashcard[]) => Promise<void>,
     openAiGenerator?: () => void,
+    openAnkiImport?: () => void,
   ) {
     super(leaf);
     this.db = database;
@@ -77,6 +79,7 @@ export class DecksView extends ItemView {
     this.openEditModal = openEditModal;
     this.openBatchRefactor = openBatchRefactor;
     this.openAiGenerator = openAiGenerator;
+    this.openAnkiImport = openAnkiImport;
 
     this.progressTracker = progressTracker;
   }
@@ -160,6 +163,7 @@ export class DecksView extends ItemView {
         openStatisticsModal: () => this.openStatisticsModal(),
         openProfilesManagerModal: () => this.openProfilesManagerModal(),
         openSrMigrationModal: () => this.openSrMigrationModal(),
+        openAnkiImportModal: () => this.openAnkiImport?.(),
         openDeckConfigModal: (deck: DeckWithProfile) => this.openDeckConfigModal(deck),
         openFlashcardManager: () => this.openFlashcardManager(),
         openAiGeneratorModal: () => this.openAiGenerator?.(),

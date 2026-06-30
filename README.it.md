@@ -211,6 +211,25 @@ Apri il migratore dalla barra degli strumenti del pannello dei mazzi (l'icona de
 
 Scegli un profilo nella finestra di dialogo (o usa quello predefinito) — il suo livello di intestazione e le sue impostazioni di pianificazione vengono applicati ai mazzi migrati.
 
+## Migrazione da Anki
+
+Passi da Anki? Puoi portare l'intera collezione in Decks **senza perdere carte, media o cronologia di ripasso** — e continuare a studiare con FSRS-6.
+
+In Anki, esporta il mazzo (o l'intera collezione) come **`.apkg`** (**File → Esporta**, formato *Pacchetto mazzo Anki*, con **Includi media** e **Includi informazioni di pianificazione** spuntati). Poi apri l'importatore dalla barra degli strumenti del pannello mazzi o esegui il comando **«Import from Anki»**, scegli il file e una cartella di destinazione e importa. Funzionano sia gli export `.apkg` vecchi sia quelli nuovi (compressi).
+
+**La tua collezione di Anki non viene mai toccata.** L'import è additivo: scrive nuovi file in una cartella di destinazione a tua scelta, annidata sotto il tag `#decks/anki`, e lascia il `.apkg` di origine com'è. Reimportare lo stesso file sovrascrive i file generati e aggiorna i loro media — puoi quindi rieseguirlo quando vuoi.
+
+**Come funziona**
+
+1. **Scegli il `.apkg` e una cartella di destinazione.** Decks lo decomprime in memoria, legge la collezione Anki incorporata (formato vecchio o il nuovo compresso) e copia ogni file multimediale referenziato in una cartella `media/` del tuo vault. La gerarchia originale dei mazzi Anki (`Genitore::Figlio`) è mantenuta come cartelle.
+2. **Ogni tipo di nota diventa una carta Decks pulita.** Le note di base passano automaticamente tra una **tabella** compatta e le **intestazioni**; le **cloze** diventano evidenziazioni `==…==` — incluse le cloze dentro MathJax `$…$`; le note **multicampo / con modello** ricevono un modello generato automaticamente; e le carte di **occlusione immagine** di Anki arrivano come occlusione nativa di Decks.
+3. **Media, matematica e tag vengono mantenuti.** Audio e immagini sono incorporati e vengono riprodotti/renderizzati in ripasso; le immagini mantengono la dimensione originale; LaTeX/MathJax è preservato; i tag di Anki vengono raggruppati e ordinati in sezioni leggibili.
+4. **Il tuo stato di pianificazione è tradotto in FSRS-6.** Data di scadenza, intervallo e facilità di ogni carta — più la sua intera cronologia di ripasso di Anki — sono mappati su uno stato stabilità/difficoltà/scadenza e scritti come registro di ripasso, così le carte appaiono **già in scadenza alla data giusta con l'intervallo giusto**. Riprendi, non ricominci.
+5. **I mazzi grandi e ricchi di media restano fluidi.** Un mazzo grande viene suddiviso automaticamente in file limitati e organizzati in sottocartelle — per numero di carte e numero di media incorporati — così un mazzo con migliaia di clip audio si apre comunque velocemente in Obsidian. I mazzi più piccoli restano un singolo file.
+6. **Lo vedi accadere.** Una barra di avanzamento segue ogni fase — lettura della collezione, scrittura dei mazzi, copia dei media, sincronizzazione e import della cronologia di ripasso — così anche un import grande non sembra mai bloccato.
+
+Scegli un profilo nella finestra (o usa quello predefinito): il suo livello di intestazione e le impostazioni di pianificazione vengono applicati ai mazzi importati, annidati sotto il tag `#decks/anki`.
+
 ## Note di rilascio e Supporto
 
 - Le **Note di rilascio** per ogni versione si trovano in [`release-notes/`](./release-notes/).

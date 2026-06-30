@@ -1,6 +1,14 @@
 # Decks - Progress Summary
 
-## ✅ Latest: Unified profile + first-class Trained (schema v22)
+## ✅ Latest: Anki import (.apkg)
+- One-click importer for Anki `.apkg` exports: decks, cards, media, and scheduling/review history. Pipeline: unzip (fflate) → `pickAnkiCollection` (prefers the modern zstd `collection.anki21b`, falls back to legacy schema-11 `collection.anki2`) → `AnkiCollectionParser.parse` (injects `htmlToMarkdown`/`getMediaText`/`getMediaSize`) → `AnkiDeckRenderer.render` → write files → `deckSynchronizer.sync` → `AnkiHistoryImporter.importHistory`. Lives in `packages/decks-core/src/services/migration/anki/` + `apps/obsidian-plugin/src/services/AnkiImportController.ts`, driven by `AnkiImportUI.svelte`.
+- Note-type aware rendering: basic notes escalate header-paragraph → aggregated table by column shape; cloze deletions become positional `==…==` (incl. clozes inside `$…$` via `prepareClozeMath`); multi-field/template models emit per-model HTML templates; image-occlusion → native `decks-occlusion`. Tags are grouped by tag-set and sorted; `<img>` carries an intrinsic-size width hint; `[[…]]` wikilink collisions are neutralized.
+- Media copied into a `media/` subfolder; re-import overwrites markdown **and** media (idempotent, stable `generateDeckId(filepath)`). Folder ensured once per directory; UI yields batched (`yieldEvery`) to keep imports fast.
+- Large/media-heavy decks split into subfoldered, capped part-files — by **card count** (`CARDS_PER_FILE = 1000`) **and** media-embed count (`MEDIA_PER_FILE = 500`), whichever hits first — without ever splitting a note (chunk by `noteId`, ordered by `min(cardId)` for deterministic, re-import-stable deckIds). Keeps big audio decks openable in Obsidian.
+- Scheduling state + full Anki revlog translated to FSRS-6 with a per-card review log, so cards resume on the right due date. Live per-phase import progress (reading → writing → copying media → syncing → importing history), incl. a `progressCopyingMedia` count.
+- Review modal/view resolve `![[…]]` embeds against the card's `sourceFile` (audio fronts play; no empty/broken players). Importer UI fully localized across all 13 languages.
+
+## ✅ Unified profile + first-class Trained (schema v22)
 - The `INTENSIVE` and `STANDARD` profiles are merged into a single **Standard** profile. FSRS produces continuous floating-point intervals, so a separate intensive profile is unnecessary: the unified profile uses `minMinutes = 1`, allowing sub-day (minute-scale) intervals for every deck when FSRS warrants them (Again, lapses, low-stability cards). New-card Hard/Good/Easy are pure FSRS (day-scale); the hardcoded `1m/6m/10m/1day` `w[0..3]` overrides are gone.
 - **Trained** is now a first-class profile value (`FSRSProfile = "STANDARD" | "TRAINED"`); the old `useTrainedWeights` flag is removed. The FSRS profile dropdown is now Standard / Trained.
 - The weight optimizer now trains on **all** review history regardless of profile — STANDARD, TRAINED, and legacy INTENSIVE rows all feed each run.
