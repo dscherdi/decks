@@ -33,6 +33,7 @@ export interface CachedMetadata {
 
 export class Vault {
   private files: Map<string, string> = new Map();
+  private binaryFiles: Map<string, Uint8Array> = new Map();
   private markdownFiles: TFile[] = [];
   private otherFiles: TFile[] = [];
 
@@ -55,6 +56,16 @@ export class Vault {
   async create(path: string, content: string): Promise<TFile> {
     this._addFile(path, content);
     return this.getAbstractFileByPath(path) as TFile;
+  }
+
+  async createBinary(path: string, data: ArrayBuffer): Promise<TFile> {
+    this._addFile(path, "");
+    this.binaryFiles.set(path, new Uint8Array(data));
+    return this.getAbstractFileByPath(path) as TFile;
+  }
+
+  async modifyBinary(file: TFile, data: ArrayBuffer): Promise<void> {
+    this.binaryFiles.set(file.path, new Uint8Array(data));
   }
 
   // Minimal DataAdapter surface used by file writers (folder creation).
@@ -117,8 +128,13 @@ export class Vault {
     }
   }
 
+  _readBinary(path: string): Uint8Array | undefined {
+    return this.binaryFiles.get(path);
+  }
+
   _clear(): void {
     this.files.clear();
+    this.binaryFiles.clear();
     this.markdownFiles = [];
     this.otherFiles = [];
   }

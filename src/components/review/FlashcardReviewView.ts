@@ -149,12 +149,13 @@ export class FlashcardReviewView extends ItemView {
     });
   }
 
-  private renderMarkdown(content: string, el: HTMLElement): void {
+  private renderMarkdown(content: string, el: HTMLElement, sourcePath = ""): void {
     try {
       const component = new Component();
       component.load();
       this.markdownComponents.push(component);
-      void MarkdownRenderer.render(this.app, content, el, "", component);
+      // sourcePath lets Obsidian resolve ![[…]] embeds (audio/images) against the deck file.
+      void MarkdownRenderer.render(this.app, content, el, sourcePath, component);
     } catch (error) {
       console.error("Error rendering markdown:", error);
       el.textContent = content;
@@ -272,8 +273,8 @@ export class FlashcardReviewView extends ItemView {
         ) => {
           await this.reviewFlashcard(card, rating, timeElapsed, shownAt);
         },
-        renderMarkdown: (content: string, el: HTMLElement) => {
-          this.renderMarkdown(content, el);
+        renderMarkdown: (content: string, el: HTMLElement, sourcePath?: string) => {
+          this.renderMarkdown(content, el, sourcePath ?? "");
         },
         resolveTemplate: (card: Flashcard) => this.resolveTemplate(card),
         resolveEmbed: (linkpath: string, sourcePath: string) => {

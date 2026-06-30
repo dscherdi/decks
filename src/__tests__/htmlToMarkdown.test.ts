@@ -28,4 +28,9 @@ describe("htmlToMarkdown (turndown)", () => {
     expect(htmlToMarkdown('<span style="color: red">hot</span>')).toContain('<span style="color: red">hot</span>');
     expect(htmlToMarkdown('<span style="font-family: arial">plain</span>')).toBe("plain");
   });
+
+  it("drops <u> so math inside it renders (Obsidian won't run MathJax in raw inline HTML)", () => {
+    expect(htmlToMarkdown("<u>$x^2$</u>")).toBe("$x^2$");
+    expect(htmlToMarkdown("<u>word</u>")).toBe("word");
+  });
 });

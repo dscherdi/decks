@@ -6,7 +6,7 @@ import {
   AnkiHistoryImporter,
   generateDeckId,
   isZstd,
-  yieldToUI,
+  yieldEvery,
 } from "@decks/core";
 import type {
   AnkiParseResult,
@@ -26,7 +26,7 @@ import { decompressZstd } from "@/utils/zstd";
 import { pickAnkiCollection, readAnkiMediaMap } from "@/utils/ankiCollection";
 import { imageDimensions } from "@/utils/imageDimensions";
 
-export type AnkiProgressPhase = "read" | "write" | "sync" | "import";
+export type AnkiProgressPhase = "read" | "write" | "media" | "sync" | "import";
 export type AnkiProgress = (
   done: number,
   total: number,
@@ -135,7 +135,6 @@ export class AnkiImportController {
         getMediaSize: (name) => AnkiImportController.mediaSize(loaded, name),
       });
       const decks = AnkiDeckRenderer.render(parsed.cards, this.ankiSubtag, headerLevel);
-      const total = decks.length + 2; // + sync + import
 
       await this.db.createTagMapping(opts.profileId, this.ankiSubtag);
 
@@ -144,9 +143,11 @@ export class AnkiImportController {
       let cardsImported = 0;
       const base = normalizePath(opts.targetFolder.trim());
 
+      // Progress is reported per-phase (done/total within the current phase) so the
+      // bar visibly advances during every long phase, not just the deck write.
       for (let i = 0; i < decks.length; i++) {
         const deck = decks[i];
-        onProgress?.(i + 1, total, "write", deck.deckName);
+        onProgress?.(i + 1, decks.length, "write", deck.relativePath);
         const outPath = normalizePath(`${base}/${deck.relativePath}.md`);
         try {
           await this.createOrOverwrite(outPath, deck.content);
@@ -156,22 +157,26 @@ export class AnkiImportController {
         } catch (error) {
           this.logger.error(`Anki import failed for deck ${deck.deckName}`, error);
         }
-        await yieldToUI();
+        await yieldEvery(i, 100);
       }
 
-      const mediaCopied = await this.copyMedia(parsed, loaded, base);
+      const mediaCopied = await this.copyMedia(parsed, loaded, base, (done, mediaTotal) =>
+        onProgress?.(done, mediaTotal, "media")
+      );
       const templatesWritten = await this.writeTemplates(parsed.templateFiles, base);
 
-      onProgress?.(decks.length + 1, total, "sync");
       // Non-force: only the newly written/overwritten decks are stale (new decks
       // register with lastSyncedMtime 0, overwrites bump mtime), so unchanged
       // decks elsewhere in the vault aren't needlessly re-parsed.
-      await this.deckSynchronizer.sync();
+      await this.deckSynchronizer.sync({
+        showProgress: true,
+        onProgress: (p) => onProgress?.(Math.round(p.percentage), 100, "sync"),
+      });
 
-      onProgress?.(total, total, "import");
       const { injected, reviews } = await AnkiHistoryImporter.importHistory(this.db, deckItems, {
         collectionCreatedMs: AnkiCollectionParser.readCollectionCreatedMs(rawDb),
         revlogByCard: AnkiCollectionParser.readRevlog(rawDb),
+        onProgress: (done, historyTotal) => onProgress?.(done, historyTotal, "import"),
       });
 
       return {
@@ -195,14 +200,15 @@ export class AnkiImportController {
     if (templateFiles.length === 0) return 0;
     const folder = await this.ensureTemplateFolder(base);
     let written = 0;
-    for (const file of templateFiles) {
+    for (let i = 0; i < templateFiles.length; i++) {
+      const file = templateFiles[i];
       try {
         await this.createOrOverwrite(normalizePath(`${folder}/${file.relativePath}`), file.content);
         written++;
       } catch (error) {
         this.logger.error(`Anki import: failed to write template ${file.relativePath}`, error);
       }
-      await yieldToUI();
+      await yieldEvery(i, 100);
     }
     await this.templateSyncService?.syncAll();
     return written;
@@ -253,28 +259,40 @@ export class AnkiImportController {
   private async copyMedia(
     parsed: AnkiParseResult,
     loaded: LoadedCollection,
-    base: string
+    base: string,
+    onProgress?: (done: number, total: number) => void
   ): Promise<number> {
-    if (parsed.mediaFiles.length === 0) return 0;
+    const total = parsed.mediaFiles.length;
+    if (total === 0) return 0;
     const folder = normalizePath(`${base}/${MEDIA_SUBFOLDER}`);
     let copied = 0;
-    for (const name of parsed.mediaFiles) {
+    // Ensure each distinct parent folder only once (all media share base/media,
+    // bar the rare nested name) — avoids O(files) redundant existence checks.
+    const ensured = new Set<string>();
+    for (let i = 0; i < total; i++) {
+      const name = parsed.mediaFiles[i];
       const entryKey = loaded.mediaByName.get(name);
       let data = entryKey ? loaded.entries[entryKey] : undefined;
       if (!data) continue;
       if (isZstd(data)) data = decompressZstd(data);
       const target = normalizePath(`${folder}/${name}`);
       try {
-        await this.ensureFolderFor(target);
-        if (!this.app.vault.getAbstractFileByPath(target)) {
-          await this.app.vault.createBinary(target, AnkiImportController.toArrayBuffer(data));
-          copied++;
+        const parent = target.slice(0, Math.max(0, target.lastIndexOf("/")));
+        if (parent && !ensured.has(parent)) {
+          await this.ensureFolderFor(target);
+          ensured.add(parent);
         }
+        // Overwrite on re-import so changed media is refreshed (mirrors the
+        // markdown overwrite); counts overwrites as copied.
+        await this.createOrOverwriteBinary(target, data);
+        copied++;
       } catch (error) {
         this.logger.debug("Could not copy Anki media", name, error);
       }
-      await yieldToUI();
+      if (i % 50 === 0) onProgress?.(i + 1, total);
+      await yieldEvery(i, 100);
     }
+    onProgress?.(total, total);
     return copied;
   }
 
@@ -292,6 +310,16 @@ export class AnkiImportController {
     const existing = this.app.vault.getAbstractFileByPath(norm);
     if (existing instanceof TFile) await this.app.vault.modify(existing, content);
     else await this.app.vault.create(norm, content);
+  }
+
+  // Caller is responsible for ensuring the parent folder exists (copyMedia does
+  // so once per folder), so this only writes — create new, else overwrite.
+  private async createOrOverwriteBinary(path: string, data: Uint8Array): Promise<void> {
+    const norm = normalizePath(path);
+    const buffer = AnkiImportController.toArrayBuffer(data);
+    const existing = this.app.vault.getAbstractFileByPath(norm);
+    if (existing instanceof TFile) await this.app.vault.modifyBinary(existing, buffer);
+    else await this.app.vault.createBinary(norm, buffer);
   }
 
   private async ensureFolderFor(filePath: string): Promise<void> {

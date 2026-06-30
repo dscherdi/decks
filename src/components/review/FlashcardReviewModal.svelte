@@ -226,7 +226,9 @@
       })
     : null;
   let sessionId: string | null = null;
-  const deckFilePath = "";
+  // The deck file path is the sourcePath Obsidian needs to resolve ![[…]] embeds
+  // (audio/images). All cards in a deck share one sourceFile.
+  $: deckFilePath = currentCard?.sourceFile ?? "";
   let sessionProgress: SessionProgress | null = null;
   let canUndo = false;
 

@@ -115,9 +115,11 @@
               ? t.progressReading
               : phase === "write"
                 ? I18n.format(t.progressWriting, { deck: detail ?? "" })
-                : phase === "sync"
-                  ? t.progressSyncing
-                  : t.progressImporting;
+                : phase === "media"
+                  ? I18n.format(t.progressCopyingMedia, { done, total })
+                  : phase === "sync"
+                    ? t.progressSyncing
+                    : t.progressImporting;
         }
       );
       new Notice(

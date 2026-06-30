@@ -16,11 +16,12 @@ function getService(): TurndownService {
   // pass through untouched — disable turndown's markdown escaping.
   created.escape = (text: string) => text;
   // Markdown can't express these; keep them as raw inline HTML (Obsidian renders
-  // it) so we don't lose sub/super-scripts, tables, etc.
+  // it) so we don't lose sub/super-scripts, tables, etc. `<u>` is intentionally
+  // NOT kept: Obsidian won't render `$…$` math inside raw inline HTML, so a kept
+  // `<u>$x$</u>` would leave the LaTeX unrendered. Dropping the tag exposes the math.
   created.keep([
     "sub",
     "sup",
-    "u",
     "kbd",
     "mark",
     "ins",
