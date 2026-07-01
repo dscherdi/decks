@@ -279,7 +279,7 @@ export class DeckManager {
    */
   async parseFlashcardsFromFile(
     file: TFile,
-    headerLevel = 2
+    headerLevel: number | number[] = 2
   ): Promise<ParsedFlashcard[]> {
     const parseStartTime = performance.now();
 
@@ -309,7 +309,7 @@ export class DeckManager {
    */
   parseFlashcardsFromContent(
     content: string,
-    headerLevel = 2,
+    headerLevel: number | number[] = 2,
     clozeEnabled = false
   ): ParsedFlashcard[] {
     return FlashcardParser.parseFlashcardsFromContent(content, headerLevel, undefined, clozeEnabled);

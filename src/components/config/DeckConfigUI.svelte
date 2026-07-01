@@ -176,12 +176,22 @@
       .setDesc(reviewCardsDesc)
       .setClass("decks-config-readonly");
 
-    // Header level
+    // Header level (primary, plus any additional levels also parsed as cards)
+    let headerLevelDesc: string;
+    if (selectedProfile.headerLevel === 0) {
+      headerLevelDesc = t.config.headerTitle;
+    } else {
+      const primaryLevel = selectedProfile.headerLevel;
+      const primary = I18n.format(t.config.headerH, { level: primaryLevel });
+      const extras = (selectedProfile.extraHeaderLevels ?? [])
+        .filter((l) => l !== primaryLevel)
+        .sort((a, b) => a - b)
+        .map((l) => I18n.format(t.config.headerH, { level: l }));
+      headerLevelDesc = extras.length > 0 ? `${primary} (+ ${extras.join(", ")})` : primary;
+    }
     new Setting(profileDetailsContainer)
       .setName(t.config.headerLevelLabel)
-      .setDesc(selectedProfile.headerLevel === 0
-        ? t.config.headerTitle
-        : I18n.format(t.config.headerH, { level: selectedProfile.headerLevel }))
+      .setDesc(headerLevelDesc)
       .setClass("decks-config-readonly");
 
     // Review order

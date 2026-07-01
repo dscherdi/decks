@@ -28,6 +28,7 @@
   let enableReviewCardsContainer: HTMLElement;
   let reviewOrderContainer: HTMLElement;
   let headerLevelContainer: HTMLElement;
+  let extraHeaderLevelsContainer: HTMLElement;
   let requestRetentionContainer: HTMLElement;
   let fsrsProfileContainer: HTMLElement;
   let learningStepsContainer: HTMLElement;
@@ -47,6 +48,7 @@
   let enableReviewCardsLimit = false;
   let reviewOrder: ReviewOrder = "due-date";
   let headerLevel = 2;
+  let extraHeaderLevels: number[] = [];
   let requestRetention = 0.9;
   let fsrsProfile: FSRSProfile = "STANDARD";
   let learningSteps = "1m";
@@ -83,6 +85,7 @@
     enableReviewCardsLimit = profile.hasReviewCardsLimitEnabled;
     reviewOrder = profile.reviewOrder;
     headerLevel = profile.headerLevel;
+    extraHeaderLevels = [...(profile.extraHeaderLevels ?? [])];
     requestRetention = profile.fsrs.requestRetention;
     fsrsProfile = profile.fsrs.profile;
     learningSteps = profile.learningSteps;
@@ -182,6 +185,7 @@
         hasReviewCardsLimitEnabled: enableReviewCardsLimit,
         reviewOrder: reviewOrder,
         headerLevel: headerLevel,
+        extraHeaderLevels: extraHeaderLevels,
         learningSteps: learningSteps,
         relearningSteps: relearningSteps,
         fsrs: {
@@ -463,8 +467,48 @@
           }
           dropdown.setValue(headerLevel.toString()).onChange((value) => {
             headerLevel = parseInt(value);
+            // Title mode has no extra levels; otherwise the primary level can't
+            // also be an "extra".
+            extraHeaderLevels =
+              headerLevel === 0
+                ? []
+                : extraHeaderLevels.filter((l) => l !== headerLevel);
+            rebuildSettings();
           });
         });
+    }
+
+    // Additional header levels also parsed as cards (hidden in title mode).
+    // Rendered as a compact multi-select of level chips.
+    if (extraHeaderLevelsContainer) {
+      extraHeaderLevelsContainer.empty();
+      if (headerLevel !== 0) {
+        new Setting(extraHeaderLevelsContainer)
+          .setName(p.extraHeaderLevelsLabel)
+          .setDesc(p.extraHeaderLevelsDesc);
+        const chips = extraHeaderLevelsContainer.createDiv({
+          cls: "decks-level-multiselect",
+        });
+        for (let i = 1; i <= 6; i++) {
+          if (i === headerLevel) continue;
+          const level = i;
+          const chip = chips.createEl("button", {
+            cls: "decks-level-chip",
+            text: I18n.format(t.config.headerH, { level }),
+            attr: { type: "button" },
+          });
+          chip.classList.toggle("mod-cta", extraHeaderLevels.includes(level));
+          chip.addEventListener("click", () => {
+            const selected = !extraHeaderLevels.includes(level);
+            extraHeaderLevels = (
+              selected
+                ? [...extraHeaderLevels, level]
+                : extraHeaderLevels.filter((l) => l !== level)
+            ).sort((a, b) => a - b);
+            chip.classList.toggle("mod-cta", selected);
+          });
+        }
+      }
     }
 
     // Cloze enabled toggle
@@ -647,6 +691,7 @@
         <div class="decks-settings-section">
           <h4>{p.sectionCardParsing}</h4>
           <div bind:this={headerLevelContainer}></div>
+          <div bind:this={extraHeaderLevelsContainer}></div>
           <div bind:this={clozeEnabledContainer}></div>
           <div bind:this={clozeShowContextContainer}></div>
         </div>

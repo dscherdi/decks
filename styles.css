@@ -1241,3 +1241,14 @@ div.decks-card-content
   border-top: 1px solid var(--background-modifier-border);
   padding-top: 12px;
 }
+
+/* Additional-header-levels multi-select (deck profile config) */
+.decks-level-multiselect {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin: 0 0 18px;
+}
+.decks-level-chip {
+  cursor: pointer;
+}

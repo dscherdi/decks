@@ -145,6 +145,24 @@ export abstract class BaseDatabaseService implements IDatabaseService {
     }
   }
 
+  /** Parse the extra_header_levels JSON column into deduped valid levels (1-6). */
+  private parseJsonHeaderLevels(value: string | number | null): number[] {
+    if (typeof value !== "string" || value.trim() === "") return [];
+    try {
+      const parsed = JSON.parse(value);
+      if (!Array.isArray(parsed)) return [];
+      return Array.from(
+        new Set(
+          parsed.filter(
+            (l): l is number => typeof l === "number" && l >= 1 && l <= 6
+          )
+        )
+      );
+    } catch {
+      return [];
+    }
+  }
+
   protected parseProfileRow(row: (string | number | null)[]): DeckProfile {
     return {
       id: row[0] as string,
@@ -154,6 +172,7 @@ export abstract class BaseDatabaseService implements IDatabaseService {
       hasReviewCardsLimitEnabled: Boolean(row[4]),
       reviewCardsPerDay: row[5] as number,
       headerLevel: row[6] as number,
+      extraHeaderLevels: this.parseJsonHeaderLevels(row[17]),
       reviewOrder: row[7] as "due-date" | "random",
       learningSteps: (row[8] as string) ?? "1m",
       relearningSteps: (row[9] as string) ?? "10m",
@@ -540,6 +559,7 @@ export abstract class BaseDatabaseService implements IDatabaseService {
       profile.isDefault ? 1 : 0,
       now,
       now,
+      JSON.stringify(profile.extraHeaderLevels ?? []),
     ]);
 
     this.emitSyncOp({
@@ -552,6 +572,7 @@ export abstract class BaseDatabaseService implements IDatabaseService {
         hasReviewCardsLimitEnabled: profile.hasReviewCardsLimitEnabled,
         reviewCardsPerDay: profile.reviewCardsPerDay,
         headerLevel: profile.headerLevel,
+        extraHeaderLevels: profile.extraHeaderLevels ?? [],
         reviewOrder: profile.reviewOrder,
         learningSteps: profile.learningSteps ?? "1m",
         relearningSteps: profile.relearningSteps ?? "10m",
@@ -640,6 +661,8 @@ export abstract class BaseDatabaseService implements IDatabaseService {
     // fast-path on the next refresh.
     const parsingAffected =
       updated.headerLevel !== current.headerLevel ||
+      JSON.stringify(updated.extraHeaderLevels ?? []) !==
+        JSON.stringify(current.extraHeaderLevels ?? []) ||
       updated.clozeEnabled !== current.clozeEnabled;
 
     const modifiedAt = this.getCurrentTimestamp();
@@ -657,6 +680,7 @@ export abstract class BaseDatabaseService implements IDatabaseService {
       updated.fsrs.profile,
       updated.clozeEnabled ? 1 : 0,
       updated.clozeShowContext ?? "open",
+      JSON.stringify(updated.extraHeaderLevels ?? []),
       modifiedAt,
       id,
     ]);
@@ -676,6 +700,7 @@ export abstract class BaseDatabaseService implements IDatabaseService {
         hasReviewCardsLimitEnabled: updated.hasReviewCardsLimitEnabled,
         reviewCardsPerDay: updated.reviewCardsPerDay,
         headerLevel: updated.headerLevel,
+        extraHeaderLevels: updated.extraHeaderLevels ?? [],
         reviewOrder: updated.reviewOrder,
         learningSteps: updated.learningSteps,
         relearningSteps: updated.relearningSteps,

@@ -309,7 +309,7 @@ class SimpleDatabaseWorker {
    */
   parseFlashcardsFromContent(
     content: string,
-    headerLevel = 2
+    headerLevel: number | number[] = 2
   ): ParsedFlashcard[] {
     return FlashcardParser.parseFlashcardsFromContent(content, headerLevel);
   }

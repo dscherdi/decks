@@ -150,5 +150,56 @@ describe("Incremental sync (v18 mtime gate)", () => {
       await db.updateProfile("profile_x", { headerLevel: 2 }); // same as before
       expect(await db.getDeckLastSyncedMtime(deckId)).toBe(9999);
     });
+
+    it("clears mtime when extraHeaderLevels changes", async () => {
+      const deckId = await setupProfileWithDeck();
+      await db.updateProfile("profile_x", { extraHeaderLevels: [3] });
+      expect(await db.getDeckLastSyncedMtime(deckId)).toBe(0);
+    });
+
+    it("does not clear mtime when extraHeaderLevels update is a no-op (still empty)", async () => {
+      const deckId = await setupProfileWithDeck();
+      await db.updateProfile("profile_x", { extraHeaderLevels: [] });
+      expect(await db.getDeckLastSyncedMtime(deckId)).toBe(9999);
+    });
+  });
+
+  describe("extraHeaderLevels persistence", () => {
+    it("defaults preset/seeded profiles to an empty extra-levels array", async () => {
+      const profiles = await db.getAllProfiles();
+      expect(profiles.length).toBeGreaterThan(0);
+      for (const p of profiles) {
+        expect(Array.isArray(p.extraHeaderLevels)).toBe(true);
+      }
+      const def = profiles.find((p) => p.isDefault);
+      expect(def?.extraHeaderLevels).toEqual([]);
+    });
+
+    it("round-trips extraHeaderLevels through create and read", async () => {
+      await db.createProfile({
+        id: "profile_multi",
+        name: "Multi",
+        hasNewCardsLimitEnabled: false,
+        newCardsPerDay: 20,
+        hasReviewCardsLimitEnabled: false,
+        reviewCardsPerDay: 100,
+        headerLevel: 2,
+        extraHeaderLevels: [3, 4],
+        reviewOrder: "due-date",
+        learningSteps: "1m",
+        relearningSteps: "10m",
+        fsrs: { requestRetention: 0.9, profile: "STANDARD", useTrainedWeights: false },
+        clozeEnabled: true,
+        clozeShowContext: "hidden",
+        isDefault: false,
+      });
+
+      const created = await db.getProfileById("profile_multi");
+      expect(created?.extraHeaderLevels).toEqual([3, 4]);
+
+      await db.updateProfile("profile_multi", { extraHeaderLevels: [5] });
+      const updated = await db.getProfileById("profile_multi");
+      expect(updated?.extraHeaderLevels).toEqual([5]);
+    });
   });
 });
