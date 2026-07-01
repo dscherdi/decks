@@ -170,6 +170,7 @@ export class DecksViewModal extends Modal {
         deckListSort: this.settings.ui.deckListSort,
         minDeckCardCount: this.settings.ui.minDeckCardCount,
         onChangeSortMode: (mode: DeckListSortMode) => this.changeSortMode(mode),
+        globalReviewToday: null,
       },
     }) as DeckListPanelComponent;
 
@@ -251,6 +252,7 @@ export class DecksViewModal extends Modal {
       const initialDecks = await this.db.getAllDecksWithProfiles();
       const initialStats = await this.getAllDeckStatsMap();
       await this.deckListPanelComponent?.updateAll?.(initialDecks, initialStats);
+      await this.pushGlobalReviewCap();
     } catch (error) {
       this.logger.error("Error painting initial deck state in modal:", error);
       return;
@@ -278,6 +280,7 @@ export class DecksViewModal extends Modal {
       const decks = await this.db.getAllDecksWithProfiles();
       const stats = await this.getAllDeckStatsMap();
       await this.deckListPanelComponent?.updateAll?.(decks, stats);
+      await this.pushGlobalReviewCap();
     } catch (error) {
       this.logger.error("Background sync failed in modal:", error);
     } finally {
@@ -288,6 +291,16 @@ export class DecksViewModal extends Modal {
 
   private async getAllDeckStatsMap(): Promise<Map<string, DeckStats>> {
     return await this.deckManager.getAllDeckStatsMap();
+  }
+
+  // Refresh the deck list's global daily review-cap indicator.
+  private async pushGlobalReviewCap(): Promise<void> {
+    try {
+      const status = await this.deckManager.getGlobalDailyCapStatus();
+      this.deckListPanelComponent?.updateGlobalReviewToday?.(status);
+    } catch (error) {
+      this.logger.debug("Could not refresh global review cap status", error);
+    }
   }
 
   /**

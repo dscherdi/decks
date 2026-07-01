@@ -569,9 +569,30 @@ export class DeckManager {
   /**
    * Get statistics for a single deck
    */
+  /**
+   * Cards (new + review) still allowed today under the global daily cap across
+   * ALL decks. `Infinity` when the cap is disabled or set to 0. Also exposed for
+   * the deck list header via getGlobalDailyCapStatus().
+   */
+  private async globalDailyRemaining(): Promise<number> {
+    const r = this.settings?.review;
+    if (!r?.hasGlobalReviewCap || !(r.globalReviewCapAmount > 0)) return Infinity;
+    const done = await this.db.countCardsStudiedTodayAllDecks(r.nextDayStartsAt);
+    return Math.max(0, r.globalReviewCapAmount - done);
+  }
+
+  /** Global daily-cap status for the deck list header; null when disabled. */
+  async getGlobalDailyCapStatus(): Promise<{ done: number; cap: number } | null> {
+    const r = this.settings?.review;
+    if (!r?.hasGlobalReviewCap || !(r.globalReviewCapAmount > 0)) return null;
+    const done = await this.db.countCardsStudiedTodayAllDecks(r.nextDayStartsAt);
+    return { done, cap: r.globalReviewCapAmount };
+  }
+
   async getDeckStats(
     deckId: string,
-    respectDailyLimits = true
+    respectDailyLimits = true,
+    globalDailyRemaining = Infinity
   ): Promise<DeckStats> {
     // Get basic deck stats
     const totalCards = await this.db.countTotalCards(deckId);
@@ -624,6 +645,15 @@ export class DeckManager {
       }
     }
 
+    // Clamp shown counts by the remaining global daily cap (shared across all
+    // decks, new + review). Reviews take the budget first, new cards the rest;
+    // when the cap is exhausted every deck shows 0.
+    finalDueCount = Math.min(finalDueCount, globalDailyRemaining);
+    finalNewCount = Math.min(
+      finalNewCount,
+      Math.max(0, globalDailyRemaining - finalDueCount)
+    );
+
     return {
       deckId,
       newCount: finalNewCount,
@@ -636,13 +666,17 @@ export class DeckManager {
   /**
    * Get statistics for a deck group (aggregates stats from all decks in the group)
    */
-  async getDeckGroupStats(deckGroup: DeckGroup): Promise<DeckStats> {
+  async getDeckGroupStats(
+    deckGroup: DeckGroup,
+    globalDailyRemaining = Infinity
+  ): Promise<DeckStats> {
     let totalNew = 0;
     let totalDue = 0;
     let totalCount = 0;
     let totalMature = 0;
 
     for (const deckId of deckGroup.deckIds) {
+      // Members counted uncapped; the group total is clamped once below.
       const stats = await this.getDeckStats(deckId);
       totalNew += stats.newCount;
       totalDue += stats.dueCount;
@@ -650,10 +684,17 @@ export class DeckManager {
       totalMature += stats.matureCount;
     }
 
+    // Clamp the group's combined total (new + review) by the shared global cap.
+    const clampedDue = Math.min(totalDue, globalDailyRemaining);
+    const clampedNew = Math.min(
+      totalNew,
+      Math.max(0, globalDailyRemaining - clampedDue)
+    );
+
     return {
       deckId: generateDeckGroupId(deckGroup.tag),
-      newCount: totalNew,
-      dueCount: totalDue,
+      newCount: clampedNew,
+      dueCount: clampedDue,
       totalCount: totalCount,
       matureCount: totalMature,
     };
@@ -671,16 +712,25 @@ export class DeckManager {
     const tagGroupService = new TagGroupService(this.db);
     const statsMap = new Map<string, DeckStats>();
 
+    // Shared global-cap budget, computed once for this whole refresh.
+    const globalDailyRemaining = await this.globalDailyRemaining();
+
     const decks = await this.db.getAllDecks();
     const deckStatsPairs = await Promise.all(
-      decks.map(async (d) => [d.id, await this.getDeckStats(d.id)] as const)
+      decks.map(
+        async (d) =>
+          [d.id, await this.getDeckStats(d.id, true, globalDailyRemaining)] as const
+      )
     );
     for (const [id, stats] of deckStatsPairs) statsMap.set(id, stats);
 
     const decksWithProfiles = await this.db.getAllDecksWithProfiles();
     const tagGroups = await tagGroupService.aggregateByTag(decksWithProfiles);
     const groupStatsPairs = await Promise.all(
-      tagGroups.map(async (g) => [g.tag, await this.getDeckGroupStats(g)] as const)
+      tagGroups.map(
+        async (g) =>
+          [g.tag, await this.getDeckGroupStats(g, globalDailyRemaining)] as const
+      )
     );
     for (const [, stats] of groupStatsPairs) statsMap.set(stats.deckId, stats);
 

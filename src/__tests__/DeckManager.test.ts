@@ -82,6 +82,43 @@ describe("DeckManager", () => {
       // The expensive all-cards fetch must NOT be used for stats.
       expect(db.getFlashcardsByDeck).not.toHaveBeenCalled();
     });
+
+    it("clamps new + due counts by the remaining global daily cap", async () => {
+      const db = {
+        countTotalCards: jest.fn(async () => 100),
+        countNewCards: jest.fn(async () => 5),
+        countDueCards: jest.fn(async () => 9),
+        countMatureCards: jest.fn(async () => 0),
+        getFlashcardsByDeck: jest.fn(async () => []),
+        getDeckWithProfile: jest.fn(async () => null),
+        getDailyReviewCounts: jest.fn(async () => ({ newCount: 0, reviewCount: 0 })),
+      } as unknown as IDatabaseService;
+      const mgr = new DeckManager(
+        {} as unknown as Vault,
+        {} as unknown as MetadataCache,
+        db
+      );
+
+      // No cap → raw counts (9 due, 5 new).
+      const uncapped = await mgr.getDeckStats("d", true, Infinity);
+      expect(uncapped.dueCount).toBe(9);
+      expect(uncapped.newCount).toBe(5);
+
+      // Budget 2: reviews take it first (2 due), new gets the leftover (0).
+      const two = await mgr.getDeckStats("d", true, 2);
+      expect(two.dueCount).toBe(2);
+      expect(two.newCount).toBe(0);
+
+      // Budget 12: all 9 due + 3 new (leftover 3).
+      const twelve = await mgr.getDeckStats("d", true, 12);
+      expect(twelve.dueCount).toBe(9);
+      expect(twelve.newCount).toBe(3);
+
+      // Cap exhausted → nothing shown.
+      const zero = await mgr.getDeckStats("d", true, 0);
+      expect(zero.dueCount).toBe(0);
+      expect(zero.newCount).toBe(0);
+    });
   });
 
   describe("flashcard ID generation", () => {

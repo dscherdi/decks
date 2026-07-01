@@ -174,6 +174,7 @@ export class DecksView extends ItemView {
         deckListSort: this.settings.ui.deckListSort,
         minDeckCardCount: this.settings.ui.minDeckCardCount,
         onChangeSortMode: (mode: DeckListSortMode) => this.changeSortMode(mode),
+        globalReviewToday: null,
       },
     }) as DeckListPanelComponent;
 
@@ -203,6 +204,17 @@ export class DecksView extends ItemView {
 
   async update(updatedDecks: DeckWithProfile[], deckStats: Map<string, DeckStats>) {
     await this.deckListPanelComponent?.updateAll?.(updatedDecks, deckStats);
+    await this.pushGlobalReviewCap();
+  }
+
+  // Refresh the deck list's global daily review-cap indicator.
+  private async pushGlobalReviewCap(): Promise<void> {
+    try {
+      const status = await this.deckManager.getGlobalDailyCapStatus();
+      this.deckListPanelComponent?.updateGlobalReviewToday?.(status);
+    } catch (error) {
+      this.logger.debug("Could not refresh global review cap status", error);
+    }
   }
 
   private async getAllDeckStatsMap(): Promise<Map<string, DeckStats>> {
@@ -395,6 +407,7 @@ export class DecksView extends ItemView {
       // Update component with new stats using unified function
       if (this.deckListPanelComponent) {
         await this.deckListPanelComponent.updateAll?.(undefined, deckStats);
+        await this.pushGlobalReviewCap();
       }
     } catch (error) {
       console.error("Error refreshing stats:", error);

@@ -2611,7 +2611,8 @@ export class StatisticsService {
    */
   async getDeckStats(
     deckId: string,
-    respectDailyLimits = true
+    respectDailyLimits = true,
+    globalDailyRemaining = Infinity
   ): Promise<DeckStats> {
     // Get basic deck stats
     const totalCards = await this.db.countTotalCards(deckId);
@@ -2664,6 +2665,14 @@ export class StatisticsService {
         }
       }
     }
+
+    // Clamp shown counts by the remaining global daily cap (shared across all
+    // decks, new + review). Reviews take the budget first, new cards the rest.
+    finalDueCount = Math.min(finalDueCount, globalDailyRemaining);
+    finalNewCount = Math.min(
+      finalNewCount,
+      Math.max(0, globalDailyRemaining - finalDueCount)
+    );
 
     return {
       deckId,

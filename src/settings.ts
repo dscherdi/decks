@@ -17,6 +17,8 @@ export interface DecksSettings {
     nextDayStartsAt: number; // Hour (0-23) when study day rolls over (default 4 AM)
     leechThreshold: number; // Lapses count at/above which a card is flagged as a leech (default 8)
     denseCardCharThreshold: number; // back text length (chars) at/above which a card is flagged as dense (default 500)
+    hasGlobalReviewCap: boolean; // When true, cap total review cards per day across ALL decks combined
+    globalReviewCapAmount: number; // Max review cards per day across all decks (when hasGlobalReviewCap)
   };
 
   // Parsing Settings
@@ -118,6 +120,8 @@ export const DEFAULT_SETTINGS: DecksSettings = {
     nextDayStartsAt: 4,
     leechThreshold: 8,
     denseCardCharThreshold: 500,
+    hasGlobalReviewCap: false,
+    globalReviewCapAmount: 100,
   },
 
   parsing: {

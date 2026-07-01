@@ -105,6 +105,16 @@
     pinnedDeckIds = ids;
   }
 
+  // Global daily review cap status ({done, cap}) or null when disabled.
+  // Pushed by the parent alongside stat refreshes.
+  export let globalReviewToday: { done: number; cap: number } | null = null;
+
+  export function updateGlobalReviewToday(
+    v: { done: number; cap: number } | null
+  ): void {
+    globalReviewToday = v;
+  }
+
   // Active sort + size filter — both synced through data.json. The panel
   // owns rendering and re-sort; the parent owns persistence.
   export let deckListSort: DeckListSortMode = "name-asc";
@@ -1512,6 +1522,17 @@
     {/if}
 
     <div class="decks-stats-grid">
+      {#if globalReviewToday}
+        <div class="decks-stat-item">
+          <div class="decks-stat-label">{t.deckList.statCardsToday}</div>
+          <div
+            class="decks-stat-value"
+            class:decks-cap-reached={globalReviewToday.done >= globalReviewToday.cap}
+          >
+            {globalReviewToday.done}/{globalReviewToday.cap}
+          </div>
+        </div>
+      {/if}
       <div class="decks-stat-item">
         <div class="decks-stat-label">{t.deckList.statTotal}</div>
         <div class="decks-stat-value">
@@ -1958,9 +1979,13 @@
     border-bottom: 1px solid var(--background-modifier-border);
   }
 
+  .decks-stat-value.decks-cap-reached {
+    color: var(--text-accent);
+  }
+
   .decks-stats-grid {
     display: grid;
-    grid-template-columns: 1fr 1fr 1fr;
+    grid-template-columns: repeat(auto-fit, minmax(64px, 1fr));
     gap: var(--size-4-3);
   }
 

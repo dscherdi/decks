@@ -78,6 +78,8 @@ export type DeckListPanelComponent = (
   // Push the AI-enabled toggle in after a settings change so the generate
   // button enables/disables without remounting.
   updateAiEnabled?(enabled: boolean): void;
+  // Push the global daily review-cap status ({done, cap}) or null when disabled.
+  updateGlobalReviewToday?(v: { done: number; cap: number } | null): void;
 };
 
 // Constructor interface for DeckListPanel

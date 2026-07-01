@@ -488,6 +488,37 @@ export class DecksSettingTab extends PluginSettingTab {
           })
       );
 
+    // Global daily review cap across all decks (dependent amount + toggle).
+    const globalReviewCapSetting = new Setting(containerEl)
+      .setName(I18n.t.settings.review.globalReviewCap)
+      .setDesc(I18n.t.settings.review.globalReviewCapDesc)
+      .addText((text) =>
+        text
+          .setPlaceholder(I18n.t.settings.review.globalReviewCapPlaceholder)
+          .setValue(this.settings.review.globalReviewCapAmount.toString())
+          .onChange(async (value) => {
+            const num = parseInt(value);
+            if (!isNaN(num) && num >= 1 && num <= 99999) {
+              this.settings.review.globalReviewCapAmount = num;
+              await this.saveSettings();
+            }
+          })
+      );
+
+    new Setting(containerEl)
+      .setName(I18n.t.settings.review.enableGlobalReviewCap)
+      .setDesc(I18n.t.settings.review.enableGlobalReviewCapDesc)
+      .addToggle((toggle) =>
+        toggle
+          .setValue(this.settings.review.hasGlobalReviewCap)
+          .onChange(async (value) => {
+            this.settings.review.hasGlobalReviewCap = value;
+            await this.saveSettings();
+            globalReviewCapSetting.setDisabled(!value);
+          })
+      );
+    globalReviewCapSetting.setDisabled(!this.settings.review.hasGlobalReviewCap);
+
     new Setting(containerEl)
       .setName(I18n.t.settings.review.leechThreshold)
       .setDesc(I18n.t.settings.review.leechThresholdDesc)

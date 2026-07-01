@@ -1449,6 +1449,24 @@ export abstract class BaseDatabaseService implements IDatabaseService {
     return results[0]?.count || 0;
   }
 
+  async countCardsStudiedTodayAllDecks(nextDayStartsAt = 4): Promise<number> {
+    const now = new Date();
+    const studyDayStart = this.getStudyDayStart(now, nextDayStartsAt);
+    const studyDayEnd = this.getStudyDayEnd(now, nextDayStartsAt);
+
+    // Distinct cards studied today across all decks — both new (first study,
+    // old_state 'new') and review cards — for the global daily cap.
+    const sql = `SELECT COUNT(DISTINCT flashcard_id) as count
+                 FROM review_logs
+                 WHERE reviewed_at >= ?
+                   AND reviewed_at < ?
+                   AND old_state IN ('new', 'review')`;
+    const results = await this.querySql<CountResult>(sql, [studyDayStart, studyDayEnd], {
+      asObject: true,
+    });
+    return results[0]?.count || 0;
+  }
+
   /**
    * Calculates the start of the current Study Day in UTC
    */
