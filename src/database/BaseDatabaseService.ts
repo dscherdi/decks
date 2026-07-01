@@ -1316,6 +1316,68 @@ export abstract class BaseDatabaseService implements IDatabaseService {
     return results[0]?.count || 0;
   }
 
+  // Per-deck card counts (total / new / due / mature) for ALL decks in a single
+  // grouped query — the batched equivalent of countTotalCards + countNewCards +
+  // countDueCards + countMatureCards run per deck. Predicates mirror those
+  // methods exactly (queue counts exclude suspended/actively-buried cards).
+  async getDeckCardStatsBatch(): Promise<
+    { deckId: string; total: number; newCount: number; dueCount: number; matureCount: number }[]
+  > {
+    const now = this.getCurrentTimestamp();
+    const sql = `
+      SELECT deck_id,
+        COUNT(*) AS total,
+        SUM(CASE WHEN state = 'new' AND suspended_at IS NULL
+                 AND (buried_until IS NULL OR buried_until <= ?) THEN 1 ELSE 0 END) AS new_count,
+        SUM(CASE WHEN state = 'review' AND due_date <= ? AND suspended_at IS NULL
+                 AND (buried_until IS NULL OR buried_until <= ?) THEN 1 ELSE 0 END) AS due_count,
+        SUM(CASE WHEN state = 'review' AND interval > 30240 THEN 1 ELSE 0 END) AS mature_count
+      FROM flashcards
+      GROUP BY deck_id`;
+    const rows = await this.querySql<{
+      deck_id: string;
+      total: number;
+      new_count: number;
+      due_count: number;
+      mature_count: number;
+    }>(sql, [now, now, now], { asObject: true });
+    return rows.map((r) => ({
+      deckId: r.deck_id,
+      total: r.total ?? 0,
+      newCount: r.new_count ?? 0,
+      dueCount: r.due_count ?? 0,
+      matureCount: r.mature_count ?? 0,
+    }));
+  }
+
+  // Per-deck "studied today" counts (distinct new / review cards) for ALL decks
+  // in a single grouped query — the batched equivalent of getDailyReviewCounts.
+  async getDailyReviewCountsBatch(
+    nextDayStartsAt = 4
+  ): Promise<{ deckId: string; newCount: number; reviewCount: number }[]> {
+    const now = new Date();
+    const studyDayStart = this.getStudyDayStart(now, nextDayStartsAt);
+    const studyDayEnd = this.getStudyDayEnd(now, nextDayStartsAt);
+    const sql = `
+      SELECT f.deck_id,
+        COUNT(DISTINCT CASE WHEN r.old_state = 'new' THEN r.flashcard_id END) AS new_count,
+        COUNT(DISTINCT CASE WHEN r.old_state = 'review' THEN r.flashcard_id END) AS review_count
+      FROM review_logs r
+      JOIN flashcards f ON r.flashcard_id = f.id
+      WHERE r.reviewed_at >= ? AND r.reviewed_at < ?
+      GROUP BY f.deck_id`;
+    const rows = await this.querySql<{
+      deck_id: string;
+      new_count: number;
+      review_count: number;
+    }>(sql, [studyDayStart, studyDayEnd], { asObject: true });
+    return rows.map((r) => ({
+      deckId: r.deck_id,
+      newCount: r.new_count ?? 0,
+      reviewCount: r.review_count ?? 0,
+    }));
+  }
+
   // FORECAST OPERATIONS (optimized SQL)
   async getScheduledDueByDay(
     deckId: string,

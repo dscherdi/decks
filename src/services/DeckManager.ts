@@ -19,6 +19,45 @@ import type { DecksSettings } from "../settings";
 // Maximum number of flashcards to process per deck for performance
 const MAX_FLASHCARDS_PER_DECK = 50000;
 
+type RawCounts = { newCount: number; dueCount: number };
+type LimitProfile = {
+  hasNewCardsLimitEnabled: boolean;
+  newCardsPerDay: number;
+  hasReviewCardsLimitEnabled: boolean;
+  reviewCardsPerDay: number;
+};
+
+// Apply a profile's per-deck daily limits to raw new/due counts, using the
+// counts already reviewed today. Pure — shared by the batch + single-deck paths.
+function applyPerDeckLimits(
+  raw: RawCounts,
+  profile: LimitProfile,
+  dailyCounts: { newCount: number; reviewCount: number }
+): RawCounts {
+  let newCount = raw.newCount;
+  let dueCount = raw.dueCount;
+  if (profile.hasNewCardsLimitEnabled && profile.newCardsPerDay >= 0) {
+    newCount =
+      profile.newCardsPerDay === 0
+        ? 0
+        : Math.min(raw.newCount, Math.max(0, profile.newCardsPerDay - dailyCounts.newCount));
+  }
+  if (profile.hasReviewCardsLimitEnabled && profile.reviewCardsPerDay >= 0) {
+    dueCount =
+      profile.reviewCardsPerDay === 0
+        ? 0
+        : Math.min(raw.dueCount, Math.max(0, profile.reviewCardsPerDay - dailyCounts.reviewCount));
+  }
+  return { newCount, dueCount };
+}
+
+// Clamp new/due by the shared global daily cap; reviews take the budget first.
+function applyGlobalClamp(counts: RawCounts, globalDailyRemaining: number): RawCounts {
+  const dueCount = Math.min(counts.dueCount, globalDailyRemaining);
+  const newCount = Math.min(counts.newCount, Math.max(0, globalDailyRemaining - dueCount));
+  return { newCount, dueCount };
+}
+
 export interface DeckManagerOptions {
   settings?: DecksSettings;
   configDir?: string;
@@ -602,62 +641,24 @@ export class DeckManager {
     // worker boundary just to filter by state/interval.
     const matureCount = await this.db.countMatureCards(deckId);
 
-    let finalNewCount = newCards;
-    let finalDueCount = dueCards;
+    let counts: RawCounts = { newCount: newCards, dueCount: dueCards };
 
-    // Apply daily limits if requested
+    // Apply per-deck daily limits if requested.
     if (respectDailyLimits) {
       const deck = await this.db.getDeckWithProfile(deckId);
       if (deck) {
         const dailyCounts = await this.db.getDailyReviewCounts(deckId);
-
-        // Apply new card limits
-        if (
-          deck.profile.hasNewCardsLimitEnabled &&
-          deck.profile.newCardsPerDay >= 0
-        ) {
-          if (deck.profile.newCardsPerDay === 0) {
-            finalNewCount = 0;
-          } else {
-            const remainingNew = Math.max(
-              0,
-              deck.profile.newCardsPerDay - dailyCounts.newCount
-            );
-            finalNewCount = Math.min(newCards, remainingNew);
-          }
-        }
-
-        // Apply review card limits
-        if (
-          deck.profile.hasReviewCardsLimitEnabled &&
-          deck.profile.reviewCardsPerDay >= 0
-        ) {
-          if (deck.profile.reviewCardsPerDay === 0) {
-            finalDueCount = 0;
-          } else {
-            const remainingReview = Math.max(
-              0,
-              deck.profile.reviewCardsPerDay - dailyCounts.reviewCount
-            );
-            finalDueCount = Math.min(dueCards, remainingReview);
-          }
-        }
+        counts = applyPerDeckLimits(counts, deck.profile, dailyCounts);
       }
     }
 
-    // Clamp shown counts by the remaining global daily cap (shared across all
-    // decks, new + review). Reviews take the budget first, new cards the rest;
-    // when the cap is exhausted every deck shows 0.
-    finalDueCount = Math.min(finalDueCount, globalDailyRemaining);
-    finalNewCount = Math.min(
-      finalNewCount,
-      Math.max(0, globalDailyRemaining - finalDueCount)
-    );
+    // Clamp by the shared global daily cap (no-op when Infinity).
+    counts = applyGlobalClamp(counts, globalDailyRemaining);
 
     return {
       deckId,
-      newCount: finalNewCount,
-      dueCount: finalDueCount,
+      newCount: counts.newCount,
+      dueCount: counts.dueCount,
       totalCount: totalCards,
       matureCount,
     };
@@ -701,38 +702,85 @@ export class DeckManager {
   }
 
   /**
-   * Get all deck stats (file decks + tag groups) as a Map. Per-deck stats
-   * are independent — fire them in parallel with Promise.all rather than
-   * the previous sequential await chain. For a vault with N decks this
-   * collapses N round-trips' wall-time into one (subject to the worker's
-   * sequential message processing, which is still a big win because the
-   * JS-side await chain disappears).
+   * Get all deck stats (file decks + tag groups) as a Map. Uses batched
+   * aggregate queries (GROUP BY deck_id) instead of ~7 queries per deck: the
+   * whole refresh is ~4 worker round-trips regardless of deck/group count.
+   * Per-deck limit + global-cap math runs in JS; group stats are summed in
+   * memory from the per-deck results (no re-query of member decks).
    */
   async getAllDeckStatsMap(): Promise<Map<string, DeckStats>> {
     const tagGroupService = new TagGroupService(this.db);
     const statsMap = new Map<string, DeckStats>();
+    const nextDayStartsAt = this.settings?.review.nextDayStartsAt ?? 4;
 
-    // Shared global-cap budget, computed once for this whole refresh.
-    const globalDailyRemaining = await this.globalDailyRemaining();
+    // Four aggregate queries for the whole vault (was 3 + ~7 per deck).
+    const [decksWithProfiles, cardStatsRows, dailyRows, globalDailyRemaining] =
+      await Promise.all([
+        this.db.getAllDecksWithProfiles(),
+        this.db.getDeckCardStatsBatch(),
+        this.db.getDailyReviewCountsBatch(nextDayStartsAt),
+        this.globalDailyRemaining(),
+      ]);
 
-    const decks = await this.db.getAllDecks();
-    const deckStatsPairs = await Promise.all(
-      decks.map(
-        async (d) =>
-          [d.id, await this.getDeckStats(d.id, true, globalDailyRemaining)] as const
-      )
-    );
-    for (const [id, stats] of deckStatsPairs) statsMap.set(id, stats);
+    const cardStatsById = new Map(cardStatsRows.map((r) => [r.deckId, r]));
+    const dailyById = new Map(dailyRows.map((r) => [r.deckId, r]));
 
-    const decksWithProfiles = await this.db.getAllDecksWithProfiles();
+    // Per-deck stats BEFORE the global clamp — reused for group summation.
+    const perDeck = new Map<
+      string,
+      { newCount: number; dueCount: number; totalCount: number; matureCount: number }
+    >();
+
+    for (const deck of decksWithProfiles) {
+      const cs = cardStatsById.get(deck.id);
+      const raw: RawCounts = {
+        newCount: cs?.newCount ?? 0,
+        dueCount: cs?.dueCount ?? 0,
+      };
+      const daily = dailyById.get(deck.id) ?? { newCount: 0, reviewCount: 0 };
+      const limited = applyPerDeckLimits(raw, deck.profile, daily);
+      const totalCount = cs?.total ?? 0;
+      const matureCount = cs?.matureCount ?? 0;
+      perDeck.set(deck.id, { ...limited, totalCount, matureCount });
+
+      const clamped = applyGlobalClamp(limited, globalDailyRemaining);
+      statsMap.set(deck.id, {
+        deckId: deck.id,
+        newCount: clamped.newCount,
+        dueCount: clamped.dueCount,
+        totalCount,
+        matureCount,
+      });
+    }
+
+    // Tag groups: sum member per-deck (pre-global) stats, then clamp once.
     const tagGroups = await tagGroupService.aggregateByTag(decksWithProfiles);
-    const groupStatsPairs = await Promise.all(
-      tagGroups.map(
-        async (g) =>
-          [g.tag, await this.getDeckGroupStats(g, globalDailyRemaining)] as const
-      )
-    );
-    for (const [, stats] of groupStatsPairs) statsMap.set(stats.deckId, stats);
+    for (const g of tagGroups) {
+      let totalNew = 0;
+      let totalDue = 0;
+      let totalCount = 0;
+      let totalMature = 0;
+      for (const deckId of g.deckIds) {
+        const pd = perDeck.get(deckId);
+        if (!pd) continue;
+        totalNew += pd.newCount;
+        totalDue += pd.dueCount;
+        totalCount += pd.totalCount;
+        totalMature += pd.matureCount;
+      }
+      const clamped = applyGlobalClamp(
+        { newCount: totalNew, dueCount: totalDue },
+        globalDailyRemaining
+      );
+      const groupId = generateDeckGroupId(g.tag);
+      statsMap.set(groupId, {
+        deckId: groupId,
+        newCount: clamped.newCount,
+        dueCount: clamped.dueCount,
+        totalCount,
+        matureCount: totalMature,
+      });
+    }
 
     return statsMap;
   }
