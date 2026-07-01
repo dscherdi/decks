@@ -230,12 +230,18 @@ export default class DecksPlugin extends Plugin {
         }
       );
 
-      if (this.db.migrationNotice) {
-        new Notice(this.db.migrationNotice, 15000);
-      }
-
-      // One-time migration of legacy settings-based trained weights into the DB.
-      await this.migrateLegacyTrainedWeights();
+      // DB init runs in the background (off the onload critical path). Anything
+      // that needs the DB ready is sequenced after whenReady() so onload returns
+      // fast and Obsidian startup isn't blocked on loading the .db + SQL.js.
+      void this.db.whenReady().then(() => {
+        if (this.db.migrationNotice) {
+          new Notice(this.db.migrationNotice, 15000);
+        }
+        // One-time migration of legacy settings-based trained weights into the DB.
+        return this.migrateLegacyTrainedWeights();
+      }).catch((e) =>
+        this.logger.error("Post-init startup work failed", e as object)
+      );
 
       // Initialize deck manager with optimized main-thread approach
       this.deckManager = new DeckManager(

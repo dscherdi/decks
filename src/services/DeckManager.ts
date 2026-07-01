@@ -279,17 +279,16 @@ export class DeckManager {
         }
       }
 
-      // Clean up orphaned decks (decks whose files no longer exist)
-      const allFiles = new Set<string>();
-      for (const [, files] of decksMap) {
-        for (const file of files) {
-          allFiles.add(file.path);
-        }
-      }
-
+      // Clean up orphaned decks — decks whose source FILE no longer exists.
+      // Base this on the vault's file registry (populated at vault load), NOT on
+      // the tag scan: at startup the metadata cache is cold, so tagged files are
+      // skipped by scanVaultForDecks and would look "orphaned" — deleting live
+      // decks (and cascade-deleting their cards). getAbstractFileByPath is
+      // reliable before the cache resolves.
       let deletedDecks = 0;
       for (const deck of existingDecks) {
-        if (!allFiles.has(deck.filepath)) {
+        const file = this.vault.getAbstractFileByPath(deck.filepath);
+        if (!(file instanceof TFile)) {
           this.debugLog(
             `Deleting orphaned deck: "${deck.name}" (${deck.filepath})`
           );

@@ -45,10 +45,13 @@ export class DatabaseFactory {
         debugLog
       );
 
-      await this.instance.initialize();
+      // Kick off worker/SQL.js init in the background (do NOT await) so the
+      // plugin's onload returns fast. The instance queues every op behind
+      // whenReady(), so callers transparently wait for init to finish.
+      void this.instance.initialize();
       this.currentPath = dbPath;
 
-      debugLog(`Database instance created successfully for path: ${dbPath}`);
+      debugLog(`Database instance created (init running) for path: ${dbPath}`);
       return this.instance;
     } catch (error) {
       debugLog("Failed to create database instance:", error);

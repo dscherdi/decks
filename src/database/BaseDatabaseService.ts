@@ -111,6 +111,7 @@ export abstract class BaseDatabaseService implements IDatabaseService {
   // Abstract methods to be implemented by concrete classes
   // Core abstract methods that must be implemented by subclasses
   abstract initialize(): Promise<void>;
+  abstract whenReady(): Promise<void>;
   abstract close(): Promise<void>;
   abstract save(): Promise<void>;
   abstract executeSql(sql: string, params?: SqlJsValue[]): Promise<void>;

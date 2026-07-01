@@ -360,13 +360,24 @@ export class DecksView extends ItemView {
       return;
     }
 
-    // Stage 2: background sync.
-    void this.runBackgroundSync();
+    // Stage 2: background sync. On the first refresh after load, wait for the
+    // workspace to be ready (metadata cache warm) so the sync scans against a
+    // populated cache rather than a fixed delay. onLayoutReady runs the callback
+    // immediately if the layout is already ready (view opened later).
+    if (this.firstRefreshPending) {
+      this.firstRefreshPending = false;
+      this.app.workspace.onLayoutReady(() => void this.runBackgroundSync());
+    } else {
+      void this.runBackgroundSync();
+    }
   }
 
   // Single-flight guard so rapid refresh triggers (modal open + focus
   // event in the same frame, say) don't fan out into concurrent syncs.
   private backgroundSyncInFlight = false;
+  // The first refresh happens during Obsidian startup (restored-open panel);
+  // defer its background sync so it doesn't compete with startup work.
+  private firstRefreshPending = true;
 
   private async runBackgroundSync(): Promise<void> {
     if (this.backgroundSyncInFlight) return;

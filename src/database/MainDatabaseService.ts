@@ -48,6 +48,12 @@ export class MainDatabaseService extends BaseDatabaseService {
     return file;
   }
 
+  // In-process (test) service inits eagerly via setupTestDatabase, so it's
+  // always ready by the time callers use it.
+  whenReady(): Promise<void> {
+    return Promise.resolve();
+  }
+
   async initialize(): Promise<void> {
     try {
       // Load SQL.js

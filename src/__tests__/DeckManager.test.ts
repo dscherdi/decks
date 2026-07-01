@@ -4,6 +4,45 @@ import type { IDatabaseService } from "../database/DatabaseFactory";
 import { TFile, type MetadataCache, type Vault } from "obsidian";
 
 describe("DeckManager", () => {
+  describe("syncDecks orphan cleanup", () => {
+    it("does not delete decks whose files exist when the metadata cache is cold", async () => {
+      // Files exist in the vault registry, but the metadata cache is cold
+      // (getFileCache returns null) — as at Obsidian startup. The old code
+      // treated these as orphaned and deleted them (and their cards).
+      const existing = new Map<string, TFile>([
+        ["a.md", new TFile("a.md")],
+        ["b.md", new TFile("b.md")],
+      ]);
+      const vault = {
+        getMarkdownFiles: () => [...existing.values()],
+        getFiles: () => [] as TFile[],
+        getAbstractFileByPath: (p: string) => existing.get(p) ?? null,
+      } as unknown as Vault;
+      const metadataCache = {
+        getFileCache: () => null, // cold cache
+      } as unknown as MetadataCache;
+
+      const deleteDeckByFilepath = jest.fn(async () => {});
+      const db = {
+        getAllDecks: jest.fn(async () => [
+          { id: "d_a", name: "A", filepath: "a.md" },
+          { id: "d_b", name: "B", filepath: "b.md" },
+          { id: "d_gone", name: "Gone", filepath: "gone.md" }, // file truly deleted
+        ]),
+        deleteDeckByFilepath,
+      } as unknown as IDatabaseService;
+
+      const mgr = new DeckManager(vault, metadataCache, db);
+      await mgr.syncDecks();
+
+      // Only the deck whose file is actually gone should be deleted.
+      expect(deleteDeckByFilepath).toHaveBeenCalledTimes(1);
+      expect(deleteDeckByFilepath).toHaveBeenCalledWith("gone.md");
+      expect(deleteDeckByFilepath).not.toHaveBeenCalledWith("a.md");
+      expect(deleteDeckByFilepath).not.toHaveBeenCalledWith("b.md");
+    });
+  });
+
   describe("getStaleDeckIds", () => {
     function makeManager(
       meta: { id: string; filepath: string; lastSyncedMtime: number }[],
