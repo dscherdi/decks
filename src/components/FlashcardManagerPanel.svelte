@@ -8,6 +8,7 @@
   import type { IDatabaseService } from "../database/DatabaseFactory";
   import type { CustomDeckService } from "@decks/core";
   import { evaluateFilter } from "@decks/core";
+  import { naturalCompare } from "@decks/core";
   import { computeCardHealth } from "@decks/core";
   import { formatBadgeParts } from "../services/FilterBadgeFormatter";
   import type { EditTarget, EditCommitPayload } from "./FlashcardManagerEditTypes";
@@ -789,8 +790,8 @@
         deckList.push({ id: deck.id, name: deck.name });
       }
       deckTagMap = dtMap;
-      availableTags = Array.from(tags).sort();
-      availableDecks = deckList.sort((a, b) => a.name.localeCompare(b.name));
+      availableTags = Array.from(tags).sort(naturalCompare);
+      availableDecks = deckList.sort((a, b) => naturalCompare(a.name, b.name));
 
       const rawFlashcards = await db.getAllFlashcards();
       allFlashcards = rawFlashcards.filter((c) => dtMap.has(c.deckId));
