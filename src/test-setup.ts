@@ -1,3 +1,4 @@
+/* eslint-disable obsidianmd/no-global-this -- Node/jest bootstrap: this file polyfills window/activeWindow from `global`, so it must reference `global` directly; it never runs in Obsidian. */
 // Test setup file to mock browser APIs not available in Node.js
 
 // Mock requestAnimationFrame for Node.js test environment

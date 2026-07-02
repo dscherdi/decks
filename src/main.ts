@@ -240,7 +240,7 @@ export default class DecksPlugin extends Plugin {
         // One-time migration of legacy settings-based trained weights into the DB.
         return this.migrateLegacyTrainedWeights();
       }).catch((e) =>
-        this.logger.error("Post-init startup work failed", e as object)
+        this.logger.error("Post-init startup work failed", e)
       );
 
       // Initialize deck manager with optimized main-thread approach
@@ -670,7 +670,7 @@ export default class DecksPlugin extends Plugin {
       this.snapshotTimer = window.setInterval(() => {
         if (this.db?.isDirty()) {
           void this.db.save().catch((error) => {
-            this.logger.debug("periodic snapshot save failed", error as object);
+            this.logger.debug("periodic snapshot save failed", error);
           });
         }
       }, 30 * 60 * 1000);
@@ -686,7 +686,7 @@ export default class DecksPlugin extends Plugin {
       // harmless (we just keep the longer file until the next attempt).
       void this.syncLog
         .compact()
-        .catch((error) => this.logger.debug("startup compact failed", error as object));
+        .catch((error) => this.logger.debug("startup compact failed", error));
 
       // Listen for file changes to update decks. Both .md (tag-scoped) and
       // .canvas (folder-scoped) files reach the handlers, which branch by
@@ -1080,18 +1080,18 @@ export default class DecksPlugin extends Plugin {
     try {
       await this.flushPendingDeckSyncs();
     } catch (error) {
-      this.logger.debug("flushPendingDeckSyncs failed on blur/pagehide", error as object);
+      this.logger.debug("flushPendingDeckSyncs failed on blur/pagehide", error);
     }
     try {
       await this.syncLog?.flushNow();
     } catch (error) {
-      this.logger.debug("flushNow failed on blur/pagehide", error as object);
+      this.logger.debug("flushNow failed on blur/pagehide", error);
     }
     if (this.db?.isDirty()) {
       try {
         await this.db.save();
       } catch (error) {
-        this.logger.debug("save failed on blur/pagehide", error as object);
+        this.logger.debug("save failed on blur/pagehide", error);
       }
     }
   }
@@ -1112,7 +1112,7 @@ export default class DecksPlugin extends Plugin {
       // Repaint from the merged DB — no vault scan needed.
       await this.getDecksView()?.refreshDecksAndStats();
     } catch (error) {
-      this.logger.debug("reloadFromDiskIfNewer failed", error as object);
+      this.logger.debug("reloadFromDiskIfNewer failed", error);
     } finally {
       this.reloadFromDiskInFlight = false;
     }
@@ -1802,7 +1802,7 @@ export default class DecksPlugin extends Plugin {
         const file = this.app.vault.getAbstractFileByPath(sourcePath);
         if (file instanceof TFile) {
           this.handleFileChange(file).catch((e) =>
-            this.logger.debug("occlusion re-sync failed", e as object),
+            this.logger.debug("occlusion re-sync failed", e),
           );
         }
       },

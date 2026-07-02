@@ -103,7 +103,7 @@ const THEME_VARS = [
 // background/color/font come from the baseline sheet's API (see BASELINE_RESET)
 // so a template can override them via :host{--bg/--padding/...}.
 function applyThemeVars(wrapper: HTMLElement): void {
-  const computed = getComputedStyle(document.body);
+  const computed = getComputedStyle(activeDocument.body);
   const props: Record<string, string> = {};
   for (const name of THEME_VARS) {
     const value = computed.getPropertyValue(name);
@@ -177,7 +177,7 @@ export function renderHtmlIntoShadow(
   const host = el.createDiv({ cls: "decks-template-host" });
   const shadow = host.attachShadow({ mode: "open" });
 
-  const wrapper = document.createElement("div");
+  const wrapper = activeDocument.createElement("div");
   wrapper.className = "decks-template-wrapper markdown-rendered";
   applyThemeVars(wrapper);
   registerThemeWrapper(wrapper);

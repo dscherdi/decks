@@ -169,7 +169,7 @@ export class SyncLog {
           await this.renameConsumedConflictFile(source.path).catch((error) => {
             this.logger.debug(
               `SyncLog: failed to rename consumed conflict file ${source.path}`,
-              error as object
+              error
             );
           });
         }
@@ -206,7 +206,7 @@ export class SyncLog {
     } catch (error) {
       this.logger.debug(
         `SyncLog: failed to list ${this.logFolder || "vault root"}`,
-        error as object
+        error
       );
       return [];
     }
@@ -253,7 +253,7 @@ export class SyncLog {
     try {
       content = await this.adapter.read(path);
     } catch (error) {
-      this.logger.debug(`SyncLog: read failed for ${path}`, error as object);
+      this.logger.debug(`SyncLog: read failed for ${path}`, error);
       return;
     }
 
@@ -273,7 +273,7 @@ export class SyncLog {
       } catch (error) {
         this.logger.debug(
           `SyncLog: skipping malformed line in ${path}`,
-          error as object
+          error
         );
         continue;
       }
@@ -374,7 +374,7 @@ export class SyncLog {
       if (!(await this.adapter.exists(path))) return { before: 0, after: 0 };
       content = await this.adapter.read(path);
     } catch (error) {
-      this.logger.debug("SyncLog.compact: read failed", error as object);
+      this.logger.debug("SyncLog.compact: read failed", error);
       return { before: 0, after: 0 };
     }
 
