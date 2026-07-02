@@ -8,6 +8,9 @@ import type {
   FlashcardType,
   ReviewLog,
   ReviewSession,
+  CramSession,
+  CramCard,
+  CramDeckKind,
   CustomDeck,
   CustomDeckType,
   FsrsWeightSet,
@@ -255,6 +258,37 @@ export abstract class BaseDatabaseService implements IDatabaseService {
       endedAt: row[3] as string | null,
       goalTotal: row[4] as number,
       doneUnique: row[5] as number,
+    };
+  }
+
+  protected rowToCramSession(row: (string | number | null)[]): CramSession {
+    return {
+      id: row[0] as string,
+      deckKey: row[1] as string,
+      deckKind: row[2] as CramDeckKind,
+      startedAt: row[3] as string,
+      endedAt: row[4] as string | null,
+      goalTotal: row[5] as number,
+      graduatedCount: row[6] as number,
+      created: row[7] as string,
+      modified: row[8] as string,
+    };
+  }
+
+  protected rowToCramCard(row: (string | number | null)[]): CramCard {
+    return {
+      id: row[0] as string,
+      sessionId: row[1] as string,
+      flashcardId: row[2] as string,
+      tempState: row[3] as CramCard["tempState"],
+      tempStability: row[4] as number,
+      tempDifficulty: row[5] as number,
+      tempInterval: row[6] as number,
+      tempDueAt: row[7] as string,
+      reps: row[8] as number,
+      graduatedAt: row[9] as string | null,
+      created: row[10] as string,
+      modified: row[11] as string,
     };
   }
 
@@ -2088,6 +2122,147 @@ export abstract class BaseDatabaseService implements IDatabaseService {
       { asObject: true }
     );
     return results.length > 0 ? results[0].count : 0;
+  }
+
+  // CRAM (DRILL) OPERATIONS
+  // Isolated from real scheduling: these never touch flashcards or review_logs
+  // and never emit sync ops. Cross-device convergence is handled by
+  // merge-before-save (last-write-wins on `modified`).
+
+  async createCramSession(
+    session: Omit<CramSession, "id" | "created" | "modified">
+  ): Promise<string> {
+    const id = `cram_${Date.now()}_${Math.random()
+      .toString(36)
+      .substring(2, 11)}`;
+    const now = this.getCurrentTimestamp();
+    await this.executeSql(SQL_QUERIES.INSERT_CRAM_SESSION, [
+      id,
+      session.deckKey,
+      session.deckKind,
+      session.startedAt,
+      session.endedAt ?? null,
+      session.goalTotal,
+      session.graduatedCount,
+      now,
+      now,
+    ]);
+    return id;
+  }
+
+  async getCramSessionById(id: string): Promise<CramSession | null> {
+    const results = (await this.querySql(SQL_QUERIES.GET_CRAM_SESSION_BY_ID, [
+      id,
+    ])) as (string | number | null)[][];
+    return results.length > 0 ? this.rowToCramSession(results[0]) : null;
+  }
+
+  async getActiveCramSessionForDeck(
+    deckKey: string
+  ): Promise<CramSession | null> {
+    const results = (await this.querySql(
+      SQL_QUERIES.GET_ACTIVE_CRAM_SESSION_FOR_DECK,
+      [deckKey]
+    )) as (string | number | null)[][];
+    return results.length > 0 ? this.rowToCramSession(results[0]) : null;
+  }
+
+  async updateCramSessionProgress(
+    id: string,
+    graduatedCount: number
+  ): Promise<void> {
+    await this.executeSql(SQL_QUERIES.UPDATE_CRAM_SESSION_PROGRESS, [
+      graduatedCount,
+      this.getCurrentTimestamp(),
+      id,
+    ]);
+  }
+
+  async endCramSession(id: string): Promise<void> {
+    const now = this.getCurrentTimestamp();
+    await this.executeSql(SQL_QUERIES.UPDATE_CRAM_SESSION_END, [now, now, id]);
+  }
+
+  async batchCreateCramCards(
+    cards: Array<Omit<CramCard, "created" | "modified">>
+  ): Promise<void> {
+    if (cards.length === 0) return;
+    const now = this.getCurrentTimestamp();
+    for (const card of cards) {
+      await this.executeSql(SQL_QUERIES.INSERT_CRAM_CARD, [
+        card.id,
+        card.sessionId,
+        card.flashcardId,
+        card.tempState,
+        card.tempStability,
+        card.tempDifficulty,
+        card.tempInterval,
+        card.tempDueAt,
+        card.reps,
+        card.graduatedAt ?? null,
+        now,
+        now,
+      ]);
+    }
+  }
+
+  async getCramCardById(id: string): Promise<CramCard | null> {
+    const results = (await this.querySql(SQL_QUERIES.GET_CRAM_CARD_BY_ID, [
+      id,
+    ])) as (string | number | null)[][];
+    return results.length > 0 ? this.rowToCramCard(results[0]) : null;
+  }
+
+  async getNextDueCramCard(sessionId: string): Promise<CramCard | null> {
+    const results = (await this.querySql(SQL_QUERIES.GET_NEXT_CRAM_CARD, [
+      sessionId,
+    ])) as (string | number | null)[][];
+    return results.length > 0 ? this.rowToCramCard(results[0]) : null;
+  }
+
+  async countRemainingCramCards(sessionId: string): Promise<number> {
+    const results = await this.querySql<{ count: number }>(
+      SQL_QUERIES.COUNT_REMAINING_CRAM_CARDS,
+      [sessionId],
+      { asObject: true }
+    );
+    return results.length > 0 ? results[0].count : 0;
+  }
+
+  async updateCramCard(
+    id: string,
+    updates: {
+      tempState: CramCard["tempState"];
+      tempStability: number;
+      tempDifficulty: number;
+      tempInterval: number;
+      tempDueAt: string;
+      reps: number;
+    }
+  ): Promise<void> {
+    await this.executeSql(SQL_QUERIES.UPDATE_CRAM_CARD, [
+      updates.tempState,
+      updates.tempStability,
+      updates.tempDifficulty,
+      updates.tempInterval,
+      updates.tempDueAt,
+      updates.reps,
+      this.getCurrentTimestamp(),
+      id,
+    ]);
+  }
+
+  async graduateCramCard(
+    id: string,
+    graduatedAt: string,
+    reps: number
+  ): Promise<void> {
+    await this.executeSql(SQL_QUERIES.GRADUATE_CRAM_CARD, [
+      graduatedAt,
+      reps,
+      this.getCurrentTimestamp(),
+      id,
+    ]);
   }
 
   async getDailyReviewCounts(

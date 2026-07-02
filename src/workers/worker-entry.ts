@@ -390,6 +390,9 @@ class SimpleDatabaseWorker {
       this.mergeAppendOnly(remoteDb, "custom_deck_cards");
       // Trained weight sets: immutable history + soft-delete, newer-wins by effective ts.
       this.mergeByEffectiveTimestamp(remoteDb, "fsrs_weight_sets");
+      // Cram (drill) state: mutable, per-device but resumable across devices — newer-wins by modified.
+      this.mergeByModified(remoteDb, "cram_sessions");
+      this.mergeByModified(remoteDb, "cram_cards");
 
       this.db.exec("COMMIT");
       self.postMessage({ type: "dbg", message: "Sync with disk completed" });

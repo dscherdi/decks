@@ -8,7 +8,7 @@
   } from "../../database/types";
   import { isDeckGroup, isCustomDeck } from "../../database/types";
   import type { DecksSettings } from "../../settings";
-  import { type RatingLabel } from "@decks/core";
+  import { type RatingLabel, type CramRating } from "@decks/core";
   import type {
     Scheduler,
     SchedulingPreview,
@@ -65,6 +65,9 @@
       ) => Promise<boolean>)
     | undefined = undefined;
   export let browseMode = false;
+  // Cram (drill) mode: two-button Again/Good drill over allCards. Isolated from
+  // real scheduling — writes no review logs and does not mutate card state.
+  export let cramMode = false;
   export let allCards: Flashcard[] = [];
   export let isActive: (() => boolean) | undefined = undefined;
 
@@ -226,6 +229,7 @@
       })
     : null;
   let sessionId: string | null = null;
+  let cramSessionId: string | null = null;
   // The deck file path is the sourcePath Obsidian needs to resolve ![[…]] embeds
   // (audio/images). All cards in a deck share one sourceFile.
   $: deckFilePath = currentCard?.sourceFile ?? "";
@@ -324,7 +328,22 @@
     : reviewedCount;
 
   onMount(async () => {
-    if (browseMode) {
+    if (cramMode) {
+      // Cram mode: drill every card until it graduates to a >= 1 day interval.
+      const session = await scheduler.startCramSession(
+        deckOrGroup,
+        allCards,
+        new Date()
+      );
+      cramSessionId = session.sessionId;
+      await refreshCramProgress();
+      currentCard = await scheduler.getNextCramCard(cramSessionId);
+      if (currentCard) {
+        await loadCard();
+      } else {
+        await endReview();
+      }
+    } else if (browseMode) {
       // Browse mode: load all cards, no session
       browseCards = allCards;
       if (browseCards.length > 0) {
@@ -521,9 +540,14 @@
       ? await scheduler.getClozeGroupSize(currentCard)
       : 0;
 
-    // Build the sequential cloze group only in review mode (browse navigates
-    // every card individually, so it must not enter group-review state).
-    if (!browseMode && isClozeType(currentCard.type) && !inClozeGroupReview) {
+    // Build the sequential cloze group only in review mode (browse and cram
+    // navigate every card individually, so they must not enter group-review state).
+    if (
+      !browseMode &&
+      !cramMode &&
+      isClozeType(currentCard.type) &&
+      !inClozeGroupReview
+    ) {
       const siblings = await scheduler.getClozeSiblings(
         currentCard,
         new Date()
@@ -533,11 +557,17 @@
       inClozeGroupReview = true;
     }
 
-    try {
-      schedulingInfo = await scheduler.preview(currentCard);
-    } catch (error) {
-      console.error("Error getting scheduling preview:", error);
+    // Cram uses a fixed two-button bar (no per-rating interval preview), and its
+    // scheduling is isolated from the card's real FSRS state.
+    if (cramMode) {
       schedulingInfo = null;
+    } else {
+      try {
+        schedulingInfo = await scheduler.preview(currentCard);
+      } catch (error) {
+        console.error("Error getting scheduling preview:", error);
+        schedulingInfo = null;
+      }
     }
     cardStartTime = Date.now();
 
@@ -657,8 +687,52 @@
     }
   }
 
+  async function refreshCramProgress() {
+    if (!cramSessionId) return;
+    const p = await scheduler.getCramProgress(cramSessionId);
+    if (p) {
+      // Reuse the shared progress bar/counters by mapping cram progress
+      // (graduated / goal) onto the session-progress shape.
+      sessionProgress = {
+        doneUnique: p.graduated,
+        goalTotal: p.goalTotal,
+        progress: p.progress,
+      };
+    }
+  }
+
+  async function handleCramReview(rating: CramRating) {
+    if (!currentCard || isLoading || !cramSessionId) return;
+
+    isLoading = true;
+    try {
+      await scheduler.rateCram(cramSessionId, currentCard.id, rating, new Date());
+      reviewedCount++;
+      await refreshCramProgress();
+
+      currentCard = await scheduler.getNextCramCard(cramSessionId);
+      await yieldToUI();
+
+      if (currentCard) {
+        await loadCard();
+      } else {
+        await endReview();
+      }
+    } catch (error) {
+      console.error("Error cramming card:", error);
+    } finally {
+      isLoading = false;
+    }
+  }
+
   async function handleReview(rating: RatingLabel) {
     if (!currentCard || isLoading) return;
+
+    if (cramMode) {
+      // Cram is a two-button drill: only Again / Good are possible.
+      await handleCramReview(rating === "again" ? "again" : "good");
+      return;
+    }
 
     isLoading = true;
     const reviewPerfStart = performance.now();
@@ -953,6 +1027,34 @@
       return;
     }
 
+    // Cram mode: two-button drill (1 = again, 2 or space = good)
+    if (cramMode) {
+      if (!showAnswer && event.key === " ") {
+        event.preventDefault();
+        lastEventTime = now;
+        lastEventType = eventType;
+        revealAnswer();
+      } else if (showAnswer) {
+        lastEventTime = now;
+        lastEventType = eventType;
+
+        if ((event.key === "n" || event.key === "N") && hasNotes) {
+          event.preventDefault();
+          toggleNotes();
+          return;
+        }
+
+        if (event.key === "1") {
+          event.preventDefault();
+          handleReview("again");
+        } else if (event.key === "2" || event.key === " ") {
+          event.preventDefault();
+          handleReview("good");
+        }
+      }
+      return;
+    }
+
     // Standard mode
     if (!showAnswer && event.key === " ") {
       event.preventDefault();
@@ -1126,6 +1228,18 @@
     if (sessionTimer) {
       window.clearInterval(sessionTimer);
       sessionTimer = null;
+    }
+
+    // Cram: do NOT end the session on close — leave it open so it can be resumed
+    // later the same study day. startCramSession retires stale/completed sessions
+    // lazily on the next start.
+    if (cramMode) {
+      handleComplete({
+        reason: "cram-complete",
+        reviewed: sessionProgress ? sessionProgress.doneUnique : reviewedCount,
+      });
+      reviewFinished = true;
+      return;
     }
 
     // End the review session
@@ -1327,15 +1441,17 @@
                 : r.sessionComplete})</span
           >
         </div>
-        <div class="decks-timer-display">
-          <span class="decks-timer-label">{r.timeRemaining}</span>
-          <span
-            class="decks-timer-value"
-            class:decks-timer-warning={sessionTimeRemaining < 60000}
-          >
-            {timeRemainingDisplay}
-          </span>
-        </div>
+        {#if !cramMode}
+          <div class="decks-timer-display">
+            <span class="decks-timer-label">{r.timeRemaining}</span>
+            <span
+              class="decks-timer-value"
+              class:decks-timer-warning={sessionTimeRemaining < 60000}
+            >
+              {timeRemainingDisplay}
+            </span>
+          </div>
+        {/if}
       {/if}
     </div>
   </div>
@@ -1669,6 +1785,30 @@
                 ? r.finish
                 : r.next}</span
             >
+            <kbd class="decks-shortcut">{r.spaceShortcut}</kbd>
+          </button>
+        </div>
+      {:else if showAnswer && cramMode}
+        <div class="decks-difficulty-buttons decks-cram-buttons">
+          <button
+            class="decks-difficulty-button decks-again decks-rate-btn"
+            disabled={isLoading}
+            on:pointerup={async (e) => await onRating(e, 1)}
+            style="touch-action: manipulation;"
+            type="button"
+          >
+            <div class="decks-button-label">{r.again}</div>
+            <kbd class="decks-shortcut">1</kbd>
+          </button>
+
+          <button
+            class="decks-difficulty-button decks-good decks-rate-btn"
+            disabled={isLoading}
+            on:pointerup={async (e) => await onRating(e, 3)}
+            style="touch-action: manipulation;"
+            type="button"
+          >
+            <div class="decks-button-label">{r.good}</div>
             <kbd class="decks-shortcut">{r.spaceShortcut}</kbd>
           </button>
         </div>

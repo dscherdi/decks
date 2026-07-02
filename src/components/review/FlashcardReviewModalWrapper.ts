@@ -30,6 +30,7 @@ export class FlashcardReviewModalWrapper extends Modal {
   private refreshStats: () => Promise<void>;
   private refreshStatsById: (deckId: string) => Promise<void>;
   private browseMode: boolean;
+  private cramMode: boolean;
   private component: FlashcardReviewComponent | null = null;
   private markdownComponents: Component[] = [];
   private resizeHandler?: () => void;
@@ -60,7 +61,8 @@ export class FlashcardReviewModalWrapper extends Modal {
     deckSynchronizer: DeckSynchronizer,
     refreshStats: () => Promise<void>,
     refreshStatsById: (deckId: string) => Promise<void>,
-    browseMode = false
+    browseMode = false,
+    cramMode = false
   ) {
     super(app);
     this.deckOrGroup = deckOrGroup;
@@ -73,6 +75,7 @@ export class FlashcardReviewModalWrapper extends Modal {
     this.refreshStats = refreshStats;
     this.refreshStatsById = refreshStatsById;
     this.browseMode = browseMode;
+    this.cramMode = cramMode;
   }
 
   private async reviewFlashcard(
@@ -194,6 +197,7 @@ export class FlashcardReviewModalWrapper extends Modal {
         initialCard: this.initialCard,
         deckOrGroup: this.deckOrGroup,
         browseMode: this.browseMode,
+        cramMode: this.cramMode,
         allCards: this.allCards,
         onReview: async (
           card: Flashcard,
@@ -221,7 +225,8 @@ export class FlashcardReviewModalWrapper extends Modal {
         scheduler: this.scheduler,
         onCardReviewed: undefined,
         onComplete: async (_event: CompleteEventDetail) => {
-          if (this.browseMode) {
+          if (this.browseMode || this.cramMode) {
+            // Cram changes no real scheduling — just close (no session notice).
             this.close();
             return;
           }

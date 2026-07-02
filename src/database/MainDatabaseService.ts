@@ -592,6 +592,24 @@ export class MainDatabaseService extends BaseDatabaseService {
               this.debugLog("Remote DB has no fsrs_weight_sets table, skipping");
             }
 
+            // Merge cram (drill) state — mutable, newer-wins by modified.
+            try {
+              this.db.exec(`
+                INSERT OR REPLACE INTO cram_sessions
+                SELECT remote.* FROM remote.cram_sessions
+                LEFT JOIN cram_sessions AS main ON remote.id = main.id
+                WHERE main.id IS NULL OR remote.modified > main.modified
+              `);
+              this.db.exec(`
+                INSERT OR REPLACE INTO cram_cards
+                SELECT remote.* FROM remote.cram_cards
+                LEFT JOIN cram_cards AS main ON remote.id = main.id
+                WHERE main.id IS NULL OR remote.modified > main.modified
+              `);
+            } catch {
+              this.debugLog("Remote DB has no cram tables, skipping");
+            }
+
             // Commit the transaction
             this.db.exec("COMMIT");
             this.debugLog("Successfully merged data from disk");
@@ -887,6 +905,39 @@ export class MainDatabaseService extends BaseDatabaseService {
               }
             } catch {
               this.debugLog("Remote DB has no fsrs_weight_sets table, skipping");
+            }
+
+            // Merge cram (drill) state — mutable, newer-wins by modified.
+            for (const cramTable of ["cram_sessions", "cram_cards"]) {
+              try {
+                const remoteRows = remoteDb.exec(`SELECT * FROM ${cramTable}`);
+                if (remoteRows.length > 0) {
+                  const data = remoteRows[0];
+                  const idIdx = data.columns.indexOf("id");
+                  const modIdx = data.columns.indexOf("modified");
+                  const stmt = this.db.prepare(
+                    `INSERT OR REPLACE INTO ${cramTable} (${data.columns.join(",")})
+                     VALUES (${data.columns.map(() => "?").join(",")})`
+                  );
+                  for (const row of data.values) {
+                    const id = row[idIdx] as string;
+                    const remoteModified = row[modIdx] as string;
+                    const existing = this.db.exec(
+                      `SELECT modified FROM ${cramTable} WHERE id = ?`,
+                      [id]
+                    );
+                    const localModified = existing.length
+                      ? (existing[0]?.values?.[0]?.[0] as string | null)
+                      : null;
+                    if (!localModified || remoteModified > localModified) {
+                      stmt.run(row);
+                    }
+                  }
+                  stmt.free();
+                }
+              } catch {
+                this.debugLog(`Remote DB has no ${cramTable} table, skipping`);
+              }
             }
 
             // Commit the transaction

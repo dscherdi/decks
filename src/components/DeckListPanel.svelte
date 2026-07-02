@@ -67,8 +67,20 @@
   export let onDeckGroupClick: (deckGroup: DeckGroup) => void;
   export let onBrowseDeck: (deck: DeckWithProfile) => void;
   export let onBrowseDeckGroup: (deckGroup: DeckGroup) => void;
+  export let onCramDeck: ((deck: DeckWithProfile) => void) | undefined = undefined;
+  export let onCramDeckGroup: ((deckGroup: DeckGroup) => void) | undefined = undefined;
+  export let isCramResumable:
+    | ((deck: DeckWithProfile) => Promise<boolean>)
+    | undefined = undefined;
+  export let isCramResumableGroup:
+    | ((deckGroup: DeckGroup) => Promise<boolean>)
+    | undefined = undefined;
   export let onCustomDeckClick: (customDeck: CustomDeckGroup) => void;
   export let onBrowseCustomDeck: (customDeck: CustomDeckGroup) => void;
+  export let onCramCustomDeck: ((customDeck: CustomDeckGroup) => void) | undefined = undefined;
+  export let isCramResumableCustom:
+    | ((customDeck: CustomDeckGroup) => Promise<boolean>)
+    | undefined = undefined;
   export let onEditCustomDeck: (customDeck: CustomDeckGroup) => void;
 
   export let app: App;
@@ -542,6 +554,17 @@
       onBrowseDeckGroup(group);
     };
 
+    const cramOption = activeDocument.createElement("div");
+    cramOption.className = "decks-dropdown-option";
+    cramOption.textContent = t.deckList.cram;
+    cramOption.onclick = () => {
+      closeActiveDropdown();
+      onCramDeckGroup?.(group);
+    };
+    isCramResumableGroup?.(group).then((resumable) => {
+      if (resumable) cramOption.textContent = t.deckList.resumeCram;
+    });
+
     const exportOption = activeDocument.createElement("div");
     exportOption.className = "decks-dropdown-option";
     exportOption.textContent = t.deckList.exportToAnki;
@@ -565,6 +588,7 @@
 
     dropdown.appendChild(pinOption);
     dropdown.appendChild(browseOption);
+    if (onCramDeckGroup) dropdown.appendChild(cramOption);
     dropdown.appendChild(exportOption);
     dropdown.appendChild(configOption);
 
@@ -656,6 +680,17 @@
       onBrowseDeck(deck);
     };
 
+    const cramOption = activeDocument.createElement("div");
+    cramOption.className = "decks-dropdown-option";
+    cramOption.textContent = t.deckList.cram;
+    cramOption.onclick = () => {
+      closeActiveDropdown();
+      onCramDeck?.(deck);
+    };
+    isCramResumable?.(deck).then((resumable) => {
+      if (resumable) cramOption.textContent = t.deckList.resumeCram;
+    });
+
     const exportOption = activeDocument.createElement("div");
     exportOption.className = "decks-dropdown-option";
     exportOption.textContent = t.deckList.exportToAnki;
@@ -684,6 +719,7 @@
 
     dropdown.appendChild(pinOption);
     dropdown.appendChild(browseOption);
+    if (onCramDeck) dropdown.appendChild(cramOption);
     dropdown.appendChild(exportOption);
     dropdown.appendChild(configOption);
     dropdown.appendChild(resetOption);
@@ -773,6 +809,17 @@
       onBrowseCustomDeck(customDeck);
     };
 
+    const cramOption = activeDocument.createElement("div");
+    cramOption.className = "decks-dropdown-option";
+    cramOption.textContent = t.deckList.cram;
+    cramOption.onclick = () => {
+      closeActiveDropdown();
+      onCramCustomDeck?.(customDeck);
+    };
+    isCramResumableCustom?.(customDeck).then((resumable) => {
+      if (resumable) cramOption.textContent = t.deckList.resumeCram;
+    });
+
     const exportOption = activeDocument.createElement("div");
     exportOption.className = "decks-dropdown-option";
     exportOption.textContent = t.deckList.exportToAnki;
@@ -817,6 +864,7 @@
 
     dropdown.appendChild(pinOption);
     dropdown.appendChild(browseOption);
+    if (onCramCustomDeck) dropdown.appendChild(cramOption);
     dropdown.appendChild(editOption);
     dropdown.appendChild(exportOption);
     dropdown.appendChild(renameOption);
