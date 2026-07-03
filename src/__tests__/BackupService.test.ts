@@ -308,6 +308,40 @@ describe("BackupService", () => {
       );
     });
 
+    it("does not error when a backup to delete is already gone (ENOENT race)", async () => {
+      const consoleError = jest
+        .spyOn(console, "error")
+        .mockImplementation(() => {});
+      backupService.setMaxBackups(3);
+      mockAdapter.exists.mockResolvedValue(true);
+      mockAdapter.list.mockResolvedValue({
+        files: [
+          "backup-2023-01-01.db",
+          "backup-2023-01-02.db",
+          "backup-2023-01-03.db",
+          "backup-2023-01-04.db",
+          "backup-2023-01-05.db",
+        ],
+        folders: [],
+      });
+      mockAdapter.stat.mockImplementation((path) => {
+        const filename = path.split("/").pop();
+        const dateMatch = filename?.match(/backup-(\d{4}-\d{2}-\d{2})\.db/);
+        const mtime = dateMatch ? new Date(dateMatch[1]).getTime() : Date.now();
+        return Promise.resolve({ mtime, size: 1024 });
+      });
+      // A concurrent cleanup already deleted the file: remove rejects ENOENT.
+      mockAdapter.remove.mockRejectedValue(
+        Object.assign(new Error("ENOENT: no such file or directory"), {
+          code: "ENOENT",
+        })
+      );
+
+      await expect(backupService.createBackup(mockDb)).resolves.toBeDefined();
+      expect(consoleError).not.toHaveBeenCalled();
+      consoleError.mockRestore();
+    });
+
     it("should overwrite backup from same day", async () => {
       mockAdapter.exists.mockResolvedValue(true);
       mockAdapter.list.mockResolvedValue({ files: [], folders: [] });

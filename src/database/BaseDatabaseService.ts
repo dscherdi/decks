@@ -35,11 +35,18 @@ import type {
 } from "@decks/core";
 import type { IDatabaseService, JournalStateRow } from "./DatabaseFactory";
 import type { SyncLog } from "../services/SyncLog";
-import { generateOldFlashcardId } from "@decks/core";
+import {
+  generateOldFlashcardId,
+  generateLegacyDeckScopedFlashcardId,
+} from "@decks/core";
 
 export interface QueryConfig {
   asObject?: boolean;
 }
+
+// Schema version at which card IDs became deck-independent. Restoring a backup
+// older than this re-links its review history to the new ID scheme.
+const DECK_INDEPENDENT_ID_VERSION = 36;
 
 function serializeTags(tags: string[] | undefined): string {
   if (!tags || tags.length === 0) return "";
@@ -526,13 +533,10 @@ export abstract class BaseDatabaseService implements IDatabaseService {
       oldDeckId,
     ]);
 
-    // Update flashcard deck_id references
+    // Update flashcard deck_id references. Card IDs are deck-independent, so
+    // they (and their review_logs links) stay valid across the rename.
     const sql2 = `UPDATE flashcards SET deck_id = ? WHERE deck_id = ?`;
     await this.executeSql(sql2, [newDeckId, oldDeckId]);
-
-    // Update review logs
-    const sql3 = `UPDATE review_logs SET deck_id = ? WHERE deck_id = ?`;
-    await this.executeSql(sql3, [newDeckId, oldDeckId]);
 
     // Update review sessions
     const sql4 = `UPDATE review_sessions SET deck_id = ? WHERE deck_id = ?`;
@@ -979,7 +983,7 @@ export abstract class BaseDatabaseService implements IDatabaseService {
   ): Promise<void> {
     const now = this.getCurrentTimestamp();
     // Use provided ID first, then generate from front text
-    const flashcardId = flashcard.id || generateFlashcardId(flashcard.front, flashcard.deckId);
+    const flashcardId = flashcard.id || generateFlashcardId(flashcard.front);
     const flashcardWithId = {
       ...flashcard,
       id: flashcardId,
@@ -2292,44 +2296,49 @@ export abstract class BaseDatabaseService implements IDatabaseService {
   }
 
  /**
-   * Recovery: Migrates orphaned review logs by reverse-computing old IDs from 
-   * the current flashcard text, then rebuilds each card's FSRS scheduling 
-   * state from its most recent review log.
+   * Recovery: re-links review logs still keyed to a card's previous ID —
+   * hash(deckId + front) from the interim scheme, or the pre-deck hash(front) —
+   * to the card's current deck-independent ID, then rebuilds each card's FSRS
+   * state from its most recent review log. Non-destructive to card IDs. Used by
+   * the manual "rebuild from history" action and to heal the mixed-version sync
+   * window where a not-yet-upgraded device delivers old-ID logs.
    */
   async rebuildCardStateFromReviewLogs(): Promise<number> {
     const now = this.getCurrentTimestamp();
 
-    // 1. Fetch current cards to compute what their old IDs used to be
-    // Assuming 'id' is the new ID, and we have 'front'
-    const cards = await this.querySql<{ id: string, front: string, back: string }>(
-      `SELECT id, front FROM flashcards`,
+    const cards = await this.querySql<{
+      id: string;
+      front: string;
+      deck_id: string;
+      source_node_id: string | null;
+    }>(
+      `SELECT id, front, deck_id, source_node_id FROM flashcards`,
       [],
       { asObject: true }
     );
 
-    // 2. Compute the ID migrations in TypeScript
-    const idMigrations: { oldId: string, newId: string }[] = [];
+    // Reverse the interim scheme: reviews keyed to hash(deckId + front) (or the
+    // pre-deck hash(front)) re-point to the card's current deck-independent ID.
+    const idMigrations: { oldId: string; newId: string }[] = [];
     for (const card of cards) {
-      // NOTE: Replace this with your exact old hash generation function call
-      const oldId = generateOldFlashcardId(card.front); 
-      
-      if (oldId !== card.id) {
-        idMigrations.push({ oldId, newId: card.id });
+      if (!card.id.startsWith("card_")) continue;
+      const nodeId = card.source_node_id ?? undefined;
+      const candidates = [
+        generateLegacyDeckScopedFlashcardId(card.front, card.deck_id, nodeId),
+        generateOldFlashcardId(card.front),
+      ];
+      for (const oldId of candidates) {
+        if (oldId !== card.id) idMigrations.push({ oldId, newId: card.id });
       }
     }
 
-    // 3. Re-link the orphaned review logs to the new flashcard IDs
-    // If your DB wrapper supports transactions, wrap this loop in one for speed
     for (const { oldId, newId } of idMigrations) {
       await this.executeSql(
-        `UPDATE review_logs 
-         SET flashcard_id = ? 
-         WHERE flashcard_id = ?`,
+        `UPDATE review_logs SET flashcard_id = ? WHERE flashcard_id = ?`,
         [newId, oldId]
       );
     }
 
-    // 4. Count how many cards we can now successfully restore
     const countRows = await this.querySql<{ count: number }>(
       `SELECT COUNT(*) as count
        FROM flashcards f
@@ -2338,7 +2347,7 @@ export abstract class BaseDatabaseService implements IDatabaseService {
       { asObject: true }
     );
     const restored = countRows[0]?.count ?? 0;
-    
+
     if (restored === 0) return 0;
 
     // 5. Rebuild the FSRS state from the newly linked logs
@@ -2924,6 +2933,12 @@ export abstract class BaseDatabaseService implements IDatabaseService {
     try {
       const backupDb = await this.createBackupDatabaseInstance(backupData);
 
+      const backupVersionRows = await this.queryBackupDatabase(
+        backupDb,
+        "PRAGMA user_version"
+      );
+      const backupVersion = Number(backupVersionRows?.[0]?.[0] ?? 0);
+
       // Get current schema column names
       const currentLogColumns = new Set(
         (await this.querySql("PRAGMA table_info(review_logs)") as SqlJsValue[][])
@@ -3183,6 +3198,17 @@ export abstract class BaseDatabaseService implements IDatabaseService {
 
       await this.closeBackupDatabaseInstance(backupDb);
       this.debugLog("Database restored from backup data");
+
+      // A pre-v36 backup's review_logs are keyed to deck-scoped card IDs
+      // (hash(deckId + front)); re-link them to the vault's current deck-
+      // independent cards so restored history isn't orphaned. (Restore skips the
+      // flashcards table, so only the logs need re-pointing.)
+      if (backupVersion > 0 && backupVersion < DECK_INDEPENDENT_ID_VERSION) {
+        this.debugLog(
+          `Restored a pre-v${DECK_INDEPENDENT_ID_VERSION} backup — re-linking review history to deck-independent IDs`
+        );
+        await this.rebuildCardStateFromReviewLogs();
+      }
     } catch (error) {
       console.error("Failed to restore from backup data:", error);
       throw error;

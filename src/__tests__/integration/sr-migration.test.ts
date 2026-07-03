@@ -69,7 +69,7 @@ describe("SR migration pipeline (integration)", () => {
     const deckId = await syncFile(filepath, rendered.content);
 
     // Before injection the synced card is brand new.
-    const cardId = generateFlashcardId("Capital of France", deckId);
+    const cardId = generateFlashcardId("Capital of France");
     const fresh = await db.getFlashcardById(cardId);
     expect(fresh).not.toBeNull();
     expect(fresh!.state).toBe("new");
@@ -107,8 +107,8 @@ describe("SR migration pipeline (integration)", () => {
     const filepath = "Decks/animals (reversed).md";
     const deckId = await syncFile(filepath, reversedFile.content, true);
 
-    const fwdId = generateFlashcardId("Cat", deckId);
-    const revId = generateReverseFlashcardId("Cat", deckId);
+    const fwdId = generateFlashcardId("Cat");
+    const revId = generateReverseFlashcardId("Cat");
     expect(await db.getFlashcardById(fwdId)).not.toBeNull();
     expect(await db.getFlashcardById(revId)).not.toBeNull();
 
@@ -184,8 +184,8 @@ describe("SR migration pipeline (integration)", () => {
     const filepath = "Decks/mixed.md";
     const deckId = await syncFile(filepath, rendered.content);
 
-    const tableCardId = generateFlashcardId("Short", deckId);
-    const headerCardId = generateFlashcardId("Long question", deckId);
+    const tableCardId = generateFlashcardId("Short");
+    const headerCardId = generateFlashcardId("Long question");
     expect(await db.getFlashcardById(tableCardId)).not.toBeNull();
     expect(await db.getFlashcardById(headerCardId)).not.toBeNull();
 
@@ -248,7 +248,7 @@ describe("SR migration pipeline (integration)", () => {
       format: "headers",
     });
     const deckId = await syncFile("Decks/biology.md", rendered.content);
-    const cardId = generateFlashcardId(expectedFront, deckId);
+    const cardId = generateFlashcardId(expectedFront);
 
     await SrHistoryImporter.importHistory(
       db,
@@ -278,7 +278,7 @@ describe("SR migration pipeline (integration)", () => {
     );
     expect(suspended).toBe(1);
 
-    const cardId = generateFlashcardId("Cat", deckId);
+    const cardId = generateFlashcardId("Cat");
     const card = await db.getFlashcardById(cardId);
     expect(card!.suspendedAt).not.toBeNull();
   });
@@ -298,7 +298,7 @@ describe("SR migration pipeline (integration)", () => {
       db,
       [{ deckId, profileFsrs: profileFsrs(), cards: rendered.cards }]
     );
-    const card = await db.getFlashcardById(generateFlashcardId("Perro", deckId));
+    const card = await db.getFlashcardById(generateFlashcardId("Perro"));
     expect(card!.state).toBe("review");
     expect(card!.stability).toBe(7);
   });
@@ -326,8 +326,8 @@ describe("SR migration pipeline (integration)", () => {
     expect(injected).toBe(2);
 
     const front = dbRecords[0].front;
-    const parisId = generateClozeFlashcardId(front, "Paris", 0, deckId);
-    const franceId = generateClozeFlashcardId(front, "France", 1, deckId);
+    const parisId = generateClozeFlashcardId(front, "Paris", 0);
+    const franceId = generateClozeFlashcardId(front, "France", 1);
     expect((await db.getFlashcardById(parisId))!.stability).toBe(4);
     expect((await db.getFlashcardById(franceId))!.stability).toBe(9);
   });
@@ -388,7 +388,7 @@ describe("SR migration pipeline (integration)", () => {
       [{ deckId, profileFsrs: profileFsrs(), cards: [card] }]
     );
 
-    const cardId = generateFlashcardId("Photosynthesis", deckId);
+    const cardId = generateFlashcardId("Photosynthesis");
     const restored = await db.getFlashcardById(cardId);
     expect(restored).not.toBeNull();
     expect(restored!.state).toBe("review");
@@ -443,8 +443,8 @@ describe("SR migration pipeline (integration)", () => {
     );
     expect(injected).toBe(2);
 
-    const nyId = generateFlashcardId("New York", deckId);
-    const txId = generateFlashcardId("Texas", deckId);
+    const nyId = generateFlashcardId("New York");
+    const txId = generateFlashcardId("Texas");
     expect((await db.getFlashcardById(nyId))!.stability).toBe(4);
     expect((await db.getFlashcardById(txId))!.stability).toBe(9);
   });
@@ -481,8 +481,8 @@ describe("SR migration pipeline (integration)", () => {
     );
     expect(injected).toBe(2);
 
-    const jupId = generateClozeFlashcardId("The largest planet is ==Jupiter==.", "Jupiter", 0, deckId);
-    const merId = generateClozeFlashcardId("Closest to the sun is ==Mercury==.", "Mercury", 0, deckId);
+    const jupId = generateClozeFlashcardId("The largest planet is ==Jupiter==.", "Jupiter", 0);
+    const merId = generateClozeFlashcardId("Closest to the sun is ==Mercury==.", "Mercury", 0);
     expect((await db.getFlashcardById(jupId))!.stability).toBe(4);
     expect((await db.getFlashcardById(merId))!.stability).toBe(9);
   });
@@ -520,7 +520,7 @@ describe("SR migration pipeline (integration)", () => {
     // A review_log row exists → the heatmap (which counts review_logs) is no longer empty.
     const logs = await db.getReviewLogsByDeck(deckId);
     expect(logs.length).toBe(1);
-    expect((await db.getFlashcardById(generateFlashcardId("Note", deckId)))!.stability).toBe(20);
+    expect((await db.getFlashcardById(generateFlashcardId("Note")))!.stability).toBe(20);
   });
 
   it("preserves user frontmatter properties + tags and drops SR tags on the review file", () => {

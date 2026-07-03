@@ -6,7 +6,10 @@
 import type { DataAdapter } from "obsidian";
 import { BaseDatabaseService } from "./BaseDatabaseService";
 import type { QueryConfig } from "./BaseDatabaseService";
-import { buildMigrationSQL, CREATE_TABLES_SQL, CURRENT_SCHEMA_VERSION, yieldToUI, FlashcardSynchronizer } from "@decks/core";
+import { buildMigrationSQL, CREATE_TABLES_SQL, CURRENT_SCHEMA_VERSION, yieldToUI, FlashcardSynchronizer, remapCardIdsToDeckIndependent } from "@decks/core";
+
+// Schema version at which card IDs became deck-independent.
+const DECK_INDEPENDENT_ID_VERSION = 36;
 import type { Database, InitSqlJsStatic } from "sql.js";
 import type { SyncData, SyncResult, SqlJsValue } from "@decks/core";
 import { getEmbeddedAssets } from "./embedded-assets";
@@ -269,6 +272,11 @@ export class MainDatabaseService extends BaseDatabaseService {
           `Migrating database from version ${currentVersion} to ${CURRENT_SCHEMA_VERSION}`
         );
         const reviewLogsBefore = this.getReviewLogsCount();
+        // Re-point review history to deck-independent card IDs while the old IDs
+        // are still present — buildMigrationSQL then drops/rebuilds flashcards.
+        if (currentVersion > 0 && currentVersion < DECK_INDEPENDENT_ID_VERSION) {
+          remapCardIdsToDeckIndependent(this.db);
+        }
         const migrationSQL = buildMigrationSQL(this.db);
         this.db.exec(migrationSQL);
         this.debugLog(`Database migrated to version ${CURRENT_SCHEMA_VERSION}`);

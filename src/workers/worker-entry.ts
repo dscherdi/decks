@@ -25,7 +25,12 @@ import {
   CREATE_TABLES_SQL,
   CURRENT_SCHEMA_VERSION,
   buildMigrationSQL,
+  remapCardIdsToDeckIndependent,
 } from "@decks/core";
+
+// Schema version at which card IDs became deck-independent. Upgrading from an
+// earlier version re-points review history to the new IDs before the rebuild.
+const DECK_INDEPENDENT_ID_VERSION = 36;
 
 export interface QueryConfig {
   asObject?: boolean;
@@ -254,6 +259,15 @@ class SimpleDatabaseWorker {
       if (currentVersion < CURRENT_SCHEMA_VERSION) {
         const reviewLogsBefore = this.getReviewLogsCount();
         try {
+          // Re-point review history to deck-independent card IDs while the old
+          // IDs are still present — buildMigrationSQL then drops and rebuilds
+          // the flashcards table.
+          if (
+            currentVersion > 0 &&
+            currentVersion < DECK_INDEPENDENT_ID_VERSION
+          ) {
+            remapCardIdsToDeckIndependent(this.db);
+          }
           const migrationSQL = buildMigrationSQL(this.db);
           this.db.exec(migrationSQL);
 

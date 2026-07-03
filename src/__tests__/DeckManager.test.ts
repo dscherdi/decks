@@ -161,27 +161,26 @@ describe("DeckManager", () => {
   });
 
   describe("flashcard ID generation", () => {
-    it("should generate consistent IDs for same content and deck", () => {
-      const id1 = generateFlashcardId("What is 2+2?", "deck_abc");
-      const id2 = generateFlashcardId("What is 2+2?", "deck_abc");
+    it("should generate consistent IDs for the same content", () => {
+      const id1 = generateFlashcardId("What is 2+2?");
+      const id2 = generateFlashcardId("What is 2+2?");
 
       expect(id1).toBe(id2);
       expect(id1).toMatch(/^card_[a-z0-9]+$/);
     });
 
     it("should generate different IDs for different content", () => {
-      const id1 = generateFlashcardId("Question 1", "deck_abc");
-      const id2 = generateFlashcardId("Question 2", "deck_abc");
+      const id1 = generateFlashcardId("Question 1");
+      const id2 = generateFlashcardId("Question 2");
 
       expect(id1).not.toBe(id2);
     });
 
-    it("should generate different IDs for same content across decks", () => {
+    it("should generate the same ID for the same content regardless of deck", () => {
+      // IDs are deck-independent: a card keeps its identity (and review history)
+      // when it moves between decks or its deck file is renamed.
       const question = "What is 2+2?";
-      const id1 = generateFlashcardId(question, "deck_abc");
-      const id2 = generateFlashcardId(question, "deck_xyz");
-
-      expect(id1).not.toBe(id2);
+      expect(generateFlashcardId(question)).toBe(generateFlashcardId(question));
     });
   });
 });

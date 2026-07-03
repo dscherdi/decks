@@ -28,17 +28,22 @@
   }
   let drag: DragState | null = null;
 
+  function randomMaskId(): string {
+    // Random so a mask's id is a stable, globally-unique identity (the card id
+    // is keyed on it). The "m" prefix keeps an all-digit hash from being read
+    // back as a YAML number. Assigned once here and persisted; never reissued.
+    const rand =
+      typeof crypto !== "undefined" && "randomUUID" in crypto
+        ? crypto.randomUUID().slice(0, 8)
+        : Math.random().toString(36).slice(2, 10);
+    return `m${rand}`;
+  }
+
   function nextMaskId(): string {
-    let max = 0;
-    for (const m of masks) {
-      const match = /^m(\d+)$/.exec(m.id);
-      if (match) max = Math.max(max, parseInt(match[1], 10));
-    }
-    let candidate = `m${max + 1}`;
     const used = new Set(masks.map((m) => m.id));
-    let n = max + 1;
-    while (used.has(candidate)) candidate = `m${++n}`;
-    return candidate;
+    let id = randomMaskId();
+    while (used.has(id)) id = randomMaskId();
+    return id;
   }
 
   function clamp(n: number, min: number, max: number): number {
