@@ -22,6 +22,7 @@ import type {
 import FlashcardReviewModal from "./FlashcardReviewModal.svelte";
 import { mount, unmount } from "svelte";
 import { navigateToFlashcardSource } from "../../utils/flashcard-navigator";
+import { wireInternalLinks } from "../../utils/internal-links";
 import { I18n } from "@decks/core";
 import { ConfirmModal } from "../ConfirmModal";
 
@@ -156,6 +157,8 @@ export class FlashcardReviewView extends ItemView {
       this.markdownComponents.push(component);
       // sourcePath lets Obsidian resolve ![[…]] embeds (audio/images) against the deck file.
       void MarkdownRenderer.render(this.app, content, el, sourcePath, component);
+      // Make internal links open/preview like Obsidian during review.
+      wireInternalLinks(this.app, el, sourcePath, component);
     } catch (error) {
       console.error("Error rendering markdown:", error);
       el.textContent = content;

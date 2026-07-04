@@ -405,6 +405,13 @@ export default class DecksPlugin extends Plugin {
         (leaf) => new AiGeneratorView(leaf),
       );
 
+      // Let internal links in reviewed cards use Obsidian's page preview
+      // (mod-key hover, configurable under core Page Preview settings).
+      this.registerHoverLinkSource("decks", {
+        display: "Decks",
+        defaultMod: true,
+      });
+
       // Add ribbon icon
       this.addRibbonIcon("brain", I18n.t.ribbon.decks, () => {
         new DecksViewModal(
