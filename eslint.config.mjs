@@ -21,6 +21,8 @@ export default [
       "**/__mocks__/**",
       "**/*.test.ts",
       "**/*.spec.ts",
+      // Node/jest bootstrap that polyfills window from the Node global.
+      "src/test-setup.ts",
       "*.config.js",
       "*.config.mjs",
       "esbuild.config.mjs",

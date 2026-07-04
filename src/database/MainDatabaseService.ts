@@ -1,4 +1,3 @@
-/* eslint-disable obsidianmd/no-global-this -- Test-only in-process DB: runs in Node (jest), never in Obsidian, so it reads sql.js from Node's `global`/`globalThis` (window/activeWindow are polyfilled from these in test-setup). */
 // TEST-ONLY: in-process DB used by Jest integration tests.
 // Production always uses WorkerDatabaseService via DatabaseFactory.
 // Do not import this from production code — workers run on every Obsidian
@@ -65,15 +64,11 @@ export class MainDatabaseService extends BaseDatabaseService {
         typeof window !== "undefined" &&
         (window as Window & { initSqlJs?: InitSqlJsStatic }).initSqlJs
       ) {
+        // Node test environment: test-setup polyfills `window`, onto which the
+        // tests inject `initSqlJs`.
         this.SQL = (
           window as Window & { initSqlJs: InitSqlJsStatic }
         ).initSqlJs;
-      } else if (
-        typeof global !== "undefined" &&
-        (global as { initSqlJs?: InitSqlJsStatic }).initSqlJs
-      ) {
-        // For Node.js test environment with global initSqlJs
-        this.SQL = (global as { initSqlJs: InitSqlJsStatic }).initSqlJs;
       } else {
         // For environments where SQL.js is not globally available
         const sqlJs = await import("sql.js");
@@ -419,7 +414,7 @@ export class MainDatabaseService extends BaseDatabaseService {
           }
         ).FS ||
         (
-          globalThis as typeof globalThis & {
+          window as Window & {
             FS?: {
               createDataFile?: (
                 parent: string,
