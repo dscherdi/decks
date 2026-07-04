@@ -644,6 +644,12 @@
   justify-content: flex-end;
 }
 
+/* Container for the customizable review-shortcut rows; collapses fully when the
+   keyboard-shortcuts toggle hides them. */
+.decks-nested-settings:empty {
+  display: none;
+}
+
 div.decks-card-content
   > div.decks-answer-section
   > div.decks-card-side.decks-back

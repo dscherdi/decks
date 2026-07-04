@@ -5,10 +5,18 @@ import {
   Notice,
   Modal,
   DropdownComponent,
+  ButtonComponent,
   normalizePath,
   getLanguage,
 } from "obsidian";
 import type { DecksSettings } from "../../settings";
+import {
+  type ReviewShortcuts,
+  DEFAULT_REVIEW_SHORTCUTS,
+  displayShortcutKey,
+  normalizeShortcutKey,
+  matchesShortcut,
+} from "../../utils/shortcuts";
 import { BackupService } from "../../services/BackupService";
 import DecksPlugin from "@/main";
 import type { IDatabaseService } from "@/database/DatabaseFactory";
@@ -30,6 +38,8 @@ export class DecksSettingTab extends PluginSettingTab {
   private plugin: DecksPlugin;
   private db: IDatabaseService;
   private logger: Logger;
+  // Cancels an in-progress review-shortcut key capture (only one at a time).
+  private cancelShortcutCapture?: () => void;
   // Tracks when the user explicitly chose "Custom…" in the model picker so the
   // free-text field stays open even while the typed id matches no preset.
   private aiModelCustom = false;
@@ -76,6 +86,9 @@ export class DecksSettingTab extends PluginSettingTab {
 
     // Review Session Settings
     this.addReviewSettings(containerEl);
+
+    // Keyboard shortcuts (standalone section)
+    this.addKeyboardShortcutSettings(containerEl);
 
     // Parsing Settings
     this.addParsingSettings(containerEl);
@@ -431,6 +444,117 @@ export class DecksSettingTab extends PluginSettingTab {
     });
   }
 
+  // Five capturable review keys (four ratings + reveal/advance).
+  // Standalone "Keyboard shortcuts" section: the master toggle plus the nested,
+  // customizable review keys (shown only while enabled).
+  private addKeyboardShortcutSettings(containerEl: HTMLElement): void {
+    const s = I18n.t.settings.review;
+    new Setting(containerEl).setName(s.keyboardShortcuts).setHeading();
+
+    new Setting(containerEl)
+      .setName(s.enableShortcuts)
+      .setDesc(s.keyboardShortcutsDesc)
+      .addToggle((toggle) =>
+        toggle
+          .setValue(this.settings.review.enableKeyboardShortcuts)
+          .onChange(async (value) => {
+            this.settings.review.enableKeyboardShortcuts = value;
+            await this.saveSettings();
+            this.renderReviewShortcutRows(shortcutsEl);
+          })
+      );
+
+    const shortcutsEl = containerEl.createDiv({ cls: "decks-nested-settings" });
+    this.renderReviewShortcutRows(shortcutsEl);
+  }
+
+  // Renders the customizable review keys into the (indented) sub-container.
+  // Hidden when keyboard shortcuts are disabled.
+  private renderReviewShortcutRows(containerEl: HTMLElement): void {
+    this.cancelShortcutCapture?.();
+    containerEl.empty();
+    if (!this.settings.review.enableKeyboardShortcuts) return;
+
+    const s = I18n.t.settings.review;
+    const rl = I18n.t.review; // reuse the already-translated rating labels
+    const actions: Array<{ key: keyof ReviewShortcuts; name: string }> = [
+      { key: "again", name: rl.again },
+      { key: "hard", name: rl.hard },
+      { key: "good", name: rl.good },
+      { key: "easy", name: rl.easy },
+      { key: "reveal", name: s.shortcutReveal },
+    ];
+    const buttons = new Map<keyof ReviewShortcuts, ButtonComponent>();
+    const refresh = (): void => {
+      for (const { key } of actions) {
+        buttons
+          .get(key)
+          ?.setButtonText(displayShortcutKey(this.settings.review.shortcuts[key]));
+      }
+    };
+
+    new Setting(containerEl)
+      .setName(s.shortcutsHeading)
+      .setDesc(s.shortcutsHeadingDesc);
+
+    for (const { key, name } of actions) {
+      new Setting(containerEl).setName(name).addButton((btn) => {
+        buttons.set(key, btn);
+        btn
+          .setButtonText(displayShortcutKey(this.settings.review.shortcuts[key]))
+          .onClick(() => this.captureShortcut(key, btn, refresh));
+      });
+    }
+
+    new Setting(containerEl).addButton((btn) =>
+      btn.setButtonText(s.shortcutResetDefaults).onClick(async () => {
+        this.cancelShortcutCapture?.();
+        this.settings.review.shortcuts = { ...DEFAULT_REVIEW_SHORTCUTS };
+        await this.saveSettings();
+        refresh();
+      })
+    );
+  }
+
+  private captureShortcut(
+    action: keyof ReviewShortcuts,
+    btn: ButtonComponent,
+    refresh: () => void
+  ): void {
+    const s = I18n.t.settings.review;
+    // Only one capture at a time.
+    this.cancelShortcutCapture?.();
+    btn.setButtonText(s.shortcutPressKey);
+
+    const onKey = (evt: KeyboardEvent): void => {
+      // Ignore a bare modifier press — wait for the real key.
+      if (["Shift", "Control", "Alt", "Meta"].includes(evt.key)) return;
+      evt.preventDefault();
+      evt.stopPropagation();
+      this.cancelShortcutCapture?.();
+      if (evt.key === "Escape") return; // cancel, keep current binding
+
+      const nextKey = normalizeShortcutKey(evt.key);
+      const shortcuts = this.settings.review.shortcuts;
+      const clashes = (
+        Object.keys(shortcuts) as Array<keyof ReviewShortcuts>
+      ).some((k) => k !== action && matchesShortcut(shortcuts[k], nextKey));
+      if (clashes) {
+        new Notice(s.shortcutDuplicate);
+        return;
+      }
+      shortcuts[action] = nextKey;
+      void this.saveSettings().then(refresh);
+    };
+
+    activeDocument.addEventListener("keydown", onKey, true);
+    this.cancelShortcutCapture = (): void => {
+      activeDocument.removeEventListener("keydown", onKey, true);
+      this.cancelShortcutCapture = undefined;
+      refresh();
+    };
+  }
+
   private addReviewSettings(containerEl: HTMLElement): void {
     new Setting(containerEl).setName(I18n.t.settings.review.heading).setHeading();
 
@@ -442,18 +566,6 @@ export class DecksSettingTab extends PluginSettingTab {
           .setValue(this.settings.review.showProgress)
           .onChange(async (value) => {
             this.settings.review.showProgress = value;
-            await this.saveSettings();
-          })
-      );
-
-    new Setting(containerEl)
-      .setName(I18n.t.settings.review.keyboardShortcuts)
-      .setDesc(I18n.t.settings.review.keyboardShortcutsDesc)
-      .addToggle((toggle) =>
-        toggle
-          .setValue(this.settings.review.enableKeyboardShortcuts)
-          .onChange(async (value) => {
-            this.settings.review.enableKeyboardShortcuts = value;
             await this.saveSettings();
           })
       );

@@ -1,4 +1,8 @@
 import { type AiProviderId, type LanguagePreference } from "@decks/core";
+import {
+  type ReviewShortcuts,
+  DEFAULT_REVIEW_SHORTCUTS,
+} from "./utils/shortcuts";
 
 export type DeckListSortMode =
   | "name-asc"
@@ -13,6 +17,7 @@ export interface DecksSettings {
   review: {
     showProgress: boolean;
     enableKeyboardShortcuts: boolean;
+    shortcuts: ReviewShortcuts; // Customizable review keys (4 ratings + reveal)
     sessionDuration: number; // Session duration in minutes (1-60, default 25)
     nextDayStartsAt: number; // Hour (0-23) when study day rolls over (default 4 AM)
     leechThreshold: number; // Lapses count at/above which a card is flagged as a leech (default 8)
@@ -116,6 +121,7 @@ export const DEFAULT_SETTINGS: DecksSettings = {
   review: {
     showProgress: true,
     enableKeyboardShortcuts: true,
+    shortcuts: { ...DEFAULT_REVIEW_SHORTCUTS },
     sessionDuration: 25,
     nextDayStartsAt: 4,
     leechThreshold: 8,

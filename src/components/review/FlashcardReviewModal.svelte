@@ -20,9 +20,20 @@
   import { isOcclusionV2, parseOcclusionBack, activeMaskIdForCard, prepareClozeMath } from "@decks/core";
   import { renderCardSide } from "../../utils/html-template-render";
   import { renderOcclusion } from "../../utils/occlusion-render";
+  import {
+    DEFAULT_REVIEW_SHORTCUTS,
+    matchesShortcut,
+    isReviewShortcut,
+    displayShortcutKey,
+  } from "../../utils/shortcuts";
 
   const t = I18n.t;
   const r = t.review;
+
+  // The five configurable review keys (four ratings + reveal/advance).
+  $: shortcuts = settings.review.shortcuts ?? DEFAULT_REVIEW_SHORTCUTS;
+  // Master switch: gates all review keyboard shortcuts (ratings + reveal + B/S/R).
+  $: kbEnabled = settings.review.enableKeyboardShortcuts;
 
   export let deckOrGroup: DeckOrGroup;
   export let initialCard: Flashcard | null = null;
@@ -984,7 +995,12 @@
       !event.altKey
     ) {
       const k = event.key.toLowerCase();
-      if (k === "b" || k === "s" || k === "r") {
+      // A key bound to a review shortcut (e.g. rebinding a rating to "s") takes
+      // precedence over the card-action keys, so it isn't swallowed here.
+      if (
+        (k === "b" || k === "s" || k === "r") &&
+        !isReviewShortcut(event.key, shortcuts)
+      ) {
         event.preventDefault();
         lastEventTime = now;
         lastEventType = eventType;
@@ -996,8 +1012,8 @@
     }
 
     if (browseMode) {
-      // Browse mode: Space shows answer, then advances
-      if (!showAnswer && event.key === " ") {
+      // Browse mode: reveal key shows the answer, then advances
+      if (!showAnswer && kbEnabled && matchesShortcut(event.key, shortcuts.reveal)) {
         event.preventDefault();
         lastEventTime = now;
         lastEventType = eventType;
@@ -1007,7 +1023,7 @@
         lastEventType = eventType;
 
         if (
-          event.key === " " ||
+          (kbEnabled && matchesShortcut(event.key, shortcuts.reveal)) ||
           event.key === "Enter" ||
           event.key === "ArrowRight"
         ) {
@@ -1027,9 +1043,9 @@
       return;
     }
 
-    // Cram mode: two-button drill (1 = again, 2 or space = good)
+    // Cram mode: two-button drill (again / good; reveal doubles as good)
     if (cramMode) {
-      if (!showAnswer && event.key === " ") {
+      if (!showAnswer && kbEnabled && matchesShortcut(event.key, shortcuts.reveal)) {
         event.preventDefault();
         lastEventTime = now;
         lastEventType = eventType;
@@ -1044,10 +1060,15 @@
           return;
         }
 
-        if (event.key === "1") {
+        if (!kbEnabled) return;
+
+        if (matchesShortcut(event.key, shortcuts.again)) {
           event.preventDefault();
           handleReview("again");
-        } else if (event.key === "2" || event.key === " ") {
+        } else if (
+          matchesShortcut(event.key, shortcuts.good) ||
+          matchesShortcut(event.key, shortcuts.reveal)
+        ) {
           event.preventDefault();
           handleReview("good");
         }
@@ -1056,7 +1077,7 @@
     }
 
     // Standard mode
-    if (!showAnswer && event.key === " ") {
+    if (!showAnswer && kbEnabled && matchesShortcut(event.key, shortcuts.reveal)) {
       event.preventDefault();
       lastEventTime = now;
       lastEventType = eventType;
@@ -1072,20 +1093,20 @@
         return;
       }
 
-      switch (event.key) {
-        case "1":
-          handleReview("again");
-          break;
-        case "2":
-          handleReview("hard");
-          break;
-        case "3":
-        case " ":
-          handleReview("good");
-          break;
-        case "4":
-          handleReview("easy");
-          break;
+      if (!kbEnabled) return;
+
+      // The reveal key doubles as "Good" once the answer is shown (as Space did).
+      if (matchesShortcut(event.key, shortcuts.again)) {
+        handleReview("again");
+      } else if (matchesShortcut(event.key, shortcuts.hard)) {
+        handleReview("hard");
+      } else if (
+        matchesShortcut(event.key, shortcuts.good) ||
+        matchesShortcut(event.key, shortcuts.reveal)
+      ) {
+        handleReview("good");
+      } else if (matchesShortcut(event.key, shortcuts.easy)) {
+        handleReview("easy");
       }
     }
   }
@@ -1757,7 +1778,7 @@
           type="button"
         >
           <span>{r.showAnswerButton}</span>
-          <kbd class="decks-shortcut">{r.spaceShortcut}</kbd>
+          <kbd class="decks-shortcut">{displayShortcutKey(shortcuts.reveal)}</kbd>
         </button>
       {/if}
 
@@ -1785,7 +1806,7 @@
                 ? r.finish
                 : r.next}</span
             >
-            <kbd class="decks-shortcut">{r.spaceShortcut}</kbd>
+            <kbd class="decks-shortcut">{displayShortcutKey(shortcuts.reveal)}</kbd>
           </button>
         </div>
       {:else if showAnswer && cramMode}
@@ -1798,7 +1819,7 @@
             type="button"
           >
             <div class="decks-button-label">{r.again}</div>
-            <kbd class="decks-shortcut">1</kbd>
+            <kbd class="decks-shortcut">{displayShortcutKey(shortcuts.again)}</kbd>
           </button>
 
           <button
@@ -1809,7 +1830,7 @@
             type="button"
           >
             <div class="decks-button-label">{r.good}</div>
-            <kbd class="decks-shortcut">{r.spaceShortcut}</kbd>
+            <kbd class="decks-shortcut">{displayShortcutKey(shortcuts.reveal)}</kbd>
           </button>
         </div>
       {:else if showAnswer && schedulingInfo}
@@ -1825,7 +1846,7 @@
             <div class="decks-interval">
               {getIntervalDisplay(schedulingInfo.again.interval)}
             </div>
-            <kbd class="decks-shortcut">1</kbd>
+            <kbd class="decks-shortcut">{displayShortcutKey(shortcuts.again)}</kbd>
           </button>
 
           <button
@@ -1839,7 +1860,7 @@
             <div class="decks-interval">
               {getIntervalDisplay(schedulingInfo.hard.interval)}
             </div>
-            <kbd class="decks-shortcut">2</kbd>
+            <kbd class="decks-shortcut">{displayShortcutKey(shortcuts.hard)}</kbd>
           </button>
 
           <button
@@ -1852,7 +1873,7 @@
             <div class="decks-interval">
               {getIntervalDisplay(schedulingInfo.good.interval)}
             </div>
-            <kbd class="decks-shortcut">3</kbd>
+            <kbd class="decks-shortcut">{displayShortcutKey(shortcuts.good)}</kbd>
           </button>
 
           <button
@@ -1865,7 +1886,7 @@
             <div class="decks-interval">
               {getIntervalDisplay(schedulingInfo.easy.interval)}
             </div>
-            <kbd class="decks-shortcut">4</kbd>
+            <kbd class="decks-shortcut">{displayShortcutKey(shortcuts.easy)}</kbd>
           </button>
         </div>
       {/if}
