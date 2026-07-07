@@ -1,4 +1,4 @@
-import { App, TFile, normalizePath } from "obsidian";
+import { App, FileSystemAdapter, Platform, TFile, normalizePath } from "obsidian";
 import { unzipSync } from "fflate";
 import {
   AnkiCollectionParser,
@@ -6,6 +6,7 @@ import {
   AnkiHistoryImporter,
   generateDeckId,
   isZstd,
+  mapWithConcurrency,
   yieldEvery,
 } from "@decks/core";
 import type {
@@ -57,11 +58,25 @@ export interface AnkiImportSummary {
 }
 
 const MEDIA_SUBFOLDER = "media";
+// Media files written concurrently. Bounded so bulk imports pipeline disk I/O
+// without exhausting file descriptors or the mobile filesystem bridge.
+const MEDIA_WRITE_CONCURRENCY = 8;
 
 interface LoadedCollection {
   db: Database;
   mediaByName: Map<string, string>; // filename → zip entry key
   entries: Record<string, Uint8Array>;
+}
+
+// Minimal shapes for the Node modules reached only on Electron desktop.
+interface NodeFsPromises {
+  writeFile(path: string, data: Uint8Array): Promise<void>;
+}
+interface NodePathModule {
+  join(...parts: string[]): string;
+}
+interface WindowWithRequire {
+  require?: (module: string) => unknown;
 }
 
 /**
@@ -81,6 +96,9 @@ export class AnkiImportController {
     private readonly templateSyncService?: { syncAll(): Promise<void> },
     private readonly saveSettings?: () => Promise<void>
   ) {}
+
+  // Cached desktop fs writer: undefined = not resolved yet, null = unavailable.
+  private fastWriter?: ((normPath: string, buffer: ArrayBuffer) => Promise<void>) | null;
 
   // Migrated Anki decks nest under a `/anki` subtag so the chosen profile maps
   // only to them — never the user's own decks.
@@ -265,10 +283,11 @@ export class AnkiImportController {
     const total = parsed.mediaFiles.length;
     if (total === 0) return 0;
     const folder = normalizePath(`${base}/${MEDIA_SUBFOLDER}`);
-    let copied = 0;
-    // Ensure each distinct parent folder only once (all media share base/media,
-    // bar the rare nested name) — avoids O(files) redundant existence checks.
-    const ensured = new Set<string>();
+
+    // Phase A — build the write list (CPU only): resolve each entry, decompress
+    // if needed, convert to a buffer. Also collect the distinct parent folders.
+    const writes: Array<{ target: string; buffer: ArrayBuffer }> = [];
+    const parents = new Set<string>();
     for (let i = 0; i < total; i++) {
       const name = parsed.mediaFiles[i];
       const entryKey = loaded.mediaByName.get(name);
@@ -276,30 +295,54 @@ export class AnkiImportController {
       if (!data) continue;
       if (isZstd(data)) data = decompressZstd(data);
       const target = normalizePath(`${folder}/${name}`);
-      try {
-        const parent = target.slice(0, Math.max(0, target.lastIndexOf("/")));
-        if (parent && !ensured.has(parent)) {
-          await this.ensureFolderFor(target);
-          ensured.add(parent);
-        }
-        // Overwrite on re-import so changed media is refreshed (mirrors the
-        // markdown overwrite); counts overwrites as copied.
-        await this.createOrOverwriteBinary(target, data);
-        copied++;
-      } catch (error) {
-        this.logger.debug("Could not copy Anki media", name, error);
-      }
-      if (i % 50 === 0) onProgress?.(i + 1, total);
+      const parent = target.slice(0, Math.max(0, target.lastIndexOf("/")));
+      if (parent) parents.add(parent);
+      writes.push({ target, buffer: AnkiImportController.toArrayBuffer(data) });
       await yieldEvery(i, 100);
     }
+
+    // Phase B — create each distinct parent folder once (all media share
+    // base/media, bar the rare nested name), before any parallel write.
+    for (const parent of parents) {
+      await this.ensureFolderFor(`${parent}/.`);
+    }
+
+    // Phase C — write files concurrently. Distinct paths, folders already
+    // created, so bounded-parallel writes are safe; the shared counter keeps
+    // progress monotonic. Overwrite on re-import to refresh changed media.
+    let completed = 0;
+    const results = await mapWithConcurrency(
+      writes,
+      MEDIA_WRITE_CONCURRENCY,
+      async ({ target, buffer }) => {
+        let ok = false;
+        try {
+          await this.writeBinary(target, buffer);
+          ok = true;
+        } catch (error) {
+          this.logger.debug("Could not copy Anki media", target, error);
+        }
+        completed++;
+        if (completed % 50 === 0) onProgress?.(completed, total);
+        await yieldEvery(completed, 100);
+        return ok;
+      }
+    );
+
     onProgress?.(total, total);
-    return copied;
+    return results.filter(Boolean).length;
   }
 
   private static toArrayBuffer(bytes: Uint8Array): ArrayBuffer {
-    const copy = new Uint8Array(bytes.byteLength);
-    copy.set(bytes);
-    return copy.buffer;
+    const { buffer, byteOffset, byteLength } = bytes;
+    // Reuse the backing buffer when the view spans it exactly (unzipSync/fzstd
+    // outputs own their buffer) to avoid copying large media.
+    if (buffer instanceof ArrayBuffer && byteOffset === 0 && byteLength === buffer.byteLength) {
+      return buffer;
+    }
+    const copy = new ArrayBuffer(byteLength);
+    new Uint8Array(copy).set(bytes);
+    return copy;
   }
 
   // --- file helpers (mirror SrMigrationController) ---
@@ -312,14 +355,42 @@ export class AnkiImportController {
     else await this.app.vault.create(norm, content);
   }
 
-  // Caller is responsible for ensuring the parent folder exists (copyMedia does
-  // so once per folder), so this only writes — create new, else overwrite.
-  private async createOrOverwriteBinary(path: string, data: Uint8Array): Promise<void> {
+  // On desktop, resolve a direct Node fs writer once: writing straight to the
+  // vault path lets libuv's threadpool run writes in parallel and skips the
+  // adapter's per-file bookkeeping/fsync that serialises bulk media imports.
+  // Null on mobile or if Node isn't reachable — callers fall back to the adapter.
+  private resolveFastWriter(): ((normPath: string, buffer: ArrayBuffer) => Promise<void>) | null {
+    if (this.fastWriter !== undefined) return this.fastWriter;
+    this.fastWriter = null;
+    const adapter = this.app.vault.adapter;
+    const req =
+      typeof window !== "undefined" ? (window as unknown as WindowWithRequire).require : undefined;
+    if (Platform.isDesktopApp && adapter instanceof FileSystemAdapter && req) {
+      const fs = (req("fs") as { promises: NodeFsPromises }).promises;
+      const path = req("path") as NodePathModule;
+      const base = adapter.getBasePath();
+      this.fastWriter = (normPath, buffer) =>
+        fs.writeFile(path.join(base, normPath), new Uint8Array(buffer));
+    }
+    return this.fastWriter;
+  }
+
+  // Caller ensures the parent folder exists (copyMedia does so once per folder).
+  // Desktop uses the direct fs writer; everything else (mobile, or a failed fast
+  // write) falls back to the adapter. Obsidian's file watcher registers the files
+  // either way, so embeds resolve at review time.
+  private async writeBinary(path: string, buffer: ArrayBuffer): Promise<void> {
     const norm = normalizePath(path);
-    const buffer = AnkiImportController.toArrayBuffer(data);
-    const existing = this.app.vault.getAbstractFileByPath(norm);
-    if (existing instanceof TFile) await this.app.vault.modifyBinary(existing, buffer);
-    else await this.app.vault.createBinary(norm, buffer);
+    const fast = this.resolveFastWriter();
+    if (fast) {
+      try {
+        await fast(norm, buffer);
+        return;
+      } catch (error) {
+        this.logger.debug("fs fast-write failed, using adapter", norm, error);
+      }
+    }
+    await this.app.vault.adapter.writeBinary(norm, buffer);
   }
 
   private async ensureFolderFor(filePath: string): Promise<void> {

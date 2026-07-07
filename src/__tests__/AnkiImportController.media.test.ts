@@ -57,14 +57,13 @@ describe("AnkiImportController media copy", () => {
     const vault = new Vault();
     let existsCalls = 0;
     let mkdirCalls = 0;
-    vault.adapter = {
-      exists: async (): Promise<boolean> => {
-        existsCalls++;
-        return false;
-      },
-      mkdir: async (): Promise<void> => {
-        mkdirCalls++;
-      },
+    // Override just the folder ops so the mock's writeBinary still records bytes.
+    vault.adapter.exists = async (): Promise<boolean> => {
+      existsCalls++;
+      return false;
+    };
+    vault.adapter.mkdir = async (): Promise<void> => {
+      mkdirCalls++;
     };
     const copier = makeController(vault);
     const names = ["a.png", "b.png", "c.png", "d.png"];

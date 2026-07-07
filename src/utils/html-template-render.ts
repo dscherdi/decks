@@ -22,6 +22,9 @@ export type MarkdownRenderFn = (
 export type EmbedResolver = (linkpath: string) => string | null;
 
 const IMAGE_EXT = /\.(png|jpe?g|gif|svg|webp|avif|bmp)$/i;
+const AUDIO_EXT = /\.(mp3|ogg|wav|m4a|flac|aac|opus|3gp)$/i;
+// webm can carry audio or video; a <video> element plays audio-only webm fine.
+const VIDEO_EXT = /\.(mp4|webm|mov|mkv|ogv|avi)$/i;
 // ![[path]] / ![[path|opts]] (ignores an optional #subpath); and ![alt](path).
 const WIKI_EMBED = /!\[\[([^\]|#]+?)(?:#[^\]|]*)?(?:\|([^\]]*))?\]\]/g;
 const MD_EMBED = /!\[([^\]]*)\]\(([^)\s]+?)\)/g;
@@ -46,32 +49,53 @@ function imgTag(src: string, alt: string, opts?: string): string {
   return `<img src="${escapeAttr(src)}" alt="${escapeAttr(altText)}"${dims}>`;
 }
 
+function audioTag(src: string): string {
+  return `<audio controls src="${escapeAttr(src)}"></audio>`;
+}
+
+function videoTag(src: string): string {
+  return `<video controls src="${escapeAttr(src)}"></video>`;
+}
+
 // Embeds pointing at the open internet (or already-resolved resource URLs) are
 // used verbatim as the <img> src — no vault resolution, no extension check
 // (the `!` already declares the embed an image).
 const EXTERNAL_URL = /^(?:https?|data|app|capacitor):/i;
 
+// Turn a resolved resource URL into the right media tag for its extension, or
+// null if the path isn't a recognized image/audio/video file.
+function mediaTagFor(path: string, src: string, opts?: string, alt?: string): string | null {
+  if (IMAGE_EXT.test(path)) return imgTag(src, alt ?? path, opts);
+  if (AUDIO_EXT.test(path)) return audioTag(src);
+  if (VIDEO_EXT.test(path)) return videoTag(src);
+  return null;
+}
+
 /**
- * Convert Obsidian image embeds in an HTML string to native <img> tags so they
- * render inside the Shadow DOM (which doesn't understand wikilinks). Vault
- * paths are resolved via `resolve`; external http(s)/data URLs are used as-is.
- * Note embeds (`![[note]]`), non-image vault paths, and unresolved vault paths
- * are left untouched.
+ * Convert Obsidian media embeds in an HTML string to native <img>/<audio>/
+ * <video> tags so they render inside the Shadow DOM (which doesn't understand
+ * wikilinks). Vault paths are resolved via `resolve`; external http(s)/data URLs
+ * are used as-is. Note embeds (`![[note]]`), non-media vault paths, and
+ * unresolved vault paths are left untouched.
  */
-export function embedWikiImages(html: string, resolve: EmbedResolver): string {
+export function embedWikiMedia(html: string, resolve: EmbedResolver): string {
   let out = html.replace(WIKI_EMBED, (full, rawPath: string, opts?: string) => {
     const path = rawPath.trim();
-    if (EXTERNAL_URL.test(path)) return imgTag(path, path, opts);
-    if (!IMAGE_EXT.test(path)) return full;
+    // External URLs: the `!` already declares an embed — audio/video by
+    // extension, otherwise treat as an image (may be extension-less).
+    if (EXTERNAL_URL.test(path)) return mediaTagFor(path, path, opts) ?? imgTag(path, path, opts);
+    if (!IMAGE_EXT.test(path) && !AUDIO_EXT.test(path) && !VIDEO_EXT.test(path)) return full;
     const src = resolve(path);
-    return src ? imgTag(src, path, opts) : full;
+    return src ? (mediaTagFor(path, src, opts) ?? full) : full;
   });
   out = out.replace(MD_EMBED, (full, alt: string, rawPath: string) => {
     const path = rawPath.trim();
-    if (EXTERNAL_URL.test(path)) return imgTag(path, alt || path);
-    if (!IMAGE_EXT.test(path)) return full;
+    if (EXTERNAL_URL.test(path)) {
+      return mediaTagFor(path, path, undefined, alt || path) ?? imgTag(path, alt || path);
+    }
+    if (!IMAGE_EXT.test(path) && !AUDIO_EXT.test(path) && !VIDEO_EXT.test(path)) return full;
     const src = resolve(decodeURIComponent(path));
-    return src ? imgTag(src, alt || path) : full;
+    return src ? (mediaTagFor(path, src, undefined, alt || path) ?? full) : full;
   });
   return out;
 }
@@ -182,9 +206,10 @@ export function renderHtmlIntoShadow(
   applyThemeVars(wrapper);
   registerThemeWrapper(wrapper);
 
-  const html = resolve ? embedWikiImages(rawHtml, resolve) : rawHtml;
+  const html = resolve ? embedWikiMedia(rawHtml, resolve) : rawHtml;
   const clean = DOMPurify.sanitize(html, {
-    ADD_TAGS: ["style"],
+    ADD_TAGS: ["style", "audio", "video", "source"],
+    ADD_ATTR: ["controls"],
     FORBID_TAGS: ["script"],
     ALLOWED_URI_REGEXP,
   });

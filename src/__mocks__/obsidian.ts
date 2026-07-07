@@ -68,10 +68,16 @@ export class Vault {
     this.binaryFiles.set(file.path, new Uint8Array(data));
   }
 
-  // Minimal DataAdapter surface used by file writers (folder creation).
+  // Minimal DataAdapter surface used by file writers (folder creation + binary
+  // media writes). writeBinary mirrors Obsidian's low-level adapter: it writes
+  // the bytes and the file becomes discoverable (register once if new).
   adapter = {
     exists: async (_path: string): Promise<boolean> => false,
     mkdir: async (_path: string): Promise<void> => undefined,
+    writeBinary: async (path: string, data: ArrayBuffer): Promise<void> => {
+      if (!this.getAbstractFileByPath(path)) this._addFile(path, "");
+      this.binaryFiles.set(path, new Uint8Array(data));
+    },
   };
 
   getMarkdownFiles(): TFile[] {
@@ -137,6 +143,15 @@ export class Vault {
     this.binaryFiles.clear();
     this.markdownFiles = [];
     this.otherFiles = [];
+  }
+}
+
+// Stub for `instanceof` checks. The mock Vault.adapter is a plain object (not an
+// instance), so desktop-only fast paths gated on `adapter instanceof
+// FileSystemAdapter` fall back to the adapter path in tests.
+export class FileSystemAdapter {
+  getBasePath(): string {
+    return "";
   }
 }
 

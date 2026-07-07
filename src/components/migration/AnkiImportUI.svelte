@@ -12,6 +12,10 @@
 
   const t = I18n.t.anki;
 
+  // Above this many copied media files, warn that Obsidian indexes them in the
+  // background (fast fs writes mean the vault watcher discovers them after).
+  const LARGE_MEDIA_NOTICE_THRESHOLD = 2000;
+
   export let db: IDatabaseService;
   export let controller: AnkiImportController;
   export let onComplete: (() => void) | undefined = undefined;
@@ -129,6 +133,11 @@
           history: summary.withHistory,
         })
       );
+      // Large imports write media straight to disk; Obsidian's watcher indexes
+      // them in the background, so flag the brief catch-up to avoid confusion.
+      if (summary.mediaCopied > LARGE_MEDIA_NOTICE_THRESHOLD) {
+        new Notice(I18n.format(t.mediaIndexingNotice, { count: summary.mediaCopied }));
+      }
       onComplete?.();
     } catch (error) {
       console.error("Anki import failed", error);
