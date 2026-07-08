@@ -38,6 +38,8 @@ export type AnkiProgress = (
 export interface AnkiImportOptions {
   targetFolder: string; // vault folder the imported decks are written under
   profileId: string;
+  split: boolean; // break large decks into numbered part-files (subdecks always split)
+  cardsPerFile: number; // max cards per part-file when split is on
 }
 
 export interface AnkiScanResult {
@@ -152,7 +154,13 @@ export class AnkiImportController {
         getMediaText: (name) => AnkiImportController.mediaText(loaded, name),
         getMediaSize: (name) => AnkiImportController.mediaSize(loaded, name),
       });
-      const decks = AnkiDeckRenderer.render(parsed.cards, this.ankiSubtag, headerLevel);
+      const decks = AnkiDeckRenderer.render(
+        parsed.cards,
+        this.ankiSubtag,
+        headerLevel,
+        opts.split,
+        opts.cardsPerFile
+      );
 
       await this.db.createTagMapping(opts.profileId, this.ankiSubtag);
 

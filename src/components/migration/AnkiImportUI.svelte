@@ -1,7 +1,7 @@
 <script lang="ts">
   import { onMount } from "svelte";
   import { Setting, Notice } from "obsidian";
-  import { I18n } from "@decks/core";
+  import { I18n, DEFAULT_ANKI_CARDS_PER_FILE } from "@decks/core";
   import type { DeckProfile } from "@decks/core";
   import type { IDatabaseService } from "@/database/DatabaseFactory";
   import type {
@@ -23,6 +23,8 @@
 
   let targetFolder = "Anki Import";
   let profileId = "";
+  let split = true;
+  let cardsPerFile = DEFAULT_ANKI_CARDS_PER_FILE;
   let profiles: DeckProfile[] = [];
 
   let fileBytes: Uint8Array | null = null;
@@ -66,6 +68,33 @@
         }
         dropdown.setValue(profileId).onChange((v) => (profileId = v));
       });
+
+    new Setting(settingsContainer)
+      .setName(t.splitName)
+      .setDesc(t.splitDesc)
+      .addToggle((toggle) =>
+        toggle.setValue(split).onChange((v) => {
+          split = v;
+          buildSettings();
+        })
+      );
+
+    if (split) {
+      new Setting(settingsContainer)
+        .setName(t.chunkSizeName)
+        .setDesc(t.chunkSizeDesc)
+        .addText((text) =>
+          text
+            .setValue(String(cardsPerFile))
+            .setPlaceholder(String(DEFAULT_ANKI_CARDS_PER_FILE))
+            .onChange((v) => {
+              const n = parseInt(v, 10);
+              const ok = !isNaN(n) && n >= 50 && n <= 50000;
+              if (ok) cardsPerFile = n;
+              text.inputEl.toggleClass("decks-input-error", !ok);
+            })
+        );
+    }
   }
 
   async function handleFileChange(event: Event): Promise<void> {
@@ -111,7 +140,7 @@
     try {
       summary = await controller.import(
         fileBytes,
-        { targetFolder, profileId },
+        { targetFolder, profileId, split, cardsPerFile },
         (done, total, phase, detail) => {
           progressPct = total > 0 ? (done / total) * 100 : 0;
           progressLabel =
