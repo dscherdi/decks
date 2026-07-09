@@ -167,6 +167,9 @@
       if (summary.mediaCopied > LARGE_MEDIA_NOTICE_THRESHOLD) {
         new Notice(I18n.format(t.mediaIndexingNotice, { count: summary.mediaCopied }));
       }
+      if (summary.duplicateFronts > 0) {
+        new Notice(I18n.format(t.cardsMerged, { count: summary.duplicateFronts }));
+      }
       onComplete?.();
     } catch (error) {
       console.error("Anki import failed", error);
@@ -221,6 +224,11 @@
           history: summary.withHistory,
         })}
       </p>
+      {#if summary.duplicateFronts > 0}
+        <p class="decks-sr-migration-warn">
+          {I18n.format(t.cardsMerged, { count: summary.duplicateFronts })}
+        </p>
+      {/if}
     {/if}
   </div>
 
@@ -293,6 +301,10 @@
   .decks-sr-migration-done {
     margin-top: 12px;
     color: var(--text-normal);
+  }
+  .decks-sr-migration-warn {
+    margin-top: 6px;
+    color: var(--text-warning);
   }
   .decks-modal-footer {
     display: flex;

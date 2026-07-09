@@ -239,6 +239,18 @@ export class DeckSynchronizer {
         );
       }
 
+      // Step 3b: on a full sync, prune orphaned cards (deck_id → no deck row) left
+      // by old deletes/FK-off migrations. Runs AFTER the per-deck loop so any orphan
+      // matching a live file was already adopted into its deck by the create upsert;
+      // only truly-dangling cards are removed. Skipped on incremental syncs (which
+      // visit only stale decks, so a not-yet-visited deck's cards must not be pruned).
+      if (force) {
+        const pruned = await this.db.pruneOrphanedFlashcards();
+        if (pruned > 0) {
+          this.logger.debug(`Pruned ${pruned} orphaned flashcard(s) with no deck.`);
+        }
+      }
+
       // Step 4: Save database — only when something actually changed. A no-op
       // sync (every deck unchanged) leaves the DB clean, so we skip the
       // expensive full serialize + disk write.

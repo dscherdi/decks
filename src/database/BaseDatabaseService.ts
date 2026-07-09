@@ -1302,6 +1302,23 @@ export abstract class BaseDatabaseService implements IDatabaseService {
     await this.executeSql(sql, flashcardIds);
   }
 
+  // Delete flashcards whose deck no longer exists (deck_id points at a deleted
+  // deck row). Orphans accumulate from FK-off migrations and older deletes. Run on
+  // a full sync AFTER the per-deck sync has adopted any orphan matching a live file,
+  // so only truly-dangling cards are removed. review_logs have no FK to flashcards,
+  // so review history survives and re-import can still restore FSRS. Returns the
+  // number of cards removed.
+  async pruneOrphanedFlashcards(): Promise<number> {
+    const sql = "SELECT id FROM flashcards WHERE deck_id NOT IN (SELECT id FROM decks)";
+    const orphans = await this.querySql<{ id: string }>(sql, [], { asObject: true });
+    if (orphans.length === 0) return 0;
+    await this.executeSql(
+      "DELETE FROM flashcards WHERE deck_id NOT IN (SELECT id FROM decks)",
+      []
+    );
+    return orphans.length;
+  }
+
   // COUNT OPERATIONS. Queue counts exclude suspended + actively-buried cards;
   // total/maturity counts (countTotalCards, GET_CARD_STATS) include them.
   async countNewCards(deckId: string): Promise<number> {

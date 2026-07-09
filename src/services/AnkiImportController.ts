@@ -53,6 +53,8 @@ export interface AnkiScanResult {
 export interface AnkiImportSummary {
   decksCreated: number;
   cardsImported: number;
+  // Source cards whose front collided with another and merged into one card.
+  duplicateFronts: number;
   mediaCopied: number;
   reviewsImported: number;
   withHistory: number;
@@ -166,7 +168,6 @@ export class AnkiImportController {
 
       const deckItems: AnkiDeckItem[] = [];
       let decksCreated = 0;
-      let cardsImported = 0;
       const base = normalizePath(opts.targetFolder.trim());
 
       // Progress is reported per-phase (done/total within the current phase) so the
@@ -178,7 +179,6 @@ export class AnkiImportController {
         try {
           await this.createOrOverwrite(outPath, deck.content);
           decksCreated++;
-          cardsImported += deck.cards.length;
           deckItems.push({ deckId: generateDeckId(outPath), profileFsrs, cards: deck.cards });
         } catch (error) {
           this.logger.error(`Anki import failed for deck ${deck.deckName}`, error);
@@ -205,9 +205,19 @@ export class AnkiImportController {
         onProgress: (done, historyTotal) => onProgress?.(done, historyTotal, "import"),
       });
 
+      // Count what actually landed in the imported decks (not the pre-sync render
+      // count). duplicateFronts is any shortfall — cards whose front collided with
+      // another and merged into a single card.
+      let cardsImported = 0;
+      for (const item of deckItems) {
+        cardsImported += await this.db.countTotalCards(item.deckId);
+      }
+      const duplicateFronts = Math.max(0, parsed.cardCount - cardsImported);
+
       return {
         decksCreated,
         cardsImported,
+        duplicateFronts,
         mediaCopied,
         reviewsImported: reviews,
         withHistory: injected,

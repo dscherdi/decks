@@ -16,7 +16,14 @@ import {
   AnkiHistoryImporter,
   generateDeckId,
 } from "@decks/core";
-import type { AnkiDeckItem, AnkiRenderedDeck, DeckProfile, RawDatabase } from "@decks/core";
+import type {
+  AnkiDeckItem,
+  AnkiParsedCard,
+  AnkiRenderedDeck,
+  AnkiScheduling,
+  DeckProfile,
+  RawDatabase,
+} from "@decks/core";
 
 // A tiny self-contained `.apkg` built in memory from representative samples —
 // no dependency on any local Anki export. See fixtures/anki-sample-apkg.ts.
@@ -188,6 +195,51 @@ describe("Anki import pipeline (integration)", () => {
     // Re-running imports nothing new (deterministic ids → idempotent).
     const second = await AnkiHistoryImporter.importHistory(db, items, options);
     expect(second.injected).toBe(0);
+  });
+
+  it("keeps duplicate-front cards distinct across decks (no silent drop)", async () => {
+    const sched: AnkiScheduling = {
+      type: 0, queue: 0, due: 0, ivl: 0, factor: 0, reps: 0, lapses: 0, data: "{}",
+    };
+    const basic = (noteId: number, cardId: number, deckName: string, back: string): AnkiParsedCard => ({
+      noteId, cardId, ord: 0, kind: "basic", isCloze: false, deckName,
+      front: "object", back, notes: "", media: [], scheduling: sched,
+    });
+    // The same front in two decks would collapse to one id without disambiguation.
+    const cards = [basic(1, 10, "Book::1", "a thing"), basic(2, 20, "Book::2", "to protest")];
+    const decks = AnkiDeckRenderer.render(cards, "decks/anki", profile.headerLevel);
+
+    let total = 0;
+    const ids = new Set<string>();
+    for (const deck of decks) {
+      const deckId = await syncDeck(`Anki Import/${deck.relativePath}.md`, deck);
+      const dcards = await db.getFlashcardsByDeck(deckId);
+      total += dcards.length;
+      dcards.forEach((c) => ids.add(c.id));
+    }
+    expect(total).toBe(2); // both persisted — no silent collapse
+    expect(ids.size).toBe(2); // distinct ids
+  });
+
+  it("re-import adopts a card into its new deck, preserving suspend + FSRS", async () => {
+    const content = "---\ntags:\n  - decks\n---\n\n## Hallo\n\nHello\n";
+    // Prior import: the card lives under deck A, reviewed and suspended.
+    const deckA = await syncDeck("Anki Import/old/Book 01.md", { content });
+    const cardId = (await db.getFlashcardsByDeck(deckA))[0].id;
+    const suspendedAt = new Date().toISOString();
+    await db.updateFlashcard(cardId, { state: "review", stability: 7.3, suspendedAt });
+
+    // Re-import writes the same card to a new path (deck B). The sync's upsert adopts
+    // the existing row into the new deck (no delete), so nothing is lost or reset.
+    const deckB = await syncDeck("Anki Import/new/Book 04.md", { content });
+
+    expect((await db.getFlashcardsByDeck(deckA)).length).toBe(0); // moved, not duplicated
+    const after = await db.getFlashcardsByDeck(deckB);
+    expect(after.map((c) => c.id)).toEqual([cardId]);
+    expect(after[0].deckId).toBe(deckB);
+    expect(after[0].state).toBe("review"); // FSRS preserved
+    expect(after[0].stability).toBe(7.3);
+    expect(after[0].suspendedAt).toBe(suspendedAt); // suspend preserved (was lost pre-fix)
   });
 
   async function syncDeck(filepath: string, deck: AnkiRenderedDeck | { content: string; relativePath?: string }): Promise<string> {
