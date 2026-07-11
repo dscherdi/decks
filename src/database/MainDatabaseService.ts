@@ -571,11 +571,18 @@ export class MainDatabaseService extends BaseDatabaseService {
               this.debugLog("Remote DB has no custom_decks table, skipping");
             }
 
-            // Merge Custom Deck Cards (INSERT OR IGNORE - preserve memberships)
+            // Merge Custom Deck Cards — append-only, but never resurrect a pair
+            // whose local tombstone is at least as new as the incoming row.
             try {
               this.db.exec(`
                 INSERT OR IGNORE INTO custom_deck_cards
-                SELECT * FROM remote.custom_deck_cards
+                SELECT r.* FROM remote.custom_deck_cards AS r
+                WHERE NOT EXISTS (
+                  SELECT 1 FROM custom_deck_card_tombstones t
+                  WHERE t.custom_deck_id = r.custom_deck_id
+                    AND t.flashcard_id = r.flashcard_id
+                    AND t.removed_at_hlc >= r.created
+                )
               `);
             } catch {
               this.debugLog("Remote DB has no custom_deck_cards table, skipping");
@@ -855,16 +862,29 @@ export class MainDatabaseService extends BaseDatabaseService {
               this.debugLog("Remote DB has no custom_decks table, skipping");
             }
 
-            // Merge custom deck cards (INSERT OR IGNORE)
+            // Merge custom deck cards — append-only, but never resurrect a pair
+            // whose local tombstone is at least as new as the incoming row.
             try {
               const remoteCustomCards = remoteDb.exec("SELECT * FROM custom_deck_cards");
               if (remoteCustomCards.length > 0) {
                 const cardData = remoteCustomCards[0];
+                const deckIdx = cardData.columns.indexOf("custom_deck_id");
+                const cardIdx = cardData.columns.indexOf("flashcard_id");
+                const createdIdx = cardData.columns.indexOf("created");
                 const placeholders = cardData.columns.map(() => "?").join(",");
                 const stmt = this.db.prepare(
                   `INSERT OR IGNORE INTO custom_deck_cards VALUES (${placeholders})`
                 );
                 for (const row of cardData.values) {
+                  const deckId = row[deckIdx] as string;
+                  const cardId = row[cardIdx] as string;
+                  const created = row[createdIdx] as string;
+                  const tomb = this.db.exec(
+                    "SELECT removed_at_hlc FROM custom_deck_card_tombstones WHERE custom_deck_id = ? AND flashcard_id = ?",
+                    [deckId, cardId]
+                  );
+                  const removedAt = tomb.length ? (tomb[0].values[0][0] as string) : null;
+                  if (removedAt && removedAt >= created) continue;
                   stmt.run(row);
                 }
                 stmt.free();

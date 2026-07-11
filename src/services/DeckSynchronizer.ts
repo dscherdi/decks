@@ -229,7 +229,21 @@ export class DeckSynchronizer {
         await this.deckManager.syncFlashcardsForDeck(
           deck.id,
           this.progressTracker,
-          { force }
+          {
+            force,
+            // Map the worker's within-deck progress (0-100) into this deck's
+            // slice of the bar so a long deck visibly advances.
+            onProgress:
+              showProgress && onProgress
+                ? (p) =>
+                    onProgress({
+                      message: `📄 Processing deck: ${deck.name} (${i + 1}/${
+                        decks.length
+                      })`,
+                      percentage: 20 + ((i + p / 100) / decks.length) * 70,
+                    })
+                : undefined,
+          }
         );
         await yieldToUI();
 
@@ -239,17 +253,11 @@ export class DeckSynchronizer {
         );
       }
 
-      // Step 3b: on a full sync, prune orphaned cards (deck_id → no deck row) left
-      // by old deletes/FK-off migrations. Runs AFTER the per-deck loop so any orphan
-      // matching a live file was already adopted into its deck by the create upsert;
-      // only truly-dangling cards are removed. Skipped on incremental syncs (which
-      // visit only stale decks, so a not-yet-visited deck's cards must not be pruned).
-      if (force) {
-        const pruned = await this.db.pruneOrphanedFlashcards();
-        if (pruned > 0) {
-          this.logger.debug(`Pruned ${pruned} orphaned flashcard(s) with no deck.`);
-        }
-      }
+      // Orphaned-card pruning is deliberately NOT run here. A destructive
+      // `DELETE … WHERE deck_id NOT IN (SELECT id FROM decks)` during any sync can
+      // wipe a real deck's cards if its deck row is transiently missing (cold
+      // registry / iCloud race). It's exposed as an explicit "Clean up orphaned
+      // cards" command instead (see main.ts).
 
       // Step 4: Save database — only when something actually changed. A no-op
       // sync (every deck unchanged) leaves the DB clean, so we skip the

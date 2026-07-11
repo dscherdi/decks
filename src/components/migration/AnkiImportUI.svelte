@@ -151,7 +151,7 @@
                 : phase === "media"
                   ? I18n.format(t.progressCopyingMedia, { done, total })
                   : phase === "sync"
-                    ? t.progressSyncing
+                    ? `${t.progressSyncing} ${Math.round(total > 0 ? (done / total) * 100 : 0)}%`
                     : t.progressImporting;
         }
       );

@@ -108,8 +108,7 @@ export class DeckManager {
     const existingDecks = await this.db.getAllDecks();
     let deleted = 0;
     for (const deck of existingDecks) {
-      const file = this.vault.getAbstractFileByPath(deck.filepath);
-      if (!(file instanceof TFile)) {
+      if (await this.fileIsTrulyGone(deck.filepath)) {
         this.debugLog(
           `Cleaning up orphaned deck: "${deck.name}" (${deck.filepath})`
         );
@@ -118,6 +117,21 @@ export class DeckManager {
       }
     }
     return deleted;
+  }
+
+  // A deck counts as orphaned only when its file is gone from BOTH the vault's
+  // in-memory registry AND the disk. The registry lags on cold startup, right
+  // after a burst of imported files, and during iCloud/Dropbox delivery — so
+  // trusting it alone would cascade-delete a live deck's cards. If the disk can't
+  // be checked, be conservative and treat the file as present (don't delete).
+  private async fileIsTrulyGone(filepath: string): Promise<boolean> {
+    if (this.vault.getAbstractFileByPath(filepath) instanceof TFile) return false;
+    try {
+      if (await this.vault.adapter.exists(filepath)) return false;
+    } catch {
+      return false;
+    }
+    return true;
   }
 
   private debugLog(message: string, ...args: unknown[]): void {
@@ -287,8 +301,7 @@ export class DeckManager {
       // reliable before the cache resolves.
       let deletedDecks = 0;
       for (const deck of existingDecks) {
-        const file = this.vault.getAbstractFileByPath(deck.filepath);
-        if (!(file instanceof TFile)) {
+        if (await this.fileIsTrulyGone(deck.filepath)) {
           this.debugLog(
             `Deleting orphaned deck: "${deck.name}" (${deck.filepath})`
           );
@@ -383,7 +396,12 @@ export class DeckManager {
   async syncFlashcardsForDeck(
     deckId: string,
     progressTracker?: ProgressTracker,
-    options: { force?: boolean } = {}
+    options: {
+      force?: boolean;
+      // Receives the worker's within-deck progress (0-100) so callers can show
+      // movement during a long deck instead of a frozen per-deck percentage.
+      onProgress?: (progress: number, message?: string) => void;
+    } = {}
   ): Promise<void> {
     const deckSyncStartTime = performance.now();
     this.debugLog(`Syncing flashcards for deck ID: ${deckId}`);
@@ -405,10 +423,18 @@ export class DeckManager {
     if (!options.force) {
       const lastSyncedMtime = await this.db.getDeckLastSyncedMtime(deckId);
       if (lastSyncedMtime > 0 && fileMtime <= lastSyncedMtime) {
+        // Self-heal: a deck stuck at 0 cards (e.g. from a prior wrongful wipe)
+        // whose file is unchanged would stay empty forever behind this gate.
+        // Re-parse when the DB shows 0 cards; otherwise skip as usual.
+        if ((await this.db.countTotalCards(deckId)) > 0) {
+          this.debugLog(
+            `Skipping sync for ${deck.name}: file mtime ${fileMtime} <= last_synced_mtime ${lastSyncedMtime}`
+          );
+          return;
+        }
         this.debugLog(
-          `Skipping sync for ${deck.name}: file mtime ${fileMtime} <= last_synced_mtime ${lastSyncedMtime}`
+          `Self-heal: ${deck.name} has 0 cards but file unchanged — re-syncing`
         );
-        return;
       }
     }
 
@@ -416,11 +442,14 @@ export class DeckManager {
     const fileContent = await this.vault.read(file);
     const fileTitle = file.basename.replace(/\.md$/i, "");
 
-    // Create progress callback from ProgressTracker
-    const progressCallback = progressTracker
-      ? (progress: number, message?: string) =>
-          progressTracker.update(message || "Processing...", progress)
-      : undefined;
+    // Create progress callback from ProgressTracker + caller's onProgress
+    const progressCallback =
+      progressTracker || options.onProgress
+        ? (progress: number, message?: string) => {
+            progressTracker?.update(message || "Processing...", progress);
+            options.onProgress?.(progress, message);
+          }
+        : undefined;
 
     // Use unified sync method - implementation handles worker vs main thread
     try {
@@ -486,8 +515,12 @@ export class DeckManager {
       // Stamp the mtime gate. Only after the sync succeeded — if anything
       // above threw, we want the next sync to retry (mtime stays unchanged
       // so the gate condition `fileMtime > lastSyncedMtime` is satisfied
-      // and parse happens again next time).
-      await this.db.setDeckLastSyncedMtime(deck.id, fileMtime);
+      // and parse happens again next time). Also skip stamping when the sync
+      // aborted on an empty parse (cards preserved) so the gate can't lock in a
+      // stuck state — the next sync re-attempts once the read/config resolves.
+      if (!result.skippedEmptyParse) {
+        await this.db.setDeckLastSyncedMtime(deck.id, fileMtime);
+      }
 
       // Check for duplicates after sync
       try {

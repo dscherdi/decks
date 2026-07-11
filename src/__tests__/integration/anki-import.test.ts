@@ -221,7 +221,7 @@ describe("Anki import pipeline (integration)", () => {
     expect(ids.size).toBe(2); // distinct ids
   });
 
-  it("re-import adopts a card into its new deck, preserving suspend + FSRS", async () => {
+  it("re-import adopts an ORPHANED card into its new deck, preserving suspend + FSRS", async () => {
     const content = "---\ntags:\n  - decks\n---\n\n## Hallo\n\nHello\n";
     // Prior import: the card lives under deck A, reviewed and suspended.
     const deckA = await syncDeck("Anki Import/old/Book 01.md", { content });
@@ -229,17 +229,22 @@ describe("Anki import pipeline (integration)", () => {
     const suspendedAt = new Date().toISOString();
     await db.updateFlashcard(cardId, { state: "review", stability: 7.3, suspendedAt });
 
-    // Re-import writes the same card to a new path (deck B). The sync's upsert adopts
-    // the existing row into the new deck (no delete), so nothing is lost or reset.
+    // A re-import that changes the split/paths leaves the old deck row gone, so the
+    // card is orphaned. (A live old deck would keep the card — the sync never steals.)
+    await db["executeSql"]("PRAGMA foreign_keys = OFF", []);
+    await db["executeSql"]("DELETE FROM decks WHERE id = ?", [deckA]);
+    await db["executeSql"]("PRAGMA foreign_keys = ON", []);
+
+    // Re-import writes the card to a new path (deck B). The upsert adopts the
+    // orphaned row into the new deck (no delete), so nothing is lost or reset.
     const deckB = await syncDeck("Anki Import/new/Book 04.md", { content });
 
-    expect((await db.getFlashcardsByDeck(deckA)).length).toBe(0); // moved, not duplicated
     const after = await db.getFlashcardsByDeck(deckB);
     expect(after.map((c) => c.id)).toEqual([cardId]);
     expect(after[0].deckId).toBe(deckB);
     expect(after[0].state).toBe("review"); // FSRS preserved
     expect(after[0].stability).toBe(7.3);
-    expect(after[0].suspendedAt).toBe(suspendedAt); // suspend preserved (was lost pre-fix)
+    expect(after[0].suspendedAt).toBe(suspendedAt); // suspend preserved
   });
 
   async function syncDeck(filepath: string, deck: AnkiRenderedDeck | { content: string; relativePath?: string }): Promise<string> {

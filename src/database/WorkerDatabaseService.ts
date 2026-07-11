@@ -18,6 +18,9 @@ export class WorkerDatabaseService extends BaseDatabaseService {
     }
   >();
   private progressTracker?: ProgressTracker;
+  // Receives the worker's `progress` messages for the deck sync currently in
+  // flight (syncs are serialized); undefined outside a sync call.
+  private activeSyncProgress?: (progress: number, message?: string) => void;
   // Worker init runs off the onload critical path; ops queue behind it.
   private workerReady = false;
   private readyPromise: Promise<void> | null = null;
@@ -96,6 +99,13 @@ export class WorkerDatabaseService extends BaseDatabaseService {
               event.data.progress
             );
           }
+          // Forward to the in-flight sync's caller (deck syncs are serialized),
+          // so a long deck visibly advances instead of freezing the UI at the
+          // last painted percentage.
+          this.activeSyncProgress?.(
+            event.data.progress as number,
+            event.data.message as string | undefined
+          );
           return;
         }
 
@@ -415,25 +425,32 @@ export class WorkerDatabaseService extends BaseDatabaseService {
   }
 
   /**
-   * Unified sync method - runs in worker for WorkerDatabaseService
-   * Note: progressCallback is currently not used in worker mode (worker handles progress internally)
+   * Unified sync method - runs in worker for WorkerDatabaseService. The worker
+   * posts `progress` messages during the sync; they are routed to
+   * `progressCallback` for the duration of this call (deck syncs are
+   * serialized, so a single active callback suffices).
    */
   async syncFlashcardsForDeck(
     data: SyncData,
-    _progressCallback?: (progress: number, message?: string) => void
+    progressCallback?: (progress: number, message?: string) => void
   ): Promise<SyncResult> {
     if (!this.workerReady) await this.whenReady();
 
-    const result = await this.sendMessage("syncFlashcardsForDeck", data);
+    this.activeSyncProgress = progressCallback;
+    try {
+      const result = await this.sendMessage("syncFlashcardsForDeck", data);
 
-    const typedResult = result as SyncResult;
+      const typedResult = result as SyncResult;
 
-    return {
-      success: typedResult.success,
-      parsedCount: typedResult.parsedCount,
-      operationsCount: typedResult.operationsCount,
-      duplicatesSkipped: typedResult.duplicatesSkipped,
-    };
+      return {
+        success: typedResult.success,
+        parsedCount: typedResult.parsedCount,
+        operationsCount: typedResult.operationsCount,
+        duplicatesSkipped: typedResult.duplicatesSkipped,
+      };
+    } finally {
+      this.activeSyncProgress = undefined;
+    }
   }
 
   // Worker-specific operations (deprecated - use syncFlashcardsForDeck)

@@ -115,6 +115,9 @@ export interface DecksSettings {
   // Internal tracking
   hasCreatedTestDeck: boolean;
   hasCreatedCanvasTestDeck: boolean;
+  // One-time cleanup of orphaned cards left by deck deletions that ran without
+  // FK cascade enforcement (pre-2.5.7 behaviour).
+  orphanPruneV1Done?: boolean;
 }
 
 export const DEFAULT_SETTINGS: DecksSettings = {
@@ -191,4 +194,5 @@ export const DEFAULT_SETTINGS: DecksSettings = {
 
   hasCreatedTestDeck: false,
   hasCreatedCanvasTestDeck: false,
+  orphanPruneV1Done: false,
 };

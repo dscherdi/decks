@@ -95,9 +95,9 @@ export class AnkiImportController {
     private readonly deckSynchronizer: DeckSynchronizer,
     private readonly settings: DecksSettings,
     private readonly logger: Logger,
-    // Optional: rebuild the template cache + persist the template folder after
+    // Optional: refresh the template cache + persist the template folder after
     // generated templates are written (so multi-field cards render immediately).
-    private readonly templateSyncService?: { syncAll(): Promise<void> },
+    private readonly templateSyncService?: { syncFile(file: TFile): Promise<void> },
     private readonly saveSettings?: () => Promise<void>
   ) {}
 
@@ -156,19 +156,27 @@ export class AnkiImportController {
         getMediaText: (name) => AnkiImportController.mediaText(loaded, name),
         getMediaSize: (name) => AnkiImportController.mediaSize(loaded, name),
       });
+      // Fronts already taken by cards in live decks OUTSIDE the import target
+      // folder are reserved: an imported card sharing such a front gets a " (n)"
+      // suffix so it lands as its own card instead of being dropped in favour of
+      // the other deck's. The import's own (re-)target decks are excluded so a
+      // re-import keeps stable fronts/ids.
+      const base = normalizePath(opts.targetFolder.trim());
+      const reservedFronts = new Set(await this.db.getFrontsOutsidePath(`${base}/`));
       const decks = AnkiDeckRenderer.render(
         parsed.cards,
         this.ankiSubtag,
         headerLevel,
         opts.split,
-        opts.cardsPerFile
+        opts.cardsPerFile,
+        reservedFronts
       );
 
       await this.db.createTagMapping(opts.profileId, this.ankiSubtag);
 
       const deckItems: AnkiDeckItem[] = [];
+      const deckMetaById = new Map<string, { path: string; name: string }>();
       let decksCreated = 0;
-      const base = normalizePath(opts.targetFolder.trim());
 
       // Progress is reported per-phase (done/total within the current phase) so the
       // bar visibly advances during every long phase, not just the deck write.
@@ -179,16 +187,20 @@ export class AnkiImportController {
         try {
           await this.createOrOverwrite(outPath, deck.content);
           decksCreated++;
-          deckItems.push({ deckId: generateDeckId(outPath), profileFsrs, cards: deck.cards });
+          const deckId = generateDeckId(outPath);
+          deckItems.push({ deckId, profileFsrs, cards: deck.cards });
+          deckMetaById.set(deckId, { path: outPath, name: deck.relativePath });
         } catch (error) {
           this.logger.error(`Anki import failed for deck ${deck.deckName}`, error);
         }
         await yieldEvery(i, 100);
       }
 
-      const mediaCopied = await this.copyMedia(parsed, loaded, base, (done, mediaTotal) =>
-        onProgress?.(done, mediaTotal, "media")
-      );
+      // Templates + deck sync run BEFORE the media copy: writing thousands of
+      // media files kicks off Obsidian's background indexing on the main thread,
+      // which starved the sync and froze the modal's repaint. The DB sync doesn't
+      // need the media — embeds resolve at render time.
+      onProgress?.(0, 100, "sync");
       const templatesWritten = await this.writeTemplates(parsed.templateFiles, base);
 
       // Non-force: only the newly written/overwritten decks are stale (new decks
@@ -206,12 +218,55 @@ export class AnkiImportController {
       });
 
       // Count what actually landed in the imported decks (not the pre-sync render
-      // count). duplicateFronts is any shortfall — cards whose front collided with
-      // another and merged into a single card.
-      let cardsImported = 0;
-      for (const item of deckItems) {
-        cardsImported += await this.db.countTotalCards(item.deckId);
+      // count) in a single grouped query — one worker round-trip instead of one
+      // per deck.
+      const importedIds = new Set(deckItems.map((item) => item.deckId));
+      const fetchImportedStats = async (): Promise<Map<string, number>> =>
+        new Map(
+          (await this.db.getDeckCardStatsBatch())
+            .filter((s) => importedIds.has(s.deckId))
+            .map((s) => [s.deckId, s.total])
+        );
+      const sumCounts = (landed: Map<string, number>): number =>
+        [...landed.values()].reduce((sum, n) => sum + n, 0);
+      let landedByDeck = await fetchImportedStats();
+      let cardsImported = sumCounts(landedByDeck);
+
+      // Retry pass: a card whose front moved between part-files since the last
+      // import can be dropped when its NEW home syncs before its OLD home's
+      // delete ran (the create refuses to steal from a live deck). After the full
+      // sync every delete has been applied, so one targeted re-sync of the short
+      // decks lands those cards, restoring their state from review_logs.
+      // Anything still short afterwards is a genuine conflict.
+      if (cardsImported < parsed.cardCount && profile) {
+        for (const item of deckItems) {
+          if ((landedByDeck.get(item.deckId) ?? 0) >= item.cards.length) continue;
+          const meta = deckMetaById.get(item.deckId);
+          if (!meta) continue;
+          const file = this.app.vault.getAbstractFileByPath(meta.path);
+          if (!(file instanceof TFile)) continue;
+          try {
+            await this.db.syncFlashcardsForDeck({
+              deckId: item.deckId,
+              deckName: meta.name,
+              deckFilepath: meta.path,
+              deckConfig: profile,
+              fileContent: await this.app.vault.read(file),
+            });
+          } catch (error) {
+            this.logger.error(`Anki import: retry sync failed for ${meta.path}`, error);
+          }
+        }
+        landedByDeck = await fetchImportedStats();
+        cardsImported = sumCounts(landedByDeck);
       }
+
+      const mediaCopied = await this.copyMedia(parsed, loaded, base, (done, mediaTotal) =>
+        onProgress?.(done, mediaTotal, "media")
+      );
+
+      // duplicateFronts is any remaining shortfall — cards whose front collided
+      // with another and merged into a single card.
       const duplicateFronts = Math.max(0, parsed.cardCount - cardsImported);
 
       return {
@@ -230,23 +285,30 @@ export class AnkiImportController {
   }
 
   // Write the generated per-model HTML templates into the template folder (auto-
-  // configuring it on first use), then rebuild the template cache so multi-field
-  // cards render via their template right away.
+  // configuring it on first use), then refresh the template cache for exactly the
+  // files written so multi-field cards render via their template right away — a
+  // vault-wide rescan here re-read every markdown file for no benefit.
   private async writeTemplates(templateFiles: AnkiTemplateFile[], base: string): Promise<number> {
     if (templateFiles.length === 0) return 0;
     const folder = await this.ensureTemplateFolder(base);
     let written = 0;
+    const writtenPaths: string[] = [];
     for (let i = 0; i < templateFiles.length; i++) {
       const file = templateFiles[i];
+      const outPath = normalizePath(`${folder}/${file.relativePath}`);
       try {
-        await this.createOrOverwrite(normalizePath(`${folder}/${file.relativePath}`), file.content);
+        await this.createOrOverwrite(outPath, file.content);
         written++;
+        writtenPaths.push(outPath);
       } catch (error) {
         this.logger.error(`Anki import: failed to write template ${file.relativePath}`, error);
       }
       await yieldEvery(i, 100);
     }
-    await this.templateSyncService?.syncAll();
+    for (const path of writtenPaths) {
+      const file = this.app.vault.getAbstractFileByPath(path);
+      if (file instanceof TFile) await this.templateSyncService?.syncFile(file);
+    }
     return written;
   }
 

@@ -258,6 +258,20 @@ export default class DecksPlugin extends Plugin {
         } catch (error) {
           this.logger.debug("startup compact failed", error);
         }
+        // One-time cleanup of orphaned cards left behind by deck deletions that
+        // ran without FK cascade enforcement. Keys on the (authoritative) decks
+        // table, so it only removes cards whose deck row is genuinely gone;
+        // review_logs survive, so a re-synced card restores its FSRS state.
+        if (!this.settings.orphanPruneV1Done) {
+          try {
+            const pruned = await this.db.pruneOrphanedFlashcards();
+            this.settings.orphanPruneV1Done = true;
+            await this.saveSettings();
+            if (pruned > 0) this.logger.debug(`startup orphan prune removed ${pruned} card(s)`);
+          } catch (error) {
+            this.logger.debug("startup orphan prune failed", error);
+          }
+        }
         void this.getDecksView()?.refresh();
       }).catch((e) =>
         this.logger.error("Post-init startup work failed", e)
@@ -645,6 +659,25 @@ export default class DecksPlugin extends Plugin {
               this.logger.error("Force resync failed", error);
               new Notice(I18n.t.notices.resyncFailed);
             });
+        },
+      });
+
+      // Explicitly clean up orphaned cards (deck_id points at a deleted deck row)
+      // left by FK-off migrations or old deletes. NOT run automatically during
+      // sync — a transiently-missing deck row would otherwise wipe a live deck.
+      this.addCommand({
+        id: "cleanup-orphaned-cards",
+        name: I18n.t.commands.cleanupOrphanedCards,
+        callback: () => {
+          this.db
+            .pruneOrphanedFlashcards()
+            .then((count) => {
+              new Notice(I18n.format(I18n.t.notices.orphansCleaned, { count }));
+              if (count > 0) void this.getDecksView()?.refresh();
+            })
+            .catch((error) =>
+              this.logger.error("Orphan cleanup failed", error)
+            );
         },
       });
 

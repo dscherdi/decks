@@ -5,10 +5,11 @@ import { generateDeckId, generateFlashcardId } from "@decks/core";
 import { setupTestDatabase, teardownTestDatabase } from "./database-test-utils";
 import type { Deck, DeckProfile } from "../../database/types";
 
-// The sync create op is a move-or-create upsert: a card that already exists in a
-// different deck OR is orphaned (deck row gone) is ADOPTED into the new deck with its
-// content refreshed but its scheduling/suspend/bury state preserved. This is what makes
-// re-import into a dirty vault lossless and non-destructive.
+// The sync create op is a move-or-create upsert. An ORPHANED card (its deck row is gone)
+// is ADOPTED into the new deck with content refreshed and scheduling/suspend/bury state
+// preserved — this makes re-import into a dirty vault lossless. But a card that still
+// lives in a LIVE deck is NEVER stolen (that would make a front shared by overlapping
+// decks bounce/overwrite on every sync).
 describe("Sync upsert: move-or-create preserves card state", () => {
   let db: MainDatabaseService;
   let profile: DeckProfile;
@@ -57,24 +58,26 @@ describe("Sync upsert: move-or-create preserves card state", () => {
     await db["executeSql"]("PRAGMA foreign_keys = ON", []);
   }
 
-  it("adopts a card from a wrong deck into the new deck, preserving FSRS + suspended", async () => {
+  it("does NOT steal a card that still lives in a live deck", async () => {
     const a = await makeDeck("deck-a");
     const b = await makeDeck("deck-b");
     await sync(a, CONTENT);
     const suspendedAt = new Date().toISOString();
     await db.updateFlashcard(cardId, { state: "review", stability: 9.9, suspendedAt });
 
-    // deck B's file has the same front while the card still lives in A → upsert adopts.
+    // deck B's file has the same front, but the card still lives in the LIVE deck A.
+    // The upsert must leave it entirely alone (no relocation, no content overwrite) —
+    // otherwise the same front would bounce between overlapping decks on every sync.
     await sync(b, CONTENT);
 
-    expect(await db.getFlashcardsByDeck(a.id)).toHaveLength(0); // moved, not duplicated
-    const inB = await db.getFlashcardsByDeck(b.id);
-    expect(inB.map((c) => c.id)).toEqual([cardId]);
-    expect(inB[0].deckId).toBe(b.id);
-    expect(inB[0].state).toBe("review"); // FSRS preserved (not reset)
-    expect(inB[0].stability).toBe(9.9);
-    expect(inB[0].suspendedAt).toBe(suspendedAt); // suspend preserved (not nulled)
-    expect(await db.countAllCards()).toBe(1); // no loss, no duplication
+    expect(await db.getFlashcardsByDeck(b.id)).toHaveLength(0); // not stolen
+    const inA = await db.getFlashcardsByDeck(a.id);
+    expect(inA.map((c) => c.id)).toEqual([cardId]);
+    expect(inA[0].deckId).toBe(a.id);
+    expect(inA[0].state).toBe("review"); // untouched
+    expect(inA[0].stability).toBe(9.9);
+    expect(inA[0].suspendedAt).toBe(suspendedAt);
+    expect(await db.countAllCards()).toBe(1); // no duplication
   });
 
   it("adopts an ORPHANED card (deck row gone) preserving all state", async () => {
@@ -145,5 +148,31 @@ describe("Sync upsert: move-or-create preserves card state", () => {
     );
     // (orphan card was never reviewed here, so 0 — the point is prune doesn't touch logs)
     expect((logs[0] as { c: number }).c).toBe(0);
+  });
+
+  it("empty-parse guard: an EMPTY read does not wipe the deck (read-race safety)", async () => {
+    const a = await makeDeck("deck-a");
+    await sync(a, CONTENT);
+    expect(await db.getFlashcardsByDeck(a.id)).toHaveLength(1);
+
+    const call = (fileContent: string) =>
+      db.syncFlashcardsForDeck({
+        deckId: a.id,
+        deckName: a.name,
+        deckFilepath: a.filepath,
+        deckConfig: profile,
+        fileContent,
+      });
+
+    // Empty/whitespace content (a failed/racy vault.read on a real deck file) must
+    // NOT delete the card — a live deck file always has at least its frontmatter.
+    const empty = await call("   \n");
+    expect(empty.skippedEmptyParse).toBe(true);
+    expect(await db.getFlashcardsByDeck(a.id)).toHaveLength(1);
+
+    // Non-empty content that genuinely has no cards deletes normally (a real edit).
+    const noCards = await call("Just some prose, no cards.\n");
+    expect(noCards.skippedEmptyParse).toBeFalsy();
+    expect(await db.getFlashcardsByDeck(a.id)).toHaveLength(0);
   });
 });

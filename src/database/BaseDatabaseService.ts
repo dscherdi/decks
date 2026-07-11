@@ -543,14 +543,33 @@ export abstract class BaseDatabaseService implements IDatabaseService {
     await this.executeSql(sql4, [newDeckId, oldDeckId]);
   }
 
+  // Deck deletion removes the deck's cards + their custom-deck memberships
+  // explicitly, rather than trusting `ON DELETE CASCADE`: sql.js runs with
+  // `PRAGMA foreign_keys` OFF in a normal session, so the cascade never fires and
+  // deleted decks would otherwise leave orphaned cards behind (still shown in
+  // filter decks, still reviewable, colliding on re-import). review_logs are kept
+  // (no FK; they carry FSRS history used to restore a re-created card).
   async deleteDeck(id: string): Promise<void> {
-    const sql = `DELETE FROM decks WHERE id = ?`;
-    await this.executeSql(sql, [id]);
+    await this.executeSql(
+      `DELETE FROM custom_deck_cards WHERE flashcard_id IN (SELECT id FROM flashcards WHERE deck_id = ?)`,
+      [id]
+    );
+    await this.executeSql(`DELETE FROM flashcards WHERE deck_id = ?`, [id]);
+    await this.executeSql(`DELETE FROM decks WHERE id = ?`, [id]);
   }
 
   async deleteDeckByFilepath(filepath: string): Promise<void> {
-    const sql = `DELETE FROM decks WHERE filepath = ?`;
-    await this.executeSql(sql, [filepath]);
+    await this.executeSql(
+      `DELETE FROM custom_deck_cards WHERE flashcard_id IN (
+         SELECT id FROM flashcards WHERE deck_id IN (SELECT id FROM decks WHERE filepath = ?)
+       )`,
+      [filepath]
+    );
+    await this.executeSql(
+      `DELETE FROM flashcards WHERE deck_id IN (SELECT id FROM decks WHERE filepath = ?)`,
+      [filepath]
+    );
+    await this.executeSql(`DELETE FROM decks WHERE filepath = ?`, [filepath]);
   }
 
   async getDecksByTag(tag: string): Promise<Deck[]> {
@@ -1313,10 +1332,33 @@ export abstract class BaseDatabaseService implements IDatabaseService {
     const orphans = await this.querySql<{ id: string }>(sql, [], { asObject: true });
     if (orphans.length === 0) return 0;
     await this.executeSql(
+      `DELETE FROM custom_deck_cards WHERE flashcard_id IN (
+         SELECT id FROM flashcards WHERE deck_id NOT IN (SELECT id FROM decks)
+       )`,
+      []
+    );
+    await this.executeSql(
       "DELETE FROM flashcards WHERE deck_id NOT IN (SELECT id FROM decks)",
       []
     );
     return orphans.length;
+  }
+
+  // Fronts of all cards living in decks OUTSIDE the given path prefix. Used by
+  // the Anki import to reserve fronts already taken elsewhere in the vault, so
+  // an imported card that shares a front gets a " (2)" suffix instead of being
+  // silently merged into the other deck's card. The decks JOIN excludes orphaned
+  // cards on purpose — those stay adoptable by the sync upsert (which preserves
+  // their review history), so their fronts must not be reserved.
+  async getFrontsOutsidePath(pathPrefix: string): Promise<string[]> {
+    const rows = await this.querySql<{ front: string }>(
+      `SELECT DISTINCT f.front FROM flashcards f
+       JOIN decks d ON f.deck_id = d.id
+       WHERE d.filepath NOT LIKE ? || '%'`,
+      [pathPrefix],
+      { asObject: true }
+    );
+    return rows.map((r) => r.front);
   }
 
   // COUNT OPERATIONS. Queue counts exclude suspended + actively-buried cards;

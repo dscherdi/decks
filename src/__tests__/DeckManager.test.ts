@@ -5,18 +5,20 @@ import { TFile, type MetadataCache, type Vault } from "obsidian";
 
 describe("DeckManager", () => {
   describe("syncDecks orphan cleanup", () => {
-    it("does not delete decks whose files exist when the metadata cache is cold", async () => {
-      // Files exist in the vault registry, but the metadata cache is cold
-      // (getFileCache returns null) — as at Obsidian startup. The old code
-      // treated these as orphaned and deleted them (and their cards).
-      const existing = new Map<string, TFile>([
+    it("only deletes a deck whose file is gone from BOTH the registry and disk", async () => {
+      // a.md/b.md are in the registry; cold.md is on disk but missing from the
+      // (cold) registry — a burst-import/iCloud race. gone.md is truly deleted.
+      // A registry miss alone must NOT cascade-delete a live deck's cards.
+      const inRegistry = new Map<string, TFile>([
         ["a.md", new TFile("a.md")],
         ["b.md", new TFile("b.md")],
       ]);
+      const onDisk = new Set(["a.md", "b.md", "cold.md"]);
       const vault = {
-        getMarkdownFiles: () => [...existing.values()],
+        getMarkdownFiles: () => [...inRegistry.values()],
         getFiles: () => [] as TFile[],
-        getAbstractFileByPath: (p: string) => existing.get(p) ?? null,
+        getAbstractFileByPath: (p: string) => inRegistry.get(p) ?? null,
+        adapter: { exists: async (p: string) => onDisk.has(p) },
       } as unknown as Vault;
       const metadataCache = {
         getFileCache: () => null, // cold cache
@@ -27,7 +29,8 @@ describe("DeckManager", () => {
         getAllDecks: jest.fn(async () => [
           { id: "d_a", name: "A", filepath: "a.md" },
           { id: "d_b", name: "B", filepath: "b.md" },
-          { id: "d_gone", name: "Gone", filepath: "gone.md" }, // file truly deleted
+          { id: "d_cold", name: "Cold", filepath: "cold.md" }, // registry-cold, on disk
+          { id: "d_gone", name: "Gone", filepath: "gone.md" }, // gone from both
         ]),
         deleteDeckByFilepath,
       } as unknown as IDatabaseService;
@@ -35,11 +38,73 @@ describe("DeckManager", () => {
       const mgr = new DeckManager(vault, metadataCache, db);
       await mgr.syncDecks();
 
-      // Only the deck whose file is actually gone should be deleted.
       expect(deleteDeckByFilepath).toHaveBeenCalledTimes(1);
       expect(deleteDeckByFilepath).toHaveBeenCalledWith("gone.md");
+      expect(deleteDeckByFilepath).not.toHaveBeenCalledWith("cold.md");
       expect(deleteDeckByFilepath).not.toHaveBeenCalledWith("a.md");
-      expect(deleteDeckByFilepath).not.toHaveBeenCalledWith("b.md");
+    });
+  });
+
+  describe("mtime gate: self-heal + skip-stamp", () => {
+    function makeMgr(opts: {
+      lastSyncedMtime: number;
+      fileMtime: number;
+      cardCount: number;
+      skippedEmptyParse?: boolean;
+    }) {
+      const file = new TFile("d.md");
+      file.stat = { mtime: opts.fileMtime, ctime: opts.fileMtime, size: 10 };
+      const vault = {
+        getAbstractFileByPath: () => file,
+        read: async () => "## Q\n\nA\n",
+      } as unknown as Vault;
+      const metadataCache = { getFileCache: () => null } as unknown as MetadataCache;
+      const setDeckLastSyncedMtime = jest.fn(async () => {});
+      const dbSync = jest.fn(async () => ({
+        success: true,
+        parsedCount: opts.skippedEmptyParse ? 0 : 1,
+        operationsCount: 0,
+        duplicatesSkipped: 0,
+        skippedEmptyParse: opts.skippedEmptyParse ?? false,
+      }));
+      const db = {
+        getDeckWithProfile: async () => ({
+          id: "d",
+          name: "D",
+          filepath: "d.md",
+          profile: { clozeEnabled: false, headerLevel: 2 },
+        }),
+        getDeckLastSyncedMtime: async () => opts.lastSyncedMtime,
+        countTotalCards: async () => opts.cardCount,
+        setDeckFileTags: jest.fn(async () => {}),
+        syncFlashcardsForDeck: dbSync,
+        setDeckLastSyncedMtime,
+      } as unknown as IDatabaseService;
+      const mgr = new DeckManager(vault, metadataCache, db);
+      return { mgr, dbSync, setDeckLastSyncedMtime };
+    }
+
+    it("skips re-parse when the gate hits and the deck still has cards", async () => {
+      const { mgr, dbSync } = makeMgr({ lastSyncedMtime: 100, fileMtime: 50, cardCount: 5 });
+      await mgr.syncFlashcardsForDeck("d");
+      expect(dbSync).not.toHaveBeenCalled();
+    });
+
+    it("self-heals (re-parses) when the gate hits but the deck has 0 cards", async () => {
+      const { mgr, dbSync } = makeMgr({ lastSyncedMtime: 100, fileMtime: 50, cardCount: 0 });
+      await mgr.syncFlashcardsForDeck("d");
+      expect(dbSync).toHaveBeenCalled();
+    });
+
+    it("does not stamp mtime when the sync aborted on an empty parse", async () => {
+      const { mgr, setDeckLastSyncedMtime } = makeMgr({
+        lastSyncedMtime: 0,
+        fileMtime: 50,
+        cardCount: 0,
+        skippedEmptyParse: true,
+      });
+      await mgr.syncFlashcardsForDeck("d");
+      expect(setDeckLastSyncedMtime).not.toHaveBeenCalled();
     });
   });
 

@@ -376,15 +376,20 @@ class SimpleDatabaseWorker {
    * in-memory DB. Wrapped in a transaction; rolled back on error.
    *
    * Conflict resolution:
-   *   - Append-only tables (review_sessions, review_logs, custom_deck_cards):
+   *   - Append-only tables (review_sessions, review_logs):
    *     INSERT OR IGNORE — both sides' rows survive.
+   *   - custom_deck_cards: append-only, but a row is NOT resurrected if the
+   *     local custom_deck_card_tombstones has a removal at least as new as the
+   *     row's `created` (otherwise a stale disk snapshot re-adds just-removed
+   *     memberships on every save).
    *   - decks, flashcards: conditional replace by `modified` (markdown is the
    *     source of truth, no tombstones).
    *   - deckprofiles, custom_decks: conditional replace by effective timestamp
    *     COALESCE(deleted_at, modified) — propagates tombstones.
    *   - profile_tag_mappings: conditional replace by COALESCE(deleted_at, created).
    *
-   * Excluded (local-only): journal_state, custom_deck_card_tombstones.
+   * Consulted but never merged (local-only): custom_deck_card_tombstones.
+   * Excluded (local-only): journal_state.
    */
   private performMerge(remoteDb: Database): void {
     if (!this.db) throw new Error("Database not initialized");
@@ -401,7 +406,7 @@ class SimpleDatabaseWorker {
       // device conflicts and tombstones precisely.
       this.mergeAppendOnly(remoteDb, "profile_tag_mappings");
       this.mergeCustomDecks(remoteDb);
-      this.mergeAppendOnly(remoteDb, "custom_deck_cards");
+      this.mergeCustomDeckCards(remoteDb);
       // Trained weight sets: immutable history + soft-delete, newer-wins by effective ts.
       this.mergeByEffectiveTimestamp(remoteDb, "fsrs_weight_sets");
       // Cram (drill) state: mutable, per-device but resumable across devices — newer-wins by modified.
@@ -428,6 +433,46 @@ class SimpleDatabaseWorker {
         `INSERT OR IGNORE INTO ${table} (${columnList}) VALUES (${placeholders})`
       );
       for (const row of result[0].values) stmt.run(row);
+      stmt.free();
+    } catch {
+      // Remote may lack the table on older schemas.
+    }
+  }
+
+  /**
+   * Append-only merge of custom_deck_cards that honours local removals. A blind
+   * INSERT OR IGNORE would re-add a membership the user just removed, because the
+   * on-disk snapshot predates the delete — so every save resurrected it. We skip
+   * any (custom_deck_id, flashcard_id) pair whose local tombstone is at least as
+   * new as the incoming row's `created` (a genuine re-add clears the tombstone,
+   * so it is not blocked).
+   */
+  private mergeCustomDeckCards(remoteDb: Database): void {
+    if (!this.db) return;
+    try {
+      const result = remoteDb.exec("SELECT * FROM custom_deck_cards");
+      if (result.length === 0) return;
+      const columns = result[0].columns;
+      const deckIdx = columns.indexOf("custom_deck_id");
+      const cardIdx = columns.indexOf("flashcard_id");
+      const createdIdx = columns.indexOf("created");
+      const placeholders = columns.map(() => "?").join(",");
+      const columnList = columns.join(",");
+      const stmt = this.db.prepare(
+        `INSERT OR IGNORE INTO custom_deck_cards (${columnList}) VALUES (${placeholders})`
+      );
+      for (const row of result[0].values) {
+        const deckId = row[deckIdx] as string;
+        const cardId = row[cardIdx] as string;
+        const created = row[createdIdx] as string;
+        const tomb = this.db.exec(
+          "SELECT removed_at_hlc FROM custom_deck_card_tombstones WHERE custom_deck_id = ? AND flashcard_id = ?",
+          [deckId, cardId]
+        );
+        const removedAt = tomb.length ? (tomb[0].values[0][0] as string) : null;
+        if (removedAt && removedAt >= created) continue;
+        stmt.run(row);
+      }
       stmt.free();
     } catch {
       // Remote may lack the table on older schemas.

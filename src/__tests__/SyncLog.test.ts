@@ -221,6 +221,25 @@ describe("SyncLog", () => {
       expect(adapter.appendCount).toBe(1);
       expect(log.bufferLengthForTests()).toBe(1);
     });
+
+    it("flushes custom-deck ops immediately (a reload can't drop a new custom deck)", async () => {
+      const customDeckOps: SyncOpV1[] = [
+        { o: "custom_deck_upsert", p: { id: "cd1", name: "My deck", deckType: "manual", filterDefinition: null, lastReviewed: null, created: "2026-05-11T00:00:00Z", modified: "2026-05-11T00:00:00Z" } },
+        { o: "custom_deck_card_add", p: { customDeckId: "cd1", flashcardId: "card_a", created: "2026-05-11T00:00:00Z" } },
+        { o: "custom_deck_card_remove", p: { customDeckId: "cd1", flashcardId: "card_a", removedAt: "2026-05-11T00:00:01Z" } },
+        { o: "custom_deck_delete", p: { id: "cd1", deletedAt: "2026-05-11T00:00:02Z" } },
+        { o: "custom_deck_reset", p: { customDeckId: "cd1", resetAt: "2026-05-11T00:00:03Z" } },
+      ];
+      for (const op of customDeckOps) {
+        const adapter = new FakeAdapter();
+        const { log } = makeSyncLog(adapter);
+        log.append(op);
+        await Promise.resolve();
+        await Promise.resolve();
+        expect(adapter.appendCount).toBe(1); // flushed without advancing the timer
+        expect(log.bufferLengthForTests()).toBe(0);
+      }
+    });
   });
 
   describe("flushNow", () => {
