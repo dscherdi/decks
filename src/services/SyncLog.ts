@@ -28,6 +28,18 @@ import { safeRename } from "../utils/adapter";
 const FLUSH_DEBOUNCE_MS = 2000;
 const FLUSH_BACKSTOP_COUNT = 10;
 const LOG_EXT = ".deckssynclog";
+
+// Single, user-initiated ops (not review bursts). These are flushed to disk
+// immediately so a hard reload right after the action can't lose them before the
+// debounce fires. The tiny text append doesn't trip iCloud's big-binary heuristic.
+const PROMPT_FLUSH_OPS: ReadonlySet<SyncOpV1["o"]> = new Set([
+  "card_suspend",
+  "card_unsuspend",
+  "card_bury",
+  "card_unbury",
+  "card_reset",
+  "deck_reset",
+]);
 const COMPACT_RETENTION_DAYS = 30;
 const MS_PER_DAY = 24 * 60 * 60 * 1000;
 
@@ -84,11 +96,16 @@ export class SyncLog {
       p: op.p,
     } as SyncLogEntry;
     this.buffer.push(JSON.stringify(entry) + "\n");
-    this.scheduleFlush();
-    if (this.buffer.length >= FLUSH_BACKSTOP_COUNT) {
-      // Don't await — caller doesn't need to wait for the flush. The
-      // single-flight guard inside flushNow handles overlap.
+    if (PROMPT_FLUSH_OPS.has(op.o)) {
+      // Durability-critical single actions land on disk now, not in 2s.
       void this.flushNow();
+    } else {
+      this.scheduleFlush();
+      if (this.buffer.length >= FLUSH_BACKSTOP_COUNT) {
+        // Don't await — caller doesn't need to wait for the flush. The
+        // single-flight guard inside flushNow handles overlap.
+        void this.flushNow();
+      }
     }
     return seq;
   }
@@ -174,6 +191,33 @@ export class SyncLog {
           });
         }
       }
+    } finally {
+      this.applying = false;
+    }
+  }
+
+  /**
+   * Recover this device's OWN un-snapshotted ops after a reload. The binary DB
+   * is saved lazily (30-min timer / blur), so ops emitted since the last snapshot
+   * live only in this device's log. `applyPending` deliberately skips the own log
+   * (its ops are normally already in the binary); on startup we replay it against
+   * the `journal_state[ownDeviceId]` watermark so a stale binary catches up. A
+   * fresh binary has a current watermark → near no-op. Handlers are
+   * `modified < at`-guarded, so re-applying an op already in the binary is a no-op.
+   */
+  async replayOwnLog(): Promise<void> {
+    if (!this.db) return;
+    if (this.applying) return; // share the single-flight guard with applyPending
+    this.applying = true;
+    try {
+      await this.flushNow(); // land just-emitted ops on disk before we read
+      const ownDeviceId = this.deviceState.getDeviceId();
+      const consumed = await this.loadJournalState();
+      await this.applyFromSource(
+        ownDeviceId,
+        this.ownLogPath,
+        consumed.get(ownDeviceId) ?? 0
+      );
     } finally {
       this.applying = false;
     }

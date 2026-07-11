@@ -202,6 +202,25 @@ describe("SyncLog", () => {
       expect(adapter.appendCount).toBe(1);
       expect(log.bufferLengthForTests()).toBe(0);
     });
+
+    it("flushes high-value ops (card_suspend) immediately, without the debounce", async () => {
+      const adapter = new FakeAdapter();
+      const { log } = makeSyncLog(adapter);
+
+      // A suspend is a single user action — it must reach disk now, not in 2s,
+      // so a hard reload right after can't lose it.
+      log.append({ o: "card_suspend", p: { c: "card_a", at: "2026-05-11T00:00:00Z" } });
+      await Promise.resolve();
+      await Promise.resolve();
+      expect(adapter.appendCount).toBe(1); // flushed without advancing the timer
+      expect(log.bufferLengthForTests()).toBe(0);
+
+      // The hot rate path still buffers (debounce unchanged).
+      log.append(sampleOp("card_b"));
+      await Promise.resolve();
+      expect(adapter.appendCount).toBe(1);
+      expect(log.bufferLengthForTests()).toBe(1);
+    });
   });
 
   describe("flushNow", () => {

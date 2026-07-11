@@ -233,12 +233,32 @@ export default class DecksPlugin extends Plugin {
       // DB init runs in the background (off the onload critical path). Anything
       // that needs the DB ready is sequenced after whenReady() so onload returns
       // fast and Obsidian startup isn't blocked on loading the .db + SQL.js.
-      void this.db.whenReady().then(() => {
+      void this.db.whenReady().then(async () => {
         if (this.db.migrationNotice) {
           new Notice(this.db.migrationNotice, 15000);
         }
         // One-time migration of legacy settings-based trained weights into the DB.
-        return this.migrateLegacyTrainedWeights();
+        await this.migrateLegacyTrainedWeights();
+        // Recover local ops that never reached the lazily-saved binary (e.g. a
+        // suspend done right before a hard reload), then catch up other devices,
+        // then compact. Order matters: replay BEFORE compact (compact rewrites the
+        // own log). Best-effort per step.
+        try {
+          await this.syncLog.replayOwnLog();
+        } catch (error) {
+          this.logger.debug("startup replayOwnLog failed", error);
+        }
+        try {
+          await this.syncLog.applyPending();
+        } catch (error) {
+          this.logger.debug("startup applyPending failed", error);
+        }
+        try {
+          await this.syncLog.compact();
+        } catch (error) {
+          this.logger.debug("startup compact failed", error);
+        }
+        void this.getDecksView()?.refresh();
       }).catch((e) =>
         this.logger.error("Post-init startup work failed", e)
       );
@@ -688,12 +708,8 @@ export default class DecksPlugin extends Plugin {
         }
       });
 
-      // Compact our own sync log on plugin load so the file doesn't grow
-      // unbounded across years of use. Best-effort; failures here are
-      // harmless (we just keep the longer file until the next attempt).
-      void this.syncLog
-        .compact()
-        .catch((error) => this.logger.debug("startup compact failed", error));
+      // (Own-log replay + other-device applyPending + compaction now run in the
+      // whenReady() recovery block above, sequenced after the DB is loaded.)
 
       // Listen for file changes to update decks. Both .md (tag-scoped) and
       // .canvas (folder-scoped) files reach the handlers, which branch by
