@@ -405,6 +405,8 @@ class SimpleDatabaseWorker {
       // the sync log path (HLC-ordered tag_mapping_upsert/_delete) handles cross-
       // device conflicts and tombstones precisely.
       this.mergeAppendOnly(remoteDb, "profile_tag_mappings");
+      // Anchor bindings are immutable once written (first writer wins per key).
+      this.mergeAppendOnly(remoteDb, "anchor_bindings");
       this.mergeCustomDecks(remoteDb);
       this.mergeCustomDeckCards(remoteDb);
       // Trained weight sets: immutable history + soft-delete, newer-wins by effective ts.

@@ -277,7 +277,7 @@ describe("Image Occlusion Integration Tests", () => {
   });
 
   describe("cloze disabled", () => {
-    it("should not generate image-occlusion cards when cloze is disabled", async () => {
+    it("should generate image-occlusion cards even when cloze is disabled", async () => {
       const { deck, profile } = await createClozeEnabledDeck("img-occ-disabled");
 
       const content = `## Anatomy\n\n![[skeleton.png]]\n1. ==Femur==\n2. ==Tibia==`;
@@ -292,8 +292,8 @@ describe("Image Occlusion Integration Tests", () => {
       });
 
       const flashcards = await db.getFlashcardsByDeck(deck.id);
-      expect(flashcards).toHaveLength(1);
-      expect(flashcards[0].type).toBe("header-paragraph");
+      expect(flashcards).toHaveLength(2);
+      expect(flashcards.every((c) => c.type === "image-occlusion")).toBe(true);
     });
   });
 });

@@ -24,6 +24,8 @@ import {
 import { DeckManager } from "./services/DeckManager";
 import { TemplateSyncService } from "./services/TemplateSyncService";
 import { DeckSynchronizer } from "./services/DeckSynchronizer";
+import { AnchorStamper } from "./services/AnchorStamper";
+import { AnchorMigrator } from "./services/AnchorMigrator";
 import { CanvasFileEventHandlers } from "./services/CanvasFileEventHandlers";
 import { Scheduler } from "@decks/core";
 import { DeviceLocalState } from "./services/DeviceLocalState";
@@ -1660,6 +1662,8 @@ export default class DecksPlugin extends Plugin {
 
       await yieldToUI();
 
+      await this.runAnchorMigrationOnce();
+
       const totalTime = performance.now() - startTime;
       this.logger.performance(
         `Initial sync completed successfully in ${formatTime(totalTime)}`
@@ -1667,6 +1671,22 @@ export default class DecksPlugin extends Plugin {
     } catch (error) {
       console.error("Error during initial sync:", error);
       // Don't throw - let the app continue working even if initial sync fails
+    }
+  }
+
+  // One-time anchor migration: runs after the first full sync (cards must
+  // exist in the DB). Idempotent — misses fall back to lazy stamping at
+  // review time, so marking it done up front is safe.
+  private async runAnchorMigrationOnce(): Promise<void> {
+    if (this.settings.anchorMigrationV1Done) return;
+    this.settings.anchorMigrationV1Done = true;
+    await this.saveSettings();
+    try {
+      const stamper = new AnchorStamper(this.app, this.db, this.logger);
+      const migrator = new AnchorMigrator(this.app, this.db, stamper, this.logger);
+      await migrator.run(this.settings.ui?.enableNotices !== false);
+    } catch (error) {
+      this.logger.error("Anchor migration failed", error);
     }
   }
 

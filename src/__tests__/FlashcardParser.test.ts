@@ -1220,4 +1220,92 @@ European city
       expect(cards[0].back).not.toContain("European city");
     });
   });
+
+  describe("anchor token stripping", () => {
+    it("parses a tokened header card identically to the clean source", () => {
+      const clean = `## What is the capital? #geo\n\nParis is the capital.\nIt lies on the Seine.`;
+      const tokened = `## What is the capital? #geo\n\nParis is the capital.\nIt lies on the Seine. %%dk:h:x7f2%%`;
+
+      const cleanCards = FlashcardParser.parseFlashcardsFromContent(clean, 2);
+      const tokenedCards = FlashcardParser.parseFlashcardsFromContent(tokened, 2);
+
+      expect(tokenedCards).toHaveLength(1);
+      expect(tokenedCards[0].front).toBe(cleanCards[0].front);
+      expect(tokenedCards[0].back).toBe(cleanCards[0].back);
+      expect(tokenedCards[0].notes).toBe(cleanCards[0].notes);
+      expect(tokenedCards[0].tags).toEqual(cleanCards[0].tags);
+    });
+
+    it("never turns anchor tokens into card notes, but keeps real comments as notes", () => {
+      const content = `## Question\n\nAnswer text. %%dk:h:abc1%%\n%%a real note%%`;
+      const cards = FlashcardParser.parseFlashcardsFromContent(content, 2);
+
+      expect(cards).toHaveLength(1);
+      expect(cards[0].notes).toBe("a real note");
+      expect(cards[0].back).toBe("Answer text.");
+    });
+
+    it("parses a tokened cloze line with unchanged clozeOrder and clozeText", () => {
+      const clean = `## Facts\n\nThe ==mitochondria== is the powerhouse.\nWater is ==H2O== of course.`;
+      const tokened = `## Facts\n\nThe ==mitochondria== is the powerhouse. %%dk:c:aa11%%\nWater is ==H2O== of course. %%dk:c:bb22%%`;
+
+      const cleanCards = FlashcardParser.parseFlashcardsFromContent(clean, 2, undefined, true);
+      const tokenedCards = FlashcardParser.parseFlashcardsFromContent(tokened, 2, undefined, true);
+
+      expect(tokenedCards).toHaveLength(cleanCards.length);
+      for (let i = 0; i < cleanCards.length; i++) {
+        expect(tokenedCards[i].clozeText).toBe(cleanCards[i].clozeText);
+        expect(tokenedCards[i].clozeOrder).toBe(cleanCards[i].clozeOrder);
+        expect(tokenedCards[i].back).toBe(cleanCards[i].back);
+      }
+    });
+
+    it("strips tokens from table cells before fronts, backs and templateRow", () => {
+      const clean = `## Vocab\n\n| Front | Back |\n|---|---|\n| chat | cat |`;
+      const tokened = `## Vocab\n\n| Front | Back |\n|---|---|\n| chat %%dk:t:cc33%% | cat %%dk:t:dd44%% |`;
+
+      const cleanCards = FlashcardParser.parseFlashcardsFromContent(clean, 2);
+      const tokenedCards = FlashcardParser.parseFlashcardsFromContent(tokened, 2);
+
+      expect(tokenedCards).toHaveLength(1);
+      expect(tokenedCards[0].front).toBe(cleanCards[0].front);
+      expect(tokenedCards[0].back).toBe(cleanCards[0].back);
+      expect(tokenedCards[0].templateRow).toEqual(cleanCards[0].templateRow);
+    });
+
+    it("strips a stray token on the header line from front and breadcrumb", () => {
+      const content = `## Question %%dk:h:ee55%%\n\nAnswer.`;
+      const cards = FlashcardParser.parseFlashcardsFromContent(content, 2);
+
+      expect(cards).toHaveLength(1);
+      expect(cards[0].front).toBe("Question");
+    });
+
+    it("strips tokens from title-mode bodies", () => {
+      const content = `Body line one. %%dk:h:ff66%%\nBody line two.`;
+      const cards = FlashcardParser.parseFlashcardsFromContent(content, 0, "Note title");
+
+      expect(cards).toHaveLength(1);
+      expect(cards[0].back).toBe("Body line one.\nBody line two.");
+    });
+
+    it("does not mint a card from a body that only contains a token", () => {
+      const content = `## Question\n\n%%dk:h:aa77%%`;
+      const cards = FlashcardParser.parseFlashcardsFromContent(content, 2);
+      expect(cards).toHaveLength(0);
+    });
+
+    it("parses an own-line token after the body identically to the clean source", () => {
+      const clean = `## Question\n\nFirst line.\nLast line.\n\n## Next\n\nOther.`;
+      const tokened = `## Question\n\nFirst line.\nLast line.\n%%dk:h:gg88%%\n\n## Next\n\nOther.`;
+
+      const cleanCards = FlashcardParser.parseFlashcardsFromContent(clean, 2);
+      const tokenedCards = FlashcardParser.parseFlashcardsFromContent(tokened, 2);
+
+      expect(tokenedCards).toHaveLength(cleanCards.length);
+      expect(tokenedCards[0].front).toBe(cleanCards[0].front);
+      expect(tokenedCards[0].back).toBe(cleanCards[0].back);
+      expect(tokenedCards[0].notes).toBe(cleanCards[0].notes);
+    });
+  });
 });

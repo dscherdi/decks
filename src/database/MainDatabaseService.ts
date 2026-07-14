@@ -558,6 +558,16 @@ export class MainDatabaseService extends BaseDatabaseService {
               this.debugLog("Remote DB has no profile_tag_mappings table, skipping");
             }
 
+            // Merge anchor bindings (append-only; first writer wins per key)
+            try {
+              this.db.exec(`
+                INSERT OR IGNORE INTO anchor_bindings
+                SELECT * FROM remote.anchor_bindings
+              `);
+            } catch {
+              this.debugLog("Remote DB has no anchor_bindings table, skipping");
+            }
+
             // Merge Custom Decks by effective timestamp COALESCE(deleted_at, modified).
             try {
               this.db.exec(`
@@ -823,6 +833,24 @@ export class MainDatabaseService extends BaseDatabaseService {
               }
             } catch {
               this.debugLog("Remote DB has no profile_tag_mappings table, skipping");
+            }
+
+            // Merge anchor bindings (append-only; first writer wins per key)
+            try {
+              const remoteBindings = remoteDb.exec("SELECT * FROM anchor_bindings");
+              if (remoteBindings.length > 0) {
+                const bindingData = remoteBindings[0];
+                const placeholders = bindingData.columns.map(() => "?").join(",");
+                const stmt = this.db.prepare(
+                  `INSERT OR IGNORE INTO anchor_bindings VALUES (${placeholders})`
+                );
+                for (const row of bindingData.values) {
+                  stmt.run(row);
+                }
+                stmt.free();
+              }
+            } catch {
+              this.debugLog("Remote DB has no anchor_bindings table, skipping");
             }
 
             // Merge custom decks by effective timestamp COALESCE(deleted_at, modified).

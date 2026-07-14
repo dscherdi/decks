@@ -1,6 +1,6 @@
 import type { Flashcard } from "../database/types";
 import { FlashcardParser } from "@decks/core";
-import { splitTableLine, unescapeTableCell } from "@decks/core";
+import { splitTableLine, stripAnchorTokens, unescapeTableCell } from "@decks/core";
 
 const HEADER_REGEX = /^(#{1,6})\s+(.+)$/;
 const TABLE_ROW_REGEX = /^\|.*\|$/;
@@ -26,10 +26,10 @@ function matchHeader(line: string): HeaderInfo | null {
 function matchTableRowFront(line: string, target: string): boolean {
   const trimmed = line.trim();
   if (!TABLE_ROW_REGEX.test(trimmed)) return false;
-  // Respect escaped pipes and un-escape so we compare against the same
-  // un-escaped value the parser stored in card.front.
+  // Strip anchor tokens and un-escape so we compare against the same
+  // cleaned value the parser stored in card.front.
   const cells = splitTableLine(trimmed.slice(1, -1)).map(
-    (c) => unescapeTableCell(c.trim()),
+    (c) => unescapeTableCell(stripAnchorTokens(c).trim()),
   );
   return cells.length >= 1 && cells[0] === target;
 }

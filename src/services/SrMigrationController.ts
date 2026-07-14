@@ -10,6 +10,8 @@ import {
   LegacySrMigrator,
   SrHistoryImporter,
   generateDeckId,
+  generateFlashcardId,
+  titleBindingKey,
   yieldToUI,
   DEFAULT_DECK_PROFILE,
   HEADER_LEVEL_TITLE,
@@ -485,6 +487,7 @@ export class SrMigrationController {
 
     let cardsText: string | null = null;
     let cardsCards: MigratedCard[] = [];
+    let renderedBindings: { anchor: string; flashcardId: string }[] = [];
     if (hasCards) {
       const rendered = LegacySrMigrator.renderDecksFiles(cards, this.decksBaseTag, headerLevel, {
         format: opts.format,
@@ -499,6 +502,7 @@ export class SrMigrationController {
       })[0];
       cardsText = rendered?.content ?? null;
       cardsCards = rendered?.cards ?? [];
+      renderedBindings = rendered?.bindings ?? [];
     }
 
     let reviewText: string | null = null;
@@ -568,8 +572,20 @@ export class SrMigrationController {
 
     // History: review deck (title-mode) + cards deck. Ids derive from the paths.
     if (reviewText && reviewCard) {
+      // The emitted decks-id was minted from the pre-rename front; the binding
+      // targets the id the FINAL basename resolves to on sync.
+      const titleAnchorId = LegacySrMigrator.titleAnchorId(reviewCard.front);
       reviewCard.front = this.basename(reviewPath);
+      await this.db.insertAnchorBindings([
+        {
+          anchor: titleBindingKey(titleAnchorId),
+          flashcardId: generateFlashcardId(reviewCard.front),
+        },
+      ]);
       deckItems.push({ deckId: generateDeckId(reviewPath), profileFsrs, cards: [reviewCard] });
+    }
+    if (cardsText && renderedBindings.length > 0) {
+      await this.db.insertAnchorBindings(renderedBindings);
     }
     if (cardsText) {
       deckItems.push({ deckId: generateDeckId(cardsOutPath), profileFsrs, cards: cardsCards });

@@ -25,11 +25,13 @@ import { navigateToFlashcardSource } from "../../utils/flashcard-navigator";
 import { wireInternalLinks } from "../../utils/internal-links";
 import { I18n } from "@decks/core";
 import { ConfirmModal } from "../ConfirmModal";
+import { AnchorStamper } from "../../services/AnchorStamper";
 
 export const VIEW_TYPE_FLASHCARD_REVIEW = "flashcard-review-view";
 
 export class FlashcardReviewView extends ItemView {
   private scheduler: Scheduler;
+  private anchorStamper: AnchorStamper;
   private settings: DecksSettings;
   private db: IDatabaseService;
 
@@ -58,6 +60,7 @@ export class FlashcardReviewView extends ItemView {
     this.scheduler = scheduler;
     this.settings = settings;
     this.db = db;
+    this.anchorStamper = new AnchorStamper(this.app, db);
   }
 
   getViewType(): string {
@@ -176,6 +179,9 @@ export class FlashcardReviewView extends ItemView {
       flashcard.deckId,
       new Date().toISOString()
     );
+    if (!this.browseMode) {
+      await this.anchorStamper.ensureAnchored(flashcard);
+    }
     // No per-rating stats refresh — onClose handles it.
   }
 

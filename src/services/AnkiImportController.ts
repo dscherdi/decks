@@ -190,6 +190,9 @@ export class AnkiImportController {
           const deckId = generateDeckId(outPath);
           deckItems.push({ deckId, profileFsrs, cards: deck.cards });
           deckMetaById.set(deckId, { path: outPath, name: deck.relativePath });
+          // Bindings before the sync below, so the first parse resolves every
+          // emitted token to the id the history importer keys to.
+          await this.db.insertAnchorBindings(deck.bindings);
         } catch (error) {
           this.logger.error(`Anki import failed for deck ${deck.deckName}`, error);
         }

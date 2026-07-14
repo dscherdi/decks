@@ -551,4 +551,112 @@ describe("FlashcardWriter", () => {
     expect(result.ok).toBe(false);
     if (!result.ok) expect(result.failure.code).toBe("invalid_edit");
   });
+
+  describe("anchor token preservation", () => {
+    it("edits a stamped header card and keeps its own-line h token", async () => {
+      const { app, currentContent } = mockApp(
+        "test.md",
+        "## Question\n\nOld body.\n%%dk:h:x7f2%%\n",
+      );
+      const writer = new FlashcardWriter(app as never);
+      const card = makeCard({ front: "Question", back: "Old body." });
+      const result = await writer.editFlashcard(card, {
+        type: "header-paragraph",
+        front: "Question",
+        back: "New body.",
+      });
+
+      expect(result.ok).toBe(true);
+      expect(currentContent()).toContain("New body.\n%%dk:h:x7f2%%");
+      expect((currentContent().match(/%%dk:h:/g) ?? []).length).toBe(1);
+    });
+
+    it("re-attaches cloze line tokens to unchanged lines", async () => {
+      const { app, currentContent } = mockApp(
+        "test.md",
+        "## Facts\n\nThe ==sun== is a star. %%dk:c:aa11%%\nOld second line.\n",
+      );
+      const writer = new FlashcardWriter(app as never);
+      const card = makeCard({
+        front: "Facts",
+        back: "The ==sun== is a star.\nOld second line.",
+        type: "cloze",
+        clozeText: "sun",
+        clozeOrder: 0,
+      });
+      const result = await writer.editFlashcard(card, {
+        type: "cloze",
+        front: "Facts",
+        sentence: "The ==sun== is a star.\nEdited second line.",
+      });
+
+      expect(result.ok).toBe(true);
+      expect(currentContent()).toContain("The ==sun== is a star. %%dk:c:aa11%%");
+      expect(currentContent()).toContain("Edited second line.");
+    });
+
+    it("edits a stamped table row and keeps its t token in the first cell", async () => {
+      const { app, currentContent } = mockApp(
+        "test.md",
+        "## Vocab\n\n| Front | Back |\n|---|---|\n| chat %%dk:t:bb22%% | cat |\n",
+      );
+      const writer = new FlashcardWriter(app as never);
+      const card = makeCard({
+        front: "chat",
+        back: "cat",
+        type: "table",
+        breadcrumb: "Vocab",
+      });
+      const result = await writer.editFlashcard(card, {
+        type: "table",
+        front: "chatte",
+        back: "female cat",
+        notes: "",
+      });
+
+      expect(result.ok).toBe(true);
+      expect(currentContent()).toContain("| chatte %%dk:t:bb22%% | female cat |");
+    });
+
+    it("edits a stamped occlusion item and keeps its o token", async () => {
+      const { app, currentContent } = mockApp(
+        "test.md",
+        "## Anatomy\n\n![[skeleton.png]]\n1. ==Femur== %%dk:o:cc33%%\n2. ==Tibia==\n",
+      );
+      const writer = new FlashcardWriter(app as never);
+      const card = makeCard({
+        front: "![[skeleton.png]]",
+        back: "1. ==Femur==\n2. ==Tibia==",
+        type: "image-occlusion",
+        breadcrumb: "Anatomy",
+        clozeText: "Femur",
+        clozeOrder: 0,
+      });
+      const result = await writer.editFlashcard(card, {
+        type: "image-occlusion",
+        listItem: "==Thigh bone==",
+      });
+
+      expect(result.ok).toBe(true);
+      expect(currentContent()).toContain("1. ==Thigh bone== %%dk:o:cc33%%");
+    });
+
+    it("keeps the token only in the first group when splitting", async () => {
+      const { app, currentContent } = mockApp(
+        "test.md",
+        "## Question\n\nBody text.\n%%dk:h:dd44%%\n",
+      );
+      const writer = new FlashcardWriter(app as never);
+      const card = makeCard({ front: "Question", back: "Body text." });
+      const result = await writer.splitFlashcard(card, [
+        { type: "header-paragraph", front: "Question", back: "Part one." },
+        { type: "header-paragraph", front: "Question 2", back: "Part two." },
+      ]);
+
+      expect(result.ok).toBe(true);
+      expect((currentContent().match(/%%dk:h:/g) ?? []).length).toBe(1);
+      expect(currentContent()).toContain("Part one.\n%%dk:h:dd44%%");
+      expect(currentContent()).not.toContain("Part two.\n%%dk:h:dd44%%");
+    });
+  });
 });

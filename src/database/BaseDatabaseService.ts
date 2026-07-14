@@ -254,6 +254,7 @@ export abstract class BaseDatabaseService implements IDatabaseService {
       templateRow: row[27]
         ? (JSON.parse(row[27] as string) as TemplateRow)
         : null,
+      anchor: (row[28] as string) ?? null,
     };
   }
 
@@ -3364,5 +3365,49 @@ export abstract class BaseDatabaseService implements IDatabaseService {
 
   async clearLastSyncedMtimeForProfile(profileId: string): Promise<void> {
     await this.executeSql(SQL_QUERIES.CLEAR_LAST_SYNCED_MTIME_BY_PROFILE, [profileId]);
+  }
+
+  // Anchor bindings: durable anchor-key -> card-id records (append-only).
+  async getAnchorBinding(anchor: string): Promise<string | null> {
+    const rows = (await this.querySql(
+      "SELECT flashcard_id FROM anchor_bindings WHERE anchor = ?",
+      [anchor]
+    )) as Array<[string]>;
+    return rows.length > 0 ? String(rows[0][0]) : null;
+  }
+
+  async insertAnchorBindings(
+    rows: { anchor: string; flashcardId: string }[]
+  ): Promise<void> {
+    for (const row of rows) {
+      await this.executeSql(
+        "INSERT OR IGNORE INTO anchor_bindings (anchor, flashcard_id, created) VALUES (?, ?, datetime('now'))",
+        [row.anchor, row.flashcardId]
+      );
+    }
+  }
+
+  async setFlashcardAnchor(flashcardId: string, anchor: string): Promise<void> {
+    await this.executeSql(
+      "UPDATE flashcards SET anchor = ? WHERE id = ?",
+      [anchor, flashcardId]
+    );
+  }
+
+  async countNodeCards(deckId: string, sourceNodeId: string): Promise<number> {
+    const rows = (await this.querySql(
+      "SELECT COUNT(*) FROM flashcards WHERE deck_id = ? AND source_node_id = ? AND edge_id IS NULL",
+      [deckId, sourceNodeId]
+    )) as Array<[number]>;
+    return rows.length > 0 ? Number(rows[0][0]) : 0;
+  }
+
+  // Reviewed cards without an anchor (migration + lazy stamping candidates).
+  async getReviewedUnanchoredCards(): Promise<Flashcard[]> {
+    const results = (await this.querySql(
+      "SELECT * FROM flashcards WHERE anchor IS NULL AND (last_reviewed IS NOT NULL OR repetitions > 0)",
+      []
+    )) as Array<(string | number | null)[]>;
+    return results.map((row) => this.rowToFlashcard(row));
   }
 }

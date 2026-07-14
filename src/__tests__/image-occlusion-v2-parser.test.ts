@@ -69,9 +69,9 @@ describe("FlashcardParser V2 occlusion extraction", () => {
     expect(cards.filter((c) => c.type === "image-occlusion-v2")).toHaveLength(0);
   });
 
-  it("does not generate occlusion cards when cloze is disabled", () => {
+  it("generates occlusion cards even when cloze is disabled", () => {
     const cards = FlashcardParser.parseFlashcardsFromContent(V2_BLOCK, 2, undefined, false);
-    expect(cards.filter((c) => c.type === "image-occlusion-v2")).toHaveLength(0);
+    expect(cards.filter((c) => c.type === "image-occlusion-v2")).toHaveLength(2);
   });
 
   it("strips the codeblock so its YAML is never parsed as a header/table card", () => {

@@ -19,6 +19,7 @@ import { navigateToFlashcardSource } from "../../utils/flashcard-navigator";
 import { wireInternalLinks } from "../../utils/internal-links";
 import { I18n } from "@decks/core";
 import { ConfirmModal } from "../ConfirmModal";
+import { AnchorStamper } from "../../services/AnchorStamper";
 
 export class FlashcardReviewModalWrapper extends Modal {
   private deckOrGroup: DeckOrGroup;
@@ -79,7 +80,10 @@ export class FlashcardReviewModalWrapper extends Modal {
     this.refreshStatsById = refreshStatsById;
     this.browseMode = browseMode;
     this.cramMode = cramMode;
+    this.anchorStamper = new AnchorStamper(app, db);
   }
+
+  private anchorStamper: AnchorStamper;
 
   private async reviewFlashcard(
     deckOrGroup: DeckOrGroup,
@@ -93,6 +97,9 @@ export class FlashcardReviewModalWrapper extends Modal {
       flashcard.deckId,
       new Date().toISOString()
     );
+    if (!this.cramMode && !this.browseMode) {
+      await this.anchorStamper.ensureAnchored(flashcard);
+    }
     // No per-rating stats refresh — onClose handles it.
   }
 
