@@ -456,11 +456,18 @@ export class AnchorStamper {
     if (!segment) return unchanged({ ok: false, reason: "segment_not_found" });
 
     // A cloze whose segment resolves to a table row belongs to the t path.
+    // Route rather than reject: templateRow may be missing on older rows, and
+    // the segment itself proves the host is a table.
     if (
       segment.end - segment.start === 1 &&
       TABLE_ROW_REGEX.test(lines[segment.start].trim())
     ) {
-      return unchanged({ ok: false, reason: "not_stampable" });
+      return this.applyTableStamp(content, card, hostFront, hostBack, {
+        tokenRole: "t",
+        tokenId: plan.tokenId,
+        cardKey: tableBindingKey(plan.tokenId, card.clozeOrder ?? 0),
+        bindings: [],
+      });
     }
 
     const bodyStart = segment.start + 1;

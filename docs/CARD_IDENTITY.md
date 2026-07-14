@@ -129,21 +129,14 @@ Placement rules and their reasons:
 
 ---
 
-## Token visibility: hidden in reading, visible while editing (by design)
+## Token visibility (verified in Obsidian)
 
-The split is deliberate: **reading mode** (consumption) hides the token natively via
-Obsidian's comment rendering — clean cards, clean notes. **Live Preview / source mode**
-(editing) shows the token, and that visibility is a feature, not a gap: the token is
-the card's identity, and seeing it while editing is what lets users carry it through
-edits and avoid deleting it — the direct mitigation for the gesture-triggered reset
-hole below. No default-on hiding extension is built.
-
-Open question (see "To prototype"): if Obsidian natively hides `%%…%%` comments in
-Live Preview outside the cursor line, the marker won't show during editing on its own —
-then decide whether a subtle Decks reveal (e.g. a dimmed badge via editor decorations)
-is worth building, or whether cursor-line reveal is marker enough. An opt-in "hide
-anchors in Live Preview" toggle can be offered later for users who prefer a clean
-editing view; it is not v0 scope.
+Obsidian hides `%%…%%` comments natively in **both reading mode and Live Preview**
+(revealing them when the cursor enters the line), so the token is invisible everywhere
+users normally look with zero Decks-side rendering code — only source mode shows it
+persistently. Consequence: the token can't serve as an always-visible "don't delete
+me" marker in Live Preview; cursor-line reveal plus the writer's token preservation on
+edits is the protection instead. No editor extension is built or needed.
 
 ## The `clozeEnabled` flag
 

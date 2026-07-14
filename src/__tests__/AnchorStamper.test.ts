@@ -357,6 +357,32 @@ describe("AnchorStamper", () => {
     if (outcome.ok) expect(outcome.anchorKey).toBe(`t:${tokenId}#1`);
   });
 
+  it("stamps a table-hosted cloze even when templateRow is missing", async () => {
+    const back = "The ==heart== and ==lungs==";
+    const env = mockEnv(
+      `## Organs\n\n| Front | Back |\n|---|---|\n| word | ${back} |\n`
+    );
+    const card = makeCard({
+      id: "ccard_x",
+      front: "word",
+      back,
+      type: "cloze",
+      breadcrumb: "Organs",
+      clozeText: "heart",
+      clozeOrder: 0,
+      templateRow: null,
+    });
+    const outcome = await stamperFor(env).ensureAnchored(card);
+
+    expect(outcome.ok).toBe(true);
+    const tokenId = generateAnchorId("word");
+    expect(env.currentContent()).toContain(`| word %%dk:t:${tokenId}%% |`);
+    expect(env.db.bindings.get(`t:${tokenId}#0`)).toBe(
+      generateClozeFlashcardId("word", "heart", 0)
+    );
+    if (outcome.ok) expect(outcome.anchorKey).toBe(`t:${tokenId}#0`);
+  });
+
   it("skips duplicate table fronts deterministically", async () => {
     const env = mockEnv(
       "## Vocab\n\n| Front | Back |\n|---|---|\n| chat | cat |\n| chat | chatter |\n"
