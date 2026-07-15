@@ -478,4 +478,170 @@ describe("suspend/bury durability", () => {
       }
     });
   });
+
+  describe("backup restore", () => {
+    it("backup restore onto a fresh database brings back suspend state and anchor bindings", async () => {
+      const db = await createTestDatabase();
+      const profile = await db.getDefaultProfile();
+      const deck = DatabaseTestUtils.createTestDeck({
+        filepath: "/test/durability.md",
+      });
+      await db.createDeck(deck);
+      const deckId = deck.id;
+      try {
+        await syncContent(db, deckId, profile, FILE_CONTENT);
+        const cardId = generateFlashcardId(FRONT);
+        await db.suspendCard(cardId);
+        const suspendedAt = (await db.getFlashcardById(cardId))?.suspendedAt;
+        await db.insertAnchorBindings([
+          { anchor: "h:tok9", flashcardId: cardId },
+        ]);
+        const backup = await db.exportDatabaseToBuffer();
+
+        const dbB = new MainDatabaseService(
+          "restore.db",
+          new InMemoryAdapter(),
+          jest.fn()
+        );
+        await dbB.initialize();
+        try {
+          await dbB.restoreFromBackupData(backup);
+
+          expect((await overlayRow(dbB, cardId))?.suspended_at).toBe(
+            suspendedAt
+          );
+          expect(await dbB.getAnchorBinding("h:tok9")).toBe(cardId);
+
+          // Vault sync after restore materializes the card suspended.
+          const deckB = DatabaseTestUtils.createTestDeck({
+            id: deckId,
+            filepath: "/test/durability.md",
+          });
+          await dbB.createDeck(deckB);
+          const profileB = await dbB.getDefaultProfile();
+          await syncContent(dbB, deckId, profileB, FILE_CONTENT);
+          expect((await dbB.getFlashcardById(cardId))?.suspendedAt).toBe(
+            suspendedAt
+          );
+        } finally {
+          await dbB.close();
+        }
+      } finally {
+        await cleanupTestDatabase(db);
+      }
+    });
+
+    it("backup restore respects the newer-wins guard in both directions", async () => {
+      const t1 = "2026-07-01T10:00:00.000Z";
+      const t2 = "2026-07-03T10:00:00.000Z";
+      const tMid = "2026-07-02T10:00:00.000Z";
+      const tNewest = "2026-07-04T10:00:00.000Z";
+
+      // Backup source: suspended at t1, unsuspended at t2 → NULL tombstone @ t2.
+      const db = await createTestDatabase();
+      const profile = await db.getDefaultProfile();
+      const deck = DatabaseTestUtils.createTestDeck({
+        filepath: "/test/durability.md",
+      });
+      await db.createDeck(deck);
+      const deckId = deck.id;
+      try {
+        await syncContent(db, deckId, profile, FILE_CONTENT);
+        const cardId = generateFlashcardId(FRONT);
+        await applyOp(
+          db,
+          "device-a",
+          opEntry("card_suspend", { c: cardId, at: t1 }, t1),
+          makeLogger()
+        );
+        await applyOp(
+          db,
+          "device-a",
+          opEntry("card_unsuspend", { c: cardId, at: t2 }, t2),
+          makeLogger()
+        );
+        const backup = await db.exportDatabaseToBuffer();
+
+        const dbB = new MainDatabaseService(
+          "restore.db",
+          new InMemoryAdapter(),
+          jest.fn()
+        );
+        await dbB.initialize();
+        try {
+          const deckB = DatabaseTestUtils.createTestDeck({
+            id: deckId,
+            filepath: "/test/durability.md",
+          });
+          await dbB.createDeck(deckB);
+          const profileB = await dbB.getDefaultProfile();
+          await syncContent(dbB, deckId, profileB, FILE_CONTENT);
+
+          // Backup newer than local: local suspend @ tMid loses to the t2
+          // unsuspend, and the mirror updates the existing card row.
+          await applyOp(
+            dbB,
+            "device-b",
+            opEntry("card_suspend", { c: cardId, at: tMid }, tMid),
+            makeLogger()
+          );
+          await dbB.restoreFromBackupData(backup);
+          expect((await dbB.getFlashcardById(cardId))?.suspendedAt).toBeNull();
+          expect((await overlayRow(dbB, cardId))?.modified).toBe(t2);
+
+          // Local newer than backup: suspend @ tNewest survives a re-restore.
+          await applyOp(
+            dbB,
+            "device-b",
+            opEntry("card_suspend", { c: cardId, at: tNewest }, tNewest),
+            makeLogger()
+          );
+          await dbB.restoreFromBackupData(backup);
+          expect((await dbB.getFlashcardById(cardId))?.suspendedAt).toBe(
+            tNewest
+          );
+        } finally {
+          await dbB.close();
+        }
+      } finally {
+        await cleanupTestDatabase(db);
+      }
+    });
+
+    it("restoring a pre-v38 backup without the new tables still restores review logs", async () => {
+      const bin = fs.readFileSync(
+        path.resolve(
+          __dirname,
+          "../../../node_modules/sql.js/dist/sql-wasm.wasm"
+        )
+      );
+      const SQL = await initSqlJs({ wasmBinary: bin as unknown as ArrayBuffer });
+      const raw: Database = new SQL.Database();
+      raw.run(CREATE_TABLES_SQL);
+      raw.run("DROP TABLE card_state_overlays");
+      raw.run("DROP TABLE anchor_bindings");
+      raw.run(
+        `INSERT INTO review_logs
+           (id, flashcard_id, last_reviewed_at, reviewed_at, rating, rating_label,
+            old_state, new_state, old_interval_minutes, new_interval_minutes,
+            old_due_at, new_due_at, elapsed_days, retrievability, request_retention,
+            profile, maximum_interval_days, min_minutes, fsrs_weights_version,
+            scheduler_version, new_stability)
+         VALUES ('log_pre38', 'card_x', datetime('now'), datetime('now'), 3, 'good',
+                 'new', 'review', 0, 600, datetime('now'), datetime('now'),
+                 1.0, 0.9, 0.9, 'STANDARD', 36500, 1, '1.0', '1.0', 42)`
+      );
+      const bytes = raw.export();
+      raw.close();
+
+      const db = await createTestDatabase();
+      try {
+        await db.restoreFromBackupData(bytes);
+        const logs = await db.getAllReviewLogs();
+        expect(logs.some((l) => l.id === "log_pre38")).toBe(true);
+      } finally {
+        await cleanupTestDatabase(db);
+      }
+    });
+  });
 });

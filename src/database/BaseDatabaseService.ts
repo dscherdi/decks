@@ -3337,6 +3337,56 @@ export abstract class BaseDatabaseService implements IDatabaseService {
         this.debugLog("Backup does not contain fsrs_weight_sets table, skipping");
       }
 
+      // Restore durable suspend/bury state (newer wins), then mirror onto any
+      // cards already present; cards restored later by vault sync pick the
+      // overlay up through the synchronizer.
+      try {
+        const overlays = await this.queryBackupDatabase(
+          backupDb,
+          "SELECT flashcard_id, suspended_at, buried_until, modified FROM card_state_overlays"
+        );
+        for (const row of overlays) {
+          await this.executeSql(
+            `INSERT INTO card_state_overlays (flashcard_id, suspended_at, buried_until, modified)
+             VALUES (?, ?, ?, ?)
+             ON CONFLICT(flashcard_id) DO UPDATE SET
+               suspended_at = excluded.suspended_at,
+               buried_until = excluded.buried_until,
+               modified = excluded.modified
+             WHERE excluded.modified > card_state_overlays.modified`,
+            row
+          );
+        }
+        if (overlays.length > 0) {
+          await this.executeSql(
+            `UPDATE flashcards SET
+               suspended_at = (SELECT o.suspended_at FROM card_state_overlays o WHERE o.flashcard_id = flashcards.id),
+               buried_until = (SELECT o.buried_until FROM card_state_overlays o WHERE o.flashcard_id = flashcards.id)
+             WHERE id IN (SELECT flashcard_id FROM card_state_overlays)`,
+            []
+          );
+        }
+      } catch {
+        this.debugLog("Backup does not contain card_state_overlays table, skipping");
+      }
+
+      // Restore anchor bindings (append-only, first writer wins) so anchored
+      // cards re-attach to their original ids and restored review history.
+      try {
+        const bindings = await this.queryBackupDatabase(
+          backupDb,
+          "SELECT anchor, flashcard_id, created FROM anchor_bindings"
+        );
+        for (const row of bindings) {
+          await this.executeSql(
+            "INSERT OR IGNORE INTO anchor_bindings (anchor, flashcard_id, created) VALUES (?, ?, ?)",
+            row
+          );
+        }
+      } catch {
+        this.debugLog("Backup does not contain anchor_bindings table, skipping");
+      }
+
       await this.closeBackupDatabaseInstance(backupDb);
       this.debugLog("Database restored from backup data");
 
