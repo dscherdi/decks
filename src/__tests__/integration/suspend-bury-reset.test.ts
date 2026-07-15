@@ -319,6 +319,68 @@ describe("Suspend / Bury / Reset Integration", () => {
     });
   });
 
+  describe("durable overlay rows", () => {
+    async function overlay(cardId: string) {
+      const rows = await db.querySql<{
+        suspended_at: string | null;
+        buried_until: string | null;
+      }>(
+        "SELECT suspended_at, buried_until FROM card_state_overlays WHERE flashcard_id = ?",
+        [cardId],
+        { asObject: true }
+      );
+      return rows[0];
+    }
+
+    it("suspend/bury/reset writers keep card_state_overlays in lockstep", async () => {
+      await db.createFlashcard(
+        DatabaseTestUtils.createTestFlashcard(testDeck.id, {
+          id: "c_overlay",
+          state: "review",
+          dueDate: new Date().toISOString(),
+          interval: 1440,
+        })
+      );
+
+      await db.suspendCard("c_overlay");
+      expect((await overlay("c_overlay"))?.suspended_at).not.toBeNull();
+
+      const until = new Date(Date.now() + 60 * 60 * 1000).toISOString();
+      await db.buryCard("c_overlay", until);
+      expect((await overlay("c_overlay"))?.buried_until).toBe(until);
+
+      await db.unsuspendCard("c_overlay");
+      const afterUnsuspend = await overlay("c_overlay");
+      expect(afterUnsuspend?.suspended_at).toBeNull();
+      expect(afterUnsuspend?.buried_until).toBe(until);
+
+      await db.resetCard("c_overlay");
+      const afterReset = await overlay("c_overlay");
+      expect(afterReset?.suspended_at).toBeNull();
+      expect(afterReset?.buried_until).toBeNull();
+    });
+
+    it("deck reset clears bury in the overlay but keeps suspend", async () => {
+      await db.createFlashcard(
+        DatabaseTestUtils.createTestFlashcard(testDeck.id, {
+          id: "c_deck_reset",
+          state: "review",
+          dueDate: new Date().toISOString(),
+          interval: 1440,
+        })
+      );
+      await db.suspendCard("c_deck_reset");
+      const until = new Date(Date.now() + 60 * 60 * 1000).toISOString();
+      await db.buryCard("c_deck_reset", until);
+
+      await db.resetDeckProgress(testDeck.id);
+
+      const row = await overlay("c_deck_reset");
+      expect(row?.suspended_at).not.toBeNull();
+      expect(row?.buried_until).toBeNull();
+    });
+  });
+
   describe("deck reset interaction", () => {
     it("resetDeckProgress clears buried_until but preserves suspended_at", async () => {
       const card = DatabaseTestUtils.createTestFlashcard(testDeck.id, {

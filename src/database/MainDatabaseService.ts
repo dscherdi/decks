@@ -488,14 +488,24 @@ export class MainDatabaseService extends BaseDatabaseService {
               `);
             }
 
-            // Merge Flashcards (REPLACE only if remote.modified > main.modified)
-            // Use try/catch to handle schema mismatch when remote DB lacks the notes column
+            // Merge Flashcards (REPLACE only if remote.modified > main.modified).
+            // Explicit column list matching the worker merge: suspended_at and
+            // buried_until are excluded (REPLACE resets them to NULL) and
+            // re-mirrored from card_state_overlays below.
             try {
               this.db.exec(`
                 INSERT OR REPLACE INTO flashcards
-                SELECT remote.* FROM remote.flashcards
-                LEFT JOIN flashcards AS main ON remote.id = main.id
-                WHERE main.id IS NULL OR remote.modified > main.modified
+                (id, deck_id, front, back, type, source_file, content_hash, breadcrumb, notes,
+                 cloze_text, cloze_order, source_node_id, edge_id, hint,
+                 state, due_date, interval, repetitions, difficulty, stability, lapses,
+                 last_reviewed, created, modified, tags, template_row, anchor)
+                SELECT r.id, r.deck_id, r.front, r.back, r.type, r.source_file, r.content_hash,
+                  r.breadcrumb, r.notes, r.cloze_text, r.cloze_order, r.source_node_id, r.edge_id, r.hint,
+                  r.state, r.due_date, r.interval, r.repetitions, r.difficulty, r.stability, r.lapses,
+                  r.last_reviewed, r.created, r.modified, r.tags, r.template_row, r.anchor
+                FROM remote.flashcards r
+                LEFT JOIN flashcards AS main ON r.id = main.id
+                WHERE main.id IS NULL OR r.modified > main.modified
               `);
             } catch {
               // Remote DB has different schema (e.g., missing notes column) - use explicit columns
@@ -513,6 +523,31 @@ export class MainDatabaseService extends BaseDatabaseService {
                 WHERE main.id IS NULL OR r.modified > main.modified
               `);
             }
+
+            // Merge durable suspend/bury state (newer wins), then re-mirror
+            // onto the flashcards cache columns — required after the REPLACE
+            // above reset them to NULL for replaced rows.
+            try {
+              this.db.exec(`
+                INSERT INTO card_state_overlays (flashcard_id, suspended_at, buried_until, modified)
+                SELECT r.flashcard_id, r.suspended_at, r.buried_until, r.modified
+                FROM remote.card_state_overlays r
+                WHERE true
+                ON CONFLICT(flashcard_id) DO UPDATE SET
+                  suspended_at = excluded.suspended_at,
+                  buried_until = excluded.buried_until,
+                  modified = excluded.modified
+                WHERE excluded.modified > card_state_overlays.modified
+              `);
+            } catch {
+              this.debugLog("Remote DB has no card_state_overlays table, skipping");
+            }
+            this.db.exec(`
+              UPDATE flashcards SET
+                suspended_at = (SELECT o.suspended_at FROM card_state_overlays o WHERE o.flashcard_id = flashcards.id),
+                buried_until = (SELECT o.buried_until FROM card_state_overlays o WHERE o.flashcard_id = flashcards.id)
+              WHERE id IN (SELECT flashcard_id FROM card_state_overlays)
+            `);
 
             // Merge Profiles by effective timestamp COALESCE(deleted_at, modified)
             // so a soft-delete on one device propagates to the other.
@@ -741,17 +776,28 @@ export class MainDatabaseService extends BaseDatabaseService {
               }
             }
 
-            // Merge flashcards (conditional replace)
+            // Merge flashcards (conditional replace). suspended_at and
+            // buried_until are excluded like in the worker merge and
+            // re-mirrored from card_state_overlays below.
             if (remoteFlashcards.length > 0) {
               const cardData = remoteFlashcards[0];
               const modifiedIndex = cardData.columns.indexOf("modified");
-              const hasNotesColumn = cardData.columns.includes("notes");
+              const skipCols = new Set(["suspended_at", "buried_until"]);
+              const colIndexes: number[] = [];
+              const mergeColumns: string[] = [];
+              for (let i = 0; i < cardData.columns.length; i++) {
+                if (skipCols.has(cardData.columns[i])) continue;
+                colIndexes.push(i);
+                mergeColumns.push(cardData.columns[i]);
+              }
+              const hasNotesColumn = mergeColumns.includes("notes");
+              const stateIndex = mergeColumns.indexOf("state");
               const columnList = hasNotesColumn
-                ? cardData.columns.join(",")
-                : [...cardData.columns.slice(0, cardData.columns.indexOf("state")), "notes", ...cardData.columns.slice(cardData.columns.indexOf("state"))].join(",");
+                ? mergeColumns.join(",")
+                : [...mergeColumns.slice(0, stateIndex), "notes", ...mergeColumns.slice(stateIndex)].join(",");
               const placeholders = hasNotesColumn
-                ? cardData.columns.map(() => "?").join(",")
-                : [...cardData.columns.slice(0, cardData.columns.indexOf("state")).map(() => "?"), "?", ...cardData.columns.slice(cardData.columns.indexOf("state")).map(() => "?")].join(",");
+                ? mergeColumns.map(() => "?").join(",")
+                : [...mergeColumns.slice(0, stateIndex).map(() => "?"), "?", ...mergeColumns.slice(stateIndex).map(() => "?")].join(",");
 
               for (const row of cardData.values) {
                 const cardId = row[0]; // Assuming id is first column
@@ -767,9 +813,10 @@ export class MainDatabaseService extends BaseDatabaseService {
                     (remoteModified || 0);
 
                 if (shouldReplace) {
+                  const projected = colIndexes.map((i) => row[i]);
                   const rowValues = hasNotesColumn
-                    ? row
-                    : [...row.slice(0, cardData.columns.indexOf("state")), "", ...row.slice(cardData.columns.indexOf("state"))];
+                    ? projected
+                    : [...projected.slice(0, stateIndex), "", ...projected.slice(stateIndex)];
                   const cardStmt = this.db.prepare(`
                     INSERT OR REPLACE INTO flashcards (${columnList})
                     VALUES (${placeholders})
@@ -779,6 +826,37 @@ export class MainDatabaseService extends BaseDatabaseService {
                 }
               }
             }
+
+            // Merge durable suspend/bury state (newer wins), then re-mirror
+            // onto the flashcards cache columns.
+            try {
+              const remoteOverlays = remoteDb.exec(
+                "SELECT flashcard_id, suspended_at, buried_until, modified FROM card_state_overlays"
+              );
+              if (remoteOverlays.length > 0) {
+                const overlayStmt = this.db.prepare(`
+                  INSERT INTO card_state_overlays (flashcard_id, suspended_at, buried_until, modified)
+                  VALUES (?, ?, ?, ?)
+                  ON CONFLICT(flashcard_id) DO UPDATE SET
+                    suspended_at = excluded.suspended_at,
+                    buried_until = excluded.buried_until,
+                    modified = excluded.modified
+                  WHERE excluded.modified > card_state_overlays.modified
+                `);
+                for (const row of remoteOverlays[0].values) {
+                  overlayStmt.run(row);
+                }
+                overlayStmt.free();
+              }
+            } catch {
+              this.debugLog("Remote DB has no card_state_overlays table, skipping");
+            }
+            this.db.exec(`
+              UPDATE flashcards SET
+                suspended_at = (SELECT o.suspended_at FROM card_state_overlays o WHERE o.flashcard_id = flashcards.id),
+                buried_until = (SELECT o.buried_until FROM card_state_overlays o WHERE o.flashcard_id = flashcards.id)
+              WHERE id IN (SELECT flashcard_id FROM card_state_overlays)
+            `);
 
             // Merge profiles by effective timestamp COALESCE(deleted_at, modified).
             try {

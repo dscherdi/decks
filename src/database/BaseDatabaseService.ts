@@ -1216,6 +1216,19 @@ export abstract class BaseDatabaseService implements IDatabaseService {
 
     const sql = `UPDATE flashcards SET ${updateFields.join(", ")} WHERE id = ?`;
     await this.executeSql(sql, params);
+
+    // Keep the durable overlay in lockstep when suspend/bury is set this way
+    // (e.g. legacy-history import).
+    const overlayFields: { suspendedAt?: string | null; buriedUntil?: string | null } = {};
+    if (updates.suspendedAt !== undefined) overlayFields.suspendedAt = updates.suspendedAt;
+    if (updates.buriedUntil !== undefined) overlayFields.buriedUntil = updates.buriedUntil;
+    if (Object.keys(overlayFields).length > 0) {
+      await this.upsertCardStateOverlays(
+        [flashcardId],
+        overlayFields,
+        updates.modified ?? this.getCurrentTimestamp()
+      );
+    }
   }
 
   async updateFlashcardDeckIds(
@@ -1244,6 +1257,21 @@ export abstract class BaseDatabaseService implements IDatabaseService {
     await this.executeSql(
       `UPDATE review_logs SET flashcard_id = ? WHERE flashcard_id = ?`,
       [newCard.id, oldId]
+    );
+
+    await this.executeSql(
+      `INSERT INTO card_state_overlays (flashcard_id, suspended_at, buried_until, modified)
+       SELECT ?, suspended_at, buried_until, modified FROM card_state_overlays WHERE flashcard_id = ?
+       ON CONFLICT(flashcard_id) DO UPDATE SET
+         suspended_at = excluded.suspended_at,
+         buried_until = excluded.buried_until,
+         modified = excluded.modified
+       WHERE excluded.modified > card_state_overlays.modified`,
+      [newCard.id, oldId]
+    );
+    await this.executeSql(
+      `DELETE FROM card_state_overlays WHERE flashcard_id = ?`,
+      [oldId]
     );
   }
 
@@ -2352,6 +2380,14 @@ export abstract class BaseDatabaseService implements IDatabaseService {
     await this.executeSql(SQL_QUERIES.DELETE_REVIEW_LOGS_FOR_DECK, [deckId]);
     await this.executeSql(SQL_QUERIES.DELETE_REVIEW_SESSIONS_FOR_DECK, [deckId]);
     await this.executeSql(SQL_QUERIES.RESET_DECK_FLASHCARDS, [now, deckId]);
+    // Deck reset clears bury (daily-scoped) but preserves suspend; keep the
+    // durable overlay in lockstep so a later mirror can't re-bury.
+    await this.executeSql(
+      `UPDATE card_state_overlays SET buried_until = NULL, modified = ?
+       WHERE buried_until IS NOT NULL
+         AND flashcard_id IN (SELECT id FROM flashcards WHERE deck_id = ?)`,
+      [now, deckId]
+    );
     this.emitSyncOp({ o: "deck_reset", p: { deckId, resetAt: now } });
   }
 
@@ -2442,11 +2478,32 @@ export abstract class BaseDatabaseService implements IDatabaseService {
 
   // CARD STATE OVERLAYS (suspend, bury, reset)
   //
-  // All four operations bump `modified` on the row so the existing
-  // last-writer-wins flashcard merge does the right thing for FSRS state.
-  // `suspended_at` and `buried_until` are intentionally excluded from the
-  // bulk flashcards merge in worker-entry.ts; their cross-device convergence
-  // runs entirely through the dedicated SyncLog ops emitted here.
+  // Durable suspend/bury state lives in card_state_overlays (preserved
+  // across schema rebuilds and merged last-writer-wins on its own
+  // `modified`). The flashcards columns are a query-time cache written in
+  // lockstep here; sync-op replays and bulk merges re-mirror from the
+  // overlay, so the cache never has to survive on its own.
+
+  private async upsertCardStateOverlays(
+    cardIds: string[],
+    fields: { suspendedAt?: string | null; buriedUntil?: string | null },
+    modified: string
+  ): Promise<void> {
+    const sets: string[] = ["modified = excluded.modified"];
+    if ("suspendedAt" in fields) sets.push("suspended_at = excluded.suspended_at");
+    if ("buriedUntil" in fields) sets.push("buried_until = excluded.buried_until");
+    const sql = `INSERT INTO card_state_overlays (flashcard_id, suspended_at, buried_until, modified)
+       VALUES (?, ?, ?, ?)
+       ON CONFLICT(flashcard_id) DO UPDATE SET ${sets.join(", ")}`;
+    for (const cardId of cardIds) {
+      await this.executeSql(sql, [
+        cardId,
+        fields.suspendedAt ?? null,
+        fields.buriedUntil ?? null,
+        modified,
+      ]);
+    }
+  }
 
   async suspendCard(cardId: string): Promise<void> {
     const now = this.getCurrentTimestamp();
@@ -2454,6 +2511,7 @@ export abstract class BaseDatabaseService implements IDatabaseService {
       `UPDATE flashcards SET suspended_at = ?, modified = ? WHERE id = ?`,
       [now, now, cardId]
     );
+    await this.upsertCardStateOverlays([cardId], { suspendedAt: now }, now);
     this.emitSyncOp({ o: "card_suspend", p: { c: cardId, at: now } });
   }
 
@@ -2463,6 +2521,7 @@ export abstract class BaseDatabaseService implements IDatabaseService {
       `UPDATE flashcards SET suspended_at = NULL, modified = ? WHERE id = ?`,
       [now, cardId]
     );
+    await this.upsertCardStateOverlays([cardId], { suspendedAt: null }, now);
     this.emitSyncOp({ o: "card_unsuspend", p: { c: cardId, at: now } });
   }
 
@@ -2474,6 +2533,7 @@ export abstract class BaseDatabaseService implements IDatabaseService {
       `UPDATE flashcards SET suspended_at = ?, modified = ? WHERE id IN (${placeholders})`,
       [now, now, ...cardIds]
     );
+    await this.upsertCardStateOverlays(cardIds, { suspendedAt: now }, now);
     for (const cardId of cardIds) {
       this.emitSyncOp({ o: "card_suspend", p: { c: cardId, at: now } });
     }
@@ -2487,6 +2547,7 @@ export abstract class BaseDatabaseService implements IDatabaseService {
       `UPDATE flashcards SET suspended_at = NULL, modified = ? WHERE id IN (${placeholders})`,
       [now, ...cardIds]
     );
+    await this.upsertCardStateOverlays(cardIds, { suspendedAt: null }, now);
     for (const cardId of cardIds) {
       this.emitSyncOp({ o: "card_unsuspend", p: { c: cardId, at: now } });
     }
@@ -2498,6 +2559,7 @@ export abstract class BaseDatabaseService implements IDatabaseService {
       `UPDATE flashcards SET buried_until = ?, modified = ? WHERE id = ?`,
       [untilIso, now, cardId]
     );
+    await this.upsertCardStateOverlays([cardId], { buriedUntil: untilIso }, now);
     this.emitSyncOp({ o: "card_bury", p: { c: cardId, until: untilIso, at: now } });
   }
 
@@ -2507,6 +2569,7 @@ export abstract class BaseDatabaseService implements IDatabaseService {
       `UPDATE flashcards SET buried_until = NULL, modified = ? WHERE id = ?`,
       [now, cardId]
     );
+    await this.upsertCardStateOverlays([cardId], { buriedUntil: null }, now);
     this.emitSyncOp({ o: "card_unbury", p: { c: cardId, at: now } });
   }
 
@@ -2518,6 +2581,7 @@ export abstract class BaseDatabaseService implements IDatabaseService {
       `UPDATE flashcards SET buried_until = ?, modified = ? WHERE id IN (${placeholders})`,
       [untilIso, now, ...cardIds]
     );
+    await this.upsertCardStateOverlays(cardIds, { buriedUntil: untilIso }, now);
     for (const cardId of cardIds) {
       this.emitSyncOp({ o: "card_bury", p: { c: cardId, until: untilIso, at: now } });
     }
@@ -2531,6 +2595,7 @@ export abstract class BaseDatabaseService implements IDatabaseService {
       `UPDATE flashcards SET buried_until = NULL, modified = ? WHERE id IN (${placeholders})`,
       [now, ...cardIds]
     );
+    await this.upsertCardStateOverlays(cardIds, { buriedUntil: null }, now);
     for (const cardId of cardIds) {
       this.emitSyncOp({ o: "card_unbury", p: { c: cardId, at: now } });
     }
@@ -2563,6 +2628,11 @@ export abstract class BaseDatabaseService implements IDatabaseService {
        WHERE id = ?`,
       [now, now, cardId]
     );
+    await this.upsertCardStateOverlays(
+      [cardId],
+      { suspendedAt: null, buriedUntil: null },
+      now
+    );
     this.emitSyncOp({ o: "card_reset", p: { c: cardId, at: now } });
   }
 
@@ -2589,6 +2659,11 @@ export abstract class BaseDatabaseService implements IDatabaseService {
          modified = ?
        WHERE id IN (${placeholders})`,
       [now, now, ...cardIds]
+    );
+    await this.upsertCardStateOverlays(
+      cardIds,
+      { suspendedAt: null, buriedUntil: null },
+      now
     );
     for (const cardId of cardIds) {
       this.emitSyncOp({ o: "card_reset", p: { c: cardId, at: now } });
@@ -2618,6 +2693,12 @@ export abstract class BaseDatabaseService implements IDatabaseService {
 
     await this.executeSql(SQL_QUERIES.DELETE_REVIEW_LOGS_FOR_CUSTOM_DECK, [customDeckId]);
     await this.executeSql(SQL_QUERIES.RESET_CUSTOM_DECK_FLASHCARDS, [now, customDeckId]);
+    await this.executeSql(
+      `UPDATE card_state_overlays SET buried_until = NULL, modified = ?
+       WHERE buried_until IS NOT NULL
+         AND flashcard_id IN (SELECT flashcard_id FROM custom_deck_cards WHERE custom_deck_id = ?)`,
+      [now, customDeckId]
+    );
     this.emitSyncOp({ o: "custom_deck_reset", p: { customDeckId, resetAt: now } });
   }
 

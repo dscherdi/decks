@@ -381,7 +381,7 @@ describe("card_suspend / card_unsuspend / card_bury / card_unbury / card_reset",
     } as SyncLogEntry;
   }
 
-  it("handleCardSuspend issues only-if-newer UPDATE with the at timestamp", async () => {
+  it("handleCardSuspend upserts the overlay only-if-newer, then mirrors onto flashcards", async () => {
     const db = new FakeDb();
     await applyOp(
       asDb(db),
@@ -390,20 +390,24 @@ describe("card_suspend / card_unsuspend / card_bury / card_unbury / card_reset",
       makeLogger()
     );
 
-    expect(db.executeSqlCalls).toHaveLength(1);
-    const call = db.executeSqlCalls[0];
-    expect(call.sql).toContain("UPDATE flashcards");
-    expect(call.sql).toContain("suspended_at = ?");
-    expect(call.sql).toContain("modified < ?");
-    expect(call.params).toEqual([
-      "2026-05-12T00:00:00Z",
-      "2026-05-12T00:00:00Z",
+    expect(db.executeSqlCalls).toHaveLength(2);
+    const [upsert, mirror] = db.executeSqlCalls;
+    expect(upsert.sql).toContain("INSERT INTO card_state_overlays");
+    expect(upsert.sql).toContain("suspended_at = excluded.suspended_at");
+    expect(upsert.sql).toContain("excluded.modified > card_state_overlays.modified");
+    expect(upsert.params).toEqual([
       "card_a",
       "2026-05-12T00:00:00Z",
+      "2026-05-12T00:00:00Z",
     ]);
+
+    expect(mirror.sql).toContain("UPDATE flashcards");
+    expect(mirror.sql).toContain("SELECT suspended_at FROM card_state_overlays");
+    expect(mirror.sql).not.toContain("modified =");
+    expect(mirror.params).toEqual(["card_a"]);
   });
 
-  it("handleCardUnsuspend sets suspended_at to NULL and guards by modified", async () => {
+  it("handleCardUnsuspend clears suspended_at in the overlay and guards by overlay modified", async () => {
     const db = new FakeDb();
     await applyOp(
       asDb(db),
@@ -412,17 +416,15 @@ describe("card_suspend / card_unsuspend / card_bury / card_unbury / card_reset",
       makeLogger()
     );
 
-    const call = db.executeSqlCalls[0];
-    expect(call.sql).toContain("suspended_at = NULL");
-    expect(call.sql).toContain("modified < ?");
-    expect(call.params).toEqual([
-      "2026-05-12T00:00:00Z",
-      "card_a",
-      "2026-05-12T00:00:00Z",
-    ]);
+    expect(db.executeSqlCalls).toHaveLength(2);
+    const upsert = db.executeSqlCalls[0];
+    expect(upsert.sql).toContain("INSERT INTO card_state_overlays");
+    expect(upsert.sql).toContain("suspended_at = NULL");
+    expect(upsert.sql).toContain("excluded.modified > card_state_overlays.modified");
+    expect(upsert.params).toEqual(["card_a", "2026-05-12T00:00:00Z"]);
   });
 
-  it("handleCardBury sets buried_until to the until ISO and guards by modified", async () => {
+  it("handleCardBury sets buried_until in the overlay to the until ISO", async () => {
     const db = new FakeDb();
     await applyOp(
       asDb(db),
@@ -435,18 +437,19 @@ describe("card_suspend / card_unsuspend / card_bury / card_unbury / card_reset",
       makeLogger()
     );
 
-    const call = db.executeSqlCalls[0];
-    expect(call.sql).toContain("buried_until = ?");
-    expect(call.sql).toContain("modified < ?");
-    expect(call.params).toEqual([
-      "2026-05-13T04:00:00Z",
-      "2026-05-12T14:00:00Z",
+    expect(db.executeSqlCalls).toHaveLength(2);
+    const upsert = db.executeSqlCalls[0];
+    expect(upsert.sql).toContain("INSERT INTO card_state_overlays");
+    expect(upsert.sql).toContain("buried_until = excluded.buried_until");
+    expect(upsert.sql).toContain("excluded.modified > card_state_overlays.modified");
+    expect(upsert.params).toEqual([
       "card_b",
+      "2026-05-13T04:00:00Z",
       "2026-05-12T14:00:00Z",
     ]);
   });
 
-  it("handleCardUnbury sets buried_until to NULL", async () => {
+  it("handleCardUnbury clears buried_until in the overlay", async () => {
     const db = new FakeDb();
     await applyOp(
       asDb(db),
@@ -455,16 +458,14 @@ describe("card_suspend / card_unsuspend / card_bury / card_unbury / card_reset",
       makeLogger()
     );
 
-    const call = db.executeSqlCalls[0];
-    expect(call.sql).toContain("buried_until = NULL");
-    expect(call.params).toEqual([
-      "2026-05-12T14:00:00Z",
-      "card_b",
-      "2026-05-12T14:00:00Z",
-    ]);
+    expect(db.executeSqlCalls).toHaveLength(2);
+    const upsert = db.executeSqlCalls[0];
+    expect(upsert.sql).toContain("buried_until = NULL");
+    expect(upsert.sql).toContain("excluded.modified > card_state_overlays.modified");
+    expect(upsert.params).toEqual(["card_b", "2026-05-12T14:00:00Z"]);
   });
 
-  it("handleCardReset issues a scoped DELETE for review_logs + scoped FSRS reset", async () => {
+  it("handleCardReset deletes scoped review_logs, resets FSRS, clears the overlay, and mirrors", async () => {
     const db = new FakeDb();
     await applyOp(
       asDb(db),
@@ -473,8 +474,8 @@ describe("card_suspend / card_unsuspend / card_bury / card_unbury / card_reset",
       makeLogger()
     );
 
-    expect(db.executeSqlCalls).toHaveLength(2);
-    const [del, upd] = db.executeSqlCalls;
+    expect(db.executeSqlCalls).toHaveLength(4);
+    const [del, upd, upsert, mirror] = db.executeSqlCalls;
     expect(del.sql).toContain("DELETE FROM review_logs");
     expect(del.sql).toContain("flashcard_id = ?");
     expect(del.sql).toContain("reviewed_at <= ?");
@@ -482,8 +483,7 @@ describe("card_suspend / card_unsuspend / card_bury / card_unbury / card_reset",
 
     expect(upd.sql).toContain("UPDATE flashcards");
     expect(upd.sql).toContain("state = 'new'");
-    expect(upd.sql).toContain("suspended_at = NULL");
-    expect(upd.sql).toContain("buried_until = NULL");
+    expect(upd.sql).not.toContain("suspended_at");
     expect(upd.sql).toContain("modified <= ?");
     expect(upd.params).toEqual([
       "2026-05-12T00:00:00Z", // due_date = at
@@ -491,9 +491,17 @@ describe("card_suspend / card_unsuspend / card_bury / card_unbury / card_reset",
       "card_c",
       "2026-05-12T00:00:00Z",
     ]);
+
+    expect(upsert.sql).toContain("INSERT INTO card_state_overlays");
+    expect(upsert.sql).toContain("suspended_at = NULL");
+    expect(upsert.sql).toContain("buried_until = NULL");
+    expect(upsert.params).toEqual(["card_c", "2026-05-12T00:00:00Z"]);
+
+    expect(mirror.sql).toContain("UPDATE flashcards");
+    expect(mirror.params).toEqual(["card_c"]);
   });
 
-  it("idempotent: replaying card_suspend yields the same SQL twice (no-op via modified guard)", async () => {
+  it("idempotent: replaying card_suspend yields the same SQL twice (no-op via overlay modified guard)", async () => {
     const db = new FakeDb();
     const e = entry("card_suspend", {
       c: "card_a",
@@ -501,11 +509,14 @@ describe("card_suspend / card_unsuspend / card_bury / card_unbury / card_reset",
     });
     await applyOp(asDb(db), "remote-dev", e, makeLogger());
     await applyOp(asDb(db), "remote-dev", e, makeLogger());
-    // Both calls emit the same UPDATE. The modified-guard inside SQL is what
-    // makes the second a no-op in production. Behavior verified end-to-end
-    // by the suspend-bury-reset integration test.
-    expect(db.executeSqlCalls).toHaveLength(2);
-    expect(db.executeSqlCalls[0].sql).toBe(db.executeSqlCalls[1].sql);
-    expect(db.executeSqlCalls[0].params).toEqual(db.executeSqlCalls[1].params);
+    // Both replays emit the same upsert+mirror pair. The overlay modified
+    // guard makes the second upsert a no-op in production; the mirror is
+    // idempotent by construction. Behavior verified end-to-end by the
+    // suspend-durability integration test.
+    expect(db.executeSqlCalls).toHaveLength(4);
+    expect(db.executeSqlCalls[0].sql).toBe(db.executeSqlCalls[2].sql);
+    expect(db.executeSqlCalls[0].params).toEqual(db.executeSqlCalls[2].params);
+    expect(db.executeSqlCalls[1].sql).toBe(db.executeSqlCalls[3].sql);
+    expect(db.executeSqlCalls[1].params).toEqual(db.executeSqlCalls[3].params);
   });
 });

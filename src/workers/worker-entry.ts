@@ -384,6 +384,8 @@ class SimpleDatabaseWorker {
    *     memberships on every save).
    *   - decks, flashcards: conditional replace by `modified` (markdown is the
    *     source of truth, no tombstones).
+   *   - card_state_overlays: conditional replace by `modified` (newer wins),
+   *     then mirrored onto the flashcards suspend/bury cache columns.
    *   - deckprofiles, custom_decks: conditional replace by effective timestamp
    *     COALESCE(deleted_at, modified) — propagates tombstones.
    *   - profile_tag_mappings: conditional replace by COALESCE(deleted_at, created).
@@ -400,6 +402,9 @@ class SimpleDatabaseWorker {
       this.mergeAppendOnly(remoteDb, "review_logs");
       this.mergeDecks(remoteDb);
       this.mergeFlashcards(remoteDb);
+      // Must follow mergeFlashcards: the overlay mirror rewrites the
+      // suspend/bury cache columns on the final merged rows.
+      this.mergeCardStateOverlays(remoteDb);
       this.mergeProfiles(remoteDb);
       // profile_tag_mappings: bulk merge stays additive (first writer wins per tag);
       // the sync log path (HLC-ordered tag_mapping_upsert/_delete) handles cross-
@@ -615,6 +620,40 @@ class SimpleDatabaseWorker {
     } catch {
       // Schema or table missing on remote.
     }
+  }
+
+  // Last-writer-wins merge of durable suspend/bury state, then re-mirror onto
+  // the flashcards cache columns. The mirror runs even when the remote lacks
+  // the table: the flashcards INSERT OR REPLACE above resets unlisted columns
+  // to NULL, so local state must be re-asserted after every merge.
+  private mergeCardStateOverlays(remoteDb: Database): void {
+    if (!this.db) return;
+    try {
+      const result = remoteDb.exec(
+        "SELECT flashcard_id, suspended_at, buried_until, modified FROM card_state_overlays"
+      );
+      if (result.length > 0) {
+        const stmt = this.db.prepare(
+          `INSERT INTO card_state_overlays (flashcard_id, suspended_at, buried_until, modified)
+           VALUES (?, ?, ?, ?)
+           ON CONFLICT(flashcard_id) DO UPDATE SET
+             suspended_at = excluded.suspended_at,
+             buried_until = excluded.buried_until,
+             modified = excluded.modified
+           WHERE excluded.modified > card_state_overlays.modified`
+        );
+        for (const row of result[0].values) stmt.run(row);
+        stmt.free();
+      }
+    } catch {
+      // Remote may lack the table on older schemas.
+    }
+    this.db.exec(
+      `UPDATE flashcards SET
+         suspended_at = (SELECT o.suspended_at FROM card_state_overlays o WHERE o.flashcard_id = flashcards.id),
+         buried_until = (SELECT o.buried_until FROM card_state_overlays o WHERE o.flashcard_id = flashcards.id)
+       WHERE id IN (SELECT flashcard_id FROM card_state_overlays)`
+    );
   }
 
   /**
