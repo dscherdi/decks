@@ -76,6 +76,30 @@ function makeCard(partial: Partial<Flashcard>): Flashcard {
 }
 
 describe("FlashcardWriter", () => {
+  describe("multiple-choice", () => {
+    it("edits like a header card and carries the q token with its blank line", async () => {
+      const source =
+        "## Noble gas?\n- [ ] Oxygen\n- [x] Argon\n\n%%dk:q:ab12%%\n## Next\nother";
+      const { app, currentContent } = mockApp("test.md", source);
+      const writer = new FlashcardWriter(app as never);
+      const card = makeCard({
+        front: "Noble gas?",
+        back: "- [ ] Oxygen\n- [x] Argon",
+        type: "multiple-choice",
+      });
+      const result = await writer.editFlashcard(card, {
+        type: "multiple-choice",
+        front: "Which is the noble gas?",
+        back: "- [ ] Oxygen\n- [x] Argon\n- [ ] Chlorine",
+      });
+      expect(result).toEqual({ ok: true });
+      expect(currentContent()).toContain("## Which is the noble gas?");
+      // Re-appended after the new body, blank-line separated.
+      expect(currentContent()).toContain("- [ ] Chlorine\n\n%%dk:q:ab12%%");
+      expect(currentContent().match(/%%dk:q:/g)).toHaveLength(1);
+    });
+  });
+
   describe("header-paragraph", () => {
     it("rewrites the header text and body", async () => {
       const source = "# Top\n## Question?\nold answer\n## Next\nother";

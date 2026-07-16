@@ -4,6 +4,7 @@ import {
   getTemplateShowcaseContent,
 } from "../assets/TestDeckTemplate";
 import { getTestDeckCanvasContent } from "../assets/TestDeckCanvasTemplate";
+import { getExamDeckContent } from "../assets/ExamDeckTemplate";
 import { I18n } from "@decks/core";
 
 const DEFAULT_CANVAS_DECKS_FOLDER = "Canvas decks";
@@ -26,6 +27,21 @@ export class TestDeckService {
     }
 
     const content = getTestDeckContent(deckTag);
+    await this.app.vault.create(filename, content);
+  }
+
+  /** Demo exam deck, tagged `<deckTag>/exams` so it lands on the Exams preset. */
+  async createExamDemoDeck(deckTag: string, folderPath?: string): Promise<void> {
+    const localizedFilename = I18n.t.examDeck.filename;
+    const filename = folderPath
+      ? `${folderPath.replace(/\/$/, "")}/${localizedFilename}`
+      : localizedFilename;
+
+    if (await this.app.vault.adapter.exists(filename)) {
+      return;
+    }
+
+    const content = getExamDeckContent(deckTag);
     await this.app.vault.create(filename, content);
   }
 

@@ -111,6 +111,82 @@ function stamperFor(env: { app: App; db: FakeDb }): AnchorStamper {
   return new AnchorStamper(env.app, env.db as unknown as IDatabaseService);
 }
 
+describe("AnchorStamper multiple-choice (q role)", () => {
+  const OPTIONS = "- [ ] Oxygen\n- [x] Argon\n- [ ] Nitrogen";
+
+  it("stamps the q token as its own paragraph after the list, blank-line separated", async () => {
+    const env = mockEnv(`## Noble gas?\n\n${OPTIONS}\n`);
+    const card = makeCard({
+      front: "Noble gas?",
+      back: OPTIONS,
+      type: "multiple-choice",
+    });
+    const outcome = await stamperFor(env).ensureAnchored(card);
+
+    expect(outcome.ok).toBe(true);
+    const tokenId = generateAnchorId("Noble gas?");
+    // Blank line between the last option and the token: a directly-following
+    // line would lazily continue the last list item.
+    expect(env.currentContent()).toContain(
+      `- [ ] Nitrogen\n\n%%dk:q:${tokenId}%%`
+    );
+    expect(env.db.bindings.get(`q:${tokenId}`)).toBe("card_1");
+    expect(card.anchor).toBe(`q:${tokenId}`);
+  });
+
+  it("stamps after the notes divider region, still blank-line separated", async () => {
+    const env = mockEnv(
+      `## Noble gas?\n\n${OPTIONS}\n\n---\nGroup 18 explanation.\n`
+    );
+    const card = makeCard({
+      front: "Noble gas?",
+      back: OPTIONS,
+      type: "multiple-choice",
+      notes: "Group 18 explanation.",
+    });
+    const outcome = await stamperFor(env).ensureAnchored(card);
+
+    expect(outcome.ok).toBe(true);
+    const tokenId = generateAnchorId("Noble gas?");
+    expect(env.currentContent()).toContain(
+      `Group 18 explanation.\n\n%%dk:q:${tokenId}%%`
+    );
+  });
+
+  it("adopts an existing q token and ignores a dormant h token", async () => {
+    const env = mockEnv(
+      `## Noble gas?\n\n${OPTIONS}\n%%dk:h:old1%%\n\n%%dk:q:mine2%%\n`
+    );
+    const card = makeCard({
+      front: "Noble gas?",
+      back: OPTIONS,
+      type: "multiple-choice",
+    });
+    const outcome = await stamperFor(env).ensureAnchored(card);
+
+    expect(outcome.ok && outcome.adopted).toBe(true);
+    expect(env.db.bindings.get("q:mine2")).toBe("card_1");
+    expect(env.db.bindings.has("h:old1")).toBe(false);
+    // No second token was written.
+    expect(env.currentContent().match(/%%dk:q:/g)).toHaveLength(1);
+  });
+
+  it("never adopts a dormant h token for a question", async () => {
+    const env = mockEnv(`## Noble gas?\n\n${OPTIONS}\n%%dk:h:old1%%\n`);
+    const card = makeCard({
+      front: "Noble gas?",
+      back: OPTIONS,
+      type: "multiple-choice",
+    });
+    const outcome = await stamperFor(env).ensureAnchored(card);
+
+    expect(outcome.ok).toBe(true);
+    const tokenId = generateAnchorId("Noble gas?");
+    expect(card.anchor).toBe(`q:${tokenId}`);
+    expect(env.db.bindings.has("h:old1")).toBe(false);
+  });
+});
+
 describe("AnchorStamper", () => {
   it("writes the h token on its own line after the body and binds it", async () => {
     const env = mockEnv("## Question\n\nFirst line.\nLast line.\n");

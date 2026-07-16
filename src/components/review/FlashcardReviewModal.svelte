@@ -17,6 +17,12 @@
   import { I18n, yieldToUI, type ResolvedRender } from "@decks/core";
   import { prepareFuzzySearch } from "obsidian";
   import { computeCardHealth } from "@decks/core";
+  import {
+    classifyExamBody,
+    indexSetsEqual,
+    shuffleInPlace,
+    type ExamOption,
+  } from "@decks/core";
   import { isOcclusionV2, parseOcclusionBack, activeMaskIdForCard, prepareClozeMath } from "@decks/core";
   import { renderCardSide } from "../../utils/html-template-render";
   import { renderOcclusion } from "../../utils/occlusion-render";
@@ -234,10 +240,22 @@
   let cardStartTime = 0;
   let currentCard: Flashcard | null = initialCard;
   $: cardHealth = currentCard
-    ? computeCardHealth(currentCard, {
-        leechThreshold: settings.review.leechThreshold,
-        denseCardCharThreshold: settings.review.denseCardCharThreshold,
-      })
+    ? computeCardHealth(
+        currentCard,
+        {
+          leechThreshold: settings.review.leechThreshold,
+          denseCardCharThreshold: settings.review.denseCardCharThreshold,
+        },
+        (() => {
+          const profile = "profile" in deckOrGroup ? deckOrGroup.profile : undefined;
+          return profile
+            ? {
+                examEnabled: profile.examEnabled ?? false,
+                typedGrading: profile.examSettings?.typedGrading ?? "tolerant",
+              }
+            : undefined;
+        })()
+      )
     : null;
   let sessionId: string | null = null;
   let cramSessionId: string | null = null;
@@ -255,6 +273,59 @@
 
   $: clozeShowContext =
     ("profile" in deckOrGroup ? deckOrGroup.profile : undefined)?.clozeShowContext ?? "open";
+
+  // Multiple-choice inside an ordinary review: interactive select → reveal
+  // (objective verdict styling) → the normal self-rating buttons. Nothing is
+  // persisted beyond the rating; an empty selection is a plain reveal.
+  $: isMultipleChoice = currentCard?.type === "multiple-choice";
+  let mcqOptions: ExamOption[] = [];
+  let mcqStem = "";
+  let mcqDisplayOrder: number[] = [];
+  let mcqSelected: number[] = [];
+  let mcqCardId: string | null = null;
+  $: if (currentCard && isMultipleChoice && currentCard.id !== mcqCardId) {
+    mcqCardId = currentCard.id;
+    const classified = classifyExamBody(currentCard.back);
+    mcqOptions = classified.kind === "mcq" ? classified.options : [];
+    mcqStem = classified.kind === "mcq" ? classified.stem : "";
+    mcqSelected = [];
+    const order = mcqOptions.map((_o, i) => i);
+    const profile = "profile" in deckOrGroup ? deckOrGroup.profile : undefined;
+    mcqDisplayOrder =
+      (profile?.examSettings?.shuffleOptions ?? true)
+        ? shuffleInPlace(order)
+        : order;
+  }
+  $: mcqCorrectIndices = mcqOptions
+    .map((option, index) => (option.correct ? index : -1))
+    .filter((index) => index >= 0);
+  $: mcqMulti = mcqCorrectIndices.length > 1;
+
+  function toggleMcqOption(fileIndex: number): void {
+    if (showAnswer) return;
+    if (mcqMulti) {
+      mcqSelected = mcqSelected.includes(fileIndex)
+        ? mcqSelected.filter((v) => v !== fileIndex)
+        : [...mcqSelected, fileIndex];
+    } else {
+      mcqSelected = [fileIndex];
+    }
+  }
+
+  function mcqOptionState(fileIndex: number): string {
+    const isSelected = mcqSelected.includes(fileIndex);
+    if (!showAnswer) return isSelected ? "selected" : "";
+    const correct = mcqOptions[fileIndex]?.correct === true;
+    if (isSelected && correct) return "chosen-correct";
+    if (isSelected && !correct) return "chosen-wrong";
+    if (!isSelected && correct) return "missed-correct";
+    return "";
+  }
+
+  function mcqRenderInto(el: HTMLElement, content: string): { destroy(): void } {
+    renderMarkdown(content, el, deckFilePath);
+    return { destroy() {} };
+  }
 
   // Browse mode variables
   let browseCardIndex = 0;
@@ -281,10 +352,15 @@
   // A front-only cloze keeps the cloze on the front (empty back); its Notes
   // button lives on the front card, so the answer section only appears to host
   // the Extra panel once the user toggles notes open.
-  $: answerSectionHidden = frontOnlyClozeCard
+  // Multiple-choice: the options carry the answer (verdict styling on
+  // reveal); the raw task-list back never renders — the section only opens
+  // to host notes.
+  $: answerSectionHidden = isMultipleChoice
     ? !(showNotes && hasNotes)
-    : (!!currentCard && isOcclusionV2(currentCard) && !currentV2Answered) ||
-      (!showAnswer && !(currentCard && isClozeType(currentCard.type) && !isOcclusionV2(currentCard)));
+    : frontOnlyClozeCard
+      ? !(showNotes && hasNotes)
+      : (!!currentCard && isOcclusionV2(currentCard) && !currentV2Answered) ||
+        (!showAnswer && !(currentCard && isClozeType(currentCard.type) && !isOcclusionV2(currentCard)));
 
   $: searchResults =
     searchMode && searchQuery.trim()
@@ -1077,6 +1153,17 @@
     }
 
     // Standard mode
+    if (!showAnswer && kbEnabled && isMultipleChoice && /^[1-9]$/.test(event.key)) {
+      // Number keys only here — letters would clash with the B/S/R bindings.
+      const displayPosition = parseInt(event.key, 10) - 1;
+      if (displayPosition < mcqDisplayOrder.length) {
+        event.preventDefault();
+        lastEventTime = now;
+        lastEventType = eventType;
+        toggleMcqOption(mcqDisplayOrder[displayPosition]);
+      }
+      return;
+    }
     if (!showAnswer && kbEnabled && matchesShortcut(event.key, shortcuts.reveal)) {
       event.preventDefault();
       lastEventTime = now;
@@ -1689,6 +1776,31 @@
             {/if}
           </div>
         {/if}
+        {#if isMultipleChoice && mcqOptions.length > 0}
+          <div class="decks-review-mcq">
+            {#if mcqStem}
+              {#key mcqCardId}
+                <div
+                  class="decks-card-text markdown-rendered"
+                  use:mcqRenderInto={mcqStem}
+                ></div>
+              {/key}
+            {/if}
+            {#each mcqDisplayOrder as fileIndex, displayPosition (`${mcqCardId}:${fileIndex}`)}
+              <button
+                class="decks-exam-option {mcqOptionState(fileIndex)}"
+                type="button"
+                on:click={() => toggleMcqOption(fileIndex)}
+              >
+                <span class="decks-exam-option-prefix">{displayPosition + 1})</span>
+                <span
+                  class="decks-exam-option-text markdown-rendered"
+                  use:mcqRenderInto={mcqOptions[fileIndex].text}
+                ></span>
+              </button>
+            {/each}
+          </div>
+        {/if}
       </div>
 
       {#if currentCard?.hint && currentCard.hint.length > 0}
@@ -1728,7 +1840,7 @@
             </button>
           {/if}
         {/snippet}
-        {#if !frontOnlyClozeCard}
+        {#if !frontOnlyClozeCard && !isMultipleChoice}
           {#if backIsHtml}
             <div class="decks-card-shell">
               <div class="decks-template-layer decks-back" bind:this={backEl}></div>

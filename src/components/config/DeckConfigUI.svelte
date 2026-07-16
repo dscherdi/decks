@@ -216,6 +216,14 @@
         : t.config.clozeDisabled)
       .setClass("decks-config-readonly");
 
+    // Exam questions
+    if (selectedProfile.examEnabled) {
+      new Setting(profileDetailsContainer)
+        .setName(t.exam.examEnabledSetting)
+        .setDesc(t.exam.examEnabledDesc)
+        .setClass("decks-config-readonly");
+    }
+
     // FSRS settings
     new Setting(profileDetailsContainer)
       .setName(t.config.fsrsSettings)

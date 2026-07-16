@@ -361,9 +361,10 @@ export class DeckManager {
   parseFlashcardsFromContent(
     content: string,
     headerLevel: number | number[] = 2,
-    clozeEnabled = false
+    clozeEnabled = false,
+    examEnabled = false
   ): ParsedFlashcard[] {
-    return FlashcardParser.parseFlashcardsFromContent(content, headerLevel, undefined, clozeEnabled);
+    return FlashcardParser.parseFlashcardsFromContent(content, headerLevel, undefined, clozeEnabled, examEnabled);
   }
 
   /**
@@ -473,6 +474,7 @@ export class DeckManager {
           fileTitle: fileTitle,
           reverseCards,
           clozeEnabled: deck.profile.clozeEnabled,
+          examEnabled: deck.profile.examEnabled ?? false,
         },
         progressCallback
       );

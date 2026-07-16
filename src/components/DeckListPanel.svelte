@@ -83,6 +83,17 @@
     | undefined = undefined;
   export let onEditCustomDeck: (customDeck: CustomDeckGroup) => void;
 
+  // Exam entry points: shown only where exam questions are enabled — per row
+  // via item.profile for file decks and groups, via the vault-level flag for
+  // custom decks. Start review is the escape hatch on exam-enabled rows,
+  // whose row click opens the exam setup instead of review.
+  export let onExamDeck: ((deck: DeckWithProfile) => void) | undefined = undefined;
+  export let onExamDeckGroup: ((deckGroup: DeckGroup) => void) | undefined = undefined;
+  export let onExamCustomDeck: ((customDeck: CustomDeckGroup) => void) | undefined = undefined;
+  export let onReviewDeck: ((deck: DeckWithProfile) => void) | undefined = undefined;
+  export let onReviewDeckGroup: ((deckGroup: DeckGroup) => void) | undefined = undefined;
+  export let examCapable = false;
+
   export let app: App;
 
   export let onRefresh: () => Promise<void>;
@@ -586,7 +597,25 @@
 
     const pinOption = buildPinDropdownOption(groupId);
 
+    const groupExamEnabled = group.profile?.examEnabled === true;
+    const examOption = activeDocument.createElement("div");
+    examOption.className = "decks-dropdown-option";
+    examOption.textContent = t.exam.startExam;
+    examOption.onclick = () => {
+      closeActiveDropdown();
+      onExamDeckGroup?.(group);
+    };
+    const reviewOption = activeDocument.createElement("div");
+    reviewOption.className = "decks-dropdown-option";
+    reviewOption.textContent = t.exam.startReview;
+    reviewOption.onclick = () => {
+      closeActiveDropdown();
+      onReviewDeckGroup?.(group);
+    };
+
     dropdown.appendChild(pinOption);
+    if (groupExamEnabled && onExamDeckGroup) dropdown.appendChild(examOption);
+    if (groupExamEnabled && onReviewDeckGroup) dropdown.appendChild(reviewOption);
     dropdown.appendChild(browseOption);
     if (onCramDeckGroup) dropdown.appendChild(cramOption);
     dropdown.appendChild(exportOption);
@@ -717,7 +746,25 @@
 
     const pinOption = buildPinDropdownOption(deck.id);
 
+    const deckExamEnabled = deck.profile.examEnabled === true;
+    const examOption = activeDocument.createElement("div");
+    examOption.className = "decks-dropdown-option";
+    examOption.textContent = t.exam.startExam;
+    examOption.onclick = () => {
+      closeActiveDropdown();
+      onExamDeck?.(deck);
+    };
+    const reviewOption = activeDocument.createElement("div");
+    reviewOption.className = "decks-dropdown-option";
+    reviewOption.textContent = t.exam.startReview;
+    reviewOption.onclick = () => {
+      closeActiveDropdown();
+      onReviewDeck?.(deck);
+    };
+
     dropdown.appendChild(pinOption);
+    if (deckExamEnabled && onExamDeck) dropdown.appendChild(examOption);
+    if (deckExamEnabled && onReviewDeck) dropdown.appendChild(reviewOption);
     dropdown.appendChild(browseOption);
     if (onCramDeck) dropdown.appendChild(cramOption);
     dropdown.appendChild(exportOption);
@@ -862,7 +909,16 @@
 
     const pinOption = buildPinDropdownOption(customDeck.id);
 
+    const examOption = activeDocument.createElement("div");
+    examOption.className = "decks-dropdown-option";
+    examOption.textContent = t.exam.startExam;
+    examOption.onclick = () => {
+      closeActiveDropdown();
+      onExamCustomDeck?.(customDeck);
+    };
+
     dropdown.appendChild(pinOption);
+    if (examCapable && onExamCustomDeck) dropdown.appendChild(examOption);
     dropdown.appendChild(browseOption);
     if (onCramCustomDeck) dropdown.appendChild(cramOption);
     dropdown.appendChild(editOption);

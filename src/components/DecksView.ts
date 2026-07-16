@@ -12,6 +12,17 @@ import {
   FlashcardReviewView,
   VIEW_TYPE_FLASHCARD_REVIEW,
 } from "./review/FlashcardReviewView";
+import {
+  ExamAttempt,
+  buildExamPool,
+  drawExamQuestions,
+  type DeckProfile,
+  type ExamDeckKind,
+  type ExamSettings,
+} from "@decks/core";
+import { ExamSetupModal } from "./exam/ExamSetupModal";
+import { ExamModalWrapper } from "./exam/ExamModalWrapper";
+import { ExamView, VIEW_TYPE_FLASHCARD_EXAM } from "./exam/ExamView";
 import { StatisticsModal } from "./settings/StatisticsModal";
 import { ProfilesManagerModal } from "./config/ProfilesManagerModal";
 import { DeckConfigModal } from "./config/DeckConfigModal";
@@ -142,6 +153,15 @@ export class DecksView extends ItemView {
     container.empty();
     container.addClass("decks-view");
 
+    // Exam entry points on custom decks only make sense once any exam deck
+    // exists; per-row gating for file decks and groups uses item.profile.
+    let examCapable = false;
+    try {
+      examCapable = (await this.db.getExamEnabledDeckIds()).length > 0;
+    } catch (error) {
+      this.logger.debug("exam capability check failed", error);
+    }
+
     // Create and mount Svelte component using Svelte 5 API
     this.deckListPanelComponent = mount(DeckListPanel, {
       target: container,
@@ -151,8 +171,14 @@ export class DecksView extends ItemView {
         deckSynchronizer: this.deckSynchronizer,
         tagGroupService: this.tagGroupService,
         app: this.app,
-        onDeckClick: (deck: DeckWithProfile) => this.startReview(deck),
-        onDeckGroupClick: (deckGroup: DeckGroup) => this.startReviewForDeckGroup(deckGroup),
+        onDeckClick: (deck: DeckWithProfile) =>
+          deck.profile.examEnabled
+            ? this.startExamForSelection({ ...deck, type: "file" }, deck.profile)
+            : this.startReview(deck),
+        onDeckGroupClick: (deckGroup: DeckGroup) =>
+          deckGroup.profile?.examEnabled
+            ? this.startExamForSelection(deckGroup, deckGroup.profile)
+            : this.startReviewForDeckGroup(deckGroup),
         onBrowseDeck: (deck: DeckWithProfile) => this.startBrowse(deck),
         onBrowseDeckGroup: (deckGroup: DeckGroup) => this.startBrowseForDeckGroup(deckGroup),
         onCramDeck: (deck: DeckWithProfile) => this.startCram(deck),
@@ -167,6 +193,16 @@ export class DecksView extends ItemView {
         isCramResumableCustom: (customDeck: CustomDeckGroup) =>
           this.scheduler.hasResumableCram(customDeck, new Date()),
         onEditCustomDeck: (customDeck: CustomDeckGroup) => this.openEditCustomDeck(customDeck),
+        onExamDeck: (deck: DeckWithProfile) =>
+          this.startExamForSelection({ ...deck, type: "file" }, deck.profile),
+        onExamDeckGroup: (deckGroup: DeckGroup) =>
+          this.startExamForSelection(deckGroup, deckGroup.profile ?? null),
+        onExamCustomDeck: (customDeck: CustomDeckGroup) =>
+          this.startExamForSelection(customDeck, null),
+        onReviewDeck: (deck: DeckWithProfile) => this.startReview(deck),
+        onReviewDeckGroup: (deckGroup: DeckGroup) =>
+          this.startReviewForDeckGroup(deckGroup),
+        examCapable,
         customDeckService: this.customDeckService,
         onRefresh: () => this.refresh(),
         openStatisticsModal: () => this.openStatisticsModal(),
@@ -959,5 +995,145 @@ export class DecksView extends ItemView {
         new Notice(I18n.t.notices.errorStartingCram);
       }
     }
+  }
+
+  private async gatherSelectionCards(selection: DeckOrGroup): Promise<Flashcard[]> {
+    if (selection.type === "file") {
+      await this.syncStaleDecks([selection.id]);
+      return this.db.getFlashcardsByDeck(selection.id);
+    }
+    if (selection.type === "custom") {
+      return this.db.getFlashcardsForCustomDeck(selection.id);
+    }
+    await this.syncStaleDecks(selection.deckIds);
+    const allCards: Flashcard[] = [];
+    for (const deckId of selection.deckIds) {
+      allCards.push(...(await this.db.getFlashcardsByDeck(deckId)));
+    }
+    return allCards;
+  }
+
+  async startExamForSelection(
+    selection: DeckOrGroup,
+    profile: DeckProfile | null
+  ): Promise<void> {
+    try {
+      const cards = await this.gatherSelectionCards(selection);
+      const examDeckIds = new Set(await this.db.getExamEnabledDeckIds());
+      const examEnabledByDeckId = new Map<string, boolean>();
+      for (const card of cards) {
+        examEnabledByDeckId.set(card.deckId, examDeckIds.has(card.deckId));
+      }
+      const initial: ExamSettings = profile?.examSettings ?? this.settings.exam;
+      const showClozeContext = (profile?.clozeShowContext ?? "open") === "open";
+
+      const pool = buildExamPool(
+        cards,
+        examEnabledByDeckId,
+        initial.typedGrading,
+        showClozeContext
+      );
+      if (pool.eligible.length === 0) {
+        if (this.settings?.ui?.enableNotices !== false) {
+          new Notice(I18n.t.exam.noQuestions);
+        }
+        return;
+      }
+
+      new ExamSetupModal(
+        this.app,
+        selection.name,
+        pool.eligible.length,
+        pool.skipped.length,
+        initial,
+        (finalSettings) => {
+          // The string-grading ceiling affects eligibility, so re-pool when
+          // the grading mode was changed in the dialog.
+          const finalPool =
+            finalSettings.typedGrading === initial.typedGrading
+              ? pool
+              : buildExamPool(
+                  cards,
+                  examEnabledByDeckId,
+                  finalSettings.typedGrading,
+                  showClozeContext
+                );
+          if (finalPool.eligible.length === 0) {
+            new Notice(I18n.t.exam.noQuestions);
+            return;
+          }
+          const deckKey =
+            selection.type === "file" || selection.type === "custom"
+              ? selection.id
+              : selection.tag;
+          const deckKind: ExamDeckKind =
+            selection.type === "file"
+              ? "file"
+              : selection.type === "custom"
+                ? "custom"
+                : "group";
+          const attempt = new ExamAttempt({
+            questions: drawExamQuestions(finalPool.eligible, finalSettings),
+            settings: finalSettings,
+            deckKey,
+            deckKind,
+          });
+          this.openExamSession(attempt, selection.name, () =>
+            void this.startExamForSelection(selection, profile)
+          );
+        }
+      ).open();
+    } catch (error) {
+      console.error("Error starting exam:", error);
+      if (this.settings?.ui?.enableNotices !== false) {
+        new Notice(I18n.t.exam.noQuestions);
+      }
+    }
+  }
+
+  private openExamSession(
+    attempt: ExamAttempt,
+    deckName: string,
+    onRetake: () => void
+  ): void {
+    if (this.settings.ui.reviewDisplayMode === "tab") {
+      this.openExamInTab(attempt, deckName, onRetake);
+    } else {
+      new ExamModalWrapper(
+        this.app,
+        attempt,
+        deckName,
+        this.db,
+        onRetake,
+        this.refreshDecksAndStats.bind(this)
+      ).open();
+    }
+  }
+
+  private openExamInTab(
+    attempt: ExamAttempt,
+    deckName: string,
+    onRetake: () => void
+  ): void {
+    const { workspace } = this.app;
+    const existingLeaves = workspace.getLeavesOfType(VIEW_TYPE_FLASHCARD_EXAM);
+    const leaf: WorkspaceLeaf =
+      existingLeaves.length > 0 ? existingLeaves[0] : workspace.getLeaf("tab");
+
+    void leaf
+      .setViewState({ type: VIEW_TYPE_FLASHCARD_EXAM, active: true })
+      .then(() => {
+        const view = leaf.view;
+        if (view instanceof ExamView) {
+          view.setExamData(
+            attempt,
+            deckName,
+            onRetake,
+            this.refreshDecksAndStats.bind(this)
+          );
+        }
+        void workspace.revealLeaf(leaf);
+      })
+      .catch(console.error);
   }
 }

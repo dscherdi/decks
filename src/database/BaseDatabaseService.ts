@@ -11,6 +11,9 @@ import type {
   CramSession,
   CramCard,
   CramDeckKind,
+  ExamSession,
+  ExamAnswer,
+  TypedGradingMode,
   CustomDeck,
   CustomDeckType,
   FsrsWeightSet,
@@ -22,6 +25,7 @@ import { DEFAULT_PROFILE_ID, deckWithProfile } from "./types";
 import type { FilterDefinition } from "./types";
 import { generateCustomDeckCardId, generateCustomDeckId, generateFlashcardId, SQL_QUERIES, type SyncOpV1 } from "@decks/core";
 import { normalizeProfile } from "@decks/core";
+import { DEFAULT_EXAM_SETTINGS, classifyExamBody, parseExamSettings } from "@decks/core";
 import { compileFilter, type FilterCompileOptions } from "@decks/core";
 import type { SyncData, SyncResult } from "@decks/core";
 import type {
@@ -193,6 +197,8 @@ export abstract class BaseDatabaseService implements IDatabaseService {
       },
       clozeEnabled: Boolean(row[12]),
       clozeShowContext: (row[13] as "open" | "hidden") ?? "open",
+      examEnabled: Boolean(row[18]),
+      examSettings: parseExamSettings(row[19] as string | null),
       isDefault: Boolean(row[14]),
       created: row[15] as string,
       modified: row[16] as string,
@@ -297,6 +303,40 @@ export abstract class BaseDatabaseService implements IDatabaseService {
       graduatedAt: row[9] as string | null,
       created: row[10] as string,
       modified: row[11] as string,
+    };
+  }
+
+  protected rowToExamSession(row: (string | number | null)[]): ExamSession {
+    return {
+      id: row[0] as string,
+      deckKey: row[1] as string,
+      deckKind: row[2] as ExamSession["deckKind"],
+      startedAt: row[3] as string,
+      endedAt: row[4] as string,
+      configJson: row[5] as string,
+      questionCount: row[6] as number,
+      correctCount: row[7] as number,
+      scorePct: row[8] as number,
+      passed: Boolean(row[9]),
+      durationMs: row[10] as number,
+      created: row[11] as string,
+    };
+  }
+
+  protected rowToExamAnswer(row: (string | number | null)[]): ExamAnswer {
+    return {
+      id: row[0] as string,
+      sessionId: row[1] as string,
+      flashcardId: row[2] as string,
+      ordinal: row[3] as number,
+      questionType: row[4] as ExamAnswer["questionType"],
+      gradingMethod: row[5] as ExamAnswer["gradingMethod"],
+      prompt: row[6] as string,
+      correctAnswer: row[7] as string,
+      givenAnswer: row[8] as string,
+      isCorrect: Boolean(row[9]),
+      timeMs: row[10] as number | null,
+      created: row[11] as string,
     };
   }
 
@@ -619,6 +659,8 @@ export abstract class BaseDatabaseService implements IDatabaseService {
       now,
       now,
       JSON.stringify(profile.extraHeaderLevels ?? []),
+      profile.examEnabled ? 1 : 0,
+      JSON.stringify(profile.examSettings ?? DEFAULT_EXAM_SETTINGS),
     ]);
 
     this.emitSyncOp({
@@ -639,6 +681,8 @@ export abstract class BaseDatabaseService implements IDatabaseService {
         fsrsProfile: profile.fsrs.profile,
         clozeEnabled: profile.clozeEnabled,
         clozeShowContext: profile.clozeShowContext ?? "open",
+        examEnabled: profile.examEnabled ?? false,
+        examSettings: profile.examSettings ?? DEFAULT_EXAM_SETTINGS,
         isDefault: profile.isDefault,
         created: now,
         modified: now,
@@ -722,7 +766,8 @@ export abstract class BaseDatabaseService implements IDatabaseService {
       updated.headerLevel !== current.headerLevel ||
       JSON.stringify(updated.extraHeaderLevels ?? []) !==
         JSON.stringify(current.extraHeaderLevels ?? []) ||
-      updated.clozeEnabled !== current.clozeEnabled;
+      updated.clozeEnabled !== current.clozeEnabled ||
+      (updated.examEnabled ?? false) !== (current.examEnabled ?? false);
 
     const modifiedAt = this.getCurrentTimestamp();
     await this.executeSql(SQL_QUERIES.UPDATE_PROFILE, [
@@ -740,6 +785,8 @@ export abstract class BaseDatabaseService implements IDatabaseService {
       updated.clozeEnabled ? 1 : 0,
       updated.clozeShowContext ?? "open",
       JSON.stringify(updated.extraHeaderLevels ?? []),
+      updated.examEnabled ? 1 : 0,
+      JSON.stringify(updated.examSettings ?? DEFAULT_EXAM_SETTINGS),
       modifiedAt,
       id,
     ]);
@@ -767,6 +814,8 @@ export abstract class BaseDatabaseService implements IDatabaseService {
         fsrsProfile: updated.fsrs.profile,
         clozeEnabled: updated.clozeEnabled,
         clozeShowContext: updated.clozeShowContext ?? "open",
+        examEnabled: updated.examEnabled ?? false,
+        examSettings: updated.examSettings ?? DEFAULT_EXAM_SETTINGS,
         isDefault: updated.isDefault,
         created: updated.created,
         modified: modifiedAt,
@@ -2221,6 +2270,120 @@ export abstract class BaseDatabaseService implements IDatabaseService {
   // and never emit sync ops. Cross-device convergence is handled by
   // merge-before-save (last-write-wins on `modified`).
 
+  /**
+   * How many reviewed plain cards on this profile's decks would become
+   * questions if exam parsing were enabled (the type-flip warning count).
+   * Classification can't run in SQL, so bodies are classified in TS.
+   */
+  async countReviewedCardsBecomingQuestions(profileId: string): Promise<number> {
+    const rows = (await this.querySql(
+      `SELECT f.back FROM flashcards f
+       JOIN decks d ON d.id = f.deck_id
+       WHERE d.profile_id = ? AND f.type = 'header-paragraph' AND f.state = 'review'`,
+      [profileId]
+    )) as (string | number | null)[][];
+    let count = 0;
+    for (const row of rows) {
+      if (classifyExamBody((row[0] as string) ?? "").kind === "mcq") count++;
+    }
+    return count;
+  }
+
+  /** Ids of decks whose profile has exam questions enabled. */
+  async getExamEnabledDeckIds(): Promise<string[]> {
+    const rows = (await this.querySql(
+      `SELECT d.id FROM decks d
+       JOIN deckprofiles p ON p.id = d.profile_id
+       WHERE p.exam_enabled = 1 AND p.deleted_at IS NULL`,
+      []
+    )) as (string | number | null)[][];
+    return rows.map((row) => row[0] as string);
+  }
+
+  /** Per-deck exam health context (flag + grading mode) for validity badges. */
+  async getDeckExamContexts(): Promise<
+    Array<{ deckId: string; examEnabled: boolean; typedGrading: TypedGradingMode }>
+  > {
+    const rows = (await this.querySql(
+      `SELECT d.id, p.exam_enabled, p.exam_settings FROM decks d
+       JOIN deckprofiles p ON p.id = d.profile_id
+       WHERE p.deleted_at IS NULL`,
+      []
+    )) as (string | number | null)[][];
+    return rows.map((row) => ({
+      deckId: row[0] as string,
+      examEnabled: row[1] === 1,
+      typedGrading: parseExamSettings(row[2] as string | null).typedGrading,
+    }));
+  }
+
+  // EXAM ATTEMPT OPERATIONS
+  // Append-only results store. No cross-worker transaction exists, so
+  // completeExamSession writes answers first and the session row last — the
+  // session row is the commit marker: partial answer writes stay invisible
+  // (every query keys off exam_sessions) and re-runs are idempotent
+  // (INSERT OR IGNORE + deterministic answer ids).
+
+  async completeExamSession(
+    session: Omit<ExamSession, "created">,
+    answers: Array<Omit<ExamAnswer, "id" | "sessionId" | "created">>
+  ): Promise<void> {
+    const now = this.getCurrentTimestamp();
+    for (const answer of answers) {
+      await this.executeSql(SQL_QUERIES.INSERT_EXAM_ANSWER, [
+        `${session.id}:${answer.ordinal}`,
+        session.id,
+        answer.flashcardId,
+        answer.ordinal,
+        answer.questionType,
+        answer.gradingMethod,
+        answer.prompt,
+        answer.correctAnswer,
+        answer.givenAnswer,
+        answer.isCorrect ? 1 : 0,
+        answer.timeMs ?? null,
+        now,
+      ]);
+    }
+    await this.executeSql(SQL_QUERIES.INSERT_EXAM_SESSION, [
+      session.id,
+      session.deckKey,
+      session.deckKind,
+      session.startedAt,
+      session.endedAt,
+      session.configJson,
+      session.questionCount,
+      session.correctCount,
+      session.scorePct,
+      session.passed ? 1 : 0,
+      session.durationMs,
+      now,
+    ]);
+    this.emitSyncOp({
+      o: "exam_session_complete",
+      p: { session: { ...session, created: now }, answers },
+    });
+  }
+
+  async getExamSessionsForDeckKey(
+    deckKey: string,
+    limit = 50
+  ): Promise<ExamSession[]> {
+    const results = (await this.querySql(
+      SQL_QUERIES.GET_EXAM_SESSIONS_FOR_DECK_KEY,
+      [deckKey, limit]
+    )) as (string | number | null)[][];
+    return results.map((row) => this.rowToExamSession(row));
+  }
+
+  async getExamAnswersForSession(sessionId: string): Promise<ExamAnswer[]> {
+    const results = (await this.querySql(
+      SQL_QUERIES.GET_EXAM_ANSWERS_FOR_SESSION,
+      [sessionId]
+    )) as (string | number | null)[][];
+    return results.map((row) => this.rowToExamAnswer(row));
+  }
+
   async createCramSession(
     session: Omit<CramSession, "id" | "created" | "modified">
   ): Promise<string> {
@@ -3385,6 +3548,30 @@ export abstract class BaseDatabaseService implements IDatabaseService {
         }
       } catch {
         this.debugLog("Backup does not contain anchor_bindings table, skipping");
+      }
+
+      // Restore exam attempts (append-only, immutable — union by id).
+      try {
+        const examSessions = await this.queryBackupDatabase(
+          backupDb,
+          `SELECT id, deck_key, deck_kind, started_at, ended_at, config_json,
+                  question_count, correct_count, score_pct, passed, duration_ms, created
+           FROM exam_sessions`
+        );
+        for (const row of examSessions) {
+          await this.executeSql(SQL_QUERIES.INSERT_EXAM_SESSION, row);
+        }
+        const examAnswers = await this.queryBackupDatabase(
+          backupDb,
+          `SELECT id, session_id, flashcard_id, ordinal, question_type, grading_method,
+                  prompt, correct_answer, given_answer, is_correct, time_ms, created
+           FROM exam_answers`
+        );
+        for (const row of examAnswers) {
+          await this.executeSql(SQL_QUERIES.INSERT_EXAM_ANSWER, row);
+        }
+      } catch {
+        this.debugLog("Backup does not contain exam tables, skipping");
       }
 
       await this.closeBackupDatabaseInstance(backupDb);

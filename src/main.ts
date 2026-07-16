@@ -28,6 +28,7 @@ import { AnchorStamper } from "./services/AnchorStamper";
 import { AnchorMigrator } from "./services/AnchorMigrator";
 import { CanvasFileEventHandlers } from "./services/CanvasFileEventHandlers";
 import { Scheduler } from "@decks/core";
+import { EXAMS_PROFILE_ID } from "@decks/core";
 import { DeviceLocalState } from "./services/DeviceLocalState";
 import { SyncLog } from "./services/SyncLog";
 import {
@@ -84,6 +85,7 @@ import {
   FlashcardReviewView,
   VIEW_TYPE_FLASHCARD_REVIEW,
 } from "./components/review/FlashcardReviewView";
+import { ExamView, VIEW_TYPE_FLASHCARD_EXAM } from "./components/exam/ExamView";
 
 export const VIEW_TYPE_DECKS = "decks-view";
 export { VIEW_TYPE_FLASHCARD_REVIEW, VIEW_TYPE_FLASHCARD_MANAGER };
@@ -274,6 +276,21 @@ export default class DecksPlugin extends Plugin {
             this.logger.debug("startup orphan prune failed", error);
           }
         }
+        // One-time tag mapping for the Exams preset, derived from the user's
+        // base tag. Base-tag renames migrate it with every other mapping.
+        if (!this.settings.examsPresetMappingDone) {
+          try {
+            const examsTag = `${this.settings.parsing.deckTag}/exams`;
+            const existing = await this.db.getProfileIdForTag(examsTag);
+            if (!existing) {
+              await this.db.createTagMapping(EXAMS_PROFILE_ID, examsTag);
+            }
+            this.settings.examsPresetMappingDone = true;
+            await this.saveSettings();
+          } catch (error) {
+            this.logger.debug("startup exams mapping failed", error);
+          }
+        }
         void this.getDecksView()?.refresh();
       }).catch((e) =>
         this.logger.error("Post-init startup work failed", e)
@@ -421,6 +438,12 @@ export default class DecksPlugin extends Plugin {
             this.settings,
             this.db
           )
+      );
+
+      // Register the exam tab view
+      this.registerView(
+        VIEW_TYPE_FLASHCARD_EXAM,
+        (leaf) => new ExamView(leaf, this.db)
       );
 
       // Register the flashcard manager tab view
@@ -641,6 +664,29 @@ export default class DecksPlugin extends Plugin {
             .then(setCanvasFolderIfEmpty)
             .catch(console.error);
         },
+      });
+
+      // Demo exam deck: tagged `<deckTag>/exams`, so it resolves to the Exams
+      // preset via the startup tag mapping. Created once, plus a command.
+      const createExamDemoDeck = () => {
+        testDeckService
+          .createExamDemoDeck(
+            this.settings.parsing.deckTag,
+            this.settings.parsing.folderSearchPath
+          )
+          .catch(console.error);
+      };
+
+      if (!this.settings.hasCreatedExamDeck) {
+        this.settings.hasCreatedExamDeck = true;
+        await this.saveSettings();
+        this.app.workspace.onLayoutReady(createExamDemoDeck);
+      }
+
+      this.addCommand({
+        id: "create-exam-demo-deck",
+        name: I18n.t.commands.createExamDemoDeck,
+        callback: createExamDemoDeck,
       });
 
       // Force a full resync (bypasses the mtime gate). Defensive lever for

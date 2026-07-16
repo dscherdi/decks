@@ -13,6 +13,7 @@ import {
   nodeBindingKey,
   occlusionBindingKey,
   parseHeaderLevels,
+  questionBindingKey,
   reverseBindingKey,
   splitTableLine,
   stripAnchorTokens,
@@ -45,7 +46,7 @@ interface BindingRow {
 }
 
 interface StampPlan {
-  tokenRole: "h" | "c" | "t" | "o";
+  tokenRole: "h" | "c" | "t" | "o" | "q";
   tokenId: string;
   cardKey: string;
   bindings: BindingRow[];
@@ -362,6 +363,7 @@ export class AnchorStamper {
         this.db.getAnchorBinding(tableBindingKey(candidate)),
         this.db.getAnchorBinding(tableBindingKey(candidate, 0)),
         this.db.getAnchorBinding(occlusionBindingKey(candidate)),
+        this.db.getAnchorBinding(questionBindingKey(candidate)),
       ]);
       if (conflicts.some((id) => id !== null)) continue;
       return candidate;
@@ -401,6 +403,15 @@ export class AnchorStamper {
         tokenId,
         cardKey: clozeBindingKey(tokenId, 0),
         bindings: [],
+      };
+    }
+    if (card.type === "multiple-choice") {
+      const questionKey = questionBindingKey(tokenId);
+      return {
+        tokenRole: "q",
+        tokenId,
+        cardKey: questionKey,
+        bindings: [{ anchor: questionKey, flashcardId: card.id }],
       };
     }
     const baseKey = headerBindingKey(tokenId);
@@ -521,6 +532,51 @@ export class AnchorStamper {
       };
     }
 
+    if (plan.tokenRole === "q") {
+      // Adopt semantics mirror the parser: the first q token anywhere in the
+      // body owns the question. A dormant h token stays inert here.
+      for (const bodyLine of bodyLines) {
+        const existing = extractAnchorTokens(bodyLine).tokens.find(
+          (t) => t.role === "q"
+        );
+        if (existing) {
+          return {
+            content,
+            outcome: {
+              ok: true,
+              anchorKey: questionBindingKey(existing.id),
+              adopted: true,
+            },
+            bindings: this.rekeyBindings(plan, existing.id),
+          };
+        }
+      }
+      let target = -1;
+      for (let i = bodyLines.length - 1; i >= 0; i--) {
+        if (bodyLines[i].trim() !== "") {
+          target = i;
+          break;
+        }
+      }
+      if (target === -1) {
+        return unchanged({ ok: false, reason: "segment_not_found" });
+      }
+      // Own paragraph after the list, separated by a blank line: a non-blank
+      // line directly after a list item would lazily continue that item, so
+      // the token would land inside the last option and die with it.
+      lines.splice(
+        bodyStart + target + 1,
+        0,
+        "",
+        formatAnchorToken("q", plan.tokenId)
+      );
+      return {
+        content: lines.join("\n"),
+        outcome: { ok: true, anchorKey: plan.cardKey, adopted: false },
+        bindings: plan.bindings,
+      };
+    }
+
     // Cloze: locate the body line holding match #clozeOrder and its
     // within-line index, then token that line and bind every sibling on it.
     const located = this.locateCloze(cleanBody, card.clozeOrder ?? 0);
@@ -556,18 +612,15 @@ export class AnchorStamper {
 
   /** Re-point a plan's bindings at an adopted token id. */
   private rekeyBindings(plan: StampPlan, adoptedId: string): BindingRow[] {
-    const baseKey = headerBindingKey(adoptedId);
     return plan.bindings.map((row) => ({
       flashcardId: row.flashcardId,
-      anchor: row.anchor.endsWith(":rev")
-        ? reverseBindingKey(baseKey)
-        : baseKey,
+      anchor: this.rekeyCardKey(row.anchor, adoptedId),
     }));
   }
 
   /** Swap the token id inside a binding key, keeping role and suffix. */
   private rekeyCardKey(cardKey: string, adoptedId: string): string {
-    return cardKey.replace(/^([hcto]):[a-z0-9]+/, `$1:${adoptedId}`);
+    return cardKey.replace(/^([hctoq]):[a-z0-9]+/, `$1:${adoptedId}`);
   }
 
   /** Table rows: token written into the first data cell, located by row scan. */

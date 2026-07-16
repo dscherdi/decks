@@ -10,6 +10,11 @@
   import { evaluateFilter } from "@decks/core";
   import { naturalCompare } from "@decks/core";
   import { computeCardHealth } from "@decks/core";
+  import type {
+    CardHealth,
+    ExamHealthContext,
+    ExamHealthIssue,
+  } from "@decks/core";
   import { formatBadgeParts } from "../services/FilterBadgeFormatter";
   import type { EditTarget, EditCommitPayload } from "./FlashcardManagerEditTypes";
   import FilterBuilder from "./FilterBuilder.svelte";
@@ -300,8 +305,31 @@
     return null;
   }
 
+  let examContexts = new Map<string, ExamHealthContext>();
+
+  function cardHealthFor(card: Flashcard): CardHealth {
+    return computeCardHealth(card, thresholds, examContexts.get(card.deckId));
+  }
+
+  function examIssueTooltip(issue: ExamHealthIssue): string {
+    if (issue.kind === "answer-too-long") return t.exam.answerTooLongTooltip;
+    switch (issue.reason) {
+      case "no-correct-answer":
+        return t.exam.invalidReasonNoCorrect;
+      case "single-option":
+        return t.exam.invalidReasonSingleOption;
+      case "mixed-list":
+        return t.exam.invalidReasonMixedList;
+      case "nested-task-list":
+        return t.exam.invalidReasonNested;
+      case "empty-option":
+        return t.exam.invalidReasonEmptyOption;
+    }
+  }
+
   function healthRank(card: Flashcard): number {
-    const h = computeCardHealth(card, thresholds);
+    const h = cardHealthFor(card);
+    if (h.examIssue) return 4;
     if (h.isLeech && h.isDense) return 3;
     if (h.isLeech) return 2;
     if (h.isDense) return 1;
@@ -759,6 +787,18 @@
   onMount(async () => {
     activeDocument.addEventListener("click", handleDocClickPopover);
     activeDocument.addEventListener("click", handleOutsideClick);
+    // Exam validity is profile-relative; one bulk lookup keys it per deck.
+    try {
+      const contexts = await db.getDeckExamContexts();
+      examContexts = new Map(
+        contexts.map((c) => [
+          c.deckId,
+          { examEnabled: c.examEnabled, typedGrading: c.typedGrading },
+        ])
+      );
+    } catch (e) {
+      console.warn("Loading exam contexts failed:", e);
+    }
     // Periodically refresh "now" so buried_until expiry visibly clears the
     // "Buried" badge in long-lived manager sessions without requiring a
     // user action.
@@ -1132,7 +1172,7 @@
 
         <div class="decks-fm-table-body">
           {#each displayedFlashcards as card (card.id)}
-            {@const health = computeCardHealth(card, thresholds)}
+            {@const health = cardHealthFor(card)}
             {@const spatialClozeBlocked = !!card.edgeId && card.type === "cloze"}
             <div
               class="decks-fm-table-row"
@@ -1194,6 +1234,16 @@
                 {/if}
               </div>
               <div class="decks-fm-col-health">
+                {#if health.examIssue}
+                  <span
+                    class="decks-fm-health-badge decks-fm-health-invalid-exam"
+                    title={examIssueTooltip(health.examIssue)}
+                  >
+                    {health.examIssue.kind === "invalid-question"
+                      ? t.exam.invalidQuestionBadge
+                      : t.exam.answerTooLongBadge}
+                  </span>
+                {/if}
                 {#if health.isLeech}
                   <span class="decks-fm-health-badge decks-fm-health-leech" title={I18n.format(m.leechTooltip, { count: card.lapses })}>
                     {m.badgeLeech}
@@ -1204,7 +1254,7 @@
                     {m.badgeDense}
                   </span>
                 {/if}
-                {#if !health.isLeech && !health.isDense}
+                {#if !health.isLeech && !health.isDense && !health.examIssue}
                   <span class="decks-fm-health-badge decks-fm-health-healthy" title={m.healthyTooltip}>
                     {m.badgeHealthy}
                   </span>
@@ -2095,6 +2145,11 @@
     border: 1px solid var(--color-green);
     color: var(--color-green);
     font-weight: 500;
+  }
+
+  .decks-fm-health-invalid-exam {
+    background: var(--color-purple, var(--color-red));
+    color: var(--text-on-accent);
   }
 
   .decks-fm-footer {

@@ -106,6 +106,7 @@ export function findFlashcardLineInRange(
 
   if (
     flashcard.type === "header-paragraph" ||
+    flashcard.type === "multiple-choice" ||
     flashcard.type === "cloze"
   ) {
     for (let i = clampedStart; i < clampedEnd; i++) {

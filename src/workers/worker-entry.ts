@@ -323,9 +323,18 @@ class SimpleDatabaseWorker {
    */
   parseFlashcardsFromContent(
     content: string,
-    headerLevel: number | number[] = 2
+    headerLevel: number | number[] = 2,
+    fileTitle?: string,
+    clozeEnabled = false,
+    examEnabled = false
   ): ParsedFlashcard[] {
-    return FlashcardParser.parseFlashcardsFromContent(content, headerLevel);
+    return FlashcardParser.parseFlashcardsFromContent(
+      content,
+      headerLevel,
+      fileTitle,
+      clozeEnabled,
+      examEnabled
+    );
   }
 
   /**
@@ -419,6 +428,9 @@ class SimpleDatabaseWorker {
       // Cram (drill) state: mutable, per-device but resumable across devices — newer-wins by modified.
       this.mergeByModified(remoteDb, "cram_sessions");
       this.mergeByModified(remoteDb, "cram_cards");
+      // Exam attempts: append-only and immutable once ended — union by id.
+      this.mergeAppendOnly(remoteDb, "exam_sessions");
+      this.mergeAppendOnly(remoteDb, "exam_answers");
 
       this.db.exec("COMMIT");
       self.postMessage({ type: "dbg", message: "Sync with disk completed" });
@@ -902,7 +914,10 @@ self.onmessage = async (event: MessageEvent<DatabaseWorkerMessage>) => {
           result = {
             flashcards: FlashcardParser.parseFlashcardsFromContent(
               (data as { content: string }).content,
-              (data as { headerLevel: number }).headerLevel
+              (data as { headerLevel: number }).headerLevel,
+              (data as { fileTitle?: string }).fileTitle,
+              (data as { clozeEnabled?: boolean }).clozeEnabled ?? false,
+              (data as { examEnabled?: boolean }).examEnabled ?? false
             ),
           };
         }

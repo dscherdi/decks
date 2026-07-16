@@ -1258,3 +1258,71 @@ div.decks-card-content
 .decks-level-chip {
   cursor: pointer;
 }
+
+/* Exam decks: shared option rows (exam surface + review-mode multiple choice).
+   Never native task-list checkboxes — checked-state styling would leak the
+   answer and strikethrough reads as "cancelled". */
+.decks-review-mcq {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin-top: 12px;
+}
+.decks-exam-option {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+  text-align: left;
+  padding: 10px 12px;
+  border: 1px solid var(--background-modifier-border);
+  border-radius: 6px;
+  background: var(--background-primary);
+  cursor: pointer;
+  width: 100%;
+}
+.decks-exam-option.selected {
+  border-color: var(--interactive-accent);
+  background: var(--background-modifier-hover);
+}
+.decks-exam-option.chosen-correct {
+  border-color: var(--color-green);
+  background: rgba(0, 160, 60, 0.12);
+}
+.decks-exam-option.chosen-wrong {
+  border-color: var(--color-red);
+  background: rgba(200, 40, 40, 0.12);
+}
+.decks-exam-option.missed-correct {
+  border-color: var(--color-green);
+  border-style: dashed;
+}
+.decks-exam-option-prefix {
+  font-weight: 600;
+  color: var(--text-muted);
+}
+.decks-exam-option-text p {
+  margin: 0;
+}
+.decks-exam-blank-input {
+  display: inline-block;
+  min-width: 8em;
+  border: none;
+  border-bottom: 2px solid var(--interactive-accent);
+  border-radius: 0;
+  background: transparent;
+  padding: 0 4px;
+}
+.decks-exam-modal .modal-content,
+.decks-exam-container {
+  height: 100%;
+}
+.decks-exam-tab-container {
+  padding: 0;
+}
+.decks-exam-setup-skipped {
+  color: var(--text-warning, var(--text-muted));
+}
+.decks-exam-setup-hint {
+  color: var(--text-muted);
+  font-size: 0.9em;
+}

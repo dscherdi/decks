@@ -664,6 +664,20 @@ export class MainDatabaseService extends BaseDatabaseService {
               this.debugLog("Remote DB has no cram tables, skipping");
             }
 
+            // Merge exam attempts (append-only, immutable once ended — union by id)
+            try {
+              this.db.exec(`
+                INSERT OR IGNORE INTO exam_sessions
+                SELECT * FROM remote.exam_sessions
+              `);
+              this.db.exec(`
+                INSERT OR IGNORE INTO exam_answers
+                SELECT * FROM remote.exam_answers
+              `);
+            } catch {
+              this.debugLog("Remote DB has no exam tables, skipping");
+            }
+
             // Commit the transaction
             this.db.exec("COMMIT");
             this.debugLog("Successfully merged data from disk");
@@ -1065,6 +1079,26 @@ export class MainDatabaseService extends BaseDatabaseService {
                 }
               } catch {
                 this.debugLog(`Remote DB has no ${cramTable} table, skipping`);
+              }
+            }
+
+            // Merge exam attempts (append-only, immutable — union by id).
+            for (const examTable of ["exam_sessions", "exam_answers"]) {
+              try {
+                const remoteRows = remoteDb.exec(`SELECT * FROM ${examTable}`);
+                if (remoteRows.length > 0) {
+                  const data = remoteRows[0];
+                  const stmt = this.db.prepare(
+                    `INSERT OR IGNORE INTO ${examTable} (${data.columns.join(",")})
+                     VALUES (${data.columns.map(() => "?").join(",")})`
+                  );
+                  for (const row of data.values) {
+                    stmt.run(row);
+                  }
+                  stmt.free();
+                }
+              } catch {
+                this.debugLog(`Remote DB has no ${examTable} table, skipping`);
               }
             }
 

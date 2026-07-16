@@ -44,6 +44,7 @@ const PROMPT_FLUSH_OPS: ReadonlySet<SyncOpV1["o"]> = new Set([
   "custom_deck_reset",
   "custom_deck_card_add",
   "custom_deck_card_remove",
+  "exam_session_complete",
 ]);
 const COMPACT_RETENTION_DAYS = 30;
 const MS_PER_DAY = 24 * 60 * 60 * 1000;

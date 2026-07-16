@@ -138,8 +138,10 @@
   let saveState: "idle" | "saving" | "error" = "idle";
   let errorMessage = "";
 
-  let headerFront = card.type === "header-paragraph" ? card.front : "";
-  let headerBody = card.type === "header-paragraph" ? card.back : "";
+  const isHeaderShaped =
+    card.type === "header-paragraph" || card.type === "multiple-choice";
+  let headerFront = isHeaderShaped ? card.front : "";
+  let headerBody = isHeaderShaped ? card.back : "";
   let tableFront = card.type === "table" ? card.front : "";
   let tableBack = card.type === "table" ? card.back : "";
   let tableNotes = card.type === "table" ? (card.notes ?? "") : "";
@@ -241,6 +243,8 @@
     switch (type) {
       case "header-paragraph":
         return "Header-paragraph";
+      case "multiple-choice":
+        return "Multiple choice";
       case "table":
         return "Table";
       case "cloze":
@@ -350,6 +354,9 @@
     if (card.type === "header-paragraph") {
       return { type: "header-paragraph", front: headerFront, back: headerBody };
     }
+    if (card.type === "multiple-choice") {
+      return { type: "multiple-choice", front: headerFront, back: headerBody };
+    }
     if (card.type === "table") {
       if (isTemplateMode) {
         return {
@@ -381,7 +388,7 @@
   $: fields = computeFields(card);
   function computeFields(c: Flashcard): FieldDef[] {
     const ef = I18n.t.modals.editFlashcard;
-    if (c.type === "header-paragraph") {
+    if (c.type === "header-paragraph" || c.type === "multiple-choice") {
       return [
         { key: "headerFront", label: ef.fieldHeader, isFront: true, refKey: "front" },
         { key: "headerBody", label: ef.fieldBody, refKey: "back" },
@@ -411,7 +418,9 @@
   }
 
   function currentFieldSet(): RefactorFieldSet {
-    if (card.type === "header-paragraph") {
+    if (card.type === "header-paragraph" || card.type === "multiple-choice") {
+      // The AI refactor layer has no question shape; the raw task-list body
+      // refactors like any header card body.
       return { type: "header-paragraph", front: headerFront, back: headerBody };
     }
     if (card.type === "table") {

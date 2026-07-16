@@ -4,7 +4,14 @@
   import type { DeckProfile, ProfileTagMapping, ClozeShowContext } from "../../database/types";
   import type { IDatabaseService } from "../../database/DatabaseFactory";
   import type { ReviewOrder, FSRSProfile } from "../../database/types";
-  import { getDefaultLearningSteps, getDefaultRelearningSteps, I18n, validateLearningSteps, validateRelearningSteps } from "@decks/core";
+  import type {
+    ExamFeedbackTiming,
+    ExamOptionLabels,
+    ExamSelectionMode,
+    ExamSettings,
+    TypedGradingMode,
+  } from "../../database/types";
+  import { getDefaultLearningSteps, getDefaultRelearningSteps, DEFAULT_EXAM_SETTINGS, I18n, validateLearningSteps, validateRelearningSteps } from "@decks/core";
 
   const t = I18n.t;
   const p = t.profiles;
@@ -35,6 +42,8 @@
   let relearningStepsContainer: HTMLElement;
   let clozeEnabledContainer: HTMLElement;
   let clozeShowContextContainer: HTMLElement;
+  let examEnabledContainer: HTMLElement;
+  let examSettingsContainer: HTMLElement;
   let deckCountContainer: HTMLElement;
   let tagMappingsContainer: HTMLElement;
 
@@ -55,6 +64,8 @@
   let relearningSteps = "10m";
   let clozeEnabled = false;
   let clozeShowContext: ClozeShowContext = "open";
+  let examEnabled = false;
+  let examSettings: ExamSettings = { ...DEFAULT_EXAM_SETTINGS };
 
   // Validation error tracking
   let nameError = false;
@@ -92,6 +103,8 @@
     relearningSteps = profile.relearningSteps;
     clozeEnabled = profile.clozeEnabled;
     clozeShowContext = profile.clozeShowContext;
+    examEnabled = profile.examEnabled ?? false;
+    examSettings = { ...DEFAULT_EXAM_SETTINGS, ...(profile.examSettings ?? {}) };
 
     // Reset validation errors
     nameError = false;
@@ -194,6 +207,8 @@
         },
         clozeEnabled: clozeEnabled,
         clozeShowContext: clozeShowContext,
+        examEnabled: examEnabled,
+        examSettings: { ...examSettings },
         modified: new Date().toISOString(),
       };
 
@@ -542,6 +557,145 @@
       clozeShowContextContainer.empty();
     }
 
+    // Exam questions toggle (task list under a heading → multiple-choice).
+    // Enabling reinterprets reviewed task-list cards, so warn with the count.
+    if (examEnabledContainer) {
+      examEnabledContainer.empty();
+      new Setting(examEnabledContainer)
+        .setName(t.exam.examEnabledSetting)
+        .setDesc(t.exam.examEnabledDesc)
+        .addToggle((toggle) => {
+          toggle.setValue(examEnabled).onChange((value) => {
+            if (value && selectedProfile) {
+              db
+                .countReviewedCardsBecomingQuestions(selectedProfile.id)
+                .then((count) => {
+                  if (
+                    count > 0 &&
+                    !confirm(
+                      I18n.format(t.exam.typeFlipWarningBody, {
+                        count: String(count),
+                      })
+                    )
+                  ) {
+                    toggle.setValue(false);
+                    return;
+                  }
+                  examEnabled = true;
+                  rebuildSettings();
+                })
+                .catch(console.error);
+            } else {
+              examEnabled = value;
+              rebuildSettings();
+            }
+          });
+        });
+    }
+
+    // Exam session defaults (pre-fill the exam setup dialog).
+    if (examSettingsContainer && examEnabled) {
+      examSettingsContainer.empty();
+      new Setting(examSettingsContainer)
+        .setName(t.exam.examSettingsHeading)
+        .setHeading();
+      new Setting(examSettingsContainer)
+        .setName(t.exam.questionCountSetting)
+        .setDesc(t.exam.questionCountAll)
+        .addText((text) =>
+          text.setValue(String(examSettings.questionCount)).onChange((value) => {
+            const parsed = parseInt(value, 10);
+            examSettings.questionCount = Number.isFinite(parsed)
+              ? Math.max(0, parsed)
+              : 0;
+          })
+        );
+      new Setting(examSettingsContainer)
+        .setName(t.exam.timeLimitSetting)
+        .setDesc(t.exam.timeLimitOff)
+        .addText((text) =>
+          text
+            .setValue(String(examSettings.timeLimitMinutes))
+            .onChange((value) => {
+              const parsed = parseInt(value, 10);
+              examSettings.timeLimitMinutes = Number.isFinite(parsed)
+                ? Math.max(0, parsed)
+                : 0;
+            })
+        );
+      new Setting(examSettingsContainer)
+        .setName(t.exam.passScoreSetting)
+        .addText((text) =>
+          text.setValue(String(examSettings.passScorePct)).onChange((value) => {
+            const parsed = parseInt(value, 10);
+            examSettings.passScorePct = Number.isFinite(parsed)
+              ? Math.max(0, Math.min(100, parsed))
+              : 60;
+          })
+        );
+      new Setting(examSettingsContainer)
+        .setName(t.exam.shuffleQuestionsSetting)
+        .addToggle((toggle) =>
+          toggle.setValue(examSettings.shuffleQuestions).onChange((value) => {
+            examSettings.shuffleQuestions = value;
+          })
+        );
+      new Setting(examSettingsContainer)
+        .setName(t.exam.shuffleOptionsSetting)
+        .addToggle((toggle) =>
+          toggle.setValue(examSettings.shuffleOptions).onChange((value) => {
+            examSettings.shuffleOptions = value;
+          })
+        );
+      new Setting(examSettingsContainer)
+        .setName(t.exam.feedbackTimingSetting)
+        .addDropdown((dropdown) =>
+          dropdown
+            .addOption("end", t.exam.feedbackEnd)
+            .addOption("immediate", t.exam.feedbackImmediate)
+            .setValue(examSettings.feedbackTiming)
+            .onChange((value) => {
+              examSettings.feedbackTiming = value as ExamFeedbackTiming;
+            })
+        );
+      new Setting(examSettingsContainer)
+        .setName(t.exam.selectionModeSetting)
+        .addDropdown((dropdown) =>
+          dropdown
+            .addOption("random", t.exam.selectionRandom)
+            .addOption("sequential", t.exam.selectionSequential)
+            .setValue(examSettings.selectionMode)
+            .onChange((value) => {
+              examSettings.selectionMode = value as ExamSelectionMode;
+            })
+        );
+      new Setting(examSettingsContainer)
+        .setName(t.exam.typedGradingSetting)
+        .addDropdown((dropdown) =>
+          dropdown
+            .addOption("exact", t.exam.gradingExact)
+            .addOption("tolerant", t.exam.gradingTolerant)
+            .addOption("self", t.exam.gradingSelf)
+            .setValue(examSettings.typedGrading)
+            .onChange((value) => {
+              examSettings.typedGrading = value as TypedGradingMode;
+            })
+        );
+      new Setting(examSettingsContainer)
+        .setName(t.exam.optionLabelsSetting)
+        .addDropdown((dropdown) =>
+          dropdown
+            .addOption("letters", t.exam.optionLabelsLetters)
+            .addOption("numbers", t.exam.optionLabelsNumbers)
+            .setValue(examSettings.optionLabels)
+            .onChange((value) => {
+              examSettings.optionLabels = value as ExamOptionLabels;
+            })
+        );
+    } else if (examSettingsContainer) {
+      examSettingsContainer.empty();
+    }
+
     // Review order
     if (reviewOrderContainer) {
       reviewOrderContainer.empty();
@@ -694,6 +848,8 @@
           <div bind:this={extraHeaderLevelsContainer}></div>
           <div bind:this={clozeEnabledContainer}></div>
           <div bind:this={clozeShowContextContainer}></div>
+          <div bind:this={examEnabledContainer}></div>
+          <div bind:this={examSettingsContainer}></div>
         </div>
 
         <div class="decks-settings-section">

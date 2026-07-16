@@ -16,6 +16,10 @@ export function cardToRefactorFieldSet(card: Flashcard): RefactorFieldSet {
   switch (card.type) {
     case "header-paragraph":
       return { type: "header-paragraph", front: card.front, back: card.back };
+    case "multiple-choice":
+      // No question shape in the AI layer; the raw task-list body refactors
+      // like a header card body.
+      return { type: "header-paragraph", front: card.front, back: card.back };
     case "table":
       return {
         type: "table",

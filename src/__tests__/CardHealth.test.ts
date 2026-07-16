@@ -13,7 +13,7 @@ describe("CardHealth", () => {
         { lapses: 2, back: "short answer" },
         thresholds
       );
-      expect(result).toEqual({ isLeech: false, isDense: false });
+      expect(result).toEqual({ isLeech: false, isDense: false, examIssue: null });
     });
 
     it("flags leech when lapses >= threshold", () => {
@@ -59,7 +59,7 @@ describe("CardHealth", () => {
         { lapses: 3, back: "a".repeat(100) },
         custom
       );
-      expect(result).toEqual({ isLeech: true, isDense: true });
+      expect(result).toEqual({ isLeech: true, isDense: true, examIssue: null });
     });
 
     it("treats empty back as not dense", () => {

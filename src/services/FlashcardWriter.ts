@@ -19,6 +19,7 @@ const TRAILING_TAGS_REGEX = /(\s+#[\w/-]+(?:\s+#[\w/-]+)*)\s*$/;
 
 export type FlashcardEdits =
   | { type: "header-paragraph"; front: string; back: string }
+  | { type: "multiple-choice"; front: string; back: string }
   | { type: "table"; front: string; back: string; notes: string; columns?: string[] }
   | { type: "cloze"; front: string; sentence: string }
   | { type: "image-occlusion"; listItem: string }
@@ -399,7 +400,7 @@ function checkStale(
 ): InternalApply | null {
   // Anchor tokens are identity markers, not content: strip them everywhere
   // before comparing to the card's stored (clean) values, mirroring the parser.
-  if (card.type === "header-paragraph") {
+  if (card.type === "header-paragraph" || card.type === "multiple-choice") {
     const body = stripAnchorTokens(extractHeaderBlockBody(segLines)).trim();
     if (body !== card.back.trim()) {
       return fail(
@@ -529,7 +530,7 @@ function buildReplacement(
 ): { ok: true; lines: string[] } | { ok: false; failure: EditFailure } {
   const segLines = allLines.slice(segment.start, segment.end);
 
-  if (edits.type === "header-paragraph") {
+  if (edits.type === "header-paragraph" || edits.type === "multiple-choice") {
     return buildHeaderParagraph(segLines, edits.front, edits.back, preserveAnchors);
   }
   if (edits.type === "table") {
@@ -597,17 +598,20 @@ function buildHeaderParagraph(
 
 /**
  * Carry anchor tokens from the old body into the rebuilt one: line-scoped
- * tokens re-attach to the first identical new line; the card's own `h` token
- * keeps its own line after the new body. Tokens on lines the user rewrote are
- * dropped (their card follows intended-reset semantics).
+ * tokens re-attach to the first identical new line; the card's own `h` and
+ * `q` tokens keep their own line after the new body (`q` with its blank-line
+ * separation, so it never lazily joins the last list item). Tokens on lines
+ * the user rewrote are dropped (their card follows intended-reset semantics).
  */
 function carryBodyAnchors(oldBody: string[], bodyLines: string[]): void {
   const headerTokens: AnchorToken[] = [];
+  const questionTokens: AnchorToken[] = [];
   const lineTokens: { cleaned: string; token: AnchorToken }[] = [];
   for (const line of oldBody) {
     const { cleaned, tokens } = extractAnchorTokens(line);
     for (const token of tokens) {
       if (token.role === "h") headerTokens.push(token);
+      else if (token.role === "q") questionTokens.push(token);
       else lineTokens.push({ cleaned: cleaned.trim(), token });
     }
   }
@@ -622,15 +626,26 @@ function carryBodyAnchors(oldBody: string[], bodyLines: string[]): void {
       }
     }
   }
-  if (headerTokens.length > 0) {
-    let last = -1;
+  const lastContentIndex = (): number => {
     for (let i = bodyLines.length - 1; i >= 0; i--) {
-      if (bodyLines[i].trim() !== "") {
-        last = i;
-        break;
-      }
+      if (bodyLines[i].trim() !== "") return i;
     }
-    bodyLines.splice(last + 1, 0, formatAnchorToken("h", headerTokens[0].id));
+    return -1;
+  };
+  if (headerTokens.length > 0) {
+    bodyLines.splice(
+      lastContentIndex() + 1,
+      0,
+      formatAnchorToken("h", headerTokens[0].id)
+    );
+  }
+  if (questionTokens.length > 0) {
+    bodyLines.splice(
+      lastContentIndex() + 1,
+      0,
+      "",
+      formatAnchorToken("q", questionTokens[0].id)
+    );
   }
 }
 
