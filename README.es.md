@@ -183,11 +183,47 @@ personalizados a sangre. Las tablas sin plantilla coincidente siguen usando las 
 
 Consulta **[docs/TEMPLATES.md](docs/TEMPLATES.md)** para la guía completa y ejemplos.
 
+## Mazos de examen
+
+Ejecuta un mazo como un examen calificado: un conjunto de preguntas extraídas que se responden en una sola
+sesión, en cualquier orden, con un desglose de resultados — y opcionalmente un límite de tiempo y una nota
+para aprobar — al final. Los exámenes se activan por perfil y añaden un formato de creación: un encabezado
+seguido de una lista de tareas se convierte en una tarjeta de opción múltiple.
+
+```markdown
+## ¿Qué elemento es un gas noble?
+
+- [ ] Oxígeno
+- [x] Argón
+- [ ] Nitrógeno
+```
+
+`- [x]` marca una opción correcta; marcar varias la convierte en selección múltiple.
+
+- Etiqueta una nota con la subetiqueta `exams` de tu etiqueta de mazo (por defecto `#decks/exams`) para
+  usar el perfil preinstalado **Exams**, o activa **Exam questions** en cualquier perfil.
+- Comienza desde el menú del mazo (**⋮ → Start exam**) o haciendo clic en un mazo de examen; un diálogo de
+  configuración muestra el número de preguntas y te permite ajustar la configuración del examen.
+- Además de la opción múltiple, las tarjetas de encabezado y respuesta y las filas de tabla se plantean
+  como preguntas de respuesta escrita, y las tarjetas cloze muestran la frase con los resaltados como
+  huecos por rellenar.
+- Las respuestas escritas se califican de forma exacta, con tolerancia a pequeñas erratas o mediante
+  autoevaluación; los valores por defecto del examen (número de preguntas, límite de tiempo, nota para
+  aprobar, mezcla, momento de la corrección, etiquetas de las opciones) viven en el perfil.
+- Los exámenes completados se guardan en la base de datos del plugin, se fusionan entre dispositivos y se
+  incluyen en las copias de seguridad.
+
+Un mazo «Demo exam» que muestra todos los formatos de pregunta se crea en la primera instalación (o con el
+comando **«Create demo exam deck»**).
+
+Consulta **[docs/EXAM_DECKS.md](docs/EXAM_DECKS.md)** para las reglas de creación completas.
+
 ## Lo que obtienes
 
 - Modo exploración y sesiones de repaso cronometradas con límites diarios.
 - Perfiles por etiqueta (FSRS estándar / intensivo, objetivo de retención, cuotas diarias).
 - Mazos personalizados creados a partir de reglas de filtro — p. ej. cada tarjeta etiquetada con `#secundaria`.
+- Modo examen: sesiones de examen calificadas con preguntas de opción múltiple, de respuesta escrita y de huecos (cloze).
 - Estadísticas: mapa de calor, retención, pronóstico de vencimientos futuros, intervalos, desglose por hora, estadísticas de botones de respuesta.
 - Exportación a Anki, copias de seguridad automáticas, sincronización con fusión multi-dispositivo.
 - Atajos de teclado: **Espacio** para voltear, **1–4** para calificar.

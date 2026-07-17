@@ -14,6 +14,7 @@ Bir dosyayı `#decks` ile etiketleyin. Her `##` başlığı kartın ön yüzü, 
 
 - **Notlarınız zaten bir destedir.** Bir dosyayı etiketleyin: seçtiğiniz seviyedeki her başlık ön yüz, altındaki metin arka yüz olur. Anki'den geliyorsanız, hiçbir şeyi iki kez yazmanıza gerek kalmaz.
 - **Öğrenilecek sözdizimi yok, 4 farklı format.** Başlıklar, iki sütunlu tablolar, görsel örtme ve halihazırda kullandığınız vurgulardan oluşan `==cloze==` boşlukları.
+- **Sınav modu.** Çoktan seçmeli, yazarak cevaplanan ve boşluk doldurmalı (cloze) sorularla notlandırılan sınav oturumları.
 - **FSRS tabanlı zamanlama.** Üç farklı profil (Standart / Yoğun / Eğitilmiş), etiket başına akılda tutma hedefleri, SM-2'nin yükü yok.
 - **Algoritma ince ayarı.** Tek tıklamalı optimizasyon aracı, FSRS ağırlıklarını kendi tekrar geçmişinize göre eğitir — tamamen cihazınızda (client-side) gerçekleşen, unutma eğrinize özel daha iyi zamanlamalar.
 - **Gerçek çoklu cihaz senkronizasyonu.** Veritabanı iCloud/Dropbox üzerinden otomatik olarak birleşir; telefonda ve bilgisayarda tekrar yapın, geçmişiniz asla kaybolmaz.
@@ -171,6 +172,41 @@ temaya duyarlı ve yalıtılmış bir alanda işlenir ve tam düzen denetimi iç
 olmayan tablolar yine normal sütunları kullanır.
 
 Tam kılavuz ve örnekler için **[docs/TEMPLATES.md](docs/TEMPLATES.md)** bölümüne bakın.
+
+## Sınav desteleri
+
+Bir desteyi notlandırılan bir sınav olarak çalıştırın: tek oturumda ve istediğiniz sırayla cevaplanan,
+çekilişle belirlenmiş bir soru kümesi ve sonunda bir sonuç dökümü — isteğe bağlı olarak bir süre sınırı ve
+bir geçme puanıyla birlikte. Sınavlar profil başına etkinleştirilir ve tek bir yazım biçimi ekler: ardından
+bir görev listesi gelen başlık, çoktan seçmeli bir kart olur.
+
+```markdown
+## Hangi element bir soy gazdır?
+
+- [ ] Oksijen
+- [x] Argon
+- [ ] Azot
+```
+
+`- [x]` doğru bir seçeneği işaretler; birden fazlasını işaretlemek soruyu çok seçimli yapar.
+
+- Önceden yüklenmiş **Exams** profilini kullanmak için bir notu deste etiketinizin `exams` alt etiketiyle
+  (varsayılan olarak `#decks/exams`) etiketleyin veya herhangi bir profilde **Exam questions** seçeneğini
+  açın.
+- Destenin menüsünden (**⋮ → Start exam**) veya bir sınav destesine tıklayarak başlatın; bir kurulum
+  iletişim kutusu soru sayısını gösterir ve sınav ayarlarını düzenlemenize olanak tanır.
+- Çoktan seçmelinin yanı sıra, başlık-cevap kartları ve tablo satırları yazarak cevaplanan sorular olarak
+  sorulur; boşluk doldurma (cloze) kartları ise cümleyi, vurgular yazılan boşluklara dönüşmüş hâlde
+  gösterir.
+- Yazılan cevaplar tam eşleşmeyle, küçük yazım hatalarına tolerans gösterilerek veya öz değerlendirmeyle
+  notlandırılır; sınav varsayılanları (soru sayısı, süre sınırı, geçme puanı, karıştırma, geri bildirim
+  zamanı, seçenek etiketleri) profilde tutulur.
+- Tamamlanan sınavlar eklenti veritabanında saklanır, cihazlar arasında birleşir ve yedeklere dahil edilir.
+
+Her soru biçimini gösteren bir "Demo exam" destesi ilk kurulumda (veya **Create demo exam deck** komutuyla)
+oluşturulur.
+
+Tam yazım kuralları için **[docs/EXAM_DECKS.md](docs/EXAM_DECKS.md)** bölümüne bakın.
 
 ## Kişiselleştirilmiş planlama
 

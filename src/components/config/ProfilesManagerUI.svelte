@@ -596,10 +596,7 @@
     // Exam session defaults (pre-fill the exam setup dialog).
     if (examSettingsContainer && examEnabled) {
       examSettingsContainer.empty();
-      new Setting(examSettingsContainer)
-        .setName(t.exam.examSettingsHeading)
-        .setHeading();
-      new Setting(examSettingsContainer)
+      new Setting(examSettingsContainer.createDiv())
         .setName(t.exam.questionCountSetting)
         .setDesc(t.exam.questionCountAll)
         .addText((text) =>
@@ -610,7 +607,7 @@
               : 0;
           })
         );
-      new Setting(examSettingsContainer)
+      new Setting(examSettingsContainer.createDiv())
         .setName(t.exam.timeLimitSetting)
         .setDesc(t.exam.timeLimitOff)
         .addText((text) =>
@@ -623,7 +620,7 @@
                 : 0;
             })
         );
-      new Setting(examSettingsContainer)
+      new Setting(examSettingsContainer.createDiv())
         .setName(t.exam.passScoreSetting)
         .addText((text) =>
           text.setValue(String(examSettings.passScorePct)).onChange((value) => {
@@ -633,21 +630,21 @@
               : 60;
           })
         );
-      new Setting(examSettingsContainer)
+      new Setting(examSettingsContainer.createDiv())
         .setName(t.exam.shuffleQuestionsSetting)
         .addToggle((toggle) =>
           toggle.setValue(examSettings.shuffleQuestions).onChange((value) => {
             examSettings.shuffleQuestions = value;
           })
         );
-      new Setting(examSettingsContainer)
+      new Setting(examSettingsContainer.createDiv())
         .setName(t.exam.shuffleOptionsSetting)
         .addToggle((toggle) =>
           toggle.setValue(examSettings.shuffleOptions).onChange((value) => {
             examSettings.shuffleOptions = value;
           })
         );
-      new Setting(examSettingsContainer)
+      new Setting(examSettingsContainer.createDiv())
         .setName(t.exam.feedbackTimingSetting)
         .addDropdown((dropdown) =>
           dropdown
@@ -658,7 +655,7 @@
               examSettings.feedbackTiming = value as ExamFeedbackTiming;
             })
         );
-      new Setting(examSettingsContainer)
+      new Setting(examSettingsContainer.createDiv())
         .setName(t.exam.selectionModeSetting)
         .addDropdown((dropdown) =>
           dropdown
@@ -669,7 +666,7 @@
               examSettings.selectionMode = value as ExamSelectionMode;
             })
         );
-      new Setting(examSettingsContainer)
+      new Setting(examSettingsContainer.createDiv())
         .setName(t.exam.typedGradingSetting)
         .addDropdown((dropdown) =>
           dropdown
@@ -681,7 +678,7 @@
               examSettings.typedGrading = value as TypedGradingMode;
             })
         );
-      new Setting(examSettingsContainer)
+      new Setting(examSettingsContainer.createDiv())
         .setName(t.exam.optionLabelsSetting)
         .addDropdown((dropdown) =>
           dropdown
@@ -849,7 +846,13 @@
           <div bind:this={clozeEnabledContainer}></div>
           <div bind:this={clozeShowContextContainer}></div>
           <div bind:this={examEnabledContainer}></div>
-          <div bind:this={examSettingsContainer}></div>
+        </div>
+
+        <!-- Kept mounted and CSS-hidden when exam is off: the imperative
+             rebuildSettings() fill must never race a conditional mount. -->
+        <div class="decks-settings-section" class:decks-section-hidden={!examEnabled}>
+          <h4>{t.exam.examSettingsHeading}</h4>
+          <div bind:this={examSettingsContainer} class="decks-exam-settings"></div>
         </div>
 
         <div class="decks-settings-section">
@@ -936,6 +939,18 @@
     color: var(--text-muted);
     text-transform: uppercase;
     letter-spacing: 0.5px;
+  }
+
+  .decks-section-hidden {
+    display: none;
+  }
+
+  /* Same row rhythm as .decks-settings-section: each setting sits in its own
+     child div, so the flex gap (not setting-item padding) spaces the rows. */
+  .decks-exam-settings {
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
   }
 
   .decks-profile-actions {

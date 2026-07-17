@@ -197,11 +197,43 @@ the normal columns.
 
 See **[docs/TEMPLATES.md](docs/TEMPLATES.md)** for the full guide and examples.
 
+## Exam decks
+
+Run a deck as a graded exam: a drawn set of questions answered in one sitting, in any order, with a
+results breakdown — and optionally a time limit and a pass score — at the end. Exams are enabled per
+profile, and add one authoring format: a heading followed by a task list becomes a multiple-choice card.
+
+```markdown
+## Which element is a noble gas?
+
+- [ ] Oxygen
+- [x] Argon
+- [ ] Nitrogen
+```
+
+`- [x]` marks a correct option; checking several makes it multi-select.
+
+- Tag a note with the `exams` subtag of your deck tag (by default `#decks/exams`) to use the preinstalled
+  **Exams** profile, or turn on **Exam questions** in any profile.
+- Start from the deck's menu (**⋮ → Start exam**) or by clicking an exam deck; a setup dialog shows the
+  question count and lets you adjust the exam settings.
+- Besides multiple choice, header-and-answer cards and table rows are asked as type-in questions, and
+  cloze cards show the sentence with the highlights as type-in blanks.
+- Typed answers are graded exactly, tolerantly of small typos, or self-graded; exam defaults (question
+  count, time limit, pass score, shuffling, feedback timing, option labels) live on the profile.
+- Completed exams are stored in the plugin database, merge across devices, and are included in backups.
+
+A "Demo exam" deck showing every question format is created on first install (or via the **Create demo
+exam deck** command).
+
+See **[docs/EXAM_DECKS.md](docs/EXAM_DECKS.md)** for the full authoring rules.
+
 ## What you get
 
 - Browse mode and timed review sessions with daily limits.
 - Per-tag profiles (Standard / Intensive FSRS, retention target, daily quotas).
 - Custom decks built from filter rules — e.g., every card tagged `#high-school`.
+- Exam mode: graded exam sessions with multiple-choice, type-in, and cloze questions.
 - Statistics: heatmap, retention, future-due forecast, intervals, hourly breakdown, answer-button stats.
 - Anki import and export, automatic backups, multi-device merge sync.
 - Keyboard shortcuts: **Space** to flip, **1–4** to rate.

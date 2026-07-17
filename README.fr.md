@@ -184,11 +184,48 @@ colonnes habituelles.
 
 Voir **[docs/TEMPLATES.md](docs/TEMPLATES.md)** pour le guide complet et des exemples.
 
+## Paquets d'examen
+
+Lancez un paquet comme un examen noté : un tirage de questions auxquelles vous répondez en une seule
+session, dans n'importe quel ordre, avec un récapitulatif des résultats — et éventuellement une limite de
+temps et un score de réussite — à la fin. Les examens s'activent par profil et ajoutent un format de
+rédaction : un en-tête suivi d'une liste de tâches devient une carte à choix multiple.
+
+```markdown
+## Quel élément est un gaz noble ?
+
+- [ ] Oxygène
+- [x] Argon
+- [ ] Azote
+```
+
+`- [x]` marque une option correcte ; en cocher plusieurs rend la question à sélection multiple.
+
+- Ajoutez à une note la sous-balise `exams` de votre balise de paquet (par défaut `#decks/exams`) pour
+  utiliser le profil préinstallé **Exams**, ou activez **Exam questions** dans n'importe quel profil.
+- Démarrez depuis le menu du paquet (**⋮ → Start exam**) ou en cliquant sur un paquet d'examen ; une boîte
+  de dialogue de configuration affiche le nombre de questions et vous laisse ajuster les paramètres de
+  l'examen.
+- Outre le choix multiple, les cartes en-tête + réponse et les lignes de tableau sont posées comme des
+  questions à réponse saisie, et les cartes à trous affichent la phrase avec les surlignages comme des
+  trous à remplir.
+- Les réponses saisies sont notées exactement, avec tolérance aux petites fautes de frappe, ou
+  auto-évaluées ; les valeurs par défaut de l'examen (nombre de questions, limite de temps, score de
+  réussite, mélange, moment de la correction, libellés des options) vivent sur le profil.
+- Les examens terminés sont stockés dans la base de données du plugin, fusionnent entre appareils et sont
+  inclus dans les sauvegardes.
+
+Un paquet « Demo exam » présentant tous les formats de question est créé à la première installation (ou via
+la commande **« Create demo exam deck »**).
+
+Voir **[docs/EXAM_DECKS.md](docs/EXAM_DECKS.md)** pour toutes les règles de rédaction.
+
 ## Ce que vous obtenez
 
 - Mode navigation et sessions de révision chronométrées avec limites journalières.
 - Profils par balise (FSRS Standard / Intensif, cible de rétention, quotas journaliers).
 - Paquets personnalisés construits à partir de règles de filtre — ex., toutes les cartes balisées `#lycée`.
+- Mode examen : sessions d'examen notées avec questions à choix multiple, à réponse saisie et à trous.
 - Statistiques : carte thermique (heatmap), rétention, prévisions des révisions futures, intervalles, répartition horaire, statistiques des boutons de réponse.
 - Exportation Anki, sauvegardes automatiques, synchronisation avec fusion multi-appareils.
 - Raccourcis clavier : **Espace** pour retourner, **1–4** pour évaluer.

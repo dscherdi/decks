@@ -14,6 +14,7 @@ Etiketo një skedar me `#decks`. Çdo titull `##` bëhet pjesa e përparme e nj�
 
 - **Shënimet tuaja janë tashmë pakoja.** Etiketo një skedar: çdo titull në nivelin që zgjedh bëhet pjesa e përparme dhe teksti më poshtë bëhet pjesa e pasme. Nëse vjen nga Anki, nuk ka asgjë për të shkruar dy herë.
 - **Katër formate, asnjë sintaksë për të mësuar.** Titujt, tabelat me dy kolona, mbulimi i imazheve dhe `==cloze==` nga theksimet që tashmë përdorni.
+- **Modaliteti i provimit.** Seanca provimi me notim, me pyetje me zgjedhje të shumëfishta, me përgjigje të shkruar dhe cloze.
 - **Planifikim origjinal me FSRS.** Tre profile (Standard / Intensiv / I Trajnuar), objektiva të mbajtjes mend për çdo etiketë, pa ngarkesën e SM-2.
 - **Rregullimi i algoritmit.** Optimizuesi me një klikim trajnon peshat e FSRS në historikun tuaj të rishikimit — planifikim më i mirë për kurbën tuaj të harrimit, e gjitha në pajisjen tuaj (client-side).
 - **Sinkronizim i vërtetë me shumë pajisje.** Baza e të dhënave bashkohet automatikisht përmes iCloud/Dropbox — rishikoni në telefon dhe kompjuter, pa humbur historikun.
@@ -171,6 +172,30 @@ mjedis të izoluar, të pastruar dhe të ndërgjegjshëm për temën, dhe ekspoz
 personalizuara buzë-më-buzë. Tabelat pa një shabllon që përputhet përdorin përsëri kolonat normale.
 
 Shih **[docs/TEMPLATES.md](docs/TEMPLATES.md)** për udhëzuesin e plotë dhe shembuj.
+
+## Pako provimi
+
+Ekzekuto një pako si një provim me notim: një grup pyetjesh të tërhequra, që u përgjigjesh në një seancë të vetme, në çfarëdo rendi, me një përmbledhje të rezultateve — dhe opsionalisht një kufi kohor dhe një prag kalimi — në fund. Provimet aktivizohen për çdo profil dhe shtojnë një format shkrimi: një titull i ndjekur nga një listë detyrash bëhet një kartë me zgjedhje të shumëfishta.
+
+```markdown
+## Cili element është një gaz fisnik?
+
+- [ ] Oksigjeni
+- [x] Argoni
+- [ ] Azoti
+```
+
+`- [x]` shënon një opsion të saktë; shënimi i disave e bën pyetjen me përzgjedhje të shumëfishtë.
+
+- Etiketo një shënim me nën-etiketën `exams` të etiketës së pakos tënde (e paracaktuar `#decks/exams`) për të përdorur profilin e parainstaluar **Exams**, ose aktivizo **Exam questions** në çdo profil.
+- Fillo nga menyja e pakos (**⋮ → Start exam**) ose duke klikuar një pako provimi; një dialog konfigurimi tregon numrin e pyetjeve dhe të lejon të rregullosh cilësimet e provimit.
+- Përveç zgjedhjes së shumëfishtë, kartat titull-dhe-përgjigje dhe rreshtat e tabelave pyeten si pyetje me përgjigje të shkruar, dhe kartat cloze shfaqin fjalinë me theksimet si vende bosh për t'u plotësuar me shkrim.
+- Përgjigjet e shkruara vlerësohen me saktësi të plotë, me tolerancë ndaj gabimeve të vogla shtypi, ose i vlerëson vetë; parazgjedhjet e provimit (numri i pyetjeve, kufiri kohor, pragu i kalimit, përzierja, momenti i reagimit, etiketat e opsioneve) qëndrojnë te profili.
+- Provimet e përfunduara ruhen në bazën e të dhënave të shtojcës, bashkohen mes pajisjeve dhe përfshihen në kopjet rezervë.
+
+Një pako "Demo exam" që tregon çdo format pyetjeje krijohet në instalimin e parë (ose përmes komandës **Create demo exam deck**).
+
+Shih **[docs/EXAM_DECKS.md](docs/EXAM_DECKS.md)** për rregullat e plota të shkrimit.
 
 ## Planifikim i personalizuar
 

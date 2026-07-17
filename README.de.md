@@ -183,11 +183,47 @@ randlosen eigenen Designs. Tabellen ohne passende Vorlage verwenden weiterhin di
 
 Siehe **[docs/TEMPLATES.md](docs/TEMPLATES.md)** für die vollständige Anleitung und Beispiele.
 
+## Prüfungsstapel
+
+Führe einen Stapel als benotete Prüfung durch: eine gezogene Auswahl von Fragen, die in einer Sitzung in
+beliebiger Reihenfolge beantwortet wird, mit einer Ergebnisauswertung — und optional einem Zeitlimit und
+einer Bestehensgrenze — am Ende. Prüfungen werden pro Profil aktiviert und fügen ein Erstellungsformat
+hinzu: eine Überschrift gefolgt von einer Aufgabenliste wird zur Multiple-Choice-Karte.
+
+```markdown
+## Welches Element ist ein Edelgas?
+
+- [ ] Sauerstoff
+- [x] Argon
+- [ ] Stickstoff
+```
+
+`- [x]` markiert eine richtige Option; mehrere Häkchen machen die Frage zur Mehrfachauswahl.
+
+- Versieh eine Notiz mit dem Unter-Tag `exams` deines Stapel-Tags (standardmäßig `#decks/exams`), um das
+  vorinstallierte **Exams**-Profil zu verwenden, oder aktiviere **Exam questions** in einem beliebigen
+  Profil.
+- Starte über das Menü des Stapels (**⋮ → Start exam**) oder per Klick auf einen Prüfungsstapel; ein
+  Einrichtungsdialog zeigt die Fragenanzahl und lässt dich die Prüfungseinstellungen anpassen.
+- Neben Multiple-Choice werden Überschrift-Antwort-Karten und Tabellenzeilen als Fragen mit Texteingabe
+  gestellt, und Lückentextkarten zeigen den Satz mit den Hervorhebungen als auszufüllende Lücken.
+- Eingetippte Antworten werden exakt, tolerant gegenüber kleinen Tippfehlern oder per Selbsteinschätzung
+  bewertet; die Prüfungsvorgaben (Fragenanzahl, Zeitlimit, Bestehensgrenze, Mischen, Zeitpunkt des
+  Feedbacks, Optionsbeschriftungen) liegen im Profil.
+- Abgeschlossene Prüfungen werden in der Plugin-Datenbank gespeichert, über Geräte hinweg zusammengeführt
+  und in Sicherungen einbezogen.
+
+Ein Stapel „Demo exam" mit allen Fragenformaten wird bei der ersten Installation erstellt (oder über den
+Befehl **„Create demo exam deck"**).
+
+Siehe **[docs/EXAM_DECKS.md](docs/EXAM_DECKS.md)** für die vollständigen Erstellungsregeln.
+
 ## Was du bekommst
 
 - Durchsuchen-Modus und zeitlich begrenzte Wiederholungssitzungen mit Tageslimits.
 - Profile pro Tag (Standard / Intensives FSRS, Retentionsziel, Tagesquoten).
 - Benutzerdefinierte Stapel aus Filterregeln — z. B. jede Karte mit dem Tag `#gymnasium`.
+- Prüfungsmodus: benotete Prüfungssitzungen mit Multiple-Choice-, Texteingabe- und Lückentextfragen.
 - Statistiken: Heatmap, Retention, Vorhersage zukünftiger Fälligkeiten, Intervalle, stündliche Aufschlüsselung, Antwortschaltflächen-Statistik.
 - Anki-Export, automatische Sicherungen, Multi-Geräte-Merge-Sync.
 - Tastenkürzel: **Leertaste** zum Umdrehen, **1–4** zum Bewerten.

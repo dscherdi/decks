@@ -14,6 +14,7 @@ Aggiungi il tag `#decks` a un file. Ogni intestazione `##` diventa il fronte di 
 
 - **Le tue note sono già il mazzo.** Tagga un file: ogni intestazione al livello che scegli diventa un fronte e il testo sottostante diventa un retro. Se vieni da Anki, non c'è nulla da scrivere due volte.
 - **Quattro formati, nessuna sintassi da imparare.** Intestazioni, tabelle a due colonne, occlusione d'immagine e spazi vuoti `==cloze==` a partire dalle evidenziazioni che già usi.
+- **Modalità esame.** Sessioni d'esame con voto, con domande a scelta multipla, a risposta scritta e cloze.
 - **Pianificazione nativa FSRS.** Tre profili (Standard / Intensivo / Allenato), target di ritenzione per tag, nessun fardello legato a SM-2.
 - **Ottimizzazione dell'algoritmo.** L'ottimizzatore in un clic allena i pesi di FSRS sulla base della tua cronologia di ripasso: una pianificazione migliore per la tua specifica curva dell'oblio, tutto elaborato localmente (client-side).
 - **Vera sincronizzazione multi-dispositivo.** Il database si unisce automaticamente tramite iCloud/Dropbox: ripassa su telefono e desktop, senza perdere lo storico.
@@ -182,6 +183,41 @@ vengono renderizzati in un ambiente isolato, sanificato e consapevole del tema, 
 personalizzati a tutto campo. Le tabelle senza un modello corrispondente usano le colonne normali.
 
 Vedi **[docs/TEMPLATES.md](docs/TEMPLATES.md)** per la guida completa ed esempi.
+
+## Mazzi d'esame
+
+Esegui un mazzo come esame con voto: un insieme di domande estratte a cui rispondere in un'unica sessione,
+in qualsiasi ordine, con un riepilogo dei risultati — e, facoltativamente, un limite di tempo e un punteggio
+di superamento — alla fine. Gli esami si abilitano per profilo e aggiungono un solo formato di scrittura:
+un'intestazione seguita da un elenco di attività diventa una carta a scelta multipla.
+
+```markdown
+## Quale elemento è un gas nobile?
+
+- [ ] Ossigeno
+- [x] Argon
+- [ ] Azoto
+```
+
+`- [x]` contrassegna un'opzione corretta; spuntandone più di una, la domanda diventa a selezione multipla.
+
+- Tagga una nota con il sottotag `exams` del tuo tag dei mazzi (per impostazione predefinita `#decks/exams`)
+  per usare il profilo preinstallato **Exams**, oppure attiva **Exam questions** in qualsiasi profilo.
+- Avvia dal menu del mazzo (**⋮ → Start exam**) o cliccando su un mazzo d'esame; una finestra di
+  configurazione mostra il numero di domande e ti permette di regolare le impostazioni dell'esame.
+- Oltre alla scelta multipla, le carte intestazione-risposta e le righe delle tabelle vengono poste come
+  domande a risposta scritta, e le carte cloze mostrano la frase con le evidenziazioni trasformate in spazi
+  da compilare.
+- Le risposte scritte vengono valutate in modo esatto, con tolleranza per i piccoli errori di battitura o in
+  autovalutazione; i valori predefiniti dell'esame (numero di domande, limite di tempo, punteggio di
+  superamento, mescolamento, momento del feedback, etichette delle opzioni) risiedono nel profilo.
+- Gli esami completati vengono salvati nel database del plugin, si uniscono tra i dispositivi e sono inclusi
+  nei backup.
+
+Un mazzo "Demo exam" che mostra ogni formato di domanda viene creato alla prima installazione (o tramite il
+comando **Create demo exam deck**).
+
+Vedi **[docs/EXAM_DECKS.md](docs/EXAM_DECKS.md)** per le regole di scrittura complete.
 
 ## Pianificazione personalizzata
 
