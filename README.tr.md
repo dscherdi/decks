@@ -191,9 +191,9 @@ bir görev listesi gelen başlık, çoktan seçmeli bir kart olur.
 `- [x]` doğru bir seçeneği işaretler; birden fazlasını işaretlemek soruyu çok seçimli yapar.
 
 - Önceden yüklenmiş **Exams** profilini kullanmak için bir notu deste etiketinizin `exams` alt etiketiyle
-  (varsayılan olarak `#decks/exams`) etiketleyin veya herhangi bir profilde **Exam questions** seçeneğini
+  (varsayılan olarak `#decks/exams`) etiketleyin veya herhangi bir profilde **Sınav soruları** seçeneğini
   açın.
-- Destenin menüsünden (**⋮ → Start exam**) veya bir sınav destesine tıklayarak başlatın; bir kurulum
+- Destenin menüsünden (**⋮ → Sınavı başlat**) veya bir sınav destesine tıklayarak başlatın; bir kurulum
   iletişim kutusu soru sayısını gösterir ve sınav ayarlarını düzenlemenize olanak tanır.
 - Çoktan seçmelinin yanı sıra, başlık-cevap kartları ve tablo satırları yazarak cevaplanan sorular olarak
   sorulur; boşluk doldurma (cloze) kartları ise cümleyi, vurgular yazılan boşluklara dönüşmüş hâlde
@@ -203,7 +203,7 @@ bir görev listesi gelen başlık, çoktan seçmeli bir kart olur.
   zamanı, seçenek etiketleri) profilde tutulur.
 - Tamamlanan sınavlar eklenti veritabanında saklanır, cihazlar arasında birleşir ve yedeklere dahil edilir.
 
-Her soru biçimini gösteren bir "Demo exam" destesi ilk kurulumda (veya **Create demo exam deck** komutuyla)
+Her soru biçimini gösteren bir "Demo sınavı" destesi ilk kurulumda (veya **Demo sınav destesi oluştur** komutuyla)
 oluşturulur.
 
 Tam yazım kuralları için **[docs/EXAM_DECKS.md](docs/EXAM_DECKS.md)** bölümüne bakın.

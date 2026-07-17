@@ -201,8 +201,8 @@ seguido de una lista de tareas se convierte en una tarjeta de opción múltiple.
 `- [x]` marca una opción correcta; marcar varias la convierte en selección múltiple.
 
 - Etiqueta una nota con la subetiqueta `exams` de tu etiqueta de mazo (por defecto `#decks/exams`) para
-  usar el perfil preinstalado **Exams**, o activa **Exam questions** en cualquier perfil.
-- Comienza desde el menú del mazo (**⋮ → Start exam**) o haciendo clic en un mazo de examen; un diálogo de
+  usar el perfil preinstalado **Exams**, o activa **Preguntas de examen** en cualquier perfil.
+- Comienza desde el menú del mazo (**⋮ → Iniciar examen**) o haciendo clic en un mazo de examen; un diálogo de
   configuración muestra el número de preguntas y te permite ajustar la configuración del examen.
 - Además de la opción múltiple, las tarjetas de encabezado y respuesta y las filas de tabla se plantean
   como preguntas de respuesta escrita, y las tarjetas cloze muestran la frase con los resaltados como
@@ -213,8 +213,8 @@ seguido de una lista de tareas se convierte en una tarjeta de opción múltiple.
 - Los exámenes completados se guardan en la base de datos del plugin, se fusionan entre dispositivos y se
   incluyen en las copias de seguridad.
 
-Un mazo «Demo exam» que muestra todos los formatos de pregunta se crea en la primera instalación (o con el
-comando **«Create demo exam deck»**).
+Un mazo «Examen de demostración» que muestra todos los formatos de pregunta se crea en la primera instalación (o con el
+comando **«Crear mazo de examen de demostración»**).
 
 Consulta **[docs/EXAM_DECKS.md](docs/EXAM_DECKS.md)** para las reglas de creación completas.
 

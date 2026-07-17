@@ -201,9 +201,9 @@ hinzu: eine Überschrift gefolgt von einer Aufgabenliste wird zur Multiple-Choic
 `- [x]` markiert eine richtige Option; mehrere Häkchen machen die Frage zur Mehrfachauswahl.
 
 - Versieh eine Notiz mit dem Unter-Tag `exams` deines Stapel-Tags (standardmäßig `#decks/exams`), um das
-  vorinstallierte **Exams**-Profil zu verwenden, oder aktiviere **Exam questions** in einem beliebigen
+  vorinstallierte **Exams**-Profil zu verwenden, oder aktiviere **Prüfungsfragen** in einem beliebigen
   Profil.
-- Starte über das Menü des Stapels (**⋮ → Start exam**) oder per Klick auf einen Prüfungsstapel; ein
+- Starte über das Menü des Stapels (**⋮ → Prüfung starten**) oder per Klick auf einen Prüfungsstapel; ein
   Einrichtungsdialog zeigt die Fragenanzahl und lässt dich die Prüfungseinstellungen anpassen.
 - Neben Multiple-Choice werden Überschrift-Antwort-Karten und Tabellenzeilen als Fragen mit Texteingabe
   gestellt, und Lückentextkarten zeigen den Satz mit den Hervorhebungen als auszufüllende Lücken.
@@ -213,8 +213,8 @@ hinzu: eine Überschrift gefolgt von einer Aufgabenliste wird zur Multiple-Choic
 - Abgeschlossene Prüfungen werden in der Plugin-Datenbank gespeichert, über Geräte hinweg zusammengeführt
   und in Sicherungen einbezogen.
 
-Ein Stapel „Demo exam" mit allen Fragenformaten wird bei der ersten Installation erstellt (oder über den
-Befehl **„Create demo exam deck"**).
+Ein Stapel „Demo-Prüfung" mit allen Fragenformaten wird bei der ersten Installation erstellt (oder über den
+Befehl **„Demo-Prüfungsstapel erstellen"**).
 
 Siehe **[docs/EXAM_DECKS.md](docs/EXAM_DECKS.md)** für die vollständigen Erstellungsregeln.
 

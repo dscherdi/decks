@@ -202,8 +202,8 @@ un'intestazione seguita da un elenco di attività diventa una carta a scelta mul
 `- [x]` contrassegna un'opzione corretta; spuntandone più di una, la domanda diventa a selezione multipla.
 
 - Tagga una nota con il sottotag `exams` del tuo tag dei mazzi (per impostazione predefinita `#decks/exams`)
-  per usare il profilo preinstallato **Exams**, oppure attiva **Exam questions** in qualsiasi profilo.
-- Avvia dal menu del mazzo (**⋮ → Start exam**) o cliccando su un mazzo d'esame; una finestra di
+  per usare il profilo preinstallato **Exams**, oppure attiva **Domande d'esame** in qualsiasi profilo.
+- Avvia dal menu del mazzo (**⋮ → Inizia esame**) o cliccando su un mazzo d'esame; una finestra di
   configurazione mostra il numero di domande e ti permette di regolare le impostazioni dell'esame.
 - Oltre alla scelta multipla, le carte intestazione-risposta e le righe delle tabelle vengono poste come
   domande a risposta scritta, e le carte cloze mostrano la frase con le evidenziazioni trasformate in spazi
@@ -214,8 +214,8 @@ un'intestazione seguita da un elenco di attività diventa una carta a scelta mul
 - Gli esami completati vengono salvati nel database del plugin, si uniscono tra i dispositivi e sono inclusi
   nei backup.
 
-Un mazzo "Demo exam" che mostra ogni formato di domanda viene creato alla prima installazione (o tramite il
-comando **Create demo exam deck**).
+Un mazzo "Esame demo" che mostra ogni formato di domanda viene creato alla prima installazione (o tramite il
+comando **Crea mazzo d'esame demo**).
 
 Vedi **[docs/EXAM_DECKS.md](docs/EXAM_DECKS.md)** per le regole di scrittura complete.
 

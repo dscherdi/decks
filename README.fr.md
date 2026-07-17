@@ -202,8 +202,8 @@ rédaction : un en-tête suivi d'une liste de tâches devient une carte à choix
 `- [x]` marque une option correcte ; en cocher plusieurs rend la question à sélection multiple.
 
 - Ajoutez à une note la sous-balise `exams` de votre balise de paquet (par défaut `#decks/exams`) pour
-  utiliser le profil préinstallé **Exams**, ou activez **Exam questions** dans n'importe quel profil.
-- Démarrez depuis le menu du paquet (**⋮ → Start exam**) ou en cliquant sur un paquet d'examen ; une boîte
+  utiliser le profil préinstallé **Exams**, ou activez **Questions d'examen** dans n'importe quel profil.
+- Démarrez depuis le menu du paquet (**⋮ → Démarrer l'examen**) ou en cliquant sur un paquet d'examen ; une boîte
   de dialogue de configuration affiche le nombre de questions et vous laisse ajuster les paramètres de
   l'examen.
 - Outre le choix multiple, les cartes en-tête + réponse et les lignes de tableau sont posées comme des
@@ -215,8 +215,8 @@ rédaction : un en-tête suivi d'une liste de tâches devient une carte à choix
 - Les examens terminés sont stockés dans la base de données du plugin, fusionnent entre appareils et sont
   inclus dans les sauvegardes.
 
-Un paquet « Demo exam » présentant tous les formats de question est créé à la première installation (ou via
-la commande **« Create demo exam deck »**).
+Un paquet « Examen de démonstration » présentant tous les formats de question est créé à la première installation (ou via
+la commande **« Créer un paquet d'examen de démonstration »**).
 
 Voir **[docs/EXAM_DECKS.md](docs/EXAM_DECKS.md)** pour toutes les règles de rédaction.
 

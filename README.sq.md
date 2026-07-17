@@ -187,13 +187,13 @@ Ekzekuto një pako si një provim me notim: një grup pyetjesh të tërhequra, q
 
 `- [x]` shënon një opsion të saktë; shënimi i disave e bën pyetjen me përzgjedhje të shumëfishtë.
 
-- Etiketo një shënim me nën-etiketën `exams` të etiketës së pakos tënde (e paracaktuar `#decks/exams`) për të përdorur profilin e parainstaluar **Exams**, ose aktivizo **Exam questions** në çdo profil.
-- Fillo nga menyja e pakos (**⋮ → Start exam**) ose duke klikuar një pako provimi; një dialog konfigurimi tregon numrin e pyetjeve dhe të lejon të rregullosh cilësimet e provimit.
+- Etiketo një shënim me nën-etiketën `exams` të etiketës së pakos tënde (e paracaktuar `#decks/exams`) për të përdorur profilin e parainstaluar **Exams**, ose aktivizo **Pyetje provimi** në çdo profil.
+- Fillo nga menyja e pakos (**⋮ → Fillo provimin**) ose duke klikuar një pako provimi; një dialog konfigurimi tregon numrin e pyetjeve dhe të lejon të rregullosh cilësimet e provimit.
 - Përveç zgjedhjes së shumëfishtë, kartat titull-dhe-përgjigje dhe rreshtat e tabelave pyeten si pyetje me përgjigje të shkruar, dhe kartat cloze shfaqin fjalinë me theksimet si vende bosh për t'u plotësuar me shkrim.
 - Përgjigjet e shkruara vlerësohen me saktësi të plotë, me tolerancë ndaj gabimeve të vogla shtypi, ose i vlerëson vetë; parazgjedhjet e provimit (numri i pyetjeve, kufiri kohor, pragu i kalimit, përzierja, momenti i reagimit, etiketat e opsioneve) qëndrojnë te profili.
 - Provimet e përfunduara ruhen në bazën e të dhënave të shtojcës, bashkohen mes pajisjeve dhe përfshihen në kopjet rezervë.
 
-Një pako "Demo exam" që tregon çdo format pyetjeje krijohet në instalimin e parë (ose përmes komandës **Create demo exam deck**).
+Një pako "Provim demo" që tregon çdo format pyetjeje krijohet në instalimin e parë (ose përmes komandës **Krijo pako provimi demo**).
 
 Shih **[docs/EXAM_DECKS.md](docs/EXAM_DECKS.md)** për rregullat e plota të shkrimit.
 
