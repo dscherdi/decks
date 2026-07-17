@@ -1271,26 +1271,34 @@ div.decks-card-content
 .decks-exam-option {
   display: flex;
   align-items: baseline;
-  gap: 8px;
+  justify-content: flex-start;
+  gap: var(--size-4-2);
   text-align: left;
-  padding: 10px 12px;
+  height: auto;
+  padding: var(--size-4-2) var(--size-4-3);
   border: 1px solid var(--background-modifier-border);
-  border-radius: 6px;
-  background: var(--background-primary);
-  cursor: pointer;
+  border-radius: var(--radius-m);
+  background: var(--interactive-normal);
+  color: var(--text-normal);
+  cursor: var(--cursor);
   width: 100%;
+  box-shadow: none;
+}
+.decks-exam-option:hover {
+  background: var(--interactive-hover);
 }
 .decks-exam-option.selected {
   border-color: var(--interactive-accent);
   background: var(--background-modifier-hover);
+  box-shadow: 0 0 0 1px var(--interactive-accent);
 }
 .decks-exam-option.chosen-correct {
   border-color: var(--color-green);
-  background: rgba(0, 160, 60, 0.12);
+  background: rgba(var(--color-green-rgb), 0.15);
 }
 .decks-exam-option.chosen-wrong {
   border-color: var(--color-red);
-  background: rgba(200, 40, 40, 0.12);
+  background: rgba(var(--color-red-rgb), 0.15);
 }
 .decks-exam-option.missed-correct {
   border-color: var(--color-green);

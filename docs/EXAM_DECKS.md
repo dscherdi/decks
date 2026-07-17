@@ -214,8 +214,9 @@ Selections without a profile of their own (custom decks) fall back to global def
 
 A new preinstalled preset **"Exams"** (`profile_exams`), seeded through the existing
 preset mechanism alongside Default, Heading 1–6, and Review notes: heading level 2,
-`clozeEnabled` off, `examEnabled` on — and **new-cards limit enabled with
-`newCardsPerDay: 0`**. No preset tag mappings are seeded today (they depend on the
+`clozeEnabled` on (so cloze fill-in-the-blank questions work out of the box — a body
+that qualifies as a question still beats cloze by parse order), `examEnabled` on —
+and **new-cards limit enabled with `newCardsPerDay: 0`**. No preset tag mappings are seeded today (they depend on the
 user's configured base tag), so the **`<base>/exams`** mapping (e.g. `#decks/exams`)
 is created once at plugin startup behind a settings flag — a user who deletes the
 mapping keeps it gone. Base-tag renames migrate it together with every other

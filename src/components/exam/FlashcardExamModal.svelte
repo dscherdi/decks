@@ -1,5 +1,5 @@
 <script lang="ts">
-  import { onDestroy, onMount, tick } from "svelte";
+  import { onDestroy, onMount } from "svelte";
   import {
     EXAM_TARGET_BLANK,
     I18n,
@@ -84,6 +84,8 @@
     selectedIndices = given?.kind === "options" ? [...given.selected] : [];
     revealed = attempt.isLocked(currentIndex);
     selfPromptVisible = false;
+    // The swapped input remounts with the question ({#key currentIndex}).
+    clozeInputEl = null;
   }
 
   function goTo(i: number): void {
@@ -131,6 +133,7 @@
     if (immediate) {
       attempt.lockAnswer(currentIndex);
       revealed = true;
+      if (clozeInputEl) clozeInputEl.disabled = true;
       answeredFlags = refreshAnsweredFlags();
     } else {
       next();
@@ -142,6 +145,7 @@
     attempt.lockAnswer(currentIndex);
     selfPromptVisible = false;
     revealed = true;
+    if (clozeInputEl) clozeInputEl.disabled = true;
     answeredFlags = refreshAnsweredFlags();
   }
 
@@ -163,19 +167,26 @@
 
   async function requestSubmit(force = false): Promise<void> {
     if (phase !== "question" || submitting) return;
-    const unanswered = attempt.unansweredCount();
-    if (!force && unanswered > 0 && !(await confirmSubmit(unanswered))) return;
     submitting = true;
-    recordScreenTime();
-    stopTimer();
-    finishResult = attempt.finish();
-    phase = "results";
     try {
-      previousAttempts = await onFinished(finishResult);
+      const unanswered = attempt.unansweredCount();
+      if (!force && unanswered > 0 && !(await confirmSubmit(unanswered))) {
+        return;
+      }
+      recordScreenTime();
+      stopTimer();
+      finishResult = attempt.finish();
+      phase = "results";
+      try {
+        previousAttempts = await onFinished(finishResult);
+      } catch (error) {
+        console.error("Persisting exam attempt failed:", error);
+      }
     } catch (error) {
-      console.error("Persisting exam attempt failed:", error);
+      console.error("Submitting exam failed:", error);
+    } finally {
+      submitting = false;
     }
-    submitting = false;
   }
 
   function stopTimer(): void {
@@ -254,13 +265,17 @@
     }
   }
 
-  // Markdown rendering: an action-ish helper — render then swap the cloze
-  // sentinel for the answer input so the target blank IS the input.
-  function renderInto(el: HTMLElement, content: string): void {
+  // Mount-time markdown action: render, then swap the cloze sentinel for
+  // the answer input so the target blank IS the input. Question content is
+  // wrapped in {#key currentIndex}, so every navigation remounts these —
+  // reactive re-render timing (which runs before the DOM patch) never
+  // touches a stale or unmounted element.
+  function renderBlock(el: HTMLElement, content: string): { destroy(): void } {
     el.empty();
     void renderMarkdown(content, el, question?.card.sourceFile ?? "").then(() => {
       swapSentinel(el);
     });
+    return { destroy() {} };
   }
 
   let clozeInputEl: HTMLInputElement | null = null;
@@ -286,46 +301,23 @@
         after.nodeValue = (after.nodeValue ?? "").slice(EXAM_TARGET_BLANK.length);
         node.parentElement.insertBefore(input, after);
         clozeInputEl = input;
+        input.focus();
         return;
       }
       node = walker.nextNode();
     }
   }
 
-  let stemEl: HTMLElement | null = null;
-  let clozeEl: HTMLElement | null = null;
-  const optionEls = new Map<number, HTMLElement>();
-
-  function rerenderQuestion(): void {
-    if (!question) return;
-    if (stemEl) renderInto(stemEl, question.stem);
-    if (clozeEl && question.clozeContext) renderInto(clozeEl, question.clozeContext);
-    for (const [fileIndex, el] of optionEls) {
-      const option = question.options?.[fileIndex];
-      if (option) renderInto(el, option.text);
-    }
-    void tick().then(() => clozeInputEl?.focus());
-  }
-
-  $: if (phase === "question" && question && stemEl) {
-    void currentIndex;
-    rerenderQuestion();
-  }
-
-  function optionEl(el: HTMLElement, fileIndex: number): { destroy(): void } {
-    optionEls.set(fileIndex, el);
-    const option = question.options?.[fileIndex];
-    if (option) renderInto(el, option.text);
-    return {
-      destroy() {
-        if (optionEls.get(fileIndex) === el) optionEls.delete(fileIndex);
-      },
-    };
-  }
-
-  function optionState(fileIndex: number, verdict: ExamQuestionOutcome | null): string {
-    const isSelected = selectedIndices.includes(fileIndex);
-    if (!revealed || !verdict) return isSelected ? "selected" : "";
+  // Selection and reveal state are passed in so the template expression
+  // depends on them — Svelte only invalidates on identifiers it can see.
+  function optionState(
+    fileIndex: number,
+    verdict: ExamQuestionOutcome | null,
+    selected: number[],
+    isRevealed: boolean
+  ): string {
+    const isSelected = selected.includes(fileIndex);
+    if (!isRevealed || !verdict) return isSelected ? "selected" : "";
     const correct = question.options?.[fileIndex]?.correct === true;
     if (isSelected && correct) return "chosen-correct";
     if (isSelected && !correct) return "chosen-wrong";
@@ -384,24 +376,30 @@
         })}
       </div>
 
-      <div class="decks-exam-stem" bind:this={stemEl}></div>
+      {#key currentIndex}
+        <div class="decks-exam-stem markdown-rendered" use:renderBlock={question.stem}></div>
 
-      {#if question.kind === "multiple-choice"}
-        <div class="decks-exam-options">
-          {#each displayOrder as fileIndex, displayPosition (`${currentIndex}:${fileIndex}`)}
-            <button
-              class="decks-exam-option {optionState(fileIndex, outcome)}"
-              disabled={locked && !revealed}
-              on:click={() => toggleOption(fileIndex)}
-            >
-              <span class="decks-exam-option-prefix">{optionPrefix(displayPosition)}</span>
-              <span class="decks-exam-option-text" use:optionEl={fileIndex}></span>
-            </button>
-          {/each}
-        </div>
-      {:else}
-        {#if question.isCloze && question.clozeContext}
-          <div class="decks-exam-cloze" bind:this={clozeEl}></div>
+        {#if question.kind === "multiple-choice"}
+          <div class="decks-exam-options">
+            {#each displayOrder as fileIndex, displayPosition (fileIndex)}
+              <button
+                class="decks-exam-option {optionState(fileIndex, outcome, selectedIndices, revealed)}"
+                disabled={locked && !revealed}
+                on:click={() => toggleOption(fileIndex)}
+              >
+                <span class="decks-exam-option-prefix">{optionPrefix(displayPosition)}</span>
+                <span
+                  class="decks-exam-option-text markdown-rendered"
+                  use:renderBlock={question.options?.[fileIndex]?.text ?? ""}
+                ></span>
+              </button>
+            {/each}
+          </div>
+        {:else if question.isCloze && question.clozeContext}
+          <div
+            class="decks-exam-cloze markdown-rendered"
+            use:renderBlock={question.clozeContext}
+          ></div>
         {:else}
           <input
             class="decks-exam-typed-input"
@@ -412,7 +410,7 @@
             disabled={locked}
           />
         {/if}
-      {/if}
+      {/key}
 
       {#if selfPromptVisible}
         <div class="decks-exam-self-prompt">
@@ -455,7 +453,7 @@
             {t.submitAnswer}
           </button>
         {/if}
-        <button class="decks-exam-submit" on:click={() => void requestSubmit()}>
+        <button class="decks-exam-submit mod-cta" on:click={() => void requestSubmit()}>
           {t.submitExam}
         </button>
         <button on:click={next} disabled={currentIndex === total - 1}>
@@ -548,7 +546,7 @@
       {/if}
 
       <div class="decks-exam-results-actions">
-        <button class="decks-exam-retake" on:click={onRetake}>{t.retake}</button>
+        <button class="decks-exam-retake mod-cta" on:click={onRetake}>{t.retake}</button>
         <button class="decks-exam-close" on:click={onComplete}>{t.close}</button>
       </div>
     </div>
@@ -600,44 +598,11 @@
   .decks-exam-stem {
     font-size: 1.1em;
   }
+  /* Option row visuals live in styles.css (shared with the review modal). */
   .decks-exam-options {
     display: flex;
     flex-direction: column;
-    gap: 0.5rem;
-  }
-  .decks-exam-option {
-    display: flex;
-    align-items: baseline;
-    gap: 0.5rem;
-    text-align: left;
-    padding: 0.6rem 0.8rem;
-    border: 1px solid var(--background-modifier-border);
-    border-radius: 6px;
-    background: var(--background-primary);
-    cursor: pointer;
-  }
-  .decks-exam-option.selected {
-    border-color: var(--interactive-accent);
-    background: var(--background-modifier-hover);
-  }
-  .decks-exam-option.chosen-correct {
-    border-color: var(--color-green);
-    background: rgba(0, 160, 60, 0.12);
-  }
-  .decks-exam-option.chosen-wrong {
-    border-color: var(--color-red);
-    background: rgba(200, 40, 40, 0.12);
-  }
-  .decks-exam-option.missed-correct {
-    border-color: var(--color-green);
-    border-style: dashed;
-  }
-  .decks-exam-option-prefix {
-    font-weight: 600;
-    color: var(--text-muted);
-  }
-  .decks-exam-option-text :global(p) {
-    margin: 0;
+    gap: var(--size-4-2);
   }
   .decks-exam-typed-input {
     width: 100%;
@@ -672,10 +637,6 @@
     justify-content: center;
     align-items: center;
     margin-top: auto;
-  }
-  .decks-exam-submit {
-    background: var(--interactive-accent);
-    color: var(--text-on-accent);
   }
   .decks-exam-navigator {
     display: flex;

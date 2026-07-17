@@ -312,9 +312,15 @@
     }
   }
 
-  function mcqOptionState(fileIndex: number): string {
-    const isSelected = mcqSelected.includes(fileIndex);
-    if (!showAnswer) return isSelected ? "selected" : "";
+  // Selection/reveal passed as params so the template expression depends on
+  // them — Svelte only invalidates on identifiers visible in the template.
+  function mcqOptionState(
+    fileIndex: number,
+    selected: number[],
+    revealed: boolean
+  ): string {
+    const isSelected = selected.includes(fileIndex);
+    if (!revealed) return isSelected ? "selected" : "";
     const correct = mcqOptions[fileIndex]?.correct === true;
     if (isSelected && correct) return "chosen-correct";
     if (isSelected && !correct) return "chosen-wrong";
@@ -1788,7 +1794,7 @@
             {/if}
             {#each mcqDisplayOrder as fileIndex, displayPosition (`${mcqCardId}:${fileIndex}`)}
               <button
-                class="decks-exam-option {mcqOptionState(fileIndex)}"
+                class="decks-exam-option {mcqOptionState(fileIndex, mcqSelected, showAnswer)}"
                 type="button"
                 on:click={() => toggleMcqOption(fileIndex)}
               >

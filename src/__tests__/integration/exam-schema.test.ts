@@ -95,7 +95,7 @@ describe("Exam schema v39", () => {
     expect(preset!.examEnabled).toBe(true);
     expect(preset!.hasNewCardsLimitEnabled).toBe(true);
     expect(preset!.newCardsPerDay).toBe(0);
-    expect(preset!.clozeEnabled).toBe(false);
+    expect(preset!.clozeEnabled).toBe(true);
     expect(preset!.headerLevel).toBe(2);
     expect(preset!.examSettings).toEqual(DEFAULT_EXAM_SETTINGS);
   });

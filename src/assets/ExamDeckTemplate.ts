@@ -1,5 +1,8 @@
 import { I18n } from "@decks/core";
 
+// All prose lives under the H1 (never a card); every H2 is a question. No
+// scaffolding headings between cards — a heading at the parsed level IS a
+// card front, and deeper levels would nest under the preceding question.
 export function getExamDeckContent(deckTag: string): string {
   const examTag = `${deckTag.replace("#", "")}/exams`;
   const t = I18n.t.examDeck;
@@ -15,11 +18,7 @@ ${I18n.format(t.intro, { tag: tagBacktick })}
 
 ${t.formatsHint}
 
----
-
-## ${t.section1}
-
-${t.section1Body}
+${t.outro}
 
 ## ${t.mcq1Front}
 
@@ -30,12 +29,6 @@ ${t.section1Body}
 
 %%${t.mcq1Note}%%
 
----
-
-## ${t.section2}
-
-${t.section2Body}
-
 ## ${t.mcq2Front}
 
 - [x] ${t.mcq2OptA}
@@ -43,29 +36,24 @@ ${t.section2Body}
 - [x] ${t.mcq2OptC}
 - [x] ${t.mcq2OptD}
 
----
-
-## ${t.section3}
-
-${t.section3Body}
-
 ## ${t.tfFront}
 
 - [x] ${t.tfTrue}
 - [ ] ${t.tfFalse}
 
----
-
-## ${t.section4}
-
-${t.section4Body}
-
 ## ${t.saFront}
 
 ${t.saBack}
 
----
+## ${t.tableHeading}
 
-${t.outro}
+| ${t.tColFront} | ${t.tColBack} | ${t.tColNotes} |
+| --- | --- | --- |
+| ${t.tRow1Front} | ${t.tRow1Back} | ${t.tRow1Notes} |
+| ${t.tRow2Front} | ${t.tRow2Back} | ${t.tRow2Notes} |
+
+## ${t.clozeHeading}
+
+${t.clozeBody}
 `;
 }

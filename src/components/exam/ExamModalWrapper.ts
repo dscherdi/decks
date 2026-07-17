@@ -55,20 +55,25 @@ export function confirmDialog(
   message: string
 ): Promise<boolean> {
   return new Promise<boolean>((resolve) => {
-    let confirmed = false;
+    let settled = false;
+    const settle = (value: boolean) => {
+      if (!settled) {
+        settled = true;
+        resolve(value);
+      }
+    };
     const modal = new ConfirmModal(app, {
       title,
       message,
       isDanger: true,
-      onConfirm: () => {
-        confirmed = true;
-        resolve(true);
-      },
+      onConfirm: () => settle(true),
     });
     const originalOnClose = modal.onClose.bind(modal);
     modal.onClose = () => {
       originalOnClose();
-      if (!confirmed) resolve(false);
+      // ConfirmModal closes BEFORE onConfirm fires; defer the cancel
+      // resolution one tick so a confirmation wins the race.
+      window.setTimeout(() => settle(false), 0);
     };
     modal.open();
   });
