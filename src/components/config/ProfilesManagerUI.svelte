@@ -158,7 +158,7 @@
         saving = false;
         return;
       }
-      if (enableNewCardsLimit && (isNaN(newCardsLimit) || newCardsLimit < 1 || newCardsLimit > 9999)) {
+      if (enableNewCardsLimit && (isNaN(newCardsLimit) || newCardsLimit < 0 || newCardsLimit > 9999)) {
         new Notice(p.noticeNewCardsRange);
         saving = false;
         return;
@@ -366,7 +366,9 @@
             .setPlaceholder("20")
             .onChange((value) => {
               const num = parseInt(value);
-              if (!isNaN(num) && num >= 1 && num <= 9999) {
+              // 0 is valid here: with the limit enabled it means "introduce no
+              // new cards" (the Exams preset ships this way).
+              if (!isNaN(num) && num >= 0 && num <= 9999) {
                 newCardsLimit = num;
                 newCardsError = false;
                 text.inputEl.removeClass("decks-input-error");

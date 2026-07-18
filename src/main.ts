@@ -164,6 +164,9 @@ export default class DecksPlugin extends Plugin {
   private deviceLocalState: DeviceLocalState;
   private syncLog: SyncLog;
   private snapshotTimer: number | null = null;
+  // Resolves after the whenReady() post-init chain (incl. the exams tag
+  // mapping) so first-run file creation can sequence behind it.
+  private dbPostInit: Promise<void> = Promise.resolve();
 
   // Coalesce rapid-fire vault `modify` events (Obsidian autosaves every ~1-2s
   // during typing) into one trailing-edge sync per deck after the user pauses.
@@ -237,7 +240,7 @@ export default class DecksPlugin extends Plugin {
       // DB init runs in the background (off the onload critical path). Anything
       // that needs the DB ready is sequenced after whenReady() so onload returns
       // fast and Obsidian startup isn't blocked on loading the .db + SQL.js.
-      void this.db.whenReady().then(async () => {
+      this.dbPostInit = this.db.whenReady().then(async () => {
         if (this.db.migrationNotice) {
           new Notice(this.db.migrationNotice, 15000);
         }
@@ -292,7 +295,8 @@ export default class DecksPlugin extends Plugin {
           }
         }
         void this.getDecksView()?.refresh();
-      }).catch((e) =>
+      });
+      this.dbPostInit = this.dbPostInit.catch((e) =>
         this.logger.error("Post-init startup work failed", e)
       );
 
@@ -680,7 +684,11 @@ export default class DecksPlugin extends Plugin {
       if (!this.settings.hasCreatedExamDeck) {
         this.settings.hasCreatedExamDeck = true;
         await this.saveSettings();
-        this.app.workspace.onLayoutReady(createExamDemoDeck);
+        // The file must not reach the vault before the exams tag mapping
+        // exists, or its first parse resolves to the default profile.
+        this.app.workspace.onLayoutReady(() => {
+          void this.dbPostInit.then(createExamDemoDeck);
+        });
       }
 
       this.addCommand({
