@@ -569,9 +569,15 @@
         .addToggle((toggle) => {
           toggle.setValue(examEnabled).onChange((value) => {
             if (value && selectedProfile) {
+              const toggledProfileId = selectedProfile.id;
               db
-                .countReviewedCardsBecomingQuestions(selectedProfile.id)
+                .countReviewedCardsBecomingQuestions(toggledProfileId)
                 .then((count) => {
+                  // The selection may have moved on while this awaited; applying
+                  // to whatever profile is now open would silently mis-toggle it.
+                  if (selectedProfile?.id !== toggledProfileId) {
+                    return;
+                  }
                   if (
                     count > 0 &&
                     !confirm(
