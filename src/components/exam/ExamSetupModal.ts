@@ -7,6 +7,10 @@ import {
   type ExamSettings,
   type TypedGradingMode,
 } from "@decks/core";
+import {
+  makeModalResponsive,
+  type ResponsiveModalHandle,
+} from "../../utils/responsive-modal";
 
 /**
  * Pre-attempt configuration dialog. Pre-filled from the selection's profile
@@ -15,6 +19,7 @@ import {
  */
 export class ExamSetupModal extends Modal {
   private values: ExamSettings;
+  private responsiveHandle?: ResponsiveModalHandle;
 
   constructor(
     app: App,
@@ -32,6 +37,7 @@ export class ExamSetupModal extends Modal {
     const t = I18n.t.exam;
     const { contentEl } = this;
     contentEl.empty();
+    this.responsiveHandle = makeModalResponsive(this, ["decks-exam-setup-modal"]);
     this.setTitle(`${t.setupTitle} — ${this.deckName}`);
 
     contentEl.createEl("p", {
@@ -144,6 +150,8 @@ export class ExamSetupModal extends Modal {
   }
 
   onClose() {
+    this.responsiveHandle?.dispose();
+    this.responsiveHandle = undefined;
     this.contentEl.empty();
   }
 }

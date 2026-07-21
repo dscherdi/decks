@@ -10,6 +10,7 @@ import type { Flashcard } from "../database/types";
 import AiBatchRefactorModal from "./AiBatchRefactorModal.svelte";
 import { mount, unmount } from "svelte";
 import type { Svelte5MountedComponent } from "../types/svelte-components";
+import { makeModalResponsive, type ResponsiveModalHandle } from "../utils/responsive-modal";
 
 export interface AiBatchRefactorOptions {
   cards: Flashcard[];
@@ -38,7 +39,7 @@ export class AiBatchRefactorModalWrapper extends Modal {
   private onClosed?: () => void;
   private component: Svelte5MountedComponent | null = null;
   private markdownComponents: Component[] = [];
-  private resizeHandler?: () => void;
+  private responsiveHandle?: ResponsiveModalHandle;
 
   constructor(
     app: App,
@@ -66,21 +67,8 @@ export class AiBatchRefactorModalWrapper extends Modal {
     const { contentEl } = this;
     contentEl.empty();
 
-    const modalEl = this.containerEl.querySelector(".modal");
-    if (modalEl instanceof HTMLElement) {
-      modalEl.addClass("decks-modal");
-      modalEl.addClass("decks-ai-batch-modal");
-    }
+    this.responsiveHandle = makeModalResponsive(this, ["decks-ai-batch-modal"]);
     contentEl.addClass("decks-ai-batch-modal-content");
-
-    const applyMobileClass = () => {
-      if (!(modalEl instanceof HTMLElement)) return;
-      if (window.innerWidth <= 768) modalEl.addClass("decks-modal-mobile");
-      else modalEl.removeClass("decks-modal-mobile");
-    };
-    applyMobileClass();
-    window.addEventListener("resize", applyMobileClass);
-    this.resizeHandler = applyMobileClass;
 
     this.component = mount(AiBatchRefactorModal, {
       target: contentEl,
@@ -99,10 +87,8 @@ export class AiBatchRefactorModalWrapper extends Modal {
   }
 
   onClose() {
-    if (this.resizeHandler) {
-      window.removeEventListener("resize", this.resizeHandler);
-      this.resizeHandler = undefined;
-    }
+    this.responsiveHandle?.dispose();
+    this.responsiveHandle = undefined;
     if (this.component) {
       void unmount(this.component);
       this.component = null;

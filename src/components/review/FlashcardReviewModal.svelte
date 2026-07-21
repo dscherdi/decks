@@ -2236,11 +2236,19 @@
     min-height: 0;
   }
 
-  .decks-question-section,
   .decks-answer-section {
     width: 100%;
     display: flex;
     justify-content: center;
+  }
+
+  /* Column so a multiple-choice card's options stack under the front card
+     rather than beside it; single-front cards stay centered. */
+  .decks-question-section {
+    width: 100%;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
   }
 
   /* Markdown / fallback face — shares the physical look of .decks-card-shell so

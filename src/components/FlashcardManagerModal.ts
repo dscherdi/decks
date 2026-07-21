@@ -12,6 +12,7 @@ import type {
 import { mount, unmount } from "svelte";
 import type { Svelte5MountedComponent } from "../types/svelte-components";
 import { I18n } from "@decks/core";
+import { makeModalResponsive, type ResponsiveModalHandle } from "../utils/responsive-modal";
 
 export type FlashcardManagerComponent = Svelte5MountedComponent;
 
@@ -27,7 +28,7 @@ export class FlashcardManagerModal extends Modal {
   private db: IDatabaseService;
   private customDeckService: CustomDeckService;
   private component: FlashcardManagerComponent | null = null;
-  private resizeHandler?: () => void;
+  private responsiveHandle?: ResponsiveModalHandle;
   private editingCustomDeck: EditTarget | null;
   private thresholds: FlashcardManagerThresholds;
   private onDeckListChanged?: () => void | Promise<void>;
@@ -70,16 +71,7 @@ export class FlashcardManagerModal extends Modal {
     const { contentEl } = this;
     contentEl.empty();
 
-    const modalEl = this.containerEl.querySelector(".modal");
-    if (modalEl instanceof HTMLElement) {
-      modalEl.addClass("decks-modal");
-      modalEl.addClass("decks-flashcard-manager-modal");
-      if (window.innerWidth <= 768) {
-        modalEl.addClass("decks-modal-mobile");
-      } else {
-        modalEl.removeClass("decks-modal-mobile");
-      }
-    }
+    this.responsiveHandle = makeModalResponsive(this, ["decks-flashcard-manager-modal"]);
 
     this.component = mount(FlashcardManagerPanel, {
       target: contentEl,
@@ -184,25 +176,11 @@ export class FlashcardManagerModal extends Modal {
         },
       },
     }) as FlashcardManagerComponent;
-
-    const handleResize = () => {
-      if (modalEl instanceof HTMLElement) {
-        if (window.innerWidth <= 768) {
-          modalEl.addClass("decks-modal-mobile");
-        } else {
-          modalEl.removeClass("decks-modal-mobile");
-        }
-      }
-    };
-    window.addEventListener("resize", handleResize);
-    this.resizeHandler = handleResize;
   }
 
   onClose() {
-    if (this.resizeHandler) {
-      window.removeEventListener("resize", this.resizeHandler);
-      this.resizeHandler = undefined;
-    }
+    this.responsiveHandle?.dispose();
+    this.responsiveHandle = undefined;
 
     if (this.component) {
       void unmount(this.component);

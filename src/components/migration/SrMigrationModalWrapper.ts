@@ -4,12 +4,11 @@ import SrMigrationUI from "./SrMigrationUI.svelte";
 import type { SrMigrationComponent } from "../../types/svelte-components";
 import type { SrMigrationController } from "@/services/SrMigrationController";
 import type { IDatabaseService } from "@/database/DatabaseFactory";
-
-const MOBILE_BREAKPOINT = 768;
+import { makeModalResponsive, type ResponsiveModalHandle } from "../../utils/responsive-modal";
 
 export class SrMigrationModalWrapper extends Modal {
   private component: SrMigrationComponent | null = null;
-  private resizeHandler?: () => void;
+  private responsiveHandle?: ResponsiveModalHandle;
 
   constructor(
     app: App,
@@ -24,7 +23,7 @@ export class SrMigrationModalWrapper extends Modal {
     const { contentEl } = this;
     contentEl.empty();
 
-    this.applyResponsiveClasses();
+    this.responsiveHandle = makeModalResponsive(this);
     contentEl.addClass("decks-sr-migration-container");
 
     this.component = mount(SrMigrationUI, {
@@ -38,28 +37,11 @@ export class SrMigrationModalWrapper extends Modal {
         oncancel: () => this.close(),
       },
     }) as SrMigrationComponent;
-
-    this.resizeHandler = () => this.applyResponsiveClasses();
-    window.addEventListener("resize", this.resizeHandler);
-  }
-
-  private applyResponsiveClasses(): void {
-    const modalEl = this.containerEl.querySelector(".modal");
-    if (modalEl instanceof HTMLElement) {
-      modalEl.addClass("decks-modal");
-      if (window.innerWidth <= MOBILE_BREAKPOINT) {
-        modalEl.addClass("decks-modal-mobile");
-      } else {
-        modalEl.removeClass("decks-modal-mobile");
-      }
-    }
   }
 
   onClose() {
-    if (this.resizeHandler) {
-      window.removeEventListener("resize", this.resizeHandler);
-      this.resizeHandler = undefined;
-    }
+    this.responsiveHandle?.dispose();
+    this.responsiveHandle = undefined;
     if (this.component) {
       void unmount(this.component);
       this.component = null;

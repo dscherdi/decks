@@ -10,7 +10,7 @@ import type {
 import { DeckSynchronizer } from "@/services/DeckSynchronizer";
 import { DeckManager } from "@/services/DeckManager";
 import type { DecksSettings } from "@/settings";
-import { I18n, yieldToUI } from "@decks/core";
+import { I18n, yieldToUI, ExamAttempt, type DeckProfile } from "@decks/core";
 import { Logger } from "@/utils/logging";
 import { Modal, Notice, WorkspaceLeaf } from "obsidian";
 import type { App } from "obsidian";
@@ -20,6 +20,9 @@ import {
   FlashcardReviewView,
   VIEW_TYPE_FLASHCARD_REVIEW,
 } from "./review/FlashcardReviewView";
+import { launchExamForSelection } from "./exam/launchExam";
+import { ExamModalWrapper } from "./exam/ExamModalWrapper";
+import { ExamView, VIEW_TYPE_FLASHCARD_EXAM } from "./exam/ExamView";
 import { StatisticsModal } from "./settings/StatisticsModal";
 import { ProfilesManagerModal } from "./config/ProfilesManagerModal";
 import { DeckConfigModal } from "./config/DeckConfigModal";
@@ -35,6 +38,7 @@ import type { DeckListPanelComponent } from "../types/svelte-components";
 import type { IDatabaseService } from "../database/DatabaseFactory";
 import type { DecksView } from "./DecksView";
 import type { DeckListSortMode } from "@/settings";
+import { makeModalResponsive, type ResponsiveModalHandle } from "../utils/responsive-modal";
 
 export class DecksViewModal extends Modal {
   private db: IDatabaseService;
@@ -47,7 +51,7 @@ export class DecksViewModal extends Modal {
   private settings: DecksSettings;
   private logger: Logger;
   private deckListPanelComponent: DeckListPanelComponent | null = null;
-  private resizeHandler?: () => void;
+  private responsiveHandle?: ResponsiveModalHandle;
   private getDecksView: () => DecksView | null;
   private saveSettings: () => Promise<void>;
   private openEditModal?: (card: Flashcard) => Promise<void>;
@@ -113,17 +117,22 @@ export class DecksViewModal extends Modal {
     const { contentEl } = this;
     contentEl.empty();
 
-    const modalEl = this.containerEl.querySelector(".modal");
-    if (modalEl instanceof HTMLElement) {
-      modalEl.addClass("decks-modal");
-      if (window.innerWidth <= 768) {
-        modalEl.addClass("decks-modal-mobile");
-      } else {
-        modalEl.removeClass("decks-modal-mobile");
-      }
-    }
+    this.responsiveHandle = makeModalResponsive(this);
 
     contentEl.addClass("decks-decks-view-container");
+
+    void this.mountPanel(contentEl);
+  }
+
+  // Mount is async (onOpen must not be) so we can resolve exam capability
+  // before the panel renders, matching the leaf view.
+  private async mountPanel(contentEl: HTMLElement): Promise<void> {
+    let examCapable = false;
+    try {
+      examCapable = (await this.db.getExamEnabledDeckIds()).length > 0;
+    } catch (error) {
+      this.logger.debug("exam capability check failed", error);
+    }
 
     this.deckListPanelComponent = mount(DeckListPanel, {
       target: contentEl,
@@ -134,10 +143,24 @@ export class DecksViewModal extends Modal {
         tagGroupService: this.tagGroupService,
         app: this.app,
         onDeckClick: (deck: DeckWithProfile) => {
-          void this.startReview(deck);
+          if (deck.profile.examEnabled) {
+            void this.startExamForSelection(
+              { ...deck, type: "file" },
+              deck.profile
+            );
+          } else {
+            void this.startReview(deck);
+          }
         },
         onDeckGroupClick: (deckGroup: DeckGroup) => {
-          void this.startReviewForDeckGroup(deckGroup);
+          if (deckGroup.profile?.examEnabled) {
+            void this.startExamForSelection(
+              deckGroup,
+              deckGroup.profile ?? null
+            );
+          } else {
+            void this.startReviewForDeckGroup(deckGroup);
+          }
         },
         onBrowseDeck: (deck: DeckWithProfile) => {
           void this.startBrowse(deck);
@@ -154,6 +177,22 @@ export class DecksViewModal extends Modal {
         onEditCustomDeck: (customDeck: CustomDeckGroup) => {
           this.openEditCustomDeck(customDeck);
         },
+        onExamDeck: (deck: DeckWithProfile) =>
+          void this.startExamForSelection(
+            { ...deck, type: "file" },
+            deck.profile
+          ),
+        onExamDeckGroup: (deckGroup: DeckGroup) =>
+          void this.startExamForSelection(
+            deckGroup,
+            deckGroup.profile ?? null
+          ),
+        onExamCustomDeck: (customDeck: CustomDeckGroup) =>
+          void this.startExamForSelection(customDeck, null),
+        onReviewDeck: (deck: DeckWithProfile) => void this.startReview(deck),
+        onReviewDeckGroup: (deckGroup: DeckGroup) =>
+          void this.startReviewForDeckGroup(deckGroup),
+        examCapable,
         customDeckService: this.customDeckService,
         onRefresh: () => this.refresh(),
         openStatisticsModal: () => this.openStatisticsModal(),
@@ -175,26 +214,11 @@ export class DecksViewModal extends Modal {
     }) as DeckListPanelComponent;
 
     void this.refresh();
-
-    const handleResize = () => {
-      const el = this.containerEl.querySelector(".modal");
-      if (el instanceof HTMLElement) {
-        if (window.innerWidth <= 768) {
-          el.addClass("decks-modal-mobile");
-        } else {
-          el.removeClass("decks-modal-mobile");
-        }
-      }
-    };
-    window.addEventListener("resize", handleResize);
-    this.resizeHandler = handleResize;
   }
 
   onClose() {
-    if (this.resizeHandler) {
-      window.removeEventListener("resize", this.resizeHandler);
-      this.resizeHandler = undefined;
-    }
+    this.responsiveHandle?.dispose();
+    this.responsiveHandle = undefined;
 
     if (this.deckListPanelComponent) {
       void unmount(this.deckListPanelComponent);
@@ -527,6 +551,88 @@ export class DecksViewModal extends Modal {
             this.refreshDecksAndStats.bind(this),
             this.refreshStatsById.bind(this),
             this.deckSynchronizer
+          );
+        }
+        void workspace.revealLeaf(leaf);
+      })
+      .catch(console.error);
+  }
+
+  async startExamForSelection(
+    selection: DeckOrGroup,
+    profile: DeckProfile | null
+  ): Promise<void> {
+    await launchExamForSelection(
+      { app: this.app, db: this.db, settings: this.settings },
+      selection,
+      profile,
+      (s) => this.gatherSelectionCards(s),
+      (attempt, deckName, onRetake) =>
+        this.openExamSession(attempt, deckName, onRetake)
+    );
+  }
+
+  private async gatherSelectionCards(
+    selection: DeckOrGroup
+  ): Promise<Flashcard[]> {
+    if (selection.type === "file") {
+      await this.deckSynchronizer.syncDeck(selection.id);
+      await yieldToUI();
+      return this.db.getFlashcardsByDeck(selection.id);
+    }
+    if (selection.type === "custom") {
+      return this.db.getFlashcardsForCustomDeck(selection.id);
+    }
+    const allCards: Flashcard[] = [];
+    for (const deckId of selection.deckIds) {
+      await this.deckSynchronizer.syncDeck(deckId);
+      await yieldToUI();
+      allCards.push(...(await this.db.getFlashcardsByDeck(deckId)));
+    }
+    return allCards;
+  }
+
+  private openExamSession(
+    attempt: ExamAttempt,
+    deckName: string,
+    onRetake: () => void
+  ): void {
+    if (this.settings.ui.reviewDisplayMode === "tab") {
+      this.close();
+      this.openExamInTab(attempt, deckName, onRetake);
+    } else {
+      const examModal = new ExamModalWrapper(
+        this.app,
+        attempt,
+        deckName,
+        this.db,
+        onRetake,
+        this.refreshDecksAndStats.bind(this)
+      );
+      this.openWithReturn(examModal);
+    }
+  }
+
+  private openExamInTab(
+    attempt: ExamAttempt,
+    deckName: string,
+    onRetake: () => void
+  ): void {
+    const { workspace } = this.app;
+    const existingLeaves = workspace.getLeavesOfType(VIEW_TYPE_FLASHCARD_EXAM);
+    const leaf: WorkspaceLeaf =
+      existingLeaves.length > 0 ? existingLeaves[0] : workspace.getLeaf("tab");
+
+    void leaf
+      .setViewState({ type: VIEW_TYPE_FLASHCARD_EXAM, active: true })
+      .then(() => {
+        const view = leaf.view;
+        if (view instanceof ExamView) {
+          view.setExamData(
+            attempt,
+            deckName,
+            onRetake,
+            this.refreshDecksAndStats.bind(this)
           );
         }
         void workspace.revealLeaf(leaf);

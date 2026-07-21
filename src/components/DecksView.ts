@@ -12,15 +12,8 @@ import {
   FlashcardReviewView,
   VIEW_TYPE_FLASHCARD_REVIEW,
 } from "./review/FlashcardReviewView";
-import {
-  ExamAttempt,
-  buildExamPool,
-  drawExamQuestions,
-  type DeckProfile,
-  type ExamDeckKind,
-  type ExamSettings,
-} from "@decks/core";
-import { ExamSetupModal } from "./exam/ExamSetupModal";
+import { ExamAttempt, type DeckProfile } from "@decks/core";
+import { launchExamForSelection } from "./exam/launchExam";
 import { ExamModalWrapper } from "./exam/ExamModalWrapper";
 import { ExamView, VIEW_TYPE_FLASHCARD_EXAM } from "./exam/ExamView";
 import { StatisticsModal } from "./settings/StatisticsModal";
@@ -1017,78 +1010,14 @@ export class DecksView extends ItemView {
     selection: DeckOrGroup,
     profile: DeckProfile | null
   ): Promise<void> {
-    try {
-      const cards = await this.gatherSelectionCards(selection);
-      const examDeckIds = new Set(await this.db.getExamEnabledDeckIds());
-      const examEnabledByDeckId = new Map<string, boolean>();
-      for (const card of cards) {
-        examEnabledByDeckId.set(card.deckId, examDeckIds.has(card.deckId));
-      }
-      const initial: ExamSettings = profile?.examSettings ?? this.settings.exam;
-      const showClozeContext = (profile?.clozeShowContext ?? "open") === "open";
-
-      const pool = buildExamPool(
-        cards,
-        examEnabledByDeckId,
-        initial.typedGrading,
-        showClozeContext
-      );
-      if (pool.eligible.length === 0) {
-        if (this.settings?.ui?.enableNotices !== false) {
-          new Notice(I18n.t.exam.noQuestions);
-        }
-        return;
-      }
-
-      new ExamSetupModal(
-        this.app,
-        selection.name,
-        pool.eligible.length,
-        pool.skipped.length,
-        initial,
-        (finalSettings) => {
-          // The string-grading ceiling affects eligibility, so re-pool when
-          // the grading mode was changed in the dialog.
-          const finalPool =
-            finalSettings.typedGrading === initial.typedGrading
-              ? pool
-              : buildExamPool(
-                  cards,
-                  examEnabledByDeckId,
-                  finalSettings.typedGrading,
-                  showClozeContext
-                );
-          if (finalPool.eligible.length === 0) {
-            new Notice(I18n.t.exam.noQuestions);
-            return;
-          }
-          const deckKey =
-            selection.type === "file" || selection.type === "custom"
-              ? selection.id
-              : selection.tag;
-          const deckKind: ExamDeckKind =
-            selection.type === "file"
-              ? "file"
-              : selection.type === "custom"
-                ? "custom"
-                : "group";
-          const attempt = new ExamAttempt({
-            questions: drawExamQuestions(finalPool.eligible, finalSettings),
-            settings: finalSettings,
-            deckKey,
-            deckKind,
-          });
-          this.openExamSession(attempt, selection.name, () =>
-            void this.startExamForSelection(selection, profile)
-          );
-        }
-      ).open();
-    } catch (error) {
-      console.error("Error starting exam:", error);
-      if (this.settings?.ui?.enableNotices !== false) {
-        new Notice(I18n.t.exam.noQuestions);
-      }
-    }
+    await launchExamForSelection(
+      { app: this.app, db: this.db, settings: this.settings },
+      selection,
+      profile,
+      (s) => this.gatherSelectionCards(s),
+      (attempt, deckName, onRetake) =>
+        this.openExamSession(attempt, deckName, onRetake)
+    );
   }
 
   private openExamSession(

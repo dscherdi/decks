@@ -4,6 +4,7 @@ import type { IDatabaseService } from "../../database/DatabaseFactory";
 import type { DeckConfigComponent } from "../../types/svelte-components";
 import DeckConfigUI from "./DeckConfigUI.svelte";
 import { mount, unmount } from "svelte";
+import { makeModalResponsive, type ResponsiveModalHandle } from "../../utils/responsive-modal";
 
 export class DeckConfigModal extends Modal {
   private deck: Deck;
@@ -11,7 +12,7 @@ export class DeckConfigModal extends Modal {
   private onRefreshDecksAndStats: () => Promise<void>;
   private profiles: DeckProfile[] = [];
   private component: DeckConfigComponent | null = null;
-  private resizeHandler?: () => void;
+  private responsiveHandle?: ResponsiveModalHandle;
 
   constructor(
     app: App,
@@ -29,16 +30,7 @@ export class DeckConfigModal extends Modal {
     const { contentEl } = this;
     contentEl.empty();
 
-    // Add mobile-specific classes
-    const modalEl = this.containerEl.querySelector(".modal");
-    if (modalEl instanceof HTMLElement) {
-      modalEl.addClass("decks-modal");
-      if (window.innerWidth <= 768) {
-        modalEl.addClass("decks-modal-mobile");
-      } else {
-        modalEl.removeClass("decks-modal-mobile");
-      }
-    }
+    this.responsiveHandle = makeModalResponsive(this);
 
     // Modal title
     contentEl.addClass("decks-deck-config-container");
@@ -65,21 +57,6 @@ export class DeckConfigModal extends Modal {
         },
       },
     }) as DeckConfigComponent;
-
-    // Handle window resize for mobile adaptation
-    const handleResize = () => {
-      const modalEl = this.containerEl.querySelector(".modal");
-      if (modalEl instanceof HTMLElement) {
-        if (window.innerWidth <= 768) {
-          modalEl.addClass("decks-modal-mobile");
-        } else {
-          modalEl.removeClass("decks-modal-mobile");
-        }
-      }
-    };
-
-    window.addEventListener("resize", handleResize);
-    this.resizeHandler = handleResize;
   }
 
   private async handleSave(data: {
@@ -106,11 +83,8 @@ export class DeckConfigModal extends Modal {
   onClose() {
     const { contentEl } = this;
 
-    // Clean up resize handler
-    if (this.resizeHandler) {
-      window.removeEventListener("resize", this.resizeHandler);
-      this.resizeHandler = undefined;
-    }
+    this.responsiveHandle?.dispose();
+    this.responsiveHandle = undefined;
 
     // Unmount Svelte component using Svelte 5 API
     if (this.component) {

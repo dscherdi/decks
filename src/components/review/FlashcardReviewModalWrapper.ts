@@ -20,6 +20,7 @@ import { wireInternalLinks } from "../../utils/internal-links";
 import { I18n } from "@decks/core";
 import { ConfirmModal } from "../ConfirmModal";
 import { AnchorStamper } from "../../services/AnchorStamper";
+import { makeModalResponsive, type ResponsiveModalHandle } from "../../utils/responsive-modal";
 
 export class FlashcardReviewModalWrapper extends Modal {
   private deckOrGroup: DeckOrGroup;
@@ -35,7 +36,7 @@ export class FlashcardReviewModalWrapper extends Modal {
   private cramMode: boolean;
   private component: FlashcardReviewComponent | null = null;
   private markdownComponents: Component[] = [];
-  private resizeHandler?: () => void;
+  private responsiveHandle?: ResponsiveModalHandle;
   public navigatedToSource = false;
   // Per-card template resolver, built from a cache loaded once before mount.
   private resolveTemplate: (card: Flashcard) => ResolvedRender | null = () => null;
@@ -181,17 +182,7 @@ export class FlashcardReviewModalWrapper extends Modal {
     const { contentEl } = this;
     contentEl.empty();
 
-    // Add mobile-specific classes
-    const modalEl = this.containerEl.querySelector(".modal");
-    if (modalEl instanceof HTMLElement) {
-      modalEl.addClass("decks-modal");
-
-      if (window.innerWidth <= 768) {
-        modalEl.addClass("decks-modal-mobile");
-      } else {
-        modalEl.removeClass("decks-modal-mobile");
-      }
-    }
+    this.responsiveHandle = makeModalResponsive(this);
 
     contentEl.addClass("decks-review-modal-container");
 
@@ -261,31 +252,13 @@ export class FlashcardReviewModalWrapper extends Modal {
         ) => this.handleCardStateAction(card, action),
       },
     }) as FlashcardReviewComponent;
-
-    // Handle window resize for mobile adaptation
-    const handleResize = () => {
-      const modalEl = this.containerEl.querySelector(".modal");
-      if (modalEl instanceof HTMLElement) {
-        if (window.innerWidth <= 768) {
-          modalEl.addClass("decks-modal-mobile");
-        } else {
-          modalEl.removeClass("decks-modal-mobile");
-        }
-      }
-    };
-
-    window.addEventListener("resize", handleResize);
-    this.resizeHandler = handleResize;
   }
 
   onClose() {
     this.deckSynchronizer.isReviewing = false;
 
-    // Clean up resize handler
-    if (this.resizeHandler) {
-      window.removeEventListener("resize", this.resizeHandler);
-      this.resizeHandler = undefined;
-    }
+    this.responsiveHandle?.dispose();
+    this.responsiveHandle = undefined;
 
     if (this.component) {
       // Svelte 5: explicitly unmount to trigger onDestroy and cleanup listeners

@@ -1,9 +1,11 @@
 import { Modal, App, MarkdownRenderer, Component } from "obsidian";
 import RELEASE_NOTES_DATA from "../assets/ReleaseNotesData";
 import { I18n } from "@decks/core";
+import { makeModalResponsive, type ResponsiveModalHandle } from "../utils/responsive-modal";
 
 export class ReleaseNotesModal extends Modal {
   private markdownComponents: Component[] = [];
+  private responsiveHandle?: ResponsiveModalHandle;
 
   constructor(app: App) {
     super(app);
@@ -15,11 +17,7 @@ export class ReleaseNotesModal extends Modal {
 
     this.setTitle(I18n.t.modals.releaseNotes.title);
 
-    const modalEl = this.containerEl.querySelector(".modal");
-    if (modalEl instanceof HTMLElement) {
-      modalEl.addClass("decks-modal");
-      modalEl.addClass("decks-release-notes-modal");
-    }
+    this.responsiveHandle = makeModalResponsive(this, ["decks-release-notes-modal"]);
 
     contentEl.addClass("decks-release-notes-content");
 
@@ -36,6 +34,8 @@ export class ReleaseNotesModal extends Modal {
   }
 
   onClose() {
+    this.responsiveHandle?.dispose();
+    this.responsiveHandle = undefined;
     this.markdownComponents.forEach((c) => c.unload());
     this.markdownComponents = [];
     this.contentEl.empty();

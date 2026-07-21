@@ -12,6 +12,7 @@ import { mount, unmount } from "svelte";
 import type { Svelte5MountedComponent } from "../types/svelte-components";
 import OcclusionStudioModal from "./OcclusionStudioModal.svelte";
 import { replaceOcclusionBlock } from "../utils/occlusion-codeblock";
+import { makeModalResponsive, type ResponsiveModalHandle } from "../utils/responsive-modal";
 
 export interface OcclusionStudioOptions {
   /** The note that contains the codeblock being edited. */
@@ -32,7 +33,7 @@ export class OcclusionStudioModalWrapper extends Modal {
   private options: OcclusionStudioOptions;
   private component: Svelte5MountedComponent | null = null;
   private markdownComponents: Component[] = [];
-  private resizeHandler?: () => void;
+  private responsiveHandle?: ResponsiveModalHandle;
 
   constructor(app: App, options: OcclusionStudioOptions) {
     super(app);
@@ -102,20 +103,7 @@ export class OcclusionStudioModalWrapper extends Modal {
     const { contentEl } = this;
     contentEl.empty();
 
-    const modalEl = this.containerEl.querySelector(".modal");
-    if (modalEl instanceof HTMLElement) {
-      modalEl.addClass("decks-modal");
-      modalEl.addClass("decks-occlusion-studio-modal");
-    }
-
-    const applyMobileClass = () => {
-      if (!(modalEl instanceof HTMLElement)) return;
-      if (window.innerWidth <= 768) modalEl.addClass("decks-modal-mobile");
-      else modalEl.removeClass("decks-modal-mobile");
-    };
-    applyMobileClass();
-    window.addEventListener("resize", applyMobileClass);
-    this.resizeHandler = applyMobileClass;
+    this.responsiveHandle = makeModalResponsive(this, ["decks-occlusion-studio-modal"]);
 
     const linkpath = occlusionImageLinkpath(this.options.doc.image);
     this.component = mount(OcclusionStudioModal, {
@@ -132,10 +120,8 @@ export class OcclusionStudioModalWrapper extends Modal {
   }
 
   onClose() {
-    if (this.resizeHandler) {
-      window.removeEventListener("resize", this.resizeHandler);
-      this.resizeHandler = undefined;
-    }
+    this.responsiveHandle?.dispose();
+    this.responsiveHandle = undefined;
     if (this.component) {
       void unmount(this.component);
       this.component = null;

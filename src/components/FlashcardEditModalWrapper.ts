@@ -10,6 +10,7 @@ import type { FlashcardEdits, EditResult } from "../services/FlashcardWriter";
 import FlashcardEditModal from "./FlashcardEditModal.svelte";
 import { mount, unmount } from "svelte";
 import type { Svelte5MountedComponent } from "../types/svelte-components";
+import { makeModalResponsive, type ResponsiveModalHandle } from "../utils/responsive-modal";
 
 /** Per-refactor options resolved by the AI drawer (context already built). */
 export interface RefactorUiOptions {
@@ -39,7 +40,7 @@ export class FlashcardEditModalWrapper extends Modal {
   private templateColumns: { headers: string[]; cells: string[] } | null;
   private component: Svelte5MountedComponent | null = null;
   private markdownComponents: Component[] = [];
-  private resizeHandler?: () => void;
+  private responsiveHandle?: ResponsiveModalHandle;
 
   constructor(
     app: App,
@@ -79,24 +80,8 @@ export class FlashcardEditModalWrapper extends Modal {
     const { contentEl } = this;
     contentEl.empty();
 
-    const modalEl = this.containerEl.querySelector(".modal");
-    if (modalEl instanceof HTMLElement) {
-      modalEl.addClass("decks-modal");
-      modalEl.addClass("decks-flashcard-edit-modal");
-    }
+    this.responsiveHandle = makeModalResponsive(this, ["decks-flashcard-edit-modal"]);
     contentEl.addClass("decks-flashcard-edit-modal-content");
-
-    const applyMobileClass = () => {
-      if (!(modalEl instanceof HTMLElement)) return;
-      if (window.innerWidth <= 768) {
-        modalEl.addClass("decks-modal-mobile");
-      } else {
-        modalEl.removeClass("decks-modal-mobile");
-      }
-    };
-    applyMobileClass();
-    window.addEventListener("resize", applyMobileClass);
-    this.resizeHandler = applyMobileClass;
 
     this.component = mount(FlashcardEditModal, {
       target: contentEl,
@@ -117,10 +102,8 @@ export class FlashcardEditModalWrapper extends Modal {
   }
 
   onClose() {
-    if (this.resizeHandler) {
-      window.removeEventListener("resize", this.resizeHandler);
-      this.resizeHandler = undefined;
-    }
+    this.responsiveHandle?.dispose();
+    this.responsiveHandle = undefined;
     if (this.component) {
       void unmount(this.component);
       this.component = null;

@@ -5,6 +5,10 @@ import type { IDatabaseService } from "../../database/DatabaseFactory";
 import { AnchorStamper } from "../../services/AnchorStamper";
 import { ConfirmModal } from "../ConfirmModal";
 import { wireInternalLinks } from "../../utils/internal-links";
+import {
+  makeModalResponsive,
+  type ResponsiveModalHandle,
+} from "../../utils/responsive-modal";
 import FlashcardExamModal from "./FlashcardExamModal.svelte";
 
 type ExamComponent = ReturnType<typeof mount>;
@@ -82,6 +86,7 @@ export function confirmDialog(
 export class ExamModalWrapper extends Modal {
   private component: ExamComponent | null = null;
   private markdownComponents: Component[] = [];
+  private responsiveHandle?: ResponsiveModalHandle;
 
   constructor(
     app: App,
@@ -114,11 +119,7 @@ export class ExamModalWrapper extends Modal {
   onOpen() {
     const { contentEl } = this;
     contentEl.empty();
-    const modalEl = this.containerEl.querySelector(".modal");
-    if (modalEl instanceof HTMLElement) {
-      modalEl.addClass("decks-modal");
-      modalEl.addClass("decks-exam-modal");
-    }
+    this.responsiveHandle = makeModalResponsive(this, ["decks-exam-modal"]);
     contentEl.addClass("decks-exam-container");
 
     const t = I18n.t.exam;
@@ -153,6 +154,8 @@ export class ExamModalWrapper extends Modal {
   }
 
   onClose() {
+    this.responsiveHandle?.dispose();
+    this.responsiveHandle = undefined;
     if (this.component) {
       try {
         void unmount(this.component);

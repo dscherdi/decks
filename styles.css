@@ -1267,6 +1267,8 @@ div.decks-card-content
   flex-direction: column;
   gap: 8px;
   margin-top: 12px;
+  width: 100%;
+  max-width: 900px;
 }
 .decks-exam-option {
   display: flex;
@@ -1303,6 +1305,7 @@ div.decks-card-content
 .decks-exam-option.missed-correct {
   border-color: var(--color-green);
   border-style: dashed;
+  background: rgba(var(--color-green-rgb), 0.15);
 }
 .decks-exam-option-prefix {
   font-weight: 600;
@@ -1323,6 +1326,12 @@ div.decks-card-content
 .decks-exam-modal .modal-content,
 .decks-exam-container {
   height: 100%;
+}
+/* The setup dialog is a plain settings form, not a filled flex layout, so
+   restore padding/scroll that the shared .decks-modal content reset removes. */
+.decks-exam-setup-modal > .modal-content {
+  padding: var(--size-4-4);
+  overflow-y: auto;
 }
 .decks-exam-tab-container {
   padding: 0;

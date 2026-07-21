@@ -64,6 +64,7 @@ npm run check
   - When Logger is not available, only use `console.debug()`, `console.warn()`, and `console.error()`
   - Never use `console.log()` or `console.info()` - they are not allowed by Obsidian plugin store linter
 - **Async Modal methods**: Modal and ItemView lifecycle methods (`onOpen()`, `onClose()`) must NOT be async. Wrap async operations in separate methods called from lifecycle methods with `.catch(console.error)`.
+- **Responsive modals**: Every Decks `Modal` subclass must call `makeModalResponsive(this, [extraModalClasses])` (from `src/utils/responsive-modal.ts`) in `onOpen`, store the returned handle, and call `handle.dispose()` in `onClose`. This is the single source of truth for the `decks-modal` sizing class, the `decks-modal-mobile` full-screen breakpoint (≤768px), and the resize listener. Never hand-roll the `querySelector(".modal")` + `innerWidth`/`addClass("decks-modal"/"decks-modal-mobile")` logic in a modal.
 - **DOM manipulation**: Never use `innerHTML` or `outerHTML`. Use Obsidian's `createEl()`, `createDiv()`, `appendText()`, etc.
 - **Style properties**: Never set `element.style.*` directly. Use CSS classes with `decks-` prefix and `addClass()`/`removeClass()`, or use `element.setCssProps()` for dynamic positioning.
 - **UI headings**: Use `new Setting(containerEl).setName("...").setHeading()` instead of `containerEl.createEl("h2"|"h3", ...)`.
