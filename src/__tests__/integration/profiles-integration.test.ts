@@ -92,6 +92,66 @@ describe("Profiles Integration Tests", () => {
       expect(updated?.reviewOrder).toBe("due-date");
     });
 
+    it("should round-trip and update TTS voice settings", async () => {
+      const profile: Omit<DeckProfile, "created" | "modified"> = {
+        id: "profile_tts",
+        name: "TTS Profile",
+        hasNewCardsLimitEnabled: false,
+        newCardsPerDay: 20,
+        hasReviewCardsLimitEnabled: false,
+        reviewCardsPerDay: 100,
+        headerLevel: 2,
+        reviewOrder: "due-date",
+        fsrs: { requestRetention: 0.9, profile: "STANDARD" },
+        ttsVoice: "com.apple.voice.Anna",
+        ttsRate: 1.3,
+        ttsLang: "de-DE",
+        isDefault: false,
+      };
+
+      await db.createProfile(profile);
+      await db.save();
+
+      const created = await db.getProfileById("profile_tts");
+      expect(created?.ttsVoice).toBe("com.apple.voice.Anna");
+      expect(created?.ttsRate).toBe(1.3);
+      expect(created?.ttsLang).toBe("de-DE");
+
+      await db.updateProfile("profile_tts", {
+        ttsVoice: "com.apple.voice.Otto",
+        ttsRate: 0.8,
+        ttsLang: "en-US",
+      });
+      await db.save();
+
+      const updated = await db.getProfileById("profile_tts");
+      expect(updated?.ttsVoice).toBe("com.apple.voice.Otto");
+      expect(updated?.ttsRate).toBe(0.8);
+      expect(updated?.ttsLang).toBe("en-US");
+    });
+
+    it("leaves TTS fields undefined when unset", async () => {
+      const profile: Omit<DeckProfile, "created" | "modified"> = {
+        id: "profile_no_tts",
+        name: "No TTS",
+        hasNewCardsLimitEnabled: false,
+        newCardsPerDay: 20,
+        hasReviewCardsLimitEnabled: false,
+        reviewCardsPerDay: 100,
+        headerLevel: 2,
+        reviewOrder: "due-date",
+        fsrs: { requestRetention: 0.9, profile: "STANDARD" },
+        isDefault: false,
+      };
+      await db.createProfile(profile);
+      await db.save();
+
+      const created = await db.getProfileById("profile_no_tts");
+      expect(created?.ttsVoice).toBeUndefined();
+      expect(created?.ttsRate).toBeUndefined();
+      expect(created?.ttsLang).toBeUndefined();
+    });
+
     it("should delete profile and reset affected decks to DEFAULT", async () => {
       const profile: Omit<DeckProfile, "created" | "modified"> = {
         id: "profile_delete",

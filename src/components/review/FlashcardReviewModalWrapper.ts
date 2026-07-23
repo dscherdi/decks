@@ -21,6 +21,7 @@ import { I18n } from "@decks/core";
 import { ConfirmModal } from "../ConfirmModal";
 import { AnchorStamper } from "../../services/AnchorStamper";
 import { makeModalResponsive, type ResponsiveModalHandle } from "../../utils/responsive-modal";
+import { ttsService } from "../../services/TtsService";
 
 export class FlashcardReviewModalWrapper extends Modal {
   private deckOrGroup: DeckOrGroup;
@@ -224,6 +225,7 @@ export class FlashcardReviewModalWrapper extends Modal {
         },
         settings: this.settings,
         scheduler: this.scheduler,
+        tts: ttsService,
         onCardReviewed: undefined,
         onComplete: async (_event: CompleteEventDetail) => {
           if (this.browseMode || this.cramMode) {
@@ -256,6 +258,9 @@ export class FlashcardReviewModalWrapper extends Modal {
 
   onClose() {
     this.deckSynchronizer.isReviewing = false;
+
+    // Stop any in-progress speech (onClose must stay synchronous).
+    ttsService.stop();
 
     this.responsiveHandle?.dispose();
     this.responsiveHandle = undefined;

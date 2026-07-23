@@ -26,6 +26,7 @@ import { wireInternalLinks } from "../../utils/internal-links";
 import { I18n } from "@decks/core";
 import { ConfirmModal } from "../ConfirmModal";
 import { AnchorStamper } from "../../services/AnchorStamper";
+import { ttsService } from "../../services/TtsService";
 
 export const VIEW_TYPE_FLASHCARD_REVIEW = "flashcard-review-view";
 
@@ -128,6 +129,7 @@ export class FlashcardReviewView extends ItemView {
   async onClose(): Promise<void> {
     // Review tab closed — let background syncs resume.
     if (this.deckSynchronizer) this.deckSynchronizer.isReviewing = false;
+    ttsService.stop();
     this.unmountComponent();
     this.contentEl.empty();
     if (this.refreshStats) await this.refreshStats();
@@ -292,6 +294,7 @@ export class FlashcardReviewView extends ItemView {
         },
         settings: this.settings,
         scheduler: this.scheduler,
+        tts: ttsService,
         // Deliberately no per-rating stats refresh (see reviewFlashcard).
         onCardReviewed: undefined,
         // eslint-disable-next-line @typescript-eslint/require-await -- callback typed Promise<void> by the component contract; stats refresh now lives in onClose

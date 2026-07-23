@@ -14,7 +14,8 @@
     SchedulingPreview,
     SessionProgress,
   } from "@decks/core";
-  import { I18n, yieldToUI, type ResolvedRender } from "@decks/core";
+  import { I18n, yieldToUI, toSpeechText, type ResolvedRender } from "@decks/core";
+  import type { TtsService } from "../../services/TtsService";
   import { prepareFuzzySearch } from "obsidian";
   import { computeCardHealth } from "@decks/core";
   import {
@@ -61,6 +62,7 @@
   export let resolveEmbed: (linkpath: string, sourcePath: string) => string | null = () => null;
   export let settings: DecksSettings;
   export let scheduler: Scheduler;
+  export let tts: TtsService | undefined = undefined;
   export let onCardReviewed:
     | ((reviewedCard: Flashcard) => Promise<void>)
     | undefined = undefined;
@@ -159,6 +161,61 @@
       navigator.clipboard.writeText(text).catch(console.error);
     }
   }
+
+  // Read-aloud: voice config comes from the deck's profile; the button reads
+  // whichever side is currently visible.
+  let isSpeaking = false;
+  $: ttsProfile = "profile" in deckOrGroup ? deckOrGroup.profile : undefined;
+  $: ttsAvailable = tts ? tts.isAvailable() : false;
+
+  // Plain text for the visible side. Cloze answers are masked on the front so
+  // the play button never leaks them; the revealed side reads clean.
+  function ttsTextForVisibleSide(card: Flashcard): string {
+    if (showAnswer) {
+      return isClozeType(card.type)
+        ? toSpeechText(clozeContent(card))
+        : toSpeechText(card.back);
+    }
+    return isClozeType(card.type)
+      ? toSpeechText(clozeContent(card), { maskCloze: true })
+      : toSpeechText(card.front);
+  }
+
+  function handleToggleSpeak() {
+    if (!tts || !currentCard) return;
+    if (isSpeaking) {
+      tts.stop();
+      isSpeaking = false;
+      return;
+    }
+    const text = ttsTextForVisibleSide(currentCard);
+    if (!text) return;
+    tts.speak(
+      text,
+      {
+        voiceURI: ttsProfile?.ttsVoice,
+        rate: ttsProfile?.ttsRate,
+        lang: ttsProfile?.ttsLang,
+      },
+      {
+        onStart: () => {
+          isSpeaking = true;
+        },
+        onEnd: () => {
+          isSpeaking = false;
+        },
+      }
+    );
+  }
+
+  // Stop any reading when the visible card or its reveal state changes so a
+  // reading never bleeds across cards or into the answer.
+  function cancelSpeechOnChange(_cardId: string | undefined, _revealed: boolean): void {
+    if (!tts) return;
+    tts.stop();
+    isSpeaking = false;
+  }
+  $: cancelSpeechOnChange(currentCard?.id, showAnswer);
 
   function getBreadcrumbParts(card: Flashcard): string[] {
     if (!card.breadcrumb) return [];
@@ -1311,6 +1368,9 @@
     window.removeEventListener("keydown", handleKeydown);
     window.removeEventListener("mousedown", handleDocumentMouseDown);
 
+    // Stop any in-progress read-aloud
+    tts?.stop();
+
     // Clean up session timer (standard mode only)
     if (sessionTimer) {
       window.clearInterval(sessionTimer);
@@ -1664,6 +1724,48 @@
                   <polyline points="15 3 21 3 21 9"></polyline>
                   <line x1="10" y1="14" x2="21" y2="3"></line>
                 </svg>
+              </button>
+            {/if}
+            {#if ttsAvailable && currentCard}
+              <button
+                class="decks-tts-button decks-icon-btn clickable-icon"
+                class:decks-tts-active={isSpeaking}
+                on:click={handleToggleSpeak}
+                aria-label={isSpeaking ? r.stopAudio : r.playAudio}
+                type="button"
+                tabindex="-1"
+              >
+                {#if isSpeaking}
+                  <svg
+                    xmlns="http://www.w3.org/2000/svg"
+                    width="12"
+                    height="12"
+                    viewBox="0 0 24 24"
+                    fill="currentColor"
+                    stroke="currentColor"
+                    stroke-width="2"
+                    stroke-linecap="round"
+                    stroke-linejoin="round"
+                  >
+                    <rect x="6" y="6" width="12" height="12" rx="1"></rect>
+                  </svg>
+                {:else}
+                  <svg
+                    xmlns="http://www.w3.org/2000/svg"
+                    width="12"
+                    height="12"
+                    viewBox="0 0 24 24"
+                    fill="none"
+                    stroke="currentColor"
+                    stroke-width="2"
+                    stroke-linecap="round"
+                    stroke-linejoin="round"
+                  >
+                    <polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5"></polygon>
+                    <path d="M15.54 8.46a5 5 0 0 1 0 7.07"></path>
+                    <path d="M19.07 4.93a10 10 0 0 1 0 14.14"></path>
+                  </svg>
+                {/if}
               </button>
             {/if}
             {#if onCardStateAction && currentCard}
@@ -2391,6 +2493,19 @@
     min-width: 0 !important;
     min-height: 0 !important;
     padding: 0 !important;
+  }
+
+  .decks-tts-button {
+    width: 24px !important;
+    height: 24px !important;
+    min-width: 0 !important;
+    min-height: 0 !important;
+    padding: 0 !important;
+    color: var(--text-muted);
+  }
+
+  .decks-tts-button.decks-tts-active {
+    color: var(--interactive-accent);
   }
 
   .decks-card-actions-menu {

@@ -12,6 +12,7 @@
     TypedGradingMode,
   } from "../../database/types";
   import { getDefaultLearningSteps, getDefaultRelearningSteps, DEFAULT_EXAM_SETTINGS, I18n, validateLearningSteps, validateRelearningSteps } from "@decks/core";
+  import { ttsService } from "../../services/TtsService";
 
   const t = I18n.t;
   const p = t.profiles;
@@ -42,6 +43,8 @@
   let relearningStepsContainer: HTMLElement;
   let clozeEnabledContainer: HTMLElement;
   let clozeShowContextContainer: HTMLElement;
+  let ttsVoiceContainer: HTMLElement;
+  let ttsRateContainer: HTMLElement;
   let examEnabledContainer: HTMLElement;
   let examSettingsContainer: HTMLElement;
   let deckCountContainer: HTMLElement;
@@ -64,6 +67,11 @@
   let relearningSteps = "10m";
   let clozeEnabled = false;
   let clozeShowContext: ClozeShowContext = "open";
+  // Read-aloud voice: ttsLang is derived from the chosen voice so cross-device
+  // sync can fall back to a same-language voice when the exact one is missing.
+  let ttsVoice = "";
+  let ttsRate = 1;
+  let ttsLang = "";
   let examEnabled = false;
   let examSettings: ExamSettings = { ...DEFAULT_EXAM_SETTINGS };
 
@@ -103,6 +111,9 @@
     relearningSteps = profile.relearningSteps;
     clozeEnabled = profile.clozeEnabled;
     clozeShowContext = profile.clozeShowContext;
+    ttsVoice = profile.ttsVoice ?? "";
+    ttsRate = profile.ttsRate ?? 1;
+    ttsLang = profile.ttsLang ?? "";
     examEnabled = profile.examEnabled ?? false;
     examSettings = { ...DEFAULT_EXAM_SETTINGS, ...(profile.examSettings ?? {}) };
 
@@ -207,6 +218,9 @@
         },
         clozeEnabled: clozeEnabled,
         clozeShowContext: clozeShowContext,
+        ttsVoice: ttsVoice || undefined,
+        ttsRate: ttsRate,
+        ttsLang: ttsLang || undefined,
         examEnabled: examEnabled,
         examSettings: { ...examSettings },
         modified: new Date().toISOString(),
@@ -772,6 +786,54 @@
         });
     }
 
+    // Read-aloud voice (per profile)
+    if (ttsVoiceContainer) {
+      ttsVoiceContainer.empty();
+      if (ttsService.isAvailable()) {
+        const voices = ttsService.listVoices();
+        new Setting(ttsVoiceContainer)
+          .setName(p.ttsVoiceLabel)
+          .setDesc(p.ttsVoiceDesc)
+          .addDropdown((dropdown) => {
+            dropdown.addOption("", p.ttsVoiceDefault);
+            for (const v of voices) {
+              dropdown.addOption(v.voiceURI, `${v.name} (${v.lang})`);
+            }
+            // The stored voice may not exist on this device; fall back to default.
+            const known = voices.some((v) => v.voiceURI === ttsVoice);
+            dropdown.setValue(known ? ttsVoice : "").onChange((value) => {
+              ttsVoice = value;
+              const match = voices.find((v) => v.voiceURI === value);
+              ttsLang = match ? match.lang : "";
+            });
+          });
+      } else {
+        new Setting(ttsVoiceContainer)
+          .setName(p.ttsVoiceLabel)
+          .setDesc(p.ttsUnavailable)
+          .setClass("decks-config-readonly");
+      }
+    }
+
+    // Read-aloud speed
+    if (ttsRateContainer) {
+      ttsRateContainer.empty();
+      if (ttsService.isAvailable()) {
+        new Setting(ttsRateContainer)
+          .setName(p.ttsRateLabel)
+          .setDesc(p.ttsRateDesc)
+          .addSlider((slider) => {
+            slider
+              .setLimits(0.5, 2, 0.1)
+              .setValue(ttsRate)
+              .setDynamicTooltip()
+              .onChange((value) => {
+                ttsRate = value;
+              });
+          });
+      }
+    }
+
     // Deck count
     if (deckCountContainer) {
       deckCountContainer.empty();
@@ -872,6 +934,12 @@
           <h4>{p.sectionFsrsAlgorithm}</h4>
           <div bind:this={requestRetentionContainer}></div>
           <div bind:this={fsrsProfileContainer}></div>
+        </div>
+
+        <div class="decks-settings-section">
+          <h4>{p.sectionReadAloud}</h4>
+          <div bind:this={ttsVoiceContainer}></div>
+          <div bind:this={ttsRateContainer}></div>
         </div>
 
         <div class="decks-settings-section">

@@ -174,6 +174,65 @@ describe("Exam schema v39", () => {
     }
   });
 
+  // The v40 additions (tts_voice/tts_rate/tts_lang) must materialize on the
+  // worker migration path, which runs ONLY buildMigrationSQL.
+  it("worker migration path adds TTS columns to a simulated v39 database", async () => {
+    const wasmPath = path.join(process.cwd(), "node_modules/sql.js/dist/sql-wasm.wasm");
+    const SQL = await initSqlJs({ locateFile: () => wasmPath });
+    const raw = new SQL.Database();
+    try {
+      raw.run(CREATE_TABLES_SQL);
+      // Rebuild deckprofiles to the v39 shape (exam columns present, no TTS
+      // columns), seed a user row, and rewind the version.
+      raw.run(`
+        CREATE TABLE deckprofiles_v39 AS SELECT
+          id, name, has_new_cards_limit_enabled, new_cards_per_day,
+          has_review_cards_limit_enabled, review_cards_per_day,
+          header_level, extra_header_levels, review_order,
+          learning_steps, relearning_steps,
+          fsrs_request_retention, fsrs_profile,
+          cloze_enabled, cloze_show_context,
+          exam_enabled, exam_settings,
+          is_default, created, modified, deleted_at
+        FROM deckprofiles;
+        DROP TABLE deckprofiles;
+        ALTER TABLE deckprofiles_v39 RENAME TO deckprofiles;
+        INSERT INTO deckprofiles (
+          id, name, has_new_cards_limit_enabled, new_cards_per_day,
+          has_review_cards_limit_enabled, review_cards_per_day,
+          header_level, extra_header_levels, review_order,
+          learning_steps, relearning_steps,
+          fsrs_request_retention, fsrs_profile,
+          cloze_enabled, cloze_show_context,
+          exam_enabled, exam_settings,
+          is_default, created, modified, deleted_at
+        ) VALUES (
+          'prof_pre_tts', 'Pre TTS', 0, 20, 0, 100,
+          2, '[]', 'due-date', '1m', '10m', 0.9, 'STANDARD',
+          1, 'hidden', 0, '{}', 0, datetime('now'), datetime('now'), NULL
+        );
+        PRAGMA user_version = 39;
+      `);
+
+      raw.exec(buildMigrationSQL(raw));
+
+      const cols = raw
+        .exec("PRAGMA table_info(deckprofiles)")[0]
+        .values.map((v) => v[1]);
+      expect(cols).toContain("tts_voice");
+      expect(cols).toContain("tts_rate");
+      expect(cols).toContain("tts_lang");
+
+      // Pre-existing rows survive the rebuild with NULL TTS columns.
+      const row = raw.exec(
+        "SELECT name, tts_voice, tts_rate, tts_lang FROM deckprofiles WHERE id = 'prof_pre_tts'"
+      )[0].values[0];
+      expect(row).toEqual(["Pre TTS", null, null, null]);
+    } finally {
+      raw.close();
+    }
+  });
+
   it("round-trips exam fields through create/get/update", async () => {
     const created = await db.getDefaultProfile();
     await db.createProfile({
