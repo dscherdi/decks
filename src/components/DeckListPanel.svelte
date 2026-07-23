@@ -162,6 +162,10 @@
     () => {};
 
   let collapsedIds = new Set(collapsedDeckNodeIds);
+  // Transient collapse state used only while a search is active, so the user can
+  // still fold search results without touching (or persisting) the normal tree
+  // state. Reset when the filter clears (see the reactive block below).
+  let searchCollapsed = new Set<string>();
 
   export function updateCollapsedIds(ids: string[]): void {
     collapsedDeckNodeIds = ids;
@@ -169,6 +173,12 @@
   }
 
   function toggleCollapse(id: string): void {
+    if (filtering) {
+      const next = new Set(searchCollapsed);
+      if (!next.delete(id)) next.add(id);
+      searchCollapsed = next;
+      return;
+    }
     const next = new Set(collapsedIds);
     if (!next.delete(id)) next.add(id);
     collapsedIds = next;
@@ -176,9 +186,14 @@
   }
 
   // One button that collapses everything, or expands everything when the tree
-  // is already fully collapsed.
+  // is already fully collapsed. Operates on the transient set while searching.
   function toggleCollapseAll(): void {
     const branchIds = allBranchIds(tree);
+    if (filtering) {
+      const allCollapsed = branchIds.every((id) => searchCollapsed.has(id));
+      searchCollapsed = new Set(allCollapsed ? [] : branchIds);
+      return;
+    }
     const allCollapsed = branchIds.every((id) => collapsedIds.has(id));
     const next = allCollapsed ? [] : branchIds;
     collapsedIds = new Set(next);
@@ -412,14 +427,16 @@
     minDeckCardCount,
   );
   $: filtering = filterText.trim().length > 0;
-  $: flattenedRows = flattenDeckTree(
-    sortDeckTree(filterDeckTree(tree, filterText), deckListSort),
-    collapsedIds,
-    filtering,
-  );
-  // During a filter every section is a header; count real matches to decide
-  // whether to show the "no matches" empty state instead of empty sections.
-  $: matchingLeafCount = flattenedRows.reduce(
+  // Leaving a search discards any transient folds made during it.
+  $: if (!filtering && searchCollapsed.size) searchCollapsed = new Set();
+  // While searching, results start fully expanded (empty transient set) and the
+  // user can fold branches into searchCollapsed; otherwise use the persisted set.
+  $: activeCollapsed = filtering ? searchCollapsed : collapsedIds;
+  $: sortedFilteredTree = sortDeckTree(filterDeckTree(tree, filterText), deckListSort);
+  $: flattenedRows = flattenDeckTree(sortedFilteredTree, activeCollapsed);
+  // Count matches from a fully-expanded flatten so folding all results during a
+  // search doesn't falsely trigger the "no matches" empty state.
+  $: matchingLeafCount = flattenDeckTree(sortedFilteredTree, new Set()).reduce(
     (n, r) => n + (r.node.kind === "leaf" ? 1 : 0),
     0,
   );
@@ -489,6 +506,11 @@
     if (node.group) return { emoji: "🏷️" };
     if (node.customDeck) {
       return node.customDeck.deckType === "filter" ? { emoji: "🔍" } : { emoji: "📋" };
+    }
+    if (node.fileDeck) {
+      return node.fileDeck.filepath.endsWith(".canvas")
+        ? { lucide: "layout-dashboard" }
+        : { lucide: "file-text" };
     }
     return null;
   }
@@ -1615,26 +1637,32 @@
             >
               <div class="decks-col-deck">
                 <span class="decks-tree-indent" style="--decks-indent: {node.depth * 16}px;"></span>
-                {#if node.kind !== "leaf"}
-                  <button
-                    class="decks-tree-chevron"
-                    class:decks-tree-chevron-open={row.expanded}
-                    on:click|stopPropagation={() => toggleCollapse(node.id)}
-                    aria-label={row.expanded ? t.deckList.collapse : t.deckList.expand}
-                    aria-expanded={row.expanded}
-                  >
-                    <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="9 18 15 12 9 6"></polyline></svg>
-                  </button>
-                {:else}
-                  <span class="decks-tree-chevron-spacer"></span>
-                {/if}
-                {#if node.pinned}
-                  <span class="decks-pin-indicator" use:pinIconAction={"pin"} title={t.deckList.pinned}></span>
-                {:else if icon?.emoji}
-                  <span class="decks-tag-group-icon">{icon.emoji}</span>
-                {:else if icon?.lucide}
-                  <span class="decks-tree-folder-icon" use:pinIconAction={icon.lucide}></span>
-                {/if}
+                <span class="decks-tree-chevron-slot">
+                  {#if node.kind !== "leaf"}
+                    <button
+                      class="decks-tree-chevron"
+                      class:decks-tree-chevron-open={row.expanded}
+                      on:click|stopPropagation={() => toggleCollapse(node.id)}
+                      aria-label={row.expanded ? t.deckList.collapse : t.deckList.expand}
+                      aria-expanded={row.expanded}
+                    >
+                      <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="9 18 15 12 9 6"></polyline></svg>
+                    </button>
+                  {:else}
+                    <span class="decks-tree-chevron decks-tree-chevron-hidden" aria-hidden="true">
+                      <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="9 18 15 12 9 6"></polyline></svg>
+                    </span>
+                  {/if}
+                </span>
+                <span class="decks-tree-icon-slot">
+                  {#if node.pinned}
+                    <span class="decks-pin-indicator" use:pinIconAction={"pin"} title={t.deckList.pinned}></span>
+                  {:else if icon?.emoji}
+                    <span class="decks-tag-group-icon">{icon.emoji}</span>
+                  {:else if icon?.lucide}
+                    <span class="decks-tree-folder-icon" use:pinIconAction={icon.lucide}></span>
+                  {/if}
+                </span>
                 <span
                   class="decks-deck-name-link"
                   on:click={(e) => handleTouchClick(() => handleRowStudy(node), e)}
@@ -2056,7 +2084,6 @@
 
   .decks-tag-group-icon {
     flex-shrink: 0;
-    margin-right: var(--size-4-1);
     font-size: 11px;
   }
 
@@ -2250,7 +2277,6 @@
   .decks-pin-indicator {
     display: inline-flex;
     align-items: center;
-    margin-right: 4px;
     color: var(--text-accent);
     vertical-align: middle;
   }
@@ -2368,9 +2394,23 @@
     transform: rotate(90deg);
   }
 
-  .decks-tree-chevron-spacer {
+  /* Leaf rows render this hidden chevron so the slot always has content and
+     never collapses; it keeps the same 16px box, just invisible. */
+  .decks-tree-chevron-hidden {
+    visibility: hidden;
+    pointer-events: none;
+  }
+
+  /* Fixed-width slot so leaf rows (chevron hidden) reserve exactly the same
+     space as folder rows, keeping icons/labels aligned at every depth. Uses the
+     same width pattern as .decks-tree-indent, which reserves space reliably. */
+  .decks-tree-chevron-slot {
     flex-shrink: 0;
     width: 16px;
+    min-width: 16px;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
   }
 
   .decks-tree-chevron :global(svg),
@@ -2379,11 +2419,22 @@
     height: 14px;
   }
 
+  /* Fixed icon slot so every row (folder, tag, custom, file, section) reserves
+     the same space before its label — files/folders/leaves stay aligned. */
+  .decks-tree-icon-slot {
+    flex-shrink: 0;
+    width: 18px;
+    min-width: 18px;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    margin-right: var(--size-4-1);
+  }
+
   .decks-tree-folder-icon {
     display: inline-flex;
     align-items: center;
     flex-shrink: 0;
-    margin-right: var(--size-4-1);
     color: var(--text-muted);
   }
 
