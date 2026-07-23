@@ -108,6 +108,17 @@ export class DecksView extends ItemView {
     this.deckListPanelComponent?.updatePinnedIds?.(ids);
   }
 
+  private async setCollapsedIds(ids: string[]): Promise<void> {
+    this.settings.ui.collapsedDeckNodeIds = ids;
+    await this.saveSettings();
+    this.deckListPanelComponent?.updateCollapsedIds?.(ids);
+  }
+
+  applyCollapsedIdsUpdate(ids: string[]): void {
+    this.settings.ui.collapsedDeckNodeIds = ids;
+    this.deckListPanelComponent?.updateCollapsedIds?.(ids);
+  }
+
   private async changeSortMode(mode: DeckListSortMode): Promise<void> {
     this.settings.ui.deckListSort = mode;
     await this.saveSettings();
@@ -212,6 +223,8 @@ export class DecksView extends ItemView {
         deckListSort: this.settings.ui.deckListSort,
         minDeckCardCount: this.settings.ui.minDeckCardCount,
         onChangeSortMode: (mode: DeckListSortMode) => this.changeSortMode(mode),
+        collapsedDeckNodeIds: this.settings.ui.collapsedDeckNodeIds,
+        onSetCollapsedIds: (ids: string[]) => this.setCollapsedIds(ids),
         globalReviewToday: null,
       },
     }) as DeckListPanelComponent;

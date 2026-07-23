@@ -60,6 +60,9 @@ export interface DecksSettings {
     // Decks with totalCount strictly less than this number are hidden
     // from the list. Pinned decks are exempt. 0 disables the filter.
     minDeckCardCount: number;
+    // Branch (section / folder / tag-folder) node ids the user has collapsed
+    // in the unified deck tree. Synced across devices via data.json.
+    collapsedDeckNodeIds: string[];
     // Per-column widths (in pixels) for the flashcard manager table.
     // Empty object means use defaults from the grid template.
     managerColumnWidths: Record<string, number>;
@@ -169,6 +172,7 @@ export const DEFAULT_SETTINGS: DecksSettings = {
     pinnedDeckIds: [],
     deckListSort: "name-asc",
     minDeckCardCount: 0,
+    collapsedDeckNodeIds: [],
     managerColumnWidths: {},
   },
 

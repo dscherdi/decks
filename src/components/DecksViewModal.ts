@@ -113,6 +113,14 @@ export class DecksViewModal extends Modal {
     this.getDecksView()?.applySortModeUpdate(mode);
   }
 
+  private async setCollapsedIds(ids: string[]): Promise<void> {
+    this.settings.ui.collapsedDeckNodeIds = ids;
+    await this.saveSettings();
+    this.deckListPanelComponent?.updateCollapsedIds?.(ids);
+    // Also push into the sidepanel if it's open so both views stay in sync.
+    this.getDecksView()?.applyCollapsedIdsUpdate(ids);
+  }
+
   onOpen() {
     const { contentEl } = this;
     contentEl.empty();
@@ -209,6 +217,8 @@ export class DecksViewModal extends Modal {
         deckListSort: this.settings.ui.deckListSort,
         minDeckCardCount: this.settings.ui.minDeckCardCount,
         onChangeSortMode: (mode: DeckListSortMode) => this.changeSortMode(mode),
+        collapsedDeckNodeIds: this.settings.ui.collapsedDeckNodeIds,
+        onSetCollapsedIds: (ids: string[]) => this.setCollapsedIds(ids),
         globalReviewToday: null,
       },
     }) as DeckListPanelComponent;

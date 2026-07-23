@@ -1,14 +1,23 @@
 <script lang="ts">
-  import { onMount, onDestroy, tick } from "svelte";
+  import { onMount, onDestroy } from "svelte";
   import { fade } from "svelte/transition";
   import type {
     DeckWithProfile,
     DeckStats,
     DeckGroup,
-    DeckOrGroup,
+    DeckProfile,
   } from "../database/types";
-  import { isDeckGroup, isFileDeck, isCustomDeck } from "../database/types";
-  import { filterByMinCount, generateDeckGroupId, I18n, sortDeckList } from "@decks/core";
+  import {
+    buildDeckTree,
+    filterDeckTree,
+    sortDeckTree,
+    flattenDeckTree,
+    allBranchIds,
+    generateDeckGroupId,
+    I18n,
+    DEFAULT_DECK_PROFILE,
+  } from "@decks/core";
+  import type { DeckTree, TreeNode, FlatRow } from "@decks/core";
 
   import ReviewHeatmap from "./statistics/ReviewHeatmap.svelte";
   import { AnkiExportModal } from "./export/AnkiExportModal";
@@ -29,21 +38,16 @@
 
   let tableBodyWidth = 0;
   let panelWidth = 0;
-  let tabDropdownOpen = false;
   let headerOverflowOpen = false;
 
-  $: isTabsCompact   = panelWidth > 0 && panelWidth < 380;
   // Collapse the action icons into the "…" overflow menu below this width — the
   // inline toolbar has enough buttons (incl. Anki import) to crowd a narrow panel.
   $: isHeaderCompact = panelWidth > 0 && panelWidth < 450;
 
-  let decks: DeckWithProfile[] = [];
   let allDecks: DeckWithProfile[] = [];
   let stats = new Map<string, DeckStats>();
   let filterText = "";
   let heatmapComponent: ReviewHeatmap;
-  let searchOpen = false;
-  let searchInputEl: HTMLInputElement | undefined;
   let activeDropdown: HTMLElement | null = null;
   let activeDropdownDeckId: string | null = null;
   let dropdownEventListeners: {
@@ -52,11 +56,9 @@
     resize?: () => void;
   } = {};
 
-  let viewMode: "files" | "tags" | "custom" = "files";
   let deckGroups: DeckGroup[] = [];
   let customDeckGroups: CustomDeckGroup[] = [];
   let customDeckStats = new Map<string, DeckStats>();
-  let currentItems: DeckOrGroup[] = [];
 
   export let statisticsService: StatisticsService;
   export let deckSynchronizer: DeckSynchronizer;
@@ -151,6 +153,36 @@
 
   export function updateMinDeckCardCount(value: number): void {
     minDeckCardCount = value;
+  }
+
+  // Collapsed branch-node ids for the tree — synced through data.json. The
+  // panel owns rendering; the parent owns persistence via onSetCollapsedIds.
+  export let collapsedDeckNodeIds: string[] = [];
+  export let onSetCollapsedIds: (ids: string[]) => Promise<void> | void =
+    () => {};
+
+  let collapsedIds = new Set(collapsedDeckNodeIds);
+
+  export function updateCollapsedIds(ids: string[]): void {
+    collapsedDeckNodeIds = ids;
+    collapsedIds = new Set(ids);
+  }
+
+  function toggleCollapse(id: string): void {
+    const next = new Set(collapsedIds);
+    if (!next.delete(id)) next.add(id);
+    collapsedIds = next;
+    void onSetCollapsedIds([...next]);
+  }
+
+  // One button that collapses everything, or expands everything when the tree
+  // is already fully collapsed.
+  function toggleCollapseAll(): void {
+    const branchIds = allBranchIds(tree);
+    const allCollapsed = branchIds.every((id) => collapsedIds.has(id));
+    const next = allCollapsed ? [] : branchIds;
+    collapsedIds = new Set(next);
+    void onSetCollapsedIds(next);
   }
 
   // Push the AI-enabled toggle in after a settings change so the generate
@@ -290,16 +322,6 @@
   let lastEventTime = 0;
   let lastEventType = "";
 
-  function getItemId(item: DeckOrGroup): string {
-    if (isDeckGroup(item)) {
-      return generateDeckGroupId(item.tag);
-    }
-    if (item.type === 'custom') {
-      return item.id;
-    }
-    return item.id;
-  }
-
   function getDeckStats(deckId: string): DeckStats {
     return (
       stats.get(deckId) ?? customDeckStats.get(deckId) ?? {
@@ -337,7 +359,7 @@
     isUpdatingStats = true;
     stats.set(deckId, newStats);
     // eslint-disable-next-line no-self-assign -- self-assignment triggers Svelte reactivity
-    decks = decks;
+    stats = stats;
     loadStudyStats().catch(console.error);
     isUpdatingStats = false;
   }
@@ -355,103 +377,183 @@
   export function updateStats(newStats: Map<string, DeckStats>) {
     isUpdatingStats = true;
     stats = newStats;
-    // eslint-disable-next-line no-self-assign -- self-assignment triggers Svelte reactivity
-    decks = decks;
     isUpdatingStats = false;
   }
-  $: currentItems =
-    viewMode === "files"
-      ? allDecks.map((d) => ({ ...d, type: "file" as const }))
-      : viewMode === "tags"
-        ? deckGroups
-        : customDeckGroups;
+  // Build the unified tree, then filter → sort → flatten into rows. `stats` and
+  // `customDeckStats` are passed explicitly so Svelte re-derives when they
+  // change (reassigned in updateStats* to trigger this).
+  function buildTree(
+    fileDecks: DeckWithProfile[],
+    groups: DeckGroup[],
+    customs: CustomDeckGroup[],
+    fileStats: Map<string, DeckStats>,
+    customStats: Map<string, DeckStats>,
+    pins: Set<string>,
+    minCount: number,
+  ): DeckTree {
+    const getStats = (id: string) => fileStats.get(id) ?? customStats.get(id);
+    return buildDeckTree({
+      fileDecks: fileDecks.map((d) => ({ ...d, type: "file" as const })),
+      deckGroups: groups,
+      customDeckGroups: customs,
+      getStats,
+      pinnedIds: pins,
+      minDeckCardCount: minCount,
+    });
+  }
 
-  $: filteredItems = sortDeckList(
-    filterByMinCount(
-      filterItems(currentItems, filterText),
-      getItemId,
-      getDeckStats,
-      pinnedIds,
-      minDeckCardCount,
-    ),
-    getItemId,
-    getDeckStats,
+  $: tree = buildTree(
+    allDecks,
+    deckGroups,
+    customDeckGroups,
+    stats,
+    customDeckStats,
     pinnedIds,
-    deckListSort,
+    minDeckCardCount,
+  );
+  $: filtering = filterText.trim().length > 0;
+  $: flattenedRows = flattenDeckTree(
+    sortDeckTree(filterDeckTree(tree, filterText), deckListSort),
+    collapsedIds,
+    filtering,
+  );
+  // During a filter every section is a header; count real matches to decide
+  // whether to show the "no matches" empty state instead of empty sections.
+  $: matchingLeafCount = flattenedRows.reduce(
+    (n, r) => n + (r.node.kind === "leaf" ? 1 : 0),
+    0,
   );
 
-  function filterItems(items: DeckOrGroup[], filter: string): DeckOrGroup[] {
-    if (!filter.trim()) return items;
-    const filterLower = filter.toLowerCase();
-    return items.filter(
-      (item) =>
-        item.name.toLowerCase().includes(filterLower) ||
-        ("tag" in item && item.tag.toLowerCase().includes(filterLower))
-    );
+  // Synthetic profile for subtree study — limits disabled so a folder/section
+  // review surfaces every due+new card underneath, uncapped.
+  const syntheticProfile: DeckProfile = {
+    ...DEFAULT_DECK_PROFILE,
+    id: "profile_default",
+    created: "",
+    modified: "",
+  };
+
+  // A real backing group for a tag node, or a synthetic group over a folder's
+  // descendant deck ids, so subtree actions can reuse the deck-group handlers.
+  function groupForNode(node: TreeNode): DeckGroup {
+    if (node.group) return node.group;
+    return {
+      type: "group",
+      tag: node.id,
+      name: node.name,
+      deckIds: node.deckIds,
+      profile: syntheticProfile,
+      lastReviewed: null,
+      created: "",
+      modified: "",
+    };
+  }
+
+  function handleRowStudy(node: TreeNode): void {
+    if (node.kind === "section") {
+      toggleCollapse(node.id);
+      return;
+    }
+    if (node.kind === "folder") {
+      onDeckGroupClick(groupForNode(node));
+      return;
+    }
+    if (node.fileDeck) onDeckClick(node.fileDeck);
+    else if (node.group) onDeckGroupClick(node.group);
+    else if (node.customDeck) onCustomDeckClick(node.customDeck);
+  }
+
+  function handleRowConfig(node: TreeNode, event: Event): void {
+    if (node.kind === "folder") {
+      handleFolderConfigClick(node, event);
+    } else if (node.fileDeck) {
+      handleConfigClick(node.fileDeck, event);
+    } else if (node.group) {
+      handleGroupConfigClick(node.group, event);
+    } else if (node.customDeck) {
+      handleCustomDeckConfigClick(node.customDeck, event);
+    }
+  }
+
+  // Row icon: emoji for tags/custom, a Lucide glyph for folders/sections.
+  function rowIcon(node: TreeNode): { emoji?: string; lucide?: string } | null {
+    if (node.kind === "section") {
+      if (node.section === "tags") return { emoji: "🏷️" };
+      if (node.section === "custom") return { emoji: "📋" };
+      if (node.section === "pinned") return { lucide: "pin" };
+      return { lucide: "folder-tree" };
+    }
+    if (node.kind === "folder") {
+      return node.id.startsWith("tag:") ? { emoji: "🏷️" } : { lucide: "folder" };
+    }
+    if (node.group) return { emoji: "🏷️" };
+    if (node.customDeck) {
+      return node.customDeck.deckType === "filter" ? { emoji: "🔍" } : { emoji: "📋" };
+    }
+    return null;
+  }
+
+  function sectionMeta(node: TreeNode): string {
+    const count =
+      node.section === "files"
+        ? allDecks.length
+        : node.section === "tags"
+          ? deckGroups.length
+          : node.section === "custom"
+            ? customDeckGroups.length
+            : node.children.length;
+    return `(${count})`;
+  }
+
+  function nodeProfile(node: TreeNode): DeckProfile | null {
+    return node.fileDeck?.profile ?? node.group?.profile ?? null;
+  }
+
+  function newTitle(node: TreeNode): string {
+    const p = nodeProfile(node);
+    if (p?.hasNewCardsLimitEnabled) {
+      return node.group
+        ? I18n.format(t.deckList.newCardsGroupTooltip, { count: node.newCount, limit: p.newCardsPerDay })
+        : I18n.format(t.deckList.newCardsLimitTooltip, { count: node.newCount, limit: p.newCardsPerDay });
+    }
+    return I18n.format(t.deckList.newCardsDueTooltip, { count: node.newCount });
+  }
+
+  function dueTitle(node: TreeNode): string {
+    const p = nodeProfile(node);
+    if (p?.hasReviewCardsLimitEnabled) {
+      return node.group
+        ? I18n.format(t.deckList.reviewCardsGroupTooltip, { count: node.dueCount, limit: p.reviewCardsPerDay })
+        : I18n.format(t.deckList.reviewCardsLimitTooltip, { count: node.dueCount, limit: p.reviewCardsPerDay });
+    }
+    return I18n.format(t.deckList.reviewCardsDueTooltip, { count: node.dueCount });
+  }
+
+  function reviewLimited(node: TreeNode): boolean {
+    return nodeProfile(node)?.hasReviewCardsLimitEnabled ?? false;
   }
 
   export function updateDecks(newDecks: DeckWithProfile[]) {
     allDecks = newDecks;
 
-    // Generate deck groups asynchronously
+    // Generate deck groups asynchronously — the tree re-derives when they land.
     tagGroupService
       .aggregateByTag(newDecks)
       .then((groups) => {
         deckGroups = groups;
       })
       .catch(console.error);
-
-    applyFilter();
-  }
-
-  function applyFilter() {
-    if (!filterText.trim()) {
-      decks = allDecks;
-    } else {
-      const filter = filterText.toLowerCase();
-      decks = allDecks.filter(
-        (deck) =>
-          deck.name.toLowerCase().includes(filter) ||
-          deck.tag.toLowerCase().includes(filter)
-      );
-    }
-  }
-
-  function handleFilterInput(event: Event) {
-    const target = event.target as HTMLInputElement;
-    filterText = target.value;
-    applyFilter();
   }
 
   function clearFilter() {
     filterText = "";
-    applyFilter();
-  }
-
-  async function toggleSearch() {
-    searchOpen = !searchOpen;
-    if (searchOpen) {
-      await tick();
-      searchInputEl?.focus();
-    }
   }
 
   function handleSearchKeydown(event: KeyboardEvent) {
     if (event.key === "Escape") {
       event.preventDefault();
       clearFilter();
-      searchOpen = false;
-      searchInputEl?.blur();
-    }
-  }
-
-  function handleItemClick(item: DeckOrGroup) {
-    if (isDeckGroup(item)) {
-      onDeckGroupClick(item);
-    } else if (isCustomDeck(item)) {
-      onCustomDeckClick(item);
-    } else if (isFileDeck(item)) {
-      onDeckClick(item);
+      (event.target as HTMLInputElement).blur();
     }
   }
 
@@ -1068,6 +1170,109 @@
     }).open();
   }
 
+  // Measure, position (with viewport-bounds flipping), show and activate a
+  // freshly-built dropdown near `button`. Shared by the folder menu.
+  function positionAndActivateDropdown(
+    dropdown: HTMLElement,
+    button: HTMLElement,
+    activeId: string,
+  ) {
+    const rect = button.getBoundingClientRect();
+    const viewportWidth = window.innerWidth;
+    const viewportHeight = window.innerHeight;
+
+    dropdown.addClass("decks-context-menu");
+    activeDocument.body.appendChild(dropdown);
+    const dropdownRect = dropdown.getBoundingClientRect();
+
+    let top = rect.bottom + 5;
+    let left = rect.left;
+    if (top + dropdownRect.height > viewportHeight - 10) {
+      top = rect.top - dropdownRect.height - 5;
+    }
+    if (left + dropdownRect.width > viewportWidth - 10) {
+      left = viewportWidth - dropdownRect.width - 10;
+    }
+    top = Math.max(10, top);
+    left = Math.max(10, left);
+
+    dropdown.setCssProps({ top: `${top}px`, left: `${left}px` });
+    dropdown.removeClass("decks-context-menu");
+    dropdown.addClass("decks-context-menu-visible");
+
+    activeDropdown = dropdown;
+    activeDropdownDeckId = activeId;
+
+    dropdownEventListeners.click = (e: Event) => {
+      if (!dropdown.contains(e.target as Node)) closeActiveDropdown();
+    };
+    dropdownEventListeners.scroll = closeActiveDropdown;
+    dropdownEventListeners.resize = closeActiveDropdown;
+    window.setTimeout(() => {
+      if (dropdownEventListeners.click) {
+        activeDocument.addEventListener("click", dropdownEventListeners.click);
+      }
+      if (dropdownEventListeners.scroll) {
+        window.addEventListener("scroll", dropdownEventListeners.scroll, true);
+      }
+      if (dropdownEventListeners.resize) {
+        window.addEventListener("resize", dropdownEventListeners.resize);
+      }
+    }, 0);
+  }
+
+  function buildDropdownOption(label: string, onClick: () => void): HTMLDivElement {
+    const option = activeDocument.createElement("div");
+    option.className = "decks-dropdown-option";
+    option.textContent = label;
+    option.onclick = () => {
+      closeActiveDropdown();
+      onClick();
+    };
+    return option;
+  }
+
+  // Options menu for a folder / tag-folder node: subtree actions over a real
+  // (backed tag) or synthetic (folder) deck group.
+  function handleFolderConfigClick(node: TreeNode, event: Event) {
+    event.stopPropagation();
+
+    if (activeDropdown && activeDropdownDeckId === node.id) {
+      closeActiveDropdown();
+      return;
+    }
+    closeActiveDropdown();
+
+    const group = groupForNode(node);
+    const dropdown = activeDocument.createElement("div");
+    dropdown.className = "decks-deck-config-dropdown";
+
+    dropdown.appendChild(
+      buildDropdownOption(t.deckList.studyAll, () => onDeckGroupClick(group)),
+    );
+    dropdown.appendChild(
+      buildDropdownOption(t.deckList.browseAllCards, () => onBrowseDeckGroup(group)),
+    );
+    if (onCramDeckGroup) {
+      const cramOption = buildDropdownOption(t.deckList.cram, () =>
+        onCramDeckGroup?.(group),
+      );
+      isCramResumableGroup?.(group).then((resumable) => {
+        if (resumable) cramOption.textContent = t.deckList.resumeCram;
+      });
+      dropdown.appendChild(cramOption);
+    }
+    dropdown.appendChild(
+      buildDropdownOption(t.deckList.exportToAnki, () => openAnkiExportForGroup(group)),
+    );
+    // Pin only applies to a real tag group — a folder id isn't in the pin space.
+    if (node.group) {
+      dropdown.appendChild(buildPinDropdownOption(generateDeckGroupId(node.group.tag)));
+    }
+
+    positionAndActivateDropdown(dropdown, event.target as HTMLElement, node.id);
+  }
+
   function closeActiveDropdown() {
     if (activeDropdown) {
       activeDropdown.remove();
@@ -1177,7 +1382,7 @@
   });
 </script>
 
-<svelte:window on:click={() => { tabDropdownOpen = false; headerOverflowOpen = false; }} />
+<svelte:window on:click={() => { headerOverflowOpen = false; }} />
 
 <div class="decks-deck-list-panel" bind:clientWidth={panelWidth}>
   <div class="decks-panel-header">
@@ -1317,123 +1522,44 @@
   </div>
 
   <div class="decks-deck-content">
-    <div class="decks-tab-switcher">
-      {#if isTabsCompact}
-        <div class="decks-tab-compact-container">
+    <div class="decks-filter-row">
+      <div class="decks-filter-input-wrapper">
+        <svg class="decks-filter-search-icon" xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="8"></circle><line x1="21" y1="21" x2="16.65" y2="16.65"></line></svg>
+        <input
+          type="text"
+          class="decks-filter-input"
+          placeholder={t.deckList.filterPlaceholder}
+          bind:value={filterText}
+          on:keydown={handleSearchKeydown}
+        />
+        {#if filterText}
           <button
-            class="decks-tab-compact-btn"
-            on:click|stopPropagation={() => (tabDropdownOpen = !tabDropdownOpen)}
-            aria-expanded={tabDropdownOpen}
+            class="clickable-icon decks-filter-clear-button"
+            aria-label={t.deckList.clearFilter}
+            on:click={clearFilter}
           >
-            <span>
-              {viewMode === "files"
-                ? `${t.deckList.tabFiles} (${allDecks.length})`
-                : viewMode === "tags"
-                ? `${t.deckList.tabTags} (${deckGroups.length})`
-                : `${t.deckList.tabCustom} (${customDeckGroups.length})`}
-            </span>
-            <svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9"/></svg>
+            <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="6" x2="6" y2="18"></line><line x1="6" y1="6" x2="18" y2="18"></line></svg>
           </button>
-          {#if tabDropdownOpen}
-            <div class="decks-overflow-menu decks-overflow-menu-tabs">
-              <button
-                class="decks-overflow-item"
-                class:decks-overflow-item-active={viewMode === "files"}
-                on:click={() => { viewMode = "files"; tabDropdownOpen = false; }}
-              >
-                {t.deckList.tabFiles} ({allDecks.length})
-              </button>
-              <button
-                class="decks-overflow-item"
-                class:decks-overflow-item-active={viewMode === "tags"}
-                on:click={() => { viewMode = "tags"; tabDropdownOpen = false; }}
-              >
-                {t.deckList.tabTags} ({deckGroups.length})
-              </button>
-              <button
-                class="decks-overflow-item"
-                class:decks-overflow-item-active={viewMode === "custom"}
-                on:click={() => { viewMode = "custom"; loadCustomDecks(); tabDropdownOpen = false; }}
-              >
-                {t.deckList.tabCustom} ({customDeckGroups.length})
-              </button>
-            </div>
-          {/if}
-        </div>
-      {:else}
-        <div class="decks-tab-group">
-          <button
-            class="decks-tab-button"
-            class:decks-tab-active={viewMode === "files"}
-            title="{t.deckList.tabFiles} ({allDecks.length})"
-            on:click={() => (viewMode = "files")}
-          >
-            <span>{t.deckList.tabFiles} ({allDecks.length})</span>
-          </button>
-          <button
-            class="decks-tab-button"
-            class:decks-tab-active={viewMode === "tags"}
-            title="{t.deckList.tabTags} ({deckGroups.length})"
-            on:click={() => (viewMode = "tags")}
-          >
-            <span>{t.deckList.tabTags} ({deckGroups.length})</span>
-          </button>
-          <button
-            class="decks-tab-button"
-            class:decks-tab-active={viewMode === "custom"}
-            title="{t.deckList.tabCustom} ({customDeckGroups.length})"
-            on:click={() => { viewMode = "custom"; loadCustomDecks(); }}
-          >
-            <span>{t.deckList.tabCustom} ({customDeckGroups.length})</span>
-          </button>
-        </div>
-      {/if}
+        {/if}
+      </div>
       <button
-        class="clickable-icon"
-        class:decks-search-toggle-active={searchOpen}
-        on:click={toggleSearch}
-        title={t.deckList.search}
-        aria-label={t.deckList.search}
-        aria-expanded={searchOpen}
+        class="clickable-icon decks-collapse-all-button"
+        on:click={toggleCollapseAll}
+        title={t.deckList.collapseAll}
+        aria-label={t.deckList.collapseAll}
       >
-        <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="8"></circle><line x1="21" y1="21" x2="16.65" y2="16.65"></line></svg>
+        <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="4 14 10 14 10 20"></polyline><polyline points="20 10 14 10 14 4"></polyline><line x1="14" y1="10" x2="21" y2="3"></line><line x1="3" y1="21" x2="10" y2="14"></line></svg>
       </button>
     </div>
 
-    {#if searchOpen}
-      <div class="decks-collapsible-search-row">
-        <div class="decks-filter-input-wrapper">
-          <svg class="decks-filter-search-icon" xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="8"></circle><line x1="21" y1="21" x2="16.65" y2="16.65"></line></svg>
-          <input
-            type="text"
-            class="decks-filter-input"
-            placeholder={t.deckList.filterPlaceholder}
-            bind:this={searchInputEl}
-            bind:value={filterText}
-            on:input={handleFilterInput}
-            on:keydown={handleSearchKeydown}
-          />
-          {#if filterText}
-            <button
-              class="clickable-icon decks-filter-clear-button"
-              aria-label={t.deckList.clearFilter}
-              on:click={clearFilter}
-            >
-              <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="6" x2="6" y2="18"></line><line x1="6" y1="6" x2="18" y2="18"></line></svg>
-            </button>
-          {/if}
-        </div>
-      </div>
-    {/if}
-
-    {#if allDecks.length === 0}
+    {#if allDecks.length === 0 && customDeckGroups.length === 0}
       <div class="decks-empty-state">
         <p>{t.deckList.emptyNoDecks}</p>
         <p class="decks-help-text">
           {I18n.format(t.deckList.tagYourNotes, { tag: deckTag })}
         </p>
       </div>
-    {:else if decks.length === 0}
+    {:else if filtering && matchingLeafCount === 0}
       <div class="decks-empty-state">
         <p>{t.deckList.emptyNoFilterMatch}</p>
         <p class="decks-help-text">{t.deckList.emptyFilterHint}</p>
@@ -1454,7 +1580,7 @@
               on:click={() => void clickSortColumn("name")}
               aria-label={t.deckList.sortByName}
             >
-              <span>{viewMode === "files" ? t.deckList.columnDeck : viewMode === "tags" ? t.deckList.columnTagGroup : t.deckList.columnCustomDeck}</span>
+              <span>{t.deckList.columnDeck}</span>
               <span class="decks-sort-arrow" use:sortIconAction={nameArrow}></span>
             </button>
             <button
@@ -1479,124 +1605,99 @@
             </button>
             <div class="decks-col-config"></div>
           </div>
-          {#each filteredItems as item, i (getItemId(item))}
-            {@const itemStats = getDeckStats(getItemId(item))}
-            <!--
-              Staggered fade-in: each row appears 30ms after the previous,
-              so the list eases in rather than popping. Keyed (id), so the
-              transition fires ONLY on first appearance and on genuinely
-              new rows — existing rows that just got fresh stats stay put.
-              `|global` is required so the fade fires on the very first
-              paint too (going from empty state → populated mounts the
-              {:else} block fresh; local transitions don't play in that
-              case, only `|global` does).
-              200ms total per row keeps the stagger snappy.
-            -->
+          {#each flattenedRows as row (row.node.id)}
+            {@const node = row.node}
+            {@const icon = rowIcon(node)}
             <div
-              class="decks-deck-row"
-              class:decks-deck-row-pinned={pinnedIds.has(getItemId(item))}
-              in:fade|global={{ duration: 200, delay: Math.min(i, 20) * 30 }}
+              class="decks-deck-row decks-tree-row-{node.kind}"
+              class:decks-deck-row-pinned={node.pinned}
+              in:fade|global={{ duration: 120 }}
             >
-
               <div class="decks-col-deck">
-                {#if pinnedIds.has(getItemId(item))}
+                <span class="decks-tree-indent" style="--decks-indent: {node.depth * 16}px;"></span>
+                {#if node.kind !== "leaf"}
+                  <button
+                    class="decks-tree-chevron"
+                    class:decks-tree-chevron-open={row.expanded}
+                    on:click|stopPropagation={() => toggleCollapse(node.id)}
+                    aria-label={row.expanded ? t.deckList.collapse : t.deckList.expand}
+                    aria-expanded={row.expanded}
+                  >
+                    <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="9 18 15 12 9 6"></polyline></svg>
+                  </button>
+                {:else}
+                  <span class="decks-tree-chevron-spacer"></span>
+                {/if}
+                {#if node.pinned}
                   <span class="decks-pin-indicator" use:pinIconAction={"pin"} title={t.deckList.pinned}></span>
+                {:else if icon?.emoji}
+                  <span class="decks-tag-group-icon">{icon.emoji}</span>
+                {:else if icon?.lucide}
+                  <span class="decks-tree-folder-icon" use:pinIconAction={icon.lucide}></span>
                 {/if}
                 <span
                   class="decks-deck-name-link"
-                  on:click={(e) =>
-                    handleTouchClick(() => handleItemClick(item), e)}
-                  on:touchend={(e) =>
-                    handleTouchClick(() => handleItemClick(item), e)}
-                  on:keydown={(e) => e.key === "Enter" && handleItemClick(item)}
+                  on:click={(e) => handleTouchClick(() => handleRowStudy(node), e)}
+                  on:touchend={(e) => handleTouchClick(() => handleRowStudy(node), e)}
+                  on:keydown={(e) => e.key === "Enter" && handleRowStudy(node)}
                   role="button"
                   tabindex="0"
-                  title={I18n.format(t.deckList.clickToReview, { name: item.name })}
+                  title={node.kind === "leaf"
+                    ? I18n.format(t.deckList.clickToReview, { name: node.name })
+                    : node.kind === "section"
+                      ? node.name
+                      : I18n.format(t.deckList.reviewAllUnder, { name: node.name })}
                 >
-                  {#if isDeckGroup(item)}
-                    <span class="decks-tag-group-icon">🏷️</span>
-                  {:else if item.type === 'custom' && item.deckType === 'filter'}
-                    <span class="decks-tag-group-icon">🔍</span>
-                  {:else if item.type === 'custom'}
-                    <span class="decks-tag-group-icon">📋</span>
-                  {/if}
-                  {item.name}
-                  {#if isDeckGroup(item)}
+                  <span class="decks-deck-name-text">{node.name}</span>
+                  {#if node.kind === "section"}
+                    <span class="decks-tag-group-count">{sectionMeta(node)}</span>
+                  {:else if node.id.startsWith("tag:")}
                     <span class="decks-tag-group-count"
-                      >{I18n.format(t.deckList.filesCount, { count: item.deckIds.length })}</span
+                      >{I18n.format(t.deckList.filesCount, { count: node.deckIds.length })}</span
                     >
-                  {:else if item.type === 'custom' && item.deckType === 'filter'}
+                  {:else if node.customDeck && node.customDeck.deckType === "filter"}
                     <span class="decks-tag-group-count"
-                      >{I18n.format(t.deckList.cardsCount, { count: getDeckStats(item.id).totalCount })}</span
+                      >{I18n.format(t.deckList.cardsCount, { count: getDeckStats(node.customDeck.id).totalCount })}</span
                     >
-                  {:else if item.type === 'custom'}
+                  {:else if node.customDeck}
                     <span class="decks-tag-group-count"
-                      >{I18n.format(t.deckList.cardsCount, { count: item.flashcardIds.length })}</span
+                      >{I18n.format(t.deckList.cardsCount, { count: node.customDeck.flashcardIds.length })}</span
                     >
                   {/if}
                 </span>
               </div>
               <div
                 class="decks-col-stat"
-                class:has-cards={itemStats.newCount > 0}
+                class:has-cards={node.newCount > 0}
                 class:updating={isUpdatingStats}
-                class:has-limit={'profile' in item && item.profile.hasNewCardsLimitEnabled}
-                title={'profile' in item && item.profile.hasNewCardsLimitEnabled
-                  ? isDeckGroup(item)
-                    ? I18n.format(t.deckList.newCardsGroupTooltip, { count: itemStats.newCount, limit: item.profile.newCardsPerDay })
-                    : I18n.format(t.deckList.newCardsLimitTooltip, { count: itemStats.newCount, limit: item.profile.newCardsPerDay })
-                  : I18n.format(t.deckList.newCardsDueTooltip, { count: itemStats.newCount })}
+                class:has-limit={node.hasLimit}
+                title={newTitle(node)}
               >
-                {itemStats.newCount}
-                {#if 'profile' in item && item.profile.hasNewCardsLimitEnabled}
+                {node.newCount}
+                {#if node.hasLimit}
                   <span class="decks-limit-indicator">⚠</span>
                 {/if}
               </div>
-
               <div
                 class="decks-col-stat"
-                class:has-cards={itemStats.dueCount > 0}
+                class:has-cards={node.dueCount > 0}
                 class:updating={isUpdatingStats}
-                class:has-limit={'profile' in item && item.profile.hasReviewCardsLimitEnabled}
-                title={'profile' in item && item.profile.hasReviewCardsLimitEnabled
-                  ? isDeckGroup(item)
-                    ? I18n.format(t.deckList.reviewCardsGroupTooltip, { count: itemStats.dueCount, limit: item.profile.reviewCardsPerDay })
-                    : I18n.format(t.deckList.reviewCardsLimitTooltip, { count: itemStats.dueCount, limit: item.profile.reviewCardsPerDay })
-                  : I18n.format(t.deckList.reviewCardsDueTooltip, { count: itemStats.dueCount })}
+                class:has-limit={reviewLimited(node)}
+                title={dueTitle(node)}
               >
-                {itemStats.dueCount}
-                {#if 'profile' in item && item.profile.hasReviewCardsLimitEnabled}
+                {node.dueCount}
+                {#if reviewLimited(node)}
                   <span class="decks-limit-indicator">📅</span>
                 {/if}
               </div>
               <div class="decks-col-config">
-                {#if isDeckGroup(item)}
+                {#if node.kind !== "section"}
                   <button
                     class="clickable-icon decks-row-action"
-                    on:click={(e) => handleTouchClick(() => handleGroupConfigClick(item, e), e)}
-                    on:touchend={(e) => handleTouchClick(() => handleGroupConfigClick(item, e), e)}
-                    title={t.deckList.optionsTagGroup}
-                    aria-label={I18n.format(t.deckList.optionsForItem, { name: item.name })}
-                  >
-                    <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="5" r="1"></circle><circle cx="12" cy="12" r="1"></circle><circle cx="12" cy="19" r="1"></circle></svg>
-                  </button>
-                {:else if isCustomDeck(item)}
-                  <button
-                    class="clickable-icon decks-row-action"
-                    on:click={(e) => handleTouchClick(() => handleCustomDeckConfigClick(item, e), e)}
-                    on:touchend={(e) => handleTouchClick(() => handleCustomDeckConfigClick(item, e), e)}
-                    title={t.deckList.optionsCustomDeck}
-                    aria-label={I18n.format(t.deckList.optionsForItem, { name: item.name })}
-                  >
-                    <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="5" r="1"></circle><circle cx="12" cy="12" r="1"></circle><circle cx="12" cy="19" r="1"></circle></svg>
-                  </button>
-                {:else if isFileDeck(item)}
-                  <button
-                    class="clickable-icon decks-row-action"
-                    on:click={(e) => handleTouchClick(() => handleConfigClick(item, e), e)}
-                    on:touchend={(e) => handleTouchClick(() => handleConfigClick(item, e), e)}
+                    on:click={(e) => handleTouchClick(() => handleRowConfig(node, e), e)}
+                    on:touchend={(e) => handleTouchClick(() => handleRowConfig(node, e), e)}
                     title={t.deckList.optionsDeck}
-                    aria-label={I18n.format(t.deckList.optionsForItem, { name: item.name })}
+                    aria-label={I18n.format(t.deckList.optionsForItem, { name: node.name })}
                   >
                     <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="5" r="1"></circle><circle cx="12" cy="12" r="1"></circle><circle cx="12" cy="19" r="1"></circle></svg>
                   </button>
@@ -1674,6 +1775,7 @@
     user-select: none;
     overflow: hidden;
     padding-bottom: var(--size-4-3);
+    -webkit-tap-highlight-color: transparent;
   }
 
   .decks-deck-content {
@@ -1689,7 +1791,7 @@
     display: flex;
     justify-content: space-between;
     align-items: center;
-    padding: var(--size-4-2) var(--size-4-3);
+    padding: var(--size-4-1) var(--size-4-3);
     border-bottom: 1px solid var(--background-modifier-border);
   }
 
@@ -1702,8 +1804,32 @@
 
   .decks-header-buttons {
     display: flex;
-    gap: var(--size-4-1);
+    gap: var(--size-2-1);
     align-items: center;
+  }
+
+  /* Flat interaction — no focus ring and no press "bounce" on any panel button
+     or the deck-name link (a role=button span). */
+  .decks-deck-list-panel button:focus,
+  .decks-deck-list-panel button:focus-visible,
+  .decks-deck-list-panel .clickable-icon:focus,
+  .decks-deck-list-panel .clickable-icon:focus-visible,
+  .decks-deck-list-panel .decks-deck-name-link:focus,
+  .decks-deck-list-panel .decks-deck-name-link:focus-visible {
+    outline: none;
+    box-shadow: none;
+  }
+
+  .decks-deck-list-panel button:not(.decks-tree-chevron):active,
+  .decks-deck-list-panel .clickable-icon:active,
+  .decks-deck-list-panel .decks-deck-name-link:active {
+    transform: none;
+  }
+
+  /* Compact icon buttons in the header + filter row. */
+  .decks-header-buttons .clickable-icon,
+  .decks-collapse-all-button {
+    padding: var(--size-2-2);
   }
 
   .decks-refreshing :global(svg) {
@@ -1715,69 +1841,22 @@
     to { transform: rotate(360deg); }
   }
 
-  /* ── Tabs (segmented control) ── */
-  .decks-tab-switcher {
+  /* ── Filter row (always-visible search + collapse-all) ── */
+  .decks-filter-row {
     display: flex;
     align-items: center;
-    gap: var(--size-4-2);
-    padding: var(--size-4-2) var(--size-4-3);
+    gap: var(--size-4-1);
+    padding: var(--size-4-1) var(--size-4-3);
     border-bottom: 1px solid var(--background-modifier-border);
   }
 
-  .decks-tab-group {
-    display: flex;
+  .decks-filter-row .decks-filter-input-wrapper {
     flex: 1;
     min-width: 0;
-    overflow: hidden;
-    background-color: var(--background-modifier-hover);
-    border-radius: var(--radius-s);
-    padding: 2px;
   }
 
-  .decks-tab-button {
-    flex: 1 1 0;
-    min-width: 0;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    padding: var(--size-4-1) var(--size-4-2);
-    border: none;
-    border-radius: var(--radius-s);
-    background: transparent;
-    color: var(--text-muted);
-    cursor: pointer;
-    font-size: var(--font-ui-smaller);
-    font-weight: var(--font-medium);
-    transition: all 0.15s ease;
-  }
-
-  .decks-tab-button span {
-    display: block;
-    min-width: 0;
-    overflow: hidden;
-    text-overflow: ellipsis;
-    white-space: nowrap;
-  }
-
-  .decks-tab-button:hover {
-    color: var(--text-normal);
-  }
-
-  .decks-tab-active {
-    background-color: var(--background-primary);
-    color: var(--text-normal);
-    box-shadow: var(--shadow-s);
-    font-weight: var(--font-semibold);
-  }
-
-  /* ── Collapsible search row ── */
-  .decks-collapsible-search-row {
-    padding: var(--size-4-2) var(--size-4-3);
-    border-bottom: 1px solid var(--background-modifier-border);
-  }
-
-  .decks-search-toggle-active {
-    color: var(--text-accent);
+  .decks-collapse-all-button {
+    flex-shrink: 0;
   }
 
   .decks-filter-input-wrapper {
@@ -1800,7 +1879,8 @@
 
   .decks-filter-input {
     width: 100%;
-    padding: var(--size-4-1) 30px;
+    height: 28px;
+    padding: 0 30px;
     border: 1px solid var(--background-modifier-border);
     border-radius: var(--radius-s);
     background: var(--background-modifier-form-field);
@@ -1834,7 +1914,7 @@
     grid-column: 1 / -1;
     display: grid;
     grid-template-columns: subgrid;
-    padding: var(--size-4-1) var(--size-4-3);
+    padding: var(--size-2-1) var(--size-4-3);
     font-size: var(--font-ui-smaller);
     font-weight: var(--font-semibold);
     color: var(--text-faint);
@@ -1915,6 +1995,7 @@
     max-height: calc(100vh - 240px);
     display: grid;
     grid-template-columns: 1fr auto auto 36px;
+    grid-auto-rows: min-content;
     column-gap: 20px;
     align-content: start;
   }
@@ -1932,7 +2013,7 @@
     grid-column: 1 / -1;
     display: grid;
     grid-template-columns: subgrid;
-    padding: var(--size-4-1) var(--size-4-3);
+    padding: var(--size-2-1) var(--size-4-3);
     align-items: center;
     border-radius: var(--radius-s);
   }
@@ -1943,41 +2024,44 @@
 
   /* ── Deck name ── */
   .decks-col-deck {
+    display: flex;
+    align-items: center;
     font-size: var(--font-ui-small);
     color: var(--text-normal);
     justify-self: start;
     min-width: 0;
     width: 100%;
-    overflow: hidden;
   }
 
   .decks-deck-name-link {
+    flex: 1 1 auto;
+    min-width: 0;
     cursor: pointer;
     color: var(--text-normal);
+    display: flex;
+    align-items: center;
+    border-radius: var(--radius-s);
+  }
+
+  .decks-deck-name-text {
+    min-width: 0;
     overflow: hidden;
     text-overflow: ellipsis;
     white-space: nowrap;
-    display: flex;
-    align-items: center;
-    min-height: 100%;
-    border-radius: var(--radius-s);
   }
 
   .decks-deck-name-link:hover {
     color: var(--text-accent);
   }
 
-  .decks-deck-name-link:focus-visible {
-    outline: 2px solid var(--interactive-accent);
-    outline-offset: 2px;
-  }
-
   .decks-tag-group-icon {
+    flex-shrink: 0;
     margin-right: var(--size-4-1);
     font-size: 11px;
   }
 
   .decks-tag-group-count {
+    flex-shrink: 0;
     margin-left: var(--size-4-1);
     font-size: var(--font-ui-smaller);
     color: var(--text-faint);
@@ -2253,44 +2337,74 @@
     background: var(--background-modifier-hover);
   }
 
-  .decks-overflow-item-active {
-    color: var(--text-accent);
-    font-weight: var(--font-semibold);
+  /* ── Tree rows (section / folder / leaf) ── */
+  .decks-tree-indent {
+    flex-shrink: 0;
+    width: var(--decks-indent, 0);
   }
 
-  /* Tab compact trigger */
-  .decks-tab-compact-container {
-    position: relative;
-    flex: 1;
-    min-width: 0;
-  }
-
-  .decks-tab-compact-btn {
-    display: flex;
+  .decks-tree-chevron {
+    flex-shrink: 0;
+    width: 16px;
+    height: 16px;
+    display: inline-flex;
     align-items: center;
-    justify-content: space-between;
-    gap: var(--size-4-1);
-    width: 100%;
-    padding: var(--size-4-1) var(--size-4-2);
-    background: var(--background-modifier-hover);
+    justify-content: center;
+    padding: 0;
     border: none;
+    background: transparent;
+    color: var(--text-muted);
+    cursor: pointer;
     border-radius: var(--radius-s);
+    box-shadow: none;
+    transition: transform 0.12s ease;
+  }
+
+  .decks-tree-chevron:hover {
     color: var(--text-normal);
+  }
+
+  .decks-tree-chevron-open {
+    transform: rotate(90deg);
+  }
+
+  .decks-tree-chevron-spacer {
+    flex-shrink: 0;
+    width: 16px;
+  }
+
+  .decks-tree-chevron :global(svg),
+  .decks-tree-folder-icon :global(svg) {
+    width: 14px;
+    height: 14px;
+  }
+
+  .decks-tree-folder-icon {
+    display: inline-flex;
+    align-items: center;
+    flex-shrink: 0;
+    margin-right: var(--size-4-1);
+    color: var(--text-muted);
+  }
+
+  /* Section header row: subtle fill + uppercase label, expand/collapse only. */
+  .decks-tree-row-section {
+    background: var(--background-secondary);
+  }
+
+  .decks-tree-row-section .decks-deck-name-link {
     font-size: var(--font-ui-smaller);
     font-weight: var(--font-semibold);
-    cursor: pointer;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+    color: var(--text-muted);
   }
 
-  .decks-tab-compact-btn span {
-    overflow: hidden;
-    text-overflow: ellipsis;
-    white-space: nowrap;
+  .decks-tree-row-section .decks-deck-name-link:hover {
+    color: var(--text-normal);
   }
 
-  .decks-overflow-menu-tabs {
-    right: auto;
-    left: 0;
-    min-width: 100%;
+  .decks-tree-row-folder .decks-deck-name-link {
+    font-weight: var(--font-medium);
   }
-
 </style>

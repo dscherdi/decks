@@ -73,6 +73,9 @@ export type DeckListPanelComponent = (
   updatePinnedIds?(ids: string[]): void;
   // Push a new sort mode in after a settings save / cross-device reload.
   updateSortMode?(mode: DeckListSortMode): void;
+  // Push fresh collapsed branch-node ids in after a settings save /
+  // cross-device reload so the tree's expand/collapse state stays in sync.
+  updateCollapsedIds?(ids: string[]): void;
   // Push a new min-card-count threshold in after settings change.
   updateMinDeckCardCount?(value: number): void;
   // Push the AI-enabled toggle in after a settings change so the generate
