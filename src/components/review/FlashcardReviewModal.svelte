@@ -27,6 +27,7 @@
   import { isOcclusionV2, parseOcclusionBack, activeMaskIdForCard, prepareClozeMath } from "@decks/core";
   import { renderCardSide } from "../../utils/html-template-render";
   import { renderOcclusion } from "../../utils/occlusion-render";
+  import ReviewScratchpad from "./ReviewScratchpad.svelte";
   import {
     DEFAULT_REVIEW_SHORTCUTS,
     matchesShortcut,
@@ -270,6 +271,7 @@
 
   let showAnswer = false;
   let showNotes = false;
+  let showScratchpad = false;
   let isLoading = false;
   let reviewFinished = false;
   let frontEl: HTMLElement;
@@ -683,6 +685,7 @@
     collapsedBreadcrumbIndices = initialCollapsed;
     showAnswer = false;
     showNotes = false;
+    showScratchpad = false;
 
     // Cloze indicator count for the current card (recomputed every card so it's
     // never stale; 0 for non-cloze cards hides the indicator).
@@ -811,6 +814,10 @@
         }
       }
     });
+  }
+
+  function toggleScratchpad() {
+    showScratchpad = !showScratchpad;
   }
 
   function toggleNotes() {
@@ -1102,6 +1109,9 @@
     if (isActive && !isActive()) return;
     if (isLoading) return;
     if (searchMode) return;
+    // While the scratchpad covers the card, keep review shortcuts (ratings,
+    // reveal, B/S/R) from firing — the text box would otherwise trigger them.
+    if (showScratchpad) return;
 
     const now = Date.now();
     const eventType = "keyboard";
@@ -1639,6 +1649,7 @@
   {#if currentCard}
     <div
       class="decks-card-content"
+      class:decks-scratchpad-covered={showScratchpad}
       on:touchstart|passive={handleTouchStart}
       on:touchend|passive={handleTouchEnd}
     >
@@ -1766,6 +1777,32 @@
                     <path d="M19.07 4.93a10 10 0 0 1 0 14.14"></path>
                   </svg>
                 {/if}
+              </button>
+            {/if}
+            {#if currentCard}
+              <button
+                class="decks-scratchpad-button decks-icon-btn clickable-icon"
+                class:decks-scratchpad-active={showScratchpad}
+                on:click={toggleScratchpad}
+                title={r.scratchpad}
+                aria-label={r.scratchpad}
+                type="button"
+                tabindex="-1"
+              >
+                <svg
+                  xmlns="http://www.w3.org/2000/svg"
+                  width="12"
+                  height="12"
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="currentColor"
+                  stroke-width="2"
+                  stroke-linecap="round"
+                  stroke-linejoin="round"
+                >
+                  <path d="M12 20h9"></path>
+                  <path d="M16.5 3.5a2.121 2.121 0 0 1 3 3L7 19l-4 1 1-4 12.5-12.5z"></path>
+                </svg>
               </button>
             {/if}
             {#if onCardStateAction && currentCard}
@@ -1987,6 +2024,13 @@
         {/if}
       </div>
     </div>
+
+    {#key currentCard?.id}
+      <ReviewScratchpad
+        open={showScratchpad}
+        on:close={() => (showScratchpad = false)}
+      />
+    {/key}
 
     <div class="decks-action-buttons">
       {#if !showAnswer}
@@ -2506,6 +2550,24 @@
 
   .decks-tts-button.decks-tts-active {
     color: var(--interactive-accent);
+  }
+
+  .decks-scratchpad-button {
+    width: 24px !important;
+    height: 24px !important;
+    min-width: 0 !important;
+    min-height: 0 !important;
+    padding: 0 !important;
+    color: var(--text-muted);
+  }
+
+  .decks-scratchpad-button.decks-scratchpad-active {
+    color: var(--interactive-accent);
+  }
+
+  /* The scratchpad takes the card's flex slot; hide the card underneath it. */
+  .decks-card-content.decks-scratchpad-covered {
+    display: none;
   }
 
   .decks-card-actions-menu {
