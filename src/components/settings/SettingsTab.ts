@@ -23,6 +23,7 @@ import type { IDatabaseService } from "@/database/DatabaseFactory";
 import type { FsrsWeightSet } from "@/database/types";
 import { Logger } from "@/utils/logging";
 import { OptimizeFsrsModal } from "./OptimizeFsrsModal";
+import { docUrl } from "../../utils/docs";
 import { type AiProviderId, I18n, type LanguagePreference, PROVIDER_MODELS, SUPPORTED_LANGUAGES } from "@decks/core";
 
 export class DecksSettingTab extends PluginSettingTab {
@@ -129,7 +130,15 @@ export class DecksSettingTab extends PluginSettingTab {
   // template file itself (a markdown codeblock postprocessor).
   private addTemplateSettings(containerEl: HTMLElement): void {
     const t = I18n.t.settings.templates;
-    new Setting(containerEl).setName(t.heading).setHeading();
+    new Setting(containerEl)
+      .setName(t.heading)
+      .setHeading()
+      .addExtraButton((b) =>
+        b
+          .setIcon("info")
+          .setTooltip(I18n.t.help.docs)
+          .onClick(() => window.open(docUrl("cards/templates"), "_blank"))
+      );
 
     if (!this.settings.templates) this.settings.templates = { templateFolder: "" };
 
@@ -162,7 +171,15 @@ export class DecksSettingTab extends PluginSettingTab {
 
   private addAiSettings(containerEl: HTMLElement): void {
     const s = I18n.t.settings.ai;
-    new Setting(containerEl).setName(s.heading).setHeading();
+    new Setting(containerEl)
+      .setName(s.heading)
+      .setHeading()
+      .addExtraButton((b) =>
+        b
+          .setIcon("info")
+          .setTooltip(I18n.t.help.docs)
+          .onClick(() => window.open(docUrl("ai"), "_blank"))
+      );
 
     // The provider/model/key fields render into their own container so toggling
     // "enabled" (or switching provider) rebuilds ONLY that container instead of
@@ -391,7 +408,15 @@ export class DecksSettingTab extends PluginSettingTab {
   }
 
   private async addFsrsOptimizationSettings(containerEl: HTMLElement): Promise<void> {
-    new Setting(containerEl).setName(I18n.t.settings.fsrs.heading).setHeading();
+    new Setting(containerEl)
+      .setName(I18n.t.settings.fsrs.heading)
+      .setHeading()
+      .addExtraButton((b) =>
+        b
+          .setIcon("info")
+          .setTooltip(I18n.t.help.docs)
+          .onClick(() => window.open(docUrl("reviewing/optimizer"), "_blank"))
+      );
 
     const active = await this.db.getActiveTrainedWeightSet();
     const desc = this.formatFsrsDescription(active);
@@ -556,7 +581,15 @@ export class DecksSettingTab extends PluginSettingTab {
   }
 
   private addReviewSettings(containerEl: HTMLElement): void {
-    new Setting(containerEl).setName(I18n.t.settings.review.heading).setHeading();
+    new Setting(containerEl)
+      .setName(I18n.t.settings.review.heading)
+      .setHeading()
+      .addExtraButton((b) =>
+        b
+          .setIcon("info")
+          .setTooltip(I18n.t.help.docs)
+          .onClick(() => window.open(docUrl("organizing/settings"), "_blank"))
+      );
 
     new Setting(containerEl)
       .setName(I18n.t.settings.review.showProgress)
@@ -742,7 +775,13 @@ export class DecksSettingTab extends PluginSettingTab {
   private addCanvasDecksSettings(containerEl: HTMLElement): void {
     new Setting(containerEl)
       .setName(I18n.t.settings.canvasDecks.heading)
-      .setHeading();
+      .setHeading()
+      .addExtraButton((b) =>
+        b
+          .setIcon("info")
+          .setTooltip(I18n.t.help.docs)
+          .onClick(() => window.open(docUrl("cards/canvas"), "_blank"))
+      );
 
     // Folder picker dropdown reusing the same getAllFolders() pattern.
     const folderOptions: Record<string, string> = {

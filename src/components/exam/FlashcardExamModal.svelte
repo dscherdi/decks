@@ -8,6 +8,7 @@
     type ExamQuestionOutcome,
     type ExamSession,
   } from "@decks/core";
+  import DocInfoButton from "../DocInfoButton.svelte";
 
   export let attempt: ExamAttempt;
   export let deckName: string;
@@ -353,6 +354,7 @@
   <div class="decks-exam-header">
     <div class="decks-exam-title">{deckName}</div>
     <div class="decks-exam-header-right">
+      <DocInfoButton path="exams/taking-an-exam" />
       {#if attempt.settings.timeLimitMinutes > 0 && phase === "question"}
         <span
           class="decks-exam-timer"

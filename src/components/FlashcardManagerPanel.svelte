@@ -18,6 +18,7 @@
   import { formatBadgeParts } from "../services/FilterBadgeFormatter";
   import type { EditTarget, EditCommitPayload } from "./FlashcardManagerEditTypes";
   import FilterBuilder from "./FilterBuilder.svelte";
+  import DocInfoButton from "./DocInfoButton.svelte";
   import { onMount, onDestroy } from "svelte";
   import { prepareFuzzySearch, Notice } from "obsidian";
   import type { App } from "obsidian";
@@ -920,6 +921,7 @@
 
     <!-- Control bar: search + filter button -->
     <div class="decks-control-bar">
+      <DocInfoButton path="organizing/flashcard-manager" />
       <div class="decks-control-search-wrap">
         <span class="decks-control-search-icon" aria-hidden="true">🔍</span>
         <input

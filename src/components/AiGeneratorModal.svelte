@@ -4,6 +4,7 @@
   import { I18n, type GeneratedCard, type GenerateHandlers } from "@decks/core";
   import AiPromptComposer from "./AiPromptComposer.svelte";
   import BatchCardRow from "./BatchCardRow.svelte";
+  import DocInfoButton from "./DocInfoButton.svelte";
   import { FilePickerModal } from "../utils/file-picker";
   import {
     type ContextItem,
@@ -287,7 +288,10 @@
 
 <div class="decks-ai-gen" bind:this={rootEl}>
   <div class="decks-ai-gen-header">
-    <h3>{g.title}</h3>
+    <div class="decks-ai-gen-title-row">
+      <h3>{g.title}</h3>
+      <DocInfoButton path="ai" />
+    </div>
     <div class="decks-ai-gen-sub">{g.intro}</div>
   </div>
 
@@ -512,6 +516,12 @@
   .decks-ai-gen-header {
     flex: 0 0 auto;
     padding-bottom: 10px;
+  }
+  .decks-ai-gen-title-row {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 8px;
   }
   .decks-ai-gen-header h3 {
     margin: 0 0 4px 0;

@@ -28,6 +28,7 @@
   import { renderCardSide } from "../../utils/html-template-render";
   import { renderOcclusion } from "../../utils/occlusion-render";
   import ReviewScratchpad from "./ReviewScratchpad.svelte";
+  import DocInfoButton from "../DocInfoButton.svelte";
   import {
     DEFAULT_REVIEW_SHORTCUTS,
     matchesShortcut,
@@ -1469,14 +1470,17 @@
 
 <div class="decks-review-modal">
   <div class="decks-modal-header">
-    <h3>
-      {browseMode ? "Browse" : "Review session"} - {deckOrGroup.name}
-      {#if currentCard && isClozeType(currentCard.type) && clozeGroupTotal > 0}
-        <span class="decks-cloze-indicator"
-          >Cloze {(currentCard.clozeOrder ?? clozeGroupIndex) + 1}/{clozeGroupTotal}</span
-        >
-      {/if}
-    </h3>
+    <div class="decks-modal-title-row">
+      <h3>
+        {browseMode ? "Browse" : "Review session"} - {deckOrGroup.name}
+        {#if currentCard && isClozeType(currentCard.type) && clozeGroupTotal > 0}
+          <span class="decks-cloze-indicator"
+            >Cloze {(currentCard.clozeOrder ?? clozeGroupIndex) + 1}/{clozeGroupTotal}</span
+          >
+        {/if}
+      </h3>
+      <DocInfoButton path="reviewing/sessions" />
+    </div>
     {#if currentCard}
       {@const breadcrumbParts = getBreadcrumbParts(currentCard)}
       {#if breadcrumbParts.length > 0}
@@ -2303,6 +2307,12 @@
     gap: 8px;
     padding: 16px 20px;
     border-bottom: 1px solid var(--background-modifier-border);
+  }
+
+  .decks-modal-title-row {
+    display: flex;
+    align-items: center;
+    gap: 8px;
   }
 
   .decks-modal-header h3 {

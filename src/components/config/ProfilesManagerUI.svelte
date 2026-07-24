@@ -13,6 +13,7 @@
   } from "../../database/types";
   import { getDefaultLearningSteps, getDefaultRelearningSteps, DEFAULT_EXAM_SETTINGS, I18n, validateLearningSteps, validateRelearningSteps } from "@decks/core";
   import { ttsService } from "../../services/TtsService";
+  import DocInfoButton from "../DocInfoButton.svelte";
 
   const t = I18n.t;
   const p = t.profiles;
@@ -887,7 +888,10 @@
 
     {#if selectedProfile}
       <div class="decks-profile-settings">
-        <h3>{p.profileSettings}</h3>
+        <div class="decks-profiles-title-row">
+          <h3>{p.profileSettings}</h3>
+          <DocInfoButton path="organizing/profiles" />
+        </div>
 
         <div bind:this={profileNameContainer}></div>
 
@@ -978,6 +982,13 @@
     display: flex;
     flex-direction: column;
     height: 100%;
+  }
+
+  .decks-profiles-title-row {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 8px;
   }
 
   .decks-profiles-content {

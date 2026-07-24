@@ -2,6 +2,7 @@
   import { onMount, createEventDispatcher, tick } from "svelte";
   import { Setting } from "obsidian";
   import ReviewHeatmap from "./ReviewHeatmap.svelte";
+  import DocInfoButton from "../DocInfoButton.svelte";
   import ReviewsOverTimeChart from "./ReviewsOverTimeChart.svelte";
   import CardCountsChart from "./CardCountsChart.svelte";
   import ReviewIntervalsChart from "./ReviewIntervalsChart.svelte";
@@ -329,7 +330,10 @@
 </script>
 
 <div class="decks-statistics-container">
-  <h2 class="decks-statistics-modal-title">{t.statistics.statisticsTitle}</h2>
+  <div class="decks-statistics-title-row">
+    <h2 class="decks-statistics-modal-title">{t.statistics.statisticsTitle}</h2>
+    <DocInfoButton path="organizing/statistics" />
+  </div>
 
   <div class="decks-filters">
     <div bind:this={deckFilterContainer}></div>
@@ -523,6 +527,13 @@
     display: flex;
     flex-direction: column;
     justify-content: space-between;
+  }
+
+  .decks-statistics-title-row {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 8px;
   }
 
   .decks-stats {

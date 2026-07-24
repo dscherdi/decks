@@ -20,6 +20,7 @@
   import type { DeckTree, TreeNode, FlatRow } from "@decks/core";
 
   import ReviewHeatmap from "./statistics/ReviewHeatmap.svelte";
+  import DocInfoButton from "./DocInfoButton.svelte";
   import { AnkiExportModal } from "./export/AnkiExportModal";
   import { DeckResetModal } from "./DeckResetModal";
   import type { StatisticsService } from "@/services/StatisticsService";
@@ -1435,7 +1436,10 @@
 
 <div class="decks-deck-list-panel" bind:clientWidth={panelWidth}>
   <div class="decks-panel-header">
-    <div class="decks-panel-title">{t.deckList.title}</div>
+    <div class="decks-panel-title-row">
+      <div class="decks-panel-title">{t.deckList.title}</div>
+      <DocInfoButton path="getting-started/interface" />
+    </div>
     <div class="decks-header-buttons">
       {#if !isHeaderCompact}
         <button
@@ -1730,6 +1734,9 @@
                   <span class="decks-deck-name-text">{node.name}</span>
                   {#if node.kind === "section"}
                     <span class="decks-tag-group-count">{sectionMeta(node)}</span>
+                    {#if node.section === "custom"}
+                      <DocInfoButton path="organizing/custom-decks" />
+                    {/if}
                   {:else if node.id.startsWith("tag:")}
                     <span class="decks-tag-group-count"
                       >{I18n.format(t.deckList.filesCount, { count: node.deckIds.length })}</span
@@ -1872,6 +1879,12 @@
     align-items: center;
     padding: var(--size-4-1) var(--size-4-3);
     border-bottom: 1px solid var(--background-modifier-border);
+  }
+
+  .decks-panel-title-row {
+    display: flex;
+    align-items: center;
+    gap: 4px;
   }
 
   .decks-panel-title {

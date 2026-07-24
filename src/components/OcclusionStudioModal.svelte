@@ -1,6 +1,7 @@
 <script lang="ts">
   import { onMount } from "svelte";
   import { I18n, type OcclusionMask } from "@decks/core";
+  import DocInfoButton from "./DocInfoButton.svelte";
 
   const o = I18n.t.occlusion;
 
@@ -209,6 +210,7 @@
   <div class="decks-occlusion-studio-header">
     <span class="decks-occlusion-studio-title">{o.studioTitle}</span>
     <span class="decks-occlusion-studio-hint">{o.drawHint}</span>
+    <DocInfoButton path="cards/image-occlusion" />
   </div>
 
   <div class="decks-occlusion-studio-body">

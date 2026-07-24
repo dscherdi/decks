@@ -1013,6 +1013,9 @@ div.decks-card-content
   align-items: baseline;
   gap: 12px;
 }
+.decks-occlusion-studio-header .decks-doc-info {
+  margin-left: auto;
+}
 .decks-occlusion-studio-title {
   font-weight: var(--font-weight-bold, 600);
 }
