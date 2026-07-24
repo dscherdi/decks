@@ -37,7 +37,7 @@ import { mount, unmount } from "svelte";
 import type { DeckListPanelComponent } from "../types/svelte-components";
 import type { IDatabaseService } from "../database/DatabaseFactory";
 import type { DecksView } from "./DecksView";
-import type { DeckListSortMode } from "@/settings";
+import type { DeckListSortMode, DeckListView } from "@/settings";
 import { makeModalResponsive, type ResponsiveModalHandle } from "../utils/responsive-modal";
 
 export class DecksViewModal extends Modal {
@@ -119,6 +119,13 @@ export class DecksViewModal extends Modal {
     this.deckListPanelComponent?.updateCollapsedIds?.(ids);
     // Also push into the sidepanel if it's open so both views stay in sync.
     this.getDecksView()?.applyCollapsedIdsUpdate(ids);
+  }
+
+  private async changeDeckListView(view: DeckListView): Promise<void> {
+    this.settings.ui.deckListView = view;
+    await this.saveSettings();
+    this.deckListPanelComponent?.updateDeckListView?.(view);
+    this.getDecksView()?.applyDeckListViewUpdate(view);
   }
 
   onOpen() {
@@ -217,6 +224,8 @@ export class DecksViewModal extends Modal {
         deckListSort: this.settings.ui.deckListSort,
         minDeckCardCount: this.settings.ui.minDeckCardCount,
         onChangeSortMode: (mode: DeckListSortMode) => this.changeSortMode(mode),
+        deckListView: this.settings.ui.deckListView,
+        onChangeDeckListView: (view: DeckListView) => this.changeDeckListView(view),
         collapsedDeckNodeIds: this.settings.ui.collapsedDeckNodeIds,
         onSetCollapsedIds: (ids: string[]) => this.setCollapsedIds(ids),
         globalReviewToday: null,

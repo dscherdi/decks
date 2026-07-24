@@ -3,7 +3,7 @@ import type { Deck, DeckStats } from "../database/types";
 import type { IDatabaseService } from "../database/DatabaseFactory";
 import type { StatisticsService } from "../services/StatisticsService";
 import type { DeckSynchronizer } from "../services/DeckSynchronizer";
-import type { DeckListSortMode } from "../settings";
+import type { DeckListSortMode, DeckListView } from "../settings";
 import type { App } from "obsidian";
 
 // Base Svelte component interface (Svelte 4 style)
@@ -73,6 +73,8 @@ export type DeckListPanelComponent = (
   updatePinnedIds?(ids: string[]): void;
   // Push a new sort mode in after a settings save / cross-device reload.
   updateSortMode?(mode: DeckListSortMode): void;
+  // Push the deck-list view (tree/flat) in after a settings change / reload.
+  updateDeckListView?(view: DeckListView): void;
   // Push fresh collapsed branch-node ids in after a settings save /
   // cross-device reload so the tree's expand/collapse state stays in sync.
   updateCollapsedIds?(ids: string[]): void;

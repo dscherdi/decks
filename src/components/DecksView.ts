@@ -31,7 +31,7 @@ import { mount, unmount } from "svelte";
 import { ProgressTracker } from "@/utils/progress";
 import type { DeckListPanelComponent } from "../types/svelte-components";
 import type { IDatabaseService } from "../database/DatabaseFactory";
-import type { DeckListSortMode } from "@/settings";
+import type { DeckListSortMode, DeckListView } from "@/settings";
 
 export class DecksView extends ItemView {
   private db: IDatabaseService;
@@ -130,6 +130,17 @@ export class DecksView extends ItemView {
     this.deckListPanelComponent?.updateSortMode?.(mode);
   }
 
+  private async changeDeckListView(view: DeckListView): Promise<void> {
+    this.settings.ui.deckListView = view;
+    await this.saveSettings();
+    this.deckListPanelComponent?.updateDeckListView?.(view);
+  }
+
+  applyDeckListViewUpdate(view: DeckListView): void {
+    this.settings.ui.deckListView = view;
+    this.deckListPanelComponent?.updateDeckListView?.(view);
+  }
+
   applyMinDeckCardCountUpdate(value: number): void {
     this.settings.ui.minDeckCardCount = value;
     this.deckListPanelComponent?.updateMinDeckCardCount?.(value);
@@ -223,6 +234,8 @@ export class DecksView extends ItemView {
         deckListSort: this.settings.ui.deckListSort,
         minDeckCardCount: this.settings.ui.minDeckCardCount,
         onChangeSortMode: (mode: DeckListSortMode) => this.changeSortMode(mode),
+        deckListView: this.settings.ui.deckListView,
+        onChangeDeckListView: (view: DeckListView) => this.changeDeckListView(view),
         collapsedDeckNodeIds: this.settings.ui.collapsedDeckNodeIds,
         onSetCollapsedIds: (ids: string[]) => this.setCollapsedIds(ids),
         globalReviewToday: null,

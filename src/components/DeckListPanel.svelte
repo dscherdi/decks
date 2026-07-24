@@ -32,7 +32,7 @@
   import { ConfirmModal } from "./ConfirmModal";
   import { Notice, setIcon } from "obsidian";
   import type { App } from "obsidian";
-  import type { DeckListSortMode } from "@/settings";
+  import type { DeckListSortMode, DeckListView } from "@/settings";
 
   const t = I18n.t;
 
@@ -149,6 +149,19 @@
 
   export function updateSortMode(mode: DeckListSortMode): void {
     deckListSort = mode;
+  }
+
+  // Deck list layout (tree/flat) — synced through data.json like the sort mode.
+  export let deckListView: DeckListView = "tree";
+  export let onChangeDeckListView: (view: DeckListView) => Promise<void> | void =
+    () => {};
+
+  export function updateDeckListView(view: DeckListView): void {
+    deckListView = view;
+  }
+
+  function setDeckListView(view: DeckListView): void {
+    if (view !== deckListView) void onChangeDeckListView(view);
   }
 
   export function updateMinDeckCardCount(value: number): void {
@@ -405,6 +418,7 @@
     customStats: Map<string, DeckStats>,
     pins: Set<string>,
     minCount: number,
+    view: DeckListView,
   ): DeckTree {
     const getStats = (id: string) => fileStats.get(id) ?? customStats.get(id);
     return buildDeckTree({
@@ -414,6 +428,7 @@
       getStats,
       pinnedIds: pins,
       minDeckCardCount: minCount,
+      flat: view === "flat",
     });
   }
 
@@ -425,6 +440,7 @@
     customDeckStats,
     pinnedIds,
     minDeckCardCount,
+    deckListView,
   );
   $: filtering = filterText.trim().length > 0;
   // Leaving a search discards any transient folds made during it.
@@ -1564,6 +1580,30 @@
           </button>
         {/if}
       </div>
+      <div class="decks-view-toggle" role="group" aria-label={t.deckList.viewToggle}>
+        <button
+          type="button"
+          class="decks-view-toggle-btn"
+          class:decks-view-toggle-active={deckListView === "tree"}
+          on:click={() => setDeckListView("tree")}
+          title={t.deckList.treeView}
+          aria-label={t.deckList.treeView}
+          aria-pressed={deckListView === "tree"}
+        >
+          <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 12h-8"></path><path d="M21 6H8"></path><path d="M21 18h-8"></path><path d="M3 6v4c0 1.1.9 2 2 2h3"></path><path d="M3 10v6c0 1.1.9 2 2 2h3"></path></svg>
+        </button>
+        <button
+          type="button"
+          class="decks-view-toggle-btn"
+          class:decks-view-toggle-active={deckListView === "flat"}
+          on:click={() => setDeckListView("flat")}
+          title={t.deckList.flatView}
+          aria-label={t.deckList.flatView}
+          aria-pressed={deckListView === "flat"}
+        >
+          <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="8" y1="6" x2="21" y2="6"></line><line x1="8" y1="12" x2="21" y2="12"></line><line x1="8" y1="18" x2="21" y2="18"></line><line x1="3" y1="6" x2="3.01" y2="6"></line><line x1="3" y1="12" x2="3.01" y2="12"></line><line x1="3" y1="18" x2="3.01" y2="18"></line></svg>
+        </button>
+      </div>
       <button
         class="clickable-icon decks-collapse-all-button"
         on:click={toggleCollapseAll}
@@ -1858,6 +1898,8 @@
   .decks-header-buttons .clickable-icon,
   .decks-collapse-all-button {
     padding: var(--size-2-2);
+    min-width: 0;
+    min-height: 0;
   }
 
   .decks-refreshing :global(svg) {
@@ -1869,7 +1911,7 @@
     to { transform: rotate(360deg); }
   }
 
-  /* ── Filter row (always-visible search + collapse-all) ── */
+  /* ── Filter row (search + view toggle + collapse-all) ── */
   .decks-filter-row {
     display: flex;
     align-items: center;
@@ -1883,8 +1925,57 @@
     min-width: 0;
   }
 
+  /* Compact, uniform icon button for the collapse-all control (override the
+     larger clickable-icon default so it matches the view toggle). */
   .decks-collapse-all-button {
     flex-shrink: 0;
+    width: 24px;
+    height: 24px;
+    min-height: 0;
+    min-width: 0;
+    padding: 0;
+  }
+
+  /* View toggle (tree / flat) — segmented control. */
+  .decks-view-toggle {
+    display: flex;
+    flex-shrink: 0;
+    background: var(--background-modifier-hover);
+    border-radius: var(--radius-s);
+    padding: 2px;
+    gap: 2px;
+  }
+
+  .decks-view-toggle-btn {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 24px;
+    height: 24px;
+    min-height: 0;
+    min-width: 0;
+    padding: 0;
+    border: none;
+    background: transparent;
+    color: var(--text-muted);
+    border-radius: var(--radius-s);
+    cursor: pointer;
+    box-shadow: none;
+  }
+
+  .decks-view-toggle-btn:hover {
+    color: var(--text-normal);
+  }
+
+  .decks-view-toggle-active {
+    background: var(--background-primary);
+    color: var(--text-normal);
+    box-shadow: var(--shadow-s);
+  }
+
+  .decks-view-toggle-btn :global(svg) {
+    width: 15px;
+    height: 15px;
   }
 
   .decks-filter-input-wrapper {
@@ -1942,7 +2033,7 @@
     grid-column: 1 / -1;
     display: grid;
     grid-template-columns: subgrid;
-    padding: var(--size-2-1) var(--size-4-3);
+    padding: var(--size-2-1) var(--size-4-3) var(--size-2-1) 14px;
     font-size: var(--font-ui-smaller);
     font-weight: var(--font-semibold);
     color: var(--text-faint);
@@ -1964,6 +2055,8 @@
     outline: none;
     padding: 0;
     margin: 0;
+    min-height: 0;
+    min-width: 0;
     font: inherit;
     color: inherit;
     text-transform: inherit;
@@ -2041,7 +2134,8 @@
     grid-column: 1 / -1;
     display: grid;
     grid-template-columns: subgrid;
-    padding: var(--size-2-1) var(--size-4-3);
+    min-height: 26px;
+    padding: 0 var(--size-4-3);
     align-items: center;
     border-radius: var(--radius-s);
   }
@@ -2146,6 +2240,16 @@
     transition: opacity 0.15s ease;
     box-shadow: none !important;
     border: none !important;
+    width: 24px;
+    height: 24px;
+    min-height: 0;
+    min-width: 0;
+    padding: 0;
+  }
+
+  .decks-row-action :global(svg) {
+    width: 14px;
+    height: 14px;
   }
 
   .decks-deck-row:hover .decks-row-action {
@@ -2440,6 +2544,7 @@
 
   /* Section header row: subtle fill + uppercase label, expand/collapse only. */
   .decks-tree-row-section {
+    min-height: 26px;
     background: var(--background-secondary);
   }
 

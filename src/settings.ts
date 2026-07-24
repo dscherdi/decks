@@ -17,6 +17,9 @@ export type DeckListSortMode =
   | "due-asc"
   | "due-desc";
 
+// Deck list layout: the nested folder tree or a flat list (sections kept).
+export type DeckListView = "tree" | "flat";
+
 export interface DecksSettings {
   // Review Session Settings
   review: {
@@ -57,6 +60,8 @@ export interface DecksSettings {
     pinnedDeckIds: string[];
     // Active sort key + direction for the deck list column headers.
     deckListSort: DeckListSortMode;
+    // Deck list layout: nested folder tree or flat list.
+    deckListView: DeckListView;
     // Decks with totalCount strictly less than this number are hidden
     // from the list. Pinned decks are exempt. 0 disables the filter.
     minDeckCardCount: number;
@@ -171,6 +176,7 @@ export const DEFAULT_SETTINGS: DecksSettings = {
     aiGeneratorDisplayMode: "modal",
     pinnedDeckIds: [],
     deckListSort: "name-asc",
+    deckListView: "tree",
     minDeckCardCount: 0,
     collapsedDeckNodeIds: [],
     managerColumnWidths: {},

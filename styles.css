@@ -81,7 +81,6 @@
   -webkit-tap-highlight-color: transparent;
   -webkit-touch-callout: none;
   user-select: none;
-  min-height: 44px;
   min-width: 44px;
   transition: all 0.2s ease;
 }
@@ -212,7 +211,6 @@
   .decks-anki-export-ui .decks-clickable,
   .decks-deck-config-ui .decks-clickable,
   .decks-heatmap-container .decks-clickable {
-    min-height: 44px;
     min-width: 44px;
   }
 
