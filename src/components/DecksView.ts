@@ -19,7 +19,6 @@ import { ExamModalWrapper } from "./exam/ExamModalWrapper";
 import { ExamView, VIEW_TYPE_FLASHCARD_EXAM } from "./exam/ExamView";
 import { StatisticsModal } from "./settings/StatisticsModal";
 import { ProfilesManagerModal } from "./config/ProfilesManagerModal";
-import { DeckConfigModal } from "./config/DeckConfigModal";
 import { SrMigrationModalWrapper } from "./migration/SrMigrationModalWrapper";
 import { SrMigrationController } from "@/services/SrMigrationController";
 import { StatisticsService } from "@/services/StatisticsService";
@@ -386,14 +385,18 @@ export class DecksView extends ItemView {
   }
 
   openDeckConfigModal(deck: DeckWithProfile): void {
-    new DeckConfigModal(
-      this.app,
-      deck,
-      this.db,
-      async () => {
-        await this.refresh();
-      }
-    ).open();
+    void this.db.getActiveTrainedWeightSet().then((active) => {
+      new ProfilesManagerModal(
+        this.app,
+        this.db,
+        async () => {
+          await this.refresh();
+        },
+        active !== null,
+        "assignments",
+        deck.profileId
+      ).open();
+    });
   }
 
   /**

@@ -13,17 +13,23 @@ export class ProfilesManagerModal extends Modal {
   private onProfilesChanged: () => Promise<void>;
   private responsiveHandle?: ResponsiveModalHandle;
   private trainedWeightsAvailable: boolean;
+  private initialTab: "settings" | "assignments";
+  private initialProfileId?: string;
 
   constructor(
     app: App,
     db: IDatabaseService,
     onProfilesChanged: () => Promise<void>,
-    trainedWeightsAvailable = false
+    trainedWeightsAvailable = false,
+    initialTab: "settings" | "assignments" = "settings",
+    initialProfileId?: string
   ) {
     super(app);
     this.db = db;
     this.onProfilesChanged = onProfilesChanged;
     this.trainedWeightsAvailable = trainedWeightsAvailable;
+    this.initialTab = initialTab;
+    this.initialProfileId = initialProfileId;
   }
 
   async onOpen() {
@@ -34,8 +40,9 @@ export class ProfilesManagerModal extends Modal {
 
     contentEl.addClass("decks-profiles-manager-container");
 
-    // Load all profiles
+    // Load all profiles + decks (decks drive the Assignments tab's tag list).
     this.profiles = await this.db.getAllProfiles();
+    const allDecks = await this.db.getAllDecks();
 
     // Mount Svelte component
     this.component = mount(ProfilesManagerUI, {
@@ -44,6 +51,9 @@ export class ProfilesManagerModal extends Modal {
         db: this.db,
         initialProfiles: this.profiles,
         trainedWeightsAvailable: this.trainedWeightsAvailable,
+        initialTab: this.initialTab,
+        initialProfileId: this.initialProfileId,
+        allDecks,
         onclose: () => {
           this.close();
         },

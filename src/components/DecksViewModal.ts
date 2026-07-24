@@ -27,7 +27,6 @@ import { ExamModalWrapper } from "./exam/ExamModalWrapper";
 import { ExamView, VIEW_TYPE_FLASHCARD_EXAM } from "./exam/ExamView";
 import { StatisticsModal } from "./settings/StatisticsModal";
 import { ProfilesManagerModal } from "./config/ProfilesManagerModal";
-import { DeckConfigModal } from "./config/DeckConfigModal";
 import { StatisticsService } from "@/services/StatisticsService";
 import { TagGroupService } from "@decks/core";
 import { CustomDeckService } from "@decks/core";
@@ -441,11 +440,20 @@ export class DecksViewModal extends Modal {
   }
 
   private openDeckConfigModal(deck: DeckWithProfile): void {
-    const modal = new DeckConfigModal(this.app, deck, this.db, async () => {
-      const view = this.getDecksView();
-      if (view) await view.refresh();
+    void this.db.getActiveTrainedWeightSet().then((active) => {
+      const modal = new ProfilesManagerModal(
+        this.app,
+        this.db,
+        async () => {
+          const view = this.getDecksView();
+          if (view) await view.refresh();
+        },
+        active !== null,
+        "assignments",
+        deck.profileId
+      );
+      this.openWithReturn(modal);
     });
-    this.openWithReturn(modal);
   }
 
   private openFlashcardManager(): void {

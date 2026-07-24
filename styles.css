@@ -630,6 +630,19 @@
   }
 }
 
+/* Compact deck list on mobile. The touch-target min-heights above inflate the
+   panel header buttons and rows (the deck name link is a [role="button"]).
+   Reset to match the compact desktop layout. No-op on desktop (no min-height
+   there). Review rating buttons keep their size (scoped to the deck panel). */
+.decks-deck-list-panel button,
+.decks-deck-list-panel [role="button"],
+.decks-deck-list-panel .decks-clickable,
+.decks-deck-list-panel .decks-deck-config-button,
+.decks-deck-list-panel .decks-stats-button,
+.decks-deck-list-panel .decks-refresh-button {
+  min-height: 0;
+}
+
 /* Backup Settings Styles */
 .decks-backup-container {
   margin-top: 10px;

@@ -38,10 +38,6 @@ export type AnkiExportComponent = Svelte5MountedComponent & {
   exportData?(): void;
 };
 
-export type DeckConfigComponent = Svelte5MountedComponent & {
-  saveConfig?(): void;
-};
-
 export type ProfilesManagerComponent = Svelte5MountedComponent & {
   loadProfiles?(): Promise<void>;
 };

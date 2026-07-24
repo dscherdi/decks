@@ -326,11 +326,6 @@
   const onOpenAnkiImport = () => {
     openAnkiImportModal();
   };
-  const onOpenDeckConfig = () => {
-    if (allDecks.length > 0) {
-      openDeckConfigModal(allDecks[0]);
-    }
-  };
 
   let isRefreshing = false;
   // Distinct from isRefreshing: this fires when a background sync runs
@@ -1444,15 +1439,6 @@
       {#if !isHeaderCompact}
         <button
           class="clickable-icon"
-          on:click={onOpenDeckConfig}
-          title={t.deckList.configureDeck}
-          disabled={allDecks.length === 0}
-          aria-label={t.deckList.configureDeck}
-        >
-          <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 20h9"></path><path d="M16.5 3.5a2.121 2.121 0 0 1 3 3L7 19l-4 1 1-4L16.5 3.5z"></path></svg>
-        </button>
-        <button
-          class="clickable-icon"
           on:click={onOpenProfilesManager}
           title={t.deckList.profiles}
           aria-label={t.deckList.profiles}
@@ -1524,14 +1510,6 @@
           </button>
           {#if headerOverflowOpen}
             <div class="decks-overflow-menu decks-overflow-menu-header">
-              <button
-                class="decks-overflow-item"
-                on:click={() => { onOpenDeckConfig(); headerOverflowOpen = false; }}
-                disabled={allDecks.length === 0}
-              >
-                <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 20h9"></path><path d="M16.5 3.5a2.121 2.121 0 0 1 3 3L7 19l-4 1 1-4L16.5 3.5z"></path></svg>
-                {t.deckList.configureDeck}
-              </button>
               <button
                 class="decks-overflow-item"
                 on:click={() => { onOpenProfilesManager(); headerOverflowOpen = false; }}
