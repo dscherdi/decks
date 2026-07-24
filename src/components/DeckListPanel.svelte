@@ -2035,7 +2035,10 @@
     grid-column: 1 / -1;
     display: grid;
     grid-template-columns: subgrid;
-    padding: var(--size-2-1) var(--size-4-3) var(--size-2-1) 14px;
+    /* Match the body-row rhythm (.decks-deck-row: 26px, no vertical padding) so
+       the column header is exactly one row tall on every platform. */
+    min-height: 26px;
+    padding: 0 var(--size-4-3) 0 14px;
     font-size: var(--font-ui-smaller);
     font-weight: var(--font-semibold);
     color: var(--text-faint);
@@ -2479,6 +2482,9 @@
     flex-shrink: 0;
     width: 16px;
     height: 16px;
+    /* Opt out of the global mobile touch min-width (44px): it's a caret, not a
+       tap target. */
+    min-width: 16px;
     display: inline-flex;
     align-items: center;
     justify-content: center;
@@ -2496,7 +2502,20 @@
     color: var(--text-normal);
   }
 
+  /* Keep it a plain rotating caret on tap: no press background and no scale
+     (the global touch :active scale would otherwise clobber the rotation and
+     make the caret flip). Outspecifies the global .decks-deck-list-panel
+     button:active. */
+  .decks-tree-chevron:active {
+    background: transparent;
+    transform: none;
+  }
+
   .decks-tree-chevron-open {
+    transform: rotate(90deg);
+  }
+
+  .decks-tree-chevron-open:active {
     transform: rotate(90deg);
   }
 
