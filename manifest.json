@@ -1,7 +1,7 @@
 {
   "id": "decks",
   "name": "Decks",
-  "version": "2.8.4",
+  "version": "2.8.5",
   "minAppVersion": "1.8.10",
   "description": "Spaced repetition flashcards with FSRS algorithm. Supports cloze deletions and image occlusion using native markdown.",
   "author": "Xherdi Lika",
