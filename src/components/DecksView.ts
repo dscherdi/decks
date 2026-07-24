@@ -14,6 +14,7 @@ import {
 } from "./review/FlashcardReviewView";
 import { ExamAttempt, type DeckProfile } from "@decks/core";
 import { launchExamForSelection } from "./exam/launchExam";
+import { launchCramForSelection } from "./review/launchCram";
 import { ExamModalWrapper } from "./exam/ExamModalWrapper";
 import { ExamView, VIEW_TYPE_FLASHCARD_EXAM } from "./exam/ExamView";
 import { StatisticsModal } from "./settings/StatisticsModal";
@@ -29,6 +30,7 @@ import { openFlashcardManager } from "./FlashcardManagerView";
 import DeckListPanel from "./DeckListPanel.svelte";
 import { mount, unmount } from "svelte";
 import { ProgressTracker } from "@/utils/progress";
+import { openDeckSourceFile } from "@/utils/deck-source";
 import type { DeckListPanelComponent } from "../types/svelte-components";
 import type { IDatabaseService } from "../database/DatabaseFactory";
 import type { DeckListSortMode, DeckListView } from "@/settings";
@@ -196,18 +198,23 @@ export class DecksView extends ItemView {
             : this.startReviewForDeckGroup(deckGroup),
         onBrowseDeck: (deck: DeckWithProfile) => this.startBrowse(deck),
         onBrowseDeckGroup: (deckGroup: DeckGroup) => this.startBrowseForDeckGroup(deckGroup),
-        onCramDeck: (deck: DeckWithProfile) => this.startCram(deck),
-        onCramDeckGroup: (deckGroup: DeckGroup) => this.startCramForDeckGroup(deckGroup),
+        onCramDeck: (deck: DeckWithProfile) =>
+          this.startCramForSelection({ ...deck, type: "file" }),
+        onCramDeckGroup: (deckGroup: DeckGroup) =>
+          this.startCramForSelection(deckGroup),
         isCramResumable: (deck: DeckWithProfile) =>
           this.scheduler.hasResumableCram({ ...deck, type: "file" }, new Date()),
         isCramResumableGroup: (deckGroup: DeckGroup) =>
           this.scheduler.hasResumableCram(deckGroup, new Date()),
         onCustomDeckClick: (customDeck: CustomDeckGroup) => this.startReviewForCustomDeck(customDeck),
         onBrowseCustomDeck: (customDeck: CustomDeckGroup) => this.startBrowseForCustomDeck(customDeck),
-        onCramCustomDeck: (customDeck: CustomDeckGroup) => this.startCramForCustomDeck(customDeck),
+        onCramCustomDeck: (customDeck: CustomDeckGroup) =>
+          this.startCramForSelection(customDeck),
         isCramResumableCustom: (customDeck: CustomDeckGroup) =>
           this.scheduler.hasResumableCram(customDeck, new Date()),
         onEditCustomDeck: (customDeck: CustomDeckGroup) => this.openEditCustomDeck(customDeck),
+        onOpenSource: (deck: DeckWithProfile) =>
+          openDeckSourceFile(this.app, deck.filepath).catch(console.error),
         onExamDeck: (deck: DeckWithProfile) =>
           this.startExamForSelection({ ...deck, type: "file" }, deck.profile),
         onExamDeckGroup: (deckGroup: DeckGroup) =>
@@ -592,24 +599,6 @@ export class DecksView extends ItemView {
     }
   }
 
-  // Cram always opens the focused modal (no tab-mode variant) — it's a
-  // short drill isolated from real scheduling.
-  private openCramSession(deckOrGroup: DeckOrGroup, cards: Flashcard[]): void {
-    new FlashcardReviewModalWrapper(
-      this.app,
-      deckOrGroup,
-      cards,
-      this.scheduler,
-      this.settings,
-      this.db,
-      this.deckSynchronizer,
-      this.refreshDecksAndStats.bind(this),
-      this.refreshStatsById.bind(this),
-      false, // browseMode
-      true // cramMode
-    ).open();
-  }
-
   private openReviewInTab(
     deckOrGroup: DeckOrGroup,
     cards: Flashcard[],
@@ -940,80 +929,21 @@ export class DecksView extends ItemView {
     }
   }
 
-  async startCram(deck: DeckWithProfile) {
-    try {
-      this.logger.debug(`Starting cram for deck: ${deck.name}`);
-      await this.syncStaleDecks([deck.id]);
-
-      const allCards = await this.db.getFlashcardsByDeck(deck.id);
-      if (allCards.length === 0) {
-        if (this.settings?.ui?.enableNotices !== false) {
-          new Notice(
-            I18n.format(I18n.t.notices.noCardsFoundInDeck, { deckName: deck.name })
-          );
-        }
-        return;
-      }
-
-      this.openCramSession({ ...deck, type: "file" }, allCards);
-    } catch (error) {
-      console.error("Error starting cram:", error);
-      if (this.settings?.ui?.enableNotices !== false) {
-        new Notice(I18n.t.notices.errorStartingCram);
-      }
-    }
-  }
-
-  async startCramForDeckGroup(deckGroup: DeckGroup) {
-    try {
-      this.logger.debug(`Starting cram for deck group: ${deckGroup.name}`);
-      await this.syncStaleDecks(deckGroup.deckIds);
-
-      const allCards: Flashcard[] = [];
-      for (const deckId of deckGroup.deckIds) {
-        const deckCards = await this.db.getFlashcardsByDeck(deckId);
-        allCards.push(...deckCards);
-      }
-
-      if (allCards.length === 0) {
-        if (this.settings?.ui?.enableNotices !== false) {
-          new Notice(
-            I18n.format(I18n.t.notices.noCardsFoundInGroup, { name: deckGroup.name })
-          );
-        }
-        return;
-      }
-
-      this.openCramSession(deckGroup, allCards);
-    } catch (error) {
-      console.error("Error starting deck group cram:", error);
-      if (this.settings?.ui?.enableNotices !== false) {
-        new Notice(I18n.t.notices.errorStartingCram);
-      }
-    }
-  }
-
-  async startCramForCustomDeck(customDeck: CustomDeckGroup) {
-    try {
-      this.logger.debug(`Starting cram for custom deck: ${customDeck.name}`);
-
-      const allCards = await this.db.getFlashcardsForCustomDeck(customDeck.id);
-      if (allCards.length === 0) {
-        if (this.settings?.ui?.enableNotices !== false) {
-          new Notice(
-            I18n.format(I18n.t.notices.noCardsFoundInGroup, { name: customDeck.name })
-          );
-        }
-        return;
-      }
-
-      this.openCramSession(customDeck, allCards);
-    } catch (error) {
-      console.error("Error starting custom deck cram:", error);
-      if (this.settings?.ui?.enableNotices !== false) {
-        new Notice(I18n.t.notices.errorStartingCram);
-      }
-    }
+  async startCramForSelection(selection: DeckOrGroup): Promise<void> {
+    this.logger.debug(`Starting cram for: ${selection.name}`);
+    await launchCramForSelection(
+      {
+        app: this.app,
+        scheduler: this.scheduler,
+        settings: this.settings,
+        db: this.db,
+        deckSynchronizer: this.deckSynchronizer,
+        refreshStats: this.refreshDecksAndStats.bind(this),
+        refreshStatsById: this.refreshStatsById.bind(this),
+      },
+      selection,
+      (s) => this.gatherSelectionCards(s)
+    );
   }
 
   private async gatherSelectionCards(selection: DeckOrGroup): Promise<Flashcard[]> {

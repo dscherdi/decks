@@ -21,6 +21,8 @@ import {
   VIEW_TYPE_FLASHCARD_REVIEW,
 } from "./review/FlashcardReviewView";
 import { launchExamForSelection } from "./exam/launchExam";
+import { launchCramForSelection } from "./review/launchCram";
+import { openDeckSourceFile } from "@/utils/deck-source";
 import { ExamModalWrapper } from "./exam/ExamModalWrapper";
 import { ExamView, VIEW_TYPE_FLASHCARD_EXAM } from "./exam/ExamView";
 import { StatisticsModal } from "./settings/StatisticsModal";
@@ -189,9 +191,23 @@ export class DecksViewModal extends Modal {
         onBrowseCustomDeck: (customDeck: CustomDeckGroup) => {
           void this.startBrowseForCustomDeck(customDeck);
         },
+        onCramDeck: (deck: DeckWithProfile) =>
+          void this.startCramForSelection({ ...deck, type: "file" }),
+        onCramDeckGroup: (deckGroup: DeckGroup) =>
+          void this.startCramForSelection(deckGroup),
+        isCramResumable: (deck: DeckWithProfile) =>
+          this.scheduler.hasResumableCram({ ...deck, type: "file" }, new Date()),
+        isCramResumableGroup: (deckGroup: DeckGroup) =>
+          this.scheduler.hasResumableCram(deckGroup, new Date()),
+        onCramCustomDeck: (customDeck: CustomDeckGroup) =>
+          void this.startCramForSelection(customDeck),
+        isCramResumableCustom: (customDeck: CustomDeckGroup) =>
+          this.scheduler.hasResumableCram(customDeck, new Date()),
         onEditCustomDeck: (customDeck: CustomDeckGroup) => {
           this.openEditCustomDeck(customDeck);
         },
+        onOpenSource: (deck: DeckWithProfile) =>
+          openDeckSourceFile(this.app, deck.filepath).catch(console.error),
         onExamDeck: (deck: DeckWithProfile) =>
           void this.startExamForSelection(
             { ...deck, type: "file" },
@@ -588,6 +604,22 @@ export class DecksViewModal extends Modal {
       (s) => this.gatherSelectionCards(s),
       (attempt, deckName, onRetake) =>
         this.openExamSession(attempt, deckName, onRetake)
+    );
+  }
+
+  async startCramForSelection(selection: DeckOrGroup): Promise<void> {
+    await launchCramForSelection(
+      {
+        app: this.app,
+        scheduler: this.scheduler,
+        settings: this.settings,
+        db: this.db,
+        deckSynchronizer: this.deckSynchronizer,
+        refreshStats: this.refreshDecksAndStats.bind(this),
+        refreshStatsById: this.refreshStatsById.bind(this),
+      },
+      selection,
+      (s) => this.gatherSelectionCards(s)
     );
   }
 

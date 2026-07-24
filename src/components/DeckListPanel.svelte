@@ -84,6 +84,8 @@
     | ((customDeck: CustomDeckGroup) => Promise<boolean>)
     | undefined = undefined;
   export let onEditCustomDeck: (customDeck: CustomDeckGroup) => void;
+  export let onOpenSource: ((deck: DeckWithProfile) => void) | undefined =
+    undefined;
 
   // Exam entry points: shown only where exam questions are enabled — per row
   // via item.profile for file decks and groups, via the vault-level flag for
@@ -860,6 +862,14 @@
       if (resumable) cramOption.textContent = t.deckList.resumeCram;
     });
 
+    const openSourceOption = activeDocument.createElement("div");
+    openSourceOption.className = "decks-dropdown-option";
+    openSourceOption.textContent = t.deckList.openSourceFile;
+    openSourceOption.onclick = () => {
+      closeActiveDropdown();
+      onOpenSource?.(deck);
+    };
+
     const exportOption = activeDocument.createElement("div");
     exportOption.className = "decks-dropdown-option";
     exportOption.textContent = t.deckList.exportToAnki;
@@ -907,6 +917,7 @@
     if (deckExamEnabled && onReviewDeck) dropdown.appendChild(reviewOption);
     dropdown.appendChild(browseOption);
     if (onCramDeck) dropdown.appendChild(cramOption);
+    if (onOpenSource) dropdown.appendChild(openSourceOption);
     dropdown.appendChild(exportOption);
     dropdown.appendChild(configOption);
     dropdown.appendChild(resetOption);

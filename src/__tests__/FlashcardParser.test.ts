@@ -480,6 +480,72 @@ Some paragraph content here.
       expect(cards).toHaveLength(2);
       expect(cards.map((c) => c.front).sort()).toEqual(["水", "火"].sort());
     });
+
+    it("treats a table after a paragraph as one header-paragraph card", () => {
+      const content = `
+## xxx
+
+aaaaaaaaaaaaaaa
+
+| Name | Age |
+| --- | --- |
+| Alice | 25 |
+| Bob | 30 |
+      `;
+
+      const result = FlashcardParser.parseFlashcardsFromContent(content, 2);
+
+      expect(result).toHaveLength(1);
+      expect(result[0].front).toBe("xxx");
+      expect(result[0].type).toBe("header-paragraph");
+      expect(result[0].back).toContain("aaaaaaaaaaaaaaa");
+      expect(result[0].back).toContain("| Alice | 25 |");
+      expect(result[0].back).toContain("| Bob | 30 |");
+    });
+
+    it("does not parse headings inside fenced code blocks", () => {
+      const content = [
+        "## Real heading",
+        "",
+        "Intro line.",
+        "",
+        "```text",
+        "## abc",
+        "content",
+        "",
+        "## def",
+        "content",
+        "```",
+      ].join("\n");
+
+      const result = FlashcardParser.parseFlashcardsFromContent(content, 2);
+
+      expect(result).toHaveLength(1);
+      expect(result[0].front).toBe("Real heading");
+      expect(result[0].type).toBe("header-paragraph");
+      expect(result[0].back).toContain("## abc");
+      expect(result[0].back).toContain("## def");
+      expect(result[0].back).toContain("```text");
+    });
+
+    it("does not parse tables inside fenced code blocks as table cards", () => {
+      const content = [
+        "## Code sample",
+        "",
+        "```",
+        "| Name | Age |",
+        "| --- | --- |",
+        "| Alice | 25 |",
+        "```",
+      ].join("\n");
+
+      const result = FlashcardParser.parseFlashcardsFromContent(content, 2);
+
+      expect(result).toHaveLength(1);
+      expect(result[0].front).toBe("Code sample");
+      expect(result[0].type).toBe("header-paragraph");
+      expect(result[0].back).toContain("| Alice | 25 |");
+    });
   });
 
   describe("three-column table parsing", () => {

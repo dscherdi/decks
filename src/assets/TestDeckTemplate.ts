@@ -35,14 +35,14 @@ ${I18n.format(t.a2, { tag: tagBacktick })}
 
 ${t.section2Body}
 
+${t.tableNote}
+
 ## ${t.fsrsConceptsHeading}
 
 | ${t.colFront} | ${t.colBack} | ${t.colNotes} |
 | --- | --- | --- |
 | ${t.row1Front} | ${t.row1Back} | ${t.row1Notes} |
 | ${t.row2Front} | ${t.row2Back} | ${t.row2Notes} |
-
-${t.tableNote}
 
 ---
 
