@@ -136,16 +136,19 @@ The published 0.346 LogLoss number is from full 9,999-user benchmark with 5-fold
 
 ## Internal validation tools
 
+The benchmark suite lives in the `@decks/core` package — run these from `packages/decks-core`
+(e.g. `cd packages/decks-core && npm run benchmark:spec-check`).
+
 | Command | What it checks |
 |---|---|
-| `npm run benchmark:spec-check` | Bit-exact match of every FSRS-6 forward-pass primitive against py-fsrs (1396 cases). Run after any change to [src/algorithm/fsrs.ts](../src/algorithm/fsrs.ts) — fails in <1 s if a divergence appears. |
+| `npm run benchmark:spec-check` | Bit-exact match of every FSRS-6 forward-pass primitive against py-fsrs (1396 cases). Run after any change to `packages/decks-core/src/algorithm/fsrs.ts` — fails in <1 s if a divergence appears. |
 | `npm run benchmark:smoke` | Synthetic-data end-to-end pipeline check. No real dataset needed. |
 | `npm run benchmark -- --data <revlogs> --users N` | Default-weight benchmark — measures how well shipped weights predict actual recall. |
 | `npm run benchmark -- --data <revlogs> --users N --train` | Per-user trained benchmark, single 80/20 split. |
 | `npm run benchmark -- --data <revlogs> --users N --train --kfold 5` | Per-user trained benchmark matching published methodology. |
 | `npm run benchmark:compare -- --data <revlogs> --users N` | Side-by-side: our pure-TS optimizer vs Rust fsrs-rs reference (FSRS-5). |
 
-The dataset itself isn't shipped; users with a HuggingFace account can download it from [open-spaced-repetition/anki-revlogs-10k](https://huggingface.co/datasets/open-spaced-repetition/anki-revlogs-10k). See [benchmark/README.md](../benchmark/README.md) for the full setup walkthrough.
+The dataset itself isn't shipped; users with a HuggingFace account can download it from [open-spaced-repetition/anki-revlogs-10k](https://huggingface.co/datasets/open-spaced-repetition/anki-revlogs-10k). See `packages/decks-core/benchmark/README.md` for the full setup walkthrough.
 
 ## References
 

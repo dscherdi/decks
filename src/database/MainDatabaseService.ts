@@ -5,11 +5,12 @@
 import type { DataAdapter } from "obsidian";
 import { BaseDatabaseService } from "./BaseDatabaseService";
 import type { QueryConfig } from "./BaseDatabaseService";
-import { buildMigrationSQL, CREATE_TABLES_SQL, CURRENT_SCHEMA_VERSION, yieldToUI } from "@decks/core";
+import { buildMigrationSQL, CREATE_TABLES_SQL, CURRENT_SCHEMA_VERSION, yieldToUI, FlashcardSynchronizer, remapCardIdsToDeckIndependent } from "@decks/core";
+
+// Schema version at which card IDs became deck-independent.
+const DECK_INDEPENDENT_ID_VERSION = 36;
 import type { Database, InitSqlJsStatic } from "sql.js";
-import { FlashcardSynchronizer } from "@decks/core";
-import type { SyncData, SyncResult } from "@decks/core";
-import type { SqlJsValue } from "@decks/core";
+import type { SyncData, SyncResult, SqlJsValue } from "@decks/core";
 import { getEmbeddedAssets } from "./embedded-assets";
 
 export class MainDatabaseService extends BaseDatabaseService {
@@ -50,6 +51,12 @@ export class MainDatabaseService extends BaseDatabaseService {
     return file;
   }
 
+  // In-process (test) service inits eagerly via setupTestDatabase, so it's
+  // always ready by the time callers use it.
+  whenReady(): Promise<void> {
+    return Promise.resolve();
+  }
+
   async initialize(): Promise<void> {
     try {
       // Load SQL.js
@@ -57,16 +64,10 @@ export class MainDatabaseService extends BaseDatabaseService {
         typeof window !== "undefined" &&
         (window as Window & { initSqlJs?: InitSqlJsStatic }).initSqlJs
       ) {
+        // Node test environment: test-setup polyfills `window`, onto which the
+        // tests inject `initSqlJs`.
         this.SQL = (
           window as Window & { initSqlJs: InitSqlJsStatic }
-        ).initSqlJs;
-      } else if (
-        typeof global !== "undefined" &&
-        (global as typeof global & { initSqlJs?: InitSqlJsStatic }).initSqlJs
-      ) {
-        // For Node.js test environment with global initSqlJs
-        this.SQL = (
-          global as typeof global & { initSqlJs: InitSqlJsStatic }
         ).initSqlJs;
       } else {
         // For environments where SQL.js is not globally available
@@ -266,6 +267,11 @@ export class MainDatabaseService extends BaseDatabaseService {
           `Migrating database from version ${currentVersion} to ${CURRENT_SCHEMA_VERSION}`
         );
         const reviewLogsBefore = this.getReviewLogsCount();
+        // Re-point review history to deck-independent card IDs while the old IDs
+        // are still present — buildMigrationSQL then drops/rebuilds flashcards.
+        if (currentVersion > 0 && currentVersion < DECK_INDEPENDENT_ID_VERSION) {
+          remapCardIdsToDeckIndependent(this.db);
+        }
         const migrationSQL = buildMigrationSQL(this.db);
         this.db.exec(migrationSQL);
         this.debugLog(`Database migrated to version ${CURRENT_SCHEMA_VERSION}`);
@@ -408,7 +414,7 @@ export class MainDatabaseService extends BaseDatabaseService {
           }
         ).FS ||
         (
-          globalThis as typeof globalThis & {
+          window as Window & {
             FS?: {
               createDataFile?: (
                 parent: string,
@@ -482,14 +488,24 @@ export class MainDatabaseService extends BaseDatabaseService {
               `);
             }
 
-            // Merge Flashcards (REPLACE only if remote.modified > main.modified)
-            // Use try/catch to handle schema mismatch when remote DB lacks the notes column
+            // Merge Flashcards (REPLACE only if remote.modified > main.modified).
+            // Explicit column list matching the worker merge: suspended_at and
+            // buried_until are excluded (REPLACE resets them to NULL) and
+            // re-mirrored from card_state_overlays below.
             try {
               this.db.exec(`
                 INSERT OR REPLACE INTO flashcards
-                SELECT remote.* FROM remote.flashcards
-                LEFT JOIN flashcards AS main ON remote.id = main.id
-                WHERE main.id IS NULL OR remote.modified > main.modified
+                (id, deck_id, front, back, type, source_file, content_hash, breadcrumb, notes,
+                 cloze_text, cloze_order, source_node_id, edge_id, hint,
+                 state, due_date, interval, repetitions, difficulty, stability, lapses,
+                 last_reviewed, created, modified, tags, template_row, anchor)
+                SELECT r.id, r.deck_id, r.front, r.back, r.type, r.source_file, r.content_hash,
+                  r.breadcrumb, r.notes, r.cloze_text, r.cloze_order, r.source_node_id, r.edge_id, r.hint,
+                  r.state, r.due_date, r.interval, r.repetitions, r.difficulty, r.stability, r.lapses,
+                  r.last_reviewed, r.created, r.modified, r.tags, r.template_row, r.anchor
+                FROM remote.flashcards r
+                LEFT JOIN flashcards AS main ON r.id = main.id
+                WHERE main.id IS NULL OR r.modified > main.modified
               `);
             } catch {
               // Remote DB has different schema (e.g., missing notes column) - use explicit columns
@@ -507,6 +523,31 @@ export class MainDatabaseService extends BaseDatabaseService {
                 WHERE main.id IS NULL OR r.modified > main.modified
               `);
             }
+
+            // Merge durable suspend/bury state (newer wins), then re-mirror
+            // onto the flashcards cache columns — required after the REPLACE
+            // above reset them to NULL for replaced rows.
+            try {
+              this.db.exec(`
+                INSERT INTO card_state_overlays (flashcard_id, suspended_at, buried_until, modified)
+                SELECT r.flashcard_id, r.suspended_at, r.buried_until, r.modified
+                FROM remote.card_state_overlays r
+                WHERE true
+                ON CONFLICT(flashcard_id) DO UPDATE SET
+                  suspended_at = excluded.suspended_at,
+                  buried_until = excluded.buried_until,
+                  modified = excluded.modified
+                WHERE excluded.modified > card_state_overlays.modified
+              `);
+            } catch {
+              this.debugLog("Remote DB has no card_state_overlays table, skipping");
+            }
+            this.db.exec(`
+              UPDATE flashcards SET
+                suspended_at = (SELECT o.suspended_at FROM card_state_overlays o WHERE o.flashcard_id = flashcards.id),
+                buried_until = (SELECT o.buried_until FROM card_state_overlays o WHERE o.flashcard_id = flashcards.id)
+              WHERE id IN (SELECT flashcard_id FROM card_state_overlays)
+            `);
 
             // Merge Profiles by effective timestamp COALESCE(deleted_at, modified)
             // so a soft-delete on one device propagates to the other.
@@ -552,6 +593,16 @@ export class MainDatabaseService extends BaseDatabaseService {
               this.debugLog("Remote DB has no profile_tag_mappings table, skipping");
             }
 
+            // Merge anchor bindings (append-only; first writer wins per key)
+            try {
+              this.db.exec(`
+                INSERT OR IGNORE INTO anchor_bindings
+                SELECT * FROM remote.anchor_bindings
+              `);
+            } catch {
+              this.debugLog("Remote DB has no anchor_bindings table, skipping");
+            }
+
             // Merge Custom Decks by effective timestamp COALESCE(deleted_at, modified).
             try {
               this.db.exec(`
@@ -565,11 +616,18 @@ export class MainDatabaseService extends BaseDatabaseService {
               this.debugLog("Remote DB has no custom_decks table, skipping");
             }
 
-            // Merge Custom Deck Cards (INSERT OR IGNORE - preserve memberships)
+            // Merge Custom Deck Cards — append-only, but never resurrect a pair
+            // whose local tombstone is at least as new as the incoming row.
             try {
               this.db.exec(`
                 INSERT OR IGNORE INTO custom_deck_cards
-                SELECT * FROM remote.custom_deck_cards
+                SELECT r.* FROM remote.custom_deck_cards AS r
+                WHERE NOT EXISTS (
+                  SELECT 1 FROM custom_deck_card_tombstones t
+                  WHERE t.custom_deck_id = r.custom_deck_id
+                    AND t.flashcard_id = r.flashcard_id
+                    AND t.removed_at_hlc >= r.created
+                )
               `);
             } catch {
               this.debugLog("Remote DB has no custom_deck_cards table, skipping");
@@ -586,6 +644,38 @@ export class MainDatabaseService extends BaseDatabaseService {
               `);
             } catch {
               this.debugLog("Remote DB has no fsrs_weight_sets table, skipping");
+            }
+
+            // Merge cram (drill) state — mutable, newer-wins by modified.
+            try {
+              this.db.exec(`
+                INSERT OR REPLACE INTO cram_sessions
+                SELECT remote.* FROM remote.cram_sessions
+                LEFT JOIN cram_sessions AS main ON remote.id = main.id
+                WHERE main.id IS NULL OR remote.modified > main.modified
+              `);
+              this.db.exec(`
+                INSERT OR REPLACE INTO cram_cards
+                SELECT remote.* FROM remote.cram_cards
+                LEFT JOIN cram_cards AS main ON remote.id = main.id
+                WHERE main.id IS NULL OR remote.modified > main.modified
+              `);
+            } catch {
+              this.debugLog("Remote DB has no cram tables, skipping");
+            }
+
+            // Merge exam attempts (append-only, immutable once ended — union by id)
+            try {
+              this.db.exec(`
+                INSERT OR IGNORE INTO exam_sessions
+                SELECT * FROM remote.exam_sessions
+              `);
+              this.db.exec(`
+                INSERT OR IGNORE INTO exam_answers
+                SELECT * FROM remote.exam_answers
+              `);
+            } catch {
+              this.debugLog("Remote DB has no exam tables, skipping");
             }
 
             // Commit the transaction
@@ -700,17 +790,28 @@ export class MainDatabaseService extends BaseDatabaseService {
               }
             }
 
-            // Merge flashcards (conditional replace)
+            // Merge flashcards (conditional replace). suspended_at and
+            // buried_until are excluded like in the worker merge and
+            // re-mirrored from card_state_overlays below.
             if (remoteFlashcards.length > 0) {
               const cardData = remoteFlashcards[0];
               const modifiedIndex = cardData.columns.indexOf("modified");
-              const hasNotesColumn = cardData.columns.includes("notes");
+              const skipCols = new Set(["suspended_at", "buried_until"]);
+              const colIndexes: number[] = [];
+              const mergeColumns: string[] = [];
+              for (let i = 0; i < cardData.columns.length; i++) {
+                if (skipCols.has(cardData.columns[i])) continue;
+                colIndexes.push(i);
+                mergeColumns.push(cardData.columns[i]);
+              }
+              const hasNotesColumn = mergeColumns.includes("notes");
+              const stateIndex = mergeColumns.indexOf("state");
               const columnList = hasNotesColumn
-                ? cardData.columns.join(",")
-                : [...cardData.columns.slice(0, cardData.columns.indexOf("state")), "notes", ...cardData.columns.slice(cardData.columns.indexOf("state"))].join(",");
+                ? mergeColumns.join(",")
+                : [...mergeColumns.slice(0, stateIndex), "notes", ...mergeColumns.slice(stateIndex)].join(",");
               const placeholders = hasNotesColumn
-                ? cardData.columns.map(() => "?").join(",")
-                : [...cardData.columns.slice(0, cardData.columns.indexOf("state")).map(() => "?"), "?", ...cardData.columns.slice(cardData.columns.indexOf("state")).map(() => "?")].join(",");
+                ? mergeColumns.map(() => "?").join(",")
+                : [...mergeColumns.slice(0, stateIndex).map(() => "?"), "?", ...mergeColumns.slice(stateIndex).map(() => "?")].join(",");
 
               for (const row of cardData.values) {
                 const cardId = row[0]; // Assuming id is first column
@@ -726,9 +827,10 @@ export class MainDatabaseService extends BaseDatabaseService {
                     (remoteModified || 0);
 
                 if (shouldReplace) {
+                  const projected = colIndexes.map((i) => row[i]);
                   const rowValues = hasNotesColumn
-                    ? row
-                    : [...row.slice(0, cardData.columns.indexOf("state")), "", ...row.slice(cardData.columns.indexOf("state"))];
+                    ? projected
+                    : [...projected.slice(0, stateIndex), "", ...projected.slice(stateIndex)];
                   const cardStmt = this.db.prepare(`
                     INSERT OR REPLACE INTO flashcards (${columnList})
                     VALUES (${placeholders})
@@ -738,6 +840,37 @@ export class MainDatabaseService extends BaseDatabaseService {
                 }
               }
             }
+
+            // Merge durable suspend/bury state (newer wins), then re-mirror
+            // onto the flashcards cache columns.
+            try {
+              const remoteOverlays = remoteDb.exec(
+                "SELECT flashcard_id, suspended_at, buried_until, modified FROM card_state_overlays"
+              );
+              if (remoteOverlays.length > 0) {
+                const overlayStmt = this.db.prepare(`
+                  INSERT INTO card_state_overlays (flashcard_id, suspended_at, buried_until, modified)
+                  VALUES (?, ?, ?, ?)
+                  ON CONFLICT(flashcard_id) DO UPDATE SET
+                    suspended_at = excluded.suspended_at,
+                    buried_until = excluded.buried_until,
+                    modified = excluded.modified
+                  WHERE excluded.modified > card_state_overlays.modified
+                `);
+                for (const row of remoteOverlays[0].values) {
+                  overlayStmt.run(row);
+                }
+                overlayStmt.free();
+              }
+            } catch {
+              this.debugLog("Remote DB has no card_state_overlays table, skipping");
+            }
+            this.db.exec(`
+              UPDATE flashcards SET
+                suspended_at = (SELECT o.suspended_at FROM card_state_overlays o WHERE o.flashcard_id = flashcards.id),
+                buried_until = (SELECT o.buried_until FROM card_state_overlays o WHERE o.flashcard_id = flashcards.id)
+              WHERE id IN (SELECT flashcard_id FROM card_state_overlays)
+            `);
 
             // Merge profiles by effective timestamp COALESCE(deleted_at, modified).
             try {
@@ -794,6 +927,24 @@ export class MainDatabaseService extends BaseDatabaseService {
               this.debugLog("Remote DB has no profile_tag_mappings table, skipping");
             }
 
+            // Merge anchor bindings (append-only; first writer wins per key)
+            try {
+              const remoteBindings = remoteDb.exec("SELECT * FROM anchor_bindings");
+              if (remoteBindings.length > 0) {
+                const bindingData = remoteBindings[0];
+                const placeholders = bindingData.columns.map(() => "?").join(",");
+                const stmt = this.db.prepare(
+                  `INSERT OR IGNORE INTO anchor_bindings VALUES (${placeholders})`
+                );
+                for (const row of bindingData.values) {
+                  stmt.run(row);
+                }
+                stmt.free();
+              }
+            } catch {
+              this.debugLog("Remote DB has no anchor_bindings table, skipping");
+            }
+
             // Merge custom decks by effective timestamp COALESCE(deleted_at, modified).
             try {
               const remoteCustomDecks = remoteDb.exec("SELECT * FROM custom_decks");
@@ -831,16 +982,29 @@ export class MainDatabaseService extends BaseDatabaseService {
               this.debugLog("Remote DB has no custom_decks table, skipping");
             }
 
-            // Merge custom deck cards (INSERT OR IGNORE)
+            // Merge custom deck cards — append-only, but never resurrect a pair
+            // whose local tombstone is at least as new as the incoming row.
             try {
               const remoteCustomCards = remoteDb.exec("SELECT * FROM custom_deck_cards");
               if (remoteCustomCards.length > 0) {
                 const cardData = remoteCustomCards[0];
+                const deckIdx = cardData.columns.indexOf("custom_deck_id");
+                const cardIdx = cardData.columns.indexOf("flashcard_id");
+                const createdIdx = cardData.columns.indexOf("created");
                 const placeholders = cardData.columns.map(() => "?").join(",");
                 const stmt = this.db.prepare(
                   `INSERT OR IGNORE INTO custom_deck_cards VALUES (${placeholders})`
                 );
                 for (const row of cardData.values) {
+                  const deckId = row[deckIdx] as string;
+                  const cardId = row[cardIdx] as string;
+                  const created = row[createdIdx] as string;
+                  const tomb = this.db.exec(
+                    "SELECT removed_at_hlc FROM custom_deck_card_tombstones WHERE custom_deck_id = ? AND flashcard_id = ?",
+                    [deckId, cardId]
+                  );
+                  const removedAt = tomb.length ? (tomb[0].values[0][0] as string) : null;
+                  if (removedAt && removedAt >= created) continue;
                   stmt.run(row);
                 }
                 stmt.free();
@@ -883,6 +1047,59 @@ export class MainDatabaseService extends BaseDatabaseService {
               }
             } catch {
               this.debugLog("Remote DB has no fsrs_weight_sets table, skipping");
+            }
+
+            // Merge cram (drill) state — mutable, newer-wins by modified.
+            for (const cramTable of ["cram_sessions", "cram_cards"]) {
+              try {
+                const remoteRows = remoteDb.exec(`SELECT * FROM ${cramTable}`);
+                if (remoteRows.length > 0) {
+                  const data = remoteRows[0];
+                  const idIdx = data.columns.indexOf("id");
+                  const modIdx = data.columns.indexOf("modified");
+                  const stmt = this.db.prepare(
+                    `INSERT OR REPLACE INTO ${cramTable} (${data.columns.join(",")})
+                     VALUES (${data.columns.map(() => "?").join(",")})`
+                  );
+                  for (const row of data.values) {
+                    const id = row[idIdx] as string;
+                    const remoteModified = row[modIdx] as string;
+                    const existing = this.db.exec(
+                      `SELECT modified FROM ${cramTable} WHERE id = ?`,
+                      [id]
+                    );
+                    const localModified = existing.length
+                      ? (existing[0]?.values?.[0]?.[0] as string | null)
+                      : null;
+                    if (!localModified || remoteModified > localModified) {
+                      stmt.run(row);
+                    }
+                  }
+                  stmt.free();
+                }
+              } catch {
+                this.debugLog(`Remote DB has no ${cramTable} table, skipping`);
+              }
+            }
+
+            // Merge exam attempts (append-only, immutable — union by id).
+            for (const examTable of ["exam_sessions", "exam_answers"]) {
+              try {
+                const remoteRows = remoteDb.exec(`SELECT * FROM ${examTable}`);
+                if (remoteRows.length > 0) {
+                  const data = remoteRows[0];
+                  const stmt = this.db.prepare(
+                    `INSERT OR IGNORE INTO ${examTable} (${data.columns.join(",")})
+                     VALUES (${data.columns.map(() => "?").join(",")})`
+                  );
+                  for (const row of data.values) {
+                    stmt.run(row);
+                  }
+                  stmt.free();
+                }
+              } catch {
+                this.debugLog(`Remote DB has no ${examTable} table, skipping`);
+              }
             }
 
             // Commit the transaction

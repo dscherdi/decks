@@ -8,18 +8,41 @@
   } from "../../database/types";
   import { isDeckGroup, isCustomDeck } from "../../database/types";
   import type { DecksSettings } from "../../settings";
-  import { type RatingLabel } from "@decks/core";
+  import { type RatingLabel, type CramRating } from "@decks/core";
   import type {
     Scheduler,
     SchedulingPreview,
     SessionProgress,
-  } from "../../services/Scheduler";
-  import { I18n, yieldToUI } from "@decks/core";
+  } from "@decks/core";
+  import { I18n, yieldToUI, toSpeechText, type ResolvedRender } from "@decks/core";
+  import type { TtsService } from "../../services/TtsService";
   import { prepareFuzzySearch } from "obsidian";
   import { computeCardHealth } from "@decks/core";
+  import {
+    classifyExamBody,
+    indexSetsEqual,
+    shuffleInPlace,
+    type ExamOption,
+  } from "@decks/core";
+  import { isOcclusionV2, parseOcclusionBack, activeMaskIdForCard, prepareClozeMath } from "@decks/core";
+  import { renderCardSide } from "../../utils/html-template-render";
+  import { renderOcclusion } from "../../utils/occlusion-render";
+  import ReviewScratchpad from "./ReviewScratchpad.svelte";
+  import DocInfoButton from "../DocInfoButton.svelte";
+  import {
+    DEFAULT_REVIEW_SHORTCUTS,
+    matchesShortcut,
+    isReviewShortcut,
+    displayShortcutKey,
+  } from "../../utils/shortcuts";
 
   const t = I18n.t;
   const r = t.review;
+
+  // The five configurable review keys (four ratings + reveal/advance).
+  $: shortcuts = settings.review.shortcuts ?? DEFAULT_REVIEW_SHORTCUTS;
+  // Master switch: gates all review keyboard shortcuts (ratings + reveal + B/S/R).
+  $: kbEnabled = settings.review.enableKeyboardShortcuts;
 
   export let deckOrGroup: DeckOrGroup;
   export let initialCard: Flashcard | null = null;
@@ -34,8 +57,14 @@
     el: HTMLElement,
     deckFilePath: string | undefined
   ) => void;
+  // Resolves a card's tag-bound template (or null to render the default columns).
+  export let resolveTemplate: (card: Flashcard) => ResolvedRender | null = () => null;
+  // Resolves an Obsidian image linkpath to a renderable URL (for HTML template
+  // faces, where ![[img]] embeds must become native <img> tags).
+  export let resolveEmbed: (linkpath: string, sourcePath: string) => string | null = () => null;
   export let settings: DecksSettings;
   export let scheduler: Scheduler;
+  export let tts: TtsService | undefined = undefined;
   export let onCardReviewed:
     | ((reviewedCard: Flashcard) => Promise<void>)
     | undefined = undefined;
@@ -57,6 +86,9 @@
       ) => Promise<boolean>)
     | undefined = undefined;
   export let browseMode = false;
+  // Cram (drill) mode: two-button Again/Good drill over allCards. Isolated from
+  // real scheduling — writes no review logs and does not mutate card state.
+  export let cramMode = false;
   export let allCards: Flashcard[] = [];
   export let isActive: (() => boolean) | undefined = undefined;
 
@@ -69,7 +101,17 @@
   }
 
   function isClozeType(type: FlashcardType): boolean {
-    return type === "cloze" || type === "image-occlusion";
+    return type === "cloze" || type === "image-occlusion" || type === "image-occlusion-v2";
+  }
+
+  // A front-only cloze (bundled 1-column table) keeps the sentence in the front
+  // with an empty back; fall back to the front so the blank/reveal logic works.
+  function clozeContent(card: Flashcard): string {
+    return card.back && card.back.trim().length > 0 ? card.back : card.front;
+  }
+
+  function isFrontOnlyCloze(card: Flashcard): boolean {
+    return isClozeType(card.type) && !(card.back && card.back.trim().length > 0);
   }
 
   function prepareImageOcclusionBack(
@@ -116,11 +158,66 @@
   function handleCopyBack() {
     if (currentCard) {
       const text = isClozeType(currentCard.type)
-        ? currentCard.back.replace(/==((?:(?!==).)+)==/g, "$1")
+        ? clozeContent(currentCard).replace(/==((?:(?!==).)+)==/g, "$1")
         : currentCard.back;
       navigator.clipboard.writeText(text).catch(console.error);
     }
   }
+
+  // Read-aloud: voice config comes from the deck's profile; the button reads
+  // whichever side is currently visible.
+  let isSpeaking = false;
+  $: ttsProfile = "profile" in deckOrGroup ? deckOrGroup.profile : undefined;
+  $: ttsAvailable = tts ? tts.isAvailable() : false;
+
+  // Plain text for the visible side. Cloze answers are masked on the front so
+  // the play button never leaks them; the revealed side reads clean.
+  function ttsTextForVisibleSide(card: Flashcard): string {
+    if (showAnswer) {
+      return isClozeType(card.type)
+        ? toSpeechText(clozeContent(card))
+        : toSpeechText(card.back);
+    }
+    return isClozeType(card.type)
+      ? toSpeechText(clozeContent(card), { maskCloze: true })
+      : toSpeechText(card.front);
+  }
+
+  function handleToggleSpeak() {
+    if (!tts || !currentCard) return;
+    if (isSpeaking) {
+      tts.stop();
+      isSpeaking = false;
+      return;
+    }
+    const text = ttsTextForVisibleSide(currentCard);
+    if (!text) return;
+    tts.speak(
+      text,
+      {
+        voiceURI: ttsProfile?.ttsVoice,
+        rate: ttsProfile?.ttsRate,
+        lang: ttsProfile?.ttsLang,
+      },
+      {
+        onStart: () => {
+          isSpeaking = true;
+        },
+        onEnd: () => {
+          isSpeaking = false;
+        },
+      }
+    );
+  }
+
+  // Stop any reading when the visible card or its reveal state changes so a
+  // reading never bleeds across cards or into the answer.
+  function cancelSpeechOnChange(_cardId: string | undefined, _revealed: boolean): void {
+    if (!tts) return;
+    tts.stop();
+    isSpeaking = false;
+  }
+  $: cancelSpeechOnChange(currentCard?.id, showAnswer);
 
   function getBreadcrumbParts(card: Flashcard): string[] {
     if (!card.breadcrumb) return [];
@@ -175,23 +272,56 @@
 
   let showAnswer = false;
   let showNotes = false;
+  let showScratchpad = false;
   let isLoading = false;
   let reviewFinished = false;
   let frontEl: HTMLElement;
   let backEl: HTMLElement;
   let notesEl: HTMLElement;
+  // Template resolved for the currently displayed card (null = default columns).
+  let currentResolved: ResolvedRender | null = null;
+  // When a template is bound, notes come ONLY from the template (table columns
+  // are template data, not a separate notes field). Otherwise use the card's
+  // own notes column (default 3-column behavior).
+  $: hasNotes = currentResolved
+    ? !!currentResolved.notes
+    : !!currentCard?.notes;
+  // HTML-template sides render seamless inside a shell (cloze always stays on
+  // the boxed markdown path). Each side is independent.
+  $: frontIsHtml =
+    currentResolved?.frontType === "html" &&
+    !(currentCard && isClozeType(currentCard.type));
+  $: backIsHtml =
+    currentResolved?.backType === "html" &&
+    !(currentCard && isClozeType(currentCard.type));
+  $: notesIsHtml = currentResolved?.notesType === "html";
   let schedulingInfo: SchedulingPreview | null = null;
   let reviewedCount = 0;
   let cardStartTime = 0;
   let currentCard: Flashcard | null = initialCard;
   $: cardHealth = currentCard
-    ? computeCardHealth(currentCard, {
-        leechThreshold: settings.review.leechThreshold,
-        denseCardCharThreshold: settings.review.denseCardCharThreshold,
-      })
+    ? computeCardHealth(
+        currentCard,
+        {
+          leechThreshold: settings.review.leechThreshold,
+          denseCardCharThreshold: settings.review.denseCardCharThreshold,
+        },
+        (() => {
+          const profile = "profile" in deckOrGroup ? deckOrGroup.profile : undefined;
+          return profile
+            ? {
+                examEnabled: profile.examEnabled ?? false,
+                typedGrading: profile.examSettings?.typedGrading ?? "tolerant",
+              }
+            : undefined;
+        })()
+      )
     : null;
   let sessionId: string | null = null;
-  const deckFilePath = "";
+  let cramSessionId: string | null = null;
+  // The deck file path is the sourcePath Obsidian needs to resolve ![[…]] embeds
+  // (audio/images). All cards in a deck share one sourceFile.
+  $: deckFilePath = currentCard?.sourceFile ?? "";
   let sessionProgress: SessionProgress | null = null;
   let canUndo = false;
 
@@ -204,6 +334,65 @@
   $: clozeShowContext =
     ("profile" in deckOrGroup ? deckOrGroup.profile : undefined)?.clozeShowContext ?? "open";
 
+  // Multiple-choice inside an ordinary review: interactive select → reveal
+  // (objective verdict styling) → the normal self-rating buttons. Nothing is
+  // persisted beyond the rating; an empty selection is a plain reveal.
+  $: isMultipleChoice = currentCard?.type === "multiple-choice";
+  let mcqOptions: ExamOption[] = [];
+  let mcqStem = "";
+  let mcqDisplayOrder: number[] = [];
+  let mcqSelected: number[] = [];
+  let mcqCardId: string | null = null;
+  $: if (currentCard && isMultipleChoice && currentCard.id !== mcqCardId) {
+    mcqCardId = currentCard.id;
+    const classified = classifyExamBody(currentCard.back);
+    mcqOptions = classified.kind === "mcq" ? classified.options : [];
+    mcqStem = classified.kind === "mcq" ? classified.stem : "";
+    mcqSelected = [];
+    const order = mcqOptions.map((_o, i) => i);
+    const profile = "profile" in deckOrGroup ? deckOrGroup.profile : undefined;
+    mcqDisplayOrder =
+      (profile?.examSettings?.shuffleOptions ?? true)
+        ? shuffleInPlace(order)
+        : order;
+  }
+  $: mcqCorrectIndices = mcqOptions
+    .map((option, index) => (option.correct ? index : -1))
+    .filter((index) => index >= 0);
+  $: mcqMulti = mcqCorrectIndices.length > 1;
+
+  function toggleMcqOption(fileIndex: number): void {
+    if (showAnswer) return;
+    if (mcqMulti) {
+      mcqSelected = mcqSelected.includes(fileIndex)
+        ? mcqSelected.filter((v) => v !== fileIndex)
+        : [...mcqSelected, fileIndex];
+    } else {
+      mcqSelected = [fileIndex];
+    }
+  }
+
+  // Selection/reveal passed as params so the template expression depends on
+  // them — Svelte only invalidates on identifiers visible in the template.
+  function mcqOptionState(
+    fileIndex: number,
+    selected: number[],
+    revealed: boolean
+  ): string {
+    const isSelected = selected.includes(fileIndex);
+    if (!revealed) return isSelected ? "selected" : "";
+    const correct = mcqOptions[fileIndex]?.correct === true;
+    if (isSelected && correct) return "chosen-correct";
+    if (isSelected && !correct) return "chosen-wrong";
+    if (!isSelected && correct) return "missed-correct";
+    return "";
+  }
+
+  function mcqRenderInto(el: HTMLElement, content: string): { destroy(): void } {
+    renderMarkdown(content, el, deckFilePath);
+    return { destroy() {} };
+  }
+
   // Browse mode variables
   let browseCardIndex = 0;
   let browseCards: Flashcard[] = [];
@@ -212,6 +401,32 @@
   let searchMode = false;
   let searchQuery = "";
   let searchInputEl: HTMLInputElement | undefined;
+
+  $: frontOnlyClozeCard = !!currentCard && isFrontOnlyCloze(currentCard);
+
+  // V2 occlusion: whether the active mask has answer text. A deletion-only mask
+  // (no answer) reveals in place on the image and shows no back panel.
+  $: currentV2Answered =
+    !!currentCard &&
+    isOcclusionV2(currentCard) &&
+    (() => {
+      const doc = parseOcclusionBack(currentCard!.back);
+      const active = doc?.masks.find((m) => m.id === activeMaskIdForCard(currentCard!));
+      return !!active && active.answer.trim().length > 0;
+    })();
+
+  // A front-only cloze keeps the cloze on the front (empty back); its Notes
+  // button lives on the front card, so the answer section only appears to host
+  // the Extra panel once the user toggles notes open.
+  // Multiple-choice: the options carry the answer (verdict styling on
+  // reveal); the raw task-list back never renders — the section only opens
+  // to host notes.
+  $: answerSectionHidden = isMultipleChoice
+    ? !(showNotes && hasNotes)
+    : frontOnlyClozeCard
+      ? !(showNotes && hasNotes)
+      : (!!currentCard && isOcclusionV2(currentCard) && !currentV2Answered) ||
+        (!showAnswer && !(currentCard && isClozeType(currentCard.type) && !isOcclusionV2(currentCard)));
 
   $: searchResults =
     searchMode && searchQuery.trim()
@@ -266,7 +481,22 @@
     : reviewedCount;
 
   onMount(async () => {
-    if (browseMode) {
+    if (cramMode) {
+      // Cram mode: drill every card until it graduates to a >= 1 day interval.
+      const session = await scheduler.startCramSession(
+        deckOrGroup,
+        allCards,
+        new Date()
+      );
+      cramSessionId = session.sessionId;
+      await refreshCramProgress();
+      currentCard = await scheduler.getNextCramCard(cramSessionId);
+      if (currentCard) {
+        await loadCard();
+      } else {
+        await endReview();
+      }
+    } else if (browseMode) {
       // Browse mode: load all cards, no session
       browseCards = allCards;
       if (browseCards.length > 0) {
@@ -383,6 +613,66 @@
     }
 
     container.setAttribute("data-decks-cloze-revealed", "true");
+    // Revealing the blank also surfaces the rating buttons.
+    showAnswer = true;
+  }
+
+  // Render a V2 occlusion image (with mask overlay) into a target element. The
+  // active mask reveals in place on the front; the answer text renders
+  // separately into the answer section.
+  function renderOcclusionV2Into(
+    el: HTMLElement,
+    card: Flashcard,
+    revealed: boolean
+  ): void {
+    const doc = parseOcclusionBack(card.back);
+    if (!doc) {
+      el.empty();
+      return;
+    }
+    renderOcclusion(el, {
+      doc,
+      activeMaskId: activeMaskIdForCard(card),
+      revealed,
+      showContext: clozeShowContext,
+      resolveImage: (lp) => resolveEmbed(lp, card.sourceFile ?? ""),
+    });
+  }
+
+  function renderOcclusionAnswerInto(el: HTMLElement, card: Flashcard): void {
+    el.empty();
+    const doc = parseOcclusionBack(card.back);
+    const activeId = activeMaskIdForCard(card);
+    const active = doc?.masks.find((m) => m.id === activeId);
+    if (active && active.answer.trim().length > 0) {
+      renderMarkdown(active.answer, el, deckFilePath);
+    }
+  }
+
+  // Render a cloze card into a target element, blanked or revealed.
+  function renderClozeInto(
+    el: HTMLElement,
+    card: Flashcard,
+    revealed: boolean
+  ): void {
+    el.empty();
+    if (card.type === "image-occlusion" && card.clozeOrder !== null) {
+      const prepared = prepareImageOcclusionBack(card.back, card.clozeOrder);
+      setClozeAttributes(el, prepared.markStart, clozeShowContext, revealed, prepared.markEnd);
+      renderMarkdown(prepared.content, el, deckFilePath);
+    } else {
+      // Clozes inside MathJax can't become <mark> (MathJax owns the $…$ span),
+      // so rewrite those to LaTeX up front; out-of-math clozes stay ==…== for the
+      // post-processor, with the active index remapped to them.
+      const { markdown, markActiveIndex } = prepareClozeMath(
+        clozeContent(card),
+        card.clozeOrder ?? 0,
+        clozeShowContext,
+        revealed
+      );
+      setClozeAttributes(el, markActiveIndex, clozeShowContext, revealed);
+      renderMarkdown(markdown, el, deckFilePath);
+    }
   }
 
   async function loadCard() {
@@ -396,63 +686,94 @@
     collapsedBreadcrumbIndices = initialCollapsed;
     showAnswer = false;
     showNotes = false;
+    showScratchpad = false;
 
-    // Build cloze group when first encountering a cloze card
-    if (isClozeType(currentCard.type) && !inClozeGroupReview) {
+    // Cloze indicator count for the current card (recomputed every card so it's
+    // never stale; 0 for non-cloze cards hides the indicator).
+    clozeGroupTotal = isClozeType(currentCard.type)
+      ? await scheduler.getClozeGroupSize(currentCard)
+      : 0;
+
+    // Build the sequential cloze group only in review mode (browse and cram
+    // navigate every card individually, so they must not enter group-review state).
+    if (
+      !browseMode &&
+      !cramMode &&
+      isClozeType(currentCard.type) &&
+      !inClozeGroupReview
+    ) {
       const siblings = await scheduler.getClozeSiblings(
         currentCard,
         new Date()
       );
       clozeGroup = [currentCard, ...siblings];
       clozeGroupIndex = 0;
-      clozeGroupTotal = await scheduler.getClozeGroupSize(currentCard);
       inClozeGroupReview = true;
     }
 
-    try {
-      schedulingInfo = await scheduler.preview(currentCard.id);
-    } catch (error) {
-      console.error("Error getting scheduling preview:", error);
+    // Cram uses a fixed two-button bar (no per-rating interval preview), and its
+    // scheduling is isolated from the card's real FSRS state.
+    if (cramMode) {
       schedulingInfo = null;
+    } else {
+      try {
+        schedulingInfo = await scheduler.preview(currentCard);
+      } catch (error) {
+        console.error("Error getting scheduling preview:", error);
+        schedulingInfo = null;
+      }
     }
     cardStartTime = Date.now();
 
-    // Render front side
+    // Resolve any tag-bound template for this card (null → default columns).
+    currentResolved = resolveTemplate(currentCard);
+
+    // Let the per-side html/markdown branch swap before rendering, so frontEl
+    // points at the freshly-mounted container (template layer vs boxed side).
+    await tick();
+
+    // Render front side. A front-only cloze (no back) shows its sentence here,
+    // in a single container, so the back area stays empty.
     if (frontEl) {
       frontEl.empty();
-      renderMarkdown(currentCard.front, frontEl, deckFilePath);
+      if (isFrontOnlyCloze(currentCard)) {
+        renderClozeInto(frontEl, currentCard, false);
+      } else if (isOcclusionV2(currentCard)) {
+        renderOcclusionV2Into(frontEl, currentCard, false);
+      } else {
+        renderCardSide(
+          frontEl,
+          currentResolved ? currentResolved.front : currentCard.front,
+          currentResolved ? currentResolved.frontType : null,
+          renderMarkdown,
+          deckFilePath,
+          (lp) => resolveEmbed(lp, currentCard?.sourceFile ?? "")
+        );
+      }
     }
 
     // Pre-render back side but keep it hidden
     tick().then(() => {
       if (backEl && currentCard) {
         backEl.empty();
-        if (isClozeType(currentCard.type) && currentCard.clozeOrder !== null) {
-          if (currentCard.type === "image-occlusion") {
-            const prepared = prepareImageOcclusionBack(
-              currentCard.back,
-              currentCard.clozeOrder
-            );
-            setClozeAttributes(
-              backEl,
-              prepared.markStart,
-              clozeShowContext,
-              false,
-              prepared.markEnd
-            );
-            renderMarkdown(prepared.content, backEl, deckFilePath);
-          } else {
-            setClozeAttributes(
-              backEl,
-              currentCard.clozeOrder,
-              clozeShowContext,
-              false
-            );
-            renderMarkdown(currentCard.back, backEl, deckFilePath);
-          }
+        if (isFrontOnlyCloze(currentCard)) {
+          clearClozeAttributes(backEl);
+        } else if (isOcclusionV2(currentCard)) {
+          // The image reveals in place on the front; keep the answer hidden
+          // until the user reveals it.
+          clearClozeAttributes(backEl);
+        } else if (isClozeType(currentCard.type) && currentCard.clozeOrder !== null) {
+          renderClozeInto(backEl, currentCard, false);
         } else {
           clearClozeAttributes(backEl);
-          renderMarkdown(currentCard.back, backEl, deckFilePath);
+          renderCardSide(
+            backEl,
+            currentResolved ? currentResolved.back : currentCard.back,
+            currentResolved ? currentResolved.backType : null,
+            renderMarkdown,
+            deckFilePath,
+            (lp) => resolveEmbed(lp, currentCard?.sourceFile ?? "")
+          );
         }
       }
     });
@@ -461,55 +782,118 @@
   function revealAnswer() {
     showAnswer = true;
     tick().then(() => {
-      if (backEl && currentCard) {
+      if (!currentCard) return;
+      // Front-only cloze: reveal the active blank in the front container.
+      if (isFrontOnlyCloze(currentCard) && frontEl) {
+        renderClozeInto(frontEl, currentCard, true);
+        return;
+      }
+      // V2 occlusion: uncover the active mask in place on the front, and render
+      // its answer text into the answer section.
+      if (isOcclusionV2(currentCard)) {
+        if (frontEl) renderOcclusionV2Into(frontEl, currentCard, true);
+        if (backEl) {
+          clearClozeAttributes(backEl);
+          renderOcclusionAnswerInto(backEl, currentCard);
+        }
+        return;
+      }
+      if (backEl) {
         backEl.empty();
         if (isClozeType(currentCard.type) && currentCard.clozeOrder !== null) {
-          if (currentCard.type === "image-occlusion") {
-            const prepared = prepareImageOcclusionBack(
-              currentCard.back,
-              currentCard.clozeOrder
-            );
-            setClozeAttributes(
-              backEl,
-              prepared.markStart,
-              clozeShowContext,
-              false,
-              prepared.markEnd
-            );
-            renderMarkdown(prepared.content, backEl, deckFilePath);
-          } else {
-            setClozeAttributes(
-              backEl,
-              currentCard.clozeOrder,
-              clozeShowContext,
-              false
-            );
-            renderMarkdown(currentCard.back, backEl, deckFilePath);
-          }
+          renderClozeInto(backEl, currentCard, true);
         } else {
           clearClozeAttributes(backEl);
-          renderMarkdown(currentCard.back, backEl, deckFilePath);
+          renderCardSide(
+            backEl,
+            currentResolved ? currentResolved.back : currentCard.back,
+            currentResolved ? currentResolved.backType : null,
+            renderMarkdown,
+            deckFilePath,
+            (lp) => resolveEmbed(lp, currentCard?.sourceFile ?? "")
+          );
         }
       }
     });
+  }
+
+  function toggleScratchpad() {
+    showScratchpad = !showScratchpad;
   }
 
   function toggleNotes() {
     showNotes = !showNotes;
     if (showNotes) {
       tick().then(() => {
-        if (notesEl && currentCard?.notes) {
+        const notesContent = currentResolved
+          ? currentResolved.notes
+          : currentCard?.notes;
+        if (notesEl && notesContent) {
           notesEl.empty();
-          renderMarkdown(currentCard.notes, notesEl, deckFilePath);
+          renderCardSide(
+            notesEl,
+            notesContent,
+            currentResolved?.notes !== undefined
+              ? currentResolved.notesType ?? "md"
+              : null,
+            renderMarkdown,
+            deckFilePath,
+            (lp) => resolveEmbed(lp, currentCard?.sourceFile ?? "")
+          );
         }
       });
+    }
+  }
+
+  async function refreshCramProgress() {
+    if (!cramSessionId) return;
+    const p = await scheduler.getCramProgress(cramSessionId);
+    if (p) {
+      // Reuse the shared progress bar/counters by mapping cram progress
+      // (graduated / goal) onto the session-progress shape.
+      sessionProgress = {
+        doneUnique: p.graduated,
+        goalTotal: p.goalTotal,
+        progress: p.progress,
+      };
+    }
+  }
+
+  async function handleCramReview(rating: CramRating) {
+    if (!currentCard || isLoading || !cramSessionId) return;
+
+    isLoading = true;
+    try {
+      await scheduler.rateCram(cramSessionId, currentCard.id, rating, new Date());
+      reviewedCount++;
+      await refreshCramProgress();
+
+      currentCard = await scheduler.getNextCramCard(cramSessionId);
+      await yieldToUI();
+
+      if (currentCard) {
+        await loadCard();
+      } else {
+        await endReview();
+      }
+    } catch (error) {
+      console.error("Error cramming card:", error);
+    } finally {
+      isLoading = false;
     }
   }
 
   async function handleReview(rating: RatingLabel) {
     if (!currentCard || isLoading) return;
 
+    if (cramMode) {
+      // Cram is a two-button drill: only Again / Good are possible.
+      await handleCramReview(rating === "again" ? "again" : "good");
+      return;
+    }
+
     isLoading = true;
+    const reviewPerfStart = performance.now();
     try {
       const timeElapsed = Date.now() - cardStartTime;
       const shownAt = new Date(cardStartTime);
@@ -573,6 +957,13 @@
       console.error("Error reviewing card:", error);
     } finally {
       isLoading = false;
+      if (settings?.debug?.performanceLogs) {
+        console.debug(
+          `[Decks Performance] Review turn (rate + next card) in ${(
+            performance.now() - reviewPerfStart
+          ).toFixed(1)}ms`
+        );
+      }
     }
   }
 
@@ -719,6 +1110,9 @@
     if (isActive && !isActive()) return;
     if (isLoading) return;
     if (searchMode) return;
+    // While the scratchpad covers the card, keep review shortcuts (ratings,
+    // reveal, B/S/R) from firing — the text box would otherwise trigger them.
+    if (showScratchpad) return;
 
     const now = Date.now();
     const eventType = "keyboard";
@@ -742,10 +1136,8 @@
 
     // Card-state action hotkeys (B / S / R). Fire on both front and back —
     // these are meta-actions, not review answers. Gated by enableKeyboardShortcuts
-    // and skipped in browse mode + when modifier keys are held (avoid eating
-    // shortcuts like Cmd+R).
+    // and skipped when modifier keys are held (avoid eating shortcuts like Cmd+R).
     if (
-      !browseMode &&
       currentCard &&
       settings.review.enableKeyboardShortcuts &&
       !event.metaKey &&
@@ -753,7 +1145,12 @@
       !event.altKey
     ) {
       const k = event.key.toLowerCase();
-      if (k === "b" || k === "s" || k === "r") {
+      // A key bound to a review shortcut (e.g. rebinding a rating to "s") takes
+      // precedence over the card-action keys, so it isn't swallowed here.
+      if (
+        (k === "b" || k === "s" || k === "r") &&
+        !isReviewShortcut(event.key, shortcuts)
+      ) {
         event.preventDefault();
         lastEventTime = now;
         lastEventType = eventType;
@@ -765,8 +1162,8 @@
     }
 
     if (browseMode) {
-      // Browse mode: Space shows answer, then advances
-      if (!showAnswer && event.key === " ") {
+      // Browse mode: reveal key shows the answer, then advances
+      if (!showAnswer && kbEnabled && matchesShortcut(event.key, shortcuts.reveal)) {
         event.preventDefault();
         lastEventTime = now;
         lastEventType = eventType;
@@ -776,7 +1173,7 @@
         lastEventType = eventType;
 
         if (
-          event.key === " " ||
+          (kbEnabled && matchesShortcut(event.key, shortcuts.reveal)) ||
           event.key === "Enter" ||
           event.key === "ArrowRight"
         ) {
@@ -787,7 +1184,7 @@
           handleBrowsePrevious();
         } else if (
           (event.key === "n" || event.key === "N") &&
-          currentCard?.notes
+          hasNotes
         ) {
           event.preventDefault();
           toggleNotes();
@@ -796,8 +1193,52 @@
       return;
     }
 
+    // Cram mode: two-button drill (again / good; reveal doubles as good)
+    if (cramMode) {
+      if (!showAnswer && kbEnabled && matchesShortcut(event.key, shortcuts.reveal)) {
+        event.preventDefault();
+        lastEventTime = now;
+        lastEventType = eventType;
+        revealAnswer();
+      } else if (showAnswer) {
+        lastEventTime = now;
+        lastEventType = eventType;
+
+        if ((event.key === "n" || event.key === "N") && hasNotes) {
+          event.preventDefault();
+          toggleNotes();
+          return;
+        }
+
+        if (!kbEnabled) return;
+
+        if (matchesShortcut(event.key, shortcuts.again)) {
+          event.preventDefault();
+          handleReview("again");
+        } else if (
+          matchesShortcut(event.key, shortcuts.good) ||
+          matchesShortcut(event.key, shortcuts.reveal)
+        ) {
+          event.preventDefault();
+          handleReview("good");
+        }
+      }
+      return;
+    }
+
     // Standard mode
-    if (!showAnswer && event.key === " ") {
+    if (!showAnswer && kbEnabled && isMultipleChoice && /^[1-9]$/.test(event.key)) {
+      // Number keys only here — letters would clash with the B/S/R bindings.
+      const displayPosition = parseInt(event.key, 10) - 1;
+      if (displayPosition < mcqDisplayOrder.length) {
+        event.preventDefault();
+        lastEventTime = now;
+        lastEventType = eventType;
+        toggleMcqOption(mcqDisplayOrder[displayPosition]);
+      }
+      return;
+    }
+    if (!showAnswer && kbEnabled && matchesShortcut(event.key, shortcuts.reveal)) {
       event.preventDefault();
       lastEventTime = now;
       lastEventType = eventType;
@@ -807,26 +1248,26 @@
       lastEventTime = now;
       lastEventType = eventType;
 
-      if ((event.key === "n" || event.key === "N") && currentCard?.notes) {
+      if ((event.key === "n" || event.key === "N") && hasNotes) {
         event.preventDefault();
         toggleNotes();
         return;
       }
 
-      switch (event.key) {
-        case "1":
-          handleReview("again");
-          break;
-        case "2":
-          handleReview("hard");
-          break;
-        case "3":
-        case " ":
-          handleReview("good");
-          break;
-        case "4":
-          handleReview("easy");
-          break;
+      if (!kbEnabled) return;
+
+      // The reveal key doubles as "Good" once the answer is shown (as Space did).
+      if (matchesShortcut(event.key, shortcuts.again)) {
+        handleReview("again");
+      } else if (matchesShortcut(event.key, shortcuts.hard)) {
+        handleReview("hard");
+      } else if (
+        matchesShortcut(event.key, shortcuts.good) ||
+        matchesShortcut(event.key, shortcuts.reveal)
+      ) {
+        handleReview("good");
+      } else if (matchesShortcut(event.key, shortcuts.easy)) {
+        handleReview("easy");
       }
     }
   }
@@ -938,6 +1379,9 @@
     window.removeEventListener("keydown", handleKeydown);
     window.removeEventListener("mousedown", handleDocumentMouseDown);
 
+    // Stop any in-progress read-aloud
+    tts?.stop();
+
     // Clean up session timer (standard mode only)
     if (sessionTimer) {
       window.clearInterval(sessionTimer);
@@ -969,6 +1413,18 @@
     if (sessionTimer) {
       window.clearInterval(sessionTimer);
       sessionTimer = null;
+    }
+
+    // Cram: do NOT end the session on close — leave it open so it can be resumed
+    // later the same study day. startCramSession retires stale/completed sessions
+    // lazily on the next start.
+    if (cramMode) {
+      handleComplete({
+        reason: "cram-complete",
+        reviewed: sessionProgress ? sessionProgress.doneUnique : reviewedCount,
+      });
+      reviewFinished = true;
+      return;
     }
 
     // End the review session
@@ -1014,14 +1470,17 @@
 
 <div class="decks-review-modal">
   <div class="decks-modal-header">
-    <h3>
-      {browseMode ? "Browse" : "Review session"} - {deckOrGroup.name}
-      {#if inClozeGroupReview && currentCard}
-        <span class="decks-cloze-indicator"
-          >Cloze {(currentCard.clozeOrder ?? clozeGroupIndex) + 1}/{clozeGroupTotal}</span
-        >
-      {/if}
-    </h3>
+    <div class="decks-modal-title-row">
+      <h3>
+        {browseMode ? "Browse" : "Review session"} - {deckOrGroup.name}
+        {#if currentCard && isClozeType(currentCard.type) && clozeGroupTotal > 0}
+          <span class="decks-cloze-indicator"
+            >Cloze {(currentCard.clozeOrder ?? clozeGroupIndex) + 1}/{clozeGroupTotal}</span
+          >
+        {/if}
+      </h3>
+      <DocInfoButton path="reviewing/sessions" />
+    </div>
     {#if currentCard}
       {@const breadcrumbParts = getBreadcrumbParts(currentCard)}
       {#if breadcrumbParts.length > 0}
@@ -1170,15 +1629,17 @@
                 : r.sessionComplete})</span
           >
         </div>
-        <div class="decks-timer-display">
-          <span class="decks-timer-label">{r.timeRemaining}</span>
-          <span
-            class="decks-timer-value"
-            class:decks-timer-warning={sessionTimeRemaining < 60000}
-          >
-            {timeRemainingDisplay}
-          </span>
-        </div>
+        {#if !cramMode}
+          <div class="decks-timer-display">
+            <span class="decks-timer-label">{r.timeRemaining}</span>
+            <span
+              class="decks-timer-value"
+              class:decks-timer-warning={sessionTimeRemaining < 60000}
+            >
+              {timeRemainingDisplay}
+            </span>
+          </div>
+        {/if}
       {/if}
     </div>
   </div>
@@ -1192,14 +1653,14 @@
   {#if currentCard}
     <div
       class="decks-card-content"
+      class:decks-scratchpad-covered={showScratchpad}
       on:touchstart|passive={handleTouchStart}
       on:touchend|passive={handleTouchEnd}
     >
-      <div class="decks-question-section">
-        <div class="decks-front-wrapper">
+      {#snippet frontControls()}
           {#if canUndo && !browseMode}
             <button
-              class="decks-undo-button clickable-icon"
+              class="decks-undo-button decks-icon-btn clickable-icon"
               on:click={handleUndo}
               disabled={isLoading}
               title={r.undoTooltip}
@@ -1225,7 +1686,7 @@
           <div class="decks-card-utilities">
             {#if cardHealth && (cardHealth.isLeech || cardHealth.isDense)}
               <button
-                class="clickable-icon decks-warning-icon"
+                class="clickable-icon decks-warning-icon decks-icon-btn"
                 type="button"
                 tabindex="-1"
                 aria-label={cardHealth.isLeech && cardHealth.isDense
@@ -1255,7 +1716,7 @@
             {/if}
             {#if onNavigateToSource && currentCard}
               <button
-                class="decks-go-to-file-button clickable-icon"
+                class="decks-go-to-file-button decks-icon-btn clickable-icon"
                 on:click={handleNavigateToSource}
                 aria-label={r.openSourceFile}
                 type="button"
@@ -1280,13 +1741,81 @@
                 </svg>
               </button>
             {/if}
-            {#if onCardStateAction && currentCard && !browseMode}
+            {#if ttsAvailable && currentCard}
+              <button
+                class="decks-tts-button decks-icon-btn clickable-icon"
+                class:decks-tts-active={isSpeaking}
+                on:click={handleToggleSpeak}
+                aria-label={isSpeaking ? r.stopAudio : r.playAudio}
+                type="button"
+                tabindex="-1"
+              >
+                {#if isSpeaking}
+                  <svg
+                    xmlns="http://www.w3.org/2000/svg"
+                    width="12"
+                    height="12"
+                    viewBox="0 0 24 24"
+                    fill="currentColor"
+                    stroke="currentColor"
+                    stroke-width="2"
+                    stroke-linecap="round"
+                    stroke-linejoin="round"
+                  >
+                    <rect x="6" y="6" width="12" height="12" rx="1"></rect>
+                  </svg>
+                {:else}
+                  <svg
+                    xmlns="http://www.w3.org/2000/svg"
+                    width="12"
+                    height="12"
+                    viewBox="0 0 24 24"
+                    fill="none"
+                    stroke="currentColor"
+                    stroke-width="2"
+                    stroke-linecap="round"
+                    stroke-linejoin="round"
+                  >
+                    <polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5"></polygon>
+                    <path d="M15.54 8.46a5 5 0 0 1 0 7.07"></path>
+                    <path d="M19.07 4.93a10 10 0 0 1 0 14.14"></path>
+                  </svg>
+                {/if}
+              </button>
+            {/if}
+            {#if currentCard}
+              <button
+                class="decks-scratchpad-button decks-icon-btn clickable-icon"
+                class:decks-scratchpad-active={showScratchpad}
+                on:click={toggleScratchpad}
+                title={r.scratchpad}
+                aria-label={r.scratchpad}
+                type="button"
+                tabindex="-1"
+              >
+                <svg
+                  xmlns="http://www.w3.org/2000/svg"
+                  width="12"
+                  height="12"
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="currentColor"
+                  stroke-width="2"
+                  stroke-linecap="round"
+                  stroke-linejoin="round"
+                >
+                  <path d="M12 20h9"></path>
+                  <path d="M16.5 3.5a2.121 2.121 0 0 1 3 3L7 19l-4 1 1-4 12.5-12.5z"></path>
+                </svg>
+              </button>
+            {/if}
+            {#if onCardStateAction && currentCard}
               <div
                 class="decks-card-actions-menu"
                 bind:this={actionsMenuEl}
               >
                 <button
-                  class="decks-card-actions-trigger clickable-icon"
+                  class="decks-card-actions-trigger decks-icon-btn clickable-icon"
                   on:click|stopPropagation={toggleActionsMenu}
                   aria-label={r.cardActions}
                   aria-haspopup="menu"
@@ -1344,8 +1873,83 @@
               </div>
             {/if}
           </div>
-          <div class="decks-card-side decks-front" bind:this={frontEl}></div>
-        </div>
+      {/snippet}
+      {#snippet notesButton()}
+        {#if hasNotes}
+          <button
+            class="decks-notes-button decks-icon-btn clickable-icon"
+            class:decks-notes-active={showNotes}
+            on:click={toggleNotes}
+            title={r.toggleNotes}
+            type="button"
+          >
+            <svg
+              xmlns="http://www.w3.org/2000/svg"
+              width="12"
+              height="12"
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              stroke-width="2"
+              stroke-linecap="round"
+              stroke-linejoin="round"
+            >
+              <circle cx="12" cy="12" r="10"></circle>
+              <line x1="12" y1="16" x2="12" y2="12"></line>
+              <line x1="12" y1="8" x2="12.01" y2="8"></line>
+            </svg>
+          </button>
+        {/if}
+      {/snippet}
+      <div class="decks-question-section">
+        {#if frontIsHtml}
+          <div class="decks-card-shell">
+            <div class="decks-template-layer decks-front" bind:this={frontEl}></div>
+            <div class="decks-controls-layer">{@render frontControls()}</div>
+          </div>
+        {:else}
+          <div class="decks-front-wrapper">
+            {@render frontControls()}
+            <div class="decks-card-side decks-front">
+              <!-- svelte-ignore a11y-click-events-have-key-events a11y-no-static-element-interactions -->
+              <div
+                class="decks-card-text markdown-rendered"
+                bind:this={frontEl}
+                on:click={handleClozeBlankClick}
+              ></div>
+            </div>
+            <!-- Front-only cloze: surface the Extra's Notes button on the front card
+                 itself (like the back card's button) once the cloze is revealed. -->
+            {#if frontOnlyClozeCard && showAnswer}
+              {@render notesButton()}
+            {/if}
+          </div>
+        {/if}
+        {#if isMultipleChoice && mcqOptions.length > 0}
+          <div class="decks-review-mcq">
+            {#if mcqStem}
+              {#key mcqCardId}
+                <div
+                  class="decks-card-text markdown-rendered"
+                  use:mcqRenderInto={mcqStem}
+                ></div>
+              {/key}
+            {/if}
+            {#each mcqDisplayOrder as fileIndex, displayPosition (`${mcqCardId}:${fileIndex}`)}
+              <button
+                class="decks-exam-option {mcqOptionState(fileIndex, mcqSelected, showAnswer)}"
+                type="button"
+                on:click={() => toggleMcqOption(fileIndex)}
+              >
+                <span class="decks-exam-option-prefix">{displayPosition + 1})</span>
+                <span
+                  class="decks-exam-option-text markdown-rendered"
+                  use:mcqRenderInto={mcqOptions[fileIndex].text}
+                ></span>
+              </button>
+            {/each}
+          </div>
+        {/if}
       </div>
 
       {#if currentCard?.hint && currentCard.hint.length > 0}
@@ -1354,14 +1958,14 @@
           <span class="decks-card-edge-chip" aria-label={currentCard.hint}>{currentCard.hint}</span>
           <span class="decks-card-edge-line"></span>
         </div>
-      {:else if showAnswer}
+      {:else if showAnswer && !(!!currentCard && isOcclusionV2(currentCard) && !currentV2Answered) && !(frontOnlyClozeCard && !showNotes)}
         <div class="decks-separator"></div>
       {/if}
-      <div class="decks-answer-section" class:hidden={!showAnswer}>
-        <div class="decks-back-wrapper">
+      <div class="decks-answer-section" class:hidden={answerSectionHidden}>
+        {#snippet backTopControls()}
           {#if currentCard}
             <button
-              class="decks-copy-button clickable-icon"
+              class="decks-copy-button decks-icon-btn clickable-icon"
               on:click={handleCopyBack}
               title={r.copyContent}
               type="button"
@@ -1384,45 +1988,53 @@
               </svg>
             </button>
           {/if}
-          <!-- svelte-ignore a11y-click-events-have-key-events a11y-no-static-element-interactions -->
-          <div
-            class="decks-card-side decks-back"
-            bind:this={backEl}
-            on:click={handleClozeBlankClick}
-          ></div>
-          {#if currentCard?.notes}
-            <button
-              class="decks-notes-button clickable-icon"
-              class:decks-notes-active={showNotes}
-              on:click={toggleNotes}
-              title={r.toggleNotes}
-              type="button"
-            >
-              <svg
-                xmlns="http://www.w3.org/2000/svg"
-                width="12"
-                height="12"
-                viewBox="0 0 24 24"
-                fill="none"
-                stroke="currentColor"
-                stroke-width="2"
-                stroke-linecap="round"
-                stroke-linejoin="round"
-              >
-                <circle cx="12" cy="12" r="10"></circle>
-                <line x1="12" y1="16" x2="12" y2="12"></line>
-                <line x1="12" y1="8" x2="12.01" y2="8"></line>
-              </svg>
-            </button>
+        {/snippet}
+        {#if !frontOnlyClozeCard && !isMultipleChoice}
+          {#if backIsHtml}
+            <div class="decks-card-shell">
+              <div class="decks-template-layer decks-back" bind:this={backEl}></div>
+              <div class="decks-controls-layer">
+                {@render backTopControls()}
+                {@render notesButton()}
+              </div>
+            </div>
+          {:else}
+            <div class="decks-back-wrapper">
+              {@render backTopControls()}
+              <div class="decks-card-side decks-back">
+                <!-- svelte-ignore a11y-click-events-have-key-events a11y-no-static-element-interactions -->
+                <div
+                  class="decks-card-text markdown-rendered"
+                  bind:this={backEl}
+                  on:click={handleClozeBlankClick}
+                ></div>
+              </div>
+              {@render notesButton()}
+            </div>
           {/if}
-        </div>
-        {#if showNotes && currentCard?.notes}
-          <div class="decks-notes-wrapper">
-            <div class="decks-card-side decks-notes" bind:this={notesEl}></div>
-          </div>
+        {/if}
+        {#if showNotes && hasNotes}
+          {#if notesIsHtml}
+            <div class="decks-card-shell decks-notes-shell">
+              <div class="decks-template-layer decks-notes" bind:this={notesEl}></div>
+            </div>
+          {:else}
+            <div class="decks-notes-wrapper">
+              <div class="decks-card-side decks-notes">
+                <div class="decks-card-text markdown-rendered" bind:this={notesEl}></div>
+              </div>
+            </div>
+          {/if}
         {/if}
       </div>
     </div>
+
+    {#key currentCard?.id}
+      <ReviewScratchpad
+        open={showScratchpad}
+        on:close={() => (showScratchpad = false)}
+      />
+    {/key}
 
     <div class="decks-action-buttons">
       {#if !showAnswer}
@@ -1434,7 +2046,7 @@
           type="button"
         >
           <span>{r.showAnswerButton}</span>
-          <kbd class="decks-shortcut">{r.spaceShortcut}</kbd>
+          <kbd class="decks-shortcut">{displayShortcutKey(shortcuts.reveal)}</kbd>
         </button>
       {/if}
 
@@ -1462,7 +2074,31 @@
                 ? r.finish
                 : r.next}</span
             >
-            <kbd class="decks-shortcut">{r.spaceShortcut}</kbd>
+            <kbd class="decks-shortcut">{displayShortcutKey(shortcuts.reveal)}</kbd>
+          </button>
+        </div>
+      {:else if showAnswer && cramMode}
+        <div class="decks-difficulty-buttons decks-cram-buttons">
+          <button
+            class="decks-difficulty-button decks-again decks-rate-btn"
+            disabled={isLoading}
+            on:pointerup={async (e) => await onRating(e, 1)}
+            style="touch-action: manipulation;"
+            type="button"
+          >
+            <div class="decks-button-label">{r.again}</div>
+            <kbd class="decks-shortcut">{displayShortcutKey(shortcuts.again)}</kbd>
+          </button>
+
+          <button
+            class="decks-difficulty-button decks-good decks-rate-btn"
+            disabled={isLoading}
+            on:pointerup={async (e) => await onRating(e, 3)}
+            style="touch-action: manipulation;"
+            type="button"
+          >
+            <div class="decks-button-label">{r.good}</div>
+            <kbd class="decks-shortcut">{displayShortcutKey(shortcuts.reveal)}</kbd>
           </button>
         </div>
       {:else if showAnswer && schedulingInfo}
@@ -1478,7 +2114,7 @@
             <div class="decks-interval">
               {getIntervalDisplay(schedulingInfo.again.interval)}
             </div>
-            <kbd class="decks-shortcut">1</kbd>
+            <kbd class="decks-shortcut">{displayShortcutKey(shortcuts.again)}</kbd>
           </button>
 
           <button
@@ -1492,7 +2128,7 @@
             <div class="decks-interval">
               {getIntervalDisplay(schedulingInfo.hard.interval)}
             </div>
-            <kbd class="decks-shortcut">2</kbd>
+            <kbd class="decks-shortcut">{displayShortcutKey(shortcuts.hard)}</kbd>
           </button>
 
           <button
@@ -1505,7 +2141,7 @@
             <div class="decks-interval">
               {getIntervalDisplay(schedulingInfo.good.interval)}
             </div>
-            <kbd class="decks-shortcut">3</kbd>
+            <kbd class="decks-shortcut">{displayShortcutKey(shortcuts.good)}</kbd>
           </button>
 
           <button
@@ -1518,7 +2154,7 @@
             <div class="decks-interval">
               {getIntervalDisplay(schedulingInfo.easy.interval)}
             </div>
-            <kbd class="decks-shortcut">4</kbd>
+            <kbd class="decks-shortcut">{displayShortcutKey(shortcuts.easy)}</kbd>
           </button>
         </div>
       {/if}
@@ -1673,8 +2309,18 @@
     border-bottom: 1px solid var(--background-modifier-border);
   }
 
+  .decks-modal-title-row {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+  }
+
   .decks-modal-header h3 {
     margin: 0;
+    display: flex;
+    align-items: baseline;
+    flex-wrap: wrap;
+    gap: 8px;
     font-size: 18px;
     font-weight: 600;
     color: var(--text-normal);
@@ -1746,25 +2392,48 @@
     min-height: 0;
   }
 
-  .decks-question-section,
   .decks-answer-section {
     width: 100%;
     display: flex;
     justify-content: center;
   }
 
+  /* Column so a multiple-choice card's options stack under the front card
+     rather than beside it; single-front cards stay centered. */
+  .decks-question-section {
+    width: 100%;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+  }
+
+  /* Markdown / fallback face — shares the physical look of .decks-card-shell so
+     HTML-template and markdown faces read as a cohesive set. */
   .decks-card-side {
-    background: var(--background-secondary);
+    background: var(--background-primary);
     border: 1px solid var(--background-modifier-border);
-    border-radius: var(--radius-m);
-    padding: 24px;
-    min-height: 100px;
+    border-radius: 12px;
+    box-shadow: 0 4px 16px rgba(0, 0, 0, 0.05);
+    padding: 2rem;
+    min-height: 250px;
     width: 100%;
     max-width: 900px;
     box-sizing: border-box;
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+    align-items: center;
     word-wrap: break-word;
     overflow-wrap: anywhere;
     overflow-x: auto;
+  }
+
+  /* Shrink-wrap centering: the inner box hugs short content (so the card
+     centers it) but grows to full width for long content (so text-align:left
+     reads naturally). text-align is inherited from the per-face rule. */
+  .decks-card-text {
+    width: fit-content;
+    max-width: 100%;
   }
 
   .decks-front-wrapper,
@@ -1772,6 +2441,60 @@
     position: relative;
     width: 100%;
     max-width: 900px;
+  }
+
+  /* Physical card shell — HTML-template sides only. The plugin enforces the
+     card frame (border, background, shadow, rounded corners); the in-flow
+     template layer fills it and the controls layer floats on top without
+     blocking selection/clicks in the template. */
+  .decks-card-shell {
+    position: relative;
+    display: flex;
+    width: 100%;
+    max-width: 900px;
+    min-height: 250px;
+    border-radius: 12px;
+    overflow: hidden;
+    border: 1px solid var(--background-modifier-border);
+    background-color: var(--background-primary);
+    box-shadow: 0 4px 16px rgba(0, 0, 0, 0.05);
+  }
+
+  /* In-flow layer: fills the shell and holds the Shadow DOM host. */
+  .decks-template-layer {
+    flex: 1 1 auto;
+    display: flex;
+    flex-direction: column;
+    width: 100%;
+    min-width: 0;
+  }
+
+  /* Overlay layer anchored exactly to the shell; never blocks the template. */
+  .decks-controls-layer {
+    position: absolute;
+    inset: 0;
+    z-index: 10;
+    pointer-events: none;
+  }
+
+  .decks-controls-layer .decks-undo-button,
+  .decks-controls-layer .decks-copy-button,
+  .decks-controls-layer .decks-notes-button,
+  .decks-controls-layer .decks-card-utilities,
+  .decks-controls-layer .decks-card-actions-menu,
+  .decks-controls-layer .decks-card-actions-dropdown {
+    pointer-events: auto;
+  }
+
+  /* Frosted-glass treatment so floating controls stay readable over any
+     template background (template cards only — scoped to the controls layer). */
+  .decks-controls-layer .decks-icon-btn {
+    pointer-events: auto;
+    color: var(--text-normal);
+    background-color: var(--background-modifier-form-field);
+    backdrop-filter: blur(4px);
+    -webkit-backdrop-filter: blur(4px);
+    border-radius: 6px;
   }
 
   .decks-card-side.decks-front {
@@ -1811,6 +2534,11 @@
     font-size: 14px;
     line-height: 1.5;
     color: var(--text-muted);
+    /* Notes keeps the white chrome but hugs its content (no 250px floor) and
+       stays a left-aligned, top annotation rather than centered. */
+    min-height: 0;
+    justify-content: flex-start;
+    align-items: flex-start;
   }
 
   .decks-go-to-file-button {
@@ -1819,6 +2547,37 @@
     min-width: 0 !important;
     min-height: 0 !important;
     padding: 0 !important;
+  }
+
+  .decks-tts-button {
+    width: 24px !important;
+    height: 24px !important;
+    min-width: 0 !important;
+    min-height: 0 !important;
+    padding: 0 !important;
+    color: var(--text-muted);
+  }
+
+  .decks-tts-button.decks-tts-active {
+    color: var(--interactive-accent);
+  }
+
+  .decks-scratchpad-button {
+    width: 24px !important;
+    height: 24px !important;
+    min-width: 0 !important;
+    min-height: 0 !important;
+    padding: 0 !important;
+    color: var(--text-muted);
+  }
+
+  .decks-scratchpad-button.decks-scratchpad-active {
+    color: var(--interactive-accent);
+  }
+
+  /* The scratchpad takes the card's flex slot; hide the card underneath it. */
+  .decks-card-content.decks-scratchpad-covered {
+    display: none;
   }
 
   .decks-card-actions-menu {
@@ -2263,51 +3022,46 @@
   }
 
   /* Markdown content styling */
-  :global(.card-side h1),
-  :global(.card-side h2),
-  :global(.card-side h3),
-  :global(.card-side h4),
-  :global(.card-side h5),
-  :global(.card-side h6) {
+  :global(.decks-card-side h1),
+  :global(.decks-card-side h2),
+  :global(.decks-card-side h3),
+  :global(.decks-card-side h4),
+  :global(.decks-card-side h5),
+  :global(.decks-card-side h6) {
     margin-top: 0;
     margin-bottom: 16px;
   }
 
-  :global(.card-side p) {
+  :global(.decks-card-side p) {
     margin-bottom: 16px;
   }
 
-  :global(.card-side p:last-child) {
+  :global(.decks-card-side p:last-child) {
     margin-bottom: 0;
   }
 
-  :global(.card-side > *:first-child) {
+  :global(.decks-card-text > *:first-child) {
     margin-top: 0;
   }
 
-  :global(.card-side ul),
-  :global(.card-side ol) {
+  :global(.decks-card-side ul),
+  :global(.decks-card-side ol) {
     margin-bottom: 16px;
     padding-left: 24px;
   }
 
-  :global(.card-side code) {
+  /* Inline code only — block code (pre > code) is styled by Obsidian's
+     markdown-rendered theme styles. */
+  :global(.decks-card-side code) {
+    font-size: 0.9em;
+  }
+  :global(.decks-card-side :not(pre) > code) {
     background: var(--code-background);
     padding: 2px 4px;
     border-radius: 3px;
-    font-size: 0.9em;
   }
 
-  :global(.card-side pre) {
-    background: var(--code-background);
-    padding: 16px;
-    border-radius: 6px;
-    overflow-x: auto;
-    margin-bottom: 16px;
-    max-width: 100%;
-  }
-
-  :global(.card-side blockquote) {
+  :global(.decks-card-side blockquote) {
     border-left: 3px solid var(--blockquote-border);
     padding-left: 16px;
     margin-left: 0;
@@ -2807,6 +3561,5 @@
     font-size: 12px;
     font-weight: 400;
     color: var(--text-muted);
-    margin-left: 8px;
   }
 </style>

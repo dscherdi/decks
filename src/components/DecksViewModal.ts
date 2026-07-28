@@ -10,19 +10,23 @@ import type {
 import { DeckSynchronizer } from "@/services/DeckSynchronizer";
 import { DeckManager } from "@/services/DeckManager";
 import type { DecksSettings } from "@/settings";
-import { I18n, yieldToUI } from "@decks/core";
+import { I18n, yieldToUI, ExamAttempt, type DeckProfile } from "@decks/core";
 import { Logger } from "@/utils/logging";
 import { Modal, Notice, WorkspaceLeaf } from "obsidian";
 import type { App } from "obsidian";
-import { Scheduler } from "@/services/Scheduler";
+import { Scheduler } from "@decks/core";
 import { FlashcardReviewModalWrapper } from "./review/FlashcardReviewModalWrapper";
 import {
   FlashcardReviewView,
   VIEW_TYPE_FLASHCARD_REVIEW,
 } from "./review/FlashcardReviewView";
+import { launchExamForSelection } from "./exam/launchExam";
+import { launchCramForSelection } from "./review/launchCram";
+import { openDeckSourceFile } from "@/utils/deck-source";
+import { ExamModalWrapper } from "./exam/ExamModalWrapper";
+import { ExamView, VIEW_TYPE_FLASHCARD_EXAM } from "./exam/ExamView";
 import { StatisticsModal } from "./settings/StatisticsModal";
 import { ProfilesManagerModal } from "./config/ProfilesManagerModal";
-import { DeckConfigModal } from "./config/DeckConfigModal";
 import { StatisticsService } from "@/services/StatisticsService";
 import { TagGroupService } from "@decks/core";
 import { CustomDeckService } from "@decks/core";
@@ -34,7 +38,8 @@ import { mount, unmount } from "svelte";
 import type { DeckListPanelComponent } from "../types/svelte-components";
 import type { IDatabaseService } from "../database/DatabaseFactory";
 import type { DecksView } from "./DecksView";
-import type { DeckListSortMode } from "@/settings";
+import type { DeckListSortMode, DeckListView } from "@/settings";
+import { makeModalResponsive, type ResponsiveModalHandle } from "../utils/responsive-modal";
 
 export class DecksViewModal extends Modal {
   private db: IDatabaseService;
@@ -47,12 +52,13 @@ export class DecksViewModal extends Modal {
   private settings: DecksSettings;
   private logger: Logger;
   private deckListPanelComponent: DeckListPanelComponent | null = null;
-  private resizeHandler?: () => void;
+  private responsiveHandle?: ResponsiveModalHandle;
   private getDecksView: () => DecksView | null;
   private saveSettings: () => Promise<void>;
   private openEditModal?: (card: Flashcard) => Promise<void>;
   private openBatchRefactor?: (cards: Flashcard[]) => Promise<void>;
   private openAiGenerator?: () => void;
+  private openAnkiImport?: () => void;
 
   constructor(
     app: App,
@@ -69,6 +75,7 @@ export class DecksViewModal extends Modal {
     openEditModal?: (card: Flashcard) => Promise<void>,
     openBatchRefactor?: (cards: Flashcard[]) => Promise<void>,
     openAiGenerator?: () => void,
+    openAnkiImport?: () => void,
   ) {
     super(app);
     this.db = db;
@@ -85,6 +92,7 @@ export class DecksViewModal extends Modal {
     this.openEditModal = openEditModal;
     this.openBatchRefactor = openBatchRefactor;
     this.openAiGenerator = openAiGenerator;
+    this.openAnkiImport = openAnkiImport;
   }
 
   private async togglePin(id: string): Promise<void> {
@@ -106,21 +114,41 @@ export class DecksViewModal extends Modal {
     this.getDecksView()?.applySortModeUpdate(mode);
   }
 
+  private async setCollapsedIds(ids: string[]): Promise<void> {
+    this.settings.ui.collapsedDeckNodeIds = ids;
+    await this.saveSettings();
+    this.deckListPanelComponent?.updateCollapsedIds?.(ids);
+    // Also push into the sidepanel if it's open so both views stay in sync.
+    this.getDecksView()?.applyCollapsedIdsUpdate(ids);
+  }
+
+  private async changeDeckListView(view: DeckListView): Promise<void> {
+    this.settings.ui.deckListView = view;
+    await this.saveSettings();
+    this.deckListPanelComponent?.updateDeckListView?.(view);
+    this.getDecksView()?.applyDeckListViewUpdate(view);
+  }
+
   onOpen() {
     const { contentEl } = this;
     contentEl.empty();
 
-    const modalEl = this.containerEl.querySelector(".modal");
-    if (modalEl instanceof HTMLElement) {
-      modalEl.addClass("decks-modal");
-      if (window.innerWidth <= 768) {
-        modalEl.addClass("decks-modal-mobile");
-      } else {
-        modalEl.removeClass("decks-modal-mobile");
-      }
-    }
+    this.responsiveHandle = makeModalResponsive(this);
 
     contentEl.addClass("decks-decks-view-container");
+
+    void this.mountPanel(contentEl);
+  }
+
+  // Mount is async (onOpen must not be) so we can resolve exam capability
+  // before the panel renders, matching the leaf view.
+  private async mountPanel(contentEl: HTMLElement): Promise<void> {
+    let examCapable = false;
+    try {
+      examCapable = (await this.db.getExamEnabledDeckIds()).length > 0;
+    } catch (error) {
+      this.logger.debug("exam capability check failed", error);
+    }
 
     this.deckListPanelComponent = mount(DeckListPanel, {
       target: contentEl,
@@ -131,10 +159,24 @@ export class DecksViewModal extends Modal {
         tagGroupService: this.tagGroupService,
         app: this.app,
         onDeckClick: (deck: DeckWithProfile) => {
-          void this.startReview(deck);
+          if (deck.profile.examEnabled) {
+            void this.startExamForSelection(
+              { ...deck, type: "file" },
+              deck.profile
+            );
+          } else {
+            void this.startReview(deck);
+          }
         },
         onDeckGroupClick: (deckGroup: DeckGroup) => {
-          void this.startReviewForDeckGroup(deckGroup);
+          if (deckGroup.profile?.examEnabled) {
+            void this.startExamForSelection(
+              deckGroup,
+              deckGroup.profile ?? null
+            );
+          } else {
+            void this.startReviewForDeckGroup(deckGroup);
+          }
         },
         onBrowseDeck: (deck: DeckWithProfile) => {
           void this.startBrowse(deck);
@@ -148,9 +190,39 @@ export class DecksViewModal extends Modal {
         onBrowseCustomDeck: (customDeck: CustomDeckGroup) => {
           void this.startBrowseForCustomDeck(customDeck);
         },
+        onCramDeck: (deck: DeckWithProfile) =>
+          void this.startCramForSelection({ ...deck, type: "file" }),
+        onCramDeckGroup: (deckGroup: DeckGroup) =>
+          void this.startCramForSelection(deckGroup),
+        isCramResumable: (deck: DeckWithProfile) =>
+          this.scheduler.hasResumableCram({ ...deck, type: "file" }, new Date()),
+        isCramResumableGroup: (deckGroup: DeckGroup) =>
+          this.scheduler.hasResumableCram(deckGroup, new Date()),
+        onCramCustomDeck: (customDeck: CustomDeckGroup) =>
+          void this.startCramForSelection(customDeck),
+        isCramResumableCustom: (customDeck: CustomDeckGroup) =>
+          this.scheduler.hasResumableCram(customDeck, new Date()),
         onEditCustomDeck: (customDeck: CustomDeckGroup) => {
           this.openEditCustomDeck(customDeck);
         },
+        onOpenSource: (deck: DeckWithProfile) =>
+          openDeckSourceFile(this.app, deck.filepath).catch(console.error),
+        onExamDeck: (deck: DeckWithProfile) =>
+          void this.startExamForSelection(
+            { ...deck, type: "file" },
+            deck.profile
+          ),
+        onExamDeckGroup: (deckGroup: DeckGroup) =>
+          void this.startExamForSelection(
+            deckGroup,
+            deckGroup.profile ?? null
+          ),
+        onExamCustomDeck: (customDeck: CustomDeckGroup) =>
+          void this.startExamForSelection(customDeck, null),
+        onReviewDeck: (deck: DeckWithProfile) => void this.startReview(deck),
+        onReviewDeckGroup: (deckGroup: DeckGroup) =>
+          void this.startReviewForDeckGroup(deckGroup),
+        examCapable,
         customDeckService: this.customDeckService,
         onRefresh: () => this.refresh(),
         openStatisticsModal: () => this.openStatisticsModal(),
@@ -159,6 +231,7 @@ export class DecksViewModal extends Modal {
           this.openDeckConfigModal(deck),
         openFlashcardManager: () => this.openFlashcardManager(),
         openAiGeneratorModal: () => this.openAiGenerator?.(),
+        openAnkiImportModal: () => this.openAnkiImport?.(),
         aiEnabled: this.settings.ai.enabled,
         deckTag: this.settings.parsing.deckTag,
         pinnedDeckIds: this.settings.ui.pinnedDeckIds,
@@ -166,30 +239,20 @@ export class DecksViewModal extends Modal {
         deckListSort: this.settings.ui.deckListSort,
         minDeckCardCount: this.settings.ui.minDeckCardCount,
         onChangeSortMode: (mode: DeckListSortMode) => this.changeSortMode(mode),
+        deckListView: this.settings.ui.deckListView,
+        onChangeDeckListView: (view: DeckListView) => this.changeDeckListView(view),
+        collapsedDeckNodeIds: this.settings.ui.collapsedDeckNodeIds,
+        onSetCollapsedIds: (ids: string[]) => this.setCollapsedIds(ids),
+        globalReviewToday: null,
       },
     }) as DeckListPanelComponent;
 
     void this.refresh();
-
-    const handleResize = () => {
-      const el = this.containerEl.querySelector(".modal");
-      if (el instanceof HTMLElement) {
-        if (window.innerWidth <= 768) {
-          el.addClass("decks-modal-mobile");
-        } else {
-          el.removeClass("decks-modal-mobile");
-        }
-      }
-    };
-    window.addEventListener("resize", handleResize);
-    this.resizeHandler = handleResize;
   }
 
   onClose() {
-    if (this.resizeHandler) {
-      window.removeEventListener("resize", this.resizeHandler);
-      this.resizeHandler = undefined;
-    }
+    this.responsiveHandle?.dispose();
+    this.responsiveHandle = undefined;
 
     if (this.deckListPanelComponent) {
       void unmount(this.deckListPanelComponent);
@@ -247,6 +310,7 @@ export class DecksViewModal extends Modal {
       const initialDecks = await this.db.getAllDecksWithProfiles();
       const initialStats = await this.getAllDeckStatsMap();
       await this.deckListPanelComponent?.updateAll?.(initialDecks, initialStats);
+      await this.pushGlobalReviewCap();
     } catch (error) {
       this.logger.error("Error painting initial deck state in modal:", error);
       return;
@@ -274,6 +338,7 @@ export class DecksViewModal extends Modal {
       const decks = await this.db.getAllDecksWithProfiles();
       const stats = await this.getAllDeckStatsMap();
       await this.deckListPanelComponent?.updateAll?.(decks, stats);
+      await this.pushGlobalReviewCap();
     } catch (error) {
       this.logger.error("Background sync failed in modal:", error);
     } finally {
@@ -284,6 +349,16 @@ export class DecksViewModal extends Modal {
 
   private async getAllDeckStatsMap(): Promise<Map<string, DeckStats>> {
     return await this.deckManager.getAllDeckStatsMap();
+  }
+
+  // Refresh the deck list's global daily review-cap indicator.
+  private async pushGlobalReviewCap(): Promise<void> {
+    try {
+      const status = await this.deckManager.getGlobalDailyCapStatus();
+      this.deckListPanelComponent?.updateGlobalReviewToday?.(status);
+    } catch (error) {
+      this.logger.debug("Could not refresh global review cap status", error);
+    }
   }
 
   /**
@@ -365,11 +440,20 @@ export class DecksViewModal extends Modal {
   }
 
   private openDeckConfigModal(deck: DeckWithProfile): void {
-    const modal = new DeckConfigModal(this.app, deck, this.db, async () => {
-      const view = this.getDecksView();
-      if (view) await view.refresh();
+    void this.db.getActiveTrainedWeightSet().then((active) => {
+      const modal = new ProfilesManagerModal(
+        this.app,
+        this.db,
+        async () => {
+          const view = this.getDecksView();
+          if (view) await view.refresh();
+        },
+        active !== null,
+        "assignments",
+        deck.profileId
+      );
+      this.openWithReturn(modal);
     });
-    this.openWithReturn(modal);
   }
 
   private openFlashcardManager(): void {
@@ -469,6 +553,7 @@ export class DecksViewModal extends Modal {
         this.scheduler,
         this.settings,
         this.db,
+        this.deckSynchronizer,
         this.refreshDecksAndStats.bind(this),
         this.refreshStatsById.bind(this),
         browseMode
@@ -507,7 +592,106 @@ export class DecksViewModal extends Modal {
             cards,
             browseMode,
             this.refreshDecksAndStats.bind(this),
-            this.refreshStatsById.bind(this)
+            this.refreshStatsById.bind(this),
+            this.deckSynchronizer
+          );
+        }
+        void workspace.revealLeaf(leaf);
+      })
+      .catch(console.error);
+  }
+
+  async startExamForSelection(
+    selection: DeckOrGroup,
+    profile: DeckProfile | null
+  ): Promise<void> {
+    await launchExamForSelection(
+      { app: this.app, db: this.db, settings: this.settings },
+      selection,
+      profile,
+      (s) => this.gatherSelectionCards(s),
+      (attempt, deckName, onRetake) =>
+        this.openExamSession(attempt, deckName, onRetake)
+    );
+  }
+
+  async startCramForSelection(selection: DeckOrGroup): Promise<void> {
+    await launchCramForSelection(
+      {
+        app: this.app,
+        scheduler: this.scheduler,
+        settings: this.settings,
+        db: this.db,
+        deckSynchronizer: this.deckSynchronizer,
+        refreshStats: this.refreshDecksAndStats.bind(this),
+        refreshStatsById: this.refreshStatsById.bind(this),
+      },
+      selection,
+      (s) => this.gatherSelectionCards(s)
+    );
+  }
+
+  private async gatherSelectionCards(
+    selection: DeckOrGroup
+  ): Promise<Flashcard[]> {
+    if (selection.type === "file") {
+      await this.deckSynchronizer.syncDeck(selection.id);
+      await yieldToUI();
+      return this.db.getFlashcardsByDeck(selection.id);
+    }
+    if (selection.type === "custom") {
+      return this.db.getFlashcardsForCustomDeck(selection.id);
+    }
+    const allCards: Flashcard[] = [];
+    for (const deckId of selection.deckIds) {
+      await this.deckSynchronizer.syncDeck(deckId);
+      await yieldToUI();
+      allCards.push(...(await this.db.getFlashcardsByDeck(deckId)));
+    }
+    return allCards;
+  }
+
+  private openExamSession(
+    attempt: ExamAttempt,
+    deckName: string,
+    onRetake: () => void
+  ): void {
+    if (this.settings.ui.reviewDisplayMode === "tab") {
+      this.close();
+      this.openExamInTab(attempt, deckName, onRetake);
+    } else {
+      const examModal = new ExamModalWrapper(
+        this.app,
+        attempt,
+        deckName,
+        this.db,
+        onRetake,
+        this.refreshDecksAndStats.bind(this)
+      );
+      this.openWithReturn(examModal);
+    }
+  }
+
+  private openExamInTab(
+    attempt: ExamAttempt,
+    deckName: string,
+    onRetake: () => void
+  ): void {
+    const { workspace } = this.app;
+    const existingLeaves = workspace.getLeavesOfType(VIEW_TYPE_FLASHCARD_EXAM);
+    const leaf: WorkspaceLeaf =
+      existingLeaves.length > 0 ? existingLeaves[0] : workspace.getLeaf("tab");
+
+    void leaf
+      .setViewState({ type: VIEW_TYPE_FLASHCARD_EXAM, active: true })
+      .then(() => {
+        const view = leaf.view;
+        if (view instanceof ExamView) {
+          view.setExamData(
+            attempt,
+            deckName,
+            onRetake,
+            this.refreshDecksAndStats.bind(this)
           );
         }
         void workspace.revealLeaf(leaf);

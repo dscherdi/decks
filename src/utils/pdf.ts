@@ -42,7 +42,7 @@ export async function renderPageImage(
   const scale = Math.min(MAX_EDGE_PX / Math.max(base.width, base.height), 4);
   const viewport = page.getViewport({ scale });
 
-  const canvas = document.createElement("canvas");
+  const canvas = activeDocument.createElement("canvas");
   canvas.width = Math.ceil(viewport.width);
   canvas.height = Math.ceil(viewport.height);
   const ctx = canvas.getContext("2d");

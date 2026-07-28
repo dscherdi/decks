@@ -42,6 +42,10 @@
   export let aiProvider: AiProviderId = "openai";
   export let defaultModel = "";
 
+  // Set only for template-bound table cards: the row's headers + cell values.
+  // When present, the editor shows one input per column instead of Front/Back/Notes.
+  export let templateColumns: { headers: string[]; cells: string[] } | null = null;
+
   // Per-prompt model picker: defaults to the global model, overrides this run only.
   const modelOptions = buildModelOptions(aiProvider, defaultModel);
   let selectedModel = defaultModel;
@@ -143,8 +147,10 @@
   let saveState: "idle" | "saving" | "error" = "idle";
   let errorMessage = "";
 
-  let headerFront = card.type === "header-paragraph" ? card.front : "";
-  let headerBody = card.type === "header-paragraph" ? card.back : "";
+  const isHeaderShaped =
+    card.type === "header-paragraph" || card.type === "multiple-choice";
+  let headerFront = isHeaderShaped ? card.front : "";
+  let headerBody = isHeaderShaped ? card.back : "";
   let tableFront = card.type === "table" ? card.front : "";
   let tableBack = card.type === "table" ? card.back : "";
   let tableNotes = card.type === "table" ? (card.notes ?? "") : "";
@@ -155,6 +161,14 @@
   let spatialFront = card.type === "spatial" ? card.front : "";
   let spatialBack = card.type === "spatial" ? card.back : "";
   let spatialHint = card.type === "spatial" ? (card.hint ?? "") : "";
+
+  // Template-bound table cards are edited as their raw row: one input per
+  // column. Provided by the wrapper only when a template binds this card.
+  const isTemplateMode = !!templateColumns;
+  const columns: string[] = templateColumns ? [...templateColumns.cells] : [];
+  const columnLabels: string[] = templateColumns
+    ? templateColumns.headers
+    : [];
 
   // One global mode for the whole modal: editable text vs rendered markdown.
   let mode: Mode = "edit";
@@ -238,6 +252,8 @@
     switch (type) {
       case "header-paragraph":
         return "Header-paragraph";
+      case "multiple-choice":
+        return "Multiple choice";
       case "table":
         return "Table";
       case "cloze":
@@ -258,8 +274,9 @@
   $: spatialValid =
     card.type !== "spatial" ||
     (spatialFront.trim().length > 0 && spatialBack.trim().length > 0);
+  $: columnValid = !isTemplateMode || (columns[0] ?? "").trim().length > 0;
   $: canSave =
-    saveState !== "saving" && clozeValid && headerValid && itemValid && spatialValid;
+    saveState !== "saving" && clozeValid && headerValid && itemValid && spatialValid && columnValid;
 
   function currentValueFor(key: string): string | null {
     switch (key) {
@@ -346,7 +363,19 @@
     if (card.type === "header-paragraph") {
       return { type: "header-paragraph", front: headerFront, back: headerBody };
     }
+    if (card.type === "multiple-choice") {
+      return { type: "multiple-choice", front: headerFront, back: headerBody };
+    }
     if (card.type === "table") {
+      if (isTemplateMode) {
+        return {
+          type: "table",
+          front: columns[0] ?? "",
+          back: columns[1] ?? "",
+          notes: columns[2] ?? "",
+          columns,
+        };
+      }
       return { type: "table", front: tableFront, back: tableBack, notes: tableNotes };
     }
     if (card.type === "cloze") {
@@ -368,7 +397,7 @@
   $: fields = computeFields(card);
   function computeFields(c: Flashcard): FieldDef[] {
     const ef = I18n.t.modals.editFlashcard;
-    if (c.type === "header-paragraph") {
+    if (c.type === "header-paragraph" || c.type === "multiple-choice") {
       return [
         { key: "headerFront", label: ef.fieldHeader, isFront: true, refKey: "front" },
         { key: "headerBody", label: ef.fieldBody, refKey: "back" },
@@ -398,7 +427,9 @@
   }
 
   function currentFieldSet(): RefactorFieldSet {
-    if (card.type === "header-paragraph") {
+    if (card.type === "header-paragraph" || card.type === "multiple-choice") {
+      // The AI refactor layer has no question shape; the raw task-list body
+      // refactors like any header card body.
       return { type: "header-paragraph", front: headerFront, back: headerBody };
     }
     if (card.type === "table") {
@@ -616,6 +647,26 @@
   </div>
 
   <div class="decks-edit-content">
+    {#if isTemplateMode}
+      <div class="decks-edit-template-hint">
+        {I18n.t.modals.editFlashcard.templateColumnsHint}
+      </div>
+      <div class="decks-edit-columns">
+        {#each columns as _cell, i (i)}
+          <label class="decks-edit-column">
+            <span class="decks-edit-column-label"
+              >{columnLabels[i] || I18n.format(I18n.t.modals.editFlashcard.templateColumnFallback, { n: i + 1 })}</span
+            >
+            <input
+              type="text"
+              class="decks-edit-column-input"
+              bind:value={columns[i]}
+              disabled={saveState === "saving"}
+            />
+          </label>
+        {/each}
+      </div>
+    {:else}
     <FieldStack zones={editorZones} let:z>
       {#if z.key === "image"}
         <div class="decks-edit-image-preview" use:bindImagePreview={card.front}></div>
@@ -704,13 +755,14 @@
     {#if card.type === "image-occlusion"}
       <div class="decks-edit-hint">Editing the item resets FSRS progress for this card.</div>
     {/if}
+    {/if}
 
     {#if saveState === "error"}
       <div class="decks-edit-error">{errorMessage}</div>
     {/if}
   </div>
 
-  {#if aiEnabled && onRefactor && aiOpen}
+  {#if aiEnabled && onRefactor && aiOpen && !isTemplateMode}
     <div class="decks-ai-input">
       <AiPromptComposer
         bind:prompt
@@ -750,7 +802,7 @@
   {/if}
 
   <div class="decks-edit-footer">
-    {#if aiEnabled && onRefactor}
+    {#if aiEnabled && onRefactor && !isTemplateMode}
       <button
         type="button"
         class="clickable-icon decks-ai-wand-button"

@@ -6,15 +6,21 @@ import type { DecksSettings } from "@/settings";
 import { I18n, yieldToUI } from "@decks/core";
 import { Logger } from "@/utils/logging";
 import { ItemView, WorkspaceLeaf, Notice } from "obsidian";
-import { Scheduler } from "@/services/Scheduler";
+import { Scheduler } from "@decks/core";
 import { FlashcardReviewModalWrapper } from "./review/FlashcardReviewModalWrapper";
 import {
   FlashcardReviewView,
   VIEW_TYPE_FLASHCARD_REVIEW,
 } from "./review/FlashcardReviewView";
+import { ExamAttempt, type DeckProfile } from "@decks/core";
+import { launchExamForSelection } from "./exam/launchExam";
+import { launchCramForSelection } from "./review/launchCram";
+import { ExamModalWrapper } from "./exam/ExamModalWrapper";
+import { ExamView, VIEW_TYPE_FLASHCARD_EXAM } from "./exam/ExamView";
 import { StatisticsModal } from "./settings/StatisticsModal";
 import { ProfilesManagerModal } from "./config/ProfilesManagerModal";
-import { DeckConfigModal } from "./config/DeckConfigModal";
+import { SrMigrationModalWrapper } from "./migration/SrMigrationModalWrapper";
+import { SrMigrationController } from "@/services/SrMigrationController";
 import { StatisticsService } from "@/services/StatisticsService";
 import { TagGroupService } from "@decks/core";
 import { CustomDeckService } from "@decks/core";
@@ -23,9 +29,10 @@ import { openFlashcardManager } from "./FlashcardManagerView";
 import DeckListPanel from "./DeckListPanel.svelte";
 import { mount, unmount } from "svelte";
 import { ProgressTracker } from "@/utils/progress";
+import { openDeckSourceFile } from "@/utils/deck-source";
 import type { DeckListPanelComponent } from "../types/svelte-components";
 import type { IDatabaseService } from "../database/DatabaseFactory";
-import type { DeckListSortMode } from "@/settings";
+import type { DeckListSortMode, DeckListView } from "@/settings";
 
 export class DecksView extends ItemView {
   private db: IDatabaseService;
@@ -44,6 +51,7 @@ export class DecksView extends ItemView {
   private openEditModal?: (card: Flashcard) => Promise<void>;
   private openBatchRefactor?: (cards: Flashcard[]) => Promise<void>;
   private openAiGenerator?: () => void;
+  private openAnkiImport?: () => void;
 
   constructor(
     leaf: WorkspaceLeaf,
@@ -60,6 +68,7 @@ export class DecksView extends ItemView {
     openEditModal?: (card: Flashcard) => Promise<void>,
     openBatchRefactor?: (cards: Flashcard[]) => Promise<void>,
     openAiGenerator?: () => void,
+    openAnkiImport?: () => void,
   ) {
     super(leaf);
     this.db = database;
@@ -75,6 +84,7 @@ export class DecksView extends ItemView {
     this.openEditModal = openEditModal;
     this.openBatchRefactor = openBatchRefactor;
     this.openAiGenerator = openAiGenerator;
+    this.openAnkiImport = openAnkiImport;
 
     this.progressTracker = progressTracker;
   }
@@ -99,6 +109,17 @@ export class DecksView extends ItemView {
     this.deckListPanelComponent?.updatePinnedIds?.(ids);
   }
 
+  private async setCollapsedIds(ids: string[]): Promise<void> {
+    this.settings.ui.collapsedDeckNodeIds = ids;
+    await this.saveSettings();
+    this.deckListPanelComponent?.updateCollapsedIds?.(ids);
+  }
+
+  applyCollapsedIdsUpdate(ids: string[]): void {
+    this.settings.ui.collapsedDeckNodeIds = ids;
+    this.deckListPanelComponent?.updateCollapsedIds?.(ids);
+  }
+
   private async changeSortMode(mode: DeckListSortMode): Promise<void> {
     this.settings.ui.deckListSort = mode;
     await this.saveSettings();
@@ -108,6 +129,17 @@ export class DecksView extends ItemView {
   applySortModeUpdate(mode: DeckListSortMode): void {
     this.settings.ui.deckListSort = mode;
     this.deckListPanelComponent?.updateSortMode?.(mode);
+  }
+
+  private async changeDeckListView(view: DeckListView): Promise<void> {
+    this.settings.ui.deckListView = view;
+    await this.saveSettings();
+    this.deckListPanelComponent?.updateDeckListView?.(view);
+  }
+
+  applyDeckListViewUpdate(view: DeckListView): void {
+    this.settings.ui.deckListView = view;
+    this.deckListPanelComponent?.updateDeckListView?.(view);
   }
 
   applyMinDeckCardCountUpdate(value: number): void {
@@ -137,6 +169,15 @@ export class DecksView extends ItemView {
     container.empty();
     container.addClass("decks-view");
 
+    // Exam entry points on custom decks only make sense once any exam deck
+    // exists; per-row gating for file decks and groups uses item.profile.
+    let examCapable = false;
+    try {
+      examCapable = (await this.db.getExamEnabledDeckIds()).length > 0;
+    } catch (error) {
+      this.logger.debug("exam capability check failed", error);
+    }
+
     // Create and mount Svelte component using Svelte 5 API
     this.deckListPanelComponent = mount(DeckListPanel, {
       target: container,
@@ -146,17 +187,49 @@ export class DecksView extends ItemView {
         deckSynchronizer: this.deckSynchronizer,
         tagGroupService: this.tagGroupService,
         app: this.app,
-        onDeckClick: (deck: DeckWithProfile) => this.startReview(deck),
-        onDeckGroupClick: (deckGroup: DeckGroup) => this.startReviewForDeckGroup(deckGroup),
+        onDeckClick: (deck: DeckWithProfile) =>
+          deck.profile.examEnabled
+            ? this.startExamForSelection({ ...deck, type: "file" }, deck.profile)
+            : this.startReview(deck),
+        onDeckGroupClick: (deckGroup: DeckGroup) =>
+          deckGroup.profile?.examEnabled
+            ? this.startExamForSelection(deckGroup, deckGroup.profile)
+            : this.startReviewForDeckGroup(deckGroup),
         onBrowseDeck: (deck: DeckWithProfile) => this.startBrowse(deck),
         onBrowseDeckGroup: (deckGroup: DeckGroup) => this.startBrowseForDeckGroup(deckGroup),
+        onCramDeck: (deck: DeckWithProfile) =>
+          this.startCramForSelection({ ...deck, type: "file" }),
+        onCramDeckGroup: (deckGroup: DeckGroup) =>
+          this.startCramForSelection(deckGroup),
+        isCramResumable: (deck: DeckWithProfile) =>
+          this.scheduler.hasResumableCram({ ...deck, type: "file" }, new Date()),
+        isCramResumableGroup: (deckGroup: DeckGroup) =>
+          this.scheduler.hasResumableCram(deckGroup, new Date()),
         onCustomDeckClick: (customDeck: CustomDeckGroup) => this.startReviewForCustomDeck(customDeck),
         onBrowseCustomDeck: (customDeck: CustomDeckGroup) => this.startBrowseForCustomDeck(customDeck),
+        onCramCustomDeck: (customDeck: CustomDeckGroup) =>
+          this.startCramForSelection(customDeck),
+        isCramResumableCustom: (customDeck: CustomDeckGroup) =>
+          this.scheduler.hasResumableCram(customDeck, new Date()),
         onEditCustomDeck: (customDeck: CustomDeckGroup) => this.openEditCustomDeck(customDeck),
+        onOpenSource: (deck: DeckWithProfile) =>
+          openDeckSourceFile(this.app, deck.filepath).catch(console.error),
+        onExamDeck: (deck: DeckWithProfile) =>
+          this.startExamForSelection({ ...deck, type: "file" }, deck.profile),
+        onExamDeckGroup: (deckGroup: DeckGroup) =>
+          this.startExamForSelection(deckGroup, deckGroup.profile ?? null),
+        onExamCustomDeck: (customDeck: CustomDeckGroup) =>
+          this.startExamForSelection(customDeck, null),
+        onReviewDeck: (deck: DeckWithProfile) => this.startReview(deck),
+        onReviewDeckGroup: (deckGroup: DeckGroup) =>
+          this.startReviewForDeckGroup(deckGroup),
+        examCapable,
         customDeckService: this.customDeckService,
         onRefresh: () => this.refresh(),
         openStatisticsModal: () => this.openStatisticsModal(),
         openProfilesManagerModal: () => this.openProfilesManagerModal(),
+        openSrMigrationModal: () => this.openSrMigrationModal(),
+        openAnkiImportModal: () => this.openAnkiImport?.(),
         openDeckConfigModal: (deck: DeckWithProfile) => this.openDeckConfigModal(deck),
         openFlashcardManager: () => this.openFlashcardManager(),
         openAiGeneratorModal: () => this.openAiGenerator?.(),
@@ -167,6 +240,11 @@ export class DecksView extends ItemView {
         deckListSort: this.settings.ui.deckListSort,
         minDeckCardCount: this.settings.ui.minDeckCardCount,
         onChangeSortMode: (mode: DeckListSortMode) => this.changeSortMode(mode),
+        deckListView: this.settings.ui.deckListView,
+        onChangeDeckListView: (view: DeckListView) => this.changeDeckListView(view),
+        collapsedDeckNodeIds: this.settings.ui.collapsedDeckNodeIds,
+        onSetCollapsedIds: (ids: string[]) => this.setCollapsedIds(ids),
+        globalReviewToday: null,
       },
     }) as DeckListPanelComponent;
 
@@ -196,6 +274,17 @@ export class DecksView extends ItemView {
 
   async update(updatedDecks: DeckWithProfile[], deckStats: Map<string, DeckStats>) {
     await this.deckListPanelComponent?.updateAll?.(updatedDecks, deckStats);
+    await this.pushGlobalReviewCap();
+  }
+
+  // Refresh the deck list's global daily review-cap indicator.
+  private async pushGlobalReviewCap(): Promise<void> {
+    try {
+      const status = await this.deckManager.getGlobalDailyCapStatus();
+      this.deckListPanelComponent?.updateGlobalReviewToday?.(status);
+    } catch (error) {
+      this.logger.debug("Could not refresh global review cap status", error);
+    }
   }
 
   private async getAllDeckStatsMap(): Promise<Map<string, DeckStats>> {
@@ -223,6 +312,24 @@ export class DecksView extends ItemView {
         active !== null
       ).open();
     });
+  }
+
+  openSrMigrationModal(): void {
+    const controller = new SrMigrationController(
+      this.app,
+      this.db,
+      this.deckSynchronizer,
+      this.settings,
+      this.logger
+    );
+    new SrMigrationModalWrapper(
+      this.app,
+      this.db,
+      controller,
+      async () => {
+        await this.refresh();
+      }
+    ).open();
   }
 
   openFlashcardManager(): void {
@@ -278,14 +385,18 @@ export class DecksView extends ItemView {
   }
 
   openDeckConfigModal(deck: DeckWithProfile): void {
-    new DeckConfigModal(
-      this.app,
-      deck,
-      this.db,
-      async () => {
-        await this.refresh();
-      }
-    ).open();
+    void this.db.getActiveTrainedWeightSet().then((active) => {
+      new ProfilesManagerModal(
+        this.app,
+        this.db,
+        async () => {
+          await this.refresh();
+        },
+        active !== null,
+        "assignments",
+        deck.profileId
+      ).open();
+    });
   }
 
   /**
@@ -323,13 +434,24 @@ export class DecksView extends ItemView {
       return;
     }
 
-    // Stage 2: background sync.
-    void this.runBackgroundSync();
+    // Stage 2: background sync. On the first refresh after load, wait for the
+    // workspace to be ready (metadata cache warm) so the sync scans against a
+    // populated cache rather than a fixed delay. onLayoutReady runs the callback
+    // immediately if the layout is already ready (view opened later).
+    if (this.firstRefreshPending) {
+      this.firstRefreshPending = false;
+      this.app.workspace.onLayoutReady(() => void this.runBackgroundSync());
+    } else {
+      void this.runBackgroundSync();
+    }
   }
 
   // Single-flight guard so rapid refresh triggers (modal open + focus
   // event in the same frame, say) don't fan out into concurrent syncs.
   private backgroundSyncInFlight = false;
+  // The first refresh happens during Obsidian startup (restored-open panel);
+  // defer its background sync so it doesn't compete with startup work.
+  private firstRefreshPending = true;
 
   private async runBackgroundSync(): Promise<void> {
     if (this.backgroundSyncInFlight) return;
@@ -370,6 +492,7 @@ export class DecksView extends ItemView {
       // Update component with new stats using unified function
       if (this.deckListPanelComponent) {
         await this.deckListPanelComponent.updateAll?.(undefined, deckStats);
+        await this.pushGlobalReviewCap();
       }
     } catch (error) {
       console.error("Error refreshing stats:", error);
@@ -419,6 +542,8 @@ export class DecksView extends ItemView {
 
     this.backgroundRefreshInterval = this.registerInterval(
       window.setInterval(() => {
+        if (this.deckSynchronizer.isReviewing) return; // don't sync during review
+
         this.logger.debug("Background refresh tick");
         void this.refresh();
       }, this.settings.ui.backgroundRefreshInterval * 1000)
@@ -469,6 +594,7 @@ export class DecksView extends ItemView {
         this.scheduler,
         this.settings,
         this.db,
+        this.deckSynchronizer,
         this.refreshDecksAndStats.bind(this),
         this.refreshStatsById.bind(this),
         browseMode
@@ -506,7 +632,8 @@ export class DecksView extends ItemView {
             cards,
             browseMode,
             this.refreshDecksAndStats.bind(this),
-            this.refreshStatsById.bind(this)
+            this.refreshStatsById.bind(this),
+            this.deckSynchronizer
           );
         }
         void workspace.revealLeaf(leaf);
@@ -514,12 +641,20 @@ export class DecksView extends ItemView {
       .catch(console.error);
   }
 
+  // Sync only the decks whose file changed (one bulk meta query + mtime checks).
+  private async syncStaleDecks(deckIds: string[]): Promise<void> {
+    const stale = await this.deckManager.getStaleDeckIds();
+    for (const id of deckIds) {
+      if (stale.has(id)) {
+        await this.deckSynchronizer.syncDeck(id, { force: true });
+        await yieldToUI();
+      }
+    }
+  }
+
   async startReview(deck: DeckWithProfile) {
     try {
-      // First sync flashcards for this specific deck
-      this.logger.debug(`Syncing cards for deck before review: ${deck.name}`);
-      await this.deckSynchronizer.syncDeck(deck.id);
-      await yieldToUI();
+      await this.syncStaleDecks([deck.id]);
       // Get daily review counts to show remaining allowance
       const dailyCounts = await this.db.getDailyReviewCounts(deck.id, this.settings.review.nextDayStartsAt);
 
@@ -656,11 +791,8 @@ export class DecksView extends ItemView {
     try {
       this.logger.debug(`Starting review for deck group: ${deckGroup.name}`);
 
-      // Sync all decks in the group
-      for (const deckId of deckGroup.deckIds) {
-        await this.deckSynchronizer.syncDeck(deckId);
-        await yieldToUI();
-      }
+      // Sync only the decks in the group whose files changed (else instant).
+      await this.syncStaleDecks(deckGroup.deckIds);
 
       // Check for available cards
       const nextCard = await this.scheduler.getNextForDeckGroup(
@@ -693,8 +825,7 @@ export class DecksView extends ItemView {
   async startBrowse(deck: DeckWithProfile) {
     try {
       this.logger.debug(`Starting browse mode for deck: ${deck.name}`);
-      await this.deckSynchronizer.syncDeck(deck.id);
-      await yieldToUI();
+      await this.syncStaleDecks([deck.id]);
 
       const allCards = await this.db.getFlashcardsByDeck(deck.id);
 
@@ -720,10 +851,7 @@ export class DecksView extends ItemView {
     try {
       this.logger.debug(`Starting browse mode for deck group: ${deckGroup.name}`);
 
-      for (const deckId of deckGroup.deckIds) {
-        await this.deckSynchronizer.syncDeck(deckId);
-        await yieldToUI();
-      }
+      await this.syncStaleDecks(deckGroup.deckIds);
 
       const allCards: Flashcard[] = [];
       for (const deckId of deckGroup.deckIds) {
@@ -802,5 +930,98 @@ export class DecksView extends ItemView {
         new Notice(I18n.t.notices.errorStartingBrowse);
       }
     }
+  }
+
+  async startCramForSelection(selection: DeckOrGroup): Promise<void> {
+    this.logger.debug(`Starting cram for: ${selection.name}`);
+    await launchCramForSelection(
+      {
+        app: this.app,
+        scheduler: this.scheduler,
+        settings: this.settings,
+        db: this.db,
+        deckSynchronizer: this.deckSynchronizer,
+        refreshStats: this.refreshDecksAndStats.bind(this),
+        refreshStatsById: this.refreshStatsById.bind(this),
+      },
+      selection,
+      (s) => this.gatherSelectionCards(s)
+    );
+  }
+
+  private async gatherSelectionCards(selection: DeckOrGroup): Promise<Flashcard[]> {
+    if (selection.type === "file") {
+      await this.syncStaleDecks([selection.id]);
+      return this.db.getFlashcardsByDeck(selection.id);
+    }
+    if (selection.type === "custom") {
+      return this.db.getFlashcardsForCustomDeck(selection.id);
+    }
+    await this.syncStaleDecks(selection.deckIds);
+    const allCards: Flashcard[] = [];
+    for (const deckId of selection.deckIds) {
+      allCards.push(...(await this.db.getFlashcardsByDeck(deckId)));
+    }
+    return allCards;
+  }
+
+  async startExamForSelection(
+    selection: DeckOrGroup,
+    profile: DeckProfile | null
+  ): Promise<void> {
+    await launchExamForSelection(
+      { app: this.app, db: this.db, settings: this.settings },
+      selection,
+      profile,
+      (s) => this.gatherSelectionCards(s),
+      (attempt, deckName, onRetake) =>
+        this.openExamSession(attempt, deckName, onRetake)
+    );
+  }
+
+  private openExamSession(
+    attempt: ExamAttempt,
+    deckName: string,
+    onRetake: () => void
+  ): void {
+    if (this.settings.ui.reviewDisplayMode === "tab") {
+      this.openExamInTab(attempt, deckName, onRetake);
+    } else {
+      new ExamModalWrapper(
+        this.app,
+        attempt,
+        deckName,
+        this.db,
+        onRetake,
+        this.refreshDecksAndStats.bind(this)
+      ).open();
+    }
+  }
+
+  private openExamInTab(
+    attempt: ExamAttempt,
+    deckName: string,
+    onRetake: () => void
+  ): void {
+    const { workspace } = this.app;
+    const existingLeaves = workspace.getLeavesOfType(VIEW_TYPE_FLASHCARD_EXAM);
+    const leaf: WorkspaceLeaf =
+      existingLeaves.length > 0 ? existingLeaves[0] : workspace.getLeaf("tab");
+
+    void leaf
+      .setViewState({ type: VIEW_TYPE_FLASHCARD_EXAM, active: true })
+      .then(() => {
+        const view = leaf.view;
+        if (view instanceof ExamView) {
+          view.setExamData(
+            attempt,
+            deckName,
+            onRetake,
+            this.refreshDecksAndStats.bind(this)
+          );
+        }
+        void workspace.revealLeaf(leaf);
+      })
+      .catch(console.error);
   }
 }

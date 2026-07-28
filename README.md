@@ -4,6 +4,10 @@
 
 **Turn your Obsidian notes into flashcards. No special syntax. No separate deck to build.**
 
+> **Coming from the Spaced Repetition plugin?** Jump to Decks without losing your progress — the built-in one-click migrator extracts your `::` cards into clean Decks decks, rewrites each note into readable prose, and carries over your review history, all while leaving your original notes untouched. You pick up your reviews right where you left off. See [Coming from Spaced Repetition](#coming-from-spaced-repetition).
+
+> **Coming from Anki?** Import an Anki `.apkg` export in one click — your decks, cards, media, and review history come with you, and your cards resume on FSRS-6 right where Anki left them. See [Coming from Anki](#coming-from-anki).
+
 Tag a file with `#decks`. Each `##` heading becomes the front of a card; the text below becomes the back. Tables, image occlusion, and `==cloze==` highlights work the same way. Scheduling is handled by FSRS-6 — the modern spaced-repetition algorithm.
 
 ![Demo](./decks_showcase.gif)
@@ -102,7 +106,33 @@ Each highlight becomes one card. During review the active blank shows as `[...]`
 </details>
 
 <details>
-<summary><b>Image occlusion</b> — an image plus a numbered list. Numbers on the image map to the list.</summary>
+<summary><b>Image occlusion</b> — hide regions of an image and recall what's underneath. Two ways: interactive (draw boxes) or a numbered list.</summary>
+
+**Interactive (recommended).** Run the command **"Create image occlusion at cursor"**, pick an image, then draw boxes right on it in the editor. Type a Markdown/LaTeX answer for each box, or leave it empty to just hide a baked-in label. It saves as a self-contained `decks-occlusion` code block (coordinates are percentages, so it scales on any device):
+
+````markdown
+```decks-occlusion
+image: "[[anatomy/heart.png]]"
+version: 2
+masks:
+  - id: m1
+    x: 12.5
+    y: 30
+    w: 18
+    h: 9.5
+    answer: "Left **ventricle**"
+  - id: m2
+    x: 55
+    y: 22
+    w: 14
+    h: 8
+    answer: ""
+```
+````
+
+Each box is one card. In review, the box is hidden on the front and revealed on the back (with its answer); in reading view you see the fully answered diagram. Re-edit any time from the block's **Edit** button or the flashcard manager.
+
+**Numbered list (simple).** An image embed followed by a numbered list also works:
 
 ```markdown
 ## Bones of the arm
@@ -114,7 +144,9 @@ Each highlight becomes one card. During review the active blank shows as `[...]`
 3. ==Ulna==
 ```
 
-Each list item is one card. The image (with its numbered labels) shows on the front; the matching item is blanked on the back. Builds on cloze, so cloze must be enabled on the profile.
+Each list item is one card; the image shows on the front and the matching item is blanked on the back.
+
+Both builds on cloze, so cloze must be enabled on the profile and the block must sit under a parsed header.
 
 </details>
 
@@ -148,13 +180,62 @@ A `Decks — Canvas getting started.canvas` is auto-created in a `Canvas decks/`
 
 See **[docs/CANVAS_DECKS.md](docs/CANVAS_DECKS.md)** for details.
 
+## Templates
+
+Render the rows of a table through a card design you author once. Write it in HTML/CSS or Markdown, drop in
+`{{Column}}` placeholders, and bind it to your tables with a tag — one template styles every matching row.
+
+```decks-html-front
+<ruby>{{Word}}<rt>{{Reading}}</rt></ruby>
+```
+
+Point **Settings → Templates** at a folder, tag a template file and the table's heading with the same tag,
+and you're set. Templates support front/back/notes faces in HTML or Markdown, render in a sanitized,
+theme-aware sandbox, and expose CSS variables (`--padding`, `--align`, `--bg`, …) for full layout control —
+from comfortable reading cards to edge-to-edge custom designs. Tables with no matching template fall back to
+the normal columns.
+
+See **[docs/TEMPLATES.md](docs/TEMPLATES.md)** for the full guide and examples.
+
+## Exam decks
+
+Run a deck as a graded exam: a drawn set of questions answered in one sitting, in any order, with a
+results breakdown — and optionally a time limit and a pass score — at the end. Exams are enabled per
+profile, and add one authoring format: a heading followed by a task list becomes a multiple-choice card.
+
+```markdown
+## Which element is a noble gas?
+
+- [ ] Oxygen
+- [x] Argon
+- [ ] Nitrogen
+```
+
+`- [x]` marks a correct option; checking several makes it multi-select.
+
+- Tag a note with the `exams` subtag of your deck tag (by default `#decks/exams`) to use the preinstalled
+  **Exams** profile, or turn on **Exam questions** in any profile.
+- Start from the deck's menu (**⋮ → Start exam**) or by clicking an exam deck; a setup dialog shows the
+  question count and lets you adjust the exam settings.
+- Besides multiple choice, header-and-answer cards and table rows are asked as type-in questions, and
+  cloze cards show the sentence with the highlights as type-in blanks.
+- Typed answers are graded exactly, tolerantly of small typos, or self-graded; exam defaults (question
+  count, time limit, pass score, shuffling, feedback timing, option labels) live on the profile.
+- Completed exams are stored in the plugin database, merge across devices, and are included in backups.
+
+A "Demo exam" deck showing every question format is created on first install (or via the **Create demo
+exam deck** command).
+
+See **[docs/EXAM_DECKS.md](docs/EXAM_DECKS.md)** for the full authoring rules.
+
 ## What you get
 
 - Browse mode and timed review sessions with daily limits.
 - Per-tag profiles (Standard / Intensive FSRS, retention target, daily quotas).
 - Custom decks built from filter rules — e.g., every card tagged `#high-school`.
+- Exam mode: graded exam sessions with multiple-choice, type-in, and cloze questions.
 - Statistics: heatmap, retention, future-due forecast, intervals, hourly breakdown, answer-button stats.
-- Anki export, automatic backups, multi-device merge sync.
+- Anki import and export, automatic backups, multi-device merge sync.
 - Keyboard shortcuts: **Space** to flip, **1–4** to rate.
 
 ## AI assistance (optional)
@@ -229,6 +310,47 @@ Open **Settings → Decks** for daily limits, retention targets, search paths, s
 
 </details>
 
+## Coming from Spaced Repetition
+
+Already using the **Spaced Repetition** plugin? You can switch to Decks **without losing your cards or your review history** — and continue your reviews exactly where you left off.
+
+Open the migrator from the deck panel toolbar (the cube icon) or run the **"Migrate from Spaced Repetition plugin"** command.
+
+**Your original notes are never touched.** Migration is additive: it writes new files into a target folder you choose (mirroring your structure) and leaves your source notes exactly as they are. Re-running the migrator simply overwrites the files it generated.
+
+**How it works**
+
+1. **Pick a source folder** to scan (or leave it empty to scan the whole vault), and a target folder for the output. Decks finds every note with legacy cards — single-line (`Front :: Back`), reversed (`Front ::: Back`), multi-line (`?` / `??`), clozes (`==…==` / `{{…}}`) — and whole-note reviews (the `#review` tag).
+2. **Each note is split into two clean files.** A **flashcards deck** (`<Note> (Flashcards)`) holds the extracted cards in standard Decks format, and a **readable note** keeps the prose — with the card syntax *de-sugared* into normal text (`::` / `:::` become " — ", `?` / `??` join question and answer, and `==…==` / `{{…}}` clozes are restored to their answer). Your configured separators are honored, so this works even if you customized them. Nothing is stripped away — your reading note stays complete.
+3. **The files are cross-linked in frontmatter.** The readable note gets a `Flashcards` property pointing at its deck and an `Origin note` property pointing back at the original; the deck gets an `Origin note` property too. If a note already uses one of those property names, the migrator overwrites it rather than creating a duplicate. Your tags are preserved — the legacy base tag (e.g. `#flashcards`) is translated to your configured Decks tag.
+4. **Reversed cards become two cards.** A `Front ::: Back` card is expanded into a forward card and a swapped card in the **same** deck file, so each direction is scheduled independently.
+5. **Nested structure is flattened into context.** SR treats ancestor headings and nested list bullets as a card's context. Decks captures that whole path into the card's front — e.g. a deeply nested `Function :: Powerhouse` becomes `Cell Anatomy > Mitochondria > … > Function` — rendered at your profile's single header level (a lone note-title H1 is omitted). Pick any level via the preinstalled **Heading 1–6** profiles.
+6. **Smart auto-routing picks the best layout.** Short single-line cards become rows in a compact **table** (no endless scrolling for vocabulary); multi-line cards — with code blocks, lists, or math — become **headers** so their formatting survives. You can override this to *all headers* or *all tables* in the dialog.
+7. **Whole-note reviews migrate too.** Notes you reviewed as a whole (the `#review` tag) become Decks **title-mode** cards (filename = front, the whole note = back) under a dedicated `…/review` profile. Their schedule is read from the note's `sr-*` frontmatter or its end-of-file marker.
+8. **Your scheduling state is translated to FSRS-6.** Decks reads the legacy `<!--SR:-->` metadata — SM-2 (`due, interval, ease`) or already FSRS — and maps it to a stability/difficulty/due state. Reversed cards keep **two separate** histories (reading vs. recall), exactly as the original plugin stored them.
+9. **A review log is written for every migrated card**, so the moment the cards appear in Decks they're already due on the right date with the right interval — you resume, you don't restart.
+
+Pick a profile in the dialog (or use the default) — its header level and scheduling settings are applied to the migrated decks.
+
+## Coming from Anki
+
+Switching from Anki? You can bring your whole collection into Decks **without losing cards, media, or review history** — and keep studying with FSRS-6.
+
+In Anki, export your deck (or whole collection) as a **`.apkg`** (**File → Export**, format *Anki Deck Package*, with **Include media** and **Include scheduling information** checked). Then open the importer from the deck panel toolbar or run the **"Import from Anki"** command, pick the file and a target folder, and import. Both legacy and modern (compressed) `.apkg` exports work.
+
+**Your Anki collection is never touched.** The import is additive: it writes new files into a target folder you choose, nested under the `#decks/anki` tag, and leaves the source `.apkg` as-is. Re-importing the same file overwrites the files it generated and refreshes their media — so you can re-run it any time.
+
+**How it works**
+
+1. **Pick the `.apkg` and a target folder.** Decks unzips it in memory, reads the embedded Anki collection (legacy or the newer compressed format), and copies every referenced media file into a `media/` folder in your vault. The original Anki deck hierarchy (`Parent::Child`) is preserved as folders.
+2. **Every note type becomes a clean Decks card.** Basic notes auto-route between a compact **table** and **headers** (the same smart layout as the rest of Decks); **cloze** deletions become `==…==` highlights — including clozes written inside `$…$` MathJax; **multi-field / templated** notes get an auto-generated template so they render the way you designed them; and Anki **image-occlusion** cards come across as native Decks occlusion.
+3. **Media, math, and tags carry over.** Audio and images are embedded and play / render in review; images keep their original size instead of being blown up; LaTeX/MathJax is preserved; your Anki tags are grouped and sorted into readable sections.
+4. **Your scheduling state is translated to FSRS-6.** Each card's due date, interval, and ease — plus its full Anki review history — are mapped to a stability/difficulty/due state and written as a review log, so cards appear **already due on the right date with the right interval**. You resume, you don't restart.
+5. **Big, media-heavy decks stay smooth.** A large deck is automatically split into capped, subfoldered files — by both card count and number of media embeds — so a deck with thousands of audio clips still opens quickly in Obsidian. Smaller decks stay a single file.
+6. **You watch it happen.** A progress bar tracks each phase — reading the collection, writing decks, copying media, syncing, and importing review history — so even a large import never looks stuck.
+
+Pick a profile in the dialog (or use the default) — its header level and scheduling settings are applied to the imported decks, which nest under the `#decks/anki` tag.
+
 ## Release notes & support
 
 - **Release notes** for each version are in [`release-notes/`](./release-notes/).
@@ -240,6 +362,18 @@ Open **Settings → Decks** for daily limits, retention targets, search paths, s
 
 Decks is built on **[`@decks/core`](https://github.com/dscherdi/decks-core)** — the open-source (MIT) engine that implements the parsing, FSRS scheduling, sync log, and AI orchestration. The plugin is the Obsidian-specific shell around it.
 
+## Acknowledgements & alternatives
+
+A huge thank you to the original [Spaced Repetition](https://github.com/st3v3nmw/obsidian-spaced-repetition) plugin by **st3v3nmw**. It pioneered flashcards within Obsidian and remains an excellent choice for users who prefer writing inline `::` cards.
+
+Decks was built as an alternative for users who want a different architectural approach: purely structural Markdown (no special syntax) and conflict-free syncing via a local SQLite database. If you are coming from the original plugin and want to try this approach, use the Decks one-click migrator to bring your cards and review history with you!
+
 ## License
 
-See [LICENSE](./LICENSE).
+This project is licensed under the **GNU Affero General Public License v3.0 or later** (AGPL-3.0-or-later).
+
+In short: you are free to use, modify, and distribute this software. However, if you modify it and distribute
+your changes — or modify it and offer it to users over a network — you must make your modified source code
+publicly available under the same AGPL-3.0 license.
+
+Copyright (C) 2026 Xherdi Lika. See the [LICENSE](./LICENSE) file for the full text.

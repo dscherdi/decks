@@ -33,6 +33,7 @@ export interface CachedMetadata {
 
 export class Vault {
   private files: Map<string, string> = new Map();
+  private binaryFiles: Map<string, Uint8Array> = new Map();
   private markdownFiles: TFile[] = [];
   private otherFiles: TFile[] = [];
 
@@ -57,10 +58,26 @@ export class Vault {
     return this.getAbstractFileByPath(path) as TFile;
   }
 
-  // Minimal DataAdapter surface used by file writers (folder creation).
+  async createBinary(path: string, data: ArrayBuffer): Promise<TFile> {
+    this._addFile(path, "");
+    this.binaryFiles.set(path, new Uint8Array(data));
+    return this.getAbstractFileByPath(path) as TFile;
+  }
+
+  async modifyBinary(file: TFile, data: ArrayBuffer): Promise<void> {
+    this.binaryFiles.set(file.path, new Uint8Array(data));
+  }
+
+  // Minimal DataAdapter surface used by file writers (folder creation + binary
+  // media writes). writeBinary mirrors Obsidian's low-level adapter: it writes
+  // the bytes and the file becomes discoverable (register once if new).
   adapter = {
     exists: async (_path: string): Promise<boolean> => false,
     mkdir: async (_path: string): Promise<void> => undefined,
+    writeBinary: async (path: string, data: ArrayBuffer): Promise<void> => {
+      if (!this.getAbstractFileByPath(path)) this._addFile(path, "");
+      this.binaryFiles.set(path, new Uint8Array(data));
+    },
   };
 
   getMarkdownFiles(): TFile[] {
@@ -117,10 +134,24 @@ export class Vault {
     }
   }
 
+  _readBinary(path: string): Uint8Array | undefined {
+    return this.binaryFiles.get(path);
+  }
+
   _clear(): void {
     this.files.clear();
+    this.binaryFiles.clear();
     this.markdownFiles = [];
     this.otherFiles = [];
+  }
+}
+
+// Stub for `instanceof` checks. The mock Vault.adapter is a plain object (not an
+// instance), so desktop-only fast paths gated on `adapter instanceof
+// FileSystemAdapter` fall back to the adapter path in tests.
+export class FileSystemAdapter {
+  getBasePath(): string {
+    return "";
   }
 }
 
@@ -275,6 +306,78 @@ export function getAllTags(metadata: CachedMetadata | null): string[] | null {
     tags.push(fm.startsWith("#") ? fm : "#" + fm);
   }
   return tags;
+}
+
+// parseFrontMatterTags: frontmatter-only tags (with leading #), or null.
+// Mirrors Obsidian's helper (reads `tags`/`tag`, accepts array or string).
+export function parseFrontMatterTags(
+  frontmatter: Record<string, unknown> | null | undefined
+): string[] | null {
+  if (!frontmatter) return null;
+  const raw = frontmatter["tags"] ?? frontmatter["tag"];
+  const list: string[] = [];
+  if (Array.isArray(raw)) {
+    for (const t of raw) if (typeof t === "string") list.push(t);
+  } else if (typeof raw === "string") {
+    list.push(...raw.split(/[,\s]+/));
+  }
+  const tags = list
+    .map((t) => t.trim())
+    .filter((t) => t.length > 0)
+    .map((t) => (t.startsWith("#") ? t : "#" + t));
+  return tags.length > 0 ? tags : null;
+}
+
+// Minimal YAML emitter for tests: scalars `key: value`, arrays as block lists.
+// Sufficient for the migration controller's frontmatter round-trip.
+export function stringifyYaml(obj: Record<string, unknown>): string {
+  const lines: string[] = [];
+  for (const [key, value] of Object.entries(obj)) {
+    if (Array.isArray(value)) {
+      lines.push(`${key}:`);
+      for (const item of value) lines.push(`  - ${String(item)}`);
+    } else {
+      lines.push(`${key}: ${String(value)}`);
+    }
+  }
+  return lines.join("\n") + "\n";
+}
+
+// Minimal YAML parser for tests: scalars `key: value`, inline arrays
+// `key: [a, b]`, and block lists (`key:` followed by `  - item`). Enough for
+// template/deck frontmatter round-trips.
+export function parseYaml(input: string): Record<string, unknown> {
+  const out: Record<string, unknown> = {};
+  const lines = input.split("\n");
+  let currentKey: string | null = null;
+  for (const line of lines) {
+    if (/^\s*-\s+/.test(line) && currentKey) {
+      const item = line.replace(/^\s*-\s+/, "").trim().replace(/^["']|["']$/g, "");
+      const arr = (out[currentKey] as unknown[]) ?? [];
+      arr.push(item);
+      out[currentKey] = arr;
+      continue;
+    }
+    const m = line.match(/^([A-Za-z0-9_-]+):\s*(.*)$/);
+    if (!m) continue;
+    const key = m[1];
+    const val = m[2].trim();
+    if (val === "") {
+      currentKey = key;
+      if (out[key] === undefined) out[key] = [];
+    } else if (val.startsWith("[") && val.endsWith("]")) {
+      out[key] = val
+        .slice(1, -1)
+        .split(",")
+        .map((s) => s.trim().replace(/^["']|["']$/g, ""))
+        .filter((s) => s.length > 0);
+      currentKey = null;
+    } else {
+      out[key] = val.replace(/^["']|["']$/g, "");
+      currentKey = null;
+    }
+  }
+  return out;
 }
 
 // normalizePath: trims, collapses repeated slashes, and converts backslashes.

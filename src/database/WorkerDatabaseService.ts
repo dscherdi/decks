@@ -1,10 +1,9 @@
 import type { DataAdapter } from "obsidian";
 import { BaseDatabaseService } from "./BaseDatabaseService";
 import type { QueryConfig } from "./BaseDatabaseService";
-import type { SqlJsValue } from "@decks/core";
+import type { SqlJsValue, SyncData, SyncResult } from "@decks/core";
 import type { DatabaseWorkerMessage } from "../workers/worker-entry";
 import { ProgressTracker } from "../utils/progress";
-import type { SyncData, SyncResult } from "@decks/core";
 import { getEmbeddedAssets } from "./embedded-assets";
 
 export class WorkerDatabaseService extends BaseDatabaseService {
@@ -19,6 +18,12 @@ export class WorkerDatabaseService extends BaseDatabaseService {
     }
   >();
   private progressTracker?: ProgressTracker;
+  // Receives the worker's `progress` messages for the deck sync currently in
+  // flight (syncs are serialized); undefined outside a sync call.
+  private activeSyncProgress?: (progress: number, message?: string) => void;
+  // Worker init runs off the onload critical path; ops queue behind it.
+  private workerReady = false;
+  private readyPromise: Promise<void> | null = null;
 
   constructor(
     dbPath: string,
@@ -30,7 +35,19 @@ export class WorkerDatabaseService extends BaseDatabaseService {
     this.configDir = configDir;
   }
 
-  async initialize(): Promise<void> {
+  // Idempotent; kicked off (not awaited) by DatabaseFactory so onload returns
+  // fast. Operations gate on whenReady() until the worker + SQL.js are up.
+  initialize(): Promise<void> {
+    if (this.readyPromise) return this.readyPromise;
+    this.readyPromise = this._doInitialize();
+    return this.readyPromise;
+  }
+
+  whenReady(): Promise<void> {
+    return this.readyPromise ?? this.initialize();
+  }
+
+  private async _doInitialize(): Promise<void> {
     try {
       // Get embedded assets (all assets are now embedded in main.js)
       const embeddedAssets = getEmbeddedAssets();
@@ -82,6 +99,13 @@ export class WorkerDatabaseService extends BaseDatabaseService {
               event.data.progress
             );
           }
+          // Forward to the in-flight sync's caller (deck syncs are serialized),
+          // so a long deck visibly advances instead of freezing the UI at the
+          // last painted percentage.
+          this.activeSyncProgress?.(
+            event.data.progress as number,
+            event.data.message as string | undefined
+          );
           return;
         }
 
@@ -152,6 +176,9 @@ export class WorkerDatabaseService extends BaseDatabaseService {
               if (this.worker) {
                 this.worker.onmessage = originalHandler;
               }
+              // Flip ready BEFORE updateLastKnownModified() below so init's own
+              // tail ops don't wait on the still-pending readyPromise.
+              this.workerReady = true;
               resolve(void 0);
             } else if (event.data.type === "initError") {
               window.clearTimeout(timeout);
@@ -186,11 +213,13 @@ export class WorkerDatabaseService extends BaseDatabaseService {
     }
   }
 
-  private sendMessage(
+  private async sendMessage(
     type: string,
     data?: object,
     transferables?: Transferable[]
   ): Promise<string | number | object> {
+    // Every DB op routes through here — transparently wait for background init.
+    if (!this.workerReady) await this.whenReady();
     return new Promise((resolve, reject) => {
       if (!this.worker) {
         reject(new Error("Worker not initialized"));
@@ -215,7 +244,7 @@ export class WorkerDatabaseService extends BaseDatabaseService {
   }
 
   async save(): Promise<void> {
-    if (!this.worker) throw new Error("Worker not initialized");
+    if (!this.workerReady) await this.whenReady();
 
     try {
       // Sync with disk before saving
@@ -260,7 +289,7 @@ export class WorkerDatabaseService extends BaseDatabaseService {
 
   // Core SQL execution methods - delegate to worker
   async executeSql(sql: string, params: SqlJsValue[] = []): Promise<void> {
-    if (!this.worker) throw new Error("Worker not initialized");
+    if (!this.workerReady) await this.whenReady();
     await this.sendMessage("executeSql", { sql, params });
     this.markDirty(true);
   }
@@ -285,7 +314,7 @@ export class WorkerDatabaseService extends BaseDatabaseService {
     params: SqlJsValue[] = [],
     config?: QueryConfig
   ): Promise<T[] | SqlJsValue[][]> {
-    if (!this.worker) throw new Error("Worker not initialized");
+    if (!this.workerReady) await this.whenReady();
     return (await this.sendMessage("querySql", { sql, params, config })) as
       | T[]
       | SqlJsValue[][];
@@ -293,13 +322,13 @@ export class WorkerDatabaseService extends BaseDatabaseService {
 
   // BACKUP OPERATIONS - Abstract method implementations
   async exportDatabaseToBuffer(): Promise<Uint8Array> {
-    if (!this.worker) throw new Error("Worker not initialized");
+    if (!this.workerReady) await this.whenReady();
     const data = await this.sendMessage("export");
     return (data as { buffer: Uint8Array }).buffer;
   }
 
   async createBackupDatabaseInstance(backupData: Uint8Array): Promise<string> {
-    if (!this.worker) throw new Error("Worker not initialized");
+    if (!this.workerReady) await this.whenReady();
 
     try {
       const response = (await this.sendMessage("createBackupDb", {
@@ -316,7 +345,7 @@ export class WorkerDatabaseService extends BaseDatabaseService {
     backupDbId: string,
     sql: string
   ): Promise<SqlJsValue[][]> {
-    if (!this.worker) throw new Error("Worker not initialized");
+    if (!this.workerReady) await this.whenReady();
 
     try {
       const response = (await this.sendMessage("queryBackupDb", {
@@ -331,7 +360,7 @@ export class WorkerDatabaseService extends BaseDatabaseService {
   }
 
   async closeBackupDatabaseInstance(backupDbId: string): Promise<void> {
-    if (!this.worker) throw new Error("Worker not initialized");
+    if (!this.workerReady) await this.whenReady();
 
     try {
       await this.sendMessage("closeBackupDb", { backupDbId });
@@ -359,7 +388,7 @@ export class WorkerDatabaseService extends BaseDatabaseService {
   }
 
   async syncWithDisk(): Promise<void> {
-    if (!this.worker) throw new Error("Worker not initialized");
+    if (!this.workerReady) await this.whenReady();
 
     try {
       // 1. Check if file exists
@@ -396,25 +425,32 @@ export class WorkerDatabaseService extends BaseDatabaseService {
   }
 
   /**
-   * Unified sync method - runs in worker for WorkerDatabaseService
-   * Note: progressCallback is currently not used in worker mode (worker handles progress internally)
+   * Unified sync method - runs in worker for WorkerDatabaseService. The worker
+   * posts `progress` messages during the sync; they are routed to
+   * `progressCallback` for the duration of this call (deck syncs are
+   * serialized, so a single active callback suffices).
    */
   async syncFlashcardsForDeck(
     data: SyncData,
-    _progressCallback?: (progress: number, message?: string) => void
+    progressCallback?: (progress: number, message?: string) => void
   ): Promise<SyncResult> {
-    if (!this.worker) throw new Error("Worker not initialized");
+    if (!this.workerReady) await this.whenReady();
 
-    const result = await this.sendMessage("syncFlashcardsForDeck", data);
+    this.activeSyncProgress = progressCallback;
+    try {
+      const result = await this.sendMessage("syncFlashcardsForDeck", data);
 
-    const typedResult = result as SyncResult;
+      const typedResult = result as SyncResult;
 
-    return {
-      success: typedResult.success,
-      parsedCount: typedResult.parsedCount,
-      operationsCount: typedResult.operationsCount,
-      duplicatesSkipped: typedResult.duplicatesSkipped,
-    };
+      return {
+        success: typedResult.success,
+        parsedCount: typedResult.parsedCount,
+        operationsCount: typedResult.operationsCount,
+        duplicatesSkipped: typedResult.duplicatesSkipped,
+      };
+    } finally {
+      this.activeSyncProgress = undefined;
+    }
   }
 
   // Worker-specific operations (deprecated - use syncFlashcardsForDeck)
@@ -422,7 +458,7 @@ export class WorkerDatabaseService extends BaseDatabaseService {
     data: SyncData,
     progressTracker?: ProgressTracker
   ): Promise<SyncResult> {
-    if (!this.worker) throw new Error("Worker not initialized");
+    if (!this.workerReady) await this.whenReady();
 
     try {
       // Set progress tracker for this operation

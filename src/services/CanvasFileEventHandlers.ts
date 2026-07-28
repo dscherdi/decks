@@ -13,6 +13,10 @@ export interface CanvasFileEventDeps {
   // Hook the plugin's per-deck debounce. Mirrors how markdown change events
   // coalesce repeated autosaves into a single trailing-edge sync.
   scheduleDeckSync: (deckId: string) => void;
+  // Debounced full vault sync (a burst of new canvases → one trailing sync).
+  scheduleFullSync: () => void;
+  // Debounced UI stats refresh (a burst of deletes → one repaint).
+  scheduleStatsRefresh: () => void;
   refreshStats: () => Promise<void>;
 }
 
@@ -93,18 +97,12 @@ export class CanvasFileEventHandlers {
    * If it's inside the configured folder, run a full discovery sync — that
    * creates the deck row, parses cards, and refreshes the UI.
    */
-  async onCreated(file: TFile): Promise<void> {
+  onCreated(file: TFile): void {
     if (!isInCanvasFolder(file.path, this.deps.settings)) return;
     this.deps.logger.debug(`New canvas file detected: ${file.path}`);
-    try {
-      await this.deps.deckSynchronizer.sync();
-      await this.deps.refreshStats();
-    } catch (error) {
-      this.deps.logger.error(
-        `Failed to sync newly-created canvas ${file.path}`,
-        error as object,
-      );
-    }
+    // Debounced full sync: a burst of new canvases collapses into one trailing
+    // sync instead of a full vault scan per file.
+    this.deps.scheduleFullSync();
   }
 
   /**
@@ -115,7 +113,7 @@ export class CanvasFileEventHandlers {
    */
   async onDeleted(filepath: string): Promise<void> {
     await this.deps.db.deleteDeckByFilepath(filepath);
-    await this.deps.refreshStats();
+    this.deps.scheduleStatsRefresh();
   }
 
   /**

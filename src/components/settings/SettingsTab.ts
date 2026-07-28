@@ -5,11 +5,19 @@ import {
   Notice,
   Modal,
   DropdownComponent,
+  ButtonComponent,
   normalizePath,
   getLanguage,
   requestUrl,
 } from "obsidian";
 import type { DecksSettings } from "../../settings";
+import {
+  type ReviewShortcuts,
+  DEFAULT_REVIEW_SHORTCUTS,
+  displayShortcutKey,
+  normalizeShortcutKey,
+  matchesShortcut,
+} from "../../utils/shortcuts";
 import { BackupService } from "../../services/BackupService";
 import DecksPlugin from "@/main";
 import type { IDatabaseService } from "@/database/DatabaseFactory";
@@ -17,6 +25,7 @@ import type { FsrsWeightSet } from "@/database/types";
 import { Logger } from "@/utils/logging";
 import { OptimizeFsrsModal } from "./OptimizeFsrsModal";
 import { resolveModelId } from "@/utils/ai-model-options";
+import { docUrl } from "../../utils/docs";
 import { type AiProviderId, DECKS_PRO_DEFAULT_BASE_URL, I18n, type LanguagePreference, PROVIDER_MODELS, SUPPORTED_LANGUAGES } from "@decks/core";
 
 export class DecksSettingTab extends PluginSettingTab {
@@ -32,6 +41,12 @@ export class DecksSettingTab extends PluginSettingTab {
   private plugin: DecksPlugin;
   private db: IDatabaseService;
   private logger: Logger;
+  // Cancels an in-progress review-shortcut key capture (only one at a time).
+  private cancelShortcutCapture?: () => void;
+  // Tracks when the user explicitly chose "Custom…" in the model picker so the
+  // free-text field stays open even while the typed id matches no preset.
+  private aiModelCustom = false;
+  private resyncTemplates: () => Promise<void>;
 
   constructor(
     app: App,
@@ -46,10 +61,12 @@ export class DecksSettingTab extends PluginSettingTab {
     startBackgroundRefresh: () => void,
     stopBackgroundRefresh: () => void,
     purgeDatabase: () => Promise<void>,
-    backupService: BackupService
+    backupService: BackupService,
+    resyncTemplates: () => Promise<void>
   ) {
     super(app, plugin);
     this.plugin = plugin;
+    this.resyncTemplates = resyncTemplates;
     this.settings = settings;
     this.db = db;
     this.logger = logger;
@@ -73,8 +90,14 @@ export class DecksSettingTab extends PluginSettingTab {
     // Review Session Settings
     this.addReviewSettings(containerEl);
 
+    // Keyboard shortcuts (standalone section)
+    this.addKeyboardShortcutSettings(containerEl);
+
     // Parsing Settings
     this.addParsingSettings(containerEl);
+
+    // Card templates (folder → deck_templates cache)
+    this.addTemplateSettings(containerEl);
 
     // Canvas Decks Settings
     this.addCanvasDecksSettings(containerEl);
@@ -104,9 +127,61 @@ export class DecksSettingTab extends PluginSettingTab {
     this.addDatabaseSettings(containerEl);
   }
 
+  // Template folder picker. Changing it rebuilds the template cache so cards
+  // bind without a reload. The live preview of template faces lives in the
+  // template file itself (a markdown codeblock postprocessor).
+  private addTemplateSettings(containerEl: HTMLElement): void {
+    const t = I18n.t.settings.templates;
+    new Setting(containerEl)
+      .setName(t.heading)
+      .setHeading()
+      .addExtraButton((b) =>
+        b
+          .setIcon("info")
+          .setTooltip(I18n.t.help.docs)
+          .onClick(() => window.open(docUrl("cards/templates"), "_blank"))
+      );
+
+    if (!this.settings.templates) this.settings.templates = { templateFolder: "" };
+
+    const folderOptions: Record<string, string> = { "": t.folderDefault };
+    this.app.vault.getAllFolders().forEach((folder) => {
+      folderOptions[folder.path] = folder.path;
+    });
+
+    new Setting(containerEl)
+      .setName(t.folder)
+      .setDesc(t.folderDesc)
+      .addDropdown((dropdown) => {
+        Object.entries(folderOptions).forEach(([value, display]) => {
+          dropdown.addOption(value, display);
+        });
+        dropdown
+          .setValue(normalizePath(this.settings.templates?.templateFolder || ""))
+          .onChange(async (value) => {
+            if (!this.settings.templates) {
+              this.settings.templates = { templateFolder: "" };
+            }
+            this.settings.templates.templateFolder = value
+              ? normalizePath(value)
+              : "";
+            await this.saveSettings();
+            await this.resyncTemplates();
+          });
+      });
+  }
+
   private addAiSettings(containerEl: HTMLElement): void {
     const s = I18n.t.settings.ai;
-    new Setting(containerEl).setName(s.heading).setHeading();
+    new Setting(containerEl)
+      .setName(s.heading)
+      .setHeading()
+      .addExtraButton((b) =>
+        b
+          .setIcon("info")
+          .setTooltip(I18n.t.help.docs)
+          .onClick(() => window.open(docUrl("ai"), "_blank"))
+      );
 
     // The provider/model/key fields render into their own container so toggling
     // "enabled" (or switching provider) rebuilds ONLY that container instead of
@@ -430,7 +505,15 @@ export class DecksSettingTab extends PluginSettingTab {
   }
 
   private async addFsrsOptimizationSettings(containerEl: HTMLElement): Promise<void> {
-    new Setting(containerEl).setName(I18n.t.settings.fsrs.heading).setHeading();
+    new Setting(containerEl)
+      .setName(I18n.t.settings.fsrs.heading)
+      .setHeading()
+      .addExtraButton((b) =>
+        b
+          .setIcon("info")
+          .setTooltip(I18n.t.help.docs)
+          .onClick(() => window.open(docUrl("reviewing/optimizer"), "_blank"))
+      );
 
     const active = await this.db.getActiveTrainedWeightSet();
     const desc = this.formatFsrsDescription(active);
@@ -483,8 +566,127 @@ export class DecksSettingTab extends PluginSettingTab {
     });
   }
 
+  // Five capturable review keys (four ratings + reveal/advance).
+  // Standalone "Keyboard shortcuts" section: the master toggle plus the nested,
+  // customizable review keys (shown only while enabled).
+  private addKeyboardShortcutSettings(containerEl: HTMLElement): void {
+    const s = I18n.t.settings.review;
+    new Setting(containerEl).setName(s.keyboardShortcuts).setHeading();
+
+    new Setting(containerEl)
+      .setName(s.enableShortcuts)
+      .setDesc(s.keyboardShortcutsDesc)
+      .addToggle((toggle) =>
+        toggle
+          .setValue(this.settings.review.enableKeyboardShortcuts)
+          .onChange(async (value) => {
+            this.settings.review.enableKeyboardShortcuts = value;
+            await this.saveSettings();
+            this.renderReviewShortcutRows(shortcutsEl);
+          })
+      );
+
+    const shortcutsEl = containerEl.createDiv({ cls: "decks-nested-settings" });
+    this.renderReviewShortcutRows(shortcutsEl);
+  }
+
+  // Renders the customizable review keys into the (indented) sub-container.
+  // Hidden when keyboard shortcuts are disabled.
+  private renderReviewShortcutRows(containerEl: HTMLElement): void {
+    this.cancelShortcutCapture?.();
+    containerEl.empty();
+    if (!this.settings.review.enableKeyboardShortcuts) return;
+
+    const s = I18n.t.settings.review;
+    const rl = I18n.t.review; // reuse the already-translated rating labels
+    const actions: Array<{ key: keyof ReviewShortcuts; name: string }> = [
+      { key: "again", name: rl.again },
+      { key: "hard", name: rl.hard },
+      { key: "good", name: rl.good },
+      { key: "easy", name: rl.easy },
+      { key: "reveal", name: s.shortcutReveal },
+    ];
+    const buttons = new Map<keyof ReviewShortcuts, ButtonComponent>();
+    const refresh = (): void => {
+      for (const { key } of actions) {
+        buttons
+          .get(key)
+          ?.setButtonText(displayShortcutKey(this.settings.review.shortcuts[key]));
+      }
+    };
+
+    new Setting(containerEl)
+      .setName(s.shortcutsHeading)
+      .setDesc(s.shortcutsHeadingDesc);
+
+    for (const { key, name } of actions) {
+      new Setting(containerEl).setName(name).addButton((btn) => {
+        buttons.set(key, btn);
+        btn
+          .setButtonText(displayShortcutKey(this.settings.review.shortcuts[key]))
+          .onClick(() => this.captureShortcut(key, btn, refresh));
+      });
+    }
+
+    new Setting(containerEl).addButton((btn) =>
+      btn.setButtonText(s.shortcutResetDefaults).onClick(async () => {
+        this.cancelShortcutCapture?.();
+        this.settings.review.shortcuts = { ...DEFAULT_REVIEW_SHORTCUTS };
+        await this.saveSettings();
+        refresh();
+      })
+    );
+  }
+
+  private captureShortcut(
+    action: keyof ReviewShortcuts,
+    btn: ButtonComponent,
+    refresh: () => void
+  ): void {
+    const s = I18n.t.settings.review;
+    // Only one capture at a time.
+    this.cancelShortcutCapture?.();
+    btn.setButtonText(s.shortcutPressKey);
+
+    const onKey = (evt: KeyboardEvent): void => {
+      // Ignore a bare modifier press — wait for the real key.
+      if (["Shift", "Control", "Alt", "Meta"].includes(evt.key)) return;
+      evt.preventDefault();
+      evt.stopPropagation();
+      this.cancelShortcutCapture?.();
+      if (evt.key === "Escape") return; // cancel, keep current binding
+
+      const nextKey = normalizeShortcutKey(evt.key);
+      const shortcuts = this.settings.review.shortcuts;
+      const clashes = (
+        Object.keys(shortcuts) as Array<keyof ReviewShortcuts>
+      ).some((k) => k !== action && matchesShortcut(shortcuts[k], nextKey));
+      if (clashes) {
+        new Notice(s.shortcutDuplicate);
+        return;
+      }
+      shortcuts[action] = nextKey;
+      void this.saveSettings().then(refresh);
+    };
+
+    activeDocument.addEventListener("keydown", onKey, true);
+    this.cancelShortcutCapture = (): void => {
+      activeDocument.removeEventListener("keydown", onKey, true);
+      this.cancelShortcutCapture = undefined;
+      refresh();
+    };
+  }
+
   private addReviewSettings(containerEl: HTMLElement): void {
-    new Setting(containerEl).setName(I18n.t.settings.review.heading).setHeading();
+    new Setting(containerEl)
+      .setName(I18n.t.settings.review.heading)
+      .setHeading()
+      .addExtraButton((b) =>
+        b
+          .setIcon("info")
+          .setTooltip(I18n.t.help.docs)
+          .onClick(() => window.open(docUrl("organizing/settings"), "_blank"))
+      );
 
     new Setting(containerEl)
       .setName(I18n.t.settings.review.showProgress)
@@ -494,18 +696,6 @@ export class DecksSettingTab extends PluginSettingTab {
           .setValue(this.settings.review.showProgress)
           .onChange(async (value) => {
             this.settings.review.showProgress = value;
-            await this.saveSettings();
-          })
-      );
-
-    new Setting(containerEl)
-      .setName(I18n.t.settings.review.keyboardShortcuts)
-      .setDesc(I18n.t.settings.review.keyboardShortcutsDesc)
-      .addToggle((toggle) =>
-        toggle
-          .setValue(this.settings.review.enableKeyboardShortcuts)
-          .onChange(async (value) => {
-            this.settings.review.enableKeyboardShortcuts = value;
             await this.saveSettings();
           })
       );
@@ -539,6 +729,37 @@ export class DecksSettingTab extends PluginSettingTab {
             await this.saveSettings();
           })
       );
+
+    // Global daily review cap across all decks (dependent amount + toggle).
+    const globalReviewCapSetting = new Setting(containerEl)
+      .setName(I18n.t.settings.review.globalReviewCap)
+      .setDesc(I18n.t.settings.review.globalReviewCapDesc)
+      .addText((text) =>
+        text
+          .setPlaceholder(I18n.t.settings.review.globalReviewCapPlaceholder)
+          .setValue(this.settings.review.globalReviewCapAmount.toString())
+          .onChange(async (value) => {
+            const num = parseInt(value);
+            if (!isNaN(num) && num >= 1 && num <= 99999) {
+              this.settings.review.globalReviewCapAmount = num;
+              await this.saveSettings();
+            }
+          })
+      );
+
+    new Setting(containerEl)
+      .setName(I18n.t.settings.review.enableGlobalReviewCap)
+      .setDesc(I18n.t.settings.review.enableGlobalReviewCapDesc)
+      .addToggle((toggle) =>
+        toggle
+          .setValue(this.settings.review.hasGlobalReviewCap)
+          .onChange(async (value) => {
+            this.settings.review.hasGlobalReviewCap = value;
+            await this.saveSettings();
+            globalReviewCapSetting.setDisabled(!value);
+          })
+      );
+    globalReviewCapSetting.setDisabled(!this.settings.review.hasGlobalReviewCap);
 
     new Setting(containerEl)
       .setName(I18n.t.settings.review.leechThreshold)
@@ -651,7 +872,13 @@ export class DecksSettingTab extends PluginSettingTab {
   private addCanvasDecksSettings(containerEl: HTMLElement): void {
     new Setting(containerEl)
       .setName(I18n.t.settings.canvasDecks.heading)
-      .setHeading();
+      .setHeading()
+      .addExtraButton((b) =>
+        b
+          .setIcon("info")
+          .setTooltip(I18n.t.help.docs)
+          .onClick(() => window.open(docUrl("cards/canvas"), "_blank"))
+      );
 
     // Folder picker dropdown reusing the same getAllFolders() pattern.
     const folderOptions: Record<string, string> = {

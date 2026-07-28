@@ -1,9 +1,14 @@
 import { Modal, Component, Notice, MarkdownRenderer, App } from "obsidian";
 import type { Flashcard, DeckOrGroup } from "../../database/types";
-import type { RatingLabel } from "@decks/core";
-import type { Scheduler } from "../../services/Scheduler";
+import { type RatingLabel, type ResolvedRender } from "@decks/core";
+import {
+  loadTemplateCache,
+  makeTemplateResolver,
+} from "../../utils/template-resolver";
+import type { Scheduler } from "@decks/core";
 import type { DecksSettings } from "../../settings";
 import type { IDatabaseService } from "../../database/DatabaseFactory";
+import type { DeckSynchronizer } from "../../services/DeckSynchronizer";
 import type {
   FlashcardReviewComponent,
   CompleteEventDetail,
@@ -11,8 +16,12 @@ import type {
 import FlashcardReviewModal from "./FlashcardReviewModal.svelte";
 import { mount, unmount } from "svelte";
 import { navigateToFlashcardSource } from "../../utils/flashcard-navigator";
+import { wireInternalLinks } from "../../utils/internal-links";
 import { I18n } from "@decks/core";
 import { ConfirmModal } from "../ConfirmModal";
+import { AnchorStamper } from "../../services/AnchorStamper";
+import { makeModalResponsive, type ResponsiveModalHandle } from "../../utils/responsive-modal";
+import { ttsService } from "../../services/TtsService";
 
 export class FlashcardReviewModalWrapper extends Modal {
   private deckOrGroup: DeckOrGroup;
@@ -21,20 +30,27 @@ export class FlashcardReviewModalWrapper extends Modal {
   private scheduler: Scheduler;
   private settings: DecksSettings;
   private db: IDatabaseService;
+  private deckSynchronizer: DeckSynchronizer;
   private refreshStats: () => Promise<void>;
   private refreshStatsById: (deckId: string) => Promise<void>;
   private browseMode: boolean;
+  private cramMode: boolean;
   private component: FlashcardReviewComponent | null = null;
   private markdownComponents: Component[] = [];
-  private resizeHandler?: () => void;
+  private responsiveHandle?: ResponsiveModalHandle;
   public navigatedToSource = false;
+  // Per-card template resolver, built from a cache loaded once before mount.
+  private resolveTemplate: (card: Flashcard) => ResolvedRender | null = () => null;
 
-  private renderMarkdown(content: string, el: HTMLElement): void {
+  private renderMarkdown(content: string, el: HTMLElement, sourcePath = ""): void {
     try {
       const component = new Component();
       component.load();
       this.markdownComponents.push(component);
-      void MarkdownRenderer.render(this.app, content, el, "", component);
+      // sourcePath lets Obsidian resolve ![[…]] embeds (audio/images) against the deck file.
+      void MarkdownRenderer.render(this.app, content, el, sourcePath, component);
+      // Make internal links open/preview like Obsidian during review.
+      wireInternalLinks(this.app, el, sourcePath, component);
     } catch (error) {
       console.error("Error rendering markdown:", error);
       el.textContent = content;
@@ -48,9 +64,11 @@ export class FlashcardReviewModalWrapper extends Modal {
     scheduler: Scheduler,
     settings: DecksSettings,
     db: IDatabaseService,
+    deckSynchronizer: DeckSynchronizer,
     refreshStats: () => Promise<void>,
     refreshStatsById: (deckId: string) => Promise<void>,
-    browseMode = false
+    browseMode = false,
+    cramMode = false
   ) {
     super(app);
     this.deckOrGroup = deckOrGroup;
@@ -59,10 +77,15 @@ export class FlashcardReviewModalWrapper extends Modal {
     this.scheduler = scheduler;
     this.settings = settings;
     this.db = db;
+    this.deckSynchronizer = deckSynchronizer;
     this.refreshStats = refreshStats;
     this.refreshStatsById = refreshStatsById;
     this.browseMode = browseMode;
+    this.cramMode = cramMode;
+    this.anchorStamper = new AnchorStamper(app, db);
   }
+
+  private anchorStamper: AnchorStamper;
 
   private async reviewFlashcard(
     deckOrGroup: DeckOrGroup,
@@ -71,17 +94,15 @@ export class FlashcardReviewModalWrapper extends Modal {
     timeElapsed?: number,
     shownAt?: Date
   ): Promise<void> {
-    // Use unified scheduler for rating
-    await this.scheduler.rate(flashcard.id, difficulty, timeElapsed, shownAt);
-
-    // Update deck last reviewed
+    await this.scheduler.rate(flashcard, difficulty, timeElapsed, shownAt);
     await this.db.updateDeckLastReviewed(
       flashcard.deckId,
       new Date().toISOString()
     );
-
-    // Refresh stats for this specific deck
-    await this.refreshStatsById(flashcard.deckId);
+    if (!this.cramMode && !this.browseMode) {
+      await this.anchorStamper.ensureAnchored(flashcard);
+    }
+    // No per-rating stats refresh — onClose handles it.
   }
 
   private async navigateToFlashcardSource(flashcard: Flashcard): Promise<void> {
@@ -157,22 +178,20 @@ export class FlashcardReviewModalWrapper extends Modal {
   }
 
   onOpen() {
+    this.deckSynchronizer.isReviewing = true; // pause background syncs during review
+
     const { contentEl } = this;
     contentEl.empty();
 
-    // Add mobile-specific classes
-    const modalEl = this.containerEl.querySelector(".modal");
-    if (modalEl instanceof HTMLElement) {
-      modalEl.addClass("decks-modal");
-
-      if (window.innerWidth <= 768) {
-        modalEl.addClass("decks-modal-mobile");
-      } else {
-        modalEl.removeClass("decks-modal-mobile");
-      }
-    }
+    this.responsiveHandle = makeModalResponsive(this);
 
     contentEl.addClass("decks-review-modal-container");
+
+    void this.preloadThenMount(contentEl);
+  }
+
+  private async preloadThenMount(contentEl: HTMLElement): Promise<void> {
+    this.resolveTemplate = makeTemplateResolver(await loadTemplateCache(this.db));
 
     this.component = mount(FlashcardReviewModal, {
       target: contentEl,
@@ -180,6 +199,7 @@ export class FlashcardReviewModalWrapper extends Modal {
         initialCard: this.initialCard,
         deckOrGroup: this.deckOrGroup,
         browseMode: this.browseMode,
+        cramMode: this.cramMode,
         allCards: this.allCards,
         onReview: async (
           card: Flashcard,
@@ -195,19 +215,21 @@ export class FlashcardReviewModalWrapper extends Modal {
             shownAt
           );
         },
-        renderMarkdown: (content: string, el: HTMLElement) => {
-          this.renderMarkdown(content, el);
+        renderMarkdown: (content: string, el: HTMLElement, sourcePath?: string) => {
+          this.renderMarkdown(content, el, sourcePath ?? "");
+        },
+        resolveTemplate: (card: Flashcard) => this.resolveTemplate(card),
+        resolveEmbed: (linkpath: string, sourcePath: string) => {
+          const dest = this.app.metadataCache.getFirstLinkpathDest(linkpath, sourcePath);
+          return dest ? this.app.vault.getResourcePath(dest) : null;
         },
         settings: this.settings,
         scheduler: this.scheduler,
-        onCardReviewed: async (reviewedCard: Flashcard) => {
-          // Refresh stats for the specific deck being reviewed (more efficient)
-          if (reviewedCard) {
-            await this.refreshStatsById(reviewedCard.deckId);
-          }
-        },
+        tts: ttsService,
+        onCardReviewed: undefined,
         onComplete: async (_event: CompleteEventDetail) => {
-          if (this.browseMode) {
+          if (this.browseMode || this.cramMode) {
+            // Cram changes no real scheduling — just close (no session notice).
             this.close();
             return;
           }
@@ -232,29 +254,16 @@ export class FlashcardReviewModalWrapper extends Modal {
         ) => this.handleCardStateAction(card, action),
       },
     }) as FlashcardReviewComponent;
-
-    // Handle window resize for mobile adaptation
-    const handleResize = () => {
-      const modalEl = this.containerEl.querySelector(".modal");
-      if (modalEl instanceof HTMLElement) {
-        if (window.innerWidth <= 768) {
-          modalEl.addClass("decks-modal-mobile");
-        } else {
-          modalEl.removeClass("decks-modal-mobile");
-        }
-      }
-    };
-
-    window.addEventListener("resize", handleResize);
-    this.resizeHandler = handleResize;
   }
 
   onClose() {
-    // Clean up resize handler
-    if (this.resizeHandler) {
-      window.removeEventListener("resize", this.resizeHandler);
-      this.resizeHandler = undefined;
-    }
+    this.deckSynchronizer.isReviewing = false;
+
+    // Stop any in-progress speech (onClose must stay synchronous).
+    ttsService.stop();
+
+    this.responsiveHandle?.dispose();
+    this.responsiveHandle = undefined;
 
     if (this.component) {
       // Svelte 5: explicitly unmount to trigger onDestroy and cleanup listeners

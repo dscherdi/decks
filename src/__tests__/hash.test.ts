@@ -1,5 +1,6 @@
 import {
   generateFlashcardId,
+  generateOldFlashcardId,
   generateReverseFlashcardId,
   generateClozeFlashcardId,
   generateContentHash,
@@ -9,118 +10,118 @@ import {
 describe("hash utilities", () => {
   describe("generateReverseFlashcardId", () => {
     it("should return a string starting with rcard_", () => {
-      expect(generateReverseFlashcardId("What is TypeScript?", "deck_1")).toMatch(
-        /^rcard_/
-      );
+      expect(generateReverseFlashcardId("What is TypeScript?")).toMatch(/^rcard_/);
     });
 
     it("should differ from generateFlashcardId for the same input", () => {
       const text = "What is TypeScript?";
-      const deckId = "deck_1";
-      expect(generateReverseFlashcardId(text, deckId)).not.toBe(
-        generateFlashcardId(text, deckId)
-      );
+      expect(generateReverseFlashcardId(text)).not.toBe(generateFlashcardId(text));
     });
 
     it("should differ from generateFlashcardId even with reverse: prefix in input", () => {
       const prefixed = "reverse:What is TypeScript?";
-      expect(generateReverseFlashcardId("What is TypeScript?", "deck_1")).not.toBe(
-        generateFlashcardId(prefixed, "deck_1")
+      expect(generateReverseFlashcardId("What is TypeScript?")).not.toBe(
+        generateFlashcardId(prefixed)
       );
     });
 
     it("should be deterministic", () => {
       const text = "What is TypeScript?";
-      const deckId = "deck_1";
-      expect(generateReverseFlashcardId(text, deckId)).toBe(
-        generateReverseFlashcardId(text, deckId)
-      );
+      expect(generateReverseFlashcardId(text)).toBe(generateReverseFlashcardId(text));
     });
 
     it("should produce different IDs for different inputs", () => {
-      expect(generateReverseFlashcardId("front A", "deck_1")).not.toBe(
-        generateReverseFlashcardId("front B", "deck_1")
+      expect(generateReverseFlashcardId("front A")).not.toBe(
+        generateReverseFlashcardId("front B")
       );
     });
 
     it("should not collide with regular card IDs for any input", () => {
       const inputs = ["", "hello", "What is 2+2?", "reverse:test"];
       for (const input of inputs) {
-        expect(generateReverseFlashcardId(input, "deck_1")).not.toBe(
-          generateFlashcardId(input, "deck_1")
-        );
-        expect(generateReverseFlashcardId(input, "deck_1")).not.toBe(
-          generateDeckId(input)
-        );
+        expect(generateReverseFlashcardId(input)).not.toBe(generateFlashcardId(input));
+        expect(generateReverseFlashcardId(input)).not.toBe(generateDeckId(input));
       }
     });
 
     it("should handle empty string without throwing", () => {
-      expect(() => generateReverseFlashcardId("", "deck_1")).not.toThrow();
-      expect(generateReverseFlashcardId("", "deck_1")).toMatch(/^rcard_/);
+      expect(() => generateReverseFlashcardId("")).not.toThrow();
+      expect(generateReverseFlashcardId("")).toMatch(/^rcard_/);
     });
 
-    it("should produce different IDs for same text in different decks", () => {
-      expect(generateReverseFlashcardId("front A", "deck_1")).not.toBe(
-        generateReverseFlashcardId("front A", "deck_2")
+    it("should be deck-independent (node suffix still disambiguates)", () => {
+      expect(generateReverseFlashcardId("front A")).toBe(
+        generateReverseFlashcardId("front A")
+      );
+      expect(generateReverseFlashcardId("front A", "node-1")).not.toBe(
+        generateReverseFlashcardId("front A", "node-2")
       );
     });
   });
 
   describe("generateFlashcardId", () => {
     it("should return a string starting with card_", () => {
-      expect(generateFlashcardId("What is TypeScript?", "deck_1")).toMatch(/^card_/);
+      expect(generateFlashcardId("What is TypeScript?")).toMatch(/^card_/);
     });
 
     it("should be deterministic", () => {
       const text = "What is TypeScript?";
-      const deckId = "deck_1";
-      expect(generateFlashcardId(text, deckId)).toBe(generateFlashcardId(text, deckId));
+      expect(generateFlashcardId(text)).toBe(generateFlashcardId(text));
     });
 
-    it("should produce different IDs for same text in different decks", () => {
+    it("should be deck-independent — same front always yields the same ID", () => {
       const question = "What is 2+2?";
-      expect(generateFlashcardId(question, "deck_1")).not.toBe(
-        generateFlashcardId(question, "deck_2")
+      // No deck component: identity is purely the front text, so a card keeps
+      // its ID (and review history) when it moves between decks or files.
+      expect(generateFlashcardId(question)).toBe(generateFlashcardId(question));
+    });
+
+    it("should equal the legacy front-only ID (migration re-link relies on this)", () => {
+      const front = "What is a monad?";
+      expect(generateFlashcardId(front)).toBe(generateOldFlashcardId(front));
+    });
+
+    it("should disambiguate canvas nodes via sourceNodeId", () => {
+      expect(generateFlashcardId("Same Q", "node-a")).not.toBe(
+        generateFlashcardId("Same Q", "node-b")
       );
     });
   });
 
   describe("generateClozeFlashcardId", () => {
     it("should return a string starting with ccard_", () => {
-      expect(generateClozeFlashcardId("front", "cloze", 0, "deck_1")).toMatch(/^ccard_/);
+      expect(generateClozeFlashcardId("front", "cloze", 0)).toMatch(/^ccard_/);
     });
 
     it("should be deterministic", () => {
-      expect(generateClozeFlashcardId("front", "cloze", 0, "deck_1")).toBe(
-        generateClozeFlashcardId("front", "cloze", 0, "deck_1")
+      expect(generateClozeFlashcardId("front", "cloze", 0)).toBe(
+        generateClozeFlashcardId("front", "cloze", 0)
       );
     });
 
     it("should produce different IDs for different cloze text", () => {
-      expect(generateClozeFlashcardId("front", "clozeA", 0, "deck_1")).not.toBe(
-        generateClozeFlashcardId("front", "clozeB", 0, "deck_1")
+      expect(generateClozeFlashcardId("front", "clozeA", 0)).not.toBe(
+        generateClozeFlashcardId("front", "clozeB", 0)
       );
     });
 
     it("should produce different IDs for same cloze text at different orders", () => {
-      expect(generateClozeFlashcardId("front", "same", 0, "deck_1")).not.toBe(
-        generateClozeFlashcardId("front", "same", 1, "deck_1")
+      expect(generateClozeFlashcardId("front", "same", 0)).not.toBe(
+        generateClozeFlashcardId("front", "same", 1)
       );
     });
 
-    it("should produce different IDs for same cloze in different decks", () => {
-      expect(generateClozeFlashcardId("front", "cloze", 0, "deck_1")).not.toBe(
-        generateClozeFlashcardId("front", "cloze", 0, "deck_2")
+    it("should be deck-independent", () => {
+      expect(generateClozeFlashcardId("front", "cloze", 0)).toBe(
+        generateClozeFlashcardId("front", "cloze", 0)
       );
     });
 
     it("should not collide with card_ or rcard_ prefixes", () => {
       const front = "test front";
-      const deckId = "deck_1";
-      const clozeId = generateClozeFlashcardId(front, "cloze", 0, deckId);
-      const cardId = generateFlashcardId(front, deckId);
-      const rcardId = generateReverseFlashcardId(front, deckId);
+      const clozeId = generateClozeFlashcardId(front, "cloze", 0);
+      const cardId = generateFlashcardId(front);
+      const rcardId = generateReverseFlashcardId(front);
 
       expect(clozeId).not.toBe(cardId);
       expect(clozeId).not.toBe(rcardId);

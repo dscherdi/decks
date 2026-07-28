@@ -8,12 +8,13 @@ import type {
 import AnkiExportUI from "./AnkiExportUI.svelte";
 import { mount, unmount } from "svelte";
 import { I18n } from "@decks/core";
+import { makeModalResponsive, type ResponsiveModalHandle } from "../../utils/responsive-modal";
 
 export class AnkiExportModal extends Modal {
   private deck: Deck;
   private db: IDatabaseService;
   private component: AnkiExportComponent | null = null;
-  private resizeHandler?: () => void;
+  private responsiveHandle?: ResponsiveModalHandle;
   public deckIds?: string[]; // For deck group exports
   public isGroupExport?: boolean;
 
@@ -27,16 +28,7 @@ export class AnkiExportModal extends Modal {
     const { contentEl } = this;
     contentEl.empty();
 
-    // Add mobile-specific classes
-    const modalEl = this.containerEl.querySelector(".modal");
-    if (modalEl instanceof HTMLElement) {
-      modalEl.addClass("decks-modal");
-      if (window.innerWidth <= 768) {
-        modalEl.addClass("decks-modal-mobile");
-      } else {
-        modalEl.removeClass("decks-modal-mobile");
-      }
-    }
+    this.responsiveHandle = makeModalResponsive(this);
 
     // Add CSS class for styling
     contentEl.addClass("decks-anki-export-container");
@@ -60,21 +52,6 @@ export class AnkiExportModal extends Modal {
         },
       },
     }) as AnkiExportComponent;
-
-    // Handle window resize for mobile adaptation
-    const handleResize = () => {
-      const modalEl = this.containerEl.querySelector(".modal");
-      if (modalEl instanceof HTMLElement) {
-        if (window.innerWidth <= 768) {
-          modalEl.addClass("decks-modal-mobile");
-        } else {
-          modalEl.removeClass("decks-modal-mobile");
-        }
-      }
-    };
-
-    window.addEventListener("resize", handleResize);
-    this.resizeHandler = handleResize;
   }
 
   private async handleExport(config: AnkiExportConfig) {
@@ -190,11 +167,8 @@ export class AnkiExportModal extends Modal {
   onClose() {
     const { contentEl } = this;
 
-    // Clean up resize handler
-    if (this.resizeHandler) {
-      window.removeEventListener("resize", this.resizeHandler);
-      this.resizeHandler = undefined;
-    }
+    this.responsiveHandle?.dispose();
+    this.responsiveHandle = undefined;
 
     // Unmount Svelte component using Svelte 5 API
     if (this.component) {

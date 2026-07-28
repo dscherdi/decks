@@ -226,6 +226,73 @@ describe("StatisticsService Integration Tests", () => {
     });
   });
 
+  describe("getReviewCountsByDate window", () => {
+    it("all-time (days<=0) counts old reviews that the 366-day window excludes", async () => {
+      const card = DatabaseTestUtils.createTestFlashcard(testDeck.id, {
+        id: "card-old",
+        state: "review",
+      });
+      await db.createFlashcard(card);
+
+      const twoYearsAgo = new Date(Date.now() - 730 * 86400000);
+      await db.createReviewLog(
+        DatabaseTestUtils.createTestReviewLog(card.id, {
+          id: "log-old",
+          rating: 3,
+          ratingLabel: "good",
+          reviewedAt: twoYearsAgo.toISOString(),
+        })
+      );
+
+      const key = toLocalDateString(twoYearsAgo);
+      const windowed = await statsService.getReviewCountsByDate(366);
+      expect(windowed.get(key)).toBeUndefined();
+
+      const allTime = await statsService.getReviewCountsByDate(0);
+      expect(allTime.get(key)).toBe(1);
+    });
+  });
+
+  describe("getStudyStats", () => {
+    it("sums review time into total/month/week hours via SQL", async () => {
+      const card = DatabaseTestUtils.createTestFlashcard(testDeck.id, {
+        id: "card-study",
+        state: "review",
+      });
+      await db.createFlashcard(card);
+
+      const HOUR_MS = 3600000;
+      const now = Date.now();
+      const at = (daysAgo: number) => new Date(now - daysAgo * 86400000).toISOString();
+
+      // 1h today (in week+month+total), 1h 10 days ago (month+total),
+      // 1h 40 days ago (total only).
+      for (const [id, daysAgo] of [
+        ["log-today", 0],
+        ["log-10d", 10],
+        ["log-40d", 40],
+      ] as const) {
+        await db.createReviewLog(
+          DatabaseTestUtils.createTestReviewLog(card.id, {
+            id,
+            reviewedAt: at(daysAgo),
+            timeElapsedMs: HOUR_MS,
+          })
+        );
+      }
+
+      const stats = await statsService.getStudyStats();
+      expect(stats.totalHours).toBeCloseTo(3);
+      expect(stats.pastMonthHours).toBeCloseTo(2);
+      expect(stats.pastWeekHours).toBeCloseTo(1);
+    });
+
+    it("returns zeros with no review history", async () => {
+      const stats = await statsService.getStudyStats();
+      expect(stats).toEqual({ totalHours: 0, pastMonthHours: 0, pastWeekHours: 0 });
+    });
+  });
+
   describe("getReviewsByHour", () => {
     it("should group reviews by hour of day", async () => {
       const card = DatabaseTestUtils.createTestFlashcard(testDeck.id, {

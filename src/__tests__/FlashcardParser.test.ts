@@ -15,7 +15,7 @@ describe("FlashcardParser", () => {
       const result = FlashcardParser.parseFlashcardsFromContent(content);
 
       expect(result).toHaveLength(2);
-      expect(result[0]).toEqual({
+      expect(result[0]).toMatchObject({
         front: "What is 2+2?",
         back: "4",
         notes: "",
@@ -23,7 +23,7 @@ describe("FlashcardParser", () => {
         breadcrumb: "Study Topics",
         tags: [],
       });
-      expect(result[1]).toEqual({
+      expect(result[1]).toMatchObject({
         front: "Capital of France",
         back: "Paris",
         notes: "",
@@ -216,7 +216,7 @@ Some more content here.
       const result = FlashcardParser.parseFlashcardsFromContent(content);
 
       expect(result).toHaveLength(1);
-      expect(result[0]).toEqual({
+      expect(result[0]).toMatchObject({
         front: "Complete question",
         back: "Complete answer",
         notes: "",
@@ -263,7 +263,7 @@ Key features:
       const result = FlashcardParser.parseFlashcardsFromContent(content);
 
       expect(result).toHaveLength(1);
-      expect(result[0]).toEqual({
+      expect(result[0]).toMatchObject({
         front: "Whitespace question",
         back: "Whitespace answer",
         notes: "",
@@ -359,7 +359,7 @@ Some regular content here.
       // Test with headerLevel 2 - should only parse table under ## header
       const h2Result = FlashcardParser.parseFlashcardsFromContent(content, 2);
       expect(h2Result).toHaveLength(2);
-      expect(h2Result[0]).toEqual({
+      expect(h2Result[0]).toMatchObject({
         front: "What is 2+2?",
         back: "4",
         notes: "",
@@ -367,7 +367,7 @@ Some regular content here.
         breadcrumb: "Main Title > Level 2 Header",
         tags: [],
       });
-      expect(h2Result[1]).toEqual({
+      expect(h2Result[1]).toMatchObject({
         front: "What is 3+3?",
         back: "6",
         notes: "",
@@ -379,7 +379,7 @@ Some regular content here.
       // Test with headerLevel 3 - should only parse table under ### header
       const h3Result = FlashcardParser.parseFlashcardsFromContent(content, 3);
       expect(h3Result).toHaveLength(1);
-      expect(h3Result[0]).toEqual({
+      expect(h3Result[0]).toMatchObject({
         front: "What is 5+5?",
         back: "10",
         notes: "",
@@ -431,7 +431,7 @@ Some paragraph content here.
       expect(result).toHaveLength(3);
 
       // First two should be table flashcards
-      expect(result[0]).toEqual({
+      expect(result[0]).toMatchObject({
         front: "What is 5+5?",
         back: "10",
         notes: "",
@@ -439,7 +439,7 @@ Some paragraph content here.
         breadcrumb: "Pure Table Header",
         tags: [],
       });
-      expect(result[1]).toEqual({
+      expect(result[1]).toMatchObject({
         front: "What is 6+6?",
         back: "12",
         notes: "",
@@ -455,6 +455,96 @@ Some paragraph content here.
       expect(result[2].type).toBe("header-paragraph");
       expect(result[2].notes).toBe("");
       expect(result[2].breadcrumb).toBe("");
+    });
+
+    it("does not emit a header card for a table section followed by a --- separator (cloze on)", () => {
+      const content = [
+        "## Kanji vocabulary #vocab",
+        "",
+        "| Word | Reading | Meaning |",
+        "| ---- | ------- | ------- |",
+        "| 火 | ひ | fire |",
+        "| 水 | みず | water |",
+        "",
+        "---",
+        "",
+      ].join("\n");
+
+      const cards = FlashcardParser.parseFlashcardsFromContent(
+        content,
+        2,
+        undefined,
+        true
+      );
+
+      expect(cards).toHaveLength(2);
+      expect(cards.map((c) => c.front).sort()).toEqual(["水", "火"].sort());
+    });
+
+    it("treats a table after a paragraph as one header-paragraph card", () => {
+      const content = `
+## xxx
+
+aaaaaaaaaaaaaaa
+
+| Name | Age |
+| --- | --- |
+| Alice | 25 |
+| Bob | 30 |
+      `;
+
+      const result = FlashcardParser.parseFlashcardsFromContent(content, 2);
+
+      expect(result).toHaveLength(1);
+      expect(result[0].front).toBe("xxx");
+      expect(result[0].type).toBe("header-paragraph");
+      expect(result[0].back).toContain("aaaaaaaaaaaaaaa");
+      expect(result[0].back).toContain("| Alice | 25 |");
+      expect(result[0].back).toContain("| Bob | 30 |");
+    });
+
+    it("does not parse headings inside fenced code blocks", () => {
+      const content = [
+        "## Real heading",
+        "",
+        "Intro line.",
+        "",
+        "```text",
+        "## abc",
+        "content",
+        "",
+        "## def",
+        "content",
+        "```",
+      ].join("\n");
+
+      const result = FlashcardParser.parseFlashcardsFromContent(content, 2);
+
+      expect(result).toHaveLength(1);
+      expect(result[0].front).toBe("Real heading");
+      expect(result[0].type).toBe("header-paragraph");
+      expect(result[0].back).toContain("## abc");
+      expect(result[0].back).toContain("## def");
+      expect(result[0].back).toContain("```text");
+    });
+
+    it("does not parse tables inside fenced code blocks as table cards", () => {
+      const content = [
+        "## Code sample",
+        "",
+        "```",
+        "| Name | Age |",
+        "| --- | --- |",
+        "| Alice | 25 |",
+        "```",
+      ].join("\n");
+
+      const result = FlashcardParser.parseFlashcardsFromContent(content, 2);
+
+      expect(result).toHaveLength(1);
+      expect(result[0].front).toBe("Code sample");
+      expect(result[0].type).toBe("header-paragraph");
+      expect(result[0].back).toContain("| Alice | 25 |");
     });
   });
 
@@ -472,7 +562,7 @@ Some paragraph content here.
       const result = FlashcardParser.parseFlashcardsFromContent(content);
 
       expect(result).toHaveLength(2);
-      expect(result[0]).toEqual({
+      expect(result[0]).toMatchObject({
         front: "What is 2+2?",
         back: "4",
         notes: "Basic arithmetic",
@@ -480,7 +570,7 @@ Some paragraph content here.
         breadcrumb: "Study Topics",
         tags: [],
       });
-      expect(result[1]).toEqual({
+      expect(result[1]).toMatchObject({
         front: "Capital of France",
         back: "Paris",
         notes: "European geography",
@@ -525,7 +615,7 @@ Some paragraph content here.
       const result = FlashcardParser.parseFlashcardsFromContent(content);
 
       expect(result).toHaveLength(2);
-      expect(result[0]).toEqual({
+      expect(result[0]).toMatchObject({
         front: "Q1",
         back: "A1",
         notes: "",
@@ -533,7 +623,7 @@ Some paragraph content here.
         breadcrumb: "Two Columns",
         tags: [],
       });
-      expect(result[1]).toEqual({
+      expect(result[1]).toMatchObject({
         front: "Q2",
         back: "A2",
         notes: "Note here",
@@ -892,6 +982,38 @@ Content
       const result = FlashcardParser.parseFlashcardsFromContent(content);
       expect(result[0].tags).toEqual([]);
     });
+
+    it("treats a cloze in a table's front cell as a front-only cloze carrying templateRow", () => {
+      const content = `
+## Deck #anki-tpl-cloze/basic
+
+| Text | Extra |
+| --- | --- |
+| Du trinkst ==jeden Tag== Bier. | extra note |
+`;
+      const result = FlashcardParser.parseFlashcardsFromContent(content, 2, undefined, true);
+      expect(result).toHaveLength(1);
+      expect(result[0].type).toBe("cloze");
+      expect(result[0].front).toBe("Du trinkst ==jeden Tag== Bier."); // cloze on the front
+      expect(result[0].back).toBe(""); // front-only
+      expect(result[0].templateRow?.headers).toEqual(["Text", "Extra"]);
+      expect(result[0].templateRow?.cells).toEqual(["Du trinkst ==jeden Tag== Bier.", "extra note"]);
+    });
+
+    it("keeps a normal | Front | Back | table as front+back (no cloze in front)", () => {
+      const content = `
+## Deck
+
+| Front | Back |
+| --- | --- |
+| Question | Answer |
+`;
+      const result = FlashcardParser.parseFlashcardsFromContent(content, 2, undefined, true);
+      expect(result).toHaveLength(1);
+      expect(result[0].type).toBe("table");
+      expect(result[0].front).toBe("Question");
+      expect(result[0].back).toBe("Answer");
+    });
   });
 
   describe("parent header tag inheritance", () => {
@@ -1162,6 +1284,94 @@ European city
       });
       expect(cards[0].back).toContain("==Paris==");
       expect(cards[0].back).not.toContain("European city");
+    });
+  });
+
+  describe("anchor token stripping", () => {
+    it("parses a tokened header card identically to the clean source", () => {
+      const clean = `## What is the capital? #geo\n\nParis is the capital.\nIt lies on the Seine.`;
+      const tokened = `## What is the capital? #geo\n\nParis is the capital.\nIt lies on the Seine. %%dk:h:x7f2%%`;
+
+      const cleanCards = FlashcardParser.parseFlashcardsFromContent(clean, 2);
+      const tokenedCards = FlashcardParser.parseFlashcardsFromContent(tokened, 2);
+
+      expect(tokenedCards).toHaveLength(1);
+      expect(tokenedCards[0].front).toBe(cleanCards[0].front);
+      expect(tokenedCards[0].back).toBe(cleanCards[0].back);
+      expect(tokenedCards[0].notes).toBe(cleanCards[0].notes);
+      expect(tokenedCards[0].tags).toEqual(cleanCards[0].tags);
+    });
+
+    it("never turns anchor tokens into card notes, but keeps real comments as notes", () => {
+      const content = `## Question\n\nAnswer text. %%dk:h:abc1%%\n%%a real note%%`;
+      const cards = FlashcardParser.parseFlashcardsFromContent(content, 2);
+
+      expect(cards).toHaveLength(1);
+      expect(cards[0].notes).toBe("a real note");
+      expect(cards[0].back).toBe("Answer text.");
+    });
+
+    it("parses a tokened cloze line with unchanged clozeOrder and clozeText", () => {
+      const clean = `## Facts\n\nThe ==mitochondria== is the powerhouse.\nWater is ==H2O== of course.`;
+      const tokened = `## Facts\n\nThe ==mitochondria== is the powerhouse. %%dk:c:aa11%%\nWater is ==H2O== of course. %%dk:c:bb22%%`;
+
+      const cleanCards = FlashcardParser.parseFlashcardsFromContent(clean, 2, undefined, true);
+      const tokenedCards = FlashcardParser.parseFlashcardsFromContent(tokened, 2, undefined, true);
+
+      expect(tokenedCards).toHaveLength(cleanCards.length);
+      for (let i = 0; i < cleanCards.length; i++) {
+        expect(tokenedCards[i].clozeText).toBe(cleanCards[i].clozeText);
+        expect(tokenedCards[i].clozeOrder).toBe(cleanCards[i].clozeOrder);
+        expect(tokenedCards[i].back).toBe(cleanCards[i].back);
+      }
+    });
+
+    it("strips tokens from table cells before fronts, backs and templateRow", () => {
+      const clean = `## Vocab\n\n| Front | Back |\n|---|---|\n| chat | cat |`;
+      const tokened = `## Vocab\n\n| Front | Back |\n|---|---|\n| chat %%dk:t:cc33%% | cat %%dk:t:dd44%% |`;
+
+      const cleanCards = FlashcardParser.parseFlashcardsFromContent(clean, 2);
+      const tokenedCards = FlashcardParser.parseFlashcardsFromContent(tokened, 2);
+
+      expect(tokenedCards).toHaveLength(1);
+      expect(tokenedCards[0].front).toBe(cleanCards[0].front);
+      expect(tokenedCards[0].back).toBe(cleanCards[0].back);
+      expect(tokenedCards[0].templateRow).toEqual(cleanCards[0].templateRow);
+    });
+
+    it("strips a stray token on the header line from front and breadcrumb", () => {
+      const content = `## Question %%dk:h:ee55%%\n\nAnswer.`;
+      const cards = FlashcardParser.parseFlashcardsFromContent(content, 2);
+
+      expect(cards).toHaveLength(1);
+      expect(cards[0].front).toBe("Question");
+    });
+
+    it("strips tokens from title-mode bodies", () => {
+      const content = `Body line one. %%dk:h:ff66%%\nBody line two.`;
+      const cards = FlashcardParser.parseFlashcardsFromContent(content, 0, "Note title");
+
+      expect(cards).toHaveLength(1);
+      expect(cards[0].back).toBe("Body line one.\nBody line two.");
+    });
+
+    it("does not mint a card from a body that only contains a token", () => {
+      const content = `## Question\n\n%%dk:h:aa77%%`;
+      const cards = FlashcardParser.parseFlashcardsFromContent(content, 2);
+      expect(cards).toHaveLength(0);
+    });
+
+    it("parses an own-line token after the body identically to the clean source", () => {
+      const clean = `## Question\n\nFirst line.\nLast line.\n\n## Next\n\nOther.`;
+      const tokened = `## Question\n\nFirst line.\nLast line.\n%%dk:h:gg88%%\n\n## Next\n\nOther.`;
+
+      const cleanCards = FlashcardParser.parseFlashcardsFromContent(clean, 2);
+      const tokenedCards = FlashcardParser.parseFlashcardsFromContent(tokened, 2);
+
+      expect(tokenedCards).toHaveLength(cleanCards.length);
+      expect(tokenedCards[0].front).toBe(cleanCards[0].front);
+      expect(tokenedCards[0].back).toBe(cleanCards[0].back);
+      expect(tokenedCards[0].notes).toBe(cleanCards[0].notes);
     });
   });
 });

@@ -19,15 +19,18 @@ declare const initSqlJs: InitSqlJsStatic;
 // Web Worker API declaration
 declare function importScripts(...urls: string[]): void;
 
-import { FlashcardParser } from "@decks/core";
-import type { ParsedFlashcard } from "@decks/core";
-import { FlashcardSynchronizer } from "@decks/core";
-import type { SyncResult, SyncData } from "@decks/core";
+import { FlashcardParser, FlashcardSynchronizer } from "@decks/core";
+import type { ParsedFlashcard, SyncResult, SyncData } from "@decks/core";
 import {
   CREATE_TABLES_SQL,
   CURRENT_SCHEMA_VERSION,
   buildMigrationSQL,
+  remapCardIdsToDeckIndependent,
 } from "@decks/core";
+
+// Schema version at which card IDs became deck-independent. Upgrading from an
+// earlier version re-points review history to the new IDs before the rebuild.
+const DECK_INDEPENDENT_ID_VERSION = 36;
 
 export interface QueryConfig {
   asObject?: boolean;
@@ -256,6 +259,15 @@ class SimpleDatabaseWorker {
       if (currentVersion < CURRENT_SCHEMA_VERSION) {
         const reviewLogsBefore = this.getReviewLogsCount();
         try {
+          // Re-point review history to deck-independent card IDs while the old
+          // IDs are still present — buildMigrationSQL then drops and rebuilds
+          // the flashcards table.
+          if (
+            currentVersion > 0 &&
+            currentVersion < DECK_INDEPENDENT_ID_VERSION
+          ) {
+            remapCardIdsToDeckIndependent(this.db);
+          }
           const migrationSQL = buildMigrationSQL(this.db);
           this.db.exec(migrationSQL);
 
@@ -311,9 +323,18 @@ class SimpleDatabaseWorker {
    */
   parseFlashcardsFromContent(
     content: string,
-    headerLevel = 2
+    headerLevel: number | number[] = 2,
+    fileTitle?: string,
+    clozeEnabled = false,
+    examEnabled = false
   ): ParsedFlashcard[] {
-    return FlashcardParser.parseFlashcardsFromContent(content, headerLevel);
+    return FlashcardParser.parseFlashcardsFromContent(
+      content,
+      headerLevel,
+      fileTitle,
+      clozeEnabled,
+      examEnabled
+    );
   }
 
   /**
@@ -364,15 +385,22 @@ class SimpleDatabaseWorker {
    * in-memory DB. Wrapped in a transaction; rolled back on error.
    *
    * Conflict resolution:
-   *   - Append-only tables (review_sessions, review_logs, custom_deck_cards):
+   *   - Append-only tables (review_sessions, review_logs):
    *     INSERT OR IGNORE — both sides' rows survive.
+   *   - custom_deck_cards: append-only, but a row is NOT resurrected if the
+   *     local custom_deck_card_tombstones has a removal at least as new as the
+   *     row's `created` (otherwise a stale disk snapshot re-adds just-removed
+   *     memberships on every save).
    *   - decks, flashcards: conditional replace by `modified` (markdown is the
    *     source of truth, no tombstones).
+   *   - card_state_overlays: conditional replace by `modified` (newer wins),
+   *     then mirrored onto the flashcards suspend/bury cache columns.
    *   - deckprofiles, custom_decks: conditional replace by effective timestamp
    *     COALESCE(deleted_at, modified) — propagates tombstones.
    *   - profile_tag_mappings: conditional replace by COALESCE(deleted_at, created).
    *
-   * Excluded (local-only): journal_state, custom_deck_card_tombstones.
+   * Consulted but never merged (local-only): custom_deck_card_tombstones.
+   * Excluded (local-only): journal_state.
    */
   private performMerge(remoteDb: Database): void {
     if (!this.db) throw new Error("Database not initialized");
@@ -383,15 +411,26 @@ class SimpleDatabaseWorker {
       this.mergeAppendOnly(remoteDb, "review_logs");
       this.mergeDecks(remoteDb);
       this.mergeFlashcards(remoteDb);
+      // Must follow mergeFlashcards: the overlay mirror rewrites the
+      // suspend/bury cache columns on the final merged rows.
+      this.mergeCardStateOverlays(remoteDb);
       this.mergeProfiles(remoteDb);
       // profile_tag_mappings: bulk merge stays additive (first writer wins per tag);
       // the sync log path (HLC-ordered tag_mapping_upsert/_delete) handles cross-
       // device conflicts and tombstones precisely.
       this.mergeAppendOnly(remoteDb, "profile_tag_mappings");
+      // Anchor bindings are immutable once written (first writer wins per key).
+      this.mergeAppendOnly(remoteDb, "anchor_bindings");
       this.mergeCustomDecks(remoteDb);
-      this.mergeAppendOnly(remoteDb, "custom_deck_cards");
+      this.mergeCustomDeckCards(remoteDb);
       // Trained weight sets: immutable history + soft-delete, newer-wins by effective ts.
       this.mergeByEffectiveTimestamp(remoteDb, "fsrs_weight_sets");
+      // Cram (drill) state: mutable, per-device but resumable across devices — newer-wins by modified.
+      this.mergeByModified(remoteDb, "cram_sessions");
+      this.mergeByModified(remoteDb, "cram_cards");
+      // Exam attempts: append-only and immutable once ended — union by id.
+      this.mergeAppendOnly(remoteDb, "exam_sessions");
+      this.mergeAppendOnly(remoteDb, "exam_answers");
 
       this.db.exec("COMMIT");
       self.postMessage({ type: "dbg", message: "Sync with disk completed" });
@@ -413,6 +452,46 @@ class SimpleDatabaseWorker {
         `INSERT OR IGNORE INTO ${table} (${columnList}) VALUES (${placeholders})`
       );
       for (const row of result[0].values) stmt.run(row);
+      stmt.free();
+    } catch {
+      // Remote may lack the table on older schemas.
+    }
+  }
+
+  /**
+   * Append-only merge of custom_deck_cards that honours local removals. A blind
+   * INSERT OR IGNORE would re-add a membership the user just removed, because the
+   * on-disk snapshot predates the delete — so every save resurrected it. We skip
+   * any (custom_deck_id, flashcard_id) pair whose local tombstone is at least as
+   * new as the incoming row's `created` (a genuine re-add clears the tombstone,
+   * so it is not blocked).
+   */
+  private mergeCustomDeckCards(remoteDb: Database): void {
+    if (!this.db) return;
+    try {
+      const result = remoteDb.exec("SELECT * FROM custom_deck_cards");
+      if (result.length === 0) return;
+      const columns = result[0].columns;
+      const deckIdx = columns.indexOf("custom_deck_id");
+      const cardIdx = columns.indexOf("flashcard_id");
+      const createdIdx = columns.indexOf("created");
+      const placeholders = columns.map(() => "?").join(",");
+      const columnList = columns.join(",");
+      const stmt = this.db.prepare(
+        `INSERT OR IGNORE INTO custom_deck_cards (${columnList}) VALUES (${placeholders})`
+      );
+      for (const row of result[0].values) {
+        const deckId = row[deckIdx] as string;
+        const cardId = row[cardIdx] as string;
+        const created = row[createdIdx] as string;
+        const tomb = this.db.exec(
+          "SELECT removed_at_hlc FROM custom_deck_card_tombstones WHERE custom_deck_id = ? AND flashcard_id = ?",
+          [deckId, cardId]
+        );
+        const removedAt = tomb.length ? (tomb[0].values[0][0] as string) : null;
+        if (removedAt && removedAt >= created) continue;
+        stmt.run(row);
+      }
       stmt.free();
     } catch {
       // Remote may lack the table on older schemas.
@@ -553,6 +632,40 @@ class SimpleDatabaseWorker {
     } catch {
       // Schema or table missing on remote.
     }
+  }
+
+  // Last-writer-wins merge of durable suspend/bury state, then re-mirror onto
+  // the flashcards cache columns. The mirror runs even when the remote lacks
+  // the table: the flashcards INSERT OR REPLACE above resets unlisted columns
+  // to NULL, so local state must be re-asserted after every merge.
+  private mergeCardStateOverlays(remoteDb: Database): void {
+    if (!this.db) return;
+    try {
+      const result = remoteDb.exec(
+        "SELECT flashcard_id, suspended_at, buried_until, modified FROM card_state_overlays"
+      );
+      if (result.length > 0) {
+        const stmt = this.db.prepare(
+          `INSERT INTO card_state_overlays (flashcard_id, suspended_at, buried_until, modified)
+           VALUES (?, ?, ?, ?)
+           ON CONFLICT(flashcard_id) DO UPDATE SET
+             suspended_at = excluded.suspended_at,
+             buried_until = excluded.buried_until,
+             modified = excluded.modified
+           WHERE excluded.modified > card_state_overlays.modified`
+        );
+        for (const row of result[0].values) stmt.run(row);
+        stmt.free();
+      }
+    } catch {
+      // Remote may lack the table on older schemas.
+    }
+    this.db.exec(
+      `UPDATE flashcards SET
+         suspended_at = (SELECT o.suspended_at FROM card_state_overlays o WHERE o.flashcard_id = flashcards.id),
+         buried_until = (SELECT o.buried_until FROM card_state_overlays o WHERE o.flashcard_id = flashcards.id)
+       WHERE id IN (SELECT flashcard_id FROM card_state_overlays)`
+    );
   }
 
   /**
@@ -801,7 +914,10 @@ self.onmessage = async (event: MessageEvent<DatabaseWorkerMessage>) => {
           result = {
             flashcards: FlashcardParser.parseFlashcardsFromContent(
               (data as { content: string }).content,
-              (data as { headerLevel: number }).headerLevel
+              (data as { headerLevel: number }).headerLevel,
+              (data as { fileTitle?: string }).fileTitle,
+              (data as { clozeEnabled?: boolean }).clozeEnabled ?? false,
+              (data as { examEnabled?: boolean }).examEnabled ?? false
             ),
           };
         }

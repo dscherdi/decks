@@ -102,7 +102,33 @@ Cada resaltado se convierte en una tarjeta. Durante el repaso, el hueco activo a
 </details>
 
 <details>
-<summary><b>Oclusión de imágenes</b> — una imagen más una lista numerada. Los números en la imagen se mapean con la lista.</summary>
+<summary><b>Oclusión de imágenes</b> — oculta regiones de una imagen y recuerda lo que hay debajo. Dos formas: interactiva (dibujar cuadros) o una lista numerada.</summary>
+
+**Interactiva (recomendada).** Ejecuta el comando **«Crear oclusión de imagen en el cursor»**, elige una imagen y dibuja cuadros sobre ella directamente en el editor. Escribe una respuesta en Markdown/LaTeX para cada cuadro, o déjalo vacío para solo ocultar una etiqueta incrustada. Se guarda como un bloque de código `decks-occlusion` autónomo (las coordenadas son porcentajes, así que se adapta a cualquier dispositivo):
+
+````markdown
+```decks-occlusion
+image: "[[heart.png]]"
+version: 2
+masks:
+  - id: m1
+    x: 12.5
+    y: 30
+    w: 18
+    h: 9.5
+    answer: "**Ventrículo** izquierdo"
+  - id: m2
+    x: 55
+    y: 22
+    w: 14
+    h: 8
+    answer: ""
+```
+````
+
+Cada cuadro es una tarjeta. En el repaso, el cuadro se oculta en el anverso y se revela en el reverso (con su respuesta); en la vista de lectura ves el diagrama totalmente etiquetado. Edítalo cuando quieras desde el botón **Editar** del bloque o el gestor de tarjetas.
+
+**Lista numerada (sencilla).** Una imagen incrustada seguida de una lista numerada también funciona:
 
 ```markdown
 ## Huesos del brazo
@@ -114,7 +140,9 @@ Cada resaltado se convierte en una tarjeta. Durante el repaso, el hueco activo a
 3. ==Cúbito==
 ```
 
-Cada elemento de la lista es una tarjeta. La imagen (con sus etiquetas numeradas) se muestra en el anverso; el elemento correspondiente se oculta en el reverso. Se basa en los huecos, por lo que cloze debe estar activado en el perfil.
+Cada elemento de la lista es una tarjeta; la imagen se muestra en el anverso y el elemento correspondiente se oculta en el reverso.
+
+Ambas se basan en los huecos, por lo que cloze debe estar activado en el perfil y el bloque debe estar bajo un encabezado analizado.
 
 </details>
 
@@ -137,11 +165,65 @@ Crea tarjetas en un Canvas de Obsidian (`.canvas`) en lugar de un archivo Markdo
 
 ![Canvas Spatial Cards Demo](./canvas_spatial_cards_demo.gif)
 
+## Plantillas
+
+Renderiza las filas de una tabla con un diseño de tarjeta que creas una sola vez. Escríbelo en HTML/CSS o
+Markdown, coloca marcadores `{{Column}}` y vincúlalo a tus tablas mediante una etiqueta: una plantilla da
+estilo a cada fila que coincida.
+
+```decks-html-front
+<ruby>{{Word}}<rt>{{Reading}}</rt></ruby>
+```
+
+Apunta **Ajustes → Plantillas** a una carpeta y etiqueta el archivo de plantilla y el encabezado de la tabla
+con la misma etiqueta: listo. Las plantillas admiten caras de anverso/reverso/notas en HTML o Markdown, se
+renderizan en un entorno aislado, saneado y consciente del tema, y exponen variables CSS (`--padding`,
+`--align`, `--bg`, …) para un control total del diseño, desde cómodas tarjetas de lectura hasta diseños
+personalizados a sangre. Las tablas sin plantilla coincidente siguen usando las columnas normales.
+
+Consulta **[docs/TEMPLATES.md](docs/TEMPLATES.md)** para la guía completa y ejemplos.
+
+## Mazos de examen
+
+Ejecuta un mazo como un examen calificado: un conjunto de preguntas extraídas que se responden en una sola
+sesión, en cualquier orden, con un desglose de resultados — y opcionalmente un límite de tiempo y una nota
+para aprobar — al final. Los exámenes se activan por perfil y añaden un formato de creación: un encabezado
+seguido de una lista de tareas se convierte en una tarjeta de opción múltiple.
+
+```markdown
+## ¿Qué elemento es un gas noble?
+
+- [ ] Oxígeno
+- [x] Argón
+- [ ] Nitrógeno
+```
+
+`- [x]` marca una opción correcta; marcar varias la convierte en selección múltiple.
+
+- Etiqueta una nota con la subetiqueta `exams` de tu etiqueta de mazo (por defecto `#decks/exams`) para
+  usar el perfil preinstalado **Exams**, o activa **Preguntas de examen** en cualquier perfil.
+- Comienza desde el menú del mazo (**⋮ → Iniciar examen**) o haciendo clic en un mazo de examen; un diálogo de
+  configuración muestra el número de preguntas y te permite ajustar la configuración del examen.
+- Además de la opción múltiple, las tarjetas de encabezado y respuesta y las filas de tabla se plantean
+  como preguntas de respuesta escrita, y las tarjetas cloze muestran la frase con los resaltados como
+  huecos por rellenar.
+- Las respuestas escritas se califican de forma exacta, con tolerancia a pequeñas erratas o mediante
+  autoevaluación; los valores por defecto del examen (número de preguntas, límite de tiempo, nota para
+  aprobar, mezcla, momento de la corrección, etiquetas de las opciones) viven en el perfil.
+- Los exámenes completados se guardan en la base de datos del plugin, se fusionan entre dispositivos y se
+  incluyen en las copias de seguridad.
+
+Un mazo «Examen de demostración» que muestra todos los formatos de pregunta se crea en la primera instalación (o con el
+comando **«Crear mazo de examen de demostración»**).
+
+Consulta **[docs/EXAM_DECKS.md](docs/EXAM_DECKS.md)** para las reglas de creación completas.
+
 ## Lo que obtienes
 
 - Modo exploración y sesiones de repaso cronometradas con límites diarios.
 - Perfiles por etiqueta (FSRS estándar / intensivo, objetivo de retención, cuotas diarias).
 - Mazos personalizados creados a partir de reglas de filtro — p. ej. cada tarjeta etiquetada con `#secundaria`.
+- Modo examen: sesiones de examen calificadas con preguntas de opción múltiple, de respuesta escrita y de huecos (cloze).
 - Estadísticas: mapa de calor, retención, pronóstico de vencimientos futuros, intervalos, desglose por hora, estadísticas de botones de respuesta.
 - Exportación a Anki, copias de seguridad automáticas, sincronización con fusión multi-dispositivo.
 - Atajos de teclado: **Espacio** para voltear, **1–4** para calificar.
@@ -203,6 +285,47 @@ Abre **Ajustes → Decks** para límites diarios, objetivos de retención, rutas
 
 </details>
 
+## Migrar desde Spaced Repetition
+
+¿Ya usas el plugin **Spaced Repetition**? Puedes cambiar a Decks **sin perder tus tarjetas ni tu historial de repaso**, y continuar tus repasos exactamente donde los dejaste.
+
+Abre el migrador desde la barra de herramientas del panel de mazos (el icono del cubo) o ejecuta el comando **"Migrar desde el plugin Spaced Repetition"**.
+
+**Tus notas originales nunca se tocan.** La migración es aditiva: escribe archivos nuevos en una carpeta de destino que tú eliges (replicando tu estructura) y deja tus notas de origen exactamente como están. Volver a ejecutar el migrador simplemente sobrescribe los archivos que generó.
+
+**Cómo funciona**
+
+1. **Elige una carpeta de origen** para escanear (o déjala vacía para escanear todo el vault) y una carpeta de destino para la salida. Decks encuentra cada nota con tarjetas heredadas: de una sola línea (`Front :: Back`), invertidas (`Front ::: Back`), de varias líneas (`?` / `??`), clozes (`==…==` / `{{…}}`) y repasos de nota completa (la etiqueta `#review`).
+2. **Cada nota se divide en dos archivos limpios.** Un **mazo de tarjetas** (`<Nota> (Tarjetas)`) contiene las tarjetas extraídas en el formato estándar de Decks, y una **nota legible** conserva el texto, con la sintaxis de tarjetas *convertida* a texto normal (`::` / `:::` se convierten en " — ", `?` / `??` unen pregunta y respuesta, y los clozes `==…==` / `{{…}}` se restauran a su respuesta). Se respetan los separadores que hayas configurado, así que esto funciona incluso si los personalizaste. No se elimina nada: tu nota de lectura queda completa.
+3. **Los archivos se enlazan entre sí en el frontmatter.** La nota legible recibe una propiedad `Tarjetas` que apunta a su mazo y una propiedad `Nota de origen` que apunta de vuelta al original; el mazo también recibe una propiedad `Nota de origen`. Si una nota ya usa uno de esos nombres de propiedad, el migrador lo sobrescribe en lugar de crear un duplicado. Tus etiquetas se conservan: la etiqueta base heredada (p. ej. `#flashcards`) se traduce a tu etiqueta de Decks configurada.
+4. **Las tarjetas invertidas se convierten en dos tarjetas.** Una tarjeta `Front ::: Back` se expande en una tarjeta directa y una tarjeta invertida en el **mismo** archivo de mazo, de modo que cada dirección se programa de forma independiente.
+5. **La estructura anidada se aplana en contexto.** SR trata los encabezados ancestros y los puntos de lista anidados como el contexto de una tarjeta. Decks captura toda esa ruta en el anverso de la tarjeta; p. ej. un `Function :: Powerhouse` profundamente anidado se convierte en `Cell Anatomy > Mitochondria > … > Function`, renderizado en el único nivel de encabezado de tu perfil (se omite un H1 solitario de título de nota). Elige cualquier nivel mediante los perfiles preinstalados **Heading 1–6**.
+6. **El enrutamiento automático inteligente elige el mejor diseño.** Las tarjetas cortas de una sola línea se convierten en filas de una **tabla** compacta (sin desplazamiento interminable para el vocabulario); las tarjetas de varias líneas (con bloques de código, listas o fórmulas) se convierten en **encabezados** para que su formato sobreviva. Puedes anular esto a *todos encabezados* o *todas tablas* en el diálogo.
+7. **Los repasos de nota completa también se migran.** Las notas que repasabas como un todo (la etiqueta `#review`) se convierten en tarjetas de **modo título** de Decks (nombre de archivo = anverso, la nota completa = reverso) bajo un perfil dedicado `…/review`. Su programación se lee del frontmatter `sr-*` de la nota o de su marcador al final del archivo.
+8. **Tu estado de programación se traduce a FSRS-6.** Decks lee los metadatos heredados `<!--SR:-->` —SM-2 (`due, interval, ease`) o ya FSRS— y los asigna a un estado de estabilidad/dificultad/vencimiento. Las tarjetas invertidas mantienen **dos historiales separados** (lectura vs. recuerdo), exactamente como los almacenaba el plugin original.
+9. **Se escribe un registro de repaso para cada tarjeta migrada**, de modo que en el momento en que las tarjetas aparecen en Decks ya están vencidas en la fecha correcta con el intervalo correcto: reanudas, no reinicias.
+
+Elige un perfil en el diálogo (o usa el predeterminado): su nivel de encabezado y su configuración de programación se aplican a los mazos migrados.
+
+## Migrar desde Anki
+
+¿Cambias desde Anki? Puedes traer toda tu colección a Decks **sin perder tarjetas, multimedia ni historial de repaso** — y seguir estudiando con FSRS-6.
+
+En Anki, exporta tu mazo (o toda la colección) como **`.apkg`** (**Archivo → Exportar**, formato *Paquete de mazo de Anki*, con **Incluir multimedia** e **Incluir información de programación** marcados). Luego abre el importador desde la barra de herramientas del panel de mazos o ejecuta el comando **«Import from Anki»**, elige el archivo y una carpeta de destino, e importa. Funcionan tanto las exportaciones `.apkg` antiguas como las nuevas (comprimidas).
+
+**Tu colección de Anki nunca se modifica.** La importación es aditiva: escribe archivos nuevos en una carpeta de destino que elijas, anidada bajo la etiqueta `#decks/anki`, y deja el `.apkg` de origen tal cual. Reimportar el mismo archivo sobrescribe los archivos que generó y actualiza su multimedia, así que puedes repetirlo cuando quieras.
+
+**Cómo funciona**
+
+1. **Elige el `.apkg` y una carpeta de destino.** Decks lo descomprime en memoria, lee la colección de Anki incrustada (formato antiguo o el nuevo comprimido) y copia cada archivo multimedia referenciado a una carpeta `media/` de tu bóveda. La jerarquía original de mazos de Anki (`Padre::Hijo`) se conserva como carpetas.
+2. **Cada tipo de nota se convierte en una tarjeta limpia de Decks.** Las notas básicas alternan automáticamente entre una **tabla** compacta y **encabezados**; las oclusiones **cloze** se convierten en resaltados `==…==` — incluidas las cloze dentro de MathJax `$…$`; las notas **multicampo / con plantilla** obtienen una plantilla generada automáticamente; y las tarjetas de **oclusión de imagen** de Anki llegan como oclusión nativa de Decks.
+3. **Multimedia, matemáticas y etiquetas se conservan.** El audio y las imágenes se incrustan y se reproducen/renderizan en el repaso; las imágenes mantienen su tamaño original; se conserva LaTeX/MathJax; tus etiquetas de Anki se agrupan y ordenan en secciones legibles.
+4. **Tu estado de programación se traduce a FSRS-6.** La fecha de vencimiento, el intervalo y la facilidad de cada tarjeta — más su historial completo de repaso de Anki — se asignan a un estado de estabilidad/dificultad/vencimiento y se escriben como registro de repaso, de modo que las tarjetas aparecen **ya vencidas en la fecha correcta con el intervalo correcto**. Continúas, no reinicias.
+5. **Los mazos grandes y con mucha multimedia siguen siendo ágiles.** Un mazo grande se divide automáticamente en archivos limitados y organizados en subcarpetas — según el número de tarjetas y de incrustaciones multimedia — para que un mazo con miles de clips de audio siga abriéndose rápido en Obsidian. Los mazos más pequeños quedan en un solo archivo.
+6. **Lo ves suceder.** Una barra de progreso sigue cada fase — leer la colección, escribir mazos, copiar multimedia, sincronizar e importar el historial de repaso — para que ni siquiera una importación grande parezca atascada.
+
+Elige un perfil en el diálogo (o usa el predeterminado): su nivel de encabezado y su configuración de programación se aplican a los mazos importados, que se anidan bajo la etiqueta `#decks/anki`.
+
 ## Notas de versión y soporte
 
 - **Notas de versión** de cada versión en [`release-notes/`](./release-notes/).
@@ -227,8 +350,15 @@ Decks está construido sobre **[`@decks/core`](https://github.com/dscherdi/decks
 
 ## Licencia
 
-Consulta [LICENSE](./LICENSE).
+Este proyecto está licenciado bajo la **GNU Affero General Public License v3.0 o posterior**
+(AGPL-3.0-or-later).
+
+En resumen: eres libre de usar, modificar y distribuir este software. Sin embargo, si lo modificas y
+distribuyes tus cambios — o lo modificas y lo ofreces a los usuarios a través de una red — debes poner tu
+código fuente modificado a disposición del público bajo la misma licencia AGPL-3.0.
+
+Copyright (C) 2026 Xherdi Lika. Consulta el archivo [LICENSE](./LICENSE) para ver el texto completo.
 
 ---
 
-> Esta traducción es un borrador — las contribuciones de hablantes nativos son bienvenidas.
+> Esta traducción es un borrador — las correcciones y sugerencias son bienvenidas en el issue tracker.

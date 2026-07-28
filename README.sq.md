@@ -14,6 +14,7 @@ Etiketo një skedar me `#decks`. Çdo titull `##` bëhet pjesa e përparme e nj�
 
 - **Shënimet tuaja janë tashmë pakoja.** Etiketo një skedar: çdo titull në nivelin që zgjedh bëhet pjesa e përparme dhe teksti më poshtë bëhet pjesa e pasme. Nëse vjen nga Anki, nuk ka asgjë për të shkruar dy herë.
 - **Katër formate, asnjë sintaksë për të mësuar.** Titujt, tabelat me dy kolona, mbulimi i imazheve dhe `==cloze==` nga theksimet që tashmë përdorni.
+- **Modaliteti i provimit.** Seanca provimi me notim, me pyetje me zgjedhje të shumëfishta, me përgjigje të shkruar dhe cloze.
 - **Planifikim origjinal me FSRS.** Tre profile (Standard / Intensiv / I Trajnuar), objektiva të mbajtjes mend për çdo etiketë, pa ngarkesën e SM-2.
 - **Rregullimi i algoritmit.** Optimizuesi me një klikim trajnon peshat e FSRS në historikun tuaj të rishikimit — planifikim më i mirë për kurbën tuaj të harrimit, e gjitha në pajisjen tuaj (client-side).
 - **Sinkronizim i vërtetë me shumë pajisje.** Baza e të dhënave bashkohet automatikisht përmes iCloud/Dropbox — rishikoni në telefon dhe kompjuter, pa humbur historikun.
@@ -102,7 +103,33 @@ Shto **shënime** opsionale në një kartë titull+paragraf me një koment Obsid
 </details>
 
 <details>
-<summary><b>Mbulimi i imazhit (Image occlusion)</b> — një imazh plus një listë e numëruar.</summary>
+<summary><b>Mbulimi i imazhit (Image occlusion)</b> — fshih zona të një imazhi dhe kujto çfarë ndodhet poshtë. Dy mënyra: interaktive (vizato kuti) ose një listë e numëruar.</summary>
+
+**Interaktive (e rekomanduar).** Ekzekuto komandën **«Krijo okluzion imazhi te kursori»**, zgjidh një imazh dhe pastaj vizato kuti drejtpërdrejt në redaktues. Shkruaj një përgjigje Markdown/LaTeX për çdo kuti, ose lëre bosh për të fshehur thjesht një etiketë të integruar. Ruhet si një bllok kodi `decks-occlusion` i vetëmjaftueshëm (koordinatat janë në përqindje, kështu që përshtatet në çdo pajisje):
+
+````markdown
+```decks-occlusion
+image: "[[heart.png]]"
+version: 2
+masks:
+  - id: m1
+    x: 12.5
+    y: 30
+    w: 18
+    h: 9.5
+    answer: "**Ventrikuli** i majtë"
+  - id: m2
+    x: 55
+    y: 22
+    w: 14
+    h: 8
+    answer: ""
+```
+````
+
+Çdo kuti është një kartë. Gjatë përsëritjes, kutia është e fshehur përpara dhe zbulohet prapa (me përgjigjen e saj); në pamjen e leximit sheh diagramin plotësisht të etiketuar. Mund të modifikohet kurdoherë nga butoni **Modifiko** i bllokut ose nga menaxheri i kartave.
+
+**Listë e numëruar (e thjeshtë).** Një imazh i integruar i ndjekur nga një listë e numëruar gjithashtu funksionon:
 
 ```markdown
 ## Kockat e krahut
@@ -114,7 +141,9 @@ Shto **shënime** opsionale në një kartë titull+paragraf me një koment Obsid
 3. ==Bërrylori (Ulna)==
 ```
 
-Çdo element i listës është një kartë. Imazhi shfaqet përpara; elementi që përputhet fshihet prapa. Bazohet në tiparin "cloze".
+Çdo element i listës është një kartë; imazhi shfaqet përpara dhe elementi që përputhet fshihet prapa.
+
+Të dyja bazohen në tiparin "cloze", prandaj cloze duhet të jetë i aktivizuar në profil dhe blloku duhet të jetë nën një titull që analizohet.
 
 </details>
 
@@ -126,11 +155,94 @@ Krijo karta në një Canvas të Obsidian (`.canvas`) në vend të një skedari M
 
 ![Canvas Spatial Cards Demo](./canvas_spatial_cards_demo.gif)
 
+## Shabllonet
+
+Shfaq rreshtat e një tabele përmes një dizajni karte që e krijon një herë. Shkruaje në HTML/CSS ose Markdown,
+vendos mbajtëse `{{Column}}` dhe lidhe me tabelat e tua përmes një etikete — një shabllon i jep stil çdo
+rreshti që përputhet.
+
+```decks-html-front
+<ruby>{{Word}}<rt>{{Reading}}</rt></ruby>
+```
+
+Te **Cilësimet → Shabllonet** zgjidh një dosje, etiketo skedarin e shabllonit dhe titullin e tabelës me të
+njëjtën etiketë — gati. Shabllonet mbështesin anët ballë/prapa/shënime në HTML ose Markdown, shfaqen në një
+mjedis të izoluar, të pastruar dhe të ndërgjegjshëm për temën, dhe ekspozojnë variabla CSS (`--padding`,
+`--align`, `--bg`, …) për kontroll të plotë të paraqitjes — nga karta të rehatshme leximi te dizajne të
+personalizuara buzë-më-buzë. Tabelat pa një shabllon që përputhet përdorin përsëri kolonat normale.
+
+Shih **[docs/TEMPLATES.md](docs/TEMPLATES.md)** për udhëzuesin e plotë dhe shembuj.
+
+## Pako provimi
+
+Ekzekuto një pako si një provim me notim: një grup pyetjesh të tërhequra, që u përgjigjesh në një seancë të vetme, në çfarëdo rendi, me një përmbledhje të rezultateve — dhe opsionalisht një kufi kohor dhe një prag kalimi — në fund. Provimet aktivizohen për çdo profil dhe shtojnë një format shkrimi: një titull i ndjekur nga një listë detyrash bëhet një kartë me zgjedhje të shumëfishta.
+
+```markdown
+## Cili element është një gaz fisnik?
+
+- [ ] Oksigjeni
+- [x] Argoni
+- [ ] Azoti
+```
+
+`- [x]` shënon një opsion të saktë; shënimi i disave e bën pyetjen me përzgjedhje të shumëfishtë.
+
+- Etiketo një shënim me nën-etiketën `exams` të etiketës së pakos tënde (e paracaktuar `#decks/exams`) për të përdorur profilin e parainstaluar **Exams**, ose aktivizo **Pyetje provimi** në çdo profil.
+- Fillo nga menyja e pakos (**⋮ → Fillo provimin**) ose duke klikuar një pako provimi; një dialog konfigurimi tregon numrin e pyetjeve dhe të lejon të rregullosh cilësimet e provimit.
+- Përveç zgjedhjes së shumëfishtë, kartat titull-dhe-përgjigje dhe rreshtat e tabelave pyeten si pyetje me përgjigje të shkruar, dhe kartat cloze shfaqin fjalinë me theksimet si vende bosh për t'u plotësuar me shkrim.
+- Përgjigjet e shkruara vlerësohen me saktësi të plotë, me tolerancë ndaj gabimeve të vogla shtypi, ose i vlerëson vetë; parazgjedhjet e provimit (numri i pyetjeve, kufiri kohor, pragu i kalimit, përzierja, momenti i reagimit, etiketat e opsioneve) qëndrojnë te profili.
+- Provimet e përfunduara ruhen në bazën e të dhënave të shtojcës, bashkohen mes pajisjeve dhe përfshihen në kopjet rezervë.
+
+Një pako "Provim demo" që tregon çdo format pyetjeje krijohet në instalimin e parë (ose përmes komandës **Krijo pako provimi demo**).
+
+Shih **[docs/EXAM_DECKS.md](docs/EXAM_DECKS.md)** për rregullat e plota të shkrimit.
+
 ## Planifikim i personalizuar
 
 FSRS vjen me parazgjedhje të arsyeshme që funksionojnë shumë mirë që në fillim. Pasi të kesh grumbulluar rreth 100 rishikime, mund të trajnosh 21 peshat e algoritmit me historikun tënd dhe të marrësh planifikime të përshtatura posaçërisht për kurbën tënde të harrimit — e njëjta gjë që bën Anki në desktop, por në pajisjen tënde, pa server, pa gjurmim të dhënash.
 
 **Cilësimet → Rregullimi i algoritmit → Optimizo parametrat.** Trajnimi zhvillohet në pak sekonda; do të shohësh një krahasim "log-loss" (para/pas). Kliko "Apliko" për të përdorur peshat e trajnuara.
+
+## Po vini nga Spaced Repetition
+
+A jeni duke përdorur tashmë shtojcën **Spaced Repetition**? Mund të kaloni te Decks **pa humbur kartat tuaja ose historikun tuaj të rishikimeve** — dhe të vazhdoni rishikimet tuaja pikërisht aty ku i latë.
+
+Hapni migruesin nga shiriti i mjeteve i panelit të kuvertave (ikona e kubit) ose ekzekutoni komandën **"Migro nga shtojca Spaced Repetition"**.
+
+**Shënimet tuaja origjinale nuk preken kurrë.** Migrimi është shtues: shkruan skedarë të rinj në një dosje të synuar që zgjidhni ju (duke pasqyruar strukturën tuaj) dhe i lë shënimet tuaja burimore pikërisht ashtu siç janë. Riekzekutimi i migruesit thjesht mbishkruan skedarët që ai gjeneroi.
+
+**Si funksionon**
+
+1. **Zgjidhni një dosje burimore** për të skanuar (ose lëreni bosh për të skanuar të gjithë kasafortën), dhe një dosje të synuar për rezultatin. Decks gjen çdo shënim me karta të vjetra — një rresht (`Front :: Back`), të kthyera (`Front ::: Back`), shumë rreshta (`?` / `??`), kloze (`==…==` / `{{…}}`) — dhe rishikime të të gjithë shënimit (etiketa `#review`).
+2. **Çdo shënim ndahet në dy skedarë të pastër.** Një **kuvertë kartash** (`<Shënimi> (Kartat)`) mban kartat e nxjerra në formatin standard të Decks, dhe një **shënim i lexueshëm** ruan tekstin — me sintaksën e kartave të *de-sheqerosur* në tekst normal (`::` / `:::` bëhen " — ", `?` / `??` bashkojnë pyetjen dhe përgjigjen, dhe klozet `==…==` / `{{…}}` rikthehen te përgjigja e tyre). Ndarësit tuaj të konfiguruar respektohen, kështu që kjo funksionon edhe nëse i keni personalizuar ato. Asgjë nuk hiqet — shënimi juaj i leximit mbetet i plotë.
+3. **Skedarët ndërlidhen me njëri-tjetrin në frontmatter.** Shënimi i lexueshëm merr një veti `Kartat` që tregon te kuverta e tij dhe një veti `Shënimi i origjinës` që tregon mbrapsht te origjinali; kuverta merr gjithashtu një veti `Shënimi i origjinës`. Nëse një shënim përdor tashmë një nga ato emra vetish, migruesi e mbishkruan atë në vend që të krijojë një dublikatë. Etiketat tuaja ruhen — etiketa bazë e vjetër (p.sh. `#flashcards`) përkthehet në etiketën tuaj të konfiguruar të Decks.
+4. **Kartat e kthyera bëhen dy karta.** Një kartë `Front ::: Back` zgjerohet në një kartë përpara dhe një kartë të shkëmbyer në **të njëjtin** skedar kuverte, kështu që çdo drejtim planifikohet në mënyrë të pavarur.
+5. **Struktura e ndërthurur sheshohet në kontekst.** SR i trajton kokat paraardhëse dhe pikat e listave të ndërthurura si kontekstin e një karte. Decks e kap të gjithë atë shteg në pjesën e përparme të kartës — p.sh. një `Function :: Powerhouse` thellësisht i ndërthurur bëhet `Cell Anatomy > Mitochondria > … > Function` — i renderuar në nivelin e vetëm të kokës të profilit tuaj (një H1 i vetëm i titullit të shënimit hiqet). Zgjidhni çdo nivel përmes profileve të parainstaluara **Heading 1–6**.
+6. **Rrugëzimi automatik inteligjent zgjedh paraqitjen më të mirë.** Kartat e shkurtra me një rresht bëhen rreshta në një **tabelë** kompakte (pa rrëshqitje të pafundme për fjalorin); kartat me shumë rreshta — me blloqe kodi, lista ose matematikë — bëhen **koka** që formatimi i tyre të mbijetojë. Mund ta anuloni këtë te *të gjitha kokat* ose *të gjitha tabelat* në dialog.
+7. **Rishikimet e të gjithë shënimit migrojnë gjithashtu.** Shënimet që i rishikuat si një të tërë (etiketa `#review`) bëhen karta të **modalitetit-titull** të Decks (emri i skedarit = pjesa e përparme, i gjithë shënimi = pjesa e pasme) nën një profil të dedikuar `…/review`. Plani i tyre lexohet nga frontmatter `sr-*` i shënimit ose shënuesi i tij në fund të skedarit.
+8. **Gjendja juaj e planifikimit përkthehet në FSRS-6.** Decks lexon metadatat e vjetra `<!--SR:-->` — SM-2 (`due, interval, ease`) ose tashmë FSRS — dhe i hartëzon ato në një gjendje stabiliteti/vështirësie/afati. Kartat e kthyera mbajnë **dy historikë të veçantë** (leximi kundrejt kujtimit), pikërisht ashtu siç i ruante shtojca origjinale.
+9. **Një ditar rishikimi shkruhet për çdo kartë të migruar**, kështu që në çastin që kartat shfaqen në Decks, ato janë tashmë në afat në datën e duhur me intervalin e duhur — ju rifilloni, nuk e nisni nga fillimi.
+
+Zgjidhni një profil në dialog (ose përdorni atë të parazgjedhurin) — niveli i tij i kokës dhe cilësimet e planifikimit zbatohen te kuvertat e migruara.
+
+## Po vini nga Anki
+
+Po kaloni nga Anki? Mund ta sillni gjithë koleksionin tuaj në Decks **pa humbur karta, media apo historik përsëritjesh** — dhe të vazhdoni me FSRS-6.
+
+Në Anki, eksportoni tufën (ose gjithë koleksionin) si **`.apkg`** (**Skedar → Eksporto**, formati *Paketë tufe Anki*, me **Përfshi mediat** dhe **Përfshi informacionin e planifikimit** të zgjedhura). Pastaj hapni importuesin nga shiriti i veglave i panelit të tufave ose ekzekutoni komandën **„Import from Anki"**, zgjidhni skedarin dhe një dosje destinacioni dhe importoni. Funksionojnë si eksportet `.apkg` të vjetra ashtu edhe ato të reja (të ngjeshura).
+
+**Koleksioni juaj i Anki-t nuk preket kurrë.** Importimi është shtues: shkruan skedarë të rinj në një dosje destinacioni që zgjidhni ju, të vendosur nën etiketën `#decks/anki`, dhe e lë `.apkg`-në burim ashtu siç është. Riimportimi i të njëjtit skedar mbishkruan skedarët e gjeneruar dhe rifreskon mediat e tyre — pra mund ta ribëni kurdoherë.
+
+**Si funksionon**
+
+1. **Zgjidhni `.apkg`-në dhe një dosje destinacioni.** Decks e shpaketon në memorie, lexon koleksionin e brendshëm të Anki-t (formati i vjetër ose i riu i ngjeshur) dhe kopjon çdo skedar media të referuar në një dosje `media/` në kasafortën tuaj. Hierarkia origjinale e tufave të Anki-t (`Prind::Fëmijë`) ruhet si dosje.
+2. **Çdo lloj shënimi bëhet një kartë e pastër Decks.** Shënimet bazë kalojnë automatikisht mes një **tabele** kompakte dhe **titujve**; boshllëqet **cloze** bëhen theksime `==…==` — përfshirë cloze-t brenda MathJax `$…$`; shënimet **shumëfushëshe / me shabllon** marrin një shabllon të gjeneruar automatikisht; dhe kartat e **mbulimit të figurës** të Anki-t vijnë si mbulim vendës i Decks.
+3. **Media, matematika dhe etiketat barten.** Audio dhe figurat ngulizen dhe luhen/renderohen gjatë përsëritjes; figurat ruajnë madhësinë origjinale; LaTeX/MathJax ruhet; etiketat tuaja të Anki-t grupohen dhe renditen në seksione të lexueshme.
+4. **Gjendja juaj e planifikimit përkthehet në FSRS-6.** Data e afatit, intervali dhe lehtësia e çdo karte — plus gjithë historiku i përsëritjeve të Anki-t — hartohen në një gjendje qëndrueshmëri/vështirësi/afat dhe shkruhen si regjistër përsëritjeje, kështu që kartat shfaqen **tashmë me afat në datën e duhur me intervalin e duhur**. Ju vazhdoni, nuk rifilloni.
+5. **Tufat e mëdha, të pasura me media, mbeten të rrjedhshme.** Një tufë e madhe ndahet automatikisht në skedarë të kufizuar, në nëndosje — sipas numrit të kartave dhe numrit të ngulizimeve të medias — kështu që një tufë me mijëra klipe audio hapet shpejt në Obsidian. Tufat më të vogla mbeten një skedar i vetëm.
+6. **E shihni duke ndodhur.** Një shirit progresi ndjek çdo fazë — leximi i koleksionit, shkrimi i tufave, kopjimi i medias, sinkronizimi dhe importimi i historikut të përsëritjeve — kështu që edhe një import i madh nuk duket kurrë i ngecur.
+
+Zgjidhni një profil në dialog (ose përdorni atë të parazgjedhur) — niveli i titullit dhe cilësimet e planifikimit zbatohen te tufat e importuara, të vendosura nën etiketën `#decks/anki`.
 
 ## Shënimet e versionit & Mbështetja
 
@@ -156,8 +268,14 @@ Decks është ndërtuar mbi **[`@decks/core`](https://github.com/dscherdi/decks-
 
 ## Licenca
 
-Shiko [LICENSE](./LICENSE).
+Ky projekt licencohet sipas **GNU Affero General Public License v3.0 ose më vonë** (AGPL-3.0-or-later).
+
+Shkurt: je i lirë ta përdorësh, ta modifikosh dhe ta shpërndash këtë softuer. Megjithatë, nëse e modifikon dhe
+shpërndan ndryshimet e tua — ose e modifikon dhe ua ofron përdoruesve përmes një rrjeti — duhet ta bësh kodin
+burim të modifikuar publikisht të disponueshëm sipas së njëjtës licencë AGPL-3.0.
+
+Copyright (C) 2026 Xherdi Lika. Shih skedarin [LICENSE](./LICENSE) për tekstin e plotë.
 
 ---
 
-> Ky përkthim është një draft — kërkesat për tërheqje (Pull Requests) nga folësit amtarë janë të mirëseardhura.
+> Ky përkthim është një draft — korrigjimet dhe sugjerimet janë të mirëseardhura te issue tracker.

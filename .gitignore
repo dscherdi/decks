@@ -25,11 +25,6 @@ demo_vault/
 RELEASE_NOTES.md
 GITHUB_RELEASE_NOTES.md
 
-# Benchmark data and results (see benchmark/README.md)
-benchmark/data
-benchmark/results/*
-!benchmark/results/.gitkeep
-
 # AI provider API keys (non-synced, never commit)
 ai-keys.json
 **/ai-keys.json

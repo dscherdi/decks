@@ -8,14 +8,24 @@ import type {
   FlashcardType,
   ReviewLog,
   ReviewSession,
+  CramSession,
+  CramCard,
+  CramDeckKind,
+  ExamSession,
+  ExamAnswer,
+  TypedGradingMode,
   CustomDeck,
   CustomDeckType,
   FsrsWeightSet,
+  TemplateRow,
+  DeckTemplate,
+  TemplateFaceType,
 } from "./types";
 import { DEFAULT_PROFILE_ID, deckWithProfile } from "./types";
 import type { FilterDefinition } from "./types";
 import { generateCustomDeckCardId, generateCustomDeckId, generateFlashcardId, SQL_QUERIES, type SyncOpV1 } from "@decks/core";
 import { normalizeProfile } from "@decks/core";
+import { DEFAULT_EXAM_SETTINGS, classifyExamBody, parseExamSettings } from "@decks/core";
 import { compileFilter, type FilterCompileOptions } from "@decks/core";
 import type { SyncData, SyncResult } from "@decks/core";
 import type {
@@ -29,11 +39,18 @@ import type {
 } from "@decks/core";
 import type { IDatabaseService, JournalStateRow } from "./DatabaseFactory";
 import type { SyncLog } from "../services/SyncLog";
-import { generateOldFlashcardId } from "@decks/core";
+import {
+  generateOldFlashcardId,
+  generateLegacyDeckScopedFlashcardId,
+} from "@decks/core";
 
 export interface QueryConfig {
   asObject?: boolean;
 }
+
+// Schema version at which card IDs became deck-independent. Restoring a backup
+// older than this re-links its review history to the new ID scheme.
+const DECK_INDEPENDENT_ID_VERSION = 36;
 
 function serializeTags(tags: string[] | undefined): string {
   if (!tags || tags.length === 0) return "";
@@ -108,6 +125,7 @@ export abstract class BaseDatabaseService implements IDatabaseService {
   // Abstract methods to be implemented by concrete classes
   // Core abstract methods that must be implemented by subclasses
   abstract initialize(): Promise<void>;
+  abstract whenReady(): Promise<void>;
   abstract close(): Promise<void>;
   abstract save(): Promise<void>;
   abstract executeSql(sql: string, params?: SqlJsValue[]): Promise<void>;
@@ -127,7 +145,37 @@ export abstract class BaseDatabaseService implements IDatabaseService {
       profileId: row[5] as string,
       created: row[6] as string,
       modified: row[7] as string,
+      fileTags: this.parseJsonTags(row[9]),
     };
+  }
+
+  /** Parse a JSON-array tag column, tolerating null/blank/malformed values. */
+  private parseJsonTags(value: string | number | null): string[] {
+    if (typeof value !== "string" || value.trim() === "") return [];
+    try {
+      const parsed = JSON.parse(value);
+      return Array.isArray(parsed) ? (parsed as string[]) : [];
+    } catch {
+      return [];
+    }
+  }
+
+  /** Parse the extra_header_levels JSON column into deduped valid levels (1-6). */
+  private parseJsonHeaderLevels(value: string | number | null): number[] {
+    if (typeof value !== "string" || value.trim() === "") return [];
+    try {
+      const parsed = JSON.parse(value);
+      if (!Array.isArray(parsed)) return [];
+      return Array.from(
+        new Set(
+          parsed.filter(
+            (l): l is number => typeof l === "number" && l >= 1 && l <= 6
+          )
+        )
+      );
+    } catch {
+      return [];
+    }
   }
 
   protected parseProfileRow(row: (string | number | null)[]): DeckProfile {
@@ -139,6 +187,7 @@ export abstract class BaseDatabaseService implements IDatabaseService {
       hasReviewCardsLimitEnabled: Boolean(row[4]),
       reviewCardsPerDay: row[5] as number,
       headerLevel: row[6] as number,
+      extraHeaderLevels: this.parseJsonHeaderLevels(row[17]),
       reviewOrder: row[7] as "due-date" | "random",
       learningSteps: (row[8] as string) ?? "1m",
       relearningSteps: (row[9] as string) ?? "10m",
@@ -148,6 +197,11 @@ export abstract class BaseDatabaseService implements IDatabaseService {
       },
       clozeEnabled: Boolean(row[12]),
       clozeShowContext: (row[13] as "open" | "hidden") ?? "open",
+      examEnabled: Boolean(row[18]),
+      examSettings: parseExamSettings(row[19] as string | null),
+      ttsVoice: (row[20] as string | null) ?? undefined,
+      ttsRate: (row[21] as number | null) ?? undefined,
+      ttsLang: (row[22] as string | null) ?? undefined,
       isDefault: Boolean(row[14]),
       created: row[15] as string,
       modified: row[16] as string,
@@ -206,6 +260,10 @@ export abstract class BaseDatabaseService implements IDatabaseService {
       tags,
       suspendedAt: (row[25] as string) ?? null,
       buriedUntil: (row[26] as string) ?? null,
+      templateRow: row[27]
+        ? (JSON.parse(row[27] as string) as TemplateRow)
+        : null,
+      anchor: (row[28] as string) ?? null,
     };
   }
 
@@ -218,6 +276,152 @@ export abstract class BaseDatabaseService implements IDatabaseService {
       goalTotal: row[4] as number,
       doneUnique: row[5] as number,
     };
+  }
+
+  protected rowToCramSession(row: (string | number | null)[]): CramSession {
+    return {
+      id: row[0] as string,
+      deckKey: row[1] as string,
+      deckKind: row[2] as CramDeckKind,
+      startedAt: row[3] as string,
+      endedAt: row[4] as string | null,
+      goalTotal: row[5] as number,
+      graduatedCount: row[6] as number,
+      created: row[7] as string,
+      modified: row[8] as string,
+    };
+  }
+
+  protected rowToCramCard(row: (string | number | null)[]): CramCard {
+    return {
+      id: row[0] as string,
+      sessionId: row[1] as string,
+      flashcardId: row[2] as string,
+      tempState: row[3] as CramCard["tempState"],
+      tempStability: row[4] as number,
+      tempDifficulty: row[5] as number,
+      tempInterval: row[6] as number,
+      tempDueAt: row[7] as string,
+      reps: row[8] as number,
+      graduatedAt: row[9] as string | null,
+      created: row[10] as string,
+      modified: row[11] as string,
+    };
+  }
+
+  protected rowToExamSession(row: (string | number | null)[]): ExamSession {
+    return {
+      id: row[0] as string,
+      deckKey: row[1] as string,
+      deckKind: row[2] as ExamSession["deckKind"],
+      startedAt: row[3] as string,
+      endedAt: row[4] as string,
+      configJson: row[5] as string,
+      questionCount: row[6] as number,
+      correctCount: row[7] as number,
+      scorePct: row[8] as number,
+      passed: Boolean(row[9]),
+      durationMs: row[10] as number,
+      created: row[11] as string,
+    };
+  }
+
+  protected rowToExamAnswer(row: (string | number | null)[]): ExamAnswer {
+    return {
+      id: row[0] as string,
+      sessionId: row[1] as string,
+      flashcardId: row[2] as string,
+      ordinal: row[3] as number,
+      questionType: row[4] as ExamAnswer["questionType"],
+      gradingMethod: row[5] as ExamAnswer["gradingMethod"],
+      prompt: row[6] as string,
+      correctAnswer: row[7] as string,
+      givenAnswer: row[8] as string,
+      isCorrect: Boolean(row[9]),
+      timeMs: row[10] as number | null,
+      created: row[11] as string,
+    };
+  }
+
+  // DECK TEMPLATE CACHE OPERATIONS
+  // Templates are authored as files in the template folder and synced here.
+  // All paths go through executeSql/querySql, so both Worker and Main inherit.
+
+  protected parseDeckTemplateRow(
+    row: (string | number | null)[]
+  ): DeckTemplate {
+    const tagsRaw = (row[2] as string) || "[]";
+    let tags: string[] = [];
+    try {
+      const parsed = JSON.parse(tagsRaw);
+      if (Array.isArray(parsed)) tags = parsed as string[];
+    } catch {
+      tags = [];
+    }
+    return {
+      id: row[0] as string,
+      sourceFile: row[1] as string,
+      tags,
+      frontTemplate: (row[3] as string) || "",
+      frontType: (row[4] as TemplateFaceType) || "md",
+      backTemplate: (row[5] as string) || "",
+      backType: (row[6] as TemplateFaceType) || "md",
+      notesTemplate: (row[7] as string) ?? null,
+      notesType: (row[8] as TemplateFaceType) ?? null,
+      created: row[9] as string,
+      modified: row[10] as string,
+    };
+  }
+
+  async getAllDeckTemplates(): Promise<DeckTemplate[]> {
+    const rows = (await this.querySql(
+      SQL_QUERIES.GET_ALL_DECK_TEMPLATES,
+      []
+    )) as (string | number | null)[][];
+    return rows.map((row) => this.parseDeckTemplateRow(row));
+  }
+
+  async upsertDeckTemplate(
+    template: Omit<DeckTemplate, "created" | "modified">
+  ): Promise<void> {
+    const now = this.getCurrentTimestamp();
+    await this.executeSql(SQL_QUERIES.UPSERT_DECK_TEMPLATE, [
+      template.id,
+      template.sourceFile,
+      JSON.stringify(template.tags ?? []),
+      template.frontTemplate,
+      template.frontType,
+      template.backTemplate,
+      template.backType,
+      template.notesTemplate,
+      template.notesType,
+      now,
+      now,
+    ]);
+  }
+
+  async deleteDeckTemplateByFile(sourceFile: string): Promise<void> {
+    await this.executeSql(SQL_QUERIES.DELETE_DECK_TEMPLATE_BY_FILE, [sourceFile]);
+  }
+
+  async renameDeckTemplate(
+    oldSourceFile: string,
+    newSourceFile: string,
+    newId: string
+  ): Promise<void> {
+    await this.executeSql(SQL_QUERIES.UPDATE_DECK_TEMPLATE_SOURCE_FILE, [
+      newId,
+      newSourceFile,
+      this.getCurrentTimestamp(),
+      oldSourceFile,
+    ]);
+  }
+
+  async setDeckFileTags(deckId: string, fileTags: string[]): Promise<void> {
+    await this.executeSql(SQL_QUERIES.UPDATE_DECK_FILE_TAGS, [
+      JSON.stringify(fileTags ?? []),
+      deckId,
+    ]);
   }
 
   // Utility methods
@@ -373,27 +577,43 @@ export abstract class BaseDatabaseService implements IDatabaseService {
       oldDeckId,
     ]);
 
-    // Update flashcard deck_id references
+    // Update flashcard deck_id references. Card IDs are deck-independent, so
+    // they (and their review_logs links) stay valid across the rename.
     const sql2 = `UPDATE flashcards SET deck_id = ? WHERE deck_id = ?`;
     await this.executeSql(sql2, [newDeckId, oldDeckId]);
-
-    // Update review logs
-    const sql3 = `UPDATE review_logs SET deck_id = ? WHERE deck_id = ?`;
-    await this.executeSql(sql3, [newDeckId, oldDeckId]);
 
     // Update review sessions
     const sql4 = `UPDATE review_sessions SET deck_id = ? WHERE deck_id = ?`;
     await this.executeSql(sql4, [newDeckId, oldDeckId]);
   }
 
+  // Deck deletion removes the deck's cards + their custom-deck memberships
+  // explicitly, rather than trusting `ON DELETE CASCADE`: sql.js runs with
+  // `PRAGMA foreign_keys` OFF in a normal session, so the cascade never fires and
+  // deleted decks would otherwise leave orphaned cards behind (still shown in
+  // filter decks, still reviewable, colliding on re-import). review_logs are kept
+  // (no FK; they carry FSRS history used to restore a re-created card).
   async deleteDeck(id: string): Promise<void> {
-    const sql = `DELETE FROM decks WHERE id = ?`;
-    await this.executeSql(sql, [id]);
+    await this.executeSql(
+      `DELETE FROM custom_deck_cards WHERE flashcard_id IN (SELECT id FROM flashcards WHERE deck_id = ?)`,
+      [id]
+    );
+    await this.executeSql(`DELETE FROM flashcards WHERE deck_id = ?`, [id]);
+    await this.executeSql(`DELETE FROM decks WHERE id = ?`, [id]);
   }
 
   async deleteDeckByFilepath(filepath: string): Promise<void> {
-    const sql = `DELETE FROM decks WHERE filepath = ?`;
-    await this.executeSql(sql, [filepath]);
+    await this.executeSql(
+      `DELETE FROM custom_deck_cards WHERE flashcard_id IN (
+         SELECT id FROM flashcards WHERE deck_id IN (SELECT id FROM decks WHERE filepath = ?)
+       )`,
+      [filepath]
+    );
+    await this.executeSql(
+      `DELETE FROM flashcards WHERE deck_id IN (SELECT id FROM decks WHERE filepath = ?)`,
+      [filepath]
+    );
+    await this.executeSql(`DELETE FROM decks WHERE filepath = ?`, [filepath]);
   }
 
   async getDecksByTag(tag: string): Promise<Deck[]> {
@@ -441,6 +661,12 @@ export abstract class BaseDatabaseService implements IDatabaseService {
       profile.isDefault ? 1 : 0,
       now,
       now,
+      JSON.stringify(profile.extraHeaderLevels ?? []),
+      profile.examEnabled ? 1 : 0,
+      JSON.stringify(profile.examSettings ?? DEFAULT_EXAM_SETTINGS),
+      profile.ttsVoice ?? null,
+      profile.ttsRate ?? null,
+      profile.ttsLang ?? null,
     ]);
 
     this.emitSyncOp({
@@ -453,6 +679,7 @@ export abstract class BaseDatabaseService implements IDatabaseService {
         hasReviewCardsLimitEnabled: profile.hasReviewCardsLimitEnabled,
         reviewCardsPerDay: profile.reviewCardsPerDay,
         headerLevel: profile.headerLevel,
+        extraHeaderLevels: profile.extraHeaderLevels ?? [],
         reviewOrder: profile.reviewOrder,
         learningSteps: profile.learningSteps ?? "1m",
         relearningSteps: profile.relearningSteps ?? "10m",
@@ -460,6 +687,11 @@ export abstract class BaseDatabaseService implements IDatabaseService {
         fsrsProfile: profile.fsrs.profile,
         clozeEnabled: profile.clozeEnabled,
         clozeShowContext: profile.clozeShowContext ?? "open",
+        examEnabled: profile.examEnabled ?? false,
+        examSettings: profile.examSettings ?? DEFAULT_EXAM_SETTINGS,
+        ttsVoice: profile.ttsVoice,
+        ttsRate: profile.ttsRate,
+        ttsLang: profile.ttsLang,
         isDefault: profile.isDefault,
         created: now,
         modified: now,
@@ -541,7 +773,10 @@ export abstract class BaseDatabaseService implements IDatabaseService {
     // fast-path on the next refresh.
     const parsingAffected =
       updated.headerLevel !== current.headerLevel ||
-      updated.clozeEnabled !== current.clozeEnabled;
+      JSON.stringify(updated.extraHeaderLevels ?? []) !==
+        JSON.stringify(current.extraHeaderLevels ?? []) ||
+      updated.clozeEnabled !== current.clozeEnabled ||
+      (updated.examEnabled ?? false) !== (current.examEnabled ?? false);
 
     const modifiedAt = this.getCurrentTimestamp();
     await this.executeSql(SQL_QUERIES.UPDATE_PROFILE, [
@@ -558,6 +793,12 @@ export abstract class BaseDatabaseService implements IDatabaseService {
       updated.fsrs.profile,
       updated.clozeEnabled ? 1 : 0,
       updated.clozeShowContext ?? "open",
+      JSON.stringify(updated.extraHeaderLevels ?? []),
+      updated.examEnabled ? 1 : 0,
+      JSON.stringify(updated.examSettings ?? DEFAULT_EXAM_SETTINGS),
+      updated.ttsVoice ?? null,
+      updated.ttsRate ?? null,
+      updated.ttsLang ?? null,
       modifiedAt,
       id,
     ]);
@@ -577,6 +818,7 @@ export abstract class BaseDatabaseService implements IDatabaseService {
         hasReviewCardsLimitEnabled: updated.hasReviewCardsLimitEnabled,
         reviewCardsPerDay: updated.reviewCardsPerDay,
         headerLevel: updated.headerLevel,
+        extraHeaderLevels: updated.extraHeaderLevels ?? [],
         reviewOrder: updated.reviewOrder,
         learningSteps: updated.learningSteps,
         relearningSteps: updated.relearningSteps,
@@ -584,6 +826,11 @@ export abstract class BaseDatabaseService implements IDatabaseService {
         fsrsProfile: updated.fsrs.profile,
         clozeEnabled: updated.clozeEnabled,
         clozeShowContext: updated.clozeShowContext ?? "open",
+        examEnabled: updated.examEnabled ?? false,
+        examSettings: updated.examSettings ?? DEFAULT_EXAM_SETTINGS,
+        ttsVoice: updated.ttsVoice,
+        ttsRate: updated.ttsRate,
+        ttsLang: updated.ttsLang,
         isDefault: updated.isDefault,
         created: updated.created,
         modified: modifiedAt,
@@ -820,7 +1067,7 @@ export abstract class BaseDatabaseService implements IDatabaseService {
   ): Promise<void> {
     const now = this.getCurrentTimestamp();
     // Use provided ID first, then generate from front text
-    const flashcardId = flashcard.id || generateFlashcardId(flashcard.front, flashcard.deckId);
+    const flashcardId = flashcard.id || generateFlashcardId(flashcard.front);
     const flashcardWithId = {
       ...flashcard,
       id: flashcardId,
@@ -1033,6 +1280,19 @@ export abstract class BaseDatabaseService implements IDatabaseService {
 
     const sql = `UPDATE flashcards SET ${updateFields.join(", ")} WHERE id = ?`;
     await this.executeSql(sql, params);
+
+    // Keep the durable overlay in lockstep when suspend/bury is set this way
+    // (e.g. legacy-history import).
+    const overlayFields: { suspendedAt?: string | null; buriedUntil?: string | null } = {};
+    if (updates.suspendedAt !== undefined) overlayFields.suspendedAt = updates.suspendedAt;
+    if (updates.buriedUntil !== undefined) overlayFields.buriedUntil = updates.buriedUntil;
+    if (Object.keys(overlayFields).length > 0) {
+      await this.upsertCardStateOverlays(
+        [flashcardId],
+        overlayFields,
+        updates.modified ?? this.getCurrentTimestamp()
+      );
+    }
   }
 
   async updateFlashcardDeckIds(
@@ -1061,6 +1321,21 @@ export abstract class BaseDatabaseService implements IDatabaseService {
     await this.executeSql(
       `UPDATE review_logs SET flashcard_id = ? WHERE flashcard_id = ?`,
       [newCard.id, oldId]
+    );
+
+    await this.executeSql(
+      `INSERT INTO card_state_overlays (flashcard_id, suspended_at, buried_until, modified)
+       SELECT ?, suspended_at, buried_until, modified FROM card_state_overlays WHERE flashcard_id = ?
+       ON CONFLICT(flashcard_id) DO UPDATE SET
+         suspended_at = excluded.suspended_at,
+         buried_until = excluded.buried_until,
+         modified = excluded.modified
+       WHERE excluded.modified > card_state_overlays.modified`,
+      [newCard.id, oldId]
+    );
+    await this.executeSql(
+      `DELETE FROM card_state_overlays WHERE flashcard_id = ?`,
+      [oldId]
     );
   }
 
@@ -1139,6 +1414,46 @@ export abstract class BaseDatabaseService implements IDatabaseService {
     await this.executeSql(sql, flashcardIds);
   }
 
+  // Delete flashcards whose deck no longer exists (deck_id points at a deleted
+  // deck row). Orphans accumulate from FK-off migrations and older deletes. Run on
+  // a full sync AFTER the per-deck sync has adopted any orphan matching a live file,
+  // so only truly-dangling cards are removed. review_logs have no FK to flashcards,
+  // so review history survives and re-import can still restore FSRS. Returns the
+  // number of cards removed.
+  async pruneOrphanedFlashcards(): Promise<number> {
+    const sql = "SELECT id FROM flashcards WHERE deck_id NOT IN (SELECT id FROM decks)";
+    const orphans = await this.querySql<{ id: string }>(sql, [], { asObject: true });
+    if (orphans.length === 0) return 0;
+    await this.executeSql(
+      `DELETE FROM custom_deck_cards WHERE flashcard_id IN (
+         SELECT id FROM flashcards WHERE deck_id NOT IN (SELECT id FROM decks)
+       )`,
+      []
+    );
+    await this.executeSql(
+      "DELETE FROM flashcards WHERE deck_id NOT IN (SELECT id FROM decks)",
+      []
+    );
+    return orphans.length;
+  }
+
+  // Fronts of all cards living in decks OUTSIDE the given path prefix. Used by
+  // the Anki import to reserve fronts already taken elsewhere in the vault, so
+  // an imported card that shares a front gets a " (2)" suffix instead of being
+  // silently merged into the other deck's card. The decks JOIN excludes orphaned
+  // cards on purpose — those stay adoptable by the sync upsert (which preserves
+  // their review history), so their fronts must not be reserved.
+  async getFrontsOutsidePath(pathPrefix: string): Promise<string[]> {
+    const rows = await this.querySql<{ front: string }>(
+      `SELECT DISTINCT f.front FROM flashcards f
+       JOIN decks d ON f.deck_id = d.id
+       WHERE d.filepath NOT LIKE ? || '%'`,
+      [pathPrefix],
+      { asObject: true }
+    );
+    return rows.map((r) => r.front);
+  }
+
   // COUNT OPERATIONS. Queue counts exclude suspended + actively-buried cards;
   // total/maturity counts (countTotalCards, GET_CARD_STATS) include them.
   async countNewCards(deckId: string): Promise<number> {
@@ -1170,6 +1485,88 @@ export abstract class BaseDatabaseService implements IDatabaseService {
       asObject: true,
     });
     return results[0]?.count || 0;
+  }
+
+  // Total cards across all decks in one query.
+  async countAllCards(): Promise<number> {
+    const results = await this.querySql<CountResult>(
+      "SELECT COUNT(*) as count FROM flashcards",
+      [],
+      { asObject: true }
+    );
+    return results[0]?.count || 0;
+  }
+
+  // Mature = review state with interval > 21 days (30240 min).
+  async countMatureCards(deckId: string): Promise<number> {
+    const results = await this.querySql<CountResult>(
+      "SELECT COUNT(*) as count FROM flashcards WHERE deck_id = ? AND state = 'review' AND interval > 30240",
+      [deckId],
+      { asObject: true }
+    );
+    return results[0]?.count || 0;
+  }
+
+  // Per-deck card counts (total / new / due / mature) for ALL decks in a single
+  // grouped query — the batched equivalent of countTotalCards + countNewCards +
+  // countDueCards + countMatureCards run per deck. Predicates mirror those
+  // methods exactly (queue counts exclude suspended/actively-buried cards).
+  async getDeckCardStatsBatch(): Promise<
+    { deckId: string; total: number; newCount: number; dueCount: number; matureCount: number }[]
+  > {
+    const now = this.getCurrentTimestamp();
+    const sql = `
+      SELECT deck_id,
+        COUNT(*) AS total,
+        SUM(CASE WHEN state = 'new' AND suspended_at IS NULL
+                 AND (buried_until IS NULL OR buried_until <= ?) THEN 1 ELSE 0 END) AS new_count,
+        SUM(CASE WHEN state = 'review' AND due_date <= ? AND suspended_at IS NULL
+                 AND (buried_until IS NULL OR buried_until <= ?) THEN 1 ELSE 0 END) AS due_count,
+        SUM(CASE WHEN state = 'review' AND interval > 30240 THEN 1 ELSE 0 END) AS mature_count
+      FROM flashcards
+      GROUP BY deck_id`;
+    const rows = await this.querySql<{
+      deck_id: string;
+      total: number;
+      new_count: number;
+      due_count: number;
+      mature_count: number;
+    }>(sql, [now, now, now], { asObject: true });
+    return rows.map((r) => ({
+      deckId: r.deck_id,
+      total: r.total ?? 0,
+      newCount: r.new_count ?? 0,
+      dueCount: r.due_count ?? 0,
+      matureCount: r.mature_count ?? 0,
+    }));
+  }
+
+  // Per-deck "studied today" counts (distinct new / review cards) for ALL decks
+  // in a single grouped query — the batched equivalent of getDailyReviewCounts.
+  async getDailyReviewCountsBatch(
+    nextDayStartsAt = 4
+  ): Promise<{ deckId: string; newCount: number; reviewCount: number }[]> {
+    const now = new Date();
+    const studyDayStart = this.getStudyDayStart(now, nextDayStartsAt);
+    const studyDayEnd = this.getStudyDayEnd(now, nextDayStartsAt);
+    const sql = `
+      SELECT f.deck_id,
+        COUNT(DISTINCT CASE WHEN r.old_state = 'new' THEN r.flashcard_id END) AS new_count,
+        COUNT(DISTINCT CASE WHEN r.old_state = 'review' THEN r.flashcard_id END) AS review_count
+      FROM review_logs r
+      JOIN flashcards f ON r.flashcard_id = f.id
+      WHERE r.reviewed_at >= ? AND r.reviewed_at < ?
+      GROUP BY f.deck_id`;
+    const rows = await this.querySql<{
+      deck_id: string;
+      new_count: number;
+      review_count: number;
+    }>(sql, [studyDayStart, studyDayEnd], { asObject: true });
+    return rows.map((r) => ({
+      deckId: r.deck_id,
+      newCount: r.new_count ?? 0,
+      reviewCount: r.review_count ?? 0,
+    }));
   }
 
   // FORECAST OPERATIONS (optimized SQL)
@@ -1300,6 +1697,24 @@ export abstract class BaseDatabaseService implements IDatabaseService {
                    AND r.reviewed_at < ?
                    AND r.old_state = 'review'`;
     const results = await this.querySql<CountResult>(sql, [deckId, studyDayStart, studyDayEnd], {
+      asObject: true,
+    });
+    return results[0]?.count || 0;
+  }
+
+  async countCardsStudiedTodayAllDecks(nextDayStartsAt = 4): Promise<number> {
+    const now = new Date();
+    const studyDayStart = this.getStudyDayStart(now, nextDayStartsAt);
+    const studyDayEnd = this.getStudyDayEnd(now, nextDayStartsAt);
+
+    // Distinct cards studied today across all decks — both new (first study,
+    // old_state 'new') and review cards — for the global daily cap.
+    const sql = `SELECT COUNT(DISTINCT flashcard_id) as count
+                 FROM review_logs
+                 WHERE reviewed_at >= ?
+                   AND reviewed_at < ?
+                   AND old_state IN ('new', 'review')`;
+    const results = await this.querySql<CountResult>(sql, [studyDayStart, studyDayEnd], {
       asObject: true,
     });
     return results[0]?.count || 0;
@@ -1865,6 +2280,261 @@ export abstract class BaseDatabaseService implements IDatabaseService {
     return results.length > 0 ? results[0].count : 0;
   }
 
+  // CRAM (DRILL) OPERATIONS
+  // Isolated from real scheduling: these never touch flashcards or review_logs
+  // and never emit sync ops. Cross-device convergence is handled by
+  // merge-before-save (last-write-wins on `modified`).
+
+  /**
+   * How many reviewed plain cards on this profile's decks would become
+   * questions if exam parsing were enabled (the type-flip warning count).
+   * Classification can't run in SQL, so bodies are classified in TS.
+   */
+  async countReviewedCardsBecomingQuestions(profileId: string): Promise<number> {
+    const rows = (await this.querySql(
+      `SELECT f.back FROM flashcards f
+       JOIN decks d ON d.id = f.deck_id
+       WHERE d.profile_id = ? AND f.type = 'header-paragraph' AND f.state = 'review'`,
+      [profileId]
+    )) as (string | number | null)[][];
+    let count = 0;
+    for (const row of rows) {
+      if (classifyExamBody((row[0] as string) ?? "").kind === "mcq") count++;
+    }
+    return count;
+  }
+
+  /** Ids of decks whose profile has exam questions enabled. */
+  async getExamEnabledDeckIds(): Promise<string[]> {
+    const rows = (await this.querySql(
+      `SELECT d.id FROM decks d
+       JOIN deckprofiles p ON p.id = d.profile_id
+       WHERE p.exam_enabled = 1 AND p.deleted_at IS NULL`,
+      []
+    )) as (string | number | null)[][];
+    return rows.map((row) => row[0] as string);
+  }
+
+  /** Per-deck exam health context (flag + grading mode) for validity badges. */
+  async getDeckExamContexts(): Promise<
+    Array<{ deckId: string; examEnabled: boolean; typedGrading: TypedGradingMode }>
+  > {
+    const rows = (await this.querySql(
+      `SELECT d.id, p.exam_enabled, p.exam_settings FROM decks d
+       JOIN deckprofiles p ON p.id = d.profile_id
+       WHERE p.deleted_at IS NULL`,
+      []
+    )) as (string | number | null)[][];
+    return rows.map((row) => ({
+      deckId: row[0] as string,
+      examEnabled: row[1] === 1,
+      typedGrading: parseExamSettings(row[2] as string | null).typedGrading,
+    }));
+  }
+
+  // EXAM ATTEMPT OPERATIONS
+  // Append-only results store. No cross-worker transaction exists, so
+  // completeExamSession writes answers first and the session row last — the
+  // session row is the commit marker: partial answer writes stay invisible
+  // (every query keys off exam_sessions) and re-runs are idempotent
+  // (INSERT OR IGNORE + deterministic answer ids).
+
+  async completeExamSession(
+    session: Omit<ExamSession, "created">,
+    answers: Array<Omit<ExamAnswer, "id" | "sessionId" | "created">>
+  ): Promise<void> {
+    const now = this.getCurrentTimestamp();
+    for (const answer of answers) {
+      await this.executeSql(SQL_QUERIES.INSERT_EXAM_ANSWER, [
+        `${session.id}:${answer.ordinal}`,
+        session.id,
+        answer.flashcardId,
+        answer.ordinal,
+        answer.questionType,
+        answer.gradingMethod,
+        answer.prompt,
+        answer.correctAnswer,
+        answer.givenAnswer,
+        answer.isCorrect ? 1 : 0,
+        answer.timeMs ?? null,
+        now,
+      ]);
+    }
+    await this.executeSql(SQL_QUERIES.INSERT_EXAM_SESSION, [
+      session.id,
+      session.deckKey,
+      session.deckKind,
+      session.startedAt,
+      session.endedAt,
+      session.configJson,
+      session.questionCount,
+      session.correctCount,
+      session.scorePct,
+      session.passed ? 1 : 0,
+      session.durationMs,
+      now,
+    ]);
+    this.emitSyncOp({
+      o: "exam_session_complete",
+      p: { session: { ...session, created: now }, answers },
+    });
+  }
+
+  async getExamSessionsForDeckKey(
+    deckKey: string,
+    limit = 50
+  ): Promise<ExamSession[]> {
+    const results = (await this.querySql(
+      SQL_QUERIES.GET_EXAM_SESSIONS_FOR_DECK_KEY,
+      [deckKey, limit]
+    )) as (string | number | null)[][];
+    return results.map((row) => this.rowToExamSession(row));
+  }
+
+  async getExamAnswersForSession(sessionId: string): Promise<ExamAnswer[]> {
+    const results = (await this.querySql(
+      SQL_QUERIES.GET_EXAM_ANSWERS_FOR_SESSION,
+      [sessionId]
+    )) as (string | number | null)[][];
+    return results.map((row) => this.rowToExamAnswer(row));
+  }
+
+  async createCramSession(
+    session: Omit<CramSession, "id" | "created" | "modified">
+  ): Promise<string> {
+    const id = `cram_${Date.now()}_${Math.random()
+      .toString(36)
+      .substring(2, 11)}`;
+    const now = this.getCurrentTimestamp();
+    await this.executeSql(SQL_QUERIES.INSERT_CRAM_SESSION, [
+      id,
+      session.deckKey,
+      session.deckKind,
+      session.startedAt,
+      session.endedAt ?? null,
+      session.goalTotal,
+      session.graduatedCount,
+      now,
+      now,
+    ]);
+    return id;
+  }
+
+  async getCramSessionById(id: string): Promise<CramSession | null> {
+    const results = (await this.querySql(SQL_QUERIES.GET_CRAM_SESSION_BY_ID, [
+      id,
+    ])) as (string | number | null)[][];
+    return results.length > 0 ? this.rowToCramSession(results[0]) : null;
+  }
+
+  async getActiveCramSessionForDeck(
+    deckKey: string
+  ): Promise<CramSession | null> {
+    const results = (await this.querySql(
+      SQL_QUERIES.GET_ACTIVE_CRAM_SESSION_FOR_DECK,
+      [deckKey]
+    )) as (string | number | null)[][];
+    return results.length > 0 ? this.rowToCramSession(results[0]) : null;
+  }
+
+  async updateCramSessionProgress(
+    id: string,
+    graduatedCount: number
+  ): Promise<void> {
+    await this.executeSql(SQL_QUERIES.UPDATE_CRAM_SESSION_PROGRESS, [
+      graduatedCount,
+      this.getCurrentTimestamp(),
+      id,
+    ]);
+  }
+
+  async endCramSession(id: string): Promise<void> {
+    const now = this.getCurrentTimestamp();
+    await this.executeSql(SQL_QUERIES.UPDATE_CRAM_SESSION_END, [now, now, id]);
+  }
+
+  async batchCreateCramCards(
+    cards: Array<Omit<CramCard, "created" | "modified">>
+  ): Promise<void> {
+    if (cards.length === 0) return;
+    const now = this.getCurrentTimestamp();
+    for (const card of cards) {
+      await this.executeSql(SQL_QUERIES.INSERT_CRAM_CARD, [
+        card.id,
+        card.sessionId,
+        card.flashcardId,
+        card.tempState,
+        card.tempStability,
+        card.tempDifficulty,
+        card.tempInterval,
+        card.tempDueAt,
+        card.reps,
+        card.graduatedAt ?? null,
+        now,
+        now,
+      ]);
+    }
+  }
+
+  async getCramCardById(id: string): Promise<CramCard | null> {
+    const results = (await this.querySql(SQL_QUERIES.GET_CRAM_CARD_BY_ID, [
+      id,
+    ])) as (string | number | null)[][];
+    return results.length > 0 ? this.rowToCramCard(results[0]) : null;
+  }
+
+  async getNextDueCramCard(sessionId: string): Promise<CramCard | null> {
+    const results = (await this.querySql(SQL_QUERIES.GET_NEXT_CRAM_CARD, [
+      sessionId,
+    ])) as (string | number | null)[][];
+    return results.length > 0 ? this.rowToCramCard(results[0]) : null;
+  }
+
+  async countRemainingCramCards(sessionId: string): Promise<number> {
+    const results = await this.querySql<{ count: number }>(
+      SQL_QUERIES.COUNT_REMAINING_CRAM_CARDS,
+      [sessionId],
+      { asObject: true }
+    );
+    return results.length > 0 ? results[0].count : 0;
+  }
+
+  async updateCramCard(
+    id: string,
+    updates: {
+      tempState: CramCard["tempState"];
+      tempStability: number;
+      tempDifficulty: number;
+      tempInterval: number;
+      tempDueAt: string;
+      reps: number;
+    }
+  ): Promise<void> {
+    await this.executeSql(SQL_QUERIES.UPDATE_CRAM_CARD, [
+      updates.tempState,
+      updates.tempStability,
+      updates.tempDifficulty,
+      updates.tempInterval,
+      updates.tempDueAt,
+      updates.reps,
+      this.getCurrentTimestamp(),
+      id,
+    ]);
+  }
+
+  async graduateCramCard(
+    id: string,
+    graduatedAt: string,
+    reps: number
+  ): Promise<void> {
+    await this.executeSql(SQL_QUERIES.GRADUATE_CRAM_CARD, [
+      graduatedAt,
+      reps,
+      this.getCurrentTimestamp(),
+      id,
+    ]);
+  }
+
   async getDailyReviewCounts(
     deckId: string,
     nextDayStartsAt = 4
@@ -1888,48 +2558,61 @@ export abstract class BaseDatabaseService implements IDatabaseService {
     await this.executeSql(SQL_QUERIES.DELETE_REVIEW_LOGS_FOR_DECK, [deckId]);
     await this.executeSql(SQL_QUERIES.DELETE_REVIEW_SESSIONS_FOR_DECK, [deckId]);
     await this.executeSql(SQL_QUERIES.RESET_DECK_FLASHCARDS, [now, deckId]);
+    // Deck reset clears bury (daily-scoped) but preserves suspend; keep the
+    // durable overlay in lockstep so a later mirror can't re-bury.
+    await this.executeSql(
+      `UPDATE card_state_overlays SET buried_until = NULL, modified = ?
+       WHERE buried_until IS NOT NULL
+         AND flashcard_id IN (SELECT id FROM flashcards WHERE deck_id = ?)`,
+      [now, deckId]
+    );
     this.emitSyncOp({ o: "deck_reset", p: { deckId, resetAt: now } });
   }
 
  /**
-   * Recovery: Migrates orphaned review logs by reverse-computing old IDs from 
-   * the current flashcard text, then rebuilds each card's FSRS scheduling 
-   * state from its most recent review log.
+   * Recovery: re-links review logs still keyed to a card's previous ID —
+   * hash(deckId + front) from the interim scheme, or the pre-deck hash(front) —
+   * to the card's current deck-independent ID, then rebuilds each card's FSRS
+   * state from its most recent review log. Non-destructive to card IDs. Used by
+   * the manual "rebuild from history" action and to heal the mixed-version sync
+   * window where a not-yet-upgraded device delivers old-ID logs.
    */
   async rebuildCardStateFromReviewLogs(): Promise<number> {
     const now = this.getCurrentTimestamp();
 
-    // 1. Fetch current cards to compute what their old IDs used to be
-    // Assuming 'id' is the new ID, and we have 'front'
-    const cards = await this.querySql<{ id: string, front: string, back: string }>(
-      `SELECT id, front FROM flashcards`,
+    const cards = await this.querySql<{
+      id: string;
+      front: string;
+      deck_id: string;
+      source_node_id: string | null;
+    }>(
+      `SELECT id, front, deck_id, source_node_id FROM flashcards`,
       [],
       { asObject: true }
     );
 
-    // 2. Compute the ID migrations in TypeScript
-    const idMigrations: { oldId: string, newId: string }[] = [];
+    // Reverse the interim scheme: reviews keyed to hash(deckId + front) (or the
+    // pre-deck hash(front)) re-point to the card's current deck-independent ID.
+    const idMigrations: { oldId: string; newId: string }[] = [];
     for (const card of cards) {
-      // NOTE: Replace this with your exact old hash generation function call
-      const oldId = generateOldFlashcardId(card.front); 
-      
-      if (oldId !== card.id) {
-        idMigrations.push({ oldId, newId: card.id });
+      if (!card.id.startsWith("card_")) continue;
+      const nodeId = card.source_node_id ?? undefined;
+      const candidates = [
+        generateLegacyDeckScopedFlashcardId(card.front, card.deck_id, nodeId),
+        generateOldFlashcardId(card.front),
+      ];
+      for (const oldId of candidates) {
+        if (oldId !== card.id) idMigrations.push({ oldId, newId: card.id });
       }
     }
 
-    // 3. Re-link the orphaned review logs to the new flashcard IDs
-    // If your DB wrapper supports transactions, wrap this loop in one for speed
     for (const { oldId, newId } of idMigrations) {
       await this.executeSql(
-        `UPDATE review_logs 
-         SET flashcard_id = ? 
-         WHERE flashcard_id = ?`,
+        `UPDATE review_logs SET flashcard_id = ? WHERE flashcard_id = ?`,
         [newId, oldId]
       );
     }
 
-    // 4. Count how many cards we can now successfully restore
     const countRows = await this.querySql<{ count: number }>(
       `SELECT COUNT(*) as count
        FROM flashcards f
@@ -1938,7 +2621,7 @@ export abstract class BaseDatabaseService implements IDatabaseService {
       { asObject: true }
     );
     const restored = countRows[0]?.count ?? 0;
-    
+
     if (restored === 0) return 0;
 
     // 5. Rebuild the FSRS state from the newly linked logs
@@ -1973,11 +2656,32 @@ export abstract class BaseDatabaseService implements IDatabaseService {
 
   // CARD STATE OVERLAYS (suspend, bury, reset)
   //
-  // All four operations bump `modified` on the row so the existing
-  // last-writer-wins flashcard merge does the right thing for FSRS state.
-  // `suspended_at` and `buried_until` are intentionally excluded from the
-  // bulk flashcards merge in worker-entry.ts; their cross-device convergence
-  // runs entirely through the dedicated SyncLog ops emitted here.
+  // Durable suspend/bury state lives in card_state_overlays (preserved
+  // across schema rebuilds and merged last-writer-wins on its own
+  // `modified`). The flashcards columns are a query-time cache written in
+  // lockstep here; sync-op replays and bulk merges re-mirror from the
+  // overlay, so the cache never has to survive on its own.
+
+  private async upsertCardStateOverlays(
+    cardIds: string[],
+    fields: { suspendedAt?: string | null; buriedUntil?: string | null },
+    modified: string
+  ): Promise<void> {
+    const sets: string[] = ["modified = excluded.modified"];
+    if ("suspendedAt" in fields) sets.push("suspended_at = excluded.suspended_at");
+    if ("buriedUntil" in fields) sets.push("buried_until = excluded.buried_until");
+    const sql = `INSERT INTO card_state_overlays (flashcard_id, suspended_at, buried_until, modified)
+       VALUES (?, ?, ?, ?)
+       ON CONFLICT(flashcard_id) DO UPDATE SET ${sets.join(", ")}`;
+    for (const cardId of cardIds) {
+      await this.executeSql(sql, [
+        cardId,
+        fields.suspendedAt ?? null,
+        fields.buriedUntil ?? null,
+        modified,
+      ]);
+    }
+  }
 
   async suspendCard(cardId: string): Promise<void> {
     const now = this.getCurrentTimestamp();
@@ -1985,6 +2689,7 @@ export abstract class BaseDatabaseService implements IDatabaseService {
       `UPDATE flashcards SET suspended_at = ?, modified = ? WHERE id = ?`,
       [now, now, cardId]
     );
+    await this.upsertCardStateOverlays([cardId], { suspendedAt: now }, now);
     this.emitSyncOp({ o: "card_suspend", p: { c: cardId, at: now } });
   }
 
@@ -1994,6 +2699,7 @@ export abstract class BaseDatabaseService implements IDatabaseService {
       `UPDATE flashcards SET suspended_at = NULL, modified = ? WHERE id = ?`,
       [now, cardId]
     );
+    await this.upsertCardStateOverlays([cardId], { suspendedAt: null }, now);
     this.emitSyncOp({ o: "card_unsuspend", p: { c: cardId, at: now } });
   }
 
@@ -2005,6 +2711,7 @@ export abstract class BaseDatabaseService implements IDatabaseService {
       `UPDATE flashcards SET suspended_at = ?, modified = ? WHERE id IN (${placeholders})`,
       [now, now, ...cardIds]
     );
+    await this.upsertCardStateOverlays(cardIds, { suspendedAt: now }, now);
     for (const cardId of cardIds) {
       this.emitSyncOp({ o: "card_suspend", p: { c: cardId, at: now } });
     }
@@ -2018,6 +2725,7 @@ export abstract class BaseDatabaseService implements IDatabaseService {
       `UPDATE flashcards SET suspended_at = NULL, modified = ? WHERE id IN (${placeholders})`,
       [now, ...cardIds]
     );
+    await this.upsertCardStateOverlays(cardIds, { suspendedAt: null }, now);
     for (const cardId of cardIds) {
       this.emitSyncOp({ o: "card_unsuspend", p: { c: cardId, at: now } });
     }
@@ -2029,6 +2737,7 @@ export abstract class BaseDatabaseService implements IDatabaseService {
       `UPDATE flashcards SET buried_until = ?, modified = ? WHERE id = ?`,
       [untilIso, now, cardId]
     );
+    await this.upsertCardStateOverlays([cardId], { buriedUntil: untilIso }, now);
     this.emitSyncOp({ o: "card_bury", p: { c: cardId, until: untilIso, at: now } });
   }
 
@@ -2038,6 +2747,7 @@ export abstract class BaseDatabaseService implements IDatabaseService {
       `UPDATE flashcards SET buried_until = NULL, modified = ? WHERE id = ?`,
       [now, cardId]
     );
+    await this.upsertCardStateOverlays([cardId], { buriedUntil: null }, now);
     this.emitSyncOp({ o: "card_unbury", p: { c: cardId, at: now } });
   }
 
@@ -2049,6 +2759,7 @@ export abstract class BaseDatabaseService implements IDatabaseService {
       `UPDATE flashcards SET buried_until = ?, modified = ? WHERE id IN (${placeholders})`,
       [untilIso, now, ...cardIds]
     );
+    await this.upsertCardStateOverlays(cardIds, { buriedUntil: untilIso }, now);
     for (const cardId of cardIds) {
       this.emitSyncOp({ o: "card_bury", p: { c: cardId, until: untilIso, at: now } });
     }
@@ -2062,6 +2773,7 @@ export abstract class BaseDatabaseService implements IDatabaseService {
       `UPDATE flashcards SET buried_until = NULL, modified = ? WHERE id IN (${placeholders})`,
       [now, ...cardIds]
     );
+    await this.upsertCardStateOverlays(cardIds, { buriedUntil: null }, now);
     for (const cardId of cardIds) {
       this.emitSyncOp({ o: "card_unbury", p: { c: cardId, at: now } });
     }
@@ -2094,6 +2806,11 @@ export abstract class BaseDatabaseService implements IDatabaseService {
        WHERE id = ?`,
       [now, now, cardId]
     );
+    await this.upsertCardStateOverlays(
+      [cardId],
+      { suspendedAt: null, buriedUntil: null },
+      now
+    );
     this.emitSyncOp({ o: "card_reset", p: { c: cardId, at: now } });
   }
 
@@ -2120,6 +2837,11 @@ export abstract class BaseDatabaseService implements IDatabaseService {
          modified = ?
        WHERE id IN (${placeholders})`,
       [now, now, ...cardIds]
+    );
+    await this.upsertCardStateOverlays(
+      cardIds,
+      { suspendedAt: null, buriedUntil: null },
+      now
     );
     for (const cardId of cardIds) {
       this.emitSyncOp({ o: "card_reset", p: { c: cardId, at: now } });
@@ -2149,6 +2871,12 @@ export abstract class BaseDatabaseService implements IDatabaseService {
 
     await this.executeSql(SQL_QUERIES.DELETE_REVIEW_LOGS_FOR_CUSTOM_DECK, [customDeckId]);
     await this.executeSql(SQL_QUERIES.RESET_CUSTOM_DECK_FLASHCARDS, [now, customDeckId]);
+    await this.executeSql(
+      `UPDATE card_state_overlays SET buried_until = NULL, modified = ?
+       WHERE buried_until IS NOT NULL
+         AND flashcard_id IN (SELECT flashcard_id FROM custom_deck_cards WHERE custom_deck_id = ?)`,
+      [now, customDeckId]
+    );
     this.emitSyncOp({ o: "custom_deck_reset", p: { customDeckId, resetAt: now } });
   }
 
@@ -2524,6 +3252,12 @@ export abstract class BaseDatabaseService implements IDatabaseService {
     try {
       const backupDb = await this.createBackupDatabaseInstance(backupData);
 
+      const backupVersionRows = await this.queryBackupDatabase(
+        backupDb,
+        "PRAGMA user_version"
+      );
+      const backupVersion = Number(backupVersionRows?.[0]?.[0] ?? 0);
+
       // Get current schema column names
       const currentLogColumns = new Set(
         (await this.querySql("PRAGMA table_info(review_logs)") as SqlJsValue[][])
@@ -2781,8 +3515,93 @@ export abstract class BaseDatabaseService implements IDatabaseService {
         this.debugLog("Backup does not contain fsrs_weight_sets table, skipping");
       }
 
+      // Restore durable suspend/bury state (newer wins), then mirror onto any
+      // cards already present; cards restored later by vault sync pick the
+      // overlay up through the synchronizer.
+      try {
+        const overlays = await this.queryBackupDatabase(
+          backupDb,
+          "SELECT flashcard_id, suspended_at, buried_until, modified FROM card_state_overlays"
+        );
+        for (const row of overlays) {
+          await this.executeSql(
+            `INSERT INTO card_state_overlays (flashcard_id, suspended_at, buried_until, modified)
+             VALUES (?, ?, ?, ?)
+             ON CONFLICT(flashcard_id) DO UPDATE SET
+               suspended_at = excluded.suspended_at,
+               buried_until = excluded.buried_until,
+               modified = excluded.modified
+             WHERE excluded.modified > card_state_overlays.modified`,
+            row
+          );
+        }
+        if (overlays.length > 0) {
+          await this.executeSql(
+            `UPDATE flashcards SET
+               suspended_at = (SELECT o.suspended_at FROM card_state_overlays o WHERE o.flashcard_id = flashcards.id),
+               buried_until = (SELECT o.buried_until FROM card_state_overlays o WHERE o.flashcard_id = flashcards.id)
+             WHERE id IN (SELECT flashcard_id FROM card_state_overlays)`,
+            []
+          );
+        }
+      } catch {
+        this.debugLog("Backup does not contain card_state_overlays table, skipping");
+      }
+
+      // Restore anchor bindings (append-only, first writer wins) so anchored
+      // cards re-attach to their original ids and restored review history.
+      try {
+        const bindings = await this.queryBackupDatabase(
+          backupDb,
+          "SELECT anchor, flashcard_id, created FROM anchor_bindings"
+        );
+        for (const row of bindings) {
+          await this.executeSql(
+            "INSERT OR IGNORE INTO anchor_bindings (anchor, flashcard_id, created) VALUES (?, ?, ?)",
+            row
+          );
+        }
+      } catch {
+        this.debugLog("Backup does not contain anchor_bindings table, skipping");
+      }
+
+      // Restore exam attempts (append-only, immutable — union by id).
+      try {
+        const examSessions = await this.queryBackupDatabase(
+          backupDb,
+          `SELECT id, deck_key, deck_kind, started_at, ended_at, config_json,
+                  question_count, correct_count, score_pct, passed, duration_ms, created
+           FROM exam_sessions`
+        );
+        for (const row of examSessions) {
+          await this.executeSql(SQL_QUERIES.INSERT_EXAM_SESSION, row);
+        }
+        const examAnswers = await this.queryBackupDatabase(
+          backupDb,
+          `SELECT id, session_id, flashcard_id, ordinal, question_type, grading_method,
+                  prompt, correct_answer, given_answer, is_correct, time_ms, created
+           FROM exam_answers`
+        );
+        for (const row of examAnswers) {
+          await this.executeSql(SQL_QUERIES.INSERT_EXAM_ANSWER, row);
+        }
+      } catch {
+        this.debugLog("Backup does not contain exam tables, skipping");
+      }
+
       await this.closeBackupDatabaseInstance(backupDb);
       this.debugLog("Database restored from backup data");
+
+      // A pre-v36 backup's review_logs are keyed to deck-scoped card IDs
+      // (hash(deckId + front)); re-link them to the vault's current deck-
+      // independent cards so restored history isn't orphaned. (Restore skips the
+      // flashcards table, so only the logs need re-pointing.)
+      if (backupVersion > 0 && backupVersion < DECK_INDEPENDENT_ID_VERSION) {
+        this.debugLog(
+          `Restored a pre-v${DECK_INDEPENDENT_ID_VERSION} backup — re-linking review history to deck-independent IDs`
+        );
+        await this.rebuildCardStateFromReviewLogs();
+      }
     } catch (error) {
       console.error("Failed to restore from backup data:", error);
       throw error;
@@ -2858,11 +3677,70 @@ export abstract class BaseDatabaseService implements IDatabaseService {
     return typeof value === "number" ? value : 0;
   }
 
+  // Every deck's id, filepath and last-synced mtime in one query (for the stale gate).
+  async getAllDeckSyncMeta(): Promise<
+    { id: string; filepath: string; lastSyncedMtime: number }[]
+  > {
+    const rows = (await this.querySql(
+      "SELECT id, filepath, COALESCE(last_synced_mtime, 0) FROM decks",
+      []
+    )) as Array<[string, string, number]>;
+    return rows.map((row) => ({
+      id: String(row[0]),
+      filepath: String(row[1]),
+      lastSyncedMtime: typeof row[2] === "number" ? row[2] : 0,
+    }));
+  }
+
   async setDeckLastSyncedMtime(deckId: string, mtime: number): Promise<void> {
     await this.executeSql(SQL_QUERIES.UPDATE_DECK_LAST_SYNCED_MTIME, [mtime, deckId]);
   }
 
   async clearLastSyncedMtimeForProfile(profileId: string): Promise<void> {
     await this.executeSql(SQL_QUERIES.CLEAR_LAST_SYNCED_MTIME_BY_PROFILE, [profileId]);
+  }
+
+  // Anchor bindings: durable anchor-key -> card-id records (append-only).
+  async getAnchorBinding(anchor: string): Promise<string | null> {
+    const rows = (await this.querySql(
+      "SELECT flashcard_id FROM anchor_bindings WHERE anchor = ?",
+      [anchor]
+    )) as Array<[string]>;
+    return rows.length > 0 ? String(rows[0][0]) : null;
+  }
+
+  async insertAnchorBindings(
+    rows: { anchor: string; flashcardId: string }[]
+  ): Promise<void> {
+    for (const row of rows) {
+      await this.executeSql(
+        "INSERT OR IGNORE INTO anchor_bindings (anchor, flashcard_id, created) VALUES (?, ?, datetime('now'))",
+        [row.anchor, row.flashcardId]
+      );
+    }
+  }
+
+  async setFlashcardAnchor(flashcardId: string, anchor: string): Promise<void> {
+    await this.executeSql(
+      "UPDATE flashcards SET anchor = ? WHERE id = ?",
+      [anchor, flashcardId]
+    );
+  }
+
+  async countNodeCards(deckId: string, sourceNodeId: string): Promise<number> {
+    const rows = (await this.querySql(
+      "SELECT COUNT(*) FROM flashcards WHERE deck_id = ? AND source_node_id = ? AND edge_id IS NULL",
+      [deckId, sourceNodeId]
+    )) as Array<[number]>;
+    return rows.length > 0 ? Number(rows[0][0]) : 0;
+  }
+
+  // Reviewed cards without an anchor (migration + lazy stamping candidates).
+  async getReviewedUnanchoredCards(): Promise<Flashcard[]> {
+    const results = (await this.querySql(
+      "SELECT * FROM flashcards WHERE anchor IS NULL AND (last_reviewed IS NOT NULL OR repetitions > 0)",
+      []
+    )) as Array<(string | number | null)[]>;
+    return results.map((row) => this.rowToFlashcard(row));
   }
 }

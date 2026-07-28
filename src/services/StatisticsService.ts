@@ -486,6 +486,9 @@ export class StatisticsService {
     days: number,
     deckIds: string[] = []
   ): Promise<Map<string, number>> {
+    // days <= 0 → all-time (no lower bound), so the heatmap can show historical
+    // (e.g. migrated) reviews when navigating to past years.
+    const allTime = days <= 0;
     const startDate = new Date();
     startDate.setDate(startDate.getDate() - days);
 
@@ -496,20 +499,20 @@ export class StatisticsService {
       sql = `
         SELECT ${getLocalDateSQL("reviewed_at")} as date, COUNT(*) as count
         FROM review_logs
-        WHERE reviewed_at >= ?
+        ${allTime ? "" : "WHERE reviewed_at >= ?"}
         GROUP BY ${getLocalDateSQL("reviewed_at")}
       `;
-      params = [startDate.toISOString()];
+      params = allTime ? [] : [startDate.toISOString()];
     } else {
       const placeholders = deckIds.map(() => "?").join(",");
       sql = `
         SELECT ${getLocalDateSQL("rl.reviewed_at")} as date, COUNT(*) as count
         FROM review_logs rl
         JOIN flashcards f ON rl.flashcard_id = f.id
-        WHERE f.deck_id IN (${placeholders}) AND rl.reviewed_at >= ?
+        WHERE f.deck_id IN (${placeholders})${allTime ? "" : " AND rl.reviewed_at >= ?"}
         GROUP BY ${getLocalDateSQL("rl.reviewed_at")}
       `;
-      params = [...deckIds, startDate.toISOString()];
+      params = allTime ? [...deckIds] : [...deckIds, startDate.toISOString()];
     }
 
     const results = await this.db.querySql(sql, params);
@@ -2608,7 +2611,8 @@ export class StatisticsService {
    */
   async getDeckStats(
     deckId: string,
-    respectDailyLimits = true
+    respectDailyLimits = true,
+    globalDailyRemaining = Infinity
   ): Promise<DeckStats> {
     // Get basic deck stats
     const totalCards = await this.db.countTotalCards(deckId);
@@ -2661,6 +2665,14 @@ export class StatisticsService {
         }
       }
     }
+
+    // Clamp shown counts by the remaining global daily cap (shared across all
+    // decks, new + review). Reviews take the budget first, new cards the rest.
+    finalDueCount = Math.min(finalDueCount, globalDailyRemaining);
+    finalNewCount = Math.min(
+      finalNewCount,
+      Math.max(0, globalDailyRemaining - finalDueCount)
+    );
 
     return {
       deckId,
@@ -2721,33 +2733,33 @@ export class StatisticsService {
     pastMonthHours: number;
     pastWeekHours: number;
   }> {
-    const allLogs = await this.db.getAllReviewLogs();
     const oneMonthAgo = new Date();
     oneMonthAgo.setMonth(oneMonthAgo.getMonth() - 1);
     const oneWeekAgo = new Date();
     oneWeekAgo.setDate(oneWeekAgo.getDate() - 7);
 
-    let totalMs = 0;
-    let monthMs = 0;
-    let weekMs = 0;
-
-    allLogs.forEach((log) => {
-      const timeElapsed = log.timeElapsedMs || 0;
-      totalMs += timeElapsed;
-
-      const reviewDate = new Date(log.reviewedAt);
-      if (reviewDate >= oneMonthAgo) {
-        monthMs += timeElapsed;
-      }
-      if (reviewDate >= oneWeekAgo) {
-        weekMs += timeElapsed;
-      }
+    // Aggregate in SQL (reviewed_at is ISO text, so string >= works) instead of
+    // loading the whole review_logs table into JS.
+    const sql = `
+      SELECT
+        COALESCE(SUM(time_elapsed_ms), 0) AS total_ms,
+        COALESCE(SUM(CASE WHEN reviewed_at >= ? THEN time_elapsed_ms ELSE 0 END), 0) AS month_ms,
+        COALESCE(SUM(CASE WHEN reviewed_at >= ? THEN time_elapsed_ms ELSE 0 END), 0) AS week_ms
+      FROM review_logs
+    `;
+    const rows = await this.db.querySql<{
+      total_ms: number;
+      month_ms: number;
+      week_ms: number;
+    }>(sql, [oneMonthAgo.toISOString(), oneWeekAgo.toISOString()], {
+      asObject: true,
     });
-
+    const r = rows[0] ?? { total_ms: 0, month_ms: 0, week_ms: 0 };
+    const HOUR_MS = 1000 * 60 * 60;
     return {
-      totalHours: totalMs / (1000 * 60 * 60),
-      pastMonthHours: monthMs / (1000 * 60 * 60),
-      pastWeekHours: weekMs / (1000 * 60 * 60),
+      totalHours: (r.total_ms || 0) / HOUR_MS,
+      pastMonthHours: (r.month_ms || 0) / HOUR_MS,
+      pastWeekHours: (r.week_ms || 0) / HOUR_MS,
     };
   }
 }

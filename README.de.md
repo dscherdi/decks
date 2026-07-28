@@ -102,7 +102,33 @@ Jede Hervorhebung wird zu einer Karte. Während der Wiederholung wird die aktive
 </details>
 
 <details>
-<summary><b>Bildverdeckung</b> — ein Bild plus eine nummerierte Liste. Nummern auf dem Bild sind mit der Liste verknüpft.</summary>
+<summary><b>Bildverdeckung</b> — verdecke Bereiche eines Bildes und rufe ab, was darunter liegt. Zwei Wege: interaktiv (Felder zeichnen) oder eine nummerierte Liste.</summary>
+
+**Interaktiv (empfohlen).** Führe den Befehl **„Bildverdeckung an Cursorposition erstellen"** aus, wähle ein Bild und zeichne dann direkt im Editor Felder darauf. Gib für jedes Feld eine Markdown/LaTeX-Antwort ein oder lasse es leer, um nur eine im Bild enthaltene Beschriftung zu verdecken. Es wird als eigenständiger `decks-occlusion`-Codeblock gespeichert (Koordinaten in Prozent, daher auf jedem Gerät skalierbar):
+
+````markdown
+```decks-occlusion
+image: "[[heart.png]]"
+version: 2
+masks:
+  - id: m1
+    x: 12.5
+    y: 30
+    w: 18
+    h: 9.5
+    answer: "Linke **Herzkammer**"
+  - id: m2
+    x: 55
+    y: 22
+    w: 14
+    h: 8
+    answer: ""
+```
+````
+
+Jedes Feld ist eine Karte. Bei der Wiederholung ist das Feld auf der Vorderseite verdeckt und auf der Rückseite aufgedeckt (mit seiner Antwort); in der Leseansicht siehst du das vollständig beschriftete Diagramm. Jederzeit über die **Bearbeiten**-Schaltfläche des Blocks oder den Karteikarten-Manager bearbeitbar.
+
+**Nummerierte Liste (einfach).** Ein Bild-Embed gefolgt von einer nummerierten Liste funktioniert ebenfalls:
 
 ```markdown
 ## Knochen des Arms
@@ -114,7 +140,9 @@ Jede Hervorhebung wird zu einer Karte. Während der Wiederholung wird die aktive
 3. ==Elle==
 ```
 
-Jeder Listeneintrag ist eine Karte. Das Bild (mit seinen nummerierten Markierungen) wird auf der Vorderseite gezeigt; der passende Eintrag ist auf der Rückseite ausgeblendet. Baut auf Lückentexten auf, daher muss Cloze im Profil aktiviert sein.
+Jeder Listeneintrag ist eine Karte; das Bild wird auf der Vorderseite gezeigt und der passende Eintrag auf der Rückseite ausgeblendet.
+
+Beides baut auf Lückentexten auf – Cloze muss also im Profil aktiviert sein und der Block muss unter einer ausgewerteten Überschrift stehen.
 
 </details>
 
@@ -137,11 +165,65 @@ Erstelle Karten auf einer Obsidian-Canvas-Datei (`.canvas`) statt in einer Markd
 
 ![Canvas Spatial Cards Demo](./canvas_spatial_cards_demo.gif)
 
+## Vorlagen
+
+Rendere die Zeilen einer Tabelle über ein Kartendesign, das du einmal erstellst. Schreibe es in HTML/CSS oder
+Markdown, setze `{{Column}}`-Platzhalter ein und binde es per Tag an deine Tabellen — eine Vorlage gestaltet
+jede passende Zeile.
+
+```decks-html-front
+<ruby>{{Word}}<rt>{{Reading}}</rt></ruby>
+```
+
+Wähle unter **Einstellungen → Vorlagen** einen Ordner und versieh eine Vorlagendatei sowie die Überschrift
+der Tabelle mit demselben Tag — fertig. Vorlagen unterstützen Vorder-/Rück-/Notizseiten in HTML oder
+Markdown, werden in einer bereinigten, themenbewussten Sandbox gerendert und stellen CSS-Variablen
+(`--padding`, `--align`, `--bg`, …) für die volle Layout-Kontrolle bereit — von angenehmen Lesekarten bis zu
+randlosen eigenen Designs. Tabellen ohne passende Vorlage verwenden weiterhin die normalen Spalten.
+
+Siehe **[docs/TEMPLATES.md](docs/TEMPLATES.md)** für die vollständige Anleitung und Beispiele.
+
+## Prüfungsstapel
+
+Führe einen Stapel als benotete Prüfung durch: eine gezogene Auswahl von Fragen, die in einer Sitzung in
+beliebiger Reihenfolge beantwortet wird, mit einer Ergebnisauswertung — und optional einem Zeitlimit und
+einer Bestehensgrenze — am Ende. Prüfungen werden pro Profil aktiviert und fügen ein Erstellungsformat
+hinzu: eine Überschrift gefolgt von einer Aufgabenliste wird zur Multiple-Choice-Karte.
+
+```markdown
+## Welches Element ist ein Edelgas?
+
+- [ ] Sauerstoff
+- [x] Argon
+- [ ] Stickstoff
+```
+
+`- [x]` markiert eine richtige Option; mehrere Häkchen machen die Frage zur Mehrfachauswahl.
+
+- Versieh eine Notiz mit dem Unter-Tag `exams` deines Stapel-Tags (standardmäßig `#decks/exams`), um das
+  vorinstallierte **Exams**-Profil zu verwenden, oder aktiviere **Prüfungsfragen** in einem beliebigen
+  Profil.
+- Starte über das Menü des Stapels (**⋮ → Prüfung starten**) oder per Klick auf einen Prüfungsstapel; ein
+  Einrichtungsdialog zeigt die Fragenanzahl und lässt dich die Prüfungseinstellungen anpassen.
+- Neben Multiple-Choice werden Überschrift-Antwort-Karten und Tabellenzeilen als Fragen mit Texteingabe
+  gestellt, und Lückentextkarten zeigen den Satz mit den Hervorhebungen als auszufüllende Lücken.
+- Eingetippte Antworten werden exakt, tolerant gegenüber kleinen Tippfehlern oder per Selbsteinschätzung
+  bewertet; die Prüfungsvorgaben (Fragenanzahl, Zeitlimit, Bestehensgrenze, Mischen, Zeitpunkt des
+  Feedbacks, Optionsbeschriftungen) liegen im Profil.
+- Abgeschlossene Prüfungen werden in der Plugin-Datenbank gespeichert, über Geräte hinweg zusammengeführt
+  und in Sicherungen einbezogen.
+
+Ein Stapel „Demo-Prüfung" mit allen Fragenformaten wird bei der ersten Installation erstellt (oder über den
+Befehl **„Demo-Prüfungsstapel erstellen"**).
+
+Siehe **[docs/EXAM_DECKS.md](docs/EXAM_DECKS.md)** für die vollständigen Erstellungsregeln.
+
 ## Was du bekommst
 
 - Durchsuchen-Modus und zeitlich begrenzte Wiederholungssitzungen mit Tageslimits.
 - Profile pro Tag (Standard / Intensives FSRS, Retentionsziel, Tagesquoten).
 - Benutzerdefinierte Stapel aus Filterregeln — z. B. jede Karte mit dem Tag `#gymnasium`.
+- Prüfungsmodus: benotete Prüfungssitzungen mit Multiple-Choice-, Texteingabe- und Lückentextfragen.
 - Statistiken: Heatmap, Retention, Vorhersage zukünftiger Fälligkeiten, Intervalle, stündliche Aufschlüsselung, Antwortschaltflächen-Statistik.
 - Anki-Export, automatische Sicherungen, Multi-Geräte-Merge-Sync.
 - Tastenkürzel: **Leertaste** zum Umdrehen, **1–4** zum Bewerten.
@@ -203,6 +285,47 @@ Die Implementierung wurde gegen die veröffentlichte FSRS-6-Spezifikation validi
 
 </details>
 
+## Umstieg von Spaced Repetition
+
+Du nutzt bereits das **Spaced Repetition**-Plugin? Du kannst zu Decks wechseln, **ohne deine Karten oder deinen Wiederholungsverlauf zu verlieren** — und genau dort weiterlernen, wo du aufgehört hast.
+
+Öffne den Migrationsassistenten über die Werkzeugleiste des Stapel-Panels (das Würfel-Symbol) oder führe den Befehl **„Migrate from Spaced Repetition plugin“** aus.
+
+**Deine ursprünglichen Notizen werden nie verändert.** Die Migration ist additiv: Sie schreibt neue Dateien in einen von dir gewählten Zielordner (und bildet deine Struktur nach) und lässt deine Quellnotizen genau so, wie sie sind. Ein erneutes Ausführen des Assistenten überschreibt einfach die von ihm erzeugten Dateien.
+
+**So funktioniert es**
+
+1. **Wähle einen Quellordner** zum Durchsuchen (oder lass ihn leer, um den gesamten Vault zu durchsuchen) und einen Zielordner für die Ausgabe. Decks findet jede Notiz mit alten Karten — einzeilig (`Front :: Back`), umgekehrt (`Front ::: Back`), mehrzeilig (`?` / `??`), Lückentexte (`==…==` / `{{…}}`) — und Ganz-Notiz-Wiederholungen (das `#review`-Tag).
+2. **Jede Notiz wird in zwei saubere Dateien aufgeteilt.** Ein **Lernkarten-Stapel** (`<Notiz> (Lernkarten)`) enthält die extrahierten Karten im Standard-Decks-Format, und eine **lesbare Notiz** bewahrt den Fließtext — wobei die Karten-Syntax in normalen Text *aufgelöst* wird (`::` / `:::` werden zu „ — “, `?` / `??` verbinden Frage und Antwort, und `==…==` / `{{…}}`-Lückentexte werden auf ihre Antwort zurückgesetzt). Deine konfigurierten Trennzeichen werden berücksichtigt, sodass dies auch dann funktioniert, wenn du sie angepasst hast. Nichts wird entfernt — deine Lese-Notiz bleibt vollständig.
+3. **Die Dateien werden im Frontmatter gegenseitig verlinkt.** Die lesbare Notiz erhält eine `Lernkarten`-Eigenschaft, die auf ihren Stapel zeigt, und eine `Ursprungsnotiz`-Eigenschaft, die auf das Original zurückverweist; der Stapel erhält ebenfalls eine `Ursprungsnotiz`-Eigenschaft. Falls eine Notiz bereits einen dieser Eigenschaftsnamen verwendet, überschreibt der Assistent ihn, anstatt ein Duplikat zu erstellen. Deine Tags bleiben erhalten — das alte Basis-Tag (z. B. `#flashcards`) wird in dein konfiguriertes Decks-Tag übersetzt.
+4. **Umgekehrte Karten werden zu zwei Karten.** Eine `Front ::: Back`-Karte wird in eine Vorwärtskarte und eine vertauschte Karte in **derselben** Stapeldatei aufgeteilt, sodass jede Richtung unabhängig geplant wird.
+5. **Verschachtelte Strukturen werden in Kontext überführt.** SR behandelt übergeordnete Überschriften und verschachtelte Listenpunkte als Kontext einer Karte. Decks erfasst diesen gesamten Pfad in der Vorderseite der Karte — z. B. wird ein tief verschachteltes `Function :: Powerhouse` zu `Cell Anatomy > Mitochondria > … > Function` — dargestellt auf der einzelnen Überschriftsebene deines Profils (eine alleinstehende Notiztitel-H1 wird weggelassen). Wähle eine beliebige Ebene über die vorinstallierten **Heading 1–6**-Profile.
+6. **Intelligentes Auto-Routing wählt das beste Layout.** Kurze einzeilige Karten werden zu Zeilen in einer kompakten **Tabelle** (kein endloses Scrollen bei Vokabeln); mehrzeilige Karten — mit Codeblöcken, Listen oder Mathematik — werden zu **Überschriften**, damit ihre Formatierung erhalten bleibt. Du kannst dies im Dialog auf *nur Überschriften* oder *nur Tabellen* umstellen.
+7. **Auch Ganz-Notiz-Wiederholungen werden migriert.** Notizen, die du als Ganzes wiederholt hast (das `#review`-Tag), werden zu Decks-Karten im **Titelmodus** (Dateiname = Vorderseite, die gesamte Notiz = Rückseite) unter einem eigenen `…/review`-Profil. Ihr Zeitplan wird aus dem `sr-*`-Frontmatter der Notiz oder ihrer Markierung am Dateiende gelesen.
+8. **Dein Planungszustand wird in FSRS-6 übersetzt.** Decks liest die alten `<!--SR:-->`-Metadaten — SM-2 (`due, interval, ease`) oder bereits FSRS — und ordnet sie einem Stabilitäts-/Schwierigkeits-/Fälligkeitszustand zu. Umgekehrte Karten behalten **zwei getrennte** Verläufe (Lesen vs. Abruf), genau so, wie das ursprüngliche Plugin sie gespeichert hat.
+9. **Für jede migrierte Karte wird ein Wiederholungsprotokoll geschrieben**, sodass die Karten in dem Moment, in dem sie in Decks erscheinen, bereits am richtigen Datum mit dem richtigen Intervall fällig sind — du machst weiter, du fängst nicht von vorne an.
+
+Wähle im Dialog ein Profil (oder verwende das Standardprofil) — seine Überschriftsebene und Planungseinstellungen werden auf die migrierten Stapel angewendet.
+
+## Umstieg von Anki
+
+Wechselst du von Anki? Du kannst deine gesamte Sammlung in Decks übernehmen — **ohne Karten, Medien oder Lernverlauf zu verlieren** — und mit FSRS-6 weiterlernen.
+
+Exportiere in Anki deinen Stapel (oder die ganze Sammlung) als **`.apkg`** (**Datei → Exportieren**, Format *Anki-Kartenstapel-Paket*, mit aktivierten Optionen **Medien einschließen** und **Planungsinformationen einschließen**). Öffne dann den Importer über die Symbolleiste des Stapel-Panels oder führe den Befehl **„Import from Anki"** aus, wähle die Datei und einen Zielordner und importiere. Sowohl alte als auch neue (komprimierte) `.apkg`-Exporte funktionieren.
+
+**Deine Anki-Sammlung wird nie verändert.** Der Import ist additiv: Er schreibt neue Dateien in einen von dir gewählten Zielordner, verschachtelt unter dem Tag `#decks/anki`, und lässt die Quell-`.apkg` unangetastet. Ein erneuter Import derselben Datei überschreibt die erzeugten Dateien und aktualisiert ihre Medien — du kannst ihn also jederzeit wiederholen.
+
+**So funktioniert's**
+
+1. **Wähle die `.apkg` und einen Zielordner.** Decks entpackt sie im Speicher, liest die eingebettete Anki-Sammlung (altes oder neueres komprimiertes Format) und kopiert jede referenzierte Mediendatei in einen `media/`-Ordner in deinem Tresor. Die ursprüngliche Anki-Hierarchie (`Eltern::Kind`) bleibt als Ordner erhalten.
+2. **Jeder Notiztyp wird zu einer sauberen Decks-Karte.** Einfache Notizen wechseln automatisch zwischen einer kompakten **Tabelle** und **Überschriften**; **Cloze**-Lücken werden zu `==…==`-Hervorhebungen — auch Clozes innerhalb von `$…$`-MathJax; **mehrfeldige/templatebasierte** Notizen erhalten ein automatisch erzeugtes Template; und Anki-**Bildverdeckungs**karten kommen als native Decks-Verdeckung herüber.
+3. **Medien, Mathematik und Tags kommen mit.** Audio und Bilder werden eingebettet und im Review abgespielt/gerendert; Bilder behalten ihre Originalgröße; LaTeX/MathJax bleibt erhalten; deine Anki-Tags werden gruppiert und in lesbare Abschnitte sortiert.
+4. **Dein Planungszustand wird zu FSRS-6 übersetzt.** Fälligkeitsdatum, Intervall und Ease jeder Karte — plus ihr vollständiger Anki-Lernverlauf — werden auf einen Stabilitäts-/Schwierigkeits-/Fälligkeitszustand abgebildet und als Lernprotokoll geschrieben, sodass Karten **bereits am richtigen Tag mit dem richtigen Intervall fällig** sind. Du machst weiter, du fängst nicht von vorn an.
+5. **Große, medienreiche Stapel bleiben flüssig.** Ein großer Stapel wird automatisch in begrenzte, in Unterordnern abgelegte Dateien aufgeteilt — nach Kartenanzahl und Anzahl der Medieneinbettungen — sodass ein Stapel mit Tausenden Audioclips in Obsidian weiterhin schnell öffnet. Kleinere Stapel bleiben eine einzige Datei.
+6. **Du siehst dabei zu.** Ein Fortschrittsbalken verfolgt jede Phase — Sammlung lesen, Stapel schreiben, Medien kopieren, synchronisieren und Lernverlauf importieren — sodass selbst ein großer Import nie hängend wirkt.
+
+Wähle im Dialog ein Profil (oder nutze die Vorgabe) — seine Überschriftenebene und Planungseinstellungen werden auf die importierten Stapel angewendet, die unter dem Tag `#decks/anki` verschachtelt sind.
+
 ## Versionshinweise & Support
 
 - **Versionshinweise** für jede Version findest du in [`release-notes/`](./release-notes/).
@@ -227,8 +350,14 @@ Decks basiert auf **[`@decks/core`](https://github.com/dscherdi/decks-core)** �
 
 ## Lizenz
 
-Siehe [LICENSE](./LICENSE).
+Dieses Projekt steht unter der **GNU Affero General Public License v3.0 oder höher** (AGPL-3.0-or-later).
+
+Kurz gesagt: Du darfst diese Software frei verwenden, verändern und weitergeben. Wenn du sie jedoch
+veränderst und deine Änderungen weitergibst — oder sie veränderst und Nutzern über ein Netzwerk anbietest —
+musst du deinen geänderten Quellcode unter derselben AGPL-3.0-Lizenz öffentlich verfügbar machen.
+
+Copyright (C) 2026 Xherdi Lika. Siehe die Datei [LICENSE](./LICENSE) für den vollständigen Text.
 
 ---
 
-> Diese Übersetzung ist ein Entwurf — Pull Requests von Muttersprachlern sind willkommen.
+> Diese Übersetzung ist ein Entwurf — Korrekturen und Verbesserungen sind im Issue-Tracker willkommen.

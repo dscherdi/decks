@@ -202,6 +202,44 @@ describe("SyncLog", () => {
       expect(adapter.appendCount).toBe(1);
       expect(log.bufferLengthForTests()).toBe(0);
     });
+
+    it("flushes high-value ops (card_suspend) immediately, without the debounce", async () => {
+      const adapter = new FakeAdapter();
+      const { log } = makeSyncLog(adapter);
+
+      // A suspend is a single user action — it must reach disk now, not in 2s,
+      // so a hard reload right after can't lose it.
+      log.append({ o: "card_suspend", p: { c: "card_a", at: "2026-05-11T00:00:00Z" } });
+      await Promise.resolve();
+      await Promise.resolve();
+      expect(adapter.appendCount).toBe(1); // flushed without advancing the timer
+      expect(log.bufferLengthForTests()).toBe(0);
+
+      // The hot rate path still buffers (debounce unchanged).
+      log.append(sampleOp("card_b"));
+      await Promise.resolve();
+      expect(adapter.appendCount).toBe(1);
+      expect(log.bufferLengthForTests()).toBe(1);
+    });
+
+    it("flushes custom-deck ops immediately (a reload can't drop a new custom deck)", async () => {
+      const customDeckOps: SyncOpV1[] = [
+        { o: "custom_deck_upsert", p: { id: "cd1", name: "My deck", deckType: "manual", filterDefinition: null, lastReviewed: null, created: "2026-05-11T00:00:00Z", modified: "2026-05-11T00:00:00Z" } },
+        { o: "custom_deck_card_add", p: { customDeckId: "cd1", flashcardId: "card_a", created: "2026-05-11T00:00:00Z" } },
+        { o: "custom_deck_card_remove", p: { customDeckId: "cd1", flashcardId: "card_a", removedAt: "2026-05-11T00:00:01Z" } },
+        { o: "custom_deck_delete", p: { id: "cd1", deletedAt: "2026-05-11T00:00:02Z" } },
+        { o: "custom_deck_reset", p: { customDeckId: "cd1", resetAt: "2026-05-11T00:00:03Z" } },
+      ];
+      for (const op of customDeckOps) {
+        const adapter = new FakeAdapter();
+        const { log } = makeSyncLog(adapter);
+        log.append(op);
+        await Promise.resolve();
+        await Promise.resolve();
+        expect(adapter.appendCount).toBe(1); // flushed without advancing the timer
+        expect(log.bufferLengthForTests()).toBe(0);
+      }
+    });
   });
 
   describe("flushNow", () => {
@@ -415,6 +453,34 @@ describe("SyncLog", () => {
       // The kept line must be the recent one.
       const kept = JSON.parse(remaining.split("\n")[0]);
       expect(kept.s).toBe(3);
+    });
+
+    it("succeeds when the rename target already exists (Obsidian-style adapter)", async () => {
+      // Obsidian's adapter.rename throws if the destination already exists.
+      // compact() must clear the destination (and any stale temp) first.
+      class StrictRenameAdapter extends FakeAdapter {
+        async rename(from: string, to: string): Promise<void> {
+          if (this.files.has(to)) {
+            throw new Error("Destination file already exists!");
+          }
+          await super.rename(from, to);
+        }
+      }
+      const adapter = new StrictRenameAdapter();
+      const { log, state } = makeSyncLog(adapter);
+      const path = `${state.getDeviceId()}.deckssynclog`;
+      const now = Date.now();
+      const old = now - 60 * 24 * 60 * 60 * 1000;
+      adapter.files.set(path, makeLine(old, 1) + makeLine(now, 2));
+      // Leave a stale temp behind from a prior interrupted compaction.
+      adapter.files.set(`${path}.compact-tmp`, "stale\n");
+
+      const result = await log.compact(30);
+      expect(result.before).toBe(2);
+      expect(result.after).toBe(1);
+      expect(adapter.files.get(path)!.split("\n").filter(Boolean)).toHaveLength(1);
+      // Running compact again must not error even though the file now exists.
+      await expect(log.compact(30)).resolves.toBeDefined();
     });
 
     it("is a no-op when nothing is older than the cutoff", async () => {

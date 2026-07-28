@@ -14,6 +14,7 @@ Aggiungi il tag `#decks` a un file. Ogni intestazione `##` diventa il fronte di 
 
 - **Le tue note sono già il mazzo.** Tagga un file: ogni intestazione al livello che scegli diventa un fronte e il testo sottostante diventa un retro. Se vieni da Anki, non c'è nulla da scrivere due volte.
 - **Quattro formati, nessuna sintassi da imparare.** Intestazioni, tabelle a due colonne, occlusione d'immagine e spazi vuoti `==cloze==` a partire dalle evidenziazioni che già usi.
+- **Modalità esame.** Sessioni d'esame con voto, con domande a scelta multipla, a risposta scritta e cloze.
 - **Pianificazione nativa FSRS.** Tre profili (Standard / Intensivo / Allenato), target di ritenzione per tag, nessun fardello legato a SM-2.
 - **Ottimizzazione dell'algoritmo.** L'ottimizzatore in un clic allena i pesi di FSRS sulla base della tua cronologia di ripasso: una pianificazione migliore per la tua specifica curva dell'oblio, tutto elaborato localmente (client-side).
 - **Vera sincronizzazione multi-dispositivo.** Il database si unisce automaticamente tramite iCloud/Dropbox: ripassa su telefono e desktop, senza perdere lo storico.
@@ -102,7 +103,33 @@ Ogni testo evidenziato diventa una carta. Durante il ripasso, lo spazio vuoto at
 </details>
 
 <details>
-<summary><b>Occlusione d'immagine</b> — un'immagine più un elenco numerato. I numeri sull'immagine corrispondono all'elenco.</summary>
+<summary><b>Occlusione d'immagine</b> — nascondi regioni di un'immagine e ricorda cosa c'è sotto. Due modi: interattivo (disegnare riquadri) o un elenco numerato.</summary>
+
+**Interattivo (consigliato).** Esegui il comando **«Crea occlusione immagine al cursore»**, scegli un'immagine, poi disegna i riquadri direttamente nell'editor. Inserisci una risposta in Markdown/LaTeX per ogni riquadro, oppure lascialo vuoto per nascondere solo un'etichetta già presente nell'immagine. Viene salvato come un blocco di codice `decks-occlusion` autonomo (le coordinate sono in percentuale, quindi si adatta a qualsiasi dispositivo):
+
+````markdown
+```decks-occlusion
+image: "[[heart.png]]"
+version: 2
+masks:
+  - id: m1
+    x: 12.5
+    y: 30
+    w: 18
+    h: 9.5
+    answer: "**Ventricolo** sinistro"
+  - id: m2
+    x: 55
+    y: 22
+    w: 14
+    h: 8
+    answer: ""
+```
+````
+
+Ogni riquadro è una carta. Durante il ripasso, il riquadro è nascosto sul fronte e rivelato sul retro (con la sua risposta); nella vista di lettura vedi il diagramma completamente etichettato. Modificabile in qualsiasi momento dal pulsante **Modifica** del blocco o dal gestore delle carte.
+
+**Elenco numerato (semplice).** Anche un'immagine incorporata seguita da un elenco numerato funziona:
 
 ```markdown
 ## Ossa del braccio
@@ -114,7 +141,9 @@ Ogni testo evidenziato diventa una carta. Durante il ripasso, lo spazio vuoto at
 3. ==Ulna==
 ```
 
-Ogni elemento dell'elenco è una carta. L'immagine (con le sue etichette numerate) viene mostrata sul fronte; l'elemento corrispondente viene oscurato sul retro. Si basa sugli spazi vuoti (cloze), quindi questa funzione deve essere abilitata nel profilo.
+Ogni elemento dell'elenco è una carta; l'immagine viene mostrata sul fronte e l'elemento corrispondente viene oscurato sul retro.
+
+Entrambi si basano sugli spazi vuoti (cloze), quindi cloze deve essere abilitato nel profilo e il blocco deve trovarsi sotto un'intestazione analizzata.
 
 </details>
 
@@ -137,11 +166,105 @@ Crea carte su un file Canvas di Obsidian (`.canvas`) anziché su un file Markdow
 
 ![Canvas Spatial Cards Demo](./canvas_spatial_cards_demo.gif)
 
+## Modelli
+
+Renderizza le righe di una tabella tramite un design di carta che crei una sola volta. Scrivilo in HTML/CSS o
+Markdown, inserisci i segnaposto `{{Column}}` e collegalo alle tue tabelle con un tag: un modello dà stile a
+ogni riga corrispondente.
+
+```decks-html-front
+<ruby>{{Word}}<rt>{{Reading}}</rt></ruby>
+```
+
+In **Impostazioni → Modelli** scegli una cartella, poi assegna lo stesso tag al file del modello e
+all'intestazione della tabella: fatto. I modelli supportano le facce fronte/retro/note in HTML o Markdown,
+vengono renderizzati in un ambiente isolato, sanificato e consapevole del tema, ed espongono variabili CSS
+(`--padding`, `--align`, `--bg`, …) per il pieno controllo del layout — da comode carte di lettura a design
+personalizzati a tutto campo. Le tabelle senza un modello corrispondente usano le colonne normali.
+
+Vedi **[docs/TEMPLATES.md](docs/TEMPLATES.md)** per la guida completa ed esempi.
+
+## Mazzi d'esame
+
+Esegui un mazzo come esame con voto: un insieme di domande estratte a cui rispondere in un'unica sessione,
+in qualsiasi ordine, con un riepilogo dei risultati — e, facoltativamente, un limite di tempo e un punteggio
+di superamento — alla fine. Gli esami si abilitano per profilo e aggiungono un solo formato di scrittura:
+un'intestazione seguita da un elenco di attività diventa una carta a scelta multipla.
+
+```markdown
+## Quale elemento è un gas nobile?
+
+- [ ] Ossigeno
+- [x] Argon
+- [ ] Azoto
+```
+
+`- [x]` contrassegna un'opzione corretta; spuntandone più di una, la domanda diventa a selezione multipla.
+
+- Tagga una nota con il sottotag `exams` del tuo tag dei mazzi (per impostazione predefinita `#decks/exams`)
+  per usare il profilo preinstallato **Exams**, oppure attiva **Domande d'esame** in qualsiasi profilo.
+- Avvia dal menu del mazzo (**⋮ → Inizia esame**) o cliccando su un mazzo d'esame; una finestra di
+  configurazione mostra il numero di domande e ti permette di regolare le impostazioni dell'esame.
+- Oltre alla scelta multipla, le carte intestazione-risposta e le righe delle tabelle vengono poste come
+  domande a risposta scritta, e le carte cloze mostrano la frase con le evidenziazioni trasformate in spazi
+  da compilare.
+- Le risposte scritte vengono valutate in modo esatto, con tolleranza per i piccoli errori di battitura o in
+  autovalutazione; i valori predefiniti dell'esame (numero di domande, limite di tempo, punteggio di
+  superamento, mescolamento, momento del feedback, etichette delle opzioni) risiedono nel profilo.
+- Gli esami completati vengono salvati nel database del plugin, si uniscono tra i dispositivi e sono inclusi
+  nei backup.
+
+Un mazzo "Esame demo" che mostra ogni formato di domanda viene creato alla prima installazione (o tramite il
+comando **Crea mazzo d'esame demo**).
+
+Vedi **[docs/EXAM_DECKS.md](docs/EXAM_DECKS.md)** per le regole di scrittura complete.
+
 ## Pianificazione personalizzata
 
 FSRS viene fornito con impostazioni predefinite logiche che funzionano benissimo fin da subito. Una volta accumulate circa 100 revisioni, puoi allenare i 21 pesi dell'algoritmo sulla tua cronologia e ottenere pianificazioni personalizzate per la tua specifica curva dell'oblio, proprio come fa Anki per desktop, ma tutto in locale, senza server e senza telemetria.
 
 **Impostazioni → Ottimizzazione dell'algoritmo → Ottimizza parametri.** L'allenamento richiede pochi secondi per mazzi tipici; vedrai un confronto "log-loss" (prima e dopo). Clicca su "Applica" per usare i pesi allenati o "Scarta" per mantenere le impostazioni predefinite.
+
+## Migrazione da Spaced Repetition
+
+Usi già il plugin **Spaced Repetition**? Puoi passare a Decks **senza perdere le tue carte o la cronologia delle ripetizioni** — e continuare le ripetizioni esattamente da dove le avevi lasciate.
+
+Apri il migratore dalla barra degli strumenti del pannello dei mazzi (l'icona del cubo) oppure esegui il comando **"Migrate from Spaced Repetition plugin"**.
+
+**Le tue note originali non vengono mai toccate.** La migrazione è additiva: scrive nuovi file in una cartella di destinazione che scegli tu (rispecchiando la tua struttura) e lascia le note di origine esattamente come sono. Rieseguire il migratore si limita a sovrascrivere i file che ha generato.
+
+**Come funziona**
+
+1. **Scegli una cartella di origine** da analizzare (oppure lasciala vuota per analizzare l'intero vault) e una cartella di destinazione per l'output. Decks trova ogni nota con carte legacy — su riga singola (`Front :: Back`), invertite (`Front ::: Back`), su più righe (`?` / `??`), cloze (`==…==` / `{{…}}`) — e le ripetizioni dell'intera nota (il tag `#review`).
+2. **Ogni nota viene suddivisa in due file puliti.** Un **mazzo di flashcard** (`<Nota> (Flashcard)`) contiene le carte estratte nel formato standard di Decks, mentre una **nota leggibile** conserva il testo — con la sintassi delle carte *normalizzata* in testo normale (`::` / `:::` diventano " — ", `?` / `??` uniscono domanda e risposta e le cloze `==…==` / `{{…}}` vengono ripristinate alla loro risposta). I separatori che hai configurato vengono rispettati, quindi funziona anche se li hai personalizzati. Nulla viene rimosso — la tua nota di lettura resta completa.
+3. **I file vengono collegati tra loro nel frontmatter.** La nota leggibile riceve una proprietà `Flashcard` che punta al suo mazzo e una proprietà `Nota di origine` che rimanda all'originale; anche il mazzo riceve una proprietà `Nota di origine`. Se una nota usa già uno di quei nomi di proprietà, il migratore lo sovrascrive invece di creare un duplicato. I tuoi tag vengono preservati — il tag base legacy (es. `#flashcards`) viene tradotto nel tag Decks che hai configurato.
+4. **Le carte invertite diventano due carte.** Una carta `Front ::: Back` viene espansa in una carta diretta e una carta invertita nello **stesso** file del mazzo, così ogni direzione viene pianificata in modo indipendente.
+5. **La struttura annidata viene appiattita in contesto.** SR tratta le intestazioni superiori e gli elenchi puntati annidati come contesto di una carta. Decks cattura l'intero percorso nel fronte della carta — ad esempio una `Function :: Powerhouse` profondamente annidata diventa `Cell Anatomy > Mitochondria > … > Function` — visualizzato al singolo livello di intestazione del tuo profilo (un H1 isolato che è il titolo della nota viene omesso). Scegli qualsiasi livello tramite i profili preinstallati **Heading 1–6**.
+6. **L'instradamento automatico intelligente sceglie il layout migliore.** Le carte brevi su riga singola diventano righe in una **tabella** compatta (niente scorrimento infinito per il vocabolario); le carte su più righe — con blocchi di codice, elenchi o formule matematiche — diventano **intestazioni** così che la loro formattazione sopravviva. Puoi forzare *tutte intestazioni* o *tutte tabelle* nella finestra di dialogo.
+7. **Anche le ripetizioni dell'intera nota vengono migrate.** Le note che hai ripetuto nella loro interezza (il tag `#review`) diventano carte Decks in **modalità titolo** (nome del file = fronte, intera nota = retro) sotto un profilo dedicato `…/review`. La loro pianificazione viene letta dal frontmatter `sr-*` della nota o dal suo marcatore a fine file.
+8. **Il tuo stato di pianificazione viene tradotto in FSRS-6.** Decks legge i metadati legacy `<!--SR:-->` — SM-2 (`due, interval, ease`) o già FSRS — e li mappa in uno stato di stabilità/difficoltà/scadenza. Le carte invertite mantengono **due cronologie separate** (lettura vs. richiamo), esattamente come le memorizzava il plugin originale.
+9. **Un log di ripetizione viene scritto per ogni carta migrata**, così nel momento in cui le carte compaiono in Decks sono già in scadenza alla data corretta con l'intervallo corretto — riprendi, non ricominci.
+
+Scegli un profilo nella finestra di dialogo (o usa quello predefinito) — il suo livello di intestazione e le sue impostazioni di pianificazione vengono applicati ai mazzi migrati.
+
+## Migrazione da Anki
+
+Passi da Anki? Puoi portare l'intera collezione in Decks **senza perdere carte, media o cronologia di ripasso** — e continuare a studiare con FSRS-6.
+
+In Anki, esporta il mazzo (o l'intera collezione) come **`.apkg`** (**File → Esporta**, formato *Pacchetto mazzo Anki*, con **Includi media** e **Includi informazioni di pianificazione** spuntati). Poi apri l'importatore dalla barra degli strumenti del pannello mazzi o esegui il comando **«Import from Anki»**, scegli il file e una cartella di destinazione e importa. Funzionano sia gli export `.apkg` vecchi sia quelli nuovi (compressi).
+
+**La tua collezione di Anki non viene mai toccata.** L'import è additivo: scrive nuovi file in una cartella di destinazione a tua scelta, annidata sotto il tag `#decks/anki`, e lascia il `.apkg` di origine com'è. Reimportare lo stesso file sovrascrive i file generati e aggiorna i loro media — puoi quindi rieseguirlo quando vuoi.
+
+**Come funziona**
+
+1. **Scegli il `.apkg` e una cartella di destinazione.** Decks lo decomprime in memoria, legge la collezione Anki incorporata (formato vecchio o il nuovo compresso) e copia ogni file multimediale referenziato in una cartella `media/` del tuo vault. La gerarchia originale dei mazzi Anki (`Genitore::Figlio`) è mantenuta come cartelle.
+2. **Ogni tipo di nota diventa una carta Decks pulita.** Le note di base passano automaticamente tra una **tabella** compatta e le **intestazioni**; le **cloze** diventano evidenziazioni `==…==` — incluse le cloze dentro MathJax `$…$`; le note **multicampo / con modello** ricevono un modello generato automaticamente; e le carte di **occlusione immagine** di Anki arrivano come occlusione nativa di Decks.
+3. **Media, matematica e tag vengono mantenuti.** Audio e immagini sono incorporati e vengono riprodotti/renderizzati in ripasso; le immagini mantengono la dimensione originale; LaTeX/MathJax è preservato; i tag di Anki vengono raggruppati e ordinati in sezioni leggibili.
+4. **Il tuo stato di pianificazione è tradotto in FSRS-6.** Data di scadenza, intervallo e facilità di ogni carta — più la sua intera cronologia di ripasso di Anki — sono mappati su uno stato stabilità/difficoltà/scadenza e scritti come registro di ripasso, così le carte appaiono **già in scadenza alla data giusta con l'intervallo giusto**. Riprendi, non ricominci.
+5. **I mazzi grandi e ricchi di media restano fluidi.** Un mazzo grande viene suddiviso automaticamente in file limitati e organizzati in sottocartelle — per numero di carte e numero di media incorporati — così un mazzo con migliaia di clip audio si apre comunque velocemente in Obsidian. I mazzi più piccoli restano un singolo file.
+6. **Lo vedi accadere.** Una barra di avanzamento segue ogni fase — lettura della collezione, scrittura dei mazzi, copia dei media, sincronizzazione e import della cronologia di ripasso — così anche un import grande non sembra mai bloccato.
+
+Scegli un profilo nella finestra (o usa quello predefinito): il suo livello di intestazione e le impostazioni di pianificazione vengono applicati ai mazzi importati, annidati sotto il tag `#decks/anki`.
 
 ## Note di rilascio e Supporto
 
@@ -167,8 +290,15 @@ Decks è basato su **[`@decks/core`](https://github.com/dscherdi/decks-core)** �
 
 ## Licenza
 
-Vedi [LICENSE](./LICENSE).
+Questo progetto è rilasciato sotto la **GNU Affero General Public License v3.0 o successiva**
+(AGPL-3.0-or-later).
+
+In breve: sei libero di usare, modificare e distribuire questo software. Tuttavia, se lo modifichi e
+distribuisci le tue modifiche — o lo modifichi e lo offri agli utenti tramite una rete — devi rendere il tuo
+codice sorgente modificato pubblicamente disponibile sotto la stessa licenza AGPL-3.0.
+
+Copyright (C) 2026 Xherdi Lika. Vedi il file [LICENSE](./LICENSE) per il testo completo.
 
 ---
 
-> Questa traduzione è una bozza — le Pull Request da parte di madrelingua sono ben accette.
+> Questa traduzione è una bozza — correzioni e suggerimenti sono benvenuti nell'issue tracker.

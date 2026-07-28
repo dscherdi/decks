@@ -11,6 +11,7 @@ import type { FlashcardEdits, EditResult } from "../services/FlashcardWriter";
 import FlashcardEditModal from "./FlashcardEditModal.svelte";
 import { mount, unmount } from "svelte";
 import type { Svelte5MountedComponent } from "../types/svelte-components";
+import { makeModalResponsive, type ResponsiveModalHandle } from "../utils/responsive-modal";
 
 /** Per-refactor options resolved by the AI drawer (context already built). */
 export interface RefactorUiOptions {
@@ -40,9 +41,10 @@ export class FlashcardEditModalWrapper extends Modal {
   private onSave: (edits: FlashcardEdits) => Promise<EditResult>;
   private onClosed?: () => void;
   private aiOptions?: FlashcardEditAiOptions;
+  private templateColumns: { headers: string[]; cells: string[] } | null;
   private component: Svelte5MountedComponent | null = null;
   private markdownComponents: Component[] = [];
-  private resizeHandler?: () => void;
+  private responsiveHandle?: ResponsiveModalHandle;
 
   constructor(
     app: App,
@@ -50,12 +52,14 @@ export class FlashcardEditModalWrapper extends Modal {
     onSave: (edits: FlashcardEdits) => Promise<EditResult>,
     onClosed?: () => void,
     aiOptions?: FlashcardEditAiOptions,
+    templateColumns?: { headers: string[]; cells: string[] } | null,
   ) {
     super(app);
     this.card = card;
     this.onSave = onSave;
     this.onClosed = onClosed;
     this.aiOptions = aiOptions;
+    this.templateColumns = templateColumns ?? null;
   }
 
   private renderMarkdown(content: string, el: HTMLElement): void {
@@ -80,24 +84,8 @@ export class FlashcardEditModalWrapper extends Modal {
     const { contentEl } = this;
     contentEl.empty();
 
-    const modalEl = this.containerEl.querySelector(".modal");
-    if (modalEl instanceof HTMLElement) {
-      modalEl.addClass("decks-modal");
-      modalEl.addClass("decks-flashcard-edit-modal");
-    }
+    this.responsiveHandle = makeModalResponsive(this, ["decks-flashcard-edit-modal"]);
     contentEl.addClass("decks-flashcard-edit-modal-content");
-
-    const applyMobileClass = () => {
-      if (!(modalEl instanceof HTMLElement)) return;
-      if (window.innerWidth <= 768) {
-        modalEl.addClass("decks-modal-mobile");
-      } else {
-        modalEl.removeClass("decks-modal-mobile");
-      }
-    };
-    applyMobileClass();
-    window.addEventListener("resize", applyMobileClass);
-    this.resizeHandler = applyMobileClass;
 
     this.component = mount(FlashcardEditModal, {
       target: contentEl,
@@ -114,15 +102,14 @@ export class FlashcardEditModalWrapper extends Modal {
         defaultModel: this.aiOptions?.defaultModel ?? "",
         onRefactor: this.aiOptions?.onRefactor,
         onSplit: this.aiOptions?.onSplit,
+        templateColumns: this.templateColumns,
       },
     }) as Svelte5MountedComponent;
   }
 
   onClose() {
-    if (this.resizeHandler) {
-      window.removeEventListener("resize", this.resizeHandler);
-      this.resizeHandler = undefined;
-    }
+    this.responsiveHandle?.dispose();
+    this.responsiveHandle = undefined;
     if (this.component) {
       void unmount(this.component);
       this.component = null;

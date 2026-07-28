@@ -8,7 +8,7 @@
 import { MainDatabaseService } from "../../database/MainDatabaseService";
 import type { DeckProfile } from "../../database/types";
 import { DEFAULT_PROFILE_ID } from "../../database/types";
-import { Scheduler } from "../../services/Scheduler";
+import { Scheduler } from "@decks/core";
 import {
   DatabaseTestUtils,
   setupTestDatabase,
@@ -90,6 +90,66 @@ describe("Profiles Integration Tests", () => {
       expect(updated?.headerLevel).toBe(4);
       // Unchanged fields should remain the same
       expect(updated?.reviewOrder).toBe("due-date");
+    });
+
+    it("should round-trip and update TTS voice settings", async () => {
+      const profile: Omit<DeckProfile, "created" | "modified"> = {
+        id: "profile_tts",
+        name: "TTS Profile",
+        hasNewCardsLimitEnabled: false,
+        newCardsPerDay: 20,
+        hasReviewCardsLimitEnabled: false,
+        reviewCardsPerDay: 100,
+        headerLevel: 2,
+        reviewOrder: "due-date",
+        fsrs: { requestRetention: 0.9, profile: "STANDARD" },
+        ttsVoice: "com.apple.voice.Anna",
+        ttsRate: 1.3,
+        ttsLang: "de-DE",
+        isDefault: false,
+      };
+
+      await db.createProfile(profile);
+      await db.save();
+
+      const created = await db.getProfileById("profile_tts");
+      expect(created?.ttsVoice).toBe("com.apple.voice.Anna");
+      expect(created?.ttsRate).toBe(1.3);
+      expect(created?.ttsLang).toBe("de-DE");
+
+      await db.updateProfile("profile_tts", {
+        ttsVoice: "com.apple.voice.Otto",
+        ttsRate: 0.8,
+        ttsLang: "en-US",
+      });
+      await db.save();
+
+      const updated = await db.getProfileById("profile_tts");
+      expect(updated?.ttsVoice).toBe("com.apple.voice.Otto");
+      expect(updated?.ttsRate).toBe(0.8);
+      expect(updated?.ttsLang).toBe("en-US");
+    });
+
+    it("leaves TTS fields undefined when unset", async () => {
+      const profile: Omit<DeckProfile, "created" | "modified"> = {
+        id: "profile_no_tts",
+        name: "No TTS",
+        hasNewCardsLimitEnabled: false,
+        newCardsPerDay: 20,
+        hasReviewCardsLimitEnabled: false,
+        reviewCardsPerDay: 100,
+        headerLevel: 2,
+        reviewOrder: "due-date",
+        fsrs: { requestRetention: 0.9, profile: "STANDARD" },
+        isDefault: false,
+      };
+      await db.createProfile(profile);
+      await db.save();
+
+      const created = await db.getProfileById("profile_no_tts");
+      expect(created?.ttsVoice).toBeUndefined();
+      expect(created?.ttsRate).toBeUndefined();
+      expect(created?.ttsLang).toBeUndefined();
     });
 
     it("should delete profile and reset affected decks to DEFAULT", async () => {
@@ -235,6 +295,38 @@ describe("Profiles Integration Tests", () => {
       expect(mappings.length).toBe(2);
       expect(mappings.some((m) => m.tag === "#math")).toBe(true);
       expect(mappings.some((m) => m.tag === "#science")).toBe(true);
+    });
+
+    it("resolves a migration subtag to its own profile without disturbing #decks", async () => {
+      const mk = (id: string): Omit<DeckProfile, "created" | "modified"> => ({
+        id,
+        name: id,
+        hasNewCardsLimitEnabled: false,
+        newCardsPerDay: 20,
+        hasReviewCardsLimitEnabled: false,
+        reviewCardsPerDay: 100,
+        headerLevel: 2,
+        reviewOrder: "due-date",
+        fsrs: { requestRetention: 0.9, profile: "STANDARD" },
+        isDefault: false,
+      });
+      await db.createProfile(mk("profile_user"));
+      await db.createProfile(mk("profile_migration"));
+
+      // User already has a profile on #decks.
+      await db.applyProfileToTag("profile_user", "#decks");
+      // Migration maps the chosen profile only to the migration subtag.
+      await db.createTagMapping("profile_migration", "#decks/migration");
+      await db.save();
+
+      // Migrated deck resolves to the migration profile (most-specific wins);
+      // a normal #decks deck still resolves to the user's profile.
+      expect(await db.getProfileIdForTag("#decks/migration/cleancode")).toBe("profile_migration");
+      expect(await db.getProfileIdForTag("#decks/notes")).toBe("profile_user");
+
+      // The user's #decks mapping is untouched.
+      const userMappings = await db.getTagMappingsForProfile("profile_user");
+      expect(userMappings.some((m) => m.tag === "#decks")).toBe(true);
     });
 
     it("should delete tag mappings when profile is deleted", async () => {

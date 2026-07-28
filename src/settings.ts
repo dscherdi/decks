@@ -1,4 +1,13 @@
-import { type AiProviderId, type LanguagePreference } from "@decks/core";
+import {
+  type AiProviderId,
+  type ExamSettings,
+  type LanguagePreference,
+  DEFAULT_EXAM_SETTINGS,
+} from "@decks/core";
+import {
+  type ReviewShortcuts,
+  DEFAULT_REVIEW_SHORTCUTS,
+} from "./utils/shortcuts";
 
 export type DeckListSortMode =
   | "name-asc"
@@ -8,15 +17,21 @@ export type DeckListSortMode =
   | "due-asc"
   | "due-desc";
 
+// Deck list layout: the nested folder tree or a flat list (sections kept).
+export type DeckListView = "tree" | "flat";
+
 export interface DecksSettings {
   // Review Session Settings
   review: {
     showProgress: boolean;
     enableKeyboardShortcuts: boolean;
+    shortcuts: ReviewShortcuts; // Customizable review keys (4 ratings + reveal)
     sessionDuration: number; // Session duration in minutes (1-60, default 25)
     nextDayStartsAt: number; // Hour (0-23) when study day rolls over (default 4 AM)
     leechThreshold: number; // Lapses count at/above which a card is flagged as a leech (default 8)
     denseCardCharThreshold: number; // back text length (chars) at/above which a card is flagged as dense (default 500)
+    hasGlobalReviewCap: boolean; // When true, cap total review cards per day across ALL decks combined
+    globalReviewCapAmount: number; // Max review cards per day across all decks (when hasGlobalReviewCap)
   };
 
   // Parsing Settings
@@ -45,9 +60,14 @@ export interface DecksSettings {
     pinnedDeckIds: string[];
     // Active sort key + direction for the deck list column headers.
     deckListSort: DeckListSortMode;
+    // Deck list layout: nested folder tree or flat list.
+    deckListView: DeckListView;
     // Decks with totalCount strictly less than this number are hidden
     // from the list. Pinned decks are exempt. 0 disables the filter.
     minDeckCardCount: number;
+    // Branch (section / folder / tag-folder) node ids the user has collapsed
+    // in the unified deck tree. Synced across devices via data.json.
+    collapsedDeckNodeIds: string[];
     // Per-column widths (in pixels) for the flashcard manager table.
     // Empty object means use defaults from the grid template.
     managerColumnWidths: Record<string, number>;
@@ -106,19 +126,42 @@ export interface DecksSettings {
     localBaseUrl: string; // for the openai-compatible provider
   };
 
+  // Table template engine. Templates are authored as markdown files inside
+  // `templateFolder` and synced to the deck_templates DB cache; empty disables.
+  templates: {
+    templateFolder: string;
+  };
+
+  // Exam session defaults used for selections without a profile of their own
+  // (custom decks). Profile-mapped decks use their profile's exam settings.
+  exam: ExamSettings;
+
   // Internal tracking
   hasCreatedTestDeck: boolean;
   hasCreatedCanvasTestDeck: boolean;
+  hasCreatedExamDeck: boolean;
+  // One-time cleanup of orphaned cards left by deck deletions that ran without
+  // FK cascade enforcement (pre-2.5.7 behaviour).
+  orphanPruneV1Done?: boolean;
+  // One-time pass writing anchor tokens for all reviewed cards (per device;
+  // idempotent, so every device running it converges on the same bindings).
+  anchorMigrationV1Done?: boolean;
+  // One-time creation of the `<deckTag>/exams` tag mapping for the Exams
+  // preset profile. Guarded so a user who deletes the mapping keeps it gone.
+  examsPresetMappingDone?: boolean;
 }
 
 export const DEFAULT_SETTINGS: DecksSettings = {
   review: {
     showProgress: true,
     enableKeyboardShortcuts: true,
+    shortcuts: { ...DEFAULT_REVIEW_SHORTCUTS },
     sessionDuration: 25,
     nextDayStartsAt: 4,
     leechThreshold: 8,
     denseCardCharThreshold: 500,
+    hasGlobalReviewCap: false,
+    globalReviewCapAmount: 100,
   },
 
   parsing: {
@@ -140,7 +183,9 @@ export const DEFAULT_SETTINGS: DecksSettings = {
     aiGeneratorDisplayMode: "modal",
     pinnedDeckIds: [],
     deckListSort: "name-asc",
+    deckListView: "tree",
     minDeckCardCount: 0,
+    collapsedDeckNodeIds: [],
     managerColumnWidths: {},
   },
 
@@ -179,6 +224,16 @@ export const DEFAULT_SETTINGS: DecksSettings = {
     localBaseUrl: "http://localhost:11434/v1",
   },
 
+  templates: {
+    templateFolder: "",
+  },
+
+  exam: { ...DEFAULT_EXAM_SETTINGS },
+
   hasCreatedTestDeck: false,
   hasCreatedCanvasTestDeck: false,
+  hasCreatedExamDeck: false,
+  orphanPruneV1Done: false,
+  anchorMigrationV1Done: false,
+  examsPresetMappingDone: false,
 };

@@ -5,6 +5,7 @@ import type { DecksSettings } from "../../settings";
 import StatisticsUI from "../statistics/StatisticsUI.svelte";
 import { mount, unmount } from "svelte";
 import { Logger } from "@/utils/logging";
+import { makeModalResponsive, type ResponsiveModalHandle } from "../../utils/responsive-modal";
 
 export class StatisticsModal extends Modal {
   private statisticsService: StatisticsService;
@@ -12,7 +13,7 @@ export class StatisticsModal extends Modal {
   private deckFilter?: string;
   private component: StatisticsComponent | null = null;
   private logger: Logger;
-  private resizeHandler?: () => void;
+  private responsiveHandle?: ResponsiveModalHandle;
 
   constructor(
     app: App,
@@ -32,16 +33,7 @@ export class StatisticsModal extends Modal {
     const { contentEl } = this;
     contentEl.empty();
 
-    // Add CSS classes for styling
-    const modalEl = this.containerEl.querySelector(".modal");
-    if (modalEl instanceof HTMLElement) {
-      modalEl.addClass("decks-modal");
-      if (window.innerWidth <= 768) {
-        modalEl.addClass("decks-modal-mobile");
-      } else {
-        modalEl.removeClass("decks-modal-mobile");
-      }
-    }
+    this.responsiveHandle = makeModalResponsive(this);
 
     this.containerEl.addClass("decks-statistics-modal-container");
     contentEl.addClass("decks-statistics-modal-content");
@@ -58,30 +50,13 @@ export class StatisticsModal extends Modal {
         },
       },
     }) as StatisticsComponent;
-
-    // Handle window resize for mobile adaptation
-    const handleResize = () => {
-      if (modalEl instanceof HTMLElement) {
-        if (window.innerWidth <= 768) {
-          modalEl.addClass("decks-modal-mobile");
-        } else {
-          modalEl.removeClass("decks-modal-mobile");
-        }
-      }
-    };
-
-    window.addEventListener("resize", handleResize);
-    this.resizeHandler = handleResize;
   }
 
   onClose() {
     const { contentEl } = this;
 
-    // Clean up resize handler
-    if (this.resizeHandler) {
-      window.removeEventListener("resize", this.resizeHandler);
-      this.resizeHandler = undefined;
-    }
+    this.responsiveHandle?.dispose();
+    this.responsiveHandle = undefined;
 
     // Clean up Svelte component
     if (this.component) {

@@ -110,6 +110,27 @@ describe("SyncLog handlers - profile_upsert / profile_delete", () => {
     expect((await db.getProfileById("prof_a"))!.name).toBe("Algebra");
   });
 
+  it("carries TTS voice settings through upsert", async () => {
+    const { db, adapter } = await freshDb();
+    await applyOp(
+      db,
+      "r",
+      entry(
+        1,
+        profileUpsertOp("prof_tts", "Voiced", "2030-01-01T00:00:00Z", {
+          ttsVoice: "voice-uri-x",
+          ttsRate: 1.25,
+          ttsLang: "fr-FR",
+        })
+      ),
+      makeLogger(adapter)
+    );
+    const got = await db.getProfileById("prof_tts");
+    expect(got!.ttsVoice).toBe("voice-uri-x");
+    expect(got!.ttsRate).toBe(1.25);
+    expect(got!.ttsLang).toBe("fr-FR");
+  });
+
   it("tombstones a profile and the read filter hides it", async () => {
     const { db, adapter } = await freshDb();
     await applyOp(

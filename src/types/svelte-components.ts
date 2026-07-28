@@ -3,7 +3,7 @@ import type { Deck, DeckStats } from "../database/types";
 import type { IDatabaseService } from "../database/DatabaseFactory";
 import type { StatisticsService } from "../services/StatisticsService";
 import type { DeckSynchronizer } from "../services/DeckSynchronizer";
-import type { DeckListSortMode } from "../settings";
+import type { DeckListSortMode, DeckListView } from "../settings";
 import type { App } from "obsidian";
 
 // Base Svelte component interface (Svelte 4 style)
@@ -38,13 +38,11 @@ export type AnkiExportComponent = Svelte5MountedComponent & {
   exportData?(): void;
 };
 
-export type DeckConfigComponent = Svelte5MountedComponent & {
-  saveConfig?(): void;
-};
-
 export type ProfilesManagerComponent = Svelte5MountedComponent & {
   loadProfiles?(): Promise<void>;
 };
+
+export type SrMigrationComponent = Svelte5MountedComponent;
 
 // DeckListPanel component - supports both Svelte 4 and Svelte 5 APIs
 export type DeckListPanelComponent = (
@@ -71,11 +69,18 @@ export type DeckListPanelComponent = (
   updatePinnedIds?(ids: string[]): void;
   // Push a new sort mode in after a settings save / cross-device reload.
   updateSortMode?(mode: DeckListSortMode): void;
+  // Push the deck-list view (tree/flat) in after a settings change / reload.
+  updateDeckListView?(view: DeckListView): void;
+  // Push fresh collapsed branch-node ids in after a settings save /
+  // cross-device reload so the tree's expand/collapse state stays in sync.
+  updateCollapsedIds?(ids: string[]): void;
   // Push a new min-card-count threshold in after settings change.
   updateMinDeckCardCount?(value: number): void;
   // Push the AI-enabled toggle in after a settings change so the generate
   // button enables/disables without remounting.
   updateAiEnabled?(enabled: boolean): void;
+  // Push the global daily review-cap status ({done, cap}) or null when disabled.
+  updateGlobalReviewToday?(v: { done: number; cap: number } | null): void;
 };
 
 // Constructor interface for DeckListPanel

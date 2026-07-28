@@ -6,6 +6,7 @@
   import ChapterPanel from "./ChapterPanel.svelte";
   import { buildModelOptions } from "../utils/ai-model-options";
   import BatchCardRow from "./BatchCardRow.svelte";
+  import DocInfoButton from "./DocInfoButton.svelte";
   import { FilePickerModal } from "../utils/file-picker";
   import { FolderPickerModal } from "../utils/folder-picker";
   import {
@@ -660,7 +661,10 @@
 <div class="decks-ai-gen" bind:this={rootEl}>
   <div class="decks-ai-gen-header">
     <div class="decks-ai-gen-header-text">
-      <h3>{g.title}</h3>
+      <div class="decks-ai-gen-title-row">
+        <h3>{g.title}</h3>
+        <DocInfoButton path="ai" />
+      </div>
       <div class="decks-ai-gen-sub">{g.intro}</div>
     </div>
     <div class="decks-ai-gen-header-actions">
@@ -1153,6 +1157,12 @@
   .decks-ai-gen-debug-toggle.is-active {
     color: var(--text-on-accent);
     background: var(--interactive-accent);
+  }
+  .decks-ai-gen-title-row {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 8px;
   }
   .decks-ai-gen-header h3 {
     margin: 0 0 4px 0;

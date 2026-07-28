@@ -1,6 +1,7 @@
 <script lang="ts">
   import type { FilterDefinition, FilterRule, FilterField, FilterOperator, FilterLogic } from "../database/types";
   import { I18n } from "@decks/core";
+  import DocInfoButton from "./DocInfoButton.svelte";
 
   const t = I18n.t;
   const fb = t.filterBuilder;
@@ -171,6 +172,9 @@
 </script>
 
 <div class="decks-fb">
+  <div class="decks-fb-doc">
+    <DocInfoButton path="organizing/custom-decks" />
+  </div>
   <!-- Logic toggle -->
   {#if filterDefinition.rules.length > 1}
     <div class="decks-fb-logic">
@@ -369,6 +373,12 @@
     display: flex;
     flex-direction: column;
     gap: 8px;
+  }
+
+  .decks-fb-doc {
+    display: flex;
+    justify-content: flex-end;
+    margin-bottom: -4px;
   }
 
   .decks-fb-logic {

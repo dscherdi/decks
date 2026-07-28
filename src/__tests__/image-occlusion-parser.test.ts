@@ -121,13 +121,13 @@ describe("Image Occlusion Parser", () => {
       expect(cards[0].type).toBe("cloze");
     });
 
-    it("should fall through when cloze is disabled", () => {
+    it("should parse image occlusion even when cloze is disabled", () => {
       const content = `## Anatomy\n\n![[skeleton.png]]\n1. ==Femur==\n2. ==Tibia==`;
       const cards = FlashcardParser.parseFlashcardsFromContent(content, 2, undefined, false);
 
-      expect(cards).toHaveLength(1);
-      expect(cards[0].type).toBe("header-paragraph");
-      expect(cards[0].back).toContain("![[skeleton.png]]");
+      expect(cards).toHaveLength(2);
+      expect(cards.every((c) => c.type === "image-occlusion")).toBe(true);
+      expect(cards[0].front).toBe("![[skeleton.png]]");
     });
   });
 

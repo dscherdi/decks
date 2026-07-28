@@ -20,6 +20,8 @@ interface Mocks {
   deckSynchronizer: jest.Mocked<DeckSynchronizer>;
   logger: jest.Mocked<Logger>;
   scheduleDeckSync: jest.Mock<void, [string]>;
+  scheduleFullSync: jest.Mock<void, []>;
+  scheduleStatsRefresh: jest.Mock<void, []>;
   refreshStats: jest.Mock<Promise<void>, []>;
 }
 
@@ -50,6 +52,8 @@ function makeMocks(): Mocks {
     deckSynchronizer,
     logger,
     scheduleDeckSync: jest.fn(),
+    scheduleFullSync: jest.fn(),
+    scheduleStatsRefresh: jest.fn(),
     refreshStats: jest.fn().mockResolvedValue(undefined),
   };
 }
@@ -62,6 +66,8 @@ function makeHandler(folder: string, mocks?: Mocks) {
     deckSynchronizer: m.deckSynchronizer,
     logger: m.logger,
     scheduleDeckSync: m.scheduleDeckSync,
+    scheduleFullSync: m.scheduleFullSync,
+    scheduleStatsRefresh: m.scheduleStatsRefresh,
     refreshStats: m.refreshStats,
   });
   return { handlers, mocks: m };
@@ -139,24 +145,24 @@ describe("CanvasFileEventHandlers.onModified", () => {
 });
 
 describe("CanvasFileEventHandlers.onCreated", () => {
-  it("kicks a full discovery sync when a canvas lands in the folder", async () => {
+  it("schedules a debounced full discovery sync when a canvas lands in the folder", async () => {
     const { handlers, mocks } = makeHandler("Canvas decks");
     await handlers.onCreated(new TFile("Canvas decks/A.canvas"));
-    expect(mocks.deckSynchronizer.sync).toHaveBeenCalledTimes(1);
-    expect(mocks.refreshStats).toHaveBeenCalled();
+    expect(mocks.scheduleFullSync).toHaveBeenCalledTimes(1);
+    // No immediate full sync — it's deferred to the debounced scheduler.
+    expect(mocks.deckSynchronizer.sync).not.toHaveBeenCalled();
   });
 
   it("does nothing when the new canvas is outside the configured folder", async () => {
     const { handlers, mocks } = makeHandler("Canvas decks");
     await handlers.onCreated(new TFile("Other/A.canvas"));
-    expect(mocks.deckSynchronizer.sync).not.toHaveBeenCalled();
-    expect(mocks.refreshStats).not.toHaveBeenCalled();
+    expect(mocks.scheduleFullSync).not.toHaveBeenCalled();
   });
 
   it("does nothing when canvas scanning is disabled", async () => {
     const { handlers, mocks } = makeHandler("");
     await handlers.onCreated(new TFile("Canvas decks/A.canvas"));
-    expect(mocks.deckSynchronizer.sync).not.toHaveBeenCalled();
+    expect(mocks.scheduleFullSync).not.toHaveBeenCalled();
   });
 });
 
@@ -165,7 +171,7 @@ describe("CanvasFileEventHandlers.onDeleted", () => {
     const { handlers, mocks } = makeHandler("Canvas decks");
     await handlers.onDeleted("Canvas decks/A.canvas");
     expect(mocks.db.deleteDeckByFilepath).toHaveBeenCalledWith("Canvas decks/A.canvas");
-    expect(mocks.refreshStats).toHaveBeenCalled();
+    expect(mocks.scheduleStatsRefresh).toHaveBeenCalled();
   });
 
   it("does not throw when no matching deck exists", async () => {

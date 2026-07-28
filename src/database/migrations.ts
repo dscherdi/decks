@@ -3,7 +3,12 @@ import {
   CREATE_TABLES_SQL,
   CURRENT_SCHEMA_VERSION,
   buildMigrationSQL,
+  remapCardIdsToDeckIndependent,
 } from "@decks/core";
+
+// Card IDs became deck-independent in this schema version. Cards migrated from
+// an earlier version have their review history re-pointed before the rebuild.
+const DECK_INDEPENDENT_ID_VERSION = 36;
 
 // Migration helper functions
 export function getCurrentSchemaVersion(db: Database): number {
@@ -61,6 +66,12 @@ export function migrate(
   );
 
   try {
+    // Re-point review history to deck-independent card IDs while the old IDs
+    // are still present — buildMigrationSQL drops and rebuilds `flashcards`.
+    if (currentVersion > 0 && currentVersion < DECK_INDEPENDENT_ID_VERSION) {
+      const remapped = remapCardIdsToDeckIndependent(db);
+      log(`Re-pointed review history for ${remapped} cards to deck-independent IDs`);
+    }
     // Migrate existing tables first (rebuilds old schemas to new shape)
     const migrationSQL = buildMigrationSQL(db);
     db.run(migrationSQL);

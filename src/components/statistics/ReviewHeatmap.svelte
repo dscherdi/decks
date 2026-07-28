@@ -226,7 +226,9 @@
   export async function refresh() {
     let newCounts: Map<string, number>;
     try {
-      newCounts = await getReviewCounts(366);
+      // All-time (0): the grid renders a calendar year and filters by currentYear,
+      // so the year selector can reach historical (e.g. migrated) reviews.
+      newCounts = await getReviewCounts(0);
     } catch (error) {
       console.error("Failed to load review counts:", error);
       isLoading = false;
@@ -412,6 +414,24 @@
     background-color: var(--interactive-hover);
     color: var(--text-normal);
     border-color: var(--background-modifier-border-hover);
+  }
+
+  /* Flat interaction — no focus ring and no press "bounce" on the collapse
+     toggle or the year nav buttons. */
+  .decks-nav-button:active {
+    transform: none;
+  }
+
+  .decks-nav-button:focus,
+  .decks-nav-button:focus-visible,
+  .decks-heatmap-header-clickable:focus,
+  .decks-heatmap-header-clickable:focus-visible {
+    outline: none;
+    box-shadow: none;
+  }
+
+  .decks-heatmap-header-clickable:active {
+    transform: none;
   }
 
   .decks-current-year {

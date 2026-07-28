@@ -65,6 +65,61 @@ describe("sortDeckList", () => {
       expect(sorted.map((i) => i.name)).toEqual(["Apple", "banana", "cherry"]);
     });
 
+    it("sorts embedded numbers naturally (Cyrillic)", () => {
+      const names = [
+        "Урок 1",
+        "Урок 10",
+        "Урок 11",
+        "Урок 12",
+        "Урок 2",
+        "Урок 3",
+      ];
+      // Shuffle-ish input; expect ascending natural order.
+      const items: Item[] = [
+        { id: "a", name: "Урок 10" },
+        { id: "b", name: "Урок 2" },
+        { id: "c", name: "Урок 1" },
+        { id: "d", name: "Урок 12" },
+        { id: "e", name: "Урок 3" },
+        { id: "f", name: "Урок 11" },
+      ];
+      const sorted = sortDeckList(items, idOf, noStats, new Set(), "name-asc");
+      expect(sorted.map((i) => i.name)).toEqual([
+        "Урок 1",
+        "Урок 2",
+        "Урок 3",
+        "Урок 10",
+        "Урок 11",
+        "Урок 12",
+      ]);
+      // Sanity: this differs from plain lexicographic order.
+      expect(sorted.map((i) => i.name)).not.toEqual([...names].sort());
+    });
+
+    it("sorts embedded numbers naturally (Latin, case-insensitive)", () => {
+      const items: Item[] = [
+        { id: "1", name: "File10" },
+        { id: "2", name: "file2" },
+        { id: "3", name: "File1" },
+      ];
+      const sorted = sortDeckList(items, idOf, noStats, new Set(), "name-asc");
+      expect(sorted.map((i) => i.name)).toEqual(["File1", "file2", "File10"]);
+    });
+
+    it("name-desc reverses natural order", () => {
+      const items: Item[] = [
+        { id: "a", name: "Lesson 2" },
+        { id: "b", name: "Lesson 10" },
+        { id: "c", name: "Lesson 1" },
+      ];
+      const sorted = sortDeckList(items, idOf, noStats, new Set(), "name-desc");
+      expect(sorted.map((i) => i.name)).toEqual([
+        "Lesson 10",
+        "Lesson 2",
+        "Lesson 1",
+      ]);
+    });
+
     it("does not mutate the input array", () => {
       const items: Item[] = [
         { id: "1", name: "Charlie" },

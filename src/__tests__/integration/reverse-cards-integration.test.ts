@@ -169,7 +169,7 @@ describe("Reverse Cards Integration Tests", () => {
       expect(regularIds).toHaveLength(1);
       expect(reverseIds).toHaveLength(1);
 
-      expect(reverseIds[0].id).toBe(generateReverseFlashcardId("Capital of France", deck.id));
+      expect(reverseIds[0].id).toBe(generateReverseFlashcardId("Capital of France"));
     });
   });
 

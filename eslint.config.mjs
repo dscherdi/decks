@@ -21,6 +21,8 @@ export default [
       "**/__mocks__/**",
       "**/*.test.ts",
       "**/*.spec.ts",
+      // Node/jest bootstrap that polyfills window from the Node global.
+      "src/test-setup.ts",
       "*.config.js",
       "*.config.mjs",
       "esbuild.config.mjs",
@@ -56,7 +58,6 @@ export default [
     },
     rules: {
       ...tsPlugin.configs.recommended.rules,
-      ...obsidianPlugin.configs.recommended,
       "@typescript-eslint/no-unused-vars": [
         "error",
         { argsIgnorePattern: "^_" },
@@ -65,6 +66,7 @@ export default [
       "@typescript-eslint/no-explicit-any": "warn",
       "@typescript-eslint/no-inferrable-types": "error",
       "@typescript-eslint/no-unnecessary-type-assertion": "error",
+      "@typescript-eslint/no-redundant-type-constituents": "error",
       "prefer-const": "error",
       // Promise/async rules
       "@typescript-eslint/no-floating-promises": "error",
@@ -108,6 +110,9 @@ export default [
       "obsidianmd/hardcoded-config-path": "error",
       "obsidianmd/no-forbidden-elements": "error",
       "obsidianmd/no-static-styles-assignment": "error",
+      // Popout-window compatibility (matches the Obsidian plugin reviewer).
+      "obsidianmd/no-global-this": "error",
+      "obsidianmd/prefer-active-doc": "error",
     },
   },
 

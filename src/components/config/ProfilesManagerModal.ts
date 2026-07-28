@@ -4,46 +4,45 @@ import type { IDatabaseService } from "../../database/DatabaseFactory";
 import type { ProfilesManagerComponent } from "../../types/svelte-components";
 import ProfilesManagerUI from "./ProfilesManagerUI.svelte";
 import { mount, unmount } from "svelte";
+import { makeModalResponsive, type ResponsiveModalHandle } from "../../utils/responsive-modal";
 
 export class ProfilesManagerModal extends Modal {
   private db: IDatabaseService;
   private profiles: DeckProfile[] = [];
   private component: ProfilesManagerComponent | null = null;
   private onProfilesChanged: () => Promise<void>;
-  private resizeHandler?: () => void;
+  private responsiveHandle?: ResponsiveModalHandle;
   private trainedWeightsAvailable: boolean;
+  private initialTab: "settings" | "assignments";
+  private initialProfileId?: string;
 
   constructor(
     app: App,
     db: IDatabaseService,
     onProfilesChanged: () => Promise<void>,
-    trainedWeightsAvailable = false
+    trainedWeightsAvailable = false,
+    initialTab: "settings" | "assignments" = "settings",
+    initialProfileId?: string
   ) {
     super(app);
     this.db = db;
     this.onProfilesChanged = onProfilesChanged;
     this.trainedWeightsAvailable = trainedWeightsAvailable;
+    this.initialTab = initialTab;
+    this.initialProfileId = initialProfileId;
   }
 
   async onOpen() {
     const { contentEl } = this;
     contentEl.empty();
 
-    // Add modal classes
-    const modalEl = this.containerEl.querySelector(".modal");
-    if (modalEl instanceof HTMLElement) {
-      modalEl.addClass("decks-modal");
-      if (window.innerWidth <= 768) {
-        modalEl.addClass("decks-modal-mobile");
-      } else {
-        modalEl.removeClass("decks-modal-mobile");
-      }
-    }
+    this.responsiveHandle = makeModalResponsive(this);
 
     contentEl.addClass("decks-profiles-manager-container");
 
-    // Load all profiles
+    // Load all profiles + decks (decks drive the Assignments tab's tag list).
     this.profiles = await this.db.getAllProfiles();
+    const allDecks = await this.db.getAllDecks();
 
     // Mount Svelte component
     this.component = mount(ProfilesManagerUI, {
@@ -52,36 +51,21 @@ export class ProfilesManagerModal extends Modal {
         db: this.db,
         initialProfiles: this.profiles,
         trainedWeightsAvailable: this.trainedWeightsAvailable,
+        initialTab: this.initialTab,
+        initialProfileId: this.initialProfileId,
+        allDecks,
         onclose: () => {
           this.close();
         },
       },
     }) as ProfilesManagerComponent;
-
-    // Handle window resize for mobile adaptation
-    const handleResize = () => {
-      const modalEl = this.containerEl.querySelector(".modal");
-      if (modalEl instanceof HTMLElement) {
-        if (window.innerWidth <= 768) {
-          modalEl.addClass("decks-modal-mobile");
-        } else {
-          modalEl.removeClass("decks-modal-mobile");
-        }
-      }
-    };
-
-    window.addEventListener("resize", handleResize);
-    this.resizeHandler = handleResize;
   }
 
   onClose() {
     const { contentEl } = this;
 
-    // Clean up resize handler
-    if (this.resizeHandler) {
-      window.removeEventListener("resize", this.resizeHandler);
-      this.resizeHandler = undefined;
-    }
+    this.responsiveHandle?.dispose();
+    this.responsiveHandle = undefined;
 
     // Unmount Svelte component
     if (this.component) {

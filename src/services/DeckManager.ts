@@ -1,4 +1,11 @@
-import { TFile, Vault, MetadataCache, Notice, getAllTags } from "obsidian";
+import {
+  TFile,
+  Vault,
+  MetadataCache,
+  Notice,
+  getAllTags,
+  parseFrontMatterTags,
+} from "obsidian";
 import { type Deck, type Flashcard, type DeckStats, type DeckGroup, DEFAULT_PROFILE_ID } from "../database/types";
 import type { IDatabaseService } from "../database/DatabaseFactory";
 import { generateDeckGroupId, generateDeckId, yieldToUI } from "@decks/core";
@@ -11,6 +18,45 @@ import type { DecksSettings } from "../settings";
 
 // Maximum number of flashcards to process per deck for performance
 const MAX_FLASHCARDS_PER_DECK = 50000;
+
+type RawCounts = { newCount: number; dueCount: number };
+type LimitProfile = {
+  hasNewCardsLimitEnabled: boolean;
+  newCardsPerDay: number;
+  hasReviewCardsLimitEnabled: boolean;
+  reviewCardsPerDay: number;
+};
+
+// Apply a profile's per-deck daily limits to raw new/due counts, using the
+// counts already reviewed today. Pure — shared by the batch + single-deck paths.
+function applyPerDeckLimits(
+  raw: RawCounts,
+  profile: LimitProfile,
+  dailyCounts: { newCount: number; reviewCount: number }
+): RawCounts {
+  let newCount = raw.newCount;
+  let dueCount = raw.dueCount;
+  if (profile.hasNewCardsLimitEnabled && profile.newCardsPerDay >= 0) {
+    newCount =
+      profile.newCardsPerDay === 0
+        ? 0
+        : Math.min(raw.newCount, Math.max(0, profile.newCardsPerDay - dailyCounts.newCount));
+  }
+  if (profile.hasReviewCardsLimitEnabled && profile.reviewCardsPerDay >= 0) {
+    dueCount =
+      profile.reviewCardsPerDay === 0
+        ? 0
+        : Math.min(raw.dueCount, Math.max(0, profile.reviewCardsPerDay - dailyCounts.reviewCount));
+  }
+  return { newCount, dueCount };
+}
+
+// Clamp new/due by the shared global daily cap; reviews take the budget first.
+function applyGlobalClamp(counts: RawCounts, globalDailyRemaining: number): RawCounts {
+  const dueCount = Math.min(counts.dueCount, globalDailyRemaining);
+  const newCount = Math.min(counts.newCount, Math.max(0, globalDailyRemaining - dueCount));
+  return { newCount, dueCount };
+}
 
 export interface DeckManagerOptions {
   settings?: DecksSettings;
@@ -62,8 +108,7 @@ export class DeckManager {
     const existingDecks = await this.db.getAllDecks();
     let deleted = 0;
     for (const deck of existingDecks) {
-      const file = this.vault.getAbstractFileByPath(deck.filepath);
-      if (!(file instanceof TFile)) {
+      if (await this.fileIsTrulyGone(deck.filepath)) {
         this.debugLog(
           `Cleaning up orphaned deck: "${deck.name}" (${deck.filepath})`
         );
@@ -72,6 +117,21 @@ export class DeckManager {
       }
     }
     return deleted;
+  }
+
+  // A deck counts as orphaned only when its file is gone from BOTH the vault's
+  // in-memory registry AND the disk. The registry lags on cold startup, right
+  // after a burst of imported files, and during iCloud/Dropbox delivery — so
+  // trusting it alone would cascade-delete a live deck's cards. If the disk can't
+  // be checked, be conservative and treat the file as present (don't delete).
+  private async fileIsTrulyGone(filepath: string): Promise<boolean> {
+    if (this.vault.getAbstractFileByPath(filepath) instanceof TFile) return false;
+    try {
+      if (await this.vault.adapter.exists(filepath)) return false;
+    } catch {
+      return false;
+    }
+    return true;
   }
 
   private debugLog(message: string, ...args: unknown[]): void {
@@ -233,17 +293,15 @@ export class DeckManager {
         }
       }
 
-      // Clean up orphaned decks (decks whose files no longer exist)
-      const allFiles = new Set<string>();
-      for (const [, files] of decksMap) {
-        for (const file of files) {
-          allFiles.add(file.path);
-        }
-      }
-
+      // Clean up orphaned decks — decks whose source FILE no longer exists.
+      // Base this on the vault's file registry (populated at vault load), NOT on
+      // the tag scan: at startup the metadata cache is cold, so tagged files are
+      // skipped by scanVaultForDecks and would look "orphaned" — deleting live
+      // decks (and cascade-deleting their cards). getAbstractFileByPath is
+      // reliable before the cache resolves.
       let deletedDecks = 0;
       for (const deck of existingDecks) {
-        if (!allFiles.has(deck.filepath)) {
+        if (await this.fileIsTrulyGone(deck.filepath)) {
           this.debugLog(
             `Deleting orphaned deck: "${deck.name}" (${deck.filepath})`
           );
@@ -272,7 +330,7 @@ export class DeckManager {
    */
   async parseFlashcardsFromFile(
     file: TFile,
-    headerLevel = 2
+    headerLevel: number | number[] = 2
   ): Promise<ParsedFlashcard[]> {
     const parseStartTime = performance.now();
 
@@ -302,10 +360,11 @@ export class DeckManager {
    */
   parseFlashcardsFromContent(
     content: string,
-    headerLevel = 2,
-    clozeEnabled = false
+    headerLevel: number | number[] = 2,
+    clozeEnabled = false,
+    examEnabled = false
   ): ParsedFlashcard[] {
-    return FlashcardParser.parseFlashcardsFromContent(content, headerLevel, undefined, clozeEnabled);
+    return FlashcardParser.parseFlashcardsFromContent(content, headerLevel, undefined, clozeEnabled, examEnabled);
   }
 
   /**
@@ -318,10 +377,32 @@ export class DeckManager {
    * event and every unrelated UI refresh would re-read + re-parse every
    * tagged file in the vault.
    */
+  // Deck ids whose file changed since last sync (mtime gate, one bulk read). Stale = newer mtime, never-synced, or missing file.
+  async getStaleDeckIds(): Promise<Set<string>> {
+    const meta = await this.db.getAllDeckSyncMeta();
+    const stale = new Set<string>();
+    for (const { id, filepath, lastSyncedMtime } of meta) {
+      const file = this.vault.getAbstractFileByPath(filepath);
+      if (!(file instanceof TFile)) {
+        stale.add(id);
+        continue;
+      }
+      if (lastSyncedMtime <= 0 || file.stat.mtime > lastSyncedMtime) {
+        stale.add(id);
+      }
+    }
+    return stale;
+  }
+
   async syncFlashcardsForDeck(
     deckId: string,
     progressTracker?: ProgressTracker,
-    options: { force?: boolean } = {}
+    options: {
+      force?: boolean;
+      // Receives the worker's within-deck progress (0-100) so callers can show
+      // movement during a long deck instead of a frozen per-deck percentage.
+      onProgress?: (progress: number, message?: string) => void;
+    } = {}
   ): Promise<void> {
     const deckSyncStartTime = performance.now();
     this.debugLog(`Syncing flashcards for deck ID: ${deckId}`);
@@ -343,10 +424,18 @@ export class DeckManager {
     if (!options.force) {
       const lastSyncedMtime = await this.db.getDeckLastSyncedMtime(deckId);
       if (lastSyncedMtime > 0 && fileMtime <= lastSyncedMtime) {
+        // Self-heal: a deck stuck at 0 cards (e.g. from a prior wrongful wipe)
+        // whose file is unchanged would stay empty forever behind this gate.
+        // Re-parse when the DB shows 0 cards; otherwise skip as usual.
+        if ((await this.db.countTotalCards(deckId)) > 0) {
+          this.debugLog(
+            `Skipping sync for ${deck.name}: file mtime ${fileMtime} <= last_synced_mtime ${lastSyncedMtime}`
+          );
+          return;
+        }
         this.debugLog(
-          `Skipping sync for ${deck.name}: file mtime ${fileMtime} <= last_synced_mtime ${lastSyncedMtime}`
+          `Self-heal: ${deck.name} has 0 cards but file unchanged — re-syncing`
         );
-        return;
       }
     }
 
@@ -354,16 +443,26 @@ export class DeckManager {
     const fileContent = await this.vault.read(file);
     const fileTitle = file.basename.replace(/\.md$/i, "");
 
-    // Create progress callback from ProgressTracker
-    const progressCallback = progressTracker
-      ? (progress: number, message?: string) =>
-          progressTracker.update(message || "Processing...", progress)
-      : undefined;
+    // Create progress callback from ProgressTracker + caller's onProgress
+    const progressCallback =
+      progressTracker || options.onProgress
+        ? (progress: number, message?: string) => {
+            progressTracker?.update(message || "Processing...", progress);
+            options.onProgress?.(progress, message);
+          }
+        : undefined;
 
     // Use unified sync method - implementation handles worker vs main thread
     try {
       const fileMeta = this.metadataCache.getFileCache(file);
       const reverseCards = fileMeta?.frontmatter?.reverse === true;
+
+      // Persist the deck file's tags for file-level (Tier 2) template binding.
+      // Only frontmatter tags are deck-wide; inline #tags on a section stay
+      // scoped to that section's cards (Tier 1), so a tag on one header doesn't
+      // bind its template to the whole file's tables.
+      const fileTags = parseFrontMatterTags(fileMeta?.frontmatter ?? null) ?? [];
+      await this.db.setDeckFileTags(deck.id, fileTags);
 
       const result = await this.db.syncFlashcardsForDeck(
         {
@@ -375,6 +474,7 @@ export class DeckManager {
           fileTitle: fileTitle,
           reverseCards,
           clozeEnabled: deck.profile.clozeEnabled,
+          examEnabled: deck.profile.examEnabled ?? false,
         },
         progressCallback
       );
@@ -417,8 +517,12 @@ export class DeckManager {
       // Stamp the mtime gate. Only after the sync succeeded — if anything
       // above threw, we want the next sync to retry (mtime stays unchanged
       // so the gate condition `fileMtime > lastSyncedMtime` is satisfied
-      // and parse happens again next time).
-      await this.db.setDeckLastSyncedMtime(deck.id, fileMtime);
+      // and parse happens again next time). Also skip stamping when the sync
+      // aborted on an empty parse (cards preserved) so the gate can't lock in a
+      // stuck state — the next sync re-attempts once the read/config resolves.
+      if (!result.skippedEmptyParse) {
+        await this.db.setDeckLastSyncedMtime(deck.id, fileMtime);
+      }
 
       // Check for duplicates after sync
       try {
@@ -538,66 +642,57 @@ export class DeckManager {
   /**
    * Get statistics for a single deck
    */
+  /**
+   * Cards (new + review) still allowed today under the global daily cap across
+   * ALL decks. `Infinity` when the cap is disabled or set to 0. Also exposed for
+   * the deck list header via getGlobalDailyCapStatus().
+   */
+  private async globalDailyRemaining(): Promise<number> {
+    const r = this.settings?.review;
+    if (!r?.hasGlobalReviewCap || !(r.globalReviewCapAmount > 0)) return Infinity;
+    const done = await this.db.countCardsStudiedTodayAllDecks(r.nextDayStartsAt);
+    return Math.max(0, r.globalReviewCapAmount - done);
+  }
+
+  /** Global daily-cap status for the deck list header; null when disabled. */
+  async getGlobalDailyCapStatus(): Promise<{ done: number; cap: number } | null> {
+    const r = this.settings?.review;
+    if (!r?.hasGlobalReviewCap || !(r.globalReviewCapAmount > 0)) return null;
+    const done = await this.db.countCardsStudiedTodayAllDecks(r.nextDayStartsAt);
+    return { done, cap: r.globalReviewCapAmount };
+  }
+
   async getDeckStats(
     deckId: string,
-    respectDailyLimits = true
+    respectDailyLimits = true,
+    globalDailyRemaining = Infinity
   ): Promise<DeckStats> {
     // Get basic deck stats
     const totalCards = await this.db.countTotalCards(deckId);
     const newCards = await this.db.countNewCards(deckId);
     const dueCards = await this.db.countDueCards(deckId);
-    const matureCards = await this.db.getFlashcardsByDeck(deckId);
-    const matureCount = matureCards.filter(
-      (card) => card.state === "review" && card.interval > 30240
-    ).length;
+    // Count mature cards via SQL — avoids serializing every card across the
+    // worker boundary just to filter by state/interval.
+    const matureCount = await this.db.countMatureCards(deckId);
 
-    let finalNewCount = newCards;
-    let finalDueCount = dueCards;
+    let counts: RawCounts = { newCount: newCards, dueCount: dueCards };
 
-    // Apply daily limits if requested
+    // Apply per-deck daily limits if requested.
     if (respectDailyLimits) {
       const deck = await this.db.getDeckWithProfile(deckId);
       if (deck) {
         const dailyCounts = await this.db.getDailyReviewCounts(deckId);
-
-        // Apply new card limits
-        if (
-          deck.profile.hasNewCardsLimitEnabled &&
-          deck.profile.newCardsPerDay >= 0
-        ) {
-          if (deck.profile.newCardsPerDay === 0) {
-            finalNewCount = 0;
-          } else {
-            const remainingNew = Math.max(
-              0,
-              deck.profile.newCardsPerDay - dailyCounts.newCount
-            );
-            finalNewCount = Math.min(newCards, remainingNew);
-          }
-        }
-
-        // Apply review card limits
-        if (
-          deck.profile.hasReviewCardsLimitEnabled &&
-          deck.profile.reviewCardsPerDay >= 0
-        ) {
-          if (deck.profile.reviewCardsPerDay === 0) {
-            finalDueCount = 0;
-          } else {
-            const remainingReview = Math.max(
-              0,
-              deck.profile.reviewCardsPerDay - dailyCounts.reviewCount
-            );
-            finalDueCount = Math.min(dueCards, remainingReview);
-          }
-        }
+        counts = applyPerDeckLimits(counts, deck.profile, dailyCounts);
       }
     }
 
+    // Clamp by the shared global daily cap (no-op when Infinity).
+    counts = applyGlobalClamp(counts, globalDailyRemaining);
+
     return {
       deckId,
-      newCount: finalNewCount,
-      dueCount: finalDueCount,
+      newCount: counts.newCount,
+      dueCount: counts.dueCount,
       totalCount: totalCards,
       matureCount,
     };
@@ -606,13 +701,17 @@ export class DeckManager {
   /**
    * Get statistics for a deck group (aggregates stats from all decks in the group)
    */
-  async getDeckGroupStats(deckGroup: DeckGroup): Promise<DeckStats> {
+  async getDeckGroupStats(
+    deckGroup: DeckGroup,
+    globalDailyRemaining = Infinity
+  ): Promise<DeckStats> {
     let totalNew = 0;
     let totalDue = 0;
     let totalCount = 0;
     let totalMature = 0;
 
     for (const deckId of deckGroup.deckIds) {
+      // Members counted uncapped; the group total is clamped once below.
       const stats = await this.getDeckStats(deckId);
       totalNew += stats.newCount;
       totalDue += stats.dueCount;
@@ -620,39 +719,102 @@ export class DeckManager {
       totalMature += stats.matureCount;
     }
 
+    // Clamp the group's combined total (new + review) by the shared global cap.
+    const clampedDue = Math.min(totalDue, globalDailyRemaining);
+    const clampedNew = Math.min(
+      totalNew,
+      Math.max(0, globalDailyRemaining - clampedDue)
+    );
+
     return {
       deckId: generateDeckGroupId(deckGroup.tag),
-      newCount: totalNew,
-      dueCount: totalDue,
+      newCount: clampedNew,
+      dueCount: clampedDue,
       totalCount: totalCount,
       matureCount: totalMature,
     };
   }
 
   /**
-   * Get all deck stats (file decks + tag groups) as a Map. Per-deck stats
-   * are independent — fire them in parallel with Promise.all rather than
-   * the previous sequential await chain. For a vault with N decks this
-   * collapses N round-trips' wall-time into one (subject to the worker's
-   * sequential message processing, which is still a big win because the
-   * JS-side await chain disappears).
+   * Get all deck stats (file decks + tag groups) as a Map. Uses batched
+   * aggregate queries (GROUP BY deck_id) instead of ~7 queries per deck: the
+   * whole refresh is ~4 worker round-trips regardless of deck/group count.
+   * Per-deck limit + global-cap math runs in JS; group stats are summed in
+   * memory from the per-deck results (no re-query of member decks).
    */
   async getAllDeckStatsMap(): Promise<Map<string, DeckStats>> {
     const tagGroupService = new TagGroupService(this.db);
     const statsMap = new Map<string, DeckStats>();
+    const nextDayStartsAt = this.settings?.review.nextDayStartsAt ?? 4;
 
-    const decks = await this.db.getAllDecks();
-    const deckStatsPairs = await Promise.all(
-      decks.map(async (d) => [d.id, await this.getDeckStats(d.id)] as const)
-    );
-    for (const [id, stats] of deckStatsPairs) statsMap.set(id, stats);
+    // Four aggregate queries for the whole vault (was 3 + ~7 per deck).
+    const [decksWithProfiles, cardStatsRows, dailyRows, globalDailyRemaining] =
+      await Promise.all([
+        this.db.getAllDecksWithProfiles(),
+        this.db.getDeckCardStatsBatch(),
+        this.db.getDailyReviewCountsBatch(nextDayStartsAt),
+        this.globalDailyRemaining(),
+      ]);
 
-    const decksWithProfiles = await this.db.getAllDecksWithProfiles();
+    const cardStatsById = new Map(cardStatsRows.map((r) => [r.deckId, r]));
+    const dailyById = new Map(dailyRows.map((r) => [r.deckId, r]));
+
+    // Per-deck stats BEFORE the global clamp — reused for group summation.
+    const perDeck = new Map<
+      string,
+      { newCount: number; dueCount: number; totalCount: number; matureCount: number }
+    >();
+
+    for (const deck of decksWithProfiles) {
+      const cs = cardStatsById.get(deck.id);
+      const raw: RawCounts = {
+        newCount: cs?.newCount ?? 0,
+        dueCount: cs?.dueCount ?? 0,
+      };
+      const daily = dailyById.get(deck.id) ?? { newCount: 0, reviewCount: 0 };
+      const limited = applyPerDeckLimits(raw, deck.profile, daily);
+      const totalCount = cs?.total ?? 0;
+      const matureCount = cs?.matureCount ?? 0;
+      perDeck.set(deck.id, { ...limited, totalCount, matureCount });
+
+      const clamped = applyGlobalClamp(limited, globalDailyRemaining);
+      statsMap.set(deck.id, {
+        deckId: deck.id,
+        newCount: clamped.newCount,
+        dueCount: clamped.dueCount,
+        totalCount,
+        matureCount,
+      });
+    }
+
+    // Tag groups: sum member per-deck (pre-global) stats, then clamp once.
     const tagGroups = await tagGroupService.aggregateByTag(decksWithProfiles);
-    const groupStatsPairs = await Promise.all(
-      tagGroups.map(async (g) => [g.tag, await this.getDeckGroupStats(g)] as const)
-    );
-    for (const [, stats] of groupStatsPairs) statsMap.set(stats.deckId, stats);
+    for (const g of tagGroups) {
+      let totalNew = 0;
+      let totalDue = 0;
+      let totalCount = 0;
+      let totalMature = 0;
+      for (const deckId of g.deckIds) {
+        const pd = perDeck.get(deckId);
+        if (!pd) continue;
+        totalNew += pd.newCount;
+        totalDue += pd.dueCount;
+        totalCount += pd.totalCount;
+        totalMature += pd.matureCount;
+      }
+      const clamped = applyGlobalClamp(
+        { newCount: totalNew, dueCount: totalDue },
+        globalDailyRemaining
+      );
+      const groupId = generateDeckGroupId(g.tag);
+      statsMap.set(groupId, {
+        deckId: groupId,
+        newCount: clamped.newCount,
+        dueCount: clamped.dueCount,
+        totalCount,
+        matureCount: totalMature,
+      });
+    }
 
     return statsMap;
   }

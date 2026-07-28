@@ -1,6 +1,6 @@
 import { MainDatabaseService } from "../../database/MainDatabaseService";
 import { FSRS } from "@decks/core";
-import { Scheduler } from "../../services/Scheduler";
+import { Scheduler } from "@decks/core";
 import { BackupService } from "../../services/BackupService";
 import {
   DatabaseTestUtils,

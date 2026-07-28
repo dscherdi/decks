@@ -5,7 +5,7 @@ import {
   setupTestDatabase,
   teardownTestDatabase,
 } from "./database-test-utils";
-import { generateDeckId } from "@decks/core";
+import { generateDeckId, Scheduler } from "@decks/core";
 import type { Deck, DeckProfile } from "../../database/types";
 
 describe("Cloze Cards Integration Tests", () => {
@@ -294,6 +294,36 @@ describe("Cloze Cards Integration Tests", () => {
       expect(clozeCard!.front).toBe("Cloze Question");
       expect(regularCard).toBeDefined();
       expect(regularCard!.front).toBe("Regular Question");
+    });
+  });
+
+  describe("cloze group size (front + back, not front alone)", () => {
+    it("counts each note's own clozes when two notes share a header", async () => {
+      const { deck, profile } = await createClozeEnabledDeck("cloze-grp");
+      // Two header-paragraph cloze notes with the SAME header but different bodies.
+      const content =
+        `## Soit\n\nThe ==a== and ==b== and ==c==.\n\n` +
+        `## Soit\n\nOnly ==x== here.`;
+      await db.syncFlashcardsForDeck({
+        deckId: deck.id,
+        deckName: deck.name,
+        deckFilepath: deck.filepath,
+        deckConfig: profile,
+        fileContent: content,
+        clozeEnabled: true,
+      });
+
+      const scheduler = new Scheduler(
+        db,
+        { review: { nextDayStartsAt: 4 }, backup: {}, debug: {} } as unknown as ConstructorParameters<typeof Scheduler>[1],
+        { createBackup: jest.fn() } as unknown as ConstructorParameters<typeof Scheduler>[2]
+      );
+      const cards = await db.getFlashcardsByDeck(deck.id);
+      const three = cards.find((c) => c.clozeText === "a")!;
+      const one = cards.find((c) => c.clozeText === "x")!;
+      // Grouping by front+back isolates each note despite the shared "Soit" header.
+      expect(await scheduler.getClozeGroupSize(three)).toBe(3);
+      expect(await scheduler.getClozeGroupSize(one)).toBe(1);
     });
   });
 });
