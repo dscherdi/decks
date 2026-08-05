@@ -3,6 +3,11 @@
 // must reference the Node global directly; it never runs in Obsidian. Excluded
 // from linting via eslint.config.mjs `ignores`.
 
+// esbuild's `define` injects this at build time; jest doesn't run esbuild, so
+// declare it here. Tests exercise the development path, which is the one with
+// the extra behaviour (URL overrides) worth covering.
+(global as { __DECKS_DEV__?: boolean }).__DECKS_DEV__ = true;
+
 // Mock requestAnimationFrame for Node.js test environment
 global.requestAnimationFrame = (callback: FrameRequestCallback): number => {
   return setTimeout(callback, 0);

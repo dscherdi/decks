@@ -124,6 +124,13 @@ export interface DecksSettings {
     // default while preserving genuine custom entries.
     customModel: Partial<Record<AiProviderId, boolean>>;
     localBaseUrl: string; // for the openai-compatible provider
+    // Development overrides for the hosted provider. Blank uses the defaults
+    // baked into core; set them to run against a local site/worker.
+    proBaseUrl: string;
+    proSiteUrl: string;
+    // Stable id for this install, minted on first sign-in. Survives signing out,
+    // so re-linking replaces this device's entry instead of adding another.
+    deviceId: string;
   };
 
   // Table template engine. Templates are authored as markdown files inside
@@ -222,6 +229,9 @@ export const DEFAULT_SETTINGS: DecksSettings = {
     },
     customModel: {},
     localBaseUrl: "http://localhost:11434/v1",
+    proBaseUrl: "",
+    proSiteUrl: "",
+    deviceId: "",
   },
 
   templates: {

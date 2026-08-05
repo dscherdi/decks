@@ -400,6 +400,32 @@ export async function loadPdfJs(): Promise<unknown> {
   throw new Error("loadPdfJs is not available in tests");
 }
 
+export interface RequestUrlResponse {
+  status: number;
+  text: string;
+  json: unknown;
+}
+
+type RequestUrlHandler = (options: {
+  url: string;
+  method?: string;
+  headers?: Record<string, string>;
+  body?: string;
+  throw?: boolean;
+}) => Promise<RequestUrlResponse>;
+
+// Network stub. Tests that exercise HTTP install their own handler with
+// setRequestUrlHandler; anything else fails loudly rather than hitting the net.
+let requestUrlHandler: RequestUrlHandler = async () => {
+  throw new Error("requestUrl was called without a handler; use setRequestUrlHandler");
+};
+
+export function setRequestUrlHandler(handler: RequestUrlHandler): void {
+  requestUrlHandler = handler;
+}
+
+export const requestUrl: RequestUrlHandler = (options) => requestUrlHandler(options);
+
 // Tests run in Node; treat them as a Linux desktop. DeviceLocalState only
 // embeds the platform prefix in deviceId strings, so this default is harmless.
 export const Platform = {

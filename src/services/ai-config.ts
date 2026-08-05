@@ -21,8 +21,20 @@ export async function buildAiConfig(
       settings.ai.customModel?.[provider] ?? false,
     ),
     apiKey: await keyStore.get(provider),
-    // Only the local provider takes a base URL; decks-pro uses its baked-in default.
-    baseUrl:
-      provider === "openai-compatible" ? settings.ai.localBaseUrl : undefined,
+    // The local provider always needs a base URL; decks-pro takes one only as a
+    // development override, otherwise it falls back to its baked-in default.
+    baseUrl: resolveBaseUrl(settings, provider),
   };
+}
+
+function resolveBaseUrl(
+  settings: DecksSettings,
+  provider: AiProviderConfig["provider"],
+): string | undefined {
+  if (provider === "openai-compatible") return settings.ai.localBaseUrl;
+  // Development-only override; release builds always use the hosted default.
+  if (provider === "decks-pro" && __DECKS_DEV__) {
+    return settings.ai.proBaseUrl?.trim() || undefined;
+  }
+  return undefined;
 }

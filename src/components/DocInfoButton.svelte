@@ -25,7 +25,6 @@
   target="_blank"
   rel="noopener"
   aria-label={I18n.t.help.docs}
-  title={I18n.t.help.docs}
   use:icon={"info"}
   on:click|stopPropagation
   on:touchend|stopPropagation

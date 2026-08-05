@@ -1158,14 +1158,16 @@
     color: var(--text-on-accent);
     background: var(--interactive-accent);
   }
+  /* Title and its (i) button sit together; the header's own actions column
+     handles anything that belongs on the far right. */
   .decks-ai-gen-title-row {
     display: flex;
     align-items: center;
-    justify-content: space-between;
-    gap: 8px;
+    gap: 6px;
+    margin-bottom: 4px;
   }
   .decks-ai-gen-header h3 {
-    margin: 0 0 4px 0;
+    margin: 0;
   }
   .decks-ai-gen-sub {
     font-size: 12px;

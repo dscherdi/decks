@@ -49,6 +49,8 @@ export default [
         // Obsidian-injected globals (popout-window compatibility).
         activeDocument: "readonly",
         activeWindow: "readonly",
+        // Injected by esbuild `define`; false in production builds.
+        __DECKS_DEV__: "readonly",
       },
     },
     plugins: {
@@ -134,6 +136,8 @@ export default [
         // Obsidian-injected globals (popout-window compatibility).
         activeDocument: "readonly",
         activeWindow: "readonly",
+        // Injected by esbuild `define`; false in production builds.
+        __DECKS_DEV__: "readonly",
       },
     },
     plugins: {

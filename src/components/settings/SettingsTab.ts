@@ -8,7 +8,6 @@ import {
   ButtonComponent,
   normalizePath,
   getLanguage,
-  requestUrl,
 } from "obsidian";
 import type { DecksSettings } from "../../settings";
 import {
@@ -26,7 +25,15 @@ import { Logger } from "@/utils/logging";
 import { OptimizeFsrsModal } from "./OptimizeFsrsModal";
 import { resolveModelId } from "@/utils/ai-model-options";
 import { docUrl } from "../../utils/docs";
-import { type AiProviderId, DECKS_PRO_DEFAULT_BASE_URL, I18n, type LanguagePreference, PROVIDER_MODELS, SUPPORTED_LANGUAGES } from "@decks/core";
+import {
+  type AiProviderId,
+  DECKS_PRO_DEFAULT_BASE_URL,
+  DECKS_PRO_SITE_URL,
+  I18n,
+  type LanguagePreference,
+  PROVIDER_MODELS,
+  SUPPORTED_LANGUAGES,
+} from "@decks/core";
 
 export class DecksSettingTab extends PluginSettingTab {
   private settings: DecksSettings;
@@ -248,15 +255,20 @@ export class DecksSettingTab extends PluginSettingTab {
     }
 
 
-    // Credential lives in the non-synced AiKeyStore, never in data.json. For the
-    // hosted decks-pro provider this field holds the license key.
+    // Decks Pro authenticates by signing in; the other providers take an API key.
     const isPro = provider === "decks-pro";
+    if (isPro) {
+      this.renderDecksProAccount(containerEl);
+      return;
+    }
+
+    // Credential lives in the non-synced AiKeyStore, never in data.json.
     new Setting(containerEl)
-      .setName(isPro ? s.licenseKey : s.apiKey)
-      .setDesc(isPro ? s.licenseKeyDesc : s.apiKeyDesc)
+      .setName(s.apiKey)
+      .setDesc(s.apiKeyDesc)
       .addText((text) => {
         text
-          .setPlaceholder(isPro ? s.licenseKeyPlaceholder : s.apiKeyPlaceholder)
+          .setPlaceholder(s.apiKeyPlaceholder)
           .onChange(async (value) => {
             await this.plugin.aiKeyStore.set(provider, value);
           });
@@ -269,64 +281,151 @@ export class DecksSettingTab extends PluginSettingTab {
           text.setValue(k);
         });
       });
-
-    // Decks Pro: surface the remaining monthly token quota (auto-loaded, with a
-    // manual refresh). Read-only call to the backend's /api/usage endpoint.
-    if (isPro) {
-      const usage = new Setting(containerEl)
-        .setName(s.tokenUsage)
-        .setDesc(s.tokenUsageLoading);
-      usage.addButton((button) =>
-        button
-          .setButtonText(s.tokenUsageRefresh)
-          .onClick(() => void this.loadProUsage(usage.descEl)),
-      );
-      void this.loadProUsage(usage.descEl);
-    }
   }
 
-  // Fetch and render the Decks Pro monthly token quota into a description el.
-  private async loadProUsage(descEl: HTMLElement): Promise<void> {
+  /**
+   * Decks Pro account panel. Renders a signed-out prompt or the live account
+   * state (subscription, quota, sign-out), plus the license-key fallback for
+   * customers who bought before accounts existed.
+   */
+  private renderDecksProAccount(containerEl: HTMLElement): void {
     const s = I18n.t.settings.ai;
-    descEl.setText(s.tokenUsageLoading);
-    try {
-      const key = (await this.plugin.aiKeyStore.get("decks-pro")).trim();
-      if (!key) {
-        descEl.setText(s.tokenUsageDesc);
-        return;
-      }
-      // Decks Pro always uses the hosted backend; localBaseUrl is the local
-      // (openai-compatible) provider's URL and must not be used here.
-      const base = DECKS_PRO_DEFAULT_BASE_URL.replace(/\/+$/, "");
-      const res = await requestUrl({
-        url: `${base}/api/usage`,
-        method: "GET",
-        headers: { Authorization: `Bearer ${key}` },
-        throw: false,
-      });
-      if (res.status !== 200) {
-        this.logger.debug(
-          `Decks Pro usage request failed: ${res.status} ${res.text?.slice(0, 200) ?? ""}`,
+
+    const panel = containerEl.createDiv();
+    const render = () => {
+      panel.empty();
+      void this.renderProAccountInto(panel, render);
+    };
+    render();
+
+    // Development overrides: point the plugin at a locally running site and
+    // worker so the sign-in hand-off can be exercised before deploying. Guarded
+    // by the build-time flag, so these are stripped from release builds.
+    if (__DECKS_DEV__) {
+      new Setting(containerEl)
+        .setName(s.serverUrl)
+        .setDesc(s.serverUrlDesc)
+        .addText((text) =>
+          text
+            .setPlaceholder(DECKS_PRO_DEFAULT_BASE_URL)
+            .setValue(this.settings.ai.proBaseUrl ?? "")
+            .onChange(async (value) => {
+              this.settings.ai.proBaseUrl = value.trim();
+              await this.saveSettings();
+            }),
         );
-        descEl.setText(s.tokenUsageError);
-        return;
-      }
-      const data = res.json as { remaining?: number; limit?: number };
-      if (typeof data?.remaining !== "number" || typeof data?.limit !== "number") {
-        descEl.setText(s.tokenUsageError);
-        return;
-      }
-      descEl.setText(
-        I18n.format(s.tokenUsageFormat, {
-          remaining: data.remaining.toLocaleString(),
-          limit: data.limit.toLocaleString(),
-        }),
-      );
-    } catch (e) {
-      this.logger.debug(`Failed to fetch Decks Pro usage: ${String(e)}`);
-      descEl.setText(s.tokenUsageError);
+
+      new Setting(containerEl)
+        .setName(s.siteUrl)
+        .setDesc(s.siteUrlDesc)
+        .addText((text) =>
+          text
+            .setPlaceholder(DECKS_PRO_SITE_URL)
+            .setValue(this.settings.ai.proSiteUrl ?? "")
+            .onChange(async (value) => {
+              this.settings.ai.proSiteUrl = value.trim();
+              await this.saveSettings();
+            }),
+        );
     }
   }
+
+  private async renderProAccountInto(
+    panel: HTMLElement,
+    rerender: () => void,
+  ): Promise<void> {
+    const s = I18n.t.settings.ai;
+    const auth = this.plugin.decksProAuth;
+    const signedIn = await auth.isSignedIn();
+
+    if (!signedIn) {
+      new Setting(panel)
+        .setName(s.account)
+        .setDesc(s.accountSignedOut)
+        .addButton((button) =>
+          button
+            .setButtonText(s.signIn)
+            .setCta()
+            .onClick(() => {
+              auth.startSignIn(this.plugin.app.vault.getName());
+              new Notice(s.signInPending);
+            }),
+        )
+        .addButton((button) =>
+          button
+            .setButtonText(s.subscribe)
+            .onClick(() => window.open(auth.pricingUrl(), "_blank")),
+        );
+      return;
+    }
+
+    const account = new Setting(panel).setName(s.account).setDesc(s.accountLoading);
+    account.addButton((button) =>
+      button.setButtonText(s.accountRefresh).onClick(() => rerender()),
+    );
+    account.addButton((button) =>
+      button.setButtonText(s.signOut).onClick(async () => {
+        await auth.signOut();
+        new Notice(s.signOutDone);
+        rerender();
+      }),
+    );
+
+    const data = await auth.fetchAccount();
+    if (!data) {
+      account.setDesc(s.accountError);
+      return;
+    }
+
+    account.setDesc(
+      data.user.email
+        ? I18n.format(s.accountSignedInAs, { email: data.user.email })
+        : s.accountSignedIn,
+    );
+
+    const statusLabels: Record<string, string> = {
+      active: s.subscriptionActive,
+      on_trial: s.subscriptionTrial,
+      past_due: s.subscriptionPastDue,
+      cancelled: s.subscriptionCancelled,
+      expired: s.subscriptionExpired,
+      paused: s.subscriptionPaused,
+    };
+
+    // A trial user has no subscription row yet — say which state they're in
+    // rather than showing a bare "no subscription".
+    const subscriptionDesc = data.subscription
+      ? (statusLabels[data.subscription.status] ?? data.subscription.status)
+      : data.trial?.exhausted
+        ? s.trialExhausted
+        : data.trial?.on_trial
+          ? s.trialActive
+          : s.subscriptionNone;
+
+    const subscription = new Setting(panel)
+      .setName(s.subscriptionStatus)
+      .setDesc(subscriptionDesc);
+    if (data.subscription) {
+      subscription.addButton((button) =>
+        button
+          .setButtonText(s.manageSubscription)
+          .onClick(() =>
+            window.open(
+              data.subscription?.customer_portal_url ?? auth.accountUrl(),
+              "_blank",
+            ),
+          ),
+      );
+    } else {
+      subscription.addButton((button) =>
+        button
+          .setButtonText(s.subscribe)
+          .setCta()
+          .onClick(() => window.open(auth.pricingUrl(), "_blank")),
+      );
+    }
+  }
+
 
   // The local (openai-compatible) provider keeps a free-text model field since
   // its ids depend on the running server; hosted providers get a curated

@@ -87,6 +87,10 @@ const buildOptions = {
   logLevel: "info",
   sourcemap: prod ? false : "inline",
   treeShaking: true,
+  // Compile-time flag for development-only UI. Inlined as `false` in production
+  // so tree shaking strips the code entirely — it never ships, rather than
+  // shipping hidden.
+  define: { __DECKS_DEV__: JSON.stringify(!prod) },
   minify: prod,
   keepNames: prod,
   outfile: path.join(outDir, "main.js"),

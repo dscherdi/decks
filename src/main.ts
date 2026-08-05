@@ -43,6 +43,7 @@ import { FlashcardWriter, type FlashcardEdits } from "./services/FlashcardWriter
 import { FlashcardEditModalWrapper } from "./components/FlashcardEditModalWrapper";
 import { AiGenerationService, AiRefactoringService, type GeneratedCard, generateDeckId, I18n, type RefactorFieldSet, resolveCardTemplate, yieldToUI, OcclusionV2Parser, type OcclusionDoc, OCCLUSION_V2_VERSION, isOcclusionV2, parseOcclusionBack } from "@decks/core";
 import { AiKeyStore } from "./services/AiKeyStore";
+import { DecksProAuth } from "./services/DecksProAuth";
 import { ObsidianHttpClient } from "./services/ObsidianHttpClient";
 import {
   AiRefactorController,
@@ -158,6 +159,7 @@ export default class DecksPlugin extends Plugin {
   private flashcardWriter: FlashcardWriter;
   private flashcardComposer: FlashcardComposer;
   public aiKeyStore: AiKeyStore;
+  public decksProAuth: DecksProAuth;
   public aiRefactorController: AiRefactorController;
   public aiGeneratorController: AiGeneratorController;
   public pdfOcrCache: PdfOcrCache;
@@ -371,6 +373,12 @@ export default class DecksPlugin extends Plugin {
       // dir (AiKeyStore) — never in data.json. HTTP goes through Obsidian's
       // requestUrl (ObsidianHttpClient) to bypass CORS.
       this.aiKeyStore = new AiKeyStore(adapter, pluginDir);
+      this.decksProAuth = new DecksProAuth(
+        this.aiKeyStore,
+        () => this.settings.ai,
+        this.logger,
+        () => this.saveSettings(),
+      );
       this.aiRefactorController = new AiRefactorController(
         new AiRefactoringService(new ObsidianHttpClient(), this.logger),
         this.settings,
@@ -495,6 +503,11 @@ export default class DecksPlugin extends Plugin {
       this.registerHoverLinkSource("decks", {
         display: "Decks",
         defaultMod: true,
+      });
+
+      // Sign-in hand-off from the website: obsidian://decks-auth?state=..&code=..
+      this.registerObsidianProtocolHandler("decks-auth", (params) => {
+        void this.completeProSignIn(params.state, params.code);
       });
 
       // Add ribbon icon
@@ -1801,6 +1814,28 @@ export default class DecksPlugin extends Plugin {
       await migrator.run(this.settings.ui?.enableNotices !== false);
     } catch (error) {
       this.logger.error("Anchor migration failed", error);
+    }
+  }
+
+  // Completes the obsidian://decks-auth hand-off started from settings. The
+  // nonce check lives in DecksProAuth, so a stray or replayed URL is rejected.
+  private async completeProSignIn(state?: string, code?: string): Promise<void> {
+    if (!this.decksProAuth) return;
+    const s = I18n.t.settings.ai;
+    try {
+      const ok = await this.decksProAuth.completeSignIn({ state, code });
+      new Notice(ok ? s.signInSuccess : s.signInFailed);
+      if (ok) {
+        // Decks Pro becomes usable immediately; select it if AI is still unset.
+        if (!this.settings.ai.enabled) {
+          this.settings.ai.enabled = true;
+        }
+        this.settings.ai.provider = "decks-pro";
+        await this.saveSettings();
+      }
+    } catch (error) {
+      this.logger.error("Decks Pro sign-in failed", error);
+      new Notice(s.signInFailed);
     }
   }
 
