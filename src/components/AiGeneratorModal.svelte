@@ -7,7 +7,8 @@
   import { buildModelOptions } from "../utils/ai-model-options";
   import BatchCardRow from "./BatchCardRow.svelte";
   import DocInfoButton from "./DocInfoButton.svelte";
-  import { FilePickerModal } from "../utils/file-picker";
+  import { ConfirmModal } from "./ConfirmModal";
+import { FilePickerModal } from "../utils/file-picker";
   import { FolderPickerModal } from "../utils/folder-picker";
   import {
     type ContextItem,
@@ -23,6 +24,7 @@
     extractOutline,
     buildSectionContent,
     pagesForSelection,
+    sectionsForSelection,
     hashPdf,
   } from "../utils/pdf";
   import type { OcrDebugEntry, OcrProgress, PdfOcrCache } from "@decks/core";
@@ -67,6 +69,8 @@
   export let onClose: () => void;
   export let aiProvider: AiProviderId;
   export let defaultModel = "";
+  /** Remember the tier chosen here; there is no settings control for it. */
+  export let onModelChange: (id: string) => void = () => {};
   export let debugEnabled = false;
   export let pdfAvailable = false;
   export let pdfOcr: PdfOcrCache | null = null;
@@ -81,17 +85,55 @@
   // Debug panel is collapsed by default; toggled from the header button.
   let showDebug = false;
 
+  /**
+   * Empty the generated list, keeping the destination and the saved tally.
+   *
+   * Confirmation only when unsaved cards would be lost — those cost tokens to
+   * produce. A list that is entirely saved has nothing to warn about.
+   *
+   * The prior cards double as the continuation context sent upstream, so
+   * clearing them means a later run may legitimately reproduce one; resetting
+   * `canContinue` makes that visible in the composer's button.
+   */
+  async function clearCards(): Promise<void> {
+    if (keptCount > 0) {
+      const ok = await new Promise<boolean>((resolve) => {
+        const modal = new ConfirmModal(app, {
+          title: g.clearConfirmTitle,
+          message: I18n.format(g.clearConfirmMessage, { count: keptCount }),
+          isDanger: true,
+          onConfirm: () => resolve(true),
+        });
+        const close = modal.onClose.bind(modal);
+        modal.onClose = () => {
+          close();
+          resolve(false);
+        };
+        modal.open();
+      });
+      if (!ok) return;
+    }
+
+    rows = [];
+    partial = null;
+    selectedId = null;
+    sourceCovered = false;
+    phase = "idle";
+    canContinue = false;
+    includeGenerated = false;
+    genError = null;
+    saveError = null;
+  }
+
   function toggleDebug() {
+    // The modal widens itself from the panels present in the DOM — see styles.css.
     showDebug = !showDebug;
-    // Widen the modal only while the panel is open (no-op in tab mode).
-    rootEl
-      ?.closest(".modal")
-      ?.classList.toggle("decks-ai-gen-has-debug", showDebug);
   }
 
   // Per-prompt model picker: defaults to the global model, overrides this run only.
   const modelOptions = buildModelOptions(aiProvider, defaultModel);
   let selectedModel = defaultModel;
+  $: if (selectedModel && selectedModel !== defaultModel) onModelChange(selectedModel);
 
   // One generation round per click. Continuation is manual: after a round the
   // Generate button switches to "Continue generating" (see canContinue) until a
@@ -125,10 +167,28 @@
   let rowCounter = 0;
   let includeGenerated = false;
   let hasSaved = false;
+  let sourceCovered = false;
+
+  // Counts what this session wrote to the vault, not what is on screen — those
+  // cards survive Clear, so the tally has to as well.
+  let savedTotal = 0;
 
   $: selected = rows.find((r) => r.id === selectedId) ?? null;
   $: keptCount = rows.filter((r) => r.keep && !r.saved).length;
-  $: savedCount = rows.filter((r) => r.saved).length;
+
+  // Cards per chapter, so an empty section is visible in the tree rather than
+  // inferred from the inbox. Keyed by chapter id; unattributed cards fall out.
+  // The notice refers to the source it was produced from, so a changed prompt,
+  // a different PDF tab or a new chapter selection invalidates it — otherwise it
+  // keeps asserting "nothing more to add" about material no longer selected.
+  $: if (prompt || activePdfId || contexts) sourceCovered = false;
+
+  $: cardsByChapter = rows.reduce<Record<string, number>>((acc, r) => {
+    const n = r.card.section;
+    const entry = n && n >= 1 ? sectionIndex[n - 1] : undefined;
+    if (entry) acc[entry.chapterId] = (acc[entry.chapterId] ?? 0) + 1;
+    return acc;
+  }, {});
 
   // Mobile: show either the list or the detail. Driven by the component's own
   // width (via ResizeObserver) so it reacts to the pane size in tab mode, not
@@ -214,6 +274,8 @@
   let pdfs: PdfAttachment[] = [];
   let activePdfId: string | null = null;
   let showChapters = false;
+  // Populated as the source is built; a card's SECTION index points in here.
+  let sectionIndex: Array<{ pdfHash: string; chapterId: string; title: string }> = [];
   let ocrProgress: OcrProgress | null = null;
   // Unified per-page progress while PDFs are resolved to text (text reads + OCR).
   let pdfProgress: { done: number; total: number } | null = null;
@@ -343,10 +405,17 @@
   // extraction. Each PDF's text is prefixed with a `# <label>` heading. Progress
   // is a single counter spanning all PDFs' pages.
   async function resolvePdfSource(signal: AbortSignal): Promise<string> {
+    // One labelled block per selected chapter rather than one per PDF, so a card
+    // can say which section it came from. Pages are cached individually, so
+    // regrouping them re-transcribes nothing.
     const plans = pdfs
-      .map((p) => ({ pdf: p, pages: pagesForSelection(p.chapters, p.selectedIds) }))
-      .filter((x) => x.pages.length > 0);
-    const total = plans.reduce((sum, x) => sum + x.pages.length, 0);
+      .map((p) => ({ pdf: p, sections: sectionsForSelection(p.chapters, p.selectedIds) }))
+      .filter((x) => x.sections.length > 0);
+    sectionIndex = [];
+    const total = plans.reduce(
+      (sum, x) => sum + x.sections.reduce((n, sec) => n + sec.pages.length, 0),
+      0,
+    );
     if (total === 0) return "";
 
     // OCR is the Decks Pro path; everyone else gets free text extraction.
@@ -358,7 +427,9 @@
     const tick = () => (pdfProgress = { done: ++done, total });
     const parts: string[] = [];
     try {
-      for (const { pdf: p, pages } of plans) {
+      for (const { pdf: p, sections } of plans) {
+        for (const section of sections) {
+          const pages = section.pages;
         const ocrRunner = (ocrPages: number[], onEach?: () => void) => {
           if (!pdfOcr) return Promise.resolve(new Map<number, string>());
           return pdfOcr.runOcr(
@@ -385,38 +456,16 @@
           ocrRunner,
           () => tick(),
         );
-        if (text) parts.push(`# ${p.label}\n${text}`);
+        if (!text) continue;
+        // Numbered so a card references an index rather than echoing a title,
+        // which the model would paraphrase and we could not match back.
+        sectionIndex.push({ pdfHash: p.hash, chapterId: section.id, title: section.title });
+        parts.push(`# [${sectionIndex.length}] ${section.title}\n${text}`);
+        }
       }
       return parts.join("\n\n---\n\n");
     } finally {
       ocrProgress = null;
-      pdfProgress = null;
-    }
-  }
-
-  // OCR attached images to text (Decks Pro) so they feed classification and the
-  // routed text model. Each image is cached by content, so re-runs don't re-OCR.
-  async function resolveImageSource(
-    images: RefactorImage[],
-    signal: AbortSignal,
-  ): Promise<string> {
-    if (!pdfOcr || images.length === 0) return "";
-    const ocrModel = ocrSentinelForTier(selectedModel);
-    const onDebug = debugEnabled
-      ? (entry: OcrDebugEntry) => {
-          ocrDebug = [...ocrDebug, entry].slice(-OCR_DEBUG_MAX);
-        }
-      : undefined;
-    pdfProgress = { done: 0, total: images.length };
-    const parts: string[] = [];
-    try {
-      for (let i = 0; i < images.length; i++) {
-        const text = await pdfOcr.ocrImageToText(images[i], ocrModel, signal, onDebug);
-        if (text) parts.push(`# Image ${i + 1}\n${text}`);
-        pdfProgress = { done: i + 1, total: images.length };
-      }
-      return parts.join("\n\n---\n\n");
-    } finally {
       pdfProgress = null;
     }
   }
@@ -426,7 +475,12 @@
     if (phase === "streaming") return;
     // Continue rounds may run without a prompt (source + prior cards drive them);
     // a fresh run still needs one.
-    const continuing = canContinue;
+    //
+    // Keyed on cards already produced, not on `canContinue`: the model saying the
+    // source is exhausted clears that flag, and a user who disagrees and presses
+    // Generate again would otherwise start from scratch — silently doing nothing
+    // when the prompt box is empty, or re-generating the same cards when it isn't.
+    const continuing = rows.length > 0;
     if (!continuing && !prompt.trim()) return;
     const req = await buildGenerationComposerRequest(
       app,
@@ -440,6 +494,7 @@
       continuing || includeGenerated ? rows.map((r) => r.card) : undefined;
     partial = null;
     genError = null;
+    sourceCovered = false;
     if (debugEnabled) {
       lastDebug = null;
       ocrDebug = [];
@@ -450,20 +505,11 @@
     // Resolve any attached PDF into source text first (OCR'ing scanned pages),
     // then merge it with the note/image-derived source context.
     let sourceContext = req.sourceContext;
-    let images = req.images;
+    const images = req.images;
     try {
       const pdfText = await resolvePdfSource(abortController.signal);
       if (pdfText) {
         sourceContext = [sourceContext, pdfText].filter(Boolean).join("\n\n---\n\n");
-      }
-      // Decks Pro: OCR attached images to text and drop the raw image blocks, so
-      // they feed classification and the routed (possibly text-only) model.
-      if (aiProvider === "decks-pro" && pdfOcr && images.length > 0) {
-        const imageText = await resolveImageSource(images, abortController.signal);
-        if (imageText) {
-          sourceContext = [sourceContext, imageText].filter(Boolean).join("\n\n---\n\n");
-        }
-        images = [];
       }
     } catch (e) {
       if (!abortController.signal.aborted) {
@@ -500,7 +546,11 @@
       if (debugEnabled) lastDebug = result.debug ?? lastDebug;
       // Offer "Continue generating" when this round produced cards or was cut off
       // by the output-token limit; otherwise the model is done.
-      canContinue = (result.cards?.length ?? 0) > 0 || (result.truncated ?? false);
+      sourceCovered = result.covered ?? false;
+      // Continuing stays possible when the model says it is done — it is a hint,
+      // not a verdict — but it stops being the suggested action.
+      canContinue =
+        !sourceCovered && ((result.cards?.length ?? 0) > 0 || (result.truncated ?? false));
     } catch (e) {
       const msg = e instanceof Error ? e.message : String(e);
       genError = msg.trim() ? msg : g.generateFailed;
@@ -636,6 +686,7 @@
       rows = rows.map((r) =>
         savedIds.has(r.id) ? { ...r, saved: true } : r,
       );
+      savedTotal += savedIds.size;
       // Further saves this session append to the file we just wrote, so lock the
       // target to it.
       hasSaved = true;
@@ -966,13 +1017,30 @@
     {:else if phase === "saving"}
       <span class="decks-ai-gen-footer-info">{g.saving}</span>
     {:else}
-      <button type="button" on:click={onClose}>{savedCount > 0 ? g.close : g.cancel}</button>
-      {#if savedCount > 0}
+      <button type="button" on:click={onClose}>{savedTotal > 0 ? g.close : g.cancel}</button>
+      {#if savedTotal > 0}
         <span class="decks-ai-gen-footer-info">
-          {I18n.format(g.savedNotice, { count: savedCount })}
+          {I18n.format(g.savedNotice, { count: savedTotal })}
+        </span>
+      {/if}
+      {#if sourceCovered}
+        <span class="decks-ai-gen-covered">
+          <span class="decks-ai-gen-covered-icon" use:icon={"check-check"}></span>
+          {g.sourceCovered}
         </span>
       {/if}
       <span class="decks-ai-gen-footer-spacer"></span>
+      {#if rows.length > 0}
+        <button
+          type="button"
+          class="decks-ai-gen-dest-toggle"
+          aria-label={g.clearCards}
+          on:click={clearCards}
+        >
+          <span class="decks-ai-gen-dest-toggle-icon" use:icon={"trash-2"}></span>
+          {g.clearCards}
+        </button>
+      {/if}
       {#if phase === "review"}
         <button
           type="button"
@@ -1003,6 +1071,7 @@
       title={activePdf.label}
       chapters={activePdf.chapters}
       selectedIds={activePdf.selectedIds}
+      {cardsByChapter}
       {ocrProgress}
       tabs={pdfTabs}
       activeTabId={activePdfId}
@@ -1079,7 +1148,7 @@
     box-sizing: border-box;
   }
   .decks-ai-gen-debug {
-    flex: 0 0 340px;
+    flex: 0 0 var(--decks-pane-debug, 340px);
     min-height: 0;
     overflow-y: auto;
     border-left: 1px solid var(--background-modifier-border);
@@ -1329,6 +1398,27 @@
     padding-top: 12px;
     border-top: 1px solid var(--background-modifier-border);
   }
+  .decks-ai-gen-covered {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    padding: 2px 8px;
+    border-radius: 10px;
+    font-size: 12px;
+    font-weight: 500;
+    color: var(--text-on-accent);
+    background: var(--interactive-accent);
+  }
+
+  .decks-ai-gen-covered-icon {
+    display: inline-flex;
+  }
+
+  .decks-ai-gen-covered-icon :global(svg) {
+    width: 14px;
+    height: 14px;
+  }
+
   .decks-ai-gen-footer-info {
     font-size: 12px;
     color: var(--text-muted);

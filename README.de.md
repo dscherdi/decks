@@ -4,6 +4,8 @@
 
 **Verwandle deine Obsidian-Notizen in Karteikarten. Keine spezielle Syntax. Kein separater Stapel zum Aufbauen.**
 
+> **Neu — [Decks Pro](https://decksmd.app/pricing/)** · Erstelle Karten aus deinen Notizen, PDFs und gescannten Folien, ohne einen API-Schlüssel einzurichten. Kostenlos testen — rund 100 Karten oder 10 PDF-Seiten, ohne Kreditkarte. Alles andere in Decks bleibt kostenlos, und ein eigener API-Schlüssel funktioniert weiterhin.
+
 Markiere eine Datei mit `#decks`. Jede `##`-Überschrift wird zur Vorderseite einer Karte; der Text darunter wird zur Rückseite. Tabellen, Bildverdeckung und `==cloze==`-Hervorhebungen funktionieren auf die gleiche Weise. Die Planung übernimmt FSRS-6 — der moderne Algorithmus für räumliche Wiederholung.
 
 ![Demo](./decks_showcase.gif)

@@ -9,6 +9,8 @@ import type { GeneratorSaveRequest, ProfileOpt } from "./generator-save";
 import type { PdfOcrCache } from "@decks/core";
 
 export interface AiGeneratorOptions {
+  /** Persist a tier chosen here — settings no longer offers the control. */
+  onModelChange?: (id: string) => void;
   generate: (
     options: {
       prompt: string;
@@ -91,6 +93,7 @@ export class AiGeneratorModalWrapper extends Modal {
         deckTag: this.options.deckTag,
         aiProvider: this.options.aiProvider,
         defaultModel: this.options.defaultModel,
+        onModelChange: this.options.onModelChange ?? ((): void => {}),
         debugEnabled: this.options.debugEnabled,
         pdfAvailable: this.options.pdfAvailable,
         pdfOcr: this.options.pdfOcr,

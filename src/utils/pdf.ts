@@ -9,8 +9,15 @@ export {
   extractPageText,
   buildSectionContent,
   pagesForSelection,
+  sectionsForSelection,
 } from "@decks/core";
-export type { ChapterNode, PdfDoc, PdfParseMode, OcrRunner } from "@decks/core";
+export type {
+  ChapterNode,
+  PdfDoc,
+  PdfParseMode,
+  OcrRunner,
+  SelectedSection,
+} from "@decks/core";
 
 // Longest-edge cap (px) for rendered page images (720p) — legible for OCR while
 // bounding token cost and mobile canvas memory.

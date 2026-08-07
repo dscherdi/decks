@@ -42,9 +42,11 @@ export class ConfirmModal extends Modal {
     const cancelButton = buttonContainer.createEl("button", { text: I18n.t.modals.confirm.cancel });
     cancelButton.onclick = () => this.close();
 
+    // mod-warning pairs --background-modifier-error with --text-on-accent, which
+    // in light themes is white on pale pink — legible as "disabled", not "danger".
     const confirmButton = buttonContainer.createEl("button", {
       text: this.confirmText,
-      cls: this.isDanger ? "mod-warning" : "mod-cta",
+      cls: this.isDanger ? "mod-cta decks-confirm-danger" : "mod-cta",
     });
     confirmButton.onclick = () => {
       this.close();

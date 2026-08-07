@@ -24,6 +24,8 @@ export interface RefactorUiOptions {
 }
 
 export interface FlashcardEditAiOptions {
+  /** Persist a tier chosen here — settings no longer offers the control. */
+  onModelChange?: (id: string) => void;
   aiEnabled: boolean;
   aiProvider: AiProviderId;
   defaultModel: string;
@@ -100,6 +102,7 @@ export class FlashcardEditModalWrapper extends Modal {
         aiEnabled: this.aiOptions?.aiEnabled ?? false,
         aiProvider: this.aiOptions?.aiProvider ?? "openai",
         defaultModel: this.aiOptions?.defaultModel ?? "",
+        onModelChange: this.aiOptions?.onModelChange ?? ((): void => {}),
         onRefactor: this.aiOptions?.onRefactor,
         onSplit: this.aiOptions?.onSplit,
         templateColumns: this.templateColumns,

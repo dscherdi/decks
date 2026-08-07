@@ -445,15 +445,35 @@
   max-height: 85vh;
 }
 
-/* The batch refactor modal is a split-pane workspace — wider on desktop. */
+/*
+ * The batch refactor modal is a split-pane workspace — wider on desktop.
+ *
+ * Side panels are ADDED to the width rather than taken out of it. Each is a
+ * fixed flex-basis, so a modal that cannot grow shrinks the generator pane until
+ * its own list/detail split collapses — which is what a maximised window used to
+ * do the moment the PDF panel opened.
+ *
+ * The panel widths live here and are consumed by the panels themselves, so the
+ * sum below can never drift from what is actually on screen.
+ */
 .decks-ai-batch-modal {
-  width: 80vw;
-  max-width: 1100px;
+  --decks-pane-chapters: 280px;
+  --decks-pane-debug: 340px;
+  --decks-gen-panes: 0px;
+  width: 90vw;
+  max-width: calc(1100px + var(--decks-gen-panes));
 }
 
-/* Widen the generator modal to fit the debug side panel (~340px) alongside it. */
-.decks-ai-batch-modal.decks-ai-gen-has-debug {
-  max-width: 1440px;
+.decks-ai-batch-modal:has(.decks-pdf-panel) {
+  --decks-gen-panes: var(--decks-pane-chapters);
+}
+
+.decks-ai-batch-modal:has(.decks-ai-gen-debug) {
+  --decks-gen-panes: var(--decks-pane-debug);
+}
+
+.decks-ai-batch-modal:has(.decks-pdf-panel):has(.decks-ai-gen-debug) {
+  --decks-gen-panes: calc(var(--decks-pane-chapters) + var(--decks-pane-debug));
 }
 
 .decks-modal-mobile {
@@ -1452,3 +1472,56 @@ div.decks-card-content
   font-size: 0.9em;
 }
 
+
+/* Destructive confirm action. Obsidian's mod-warning renders as a pale fill
+   under light text, which reads as a disabled control. */
+.decks-confirm-danger {
+  background-color: var(--text-error, #e03131);
+  color: #fff;
+}
+.decks-confirm-danger:hover {
+  background-color: var(--text-error, #e03131);
+  filter: brightness(1.1);
+}
+
+/* Decks Pro banner — settings header and release-notes tab. */
+.decks-pro-banner {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 24px;
+  padding: 14px 16px;
+  border: 1px solid var(--background-modifier-border);
+  border-radius: 10px;
+  background-color: var(--background-secondary);
+}
+.decks-pro-banner-text {
+  flex: 1 1 260px;
+  min-width: 0;
+}
+.decks-pro-banner-title {
+  font-weight: 600;
+  color: var(--text-normal);
+}
+.decks-pro-banner-body {
+  margin-top: 2px;
+  font-size: 0.85em;
+  line-height: 1.45;
+  color: var(--text-muted);
+}
+.decks-pro-banner-cta {
+  flex: 0 0 auto;
+  padding: 6px 14px;
+  border-radius: 6px;
+  background-color: var(--interactive-accent);
+  color: var(--text-on-accent);
+  font-size: 0.85em;
+  font-weight: 600;
+  text-decoration: none;
+}
+.decks-pro-banner-cta:hover {
+  background-color: var(--interactive-accent-hover);
+  color: var(--text-on-accent);
+}

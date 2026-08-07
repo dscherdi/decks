@@ -43,6 +43,8 @@
   export let onClose: () => void;
   export let aiProvider: AiProviderId;
   export let defaultModel = "";
+  /** Remember the tier chosen here; there is no settings control for it. */
+  export let onModelChange: (id: string) => void = () => {};
 
   const b = I18n.t.modals.aiBatch;
   const ef = I18n.t.modals.editFlashcard;
@@ -50,6 +52,7 @@
   // Per-prompt model picker: defaults to the global model, overrides this run only.
   const modelOptions = buildModelOptions(aiProvider, defaultModel);
   let selectedModel = defaultModel;
+  $: if (selectedModel && selectedModel !== defaultModel) onModelChange(selectedModel);
 
   function freshStates(): BatchCardState<Flashcard>[] {
     return cards.map((card) => ({

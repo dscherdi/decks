@@ -8,6 +8,8 @@
   export let chapters: ChapterNode[] = [];
   // Controlled: the set of selected chapter ids (drives which pages are sent).
   export let selectedIds: Set<string> = new Set();
+  /** Cards generated per chapter id, so an empty section is visible at a glance. */
+  export let cardsByChapter: Record<string, number> = {};
   // Live OCR progress, or null when not transcribing.
   export let ocrProgress: { done: number; total: number; fromCache: boolean } | null =
     null;
@@ -141,6 +143,9 @@
           on:change={() => toggle(row.node)}
         />
         <span class="decks-pdf-chapter-title">{row.node.title}</span>
+        {#if cardsByChapter[row.node.id]}
+          <span class="decks-pdf-chapter-cards">{cardsByChapter[row.node.id]}</span>
+        {/if}
         <span class="decks-pdf-chapter-pages">
           {row.node.startPage}–{row.node.endPage}
         </span>
@@ -154,7 +159,7 @@
 
 <style>
   .decks-pdf-panel {
-    flex: 0 0 280px;
+    flex: 0 0 var(--decks-pane-chapters, 280px);
     min-height: 0;
     display: flex;
     flex-direction: column;
@@ -244,6 +249,16 @@
   .decks-pdf-chapter.is-sub {
     color: var(--text-muted);
   }
+  .decks-pdf-chapter-cards {
+    flex: 0 0 auto;
+    padding: 0 6px;
+    border-radius: 8px;
+    font-size: 0.7rem;
+    font-weight: 600;
+    background: var(--interactive-accent);
+    color: var(--text-on-accent);
+  }
+
   .decks-pdf-chapter-title {
     flex: 1 1 auto;
     overflow: hidden;

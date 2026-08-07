@@ -4,6 +4,8 @@
 
 **Trasforma le tue note di Obsidian in flashcard. Nessuna sintassi speciale. Nessun mazzo separato da costruire.**
 
+> **Novità — [Decks Pro](https://decksmd.app/pricing/)** · Genera schede dai tuoi appunti, dai PDF e dalle diapositive scansionate senza configurare una chiave API. Provalo gratis: circa 100 schede o 10 pagine di PDF, senza carta. Tutto il resto di Decks resta gratuito e la tua chiave API continua a funzionare.
+
 Aggiungi il tag `#decks` a un file. Ogni intestazione `##` diventa il fronte di una carta; il testo sottostante diventa il retro. Le tabelle, l'occlusione d'immagine e le evidenziazioni `==cloze==` funzionano allo stesso modo. La pianificazione è gestita da FSRS-6, il moderno algoritmo di ripetizione dilazionata (spaced repetition).
 
 ![Demo](./decks_showcase.gif)

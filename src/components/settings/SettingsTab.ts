@@ -91,6 +91,8 @@ export class DecksSettingTab extends PluginSettingTab {
     const { containerEl } = this;
     containerEl.empty();
 
+    this.addProBanner(containerEl);
+
     // Language
     this.addLanguageSettings(containerEl);
 
@@ -469,9 +471,22 @@ export class DecksSettingTab extends PluginSettingTab {
       void this.saveSettings();
     }
 
+    // Decks Pro has no tier control here: the choice belongs next to the work,
+    // and every AI modal already offers it. This row is left as a pointer to
+    // what the tiers mean, with no duplicate control to drift out of sync.
+    if (isPro) {
+      const proSetting = new Setting(containerEl).setName(s.tier).setDesc(s.tierDesc);
+      proSetting.descEl.createEl("br");
+      proSetting.descEl.createEl("a", {
+        text: "decksmd.app/docs/ai-tiers",
+        href: "https://decksmd.app/docs/ai-tiers/",
+      });
+      return;
+    }
+
     new Setting(containerEl)
-      .setName(isPro ? s.tier : s.model)
-      .setDesc(isPro ? s.tierDesc : s.modelDesc)
+      .setName(s.model)
+      .setDesc(s.modelDesc)
       .addDropdown((dd) => {
         for (const m of presets) dd.addOption(m.id, m.name);
         if (allowCustom) dd.addOption(CUSTOM, s.modelCustom);
@@ -501,6 +516,18 @@ export class DecksSettingTab extends PluginSettingTab {
           }),
         );
     }
+  }
+
+  private addProBanner(containerEl: HTMLElement): void {
+    const banner = containerEl.createDiv({ cls: "decks-pro-banner" });
+    const text = banner.createDiv({ cls: "decks-pro-banner-text" });
+    text.createDiv({ cls: "decks-pro-banner-title", text: I18n.t.pro.heading });
+    text.createDiv({ cls: "decks-pro-banner-body", text: I18n.t.pro.body });
+    banner.createEl("a", {
+      cls: "decks-pro-banner-cta",
+      text: I18n.t.pro.cta,
+      attr: { href: `${DECKS_PRO_SITE_URL}/pricing/` },
+    });
   }
 
   private addLanguageSettings(containerEl: HTMLElement): void {

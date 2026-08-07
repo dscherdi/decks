@@ -77,6 +77,11 @@ import { DecksSettingTab } from "./components/settings/SettingsTab";
 import { DecksView } from "./components/DecksView";
 import { DecksViewModal } from "./components/DecksViewModal";
 import { ReleaseNotesModal } from "./components/ReleaseNotesModal";
+import {
+  ReleaseNotesView,
+  VIEW_TYPE_RELEASE_NOTES,
+} from "./components/ReleaseNotesView";
+import { shouldShowReleaseNotes } from "./utils/release-notes";
 import { SrMigrationController } from "./services/SrMigrationController";
 import { SrMigrationModalWrapper } from "./components/migration/SrMigrationModalWrapper";
 import { AnkiImportController } from "./services/AnkiImportController";
@@ -160,6 +165,8 @@ export default class DecksPlugin extends Plugin {
   private flashcardComposer: FlashcardComposer;
   public aiKeyStore: AiKeyStore;
   public decksProAuth: DecksProAuth;
+  /** Kept so the Decks Pro sign-in hand-off can repaint the panel. */
+  private settingTab: DecksSettingTab | null = null;
   public aiRefactorController: AiRefactorController;
   public aiGeneratorController: AiGeneratorController;
   public pdfOcrCache: PdfOcrCache;
@@ -498,6 +505,12 @@ export default class DecksPlugin extends Plugin {
         (leaf) => new AiGeneratorView(leaf),
       );
 
+      // Register the release notes tab view
+      this.registerView(
+        VIEW_TYPE_RELEASE_NOTES,
+        (leaf) => new ReleaseNotesView(leaf),
+      );
+
       // Let internal links in reviewed cards use Obsidian's page preview
       // (mod-key hover, configurable under core Page Preview settings).
       this.registerHoverLinkSource("decks", {
@@ -580,6 +593,13 @@ export default class DecksPlugin extends Plugin {
         callback: () => {
           new ReleaseNotesModal(this.app).open();
         },
+      });
+
+      // After an update, show what changed — once per version. Deferred to
+      // layout-ready so it does not compete with the workspace restoring its
+      // own tabs.
+      this.app.workspace.onLayoutReady(() => {
+        void this.openReleaseNotesIfUpdated();
       });
 
       // Add command to open the legacy SR migration modal
@@ -1012,9 +1032,10 @@ export default class DecksPlugin extends Plugin {
         };
       });
 
-      // Add settings tab
-      this.addSettingTab(
-        new DecksSettingTab(
+      // Add settings tab. The reference is kept so the Decks Pro sign-in
+      // hand-off can repaint it: the browser round-trip finishes outside the
+      // settings UI, which would otherwise keep showing "signed out".
+      this.settingTab = new DecksSettingTab(
           this.app,
           this,
           this.settings,
@@ -1037,8 +1058,8 @@ export default class DecksPlugin extends Plugin {
           this.db.purgeDatabase.bind(this.db),
           this.backupService,
           () => this.resyncTemplates()
-        )
       );
+      this.addSettingTab(this.settingTab);
 
       // Setup database file watcher
       this.setupDatabaseWatcher();
@@ -1136,6 +1157,30 @@ export default class DecksPlugin extends Plugin {
 
     delete (this.settings as unknown as Record<string, unknown>).fsrs;
     await this.saveSettings();
+  }
+
+  /**
+   * Open the release notes in a tab when the running version differs from the
+   * one last shown — an update, or a first install.
+   *
+   * The version is recorded before the tab is opened: if opening ever throws,
+   * the alternative is a tab that tries to reopen on every launch, which is a
+   * far worse failure than missing the notes once.
+   */
+  private async openReleaseNotesIfUpdated(): Promise<void> {
+    const current = this.manifest.version;
+    if (!shouldShowReleaseNotes(current, this.settings.ui.lastSeenVersion)) return;
+
+    this.settings.ui.lastSeenVersion = current;
+    await this.saveSettings();
+
+    try {
+      await this.app.workspace
+        .getLeaf("tab")
+        .setViewState({ type: VIEW_TYPE_RELEASE_NOTES, active: true });
+    } catch (e) {
+      console.error("Decks: could not open release notes", e);
+    }
   }
 
   async saveSettings() {
@@ -1313,6 +1358,7 @@ export default class DecksPlugin extends Plugin {
           aiEnabled: this.aiRefactorController.isEnabled(),
           aiProvider: this.settings.ai.provider,
           defaultModel: this.aiDefaultModel(),
+          onModelChange: (id: string) => void this.setAiModel(id),
           onRefactor: (current, options, signal) =>
             this.aiRefactorController.refactorCard(
               card,
@@ -1387,6 +1433,7 @@ export default class DecksPlugin extends Plugin {
           cards,
           aiProvider: this.settings.ai.provider,
           defaultModel: this.aiDefaultModel(),
+          onModelChange: (id: string) => void this.setAiModel(id),
           run: (card, options, signal) =>
             this.aiRefactorController.refactorCard(
               card,
@@ -1435,6 +1482,20 @@ export default class DecksPlugin extends Plugin {
     });
   }
 
+  /**
+   * Remember the tier or model chosen in a modal.
+   *
+   * Decks Pro has no tier control in settings — the choice belongs where the
+   * work happens — so the modals are the only place it is set, and it has to
+   * stick between them.
+   */
+  private async setAiModel(id: string): Promise<void> {
+    const provider = this.settings.ai.provider;
+    if (!id || this.settings.ai.models[provider] === id) return;
+    this.settings.ai.models[provider] = id;
+    await this.saveSettings();
+  }
+
   /** The model the in-prompt picker defaults to: the configured one, with retired ids reset. */
   private aiDefaultModel(): string {
     const provider = this.settings.ai.provider;
@@ -1464,7 +1525,11 @@ export default class DecksPlugin extends Plugin {
       deckTag: this.settings.parsing.deckTag,
       aiProvider: this.settings.ai.provider,
       defaultModel: this.aiDefaultModel(),
-      debugEnabled: this.settings.debug.enableLogging,
+      onModelChange: (id: string) => void this.setAiModel(id),
+      // Development builds only. The panel is a raw request/response viewer —
+      // useful while building, not something to ship inside a paid feature.
+      // esbuild folds __DECKS_DEV__ to false in production and drops the branch.
+      debugEnabled: __DECKS_DEV__ && this.settings.debug.enableLogging,
       // PDF attach is available to all providers: Decks Pro OCRs the pages,
       // any other provider uses free pdf.js text extraction.
       pdfAvailable: this.settings.ai.enabled,
@@ -1817,6 +1882,11 @@ export default class DecksPlugin extends Plugin {
     }
   }
 
+  /** Repaint the settings panel if it is currently mounted. */
+  private refreshSettingsTab(): void {
+    if (this.settingTab?.containerEl.isConnected) this.settingTab.display();
+  }
+
   // Completes the obsidian://decks-auth hand-off started from settings. The
   // nonce check lives in DecksProAuth, so a stray or replayed URL is rejected.
   private async completeProSignIn(state?: string, code?: string): Promise<void> {
@@ -1832,6 +1902,9 @@ export default class DecksPlugin extends Plugin {
         }
         this.settings.ai.provider = "decks-pro";
         await this.saveSettings();
+        // The settings panel rendered its signed-out state before the browser
+        // round-trip; repaint so it reflects the account without a reopen.
+        this.refreshSettingsTab();
       }
     } catch (error) {
       this.logger.error("Decks Pro sign-in failed", error);

@@ -4,6 +4,8 @@
 
 **Obsidian notlarınızı bilgi kartlarına (flashcard) dönüştürün. Özel bir sözdizimi yok. Oluşturulacak ayrı bir deste yok.**
 
+> **Yeni — [Decks Pro](https://decksmd.app/pricing/)** · API anahtarı kurmadan notlarınızdan, PDF'lerinizden ve taranmış slaytlarınızdan kart oluşturun. Ücretsiz deneyin — yaklaşık 100 kart veya 10 PDF sayfası, kart bilgisi gerekmez. Decks'teki diğer her şey ücretsiz kalır ve kendi API anahtarınız çalışmaya devam eder.
+
 Bir dosyayı `#decks` ile etiketleyin. Her `##` başlığı kartın ön yüzü, altındaki metin ise arka yüzü olur. Tablolar, görsel örtme (image occlusion) ve `==cloze==` (boşluk doldurma) vurguları da aynı şekilde çalışır. Zamanlama, modern aralıklı tekrar algoritması olan FSRS-6 tarafından yönetilir.
 
 ![Demo](./decks_showcase.gif)

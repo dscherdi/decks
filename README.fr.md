@@ -4,6 +4,8 @@
 
 **Transformez vos notes Obsidian en cartes mémoire (flashcards). Aucune syntaxe spéciale. Aucun paquet séparé à construire.**
 
+> **Nouveau — [Decks Pro](https://decksmd.app/pricing/)** · Générez des cartes à partir de vos notes, PDF et diapositives numérisées sans configurer de clé API. Essai gratuit — environ 100 cartes ou 10 pages de PDF, sans carte bancaire. Tout le reste de Decks demeure gratuit, et votre propre clé API fonctionne toujours.
+
 Ajoutez la balise `#decks` à un fichier. Chaque en-tête `##` devient le recto d'une carte ; le texte en dessous devient le verso. Les tableaux, les images masquées et les textes surlignés `==cloze==` fonctionnent de la même manière. La planification est gérée par FSRS-6 — l'algorithme moderne de répétition espacée.
 
 ![Demo](./decks_showcase.gif)

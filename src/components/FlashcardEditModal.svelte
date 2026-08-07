@@ -41,6 +41,8 @@
     | undefined = undefined;
   export let aiProvider: AiProviderId = "openai";
   export let defaultModel = "";
+  /** Remember the tier chosen here; there is no settings control for it. */
+  export let onModelChange: (id: string) => void = () => {};
 
   // Set only for template-bound table cards: the row's headers + cell values.
   // When present, the editor shows one input per column instead of Front/Back/Notes.
@@ -49,6 +51,7 @@
   // Per-prompt model picker: defaults to the global model, overrides this run only.
   const modelOptions = buildModelOptions(aiProvider, defaultModel);
   let selectedModel = defaultModel;
+  $: if (selectedModel && selectedModel !== defaultModel) onModelChange(selectedModel);
 
   type Mode = "edit" | "preview";
 

@@ -85,6 +85,7 @@ export class AiGeneratorController {
 
     let debug: GenerateResult["debug"];
     let truncated = false;
+    let covered = false;
 
     for (let batch = 0; batch < maxBatches; batch++) {
       if (signal?.aborted) break;
@@ -106,6 +107,7 @@ export class AiGeneratorController {
         );
         debug = result.debug ?? debug;
         truncated = result.truncated ?? false;
+        covered = result.covered ?? false;
       } catch (e) {
         // User cancelled: stop quietly and keep whatever we have.
         if (signal?.aborted) break;
@@ -115,13 +117,19 @@ export class AiGeneratorController {
         break;
       }
 
+      // The model says the source is spent — stop before paying for a round
+      // that would only rediscover what we already have.
+      if (covered) break;
+
       // Stop when a round added nothing new AND wasn't cut off by the output-
       // token limit. A truncated round means there's more to generate (the cap
-      // bounds total rounds), so keep going.
+      // bounds total rounds), so keep going. Kept as the backstop for models
+      // that never emit the marker.
       if (newCards.length === countBefore && !truncated) break;
     }
 
-    // `truncated` lets the caller offer a manual "Continue generating" action.
-    return { cards: newCards, debug, truncated };
+    // `truncated` lets the caller offer a manual "Continue generating" action;
+    // `covered` lets it say there is probably nothing left to find.
+    return { cards: newCards, debug, truncated, covered };
   }
 }

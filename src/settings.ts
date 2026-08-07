@@ -71,6 +71,9 @@ export interface DecksSettings {
     // Per-column widths (in pixels) for the flashcard manager table.
     // Empty object means use defaults from the grid template.
     managerColumnWidths: Record<string, number>;
+    // Plugin version whose release notes have been shown. Empty means they
+    // never have been, which is also true of a fresh install.
+    lastSeenVersion: string;
   };
 
   // Backup Settings
@@ -194,6 +197,7 @@ export const DEFAULT_SETTINGS: DecksSettings = {
     minDeckCardCount: 0,
     collapsedDeckNodeIds: [],
     managerColumnWidths: {},
+    lastSeenVersion: "",
   },
 
   backup: {

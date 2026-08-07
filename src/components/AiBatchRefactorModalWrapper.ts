@@ -14,6 +14,8 @@ import type { Svelte5MountedComponent } from "../types/svelte-components";
 import { makeModalResponsive, type ResponsiveModalHandle } from "../utils/responsive-modal";
 
 export interface AiBatchRefactorOptions {
+  /** Persist a tier chosen here — settings no longer offers the control. */
+  onModelChange?: (id: string) => void;
   cards: Flashcard[];
   aiProvider: AiProviderId;
   defaultModel: string;
@@ -81,6 +83,7 @@ export class AiBatchRefactorModalWrapper extends Modal {
         cards: this.options.cards,
         aiProvider: this.options.aiProvider,
         defaultModel: this.options.defaultModel,
+        onModelChange: this.options.onModelChange ?? ((): void => {}),
         run: this.options.run,
         apply: this.options.apply,
         applySplit: this.options.applySplit,

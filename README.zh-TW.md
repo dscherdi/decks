@@ -4,6 +4,8 @@
 
 **將您的 Obsidian 筆記變成閃卡 (Flashcards)。無需特殊語法，無需建立單獨的牌組。**
 
+> **新功能 — [Decks Pro](https://decksmd.app/pricing/)** · 無需設定 API 金鑰，即可從筆記、PDF 與掃描的投影片產生卡片。免費試用——約 100 張卡片或 10 頁 PDF，無需綁定信用卡。Decks 的其他功能仍然免費，自備 API 金鑰依然可用。
+
 只需用 `#decks` 標記一個檔案。每個 `##` 標題都會變成卡片的正面；其下方的文字會變成背面。表格、圖片遮罩 (Image occlusion) 和 `==填空==` (Cloze) 也能以同樣的方式運作。卡片複習排程由 FSRS-6 —— 現代的間隔重複演算法來處理。
 
 ![Demo](./decks_showcase.gif)

@@ -4,6 +4,8 @@
 
 **Kthe shënimet e tua të Obsidian në karta (flashcards). Asnjë sintaksë e veçantë. Asnjë pako e veçantë për të krijuar.**
 
+> **E re — [Decks Pro](https://decksmd.app/pricing/)** · Krijo karta nga shënimet, PDF-të dhe sllajdet e skanuara pa konfiguruar një çelës API. Provoje falas — rreth 100 karta ose 10 faqe PDF, pa kartë krediti. Gjithçka tjetër në Decks mbetet falas dhe çelësi yt API vazhdon të funksionojë.
+
 Etiketo një skedar me `#decks`. Çdo titull `##` bëhet pjesa e përparme e një karte; teksti më poshtë bëhet pjesa e pasme. Tabelat, mbulimi i imazheve (image occlusion) dhe theksimet `==cloze==` funksionojnë në të njëjtën mënyrë. Planifikimi trajtohet nga FSRS-6 — algoritmi modern i përsëritjes në hapësirë.
 
 ![Demo](./decks_showcase.gif)
