@@ -1,4 +1,5 @@
 import type { DataAdapter } from "obsidian";
+import { writeBinaryAtomic } from "./atomic-write";
 import type {
   Deck,
   DeckProfile,
@@ -3202,8 +3203,11 @@ export abstract class BaseDatabaseService implements IDatabaseService {
       // Export current database to buffer
       const data = await this.exportDatabaseToBuffer();
 
-      // Write the SQLite database file (convert Uint8Array to ArrayBuffer)
-      await this.adapter.writeBinary(
+      // Write the SQLite database file (convert Uint8Array to ArrayBuffer).
+      // Atomic like the live save: a half-written backup is worse than none,
+      // because it looks like a restore point until the day it is needed.
+      await writeBinaryAtomic(
+        this.adapter,
         backupPath,
         data.buffer.slice(0) as ArrayBuffer
       );

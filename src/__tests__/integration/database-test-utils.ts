@@ -58,7 +58,13 @@ export class InMemoryAdapter implements DataAdapter {
   }
 
   async stat(path: string): Promise<any> {
-    return { type: "file", size: 0, mtime: 0, ctime: 0 };
+    // Report the real size: the atomic save verifies a file it has just written
+    // against the byte count it asked for, and a hardcoded 0 makes every write
+    // look short.
+    const data = this.files.get(path);
+    if (data) return { type: "file", size: data.byteLength, mtime: 0, ctime: 0 };
+    if (this.directories.has(path)) return { type: "folder", size: 0, mtime: 0, ctime: 0 };
+    return null;
   }
 
   async append(path: string, data: string): Promise<void> {
@@ -92,8 +98,8 @@ export class InMemoryAdapter implements DataAdapter {
     this.directories.delete(path);
   }
 
-  async remove(): Promise<void> {
-    throw new Error("Not implemented");
+  async remove(path: string): Promise<void> {
+    this.files.delete(path);
   }
   async rename(from: string, to: string): Promise<void> {
     const data = this.files.get(from);

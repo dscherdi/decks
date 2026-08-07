@@ -1,4 +1,5 @@
 import type { DataAdapter } from "obsidian";
+import { recoverInterruptedWrite, writeBinaryAtomic } from "./atomic-write";
 import { BaseDatabaseService } from "./BaseDatabaseService";
 import type { QueryConfig } from "./BaseDatabaseService";
 import type { SqlJsValue, SyncData, SyncResult } from "@decks/core";
@@ -202,6 +203,11 @@ export class WorkerDatabaseService extends BaseDatabaseService {
 
   private async loadDatabaseFile(): Promise<Uint8Array | null> {
     try {
+      // Finish or discard a save that was cut short, so an interrupted write is
+      // never mistaken for "no database yet" and replaced with an empty one.
+      if (await recoverInterruptedWrite(this.adapter, this.dbPath)) {
+        this.debugLog("Recovered a database write that was interrupted");
+      }
       if (await this.adapter.exists(this.dbPath)) {
         const data = await this.adapter.readBinary(this.dbPath);
         return new Uint8Array(data);
@@ -261,7 +267,8 @@ export class WorkerDatabaseService extends BaseDatabaseService {
 
       // data.buffer is a Uint8Array from worker.export()
       // Obsidian's writeBinary expects an ArrayBuffer
-      await this.adapter.writeBinary(
+      await writeBinaryAtomic(
+        this.adapter,
         this.dbPath,
         exportData.buffer.buffer.slice(0) as ArrayBuffer
       );

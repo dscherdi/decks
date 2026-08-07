@@ -3,6 +3,7 @@
 // Do not import this from production code — workers run on every Obsidian
 // platform and the dual execution path is no longer maintained for production.
 import type { DataAdapter } from "obsidian";
+import { writeBinaryAtomic } from "./atomic-write";
 import { BaseDatabaseService } from "./BaseDatabaseService";
 import type { QueryConfig } from "./BaseDatabaseService";
 import { buildMigrationSQL, CREATE_TABLES_SQL, CURRENT_SCHEMA_VERSION, yieldToUI, FlashcardSynchronizer, remapCardIdsToDeckIndependent } from "@decks/core";
@@ -147,7 +148,8 @@ export class MainDatabaseService extends BaseDatabaseService {
 
       // Export database and save
       const data = this.db.export();
-      await this.adapter.writeBinary(
+      await writeBinaryAtomic(
+        this.adapter,
         this.dbPath,
         data.buffer.slice(0) as ArrayBuffer
       );
