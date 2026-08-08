@@ -1,5 +1,8 @@
 <p align="center">
-  <img src="./decksmd-banner.jpg" alt="DecksMD — 将您的 Obsidian 笔记变成抽认卡（Flashcards）。无需特殊语法，无需建立单独的牌组。" width="100%">
+  <picture>
+    <source media="(prefers-color-scheme: dark)" srcset="./decksmd-banner.jpg">
+    <img src="./decksmd-banner-light.jpg" alt="DecksMD — 将您的 Obsidian 笔记变成抽认卡（Flashcards）。无需特殊语法，无需建立单独的牌组。" width="100%">
+  </picture>
 </p>
 
 # Decks ![Downloads](https://img.shields.io/github/downloads/dscherdi/decks/total) ![Downloads Latest](https://img.shields.io/github/downloads/dscherdi/decks/latest/total?style=flat-square) ![Release](https://img.shields.io/github/v/release/dscherdi/decks)
