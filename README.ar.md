@@ -1,7 +1,7 @@
 <p align="center">
   <picture>
-    <source media="(prefers-color-scheme: dark)" srcset="./decksmd-banner.jpg">
-    <img src="./decksmd-banner-light.jpg" alt="DecksMD — حول ملاحظات Obsidian الخاصة بك إلى بطاقات تعليمية (Flashcards). لا توجد صيغ معقدة. لا توجد رزم منفصلة لإنشائها." width="100%">
+    <source media="(prefers-color-scheme: dark)" srcset="https://raw.githubusercontent.com/dscherdi/decks/HEAD/decksmd-banner.jpg">
+    <img src="https://raw.githubusercontent.com/dscherdi/decks/HEAD/decksmd-banner-light.jpg" alt="DecksMD — حول ملاحظات Obsidian الخاصة بك إلى بطاقات تعليمية (Flashcards). لا توجد صيغ معقدة. لا توجد رزم منفصلة لإنشائها." width="100%">
   </picture>
 </p>
 

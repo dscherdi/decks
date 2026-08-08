@@ -1,7 +1,7 @@
 <p align="center">
   <picture>
-    <source media="(prefers-color-scheme: dark)" srcset="./decksmd-banner.jpg">
-    <img src="./decksmd-banner-light.jpg" alt="DecksMD — Transformez vos notes Obsidian en cartes mémoire (flashcards). Aucune syntaxe spéciale. Aucun paquet séparé à construire." width="100%">
+    <source media="(prefers-color-scheme: dark)" srcset="https://raw.githubusercontent.com/dscherdi/decks/HEAD/decksmd-banner.jpg">
+    <img src="https://raw.githubusercontent.com/dscherdi/decks/HEAD/decksmd-banner-light.jpg" alt="DecksMD — Transformez vos notes Obsidian en cartes mémoire (flashcards). Aucune syntaxe spéciale. Aucun paquet séparé à construire." width="100%">
   </picture>
 </p>
 

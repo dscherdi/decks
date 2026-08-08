@@ -1,7 +1,7 @@
 <p align="center">
   <picture>
-    <source media="(prefers-color-scheme: dark)" srcset="./decksmd-banner.jpg">
-    <img src="./decksmd-banner-light.jpg" alt="DecksMD — 將您的 Obsidian 筆記變成閃卡 (Flashcards)。無需特殊語法，無需建立單獨的牌組。" width="100%">
+    <source media="(prefers-color-scheme: dark)" srcset="https://raw.githubusercontent.com/dscherdi/decks/HEAD/decksmd-banner.jpg">
+    <img src="https://raw.githubusercontent.com/dscherdi/decks/HEAD/decksmd-banner-light.jpg" alt="DecksMD — 將您的 Obsidian 筆記變成閃卡 (Flashcards)。無需特殊語法，無需建立單獨的牌組。" width="100%">
   </picture>
 </p>
 
