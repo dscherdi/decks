@@ -107,15 +107,16 @@ const buildOptions = {
       },
       filterWarnings: () => false,
     }),
-    // Copy only manifest, README, and LICENSE (SQL.js assets are now embedded)
+    // Manifest and LICENCE only (SQL.js assets are embedded).
+    //
+    // The README is deliberately not shipped: what anyone reads is the copy
+    // GitHub renders from the repo, where its relative images resolve. In the
+    // release artifact those links are broken and the file is dead weight.
+    // LICENCE stays — AGPLv3 requires it to travel with the distribution.
     copy({
       assets: [
         {
           from: [toPosix(path.join(__dirname, "manifest.json"))],
-          to: [toPosix(outDir)],
-        },
-        {
-          from: [toPosix(path.join(__dirname, "README.md"))],
           to: [toPosix(outDir)],
         },
         {

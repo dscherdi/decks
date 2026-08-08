@@ -91,7 +91,6 @@ jobs:
             "./dist/main.js"
             "./dist/styles.css"
             "./dist/manifest.json"
-            "./dist/README.md"
             "./dist/LICENSE"
           )
 
@@ -121,7 +120,6 @@ jobs:
             apps/obsidian-plugin/dist/main.js
             apps/obsidian-plugin/dist/styles.css
             apps/obsidian-plugin/dist/manifest.json
-            apps/obsidian-plugin/dist/README.md
             apps/obsidian-plugin/dist/LICENSE
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
