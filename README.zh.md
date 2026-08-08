@@ -1,3 +1,7 @@
+<p align="center">
+  <img src="./decksmd-banner.jpg" alt="DecksMD — 将您的 Obsidian 笔记变成抽认卡（Flashcards）。无需特殊语法，无需建立单独的牌组。" width="100%">
+</p>
+
 # Decks ![Downloads](https://img.shields.io/github/downloads/dscherdi/decks/total) ![Downloads Latest](https://img.shields.io/github/downloads/dscherdi/decks/latest/total?style=flat-square) ![Release](https://img.shields.io/github/v/release/dscherdi/decks)
 
 [English](./README.md) · [Deutsch](./README.de.md) · [Español](./README.es.md) · [Français](./README.fr.md) · [Italiano](./README.it.md) · [Русский](./README.ru.md) · [Türkçe](./README.tr.md) · [Shqip](./README.sq.md) · [العربية](./README.ar.md) · [हिन्दी](./README.hi.md) · **中文** · [繁體中文](./README.zh-TW.md) · [日本語](./README.ja.md)

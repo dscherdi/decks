@@ -1,3 +1,7 @@
+<p align="center">
+  <img src="./decksmd-banner.jpg" alt="DecksMD — Kthe shënimet e tua të Obsidian në karta (flashcards). Asnjë sintaksë e veçantë. Asnjë pako e veçantë për të krijuar." width="100%">
+</p>
+
 # Decks ![Downloads](https://img.shields.io/github/downloads/dscherdi/decks/total) ![Downloads Latest](https://img.shields.io/github/downloads/dscherdi/decks/latest/total?style=flat-square) ![Release](https://img.shields.io/github/v/release/dscherdi/decks)
 
 [English](./README.md) · [Deutsch](./README.de.md) · [Español](./README.es.md) · [Français](./README.fr.md) · [Italiano](./README.it.md) · [Русский](./README.ru.md) · [Türkçe](./README.tr.md) · **Shqip** · [العربية](./README.ar.md) · [हिन्दी](./README.hi.md) · [中文](./README.zh.md) · [繁體中文](./README.zh-TW.md) · [日本語](./README.ja.md)
