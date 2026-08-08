@@ -15,7 +15,7 @@
 
 只需用 `#decks` 標記一個檔案。每個 `##` 標題都會變成卡片的正面；其下方的文字會變成背面。表格、圖片遮罩 (Image occlusion) 和 `==填空==` (Cloze) 也能以同樣的方式運作。卡片複習排程由 FSRS-6 —— 現代的間隔重複演算法來處理。
 
-![Demo](./decks_showcase.gif)
+![Demo](https://raw.githubusercontent.com/dscherdi/decks/HEAD/decks_showcase.gif)
 
 [Discord](https://discord.com/channels/686053708261228577/1497268419861418035) · [版本說明](./release-notes/) · [贊助我一杯咖啡](https://www.buymeacoffee.com/dscherdil0)
 
@@ -162,7 +162,7 @@ masks:
 
 **空間卡片（Spatial cards）**：用連線連接文字節點，每條連線都會變成一張卡片——起始節點是正面（問題），終點節點是反面（答案），連線上的標籤作為提示。支援鏈式連接（A → B → C）、一對多、多對一；未連接的節點仍按上述四種格式解析。詳情請見 **[docs/CANVAS_DECKS.md](docs/CANVAS_DECKS.md)**。
 
-![Canvas Spatial Cards Demo](./canvas_spatial_cards_demo.gif)
+![Canvas Spatial Cards Demo](https://raw.githubusercontent.com/dscherdi/decks/HEAD/canvas_spatial_cards_demo.gif)
 
 ## 範本
 
@@ -264,7 +264,7 @@ FSRS 附帶了開箱即用的合理預設設定。一旦您累積了約 100 次�
 
 自備 OpenAI、Anthropic（Claude）、Google（Gemini）或相容 OpenAI/本機端點的金鑰。金鑰儲存在本機的 `ai-keys.json`，絕不寫入 `data.json`，因此不會透過同步離開你的裝置。除非你觸發某個動作，否則不會向供應商傳送任何內容；每個請求僅包含關於 Decks 運作方式的內建提示、你的指示以及該動作的內容。
 
-![Decks AI Generator](./decks_ai_generate.gif)
+![Decks AI Generator](https://raw.githubusercontent.com/dscherdi/decks/HEAD/decks_ai_generate.gif)
 
 ## 建構基礎
 

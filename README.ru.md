@@ -15,7 +15,7 @@
 
 Пометьте файл тегом `#decks`. Каждый заголовок уровня `##` становится лицевой стороной карточки; текст под ним — обратной. Таблицы, скрытие частей изображений (image occlusion) и выделения `==cloze==` работают точно так же. Планирование повторений осуществляется с помощью FSRS-6 — современного алгоритма интервального повторения.
 
-![Demo](./decks_showcase.gif)
+![Demo](https://raw.githubusercontent.com/dscherdi/decks/HEAD/decks_showcase.gif)
 
 [Discord](https://discord.com/channels/686053708261228577/1497268419861418035) · [Примечания к выпуску](./release-notes/) · [Купить мне кофе](https://www.buymeacoffee.com/dscherdil0)
 
@@ -162,7 +162,7 @@ masks:
 
 **Пространственные карточки (Spatial cards)**: соединяйте текстовые узлы рёбрами — каждое ребро становится карточкой: исходный узел — лицевая сторона (вопрос), целевой — обратная (ответ), а подпись ребра — необязательная подсказка. Цепочки (A → B → C), «один-ко-многим» и «многие-к-одному» — всё это работает; несвязанные узлы по-прежнему разбираются четырьмя форматами выше. Подробности в **[docs/CANVAS_DECKS.md](docs/CANVAS_DECKS.md)**.
 
-![Canvas Spatial Cards Demo](./canvas_spatial_cards_demo.gif)
+![Canvas Spatial Cards Demo](https://raw.githubusercontent.com/dscherdi/decks/HEAD/canvas_spatial_cards_demo.gif)
 
 ## Шаблоны
 
@@ -279,7 +279,7 @@ FSRS поставляется с разумными настройками по 
 
 Используйте свой ключ OpenAI, Anthropic (Claude), Google (Gemini) или совместимую с OpenAI/локальную конечную точку. Ключи хранятся локально в `ai-keys.json` и никогда не записываются в `data.json`, поэтому не покидают устройство через синхронизацию. Провайдеру ничего не отправляется, пока вы не запустите действие; каждый запрос содержит только встроенную инструкцию о том, как работает Decks, ваши указания и содержимое этого действия.
 
-![Decks AI Generator](./decks_ai_generate.gif)
+![Decks AI Generator](https://raw.githubusercontent.com/dscherdi/decks/HEAD/decks_ai_generate.gif)
 
 ## Основано на
 

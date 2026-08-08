@@ -15,7 +15,7 @@
 
 ファイルに `#decks` のタグを付けるだけ。`##` の各見出しがカードの表面（Front）になり、その下のテキストが裏面（Back）になります。テーブル、画像の穴埋め（Image occlusion）、`==cloze==` のハイライトも同じように機能します。スケジュール管理は、最新の間隔反復アルゴリズムである「FSRS-6」によって行われます。
 
-![Demo](./decks_showcase.gif)
+![Demo](https://raw.githubusercontent.com/dscherdi/decks/HEAD/decks_showcase.gif)
 
 [Discord](https://discord.com/channels/686053708261228577/1497268419861418035) · [リリースノート](./release-notes/) · [開発者を支援 (Buy me a coffee)](https://www.buymeacoffee.com/dscherdil0)
 
@@ -173,7 +173,7 @@ Markdown ファイルの代わりに Obsidian の Canvas (`.canvas`) 上でカ�
 
 **空間カード（Spatial cards）**：テキストノードをエッジで接続すると、各エッジが 1 枚のカードになります — 始点ノードが表面（質問）、終点ノードが裏面（答え）、エッジのラベルは任意のヒントです。チェーン（A → B → C）、1 対多、多対 1 のいずれも動作します。接続されていないノードは引き続き上記の 4 つの形式で解析されます。詳細は **[docs/CANVAS_DECKS.md](docs/CANVAS_DECKS.md)** を参照。
 
-![Canvas Spatial Cards Demo](./canvas_spatial_cards_demo.gif)
+![Canvas Spatial Cards Demo](https://raw.githubusercontent.com/dscherdi/decks/HEAD/canvas_spatial_cards_demo.gif)
 
 ## テンプレート
 
@@ -276,7 +276,7 @@ Anki で、デッキ（またはコレクション全体）を **`.apkg`** と�
 
 OpenAI、Anthropic（Claude）、Google（Gemini）、または OpenAI 互換/ローカルのエンドポイントのキーをご自身で用意してください。キーはローカルの `ai-keys.json` に保存され、`data.json` には決して書き込まれないため、同期で端末外に出ることはありません。操作を実行しない限りプロバイダーには何も送信されません。各リクエストには、Decks の仕組みに関する組み込みプロンプト、あなたの指示、その操作の内容のみが含まれます。
 
-![Decks AI Generator](./decks_ai_generate.gif)
+![Decks AI Generator](https://raw.githubusercontent.com/dscherdi/decks/HEAD/decks_ai_generate.gif)
 
 ## 基盤
 

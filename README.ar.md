@@ -15,7 +15,7 @@
 
 قم بإضافة العلامة `#decks` إلى ملف. كل عنوان من المستوى `##` يصبح واجهة البطاقة؛ والنص الذي تحته يصبح ظهر البطاقة. الجداول، وإخفاء أجزاء من الصور (image occlusion)، والفراغات (cloze) باستخدام `==التمييز==` تعمل بنفس الطريقة. تتم جدولة المراجعة بواسطة FSRS-6 — خوارزمية التكرار المتباعد الحديثة.
 
-![Demo](./decks_showcase.gif)
+![Demo](https://raw.githubusercontent.com/dscherdi/decks/HEAD/decks_showcase.gif)
 
 [Discord](https://discord.com/channels/686053708261228577/1497268419861418035) · [ملاحظات الإصدار](./release-notes/) · [اشترِ لي قهوة](https://www.buymeacoffee.com/dscherdil0)
 
@@ -162,7 +162,7 @@ masks:
 
 **البطاقات المكانية (Spatial cards)**: اربط العُقد النصية بحوافٍ — كل حافة تصبح بطاقةً: العقدة المصدر هي الوجه (السؤال)، والعقدة الهدف هي الظهر (الجواب)، وعنوان الحافة يعمل كتلميح اختياري. تعمل السلاسل (A → B → C) وعلاقات واحد-إلى-متعدد ومتعدد-إلى-واحد جميعها؛ أما العقد غير المتصلة فلا تزال تُحلَّل بالصيغ الأربع أعلاه. التفاصيل في **[docs/CANVAS_DECKS.md](docs/CANVAS_DECKS.md)**.
 
-![Canvas Spatial Cards Demo](./canvas_spatial_cards_demo.gif)
+![Canvas Spatial Cards Demo](https://raw.githubusercontent.com/dscherdi/decks/HEAD/canvas_spatial_cards_demo.gif)
 
 ## القوالب
 
@@ -267,7 +267,7 @@ masks:
 
 استخدم مفتاحك الخاص لـ OpenAI أو Anthropic (Claude) أو Google (Gemini) أو نقطة نهاية متوافقة مع OpenAI/محلية. تُحفظ المفاتيح محليًا في `ai-keys.json` ولا تُكتب أبدًا في `data.json`، لذا لا تغادر جهازك عبر المزامنة. لا يُرسَل شيء إلى المزوّد ما لم تبدأ إجراءً؛ ويحتوي كل طلب فقط على موجّه مدمج حول كيفية عمل Decks وتعليماتك ومحتوى ذلك الإجراء.
 
-![Decks AI Generator](./decks_ai_generate.gif)
+![Decks AI Generator](https://raw.githubusercontent.com/dscherdi/decks/HEAD/decks_ai_generate.gif)
 
 ## مبني على
 

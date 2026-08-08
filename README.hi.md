@@ -15,7 +15,7 @@
 
 किसी फ़ाइल को `#decks` के साथ टैग करें। प्रत्येक `##` हैडर कार्ड का सामने का हिस्सा (front) बन जाता है; नीचे का टेक्स्ट पीछे का हिस्सा (back) बन जाता है। टेबल, इमेज ऑक्लूज़न, और `==cloze==` हाइलाइट भी इसी तरह काम करते हैं। शेड्यूलिंग FSRS-6 द्वारा संभाली जाती है — जो कि एक आधुनिक स्पेस्ड-रिपीटीशन एल्गोरिदम है।
 
-![Demo](./decks_showcase.gif)
+![Demo](https://raw.githubusercontent.com/dscherdi/decks/HEAD/decks_showcase.gif)
 
 [Discord](https://discord.com/channels/686053708261228577/1497268419861418035) · [रिलीज़ नोट्स](./release-notes/) · [मुझे एक कॉफ़ी पिलाएं](https://www.buymeacoffee.com/dscherdil0)
 
@@ -162,7 +162,7 @@ Markdown फ़ाइल के बजाय Obsidian Canvas (`.canvas`) पर 
 
 **स्पेशियल कार्ड (Spatial cards)**: टेक्स्ट नोड्स को edges से जोड़ें — हर edge एक कार्ड बन जाता है: from-नोड सामने (प्रश्न) है, to-नोड पीछे (उत्तर) है, और edge का लेबल एक वैकल्पिक संकेत (हिंट) है। चेन (A → B → C), one-to-many और many-to-one सभी काम करते हैं; जो नोड्स जुड़े नहीं हैं वे अब भी ऊपर बताए गए चार फ़ॉर्मेट में पार्स होते हैं। विवरण: **[docs/CANVAS_DECKS.md](docs/CANVAS_DECKS.md)**।
 
-![Canvas Spatial Cards Demo](./canvas_spatial_cards_demo.gif)
+![Canvas Spatial Cards Demo](https://raw.githubusercontent.com/dscherdi/decks/HEAD/canvas_spatial_cards_demo.gif)
 
 ## टेम्पलेट (Templates)
 
@@ -268,7 +268,7 @@ Anki में, अपने डेक (या पूरे संग्रह) 
 
 OpenAI, Anthropic (Claude), Google (Gemini) या OpenAI-संगत/स्थानीय एंडपॉइंट के लिए अपनी कुंजी का उपयोग करें। कुंजियाँ स्थानीय रूप से `ai-keys.json` में रहती हैं और कभी `data.json` में नहीं लिखी जातीं, इसलिए सिंक के ज़रिये आपके डिवाइस से बाहर नहीं जातीं। जब तक आप कोई क्रिया शुरू न करें, प्रदाता को कुछ नहीं भेजा जाता; प्रत्येक अनुरोध में केवल Decks के काम करने के तरीके का एक अंतर्निहित प्रॉम्प्ट, आपके निर्देश और उस क्रिया की सामग्री होती है।
 
-![Decks AI Generator](./decks_ai_generate.gif)
+![Decks AI Generator](https://raw.githubusercontent.com/dscherdi/decks/HEAD/decks_ai_generate.gif)
 
 ## आधारित है
 

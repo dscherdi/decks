@@ -15,7 +15,7 @@
 
 只需用 `#decks` 标记一个文件。每个 `##` 标题都会变成卡片的正面；下方的文字会变成背面。表格、图片遮挡和 `==填空==` 高亮显示也能以同样的方式工作。卡片复习调度由 FSRS-6 —— 现代间隔重复算法来处理。
 
-![Demo](./decks_showcase.gif)
+![Demo](https://raw.githubusercontent.com/dscherdi/decks/HEAD/decks_showcase.gif)
 
 [Discord](https://discord.com/channels/686053708261228577/1497268419861418035) · [版本说明](./release-notes/) · [赞助我一杯咖啡](https://www.buymeacoffee.com/dscherdil0)
 
@@ -173,7 +173,7 @@ masks:
 
 **空间卡片（Spatial cards）**：用连线连接文本节点，每条连线都会变成一张卡片——起始节点是正面（问题），终点节点是反面（答案），连线上的标签作为提示。支持链式连接（A → B → C）、一对多、多对一；没有连线的节点仍按四种格式解析。详情见 **[docs/CANVAS_DECKS.md](docs/CANVAS_DECKS.md)**。
 
-![Canvas Spatial Cards Demo](./canvas_spatial_cards_demo.gif)
+![Canvas Spatial Cards Demo](https://raw.githubusercontent.com/dscherdi/decks/HEAD/canvas_spatial_cards_demo.gif)
 
 ## 模板
 
@@ -275,7 +275,7 @@ FSRS 附带了开箱即用的合理默认设置。一旦您积累了约 100 次�
 
 自带 OpenAI、Anthropic（Claude）、Google（Gemini）或兼容 OpenAI/本地端点的密钥。密钥保存在本地的 `ai-keys.json` 中，绝不写入 `data.json`，因此不会通过同步离开你的设备。除非你触发某个操作，否则不会向提供商发送任何内容；每个请求只包含关于 Decks 工作方式的内置提示、你的指令以及该操作的内容。
 
-![Decks AI Generator](./decks_ai_generate.gif)
+![Decks AI Generator](https://raw.githubusercontent.com/dscherdi/decks/HEAD/decks_ai_generate.gif)
 
 ## 构建基础
 

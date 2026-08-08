@@ -15,7 +15,7 @@
 
 Etiqueta un archivo con `#decks`. Cada encabezado `##` se convierte en el anverso de una tarjeta; el texto debajo se convierte en el reverso. Las tablas, la oclusión de imágenes y los resaltados `==cloze==` funcionan de la misma manera. La planificación la gestiona FSRS-6 — el algoritmo moderno de repetición espaciada.
 
-![Demo](./decks_showcase.gif)
+![Demo](https://raw.githubusercontent.com/dscherdi/decks/HEAD/decks_showcase.gif)
 
 [Discord](https://discord.com/channels/686053708261228577/1497268419861418035) · [Notas de versión](./release-notes/) · [Invítame a un café](https://www.buymeacoffee.com/dscherdil0)
 
@@ -172,7 +172,7 @@ Crea tarjetas en un Canvas de Obsidian (`.canvas`) en lugar de un archivo Markdo
 
 **Tarjetas espaciales (Spatial cards)**: conecta nodos de texto con aristas y cada arista se convierte en una tarjeta: el nodo de origen es el anverso (pregunta), el nodo de destino es el reverso (respuesta) y la etiqueta de la arista es una pista opcional. Funcionan cadenas (A → B → C), uno-a-muchos y muchos-a-uno; los nodos no conectados se siguen analizando con los cuatro formatos anteriores. Detalles en **[docs/CANVAS_DECKS.md](docs/CANVAS_DECKS.md)**.
 
-![Canvas Spatial Cards Demo](./canvas_spatial_cards_demo.gif)
+![Canvas Spatial Cards Demo](https://raw.githubusercontent.com/dscherdi/decks/HEAD/canvas_spatial_cards_demo.gif)
 
 ## Plantillas
 
@@ -351,7 +351,7 @@ Funciones de IA opcionales, **desactivadas hasta que añadas una clave de provee
 
 Usa tu propia clave de OpenAI, Anthropic (Claude), Google (Gemini) o un endpoint compatible con OpenAI/local. Las claves se guardan localmente en `ai-keys.json` y nunca se escriben en `data.json`, así que no salen de tu dispositivo por la sincronización. No se envía nada a un proveedor salvo que inicies una acción; cada petición contiene solo una indicación interna sobre cómo funciona Decks, tus instrucciones y el contenido de esa acción.
 
-![Decks AI Generator](./decks_ai_generate.gif)
+![Decks AI Generator](https://raw.githubusercontent.com/dscherdi/decks/HEAD/decks_ai_generate.gif)
 
 ## Basado en
 

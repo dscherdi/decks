@@ -15,7 +15,7 @@
 
 Bir dosyayı `#decks` ile etiketleyin. Her `##` başlığı kartın ön yüzü, altındaki metin ise arka yüzü olur. Tablolar, görsel örtme (image occlusion) ve `==cloze==` (boşluk doldurma) vurguları da aynı şekilde çalışır. Zamanlama, modern aralıklı tekrar algoritması olan FSRS-6 tarafından yönetilir.
 
-![Demo](./decks_showcase.gif)
+![Demo](https://raw.githubusercontent.com/dscherdi/decks/HEAD/decks_showcase.gif)
 
 [Discord](https://discord.com/channels/686053708261228577/1497268419861418035) · [Sürüm notları](./release-notes/) · [Bana bir kahve ısmarla](https://www.buymeacoffee.com/dscherdil0)
 
@@ -162,7 +162,7 @@ Markdown dosyası yerine bir Obsidian Canvas (`.canvas`) dosyasında kart oluşt
 
 **Uzamsal kartlar (Spatial cards)**: metin düğümlerini kenarlarla birbirine bağlayın — her kenar bir karta dönüşür: kaynak düğüm ön yüz (soru), hedef düğüm arka yüz (cevap), kenar etiketi ise isteğe bağlı bir ipucudur. Zincirler (A → B → C), bire-çok ve çoğa-bir ilişkilerin tümü çalışır; bağlanmamış düğümler yine yukarıdaki dört biçimle ayrıştırılır. Ayrıntılar için **[docs/CANVAS_DECKS.md](docs/CANVAS_DECKS.md)**.
 
-![Canvas Spatial Cards Demo](./canvas_spatial_cards_demo.gif)
+![Canvas Spatial Cards Demo](https://raw.githubusercontent.com/dscherdi/decks/HEAD/canvas_spatial_cards_demo.gif)
 
 ## Şablonlar
 
@@ -280,7 +280,7 @@ Anki'de destenizi (veya tüm koleksiyonu) **`.apkg`** olarak dışa aktarın (**
 
 Kendi OpenAI, Anthropic (Claude), Google (Gemini) anahtarınızı ya da OpenAI uyumlu/yerel bir uç noktayı kullanın. Anahtarlar yerel olarak `ai-keys.json` içinde tutulur ve asla `data.json` dosyasına yazılmaz; böylece senkronizasyon yoluyla cihazınızdan çıkmaz. Bir eylem başlatmadıkça sağlayıcıya hiçbir şey gönderilmez; her istek yalnızca Decks'in nasıl çalıştığına dair yerleşik bir komut, talimatlarınız ve o eylemin içeriğini barındırır.
 
-![Decks AI Generator](./decks_ai_generate.gif)
+![Decks AI Generator](https://raw.githubusercontent.com/dscherdi/decks/HEAD/decks_ai_generate.gif)
 
 ## Üzerine kurulu
 

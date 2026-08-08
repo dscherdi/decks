@@ -19,7 +19,7 @@
 
 Tag a file with `#decks`. Each `##` heading becomes the front of a card; the text below becomes the back. Tables, image occlusion, and `==cloze==` highlights work the same way. Scheduling is handled by FSRS-6 — the modern spaced-repetition algorithm.
 
-![Demo](./decks_showcase.gif)
+![Demo](https://raw.githubusercontent.com/dscherdi/decks/HEAD/decks_showcase.gif)
 
 [Discord](https://discord.com/channels/686053708261228577/1497268419861418035) · [Release notes](./release-notes/) · [Buy me a coffee](https://www.buymeacoffee.com/dscherdil0)
 
@@ -185,7 +185,7 @@ Canvas decks behave like file decks everywhere: they show up in the deck list, i
 
 A `Decks — Canvas getting started.canvas` is auto-created in a `Canvas decks/` folder on first install (or first upgrade) to show the formats in action.
 
-![Canvas Spatial Cards Demo](./canvas_spatial_cards_demo.gif)
+![Canvas Spatial Cards Demo](https://raw.githubusercontent.com/dscherdi/decks/HEAD/canvas_spatial_cards_demo.gif)
 
 See **[docs/CANVAS_DECKS.md](docs/CANVAS_DECKS.md)** for details.
 
@@ -260,7 +260,7 @@ Decks has optional AI features that are **off until you add an API key** in **Se
 
 **Transparency — what is sent, and when.** Nothing is sent to a provider unless you explicitly trigger an AI action. When you do, the request contains only: a built-in instruction prompt describing how Decks cards work, your typed instructions, and the relevant content for that action — the card's fields (for refactor) or your topic/prompt (for generate), plus any notes or images you chose to attach. The plugin makes no background or telemetry calls; the only network requests are the ones you start, sent directly to the provider you configured.
 
-![Decks AI Generator](./decks_ai_generate.gif)
+![Decks AI Generator](https://raw.githubusercontent.com/dscherdi/decks/HEAD/decks_ai_generate.gif)
 
 ## Multi-device sync
 

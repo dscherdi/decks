@@ -15,7 +15,7 @@
 
 Ajoutez la balise `#decks` à un fichier. Chaque en-tête `##` devient le recto d'une carte ; le texte en dessous devient le verso. Les tableaux, les images masquées et les textes surlignés `==cloze==` fonctionnent de la même manière. La planification est gérée par FSRS-6 — l'algorithme moderne de répétition espacée.
 
-![Demo](./decks_showcase.gif)
+![Demo](https://raw.githubusercontent.com/dscherdi/decks/HEAD/decks_showcase.gif)
 
 [Discord](https://discord.com/channels/686053708261228577/1497268419861418035) · [Notes de version](./release-notes/) · [Offrez-moi un café](https://www.buymeacoffee.com/dscherdil0)
 
@@ -172,7 +172,7 @@ Créez des cartes sur un canvas Obsidian (`.canvas`) au lieu d'un fichier Markdo
 
 **Cartes spatiales (Spatial cards)** : reliez des nœuds texte par des arêtes — chaque arête devient une carte : le nœud source est le recto (question), le nœud cible est le verso (réponse), et le libellé de l'arête sert d'indice optionnel. Les chaînes (A → B → C), les relations un-vers-plusieurs et plusieurs-vers-un fonctionnent toutes ; les nœuds non connectés continuent d'être analysés avec les quatre formats ci-dessus. Détails dans **[docs/CANVAS_DECKS.md](docs/CANVAS_DECKS.md)**.
 
-![Canvas Spatial Cards Demo](./canvas_spatial_cards_demo.gif)
+![Canvas Spatial Cards Demo](https://raw.githubusercontent.com/dscherdi/decks/HEAD/canvas_spatial_cards_demo.gif)
 
 ## Modèles
 
@@ -302,7 +302,7 @@ Fonctions IA facultatives, **désactivées tant que vous n'ajoutez pas une clé 
 
 Utilisez votre propre clé OpenAI, Anthropic (Claude), Google (Gemini) ou un point d'accès compatible OpenAI/local. Les clés sont stockées localement dans `ai-keys.json` et ne sont jamais écrites dans `data.json` : elles ne quittent donc pas votre appareil via la synchronisation. Rien n'est envoyé à un fournisseur tant que vous ne lancez pas une action ; chaque requête ne contient qu'une consigne intégrée sur le fonctionnement de Decks, vos instructions et le contenu de cette action.
 
-![Decks AI Generator](./decks_ai_generate.gif)
+![Decks AI Generator](https://raw.githubusercontent.com/dscherdi/decks/HEAD/decks_ai_generate.gif)
 
 ## Construit sur
 

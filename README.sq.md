@@ -15,7 +15,7 @@
 
 Etiketo një skedar me `#decks`. Çdo titull `##` bëhet pjesa e përparme e një karte; teksti më poshtë bëhet pjesa e pasme. Tabelat, mbulimi i imazheve (image occlusion) dhe theksimet `==cloze==` funksionojnë në të njëjtën mënyrë. Planifikimi trajtohet nga FSRS-6 — algoritmi modern i përsëritjes në hapësirë.
 
-![Demo](./decks_showcase.gif)
+![Demo](https://raw.githubusercontent.com/dscherdi/decks/HEAD/decks_showcase.gif)
 
 [Discord](https://discord.com/channels/686053708261228577/1497268419861418035) · [Shënimet e versionit](./release-notes/) · [Më bli një kafe](https://www.buymeacoffee.com/dscherdil0)
 
@@ -162,7 +162,7 @@ Krijo karta në një Canvas të Obsidian (`.canvas`) në vend të një skedari M
 
 **Karta hapësinore (Spatial cards)**: lidh nyjet e tekstit me brinjë — çdo brinjë bëhet një kartë: nyja e nisjes është pjesa e parme (pyetja), nyja e mbërritjes është pjesa e prapme (përgjigja), dhe etiketa e brinjës është një aluzion opsional. Zinxhirët (A → B → C), një-me-shumë dhe shumë-me-një funksionojnë të gjithë; nyjet e palidhura ende analizohen me katër formatet më sipër. Detaje në **[docs/CANVAS_DECKS.md](docs/CANVAS_DECKS.md)**.
 
-![Canvas Spatial Cards Demo](./canvas_spatial_cards_demo.gif)
+![Canvas Spatial Cards Demo](https://raw.githubusercontent.com/dscherdi/decks/HEAD/canvas_spatial_cards_demo.gif)
 
 ## Shabllonet
 
@@ -269,7 +269,7 @@ Veçori opsionale me IA, **të çaktivizuara derisa të shtosh një çelës ofru
 
 Përdor çelësin tënd për OpenAI, Anthropic (Claude), Google (Gemini) ose një pikë-fundore të pajtueshme me OpenAI/lokale. Çelësat ruhen lokalisht në `ai-keys.json` dhe nuk shkruhen kurrë në `data.json`, ndaj nuk largohen nga pajisja jote përmes sinkronizimit. Asgjë nuk dërgohet te një ofrues nëse nuk nis një veprim; çdo kërkesë përmban vetëm një udhëzim të brendshëm se si funksionon Decks, udhëzimet e tua dhe përmbajtjen e atij veprimi.
 
-![Decks AI Generator](./decks_ai_generate.gif)
+![Decks AI Generator](https://raw.githubusercontent.com/dscherdi/decks/HEAD/decks_ai_generate.gif)
 
 ## Ndërtuar mbi
 
