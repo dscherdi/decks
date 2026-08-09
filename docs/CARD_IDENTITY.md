@@ -129,14 +129,35 @@ Placement rules and their reasons:
 
 ---
 
-## Token visibility (verified in Obsidian)
+## Token visibility
 
-Obsidian hides `%%…%%` comments natively in **both reading mode and Live Preview**
-(revealing them when the cursor enters the line), so the token is invisible everywhere
-users normally look with zero Decks-side rendering code — only source mode shows it
-persistently. Consequence: the token can't serve as an always-visible "don't delete
-me" marker in Live Preview; cursor-line reveal plus the writer's token preservation on
-edits is the protection instead. No editor extension is built or needed.
+Obsidian hides `%%…%%` comments in **reading mode only**. In **Live Preview the raw
+token is fully visible**, unconditionally — there is no native cursor-line reveal for
+comments. (An earlier revision of this document claimed otherwise and concluded no
+editor extension was needed; that was wrong on both counts.)
+
+Decks therefore ships a CodeMirror extension,
+`src/editor/hide-anchor-tokens.ts`, gated by `ui.hideAnchorTokensInEditor` (default on):
+
+- Tokens are hidden in Live Preview; source mode and reading mode are untouched.
+- The line the cursor is on reveals its tokens, so they stay editable and visible on
+  demand. That reveal is what this extension introduces — it is not inherited from
+  Obsidian.
+- Hiding is a `Decoration.replace` over the token text in every case: the whole line
+  when the token is all that's on it, the token's own span otherwise. The branch is
+  decided by `stripAnchorTokens(line).trim() === ""`, not by role — the same role
+  occurs both inline and on its own line.
+- A token-only line is blanked, **not collapsed**. Collapsing it (a line decoration
+  plus `display: none`) was tried and dropped: the line springs back open the moment
+  the caret arrives, shifting everything below it on every pass. Blanking keeps the
+  line's height constant, so reveal never moves the document. It also removes the
+  feature's only stylesheet dependency — there is no CSS for this at all.
+- **Decorations only.** No transaction is dispatched and no atomic ranges are declared,
+  so the extension cannot alter the document or editing semantics.
+
+Consequence for the identity model is unchanged: the token still can't serve as an
+always-visible "don't delete me" marker, so cursor-line reveal plus the writer's token
+preservation on edits remains the protection.
 
 ## The `clozeEnabled` flag
 
@@ -245,10 +266,9 @@ the in-cell token gives explicit row identity with no visible column.
 
 1. `%%…%%` behavior **inside table cells** — reading mode (must hide) AND the Live
    Preview table editor (cells render as widgets; behavior unverified).
-2. Native Live Preview treatment of `%%…%%` on plain / cloze / list lines. Desired
-   outcome: token visible (or at least discoverable) while editing, since it serves as
-   the identity marker; if Obsidian hides it entirely outside the cursor line, decide
-   whether a subtle reveal decoration is warranted.
+2. ~~Native Live Preview treatment of `%%…%%` on plain / cloze / list lines.~~ Resolved:
+   Obsidian shows the raw token unconditionally, so Decks hides it with its own
+   extension and reveals it on the cursor line (see "Token visibility").
 3. (Phase 2, code-level) image-embed and numbered-list detection tolerance of trailing
    tokens in occlusion-v1 bodies.
 
@@ -261,5 +281,6 @@ cards on upgrade, token preservation in the in-place card editor, and importer t
 emission (Anki keyed on `noteId:ord` so re-imports are byte-stable; legacy-SR
 equivalents). `clozeEnabled` is un-gated from occlusion. The Levenshtein rename pass
 survives one more release as a fallback for cards the migrator could not stamp
-(missing files, ambiguous fronts); its deletion is a later cleanup. No Live Preview
-editor extension — token visibility while editing is intentional.
+(missing files, ambiguous fronts); its deletion is a later cleanup. A Live Preview
+editor extension hides tokens while editing (default on, cursor-line reveal); it was
+added after the original release, once native Live Preview behavior was retested.

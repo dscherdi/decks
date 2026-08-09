@@ -1102,6 +1102,19 @@ export class DecksSettingTab extends PluginSettingTab {
       );
 
     new Setting(containerEl)
+      .setName(I18n.t.settings.ui.hideAnchorTokens)
+      .setDesc(I18n.t.settings.ui.hideAnchorTokensDesc)
+      .addToggle((toggle) =>
+        toggle
+          .setValue(this.settings.ui.hideAnchorTokensInEditor)
+          .onChange(async (value) => {
+            this.settings.ui.hideAnchorTokensInEditor = value;
+            await this.saveSettings();
+            this.plugin.applyEditorExtensions();
+          })
+      );
+
+    new Setting(containerEl)
       .setName(I18n.t.settings.ui.reviewDisplayMode)
       .setDesc(I18n.t.settings.ui.reviewDisplayModeDesc)
       .addDropdown((dropdown) =>

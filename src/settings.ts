@@ -52,6 +52,9 @@ export interface DecksSettings {
     enableBackgroundRefresh: boolean;
     backgroundRefreshInterval: number; // seconds
     enableNotices: boolean;
+    // Hide the %%dk:…%% card identity markers in the Live Preview editor. The
+    // line under the cursor still shows them; the file is never changed.
+    hideAnchorTokensInEditor: boolean;
     reviewDisplayMode: "modal" | "tab";
     flashcardManagerDisplayMode: "modal" | "tab";
     aiGeneratorDisplayMode: "modal" | "tab";
@@ -188,6 +191,7 @@ export const DEFAULT_SETTINGS: DecksSettings = {
     enableBackgroundRefresh: true,
     backgroundRefreshInterval: 120,
     enableNotices: false,
+    hideAnchorTokensInEditor: true,
     reviewDisplayMode: "modal",
     flashcardManagerDisplayMode: "modal",
     aiGeneratorDisplayMode: "modal",

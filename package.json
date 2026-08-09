@@ -42,6 +42,8 @@
     "turndown": "^7.2.4"
   },
   "devDependencies": {
+    "@codemirror/state": "6.7.1",
+    "@codemirror/view": "6.43.6",
     "@esbuild-plugins/node-modules-polyfill": "^0.2.2",
     "@eslint-community/eslint-plugin-eslint-comments": "^4.5.0",
     "@eslint/config-array": "^0.23.0",

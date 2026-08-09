@@ -11,6 +11,8 @@ import {
   getLanguage,
   type Editor,
 } from "obsidian";
+import type { Extension } from "@codemirror/state";
+import { decksHideAnchorTokens } from "./editor/hide-anchor-tokens";
 import { renderHtmlIntoShadow } from "./utils/html-template-render";
 import { renderOcclusion } from "./utils/occlusion-render";
 import { OcclusionStudioModalWrapper } from "./components/OcclusionStudioModalWrapper";
@@ -196,6 +198,9 @@ export default class DecksPlugin extends Plugin {
   // Coalesce per-file UI stat refreshes (e.g. bulk delete) into one repaint.
   private pendingStatsRefresh: number | null = null;
   private static readonly STATS_REFRESH_DEBOUNCE_MS = 300;
+  // Registered once, then mutated in place so settings can swap extensions
+  // without re-registering; Obsidian re-reads it on workspace.updateOptions().
+  private editorExtensions: Extension[] = [];
 
   async onload() {
     // Load settings first
@@ -908,6 +913,9 @@ export default class DecksPlugin extends Plugin {
         })
       );
 
+      this.registerEditorExtension(this.editorExtensions);
+      this.applyEditorExtensions();
+
       // Register markdown post-processor for cloze deletion rendering
       this.registerMarkdownPostProcessor((el) => {
         const container = el.closest("[data-decks-cloze-index]");
@@ -1196,6 +1204,15 @@ export default class DecksPlugin extends Plugin {
 
     // Refresh filter compile thresholds in case leech/dense settings changed
     this.applyFilterCompileOptions();
+  }
+
+  /** Sync registered editor extensions with settings. Safe to call repeatedly. */
+  applyEditorExtensions(): void {
+    this.editorExtensions.length = 0;
+    if (this.settings.ui.hideAnchorTokensInEditor) {
+      this.editorExtensions.push(decksHideAnchorTokens);
+    }
+    this.app.workspace.updateOptions();
   }
 
   private applyFilterCompileOptions(): void {
