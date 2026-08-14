@@ -15,7 +15,7 @@
     ExamHealthContext,
     ExamHealthIssue,
   } from "@decks/core";
-  import { formatBadgeParts } from "../services/FilterBadgeFormatter";
+  import { formatBadgeParts } from "@decks/core";
   import type { EditTarget, EditCommitPayload } from "./FlashcardManagerEditTypes";
   import FilterBuilder from "./FilterBuilder.svelte";
   import DocInfoButton from "./DocInfoButton.svelte";
