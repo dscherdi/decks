@@ -9,8 +9,12 @@ import {
   splitTableLine,
   stripAnchorTokens,
   unescapeTableCell,
+  I18n,
   type AnchorToken,
 } from "@decks/core";
+
+/** Resolved per call, so a failure is worded in the language in force now. */
+const e = (): typeof I18n.t.cardEdit => I18n.t.cardEdit;
 
 const HEADER_REGEX = /^(#{1,6})\s+(.+)$/;
 const TABLE_ROW_REGEX = /^\|.*\|$/;
@@ -47,7 +51,10 @@ export class FlashcardWriter {
     edits: FlashcardEdits,
   ): Promise<EditResult> {
     if (edits.type !== card.type) {
-      return fail("invalid_edit", `Edit type ${edits.type} does not match card type ${card.type}`);
+      return fail(
+        "invalid_edit",
+        I18n.format(e().typeMismatch, { edit: edits.type, card: card.type }),
+      );
     }
 
     const file = this.app.vault.getAbstractFileByPath(card.sourceFile);
@@ -269,7 +276,7 @@ function applyEdit(
   const lines = content.split("\n");
   const segment = findFlashcardSegment(lines, card);
   if (!segment) {
-    return fail("card_not_found", "Could not locate card in source markdown");
+    return fail("card_not_found", e().cardNotFound);
   }
 
   const segLines = lines.slice(segment.start, segment.end);
@@ -346,10 +353,7 @@ function addNotesColumn(
     separatorIndex >= lines.length ||
     !TABLE_SEPARATOR_REGEX.test(lines[separatorIndex].trim())
   ) {
-    return fail(
-      "invalid_edit",
-      "Could not find the table separator row to add a Notes column",
-    );
+    return fail("invalid_edit", e().separatorNotFound);
   }
   const dataStart = separatorIndex + 1;
   let dataEnd = rowIndex;
@@ -403,23 +407,20 @@ function checkStale(
   if (card.type === "header-paragraph" || card.type === "multiple-choice") {
     const body = stripAnchorTokens(extractHeaderBlockBody(segLines)).trim();
     if (body !== card.back.trim()) {
-      return fail(
-        "file_changed",
-        "Card content has changed since the manager loaded. Refresh and try again.",
-      );
+      return fail("file_changed", e().noteChanged);
     }
     return null;
   }
 
   if (card.type === "table") {
     const cells = splitTableRow(segLines[0]);
-    if (!cells) return fail("file_changed", "Table row no longer parseable");
+    if (!cells) return fail("file_changed", e().tableRowUnparseable);
     // The cell values on disk are escape-encoded (\| and <br>). Un-escape
     // before comparing to the card's stored (clean) values.
     const back = unescapeTableCell(stripAnchorTokens(cells[2] ?? "").trim());
     const notes = unescapeTableCell(stripAnchorTokens(cells[3] ?? "").trim());
     if (back !== card.back || notes !== (card.notes ?? "")) {
-      return fail("file_changed", "Table row content has changed.");
+      return fail("file_changed", e().tableRowChanged);
     }
     return null;
   }
@@ -429,14 +430,14 @@ function checkStale(
     if (HEADER_REGEX.test(anchor)) {
       const body = stripAnchorTokens(extractHeaderBlockBody(segLines)).trim();
       if (body !== card.back.trim()) {
-        return fail("file_changed", "Cloze content has changed.");
+        return fail("file_changed", e().clozeChanged);
       }
     } else {
       const cells = splitTableRow(anchor);
-      if (!cells) return fail("file_changed", "Cloze host row no longer parseable");
+      if (!cells) return fail("file_changed", e().clozeRowUnparseable);
       const back = unescapeTableCell(stripAnchorTokens(cells[2] ?? "").trim());
       if (back !== card.back) {
-        return fail("file_changed", "Cloze content has changed.");
+        return fail("file_changed", e().clozeChanged);
       }
     }
     return null;
@@ -472,7 +473,7 @@ function applySplit(
   const lines = content.split("\n");
   const segment = findFlashcardSegment(lines, card);
   if (!segment) {
-    return fail("card_not_found", "Could not locate card in source markdown");
+    return fail("card_not_found", e().cardNotFound);
   }
 
   const segLines = lines.slice(segment.start, segment.end);
@@ -544,7 +545,7 @@ function buildReplacement(
     }
     const cells = splitTableRow(segLines[0]);
     if (!cells) {
-      return fail("invalid_edit", "Cloze host row is not a valid table row");
+      return fail("invalid_edit", e().clozeRowInvalid);
     }
     // Cloze hosted in a table row: edit the front cell and the back cell.
     return buildTableRow(
@@ -570,11 +571,11 @@ function buildHeaderParagraph(
   preserveAnchors = true,
 ): { ok: true; lines: string[] } | { ok: false; failure: EditFailure } {
   if (segLines.length === 0) {
-    return fail("card_not_found", "Empty header segment");
+    return fail("card_not_found", e().emptyHeaderSegment);
   }
   const headerLine = segLines[0];
   const m = HEADER_REGEX.exec(headerLine);
-  if (!m) return fail("card_not_found", "Header line is not a header");
+  if (!m) return fail("card_not_found", e().anchorNotHeader);
 
   const hashes = m[1];
   const original = m[2];
@@ -655,7 +656,7 @@ function buildTableRow(
   preserveAnchors = true,
 ): { ok: true; lines: string[] } | { ok: false; failure: EditFailure } {
   const cells = splitTableRow(rowLine);
-  if (!cells) return fail("invalid_edit", "Not a valid table row");
+  if (!cells) return fail("invalid_edit", e().notATableRow);
   // `cells` includes a leading and trailing empty entry from the surrounding
   // pipes; data columns are cells[1..cells.length-2]. A 2-column table has
   // length 4, a 3-column has length 5.
@@ -741,15 +742,15 @@ function splitTableRow(line: string): string[] | null {
 function validateEdits(edits: FlashcardEdits): InternalApply | null {
   if (edits.type === "cloze") {
     if (edits.front.trim() === "") {
-      return fail("invalid_edit", "Front text cannot be empty");
+      return fail("invalid_edit", e().frontEmpty);
     }
     if (!/==((?:(?!==).)+)==/.test(edits.sentence)) {
-      return fail("invalid_edit", "Cloze must contain at least one ==span==");
+      return fail("invalid_edit", e().clozeNeedsSpan);
     }
   }
   if (edits.type === "header-paragraph") {
     if (edits.front.trim() === "") {
-      return fail("invalid_edit", "Header text cannot be empty");
+      return fail("invalid_edit", e().headerEmpty);
     }
     // Newlines in the header are silently collapsed to spaces by
     // buildHeaderParagraph — a header line must be single-line in markdown.
@@ -766,7 +767,7 @@ function validateEdits(edits: FlashcardEdits): InternalApply | null {
   }
   if (edits.type === "spatial") {
     if (edits.front.trim() === "") {
-      return fail("invalid_edit", "Front text cannot be empty");
+      return fail("invalid_edit", e().frontEmpty);
     }
     if (edits.back.trim() === "") {
       return fail("invalid_edit", "Back text cannot be empty");
