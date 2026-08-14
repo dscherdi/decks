@@ -1,11 +1,14 @@
 import { App } from "obsidian";
-import {
-  getTestDeckContent,
-  getTemplateShowcaseContent,
-} from "../assets/TestDeckTemplate";
 import { getTestDeckCanvasContent } from "../assets/TestDeckCanvasTemplate";
 import { getExamDeckContent } from "../assets/ExamDeckTemplate";
-import { I18n } from "@decks/core";
+import {
+  I18n,
+  getTemplateShowcaseContent,
+  getTemplateShowcaseFolder,
+  getTemplateShowcasePath,
+  getTestDeckContent,
+  getTestDeckPath,
+} from "@decks/core";
 
 const DEFAULT_CANVAS_DECKS_FOLDER = "Canvas decks";
 
@@ -17,10 +20,7 @@ export class TestDeckService {
   }
 
   async createTestDeck(deckTag: string, folderPath?: string): Promise<void> {
-    const localizedFilename = I18n.t.testDeck.filename;
-    const filename = folderPath
-      ? `${folderPath.replace(/\/$/, "")}/${localizedFilename}`
-      : localizedFilename;
+    const filename = getTestDeckPath(folderPath);
 
     if (await this.app.vault.adapter.exists(filename)) {
       return;
@@ -55,11 +55,8 @@ export class TestDeckService {
   async createTemplateShowcase(
     currentTemplateFolder: string,
   ): Promise<string | null> {
-    const folder =
-      currentTemplateFolder.trim() !== ""
-        ? currentTemplateFolder.trim().replace(/\/$/, "")
-        : I18n.t.testDeck.templateFolderName;
-    const filename = `${folder}/${I18n.t.testDeck.templateFileName}`;
+    const folder = getTemplateShowcaseFolder(currentTemplateFolder);
+    const filename = getTemplateShowcasePath(folder);
 
     if (await this.app.vault.adapter.exists(filename)) {
       return null;
