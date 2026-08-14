@@ -30,7 +30,7 @@ import { AnchorStamper } from "./services/AnchorStamper";
 import { AnchorMigrator } from "./services/AnchorMigrator";
 import { CanvasFileEventHandlers } from "./services/CanvasFileEventHandlers";
 import { Scheduler } from "@decks/core";
-import { EXAMS_PROFILE_ID } from "@decks/core";
+import { EXAMS_PROFILE_ID, getExamDeckTag } from "@decks/core";
 import { DeviceLocalState } from "./services/DeviceLocalState";
 import { SyncLog } from "./services/SyncLog";
 import {
@@ -304,7 +304,7 @@ export default class DecksPlugin extends Plugin {
         // base tag. Base-tag renames migrate it with every other mapping.
         if (!this.settings.examsPresetMappingDone) {
           try {
-            const examsTag = `${this.settings.parsing.deckTag}/exams`;
+            const examsTag = getExamDeckTag(this.settings.parsing.deckTag);
             const existing = await this.db.getProfileIdForTag(examsTag);
             if (!existing) {
               await this.db.createTagMapping(EXAMS_PROFILE_ID, examsTag);

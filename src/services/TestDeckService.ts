@@ -1,8 +1,9 @@
 import { App } from "obsidian";
 import { getTestDeckCanvasContent } from "../assets/TestDeckCanvasTemplate";
-import { getExamDeckContent } from "../assets/ExamDeckTemplate";
 import {
   I18n,
+  getExamDeckContent,
+  getExamDeckPath,
   getTemplateShowcaseContent,
   getTemplateShowcaseFolder,
   getTemplateShowcasePath,
@@ -32,10 +33,7 @@ export class TestDeckService {
 
   /** Demo exam deck, tagged `<deckTag>/exams` so it lands on the Exams preset. */
   async createExamDemoDeck(deckTag: string, folderPath?: string): Promise<void> {
-    const localizedFilename = I18n.t.examDeck.filename;
-    const filename = folderPath
-      ? `${folderPath.replace(/\/$/, "")}/${localizedFilename}`
-      : localizedFilename;
+    const filename = getExamDeckPath(folderPath);
 
     if (await this.app.vault.adapter.exists(filename)) {
       return;

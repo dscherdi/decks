@@ -1,8 +1,8 @@
-import { getExamDeckContent } from "../assets/ExamDeckTemplate";
 import {
   FlashcardParser,
   buildExamPool,
   classifyExamBody,
+  getExamDeckContent,
   type Flashcard,
 } from "@decks/core";
 
