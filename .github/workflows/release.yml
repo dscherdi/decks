@@ -13,6 +13,9 @@ on:
 jobs:
   build-and-release:
     runs-on: ubuntu-latest
+    # The deploy hook is an environment secret, and secrets scoped to an
+    # environment are only readable by a job that names it.
+    environment: Release
 
     steps:
       - name: Resolve tag
@@ -123,3 +126,56 @@ jobs:
             apps/obsidian-plugin/dist/LICENSE
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      # The website builds its changelog from this repository's releases, and
+      # only does so at build time — so a release is invisible there until the
+      # site rebuilds. Nothing else triggers that.
+      #
+      # Never fails the run: the release itself has already been published by
+      # this point, and losing it over a website rebuild would be a poor trade.
+      - name: Rebuild the website
+        id: rebuild
+        env:
+          HOOK: ${{ secrets.VERCEL_DEPLOY_HOOK }}
+        run: |
+          if [[ -z "$HOOK" ]]; then
+            echo "::warning::VERCEL_DEPLOY_HOOK is not set — the changelog will not show this release until the site is rebuilt."
+            exit 0
+          fi
+          if curl -fsS -X POST "$HOOK" > /dev/null; then
+            echo "triggered=true" >> "$GITHUB_OUTPUT"
+            echo "Rebuild triggered."
+          else
+            echo "::warning::Deploy hook failed; rebuild the website manually."
+          fi
+
+      # Waits for the rebuild rather than assuming it, so the URL exists before
+      # anything is told to go and look at it.
+      - name: Tell IndexNow about the new release
+        if: steps.rebuild.outputs.triggered == 'true'
+        env:
+          VERSION: ${{ steps.tag.outputs.value }}
+          # Public by design — it is served at https://decksmd.app/<key>.txt and
+          # must keep matching that file in the decks-landing repository.
+          IDN_KEY: e5f06cd0d0114e8e8d2d0ea14963256b
+        run: |
+          URL="https://decksmd.app/changelog/$VERSION/"
+
+          echo "Waiting for $URL"
+          for _ in $(seq 1 60); do
+            if [[ "$(curl -s -o /dev/null -w '%{http_code}' "$URL")" == "200" ]]; then
+              published=1; break
+            fi
+            sleep 10
+          done
+
+          if [[ -z "${published:-}" ]]; then
+            echo "::warning::$URL did not appear within 10 minutes; skipping IndexNow."
+            exit 0
+          fi
+
+          curl -fsS -X POST https://api.indexnow.org/indexnow \
+            -H 'Content-Type: application/json; charset=utf-8' \
+            -d "{\"host\":\"decksmd.app\",\"key\":\"$IDN_KEY\",\"keyLocation\":\"https://decksmd.app/$IDN_KEY.txt\",\"urlList\":[\"$URL\",\"https://decksmd.app/changelog/\"]}" \
+            && echo "Submitted $URL to IndexNow." \
+            || echo "::warning::IndexNow submission failed."
