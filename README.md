@@ -21,7 +21,7 @@ Tag a file with `#decks`. Each `##` heading becomes the front of a card; the tex
 
 ![Demo](https://raw.githubusercontent.com/dscherdi/decks/HEAD/decks_showcase.gif)
 
-[Discord](https://discord.com/channels/686053708261228577/1497268419861418035) · [Release notes](./release-notes/) · [Buy me a coffee](https://www.buymeacoffee.com/dscherdil0)
+[Documentation](https://decksmd.app/docs/) · [Website](https://decksmd.app) · [Discord](https://discord.com/channels/686053708261228577/1497268419861418035) · [Release notes](./release-notes/) · [Buy me a coffee](https://www.buymeacoffee.com/dscherdil0)
 
 ## Why Decks
 
@@ -204,7 +204,7 @@ theme-aware sandbox, and expose CSS variables (`--padding`, `--align`, `--bg`, �
 from comfortable reading cards to edge-to-edge custom designs. Tables with no matching template fall back to
 the normal columns.
 
-See **[docs/TEMPLATES.md](docs/TEMPLATES.md)** for the full guide and examples.
+See **[docs/CARD_TYPES_AND_TEMPLATES.md](docs/CARD_TYPES_AND_TEMPLATES.md)** for the full guide and examples.
 
 ## Exam decks
 

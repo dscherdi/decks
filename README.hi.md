@@ -17,7 +17,7 @@
 
 ![Demo](https://raw.githubusercontent.com/dscherdi/decks/HEAD/decks_showcase.gif)
 
-[Discord](https://discord.com/channels/686053708261228577/1497268419861418035) · [रिलीज़ नोट्स](./release-notes/) · [मुझे एक कॉफ़ी पिलाएं](https://www.buymeacoffee.com/dscherdil0)
+[दस्तावेज़](https://decksmd.app/docs/) · [वेबसाइट](https://decksmd.app) · [Discord](https://discord.com/channels/686053708261228577/1497268419861418035) · [रिलीज़ नोट्स](./release-notes/) · [मुझे एक कॉफ़ी पिलाएं](https://www.buymeacoffee.com/dscherdil0)
 
 ## Decks क्यों?
 
@@ -179,7 +179,7 @@ Markdown फ़ाइल के बजाय Obsidian Canvas (`.canvas`) पर 
 होते हैं, और पूरे लेआउट नियंत्रण के लिए CSS variables (`--padding`, `--align`, `--bg`, …) उपलब्ध कराते हैं — आरामदायक रीडिंग
 कार्ड से लेकर edge-to-edge कस्टम डिज़ाइन तक। जिन तालिकाओं का कोई मिलान टेम्पलेट नहीं होता, वे सामान्य कॉलम का ही उपयोग करती हैं।
 
-पूरी गाइड और उदाहरणों के लिए **[docs/TEMPLATES.md](docs/TEMPLATES.md)** देखें।
+पूरी गाइड और उदाहरणों के लिए **[docs/CARD_TYPES_AND_TEMPLATES.md](docs/CARD_TYPES_AND_TEMPLATES.md)** देखें।
 
 ## परीक्षा डेक (Exam decks)
 

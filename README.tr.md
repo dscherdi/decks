@@ -17,7 +17,7 @@ Bir dosyayı `#decks` ile etiketleyin. Her `##` başlığı kartın ön yüzü, 
 
 ![Demo](https://raw.githubusercontent.com/dscherdi/decks/HEAD/decks_showcase.gif)
 
-[Discord](https://discord.com/channels/686053708261228577/1497268419861418035) · [Sürüm notları](./release-notes/) · [Bana bir kahve ısmarla](https://www.buymeacoffee.com/dscherdil0)
+[Dokümantasyon](https://decksmd.app/docs/) · [Web sitesi](https://decksmd.app) · [Discord](https://discord.com/channels/686053708261228577/1497268419861418035) · [Sürüm notları](./release-notes/) · [Bana bir kahve ısmarla](https://www.buymeacoffee.com/dscherdil0)
 
 ## Neden Decks
 
@@ -180,7 +180,7 @@ temaya duyarlı ve yalıtılmış bir alanda işlenir ve tam düzen denetimi iç
 `--align`, `--bg`, …) sunar — rahat okuma kartlarından kenardan kenara özel tasarımlara kadar. Eşleşen şablonu
 olmayan tablolar yine normal sütunları kullanır.
 
-Tam kılavuz ve örnekler için **[docs/TEMPLATES.md](docs/TEMPLATES.md)** bölümüne bakın.
+Tam kılavuz ve örnekler için **[docs/CARD_TYPES_AND_TEMPLATES.md](docs/CARD_TYPES_AND_TEMPLATES.md)** bölümüne bakın.
 
 ## Sınav desteleri
 

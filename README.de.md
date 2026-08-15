@@ -17,7 +17,7 @@ Markiere eine Datei mit `#decks`. Jede `##`-Überschrift wird zur Vorderseite ei
 
 ![Demo](https://raw.githubusercontent.com/dscherdi/decks/HEAD/decks_showcase.gif)
 
-[Discord](https://discord.com/channels/686053708261228577/1497268419861418035) · [Versionshinweise](./release-notes/) · [Spendier mir einen Kaffee](https://www.buymeacoffee.com/dscherdil0)
+[Dokumentation](https://decksmd.app/docs/) · [Website](https://decksmd.app) · [Discord](https://discord.com/channels/686053708261228577/1497268419861418035) · [Versionshinweise](./release-notes/) · [Spendier mir einen Kaffee](https://www.buymeacoffee.com/dscherdil0)
 
 ## Warum Decks
 
@@ -190,7 +190,7 @@ Markdown, werden in einer bereinigten, themenbewussten Sandbox gerendert und ste
 (`--padding`, `--align`, `--bg`, …) für die volle Layout-Kontrolle bereit — von angenehmen Lesekarten bis zu
 randlosen eigenen Designs. Tabellen ohne passende Vorlage verwenden weiterhin die normalen Spalten.
 
-Siehe **[docs/TEMPLATES.md](docs/TEMPLATES.md)** für die vollständige Anleitung und Beispiele.
+Siehe **[docs/CARD_TYPES_AND_TEMPLATES.md](docs/CARD_TYPES_AND_TEMPLATES.md)** für die vollständige Anleitung und Beispiele.
 
 ## Prüfungsstapel
 

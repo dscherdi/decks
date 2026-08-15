@@ -17,7 +17,7 @@ Aggiungi il tag `#decks` a un file. Ogni intestazione `##` diventa il fronte di 
 
 ![Demo](https://raw.githubusercontent.com/dscherdi/decks/HEAD/decks_showcase.gif)
 
-[Discord](https://discord.com/channels/686053708261228577/1497268419861418035) · [Note di rilascio](./release-notes/) · [Offrimi un caffè](https://www.buymeacoffee.com/dscherdil0)
+[Documentazione](https://decksmd.app/docs/) · [Sito web](https://decksmd.app) · [Discord](https://discord.com/channels/686053708261228577/1497268419861418035) · [Note di rilascio](./release-notes/) · [Offrimi un caffè](https://www.buymeacoffee.com/dscherdil0)
 
 ## Perché Decks
 
@@ -191,7 +191,7 @@ vengono renderizzati in un ambiente isolato, sanificato e consapevole del tema, 
 (`--padding`, `--align`, `--bg`, …) per il pieno controllo del layout — da comode carte di lettura a design
 personalizzati a tutto campo. Le tabelle senza un modello corrispondente usano le colonne normali.
 
-Vedi **[docs/TEMPLATES.md](docs/TEMPLATES.md)** per la guida completa ed esempi.
+Vedi **[docs/CARD_TYPES_AND_TEMPLATES.md](docs/CARD_TYPES_AND_TEMPLATES.md)** per la guida completa ed esempi.
 
 ## Mazzi d'esame
 

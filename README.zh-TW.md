@@ -17,7 +17,7 @@
 
 ![Demo](https://raw.githubusercontent.com/dscherdi/decks/HEAD/decks_showcase.gif)
 
-[Discord](https://discord.com/channels/686053708261228577/1497268419861418035) · [版本說明](./release-notes/) · [贊助我一杯咖啡](https://www.buymeacoffee.com/dscherdil0)
+[文件](https://decksmd.app/docs/) · [網站](https://decksmd.app) · [Discord](https://discord.com/channels/686053708261228577/1497268419861418035) · [版本說明](./release-notes/) · [贊助我一杯咖啡](https://www.buymeacoffee.com/dscherdil0)
 
 ## 為什麼選擇 Decks
 
@@ -177,7 +177,7 @@ masks:
 三個面，在經過淨化、感知主題的沙箱中渲染，並提供 CSS 變數（`--padding`、`--align`、`--bg` 等）以完全掌控版面——從舒適的
 閱讀卡片到鋪滿整張卡片的自訂設計。沒有相符範本的表格仍使用一般的欄位。
 
-完整指南與範例請見 **[docs/TEMPLATES.md](docs/TEMPLATES.md)**。
+完整指南與範例請見 **[docs/CARD_TYPES_AND_TEMPLATES.md](docs/CARD_TYPES_AND_TEMPLATES.md)**。
 
 ## 考試牌組
 

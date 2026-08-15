@@ -17,7 +17,7 @@
 
 ![Demo](https://raw.githubusercontent.com/dscherdi/decks/HEAD/decks_showcase.gif)
 
-[Discord](https://discord.com/channels/686053708261228577/1497268419861418035) · [リリースノート](./release-notes/) · [開発者を支援 (Buy me a coffee)](https://www.buymeacoffee.com/dscherdil0)
+[ドキュメント](https://decksmd.app/docs/) · [ウェブサイト](https://decksmd.app) · [Discord](https://discord.com/channels/686053708261228577/1497268419861418035) · [リリースノート](./release-notes/) · [開発者を支援 (Buy me a coffee)](https://www.buymeacoffee.com/dscherdil0)
 
 ## Decks を使う理由
 
@@ -189,7 +189,7 @@ HTML または Markdown で表面／裏面／ノートの各面に対応し、�
 レイアウトを完全に制御できる CSS 変数（`--padding`、`--align`、`--bg` など）を提供します — 読みやすいカードから、端まで
 広がるカスタムデザインまで。一致するテンプレートがない表は、これまでどおり通常の列を使います。
 
-詳しいガイドと例は **[docs/TEMPLATES.md](docs/TEMPLATES.md)** を参照してください。
+詳しいガイドと例は **[docs/CARD_TYPES_AND_TEMPLATES.md](docs/CARD_TYPES_AND_TEMPLATES.md)** を参照してください。
 
 ## 試験デッキ
 

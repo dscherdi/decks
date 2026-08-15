@@ -17,7 +17,7 @@ Ajoutez la balise `#decks` à un fichier. Chaque en-tête `##` devient le recto 
 
 ![Demo](https://raw.githubusercontent.com/dscherdi/decks/HEAD/decks_showcase.gif)
 
-[Discord](https://discord.com/channels/686053708261228577/1497268419861418035) · [Notes de version](./release-notes/) · [Offrez-moi un café](https://www.buymeacoffee.com/dscherdil0)
+[Documentation](https://decksmd.app/docs/) · [Site web](https://decksmd.app) · [Discord](https://discord.com/channels/686053708261228577/1497268419861418035) · [Notes de version](./release-notes/) · [Offrez-moi un café](https://www.buymeacoffee.com/dscherdil0)
 
 ## Pourquoi Decks
 
@@ -191,7 +191,7 @@ Markdown, s'affichent dans un bac à sable isolé, assaini et adapté au thème,
 confortables aux designs personnalisés pleine largeur. Les tableaux sans modèle correspondant utilisent les
 colonnes habituelles.
 
-Voir **[docs/TEMPLATES.md](docs/TEMPLATES.md)** pour le guide complet et des exemples.
+Voir **[docs/CARD_TYPES_AND_TEMPLATES.md](docs/CARD_TYPES_AND_TEMPLATES.md)** pour le guide complet et des exemples.
 
 ## Paquets d'examen
 

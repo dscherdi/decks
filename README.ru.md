@@ -17,7 +17,7 @@
 
 ![Demo](https://raw.githubusercontent.com/dscherdi/decks/HEAD/decks_showcase.gif)
 
-[Discord](https://discord.com/channels/686053708261228577/1497268419861418035) · [Примечания к выпуску](./release-notes/) · [Купить мне кофе](https://www.buymeacoffee.com/dscherdil0)
+[Документация](https://decksmd.app/docs/) · [Сайт](https://decksmd.app) · [Discord](https://discord.com/channels/686053708261228577/1497268419861418035) · [Примечания к выпуску](./release-notes/) · [Купить мне кофе](https://www.buymeacoffee.com/dscherdil0)
 
 ## Почему Decks
 
@@ -180,7 +180,7 @@ Markdown, расставьте подстановки `{{Column}}` и привя
 полного контроля над разметкой — от удобных для чтения карточек до собственных дизайнов «во весь экран».
 Таблицы без подходящего шаблона по-прежнему используют обычные столбцы.
 
-Полное руководство и примеры см. в **[docs/TEMPLATES.md](docs/TEMPLATES.md)**.
+Полное руководство и примеры см. в **[docs/CARD_TYPES_AND_TEMPLATES.md](docs/CARD_TYPES_AND_TEMPLATES.md)**.
 
 ## Экзаменационные колоды
 

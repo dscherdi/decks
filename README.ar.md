@@ -17,7 +17,7 @@
 
 ![Demo](https://raw.githubusercontent.com/dscherdi/decks/HEAD/decks_showcase.gif)
 
-[Discord](https://discord.com/channels/686053708261228577/1497268419861418035) · [ملاحظات الإصدار](./release-notes/) · [اشترِ لي قهوة](https://www.buymeacoffee.com/dscherdil0)
+[التوثيق](https://decksmd.app/docs/) · [الموقع](https://decksmd.app) · [Discord](https://discord.com/channels/686053708261228577/1497268419861418035) · [ملاحظات الإصدار](./release-notes/) · [اشترِ لي قهوة](https://www.buymeacoffee.com/dscherdil0)
 
 ## لماذا تختار Decks
 
@@ -178,7 +178,7 @@ masks:
 وتوفّر متغيّرات CSS (`--padding` و`--align` و`--bg` …) للتحكم الكامل في التخطيط — من بطاقات قراءة مريحة إلى
 تصاميم مخصّصة تملأ البطاقة بالكامل. أما الجداول التي لا يوجد لها قالب مطابق فتستمر في استخدام الأعمدة العادية.
 
-راجع **[docs/TEMPLATES.md](docs/TEMPLATES.md)** للدليل الكامل والأمثلة.
+راجع **[docs/CARD_TYPES_AND_TEMPLATES.md](docs/CARD_TYPES_AND_TEMPLATES.md)** للدليل الكامل والأمثلة.
 
 ## رزم الامتحانات
 

@@ -17,7 +17,7 @@ Etiqueta un archivo con `#decks`. Cada encabezado `##` se convierte en el anvers
 
 ![Demo](https://raw.githubusercontent.com/dscherdi/decks/HEAD/decks_showcase.gif)
 
-[Discord](https://discord.com/channels/686053708261228577/1497268419861418035) · [Notas de versión](./release-notes/) · [Invítame a un café](https://www.buymeacoffee.com/dscherdil0)
+[Documentación](https://decksmd.app/docs/) · [Sitio web](https://decksmd.app) · [Discord](https://discord.com/channels/686053708261228577/1497268419861418035) · [Notas de versión](./release-notes/) · [Invítame a un café](https://www.buymeacoffee.com/dscherdil0)
 
 ## Por qué Decks
 
@@ -190,7 +190,7 @@ renderizan en un entorno aislado, saneado y consciente del tema, y exponen varia
 `--align`, `--bg`, …) para un control total del diseño, desde cómodas tarjetas de lectura hasta diseños
 personalizados a sangre. Las tablas sin plantilla coincidente siguen usando las columnas normales.
 
-Consulta **[docs/TEMPLATES.md](docs/TEMPLATES.md)** para la guía completa y ejemplos.
+Consulta **[docs/CARD_TYPES_AND_TEMPLATES.md](docs/CARD_TYPES_AND_TEMPLATES.md)** para la guía completa y ejemplos.
 
 ## Mazos de examen
 
