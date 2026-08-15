@@ -3,9 +3,9 @@
   "name": "Decks",
   "version": "2.9.2",
   "minAppVersion": "1.8.10",
-  "description": "Spaced repetition flashcards with FSRS algorithm. Supports cloze deletions and image occlusion using native markdown.",
+  "description": "DecksMD — spaced repetition flashcards from your notes, with FSRS. Cloze deletions, tables and image occlusion in native markdown. No special syntax.",
   "author": "Xherdi Lika",
-  "authorUrl": "https://github.com/dscherdi",
+  "authorUrl": "https://decksmd.app",
   "isDesktopOnly": false,
   "fundingUrl": "https://buymeacoffee.com/dscherdil0"
 }
