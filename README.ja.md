@@ -280,7 +280,7 @@ OpenAI、Anthropic（Claude）、Google（Gemini）、または OpenAI 互換/�
 
 ## 基盤
 
-Decks は **[`@decks/core`](https://github.com/dscherdi/decks-core)**（解析・FSRS スケジューリング・同期・AI オーケストレーションを実装するオープンソース〔MIT〕エンジン）の上に構築されています。プラグインはその周りの Obsidian 固有の外殻です。
+Decks は **[`@decks/core`](https://github.com/dscherdi/decks-core)**（解析・FSRS スケジューリング・同期・AI オーケストレーションを実装するオープンソース〔AGPL-3.0〕エンジン）の上に構築されています。プラグインはその周りの Obsidian 固有の外殻です。
 
 ## ライセンス
 

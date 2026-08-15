@@ -306,7 +306,7 @@ Utilisez votre propre clé OpenAI, Anthropic (Claude), Google (Gemini) ou un poi
 
 ## Construit sur
 
-Decks est construit sur **[`@decks/core`](https://github.com/dscherdi/decks-core)** — le moteur open source (MIT) qui implémente l'analyse, la planification FSRS, la synchronisation et l'orchestration IA. Le plugin en est l'enveloppe spécifique à Obsidian.
+Decks est construit sur **[`@decks/core`](https://github.com/dscherdi/decks-core)** — le moteur open source (AGPL-3.0) qui implémente l'analyse, la planification FSRS, la synchronisation et l'orchestration IA. Le plugin en est l'enveloppe spécifique à Obsidian.
 
 ## Licence
 

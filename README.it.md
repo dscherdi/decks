@@ -295,7 +295,7 @@ Usa la tua chiave per OpenAI, Anthropic (Claude), Google (Gemini) o un endpoint 
 
 ## Basato su
 
-Decks è basato su **[`@decks/core`](https://github.com/dscherdi/decks-core)** — il motore open source (MIT) che implementa il parsing, la pianificazione FSRS, la sincronizzazione e l'orchestrazione IA. Il plugin è il guscio specifico per Obsidian che lo avvolge.
+Decks è basato su **[`@decks/core`](https://github.com/dscherdi/decks-core)** — il motore open source (AGPL-3.0) che implementa il parsing, la pianificazione FSRS, la sincronizzazione e l'orchestrazione IA. Il plugin è il guscio specifico per Obsidian che lo avvolge.
 
 ## Licenza
 

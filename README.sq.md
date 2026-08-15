@@ -273,7 +273,7 @@ Përdor çelësin tënd për OpenAI, Anthropic (Claude), Google (Gemini) ose nj�
 
 ## Ndërtuar mbi
 
-Decks është ndërtuar mbi **[`@decks/core`](https://github.com/dscherdi/decks-core)** — motorin me kod të hapur (MIT) që zbaton analizimin, planifikimin FSRS, sinkronizimin dhe orkestrimin e IA-së. Shtojca është mbështjellësi specifik për Obsidian rreth tij.
+Decks është ndërtuar mbi **[`@decks/core`](https://github.com/dscherdi/decks-core)** — motorin me kod të hapur (AGPL-3.0) që zbaton analizimin, planifikimin FSRS, sinkronizimin dhe orkestrimin e IA-së. Shtojca është mbështjellësi specifik për Obsidian rreth tij.
 
 ## Licenca
 

@@ -355,7 +355,7 @@ Usa tu propia clave de OpenAI, Anthropic (Claude), Google (Gemini) o un endpoint
 
 ## Basado en
 
-Decks está construido sobre **[`@decks/core`](https://github.com/dscherdi/decks-core)** — el motor de código abierto (MIT) que implementa el análisis, la planificación FSRS, la sincronización y la orquestación de IA. El complemento es la capa específica de Obsidian a su alrededor.
+Decks está construido sobre **[`@decks/core`](https://github.com/dscherdi/decks-core)** — el motor de código abierto (AGPL-3.0) que implementa el análisis, la planificación FSRS, la sincronización y la orquestación de IA. El complemento es la capa específica de Obsidian a su alrededor.
 
 ## Licencia
 

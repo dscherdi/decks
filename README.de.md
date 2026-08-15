@@ -355,7 +355,7 @@ Verwende deinen eigenen Schlüssel für OpenAI, Anthropic (Claude), Google (Gemi
 
 ## Basiert auf
 
-Decks basiert auf **[`@decks/core`](https://github.com/dscherdi/decks-core)** — der quelloffenen (MIT) Engine für Parsing, FSRS-Planung, Synchronisierung und KI-Orchestrierung. Das Plugin ist die Obsidian-spezifische Hülle darum.
+Decks basiert auf **[`@decks/core`](https://github.com/dscherdi/decks-core)** — der quelloffenen (AGPL-3.0) Engine für Parsing, FSRS-Planung, Synchronisierung und KI-Orchestrierung. Das Plugin ist die Obsidian-spezifische Hülle darum.
 
 ## Lizenz
 

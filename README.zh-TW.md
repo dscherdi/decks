@@ -268,7 +268,7 @@ FSRS 附帶了開箱即用的合理預設設定。一旦您累積了約 100 次�
 
 ## 建構基礎
 
-Decks 建構於 **[`@decks/core`](https://github.com/dscherdi/decks-core)** 之上 —— 實作解析、FSRS 排程、同步與 AI 編排的開源（MIT）引擎。此外掛是圍繞它的 Obsidian 專用外殼。
+Decks 建構於 **[`@decks/core`](https://github.com/dscherdi/decks-core)** 之上 —— 實作解析、FSRS 排程、同步與 AI 編排的開源（AGPL-3.0）引擎。此外掛是圍繞它的 Obsidian 專用外殼。
 
 ## 授權
 

@@ -369,7 +369,7 @@ Pick a profile in the dialog (or use the default) — its header level and sched
 
 ## Built on
 
-Decks is built on **[`@decks/core`](https://github.com/dscherdi/decks-core)** — the open-source (MIT) engine that implements the parsing, FSRS scheduling, sync log, and AI orchestration. The plugin is the Obsidian-specific shell around it.
+Decks is built on **[`@decks/core`](https://github.com/dscherdi/decks-core)** — the open-source (AGPL-3.0) engine that implements the parsing, FSRS scheduling, sync log, and AI orchestration. The plugin is the Obsidian-specific shell around it.
 
 ## Acknowledgements & alternatives
 

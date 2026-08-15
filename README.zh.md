@@ -279,7 +279,7 @@ FSRS 附带了开箱即用的合理默认设置。一旦您积累了约 100 次�
 
 ## 构建基础
 
-Decks 构建于 **[`@decks/core`](https://github.com/dscherdi/decks-core)** 之上 —— 实现解析、FSRS 调度、同步与 AI 编排的开源（MIT）引擎。本插件是围绕它的 Obsidian 专用外壳。
+Decks 构建于 **[`@decks/core`](https://github.com/dscherdi/decks-core)** 之上 —— 实现解析、FSRS 调度、同步与 AI 编排的开源（AGPL-3.0）引擎。本插件是围绕它的 Obsidian 专用外壳。
 
 ## 许可证
 

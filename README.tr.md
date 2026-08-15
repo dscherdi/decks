@@ -284,7 +284,7 @@ Kendi OpenAI, Anthropic (Claude), Google (Gemini) anahtarınızı ya da OpenAI u
 
 ## Üzerine kurulu
 
-Decks, ayrıştırma, FSRS planlama, senkronizasyon ve yapay zekâ orkestrasyonunu sağlayan açık kaynaklı (MIT) **[`@decks/core`](https://github.com/dscherdi/decks-core)** motoru üzerine kuruludur. Eklenti, onun çevresindeki Obsidian'a özgü kabuktur.
+Decks, ayrıştırma, FSRS planlama, senkronizasyon ve yapay zekâ orkestrasyonunu sağlayan açık kaynaklı (AGPL-3.0) **[`@decks/core`](https://github.com/dscherdi/decks-core)** motoru üzerine kuruludur. Eklenti, onun çevresindeki Obsidian'a özgü kabuktur.
 
 ## Lisans
 

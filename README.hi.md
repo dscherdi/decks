@@ -272,7 +272,7 @@ OpenAI, Anthropic (Claude), Google (Gemini) या OpenAI-संगत/स्थ
 
 ## आधारित है
 
-Decks **[`@decks/core`](https://github.com/dscherdi/decks-core)** पर आधारित है — पार्सिंग, FSRS शेड्यूलिंग, सिंक और AI ऑर्केस्ट्रेशन को लागू करने वाला ओपन-सोर्स (MIT) इंजन। प्लगइन उसके चारों ओर Obsidian-विशिष्ट आवरण है।
+Decks **[`@decks/core`](https://github.com/dscherdi/decks-core)** पर आधारित है — पार्सिंग, FSRS शेड्यूलिंग, सिंक और AI ऑर्केस्ट्रेशन को लागू करने वाला ओपन-सोर्स (AGPL-3.0) इंजन। प्लगइन उसके चारों ओर Obsidian-विशिष्ट आवरण है।
 
 ## लाइसेंस
 
