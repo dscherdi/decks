@@ -13,9 +13,9 @@ on:
 jobs:
   build-and-release:
     runs-on: ubuntu-latest
-    # The deploy hook is an environment secret, and secrets scoped to an
-    # environment are only readable by a job that names it.
-    environment: Release
+
+    outputs:
+      version: ${{ steps.tag.outputs.value }}
 
     steps:
       - name: Resolve tag
@@ -127,13 +127,24 @@ jobs:
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
-      # The website builds its changelog from this repository's releases, and
-      # only does so at build time — so a release is invisible there until the
-      # site rebuilds. Nothing else triggers that.
-      #
-      # Never fails the run: the release itself has already been published by
-      # this point, and losing it over a website rebuild would be a poor trade.
-      - name: Rebuild the website
+  # The website builds its changelog from this repository's releases, and only
+  # does so at build time — so a release is invisible there until the site
+  # rebuilds. Nothing else triggers that.
+  #
+  # Separate from the release job on purpose. The deploy hook is an environment
+  # secret, and naming an environment subjects the job to that environment's
+  # protection rules; on the release job, a required reviewer would hold up the
+  # release itself. Here it can only hold up a website rebuild.
+  rebuild-website:
+    needs: build-and-release
+    runs-on: ubuntu-latest
+    environment: Release
+    # The release is already published by now, so nothing here is worth failing
+    # the run over. Every step warns instead.
+    continue-on-error: true
+
+    steps:
+      - name: Trigger a rebuild
         id: rebuild
         env:
           HOOK: ${{ secrets.VERCEL_DEPLOY_HOOK }}
@@ -154,7 +165,7 @@ jobs:
       - name: Tell IndexNow about the new release
         if: steps.rebuild.outputs.triggered == 'true'
         env:
-          VERSION: ${{ steps.tag.outputs.value }}
+          VERSION: ${{ needs.build-and-release.outputs.version }}
           # Public by design — it is served at https://decksmd.app/<key>.txt and
           # must keep matching that file in the decks-landing repository.
           IDN_KEY: e5f06cd0d0114e8e8d2d0ea14963256b
