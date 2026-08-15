@@ -241,19 +241,19 @@ interface SyncResult {
 ### Run All Integration Tests
 
 ```bash
-npm run test:integration
+pnpm test:integration
 ```
 
 ### Run Specific Test Suite
 
 ```bash
-npm run test:integration -- full-workflow-integration.test.ts
+pnpm test:integration -- full-workflow-integration.test.ts
 ```
 
 ### Run Specific Test
 
 ```bash
-npm run test:integration -- -t "should sync flashcards from Math-Basics"
+pnpm test:integration -- -t "should sync flashcards from Math-Basics"
 ```
 
 ## Known Issues
