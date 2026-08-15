@@ -160,7 +160,7 @@ Të dyja bazohen në tiparin "cloze", prandaj cloze duhet të jetë i aktivizuar
 
 Krijo karta në një Canvas të Obsidian (`.canvas`) në vend të një skedari Markdown. Çdo canvas brenda dosjes së konfiguruar bëhet një pako; çdo nyje teksti analizohet me të njëjtat katër formate karte më sipër. Konfiguro përmes **Cilësimet → Pako canvas**: dosja dhe etiketa (e paracaktuar `#decks/canvas`). "Shko te burimi" gjatë rishikimit hap canvas-in dhe fokuson nyjen burimore. Në instalimin e parë (ose përditësimin), brenda dosjes `Canvas decks/` krijohet automatikisht një `Decks — Fillimi me canvas.canvas`.
 
-**Karta hapësinore (Spatial cards)**: lidh nyjet e tekstit me brinjë — çdo brinjë bëhet një kartë: nyja e nisjes është pjesa e parme (pyetja), nyja e mbërritjes është pjesa e prapme (përgjigja), dhe etiketa e brinjës është një aluzion opsional. Zinxhirët (A → B → C), një-me-shumë dhe shumë-me-një funksionojnë të gjithë; nyjet e palidhura ende analizohen me katër formatet më sipër. Detaje në **[docs/CANVAS_DECKS.md](docs/CANVAS_DECKS.md)**.
+**Karta hapësinore (Spatial cards)**: lidh nyjet e tekstit me brinjë — çdo brinjë bëhet një kartë: nyja e nisjes është pjesa e parme (pyetja), nyja e mbërritjes është pjesa e prapme (përgjigja), dhe etiketa e brinjës është një aluzion opsional. Zinxhirët (A → B → C), një-me-shumë dhe shumë-me-një funksionojnë të gjithë; nyjet e palidhura ende analizohen me katër formatet më sipër. Detaje në **[decksmd.app/docs/cards/canvas/](https://decksmd.app/docs/cards/canvas/)**.
 
 ![Canvas Spatial Cards Demo](https://raw.githubusercontent.com/dscherdi/decks/HEAD/canvas_spatial_cards_demo.gif)
 
@@ -180,7 +180,7 @@ mjedis të izoluar, të pastruar dhe të ndërgjegjshëm për temën, dhe ekspoz
 `--align`, `--bg`, …) për kontroll të plotë të paraqitjes — nga karta të rehatshme leximi te dizajne të
 personalizuara buzë-më-buzë. Tabelat pa një shabllon që përputhet përdorin përsëri kolonat normale.
 
-Shih **[docs/CARD_TYPES_AND_TEMPLATES.md](docs/CARD_TYPES_AND_TEMPLATES.md)** për udhëzuesin e plotë dhe shembuj.
+Shih **[decksmd.app/docs/cards/templates/](https://decksmd.app/docs/cards/templates/)** për udhëzuesin e plotë dhe shembuj.
 
 ## Pako provimi
 
@@ -204,7 +204,7 @@ Ekzekuto një pako si një provim me notim: një grup pyetjesh të tërhequra, q
 
 Një pako "Provim demo" që tregon çdo format pyetjeje krijohet në instalimin e parë (ose përmes komandës **Krijo pako provimi demo**).
 
-Shih **[docs/EXAM_DECKS.md](docs/EXAM_DECKS.md)** për rregullat e plota të shkrimit.
+Shih **[decksmd.app/docs/exams/overview/](https://decksmd.app/docs/exams/overview/)** për rregullat e plota të shkrimit.
 
 ## Planifikim i personalizuar
 

@@ -170,7 +170,7 @@ Ambas se basan en los huecos, por lo que cloze debe estar activado en el perfil 
 
 Crea tarjetas en un Canvas de Obsidian (`.canvas`) en lugar de un archivo Markdown. Cada canvas en la carpeta configurada se convierte en un mazo; cada nodo de texto se analiza con los mismos cuatro formatos de tarjeta de arriba. Configúralo en **Ajustes → Mazos de canvas**: carpeta y etiqueta (por defecto `#decks/canvas`). «Ir a la fuente» desde el repaso abre el canvas y enfoca el nodo de origen. En la primera instalación (o actualización) se crea automáticamente un `Decks — Comenzar con canvas.canvas` dentro de la carpeta `Canvas decks/`.
 
-**Tarjetas espaciales (Spatial cards)**: conecta nodos de texto con aristas y cada arista se convierte en una tarjeta: el nodo de origen es el anverso (pregunta), el nodo de destino es el reverso (respuesta) y la etiqueta de la arista es una pista opcional. Funcionan cadenas (A → B → C), uno-a-muchos y muchos-a-uno; los nodos no conectados se siguen analizando con los cuatro formatos anteriores. Detalles en **[docs/CANVAS_DECKS.md](docs/CANVAS_DECKS.md)**.
+**Tarjetas espaciales (Spatial cards)**: conecta nodos de texto con aristas y cada arista se convierte en una tarjeta: el nodo de origen es el anverso (pregunta), el nodo de destino es el reverso (respuesta) y la etiqueta de la arista es una pista opcional. Funcionan cadenas (A → B → C), uno-a-muchos y muchos-a-uno; los nodos no conectados se siguen analizando con los cuatro formatos anteriores. Detalles en **[decksmd.app/docs/cards/canvas/](https://decksmd.app/docs/cards/canvas/)**.
 
 ![Canvas Spatial Cards Demo](https://raw.githubusercontent.com/dscherdi/decks/HEAD/canvas_spatial_cards_demo.gif)
 
@@ -190,7 +190,7 @@ renderizan en un entorno aislado, saneado y consciente del tema, y exponen varia
 `--align`, `--bg`, …) para un control total del diseño, desde cómodas tarjetas de lectura hasta diseños
 personalizados a sangre. Las tablas sin plantilla coincidente siguen usando las columnas normales.
 
-Consulta **[docs/CARD_TYPES_AND_TEMPLATES.md](docs/CARD_TYPES_AND_TEMPLATES.md)** para la guía completa y ejemplos.
+Consulta **[decksmd.app/docs/cards/templates/](https://decksmd.app/docs/cards/templates/)** para la guía completa y ejemplos.
 
 ## Mazos de examen
 
@@ -225,7 +225,7 @@ seguido de una lista de tareas se convierte en una tarjeta de opción múltiple.
 Un mazo «Examen de demostración» que muestra todos los formatos de pregunta se crea en la primera instalación (o con el
 comando **«Crear mazo de examen de demostración»**).
 
-Consulta **[docs/EXAM_DECKS.md](docs/EXAM_DECKS.md)** para las reglas de creación completas.
+Consulta **[decksmd.app/docs/exams/overview/](https://decksmd.app/docs/exams/overview/)** para las reglas de creación completas.
 
 ## Lo que obtienes
 

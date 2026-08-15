@@ -170,7 +170,7 @@ Les deux s'appuient sur les textes à trous (cloze), qui doivent donc être acti
 
 Créez des cartes sur un canvas Obsidian (`.canvas`) au lieu d'un fichier Markdown. Chaque canvas dans le dossier configuré devient un paquet ; chaque nœud texte est analysé avec les mêmes quatre formats de carte ci-dessus. Configurez via **Paramètres → Paquets canvas** : dossier et étiquette (par défaut `#decks/canvas`). « Aller à la source » depuis la révision ouvre le canvas et met le focus sur le nœud d'origine. À la première installation (ou mise à jour), un fichier `Decks — Démarrer avec canvas.canvas` est créé automatiquement dans le dossier `Canvas decks/`.
 
-**Cartes spatiales (Spatial cards)** : reliez des nœuds texte par des arêtes — chaque arête devient une carte : le nœud source est le recto (question), le nœud cible est le verso (réponse), et le libellé de l'arête sert d'indice optionnel. Les chaînes (A → B → C), les relations un-vers-plusieurs et plusieurs-vers-un fonctionnent toutes ; les nœuds non connectés continuent d'être analysés avec les quatre formats ci-dessus. Détails dans **[docs/CANVAS_DECKS.md](docs/CANVAS_DECKS.md)**.
+**Cartes spatiales (Spatial cards)** : reliez des nœuds texte par des arêtes — chaque arête devient une carte : le nœud source est le recto (question), le nœud cible est le verso (réponse), et le libellé de l'arête sert d'indice optionnel. Les chaînes (A → B → C), les relations un-vers-plusieurs et plusieurs-vers-un fonctionnent toutes ; les nœuds non connectés continuent d'être analysés avec les quatre formats ci-dessus. Détails dans **[decksmd.app/docs/cards/canvas/](https://decksmd.app/docs/cards/canvas/)**.
 
 ![Canvas Spatial Cards Demo](https://raw.githubusercontent.com/dscherdi/decks/HEAD/canvas_spatial_cards_demo.gif)
 
@@ -191,7 +191,7 @@ Markdown, s'affichent dans un bac à sable isolé, assaini et adapté au thème,
 confortables aux designs personnalisés pleine largeur. Les tableaux sans modèle correspondant utilisent les
 colonnes habituelles.
 
-Voir **[docs/CARD_TYPES_AND_TEMPLATES.md](docs/CARD_TYPES_AND_TEMPLATES.md)** pour le guide complet et des exemples.
+Voir **[decksmd.app/docs/cards/templates/](https://decksmd.app/docs/cards/templates/)** pour le guide complet et des exemples.
 
 ## Paquets d'examen
 
@@ -227,7 +227,7 @@ rédaction : un en-tête suivi d'une liste de tâches devient une carte à choix
 Un paquet « Examen de démonstration » présentant tous les formats de question est créé à la première installation (ou via
 la commande **« Créer un paquet d'examen de démonstration »**).
 
-Voir **[docs/EXAM_DECKS.md](docs/EXAM_DECKS.md)** pour toutes les règles de rédaction.
+Voir **[decksmd.app/docs/exams/overview/](https://decksmd.app/docs/exams/overview/)** pour toutes les règles de rédaction.
 
 ## Ce que vous obtenez
 

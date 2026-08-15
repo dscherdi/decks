@@ -160,7 +160,7 @@ masks:
 
 Markdown फ़ाइल के बजाय Obsidian Canvas (`.canvas`) पर कार्ड बनाएँ। कॉन्फ़िगर किए गए फ़ोल्डर में हर canvas एक डेक बन जाता है; प्रत्येक टेक्स्ट नोड को ऊपर बताए गए वही चार कार्ड फ़ॉर्मेट में पार्स किया जाता है। **सेटिंग्स → Canvas डेक** में कॉन्फ़िगर करें: फ़ोल्डर और टैग (डिफ़ॉल्ट `#decks/canvas`)। रिव्यू में "स्रोत पर जाएँ" canvas खोलता है और स्रोत नोड पर फ़ोकस करता है। पहली स्थापना (या अपग्रेड) पर, `Canvas decks/` फ़ोल्डर में स्वचालित रूप से एक `Decks — Canvas शुरू करना.canvas` बनाया जाता है।
 
-**स्पेशियल कार्ड (Spatial cards)**: टेक्स्ट नोड्स को edges से जोड़ें — हर edge एक कार्ड बन जाता है: from-नोड सामने (प्रश्न) है, to-नोड पीछे (उत्तर) है, और edge का लेबल एक वैकल्पिक संकेत (हिंट) है। चेन (A → B → C), one-to-many और many-to-one सभी काम करते हैं; जो नोड्स जुड़े नहीं हैं वे अब भी ऊपर बताए गए चार फ़ॉर्मेट में पार्स होते हैं। विवरण: **[docs/CANVAS_DECKS.md](docs/CANVAS_DECKS.md)**।
+**स्पेशियल कार्ड (Spatial cards)**: टेक्स्ट नोड्स को edges से जोड़ें — हर edge एक कार्ड बन जाता है: from-नोड सामने (प्रश्न) है, to-नोड पीछे (उत्तर) है, और edge का लेबल एक वैकल्पिक संकेत (हिंट) है। चेन (A → B → C), one-to-many और many-to-one सभी काम करते हैं; जो नोड्स जुड़े नहीं हैं वे अब भी ऊपर बताए गए चार फ़ॉर्मेट में पार्स होते हैं। विवरण: **[decksmd.app/docs/cards/canvas/](https://decksmd.app/docs/cards/canvas/)**।
 
 ![Canvas Spatial Cards Demo](https://raw.githubusercontent.com/dscherdi/decks/HEAD/canvas_spatial_cards_demo.gif)
 
@@ -179,7 +179,7 @@ Markdown फ़ाइल के बजाय Obsidian Canvas (`.canvas`) पर 
 होते हैं, और पूरे लेआउट नियंत्रण के लिए CSS variables (`--padding`, `--align`, `--bg`, …) उपलब्ध कराते हैं — आरामदायक रीडिंग
 कार्ड से लेकर edge-to-edge कस्टम डिज़ाइन तक। जिन तालिकाओं का कोई मिलान टेम्पलेट नहीं होता, वे सामान्य कॉलम का ही उपयोग करती हैं।
 
-पूरी गाइड और उदाहरणों के लिए **[docs/CARD_TYPES_AND_TEMPLATES.md](docs/CARD_TYPES_AND_TEMPLATES.md)** देखें।
+पूरी गाइड और उदाहरणों के लिए **[decksmd.app/docs/cards/templates/](https://decksmd.app/docs/cards/templates/)** देखें।
 
 ## परीक्षा डेक (Exam decks)
 
@@ -203,7 +203,7 @@ Markdown फ़ाइल के बजाय Obsidian Canvas (`.canvas`) पर 
 
 हर प्रश्न प्रारूप दिखाने वाला एक "डेमो परीक्षा" डेक पहली स्थापना पर बनाया जाता है (या **डेमो परीक्षा डेक बनाएं** कमांड के ज़रिए)।
 
-पूर्ण लेखन नियमों के लिए **[docs/EXAM_DECKS.md](docs/EXAM_DECKS.md)** देखें।
+पूर्ण लेखन नियमों के लिए **[decksmd.app/docs/exams/overview/](https://decksmd.app/docs/exams/overview/)** देखें।
 
 ## वैयक्तिकृत शेड्यूलिंग (Personalized scheduling)
 

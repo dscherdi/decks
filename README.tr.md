@@ -160,7 +160,7 @@ Listedeki her öğe bir karttır; görsel ön yüzde gösterilir ve ilgili öğe
 
 Markdown dosyası yerine bir Obsidian Canvas (`.canvas`) dosyasında kart oluşturun. Yapılandırılan klasördeki her canvas bir deste olur; her metin düğümü yukarıdakiyle aynı dört kart biçimiyle ayrıştırılır. **Ayarlar → Canvas desteleri** üzerinden yapılandırın: klasör ve etiket (varsayılan `#decks/canvas`). İnceleme sırasında "Kaynağa git", canvas'ı açar ve kaynak düğümü odaklar. İlk kurulumda (veya güncellemede) `Canvas decks/` klasörünün içinde otomatik olarak `Decks — Canvas başlangıç.canvas` oluşturulur.
 
-**Uzamsal kartlar (Spatial cards)**: metin düğümlerini kenarlarla birbirine bağlayın — her kenar bir karta dönüşür: kaynak düğüm ön yüz (soru), hedef düğüm arka yüz (cevap), kenar etiketi ise isteğe bağlı bir ipucudur. Zincirler (A → B → C), bire-çok ve çoğa-bir ilişkilerin tümü çalışır; bağlanmamış düğümler yine yukarıdaki dört biçimle ayrıştırılır. Ayrıntılar için **[docs/CANVAS_DECKS.md](docs/CANVAS_DECKS.md)**.
+**Uzamsal kartlar (Spatial cards)**: metin düğümlerini kenarlarla birbirine bağlayın — her kenar bir karta dönüşür: kaynak düğüm ön yüz (soru), hedef düğüm arka yüz (cevap), kenar etiketi ise isteğe bağlı bir ipucudur. Zincirler (A → B → C), bire-çok ve çoğa-bir ilişkilerin tümü çalışır; bağlanmamış düğümler yine yukarıdaki dört biçimle ayrıştırılır. Ayrıntılar için **[decksmd.app/docs/cards/canvas/](https://decksmd.app/docs/cards/canvas/)**.
 
 ![Canvas Spatial Cards Demo](https://raw.githubusercontent.com/dscherdi/decks/HEAD/canvas_spatial_cards_demo.gif)
 
@@ -180,7 +180,7 @@ temaya duyarlı ve yalıtılmış bir alanda işlenir ve tam düzen denetimi iç
 `--align`, `--bg`, …) sunar — rahat okuma kartlarından kenardan kenara özel tasarımlara kadar. Eşleşen şablonu
 olmayan tablolar yine normal sütunları kullanır.
 
-Tam kılavuz ve örnekler için **[docs/CARD_TYPES_AND_TEMPLATES.md](docs/CARD_TYPES_AND_TEMPLATES.md)** bölümüne bakın.
+Tam kılavuz ve örnekler için **[decksmd.app/docs/cards/templates/](https://decksmd.app/docs/cards/templates/)** bölümüne bakın.
 
 ## Sınav desteleri
 
@@ -215,7 +215,7 @@ bir görev listesi gelen başlık, çoktan seçmeli bir kart olur.
 Her soru biçimini gösteren bir "Demo sınavı" destesi ilk kurulumda (veya **Demo sınav destesi oluştur** komutuyla)
 oluşturulur.
 
-Tam yazım kuralları için **[docs/EXAM_DECKS.md](docs/EXAM_DECKS.md)** bölümüne bakın.
+Tam yazım kuralları için **[decksmd.app/docs/exams/overview/](https://decksmd.app/docs/exams/overview/)** bölümüne bakın.
 
 ## Kişiselleştirilmiş planlama
 

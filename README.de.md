@@ -170,7 +170,7 @@ Beides baut auf Lückentexten auf – Cloze muss also im Profil aktiviert sein u
 
 Erstelle Karten auf einer Obsidian-Canvas-Datei (`.canvas`) statt in einer Markdown-Datei. Jedes Canvas im konfigurierten Ordner wird zu einem Stapel; jeder Textknoten darin wird mit denselben vier Karten-Formaten oben analysiert. Konfiguration unter **Einstellungen → Canvas-Stapel**: Canvas-Ordner und Canvas-Stapel-Tag (Standard `#decks/canvas`). „Quelle öffnen" beim Review öffnet das Canvas und fokussiert den entsprechenden Textknoten. Beim ersten Installieren (oder Aktualisieren) wird automatisch ein `Decks — Canvas Erste Schritte.canvas` im Ordner `Canvas decks/` erstellt.
 
-**Räumliche Karten (Spatial cards)**: Verbinde Textknoten mit Kanten — jede Kante wird zu einer Karteikarte: der Ausgangsknoten ist die Vorderseite (Frage), der Zielknoten die Rückseite (Antwort), und das Kantenlabel ist ein optionaler Hinweis. Ketten (A → B → C), Eins-zu-viele- und Viele-zu-eins-Verbindungen funktionieren alle; nicht verbundene Knoten werden weiterhin mit den vier obigen Formaten analysiert. Details in **[docs/CANVAS_DECKS.md](docs/CANVAS_DECKS.md)**.
+**Räumliche Karten (Spatial cards)**: Verbinde Textknoten mit Kanten — jede Kante wird zu einer Karteikarte: der Ausgangsknoten ist die Vorderseite (Frage), der Zielknoten die Rückseite (Antwort), und das Kantenlabel ist ein optionaler Hinweis. Ketten (A → B → C), Eins-zu-viele- und Viele-zu-eins-Verbindungen funktionieren alle; nicht verbundene Knoten werden weiterhin mit den vier obigen Formaten analysiert. Details in **[decksmd.app/docs/cards/canvas/](https://decksmd.app/docs/cards/canvas/)**.
 
 ![Canvas Spatial Cards Demo](https://raw.githubusercontent.com/dscherdi/decks/HEAD/canvas_spatial_cards_demo.gif)
 
@@ -190,7 +190,7 @@ Markdown, werden in einer bereinigten, themenbewussten Sandbox gerendert und ste
 (`--padding`, `--align`, `--bg`, …) für die volle Layout-Kontrolle bereit — von angenehmen Lesekarten bis zu
 randlosen eigenen Designs. Tabellen ohne passende Vorlage verwenden weiterhin die normalen Spalten.
 
-Siehe **[docs/CARD_TYPES_AND_TEMPLATES.md](docs/CARD_TYPES_AND_TEMPLATES.md)** für die vollständige Anleitung und Beispiele.
+Siehe **[decksmd.app/docs/cards/templates/](https://decksmd.app/docs/cards/templates/)** für die vollständige Anleitung und Beispiele.
 
 ## Prüfungsstapel
 
@@ -225,7 +225,7 @@ hinzu: eine Überschrift gefolgt von einer Aufgabenliste wird zur Multiple-Choic
 Ein Stapel „Demo-Prüfung" mit allen Fragenformaten wird bei der ersten Installation erstellt (oder über den
 Befehl **„Demo-Prüfungsstapel erstellen"**).
 
-Siehe **[docs/EXAM_DECKS.md](docs/EXAM_DECKS.md)** für die vollständigen Erstellungsregeln.
+Siehe **[decksmd.app/docs/exams/overview/](https://decksmd.app/docs/exams/overview/)** für die vollständigen Erstellungsregeln.
 
 ## Was du bekommst
 

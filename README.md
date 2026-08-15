@@ -187,7 +187,7 @@ A `Decks â€” Canvas getting started.canvas` is auto-created in a `Canvas decks/`
 
 ![Canvas Spatial Cards Demo](https://raw.githubusercontent.com/dscherdi/decks/HEAD/canvas_spatial_cards_demo.gif)
 
-See **[docs/CANVAS_DECKS.md](docs/CANVAS_DECKS.md)** for details.
+See **[decksmd.app/docs/cards/canvas/](https://decksmd.app/docs/cards/canvas/)** for details.
 
 ## Templates
 
@@ -204,7 +204,7 @@ theme-aware sandbox, and expose CSS variables (`--padding`, `--align`, `--bg`, â
 from comfortable reading cards to edge-to-edge custom designs. Tables with no matching template fall back to
 the normal columns.
 
-See **[docs/CARD_TYPES_AND_TEMPLATES.md](docs/CARD_TYPES_AND_TEMPLATES.md)** for the full guide and examples.
+See **[decksmd.app/docs/cards/templates/](https://decksmd.app/docs/cards/templates/)** for the full guide and examples.
 
 ## Exam decks
 
@@ -235,7 +235,7 @@ profile, and add one authoring format: a heading followed by a task list becomes
 A "Demo exam" deck showing every question format is created on first install (or via the **Create demo
 exam deck** command).
 
-See **[docs/EXAM_DECKS.md](docs/EXAM_DECKS.md)** for the full authoring rules.
+See **[decksmd.app/docs/exams/overview/](https://decksmd.app/docs/exams/overview/)** for the full authoring rules.
 
 ## What you get
 

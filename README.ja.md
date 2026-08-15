@@ -171,7 +171,7 @@ masks:
 
 Markdown ファイルの代わりに Obsidian の Canvas (`.canvas`) 上でカードを作成できます。設定したフォルダ内の各 canvas が 1 つのデッキになり、各テキストノードは上記と同じ 4 つのカード形式で解析されます。**設定 → Canvas デッキ** で設定します：フォルダとタグ（既定値 `#decks/canvas`）。復習中の「ソースに移動」は canvas を開き、該当のテキストノードにフォーカスします。初回インストール（またはアップグレード）時には、`Canvas decks/` フォルダ内に `Decks — Canvas はじめに.canvas` が自動的に作成されます。
 
-**空間カード（Spatial cards）**：テキストノードをエッジで接続すると、各エッジが 1 枚のカードになります — 始点ノードが表面（質問）、終点ノードが裏面（答え）、エッジのラベルは任意のヒントです。チェーン（A → B → C）、1 対多、多対 1 のいずれも動作します。接続されていないノードは引き続き上記の 4 つの形式で解析されます。詳細は **[docs/CANVAS_DECKS.md](docs/CANVAS_DECKS.md)** を参照。
+**空間カード（Spatial cards）**：テキストノードをエッジで接続すると、各エッジが 1 枚のカードになります — 始点ノードが表面（質問）、終点ノードが裏面（答え）、エッジのラベルは任意のヒントです。チェーン（A → B → C）、1 対多、多対 1 のいずれも動作します。接続されていないノードは引き続き上記の 4 つの形式で解析されます。詳細は **[decksmd.app/docs/cards/canvas/](https://decksmd.app/docs/cards/canvas/)** を参照。
 
 ![Canvas Spatial Cards Demo](https://raw.githubusercontent.com/dscherdi/decks/HEAD/canvas_spatial_cards_demo.gif)
 
@@ -189,7 +189,7 @@ HTML または Markdown で表面／裏面／ノートの各面に対応し、�
 レイアウトを完全に制御できる CSS 変数（`--padding`、`--align`、`--bg` など）を提供します — 読みやすいカードから、端まで
 広がるカスタムデザインまで。一致するテンプレートがない表は、これまでどおり通常の列を使います。
 
-詳しいガイドと例は **[docs/CARD_TYPES_AND_TEMPLATES.md](docs/CARD_TYPES_AND_TEMPLATES.md)** を参照してください。
+詳しいガイドと例は **[decksmd.app/docs/cards/templates/](https://decksmd.app/docs/cards/templates/)** を参照してください。
 
 ## 試験デッキ
 
@@ -213,7 +213,7 @@ HTML または Markdown で表面／裏面／ノートの各面に対応し、�
 
 初回インストール時に、すべての問題形式を示す「デモ試験」デッキが作成されます（**「デモ試験デッキを作成」** コマンドでも作成できます）。
 
-記述ルールの詳細は **[docs/EXAM_DECKS.md](docs/EXAM_DECKS.md)** を参照してください。
+記述ルールの詳細は **[decksmd.app/docs/exams/overview/](https://decksmd.app/docs/exams/overview/)** を参照してください。
 
 ## パーソナライズされたスケジュール管理
 

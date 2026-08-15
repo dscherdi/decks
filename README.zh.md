@@ -171,7 +171,7 @@ masks:
 
 在 Obsidian Canvas (`.canvas`) 文件中编写卡片，而不是 Markdown 文件。已配置文件夹中的每个 canvas 都会成为一个牌组；每个文本节点都会按照上述相同的四种卡片格式进行解析。在 **设置 → Canvas 牌组** 中配置：文件夹和标签（默认 `#decks/canvas`）。复习中点击「跳转到源」会打开 canvas 并聚焦到源文本节点。首次安装（或升级）时会在 `Canvas decks/` 文件夹中自动创建一份 `Decks — Canvas 入门.canvas`。
 
-**空间卡片（Spatial cards）**：用连线连接文本节点，每条连线都会变成一张卡片——起始节点是正面（问题），终点节点是反面（答案），连线上的标签作为提示。支持链式连接（A → B → C）、一对多、多对一；没有连线的节点仍按四种格式解析。详情见 **[docs/CANVAS_DECKS.md](docs/CANVAS_DECKS.md)**。
+**空间卡片（Spatial cards）**：用连线连接文本节点，每条连线都会变成一张卡片——起始节点是正面（问题），终点节点是反面（答案），连线上的标签作为提示。支持链式连接（A → B → C）、一对多、多对一；没有连线的节点仍按四种格式解析。详情见 **[decksmd.app/docs/cards/canvas/](https://decksmd.app/docs/cards/canvas/)**。
 
 ![Canvas Spatial Cards Demo](https://raw.githubusercontent.com/dscherdi/decks/HEAD/canvas_spatial_cards_demo.gif)
 
@@ -188,7 +188,7 @@ masks:
 三个面，在经过净化、感知主题的沙箱中渲染，并提供 CSS 变量（`--padding`、`--align`、`--bg` 等）以完全掌控布局——从舒适的
 阅读卡片到铺满整张卡片的自定义设计。没有匹配模板的表格仍使用普通的列。
 
-完整指南和示例见 **[docs/CARD_TYPES_AND_TEMPLATES.md](docs/CARD_TYPES_AND_TEMPLATES.md)**。
+完整指南和示例见 **[decksmd.app/docs/cards/templates/](https://decksmd.app/docs/cards/templates/)**。
 
 ## 考试牌组
 
@@ -212,7 +212,7 @@ masks:
 
 首次安装时会创建一个展示所有题型的“考试演示”牌组（也可通过 **“创建考试演示牌组”** 命令创建）。
 
-完整的编写规则见 **[docs/EXAM_DECKS.md](docs/EXAM_DECKS.md)**。
+完整的编写规则见 **[decksmd.app/docs/exams/overview/](https://decksmd.app/docs/exams/overview/)**。
 
 ## 个性化调度
 
