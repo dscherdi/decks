@@ -13,7 +13,7 @@
 
 > **New — [Decks Pro](https://decksmd.app/pricing/)** · Generate cards from your notes, PDFs and scanned slides without setting up an API key. Free to try — around 100 cards or 10 PDF pages, no card required. Everything else in Decks stays free, and bring-your-own API key still works.
 
-> **Now on iPhone and iPad — [DecksMD](https://apps.apple.com/app/id6801156953)** · Your vault, your cards, on your phone — the same markdown, reviewed anywhere. Free, with Decks Pro if you want generation.
+> **Now on iPhone and iPad — [DecksMD](https://apps.apple.com/app/id6801156953)** · Your vault, your cards, on your phone — the same markdown, reviewed anywhere.
 >
 > <a href="https://apps.apple.com/app/id6801156953"><img src="https://developer.apple.com/assets/elements/badges/download-on-the-app-store.svg" alt="Download on the App Store" height="40"></a>
 

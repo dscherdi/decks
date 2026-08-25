@@ -13,7 +13,7 @@
 
 > **Neu — [Decks Pro](https://decksmd.app/pricing/)** · Erstelle Karten aus deinen Notizen, PDFs und gescannten Folien, ohne einen API-Schlüssel einzurichten. Kostenlos testen — rund 100 Karten oder 10 PDF-Seiten, ohne Kreditkarte. Alles andere in Decks bleibt kostenlos, und ein eigener API-Schlüssel funktioniert weiterhin.
 
-> **Jetzt für iPhone und iPad — [DecksMD](https://apps.apple.com/app/id6801156953)** · Dein Vault, deine Karten, auf dem Handy — dasselbe Markdown, überall wiederholbar. Kostenlos, mit Decks Pro wenn du Erzeugung möchtest.
+> **Jetzt für iPhone und iPad — [DecksMD](https://apps.apple.com/app/id6801156953)** · Dein Vault, deine Karten, auf dem Handy — dasselbe Markdown, überall wiederholbar.
 >
 > <a href="https://apps.apple.com/app/id6801156953"><img src="https://developer.apple.com/assets/elements/badges/download-on-the-app-store.svg" alt="Laden im App Store" height="40"></a>
 

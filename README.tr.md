@@ -13,7 +13,7 @@
 
 > **Yeni — [Decks Pro](https://decksmd.app/pricing/)** · API anahtarı kurmadan notlarınızdan, PDF'lerinizden ve taranmış slaytlarınızdan kart oluşturun. Ücretsiz deneyin — yaklaşık 100 kart veya 10 PDF sayfası, kart bilgisi gerekmez. Decks'teki diğer her şey ücretsiz kalır ve kendi API anahtarınız çalışmaya devam eder.
 
-> **Artık iPhone ve iPad’de — [DecksMD](https://apps.apple.com/app/id6801156953)** · Kasan ve kartların telefonunda — aynı markdown, her yerde tekrar. Ücretsiz; üretim istersen Decks Pro var.
+> **Artık iPhone ve iPad’de — [DecksMD](https://apps.apple.com/app/id6801156953)** · Kasan ve kartların telefonunda — aynı markdown, her yerde tekrar.
 >
 > <a href="https://apps.apple.com/app/id6801156953"><img src="https://developer.apple.com/assets/elements/badges/download-on-the-app-store.svg" alt="App Store’dan indirin" height="40"></a>
 

@@ -13,7 +13,7 @@
 
 > **E re — [Decks Pro](https://decksmd.app/pricing/)** · Krijo karta nga shënimet, PDF-të dhe sllajdet e skanuara pa konfiguruar një çelës API. Provoje falas — rreth 100 karta ose 10 faqe PDF, pa kartë krediti. Gjithçka tjetër në Decks mbetet falas dhe çelësi yt API vazhdon të funksionojë.
 
-> **Tani në iPhone dhe iPad — [DecksMD](https://apps.apple.com/app/id6801156953)** · Kasaforta jote, kartat e tua, në telefon — i njëjti markdown, i përsëritshëm kudo. Falas, me Decks Pro nëse do krijim.
+> **Tani në iPhone dhe iPad — [DecksMD](https://apps.apple.com/app/id6801156953)** · Kasaforta jote, kartat e tua, në telefon — i njëjti markdown, i përsëritshëm kudo.
 >
 > <a href="https://apps.apple.com/app/id6801156953"><img src="https://developer.apple.com/assets/elements/badges/download-on-the-app-store.svg" alt="Shkarkoje në App Store" height="40"></a>
 
