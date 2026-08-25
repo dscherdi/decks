@@ -13,6 +13,10 @@
 
 > **新功能 — [Decks Pro](https://decksmd.app/pricing/)** · 无需配置 API 密钥，即可从笔记、PDF 和扫描的幻灯片生成卡片。免费试用——约 100 张卡片或 10 页 PDF，无需绑定银行卡。Decks 的其他功能仍然免费，自带 API 密钥依然可用。
 
+> **现已支持 iPhone 和 iPad — [DecksMD](https://apps.apple.com/app/id6801156953)** · 你的仓库、你的卡片，都在手机上——同样的 markdown，随时随地复习。免费；需要生成时再用 Decks Pro。
+>
+> <a href="https://apps.apple.com/app/id6801156953"><img src="https://developer.apple.com/assets/elements/badges/download-on-the-app-store.svg" alt="从 App Store 下载" height="40"></a>
+
 只需用 `#decks` 标记一个文件。每个 `##` 标题都会变成卡片的正面；下方的文字会变成背面。表格、图片遮挡和 `==填空==` 高亮显示也能以同样的方式工作。卡片复习调度由 FSRS-6 —— 现代间隔重复算法来处理。
 
 ![Demo](https://raw.githubusercontent.com/dscherdi/decks/HEAD/decks_showcase.gif)

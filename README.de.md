@@ -13,6 +13,10 @@
 
 > **Neu — [Decks Pro](https://decksmd.app/pricing/)** · Erstelle Karten aus deinen Notizen, PDFs und gescannten Folien, ohne einen API-Schlüssel einzurichten. Kostenlos testen — rund 100 Karten oder 10 PDF-Seiten, ohne Kreditkarte. Alles andere in Decks bleibt kostenlos, und ein eigener API-Schlüssel funktioniert weiterhin.
 
+> **Jetzt für iPhone und iPad — [DecksMD](https://apps.apple.com/app/id6801156953)** · Dein Vault, deine Karten, auf dem Handy — dasselbe Markdown, überall wiederholbar. Kostenlos, mit Decks Pro wenn du Erzeugung möchtest.
+>
+> <a href="https://apps.apple.com/app/id6801156953"><img src="https://developer.apple.com/assets/elements/badges/download-on-the-app-store.svg" alt="Laden im App Store" height="40"></a>
+
 Markiere eine Datei mit `#decks`. Jede `##`-Überschrift wird zur Vorderseite einer Karte; der Text darunter wird zur Rückseite. Tabellen, Bildverdeckung und `==cloze==`-Hervorhebungen funktionieren auf die gleiche Weise. Die Planung übernimmt FSRS-6 — der moderne Algorithmus für räumliche Wiederholung.
 
 ![Demo](https://raw.githubusercontent.com/dscherdi/decks/HEAD/decks_showcase.gif)

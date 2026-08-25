@@ -13,6 +13,10 @@
 
 > **New — [Decks Pro](https://decksmd.app/pricing/)** · Generate cards from your notes, PDFs and scanned slides without setting up an API key. Free to try — around 100 cards or 10 PDF pages, no card required. Everything else in Decks stays free, and bring-your-own API key still works.
 
+> **Now on iPhone and iPad — [DecksMD](https://apps.apple.com/app/id6801156953)** · Your vault, your cards, on your phone — the same markdown, reviewed anywhere. Free, with Decks Pro if you want generation.
+>
+> <a href="https://apps.apple.com/app/id6801156953"><img src="https://developer.apple.com/assets/elements/badges/download-on-the-app-store.svg" alt="Download on the App Store" height="40"></a>
+
 > **Coming from the Spaced Repetition plugin?** Jump to Decks without losing your progress — the built-in one-click migrator extracts your `::` cards into clean Decks decks, rewrites each note into readable prose, and carries over your review history, all while leaving your original notes untouched. You pick up your reviews right where you left off. See [Coming from Spaced Repetition](#coming-from-spaced-repetition).
 
 > **Coming from Anki?** Import an Anki `.apkg` export in one click — your decks, cards, media, and review history come with you, and your cards resume on FSRS-6 right where Anki left them. See [Coming from Anki](#coming-from-anki).

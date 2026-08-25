@@ -13,6 +13,10 @@
 
 > **Новое — [Decks Pro](https://decksmd.app/pricing/)** · Создавайте карточки из заметок, PDF и отсканированных слайдов без настройки API-ключа. Попробуйте бесплатно — около 100 карточек или 10 страниц PDF, без привязки карты. Всё остальное в Decks остаётся бесплатным, а собственный API-ключ по-прежнему работает.
 
+> **Теперь на iPhone и iPad — [DecksMD](https://apps.apple.com/app/id6801156953)** · Ваше хранилище и карточки — в телефоне, тот же markdown, повторять можно где угодно. Бесплатно, а Decks Pro — если нужна генерация.
+>
+> <a href="https://apps.apple.com/app/id6801156953"><img src="https://developer.apple.com/assets/elements/badges/download-on-the-app-store.svg" alt="Загрузите в App Store" height="40"></a>
+
 Пометьте файл тегом `#decks`. Каждый заголовок уровня `##` становится лицевой стороной карточки; текст под ним — обратной. Таблицы, скрытие частей изображений (image occlusion) и выделения `==cloze==` работают точно так же. Планирование повторений осуществляется с помощью FSRS-6 — современного алгоритма интервального повторения.
 
 ![Demo](https://raw.githubusercontent.com/dscherdi/decks/HEAD/decks_showcase.gif)

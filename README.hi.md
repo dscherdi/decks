@@ -13,6 +13,10 @@
 
 > **नया — [Decks Pro](https://decksmd.app/pricing/)** · API कुंजी सेट किए बिना अपने नोट्स, PDF और स्कैन की गई स्लाइड्स से कार्ड बनाएँ। मुफ़्त आज़माएँ — लगभग 100 कार्ड या 10 PDF पृष्ठ, बिना कार्ड के। Decks में बाकी सब कुछ मुफ़्त रहता है, और आपकी अपनी API कुंजी पहले की तरह काम करती है।
 
+> **अब iPhone और iPad पर — [DecksMD](https://apps.apple.com/app/id6801156953)** · आपका वॉल्ट, आपके कार्ड, आपके फ़ोन पर — वही markdown, कहीं भी दोहराएँ। निःशुल्क, और जनरेशन चाहिए तो Decks Pro।
+>
+> <a href="https://apps.apple.com/app/id6801156953"><img src="https://developer.apple.com/assets/elements/badges/download-on-the-app-store.svg" alt="App Store से डाउनलोड करें" height="40"></a>
+
 किसी फ़ाइल को `#decks` के साथ टैग करें। प्रत्येक `##` हैडर कार्ड का सामने का हिस्सा (front) बन जाता है; नीचे का टेक्स्ट पीछे का हिस्सा (back) बन जाता है। टेबल, इमेज ऑक्लूज़न, और `==cloze==` हाइलाइट भी इसी तरह काम करते हैं। शेड्यूलिंग FSRS-6 द्वारा संभाली जाती है — जो कि एक आधुनिक स्पेस्ड-रिपीटीशन एल्गोरिदम है।
 
 ![Demo](https://raw.githubusercontent.com/dscherdi/decks/HEAD/decks_showcase.gif)

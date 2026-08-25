@@ -13,6 +13,10 @@
 
 > **جديد — [Decks Pro](https://decksmd.app/pricing/)** · أنشئ بطاقات من ملاحظاتك وملفات PDF والشرائح الممسوحة ضوئيًا دون إعداد مفتاح API. جرّبه مجانًا — نحو 100 بطاقة أو 10 صفحات PDF، دون بطاقة ائتمان. يبقى كل شيء آخر في Decks مجانيًا، ويستمر مفتاح API الخاص بك في العمل.
 
+> **الآن على iPhone و iPad — [DecksMD](https://apps.apple.com/app/id6801156953)** · خزنتك وبطاقاتك على هاتفك — نفس ملفات markdown، تراجعها أينما كنت. مجانًا، مع Decks Pro إن أردت التوليد.
+>
+> <a href="https://apps.apple.com/app/id6801156953"><img src="https://developer.apple.com/assets/elements/badges/download-on-the-app-store.svg" alt="التنزيل من App Store" height="40"></a>
+
 قم بإضافة العلامة `#decks` إلى ملف. كل عنوان من المستوى `##` يصبح واجهة البطاقة؛ والنص الذي تحته يصبح ظهر البطاقة. الجداول، وإخفاء أجزاء من الصور (image occlusion)، والفراغات (cloze) باستخدام `==التمييز==` تعمل بنفس الطريقة. تتم جدولة المراجعة بواسطة FSRS-6 — خوارزمية التكرار المتباعد الحديثة.
 
 ![Demo](https://raw.githubusercontent.com/dscherdi/decks/HEAD/decks_showcase.gif)

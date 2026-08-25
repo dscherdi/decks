@@ -13,6 +13,10 @@
 
 > **Yeni — [Decks Pro](https://decksmd.app/pricing/)** · API anahtarı kurmadan notlarınızdan, PDF'lerinizden ve taranmış slaytlarınızdan kart oluşturun. Ücretsiz deneyin — yaklaşık 100 kart veya 10 PDF sayfası, kart bilgisi gerekmez. Decks'teki diğer her şey ücretsiz kalır ve kendi API anahtarınız çalışmaya devam eder.
 
+> **Artık iPhone ve iPad’de — [DecksMD](https://apps.apple.com/app/id6801156953)** · Kasan ve kartların telefonunda — aynı markdown, her yerde tekrar. Ücretsiz; üretim istersen Decks Pro var.
+>
+> <a href="https://apps.apple.com/app/id6801156953"><img src="https://developer.apple.com/assets/elements/badges/download-on-the-app-store.svg" alt="App Store’dan indirin" height="40"></a>
+
 Bir dosyayı `#decks` ile etiketleyin. Her `##` başlığı kartın ön yüzü, altındaki metin ise arka yüzü olur. Tablolar, görsel örtme (image occlusion) ve `==cloze==` (boşluk doldurma) vurguları da aynı şekilde çalışır. Zamanlama, modern aralıklı tekrar algoritması olan FSRS-6 tarafından yönetilir.
 
 ![Demo](https://raw.githubusercontent.com/dscherdi/decks/HEAD/decks_showcase.gif)

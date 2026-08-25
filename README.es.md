@@ -13,6 +13,10 @@
 
 > **Nuevo — [Decks Pro](https://decksmd.app/pricing/)** · Genera tarjetas a partir de tus notas, PDF y diapositivas escaneadas sin configurar una clave de API. Pruébalo gratis: unas 100 tarjetas o 10 páginas de PDF, sin tarjeta. Todo lo demás en Decks sigue siendo gratuito, y tu propia clave de API sigue funcionando.
 
+> **Ya en iPhone y iPad — [DecksMD](https://apps.apple.com/app/id6801156953)** · Tu bóveda, tus tarjetas, en el móvil — el mismo markdown, repasable en cualquier sitio. Gratis, con Decks Pro si quieres generación.
+>
+> <a href="https://apps.apple.com/app/id6801156953"><img src="https://developer.apple.com/assets/elements/badges/download-on-the-app-store.svg" alt="Descargar en el App Store" height="40"></a>
+
 Etiqueta un archivo con `#decks`. Cada encabezado `##` se convierte en el anverso de una tarjeta; el texto debajo se convierte en el reverso. Las tablas, la oclusión de imágenes y los resaltados `==cloze==` funcionan de la misma manera. La planificación la gestiona FSRS-6 — el algoritmo moderno de repetición espaciada.
 
 ![Demo](https://raw.githubusercontent.com/dscherdi/decks/HEAD/decks_showcase.gif)

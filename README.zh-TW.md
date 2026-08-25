@@ -13,6 +13,10 @@
 
 > **新功能 — [Decks Pro](https://decksmd.app/pricing/)** · 無需設定 API 金鑰，即可從筆記、PDF 與掃描的投影片產生卡片。免費試用——約 100 張卡片或 10 頁 PDF，無需綁定信用卡。Decks 的其他功能仍然免費，自備 API 金鑰依然可用。
 
+> **現已支援 iPhone 和 iPad — [DecksMD](https://apps.apple.com/app/id6801156953)** · 你的儲存庫、你的卡片，都在手機上——同樣的 markdown，隨時隨地複習。免費；需要產生時再用 Decks Pro。
+>
+> <a href="https://apps.apple.com/app/id6801156953"><img src="https://developer.apple.com/assets/elements/badges/download-on-the-app-store.svg" alt="從 App Store 下載" height="40"></a>
+
 只需用 `#decks` 標記一個檔案。每個 `##` 標題都會變成卡片的正面；其下方的文字會變成背面。表格、圖片遮罩 (Image occlusion) 和 `==填空==` (Cloze) 也能以同樣的方式運作。卡片複習排程由 FSRS-6 —— 現代的間隔重複演算法來處理。
 
 ![Demo](https://raw.githubusercontent.com/dscherdi/decks/HEAD/decks_showcase.gif)
