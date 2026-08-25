@@ -13,7 +13,7 @@
 
 > **Nouveau — [Decks Pro](https://decksmd.app/pricing/)** · Générez des cartes à partir de vos notes, PDF et diapositives numérisées sans configurer de clé API. Essai gratuit — environ 100 cartes ou 10 pages de PDF, sans carte bancaire. Tout le reste de Decks demeure gratuit, et votre propre clé API fonctionne toujours.
 
-> **Maintenant sur iPhone et iPad — [DecksMD](https://apps.apple.com/app/id6801156953)** · Votre coffre, vos cartes, sur votre téléphone — le même markdown, révisable partout. Gratuit, avec Decks Pro si vous voulez la génération.
+> **Maintenant sur iPhone et iPad — [DecksMD](https://apps.apple.com/app/id6801156953)** · Votre coffre, vos cartes, sur votre téléphone — le même markdown, révisable partout.
 >
 > <a href="https://apps.apple.com/app/id6801156953"><img src="https://developer.apple.com/assets/elements/badges/download-on-the-app-store.svg" alt="Télécharger dans l’App Store" height="40"></a>
 

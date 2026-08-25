@@ -13,7 +13,7 @@
 
 > **新機能 — [Decks Pro](https://decksmd.app/pricing/)** · APIキーを設定しなくても、ノートやPDF、スキャンしたスライドからカードを生成できます。無料でお試し——カード約100枚、またはPDF10ページ分。クレジットカードは不要です。Decksのその他の機能は引き続き無料で、独自のAPIキーもこれまで通り使えます。
 
-> **iPhone と iPad でも — [DecksMD](https://apps.apple.com/app/id6801156953)** · あなたのVaultとカードをスマホで——同じmarkdownを、どこでも復習。無料で、生成が必要なら Decks Pro を。
+> **iPhone と iPad でも — [DecksMD](https://apps.apple.com/app/id6801156953)** · あなたのVaultとカードをスマホで——同じmarkdownを、どこでも復習。
 >
 > <a href="https://apps.apple.com/app/id6801156953"><img src="https://developer.apple.com/assets/elements/badges/download-on-the-app-store.svg" alt="App Store からダウンロード" height="40"></a>
 
