@@ -1871,8 +1871,6 @@ export default class DecksPlugin extends Plugin {
 
       await yieldToUI();
 
-      await this.runAnchorMigrationOnce();
-
       const totalTime = performance.now() - startTime;
       this.logger.performance(
         `Initial sync completed successfully in ${formatTime(totalTime)}`
@@ -1881,19 +1879,25 @@ export default class DecksPlugin extends Plugin {
       console.error("Error during initial sync:", error);
       // Don't throw - let the app continue working even if initial sync fails
     }
+
+    // Outside the try above: a refresh that throws must not take the migration
+    // with it. It used to, silently — a vault reached 370 reviewed cards with
+    // two of them anchored, because the failure that skipped it also hid it.
+    await this.runAnchorMigrationOnce();
   }
 
   // One-time anchor migration: runs after the first full sync (cards must
-  // exist in the DB). Idempotent — misses fall back to lazy stamping at
-  // review time, so marking it done up front is safe.
+  // exist in the DB). Misses fall back to lazy stamping at review time.
   private async runAnchorMigrationOnce(): Promise<void> {
     if (this.settings.anchorMigrationV1Done) return;
-    this.settings.anchorMigrationV1Done = true;
-    await this.saveSettings();
     try {
       const stamper = new AnchorStamper(this.app, this.db, this.logger);
       const migrator = new AnchorMigrator(this.app, this.db, stamper, this.logger);
       await migrator.run(this.settings.ui?.enableNotices !== false);
+      // Only once it has actually run. Marking it done up front meant a single
+      // failure retired the pass permanently.
+      this.settings.anchorMigrationV1Done = true;
+      await this.saveSettings();
     } catch (error) {
       this.logger.error("Anchor migration failed", error);
     }

@@ -6,9 +6,10 @@ import { generateFlashcardId } from "@decks/core";
 import type { Deck, DeckProfile } from "../../database/types";
 
 // Smart Rename Detection pairs a delete (old front) with a create (new front) so
-// an edited card keeps its scheduling state. Strong matches (identical back)
-// resolve via a Map; the fuzzy front comparison only runs for leftovers, is
-// pre-filtered by length ratio, and is skipped entirely over a pair budget.
+// an edited card keeps its scheduling state. Matching is by identical back,
+// resolved through a Map. The front-similarity pass that used to catch the rest
+// is gone: it was a guess, and a capped one, disabled on exactly the large decks
+// where renames are most likely. An anchor carries those cases exactly instead.
 describe("rename detection: state survives edits, degraded paths stay safe", () => {
   let db: MainDatabaseService;
   let profile: DeckProfile;
@@ -52,16 +53,43 @@ describe("rename detection: state survives edits, degraded paths stay safe", () 
     expect(card.stability).toBe(7.7); // migrated, not recreated
   });
 
-  it("fuzzy match (>80% front similarity): rename with edited back still migrates", async () => {
+  it("both sides edited, unanchored: state is not inherited", async () => {
     await sync(table([["le chien noir", "the black dog"]]));
-    const oldId = generateFlashcardId("le chien noir");
-    await db.updateFlashcard(oldId, { state: "review", stability: 3.3 });
+    await db.updateFlashcard(generateFlashcardId("le chien noir"), {
+      state: "review",
+      stability: 3.3,
+    });
 
-    // Front off by one char, back rewritten → no strong match, fuzzy catches it.
+    // Front and back both edited: nothing identical to match on, and no anchor
+    // to match by. This is the case the front-similarity guess used to cover.
     await sync(table([["le chien noir!", "the black dog (new wording)"]]));
 
     const [card] = await db.getFlashcardsByDeck(deck.id);
     expect(card.id).toBe(generateFlashcardId("le chien noir!"));
+    expect(card.stability).not.toBe(3.3);
+  });
+
+  it("both sides edited, anchored: state migrates exactly", async () => {
+    const row = (front: string, back: string): string =>
+      `## T\n\n| Front | Back |\n| --- | --- |\n| ${front} | ${back} %%dk:t:tok1%% |\n`;
+
+    await sync(row("le chien noir", "the black dog"));
+    const oldId = generateFlashcardId("le chien noir");
+    await db.updateFlashcard(oldId, {
+      state: "review",
+      stability: 3.3,
+      repetitions: 3,
+      lastReviewed: new Date().toISOString(),
+    });
+
+    // Adopt-only: a binding is written when the token meets a card that already
+    // carries review history — hence the repetitions above, not just stability.
+    await sync(row("le chien noir", "the black dog"));
+
+    await sync(row("le chien noir!", "the black dog (new wording)"));
+
+    const [card] = await db.getFlashcardsByDeck(deck.id);
+    expect(card.id).toBe(oldId);
     expect(card.stability).toBe(3.3);
   });
 
