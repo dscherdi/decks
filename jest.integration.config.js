@@ -30,6 +30,9 @@ module.exports = {
     "^obsidian$": "<rootDir>/src/__mocks__/obsidian.ts",
     // Resolve @decks/core to TypeScript source for jest compilation
     "^@decks/core$": "<rootDir>/../../packages/decks-core/src/index.ts",
+    // Behavioural suites shared with the mobile app, run against both.
+    "^@decks/conformance/(.*)$":
+      "<rootDir>/../../packages/decks-core/src/__tests__/conformance/$1",
     // Handle @ alias
     "^@/(.*)$": "<rootDir>/src/$1",
   },
