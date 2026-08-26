@@ -20,6 +20,7 @@ import { wireInternalLinks } from "../../utils/internal-links";
 import { I18n } from "@decks/core";
 import { ConfirmModal } from "../ConfirmModal";
 import { AnchorStamper } from "../../services/AnchorStamper";
+import { ObsidianNoteAccess } from "../../services/ObsidianNoteAccess";
 import { makeModalResponsive, type ResponsiveModalHandle } from "../../utils/responsive-modal";
 import { ttsService } from "../../services/TtsService";
 
@@ -82,7 +83,7 @@ export class FlashcardReviewModalWrapper extends Modal {
     this.refreshStatsById = refreshStatsById;
     this.browseMode = browseMode;
     this.cramMode = cramMode;
-    this.anchorStamper = new AnchorStamper(app, db);
+    this.anchorStamper = new AnchorStamper(new ObsidianNoteAccess(app), db);
   }
 
   private anchorStamper: AnchorStamper;

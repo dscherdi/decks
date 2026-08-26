@@ -68,7 +68,7 @@ export class AnchorMigrator {
         skipped += cards.length;
         continue;
       }
-      const result = await this.stamper.stampFileBatch(file, cards);
+      const result = await this.stamper.stampFileBatch(path, cards);
       stamped += result.stamped;
       skipped += result.skipped;
       await yieldToUI();

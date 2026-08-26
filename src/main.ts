@@ -27,6 +27,7 @@ import { DeckManager } from "./services/DeckManager";
 import { TemplateSyncService } from "./services/TemplateSyncService";
 import { DeckSynchronizer } from "./services/DeckSynchronizer";
 import { AnchorStamper } from "./services/AnchorStamper";
+import { ObsidianNoteAccess } from "./services/ObsidianNoteAccess";
 import { AnchorMigrator } from "./services/AnchorMigrator";
 import { CanvasFileEventHandlers } from "./services/CanvasFileEventHandlers";
 import { Scheduler } from "@decks/core";
@@ -1897,7 +1898,7 @@ export default class DecksPlugin extends Plugin {
   private async runAnchorMigrationOnce(): Promise<void> {
     if (this.settings.anchorMigrationV1Done) return;
     try {
-      const stamper = new AnchorStamper(this.app, this.db, this.logger);
+      const stamper = new AnchorStamper(new ObsidianNoteAccess(this.app), this.db, this.logger);
       const migrator = new AnchorMigrator(this.app, this.db, stamper, this.logger);
       await migrator.run(this.settings.ui?.enableNotices !== false);
       // Only once it has actually run. Marking it done up front meant a single

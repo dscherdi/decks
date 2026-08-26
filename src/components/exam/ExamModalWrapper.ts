@@ -3,6 +3,7 @@ import { mount, unmount } from "svelte";
 import { I18n, type ExamAttempt, type ExamSession, type Flashcard } from "@decks/core";
 import type { IDatabaseService } from "../../database/DatabaseFactory";
 import { AnchorStamper } from "../../services/AnchorStamper";
+import { ObsidianNoteAccess } from "../../services/ObsidianNoteAccess";
 import { ConfirmModal } from "../ConfirmModal";
 import { wireInternalLinks } from "../../utils/internal-links";
 import {
@@ -25,7 +26,7 @@ export async function persistExamAttempt(
 ): Promise<ExamSession[]> {
   await db.completeExamSession(result.session, result.answers);
 
-  const stamper = new AnchorStamper(app, db);
+  const stamper = new AnchorStamper(new ObsidianNoteAccess(app), db);
   const byFile = new Map<string, Flashcard[]>();
   const loose: Flashcard[] = [];
   for (const answer of result.answers) {

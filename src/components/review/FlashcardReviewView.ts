@@ -26,6 +26,7 @@ import { wireInternalLinks } from "../../utils/internal-links";
 import { I18n } from "@decks/core";
 import { ConfirmModal } from "../ConfirmModal";
 import { AnchorStamper } from "../../services/AnchorStamper";
+import { ObsidianNoteAccess } from "../../services/ObsidianNoteAccess";
 import { ttsService } from "../../services/TtsService";
 
 export const VIEW_TYPE_FLASHCARD_REVIEW = "flashcard-review-view";
@@ -61,7 +62,7 @@ export class FlashcardReviewView extends ItemView {
     this.scheduler = scheduler;
     this.settings = settings;
     this.db = db;
-    this.anchorStamper = new AnchorStamper(this.app, db);
+    this.anchorStamper = new AnchorStamper(new ObsidianNoteAccess(this.app), db);
   }
 
   getViewType(): string {

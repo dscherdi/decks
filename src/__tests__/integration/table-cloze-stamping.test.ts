@@ -5,6 +5,7 @@ import { MainDatabaseService } from "../../database/MainDatabaseService";
 import { DatabaseTestUtils } from "./database-test-utils";
 import { createTestDatabase, cleanupTestDatabase } from "../test-db-utils";
 import { AnchorStamper } from "../../services/AnchorStamper";
+import { ObsidianNoteAccess } from "../../services/ObsidianNoteAccess";
 import {
   generateAnchorId,
   generateClozeFlashcardId,
@@ -82,7 +83,7 @@ describe("table cloze stamping through the real pipeline", () => {
     const card = cards.find((c) => c.clozeText === "lungs");
     expect(card).toBeDefined();
     const env = mockVault(content);
-    const stamper = new AnchorStamper(env.app, db);
+    const stamper = new AnchorStamper(new ObsidianNoteAccess(env.app), db);
     const outcome = await stamper.ensureAnchored(card!);
 
     expect(outcome).toEqual(
@@ -116,7 +117,7 @@ describe("table cloze stamping through the real pipeline", () => {
     expect(cards[0].templateRow).not.toBeNull();
 
     const env = mockVault(content);
-    const outcome = await new AnchorStamper(env.app, db).ensureAnchored(cards[0]);
+    const outcome = await new AnchorStamper(new ObsidianNoteAccess(env.app), db).ensureAnchored(cards[0]);
 
     expect(outcome).toEqual(expect.objectContaining({ ok: true }));
     const tokenId = generateAnchorId(sentence);
@@ -136,7 +137,7 @@ describe("table cloze stamping through the real pipeline", () => {
     expect(cards).toHaveLength(1);
 
     const env = mockVault(content);
-    const outcome = await new AnchorStamper(env.app, db).ensureAnchored(cards[0]);
+    const outcome = await new AnchorStamper(new ObsidianNoteAccess(env.app), db).ensureAnchored(cards[0]);
 
     expect(outcome).toEqual(expect.objectContaining({ ok: true }));
     const tokenId = generateAnchorId("pump");
@@ -160,7 +161,7 @@ describe("table cloze stamping through the real pipeline", () => {
     // Review the FIRST cloze: stamps the row once and binds all three ords.
     const first = cards.find((c) => c.clozeOrder === 0);
     const env = mockVault(content);
-    const stamper = new AnchorStamper(env.app, db);
+    const stamper = new AnchorStamper(new ObsidianNoteAccess(env.app), db);
     const outcome = await stamper.ensureAnchored(first!);
     expect(outcome).toEqual(expect.objectContaining({ ok: true }));
 
@@ -195,7 +196,7 @@ describe("table cloze stamping through the real pipeline", () => {
 
     const cards = await db.getFlashcardsByDeck(deckId);
     const env = mockVault(content);
-    const outcome = await new AnchorStamper(env.app, db).ensureAnchored(cards[0]);
+    const outcome = await new AnchorStamper(new ObsidianNoteAccess(env.app), db).ensureAnchored(cards[0]);
 
     expect(outcome).toEqual(expect.objectContaining({ ok: true }));
     expect(await db.getAnchorBinding(`t:${generateAnchorId("chat")}`)).toBe(

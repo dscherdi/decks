@@ -1,4 +1,5 @@
 import { AnchorStamper } from "../services/AnchorStamper";
+import { ObsidianNoteAccess } from "../services/ObsidianNoteAccess";
 import type { Flashcard } from "../database/types";
 import type { App, TFile } from "obsidian";
 import type { IDatabaseService } from "@decks/core";
@@ -108,7 +109,7 @@ function makeCard(partial: Partial<Flashcard>): Flashcard {
 }
 
 function stamperFor(env: { app: App; db: FakeDb }): AnchorStamper {
-  return new AnchorStamper(env.app, env.db as unknown as IDatabaseService);
+  return new AnchorStamper(new ObsidianNoteAccess(env.app), env.db as unknown as IDatabaseService);
 }
 
 describe("AnchorStamper multiple-choice (q role)", () => {
@@ -530,10 +531,7 @@ describe("AnchorStamper", () => {
       makeCard({ id: "card_a", front: "First", back: "Body one." }),
       makeCard({ id: "card_b", front: "Second", back: "Body two." }),
     ];
-    const result = await stamperFor(env).stampFileBatch(
-      env.file as unknown as TFile,
-      cards
-    );
+    const result = await stamperFor(env).stampFileBatch("test.md", cards);
 
     expect(result).toEqual({ stamped: 2, skipped: 0 });
     expect(processCalls).toBe(1);
