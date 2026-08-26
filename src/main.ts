@@ -371,8 +371,14 @@ export default class DecksPlugin extends Plugin {
       this.backupService = new BackupService(
         this.app.vault.adapter,
         backupDir,
-        this.logger.debug.bind(this.logger)
+        this.logger.debug.bind(this.logger),
+        // Lazy: the device state is created further down.
+        () => this.deviceLocalState?.getDeviceId() ?? null
       );
+      // Applied here as well as from the settings slider. It used to be set
+      // only by the slider's onChange, so every restart silently put a user
+      // configured for ten backups back on five until they opened that tab.
+      this.backupService.setMaxBackups(this.settings.backup.maxBackups);
 
       // Initialize statistics service
       this.statisticsService = new StatisticsService(this.db, this.settings);
