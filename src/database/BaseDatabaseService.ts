@@ -1064,7 +1064,7 @@ export abstract class BaseDatabaseService implements IDatabaseService {
 
   // FLASHCARD OPERATIONS
   async createFlashcard(
-    flashcard: Omit<Flashcard, "created" | "modified"> & { id?: string }
+    flashcard: Omit<Flashcard, "id" | "created" | "modified"> & { id?: string }
   ): Promise<void> {
     const now = this.getCurrentTimestamp();
     // Use provided ID first, then generate from front text
