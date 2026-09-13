@@ -469,15 +469,15 @@ export class MainDatabaseService extends BaseDatabaseService {
             // rows so the next refresh re-parses them.
             try {
               this.db.exec(`
-                INSERT OR REPLACE INTO decks (id, name, filepath, tag, last_reviewed, profile_id, created, modified, last_synced_mtime)
+                INSERT OR REPLACE INTO decks (id, name, filepath, tag, last_reviewed, profile_id, created, modified, last_synced_mtime, file_tags)
                 SELECT remote.id, remote.name, remote.filepath, remote.tag, remote.last_reviewed, remote.profile_id, remote.created, remote.modified,
-                       COALESCE(main.last_synced_mtime, 0)
+                       COALESCE(main.last_synced_mtime, 0), remote.file_tags
                 FROM remote.decks
                 LEFT JOIN decks AS main ON remote.id = main.id
                 WHERE main.id IS NULL OR remote.modified > main.modified
               `);
             } catch {
-              // Remote schema is pre-v18 (no last_synced_mtime column on remote.decks).
+              // Remote schema predates last_synced_mtime or file_tags on remote.decks.
               // Fall back to the legacy whole-row copy; the local column keeps its
               // default 0 for fresh rows and we accept temporary correctness loss
               // until both devices migrate.

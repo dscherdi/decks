@@ -4,6 +4,7 @@ import type { IDatabaseService } from "../database/DatabaseFactory";
 import type { CustomDeckService } from "@decks/core";
 import type { FilterDefinition, Flashcard } from "../database/types";
 import type { DecksSettings } from "../settings";
+import { tagScopeFromSettings } from "@decks/core";
 import FlashcardManagerPanel from "./FlashcardManagerPanel.svelte";
 import type {
   EditTarget,
@@ -122,6 +123,7 @@ export class FlashcardManagerView extends ItemView {
         denseCardCharThreshold: this.thresholds.denseCardCharThreshold,
         nextDayStartsAt: this.settings.review.nextDayStartsAt,
         showNotices: this.settings.ui?.enableNotices !== false,
+        tagScope: tagScopeFromSettings(this.settings.parsing),
         initialEditTarget: this.editingCustomDeck,
         onCleanupOrphans: this.onCleanupOrphans ?? null,
         initialColumnWidths: this.initialColumnWidths,

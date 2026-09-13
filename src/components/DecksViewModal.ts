@@ -28,7 +28,7 @@ import { ExamView, VIEW_TYPE_FLASHCARD_EXAM } from "./exam/ExamView";
 import { StatisticsModal } from "./settings/StatisticsModal";
 import { ProfilesManagerModal } from "./config/ProfilesManagerModal";
 import { StatisticsService } from "@/services/StatisticsService";
-import { TagGroupService } from "@decks/core";
+import { TagGroupService, tagScopeFromSettings } from "@decks/core";
 import { CustomDeckService } from "@decks/core";
 import { FlashcardManagerModal } from "./FlashcardManagerModal";
 import { openFlashcardManager } from "./FlashcardManagerView";
@@ -83,7 +83,9 @@ export class DecksViewModal extends Modal {
     this.deckManager = deckManager;
     this.scheduler = scheduler;
     this.statisticsService = statisticsService;
-    this.tagGroupService = new TagGroupService(db);
+    this.tagGroupService = new TagGroupService(db, () =>
+      tagScopeFromSettings(this.settings.parsing)
+    );
     this.customDeckService = customDeckService;
     this.settings = settings;
     this.logger = logger;
@@ -433,7 +435,10 @@ export class DecksViewModal extends Modal {
           const view = this.getDecksView();
           if (view) await view.refresh();
         },
-        active !== null
+        active !== null,
+        undefined,
+        undefined,
+        tagScopeFromSettings(this.settings.parsing)
       );
       this.openWithReturn(modal);
     });
@@ -450,7 +455,8 @@ export class DecksViewModal extends Modal {
         },
         active !== null,
         "assignments",
-        deck.profileId
+        deck.profileId,
+        tagScopeFromSettings(this.settings.parsing)
       );
       this.openWithReturn(modal);
     });

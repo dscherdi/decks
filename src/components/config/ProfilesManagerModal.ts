@@ -2,6 +2,7 @@ import { App, Modal } from "obsidian";
 import type { DeckProfile } from "../../database/types";
 import type { IDatabaseService } from "../../database/DatabaseFactory";
 import type { ProfilesManagerComponent } from "../../types/svelte-components";
+import type { TagScopeOptions } from "@decks/core";
 import ProfilesManagerUI from "./ProfilesManagerUI.svelte";
 import { mount, unmount } from "svelte";
 import { makeModalResponsive, type ResponsiveModalHandle } from "../../utils/responsive-modal";
@@ -15,6 +16,7 @@ export class ProfilesManagerModal extends Modal {
   private trainedWeightsAvailable: boolean;
   private initialTab: "settings" | "assignments";
   private initialProfileId?: string;
+  private tagScope?: TagScopeOptions;
 
   constructor(
     app: App,
@@ -22,7 +24,8 @@ export class ProfilesManagerModal extends Modal {
     onProfilesChanged: () => Promise<void>,
     trainedWeightsAvailable = false,
     initialTab: "settings" | "assignments" = "settings",
-    initialProfileId?: string
+    initialProfileId?: string,
+    tagScope?: TagScopeOptions
   ) {
     super(app);
     this.db = db;
@@ -30,6 +33,7 @@ export class ProfilesManagerModal extends Modal {
     this.trainedWeightsAvailable = trainedWeightsAvailable;
     this.initialTab = initialTab;
     this.initialProfileId = initialProfileId;
+    this.tagScope = tagScope;
   }
 
   async onOpen() {
@@ -54,6 +58,7 @@ export class ProfilesManagerModal extends Modal {
         initialTab: this.initialTab,
         initialProfileId: this.initialProfileId,
         allDecks,
+        tagScope: this.tagScope,
         onclose: () => {
           this.close();
         },

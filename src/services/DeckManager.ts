@@ -13,11 +13,19 @@ import { Logger, formatTime } from "../utils/logging";
 import { FileFilter } from "../utils/fileFilter";
 import { FlashcardParser, type ParsedFlashcard } from "@decks/core";
 import { ProgressTracker } from "../utils/progress";
-import { TagGroupService } from "@decks/core";
+import { TagGroupService, tagScopeFromSettings, studyTagsFor } from "@decks/core";
 import type { DecksSettings } from "../settings";
 
 // Maximum number of flashcards to process per deck for performance
 const MAX_FLASHCARDS_PER_DECK = 50000;
+
+/** Order-insensitive comparison, so a reordered frontmatter list isn't a change. */
+function sameTags(a: readonly string[], b: readonly string[]): boolean {
+  if (a.length !== b.length) return false;
+  const left = [...a].sort();
+  const right = [...b].sort();
+  return left.every((tag, i) => tag === right[i]);
+}
 
 type RawCounts = { newCount: number; dueCount: number };
 type LimitProfile = {
@@ -237,6 +245,7 @@ export class DeckManager {
 
       let newDecksCreated = 0;
       let totalFiles = 0;
+      const scope = tagScopeFromSettings(this.settings?.parsing);
 
       // Process each file as its own deck
       for (const [tag, files] of decksMap) {
@@ -253,9 +262,26 @@ export class DeckManager {
             existingDeck ? `YES (ID: ${existingDeck.id})` : "NO"
           );
 
+          // The note's frontmatter tags group it alongside its deck tag, so they
+          // are refreshed here on every scan rather than behind the flashcard
+          // sync's mtime gate — a note whose only edit was a tag would otherwise
+          // keep its old grouping until something else made it reparse. Written
+          // only on change, so a steady-state scan does no writes.
+          const fileTags =
+            parseFrontMatterTags(this.metadataCache.getFileCache(file)?.frontmatter ?? null) ?? [];
+
           if (existingDeck) {
-            // Re-resolve profileId from tag mapping to ensure it's current
-            const resolvedProfileId = await this.db.getProfileIdForTag(tag) || DEFAULT_PROFILE_ID;
+            const fileTagsChanged = !sameTags(existingDeck.fileTags ?? [], fileTags);
+            if (fileTagsChanged) {
+              await this.db.setDeckFileTags(existingDeck.id, fileTags);
+            }
+
+            // Re-resolve profileId from tag mappings to ensure it's current. The
+            // deck tag is tried first, so a mapping on it is never overridden by
+            // one the note picked up from a flat tag.
+            const resolvedProfileId =
+              (await this.db.getProfileIdForTags(studyTagsFor({ tag, fileTags }, scope))) ||
+              DEFAULT_PROFILE_ID;
             const needsTagUpdate = existingDeck.tag !== tag;
             const needsProfileUpdate = existingDeck.profileId !== resolvedProfileId;
 
@@ -287,7 +313,16 @@ export class DeckManager {
                 filePath
               )}, tag: ${tag}, filepath: ${filePath}`
             );
-            await this.db.createDeck(deck);
+            const createdId = await this.db.createDeck(deck);
+            if (fileTags.length > 0) {
+              await this.db.setDeckFileTags(createdId, fileTags);
+              const resolvedProfileId = await this.db.getProfileIdForTags(
+                studyTagsFor({ tag, fileTags }, scope)
+              );
+              if (resolvedProfileId) {
+                await this.db.updateDeck(createdId, { profileId: resolvedProfileId });
+              }
+            }
             newDecksCreated++;
           }
         }
@@ -743,7 +778,9 @@ export class DeckManager {
    * memory from the per-deck results (no re-query of member decks).
    */
   async getAllDeckStatsMap(): Promise<Map<string, DeckStats>> {
-    const tagGroupService = new TagGroupService(this.db);
+    const tagGroupService = new TagGroupService(this.db, () =>
+      tagScopeFromSettings(this.settings?.parsing)
+    );
     const statsMap = new Map<string, DeckStats>();
     const nextDayStartsAt = this.settings?.review.nextDayStartsAt ?? 4;
 

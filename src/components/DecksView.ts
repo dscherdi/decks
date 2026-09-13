@@ -22,7 +22,7 @@ import { ProfilesManagerModal } from "./config/ProfilesManagerModal";
 import { SrMigrationModalWrapper } from "./migration/SrMigrationModalWrapper";
 import { SrMigrationController } from "@/services/SrMigrationController";
 import { StatisticsService } from "@/services/StatisticsService";
-import { TagGroupService } from "@decks/core";
+import { TagGroupService, tagScopeFromSettings } from "@decks/core";
 import { CustomDeckService } from "@decks/core";
 import { openFlashcardManager } from "./FlashcardManagerView";
 
@@ -76,7 +76,9 @@ export class DecksView extends ItemView {
     this.deckManager = deckManager;
     this.scheduler = scheduler;
     this.statisticsService = statisticsService;
-    this.tagGroupService = new TagGroupService(database);
+    this.tagGroupService = new TagGroupService(database, () =>
+      tagScopeFromSettings(this.settings.parsing)
+    );
     this.customDeckService = customDeckService;
     this.settings = settings;
     this.logger = logger;
@@ -309,7 +311,10 @@ export class DecksView extends ItemView {
         async () => {
           await this.refresh();
         },
-        active !== null
+        active !== null,
+        undefined,
+        undefined,
+        tagScopeFromSettings(this.settings.parsing)
       ).open();
     });
   }
@@ -394,7 +399,8 @@ export class DecksView extends ItemView {
         },
         active !== null,
         "assignments",
-        deck.profileId
+        deck.profileId,
+        tagScopeFromSettings(this.settings.parsing)
       ).open();
     });
   }

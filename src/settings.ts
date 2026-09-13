@@ -38,6 +38,9 @@ export interface DecksSettings {
   parsing: {
     folderSearchPath: string; // Folder path to scan for flashcard files, empty means scan entire vault
     deckTag: string; // Base tag used to identify flashcard decks (e.g., "#decks", "#flashcards")
+    // Tags kept out of the tag tree. A deck note's other frontmatter tags group
+    // it alongside its deck tag; these are the ones that shouldn't.
+    ignoredTags: string[];
   };
 
   // Canvas decks: any Obsidian .canvas file inside `folderPath` becomes a
@@ -180,6 +183,7 @@ export const DEFAULT_SETTINGS: DecksSettings = {
   parsing: {
     folderSearchPath: "", // Default: scan entire vault
     deckTag: "#decks",
+    ignoredTags: [],
   },
 
   canvasDecks: {

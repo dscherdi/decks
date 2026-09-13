@@ -12,6 +12,8 @@
     TypedGradingMode,
   } from "../../database/types";
   import { DEFAULT_PROFILE_ID, getDefaultLearningSteps, getDefaultRelearningSteps, DEFAULT_EXAM_SETTINGS, I18n, validateLearningSteps, validateRelearningSteps } from "@decks/core";
+  import { studyTagsFor, isUnderTag } from "@decks/core";
+  import type { TagScopeOptions } from "@decks/core";
   import { ttsService } from "../../services/TtsService";
   import DocInfoButton from "../DocInfoButton.svelte";
 
@@ -25,6 +27,9 @@
   export let initialTab: "settings" | "assignments" = "settings";
   export let initialProfileId: string | undefined = undefined;
   export let allDecks: Deck[] = [];
+  export let tagScope: TagScopeOptions | undefined = undefined;
+
+  const scope: TagScopeOptions = tagScope ?? { baseTag: "#decks" };
 
   let profiles: DeckProfile[] = initialProfiles;
   let selectedProfileId = "";
@@ -108,13 +113,16 @@
     };
   }
 
+  // Every tag a deck is grouped under — its deck tag and its flat frontmatter
+  // tags — expanded to each ancestor, so a subject can be assigned at any level.
   function deriveAssignableTags(decks: Deck[], mapped: Set<string>): string[] {
     const tags = new Set<string>();
     for (const deck of decks) {
-      if (!deck.tag) continue;
-      const parts = deck.tag.split("/");
-      for (let i = 1; i <= parts.length; i++) {
-        tags.add(parts.slice(0, i).join("/"));
+      for (const tag of studyTagsFor(deck, scope)) {
+        const parts = tag.split("/");
+        for (let i = 1; i <= parts.length; i++) {
+          tags.add(parts.slice(0, i).join("/"));
+        }
       }
     }
     return Array.from(tags)
@@ -182,8 +190,8 @@
   async function refreshAssignmentCounts() {
     const counts: Record<string, { decks: number; cards: number }> = {};
     for (const mapping of tagMappings) {
-      const decks = allDecks.filter(
-        (d) => d.tag === mapping.tag || d.tag.startsWith(mapping.tag + "/")
+      const decks = allDecks.filter((d) =>
+        studyTagsFor(d, scope).some((tag) => isUnderTag(tag, mapping.tag))
       );
       let cards = 0;
       for (const d of decks) cards += await db.countTotalCards(d.id);
@@ -398,7 +406,7 @@
 
   async function handleApplyTag() {
     if (!selectedProfile || !addTag) return;
-    await db.applyProfileToTag(selectedProfile.id, addTag);
+    await db.applyProfileToTag(selectedProfile.id, addTag, tagScope);
     await db.save();
     tagMappings = await db.getTagMappingsForProfile(selectedProfile.id);
     deckCount = await db.getDeckCountForProfile(selectedProfile.id);
@@ -411,7 +419,7 @@
     const confirmRemove = confirm(I18n.format(p.removeAssignmentConfirm, { tag }));
     if (!confirmRemove) return;
     // Applying DEFAULT removes the explicit mapping so the tag re-inherits.
-    await db.applyProfileToTag(DEFAULT_PROFILE_ID, tag);
+    await db.applyProfileToTag(DEFAULT_PROFILE_ID, tag, tagScope);
     await db.save();
     tagMappings = await db.getTagMappingsForProfile(selectedProfile.id);
     deckCount = await db.getDeckCountForProfile(selectedProfile.id);

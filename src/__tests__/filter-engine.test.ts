@@ -190,7 +190,11 @@ describe("FilterEngine", () => {
       };
       const result = compileFilter(def);
       expect(result.requiresDeckJoin).toBe(true);
-      expect(result.whereClause).toBe("(d.tag LIKE ?)");
+      // A deck is reachable by its deck tag or any of its flat frontmatter tags.
+      expect(result.whereClause).toBe(
+        "(d.tag LIKE ? OR COALESCE(d.file_tags, '') LIKE ?)"
+      );
+      expect(result.params).toEqual(["%math%", "%math%"]);
     });
 
     it("should not require deck join for non-deckTag fields", () => {
@@ -234,9 +238,9 @@ describe("FilterEngine", () => {
       const result = compileFilter(def);
       expect(result.requiresDeckJoin).toBe(true);
       expect(result.whereClause).toBe(
-        "(d.tag LIKE ?) AND (f.difficulty > ?) AND (f.state = ?)"
+        "(d.tag LIKE ? OR COALESCE(d.file_tags, '') LIKE ?) AND (f.difficulty > ?) AND (f.state = ?)"
       );
-      expect(result.params).toEqual(["%science%", 5, "new"]);
+      expect(result.params).toEqual(["%science%", "%science%", 5, "new"]);
     });
 
     it("should compile isLeech=true with default threshold", () => {

@@ -33,6 +33,7 @@ import {
   type LanguagePreference,
   PROVIDER_MODELS,
   SUPPORTED_LANGUAGES,
+  parseIgnoredTags,
 } from "@decks/core";
 
 /**
@@ -989,6 +990,19 @@ export class DecksSettingTab extends PluginSettingTab {
               await this.saveSettings();
               await this.migrateTagMappings(oldTag, trimmed);
             }
+          })
+      );
+
+    new Setting(containerEl)
+      .setName(I18n.t.settings.parsing.ignoredTags)
+      .setDesc(I18n.t.settings.parsing.ignoredTagsDesc)
+      .addTextArea((text) =>
+        text
+          .setPlaceholder(I18n.t.settings.parsing.ignoredTagsPlaceholder)
+          .setValue(this.settings.parsing.ignoredTags.join(", "))
+          .onChange(async (value) => {
+            this.settings.parsing.ignoredTags = parseIgnoredTags(value);
+            await this.saveSettings();
           })
       );
 

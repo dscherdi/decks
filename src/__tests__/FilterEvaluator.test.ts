@@ -30,8 +30,9 @@ function makeCard(overrides: Partial<Flashcard> = {}): Flashcard {
   };
 }
 
+// The deck tag first, then the note's flat frontmatter tags.
 const ctx = {
-  deckTagMap: new Map([["deck_1", "math"]]),
+  deckTagMap: new Map([["deck_1", ["math", "#retry"]]]),
 };
 
 describe("FilterEvaluator", () => {
@@ -108,6 +109,40 @@ describe("FilterEvaluator", () => {
       rules: [{ field: "deckTag", operator: "equals", value: "math" }],
     };
     expect(evaluateFilter(makeCard(), def, ctx)).toBe(true);
+  });
+
+  it("matches a deck by a flat tag, not only by its deck tag", () => {
+    const equalsRetry: FilterDefinition = {
+      version: 1,
+      logic: "AND",
+      rules: [{ field: "deckTag", operator: "equals", value: "#retry" }],
+    };
+    expect(evaluateFilter(makeCard(), equalsRetry, ctx)).toBe(true);
+
+    const equalsMissing: FilterDefinition = {
+      version: 1,
+      logic: "AND",
+      rules: [{ field: "deckTag", operator: "equals", value: "#nope" }],
+    };
+    expect(evaluateFilter(makeCard(), equalsMissing, ctx)).toBe(false);
+  });
+
+  it("deckTag contains matches a substring of any of the deck's tags", () => {
+    const def: FilterDefinition = {
+      version: 1,
+      logic: "AND",
+      rules: [{ field: "deckTag", operator: "contains", value: "retr" }],
+    };
+    expect(evaluateFilter(makeCard(), def, ctx)).toBe(true);
+  });
+
+  it("deckTag not_contains is false when any tag matches", () => {
+    const def: FilterDefinition = {
+      version: 1,
+      logic: "AND",
+      rules: [{ field: "deckTag", operator: "not_contains", value: "retr" }],
+    };
+    expect(evaluateFilter(makeCard(), def, ctx)).toBe(false);
   });
 
   it("evaluates AND logic across rules", () => {

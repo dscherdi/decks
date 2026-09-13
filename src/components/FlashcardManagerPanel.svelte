@@ -23,6 +23,8 @@
   import { prepareFuzzySearch, Notice } from "obsidian";
   import type { App } from "obsidian";
   import { I18n } from "@decks/core";
+  import { studyTagsFor } from "@decks/core";
+  import type { TagScopeOptions } from "@decks/core";
   import { ConfirmModal } from "./ConfirmModal";
 
   const t = I18n.t;
@@ -54,6 +56,9 @@
   // the panel compute bury_until without dragging the full Scheduler in.
   export let nextDayStartsAt = 4;
   export let showNotices = true;
+  // Which tags group a deck, so the Deck tag column and its filters agree with
+  // the deck panel's tag tree.
+  export let tagScope: TagScopeOptions = { baseTag: "#decks" };
 
   /**
    * Compute the ISO timestamp where a card buried "today" should reappear.
@@ -177,7 +182,9 @@
   type SortDirection = "asc" | "desc";
 
   let allFlashcards: Flashcard[] = [];
-  let deckTagMap: Map<string, string> = new Map();
+  // Every tag a deck is reachable by, its own deck tag first. Element 0 is what
+  // the Deck tag column and the deck-tag sort use; filters match the whole set.
+  let deckTagMap: Map<string, string[]> = new Map();
   let customDecks: CustomDeck[] = [];
 
   let availableTags: string[] = [];
@@ -261,7 +268,7 @@
   function filterByRules(
     cards: Flashcard[],
     def: FilterDefinition,
-    tagMap: Map<string, string>,
+    tagMap: Map<string, string[]>,
     th: { leechThreshold: number; denseCardCharThreshold: number }
   ): Flashcard[] {
     if (def.rules.length === 0) return cards;
@@ -369,8 +376,8 @@
       case "breadcrumb":
         return a.breadcrumb.localeCompare(b.breadcrumb);
       case "deckTag": {
-        const ta = deckTagMap.get(a.deckId) ?? "";
-        const tb = deckTagMap.get(b.deckId) ?? "";
+        const ta = deckTagMap.get(a.deckId)?.[0] ?? "";
+        const tb = deckTagMap.get(b.deckId)?.[0] ?? "";
         return ta.localeCompare(tb);
       }
       case "cardTags": {
@@ -822,12 +829,13 @@
 
       customDecks = cDecks;
 
-      const dtMap = new Map<string, string>();
+      const dtMap = new Map<string, string[]>();
       const tags = new Set<string>();
       const deckList: { id: string; name: string }[] = [];
       for (const deck of decks) {
-        dtMap.set(deck.id, deck.tag);
-        tags.add(deck.tag);
+        const deckTags = studyTagsFor(deck, tagScope);
+        dtMap.set(deck.id, deckTags);
+        for (const tag of deckTags) tags.add(tag);
         deckList.push({ id: deck.id, name: deck.name });
       }
       deckTagMap = dtMap;
@@ -1210,8 +1218,8 @@
               <div class="decks-fm-col-breadcrumb" title={card.breadcrumb}>
                 {truncate(card.breadcrumb, 30)}
               </div>
-              <div class="decks-fm-col-tag">
-                {deckTagMap.get(card.deckId) ?? ""}
+              <div class="decks-fm-col-tag" title={(deckTagMap.get(card.deckId) ?? []).join(" ")}>
+                {(deckTagMap.get(card.deckId) ?? []).join(" ")}
               </div>
               <div class="decks-fm-col-cardtags">
                 {#each card.tags as t}

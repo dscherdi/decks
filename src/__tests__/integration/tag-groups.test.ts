@@ -61,15 +61,20 @@ describe("TagGroupService Integration Tests", () => {
       const decksWithProfile = [deck1, deck2, deck3];
       const groups = await tagGroupService.aggregateByTag(decksWithProfile);
 
-      expect(groups).toHaveLength(1);
-      expect(groups[0].tag).toBe("#flashcards/math");
-      expect(groups[0].name).toBe("Math");
-      expect(groups[0].type).toBe("group");
-      expect(groups[0].deckIds).toHaveLength(3);
-      expect(groups[0].deckIds).toContain(deck1.id);
-      expect(groups[0].deckIds).toContain(deck2.id);
-      expect(groups[0].deckIds).toContain(deck3.id);
-      expect(groups[0].profile).toEqual(defaultProfile);
+      // The base tag is a group in its own right, covering everything beneath it.
+      expect(groups.map(g => g.tag)).toEqual(["#flashcards", "#flashcards/math"]);
+
+      const mathGroup = groups.find(g => g.tag === "#flashcards/math")!;
+      expect(mathGroup.name).toBe("Math");
+      expect(mathGroup.type).toBe("group");
+      expect(mathGroup.deckIds).toHaveLength(3);
+      expect(mathGroup.deckIds).toContain(deck1.id);
+      expect(mathGroup.deckIds).toContain(deck2.id);
+      expect(mathGroup.deckIds).toContain(deck3.id);
+      expect(mathGroup.profile).toEqual(defaultProfile);
+
+      const rootGroup = groups.find(g => g.tag === "#flashcards")!;
+      expect(rootGroup.deckIds.sort()).toEqual(mathGroup.deckIds.sort());
     });
 
     it("should create separate groups for different tags", async () => {
@@ -94,11 +99,13 @@ describe("TagGroupService Integration Tests", () => {
       const decksWithProfile = [mathDeck, scienceDeck, historyDeck];
       const groups = await tagGroupService.aggregateByTag(decksWithProfile);
 
-      expect(groups).toHaveLength(3);
+      // Three leaf tags plus the shared base tag.
+      expect(groups).toHaveLength(4);
 
       const mathGroup = groups.find(g => g.tag === "#flashcards/math");
       const scienceGroup = groups.find(g => g.tag === "#flashcards/science");
       const historyGroup = groups.find(g => g.tag === "#flashcards/history");
+      expect(groups.find(g => g.tag === "#flashcards")?.deckIds).toHaveLength(3);
 
       expect(mathGroup).toBeDefined();
       expect(mathGroup?.name).toBe("Math");
@@ -135,7 +142,7 @@ describe("TagGroupService Integration Tests", () => {
       const decksWithProfile = [mathDeck, calculusDeck, algebraDeck];
       const groups = await tagGroupService.aggregateByTag(decksWithProfile);
 
-      expect(groups).toHaveLength(3);
+      expect(groups).toHaveLength(4);
 
       const mathGroup = groups.find(g => g.tag === "#flashcards/math");
       const calculusGroup = groups.find(g => g.tag === "#flashcards/math/calculus");
@@ -174,7 +181,7 @@ describe("TagGroupService Integration Tests", () => {
       const decksWithProfile = [mathDeck, calculusDeck, derivativesDeck];
       const groups = await tagGroupService.aggregateByTag(decksWithProfile);
 
-      expect(groups).toHaveLength(3);
+      expect(groups).toHaveLength(4);
 
       const mathGroup = groups.find(g => g.tag === "#flashcards/math");
       const calculusGroup = groups.find(g => g.tag === "#flashcards/math/calculus");
@@ -254,10 +261,10 @@ describe("TagGroupService Integration Tests", () => {
       const decksWithProfile = [mathDeck1, mathDeck2];
       const groups = await tagGroupService.aggregateByTag(decksWithProfile);
 
-      expect(groups).toHaveLength(1);
+      const mathGroup = groups.find(g => g.tag === "#flashcards/math")!;
       // Tag group should use the tag-to-profile mapping, not individual deck profiles
-      expect(groups[0].profile.id).toBe(customProfileId);
-      expect(groups[0].profile.name).toBe("Custom Math Profile");
+      expect(mathGroup.profile.id).toBe(customProfileId);
+      expect(mathGroup.profile.name).toBe("Custom Math Profile");
     });
 
     it("should use hierarchical tag-to-profile mapping (most specific wins)", async () => {
@@ -307,10 +314,13 @@ describe("TagGroupService Integration Tests", () => {
       const decksWithProfile = [calculusDeck];
       const groups = await tagGroupService.aggregateByTag(decksWithProfile);
 
-      expect(groups).toHaveLength(1);
+      const calculusGroup = groups.find(g => g.tag === "#flashcards/math/calculus")!;
       // Should use the more specific tag mapping (#flashcards/math/calculus)
-      expect(groups[0].profile.id).toBe(calculusProfileId);
-      expect(groups[0].profile.name).toBe("Calculus Profile");
+      expect(calculusGroup.profile.id).toBe(calculusProfileId);
+      expect(calculusGroup.profile.name).toBe("Calculus Profile");
+
+      // The ancestor group still resolves to its own, less specific mapping.
+      expect(groups.find(g => g.tag === "#flashcards/math")!.profile.id).toBe(mathProfileId);
     });
 
     it("should aggregate timestamps correctly", async () => {
@@ -351,8 +361,7 @@ describe("TagGroupService Integration Tests", () => {
 
       const groups = await tagGroupService.aggregateByTag(decksWithProfile);
 
-      expect(groups).toHaveLength(1);
-      const group = groups[0];
+      const group = groups.find(g => g.tag === "#flashcards/test")!;
 
       // Earliest creation should be twoDaysAgo
       expect(group.created).toBe(twoDaysAgo);
@@ -391,8 +400,7 @@ describe("TagGroupService Integration Tests", () => {
 
       const groups = await tagGroupService.aggregateByTag(decksWithProfile);
 
-      expect(groups).toHaveLength(1);
-      expect(groups[0].lastReviewed).toBe(now);
+      expect(groups.find(g => g.tag === "#flashcards/test")!.lastReviewed).toBe(now);
     });
 
     it("should handle all decks with null lastReviewed", async () => {
@@ -411,8 +419,7 @@ describe("TagGroupService Integration Tests", () => {
       const decksWithProfile = [deck1, deck2];
       const groups = await tagGroupService.aggregateByTag(decksWithProfile);
 
-      expect(groups).toHaveLength(1);
-      expect(groups[0].lastReviewed).toBeNull();
+      expect(groups.find(g => g.tag === "#flashcards/test")!.lastReviewed).toBeNull();
     });
 
     it("should sort groups alphabetically by tag", async () => {
@@ -437,10 +444,121 @@ describe("TagGroupService Integration Tests", () => {
       const decksWithProfile = [zDeck, aDeck, mDeck];
       const groups = await tagGroupService.aggregateByTag(decksWithProfile);
 
-      expect(groups).toHaveLength(3);
-      expect(groups[0].tag).toBe("#flashcards/algebra");
-      expect(groups[1].tag).toBe("#flashcards/math");
-      expect(groups[2].tag).toBe("#flashcards/zoology");
+      expect(groups.map(g => g.tag)).toEqual([
+        "#flashcards",
+        "#flashcards/algebra",
+        "#flashcards/math",
+        "#flashcards/zoology",
+      ]);
+    });
+
+    it("groups a deck by its flat frontmatter tags as well as its deck tag", async () => {
+      const deck = await createDeckWithProfile({
+        name: "Spanish Deck",
+        filepath: "/spanish.md",
+        tag: "#flashcards/spanish",
+      });
+      await db.setDeckFileTags(deck.id, ["flashcards/spanish", "math", "#retry"]);
+      const reloaded = (await db.getDeckById(deck.id))!;
+
+      const groups = await tagGroupService.aggregateByTag([
+        { ...reloaded, profile: defaultProfile },
+      ]);
+
+      expect(groups.map((g) => g.tag).sort()).toEqual([
+        "#flashcards",
+        "#flashcards/spanish",
+        "#math",
+        "#retry",
+      ]);
+      // The same deck, in every one of its groups — membership overlaps by design.
+      for (const group of groups) {
+        expect(group.deckIds).toEqual([deck.id]);
+      }
+    });
+
+    it("keeps ignored tags out of the tree without touching the deck tag", async () => {
+      const deck = await createDeckWithProfile({
+        name: "Spanish Deck",
+        filepath: "/spanish.md",
+        tag: "#flashcards/spanish",
+      });
+      await db.setDeckFileTags(deck.id, ["math", "status/todo"]);
+      const reloaded = (await db.getDeckById(deck.id))!;
+
+      const scoped = new TagGroupService(db, () => ({
+        baseTag: "#flashcards",
+        ignore: ["#status"],
+      }));
+      const groups = await scoped.aggregateByTag([{ ...reloaded, profile: defaultProfile }]);
+
+      expect(groups.map((g) => g.tag).sort()).toEqual([
+        "#flashcards",
+        "#flashcards/spanish",
+        "#math",
+      ]);
+    });
+
+    it("resolves the deck's profile from a flat tag only when the deck tag is unmapped", async () => {
+      const flatProfileId = await db.createProfile({
+        id: "profile_flat",
+        name: "Flat Tag Profile",
+        hasNewCardsLimitEnabled: false,
+        newCardsPerDay: 20,
+        hasReviewCardsLimitEnabled: false,
+        reviewCardsPerDay: 100,
+        headerLevel: 2,
+        reviewOrder: "due-date",
+        fsrs: { requestRetention: 0.9, profile: "STANDARD" },
+        isDefault: false,
+      });
+      const deckProfileId = await db.createProfile({
+        id: "profile_deck_tag",
+        name: "Deck Tag Profile",
+        hasNewCardsLimitEnabled: false,
+        newCardsPerDay: 20,
+        hasReviewCardsLimitEnabled: false,
+        reviewCardsPerDay: 100,
+        headerLevel: 3,
+        reviewOrder: "due-date",
+        fsrs: { requestRetention: 0.9, profile: "STANDARD" },
+        isDefault: false,
+      });
+      await db.createTagMapping(flatProfileId, "#math");
+
+      const deck = await createDeckWithProfile({
+        name: "Spanish Deck",
+        filepath: "/spanish.md",
+        tag: "#flashcards/spanish",
+      });
+      await db.setDeckFileTags(deck.id, ["math"]);
+      const tags = ["#flashcards/spanish", "#math"];
+
+      // Only the flat tag is mapped, so it decides.
+      expect(await db.getProfileIdForTags(tags)).toBe(flatProfileId);
+
+      // Once the deck tag is mapped it takes precedence outright.
+      await db.createTagMapping(deckProfileId, "#flashcards/spanish");
+      expect(await db.getProfileIdForTags(tags)).toBe(deckProfileId);
+    });
+
+    it("tells a deck with no recorded tags apart from one recorded as having none", async () => {
+      const untouched = await createDeckWithProfile({
+        name: "Never Parsed",
+        filepath: "/never.md",
+        tag: "#flashcards/a",
+      });
+      const recorded = await createDeckWithProfile({
+        name: "Parsed, No Tags",
+        filepath: "/parsed.md",
+        tag: "#flashcards/b",
+      });
+      await db.setDeckFileTags(recorded.id, []);
+
+      // The difference is what lets a surface backfill exactly the decks that
+      // predate tag recording, instead of reparsing the whole vault.
+      expect((await db.getDeckById(untouched.id))!.fileTags).toBeUndefined();
+      expect((await db.getDeckById(recorded.id))!.fileTags).toEqual([]);
     });
 
     it("should return empty array for empty input", async () => {
@@ -461,8 +579,8 @@ describe("TagGroupService Integration Tests", () => {
 
       // ID should be the same across multiple calls
       const expectedId = generateDeckGroupId("#flashcards/math");
-      expect(groups1[0].tag).toBe("#flashcards/math");
-      expect(groups2[0].tag).toBe("#flashcards/math");
+      expect(groups1.map(g => g.tag)).toEqual(groups2.map(g => g.tag));
+      expect(groups1.some(g => g.tag === "#flashcards/math")).toBe(true);
 
       // Verify ID matches hash-based generation
       expect(expectedId).toMatch(/^deckgroup_[a-z0-9]+$/);

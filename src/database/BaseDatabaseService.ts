@@ -26,6 +26,11 @@ import { DEFAULT_PROFILE_ID, deckWithProfile } from "./types";
 import type { FilterDefinition } from "./types";
 import { generateCustomDeckCardId, generateCustomDeckId, generateFlashcardId, SQL_QUERIES, type SyncOpV1 } from "@decks/core";
 import { normalizeProfile } from "@decks/core";
+import { pickProfileMapping, studyTagsFor } from "@decks/core";
+import type { TagScopeOptions } from "@decks/core";
+
+/** Fallback when a caller has no settings to hand; matches DEFAULT_SETTINGS. */
+const DEFAULT_BASE_TAG = "#decks";
 import { DEFAULT_EXAM_SETTINGS, classifyExamBody, parseExamSettings } from "@decks/core";
 import { compileFilter, type FilterCompileOptions } from "@decks/core";
 import type { SyncData, SyncResult } from "@decks/core";
@@ -136,6 +141,15 @@ export abstract class BaseDatabaseService implements IDatabaseService {
   ): Promise<SyncResult>;
 
   // Shared business logic methods
+  /**
+   * NULL means the deck predates tag recording and is not the same as a note
+   * with no tags — callers use the difference to decide whether to backfill.
+   */
+  private parseDeckFileTags(value: string | number | null): string[] | undefined {
+    if (value === null || value === undefined) return undefined;
+    return this.parseJsonTags(value);
+  }
+
   protected parseDeckRow(row: (string | number | null)[]): Deck {
     return {
       id: row[0] as string,
@@ -146,7 +160,7 @@ export abstract class BaseDatabaseService implements IDatabaseService {
       profileId: row[5] as string,
       created: row[6] as string,
       modified: row[7] as string,
-      fileTags: this.parseJsonTags(row[9]),
+      fileTags: this.parseDeckFileTags(row[9]),
     };
   }
 
@@ -933,39 +947,12 @@ export abstract class BaseDatabaseService implements IDatabaseService {
   }
 
   async getProfileIdForTag(tag: string): Promise<string | null> {
-    // Get all tag mappings
-    const allMappings = await this.querySql(SQL_QUERIES.GET_ALL_TAG_MAPPINGS) as (
-      | string
-      | number
-      | null
-    )[][];
+    return this.getProfileIdForTags([tag]);
+  }
 
-    if (allMappings.length === 0) return null;
-
-    // Find all mappings that match this tag (either exact match or parent tag)
-    const matchingMappings: { profileId: string; tag: string }[] = [];
-
-    for (const row of allMappings) {
-      const mapping = this.parseTagMappingRow(row);
-
-      // Check if the mapping tag matches the deck tag
-      // Match if: exact match OR mapping tag is a parent of deck tag
-      // Example: deck tag "#flashcards/math", mapping tag "#flashcards" -> matches
-      // Example: deck tag "#flashcards/math", mapping tag "#flashcards/math" -> matches
-      // Example: deck tag "#flashcards", mapping tag "#flashcards/math" -> does NOT match
-
-      if (tag === mapping.tag || tag.startsWith(mapping.tag + '/')) {
-        matchingMappings.push({ profileId: mapping.profileId, tag: mapping.tag });
-      }
-    }
-
-    if (matchingMappings.length === 0) return null;
-
-    // Return the most specific tag (longest tag path)
-    // Sort by tag length descending, then return the first one
-    matchingMappings.sort((a, b) => b.tag.length - a.tag.length);
-
-    return matchingMappings[0].profileId;
+  async getProfileIdForTags(tags: readonly string[]): Promise<string | null> {
+    const mappings = await this.getAllTagMappings();
+    return pickProfileMapping(mappings, tags);
   }
 
   async deleteTagMapping(id: string): Promise<void> {
@@ -974,7 +961,11 @@ export abstract class BaseDatabaseService implements IDatabaseService {
     this.emitSyncOp({ o: "tag_mapping_delete", p: { id, deletedAt: now } });
   }
 
-  async applyProfileToTag(profileId: string, tag: string): Promise<number> {
+  async applyProfileToTag(
+    profileId: string,
+    tag: string,
+    scope?: TagScopeOptions
+  ): Promise<number> {
     if (profileId === DEFAULT_PROFILE_ID) {
       // Remove explicit mapping so the tag inherits from its parent
       const existingMappings = await this.getAllTagMappings();
@@ -987,34 +978,25 @@ export abstract class BaseDatabaseService implements IDatabaseService {
       await this.createTagMapping(profileId, tag);
     }
 
+    // Re-resolve every deck rather than only the ones sitting under `tag`: a deck
+    // can reach this mapping through a flat tag too, and resolution is the single
+    // source of truth for which profile wins, so a recompute-and-compare needs no
+    // special case for child tags that carry a mapping of their own.
     const allDecks = await this.getAllDecks();
     const allMappings = await this.getAllTagMappings();
-    const mappedTags = new Set(allMappings.map(m => m.tag));
+    const effectiveScope = scope ?? { baseTag: DEFAULT_BASE_TAG };
     let count = 0;
 
     for (const deck of allDecks) {
-      if (deck.tag === tag) {
-        // Exact match — always update
-        const resolvedProfileId = await this.getProfileIdForTag(deck.tag) || DEFAULT_PROFILE_ID;
-        if (deck.profileId !== resolvedProfileId) {
-          await this.updateDeck(deck.id, { profileId: resolvedProfileId });
-          // The new profile may have a different headerLevel / clozeEnabled,
-          // so the cached parsed flashcards no longer reflect parsing rules.
-          // Reset the mtime gate so the next sync reparses this deck.
-          await this.setDeckLastSyncedMtime(deck.id, 0);
-          count++;
-        }
-      } else if (deck.tag.startsWith(tag + '/')) {
-        // Child tag — skip if it has its own explicit tag mapping
-        if (!mappedTags.has(deck.tag)) {
-          const resolvedProfileId = await this.getProfileIdForTag(deck.tag) || DEFAULT_PROFILE_ID;
-          if (deck.profileId !== resolvedProfileId) {
-            await this.updateDeck(deck.id, { profileId: resolvedProfileId });
-            await this.setDeckLastSyncedMtime(deck.id, 0);
-            count++;
-          }
-        }
-      }
+      const resolvedProfileId =
+        pickProfileMapping(allMappings, studyTagsFor(deck, effectiveScope)) || DEFAULT_PROFILE_ID;
+      if (deck.profileId === resolvedProfileId) continue;
+      await this.updateDeck(deck.id, { profileId: resolvedProfileId });
+      // The new profile may have a different headerLevel / clozeEnabled, so the
+      // cached parsed flashcards no longer reflect parsing rules. Reset the mtime
+      // gate so the next sync reparses this deck.
+      await this.setDeckLastSyncedMtime(deck.id, 0);
+      count++;
     }
 
     return count;
