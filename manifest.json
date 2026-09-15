@@ -1,7 +1,7 @@
 {
   "id": "decks",
   "name": "Decks",
-  "version": "2.9.4",
+  "version": "2.9.5",
   "minAppVersion": "1.8.10",
   "description": "DecksMD — spaced repetition flashcards from your notes, with FSRS. Cloze deletions, tables and image occlusion in native markdown. No special syntax.",
   "author": "Xherdi Lika",

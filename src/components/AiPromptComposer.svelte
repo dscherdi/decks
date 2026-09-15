@@ -498,6 +498,25 @@
     line-height: 1.5;
     box-shadow: none;
   }
+  /*
+   * Obsidian styles form fields by element, and its hover rule
+   * (`textarea:where(:not(:disabled)):hover`) scores 0-1-1 because `:where()`
+   * adds no specificity — which beats a single class. It paints an opaque
+   * `--background-modifier-form-field-hover`, and since this textarea sits above
+   * the highlight overlay, that background covered the only layer drawing the
+   * text: hovering the composer blanked the prompt. Repeating the selector with
+   * each state lifts these to 0-2-0 so the transparent field survives all of
+   * them. The same applies to the focus ring, which would otherwise draw inside
+   * the composer's own border.
+   */
+  .decks-ai-composer-input:hover,
+  .decks-ai-composer-input:focus,
+  .decks-ai-composer-input:focus-visible,
+  .decks-ai-composer-input:active {
+    background: transparent;
+    border: none;
+    box-shadow: none;
+  }
   .decks-ai-composer-input::placeholder {
     color: var(--text-faint);
   }
