@@ -2378,6 +2378,16 @@
   }
 
   .decks-card-content {
+    /* The floating controls (undo and copy at the top, notes at the bottom) are
+       24px tall at a 4px inset, so they occupy the outer 28px of a face. The
+       reserve adds 8px on top of that, because content that stops exactly at
+       the button's edge still reads as touching it. */
+    --decks-card-reserve: 36px;
+    /* Enough for one line between those two reserved rows, and no more. `1.5em`
+       resolves against the face's own font size, so the floor tracks the
+       responsive type scale instead of being restated per breakpoint. */
+    --decks-card-min-h: calc(var(--decks-card-reserve) * 2 + 1.5em);
+
     flex: 1;
     overflow-y: auto;
     overflow-x: hidden;
@@ -2385,7 +2395,10 @@
     display: flex;
     flex-direction: column;
     align-items: center;
-    justify-content: flex-start;
+    /* `safe` matters: plain `center` would push the first lines of a long card
+       above the scroll origin, where they cannot be reached. Browsers that do
+       not know the keyword drop the declaration and fall back to flex-start. */
+    justify-content: safe center;
     gap: 24px;
     width: 100%;
     box-sizing: border-box;
@@ -2414,8 +2427,10 @@
     border: 1px solid var(--background-modifier-border);
     border-radius: 12px;
     box-shadow: 0 4px 16px rgba(0, 0, 0, 0.05);
-    padding: 2rem;
-    min-height: 250px;
+    /* Vertical padding is the reserve, so content clears the floating controls
+       by the same 8px at every breakpoint; horizontal stays 2rem. */
+    padding: var(--decks-card-reserve) 2rem;
+    min-height: var(--decks-card-min-h, 96px);
     width: 100%;
     max-width: 900px;
     box-sizing: border-box;
@@ -2452,7 +2467,7 @@
     display: flex;
     width: 100%;
     max-width: 900px;
-    min-height: 250px;
+    min-height: var(--decks-card-min-h, 96px);
     border-radius: 12px;
     overflow: hidden;
     border: 1px solid var(--background-modifier-border);
@@ -3089,7 +3104,7 @@
     }
 
     .decks-card-side {
-      padding: 20px 16px;
+      padding: var(--decks-card-reserve) 16px;
       max-width: none;
     }
 
@@ -3178,7 +3193,7 @@
         }
 
         .decks-card-side {
-            padding: 16px 12px;
+            padding: var(--decks-card-reserve) 12px;
         }
 
         .decks-card-side.decks-front {
