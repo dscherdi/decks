@@ -2395,10 +2395,7 @@
     display: flex;
     flex-direction: column;
     align-items: center;
-    /* `safe` matters: plain `center` would push the first lines of a long card
-       above the scroll origin, where they cannot be reached. Browsers that do
-       not know the keyword drop the declaration and fall back to flex-start. */
-    justify-content: safe center;
+    justify-content: flex-start;
     gap: 24px;
     width: 100%;
     box-sizing: border-box;
