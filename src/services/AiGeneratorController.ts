@@ -1,8 +1,8 @@
 import type {
   AiGenerationService,
   GeneratedCard,
+  GeneratedCardType,
   GenerateHandlers,
-  GenerateRequest,
   GenerateResult,
   RefactorImage,
 } from "@decks/core";
@@ -27,22 +27,19 @@ export interface GenerateOptions {
    * deduplication and the model's context, without re-emitting them via onCard.
    */
   existingCards?: GeneratedCard[];
+  /** The round a refining instruction replaces; the reply rewrites it. */
+  refining?: GeneratedCard[];
   /** Override the model for this run only (per-prompt picker); falls back to settings. */
   modelOverride?: string;
   /** Force attaching the request payload + raw response; falls back to the debug setting. */
   debug?: boolean;
-}
-
-/** Normalized key for in-session dedup (no deck exists yet to hash against). */
-function cardKey(card: GeneratedCard): string {
-  return card.front.trim().toLowerCase();
+  /** What to generate; the prompt differs for questions. */
+  cardType?: GeneratedCardType;
 }
 
 /**
  * Plugin-side glue around the core AiGenerationService: resolves the active
- * provider config (settings + non-synced key store) and streams generated cards.
- * Drives the iterative batch loop — the core service handles incremental parsing
- * and the non-streaming fallback for a single round.
+ * provider config (settings + non-synced key store); core runs the rounds.
  */
 export class AiGeneratorController {
   constructor(
@@ -62,74 +59,20 @@ export class AiGeneratorController {
   ): Promise<GenerateResult> {
     const config = await buildAiConfig(this.settings, this.keyStore);
     if (options.modelOverride) config.model = options.modelOverride;
-    const maxBatches = Math.max(1, options.maxBatches ?? 1);
-
-    // Cards we feed back to the model each round (prior run + this run's output).
-    const priorContext: GeneratedCard[] = [...(options.existingCards ?? [])];
-    // Cards newly produced in this run — what we return and surface via onCard.
-    const newCards: GeneratedCard[] = [];
-    const seen = new Set<string>(priorContext.map(cardKey).filter(Boolean));
-
-    // Dedup wrapper: only surface genuinely new cards; accumulate the rest.
-    const dedupHandlers: GenerateHandlers = {
-      onCard: (card) => {
-        const key = cardKey(card);
-        if (!key || seen.has(key)) return;
-        seen.add(key);
-        newCards.push(card);
-        priorContext.push(card);
-        handlers.onCard(card);
-      },
-      onPartial: handlers.onPartial,
-    };
-
-    let debug: GenerateResult["debug"];
-    let truncated = false;
-    let covered = false;
-
-    for (let batch = 0; batch < maxBatches; batch++) {
-      if (signal?.aborted) break;
-      const countBefore = newCards.length;
-      const req: GenerateRequest = {
+    return this.service.generateRounds(
+      config,
+      {
         prompt: options.prompt,
         sourceContext: options.sourceContext,
         images: options.images,
-        generatedSoFar: priorContext.length ? [...priorContext] : undefined,
+        existingCards: options.existingCards,
+        refining: options.refining,
+        cardType: options.cardType,
+        maxBatches: options.maxBatches,
         debug: options.debug ?? this.settings.debug.enableLogging,
-      };
-
-      try {
-        const result = await this.service.generateStream(
-          config,
-          req,
-          dedupHandlers,
-          signal,
-        );
-        debug = result.debug ?? debug;
-        truncated = result.truncated ?? false;
-        covered = result.covered ?? false;
-      } catch (e) {
-        // User cancelled: stop quietly and keep whatever we have.
-        if (signal?.aborted) break;
-        // First round failed (e.g. missing key): surface the real error.
-        if (batch === 0) throw e;
-        // A later round failed transiently: keep the cards already produced.
-        break;
-      }
-
-      // The model says the source is spent — stop before paying for a round
-      // that would only rediscover what we already have.
-      if (covered) break;
-
-      // Stop when a round added nothing new AND wasn't cut off by the output-
-      // token limit. A truncated round means there's more to generate (the cap
-      // bounds total rounds), so keep going. Kept as the backstop for models
-      // that never emit the marker.
-      if (newCards.length === countBefore && !truncated) break;
-    }
-
-    // `truncated` lets the caller offer a manual "Continue generating" action;
-    // `covered` lets it say there is probably nothing left to find.
-    return { cards: newCards, debug, truncated, covered };
+      },
+      handlers,
+      signal,
+    );
   }
 }

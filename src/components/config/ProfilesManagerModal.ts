@@ -17,6 +17,7 @@ export class ProfilesManagerModal extends Modal {
   private initialTab: "settings" | "assignments";
   private initialProfileId?: string;
   private tagScope?: TagScopeOptions;
+  private meaningAvailable: boolean;
 
   constructor(
     app: App,
@@ -25,7 +26,8 @@ export class ProfilesManagerModal extends Modal {
     trainedWeightsAvailable = false,
     initialTab: "settings" | "assignments" = "settings",
     initialProfileId?: string,
-    tagScope?: TagScopeOptions
+    tagScope?: TagScopeOptions,
+    meaningAvailable = false
   ) {
     super(app);
     this.db = db;
@@ -34,6 +36,7 @@ export class ProfilesManagerModal extends Modal {
     this.initialTab = initialTab;
     this.initialProfileId = initialProfileId;
     this.tagScope = tagScope;
+    this.meaningAvailable = meaningAvailable;
   }
 
   async onOpen() {
@@ -59,6 +62,7 @@ export class ProfilesManagerModal extends Modal {
         initialProfileId: this.initialProfileId,
         allDecks,
         tagScope: this.tagScope,
+        meaningAvailable: this.meaningAvailable,
         onclose: () => {
           this.close();
         },

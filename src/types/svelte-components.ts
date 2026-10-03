@@ -1,7 +1,7 @@
 // Simplified Svelte component types that work with TypeScript
 import type { Deck, DeckStats } from "../database/types";
 import type { IDatabaseService } from "../database/DatabaseFactory";
-import type { StatisticsService } from "../services/StatisticsService";
+import type { StatisticsService } from "@decks/core";
 import type { DeckSynchronizer } from "../services/DeckSynchronizer";
 import type { DeckListSortMode, DeckListView } from "../settings";
 import type { App } from "obsidian";

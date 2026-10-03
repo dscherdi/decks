@@ -48,10 +48,13 @@ export class ConfirmModal extends Modal {
       text: this.confirmText,
       cls: this.isDanger ? "mod-cta decks-confirm-danger" : "mod-cta",
     });
-    confirmButton.onclick = () => {
-      this.close();
-      this.onConfirm();
-    };
+    confirmButton.onclick = () => this.confirm();
+  }
+
+  /** Confirm, then close: callers that read a close as a cancel must see the confirmation first. */
+  confirm(): void {
+    this.onConfirm();
+    this.close();
   }
 
   onClose() {

@@ -8,7 +8,7 @@ import {
 } from "obsidian";
 import { type Deck, type Flashcard, type DeckStats, type DeckGroup, DEFAULT_PROFILE_ID } from "../database/types";
 import type { IDatabaseService } from "../database/DatabaseFactory";
-import { generateDeckGroupId, generateDeckId, yieldToUI } from "@decks/core";
+import { I18n, generateDeckGroupId, generateDeckId, yieldToUI } from "@decks/core";
 import { Logger, formatTime } from "../utils/logging";
 import { FileFilter } from "../utils/fileFilter";
 import { FlashcardParser, type ParsedFlashcard } from "@decks/core";
@@ -514,16 +514,28 @@ export class DeckManager {
         progressCallback
       );
 
-      if (result.duplicatesSkipped > 0) {
+      const collisions = result.idCollisions ?? [];
+      const duplicates = result.duplicatesSkipped - collisions.length;
+      if (duplicates > 0) {
         this.debugLog(
-          `⚠️ Deck "${deck.name}" has ${result.duplicatesSkipped} duplicate flashcard(s) with the same front text. Only the first occurrence was kept.`
+          `⚠️ Deck "${deck.name}" has ${duplicates} duplicate flashcard(s) with the same front text. Only the first occurrence was kept.`
         );
         if (this.settings?.ui?.enableNotices) {
           new Notice(
-            `⚠️ Deck "${deck.name}" has ${result.duplicatesSkipped} duplicate flashcard(s) with the same front text. Only the first occurrence was kept.`,
+            `⚠️ Deck "${deck.name}" has ${duplicates} duplicate flashcard(s) with the same front text. Only the first occurrence was kept.`,
             8000
           );
         }
+      }
+      // A collision drops a different card, so it is shown whatever the notice setting.
+      for (const collision of collisions) {
+        const message = I18n.format(I18n.t.notices.idCollision, {
+          deckName: deck.name,
+          first: collision.fronts[0],
+          second: collision.fronts[1],
+        });
+        this.debugLog(message);
+        new Notice(message, 12000);
       }
 
       if (result.parsedCount > MAX_FLASHCARDS_PER_DECK) {

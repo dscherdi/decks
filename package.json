@@ -1,6 +1,6 @@
 {
   "name": "decks",
-  "version": "2.9.7",
+  "version": "2.10.0",
   "description": "Decks - Spaced repetition flashcards for Obsidian with FSRS algorithm",
   "main": "dist/main.js",
   "source": "src/main.ts",
@@ -67,6 +67,7 @@
     "eslint-plugin-svelte": "^3.13.1",
     "glob": "^13.0.0",
     "jest": "^29.7.0",
+    "jest-environment-node": "^29.7.0",
     "lru-cache": "^11.2.4",
     "obsidian": "^1.11.0",
     "prettier": "^3.7.4",

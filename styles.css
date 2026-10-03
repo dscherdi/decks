@@ -464,17 +464,8 @@
   max-width: calc(1100px + var(--decks-gen-panes));
 }
 
-.decks-ai-batch-modal:has(.decks-pdf-panel) {
-  --decks-gen-panes: var(--decks-pane-chapters);
-}
-
-.decks-ai-batch-modal:has(.decks-ai-gen-debug) {
-  --decks-gen-panes: var(--decks-pane-debug);
-}
-
-.decks-ai-batch-modal:has(.decks-pdf-panel):has(.decks-ai-gen-debug) {
-  --decks-gen-panes: calc(var(--decks-pane-chapters) + var(--decks-pane-debug));
-}
+/* The generator is a workspace leaf now, never a modal, so it no longer widens
+   one. .decks-ai-batch-modal itself stays: the batch refactor modal uses it. */
 
 .decks-modal-mobile {
   height: 100% !important;
@@ -851,17 +842,14 @@ div.decks-card-content
 }
 
 /* AI generator: footer button that toggles the destination form */
-.decks-ai-gen-dest-toggle {
+/* The workbench's pile in Obsidian's status bar. */
+.decks-ai-status {
   display: inline-flex;
-  align-items: center;
   gap: 6px;
+  cursor: pointer;
 }
-.decks-ai-gen-dest-toggle.is-active {
-  background: var(--interactive-accent);
-  color: var(--text-on-accent);
-}
-.decks-ai-gen-dest-toggle-icon {
-  display: inline-flex;
+.decks-ai-status-warn {
+  color: var(--color-yellow);
 }
 
 /* Segmented control (new-file / append) */
@@ -1417,10 +1405,15 @@ div.decks-card-content
 .decks-exam-option:hover {
   background: var(--interactive-hover);
 }
+/* Rings are drawn inside: the scrolling exam body would clip anything outside the option. */
 .decks-exam-option.selected {
   border-color: var(--interactive-accent);
   background: var(--background-modifier-hover);
-  box-shadow: 0 0 0 1px var(--interactive-accent);
+  box-shadow: inset 0 0 0 1px var(--interactive-accent);
+}
+.decks-exam-option:focus-visible {
+  outline: none;
+  box-shadow: inset 0 0 0 2px var(--background-modifier-border-focus);
 }
 .decks-exam-option.chosen-correct {
   border-color: var(--color-green);

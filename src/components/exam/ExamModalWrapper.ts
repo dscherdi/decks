@@ -11,6 +11,7 @@ import {
   type ResponsiveModalHandle,
 } from "../../utils/responsive-modal";
 import FlashcardExamModal from "./FlashcardExamModal.svelte";
+import { examMissProps, type ExamMissHooks } from "./exam-miss-props";
 
 type ExamComponent = ReturnType<typeof mount>;
 
@@ -44,7 +45,7 @@ export async function persistExamAttempt(
   for (const [path, cards] of byFile) {
     const file = app.vault.getAbstractFileByPath(path);
     if (file instanceof TFile) {
-      await stamper.stampFileBatch(file, cards).catch(() => undefined);
+      await stamper.stampFileBatch(path, cards).catch(() => undefined);
     }
   }
   for (const card of loose) {
@@ -76,8 +77,7 @@ export function confirmDialog(
     const originalOnClose = modal.onClose.bind(modal);
     modal.onClose = () => {
       originalOnClose();
-      // ConfirmModal closes BEFORE onConfirm fires; defer the cancel
-      // resolution one tick so a confirmation wins the race.
+      // Deferred one tick, so a confirmation always settles first.
       window.setTimeout(() => settle(false), 0);
     };
     modal.open();
@@ -95,7 +95,8 @@ export class ExamModalWrapper extends Modal {
     private deckName: string,
     private db: IDatabaseService,
     private onRetake: () => void,
-    private refreshStats: () => Promise<void>
+    private refreshStats: () => Promise<void>,
+    private missHooks?: ExamMissHooks
   ) {
     super(app);
   }
@@ -127,6 +128,7 @@ export class ExamModalWrapper extends Modal {
     this.component = mount(FlashcardExamModal, {
       target: contentEl,
       props: {
+        ...examMissProps(this.db, this.missHooks),
         attempt: this.attempt,
         deckName: this.deckName,
         renderMarkdown: this.renderMarkdown,

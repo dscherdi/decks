@@ -15,6 +15,7 @@ import type {
 } from "../../types/svelte-components";
 import FlashcardReviewModal from "./FlashcardReviewModal.svelte";
 import { mount, unmount } from "svelte";
+import { reviewRepairProps, type ReviewRepairHooks } from "./review-repair-props";
 import { navigateToFlashcardSource } from "../../utils/flashcard-navigator";
 import { wireInternalLinks } from "../../utils/internal-links";
 import { I18n } from "@decks/core";
@@ -69,7 +70,8 @@ export class FlashcardReviewModalWrapper extends Modal {
     refreshStats: () => Promise<void>,
     refreshStatsById: (deckId: string) => Promise<void>,
     browseMode = false,
-    cramMode = false
+    cramMode = false,
+    private repairHooks?: ReviewRepairHooks
   ) {
     super(app);
     this.deckOrGroup = deckOrGroup;
@@ -132,14 +134,14 @@ export class FlashcardReviewModalWrapper extends Modal {
     const showNotice = this.settings?.ui?.enableNotices !== false;
 
     if (action === "suspend") {
-      await this.db.suspendCard(card.id);
+      await this.scheduler.suspendCard(card.id);
       if (showNotice) new Notice(r.cardSuspended);
       return true;
     }
 
     if (action === "bury") {
       const until = this.scheduler.getBuryUntilForNextDay(new Date());
-      await this.db.buryCard(card.id, until);
+      await this.scheduler.buryCard(card.id, until);
       if (showNotice) new Notice(r.cardBuried);
       return true;
     }
@@ -197,6 +199,7 @@ export class FlashcardReviewModalWrapper extends Modal {
     this.component = mount(FlashcardReviewModal, {
       target: contentEl,
       props: {
+        ...reviewRepairProps(this.repairHooks),
         initialCard: this.initialCard,
         deckOrGroup: this.deckOrGroup,
         browseMode: this.browseMode,

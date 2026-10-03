@@ -78,12 +78,11 @@ describe("Backup and restore integration", () => {
       const backupPath = "/backup-basic.db";
       await db.createBackupDatabase(backupPath);
 
-      const adapter = db["adapter"] as InMemoryAdapter;
-      expect(await adapter.exists(backupPath)).toBe(true);
+      const buffer = await DatabaseTestUtils.readTestFile(backupPath);
+      expect(buffer).not.toBeNull();
 
-      const buffer = await adapter.readBinary(backupPath);
       const SQL = await loadSqlJs();
-      const backupDb = new SQL.Database(new Uint8Array(buffer));
+      const backupDb = new SQL.Database(buffer as Uint8Array);
 
       expect(getCurrentSchemaVersion(backupDb)).toBe(CURRENT_SCHEMA_VERSION);
 
@@ -318,12 +317,8 @@ describe("Backup and restore integration", () => {
       const v14Bytes = v14Db.export();
       v14Db.close();
 
-      const adapter = db["adapter"] as InMemoryAdapter;
       const backupPath = "/backup-v14.db";
-      await adapter.writeBinary(
-        backupPath,
-        v14Bytes.buffer.slice(0) as ArrayBuffer
-      );
+      await DatabaseTestUtils.writeTestFile(backupPath, v14Bytes);
 
       // Should not throw
       await db.restoreFromBackupDatabase(backupPath);
@@ -592,6 +587,42 @@ describe("Backup and restore integration", () => {
       expect(card?.repetitions).toBe(4);
       expect(card?.lapses).toBe(1);
       expect(card?.interval).toBe(1440);
+    });
+
+    it("leaves cards that are not showing as new untouched", async () => {
+      const { deck } = await createTestDeck("rebuild-reviewed");
+      await db.createFlashcard(
+        DatabaseTestUtils.createTestFlashcard(deck.id, {
+          id: "card_new_2",
+          state: "new",
+          dueDate: new Date().toISOString(),
+        })
+      );
+      await db.createFlashcard(
+        DatabaseTestUtils.createTestFlashcard(deck.id, {
+          id: "card_reviewed",
+          state: "review",
+          dueDate: new Date().toISOString(),
+          interval: 4320,
+          stability: 3.2,
+        })
+      );
+      for (const id of ["card_new_2", "card_reviewed"]) {
+        await db.insertReviewLog(
+          DatabaseTestUtils.createTestReviewLog(id, {
+            newState: "review",
+            newStability: 9.9,
+            newIntervalMinutes: 1440,
+          })
+        );
+      }
+
+      const restored = await db.rebuildCardStateFromReviewLogs();
+      expect(restored).toBe(1);
+      const reviewed = await db.getFlashcardById("card_reviewed");
+      expect(reviewed?.interval).toBe(4320);
+      expect(reviewed?.stability).toBeCloseTo(3.2);
+      expect((await db.getFlashcardById("card_new_2"))?.state).toBe("review");
     });
 
     it("leaves cards with no review logs untouched (e.g. after a reset)", async () => {

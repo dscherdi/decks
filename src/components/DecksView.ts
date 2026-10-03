@@ -1,4 +1,5 @@
 import type { DeckWithProfile, DeckStats, DeckGroup, Flashcard, DeckOrGroup, CustomDeckGroup, FilterDefinition } from "@/database/types";
+import { meaningGradingAvailable } from "../services/AiGradingController";
 import { VIEW_TYPE_DECKS } from "@/main";
 import { DeckSynchronizer } from "@/services/DeckSynchronizer";
 import { DeckManager } from "@/services/DeckManager";
@@ -15,13 +16,15 @@ import {
 import { ExamAttempt, type DeckProfile } from "@decks/core";
 import { launchExamForSelection } from "./exam/launchExam";
 import { launchCramForSelection } from "./review/launchCram";
+import type { ExamMissHooks } from "./exam/exam-miss-props";
+import type { ReviewRepairHooks } from "./review/review-repair-props";
 import { ExamModalWrapper } from "./exam/ExamModalWrapper";
 import { ExamView, VIEW_TYPE_FLASHCARD_EXAM } from "./exam/ExamView";
 import { StatisticsModal } from "./settings/StatisticsModal";
 import { ProfilesManagerModal } from "./config/ProfilesManagerModal";
 import { SrMigrationModalWrapper } from "./migration/SrMigrationModalWrapper";
 import { SrMigrationController } from "@/services/SrMigrationController";
-import { StatisticsService } from "@/services/StatisticsService";
+import { StatisticsService } from "@decks/core";
 import { TagGroupService, tagScopeFromSettings } from "@decks/core";
 import { CustomDeckService } from "@decks/core";
 import { openFlashcardManager } from "./FlashcardManagerView";
@@ -50,7 +53,7 @@ export class DecksView extends ItemView {
   private saveSettings: () => Promise<void>;
   private openEditModal?: (card: Flashcard) => Promise<void>;
   private openBatchRefactor?: (cards: Flashcard[]) => Promise<void>;
-  private openAiGenerator?: () => void;
+  private openAiWorkbench?: () => void;
   private openAnkiImport?: () => void;
 
   constructor(
@@ -67,8 +70,10 @@ export class DecksView extends ItemView {
     saveSettings: () => Promise<void>,
     openEditModal?: (card: Flashcard) => Promise<void>,
     openBatchRefactor?: (cards: Flashcard[]) => Promise<void>,
-    openAiGenerator?: () => void,
+    openAiWorkbench?: () => void,
     openAnkiImport?: () => void,
+    private examMissHooks?: ExamMissHooks,
+    private reviewRepairHooks?: ReviewRepairHooks,
   ) {
     super(leaf);
     this.db = database;
@@ -85,7 +90,7 @@ export class DecksView extends ItemView {
     this.saveSettings = saveSettings;
     this.openEditModal = openEditModal;
     this.openBatchRefactor = openBatchRefactor;
-    this.openAiGenerator = openAiGenerator;
+    this.openAiWorkbench = openAiWorkbench;
     this.openAnkiImport = openAnkiImport;
 
     this.progressTracker = progressTracker;
@@ -234,7 +239,7 @@ export class DecksView extends ItemView {
         openAnkiImportModal: () => this.openAnkiImport?.(),
         openDeckConfigModal: (deck: DeckWithProfile) => this.openDeckConfigModal(deck),
         openFlashcardManager: () => this.openFlashcardManager(),
-        openAiGeneratorModal: () => this.openAiGenerator?.(),
+        openAiWorkbench: () => this.openAiWorkbench?.(),
         aiEnabled: this.settings.ai.enabled,
         deckTag: this.settings.parsing.deckTag,
         pinnedDeckIds: this.settings.ui.pinnedDeckIds,
@@ -314,7 +319,8 @@ export class DecksView extends ItemView {
         active !== null,
         undefined,
         undefined,
-        tagScopeFromSettings(this.settings.parsing)
+        tagScopeFromSettings(this.settings.parsing),
+        meaningGradingAvailable(this.settings)
       ).open();
     });
   }
@@ -400,7 +406,8 @@ export class DecksView extends ItemView {
         active !== null,
         "assignments",
         deck.profileId,
-        tagScopeFromSettings(this.settings.parsing)
+        tagScopeFromSettings(this.settings.parsing),
+        meaningGradingAvailable(this.settings)
       ).open();
     });
   }
@@ -603,7 +610,9 @@ export class DecksView extends ItemView {
         this.deckSynchronizer,
         this.refreshDecksAndStats.bind(this),
         this.refreshStatsById.bind(this),
-        browseMode
+        browseMode,
+        false,
+        this.reviewRepairHooks
       ).open();
     }
   }
@@ -999,7 +1008,8 @@ export class DecksView extends ItemView {
         deckName,
         this.db,
         onRetake,
-        this.refreshDecksAndStats.bind(this)
+        this.refreshDecksAndStats.bind(this),
+        this.examMissHooks
       ).open();
     }
   }

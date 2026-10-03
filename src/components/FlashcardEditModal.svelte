@@ -15,6 +15,7 @@
     IMAGE_EXTENSIONS,
   } from "../utils/attachments";
   import { FilePickerModal } from "../utils/file-picker";
+  import { isReverseCard, reverseFieldDefs } from "../utils/reverse-card";
 
   export let card: Flashcard;
   export let app: App;
@@ -55,9 +56,10 @@
 
   type Mode = "edit" | "preview";
 
-  // Card types whose source format can be split into multiple cards.
+  // Card types whose source format can be split into multiple cards. A reverse
+  // card is its note's card read backwards, so it is never split.
   const SPLITTABLE = new Set(["header-paragraph", "table", "cloze"]);
-  $: splitAvailable = SPLITTABLE.has(card.type);
+  $: splitAvailable = SPLITTABLE.has(card.type) && !isReverseCard(card);
   let splitOn = false;
   $: if (!splitAvailable) splitOn = false;
 
@@ -270,16 +272,31 @@
 
   $: clozeValid =
     card.type !== "cloze" || /==((?:(?!==).)+)==/.test(clozeSentence);
+  // A reverse card's back is its note's heading.
   $: headerValid =
-    card.type !== "header-paragraph" || headerFront.trim().length > 0;
+    card.type !== "header-paragraph" ||
+    (isReverseCard(card) ? headerBody : headerFront).trim().length > 0;
   $: itemValid =
     card.type !== "image-occlusion" || itemText.trim().length > 0;
   $: spatialValid =
     card.type !== "spatial" ||
     (spatialFront.trim().length > 0 && spatialBack.trim().length > 0);
-  $: columnValid = !isTemplateMode || (columns[0] ?? "").trim().length > 0;
+  // A table row with an empty first or second cell is dropped on the next sync.
+  $: columnValid =
+    !isTemplateMode ||
+    ((columns[0] ?? "").trim().length > 0 && (columns[1] ?? "").trim().length > 0);
+  $: tableValid =
+    card.type !== "table" ||
+    isTemplateMode ||
+    (tableFront.trim().length > 0 && tableBack.trim().length > 0);
   $: canSave =
-    saveState !== "saving" && clozeValid && headerValid && itemValid && spatialValid && columnValid;
+    saveState !== "saving" &&
+    clozeValid &&
+    headerValid &&
+    itemValid &&
+    spatialValid &&
+    columnValid &&
+    tableValid;
 
   function currentValueFor(key: string): string | null {
     switch (key) {
@@ -397,7 +414,7 @@
     // Corresponding key in the core RefactorFieldSet for this card type.
     refKey: string;
   }
-  $: fields = computeFields(card);
+  $: fields = isReverseCard(card) ? reverseFieldDefs(computeFields(card)) : computeFields(card);
   function computeFields(c: Flashcard): FieldDef[] {
     const ef = I18n.t.modals.editFlashcard;
     if (c.type === "header-paragraph" || c.type === "multiple-choice") {

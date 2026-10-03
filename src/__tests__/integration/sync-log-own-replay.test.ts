@@ -176,4 +176,21 @@ describe("SyncLog own-log replay (local durability on reload)", () => {
     await s2.log.replayOwnLog(); // near no-op, must not throw or change state
     expect((await s2.db.getFlashcardById(CARD))?.suspendedAt).toBe(before);
   });
+
+  it("does not replay its own ops over a restore once sealed", async () => {
+    const adapter = new InMemoryAdapter();
+    const storage = new InMemoryStorage();
+
+    const s1 = await openSession(adapter, DB_PATH, storage);
+    const id = await s1.db.createCustomDeck("Weak verbs");
+    const backup = await s1.db.exportDatabaseToBuffer();
+    await s1.db.deleteCustomDeck(id);
+
+    await s1.log.markOwnLogApplied();
+    await s1.db.restoreFromBackupData(backup);
+    expect((await s1.db.getAllCustomDecks()).map((d) => d.name)).toEqual(["Weak verbs"]);
+
+    await s1.log.replayOwnLog();
+    expect((await s1.db.getAllCustomDecks()).map((d) => d.name)).toEqual(["Weak verbs"]);
+  });
 });

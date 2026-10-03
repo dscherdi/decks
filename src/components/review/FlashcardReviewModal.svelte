@@ -14,7 +14,7 @@
     SchedulingPreview,
     SessionProgress,
   } from "@decks/core";
-  import { I18n, yieldToUI, toSpeechText, type ResolvedRender } from "@decks/core";
+  import { I18n, wantsRepair, yieldToUI, toSpeechText, type ResolvedRender } from "@decks/core";
   import type { TtsService } from "../../services/TtsService";
   import { prepareFuzzySearch } from "obsidian";
   import { computeCardHealth } from "@decks/core";
@@ -91,6 +91,13 @@
   export let cramMode = false;
   export let allCards: Flashcard[] = [];
   export let isActive: (() => boolean) | undefined = undefined;
+  /** Re-read and repair for a card that keeps lapsing. Null when the workbench
+   *  never wrote these cards, and then nothing is offered. */
+  export let repair: {
+    resolve: (card: Flashcard) => Promise<{ page: number; path: string } | null>;
+    read: (source: { page: number; path: string }) => void;
+    fix: (card: Flashcard, source: { page: number; path: string }) => void;
+  } | null = null;
 
   const dispatch = createEventDispatcher();
 
@@ -675,8 +682,37 @@
     }
   }
 
+  // Where the current card came from, when it is one the workbench wrote and
+  // has been missed enough times to be the suspect itself.
+  //
+  // How often is too often is the leech threshold: the same question the leech
+  // filter already asks, answered once by the reader rather than twice by us. A
+  // card offered repair here is a card that filter would catch.
+  let repairSource: { page: number; path: string } | null = null;
+  $: repairThreshold = settings.review.leechThreshold;
+  $: repairOffered =
+    repair !== null &&
+    !cramMode &&
+    repairSource !== null &&
+    wantsRepair(currentCard?.lapses ?? 0, true, repairThreshold);
+
+  async function loadRepairSource(card: Flashcard): Promise<void> {
+    repairSource = null;
+    // Asked only for a card already past the threshold, so an ordinary review
+    // costs no lookup.
+    if (!repair || cramMode || !wantsRepair(card.lapses ?? 0, true, repairThreshold))
+      return;
+    try {
+      const found = await repair.resolve(card);
+      if (currentCard?.id === card.id) repairSource = found;
+    } catch (e) {
+      console.debug("Decks: could not resolve the card's source", e);
+    }
+  }
+
   async function loadCard() {
     if (!currentCard) return;
+    void loadRepairSource(currentCard);
 
     const parts = getBreadcrumbParts(currentCard);
     const initialCollapsed = new Set<number>();
@@ -2037,6 +2073,29 @@
     {/key}
 
     <div class="decks-action-buttons">
+      {#if showAnswer && repairOffered && repairSource && currentCard}
+        <div class="decks-repair-offer">
+          <span class="decks-repair-count">
+            {I18n.format(r.repair.missed, { count: currentCard.lapses })}
+          </span>
+          <span class="decks-repair-hint">{r.repair.hint}</span>
+          <button
+            type="button"
+            class="decks-repair-action"
+            on:click={() => repairSource && repair?.read(repairSource)}
+          >
+            {I18n.format(r.repair.reread, { page: repairSource.page })}
+          </button>
+          <button
+            type="button"
+            class="decks-repair-action"
+            on:click={() =>
+              currentCard && repairSource && repair?.fix(currentCard, repairSource)}
+          >
+            {r.repair.repair}
+          </button>
+        </div>
+      {/if}
       {#if !showAnswer}
         <button
           class="decks-show-answer-button"
@@ -2697,6 +2756,35 @@
     margin: 0 auto;
     width: 100%;
     max-width: 600px;
+  }
+
+  /* A card that keeps being missed, offering the two things that help: the
+     page it came from, and a fix. Sits above the ratings, never in their way. */
+  .decks-repair-offer {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    flex-wrap: wrap;
+    width: 100%;
+    margin-bottom: 8px;
+    padding: 4px 8px;
+    box-sizing: border-box;
+    border-radius: var(--radius-s);
+    background: rgba(var(--color-yellow-rgb), 0.1);
+    font-size: 11px;
+  }
+  .decks-repair-count {
+    color: var(--text-warning);
+    font-weight: 500;
+  }
+  .decks-repair-hint {
+    flex: 1 1 auto;
+    color: var(--text-muted);
+  }
+  .decks-repair-action {
+    font-size: 11px;
+    padding: 2px 8px;
+    height: auto;
   }
 
   .decks-action-buttons {

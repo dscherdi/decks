@@ -234,12 +234,18 @@ export class Modal {
 
 export class ItemView {
   app: any;
+  leaf: any;
   containerEl: HTMLElement;
   contentEl: HTMLElement;
 
   constructor(leaf: any) {
+    this.leaf = leaf;
     this.containerEl = activeDocument.createElement("div");
     this.contentEl = activeDocument.createElement("div");
+  }
+
+  setState(_state: unknown, _result: unknown): Promise<void> {
+    return Promise.resolve();
   }
 
   onOpen(): Promise<void> {

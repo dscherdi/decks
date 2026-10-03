@@ -399,6 +399,10 @@ class SimpleDatabaseWorker {
    *     COALESCE(deleted_at, modified) — propagates tombstones.
    *   - profile_tag_mappings: conditional replace by COALESCE(deleted_at, created).
    *
+   *   - ai_sessions: conditional replace by `modified` (newer wins).
+   *   - ai_staged_cards: same, except `saved` is terminal and never walked back.
+   *   - ai_source_concepts, ai_source_extractions: union by id (a cache).
+   *
    * Consulted but never merged (local-only): custom_deck_card_tombstones.
    * Excluded (local-only): journal_state.
    */
@@ -431,6 +435,14 @@ class SimpleDatabaseWorker {
       // Exam attempts: append-only and immutable once ended — union by id.
       this.mergeAppendOnly(remoteDb, "exam_sessions");
       this.mergeAppendOnly(remoteDb, "exam_answers");
+      // AI workbench: a pile started on one device is triaged on another.
+      // Sessions are plain newer-wins; staged cards need one extra rule.
+      this.mergeByModified(remoteDb, "ai_sessions");
+      this.mergeStagedCards(remoteDb);
+      // The ledger is a cache of what a source contains, so either device's copy
+      // is equally right and first writer wins.
+      this.mergeAppendOnly(remoteDb, "ai_source_concepts");
+      this.mergeAppendOnly(remoteDb, "ai_source_extractions");
 
       this.db.exec("COMMIT");
       self.postMessage({ type: "dbg", message: "Sync with disk completed" });
@@ -526,6 +538,44 @@ class SimpleDatabaseWorker {
       stmt.free();
     } catch {
       // Remote may lack the table.
+    }
+  }
+
+  /** Staged cards: newer-wins by `modified`, except that `saved` is terminal. */
+  private mergeStagedCards(remoteDb: Database): void {
+    if (!this.db) return;
+    try {
+      const result = remoteDb.exec(`SELECT * FROM ai_staged_cards`);
+      if (result.length === 0) return;
+      const columns = result[0].columns;
+      const modIndex = columns.indexOf("modified");
+      const idIndex = columns.indexOf("id");
+      const statusIndex = columns.indexOf("status");
+      const placeholders = columns.map(() => "?").join(",");
+      const columnList = columns.join(",");
+      const stmt = this.db.prepare(
+        `INSERT OR REPLACE INTO ai_staged_cards (${columnList}) VALUES (${placeholders})`
+      );
+      for (const row of result[0].values) {
+        const id = row[idIndex] as string;
+        const remoteMod = row[modIndex] as string;
+        const remoteStatus = row[statusIndex] as string;
+        const localRes = this.db.exec(
+          `SELECT modified, status FROM ai_staged_cards WHERE id = ?`,
+          [id]
+        );
+        if (!localRes.length) {
+          stmt.run(row);
+          continue;
+        }
+        const localMod = localRes[0].values[0][0] as string;
+        const localStatus = localRes[0].values[0][1] as string;
+        if (localStatus === "saved" && remoteStatus !== "saved") continue;
+        if (remoteMod > localMod) stmt.run(row);
+      }
+      stmt.free();
+    } catch {
+      // Remote may lack the table on an older schema.
     }
   }
 

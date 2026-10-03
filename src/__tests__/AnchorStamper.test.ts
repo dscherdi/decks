@@ -3,7 +3,12 @@ import { ObsidianNoteAccess } from "../services/ObsidianNoteAccess";
 import type { Flashcard } from "../database/types";
 import type { App, TFile } from "obsidian";
 import type { IDatabaseService } from "@decks/core";
-import { generateAnchorId, generateClozeFlashcardId } from "@decks/core";
+import {
+  encodeAnchorValue,
+  generateClozeFlashcardId,
+  generateFlashcardId,
+  generateReverseFlashcardId,
+} from "@decks/core";
 
 class TFileLike {
   public stat = { mtime: 100 };
@@ -79,7 +84,7 @@ function mockEnv(content: string): {
 
 function makeCard(partial: Partial<Flashcard>): Flashcard {
   return {
-    id: "card_1",
+    id: "card_q1",
     deckId: "deck_1",
     front: "",
     back: "",
@@ -112,6 +117,13 @@ function stamperFor(env: { app: App; db: FakeDb }): AnchorStamper {
   return new AnchorStamper(new ObsidianNoteAccess(env.app), env.db as unknown as IDatabaseService);
 }
 
+/** The value a host carrying these ids gets. */
+function value(kind: "a" | "b" | "c" | "p", ids: (string | null)[]): string {
+  const encoded = encodeAnchorValue(kind, ids);
+  if (encoded === null) throw new Error(`cannot encode ${ids.join(",")}`);
+  return encoded;
+}
+
 describe("AnchorStamper multiple-choice (q role)", () => {
   const OPTIONS = "- [ ] Oxygen\n- [x] Argon\n- [ ] Nitrogen";
 
@@ -125,14 +137,12 @@ describe("AnchorStamper multiple-choice (q role)", () => {
     const outcome = await stamperFor(env).ensureAnchored(card);
 
     expect(outcome.ok).toBe(true);
-    const tokenId = generateAnchorId("Noble gas?");
+    const v = value("a", ["card_q1"]);
     // Blank line between the last option and the token: a directly-following
     // line would lazily continue the last list item.
-    expect(env.currentContent()).toContain(
-      `- [ ] Nitrogen\n\n%%dk:q:${tokenId}%%`
-    );
-    expect(env.db.bindings.get(`q:${tokenId}`)).toBe("card_1");
-    expect(card.anchor).toBe(`q:${tokenId}`);
+    expect(env.currentContent()).toContain(`- [ ] Nitrogen\n\n%%dk:q:${v}%%`);
+    expect(env.db.bindings.get(`q:${v}`)).toBe("card_q1");
+    expect(card.anchor).toBe(`q:${v}`);
   });
 
   it("stamps after the notes divider region, still blank-line separated", async () => {
@@ -148,13 +158,12 @@ describe("AnchorStamper multiple-choice (q role)", () => {
     const outcome = await stamperFor(env).ensureAnchored(card);
 
     expect(outcome.ok).toBe(true);
-    const tokenId = generateAnchorId("Noble gas?");
     expect(env.currentContent()).toContain(
-      `Group 18 explanation.\n\n%%dk:q:${tokenId}%%`
+      `Group 18 explanation.\n\n%%dk:q:${value("a", ["card_q1"])}%%`
     );
   });
 
-  it("adopts an existing q token and ignores a dormant h token", async () => {
+  it("rewrites a minted q token in place and leaves a dormant h token alone", async () => {
     const env = mockEnv(
       `## Noble gas?\n\n${OPTIONS}\n%%dk:h:old1%%\n\n%%dk:q:mine2%%\n`
     );
@@ -165,66 +174,87 @@ describe("AnchorStamper multiple-choice (q role)", () => {
     });
     const outcome = await stamperFor(env).ensureAnchored(card);
 
-    expect(outcome.ok && outcome.adopted).toBe(true);
-    expect(env.db.bindings.get("q:mine2")).toBe("card_1");
-    expect(env.db.bindings.has("h:old1")).toBe(false);
-    // No second token was written.
-    expect(env.currentContent().match(/%%dk:q:/g)).toHaveLength(1);
-  });
-
-  it("never adopts a dormant h token for a question", async () => {
-    const env = mockEnv(`## Noble gas?\n\n${OPTIONS}\n%%dk:h:old1%%\n`);
-    const card = makeCard({
-      front: "Noble gas?",
-      back: OPTIONS,
-      type: "multiple-choice",
-    });
-    const outcome = await stamperFor(env).ensureAnchored(card);
-
     expect(outcome.ok).toBe(true);
-    const tokenId = generateAnchorId("Noble gas?");
-    expect(card.anchor).toBe(`q:${tokenId}`);
+    const v = value("a", ["card_q1"]);
+    expect(env.currentContent()).toContain(`%%dk:h:old1%%\n\n%%dk:q:${v}%%`);
+    expect(env.currentContent().match(/%%dk:q:/g)).toHaveLength(1);
     expect(env.db.bindings.has("h:old1")).toBe(false);
   });
 });
 
 describe("AnchorStamper", () => {
-  it("writes the h token on its own line after the body and binds it", async () => {
+  it("writes the card's id on its own line after the body", async () => {
     const env = mockEnv("## Question\n\nFirst line.\nLast line.\n");
     const card = makeCard({ front: "Question", back: "First line.\nLast line." });
     const outcome = await stamperFor(env).ensureAnchored(card);
 
     expect(outcome.ok).toBe(true);
-    const tokenId = generateAnchorId("Question");
-    expect(env.currentContent()).toContain(`Last line.\n%%dk:h:${tokenId}%%`);
-    expect(env.db.bindings.get(`h:${tokenId}`)).toBe("card_1");
-    expect(card.anchor).toBe(`h:${tokenId}`);
+    const v = value("a", ["card_q1"]);
+    expect(env.currentContent()).toContain(`Last line.\n%%dk:h:${v}%%`);
+    // Compatibility row for versions that still resolve through bindings.
+    expect(env.db.bindings.get(`h:${v}`)).toBe("card_q1");
+    expect(card.anchor).toBe(`h:${v}`);
   });
 
-  it("adopts an existing token instead of double-stamping", async () => {
-    const env = mockEnv("## Question\n\nBody text. %%dk:h:zzz%%\n");
-    const card = makeCard({ front: "Question", back: "Body text." });
+  it("does nothing for a card whose token already carries its id", async () => {
+    const v = value("a", ["card_q1"]);
+    const env = mockEnv(`## Question\n\nBody text.\n%%dk:h:${v}%%\n`);
+    const card = makeCard({ front: "Question", back: "Body text.", anchor: `h:${v}` });
     const outcome = await stamperFor(env).ensureAnchored(card);
 
-    expect(outcome.ok && outcome.adopted).toBe(true);
-    expect(env.currentContent()).not.toContain("%%dk:h:zzz%% %%dk:h:");
-    expect(env.db.bindings.get("h:zzz")).toBe("card_1");
+    expect(outcome).toEqual({ ok: false, reason: "already_anchored" });
+    expect(env.db.mtimeStamps).toEqual([]);
   });
 
-  it("adopts a token line that is no longer last in the body", async () => {
+  it("upgrades a minted token in place to the id its binding names", async () => {
     const env = mockEnv(
       "## Question\n\nBody text.\n%%dk:h:zzz%%\nAdded afterwards.\n"
     );
+    // Bound before the front was edited, so the bound id is not the content id.
+    env.db.bindings.set("h:zzz", "card_old7");
     const card = makeCard({
+      id: "card_old7",
       front: "Question",
       back: "Body text.\n\nAdded afterwards.",
+      anchor: "h:zzz",
     });
     const outcome = await stamperFor(env).ensureAnchored(card);
 
-    expect(outcome.ok && outcome.adopted).toBe(true);
-    const tokenCount = (env.currentContent().match(/%%dk:h:/g) ?? []).length;
-    expect(tokenCount).toBe(1);
-    expect(env.db.bindings.get("h:zzz")).toBe("card_1");
+    expect(outcome.ok).toBe(true);
+    const v = value("a", ["card_old7"]);
+    expect(env.currentContent()).toBe(
+      `## Question\n\nBody text.\n%%dk:h:${v}%%\nAdded afterwards.\n`
+    );
+    expect(card.anchor).toBe(`h:${v}`);
+  });
+
+  it("gives a copied token's card its own id", async () => {
+    const original = value("a", ["card_q1"]);
+    const env = mockEnv(
+      `## First\n\nBody one.\n%%dk:h:${original}%%\n\n## Second\n\nBody two.\n%%dk:h:${original}%%\n`
+    );
+    const copyId = generateFlashcardId("Second");
+    const card = makeCard({ id: copyId, front: "Second", back: "Body two." });
+    const outcome = await stamperFor(env).ensureAnchored(card);
+
+    expect(outcome.ok).toBe(true);
+    expect(env.currentContent()).toContain(
+      `Body one.\n%%dk:h:${original}%%`
+    );
+    expect(env.currentContent()).toContain(
+      `Body two.\n%%dk:h:${value("a", [copyId])}%%`
+    );
+  });
+
+  it("leaves a token naming another id alone until this device has synced it", async () => {
+    const other = value("a", ["card_zz9"]);
+    const content = `## Question\n\nBody text.\n%%dk:h:${other}%%\n`;
+    const env = mockEnv(content);
+    const card = makeCard({ front: "Question", back: "Body text." });
+    const outcome = await stamperFor(env).ensureAnchored(card);
+
+    expect(outcome).toEqual({ ok: false, reason: "stale" });
+    expect(env.currentContent()).toBe(content);
   });
 
   it("skips duplicate fronts deterministically", async () => {
@@ -247,10 +277,13 @@ describe("AnchorStamper", () => {
     expect(env.currentContent()).not.toContain("%%dk:");
   });
 
-  it("stamps the cloze line and binds every sibling on it", async () => {
+  it("packs every deletion on the line into one token", async () => {
     const body = "The ==heart== pumps ==blood== around.";
     const env = mockEnv(`## Anatomy\n\n${body}\n`);
+    const blood = generateClozeFlashcardId("Anatomy", "blood", 1);
+    const heart = generateClozeFlashcardId("Anatomy", "heart", 0);
     const card = makeCard({
+      id: blood,
       front: "Anatomy",
       back: body,
       type: "cloze",
@@ -260,18 +293,32 @@ describe("AnchorStamper", () => {
     const outcome = await stamperFor(env).ensureAnchored(card);
 
     expect(outcome.ok).toBe(true);
-    const tokenId = generateAnchorId(body);
-    expect(env.currentContent()).toContain(`around. %%dk:c:${tokenId}%%`);
-    expect(env.db.bindings.get(`c:${tokenId}#0`)).toBe(
-      generateClozeFlashcardId("Anatomy", "heart", 0)
-    );
-    expect(env.db.bindings.get(`c:${tokenId}#1`)).toBe(
-      generateClozeFlashcardId("Anatomy", "blood", 1)
-    );
-    if (outcome.ok) expect(outcome.anchorKey).toBe(`c:${tokenId}#1`);
+    const v = value("p", [heart, blood]);
+    expect(env.currentContent()).toContain(`around. %%dk:c:${v}%%`);
+    expect(env.db.bindings.get(`c:${v}#0`)).toBe(heart);
+    expect(env.db.bindings.get(`c:${v}#1`)).toBe(blood);
+    if (outcome.ok) expect(outcome.anchorKey).toBe(`c:${v}#1`);
   });
 
-  it("stamps every member of a cloze group sequentially against the evolving file", async () => {
+  it("counts deletions as the parser does, skipping code spans", async () => {
+    const body = "Use `==x==` then ==real== here.";
+    const env = mockEnv(`## Syntax\n\n${body}\n`);
+    const real = generateClozeFlashcardId("Syntax", "real", 0);
+    const card = makeCard({
+      id: real,
+      front: "Syntax",
+      back: body,
+      type: "cloze",
+      clozeText: "real",
+      clozeOrder: 0,
+    });
+    const outcome = await stamperFor(env).ensureAnchored(card);
+
+    expect(outcome.ok).toBe(true);
+    expect(env.currentContent()).toContain(`here. %%dk:c:${value("p", [real])}%%`);
+  });
+
+  it("stamps each cloze line of a group against the evolving file", async () => {
     const body = [
       "- it is to ==create== life",
       "- it is to ==help== others",
@@ -280,13 +327,15 @@ describe("AnchorStamper", () => {
     const env = mockEnv(`###### What is the meaning of life\n\n${body}\n`);
     const stamper = stamperFor(env);
     const front = "What is the meaning of life";
+    const texts = ["create", "help", "participate"];
 
     for (let order = 0; order < 3; order++) {
       const card = makeCard({
-        id: `ccard_${order}`,
+        id: generateClozeFlashcardId(front, texts[order], order),
         front,
         back: body,
         type: "cloze",
+        clozeText: texts[order],
         clozeOrder: order,
       });
       const outcome = await stamper.ensureAnchored(card);
@@ -295,33 +344,10 @@ describe("AnchorStamper", () => {
 
     const tokenCount = (env.currentContent().match(/%%dk:c:/g) ?? []).length;
     expect(tokenCount).toBe(3);
-    expect(env.currentContent()).toMatch(/creation of god %%dk:c:[a-z0-9]+%%/);
-  });
-
-  it("stamps the third cloze when two lines already carry tokens", async () => {
-    const env = mockEnv(
-      "###### What is the meaning of life\n\n" +
-        "- it is to ==create== life %%dk:c:ealgpb%%\n" +
-        "- it is to ==help== others  %%dk:c:91gt5d%%\n" +
-        "- it is to ==participate== in creation of god\n"
+    const last = generateClozeFlashcardId(front, "participate", 2);
+    expect(env.currentContent()).toContain(
+      `creation of god %%dk:c:${value("p", [last])}%%`
     );
-    const back = [
-      "- it is to ==create== life",
-      "- it is to ==help== others",
-      "- it is to ==participate== in creation of god",
-    ].join("\n");
-    const card = makeCard({
-      id: "ccard_2",
-      front: "What is the meaning of life",
-      back,
-      type: "cloze",
-      clozeText: "participate",
-      clozeOrder: 2,
-    });
-    const outcome = await stamperFor(env).ensureAnchored(card);
-
-    expect(outcome.ok).toBe(true);
-    expect(env.currentContent()).toMatch(/creation of god %%dk:c:[a-z0-9]+%%/);
   });
 
   it("suppresses the resync mtime only when the deck was clean", async () => {
@@ -356,23 +382,35 @@ describe("AnchorStamper", () => {
     expect(env.currentContent()).toBe("canvas json untouched");
   });
 
-  it("stamps the base card when a reverse card is rated, binding both keys", async () => {
-    const env = mockEnv("## Base front\n\nBase back.\n");
-    const { generateFlashcardId } = jest.requireActual("@decks/core");
+  it("writes both ids when the note makes reverse cards", async () => {
+    const env = mockEnv("---\nreverse: true\n---\n## Base front\n\nBase back.\n");
     const baseId = generateFlashcardId("Base front");
-    env.db.cards.set(baseId, makeCard({ id: baseId, front: "Base front", back: "Base back." }));
+    const reverseId = generateReverseFlashcardId("Base front");
     const reverse = makeCard({
-      id: "rcard_1",
+      id: reverseId,
       front: "Base back.",
       back: "Base front",
     });
     const outcome = await stamperFor(env).ensureAnchored(reverse);
 
     expect(outcome.ok).toBe(true);
-    const tokenId = generateAnchorId("Base front");
-    expect(env.currentContent()).toContain(`Base back.\n%%dk:h:${tokenId}%%`);
-    expect(env.db.bindings.get(`h:${tokenId}`)).toBe(baseId);
-    expect(env.db.bindings.get(`h:${tokenId}:rev`)).toBe("rcard_1");
+    const v = value("b", [baseId, reverseId]);
+    expect(env.currentContent()).toContain(`Base back.\n%%dk:h:${v}%%`);
+    expect(env.db.bindings.get(`h:${v}`)).toBe(baseId);
+    expect(env.db.bindings.get(`h:${v}:rev`)).toBe(reverseId);
+    expect(reverse.anchor).toBe(`h:${v}:rev`);
+  });
+
+  it("reads the reverse flag as a YAML boolean, as Obsidian does", async () => {
+    const env = mockEnv("---\r\nreverse: True # both ways\r\n---\r\n## Base front\n\nBase back.\n");
+    const baseId = generateFlashcardId("Base front");
+    const outcome = await stamperFor(env).ensureAnchored(
+      makeCard({ id: baseId, front: "Base front", back: "Base back." })
+    );
+
+    expect(outcome.ok).toBe(true);
+    const v = value("b", [baseId, generateReverseFlashcardId("Base front")]);
+    expect(env.currentContent()).toContain(`Base back.\n%%dk:h:${v}%%`);
   });
 
   it("never stamps occlusion v2 cards (mask ids are already stable)", async () => {
@@ -398,21 +436,20 @@ describe("AnchorStamper", () => {
     const outcome = await stamperFor(env).ensureAnchored(card);
 
     expect(outcome.ok).toBe(true);
-    const tokenId = generateAnchorId("chat");
-    expect(env.currentContent()).toContain(
-      `| chat %%dk:t:${tokenId}%% |  cat  |`
-    );
-    expect(env.db.bindings.get(`t:${tokenId}`)).toBe("card_1");
-    expect(card.anchor).toBe(`t:${tokenId}`);
+    const v = value("a", ["card_q1"]);
+    expect(env.currentContent()).toContain(`| chat %%dk:t:${v}%% |  cat  |`);
+    expect(card.anchor).toBe(`t:${v}`);
   });
 
-  it("binds every cloze in a table row's cloze cell", async () => {
-    const env = mockEnv(
-      "## Organs\n\n| Front | Back |\n|---|---|\n| word | The ==heart== and ==lungs== |\n"
-    );
+  it("packs every cloze in a table row's cloze cell", async () => {
     const back = "The ==heart== and ==lungs==";
+    const env = mockEnv(
+      `## Organs\n\n| Front | Back |\n|---|---|\n| word | ${back} |\n`
+    );
+    const heart = generateClozeFlashcardId("word", "heart", 0);
+    const lungs = generateClozeFlashcardId("word", "lungs", 1);
     const card = makeCard({
-      id: "ccard_x",
+      id: lungs,
       front: "word",
       back,
       type: "cloze",
@@ -424,14 +461,10 @@ describe("AnchorStamper", () => {
     const outcome = await stamperFor(env).ensureAnchored(card);
 
     expect(outcome.ok).toBe(true);
-    const tokenId = generateAnchorId("word");
-    expect(env.db.bindings.get(`t:${tokenId}#0`)).toBe(
-      generateClozeFlashcardId("word", "heart", 0)
-    );
-    expect(env.db.bindings.get(`t:${tokenId}#1`)).toBe(
-      generateClozeFlashcardId("word", "lungs", 1)
-    );
-    if (outcome.ok) expect(outcome.anchorKey).toBe(`t:${tokenId}#1`);
+    const v = value("p", [heart, lungs]);
+    expect(env.currentContent()).toContain(`| word %%dk:t:${v}%% |`);
+    expect(env.db.bindings.get(`t:${v}#0`)).toBe(heart);
+    if (outcome.ok) expect(outcome.anchorKey).toBe(`t:${v}#1`);
   });
 
   it("stamps a table-hosted cloze even when templateRow is missing", async () => {
@@ -439,8 +472,9 @@ describe("AnchorStamper", () => {
     const env = mockEnv(
       `## Organs\n\n| Front | Back |\n|---|---|\n| word | ${back} |\n`
     );
+    const heart = generateClozeFlashcardId("word", "heart", 0);
     const card = makeCard({
-      id: "ccard_x",
+      id: heart,
       front: "word",
       back,
       type: "cloze",
@@ -452,12 +486,9 @@ describe("AnchorStamper", () => {
     const outcome = await stamperFor(env).ensureAnchored(card);
 
     expect(outcome.ok).toBe(true);
-    const tokenId = generateAnchorId("word");
-    expect(env.currentContent()).toContain(`| word %%dk:t:${tokenId}%% |`);
-    expect(env.db.bindings.get(`t:${tokenId}#0`)).toBe(
-      generateClozeFlashcardId("word", "heart", 0)
-    );
-    if (outcome.ok) expect(outcome.anchorKey).toBe(`t:${tokenId}#0`);
+    const v = value("p", [heart, generateClozeFlashcardId("word", "lungs", 1)]);
+    expect(env.currentContent()).toContain(`| word %%dk:t:${v}%% |`);
+    if (outcome.ok) expect(outcome.anchorKey).toBe(`t:${v}#0`);
   });
 
   it("skips duplicate table fronts deterministically", async () => {
@@ -477,7 +508,7 @@ describe("AnchorStamper", () => {
     expect(env.currentContent()).not.toContain("%%dk:");
   });
 
-  it("adopts an existing t token in any cell of the row", async () => {
+  it("rewrites an existing t token wherever it sits in the row", async () => {
     const env = mockEnv(
       "## Vocab\n\n| Front | Back |\n|---|---|\n| chat | cat %%dk:t:zz99%% |\n"
     );
@@ -490,12 +521,14 @@ describe("AnchorStamper", () => {
     });
     const outcome = await stamperFor(env).ensureAnchored(card);
 
-    expect(outcome.ok && outcome.adopted).toBe(true);
+    expect(outcome.ok).toBe(true);
+    expect(env.currentContent()).toContain(
+      `| chat | cat %%dk:t:${value("a", ["card_q1"])}%% |`
+    );
     expect((env.currentContent().match(/%%dk:t:/g) ?? []).length).toBe(1);
-    expect(env.db.bindings.get("t:zz99")).toBe("card_1");
   });
 
-  it("stamps an occlusion item line and binds it", async () => {
+  it("stamps an occlusion item line", async () => {
     const env = mockEnv(
       "## Anatomy\n\n![[skeleton.png]]\n1. ==Femur==\n2. ==Tibia==\n"
     );
@@ -511,10 +544,10 @@ describe("AnchorStamper", () => {
     const outcome = await stamperFor(env).ensureAnchored(card);
 
     expect(outcome.ok).toBe(true);
-    const tokenId = generateAnchorId("Femur");
-    expect(env.currentContent()).toContain(`1. ==Femur== %%dk:o:${tokenId}%%`);
+    const v = value("c", ["ccard_occ"]);
+    expect(env.currentContent()).toContain(`1. ==Femur== %%dk:o:${v}%%`);
     expect(env.currentContent()).toContain("2. ==Tibia==\n");
-    expect(env.db.bindings.get(`o:${tokenId}`)).toBe("ccard_occ");
+    expect(env.db.bindings.get(`o:${v}`)).toBe("ccard_occ");
   });
 
   it("stamps a whole file in one write via stampFileBatch", async () => {
@@ -533,13 +566,57 @@ describe("AnchorStamper", () => {
     ];
     const result = await stamperFor(env).stampFileBatch("test.md", cards);
 
-    expect(result).toEqual({ stamped: 2, skipped: 0 });
+    expect(result.stamped).toBe(2);
+    expect(result.skipped).toBe(0);
     expect(processCalls).toBe(1);
     expect(env.currentContent()).toContain(
-      `Body one.\n%%dk:h:${generateAnchorId("First")}%%`
+      `Body one.\n%%dk:h:${value("a", ["card_a"])}%%`
     );
     expect(env.currentContent()).toContain(
-      `Body two.\n%%dk:h:${generateAnchorId("Second")}%%`
+      `Body two.\n%%dk:h:${value("a", ["card_b"])}%%`
+    );
+  });
+});
+
+describe("AnchorStamper title mode", () => {
+  function titleEnv(content: string): ReturnType<typeof mockEnv> {
+    const env = mockEnv(content);
+    env.db.getDeckWithProfile = async (deckId: string) => ({
+      id: deckId,
+      profile: { headerLevel: 0, clozeEnabled: true },
+    });
+    return env;
+  }
+
+  it("writes the note's token into its body, leaving decks-id alone", async () => {
+    const env = titleEnv("---\ndecks-id: abc\n---\nThe body.\n");
+    env.db.bindings.set("p:abc", "card_t1");
+    const card = makeCard({ id: "card_t1", front: "Note", back: "The body.", anchor: "p:abc" });
+    const outcome = await stamperFor(env).ensureAnchored(card);
+
+    expect(outcome.ok).toBe(true);
+    const v = value("a", ["card_t1"]);
+    expect(env.currentContent()).toBe(`---\ndecks-id: abc\n---\nThe body.\n%%dk:h:${v}%%\n`);
+    expect(card.anchor).toBe(`h:${v}`);
+  });
+
+  it("packs a title note's cloze line", async () => {
+    const env = titleEnv("Water is ==wet== and ==clear==.\n");
+    const wet = generateClozeFlashcardId("Note", "wet", 0);
+    const clear = generateClozeFlashcardId("Note", "clear", 1);
+    const card = makeCard({
+      id: clear,
+      front: "Note",
+      back: "Water is ==wet== and ==clear==.",
+      type: "cloze",
+      clozeText: "clear",
+      clozeOrder: 1,
+    });
+    const outcome = await stamperFor(env).ensureAnchored(card);
+
+    expect(outcome.ok).toBe(true);
+    expect(env.currentContent()).toBe(
+      `Water is ==wet== and ==clear==. %%dk:c:${value("p", [wet, clear])}%%\n`
     );
   });
 });

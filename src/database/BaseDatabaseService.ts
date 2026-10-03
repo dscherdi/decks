@@ -21,10 +21,16 @@ import type {
   TemplateRow,
   DeckTemplate,
   TemplateFaceType,
+  AiSession,
+  AiSessionTurn,
+  AiSourceConcept,
+  AiStagedCard,
 } from "./types";
+import type { ConceptCard, RubricCode, SessionCounts } from "@decks/core";
 import { DEFAULT_PROFILE_ID, deckWithProfile } from "./types";
 import type { FilterDefinition } from "./types";
-import { generateCustomDeckCardId, generateCustomDeckId, generateFlashcardId, SQL_QUERIES, type SyncOpV1 } from "@decks/core";
+import { generateCustomDeckCardId, generateCustomDeckId, generateFlashcardId, reviewCardDaysSQL, SQL_QUERIES, type SyncOpV1 } from "@decks/core";
+import { aiConceptId, aiSessionValues, aiStagedCardValues, applyRowPatch, isCrammed } from "@decks/core";
 import { normalizeProfile } from "@decks/core";
 import { pickProfileMapping, studyTagsFor } from "@decks/core";
 import type { TagScopeOptions } from "@decks/core";
@@ -39,7 +45,6 @@ import type {
   ReviewLogRow,
   CountResult,
   BacklogRow,
-  DateCountRow,
   SqlRecord,
   SqlRow,
 } from "@decks/core";
@@ -57,6 +62,9 @@ export interface QueryConfig {
 // Schema version at which card IDs became deck-independent. Restoring a backup
 // older than this re-links its review history to the new ID scheme.
 const DECK_INDEPENDENT_ID_VERSION = 36;
+
+// Rows per staged-card sync op, so one big pile does not become one huge log line.
+const AI_STAGED_OP_ROWS = 50;
 
 function serializeTags(tags: string[] | undefined): string {
   if (!tags || tags.length === 0) return "";
@@ -1107,7 +1115,7 @@ export abstract class BaseDatabaseService implements IDatabaseService {
   }
 
   async getFlashcardsByDeck(deckId: string): Promise<Flashcard[]> {
-    const sql = `SELECT * FROM flashcards WHERE deck_id = ? ORDER BY created`;
+    const sql = `SELECT * FROM flashcards WHERE deck_id = ? ORDER BY created, rowid`;
     const results = (await this.querySql(sql, [deckId])) as (
       | string
       | number
@@ -1420,23 +1428,6 @@ export abstract class BaseDatabaseService implements IDatabaseService {
     return orphans.length;
   }
 
-  // Fronts of all cards living in decks OUTSIDE the given path prefix. Used by
-  // the Anki import to reserve fronts already taken elsewhere in the vault, so
-  // an imported card that shares a front gets a " (2)" suffix instead of being
-  // silently merged into the other deck's card. The decks JOIN excludes orphaned
-  // cards on purpose — those stay adoptable by the sync upsert (which preserves
-  // their review history), so their fronts must not be reserved.
-  async getFrontsOutsidePath(pathPrefix: string): Promise<string[]> {
-    const rows = await this.querySql<{ front: string }>(
-      `SELECT DISTINCT f.front FROM flashcards f
-       JOIN decks d ON f.deck_id = d.id
-       WHERE d.filepath NOT LIKE ? || '%'`,
-      [pathPrefix],
-      { asObject: true }
-    );
-    return rows.map((r) => r.front);
-  }
-
   // COUNT OPERATIONS. Queue counts exclude suspended + actively-buried cards;
   // total/maturity counts (countTotalCards, GET_CARD_STATS) include them.
   async countNewCards(deckId: string): Promise<number> {
@@ -1552,97 +1543,14 @@ export abstract class BaseDatabaseService implements IDatabaseService {
     }));
   }
 
-  // FORECAST OPERATIONS (optimized SQL)
-  async getScheduledDueByDay(
+  async countReviewCardDays(
     deckId: string,
     startDate: string,
-    endDate: string
-  ): Promise<{ day: string; count: number }[]> {
-    const now = this.getCurrentTimestamp();
-    const results = await this.querySql<DateCountRow>(
-      SQL_QUERIES.GET_SCHEDULED_DUE_BY_DAY,
-      [deckId, startDate, endDate, now],
-      { asObject: true }
-    );
-    return results.map((row) => ({
-      day: row.date,
-      count: row.count,
-    }));
-  }
-
-  async getScheduledDueByDayMulti(
-    deckIds: string[],
-    startDate: string,
-    endDate: string
-  ): Promise<{ day: string; count: number }[]> {
-    if (deckIds.length === 0) return [];
-
-    const now = this.getCurrentTimestamp();
-    const placeholders = deckIds.map(() => "?").join(",");
-    const sql = `
-      SELECT substr(due_date,1,10) AS day, COUNT(*) AS c
-      FROM flashcards
-      WHERE deck_id IN (${placeholders}) AND state='review'
-        AND due_date >= ? AND due_date < ?
-        AND suspended_at IS NULL
-        AND (buried_until IS NULL OR buried_until <= ?)
-      GROUP BY day
-      ORDER BY day
-    `;
-
-    const results = await this.querySql(sql, [...deckIds, startDate, endDate, now], {
-      asObject: true,
-    });
-    return results.map((row: { day: string; c: number }) => ({
-      day: row.day,
-      count: row.c || 0,
-    }));
-  }
-
-  async getCurrentBacklog(
-    deckId: string,
-    currentDate: string
+    endDate: string,
+    nextDayStartsAt: number
   ): Promise<number> {
     const results = await this.querySql<BacklogRow>(
-      SQL_QUERIES.GET_CURRENT_BACKLOG,
-      [deckId, currentDate, currentDate],
-      { asObject: true }
-    );
-    return results[0]?.n || 0;
-  }
-
-  async getCurrentBacklogMulti(
-    deckIds: string[],
-    currentDate: string
-  ): Promise<number> {
-    if (deckIds.length === 0) return 0;
-
-    const placeholders = deckIds.map(() => "?").join(",");
-    const sql = `
-      SELECT COUNT(*) as n
-      FROM flashcards
-      WHERE deck_id IN (${placeholders}) AND state='review' AND due_date < ?
-        AND suspended_at IS NULL
-        AND (buried_until IS NULL OR buried_until <= ?)
-    `;
-
-    const results = await this.querySql<BacklogRow>(
-      sql,
-      [...deckIds, currentDate, currentDate],
-      {
-        asObject: true,
-      }
-    );
-    return results[0]?.n || 0;
-  }
-
-  async getDeckReviewCountRange(
-    deckId: string,
-    startDate: string,
-    endDate: string
-  ): Promise<number> {
-    const results = await this.querySql<BacklogRow>(
-      SQL_QUERIES.GET_DECK_REVIEW_COUNT_RANGE,
+      reviewCardDaysSQL(nextDayStartsAt),
       [deckId, startDate, endDate],
       { asObject: true }
     );
@@ -2555,8 +2463,8 @@ export abstract class BaseDatabaseService implements IDatabaseService {
  /**
    * Recovery: re-links review logs still keyed to a card's previous ID —
    * hash(deckId + front) from the interim scheme, or the pre-deck hash(front) —
-   * to the card's current deck-independent ID, then rebuilds each card's FSRS
-   * state from its most recent review log. Non-destructive to card IDs. Used by
+   * to the card's current deck-independent ID, then rebuilds the FSRS state of
+   * each card still showing as new from its most recent review log. Used by
    * the manual "rebuild from history" action and to heal the mixed-version sync
    * window where a not-yet-upgraded device delivers old-ID logs.
    */
@@ -2599,7 +2507,8 @@ export abstract class BaseDatabaseService implements IDatabaseService {
     const countRows = await this.querySql<{ count: number }>(
       `SELECT COUNT(*) as count
        FROM flashcards f
-       WHERE EXISTS (SELECT 1 FROM review_logs rl WHERE rl.flashcard_id = f.id)`,
+       WHERE f.state = 'new'
+         AND EXISTS (SELECT 1 FROM review_logs rl WHERE rl.flashcard_id = f.id)`,
       [],
       { asObject: true }
     );
@@ -2630,7 +2539,8 @@ export abstract class BaseDatabaseService implements IDatabaseService {
            GROUP BY flashcard_id
          ) m ON m.flashcard_id = rl.flashcard_id AND m.max_reviewed = rl.reviewed_at
        ) AS latest
-       WHERE flashcards.id = latest.flashcard_id`,
+       WHERE flashcards.id = latest.flashcard_id
+         AND flashcards.state = 'new'`,
       [now]
     );
 
@@ -3728,5 +3638,522 @@ export abstract class BaseDatabaseService implements IDatabaseService {
       []
     )) as Array<(string | number | null)[]>;
     return results.map((row) => this.rowToFlashcard(row));
+  }
+
+  /** Read a JSON array column. Anything that does not parse as an array reads
+   *  as empty — a merge from another build must not take the workbench down. */
+  private parseJsonArray<T>(value: string | number | null): T[] {
+    if (typeof value !== "string" || value.trim() === "") return [];
+    try {
+      const parsed: unknown = JSON.parse(value);
+      return Array.isArray(parsed) ? (parsed as T[]) : [];
+    } catch {
+      return [];
+    }
+  }
+
+  /* --- AI workbench ------------------------------------------------------ */
+
+  protected rowToAiSession(row: (string | number | null)[]): AiSession {
+    return {
+      id: row[0] as string,
+      sourceKind: row[1] as AiSession["sourceKind"],
+      sourceRef: row[2] as string,
+      sourceHash: row[3] as string | null,
+      selectedIds: this.parseJsonArray<string>(row[4]),
+      deckId: row[5] as string | null,
+      profileId: row[6] as string | null,
+      model: row[7] as string | null,
+      spendCents: Number(row[8] ?? 0),
+      turns: this.parseJsonArray<AiSessionTurn>(row[9]),
+      archived: Boolean(row[10]),
+      touchedAt: row[11] as string,
+      created: row[12] as string,
+      modified: row[13] as string,
+    };
+  }
+
+  protected rowToAiStagedCard(row: (string | number | null)[]): AiStagedCard {
+    return {
+      id: row[0] as string,
+      sessionId: row[1] as string,
+      front: row[2] as string,
+      back: (row[3] as string | null) ?? "",
+      notes: (row[4] as string | null) ?? "",
+      cardType: row[5] as AiStagedCard["cardType"],
+      options: row[6] === null ? null : this.parseJsonArray<string>(row[6]),
+      correct: row[7] === null ? null : this.parseJsonArray<number>(row[7]),
+      explanation: row[8] as string | null,
+      // Tri-state on purpose: null means the check has not run, which is not
+      // the same as having run and failed.
+      valid: row[9] === null ? null : Boolean(row[9]),
+      sourcePage: row[10] === null ? null : Number(row[10]),
+      sectionIdx: row[11] === null ? null : Number(row[11]),
+      conceptId: row[12] as string | null,
+      status: row[13] as AiStagedCard["status"],
+      rubricVerdict: row[14] as AiStagedCard["rubricVerdict"],
+      rubricCodes: this.parseJsonArray<RubricCode>(row[15]),
+      fixProposal: row[16] as string | null,
+      parentId: row[17] as string | null,
+      origin: row[18] as AiStagedCard["origin"],
+      dedupHash: row[19] as string | null,
+      created: row[20] as string,
+      modified: row[21] as string,
+    };
+  }
+
+  async createAiSession(
+    session: Omit<AiSession, "id" | "created" | "modified" | "touchedAt">
+  ): Promise<string> {
+    const id = `ais_${Date.now()}_${Math.random().toString(36).substring(2, 11)}`;
+    const now = this.getCurrentTimestamp();
+    const row: AiSession = {
+      ...session,
+      id,
+      selectedIds: session.selectedIds ?? [],
+      spendCents: session.spendCents ?? 0,
+      turns: session.turns ?? [],
+      touchedAt: now,
+      created: now,
+      modified: now,
+    };
+    await this.executeSql(SQL_QUERIES.INSERT_AI_SESSION, aiSessionValues(row));
+    this.emitSyncOp({ o: "ai_session_upsert", p: row });
+    return id;
+  }
+
+  async getAiSession(id: string): Promise<AiSession | null> {
+    const rows = (await this.querySql(
+      "SELECT * FROM ai_sessions WHERE id = ?",
+      [id]
+    )) as (string | number | null)[][];
+    return rows.length > 0 ? this.rowToAiSession(rows[0]) : null;
+  }
+
+  /** Hub ordering: live sessions first, most recently touched at the top. */
+  async getAiSessions(includeArchived = false): Promise<AiSession[]> {
+    const rows = (await this.querySql(
+      includeArchived
+        ? "SELECT * FROM ai_sessions ORDER BY archived ASC, touched_at DESC"
+        : "SELECT * FROM ai_sessions WHERE archived = 0 ORDER BY touched_at DESC",
+      []
+    )) as (string | number | null)[][];
+    return rows.map((row) => this.rowToAiSession(row));
+  }
+
+  /** Patch a session. `touched_at` moves unless the caller opts out, so
+   *  archiving does not promote a session up the hub. */
+  async updateAiSession(
+    id: string,
+    patch: Partial<
+      Pick<
+        AiSession,
+        | "sourceKind"
+        | "sourceRef"
+        | "sourceHash"
+        | "selectedIds"
+        | "deckId"
+        | "profileId"
+        | "model"
+        | "spendCents"
+        | "turns"
+        | "archived"
+      >
+    >,
+    options: { touch?: boolean } = {}
+  ): Promise<void> {
+    // A write that changes nothing is skipped, so it neither re-sorts the hub nor syncs.
+    const current = await this.getAiSession(id);
+    if (!current) return;
+    const { next, changed } = applyRowPatch(current, patch);
+    if (!changed) return;
+
+    const sets: string[] = [];
+    const params: (string | number | null)[] = [];
+    const put = (column: string, value: string | number | null): void => {
+      sets.push(`${column} = ?`);
+      params.push(value);
+    };
+    if (patch.sourceKind !== undefined) put("source_kind", patch.sourceKind);
+    if (patch.sourceRef !== undefined) put("source_ref", patch.sourceRef);
+    if (patch.sourceHash !== undefined) put("source_hash", patch.sourceHash);
+    if (patch.selectedIds !== undefined)
+      put("selected_ids", JSON.stringify(patch.selectedIds));
+    if (patch.deckId !== undefined) put("deck_id", patch.deckId);
+    if (patch.profileId !== undefined) put("profile_id", patch.profileId);
+    if (patch.model !== undefined) put("model", patch.model);
+    if (patch.spendCents !== undefined) put("spend_cents", patch.spendCents);
+    if (patch.turns !== undefined) put("turns", JSON.stringify(patch.turns));
+    if (patch.archived !== undefined) put("archived", patch.archived ? 1 : 0);
+    if (sets.length === 0) return;
+
+    const now = this.getCurrentTimestamp();
+    put("modified", now);
+    if (options.touch !== false) put("touched_at", now);
+    params.push(id);
+    await this.executeSql(
+      `UPDATE ai_sessions SET ${sets.join(", ")} WHERE id = ?`,
+      params
+    );
+    this.emitSyncOp({
+      o: "ai_session_upsert",
+      p: {
+        ...next,
+        modified: now,
+        touchedAt: options.touch !== false ? now : current.touchedAt,
+      },
+    });
+  }
+
+  /** Append a turn. The log is append-only: refinement adds, never rewrites. */
+  async appendAiSessionTurn(id: string, turn: AiSessionTurn): Promise<void> {
+    const session = await this.getAiSession(id);
+    if (!session) return;
+    await this.updateAiSession(id, { turns: [...session.turns, turn] });
+  }
+
+  async deleteAiSession(id: string): Promise<void> {
+    await this.executeSql("DELETE FROM ai_staged_cards WHERE session_id = ?", [
+      id,
+    ]);
+    await this.executeSql("DELETE FROM ai_sessions WHERE id = ?", [id]);
+  }
+
+  async createAiStagedCards(
+    cards: Array<Omit<AiStagedCard, "created" | "modified">>
+  ): Promise<void> {
+    if (cards.length === 0) return;
+    const now = this.getCurrentTimestamp();
+    for (const card of cards) {
+      await this.executeSql(
+        SQL_QUERIES.INSERT_AI_STAGED_CARD,
+        aiStagedCardValues({ ...card, created: now, modified: now })
+      );
+    }
+    await this.emitStagedCardsStampedAt(
+      cards.map((c) => c.id),
+      now
+    );
+  }
+
+  /** Sync the rows a write just stamped; the upsert leaves unchanged rows' `modified` alone. */
+  private async emitStagedCardsStampedAt(
+    ids: string[],
+    stamp: string
+  ): Promise<void> {
+    if (!this.syncLog) return;
+    for (let i = 0; i < ids.length; i += AI_STAGED_OP_ROWS) {
+      const chunk = ids.slice(i, i + AI_STAGED_OP_ROWS);
+      const rows = (await this.querySql(
+        `SELECT * FROM ai_staged_cards WHERE modified = ? AND id IN (${chunk.map(() => "?").join(",")})
+         ORDER BY created ASC, rowid ASC`,
+        [stamp, ...chunk]
+      )) as (string | number | null)[][];
+      if (rows.length === 0) continue;
+      this.emitSyncOp({
+        o: "ai_staged_cards_upsert",
+        p: { rows: rows.map((row) => this.rowToAiStagedCard(row)) },
+      });
+    }
+  }
+
+  /** Every staged card of a session, oldest first. `rowid` breaks the tie: a
+   *  round shares one timestamp, and children could outrank their parent. */
+  async getAiStagedCards(sessionId: string): Promise<AiStagedCard[]> {
+    const rows = (await this.querySql(
+      "SELECT * FROM ai_staged_cards WHERE session_id = ? ORDER BY created ASC, rowid ASC",
+      [sessionId]
+    )) as (string | number | null)[][];
+    return rows.map((row) => this.rowToAiStagedCard(row));
+  }
+
+  /** Flagged cards across every session — the hub's one triage queue. */
+  async getFlaggedAiStagedCards(): Promise<AiStagedCard[]> {
+    const rows = (await this.querySql(
+      `SELECT * FROM ai_staged_cards
+       WHERE rubric_verdict = 'flagged' AND status IN ('proposed', 'kept')
+       ORDER BY created ASC, rowid ASC`,
+      []
+    )) as (string | number | null)[][];
+    return rows.map((row) => this.rowToAiStagedCard(row));
+  }
+
+  async updateAiStagedCard(
+    id: string,
+    patch: Partial<
+      Pick<
+        AiStagedCard,
+        | "front"
+        | "back"
+        | "notes"
+        | "status"
+        | "valid"
+        | "rubricVerdict"
+        | "rubricCodes"
+        | "fixProposal"
+        | "conceptId"
+      >
+    >
+  ): Promise<void> {
+    const stored = (await this.querySql(
+      "SELECT * FROM ai_staged_cards WHERE id = ?",
+      [id]
+    )) as (string | number | null)[][];
+    if (stored.length === 0) return;
+    const { next, changed } = applyRowPatch(this.rowToAiStagedCard(stored[0]), patch);
+    if (!changed) return;
+
+    const sets: string[] = [];
+    const params: (string | number | null)[] = [];
+    const put = (column: string, value: string | number | null): void => {
+      sets.push(`${column} = ?`);
+      params.push(value);
+    };
+    if (patch.front !== undefined) put("front", patch.front);
+    if (patch.back !== undefined) put("back", patch.back);
+    if (patch.notes !== undefined) put("notes", patch.notes);
+    if (patch.status !== undefined) put("status", patch.status);
+    if (patch.valid !== undefined)
+      put("valid", patch.valid === null ? null : patch.valid ? 1 : 0);
+    if (patch.rubricVerdict !== undefined)
+      put("rubric_verdict", patch.rubricVerdict);
+    if (patch.rubricCodes !== undefined)
+      put("rubric_codes", JSON.stringify(patch.rubricCodes));
+    if (patch.fixProposal !== undefined) put("fix_proposal", patch.fixProposal);
+    if (patch.conceptId !== undefined) put("concept_id", patch.conceptId);
+    if (sets.length === 0) return;
+
+    const now = this.getCurrentTimestamp();
+    put("modified", now);
+    params.push(id);
+    await this.executeSql(
+      `UPDATE ai_staged_cards SET ${sets.join(", ")} WHERE id = ?`,
+      params
+    );
+    this.emitSyncOp({
+      o: "ai_staged_cards_upsert",
+      p: { rows: [{ ...next, modified: now }] },
+    });
+  }
+
+  /** What was saved and discarded over a window, counted over `modified`: the
+   *  question is what was decided, not what was generated. */
+  async getAiOutcome(
+    sinceIso: string
+  ): Promise<{ saved: number; discarded: number }> {
+    const rows = (await this.querySql(
+      `SELECT
+         SUM(CASE WHEN status = 'saved' THEN 1 ELSE 0 END),
+         SUM(CASE WHEN status = 'discarded' THEN 1 ELSE 0 END)
+       FROM ai_staged_cards WHERE modified >= ?`,
+      [sinceIso]
+    )) as Array<[number | null, number | null]>;
+    const [saved, discarded] = rows[0] ?? [0, 0];
+    return { saved: Number(saved ?? 0), discarded: Number(discarded ?? 0) };
+  }
+
+  /** Per-session counts for the hub in one query. `saved` is separate from the
+   *  live pile — it never returns to triage. */
+  async getAiSessionCounts(): Promise<Record<string, SessionCounts>> {
+    const rows = (await this.querySql(
+      `SELECT session_id,
+              SUM(CASE WHEN status IN ('proposed','kept') THEN 1 ELSE 0 END),
+              SUM(CASE WHEN status IN ('proposed','kept') AND rubric_verdict = 'flagged' THEN 1 ELSE 0 END),
+              SUM(CASE WHEN status = 'saved' THEN 1 ELSE 0 END),
+              MIN(CASE WHEN status NOT IN ('discarded','superseded') THEN source_page END),
+              MAX(CASE WHEN status NOT IN ('discarded','superseded') THEN source_page END)
+       FROM ai_staged_cards GROUP BY session_id`,
+      []
+    )) as Array<[string, number, number, number, number | null, number | null]>;
+    const out: Record<string, SessionCounts> = {};
+    for (const [sessionId, staged, flagged, saved, firstPage, lastPage] of rows) {
+      out[sessionId] = {
+        staged: Number(staged ?? 0),
+        flagged: Number(flagged ?? 0),
+        saved: Number(saved ?? 0),
+        firstPage: firstPage === null ? null : Number(firstPage),
+        lastPage: lastPage === null ? null : Number(lastPage),
+      };
+    }
+    return out;
+  }
+
+  /* --- Concept ledger ---------------------------------------------------- */
+
+  /**
+   * Replace a source's ledger for the pages just extracted. Recording the pages
+   * is what separates "nothing to learn here" from "nobody has read this".
+   */
+  async saveAiConcepts(
+    sourceHash: string,
+    pages: number[],
+    concepts: Array<{ page: number; term: string; blurb: string }>
+  ): Promise<void> {
+    if (pages.length === 0) return;
+    const now = this.getCurrentTimestamp();
+    const list = pages.join(",");
+    await this.executeSql(
+      `DELETE FROM ai_source_concepts WHERE source_hash = ? AND page IN (${list})`,
+      [sourceHash]
+    );
+    for (const c of concepts) {
+      await this.executeSql(
+        `INSERT OR REPLACE INTO ai_source_concepts
+           (id, source_hash, page, term, blurb, created, modified)
+         VALUES (?, ?, ?, ?, ?, ?, ?)`,
+        [
+          aiConceptId(sourceHash, c.page, c.term),
+          sourceHash,
+          c.page,
+          c.term,
+          c.blurb,
+          now,
+          now,
+        ]
+      );
+    }
+    for (const page of pages) {
+      await this.executeSql(
+        `INSERT OR REPLACE INTO ai_source_extractions (source_hash, page, created)
+         VALUES (?, ?, ?)`,
+        [sourceHash, page, now]
+      );
+    }
+    this.emitSyncOp({
+      o: "ai_concepts_save",
+      p: {
+        sourceHash,
+        pages,
+        concepts: concepts.map(({ page, term, blurb }) => ({ page, term, blurb })),
+        at: now,
+      },
+    });
+  }
+
+  async getAiConcepts(sourceHash: string): Promise<AiSourceConcept[]> {
+    const rows = (await this.querySql(
+      "SELECT * FROM ai_source_concepts WHERE source_hash = ? ORDER BY page ASC, term ASC",
+      [sourceHash]
+    )) as (string | number | null)[][];
+    return rows.map((row) => ({
+      id: row[0] as string,
+      sourceHash: row[1] as string,
+      page: Number(row[2]),
+      term: row[3] as string,
+      blurb: (row[4] as string | null) ?? "",
+      created: row[5] as string,
+      modified: row[6] as string,
+    }));
+  }
+
+  /** Pages that have been through extraction, whatever they yielded. */
+  async getAiExtractedPages(sourceHash: string): Promise<number[]> {
+    const rows = (await this.querySql(
+      "SELECT page FROM ai_source_extractions WHERE source_hash = ? ORDER BY page ASC",
+      [sourceHash]
+    )) as Array<[number]>;
+    return rows.map((r) => Number(r[0]));
+  }
+
+  /**
+   * Every card this source has produced, across sessions, with the review
+   * record of the ones that reached the vault. Discarded cards are left out —
+   * they cover nothing.
+   */
+  async getAiCardsForSource(
+    sourceHash: string,
+    excludeSessionId?: string,
+    studyOnly = false,
+  ): Promise<ConceptCard[]> {
+    const params: (string | number)[] = [sourceHash];
+    let where = "s.source_hash = ? AND c.status NOT IN ('discarded', 'superseded')";
+    if (studyOnly) where += " AND c.card_type <> 'mcq'";
+    if (excludeSessionId) {
+      where += " AND c.session_id <> ?";
+      params.push(excludeSessionId);
+    }
+    // A reverse card is its note card read backwards, so its record counts here. It pairs by the
+    // note's token, else with a same-content note card that has none (as core noteCardGroups).
+    const twin = `t.deck_id = f.deck_id AND substr(t.id, 1, 6) = 'rcard_'
+                  AND t.front = f.back AND t.back = f.front
+                  AND (t.anchor = f.anchor || ':rev'
+                       OR (IFNULL(f.anchor, '') = '' AND NOT EXISTS (
+                         SELECT 1 FROM flashcards o
+                          WHERE o.deck_id = t.deck_id AND substr(o.id, 1, 6) <> 'rcard_'
+                            AND o.front = t.back AND o.back = t.front
+                            AND t.anchor = o.anchor || ':rev')))`;
+    const misses = (id: string) =>
+      `(SELECT COUNT(*) FROM exam_answers e WHERE e.flashcard_id = ${id} AND e.is_correct = 0)`;
+    const rows = (await this.querySql(
+      `SELECT c.front, c.back, c.notes, c.concept_id,
+              COALESCE(f.lapses, 0)
+                + COALESCE((SELECT SUM(t.lapses) FROM flashcards t WHERE ${twin}), 0),
+              c.source_page, c.id AS staged_id, f.id AS flashcard_id, c.rubric_codes,
+              CASE WHEN f.id IS NULL THEN 0 ELSE ${misses("f.id")}
+                + COALESCE((SELECT SUM(${misses("t.id")}) FROM flashcards t WHERE ${twin}), 0) END
+         FROM ai_staged_cards c
+         JOIN ai_sessions s ON s.id = c.session_id
+         LEFT JOIN flashcards f ON f.id = c.dedup_hash
+        WHERE ${where}`,
+      params
+    )) as (string | number | null)[][];
+    return rows.map((row) => ({
+      text: [row[0], row[1], row[2]].filter(Boolean).join("\n"),
+      id: String(row[6]),
+      front: String(row[0] ?? ""),
+      back: String(row[1] ?? ""),
+      conceptId: (row[3] as string | null) ?? null,
+      lapses: Number(row[4] ?? 0),
+      page: row[5] === null ? null : Number(row[5]),
+      flashcardId: (row[7] as string | null) ?? null,
+      examMisses: Number(row[9] ?? 0),
+      crammed: isCrammed(this.parseJsonArray<string>(row[8])),
+    }));
+  }
+
+  /**
+   * Where these cards came from, for cards the workbench wrote. Keyed on the
+   * dedup hash, which is the flashcard id.
+   */
+  async getAiCardOrigins(
+    cardIds: readonly string[],
+  ): Promise<Map<string, { page: number | null; sourceHash: string | null; sourceRef: string }>> {
+    const out = new Map<
+      string,
+      { page: number | null; sourceHash: string | null; sourceRef: string }
+    >();
+    if (cardIds.length === 0) return out;
+    const placeholders = cardIds.map(() => "?").join(",");
+    const rows = (await this.querySql(
+      `SELECT c.dedup_hash, c.source_page, s.source_hash, s.source_ref
+         FROM ai_staged_cards c
+         JOIN ai_sessions s ON s.id = c.session_id
+        WHERE c.dedup_hash IN (${placeholders})
+        ORDER BY c.source_page IS NULL, c.created DESC`,
+      [...cardIds]
+    )) as (string | number | null)[][];
+    for (const row of rows) {
+      const id = row[0] as string;
+      // Ordered so a row that knows the page wins over one that does not; the
+      // same card can have been staged in several sessions.
+      if (out.has(id)) continue;
+      out.set(id, {
+        page: row[1] === null ? null : Number(row[1]),
+        sourceHash: (row[2] as string | null) ?? null,
+        sourceRef: (row[3] as string | null) ?? "",
+      });
+    }
+    return out;
+  }
+
+  /** Forget a source's ledger, so Re-extract starts from nothing. */
+  async clearAiConcepts(sourceHash: string): Promise<void> {
+    await this.executeSql("DELETE FROM ai_source_concepts WHERE source_hash = ?", [
+      sourceHash,
+    ]);
+    await this.executeSql(
+      "DELETE FROM ai_source_extractions WHERE source_hash = ?",
+      [sourceHash]
+    );
   }
 }

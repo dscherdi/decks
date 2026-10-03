@@ -294,7 +294,7 @@ Trained weights are global but per-profile applied — pick **Trained** in any p
 
 The optimizer matches the open-spaced-repetition reference methodology: Adam optimizer over binary cross-entropy loss, cosine-annealed learning rate, parameter clipping against published FSRS-6 bounds. Step count scales with your review history (more reviews → more iterations).
 
-The implementation has been validated against the published FSRS-6 spec (1396/1396 forward-pass cases match bit-exact) and benchmarked against 443M anonymized Anki reviews — calibration of shipped defaults agrees with empirical recall to within 0.8 percentage points. See [docs/FSRS_OPTIMIZER.md](./docs/FSRS_OPTIMIZER.md) for the full write-up: comparison with the reference benchmark, what to expect at different deck sizes, and known limitations.
+The implementation has been validated against the published FSRS-6 spec (1396/1396 forward-pass cases match bit-exact) and benchmarked against 443M anonymized Anki reviews — calibration of shipped defaults agrees with empirical recall to within 0.8 percentage points.
 
 </details>
 

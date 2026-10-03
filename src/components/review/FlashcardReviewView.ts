@@ -21,6 +21,7 @@ import type {
 } from "../../types/svelte-components";
 import FlashcardReviewModal from "./FlashcardReviewModal.svelte";
 import { mount, unmount } from "svelte";
+import { reviewRepairProps, type ReviewRepairHooks } from "./review-repair-props";
 import { navigateToFlashcardSource } from "../../utils/flashcard-navigator";
 import { wireInternalLinks } from "../../utils/internal-links";
 import { I18n } from "@decks/core";
@@ -56,7 +57,8 @@ export class FlashcardReviewView extends ItemView {
     leaf: WorkspaceLeaf,
     scheduler: Scheduler,
     settings: DecksSettings,
-    db: IDatabaseService
+    db: IDatabaseService,
+    private repairHooks?: ReviewRepairHooks
   ) {
     super(leaf);
     this.scheduler = scheduler;
@@ -208,14 +210,14 @@ export class FlashcardReviewView extends ItemView {
     const showNotice = this.settings?.ui?.enableNotices !== false;
 
     if (action === "suspend") {
-      await this.db.suspendCard(card.id);
+      await this.scheduler.suspendCard(card.id);
       if (showNotice) new Notice(r.cardSuspended);
       return true;
     }
 
     if (action === "bury") {
       const until = this.scheduler.getBuryUntilForNextDay(new Date());
-      await this.db.buryCard(card.id, until);
+      await this.scheduler.buryCard(card.id, until);
       if (showNotice) new Notice(r.cardBuried);
       return true;
     }
@@ -270,6 +272,7 @@ export class FlashcardReviewView extends ItemView {
     this.component = mount(FlashcardReviewModal, {
       target: contentEl,
       props: {
+        ...reviewRepairProps(this.repairHooks),
         isActive: () =>
           this.app.workspace.getActiveViewOfType(FlashcardReviewView) === this &&
           !activeDocument.querySelector(".modal-container"),

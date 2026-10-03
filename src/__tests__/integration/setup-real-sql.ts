@@ -3,27 +3,29 @@ import initSqlJs, { Database } from "sql.js";
 // Global SQL.js instance for integration tests
 let SQL: any = null;
 
+/**
+ * Where sql.js should look for its wasm. The default is relative to the
+ * process's working directory, which only resolves when the run starts in this
+ * package — another host running these suites sets an absolute one first.
+ */
+let wasmDir = "node_modules/sql.js/dist/";
+
+export function setSqlWasmDir(dir: string): void {
+  wasmDir = dir.endsWith("/") ? dir : `${dir}/`;
+}
+
+/**
+ * Initialise sql.js and publish it as the global the database services reach
+ * for. Eager, not lazy: `createRealDatabase` reads the same instance directly,
+ * and a host whose database never calls the global would otherwise leave it
+ * unset and fail there instead.
+ */
 export async function setupRealSqlJs(): Promise<void> {
   try {
-    // Make initSqlJs available globally for MainDatabaseService
-    // MainDatabaseService expects a function that returns the SQL module when called
-    (global as any).initSqlJs = async (config?: any) => {
-      if (!SQL) {
-        // Initialize SQL.js with WASM
-        // Override locateFile to use local node_modules instead of web URLs
-        SQL = await initSqlJs({
-          ...config,
-          // For Node.js environment, we need to provide the WASM file path
-          // This MUST come after ...config to override MainDatabaseService's web URL
-          locateFile: (file: string) => {
-            // In Node.js test environment, sql.js will handle WASM loading from node_modules
-            return `node_modules/sql.js/dist/${file}`;
-          },
-        });
-      }
-      return SQL;
-    };
-
+    if (!SQL) {
+      SQL = await initSqlJs({ locateFile: (file: string) => `${wasmDir}${file}` });
+    }
+    (global as any).initSqlJs = async () => SQL;
     console.debug("Real SQL.js initialized for integration tests");
   } catch (error) {
     console.error("Failed to initialize real SQL.js:", error);

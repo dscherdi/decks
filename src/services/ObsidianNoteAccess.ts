@@ -27,8 +27,8 @@ export class ObsidianNoteAccess implements NoteAccess {
     await this.app.vault.process(file, edit);
   }
 
-  async mtime(path: string): Promise<number> {
-    return this.file(path)?.stat.mtime ?? 0;
+  mtime(path: string): Promise<number> {
+    return Promise.resolve(this.file(path)?.stat.mtime ?? 0);
   }
 
   async readProperty(path: string, key: string): Promise<string | null> {

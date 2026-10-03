@@ -269,7 +269,7 @@ Trainierte Gewichte sind global, werden aber pro Profil angewendet — wähle **
 
 Der Optimierer entspricht der Open-Spaced-Repetition-Referenzmethodik: Adam-Optimierer über Binary-Cross-Entropy-Verlust, kosinus-annealing-Lernrate, Parameter-Clipping gegen die veröffentlichten FSRS-6-Grenzwerte. Die Anzahl der Schritte skaliert mit deinem Wiederholungsverlauf (mehr Wiederholungen → mehr Iterationen).
 
-Die Implementierung wurde gegen die veröffentlichte FSRS-6-Spezifikation validiert (1396/1396 Forward-Pass-Fälle stimmen bitgenau überein) und gegen 443M anonymisierte Anki-Wiederholungen benchmarkt — die Kalibrierung der mitgelieferten Standardwerte stimmt mit der empirischen Wiedererkennung auf 0,8 Prozentpunkte überein. Siehe [docs/FSRS_OPTIMIZER.md](./docs/FSRS_OPTIMIZER.md) für die vollständige Beschreibung: Vergleich mit dem Referenz-Benchmark, was bei unterschiedlichen Stapelgrößen zu erwarten ist und bekannte Einschränkungen.
+Die Implementierung wurde gegen die veröffentlichte FSRS-6-Spezifikation validiert (1396/1396 Forward-Pass-Fälle stimmen bitgenau überein) und gegen 443M anonymisierte Anki-Wiederholungen benchmarkt — die Kalibrierung der mitgelieferten Standardwerte stimmt mit der empirischen Wiedererkennung auf 0,8 Prozentpunkte überein.
 
 </details>
 

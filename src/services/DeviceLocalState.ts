@@ -79,6 +79,11 @@ export class DeviceLocalState {
     return seq;
   }
 
+  /** The highest seq this device could have logged; every op it wrote is at or below it. */
+  lastTakenSeq(): number {
+    return this.nextSeq - 1;
+  }
+
   /**
    * The mutable HLC state. Callers (hlcSend, hlcReceive) mutate this in
    * place; call persistHlc() after.

@@ -2,8 +2,10 @@ module.exports = {
   preset: "ts-jest",
   testEnvironment: "node",
   roots: ["<rootDir>/src"],
-  testMatch: ["**/__tests__/integration/**/*.ts"],
-  setupFilesAfterEnv: ["<rootDir>/src/test-setup.ts"],
+  // *.test.ts, not *.ts: the directory also holds the harness and its fixtures,
+  // and collecting those as suites is why setup-integration.ts carries a dummy
+  // test to look like one.
+  testMatch: ["**/__tests__/integration/**/*.test.ts"],
   testTimeout: 30000, // Longer timeout for integration tests
   // Disable automatic mocking - use real implementations
   automock: false,

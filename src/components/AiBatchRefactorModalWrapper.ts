@@ -17,6 +17,8 @@ export interface AiBatchRefactorOptions {
   /** Persist a tier chosen here — settings no longer offers the control. */
   onModelChange?: (id: string) => void;
   cards: Flashcard[];
+  /** Open with split on, for cards that each cram several facts. */
+  startSplit?: boolean;
   aiProvider: AiProviderId;
   defaultModel: string;
   run: (
@@ -81,6 +83,7 @@ export class AiBatchRefactorModalWrapper extends Modal {
       props: {
         app: this.app,
         cards: this.options.cards,
+        startSplit: this.options.startSplit ?? false,
         aiProvider: this.options.aiProvider,
         defaultModel: this.options.defaultModel,
         onModelChange: this.options.onModelChange ?? ((): void => {}),

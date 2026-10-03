@@ -23,7 +23,7 @@
   import DocInfoButton from "./DocInfoButton.svelte";
   import { AnkiExportModal } from "./export/AnkiExportModal";
   import { DeckResetModal } from "./DeckResetModal";
-  import type { StatisticsService } from "@/services/StatisticsService";
+  import type { StatisticsService } from "@decks/core";
   import type { DeckSynchronizer } from "@/services/DeckSynchronizer";
   import type { IDatabaseService } from "@/database/DatabaseFactory";
   import type { TagGroupService } from "@decks/core";
@@ -36,6 +36,10 @@
   import type { DeckListSortMode, DeckListView } from "@/settings";
 
   const t = I18n.t;
+  const filesLabel = (count: number): string =>
+    count === 1 ? t.deckList.filesCountOne : I18n.format(t.deckList.filesCount, { count });
+  const cardsLabel = (count: number): string =>
+    count === 1 ? t.deckList.cardsCountOne : I18n.format(t.deckList.cardsCount, { count });
 
   let tableBodyWidth = 0;
   let panelWidth = 0;
@@ -108,7 +112,7 @@
   export let openAnkiImportModal: () => void = () => {};
   export let openDeckConfigModal: (deck: DeckWithProfile) => void;
   export let openFlashcardManager: () => void;
-  export let openAiGeneratorModal: () => void = () => {};
+  export let openAiWorkbench: () => void = () => {};
   export let aiEnabled = false;
   export let customDeckService: CustomDeckService;
   export let deckTag = "#decks";
@@ -1480,10 +1484,10 @@
       {/if}
       <button
         class="clickable-icon"
-        on:click={() => openAiGeneratorModal()}
+        on:click={() => openAiWorkbench()}
         disabled={!aiEnabled}
-        title={t.deckList.aiGenerate}
-        aria-label={t.deckList.aiGenerate}
+        title={t.commands.openAiWorkbench}
+        aria-label={t.commands.openAiWorkbench}
       >
         <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M15 4V2"></path><path d="M15 16v-2"></path><path d="M8 9h2"></path><path d="M20 9h2"></path><path d="M17.8 11.8 19 13"></path><path d="M15 9h.01"></path><path d="M17.8 6.2 19 5"></path><path d="m3 21 9-9"></path><path d="M12.2 6.2 11 5"></path></svg>
       </button>
@@ -1717,15 +1721,15 @@
                     {/if}
                   {:else if node.id.startsWith("tag:")}
                     <span class="decks-tag-group-count"
-                      >{I18n.format(t.deckList.filesCount, { count: node.deckIds.length })}</span
+                      >{filesLabel(node.deckIds.length)}</span
                     >
                   {:else if node.customDeck && node.customDeck.deckType === "filter"}
                     <span class="decks-tag-group-count"
-                      >{I18n.format(t.deckList.cardsCount, { count: getDeckStats(node.customDeck.id).totalCount })}</span
+                      >{cardsLabel(getDeckStats(node.customDeck.id).totalCount)}</span
                     >
                   {:else if node.customDeck}
                     <span class="decks-tag-group-count"
-                      >{I18n.format(t.deckList.cardsCount, { count: node.customDeck.flashcardIds.length })}</span
+                      >{cardsLabel(node.customDeck.flashcardIds.length)}</span
                     >
                   {/if}
                 </span>

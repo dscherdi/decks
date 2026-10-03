@@ -12,6 +12,7 @@ import type { DeckOrGroup, Flashcard } from "@/database/types";
 import type { DecksSettings } from "@/settings";
 import type { IDatabaseService } from "@/database/DatabaseFactory";
 import { ExamSetupModal } from "./ExamSetupModal";
+import { meaningGradingAvailable } from "../../services/AiGradingController";
 
 export interface ExamLaunchContext {
   app: App;
@@ -105,7 +106,8 @@ export async function launchExamForSelection(
             openSession
           )
         );
-      }
+      },
+      meaningGradingAvailable(ctx.settings)
     ).open();
   } catch (error) {
     console.error("Error starting exam:", error);

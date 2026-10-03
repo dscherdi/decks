@@ -269,7 +269,7 @@ Los pesos entrenados son globales pero se aplican por perfil — selecciona **En
 
 El optimizador coincide con la metodología de referencia de open-spaced-repetition: optimizador Adam sobre la pérdida binary cross-entropy, tasa de aprendizaje con cosine-annealing, recorte de parámetros respecto a los límites publicados de FSRS-6. El número de pasos escala con tu historial de repasos (más repasos → más iteraciones).
 
-La implementación ha sido validada contra la especificación publicada de FSRS-6 (1396/1396 casos de paso hacia adelante coinciden bit a bit) y comparada con 443M repasos anonimizados de Anki — la calibración de los valores predeterminados coincide con el recuerdo empírico dentro de 0,8 puntos porcentuales. Consulta [docs/FSRS_OPTIMIZER.md](./docs/FSRS_OPTIMIZER.md) para la descripción completa: comparación con el benchmark de referencia, qué esperar con distintos tamaños de mazo y limitaciones conocidas.
+La implementación ha sido validada contra la especificación publicada de FSRS-6 (1396/1396 casos de paso hacia adelante coinciden bit a bit) y comparada con 443M repasos anonimizados de Anki — la calibración de los valores predeterminados coincide con el recuerdo empírico dentro de 0,8 puntos porcentuales.
 
 </details>
 

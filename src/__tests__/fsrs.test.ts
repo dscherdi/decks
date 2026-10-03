@@ -1393,6 +1393,23 @@ describe("FSRS-6 Short-term Scheduling", () => {
     );
   });
 
+  it("takes the short-term step for a Good review later the same study day", () => {
+    // Local times, so the two reviews share a study day in any time zone.
+    const card = makeReviewCard(new Date(2025, 5, 15, 10));
+    const updated = fsrs.updateCard(card, "good", new Date(2025, 5, 15, 14));
+    expect(updated.stability).toBeCloseTo(2.0077488, 6);
+    expect(updated.stability).toBe(fsrs.reviewStep({ stability: 2, difficulty: 5 }, 3, 4 / 24, true).stability);
+    expect(fsrs.reviewStep({ stability: 2, difficulty: 5 }, 3, 4 / 24, false).stability).toBeCloseTo(2.6704, 3);
+  });
+
+  it("rates Again without reading the study day, so an unreadable last review still schedules", () => {
+    const now = new Date(2025, 5, 15, 14);
+    const card = { ...makeReviewCard(now), stability: 5, lastReviewed: "not a date" };
+    const updated = fsrs.updateCard(card, "again", now);
+    expect(new Date(updated.dueDate).getTime()).toBe(now.getTime() + 60000);
+    expect(updated.stability).toBeGreaterThan(0);
+  });
+
   it("nextDayStartsAt boundary: cross-day review uses long-term formula, same-day uses short-term", () => {
     const now = new Date("2025-06-15T06:00:00.000Z");
     // Cross-day: last reviewed yesterday at the same time (24h elapsed)

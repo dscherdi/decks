@@ -18,6 +18,7 @@ import {
 } from "@decks/core";
 import type {
   AnkiDeckItem,
+  AnkiRevlogRow,
   AnkiParsedCard,
   AnkiRenderedDeck,
   AnkiScheduling,
@@ -197,6 +198,125 @@ describe("Anki import pipeline (integration)", () => {
     expect(second.injected).toBe(0);
   });
 
+  it("keeps a card reviewed in Decks since the import on its own state when re-imported", async () => {
+    const parsed = AnkiCollectionParser.parse(loadCollection(), { getMediaText: getMediaText() });
+    const decks = AnkiDeckRenderer.render(parsed.cards, "decks/anki", profile.headerLevel);
+    const items: AnkiDeckItem[] = [];
+    for (const deck of decks) {
+      const filepath = `Anki Import/${deck.relativePath}.md`;
+      await syncDeck(filepath, deck);
+      items.push({
+        deckId: generateDeckId(filepath),
+        profileFsrs: { requestRetention: profile.fsrs.requestRetention, profile: profile.fsrs.profile },
+        cards: deck.cards,
+      });
+    }
+    const collection = loadCollection();
+    const options = {
+      collectionCreatedMs: AnkiCollectionParser.readCollectionCreatedMs(collection),
+      revlogByCard: AnkiCollectionParser.readRevlog(collection),
+    };
+    await AnkiHistoryImporter.importHistory(db, items, options);
+
+    const reviewed = items.flatMap((item) => item.cards).find((c) => c.scheduling.reps > 0)!;
+    const cardId = AnkiDeckRenderer.decksCardId(reviewed);
+    const imported = await db.getFlashcardById(cardId);
+    expect(imported?.state).toBe("review");
+
+    // A review made in Decks after the import, logged the way the scheduler logs it.
+    const reviewedAt = new Date().toISOString();
+    const migration = await db.getReviewLogById(`log_migrate_anki_${cardId}`);
+    await db.insertReviewLog({ ...migration!, id: `log_${Date.now()}_decks`, reviewedAt });
+    await db.updateFlashcard(cardId, { stability: 99, lastReviewed: reviewedAt });
+
+    const again = await AnkiHistoryImporter.importHistory(db, items, options);
+    expect(again.kept).toBeGreaterThan(0);
+    const after = await db.getFlashcardById(cardId);
+    expect(after?.stability).toBe(99);
+    expect(after?.lastReviewed).toBe(reviewedAt);
+  });
+
+  it("takes Anki's changed state for a card never studied in Decks", async () => {
+    const parsed = AnkiCollectionParser.parse(loadCollection(), { getMediaText: getMediaText() });
+    const decks = AnkiDeckRenderer.render(parsed.cards, "decks/anki", profile.headerLevel);
+    const items: AnkiDeckItem[] = [];
+    for (const deck of decks) {
+      const filepath = `Anki Import/${deck.relativePath}.md`;
+      await syncDeck(filepath, deck);
+      items.push({
+        deckId: generateDeckId(filepath),
+        profileFsrs: { requestRetention: profile.fsrs.requestRetention, profile: profile.fsrs.profile },
+        cards: deck.cards,
+      });
+    }
+    const collection = loadCollection();
+    const options = {
+      collectionCreatedMs: AnkiCollectionParser.readCollectionCreatedMs(collection),
+      revlogByCard: AnkiCollectionParser.readRevlog(collection),
+    };
+    await AnkiHistoryImporter.importHistory(db, items, options);
+
+    // Re-weighted in Anki with no new answer: only imported logs exist, so Anki's state stands.
+    const reviewed = items.flatMap((item) => item.cards).find((c) => c.scheduling.reps > 0)!;
+    reviewed.scheduling = { ...reviewed.scheduling, data: '{"s":77,"d":5}' };
+    await AnkiHistoryImporter.importHistory(db, items, options);
+
+    expect((await db.getFlashcardById(AnkiDeckRenderer.decksCardId(reviewed)))?.stability).toBe(77);
+  });
+
+  it("weighs Anki's state for a card that moved to another part-file", async () => {
+    const day = 86_400_000;
+    const crt = Date.UTC(2026, 0, 1);
+    const sched = (s: number, reps: number, ivl: number): AnkiScheduling => ({
+      type: 2, queue: 2, due: 200, ivl, factor: 2500, reps, lapses: 0, data: `{"s":${s},"d":5}`,
+    });
+    const note = (noteId: number, scheduling: AnkiScheduling): AnkiParsedCard => ({
+      noteId, cardId: noteId * 10, ord: 0, kind: "basic", isCloze: false, deckName: "EN",
+      front: `word ${noteId}`, back: `meaning ${noteId}`, notes: "", media: [], scheduling, tableLayout: true,
+    });
+    const answer = (noteId: number, at: number, ivl: number): AnkiRevlogRow => ({
+      id: at, cid: noteId * 10, ease: 3, ivl, lastIvl: 1, factor: 2500,
+    });
+    const items = (decks: AnkiRenderedDeck[]): AnkiDeckItem[] =>
+      decks.map((deck) => ({
+        deckId: generateDeckId(`Anki Import/${deck.relativePath}.md`),
+        profileFsrs: { requestRetention: profile.fsrs.requestRetention, profile: profile.fsrs.profile },
+        cards: deck.cards,
+      }));
+    // The controllers' order: sync every part, re-sync the short ones, then weigh history.
+    const importAll = async (decks: AnkiRenderedDeck[], revlog: Map<number, AnkiRevlogRow[]>): Promise<void> => {
+      for (const deck of decks) await syncDeck(`Anki Import/${deck.relativePath}.md`, deck);
+      for (const deck of decks) {
+        const id = generateDeckId(`Anki Import/${deck.relativePath}.md`);
+        if ((await db.getFlashcardsByDeck(id)).length < deck.cards.length) {
+          await db.syncFlashcardsForDeck({
+            deckId: id, deckName: id, deckFilepath: `Anki Import/${deck.relativePath}.md`,
+            deckConfig: profile, fileContent: deck.content, reverseCards: false,
+            clozeEnabled: profile.clozeEnabled,
+          });
+        }
+      }
+      await AnkiHistoryImporter.importHistory(db, items(decks), { collectionCreatedMs: crt, revlogByCard: revlog });
+    };
+    const createDeck = db.createDeck.bind(db);
+    db.createDeck = async (deck) => ((await db.getDeckById(deck.id ?? "")) ? deck.id ?? "" : createDeck(deck));
+
+    const first = [1, 2, 3, 4].map((n) => note(n, sched(10, 2, 10)));
+    await importAll(
+      AnkiDeckRenderer.render(first, "decks/anki", 2, true, 2),
+      new Map([[30, [answer(3, crt + 100 * day, 10)]]])
+    );
+    // Note 1 deleted in Anki, and note 3 answered again, so it moves to the first part.
+    const second = [2, 3, 4].map((n) => note(n, n === 3 ? sched(50, 3, 30) : sched(10, 2, 10)));
+    const moved = second[1];
+    await importAll(
+      AnkiDeckRenderer.render(second, "decks/anki", 2, true, 2),
+      new Map([[30, [answer(3, crt + 100 * day, 10), answer(3, crt + 170 * day, 30)]]])
+    );
+
+    expect((await db.getFlashcardById(AnkiDeckRenderer.decksCardId(moved)))?.stability).toBe(50);
+  });
+
   it("keeps duplicate-front cards distinct across decks (no silent drop)", async () => {
     const sched: AnkiScheduling = {
       type: 0, queue: 0, due: 0, ivl: 0, factor: 0, reps: 0, lapses: 0, data: "{}",
@@ -205,20 +325,23 @@ describe("Anki import pipeline (integration)", () => {
       noteId, cardId, ord: 0, kind: "basic", isCloze: false, deckName,
       front: "object", back, notes: "", media: [], scheduling: sched,
     });
-    // The same front in two decks would collapse to one id without disambiguation.
+    // The same front in two decks: each card's token carries its own id.
     const cards = [basic(1, 10, "Book::1", "a thing"), basic(2, 20, "Book::2", "to protest")];
     const decks = AnkiDeckRenderer.render(cards, "decks/anki", profile.headerLevel);
 
     let total = 0;
     const ids = new Set<string>();
+    const fronts: string[] = [];
     for (const deck of decks) {
       const deckId = await syncDeck(`Anki Import/${deck.relativePath}.md`, deck);
       const dcards = await db.getFlashcardsByDeck(deckId);
       total += dcards.length;
       dcards.forEach((c) => ids.add(c.id));
+      dcards.forEach((c) => fronts.push(c.front));
     }
     expect(total).toBe(2); // both persisted — no silent collapse
     expect(ids.size).toBe(2); // distinct ids
+    expect(fronts).toEqual(["object", "object"]); // no " (n)" across decks
   });
 
   it("re-import adopts an ORPHANED card into its new deck, preserving suspend + FSRS", async () => {

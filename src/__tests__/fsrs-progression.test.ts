@@ -2,6 +2,10 @@ import { FSRS } from "@decks/core";
 import { Flashcard } from "../database/types";
 
 describe("FSRS Progression & Explosion Safety", () => {
+  // Reviews start at a fixed noon: started from the clock just after the 04:00 rollover,
+  // a sub-day interval ends in the same study day and the card does not grow.
+  const START = new Date(2026, 0, 15, 12);
+
   let fsrs: FSRS;
   let trainedFsrs: FSRS;
 
@@ -31,15 +35,15 @@ describe("FSRS Progression & Explosion Safety", () => {
     clozeText: null,
     clozeOrder: null,
     state: "new",
-    dueDate: new Date().toISOString(),
+    dueDate: new Date(START).toISOString(),
     interval: 0,
     repetitions: 0,
     difficulty: 0,
     stability: 0,
     lapses: 0,
     lastReviewed: null,
-    created: new Date().toISOString(),
-    modified: new Date().toISOString(),
+    created: new Date(START).toISOString(),
+    modified: new Date(START).toISOString(),
   });
 
   it("should maintain sane growth factors for continuous 'Good' ratings", () => {
@@ -55,7 +59,7 @@ describe("FSRS Progression & Explosion Safety", () => {
       // CRITICAL: Simulate time passing!
       // We must mock the review time to be exactly when the card became due.
       // If we review immediately (elapsed=0), FSRS treats it as "cramming" which alters growth.
-      let reviewTime = new Date();
+      let reviewTime = new Date(START);
       if (card.lastReviewed) {
         // Add previous interval to last reviewed time
         const lastReviewTime = new Date(card.lastReviewed).getTime();
@@ -116,7 +120,7 @@ describe("FSRS Progression & Explosion Safety", () => {
     for (let i = 1; i <= MAX_REVIEWS; i++) {
       const prevInterval = card.interval;
 
-      let reviewTime = new Date();
+      let reviewTime = new Date(START);
       if (card.lastReviewed) {
         const lastReviewTime = new Date(card.lastReviewed).getTime();
         reviewTime = new Date(lastReviewTime + prevInterval * 60 * 1000);
@@ -164,7 +168,7 @@ describe("FSRS Progression & Explosion Safety", () => {
         ? new Date(
             new Date(card.lastReviewed).getTime() + card.interval * 60000
           )
-        : new Date();
+        : new Date(START);
       card = fsrs.updateCard(card, "good", nextTime);
     }
 
@@ -216,7 +220,7 @@ describe("FSRS Progression & Explosion Safety", () => {
         ? new Date(
             new Date(card.lastReviewed).getTime() + card.interval * 60000
           )
-        : new Date();
+        : new Date(START);
       card = fsrs.updateCard(card, "good", nextTime);
     }
 
@@ -267,7 +271,7 @@ describe("FSRS Progression & Explosion Safety", () => {
     for (let i = 0; i < ratings.length; i++) {
       const rating = ratings[i];
 
-      let reviewTime = new Date();
+      let reviewTime = new Date(START);
       if (card.lastReviewed) {
         const lastReviewTime = new Date(card.lastReviewed).getTime();
         reviewTime = new Date(lastReviewTime + card.interval * 60 * 1000);
@@ -306,7 +310,7 @@ describe("FSRS Progression & Explosion Safety", () => {
     for (let i = 1; i <= MAX_REVIEWS; i++) {
       const prevInterval = card.interval;
 
-      let reviewTime = new Date();
+      let reviewTime = new Date(START);
       if (card.lastReviewed) {
         const lastReviewTime = new Date(card.lastReviewed).getTime();
         reviewTime = new Date(lastReviewTime + prevInterval * 60 * 1000);
@@ -350,7 +354,7 @@ describe("FSRS Progression & Explosion Safety", () => {
         ? new Date(
             new Date(card.lastReviewed).getTime() + card.interval * 60000
           )
-        : new Date();
+        : new Date(START);
       card = fsrs.updateCard(card, "good", nextTime);
 
       // Test retrievability at various time points
@@ -388,7 +392,7 @@ describe("FSRS Progression & Explosion Safety", () => {
         ? new Date(
             new Date(card.lastReviewed).getTime() + card.interval * 60000
           )
-        : new Date();
+        : new Date(START);
       card = fsrs.updateCard(card, "again", nextTime);
 
       // Difficulty should be clamped to [1, 10] range
@@ -410,7 +414,7 @@ describe("FSRS Progression & Explosion Safety", () => {
         ? new Date(
             new Date(card.lastReviewed).getTime() + card.interval * 60000
           )
-        : new Date();
+        : new Date(START);
       card = fsrs.updateCard(card, "good", nextTime);
     }
 
@@ -448,7 +452,7 @@ describe("FSRS Progression & Explosion Safety", () => {
       for (let i = 1; i <= 5; i++) {
         const prevInterval = card.interval;
 
-        let reviewTime = new Date();
+        let reviewTime = new Date(START);
         if (card.lastReviewed) {
           const lastReviewTime = new Date(card.lastReviewed).getTime();
           reviewTime = new Date(lastReviewTime + prevInterval * 60 * 1000);

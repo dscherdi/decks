@@ -2,15 +2,18 @@ import { type App, TFile } from "obsidian";
 import type { Flashcard } from "../database/types";
 import { FlashcardParser } from "@decks/core";
 import { findFlashcardSegment } from "../utils/source-navigator";
+import { forwardCard, isReverseCard } from "../utils/reverse-card";
 import {
+  carryBodyAnchors,
+  carryRowToken,
   escapeTableCell,
   extractAnchorTokens,
   formatAnchorToken,
+  isAnchorCommentBody,
   splitTableLine,
   stripAnchorTokens,
   unescapeTableCell,
   I18n,
-  type AnchorToken,
 } from "@decks/core";
 
 /** Resolved per call, so a failure is worded in the language in force now. */
@@ -62,7 +65,10 @@ export class FlashcardWriter {
       return fail("file_missing", `File not found: ${card.sourceFile}`);
     }
 
-    const validation = validateEdits(edits);
+    // Found by its front, a reverse card would land on its note's answer: edit its note's card.
+    const host = forwardCard(card);
+    const hostEdits = isReverseCard(card) ? forwardEdits(edits) : edits;
+    const validation = validateEdits(hostEdits);
     if (validation) return validation;
 
     const isCanvas = file.extension === "canvas";
@@ -71,8 +77,8 @@ export class FlashcardWriter {
       const outcome: { value: InternalApply | null } = { value: null };
       await this.app.vault.process(file, (content) => {
         const result = isCanvas
-          ? applyCanvasEdit(content, card, edits)
-          : applyEdit(content, card, edits);
+          ? applyCanvasEdit(content, host, hostEdits)
+          : applyEdit(content, host, hostEdits);
         outcome.value = result;
         return result.ok ? result.newContent : content;
       });
@@ -98,6 +104,9 @@ export class FlashcardWriter {
   ): Promise<EditResult> {
     if (edits.length === 0) {
       return fail("invalid_edit", "No cards to split into");
+    }
+    if (isReverseCard(card)) {
+      return fail("invalid_edit", e().splitUnsupported);
     }
     if (
       card.type !== "header-paragraph" &&
@@ -371,9 +380,10 @@ function addNotesColumn(
   ];
   for (let i = dataStart; i <= dataEnd; i++) {
     if (i === rowIndex) {
-      const token = extractAnchorTokens(lines[i]).tokens.find(
-        (t) => t.role === "t",
-      );
+      const token = carryRowToken(lines[i], cleanedDataCells(lines[i]), [
+        edits.front.trim(),
+        edits.back.trim(),
+      ]);
       const tokenSuffix = token ? ` ${formatAnchorToken("t", token.id)}` : "";
       newBlock.push(
         tableRowFromCells([
@@ -405,10 +415,7 @@ function checkStale(
   // Anchor tokens are identity markers, not content: strip them everywhere
   // before comparing to the card's stored (clean) values, mirroring the parser.
   if (card.type === "header-paragraph" || card.type === "multiple-choice") {
-    const body = stripAnchorTokens(extractHeaderBlockBody(segLines)).trim();
-    if (body !== card.back.trim()) {
-      return fail("file_changed", e().noteChanged);
-    }
+    if (!headerMatches(card, segLines)) return fail("file_changed", e().noteChanged);
     return null;
   }
 
@@ -428,10 +435,7 @@ function checkStale(
   if (card.type === "cloze") {
     const anchor = segLines[0];
     if (HEADER_REGEX.test(anchor)) {
-      const body = stripAnchorTokens(extractHeaderBlockBody(segLines)).trim();
-      if (body !== card.back.trim()) {
-        return fail("file_changed", e().clozeChanged);
-      }
+      if (!headerMatches(card, segLines)) return fail("file_changed", e().clozeChanged);
     } else {
       const cells = splitTableRow(anchor);
       if (!cells) return fail("file_changed", e().clozeRowUnparseable);
@@ -586,68 +590,26 @@ function buildHeaderParagraph(
   const newHeader = `${hashes} ${cleanedFront}${trailingTags}`;
 
   const endsWithBlank = segLines.length > 1 && segLines[segLines.length - 1].trim() === "";
-  const bodyLines = newBack.split("\n");
+  const opensWithBlank = segLines.length > 1 && segLines[1].trim() === "";
+  // The edit carries only the back, so the card's existing notes go back in as
+  // written; on a split they stay with the card that keeps the original's identity.
+  const notes = preserveAnchors ? carriedNotes(segLines.slice(1)) : "";
+  const back = opensWithBlank ? newBack.replace(/^\s*\n/, "") : newBack;
+  const bodyLines = (notes ? `${back.trimEnd()}\n\n${notes}` : back).split("\n");
   if (preserveAnchors) {
     carryBodyAnchors(segLines.slice(1), bodyLines);
   }
-  const result = [newHeader, ...bodyLines];
+  const result = opensWithBlank ? [newHeader, "", ...bodyLines] : [newHeader, ...bodyLines];
   if (endsWithBlank && result[result.length - 1].trim() !== "") {
     result.push("");
   }
   return { ok: true, lines: result };
 }
 
-/**
- * Carry anchor tokens from the old body into the rebuilt one: line-scoped
- * tokens re-attach to the first identical new line; the card's own `h` and
- * `q` tokens keep their own line after the new body (`q` with its blank-line
- * separation, so it never lazily joins the last list item). Tokens on lines
- * the user rewrote are dropped (their card follows intended-reset semantics).
- */
-function carryBodyAnchors(oldBody: string[], bodyLines: string[]): void {
-  const headerTokens: AnchorToken[] = [];
-  const questionTokens: AnchorToken[] = [];
-  const lineTokens: { cleaned: string; token: AnchorToken }[] = [];
-  for (const line of oldBody) {
-    const { cleaned, tokens } = extractAnchorTokens(line);
-    for (const token of tokens) {
-      if (token.role === "h") headerTokens.push(token);
-      else if (token.role === "q") questionTokens.push(token);
-      else lineTokens.push({ cleaned: cleaned.trim(), token });
-    }
-  }
-  const claimed = new Set<number>();
-  for (const { cleaned, token } of lineTokens) {
-    for (let i = 0; i < bodyLines.length; i++) {
-      if (claimed.has(i)) continue;
-      if (bodyLines[i].trim() === cleaned) {
-        bodyLines[i] = `${bodyLines[i]} ${formatAnchorToken(token.role, token.id)}`;
-        claimed.add(i);
-        break;
-      }
-    }
-  }
-  const lastContentIndex = (): number => {
-    for (let i = bodyLines.length - 1; i >= 0; i--) {
-      if (bodyLines[i].trim() !== "") return i;
-    }
-    return -1;
-  };
-  if (headerTokens.length > 0) {
-    bodyLines.splice(
-      lastContentIndex() + 1,
-      0,
-      formatAnchorToken("h", headerTokens[0].id)
-    );
-  }
-  if (questionTokens.length > 0) {
-    bodyLines.splice(
-      lastContentIndex() + 1,
-      0,
-      "",
-      formatAnchorToken("q", questionTokens[0].id)
-    );
-  }
+/** A row's data cells as the parser reads them: tokens stripped, unescaped. */
+function cleanedDataCells(rowLine: string): string[] {
+  const cells = splitTableRow(rowLine) ?? [];
+  return cells.slice(1, -1).map((c) => unescapeTableCell(stripAnchorTokens(c).trim()));
 }
 
 function buildTableRow(
@@ -665,13 +627,11 @@ function buildTableRow(
   // The row's identity token is carried into the rebuilt first cell.
   let tokenSuffix = "";
   if (preserveAnchors) {
-    for (const cell of cells) {
-      const token = extractAnchorTokens(cell).tokens.find((t) => t.role === "t");
-      if (token) {
-        tokenSuffix = ` ${formatAnchorToken("t", token.id)}`;
-        break;
-      }
-    }
+    const newCells = edits.columns
+      ? edits.columns.map((c) => c.trim())
+      : [edits.front.trim(), edits.back.trim()];
+    const token = carryRowToken(rowLine, cleanedDataCells(rowLine), newCells);
+    if (token) tokenSuffix = ` ${formatAnchorToken("t", token.id)}`;
   }
 
   // Template cards edit the whole row: write each existing data cell from the
@@ -722,6 +682,34 @@ function buildImageOcclusionItem(
   return { ok: true, lines: [`${indent}${prefix}${single}${tokenSuffix}`] };
 }
 
+/** Whether a header block still matches its card, splitting back from notes the parser's way. */
+function headerMatches(card: Flashcard, segLines: string[]): boolean {
+  const { back, notes } = FlashcardParser.extractHeaderParagraphNotes(
+    stripAnchorTokens(extractHeaderBlockBody(segLines)),
+  );
+  return back.trim() === card.back.trim() && notes.trim() === (card.notes ?? "").trim();
+}
+
+/** A header body's notes, verbatim: non-anchor `%%comments%%` and a section after the last break. */
+function carriedNotes(oldBody: string[]): string {
+  const text = oldBody.join("\n");
+  const parts: string[] = [];
+  for (const match of text.matchAll(/%%([\s\S]*?)%%/g)) {
+    const inner = match[1].trim();
+    if (inner && !isAnchorCommentBody(inner)) parts.push(match[0].trim());
+  }
+  const lines = text.replace(/%%[\s\S]*?%%/g, "").split("\n");
+  for (let i = lines.length - 1; i >= 0; i--) {
+    if (/^\s*(-{3,}|\*{3,}|_{3,})\s*$/.test(lines[i])) {
+      const after = lines.slice(i + 1).join("\n").trim();
+      if (after) parts.push(`${lines[i].trim()}\n${after}`);
+      // Only the last break can divide body from notes, as in the parser.
+      break;
+    }
+  }
+  return parts.join("\n\n");
+}
+
 function extractHeaderBlockBody(segLines: string[]): string {
   // segLines[0] is the header line; body is the rest, with trailing blank lines stripped.
   const body = segLines.slice(1);
@@ -737,6 +725,14 @@ function splitTableRow(line: string): string[] | null {
   // Respect escaped pipes (`\|`) so the column count is correct when cells
   // contain literal pipes.
   return splitTableLine(trimmed);
+}
+
+/** A reverse card's edit, put the way round its note holds it. */
+function forwardEdits(edits: FlashcardEdits): FlashcardEdits {
+  if (edits.type === "header-paragraph" || edits.type === "table") {
+    return { ...edits, front: edits.back, back: edits.front };
+  }
+  return edits;
 }
 
 function validateEdits(edits: FlashcardEdits): InternalApply | null {
@@ -759,6 +755,12 @@ function validateEdits(edits: FlashcardEdits): InternalApply | null {
     if ((edits.columns[0] ?? "").trim() === "") {
       return fail("invalid_edit", "The first column cannot be empty");
     }
+  }
+  // The parser skips a row with an empty first or second cell, so the card would be deleted.
+  if (edits.type === "table") {
+    const [front, back] = edits.columns ?? [edits.front, edits.back];
+    if ((front ?? "").trim() === "") return fail("invalid_edit", e().frontEmpty);
+    if ((back ?? "").trim() === "") return fail("invalid_edit", e().backEmpty);
   }
   if (edits.type === "image-occlusion") {
     if (edits.listItem.trim() === "") {

@@ -641,6 +641,18 @@ export class DecksSettingTab extends PluginSettingTab {
           })
       );
 
+    const identity = new Setting(containerEl).setName(I18n.t.settings.cardIdentity);
+    void this.plugin
+      .cardIdentityPending()
+      .then((pending) =>
+        identity.setDesc(
+          pending === 0
+            ? I18n.t.settings.cardIdentityUpToDate
+            : I18n.format(I18n.t.settings.cardIdentityPending, { count: pending })
+        )
+      )
+      .catch((error: unknown) => console.debug("Card identity status unavailable", error));
+
     new Setting(containerEl)
       .setName(I18n.t.settings.paths.pdfCacheFolder)
       .setDesc(I18n.format(I18n.t.settings.paths.pdfCacheFolderDesc, { pluginFolder }))
@@ -1187,20 +1199,6 @@ export class DecksSettingTab extends PluginSettingTab {
       );
 
     new Setting(containerEl)
-      .setName(I18n.t.settings.ui.aiGeneratorDisplayMode)
-      .setDesc(I18n.t.settings.ui.aiGeneratorDisplayModeDesc)
-      .addDropdown((dropdown) =>
-        dropdown
-          .addOption("modal", I18n.t.settings.ui.displayModeModal)
-          .addOption("tab", I18n.t.settings.ui.displayModeTab)
-          .setValue(this.settings.ui.aiGeneratorDisplayMode)
-          .onChange(async (value) => {
-            this.settings.ui.aiGeneratorDisplayMode = value as "modal" | "tab";
-            await this.saveSettings();
-          })
-      );
-
-    new Setting(containerEl)
       .setName(I18n.t.settings.ui.minDeckCardCount)
       .setDesc(I18n.t.settings.ui.minDeckCardCountDesc)
       .addText((text) =>
@@ -1332,7 +1330,10 @@ export class DecksSettingTab extends PluginSettingTab {
           .onClick(async () => {
             const notice = new Notice(I18n.t.notices.creatingBackup, 0);
             try {
-              const filename = await this.backupService.createBackup(this.db);
+              const filename = await this.backupService.createBackup(
+                this.db,
+                { timed: true }
+              );
               notice.hide();
               new Notice(I18n.format(I18n.t.notices.backupCreated, { filename }), 5000);
             } catch (error) {
@@ -1416,7 +1417,7 @@ export class DecksSettingTab extends PluginSettingTab {
   private async rebuildCardStateFromReviewLogs(): Promise<void> {
     const notice = new Notice(I18n.t.notices.creatingBackup, 0);
     try {
-      await this.backupService.createBackup(this.db);
+      await this.backupService.createBackup(this.db, { timed: true });
       const count = await this.db.rebuildCardStateFromReviewLogs();
       await this.db.save();
       notice.hide();

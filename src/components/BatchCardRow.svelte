@@ -3,6 +3,10 @@
   // front and back rendered as markdown, clamped so it stays compact. The card
   // is structural (front + optional back) so both stored Flashcards and
   // AI-generated cards can be rendered here.
+  //
+  // The default slot renders beneath the back, for chips the row itself knows
+  // nothing about — provenance, rubric verdicts — so callers extend the row
+  // rather than reimplementing it.
 
   type RowStatus =
     | "pending"
@@ -15,6 +19,8 @@
   export let card: { front: string; back?: string };
   export let status: RowStatus;
   export let selected = false;
+  /** Show the whole card rather than its clamped preview. */
+  export let expanded = false;
   export let renderMarkdown: (source: string, el: HTMLElement) => void;
   export let onSelect: () => void = () => {};
 
@@ -42,6 +48,7 @@
 <div
   class="decks-batch-row"
   class:is-selected={selected}
+  class:is-expanded={expanded}
   role="button"
   tabindex="0"
   on:click={onSelect}
@@ -56,6 +63,9 @@
     <div class="decks-batch-row-front" use:renderMd={card.front}></div>
     {#if card.back?.trim()}
       <div class="decks-batch-row-back" use:renderMd={card.back}></div>
+    {/if}
+    {#if $$slots.default}
+      <div class="decks-batch-row-meta"><slot /></div>
     {/if}
   </div>
 </div>
@@ -113,6 +123,10 @@
     max-height: 4.5em; /* ~3 lines */
     color: var(--text-muted);
   }
+  .decks-batch-row.is-expanded .decks-batch-row-front,
+  .decks-batch-row.is-expanded .decks-batch-row-back {
+    max-height: none;
+  }
   .decks-batch-row-front :global(p),
   .decks-batch-row-back :global(p) {
     margin: 0;
@@ -121,6 +135,15 @@
   .decks-batch-row-back :global(img) {
     max-width: 100%;
     max-height: 64px;
+  }
+
+  /* Provenance and verdict chips, supplied by the parent. Kept here so the row
+     owns its own vertical rhythm rather than each caller reinventing it. */
+  .decks-batch-row-meta {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 4px;
   }
 
   /* Status micro-badge: colored dot (✓ when accepted) or spinner. */

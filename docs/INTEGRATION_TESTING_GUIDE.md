@@ -191,7 +191,7 @@ Core logic (`MainDatabaseService`, `Scheduler`, `StatisticsService`) operates wi
 // No Obsidian UI imports needed
 import { MainDatabaseService } from "../../database/MainDatabaseService";
 import { Scheduler } from "../../services/Scheduler";
-import { StatisticsService } from "../../services/StatisticsService";
+import { StatisticsService } from "@decks/core";
 ```
 
 ### 2. Service Encapsulation
@@ -328,7 +328,7 @@ Faster development cycles:
 ```typescript
 import { MainDatabaseService } from "./database/MainDatabaseService";
 import { Scheduler } from "./services/Scheduler";
-import { StatisticsService } from "./services/StatisticsService";
+import { StatisticsService } from "@decks/core";
 import { generateDeckId } from "./utils/hash";
 import { promises as fs } from "fs";
 

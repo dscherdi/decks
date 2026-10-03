@@ -88,11 +88,7 @@ function createMockDatabase() {
     countReviewCardsToday: jest.fn().mockResolvedValue(0),
 
     // Forecast operations
-    getScheduledDueByDay: jest.fn().mockResolvedValue([]),
-    getScheduledDueByDayMulti: jest.fn().mockResolvedValue([]),
-    getCurrentBacklog: jest.fn().mockResolvedValue(0),
-    getCurrentBacklogMulti: jest.fn().mockResolvedValue(0),
-    getDeckReviewCountRange: jest.fn().mockResolvedValue(0),
+    countReviewCardDays: jest.fn().mockResolvedValue(0),
 
     // Optimized review log queries for statistics
     getReviewLogsByDeck: jest.fn().mockResolvedValue([]),
@@ -364,6 +360,39 @@ describe("BackupService", () => {
         2,
         expectedPath
       );
+    });
+
+    it("gives a requested backup the time, so it never replaces the day's", async () => {
+      mockAdapter.exists.mockResolvedValue(true);
+      mockAdapter.list.mockResolvedValue({ files: [], folders: [] });
+
+      const filename = await backupService.createBackup(mockDb, { timed: true });
+
+      const today = toLocalDateString(new Date());
+      expect(filename).toMatch(new RegExp(`^backup-${today}-\\d{6}\\.db$`));
+    });
+  });
+
+  describe("before a restore", () => {
+    it("keeps the data being replaced and seals the sync log, in that order", async () => {
+      mockAdapter.exists.mockResolvedValue(true);
+      mockAdapter.list.mockResolvedValue({ files: [], folders: [] });
+      const order: string[] = [];
+      mockDb.createBackupDatabase.mockImplementation(async (path: string) => {
+        order.push(`backup ${path.includes("-") ? "timed" : "?"}`);
+      });
+      backupService.setBeforeRestore(async () => {
+        order.push("seal");
+      });
+      mockDb.restoreFromBackupDatabase.mockImplementation(async () => {
+        order.push("restore");
+      });
+
+      await backupService.restoreFromBackup("backup-2023-01-01.db", mockDb);
+
+      expect(order).toEqual(["backup timed", "seal", "restore"]);
+      const [path] = mockDb.createBackupDatabase.mock.calls[0];
+      expect(path).toMatch(/backup-\d{4}-\d{2}-\d{2}-\d{6}\.db$/);
     });
   });
 });

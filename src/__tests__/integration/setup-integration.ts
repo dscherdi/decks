@@ -12,10 +12,6 @@ beforeAll(async () => {
   });
 });
 
-describe("empty test", () => {
-  it("should run", () => {});
-});
-
 // Clean up after all integration tests
 afterAll(() => {
   // Cleanup is handled in database-test-utils teardownTestDatabase

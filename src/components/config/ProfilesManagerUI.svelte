@@ -11,8 +11,9 @@
     ExamSettings,
     TypedGradingMode,
   } from "../../database/types";
-  import { DEFAULT_PROFILE_ID, getDefaultLearningSteps, getDefaultRelearningSteps, DEFAULT_EXAM_SETTINGS, I18n, validateLearningSteps, validateRelearningSteps } from "@decks/core";
+  import { DEFAULT_PROFILE_ID, getDefaultLearningSteps, getDefaultRelearningSteps, DEFAULT_EXAM_SETTINGS, I18n, validateLearningSteps, validateRelearningSteps, validateRequestRetention } from "@decks/core";
   import { studyTagsFor, isUnderTag } from "@decks/core";
+  import { parseRequestRetention } from "../../utils/request-retention";
   import type { TagScopeOptions } from "@decks/core";
   import { ttsService } from "../../services/TtsService";
   import DocInfoButton from "../DocInfoButton.svelte";
@@ -28,6 +29,8 @@
   export let initialProfileId: string | undefined = undefined;
   export let allDecks: Deck[] = [];
   export let tagScope: TagScopeOptions | undefined = undefined;
+  /** Offer "By meaning" grading; it stays listed while a profile uses it. */
+  export let meaningAvailable = false;
 
   const scope: TagScopeOptions = tagScope ?? { baseTag: "#decks" };
 
@@ -316,7 +319,7 @@
         saving = false;
         return;
       }
-      if (isNaN(requestRetention) || requestRetention < 0.5 || requestRetention > 0.995) {
+      if (!validateRequestRetention(requestRetention)) {
         new Notice(p.noticeRequestRetentionRange);
         saving = false;
         return;
@@ -796,6 +799,11 @@
             .addOption("exact", t.exam.gradingExact)
             .addOption("tolerant", t.exam.gradingTolerant)
             .addOption("self", t.exam.gradingSelf)
+            .then((d) => {
+              if (meaningAvailable || examSettings.typedGrading === "meaning") {
+                d.addOption("meaning", t.exam.gradingMeaning);
+              }
+            })
             .setValue(examSettings.typedGrading)
             .onChange((value) => {
               examSettings.typedGrading = value as TypedGradingMode;
@@ -842,8 +850,8 @@
             .setValue(requestRetention.toString())
             .setPlaceholder("0.9")
             .onChange((value) => {
-              const num = parseFloat(value);
-              if (!isNaN(num) && num >= 0.5 && num <= 0.995) {
+              const num = parseRequestRetention(value);
+              if (num !== null) {
                 requestRetention = num;
                 retentionError = false;
                 text.inputEl.removeClass("decks-input-error");

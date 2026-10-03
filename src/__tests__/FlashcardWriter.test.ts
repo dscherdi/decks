@@ -1,4 +1,5 @@
 import { FlashcardWriter } from "../services/FlashcardWriter";
+import { FlashcardParser, generateReverseFlashcardId, I18n } from "@decks/core";
 import type { Flashcard } from "../database/types";
 
 interface MockApp {
@@ -192,6 +193,33 @@ describe("FlashcardWriter", () => {
   describe("table", () => {
     const tableSource =
       "## Vocab\n| Front | Back | Notes |\n|---|---|---|\n| Q1 | A1 | n1 |\n| Q2 | A2 | n2 |";
+
+    it.each([
+      ["front cell", { front: "  ", back: "A2" }, "frontEmpty"],
+      ["back cell", { front: "Q2", back: "" }, "backEmpty"],
+      ["back column of a template row", { front: "Q2", back: "A2", columns: ["Q2", " ", "n2"] }, "backEmpty"],
+    ] as const)("refuses an edit that empties the %s, which would drop the row", async (_cell, sides, message) => {
+      const { app, currentContent } = mockApp("test.md", tableSource);
+      const writer = new FlashcardWriter(app as never);
+      const card = makeCard({
+        front: "Q2",
+        back: "A2",
+        notes: "n2",
+        type: "table",
+        breadcrumb: "Vocab",
+      });
+      const result = await writer.editFlashcard(card, {
+        type: "table",
+        notes: "n2",
+        ...sides,
+        columns: "columns" in sides ? [...sides.columns] : undefined,
+      });
+      expect(result).toEqual({
+        ok: false,
+        failure: { code: "invalid_edit", message: I18n.t.cardEdit[message] },
+      });
+      expect(currentContent()).toBe(tableSource);
+    });
 
     it("rewrites Front/Back/Notes on a 3-column row", async () => {
       const { app, currentContent } = mockApp("test.md", tableSource);
@@ -682,5 +710,232 @@ describe("FlashcardWriter", () => {
       expect(currentContent()).toContain("Part one.\n%%dk:h:dd44%%");
       expect(currentContent()).not.toContain("Part two.\n%%dk:h:dd44%%");
     });
+  });
+});
+
+// Cards here come from the real parser: a hand-built card would hide how it
+// splits a headed card's body into back and notes.
+describe("FlashcardWriter on cards that carry notes", () => {
+  const QUESTION = `# Note
+
+## Which element is a noble gas?
+
+- [ ] Oxygen
+- [x] Argon
+- [ ] Nitrogen
+
+%%Group 18 elements have a full valence shell.%%
+
+## Next question
+
+Something else.
+`;
+
+  function parse(content: string, examEnabled = false): Flashcard[] {
+    return FlashcardParser.parseFlashcardsFromContent(content, 2, "Note", true, examEnabled).map(
+      (c) =>
+        makeCard({
+          front: c.front,
+          back: c.back,
+          notes: c.notes,
+          type: c.type,
+          breadcrumb: c.breadcrumb,
+        }),
+    );
+  }
+
+  async function edit(content: string, card: Flashcard, front: string, back: string) {
+    const { app, currentContent } = mockApp("test.md", content);
+    const writer = new FlashcardWriter(app as never);
+    const type = card.type === "multiple-choice" ? "multiple-choice" : "header-paragraph";
+    const result = await writer.editFlashcard(card, { type, front, back });
+    return { result, content: currentContent() };
+  }
+
+  it("edits a question that carries an explanation", async () => {
+    const [card] = parse(QUESTION, true);
+    expect(card.type).toBe("multiple-choice");
+    expect(card.notes).toBe("Group 18 elements have a full valence shell.");
+
+    const { result, content } = await edit(QUESTION, card, "Which of these is a noble gas?", card.back);
+    expect(result).toEqual({ ok: true });
+    expect(content).toContain("## Which of these is a noble gas?");
+    expect(content).toContain("- [ ] Nitrogen\n\n%%Group 18 elements have a full valence shell.%%");
+    const [again] = parse(content, true);
+    expect(again.type).toBe("multiple-choice");
+    expect(again.notes).toBe(card.notes);
+  });
+
+  it("keeps a headed card's comment when its answer is rewritten", async () => {
+    const note = "## What is FSRS?\n\nA scheduler.\n\n%%From the Decks docs.%%\n";
+    const [card] = parse(note);
+    const { result, content } = await edit(note, card, card.front, "A spaced-repetition scheduler.");
+    expect(result).toEqual({ ok: true });
+    expect(content).toContain("A spaced-repetition scheduler.\n\n%%From the Decks docs.%%");
+  });
+
+  it("keeps notes written after a divider", async () => {
+    const note = "## What is a leech?\n\nA card that lapses too often.\n\n---\n\nSee the leech workbench.\n";
+    const [card] = parse(note);
+    expect(card.notes).toBe("See the leech workbench.");
+    const { result, content } = await edit(note, card, card.front, "A card missed too often.");
+    expect(result).toEqual({ ok: true });
+    const [again] = parse(content);
+    expect(again.back).toBe("A card missed too often.");
+    expect(again.notes).toBe("See the leech workbench.");
+  });
+
+  it("still refuses an edit when the note really did change underneath", async () => {
+    const [card] = parse(QUESTION, true);
+    const changed = QUESTION.replace("- [ ] Oxygen", "- [ ] Helium");
+    const { result, content } = await edit(changed, card, card.front, card.back);
+    expect(result.ok).toBe(false);
+    expect(content).toBe(changed);
+  });
+
+  it("still refuses when only the explanation changed underneath", async () => {
+    const [card] = parse(QUESTION, true);
+    const changed = QUESTION.replace("full valence shell", "complete outer shell");
+    const { result } = await edit(changed, card, "New front", card.back);
+    expect(result.ok).toBe(false);
+  });
+
+  it("edits a card with no notes and adds none", async () => {
+    const note = "## Capital of France?\n\nParis.\n";
+    const [card] = parse(note);
+    const { result, content } = await edit(note, card, card.front, "Paris, on the Seine.");
+    expect(result).toEqual({ ok: true });
+    const [again] = parse(content);
+    expect(again.back).toBe("Paris, on the Seine.");
+    expect(again.notes).toBe("");
+    expect(content).not.toContain("%%");
+  });
+
+  it("keeps the blank line under the heading", async () => {
+    const note = "## Capital of France?\n\nParis.\n";
+    const [card] = parse(note);
+    const { content } = await edit(note, card, card.front, "Paris, on the Seine.");
+    expect(content).toBe("## Capital of France?\n\nParis, on the Seine.\n");
+  });
+
+  it("gives the notes to the first card only when splitting", async () => {
+    const note = "## Question\n\nBody text.\n\n%%A note.%%\n";
+    const [card] = parse(note);
+    const { app, currentContent } = mockApp("test.md", note);
+    const writer = new FlashcardWriter(app as never);
+    const result = await writer.splitFlashcard(card, [
+      { type: "header-paragraph", front: "Question", back: "Part one." },
+      { type: "header-paragraph", front: "Question 2", back: "Part two." },
+    ]);
+    expect(result).toEqual({ ok: true });
+    expect(currentContent().match(/%%A note\.%%/g)).toHaveLength(1);
+    expect(currentContent()).toContain("Part one.\n\n%%A note.%%");
+  });
+});
+
+describe("FlashcardWriter on reverse cards", () => {
+  // Built the way the synchronizer builds them: the note's card with front and back swapped.
+  function reverseCards(content: string): Flashcard[] {
+    return FlashcardParser.parseFlashcardsFromContent(content, 2, "Note", true, false).map((c) =>
+      makeCard({
+        id: generateReverseFlashcardId(c.front),
+        front: c.back,
+        back: c.front,
+        notes: c.notes,
+        type: c.type,
+        breadcrumb: c.breadcrumb,
+      }),
+    );
+  }
+
+  it("writes its front as the note's answer and its back as the heading", async () => {
+    const note = "## comer\n\nto eat\n";
+    const [card] = reverseCards(note);
+    const { app, currentContent } = mockApp("test.md", note);
+    const result = await new FlashcardWriter(app as never).editFlashcard(card, {
+      type: "header-paragraph",
+      front: "to eat (verb)",
+      back: "comer (v.)",
+    });
+    expect(result).toEqual({ ok: true });
+    expect(currentContent()).toBe("## comer (v.)\n\nto eat (verb)\n");
+  });
+
+  it("edits its own row of a mirrored pair, not the other card", async () => {
+    const note = "## Words\n\n| Front | Back |\n| --- | --- |\n| Hund | dog |\n| dog | Hund |\n";
+    // The first row's reverse reads dog → Hund, the same as the second row.
+    const [card] = reverseCards(note);
+    expect(card).toMatchObject({ type: "table", front: "dog", back: "Hund" });
+    const { app, currentContent } = mockApp("test.md", note);
+    const result = await new FlashcardWriter(app as never).editFlashcard(card, {
+      type: "table",
+      front: "the dog",
+      back: "Hund",
+      notes: "",
+    });
+    expect(result).toEqual({ ok: true });
+    expect(currentContent()).toBe(
+      "## Words\n\n| Front | Back |\n| --- | --- |\n| Hund | the dog |\n| dog | Hund |\n",
+    );
+  });
+
+  it("edits its own block of a mirrored pair of headings", async () => {
+    const note = "## Hund\n\ndog\n\n## dog\n\nHund\n";
+    const [card] = reverseCards(note);
+    const { app, currentContent } = mockApp("test.md", note);
+    const result = await new FlashcardWriter(app as never).editFlashcard(card, {
+      type: "header-paragraph",
+      front: "the dog",
+      back: "Hund",
+    });
+    expect(result).toEqual({ ok: true });
+    expect(currentContent()).toBe("## Hund\n\nthe dog\n\n## dog\n\nHund\n");
+  });
+
+  it.each([
+    ["first", { front: "dog", back: "" }, "frontEmpty"],
+    ["second", { front: "", back: "Hund" }, "backEmpty"],
+  ] as const)("refuses an edit that empties its row's %s cell", async (_cell, sides, message) => {
+    const note = "## Words\n\n| Front | Back |\n| --- | --- |\n| Hund | dog |\n";
+    const [card] = reverseCards(note);
+    const { app, currentContent } = mockApp("test.md", note);
+    const result = await new FlashcardWriter(app as never).editFlashcard(card, {
+      type: "table",
+      notes: "",
+      ...sides,
+    });
+    expect(result).toEqual({
+      ok: false,
+      failure: { code: "invalid_edit", message: I18n.t.cardEdit[message] },
+    });
+    expect(currentContent()).toBe(note);
+  });
+
+  it("refuses an edit that empties its note's heading", async () => {
+    const note = "## beber\n\nto drink\n";
+    const [card] = reverseCards(note);
+    const { app, currentContent } = mockApp("test.md", note);
+    const result = await new FlashcardWriter(app as never).editFlashcard(card, {
+      type: "header-paragraph",
+      front: "to drink",
+      back: " ",
+    });
+    expect(result).toMatchObject({ ok: false, failure: { code: "invalid_edit" } });
+    expect(currentContent()).toBe(note);
+  });
+
+  it("is not split, even where its front reads as another card", async () => {
+    const note = "## A\n\nB\n\n## B\n\nA\n";
+    const [card] = reverseCards(note);
+    const { app, currentContent } = mockApp("test.md", note);
+    const result = await new FlashcardWriter(app as never).splitFlashcard(card, [
+      { type: "header-paragraph", front: "x", back: "y" },
+      { type: "header-paragraph", front: "z", back: "w" },
+    ]);
+    expect(result).toEqual({
+      ok: false,
+      failure: { code: "invalid_edit", message: I18n.t.cardEdit.splitUnsupported },
+    });
+    expect(currentContent()).toBe(note);
   });
 });

@@ -7,6 +7,8 @@ import {
   generateDeckId,
   isZstd,
   mapWithConcurrency,
+  readAnkiEarlierRows,
+  readAnkiPins,
   yieldEvery,
 } from "@decks/core";
 import type {
@@ -156,20 +158,17 @@ export class AnkiImportController {
         getMediaText: (name) => AnkiImportController.mediaText(loaded, name),
         getMediaSize: (name) => AnkiImportController.mediaSize(loaded, name),
       });
-      // Fronts already taken by cards in live decks OUTSIDE the import target
-      // folder are reserved: an imported card sharing such a front gets a " (n)"
-      // suffix so it lands as its own card instead of being dropped in favour of
-      // the other deck's. The import's own (re-)target decks are excluded so a
-      // re-import keeps stable fronts/ids.
       const base = normalizePath(opts.targetFolder.trim());
-      const reservedFronts = new Set(await this.db.getFrontsOutsidePath(`${base}/`));
+      // A re-import keeps the ids an earlier import anchored, and any " (n)" front it wrote.
+      const pins = await readAnkiPins(this.db);
+      const earlierRows = await readAnkiEarlierRows(this.db, `${base}/`);
       const decks = AnkiDeckRenderer.render(
         parsed.cards,
         this.ankiSubtag,
         headerLevel,
         opts.split,
         opts.cardsPerFile,
-        reservedFronts
+        { pins, earlierRows }
       );
 
       await this.db.createTagMapping(opts.profileId, this.ankiSubtag);
@@ -212,12 +211,6 @@ export class AnkiImportController {
       await this.deckSynchronizer.sync({
         showProgress: true,
         onProgress: (p) => onProgress?.(Math.round(p.percentage), 100, "sync"),
-      });
-
-      const { injected, reviews } = await AnkiHistoryImporter.importHistory(this.db, deckItems, {
-        collectionCreatedMs: AnkiCollectionParser.readCollectionCreatedMs(rawDb),
-        revlogByCard: AnkiCollectionParser.readRevlog(rawDb),
-        onProgress: (done, historyTotal) => onProgress?.(done, historyTotal, "import"),
       });
 
       // Count what actually landed in the imported decks (not the pre-sync render
@@ -263,6 +256,13 @@ export class AnkiImportController {
         landedByDeck = await fetchImportedStats();
         cardsImported = sumCounts(landedByDeck);
       }
+
+      // After the retry, so every card that lands has its row when Anki's state is weighed.
+      const { injected, reviews } = await AnkiHistoryImporter.importHistory(this.db, deckItems, {
+        collectionCreatedMs: AnkiCollectionParser.readCollectionCreatedMs(rawDb),
+        revlogByCard: AnkiCollectionParser.readRevlog(rawDb),
+        onProgress: (done, historyTotal) => onProgress?.(done, historyTotal, "import"),
+      });
 
       const mediaCopied = await this.copyMedia(parsed, loaded, base, (done, mediaTotal) =>
         onProgress?.(done, mediaTotal, "media")

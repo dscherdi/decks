@@ -141,6 +141,22 @@ export class DatabaseTestUtils {
     return db;
   }
 
+  /**
+   * Read and write the files a backup lives in, without reaching into the
+   * database's own adapter. A suite that reached for a private field could only
+   * ever run against this implementation — the point of these helpers is that
+   * another host can supply its own.
+   */
+  static async readTestFile(path: string): Promise<Uint8Array | null> {
+    if (!this.adapter) return null;
+    if (!(await this.adapter.exists(path))) return null;
+    return new Uint8Array(await this.adapter.readBinary(path));
+  }
+
+  static async writeTestFile(path: string, bytes: Uint8Array): Promise<void> {
+    await this.adapter?.writeBinary(path, bytes.buffer.slice(0) as ArrayBuffer);
+  }
+
   static async cleanupDatabase(): Promise<void> {
     if (this.instance) {
       // No explicit close method in MainDatabaseService, but we can clear the instance

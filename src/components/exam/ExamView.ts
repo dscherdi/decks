@@ -5,6 +5,7 @@ import type { IDatabaseService } from "../../database/DatabaseFactory";
 import { wireInternalLinks } from "../../utils/internal-links";
 import FlashcardExamModal from "./FlashcardExamModal.svelte";
 import { confirmDialog, persistExamAttempt } from "./ExamModalWrapper";
+import { examMissProps, type ExamMissHooks } from "./exam-miss-props";
 
 export const VIEW_TYPE_FLASHCARD_EXAM = "flashcard-exam-view";
 
@@ -20,7 +21,8 @@ export class ExamView extends ItemView {
 
   constructor(
     leaf: WorkspaceLeaf,
-    private db: IDatabaseService
+    private db: IDatabaseService,
+    private missHooks?: ExamMissHooks
   ) {
     super(leaf);
   }
@@ -79,6 +81,7 @@ export class ExamView extends ItemView {
     this.component = mount(FlashcardExamModal, {
       target: container,
       props: {
+        ...examMissProps(this.db, this.missHooks),
         attempt,
         deckName: this.deckName,
         renderMarkdown: this.renderMarkdown,

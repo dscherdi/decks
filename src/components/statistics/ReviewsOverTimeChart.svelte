@@ -13,7 +13,7 @@
   } from "chart.js";
   import "chartjs-adapter-date-fns";
   import { Logger } from "@/utils/logging";
-  import { StatisticsService } from "@/services/StatisticsService";
+  import { StatisticsService } from "@decks/core";
   import { I18n } from "@decks/core";
   import {
     BAR_DATASET_DEFAULTS,

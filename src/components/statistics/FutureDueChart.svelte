@@ -20,9 +20,9 @@
   import {
     StatisticsService,
     type BacklogForecastData,
-  } from "../../services/StatisticsService";
+  } from "@decks/core";
   import { Logger } from "@/utils/logging";
-  import { I18n, toLocalDateString } from "@decks/core";
+  import { I18n } from "@decks/core";
   import {
     LINE_DATASET_DEFAULTS,
     getCategoryXAxis,
@@ -52,6 +52,8 @@
 
   export let selectedDeckIds: string[] = [];
   export let statistics: Statistics | null = null;
+  /** When the statistics were loaded: today is the study day of that moment. */
+  export let statisticsAt: Date = new Date();
   export let statisticsService: StatisticsService;
   export let logger: Logger;
 
@@ -149,24 +151,12 @@
       };
     }
 
-    // Create chart labels based on actual dates, not array indices
-    const today = new Date();
-    today.setHours(0, 0, 0, 0); // Normalize to start of day
-    const todayStr = toLocalDateString(today);
-    const tomorrow = new Date(today);
-    tomorrow.setDate(tomorrow.getDate() + 1);
-    const tomorrowStr = toLocalDateString(tomorrow);
-
+    // Labels count study days, as the forecast's buckets do, not calendar days.
     const labels = displayData.map((day) => {
-      if (day.date === todayStr) return t.statistics.today;
-      if (day.date === tomorrowStr) return t.statistics.tomorrow;
-
-      // Calculate days from today
-      const dayDate = new Date(day.date);
-      const diffTime = dayDate.getTime() - today.getTime();
-      const diffDays = Math.round(diffTime / (1000 * 60 * 60 * 24));
-
-      return diffDays.toString();
+      const offset = statisticsService.forecastDayOffset(day.date, statisticsAt);
+      if (offset === 0) return t.statistics.today;
+      if (offset === 1) return t.statistics.tomorrow;
+      return offset.toString();
     });
 
     const barData = displayData.map((day) => day.dueCount);
@@ -175,9 +165,12 @@
     let backlogData: BacklogForecastData[] = [];
     if (showBacklog && selectedDeckIds.length > 0) {
       try {
+        // Simulated as far as the last day shown, on the forecast's study days.
+        const lastShown = displayData[displayData.length - 1].date;
         backlogData = await statisticsService.simulateFutureDueLoad(
           selectedDeckIds,
-          maxDays
+          statisticsService.forecastDayOffset(lastShown, statisticsAt) + 1,
+          statisticsAt
         );
         logger.debug(
           "[FutureDueChart] Simulated backlog data:",
@@ -189,9 +182,8 @@
       }
     }
 
-    const cumulativeData = backlogData
-      .slice(0, displayData.length)
-      .map((day) => day.projectedBacklog);
+    // Matched by date: the bars skip days with nothing due, the simulation does not.
+    const cumulativeData = statisticsService.backlogOnDays(displayData, backlogData);
 
     const greenColor = getObsidianColor(PALETTE.green);
     const mutedColor = getObsidianColor("--text-muted");
@@ -361,7 +353,8 @@
     const totalReviews = forecast.reduce((sum, day) => sum + day.dueCount, 0);
     const averagePerDay =
       forecast.length > 0 ? Math.round(totalReviews / forecast.length) : 0;
-    const dueTomorrow = forecast.length > 1 ? forecast[1].dueCount : 0;
+    // By date: the forecast skips days with nothing due, so its second entry may be later.
+    const dueTomorrow = statisticsService.getDueTomorrow(statistics, statisticsAt);
 
     return {
       totalReviews,

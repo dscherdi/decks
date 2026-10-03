@@ -2,13 +2,13 @@ import { type App, TFile, normalizePath } from "obsidian";
 import {
   buildHeaderParagraphCard,
   buildHeaderParagraphContent,
+  buildMcqContent,
   buildTableContent,
-  escapeTableCell,
   headingHashes,
   type GeneratedCard,
 } from "@decks/core";
 
-export type SaveFormat = "header-paragraph" | "table" | "canvas";
+export type SaveFormat = "header-paragraph" | "table" | "canvas" | "mcq";
 
 /** A canvas text node (the only node type that carries flashcards). */
 interface CanvasTextNode {
@@ -138,12 +138,26 @@ export class FlashcardComposer {
     const filePath = normalizePath(
       `${options.folder ? `${options.folder}/` : ""}${options.name}.md`,
     );
-    const body =
-      options.format === "table"
-        ? buildTableContent(cards, options.level, options.name)
-        : buildHeaderParagraphContent(cards, options.level);
+    const body = FlashcardComposer.body(
+      cards,
+      options.format,
+      options.level,
+      options.name,
+    );
     await this.app.vault.create(filePath, frontmatter(options.tag) + body + "\n");
     return { filePath };
+  }
+
+  /** The document body for a format. Shared so new-file and append agree. */
+  private static body(
+    cards: GeneratedCard[],
+    format: SaveFormat,
+    level: number,
+    title: string,
+  ): string {
+    if (format === "mcq") return buildMcqContent(cards, level);
+    if (format === "table") return buildTableContent(cards, level, title);
+    return buildHeaderParagraphContent(cards, level);
   }
 
   private async createCanvasFile(
@@ -171,10 +185,7 @@ export class FlashcardComposer {
       throw new Error(`Target file not found: ${options.filePath}`);
     }
     const title = file.basename;
-    const body =
-      options.format === "table"
-        ? buildTableContent(cards, options.level, title)
-        : buildHeaderParagraphContent(cards, options.level);
+    const body = FlashcardComposer.body(cards, options.format, options.level, title);
     await this.app.vault.process(file, (content) => {
       const sep = content.endsWith("\n") ? "\n" : "\n\n";
       return `${content}${sep}${body}\n`;

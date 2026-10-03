@@ -6,7 +6,13 @@ import {
   setupTestDatabase,
   teardownTestDatabase,
 } from "./database-test-utils";
-import { generateDeckId, generateReverseFlashcardId } from "@decks/core";
+import {
+  encodeAnchorValue,
+  generateDeckId,
+  generateFlashcardId,
+  generateReverseFlashcardId,
+  noteCardOf,
+} from "@decks/core";
 import type { Deck, DeckProfile } from "../../database/types";
 
 describe("Reverse Cards Integration Tests", () => {
@@ -440,6 +446,41 @@ React is a library for building user interfaces.
       expect(tsRegular).toBeDefined();
       expect(tsReverse).toBeDefined();
       expect(tsReverse!.back).toBe("What is TypeScript?");
+    });
+  });
+
+  describe("the note card a reverse card belongs to", () => {
+    const sync = (deck: Deck, profile: DeckProfile, fileContent: string) =>
+      db.syncFlashcardsForDeck({
+        deckId: deck.id,
+        deckName: deck.name,
+        deckFilepath: deck.filepath,
+        deckConfig: profile,
+        fileContent,
+        reverseCards: true,
+      });
+    const reverseOf = async (deck: Deck, front: string) =>
+      (await db.getFlashcardsByDeck(deck.id)).find((c) => c.id.startsWith("rcard_") && c.front === front);
+
+    it("is found from a stamped note, even after its heading was edited", async () => {
+      const { deck, profile } = await createTestDeck("reverse-stamped");
+      const forward = generateFlashcardId("Hund");
+      const value = encodeAnchorValue("b", [forward, generateReverseFlashcardId("Hund")]);
+      await sync(deck, profile, `## Hund\n\ndog\n%%dk:h:${value}%%\n`);
+      await sync(deck, profile, `## Hund (m)\n\ndog\n%%dk:h:${value}%%\n`);
+
+      const reverse = await reverseOf(deck, "dog");
+      expect(reverse?.back).toBe("Hund (m)");
+      expect(reverse && (await noteCardOf(db, reverse))?.id).toBe(forward);
+    });
+
+    it("is a copied block's own card, not the card whose token it copied", async () => {
+      const { deck, profile } = await createTestDeck("reverse-copied");
+      const token = `%%dk:h:${encodeAnchorValue("a", [generateFlashcardId("Hund")])}%%`;
+      await sync(deck, profile, `## Hund\n\ndog\n${token}\n\n## Katze\n\ncat\n${token}\n`);
+
+      const reverse = await reverseOf(deck, "cat");
+      expect(reverse && (await noteCardOf(db, reverse))?.front).toBe("Katze");
     });
   });
 });

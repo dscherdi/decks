@@ -1,5 +1,5 @@
 import { MainDatabaseService } from "../../database/MainDatabaseService";
-import { Scheduler } from "@decks/core";
+import { REQUEST_RETENTION_MAX, REQUEST_RETENTION_MIN, Scheduler } from "@decks/core";
 import {
   DatabaseTestUtils,
   setupTestDatabase,
@@ -159,6 +159,39 @@ describe("Scheduler Integration Tests", () => {
       expect(updatedCard!.lapses).toBe(1);
       // After lapse, interval is reset to relearning step (10m default for STANDARD)
       expect(updatedCard!.interval).toBe(10);
+    });
+  });
+
+  describe("Retention at either end of the range", () => {
+    it("previews and rates a card whose profile asks for 0.5 or 0.995", async () => {
+      const intervals: number[] = [];
+      for (const requestRetention of [REQUEST_RETENTION_MIN, REQUEST_RETENTION_MAX]) {
+        const profile = await db.getDefaultProfile();
+        if (!profile) throw new Error("no default profile");
+        await db.updateProfile(profile.id, { fsrs: { ...profile.fsrs, requestRetention } });
+        const id = `card_retention_${requestRetention}`;
+        await db.createFlashcard(
+          DatabaseTestUtils.createTestFlashcard(testDeck.id, {
+            id,
+            front: id,
+            state: "review",
+            dueDate: new Date(Date.now() - 1000).toISOString(),
+            interval: 1440 * 3,
+            stability: 3,
+            difficulty: 5,
+            repetitions: 3,
+            lastReviewed: new Date(Date.now() - 3 * 86400000).toISOString(),
+          })
+        );
+
+        expect(await scheduler.preview(id)).not.toBeNull();
+        await scheduler.rate(id, "good");
+        intervals.push((await db.getFlashcardById(id))?.interval ?? 0);
+        const log = (await db.getAllReviewLogs()).find((l) => l.flashcardId === id);
+        expect(log?.requestRetention).toBe(requestRetention);
+      }
+      // The lower target waits longer.
+      expect(intervals[0]).toBeGreaterThan(intervals[1]);
     });
   });
 

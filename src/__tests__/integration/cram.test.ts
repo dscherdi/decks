@@ -204,11 +204,13 @@ describe("Cram (drill) Integration", () => {
 
   it("resumes an unfinished cram session for the same deck", async () => {
     const cards = await seedCards(2);
-    const first = await scheduler.startCramSession(fileDeck, cards);
+    // One clock reading: two would fall in different study days if 04:00 passed between them.
+    const now = new Date();
+    const first = await scheduler.startCramSession(fileDeck, cards, now);
     // Graduate one of two.
-    await scheduler.rateCram(first.sessionId, cards[0].id, "good");
+    await scheduler.rateCram(first.sessionId, cards[0].id, "good", now);
 
-    const second = await scheduler.startCramSession(fileDeck, cards);
+    const second = await scheduler.startCramSession(fileDeck, cards, now);
     expect(second.sessionId).toBe(first.sessionId);
 
     const progress = await scheduler.getCramProgress(second.sessionId);
@@ -268,5 +270,54 @@ describe("Cram (drill) Integration", () => {
     await scheduler.rateCram(sessionId, cards[0].id, "good");
     await scheduler.rateCram(sessionId, cards[1].id, "good");
     expect(await scheduler.hasResumableCram(fileDeck)).toBe(false);
+  });
+
+  it("does not let a run narrowed to some cards resume a whole-deck run", async () => {
+    const cards = await seedCards(4);
+    const whole = await scheduler.startCramSession(fileDeck, cards);
+    await scheduler.rateCram(whole.sessionId, cards[0].id, "good");
+
+    // Drilling two chosen cards — an exam's misses, a set of leeches — must get
+    // those two, not the unfinished whole-deck run it would otherwise pick up.
+    const chosen = [cards[2], cards[3]];
+    const ids = chosen.map((c) => c.id);
+    const narrowed = await scheduler.startCramSession(fileDeck, chosen, new Date(), ids);
+    expect(narrowed.sessionId).not.toBe(whole.sessionId);
+    const progress = await scheduler.getCramProgress(narrowed.sessionId);
+    expect(progress!.goalTotal).toBe(2);
+    expect(progress!.graduated).toBe(0);
+  });
+
+  it("leaves the whole-deck run resumable after a narrowed one", async () => {
+    const cards = await seedCards(3);
+    const whole = await scheduler.startCramSession(fileDeck, cards);
+    await scheduler.rateCram(whole.sessionId, cards[0].id, "good");
+
+    const ids = [cards[1].id];
+    await scheduler.startCramSession(fileDeck, [cards[1]], new Date(), ids);
+
+    expect(await scheduler.hasResumableCram(fileDeck)).toBe(true);
+    const again = await scheduler.startCramSession(fileDeck, cards);
+    expect(again.sessionId).toBe(whole.sessionId);
+    expect((await scheduler.getCramProgress(again.sessionId))!.graduated).toBe(1);
+  });
+
+  it("resumes a narrowed run as itself, whatever order the cards come in", async () => {
+    const cards = await seedCards(3);
+    const ids = [cards[0].id, cards[2].id];
+    const first = await scheduler.startCramSession(fileDeck, [cards[0], cards[2]], new Date(), ids);
+    await scheduler.rateCram(first.sessionId, cards[0].id, "good");
+
+    expect(await scheduler.hasResumableCram(fileDeck, new Date(), [...ids].reverse())).toBe(true);
+    const second = await scheduler.startCramSession(
+      fileDeck,
+      [cards[2], cards[0]],
+      new Date(),
+      [...ids].reverse()
+    );
+    expect(second.sessionId).toBe(first.sessionId);
+    // A different choice of cards is a different run.
+    const other = await scheduler.startCramSession(fileDeck, [cards[1]], new Date(), [cards[1].id]);
+    expect(other.sessionId).not.toBe(first.sessionId);
   });
 });

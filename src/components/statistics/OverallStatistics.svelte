@@ -5,6 +5,8 @@
   const t = I18n.t;
 
   export let statistics: Statistics | null;
+  /** From the service, which reads the forecast's study-day buckets. */
+  export let dueToday = 0;
   export let todayStats: {
     reviews: number;
     timeSpent: number;
@@ -33,12 +35,6 @@
     reviewCards: number;
     correctRate: number;
   } | null = null;
-
-  function getDueToday(): number {
-    if (!statistics?.forecast) return 0;
-    const today = new Date().toISOString().split("T")[0];
-    return statistics.forecast.find((f) => f.date === today)?.dueCount ?? 0;
-  }
 
   function formatTime(seconds: number): string {
     if (seconds < 60) return `${Math.round(seconds)}s`;
@@ -89,7 +85,7 @@
         <div class="decks-stat-label">{t.statistics.matureLabel}</div>
       </div>
       <div class="decks-stat-card">
-        <div class="decks-stat-value">{getDueToday()}</div>
+        <div class="decks-stat-value">{dueToday}</div>
         <div class="decks-stat-label">{t.statistics.dueToday}</div>
       </div>
     </div>

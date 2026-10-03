@@ -680,6 +680,37 @@ export class MainDatabaseService extends BaseDatabaseService {
               this.debugLog("Remote DB has no exam tables, skipping");
             }
 
+            // AI workbench: a pile started on one device is triaged on another.
+            try {
+              this.db.exec(`
+                INSERT OR REPLACE INTO ai_sessions
+                SELECT remote.* FROM remote.ai_sessions
+                LEFT JOIN ai_sessions AS main ON remote.id = main.id
+                WHERE main.id IS NULL OR remote.modified > main.modified
+              `);
+              // `saved` is terminal: a remote row still reading `proposed`
+              // must not win.
+              this.db.exec(`
+                INSERT OR REPLACE INTO ai_staged_cards
+                SELECT remote.* FROM remote.ai_staged_cards
+                LEFT JOIN ai_staged_cards AS main ON remote.id = main.id
+                WHERE (main.id IS NULL OR remote.modified > main.modified)
+                  AND NOT (main.status = 'saved' AND remote.status <> 'saved')
+              `);
+              // The ledger is a cache of what a source contains, so either
+              // device's copy is equally right and first writer wins.
+              this.db.exec(`
+                INSERT OR IGNORE INTO ai_source_concepts
+                SELECT * FROM remote.ai_source_concepts
+              `);
+              this.db.exec(`
+                INSERT OR IGNORE INTO ai_source_extractions
+                SELECT * FROM remote.ai_source_extractions
+              `);
+            } catch {
+              this.debugLog("Remote DB has no AI workbench tables, skipping");
+            }
+
             // Commit the transaction
             this.db.exec("COMMIT");
             this.debugLog("Successfully merged data from disk");
@@ -1101,6 +1132,73 @@ export class MainDatabaseService extends BaseDatabaseService {
                 }
               } catch {
                 this.debugLog(`Remote DB has no ${examTable} table, skipping`);
+              }
+            }
+
+            // AI workbench: newer-wins by modified, except that `saved` is
+            // terminal.
+            for (const aiTable of ["ai_sessions", "ai_staged_cards"]) {
+              try {
+                const remoteRows = remoteDb.exec(`SELECT * FROM ${aiTable}`);
+                if (remoteRows.length > 0) {
+                  const data = remoteRows[0];
+                  const idIndex = data.columns.indexOf("id");
+                  const modIndex = data.columns.indexOf("modified");
+                  const statusIndex = data.columns.indexOf("status");
+                  const stmt = this.db.prepare(
+                    `INSERT OR REPLACE INTO ${aiTable} (${data.columns.join(",")})
+                     VALUES (${data.columns.map(() => "?").join(",")})`
+                  );
+                  for (const row of data.values) {
+                    const id = row[idIndex] as string;
+                    const remoteModified = row[modIndex] as string;
+                    const existing = this.db.exec(
+                      statusIndex >= 0
+                        ? `SELECT modified, status FROM ${aiTable} WHERE id = ?`
+                        : `SELECT modified FROM ${aiTable} WHERE id = ?`,
+                      [id]
+                    );
+                    if (!existing.length) {
+                      stmt.run(row);
+                      continue;
+                    }
+                    const localModified = existing[0]?.values?.[0]?.[0] as
+                      | string
+                      | null;
+                    if (statusIndex >= 0) {
+                      const localStatus = existing[0]?.values?.[0]?.[1] as
+                        | string
+                        | null;
+                      const remoteStatus = row[statusIndex] as string;
+                      if (localStatus === "saved" && remoteStatus !== "saved") {
+                        continue;
+                      }
+                    }
+                    if (!localModified || remoteModified > localModified) {
+                      stmt.run(row);
+                    }
+                  }
+                  stmt.free();
+                }
+              } catch {
+                this.debugLog(`Remote DB has no ${aiTable} table, skipping`);
+              }
+            }
+
+            for (const table of ["ai_source_concepts", "ai_source_extractions"]) {
+              try {
+                const remoteRows = remoteDb.exec(`SELECT * FROM ${table}`);
+                if (remoteRows.length > 0) {
+                  const data = remoteRows[0];
+                  const stmt = this.db.prepare(
+                    `INSERT OR IGNORE INTO ${table} (${data.columns.join(",")})
+                     VALUES (${data.columns.map(() => "?").join(",")})`
+                  );
+                  for (const row of data.values) stmt.run(row);
+                  stmt.free();
+                }
+              } catch {
+                this.debugLog(`Remote DB has no ${table} table, skipping`);
               }
             }
 

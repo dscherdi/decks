@@ -27,7 +27,8 @@ export class ExamSetupModal extends Modal {
     private eligibleCount: number,
     private skippedCount: number,
     initial: ExamSettings,
-    private onStart: (settings: ExamSettings) => void
+    private onStart: (settings: ExamSettings) => void,
+    private meaningAvailable = false
   ) {
     super(app);
     this.values = { ...initial };
@@ -123,6 +124,11 @@ export class ExamSetupModal extends Modal {
         .addOption("exact", t.gradingExact)
         .addOption("tolerant", t.gradingTolerant)
         .addOption("self", t.gradingSelf)
+        .then((d) => {
+          if (this.meaningAvailable || this.values.typedGrading === "meaning") {
+            d.addOption("meaning", t.gradingMeaning);
+          }
+        })
         .setValue(this.values.typedGrading)
         .onChange((value) => {
           this.values.typedGrading = value as TypedGradingMode;

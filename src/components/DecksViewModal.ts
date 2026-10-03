@@ -7,6 +7,7 @@ import type {
   CustomDeckGroup,
   FilterDefinition,
 } from "@/database/types";
+import { meaningGradingAvailable } from "../services/AiGradingController";
 import { DeckSynchronizer } from "@/services/DeckSynchronizer";
 import { DeckManager } from "@/services/DeckManager";
 import type { DecksSettings } from "@/settings";
@@ -23,11 +24,13 @@ import {
 import { launchExamForSelection } from "./exam/launchExam";
 import { launchCramForSelection } from "./review/launchCram";
 import { openDeckSourceFile } from "@/utils/deck-source";
+import type { ExamMissHooks } from "./exam/exam-miss-props";
+import type { ReviewRepairHooks } from "./review/review-repair-props";
 import { ExamModalWrapper } from "./exam/ExamModalWrapper";
 import { ExamView, VIEW_TYPE_FLASHCARD_EXAM } from "./exam/ExamView";
 import { StatisticsModal } from "./settings/StatisticsModal";
 import { ProfilesManagerModal } from "./config/ProfilesManagerModal";
-import { StatisticsService } from "@/services/StatisticsService";
+import { StatisticsService } from "@decks/core";
 import { TagGroupService, tagScopeFromSettings } from "@decks/core";
 import { CustomDeckService } from "@decks/core";
 import { FlashcardManagerModal } from "./FlashcardManagerModal";
@@ -57,7 +60,7 @@ export class DecksViewModal extends Modal {
   private saveSettings: () => Promise<void>;
   private openEditModal?: (card: Flashcard) => Promise<void>;
   private openBatchRefactor?: (cards: Flashcard[]) => Promise<void>;
-  private openAiGenerator?: () => void;
+  private openAiWorkbench?: () => void;
   private openAnkiImport?: () => void;
 
   constructor(
@@ -74,8 +77,10 @@ export class DecksViewModal extends Modal {
     saveSettings: () => Promise<void>,
     openEditModal?: (card: Flashcard) => Promise<void>,
     openBatchRefactor?: (cards: Flashcard[]) => Promise<void>,
-    openAiGenerator?: () => void,
+    openAiWorkbench?: () => void,
     openAnkiImport?: () => void,
+    private examMissHooks?: ExamMissHooks,
+    private reviewRepairHooks?: ReviewRepairHooks,
   ) {
     super(app);
     this.db = db;
@@ -93,7 +98,7 @@ export class DecksViewModal extends Modal {
     this.saveSettings = saveSettings;
     this.openEditModal = openEditModal;
     this.openBatchRefactor = openBatchRefactor;
-    this.openAiGenerator = openAiGenerator;
+    this.openAiWorkbench = openAiWorkbench;
     this.openAnkiImport = openAnkiImport;
   }
 
@@ -232,7 +237,11 @@ export class DecksViewModal extends Modal {
         openDeckConfigModal: (deck: DeckWithProfile) =>
           this.openDeckConfigModal(deck),
         openFlashcardManager: () => this.openFlashcardManager(),
-        openAiGeneratorModal: () => this.openAiGenerator?.(),
+        // The workbench is a tab, so this modal would cover it.
+        openAiWorkbench: () => {
+          this.close();
+          this.openAiWorkbench?.();
+        },
         openAnkiImportModal: () => this.openAnkiImport?.(),
         aiEnabled: this.settings.ai.enabled,
         deckTag: this.settings.parsing.deckTag,
@@ -438,7 +447,8 @@ export class DecksViewModal extends Modal {
         active !== null,
         undefined,
         undefined,
-        tagScopeFromSettings(this.settings.parsing)
+        tagScopeFromSettings(this.settings.parsing),
+        meaningGradingAvailable(this.settings)
       );
       this.openWithReturn(modal);
     });
@@ -456,7 +466,8 @@ export class DecksViewModal extends Modal {
         active !== null,
         "assignments",
         deck.profileId,
-        tagScopeFromSettings(this.settings.parsing)
+        tagScopeFromSettings(this.settings.parsing),
+        meaningGradingAvailable(this.settings)
       );
       this.openWithReturn(modal);
     });
@@ -562,7 +573,9 @@ export class DecksViewModal extends Modal {
         this.deckSynchronizer,
         this.refreshDecksAndStats.bind(this),
         this.refreshStatsById.bind(this),
-        browseMode
+        browseMode,
+        false,
+        this.reviewRepairHooks
       );
       this.openWithReturn(reviewModal);
     }
@@ -672,7 +685,8 @@ export class DecksViewModal extends Modal {
         deckName,
         this.db,
         onRetake,
-        this.refreshDecksAndStats.bind(this)
+        this.refreshDecksAndStats.bind(this),
+        this.examMissHooks
       );
       this.openWithReturn(examModal);
     }

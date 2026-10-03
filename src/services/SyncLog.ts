@@ -23,6 +23,7 @@ import type { Logger } from "../utils/logging";
 import { DeviceLocalState } from "./DeviceLocalState";
 import { hlcReceive, hlcSend, hlcParse, type HLCValue } from "@decks/core";
 import { applyOp, KNOWN_OP_TYPES_V1, type SyncLogEntry, type SyncOpV1 } from "@decks/core";
+import { helloOp, olderDevices, type DeviceLog } from "@decks/core";
 import { safeRename } from "../utils/adapter";
 
 const FLUSH_DEBOUNCE_MS = 2000;
@@ -65,6 +66,31 @@ export class SyncLog {
     // caller via resolveSyncLogFolder.
     private readonly logFolder = ""
   ) {}
+
+  private lastHelloAt = 0;
+
+  /** Tell other devices, at start and then daily, that this one reads id-carrying tokens. */
+  announce(now = Date.now()): void {
+    if (now - this.lastHelloAt < MS_PER_DAY) return;
+    this.lastHelloAt = now;
+    this.append(helloOp());
+  }
+
+  /** Other devices active in the last month that never announced id-carrying tokens. */
+  async olderDevices(): Promise<string[]> {
+    const logs: DeviceLog[] = [];
+    for (const log of await this.listOtherDeviceLogPaths()) {
+      if (log.isConflict) continue;
+      const stat = await this.adapter.stat(log.path);
+      if (!stat) continue;
+      logs.push({
+        deviceId: log.sourceDeviceId,
+        modified: stat.mtime,
+        text: () => this.adapter.read(log.path),
+      });
+    }
+    return olderDevices(logs, Date.now());
+  }
 
   /**
    * Path of this device's log file. The folder prefix is configurable via
@@ -227,6 +253,28 @@ export class SyncLog {
     } finally {
       this.applying = false;
     }
+  }
+
+  /**
+   * Record every op this device has logged as applied, without applying any.
+   * A restore calls this first, so its own later ops never replay over the backup.
+   */
+  async markOwnLogApplied(): Promise<void> {
+    if (!this.db) return;
+    await this.flushNow();
+    const ownDeviceId = this.deviceState.getDeviceId();
+    const consumed = await this.loadJournalState();
+    const seq = Math.max(
+      this.deviceState.lastTakenSeq(),
+      consumed.get(ownDeviceId) ?? 0
+    );
+    const clock = this.deviceState.getHlcState();
+    await this.db.upsertJournalState({
+      sourceDeviceId: ownDeviceId,
+      lastAppliedSeq: seq,
+      lastAppliedHlc: JSON.stringify([clock.pt, clock.lc, ownDeviceId]),
+      lastAppliedAt: new Date().toISOString(),
+    });
   }
 
   private async renameConsumedConflictFile(path: string): Promise<void> {

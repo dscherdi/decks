@@ -1,6 +1,7 @@
 import { App, MarkdownView, Notice, TFile, WorkspaceLeaf } from "obsidian";
 import type { Flashcard } from "../database/types";
 import { findFlashcardLine } from "./source-navigator";
+import { forwardCard } from "./reverse-card";
 import { I18n } from "@decks/core";
 
 /**
@@ -74,7 +75,8 @@ async function openMarkdownAndScrollToLine(
 ): Promise<WorkspaceLeaf> {
   const content = await app.vault.read(file);
   const lines = content.split("\n");
-  const lineNumber = findFlashcardLine(lines, flashcard) ?? 0;
+  // A reverse card's front is its note's answer; its note's card is found by its back.
+  const lineNumber = findFlashcardLine(lines, forwardCard(flashcard)) ?? 0;
 
   let leaf = app.workspace.getLeavesOfType("markdown").find((l) => {
     const viewState = l.getViewState();

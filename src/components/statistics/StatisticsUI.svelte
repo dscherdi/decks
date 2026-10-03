@@ -18,7 +18,7 @@
   import { initChartTheme } from "./chartTheme";
   import type { Statistics } from "../../database/types";
 
-  import { StatisticsService } from "../../services/StatisticsService";
+  import { StatisticsService } from "@decks/core";
   import { Logger } from "@/utils/logging";
   import { I18n } from "@decks/core";
 
@@ -43,6 +43,8 @@
 
   let loading = false; // Don't load by default
   let statistics: Statistics | null = null;
+  // One clock per load: the forecast's buckets, its labels and the due counts must agree on today.
+  let statisticsAt = new Date();
   let selectedDeckFilter = deckFilter; // Seeded from the optional deckFilter prop
   let selectedTimeframe = "12months"; // "12months" or "all"
   let availableDecks: { id: string; name: string; tag: string }[] = [];
@@ -239,10 +241,13 @@
       );
       logger.debug(`[StatisticsUI] Loading for IDs: ${ids.join(",") || "all"}`);
 
+      const loadedAt = new Date();
       statistics = await statisticsService.getOverallStatistics(
         ids,
-        selectedTimeframe
+        selectedTimeframe,
+        loadedAt
       );
+      statisticsAt = loadedAt;
 
       logger.debug(
         "[StatisticsUI] Statistics loaded successfully:",
@@ -253,10 +258,10 @@
 
       // Compute derived statistics once data is loaded
       logger.debug("[StatisticsUI] Computing derived statistics...");
-      todayStats = statisticsService.getTodayStats(statistics);
-      weekStats = statisticsService.getTimeframeStats(statistics, 7);
-      monthStats = statisticsService.getTimeframeStats(statistics, 30);
-      yearStats = statisticsService.getTimeframeStats(statistics, 365);
+      todayStats = statisticsService.getTodayStats(statistics, loadedAt);
+      weekStats = statisticsService.getTimeframeStats(statistics, 7, loadedAt);
+      monthStats = statisticsService.getTimeframeStats(statistics, 30, loadedAt);
+      yearStats = statisticsService.getTimeframeStats(statistics, 365, loadedAt);
       logger.debug("[StatisticsUI] Derived statistics computed");
     } catch (error) {
       logger.error("[StatisticsUI] Error loading statistics:", error);
@@ -374,6 +379,7 @@
   <div class="decks-stats">
     <OverallStatistics
       {statistics}
+      dueToday={statisticsService.getDueToday(statistics, statisticsAt)}
       {todayStats}
       {weekStats}
       {monthStats}
@@ -386,6 +392,7 @@
         <FutureDueChart
           {logger}
           {statistics}
+          {statisticsAt}
           {statisticsService}
           {selectedDeckIds}
         />

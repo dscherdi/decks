@@ -4,13 +4,15 @@
   // shows the full card (no diff highlighting).
   import { cardFieldDefs, fieldSetValue, type FlashcardType, type RefactorFieldSet } from "@decks/core";
   import FieldStack from "./FieldStack.svelte";
+  import { reverseFieldDefs } from "../utils/reverse-card";
 
   export let cardType: FlashcardType;
+  export let reverse = false;
   export let fieldset: RefactorFieldSet;
   export let renderMarkdown: (source: string, el: HTMLElement) => void;
 
   // Only render fields that have content.
-  $: zones = cardFieldDefs(cardType)
+  $: zones = (reverse ? reverseFieldDefs(cardFieldDefs(cardType)) : cardFieldDefs(cardType))
     .filter((f) => fieldSetValue(fieldset, f.refKey).trim() !== "")
     .map((f) => ({ key: f.refKey, label: f.label, isFront: f.isFront }));
 

@@ -11,7 +11,7 @@
     Legend,
     type TooltipItem,
   } from "chart.js";
-  import { StatisticsService } from "@/services/StatisticsService";
+  import { StatisticsService } from "@decks/core";
   import { Logger } from "@/utils/logging";
   import { I18n } from "@decks/core";
   import {

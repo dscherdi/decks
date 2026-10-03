@@ -103,8 +103,9 @@ export class AiRefactorController {
     return buildAiConfig(this.settings, this.keyStore);
   }
 
+  /** `current` is the whole input, so a staged card with no database row
+   *  refactors exactly like a stored one. */
   async refactorCard(
-    _card: Flashcard,
     current: RefactorFieldSet,
     options?: {
       instructions?: string;

@@ -6,16 +6,20 @@
  */
 
 import { MainDatabaseService } from "../../database/MainDatabaseService";
-import { StatisticsService } from "../../services/StatisticsService";
+import { StatisticsService } from "@decks/core";
 import type { Deck, Flashcard } from "../../database/types";
 import {
   DatabaseTestUtils,
   setupTestDatabase,
   teardownTestDatabase,
 } from "./database-test-utils";
-import { toLocalDateString } from "@decks/core";
+import { studyDayKey, toLocalDateString } from "@decks/core";
 
 describe("StatisticsService Integration Tests", () => {
+  // The forecast buckets cards by study day, which starts at this hour, not at midnight.
+  const NEXT_DAY_STARTS_AT = 4;
+  const forecastDay = (date: Date): string => studyDayKey(date, NEXT_DAY_STARTS_AT);
+
   let db: MainDatabaseService;
   let statsService: StatisticsService;
   let testDeck: Deck;
@@ -25,7 +29,7 @@ describe("StatisticsService Integration Tests", () => {
 
     // Create mock settings for StatisticsService
     const mockSettings = {
-      review: { nextDayStartsAt: 4 },
+      review: { nextDayStartsAt: NEXT_DAY_STARTS_AT },
       backup: { enableAutoBackup: false, maxBackups: 3 },
       debug: { enableLogging: false, performanceLogs: false },
     } as any;
@@ -250,6 +254,117 @@ describe("StatisticsService Integration Tests", () => {
 
       const allTime = await statsService.getReviewCountsByDate(0);
       expect(allTime.get(key)).toBe(1);
+    });
+  });
+
+  describe("periods", () => {
+    it("reads all history for the all period, and keeps a year of days for the summary", async () => {
+      const now = new Date(2026, 5, 15, 12);
+      const card = DatabaseTestUtils.createTestFlashcard(testDeck.id, { id: "card-periods", state: "review" });
+      await db.createFlashcard(card);
+      for (const [id, daysAgo] of [["log-yesterday", 1], ["log-100-days", 100]] as const) {
+        await db.createReviewLog(
+          DatabaseTestUtils.createTestReviewLog(card.id, {
+            id,
+            rating: 3,
+            ratingLabel: "good",
+            reviewedAt: new Date(now.getTime() - daysAgo * 86400000).toISOString(),
+          })
+        );
+      }
+
+      const all = await statsService.getOverallStatistics([testDeck.id], "all", now);
+      expect(all.answerButtons.good).toBe(2);
+
+      const month = await statsService.getOverallStatistics([testDeck.id], "30days", now);
+      expect(month.answerButtons.good).toBe(1);
+      expect(statsService.getTimeframeStats(month, 365, now).reviews).toBe(2);
+    });
+  });
+
+  describe("forecast", () => {
+    it("counts only review cards that will be served, not suspended, buried or new ones", async () => {
+      const inTwoDays = new Date();
+      inTwoDays.setDate(inTwoDays.getDate() + 2);
+      inTwoDays.setHours(12, 0, 0, 0);
+      const yesterday = new Date(Date.now() - 86400000).toISOString();
+      const card = (id: string, state: Flashcard["state"], dueDate: string) =>
+        db.createFlashcard(
+          DatabaseTestUtils.createTestFlashcard(testDeck.id, { id, state, dueDate })
+        );
+
+      await card("served", "review", inTwoDays.toISOString());
+      await card("suspended", "review", inTwoDays.toISOString());
+      await card("buried", "review", inTwoDays.toISOString());
+      await card("new", "new", inTwoDays.toISOString());
+      await card("overdue-suspended", "review", yesterday);
+      await db.suspendCard("suspended");
+      await db.suspendCard("overdue-suspended");
+      await db.buryCard("buried", new Date(Date.now() + 5 * 86400000).toISOString());
+
+      const stats = await statsService.getOverallStatistics([testDeck.id]);
+      const day = stats.forecast.find((f) => f.date === forecastDay(inTwoDays));
+      expect(day?.dueCount).toBe(1);
+      const today = stats.forecast.find((f) => f.date === forecastDay(new Date()));
+      expect(today).toBeUndefined();
+    });
+
+    describe("due today and tomorrow", () => {
+      afterEach(() => jest.useRealTimers());
+
+      it.each([
+        ["00:30", 0, 30],
+        ["03:59", 3, 59],
+        ["04:00", 4, 0],
+        ["12:00", 12, 0],
+      ])("at %s read today's study day, overdue cards included, and the next", async (_time, hour, minute) => {
+        const now = new Date(2026, 0, 15, hour, minute);
+        // Only the clock is faked: sql.js and the timers it relies on stay real.
+        jest.useFakeTimers({
+          now,
+          doNotFake: ["nextTick", "setImmediate", "clearImmediate", "setTimeout", "clearTimeout",
+            "setInterval", "clearInterval", "queueMicrotask", "hrtime", "performance"],
+        });
+        const at = (days: number) => new Date(now.getTime() + days * 86400000).toISOString();
+        for (const [id, dueDate] of [["overdue-1", at(-2)], ["overdue-2", at(-1)], ["in-a-day", at(1)]]) {
+          await db.createFlashcard(
+            DatabaseTestUtils.createTestFlashcard(testDeck.id, { id, state: "review", dueDate })
+          );
+        }
+
+        const stats = await statsService.getOverallStatistics([testDeck.id]);
+        expect(statsService.getDueToday(stats)).toBe(2);
+        expect(statsService.getDueTomorrow(stats)).toBe(1);
+      });
+    });
+  });
+
+  describe("getDeckStats global daily cap", () => {
+    it("clamps the shown counts, reviews first and new cards from what is left", async () => {
+      const yesterday = new Date(Date.now() - 86400000).toISOString();
+      for (const id of ["n1", "n2", "n3"]) {
+        await db.createFlashcard(
+          DatabaseTestUtils.createTestFlashcard(testDeck.id, { id, state: "new" })
+        );
+      }
+      for (const id of ["r1", "r2"]) {
+        await db.createFlashcard(
+          DatabaseTestUtils.createTestFlashcard(testDeck.id, {
+            id,
+            state: "review",
+            dueDate: yesterday,
+          })
+        );
+      }
+
+      const counts = async (cap: number) => {
+        const s = await statsService.getDeckStats(testDeck.id, false, cap);
+        return [s.dueCount, s.newCount];
+      };
+      expect(await counts(Infinity)).toEqual([2, 3]);
+      expect(await counts(4)).toEqual([2, 2]);
+      expect(await counts(1)).toEqual([1, 0]);
+      expect(await counts(0)).toEqual([0, 0]);
     });
   });
 
@@ -1487,7 +1602,7 @@ describe("StatisticsService Integration Tests", () => {
         [testDeck1.id],
         "all"
       );
-      const tomorrowStr = toLocalDateString(tomorrow);
+      const tomorrowStr = forecastDay(tomorrow);
       const deck1TomorrowForecast = deck1Stats.forecast.find(
         (f) => f.date === tomorrowStr
       );
@@ -1498,7 +1613,7 @@ describe("StatisticsService Integration Tests", () => {
         [testDeck2.id],
         "all"
       );
-      const nextWeekStr = toLocalDateString(nextWeek);
+      const nextWeekStr = forecastDay(nextWeek);
       const deck2NextWeekForecast = deck2Stats.forecast.find(
         (f) => f.date === nextWeekStr
       );

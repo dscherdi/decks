@@ -1,6 +1,7 @@
 import { type App, TFile } from "obsidian";
 import type { Flashcard } from "../database/types";
 import { findFlashcardSegment } from "./source-navigator";
+import { forwardCard } from "./reverse-card";
 
 interface CanvasNode {
   id?: unknown;
@@ -41,7 +42,7 @@ export async function extractSourceContext(
 
   const content = await app.vault.cachedRead(file);
   const lines = content.split("\n");
-  const segment = findFlashcardSegment(lines, card);
+  const segment = findFlashcardSegment(lines, forwardCard(card));
   if (!segment) return null;
 
   const start = Math.max(0, segment.start - radius);

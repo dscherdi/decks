@@ -7,7 +7,7 @@ import { createTestDatabase, cleanupTestDatabase } from "../test-db-utils";
 import { AnchorStamper } from "../../services/AnchorStamper";
 import { ObsidianNoteAccess } from "../../services/ObsidianNoteAccess";
 import {
-  generateAnchorId,
+  encodeAnchorValue,
   generateClozeFlashcardId,
   generateFlashcardId,
 } from "@decks/core";
@@ -39,6 +39,13 @@ function mockVault(content: string): {
     },
   } as unknown as App;
   return { app, currentContent: () => stored };
+}
+
+/** The value a row carrying these ids gets. */
+function value(kind: "a" | "p", ids: string[]): string {
+  const encoded = encodeAnchorValue(kind, ids);
+  if (encoded === null) throw new Error(`cannot encode ${ids.join(",")}`);
+  return encoded;
 }
 
 describe("table cloze stamping through the real pipeline", () => {
@@ -89,15 +96,12 @@ describe("table cloze stamping through the real pipeline", () => {
     expect(outcome).toEqual(
       expect.objectContaining({ ok: true })
     );
-    const tokenId = generateAnchorId("word");
+    const tokenId = value("p", [
+      generateClozeFlashcardId("word", "heart", 0),
+      generateClozeFlashcardId("word", "lungs", 1),
+    ]);
     expect(env.currentContent()).toContain(
       `| word %%dk:t:${tokenId}%% | The ==heart== and ==lungs== |`
-    );
-    expect(await db.getAnchorBinding(`t:${tokenId}#0`)).toBe(
-      generateClozeFlashcardId("word", "heart", 0)
-    );
-    expect(await db.getAnchorBinding(`t:${tokenId}#1`)).toBe(
-      generateClozeFlashcardId("word", "lungs", 1)
     );
 
     await sync(env.currentContent());
@@ -120,12 +124,9 @@ describe("table cloze stamping through the real pipeline", () => {
     const outcome = await new AnchorStamper(new ObsidianNoteAccess(env.app), db).ensureAnchored(cards[0]);
 
     expect(outcome).toEqual(expect.objectContaining({ ok: true }));
-    const tokenId = generateAnchorId(sentence);
+    const tokenId = value("p", [generateClozeFlashcardId(sentence, "H2O", 0)]);
     expect(env.currentContent()).toContain(
       `| ${sentence} %%dk:t:${tokenId}%% |`
-    );
-    expect(await db.getAnchorBinding(`t:${tokenId}#0`)).toBe(
-      generateClozeFlashcardId(sentence, "H2O", 0)
     );
   });
 
@@ -140,7 +141,7 @@ describe("table cloze stamping through the real pipeline", () => {
     const outcome = await new AnchorStamper(new ObsidianNoteAccess(env.app), db).ensureAnchored(cards[0]);
 
     expect(outcome).toEqual(expect.objectContaining({ ok: true }));
-    const tokenId = generateAnchorId("pump");
+    const tokenId = value("p", [cards[0].id]);
     expect(env.currentContent()).toContain(
       `| pump %%dk:t:${tokenId}%% | The ==heart== pumps | anatomy |`
     );
@@ -158,20 +159,18 @@ describe("table cloze stamping through the real pipeline", () => {
     expect(cards).toHaveLength(3);
     expect(cards.every((c) => c.type === "cloze")).toBe(true);
 
-    // Review the FIRST cloze: stamps the row once and binds all three ords.
+    // Review the FIRST cloze: stamps the row once, carrying all three ids.
     const first = cards.find((c) => c.clozeOrder === 0);
     const env = mockVault(content);
     const stamper = new AnchorStamper(new ObsidianNoteAccess(env.app), db);
     const outcome = await stamper.ensureAnchored(first!);
     expect(outcome).toEqual(expect.objectContaining({ ok: true }));
 
-    const tokenId = generateAnchorId(front);
+    const tokenId = value(
+      "p",
+      [0, 1, 2].map((k) => cards.find((c) => c.clozeOrder === k)!.id)
+    );
     expect(env.currentContent()).toContain(`${front} %%dk:t:${tokenId}%% |`);
-    for (let k = 0; k < 3; k++) {
-      expect(await db.getAnchorBinding(`t:${tokenId}#${k}`)).toBe(
-        cards.find((c) => c.clozeOrder === k)!.id
-      );
-    }
 
     // Resync: every cloze card anchors to the shared token; ids unchanged.
     await sync(env.currentContent());
@@ -181,7 +180,7 @@ describe("table cloze stamping through the real pipeline", () => {
       after.every((c) => c.anchor === `t:${tokenId}#${c.clozeOrder}`)
     ).toBe(true);
 
-    // Reviewing another cloze adopts silently — no second token, no file change.
+    // Reviewing another cloze finds its id already in the note — no file change.
     const before = env.currentContent();
     const second = after.find((c) => c.clozeOrder === 1);
     const outcome2 = await stamper.ensureAnchored(second!);
@@ -199,8 +198,8 @@ describe("table cloze stamping through the real pipeline", () => {
     const outcome = await new AnchorStamper(new ObsidianNoteAccess(env.app), db).ensureAnchored(cards[0]);
 
     expect(outcome).toEqual(expect.objectContaining({ ok: true }));
-    expect(await db.getAnchorBinding(`t:${generateAnchorId("chat")}`)).toBe(
-      generateFlashcardId("chat")
+    expect(env.currentContent()).toContain(
+      `| chat %%dk:t:${value("a", [generateFlashcardId("chat")])}%% | cat |`
     );
   });
 });

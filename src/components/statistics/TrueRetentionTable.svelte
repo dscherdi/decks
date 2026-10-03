@@ -1,6 +1,6 @@
 <script lang="ts">
   import { onMount } from "svelte";
-  import { StatisticsService } from "@/services/StatisticsService";
+  import { StatisticsService } from "@decks/core";
   import { Logger } from "@/utils/logging";
   import { I18n } from "@decks/core";
 

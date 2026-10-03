@@ -1,5 +1,5 @@
 import { Modal, App } from "obsidian";
-import type { StatisticsService } from "../../services/StatisticsService";
+import type { StatisticsService } from "@decks/core";
 import type { StatisticsComponent } from "../../types/svelte-components";
 import type { DecksSettings } from "../../settings";
 import StatisticsUI from "../statistics/StatisticsUI.svelte";

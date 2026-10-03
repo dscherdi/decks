@@ -15,6 +15,7 @@
     IMAGE_EXTENSIONS,
   } from "../utils/attachments";
   import { FilePickerModal } from "../utils/file-picker";
+  import { isReverseCard } from "../utils/reverse-card";
 
   interface BatchRunOptions {
     instructions?: string;
@@ -45,6 +46,8 @@
   export let defaultModel = "";
   /** Remember the tier chosen here; there is no settings control for it. */
   export let onModelChange: (id: string) => void = () => {};
+  /** Open with split on, for cards that each cram several facts. */
+  export let startSplit = false;
 
   const b = I18n.t.modals.aiBatch;
   const ef = I18n.t.modals.editFlashcard;
@@ -141,7 +144,7 @@
     }
   }
 
-  let splitOn = false;
+  let splitOn = startSplit;
   function toggleSplit() {
     splitOn = !splitOn;
   }
@@ -179,7 +182,8 @@
       if (cancelled) break;
       states[i].status = "running";
       states = [...states];
-      const cardSplit = effectiveSplit(split, states[i].card.type);
+      // A reverse card is its note's card read backwards; it refactors but never splits.
+      const cardSplit = effectiveSplit(split, states[i].card.type) && !isReverseCard(states[i].card);
       try {
         const res = await run(
           states[i].card,
@@ -218,7 +222,7 @@
     states[idx].status = "running";
     states[idx].error = undefined;
     states = [...states];
-    const cardSplit = effectiveSplit(lastSplitOn, card.type);
+    const cardSplit = effectiveSplit(lastSplitOn, card.type) && !isReverseCard(card);
     try {
       const res = await run(
         card,
@@ -307,6 +311,7 @@
           </div>
           <RefactorCardView
             cardType={selected.card.type}
+            reverse={isReverseCard(selected.card)}
             fieldset={cardToRefactorFieldSet(selected.card)}
             {renderMarkdown}
           />
@@ -329,6 +334,7 @@
                     <div class="decks-ai-batch-split-card">
                       <RefactorCardView
                         cardType={selected.card.type}
+                        reverse={isReverseCard(selected.card)}
                         fieldset={splitCard}
                         {renderMarkdown}
                       />
@@ -338,6 +344,7 @@
               {:else if selected.proposed}
                 <RefactorCardView
                   cardType={selected.card.type}
+                  reverse={isReverseCard(selected.card)}
                   fieldset={selected.proposed}
                   {renderMarkdown}
                 />

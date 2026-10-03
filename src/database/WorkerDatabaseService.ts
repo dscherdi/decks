@@ -445,16 +445,8 @@ export class WorkerDatabaseService extends BaseDatabaseService {
 
     this.activeSyncProgress = progressCallback;
     try {
-      const result = await this.sendMessage("syncFlashcardsForDeck", data);
-
-      const typedResult = result as SyncResult;
-
-      return {
-        success: typedResult.success,
-        parsedCount: typedResult.parsedCount,
-        operationsCount: typedResult.operationsCount,
-        duplicatesSkipped: typedResult.duplicatesSkipped,
-      };
+      // The whole result: callers read skippedEmptyParse and idCollisions too.
+      return (await this.sendMessage("syncFlashcardsForDeck", data)) as SyncResult;
     } finally {
       this.activeSyncProgress = undefined;
     }
@@ -476,14 +468,7 @@ export class WorkerDatabaseService extends BaseDatabaseService {
       // Clear progress tracker after operation
       this.progressTracker = undefined;
 
-      const typedResult = result as SyncResult;
-
-      return {
-        success: typedResult.success,
-        parsedCount: typedResult.parsedCount,
-        operationsCount: typedResult.operationsCount,
-        duplicatesSkipped: typedResult.duplicatesSkipped,
-      };
+      return result as SyncResult;
     } catch (error) {
       console.error("Worker sync failed:", error);
       throw error;

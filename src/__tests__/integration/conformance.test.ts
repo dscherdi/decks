@@ -4,6 +4,7 @@ import { describeRenameDetection } from "@decks/conformance/rename";
 import { describeSyncUpsert } from "@decks/conformance/sync-upsert";
 import { describeSuspendDurability } from "@decks/conformance/suspend-durability";
 import { describeAnchorInterop } from "@decks/conformance/anchor-interop";
+import { describeCardIdentity } from "@decks/conformance/card-identity";
 import type { ConformanceHost } from "@decks/conformance/harness";
 import { setupTestDatabase, teardownTestDatabase } from "./database-test-utils";
 
@@ -20,3 +21,4 @@ describeRenameDetection(host);
 describeSyncUpsert(host);
 describeSuspendDurability(host);
 describeAnchorInterop(host);
+describeCardIdentity(host);

@@ -4,10 +4,10 @@
   // add-context buttons + a send button. Presentational — all data and behavior
   // come from the parent via props/callbacks.
   import { tick } from "svelte";
-  import { setIcon } from "obsidian";
-  import { I18n, type AiModelOption } from "@decks/core";
+  import { Menu, setIcon } from "obsidian";
+  import { DECKS_TIER_FAST, I18n, type AiModelOption } from "@decks/core";
   import type { ContextItem } from "../utils/attachments";
-  import type { MentionItem } from "./ai-generator-types";
+  import type { MentionItem, PdfSource } from "./ai-generator-types";
 
   export let prompt = "";
   export let contexts: ContextItem[] = [];
@@ -20,17 +20,19 @@
   export let onAddNote: () => void = () => {};
   export let onAddImage: () => void = () => {};
   export let onRemoveContext: (id: string) => void = () => {};
+  // Optional: a PDF pill opens the caller's PDF panel; the open one is marked active.
+  export let onOpenContext: ((id: string) => void) | null = null;
+  export let activeContextId: string | null = null;
   export let onToggleSplit: () => void = () => {};
   export let onMention: (item: MentionItem) => void = () => {};
   export let onPasteImages: (files: File[]) => void = () => {};
   export let onSubmit: () => void = () => {};
-  // Optional PDF attachment (Decks Pro). When `pdfAvailable`, an add-PDF button
-  // is shown and dropped/pasted PDFs are routed to `onAddPdfFiles`.
+  // Optional PDF attachment: the attach menu lists `pdfSources`, and dropped or
+  // pasted PDFs go to `onAddPdfFiles`.
   export let pdfAvailable = false;
-  export let onAddPdf: () => void = () => {};
+  export let pdfSources: PdfSource[] = [];
   export let onAddPdfFiles: (files: File[]) => void = () => {};
-  // Optional include-context toggle (used by the generator) rendered as an
-  // icon button beside the attach buttons.
+  // Optional include-context toggle (used by the generator), kept in the options menu.
   export let includeAvailable = false;
   export let includeOn = false;
   export let includeLabel: string | null = null;
@@ -39,15 +41,107 @@
   // relabel the submit button. Default to the refactor wording.
   export let submitLabel: string | null = null;
   export let submittingLabel: string | null = null;
+  // When given, the send button turns into Stop while a run is in flight.
+  export let onStop: (() => void) | null = null;
+  export let stopLabel: string | null = null;
   // Optional prompt placeholder override (defaults to the refactor wording).
   export let placeholder: string | null = null;
-  // Optional per-prompt model picker: when more than one option is available it
-  // renders a native select beside the send button that overrides the model for
-  // this prompt only. Bound to `selectedModel` by the parent.
+  // Model and card type are chosen in the options menu, each only when the caller
+  // offers more than one. Both are bound by the parent.
+  export let cardTypeOptions: Array<{ id: string; name: string }> = [];
+  export let selectedCardType = "";
   export let modelOptions: AiModelOption[] = [];
   export let selectedModel = "";
+  // Optional secondary action: the same input either asks about the source or
+  // generates from it. Rendered only when the caller offers it.
+  export let askAvailable = false;
+  export let askLabel: string | null = null;
+  export let asking = false;
+  export let onAsk: () => void = () => {};
 
   const t = I18n.t.modals.editFlashcard;
+
+  $: sendLabel = submitting
+    ? (submittingLabel ?? t.aiRefactoring)
+    : splitOn
+      ? t.aiSplit
+      : (submitLabel ?? t.aiSend);
+  $: hasOptions = modelOptions.length > 1 || cardTypeOptions.length > 1 || includeAvailable;
+  $: modelName = modelOptions.find((m) => m.id === selectedModel)?.name ?? "";
+  $: cardTypeName = cardTypeOptions.find((o) => o.id === selectedCardType)?.name ?? "";
+  // Name the choices in force; the card type only once it differs from the first, unless there is no model to name.
+  $: optionsLabel = [
+    modelOptions.length > 1 ? modelName : "",
+    cardTypeOptions.length > 1 && (selectedCardType !== cardTypeOptions[0].id || modelOptions.length <= 1)
+      ? cardTypeName
+      : "",
+  ]
+    .filter(Boolean)
+    .join(" · ") || t.aiOptions;
+  $: optionsIcon =
+    modelOptions.length > 1 ? (selectedModel === DECKS_TIER_FAST ? "zap" : "wand-2") : "layers";
+
+  // A keyboard click has no pointer position, so the menu opens under the button instead.
+  function showMenu(menu: Menu, e: MouseEvent) {
+    const el = e.currentTarget;
+    if (e.detail === 0 && el instanceof HTMLElement) {
+      const r = el.getBoundingClientRect();
+      menu.showAtPosition({ x: r.left, y: r.bottom });
+    } else {
+      menu.showAtMouseEvent(e);
+    }
+  }
+
+  function openAttachMenu(e: MouseEvent) {
+    const menu = new Menu();
+    menu.addItem((i) => i.setTitle(t.aiAddNote).setIcon("file-text").onClick(() => onAddNote()));
+    menu.addItem((i) => i.setTitle(t.aiAddImage).setIcon("image").onClick(() => onAddImage()));
+    if (pdfAvailable && pdfSources.length > 0) {
+      menu.addSeparator();
+      menu.addItem((i) => i.setTitle(t.aiAddPdf).setIsLabel(true));
+      for (const source of pdfSources) {
+        menu.addItem((i) => i.setTitle(source.label).setIcon(source.icon).onClick(() => source.onPick()));
+      }
+    }
+    showMenu(menu, e);
+  }
+
+  function openOptionsMenu(e: MouseEvent) {
+    const menu = new Menu();
+    if (modelOptions.length > 1) {
+      menu.addItem((i) => i.setTitle(t.aiModel).setIsLabel(true));
+      for (const opt of modelOptions) {
+        menu.addItem((i) =>
+          i
+            .setTitle(opt.name)
+            .setChecked(opt.id === selectedModel)
+            .onClick(() => (selectedModel = opt.id)),
+        );
+      }
+    }
+    if (cardTypeOptions.length > 1) {
+      if (modelOptions.length > 1) menu.addSeparator();
+      menu.addItem((i) => i.setTitle(t.aiCardType).setIsLabel(true));
+      for (const opt of cardTypeOptions) {
+        menu.addItem((i) =>
+          i
+            .setTitle(opt.name)
+            .setChecked(opt.id === selectedCardType)
+            .onClick(() => (selectedCardType = opt.id)),
+        );
+      }
+    }
+    if (includeAvailable) {
+      menu.addSeparator();
+      menu.addItem((i) =>
+        i
+          .setTitle(includeLabel ?? "")
+          .setChecked(includeOn)
+          .onClick(() => onToggleInclude()),
+      );
+    }
+    showMenu(menu, e);
+  }
 
   let highlightEl: HTMLElement;
 
@@ -257,15 +351,30 @@
           class:is-image={ctx.kind === "image"}
           class:is-pdf={ctx.kind === "pdf"}
         >
-          <span
-            class="decks-ai-context-pill-icon"
-            use:icon={ctx.kind === "image"
-              ? "image"
-              : ctx.kind === "pdf"
-                ? "book-open"
-                : "file-text"}
-          ></span>
-          <span class="decks-ai-context-pill-label">{ctx.label}</span>
+          {#if onOpenContext && ctx.kind === "pdf"}
+            <button
+              type="button"
+              class="decks-ai-context-pill-open"
+              class:is-active={activeContextId === ctx.id}
+              aria-pressed={activeContextId === ctx.id}
+              aria-label={I18n.format(I18n.t.modals.aiGenerator.pdfPanel.show, { name: ctx.label })}
+              title={I18n.format(I18n.t.modals.aiGenerator.pdfPanel.show, { name: ctx.label })}
+              on:click={() => onOpenContext?.(ctx.id)}
+            >
+              <span class="decks-ai-context-pill-icon" use:icon={"book-open"}></span>
+              <span class="decks-ai-context-pill-label">{ctx.label}</span>
+            </button>
+          {:else}
+            <span
+              class="decks-ai-context-pill-icon"
+              use:icon={ctx.kind === "image"
+                ? "image"
+                : ctx.kind === "pdf"
+                  ? "book-open"
+                  : "file-text"}
+            ></span>
+            <span class="decks-ai-context-pill-label">{ctx.label}</span>
+          {/if}
           <button
             type="button"
             class="decks-ai-context-pill-remove"
@@ -309,39 +418,26 @@
   <div class="decks-ai-composer-actions">
     <button
       type="button"
-      class="clickable-icon decks-ai-composer-add"
-      aria-label={t.aiAddNote}
-      use:icon={"paperclip"}
-      on:click={onAddNote}
+      class="clickable-icon decks-ai-composer-attach"
+      aria-label={t.aiAttach}
+      title={t.aiAttach}
+      aria-haspopup="menu"
+      use:icon={"plus"}
+      on:click={openAttachMenu}
     ></button>
-    <button
-      type="button"
-      class="clickable-icon decks-ai-composer-add"
-      aria-label={t.aiAddImage}
-      use:icon={"image"}
-      on:click={onAddImage}
-    ></button>
-    {#if pdfAvailable}
+    {#if hasOptions}
       <button
         type="button"
-        class="clickable-icon decks-ai-composer-add"
-        aria-label={t.aiAddPdf}
-        title={t.aiAddPdf}
-        use:icon={"book-open"}
-        on:click={onAddPdf}
-      ></button>
-    {/if}
-    {#if includeAvailable}
-      <button
-        type="button"
-        class="clickable-icon decks-ai-composer-add"
-        class:is-active={includeOn}
-        aria-pressed={includeOn}
-        title={includeLabel}
-        aria-label={includeLabel}
-        use:icon={"copy-plus"}
-        on:click={onToggleInclude}
-      ></button>
+        class="decks-ai-composer-options"
+        aria-label={t.aiOptions}
+        title={t.aiOptions}
+        aria-haspopup="menu"
+        on:click={openOptionsMenu}
+      >
+        <span class="decks-ai-composer-options-icon" use:icon={optionsIcon}></span>
+        <span class="decks-ai-composer-options-label">{optionsLabel}</span>
+        <span class="decks-ai-composer-options-icon" use:icon={"chevron-down"}></span>
+      </button>
     {/if}
     {#if splitAvailable}
       <button
@@ -356,32 +452,45 @@
         {t.aiSplit}
       </button>
     {/if}
-    {#if modelOptions.length > 1}
-      <select
-        class="decks-ai-composer-model"
-        aria-label={t.aiModel}
-        bind:value={selectedModel}
+    {#if askAvailable}
+      <button
+        type="button"
+        class="decks-ai-composer-ask"
+        on:click={onAsk}
+        disabled={asking || submitting || submitDisabled}
       >
-        {#each modelOptions as opt (opt.id)}
-          <option value={opt.id}>{opt.name}</option>
-        {/each}
-      </select>
+        {#if asking}
+          <span class="decks-ai-composer-spinner" aria-hidden="true"></span>
+        {/if}
+        {askLabel ?? ""}
+      </button>
     {/if}
-    <button
-      type="button"
-      class="mod-cta decks-ai-composer-send"
-      on:click={onSubmit}
-      disabled={submitting || submitDisabled}
-    >
-      {#if submitting}
-        <span class="decks-ai-composer-spinner" aria-hidden="true"></span>
-      {/if}
-      {submitting
-        ? (submittingLabel ?? t.aiRefactoring)
-        : splitOn
-          ? t.aiSplit
-          : (submitLabel ?? t.aiSend)}
-    </button>
+    {#if submitting && onStop}
+      <button
+        type="button"
+        class="mod-cta decks-ai-composer-send is-busy"
+        aria-label={stopLabel ?? ""}
+        title={stopLabel ?? ""}
+        on:click={() => onStop?.()}
+      >
+        <span class="decks-ai-composer-send-icon" use:icon={"square"}></span>
+      </button>
+    {:else}
+      <button
+        type="button"
+        class="mod-cta decks-ai-composer-send"
+        aria-label={sendLabel}
+        title={sendLabel}
+        on:click={onSubmit}
+        disabled={submitting || submitDisabled}
+      >
+        {#if submitting}
+          <span class="decks-ai-composer-spinner" aria-hidden="true"></span>
+        {:else}
+          <span class="decks-ai-composer-send-icon" use:icon={"sparkles"}></span>
+        {/if}
+      </button>
+    {/if}
   </div>
 </div>
 
@@ -573,6 +682,24 @@
     white-space: nowrap;
     max-width: 120px;
   }
+  .decks-ai-context-pill-open {
+    display: inline-flex;
+    align-items: center;
+    gap: 2px;
+    min-width: 0;
+    height: auto;
+    padding: 0;
+    border: none;
+    background: transparent;
+    box-shadow: none;
+    color: inherit;
+    font: inherit;
+    cursor: pointer;
+  }
+  .decks-ai-context-pill-open:hover .decks-ai-context-pill-label,
+  .decks-ai-context-pill-open.is-active .decks-ai-context-pill-label {
+    color: var(--text-accent);
+  }
   .decks-ai-context-pill-remove {
     flex: 0 0 auto;
     padding: 0 1px;
@@ -587,14 +714,47 @@
   .decks-ai-context-pill-remove:hover {
     color: var(--text-normal);
   }
+  /* One row on every width: the options label gives way first. */
   .decks-ai-composer-actions {
     display: flex;
     align-items: center;
     gap: 4px;
   }
-  .decks-ai-composer-add.is-active {
-    color: var(--text-on-accent);
-    background: var(--interactive-accent);
+  .decks-ai-composer-actions > * {
+    flex: none;
+  }
+  .decks-ai-composer-actions > .decks-ai-composer-options {
+    flex: 0 1 auto;
+  }
+  .decks-ai-composer-options {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    min-width: 0;
+    padding: 4px 10px;
+    border-radius: 999px;
+    border: 1px solid var(--background-modifier-border);
+    background: var(--background-modifier-hover);
+    color: var(--text-normal);
+    font-size: 12px;
+    box-shadow: none;
+    cursor: pointer;
+  }
+  .decks-ai-composer-options-label {
+    min-width: 0;
+    overflow: hidden;
+    white-space: nowrap;
+    text-overflow: ellipsis;
+  }
+  .decks-ai-composer-options-icon {
+    display: inline-flex;
+    align-items: center;
+    flex: none;
+    color: var(--text-muted);
+  }
+  .decks-ai-composer-options-icon :global(svg) {
+    width: 14px;
+    height: 14px;
   }
   .decks-ai-composer-split {
     display: inline-flex;
@@ -622,11 +782,45 @@
     width: 13px;
     height: 13px;
   }
-  .decks-ai-composer-send {
+  .decks-ai-composer-ask {
     margin-left: auto;
     display: inline-flex;
     align-items: center;
-    gap: 6px;
+    gap: 5px;
+  }
+  .decks-ai-composer-send {
+    position: relative;
+    margin-left: auto;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 34px;
+    height: 34px;
+    padding: 0;
+    border-radius: 50%;
+  }
+  .decks-ai-composer-send-icon {
+    display: inline-flex;
+    align-items: center;
+  }
+  .decks-ai-composer-send-icon :global(svg) {
+    width: 17px;
+    height: 17px;
+  }
+  .decks-ai-composer-send.is-busy .decks-ai-composer-send-icon :global(svg) {
+    width: 13px;
+    height: 13px;
+    fill: currentColor;
+  }
+  /* A ring turns round the stop button while the run is in flight. */
+  .decks-ai-composer-send.is-busy::after {
+    content: "";
+    position: absolute;
+    inset: -4px;
+    border: 2px solid var(--interactive-accent);
+    border-top-color: transparent;
+    border-radius: 50%;
+    animation: decks-ai-composer-spin 0.9s linear infinite;
   }
   .decks-ai-composer-spinner {
     width: 12px;
@@ -642,19 +836,8 @@
       transform: rotate(360deg);
     }
   }
-  .decks-ai-composer-model {
-    margin-left: auto;
-    max-width: 40%;
-    padding: 4px 8px;
-    border-radius: 4px;
-    border: 1px solid var(--background-modifier-border);
-    background: var(--background-primary);
-    color: var(--text-normal);
-    font-size: 12px;
-  }
-  /* When the model select is present it owns the auto margin; keep the send
-     button next to it with a small gap instead of pushing it away again. */
-  .decks-ai-composer-model + .decks-ai-composer-send {
+  /* Ask sits immediately before send, as the secondary of the pair. */
+  .decks-ai-composer-ask + .decks-ai-composer-send {
     margin-left: 8px;
   }
 </style>

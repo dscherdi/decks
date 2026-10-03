@@ -3,11 +3,21 @@
   import {
     EXAM_TARGET_BLANK,
     I18n,
+    type AttemptMiss,
+    type WeakSection,
+    formatPageList,
+    missesSectionCards,
+    missesSummary,
+    weakSections,
     type ExamAttempt,
     type ExamQuestion,
     type ExamQuestionOutcome,
     type ExamSession,
+    type ExamJudge,
+    type JudgeOutcome,
+    judgePending,
   } from "@decks/core";
+  import type { Flashcard } from "../../database/types";
   import DocInfoButton from "../DocInfoButton.svelte";
 
   export let attempt: ExamAttempt;
@@ -25,11 +35,34 @@
   export let onRetake: () => void;
   export let onComplete: () => void;
   export let isActive: (() => boolean) | undefined = undefined;
+  /** Where the missed cards came from, and how many cards each page carries.
+   *  Absent when the workbench never wrote these cards. */
+  export let missOrigins:
+    | ((
+        cards: Flashcard[],
+      ) => Promise<{
+        pages: Record<string, number | null>;
+        cardsByPage: Record<number, number>;
+        sourceRef: string;
+        sourceHash: string | null;
+      }>)
+    | undefined = undefined;
+  /** Open a workbench session aimed at these pages. */
+  export let onSessionFromMisses:
+    | ((seed: { pages: number[]; sourceRef: string; sourceHash: string | null }) => void)
+    | undefined = undefined;
+  /** Hand these cards to the batch repair flow. */
+  export let onRepairCards: ((cardIds: string[]) => void) | undefined = undefined;
+  /** Checks typed answers by meaning; resolves to null when that cannot run. */
+  export let judge: (() => Promise<ExamJudge | null>) | undefined = undefined;
 
   const t = I18n.t.exam;
   const OPTION_KEYS = "abcdefghi";
 
-  type Phase = "question" | "results";
+  type Phase = "question" | "review" | "results";
+  // How long one answer, then the whole paper, may wait for the meaning check.
+  const CHECK_ONE_MS = 10_000;
+  const CHECK_ALL_MS = 15_000;
   let phase: Phase = "question";
   let currentIndex = attempt.currentIndex;
   let typedText = "";
@@ -38,7 +71,18 @@
   let selfPromptVisible = false;
   let finishResult: ReturnType<ExamAttempt["finish"]> | null = null;
   let previousAttempts: ExamSession[] = [];
+  let misses: AttemptMiss[] = [];
+  let missCardsByPage: Record<number, number> = {};
+  let missSourceRef = "";
+  let missSourceHash: string | null = null;
+  $: missPageByCard = new Map(misses.filter((m) => m.page).map((m) => [m.cardId, m.page as number]));
+  $: weakest = weakSections(misses, missCardsByPage);
+  $: missPageCount = misses.filter((m) => m.page !== null).length;
   let submitting = false;
+  let judging = false;
+  let checkFailed = false;
+  let reviewQueue: number[] = [];
+  let reviewPos = 0;
 
   let timeRemainingMs =
     attempt.settings.timeLimitMinutes > 0
@@ -51,11 +95,22 @@
   $: total = attempt.questions.length;
   $: displayOrder =
     question?.displayOrder ?? question?.options?.map((_o, i) => i) ?? [];
-  $: locked = attempt.isLocked(currentIndex);
-  $: outcome = attempt.getOutcome(currentIndex);
+  // Bumped when a question is graded: the attempt's own state is not reactive.
+  let gradeVersion = 0;
+  $: locked = lockedAt(currentIndex, gradeVersion);
+  $: outcome = outcomeAt(currentIndex, gradeVersion);
   $: immediate = attempt.settings.feedbackTiming === "immediate";
   $: selfGraded = attempt.settings.typedGrading === "self";
+  $: byMeaning = attempt.settings.typedGrading === "meaning";
   $: answeredFlags = refreshAnsweredFlags(currentIndex, phase, revealed);
+
+  function lockedAt(i: number, ..._deps: unknown[]): boolean {
+    return attempt.isLocked(i);
+  }
+
+  function outcomeAt(i: number, ..._deps: unknown[]): ExamQuestionOutcome | null {
+    return attempt.getOutcome(i);
+  }
 
   function refreshAnsweredFlags(..._deps: unknown[]): boolean[] {
     return attempt.questions.map((_q, i) => attempt.isAnswered(i));
@@ -85,6 +140,7 @@
     selectedIndices = given?.kind === "options" ? [...given.selected] : [];
     revealed = attempt.isLocked(currentIndex);
     selfPromptVisible = false;
+    checkFailed = false;
     // The swapped input remounts with the question ({#key currentIndex}).
     clozeInputEl = null;
   }
@@ -131,8 +187,13 @@
       selfPromptVisible = true;
       return;
     }
+    if (question.kind === "type-in" && byMeaning && immediate) {
+      void checkCurrent();
+      return;
+    }
     if (immediate) {
       attempt.lockAnswer(currentIndex);
+      gradeVersion += 1;
       revealed = true;
       if (clozeInputEl) clozeInputEl.disabled = true;
       answeredFlags = refreshAnsweredFlags();
@@ -141,9 +202,69 @@
     }
   }
 
+  /** Check the answer on screen by meaning, then lock it or ask the student. */
+  async function checkCurrent(): Promise<void> {
+    if (judging) return;
+    const i = currentIndex;
+    judging = true;
+    const out = await runJudge([i], CHECK_ONE_MS);
+    judging = false;
+    if (phase !== "question" || currentIndex !== i) return;
+    if (attempt.needsSelfVerdict(i)) {
+      checkFailed = out.failed;
+      revealed = true;
+      selfPromptVisible = true;
+      return;
+    }
+    attempt.lockAnswer(i);
+    gradeVersion += 1;
+    revealed = true;
+    if (clozeInputEl) clozeInputEl.disabled = true;
+    answeredFlags = refreshAnsweredFlags();
+  }
+
+  /** Judge pending answers, giving up after `timeoutMs`; never throws. */
+  async function runJudge(indices: number[] | undefined, timeoutMs: number): Promise<JudgeOutcome> {
+    const pending = attempt.pendingJudgements(indices).length > 0;
+    const judgeFn = pending ? ((await judge?.()) ?? null) : null;
+    const controller = new AbortController();
+    let timer: number | undefined;
+    const timeout = new Promise<null>((resolve) => {
+      timer = window.setTimeout(() => {
+        controller.abort();
+        resolve(null);
+      }, timeoutMs);
+    });
+    try {
+      const judged = await Promise.race([
+        judgePending(attempt, judgeFn, indices, controller.signal),
+        timeout,
+      ]);
+      const scope = indices ?? attempt.questions.map((_q, i) => i);
+      return judged ?? { unresolved: scope.filter((i) => attempt.needsSelfVerdict(i)), failed: true };
+    } finally {
+      window.clearTimeout(timer);
+    }
+  }
+
+  /** The student's verdict on the answer under review; the last one finishes the exam. */
+  function giveReviewVerdict(correct: boolean): void {
+    const i = reviewQueue[reviewPos];
+    if (phase !== "review" || i === undefined) return;
+    attempt.setSelfVerdict(i, correct);
+    if (reviewPos + 1 < reviewQueue.length) reviewPos += 1;
+    else void finalize();
+  }
+
+  function typedAnswerAt(i: number): string {
+    const given = attempt.getAnswer(i);
+    return given?.kind === "typed" ? given.text : "";
+  }
+
   function giveSelfVerdict(correct: boolean): void {
     attempt.setSelfVerdict(currentIndex, correct);
     attempt.lockAnswer(currentIndex);
+    gradeVersion += 1;
     selfPromptVisible = false;
     revealed = true;
     if (clozeInputEl) clozeInputEl.disabled = true;
@@ -176,15 +297,40 @@
       }
       recordScreenTime();
       stopTimer();
+      if (byMeaning) {
+        judging = true;
+        const out = await runJudge(undefined, CHECK_ALL_MS);
+        judging = false;
+        if (out.unresolved.length > 0) {
+          checkFailed = out.failed;
+          reviewQueue = out.unresolved;
+          reviewPos = 0;
+          phase = "review";
+          return;
+        }
+      }
+      submitting = false;
+      await finalize();
+    } catch (error) {
+      console.error("Submitting exam failed:", error);
+    } finally {
+      submitting = false;
+    }
+  }
+
+  /** Grade the attempt, persist it and show the results. */
+  async function finalize(): Promise<void> {
+    if ((phase !== "question" && phase !== "review") || submitting) return;
+    submitting = true;
+    try {
       finishResult = attempt.finish();
       phase = "results";
+      void loadMisses();
       try {
         previousAttempts = await onFinished(finishResult);
       } catch (error) {
         console.error("Persisting exam attempt failed:", error);
       }
-    } catch (error) {
-      console.error("Submitting exam failed:", error);
     } finally {
       submitting = false;
     }
@@ -224,7 +370,7 @@
       void requestQuit();
       return;
     }
-    if (phase === "results") return;
+    if (phase !== "question") return;
     if (isTypingTarget(event)) {
       if (event.key === "Enter") {
         event.preventDefault();
@@ -279,6 +425,26 @@
     return { destroy() {} };
   }
 
+  /** Markdown for an answer or result line, so its math renders as in the question. */
+  function md(el: HTMLElement, p: { text: string; source: string }): { update(next: { text: string; source: string }): void } {
+    const draw = (next: { text: string; source: string }) => {
+      el.empty();
+      void renderMarkdown(next.text, el, next.source);
+    };
+    draw(p);
+    return { update: draw };
+  }
+
+  // The page strip keeps the current question in view; only the strip scrolls, never the question.
+  let navEl: HTMLElement | null = null;
+  $: if (navEl) {
+    const chip = navEl.children[currentIndex];
+    if (chip instanceof HTMLElement) {
+      const left = chip.offsetLeft - (navEl.clientWidth - chip.offsetWidth) / 2;
+      navEl.scrollTo({ left: Math.max(0, left), behavior: "smooth" });
+    }
+  }
+
   let clozeInputEl: HTMLInputElement | null = null;
 
   function swapSentinel(root: HTMLElement): void {
@@ -324,6 +490,40 @@
     if (isSelected && !correct) return "chosen-wrong";
     if (!isSelected && correct) return "missed-correct";
     return "";
+  }
+
+  /**
+   * The misses, with the page each card cites. An attempt is the only place
+   * where "covered" and "learned" can be told apart.
+   */
+  async function loadMisses(): Promise<void> {
+    if (!finishResult || !missOrigins) return;
+    const wrong = finishResult.outcomes.filter((o) => !o.isCorrect);
+    if (wrong.length === 0) return;
+    try {
+      const origins = await missOrigins(wrong.map((o) => attempt.questions[o.index].card));
+      missCardsByPage = origins.cardsByPage;
+      missSourceRef = origins.sourceRef;
+      missSourceHash = origins.sourceHash;
+      misses = wrong.map((o) => {
+        const card = attempt.questions[o.index].card;
+        return {
+          index: o.index + 1,
+          cardId: card.id,
+          page: origins.pages[card.id] ?? null,
+          unanswered: o.givenAnswerText.trim() === "",
+        };
+      });
+    } catch (e) {
+      console.debug("Decks: could not read where the missed cards came from", e);
+    }
+  }
+
+  function cardIdsFor(section: WeakSection): string[] {
+    const pages = new Set(section.pages);
+    return misses
+      .filter((m) => m.page !== null && pages.has(m.page))
+      .map((m) => m.cardId);
   }
 
   function questionResultRows(): Array<{
@@ -402,6 +602,15 @@
             class="decks-exam-cloze markdown-rendered"
             use:renderBlock={question.clozeContext}
           ></div>
+        {:else if byMeaning}
+          <textarea
+            class="decks-exam-typed-input decks-exam-typed-long"
+            rows="3"
+            placeholder={t.typeAnswerPlaceholder}
+            bind:value={typedText}
+            on:input={onTypedInput}
+            disabled={locked || judging || submitting}
+          ></textarea>
         {:else}
           <input
             class="decks-exam-typed-input"
@@ -416,9 +625,12 @@
 
       {#if selfPromptVisible}
         <div class="decks-exam-self-prompt">
+          {#if checkFailed}
+            <div class="decks-exam-check-note">{t.checkUnavailable}</div>
+          {/if}
           <div class="decks-exam-correct-answer">
             <span class="decks-exam-label">{t.correctAnswer}:</span>
-            {question.expectedAnswer ?? ""}
+            <span class="decks-exam-md" use:md={{ text: question.expectedAnswer ?? "", source: question.card.sourceFile }}></span>
           </div>
           <div class="decks-exam-self-question">{t.selfPromptQuestion}</div>
           <div class="decks-exam-self-buttons">
@@ -437,33 +649,19 @@
           class:decks-exam-verdict-wrong={!outcome.isCorrect}
         >
           <div>{outcome.isCorrect ? t.correct : t.incorrect}</div>
+          {#if outcome.isCorrect && outcome.gradingMethod === "meaning"}
+            <div class="decks-exam-check-note">{t.acceptedByMeaning}</div>
+          {/if}
           {#if question.kind === "type-in"}
             <div class="decks-exam-correct-answer">
               <span class="decks-exam-label">{t.correctAnswer}:</span>
-              {outcome.correctAnswerText}
+              <span class="decks-exam-md" use:md={{ text: outcome.correctAnswerText, source: question.card.sourceFile }}></span>
             </div>
           {/if}
         </div>
       {/if}
 
-      <div class="decks-exam-actions">
-        <button on:click={previous} disabled={currentIndex === 0}>
-          {t.previous}
-        </button>
-        {#if (immediate || (question.kind === "type-in" && selfGraded)) && !locked}
-          <button class="decks-exam-submit-one" on:click={submitCurrent}>
-            {t.submitAnswer}
-          </button>
-        {/if}
-        <button class="decks-exam-submit mod-cta" on:click={() => void requestSubmit()}>
-          {t.submitExam}
-        </button>
-        <button on:click={next} disabled={currentIndex === total - 1}>
-          {t.next}
-        </button>
-      </div>
-
-      <div class="decks-exam-navigator">
+      <div class="decks-exam-navigator" bind:this={navEl}>
         {#each attempt.questions as _q, i (i)}
           <button
             class="decks-exam-chip"
@@ -475,6 +673,63 @@
           </button>
         {/each}
       </div>
+
+      <div class="decks-exam-actions">
+        <button on:click={previous} disabled={currentIndex === 0}>
+          {t.previous}
+        </button>
+        {#if (immediate || (question.kind === "type-in" && selfGraded)) && !locked && !selfPromptVisible}
+          <button class="decks-exam-submit-one" disabled={judging} on:click={submitCurrent}>
+            {judging && !submitting ? t.checkingAnswer : t.submitAnswer}
+          </button>
+        {/if}
+        <button
+          class="decks-exam-submit mod-cta"
+          disabled={submitting}
+          on:click={() => void requestSubmit()}
+        >
+          {submitting && judging ? t.checkingAnswers : t.submitExam}
+        </button>
+        <button on:click={next} disabled={currentIndex === total - 1}>
+          {t.next}
+        </button>
+      </div>
+
+    </div>
+  {:else if phase === "review"}
+    {@const reviewIndex = reviewQueue[reviewPos] ?? 0}
+    {@const reviewQuestion = attempt.questions[reviewIndex]}
+    <div class="decks-exam-body">
+      <div class="decks-exam-review-title">{t.reviewAnswersTitle}</div>
+      <div class="decks-exam-check-note">{checkFailed ? t.checkUnavailable : t.reviewAnswersIntro}</div>
+      <div class="decks-exam-progress">
+        {I18n.format(t.reviewAnswersProgress, {
+          current: String(reviewPos + 1),
+          total: String(reviewQueue.length),
+        })}
+      </div>
+      {#key reviewIndex}
+        <div class="decks-exam-stem markdown-rendered" use:renderBlock={reviewQuestion.stem}></div>
+        <div class="decks-exam-self-prompt">
+          <div>
+            <span class="decks-exam-label">{t.yourAnswer}:</span>
+            <span class="decks-exam-md" use:md={{ text: typedAnswerAt(reviewIndex), source: reviewQuestion.card.sourceFile }}></span>
+          </div>
+          <div class="decks-exam-correct-answer">
+            <span class="decks-exam-label">{t.correctAnswer}:</span>
+            <span class="decks-exam-md" use:md={{ text: reviewQuestion.expectedAnswer ?? "", source: reviewQuestion.card.sourceFile }}></span>
+          </div>
+          <div class="decks-exam-self-question">{t.selfPromptQuestion}</div>
+          <div class="decks-exam-self-buttons">
+            <button class="decks-exam-self-yes" disabled={submitting} on:click={() => giveReviewVerdict(true)}>
+              {t.selfYes}
+            </button>
+            <button class="decks-exam-self-no" disabled={submitting} on:click={() => giveReviewVerdict(false)}>
+              {t.selfNo}
+            </button>
+          </div>
+        </div>
+      {/key}
     </div>
   {:else if phase === "results" && finishResult}
     <div class="decks-exam-results">
@@ -508,26 +763,105 @@
             </div>
             <div class="decks-exam-result-detail">
               <div class="decks-exam-result-prompt">
-                {i + 1}. {row.question.stem}
+                {i + 1}. <span class="decks-exam-md" use:md={{ text: row.question.stem, source: row.question.card.sourceFile }}></span>
               </div>
               <div>
                 <span class="decks-exam-label">{t.yourAnswer}:</span>
-                {row.outcome.givenAnswerText || "—"}
+                {#if row.outcome.givenAnswerText}
+                  <span class="decks-exam-md" use:md={{ text: row.outcome.givenAnswerText, source: row.question.card.sourceFile }}></span>
+                {:else}
+                  —
+                {/if}
               </div>
               <div>
                 <span class="decks-exam-label">{t.correctAnswer}:</span>
-                {row.outcome.correctAnswerText}
+                <span class="decks-exam-md" use:md={{ text: row.outcome.correctAnswerText, source: row.question.card.sourceFile }}></span>
               </div>
+              {#if missPageByCard.get(row.question.card.id)}
+                <span class="decks-exam-result-page"
+                  >{I18n.format(I18n.t.modals.aiGenerator.pageChip, {
+                    page: missPageByCard.get(row.question.card.id) ?? 0,
+                  })}</span
+                >
+              {/if}
               {#if row.question.card.notes}
                 <details class="decks-exam-result-notes">
                   <summary>{t.notes}</summary>
-                  <div>{row.question.card.notes}</div>
+                  <div use:md={{ text: row.question.card.notes, source: row.question.card.sourceFile }}></div>
                 </details>
               {/if}
             </div>
           </div>
         {/each}
       </div>
+
+      {#if weakest.length > 0}
+        <div class="decks-exam-weakest">
+          <div class="decks-exam-weakest-head">
+            <span class="decks-exam-weakest-title">{t.aiMisses.title}</span>
+            <span class="decks-exam-weakest-summary">
+              {missesSummary(missPageCount, weakest.length)}
+            </span>
+            {#if onSessionFromMisses && missPageCount > 0}
+              <button
+                type="button"
+                class="mod-cta decks-exam-weakest-session"
+                on:click={() =>
+                  onSessionFromMisses?.({
+                    pages: weakest.flatMap((w) => w.pages),
+                    sourceRef: missSourceRef,
+                    sourceHash: missSourceHash,
+                  })}
+              >
+                {t.aiMisses.createSession}
+              </button>
+            {/if}
+          </div>
+          {#if onSessionFromMisses && missPageCount > 0}
+            <div class="decks-exam-weakest-note">{t.aiMisses.note}</div>
+          {/if}
+          {#each weakest as section (section.startPage)}
+            <div class="decks-exam-weakest-row">
+              <span class="decks-exam-weakest-pages">
+                {formatPageList(section.pages)}
+              </span>
+              <span class="decks-exam-weakest-count">
+                {I18n.format(t.aiMisses.sectionMisses, { count: section.misses })}
+              </span>
+              <span
+                class="decks-exam-weakest-cards"
+                class:is-none={section.cards === 0}
+                title={section.action === "generate"
+                  ? t.aiMisses.hintGenerate
+                  : t.aiMisses.hintRepair}
+              >
+                {section.cards === 0
+                  ? t.aiMisses.sectionNoCards
+                  : missesSectionCards(section.cards)}
+              </span>
+              {#if section.action === "generate" && onSessionFromMisses}
+                <button
+                  type="button"
+                  on:click={() =>
+                    onSessionFromMisses?.({
+                      pages: section.pages,
+                      sourceRef: missSourceRef,
+                    sourceHash: missSourceHash,
+                    })}
+                >
+                  {t.aiMisses.generate}
+                </button>
+              {:else if section.action === "repair" && onRepairCards}
+                <button type="button" on:click={() => onRepairCards?.(cardIdsFor(section))}>
+                  {t.aiMisses.repair}
+                </button>
+              {/if}
+            </div>
+          {/each}
+        </div>
+      {:else if misses.length > 0 && missPageCount === 0}
+        <div class="decks-exam-weakest-empty">{t.aiMisses.noPages}</div>
+      {/if}
 
       {#if previousAttempts.length > 1}
         <div class="decks-exam-previous">
@@ -556,6 +890,74 @@
 </div>
 
 <style>
+  /* What the attempt says about coverage: which pages keep going wrong, and
+     whether they want cards or repair. */
+  .decks-exam-weakest {
+    display: flex;
+    flex-direction: column;
+    gap: 0.25rem;
+    padding-top: 0.5rem;
+    border-top: 1px solid var(--background-modifier-border);
+  }
+  .decks-exam-weakest-head {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    flex-wrap: wrap;
+  }
+  .decks-exam-weakest-title {
+    font-weight: 600;
+  }
+  .decks-exam-weakest-summary {
+    font-size: 0.8em;
+    color: var(--text-muted);
+  }
+  .decks-exam-weakest-session {
+    margin-left: auto;
+  }
+  .decks-exam-weakest-note {
+    font-size: 11px;
+    color: var(--text-muted);
+  }
+  .decks-exam-result-page {
+    display: inline-block;
+    margin-top: 2px;
+    font-family: var(--font-monospace);
+    font-size: 10px;
+    padding: 1px 5px;
+    border-radius: var(--radius-s);
+    background: var(--background-modifier-hover);
+    color: var(--text-muted);
+  }
+  .decks-exam-weakest-row {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    font-size: 0.85em;
+  }
+  .decks-exam-weakest-pages {
+    min-width: 5.5em;
+    font-variant-numeric: tabular-nums;
+  }
+  .decks-exam-weakest-count {
+    color: var(--text-error);
+  }
+  .decks-exam-weakest-cards {
+    color: var(--text-muted);
+  }
+  .decks-exam-weakest-cards.is-none {
+    color: var(--text-warning);
+  }
+  .decks-exam-weakest-row button {
+    margin-left: auto;
+    font-size: 0.9em;
+    padding: 0.1rem 0.5rem;
+  }
+  .decks-exam-weakest-empty {
+    font-size: 0.85em;
+    color: var(--text-muted);
+  }
+
   .decks-exam {
     display: flex;
     flex-direction: column;
@@ -609,6 +1011,18 @@
   .decks-exam-typed-input {
     width: 100%;
   }
+  .decks-exam-typed-long {
+    min-height: 5em;
+    resize: vertical;
+  }
+  .decks-exam-review-title {
+    font-weight: 600;
+    font-size: 1.1em;
+  }
+  .decks-exam-check-note {
+    color: var(--text-muted);
+    font-size: 0.9em;
+  }
   .decks-exam-self-prompt,
   .decks-exam-verdict {
     border: 1px solid var(--background-modifier-border);
@@ -638,15 +1052,20 @@
     gap: 0.5rem;
     justify-content: center;
     align-items: center;
-    margin-top: auto;
   }
+  /* One line above the actions, as in the app; it scrolls rather than wrapping. */
   .decks-exam-navigator {
+    position: relative;
     display: flex;
-    flex-wrap: wrap;
+    flex-wrap: nowrap;
     gap: 0.3rem;
-    justify-content: center;
+    margin-top: auto;
+    overflow-x: auto;
+    padding: 2px 0 6px;
+    scrollbar-width: thin;
   }
   .decks-exam-chip {
+    flex: none;
     min-width: 2rem;
     padding: 0.2rem 0.4rem;
     border-radius: 4px;
@@ -659,7 +1078,16 @@
     color: var(--text-on-accent);
   }
   .decks-exam-chip-current {
-    outline: 2px solid var(--interactive-accent);
+    border-color: var(--interactive-accent);
+    box-shadow: inset 0 0 0 1px var(--interactive-accent);
+  }
+  .decks-exam-chip-current.decks-exam-chip-answered {
+    box-shadow: inset 0 0 0 2px var(--background-primary);
+  }
+  /* Rendered answers sit beside their label. */
+  .decks-exam-md :global(p) {
+    display: inline;
+    margin: 0;
   }
   .decks-exam-score-block {
     display: flex;

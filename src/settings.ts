@@ -60,7 +60,6 @@ export interface DecksSettings {
     hideAnchorTokensInEditor: boolean;
     reviewDisplayMode: "modal" | "tab";
     flashcardManagerDisplayMode: "modal" | "tab";
-    aiGeneratorDisplayMode: "modal" | "tab";
     // Deck / group / custom-deck ids the user has pinned to the top of
     // the deck list. Synced across devices via data.json.
     pinnedDeckIds: string[];
@@ -77,6 +76,8 @@ export interface DecksSettings {
     // Per-column widths (in pixels) for the flashcard manager table.
     // Empty object means use defaults from the grid template.
     managerColumnWidths: Record<string, number>;
+    // Width (px) of the AI generator's PDF pane; unset uses the default.
+    aiPdfPaneWidth?: number;
     // Plugin version whose release notes have been shown. Empty means they
     // never have been, which is also true of a fresh install.
     lastSeenVersion: string;
@@ -198,7 +199,6 @@ export const DEFAULT_SETTINGS: DecksSettings = {
     hideAnchorTokensInEditor: true,
     reviewDisplayMode: "modal",
     flashcardManagerDisplayMode: "modal",
-    aiGeneratorDisplayMode: "modal",
     pinnedDeckIds: [],
     deckListSort: "name-asc",
     deckListView: "tree",
