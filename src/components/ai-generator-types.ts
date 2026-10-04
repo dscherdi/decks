@@ -18,6 +18,8 @@ import type {
   GenerateHandlers,
   McqProblem,
   GenerateResult,
+  GenerateChunkedResult,
+  SourceChunk,
   PdfOcrCache,
   QuestionMix,
   RefactorImage,
@@ -29,6 +31,18 @@ import type { ChapterNode, PdfDoc } from "../utils/pdf";
 import type { GeneratorSaveRequest, ProfileOpt } from "./generator-save";
 
 /** A generated card plus the batch-review UI's keep/saved state. */
+/** What the generator supplies for a run over a large source. */
+export interface ChunkedGenerateOptions {
+  prompt: string;
+  chunks: SourceChunk[];
+  extraContext?: string;
+  images?: RefactorImage[];
+  existingCards?: GeneratedCard[];
+  model?: string;
+  cardType?: GeneratedCardType;
+  debug?: boolean;
+}
+
 export interface GenRow {
   id: string;
   card: GeneratedCard;
@@ -143,6 +157,12 @@ export interface AiGeneratorOptions {
     handlers: GenerateHandlers,
     signal: AbortSignal,
   ) => Promise<GenerateResult>;
+  /** A large source, generated a chunk at a time. */
+  generateChunked?: (
+    options: ChunkedGenerateOptions,
+    handlers: GenerateHandlers,
+    signal: AbortSignal,
+  ) => Promise<GenerateChunkedResult>;
   save: (
     cards: GeneratedCard[],
     request: GeneratorSaveRequest,

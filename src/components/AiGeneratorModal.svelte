@@ -1,7 +1,7 @@
 <script lang="ts">
   import { onMount, onDestroy, tick } from "svelte";
   import { type App, type TFile, setIcon } from "obsidian";
-  import { I18n, ThinkingBuffer, type GenerationStage, type AiProviderId, type AiSessionTurn, type AiStagedCard, type AnswerGap, type BlueprintSection, type ChatRequest, type ChatResult, type ChatTurn, type ConceptCard, type ConceptRow, type OverlapCard, type ExamSettings, type QuestionMix, type SourceConcept, type CardVerdict, type CritiqueCard, type GeneratedCard, type GenerateHandlers, type GenerateResult, type RefactorImage, type ThreadBlock, type GeneratedCardType, type McqProblem, EXAMS_PROFILE_ID, DEFAULT_EXAM_SETTINGS, buildConceptRows, generatedCardId, cardsForConcepts, fixInstructionFor, isQuestionShaped, type FixAction, chapterIdsForPages, checkGeneratedMcq, continuationCards, offersContinue, conceptsByPage, isCrammed, isPlannable, sectionHasNothingToLearn, sessionName, getExamDeckTag, fixActionFor, formatPageList, insertAfter, isRefinement, lastResultBlock, localRowId, nextRowCounter, ocrSentinelForTier, pruneBlocks, roundsByTurn, supersededIds, threadFromTurns, unmatchedCards, passageSource, type PassageText } from "@decks/core";
+  import { I18n, ThinkingBuffer, planChunks, chunkLabel, shouldChunk, ESTIMATED_PAGE_CHARS, type SourceChunk, type SelectedSection, type GenerationStage, type AiProviderId, type AiSessionTurn, type AiStagedCard, type AnswerGap, type BlueprintSection, type ChatRequest, type ChatResult, type ChatTurn, type ConceptCard, type ConceptRow, type OverlapCard, type ExamSettings, type QuestionMix, type SourceConcept, type CardVerdict, type CritiqueCard, type GeneratedCard, type GenerateHandlers, type GenerateResult, type RefactorImage, type ThreadBlock, type GeneratedCardType, type McqProblem, EXAMS_PROFILE_ID, DEFAULT_EXAM_SETTINGS, buildConceptRows, generatedCardId, cardsForConcepts, fixInstructionFor, isQuestionShaped, type FixAction, chapterIdsForPages, checkGeneratedMcq, continuationCards, offersContinue, conceptsByPage, isCrammed, isPlannable, sectionHasNothingToLearn, sessionName, getExamDeckTag, fixActionFor, formatPageList, insertAfter, isRefinement, lastResultBlock, localRowId, nextRowCounter, ocrSentinelForTier, pruneBlocks, roundsByTurn, supersededIds, threadFromTurns, unmatchedCards, passageSource, type PassageText } from "@decks/core";
   import AiPromptComposer from "./AiPromptComposer.svelte";
   import ChapterPanel from "./ChapterPanel.svelte";
   import PdfPanel from "./PdfPanel.svelte";
@@ -49,6 +49,7 @@ import { FilePickerModal } from "../utils/file-picker";
   import type { SaveFormat } from "../services/FlashcardComposer";
   import type { GeneratorSaveRequest, ProfileOpt } from "./generator-save";
   import type {
+    AiGeneratorOptions,
     AiSessionRestore,
     AiSessionSnapshot,
     GenRow,
@@ -75,6 +76,7 @@ import { FilePickerModal } from "../utils/file-picker";
     handlers: GenerateHandlers,
     signal: AbortSignal,
   ) => Promise<GenerateResult>;
+  export let generateChunked: AiGeneratorOptions["generateChunked"] = undefined;
   export let save: (
     cards: GeneratedCard[],
     request: GeneratorSaveRequest,
@@ -1283,6 +1285,98 @@ import { FilePickerModal } from "../utils/file-picker";
   // selected tier's OCR model); any other provider uses free pdf.js text
   // extraction. Each PDF's text is prefixed with a `# <label>` heading. Progress
   // is a single counter spanning all PDFs' pages.
+  /** Transcribes a PDF's pages through the cache, reporting each page. */
+  function ocrRunnerFor(p: PdfAttachment, signal: AbortSignal) {
+    const ocrModel = ocrSentinelForTier(selectedModel);
+    return (ocrPages: number[], onEach?: () => void) => {
+      if (!pdfOcr) return Promise.resolve(new Map<number, string>());
+      return pdfOcr.runOcr(
+        p.doc,
+        p.hash,
+        ocrModel,
+        ocrPages,
+        (prog) => {
+          ocrProgress = prog;
+          onEach?.();
+        },
+        signal,
+        debugEnabled
+          ? (entry) => {
+              ocrDebug = [...ocrDebug, entry].slice(-OCR_DEBUG_MAX);
+            }
+          : undefined,
+      );
+    };
+  }
+
+  /** How PDF pages become text for the active provider. */
+  function pdfParseMode(): "text" | "ocr" | "auto" {
+    if (aiProvider !== "decks-pro") return "text";
+    return pdfReading === "transcribe" ? "ocr" : "auto";
+  }
+
+  /** The section index entry a block cites, added on first use and widened by later pages. */
+  function indexSection(pdfHash: string, section: SelectedSection, pages: number[]): number {
+    const at = sectionIndex.findIndex((e) => e.pdfHash === pdfHash && e.chapterId === section.id);
+    if (at >= 0) {
+      const entry = sectionIndex[at];
+      sectionIndex = sectionIndex.map((e, i) =>
+        i === at ? { ...entry, pages: [...new Set([...entry.pages, ...pages])].sort((a, b) => a - b) } : e,
+      );
+      return at + 1;
+    }
+    sectionIndex = [...sectionIndex, { pdfHash, chapterId: section.id, title: section.title, pages }];
+    return sectionIndex.length;
+  }
+
+  /**
+   * The PDF selection as chunks generated one after another, or null when it is
+   * small enough for one request. `loaded` collects each chunk's text as it is read.
+   */
+  function pdfChunks(
+    signal: AbortSignal,
+    loaded: string[],
+    opts: { selectedIds?: Set<string>; keepIndex?: boolean } = {},
+  ): SourceChunk[] | null {
+    const plans = pdfs
+      .map((p) => ({ pdf: p, sections: sectionsForSelection(p.chapters, opts.selectedIds ?? p.selectedIds) }))
+      .filter((x) => x.sections.length > 0);
+    const unitsOf = (sections: SelectedSection[]) =>
+      sections.flatMap((sec) => sec.pages.map((page) => ({ page, chars: ESTIMATED_PAGE_CHARS, section: sec.title })));
+    if (!shouldChunk(plans.flatMap((x) => unitsOf(x.sections)))) return null;
+    if (!opts.keepIndex) sectionIndex = [];
+    const mode = pdfParseMode();
+    return plans.flatMap(({ pdf, sections }) => {
+      const sectionOf = new Map<number, SelectedSection>();
+      for (const sec of sections) for (const page of sec.pages) sectionOf.set(page, sec);
+      return planChunks(unitsOf(sections)).map((chunk) => ({
+        pages: chunk.pages,
+        label: chunkLabel(chunk),
+        load: async () => {
+          // One labelled block per section the chunk touches, as a single read builds them.
+          const groups: Array<{ section: SelectedSection; pages: number[] }> = [];
+          for (const page of chunk.pages) {
+            const section = sectionOf.get(page);
+            if (!section) continue;
+            const last = groups[groups.length - 1];
+            if (last?.section === section) last.pages.push(page);
+            else groups.push({ section, pages: [page] });
+          }
+          const parts: string[] = [];
+          for (const group of groups) {
+            const text = await buildSectionContent(pdf.doc, group.pages, mode, ocrRunnerFor(pdf, signal));
+            if (!text) continue;
+            const n = indexSection(pdf.hash, group.section, group.pages);
+            parts.push(`# [${n}] ${group.section.title}\n${text}`);
+          }
+          const joined = parts.join("\n\n---\n\n");
+          if (joined) loaded.push(joined);
+          return joined;
+        },
+      }));
+    });
+  }
+
   async function resolvePdfSource(
     signal: AbortSignal,
     opts: {
@@ -1314,8 +1408,7 @@ import { FilePickerModal } from "../utils/file-picker";
     if (total === 0) return "";
 
     // Transcription is the hosted path; everyone else gets free text extraction.
-    const mode = aiProvider !== "decks-pro" ? "text" : pdfReading === "transcribe" ? "ocr" : "auto";
-    const ocrModel = ocrSentinelForTier(selectedModel);
+    const mode = pdfParseMode();
 
     pdfProgress = { done: 0, total };
     let done = 0;
@@ -1325,30 +1418,11 @@ import { FilePickerModal } from "../utils/file-picker";
       for (const { pdf: p, sections } of plans) {
         for (const section of sections) {
           const pages = section.pages;
-        const ocrRunner = (ocrPages: number[], onEach?: () => void) => {
-          if (!pdfOcr) return Promise.resolve(new Map<number, string>());
-          return pdfOcr.runOcr(
-            p.doc,
-            p.hash,
-            ocrModel,
-            ocrPages,
-            (prog) => {
-              ocrProgress = prog;
-              onEach?.();
-            },
-            signal,
-            debugEnabled
-              ? (entry) => {
-                  ocrDebug = [...ocrDebug, entry].slice(-OCR_DEBUG_MAX);
-                }
-              : undefined,
-          );
-        };
         const text = await buildSectionContent(
           p.doc,
           pages,
           mode,
-          ocrRunner,
+          ocrRunnerFor(p, signal),
           () => advance(),
         );
         if (!text) continue;
@@ -1847,8 +1921,14 @@ import { FilePickerModal } from "../utils/file-picker";
     // then merge it with the note/image-derived source context.
     let sourceContext = req.sourceContext;
     const images = req.images;
+    // A long selection is generated a chunk at a time; a refinement answers as one round.
+    const loadedChunks: string[] = [];
+    const chunks =
+      passage || refiningCards || !generateChunked
+        ? null
+        : pdfChunks(abortController.signal, loadedChunks, scope ?? {});
     try {
-      const pdfText = passage ? "" : await resolvePdfSource(abortController.signal, scope ?? {});
+      const pdfText = passage || chunks ? "" : await resolvePdfSource(abortController.signal, scope ?? {});
       if (pdfText) {
         sourceContext = [sourceContext, pdfText].filter(Boolean).join("\n\n---\n\n");
       }
@@ -1912,21 +1992,43 @@ import { FilePickerModal } from "../utils/file-picker";
       onReasoning: (text) => thinking.push(text),
     };
     try {
-      const result = await generate(
-        {
-          prompt: req.prompt,
-          sourceContext,
-          images,
-          maxBatches: MAX_BATCHES,
-          existingCards,
-          refining: refiningCards,
-          model: selectedModel,
-          cardType,
-          debug: debugEnabled,
-        },
-        handlers,
-        abortController.signal,
-      );
+      const result = chunks && generateChunked
+        ? await generateChunked(
+            {
+              prompt: req.prompt,
+              chunks,
+              extraContext: sourceContext,
+              images,
+              existingCards,
+              model: selectedModel,
+              cardType,
+              debug: debugEnabled,
+            },
+            handlers,
+            abortController.signal,
+          )
+        : await generate(
+            {
+              prompt: req.prompt,
+              sourceContext,
+              images,
+              maxBatches: MAX_BATCHES,
+              existingCards,
+              refining: refiningCards,
+              model: selectedModel,
+              cardType,
+              debug: debugEnabled,
+            },
+            handlers,
+            abortController.signal,
+          );
+      if (chunks) {
+        lastSourceContext = [sourceContext, ...loadedChunks].filter(Boolean).join("\n\n---\n\n");
+        // A chunk that failed after others worked keeps their cards and says why it stopped.
+        if ("error" in result && result.error !== undefined && !abortController.signal.aborted) {
+          genError = result.error instanceof Error ? result.error.message : String(result.error);
+        }
+      }
       if (debugEnabled) lastDebug = result.debug ?? lastDebug;
       // Offer "Continue generating" when this round produced cards or was cut off
       // by the output-token limit; otherwise the model is done.
@@ -1935,8 +2037,10 @@ import { FilePickerModal } from "../utils/file-picker";
       // not a verdict — but it stops being the suggested action. A passage round has nothing to continue.
       canContinue = passage ? false : offersContinue(result);
     } catch (e) {
-      const msg = e instanceof Error ? e.message : String(e);
-      genError = msg.trim() ? msg : g.generateFailed;
+      if (!abortController.signal.aborted) {
+        const msg = e instanceof Error ? e.message : String(e);
+        genError = msg.trim() ? msg : g.generateFailed;
+      }
     } finally {
       partial = null;
       stage = null;

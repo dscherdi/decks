@@ -2,9 +2,11 @@ import type {
   AiGenerationService,
   GeneratedCard,
   GeneratedCardType,
+  GenerateChunkedResult,
   GenerateHandlers,
   GenerateResult,
   RefactorImage,
+  SourceChunk,
 } from "@decks/core";
 import type { DecksSettings } from "../settings";
 import type { AiKeyStore } from "./AiKeyStore";
@@ -71,6 +73,32 @@ export class AiGeneratorController {
         maxBatches: options.maxBatches,
         debug: options.debug ?? this.settings.debug.enableLogging,
       },
+      handlers,
+      signal,
+    );
+  }
+
+  /** Generate a large source a chunk at a time; see `AiGenerationService.generateChunked`. */
+  async generateChunked(
+    options: {
+      prompt: string;
+      chunks: SourceChunk[];
+      extraContext?: string;
+      images?: RefactorImage[];
+      existingCards?: GeneratedCard[];
+      modelOverride?: string;
+      cardType?: GeneratedCardType;
+      debug?: boolean;
+    },
+    handlers: GenerateHandlers,
+    signal?: AbortSignal,
+  ): Promise<GenerateChunkedResult> {
+    const config = await buildAiConfig(this.settings, this.keyStore);
+    const { modelOverride, debug, ...rest } = options;
+    if (modelOverride) config.model = modelOverride;
+    return this.service.generateChunked(
+      config,
+      { ...rest, debug: debug ?? this.settings.debug.enableLogging },
       handlers,
       signal,
     );

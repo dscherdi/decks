@@ -1783,6 +1783,12 @@ export default class DecksPlugin extends Plugin {
           handlers,
           signal,
         ),
+      generateChunked: ({ model, ...rest }, handlers, signal) =>
+        this.aiGeneratorController.generateChunked(
+          { ...rest, modelOverride: model },
+          handlers,
+          signal,
+        ),
       save: (cards, request) => this.saveGeneratedCards(cards, request),
       deckFronts: async (filePath) => {
         const deck = await this.db.getDeckByFilepath(filePath);

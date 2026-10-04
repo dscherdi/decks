@@ -144,3 +144,26 @@ describe("AiGeneratorController iterative batch loop", () => {
     expect(http.calls).toBe(1);
   });
 });
+
+describe("AiGeneratorController chunked run", () => {
+  it("generates each chunk with the run's model and keeps cards across chunks", async () => {
+    const http = new BatchHttp([sseFor([["Q1", "A1"]]), sseFor([["Q1", "A1"], ["Q2", "A2"]])]);
+    const { fronts, handlers } = collect();
+    const result = await controllerFor(http).generateChunked(
+      {
+        prompt: "",
+        chunks: [
+          { pages: [1, 2], label: "Intro", load: async () => "first part" },
+          { pages: [3, 4], label: "Variance", load: async () => "second part" },
+        ],
+        modelOverride: "picked-model",
+      },
+      handlers,
+    );
+    expect(fronts).toEqual(["Q1", "Q2"]);
+    expect(result).toMatchObject({ doneChunks: 2, emptyChunks: 0 });
+    const bodies = http.requests.map((r) => JSON.parse(r.body ?? "{}"));
+    expect(bodies.map((b) => b.model)).toEqual(["picked-model", "picked-model"]);
+    expect(JSON.stringify(bodies[1].messages)).toContain("second part");
+  });
+});
