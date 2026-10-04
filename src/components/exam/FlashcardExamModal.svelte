@@ -2,6 +2,7 @@
   import { onDestroy, onMount } from "svelte";
   import {
     EXAM_TARGET_BLANK,
+    examQuestionText,
     I18n,
     type AttemptMiss,
     type WeakSection,
@@ -579,7 +580,9 @@
       </div>
 
       {#key currentIndex}
-        <div class="decks-exam-stem markdown-rendered" use:renderBlock={question.stem}></div>
+        {#if question.stem}
+          <div class="decks-exam-stem markdown-rendered" use:renderBlock={question.stem}></div>
+        {/if}
 
         {#if question.kind === "multiple-choice"}
           <div class="decks-exam-options">
@@ -709,7 +712,7 @@
         })}
       </div>
       {#key reviewIndex}
-        <div class="decks-exam-stem markdown-rendered" use:renderBlock={reviewQuestion.stem}></div>
+        <div class="decks-exam-stem markdown-rendered" use:renderBlock={examQuestionText(reviewQuestion)}></div>
         <div class="decks-exam-self-prompt">
           <div>
             <span class="decks-exam-label">{t.yourAnswer}:</span>
@@ -763,7 +766,7 @@
             </div>
             <div class="decks-exam-result-detail">
               <div class="decks-exam-result-prompt">
-                {i + 1}. <span class="decks-exam-md" use:md={{ text: row.question.stem, source: row.question.card.sourceFile }}></span>
+                {i + 1}. <span class="decks-exam-md" use:md={{ text: examQuestionText(row.question), source: row.question.card.sourceFile }}></span>
               </div>
               <div>
                 <span class="decks-exam-label">{t.yourAnswer}:</span>
