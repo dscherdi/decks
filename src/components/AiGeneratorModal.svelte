@@ -248,7 +248,8 @@ import { FilePickerModal } from "../utils/file-picker";
   let partial: GeneratedCard | null = null;
   /** Where the running round is, and its thinking so far; neither outlives the round. */
   let stage: GenerationStage | null = null;
-  let startedAt = 0;
+  /** When the round started or last produced a card, for the slow hint. */
+  let progressAt = 0;
   let thinkingText = "";
   const thinking = new ThinkingBuffer((text) => (thinkingText = text));
   /** The round still streaming, so its cards read as not yet settled. */
@@ -1913,7 +1914,7 @@ import { FilePickerModal } from "../utils/file-picker";
     }
     phase = "streaming";
     stage = null;
-    startedAt = Date.now();
+    progressAt = Date.now();
     thinking.reset();
     abortController = new AbortController();
 
@@ -1968,6 +1969,7 @@ import { FilePickerModal } from "../utils/file-picker";
         if (passage && scope?.passagePdf) passageCardPdf.set(card, scope.passagePdf);
         const id = `gen-${rowCounter++}`;
         roundIds.push(id);
+        progressAt = Date.now();
         addToBlock(resultBlockId, id);
         rows = [
           ...rows,
@@ -2510,7 +2512,7 @@ import { FilePickerModal } from "../utils/file-picker";
         canJumpPage={Boolean(activePdf)}
       >
         {#if phase === "streaming" && !pdfProgress}
-          <AiStageLine {stage} {startedAt} thinking={thinkingText} onStop={interrupt} />
+          <AiStageLine {stage} since={progressAt} thinking={thinkingText} onStop={interrupt} />
         {/if}
         {#if rows.length === 0 && !partial && phase !== "streaming"}
           <div class="decks-ai-gen-note">{g.noCards}</div>

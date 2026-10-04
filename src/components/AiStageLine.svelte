@@ -4,8 +4,8 @@
   import { I18n, stageLabel, type GenerationStage } from "@decks/core";
 
   export let stage: GenerationStage | null = null;
-  /** When the round started, for the slow hint. */
-  export let startedAt = 0;
+  /** When the round started or last produced a card, for the slow hint. */
+  export let since = 0;
   export let thinking = "";
   export let onStop: () => void = () => {};
 
@@ -19,8 +19,7 @@
   let box: HTMLPreElement | null = null;
 
   $: label = stageLabel(stage ?? { kind: "sending" }, now);
-  // Once cards are arriving the round is moving, however long it has run.
-  $: slow = stage?.kind !== "writing" && now - startedAt > SLOW_MS;
+  $: slow = now - since > SLOW_MS;
   $: if (open && box && thinking) box.scrollTop = box.scrollHeight;
 </script>
 
