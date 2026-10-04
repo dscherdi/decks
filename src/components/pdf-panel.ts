@@ -1,12 +1,20 @@
-/** The views of the generator's PDF panel, in the order the switcher shows them. */
-export type PdfPanelView = "chapters" | "pages" | "concepts" | "blueprint";
+/** The views of the generator's side panel, in the order the switcher shows them. */
+export type PdfPanelView = "cards" | "chapters" | "pages" | "concepts" | "blueprint";
 
 export const PDF_PANE_MIN_WIDTH = 280;
 export const PDF_PANE_DEFAULT_WIDTH = 440;
 
-/** Concepts needs a concept ledger; Blueprint needs the exam planner and multiple choice. */
-export function pdfPanelViews(o: { concepts: boolean; blueprint: boolean }): PdfPanelView[] {
-  const views: PdfPanelView[] = ["chapters", "pages"];
+/** Cards once there are any; the source views need a PDF, Concepts a concept ledger,
+ *  Blueprint the exam planner and multiple choice. */
+export function pdfPanelViews(o: {
+  cards?: boolean;
+  pdf?: boolean;
+  concepts: boolean;
+  blueprint: boolean;
+}): PdfPanelView[] {
+  const views: PdfPanelView[] = o.cards ? ["cards"] : [];
+  if (o.pdf === false) return views;
+  views.push("chapters", "pages");
   if (o.concepts) views.push("concepts");
   if (o.blueprint) views.push("blueprint");
   return views;
@@ -17,7 +25,7 @@ export function shownPdfView(
   requested: PdfPanelView,
   available: readonly PdfPanelView[],
 ): PdfPanelView {
-  return available.includes(requested) ? requested : "chapters";
+  return available.includes(requested) ? requested : (available[0] ?? "chapters");
 }
 
 /** A PDF chip opens the panel on that PDF, and closes it when it is already showing it. */

@@ -1,7 +1,7 @@
 <script lang="ts">
   // The staged pile beside the thread: the same cards as a filterable working
   // list. Two views of one array, never two arrays.
-  import { I18n } from "@decks/core";
+  import { I18n, checkCardFormat } from "@decks/core";
   import StagedCardRow from "./StagedCardRow.svelte";
   import type { GenRow } from "./ai-generator-types";
   import type { FixAction, GeneratedCard } from "@decks/core";
@@ -19,16 +19,23 @@
   export let onFix: (row: GenRow, action?: FixAction) => void = () => {};
   export let onUndo: (row: GenRow) => void = () => {};
   export let onToggleKeep: (id: string) => void = () => {};
+  /** The round the panel was opened on, and whether it shows that round or every card. */
+  export let roundRowIds: Set<string> | null = null;
+  export let scope: "round" | "all" = "all";
+  export let onScope: (scope: "round" | "all") => void = () => {};
+  export let filter: "all" | "flagged" | "kept" = "all";
+  export let onKeepRows: (ids: string[]) => void = () => {};
+  export let onDiscardRows: (ids: string[]) => void = () => {};
 
   const g = I18n.t.modals.aiGenerator;
 
-  type Filter = "all" | "flagged" | "kept";
-  let filter: Filter = "all";
-
   // Saved cards leave the working list: they are in the vault, and nothing here
   // acts on them any more.
-  $: live = rows.filter((r) => !r.saved);
-  $: flaggedRows = live.filter((r) => r.verdict?.verdict === "flagged");
+  $: inScope = scope === "round" && roundRowIds ? rows.filter((r) => roundRowIds?.has(r.id)) : rows;
+  $: live = inScope.filter((r) => !r.saved);
+  $: flaggedRows = live.filter(
+    (r) => r.verdict?.verdict === "flagged" || Boolean(r.invalid) || checkCardFormat(r.card).length > 0,
+  );
   $: keptRows = live.filter((r) => r.keep);
   $: shown =
     filter === "flagged" ? flaggedRows : filter === "kept" ? keptRows : live;
@@ -39,7 +46,22 @@
 </script>
 
 <div class="decks-ai-staged">
-  <div class="decks-ai-staged-head">{g.stagedTitle}</div>
+  {#if roundRowIds}
+    <div class="decks-seg decks-ai-staged-scope" role="group">
+      <button
+        type="button"
+        class="decks-seg-btn"
+        class:is-active={scope === "round"}
+        on:click={() => onScope("round")}>{g.paneThisRound}</button
+      >
+      <button
+        type="button"
+        class="decks-seg-btn"
+        class:is-active={scope === "all"}
+        on:click={() => onScope("all")}>{g.paneAll}</button
+      >
+    </div>
+  {/if}
   <div class="decks-ai-staged-filters">
     <button
       type="button"
@@ -63,6 +85,20 @@
       >{I18n.format(g.stagedKept, { count: keptRows.length })}</button
     >
   </div>
+  {#if live.length > 0}
+    <div class="decks-ai-staged-bulk">
+      <button
+        type="button"
+        disabled={!live.some((r) => !r.keep)}
+        on:click={() => onKeepRows(live.map((r) => r.id))}>{g.threadKeepAll}</button
+      >
+      <button
+        type="button"
+        disabled={!live.some((r) => r.keep)}
+        on:click={() => onDiscardRows(live.map((r) => r.id))}>{g.threadDiscardAll}</button
+      >
+    </div>
+  {/if}
 
   <div class="decks-ai-staged-list">
     {#each shown as row (row.id)}
@@ -100,14 +136,25 @@
     flex-direction: column;
     gap: 6px;
     padding: 10px 6px 6px;
-    background: var(--background-secondary);
-    border-top: 1px solid var(--background-modifier-border);
   }
-  .decks-ai-staged-head {
+  .decks-ai-staged-scope {
+    align-self: flex-start;
+    margin: 0 6px;
+  }
+  .decks-ai-staged-bulk {
+    display: flex;
+    gap: 12px;
     padding: 0 6px;
-    font-size: 10px;
-    text-transform: uppercase;
-    letter-spacing: 0.06em;
+  }
+  .decks-ai-staged-bulk button {
+    height: auto;
+    padding: 0;
+    color: var(--text-accent);
+    background: transparent;
+    box-shadow: none;
+    font-size: 11px;
+  }
+  .decks-ai-staged-bulk button:disabled {
     color: var(--text-faint);
   }
   .decks-ai-staged-filters {

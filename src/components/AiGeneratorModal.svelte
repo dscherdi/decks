@@ -192,7 +192,7 @@ import { FilePickerModal } from "../utils/file-picker";
   export async function focusRow(rowId: string): Promise<void> {
     await restored;
     if (!rows.some((r) => r.id === rowId)) return;
-    flaggedOnly = true;
+    openCards(null, "flagged");
     selectedId = rowId;
     await tick();
     document
@@ -329,8 +329,24 @@ import { FilePickerModal } from "../utils/file-picker";
     (r) => r.keep && !r.saved && !supersededRows.has(r.id) && checkCardFormat(r.card).length > 0,
   );
   /** The thread narrowed to the cards that need attention. */
-  let flaggedOnly = false;
-  $: if (flaggedCount === 0) flaggedOnly = false;
+  /** The Cards panel's filter, and the round it was opened on. */
+  let cardsFilter: "all" | "flagged" | "kept" = "all";
+  let cardsRound: string | null = null;
+  let cardsScope: "round" | "all" = "all";
+  $: flaggedOnly = panelOpen && shownView === "cards" && cardsFilter === "flagged";
+  $: cardsRoundRows = (() => {
+    const block = cardsRound ? blocks.find((b) => b.kind === "result" && b.id === cardsRound) : undefined;
+    return block && block.kind === "result" ? new Set(block.rowIds) : null;
+  })();
+
+  /** Show cards in the side panel: a round's, or all of them under a filter. */
+  function openCards(round: string | null, filter: "all" | "flagged" | "kept" = "all"): void {
+    cardsRound = round;
+    cardsScope = round ? "round" : "all";
+    cardsFilter = filter;
+    panelView = "cards";
+    panelOpen = true;
+  }
   /** Rows whose rubric pass did not run, so their round can say so. */
   let unchecked = new Set<string>();
 
@@ -416,22 +432,24 @@ import { FilePickerModal } from "../utils/file-picker";
   }
 
   function pdfViewLabel(view: PdfPanelView): string {
+    if (view === "cards") return g.paneCards;
     if (view === "chapters") return g.pdfChapters;
     if (view === "pages") return g.pdfPanel.pages;
     if (view === "concepts") return g.pdfPanel.concepts;
     return g.pdfPanel.blueprint;
   }
 
-  // A preference: the open PDF panel takes the column without clearing it.
-  let showStaged = true;
-  $: stagedVisible = showStaged && !(activePdf && panelOpen);
+  $: stagedVisible = panelOpen && shownView === "cards";
   function toggleStaged(): void {
-    if (stagedVisible) {
-      showStaged = false;
-      return;
-    }
-    showStaged = true;
-    panelOpen = false;
+    if (stagedVisible) panelOpen = false;
+    else openCards(null);
+  }
+
+  // A wide view shows the cards beside the thread once there are any, until the panel is closed.
+  let panelSettled = false;
+  $: if (!panelSettled && !mobile && rows.length > 0) {
+    panelSettled = true;
+    if (!panelOpen) openCards(null);
   }
 
   function openPdfPanel(id: string, view?: PdfPanelView): void {
@@ -1146,6 +1164,8 @@ import { FilePickerModal } from "../utils/file-picker";
   // The last view used, kept while the panel is closed or the view is not offered.
   let panelView: PdfPanelView = "chapters";
   $: pdfViews = pdfPanelViews({
+    cards: rows.length > 0,
+    pdf: Boolean(activePdf),
     concepts: Boolean(conceptLedger),
     blueprint: Boolean(examPlanner) && (cardType === "mcq" || blueprintRunning),
   });
@@ -1518,6 +1538,26 @@ import { FilePickerModal } from "../utils/file-picker";
     });
     schedulePersist();
     return before;
+  }
+
+  function setRowsKeep(ids: string[], keep: boolean): Map<string, boolean> {
+    const wanted = new Set(ids);
+    const before = new Map<string, boolean>();
+    rows = rows.map((r) => {
+      if (!wanted.has(r.id) || r.saved || r.keep === keep) return r;
+      before.set(r.id, r.keep);
+      return { ...r, keep };
+    });
+    schedulePersist();
+    return before;
+  }
+
+  function discardRows(ids: string[]): void {
+    const before = setRowsKeep(ids, false);
+    if (before.size === 0) return;
+    undoRound = { blockId: cardsScope === "round" && cardsRound ? cardsRound : "*", before };
+    clearTimeout(undoTimer);
+    undoTimer = setTimeout(() => (undoRound = null), UNDO_MS);
   }
 
   function keepAll(blockId: string): void {
@@ -2533,19 +2573,12 @@ import { FilePickerModal } from "../utils/file-picker";
         {blocks}
         {rows}
         isQuestion={cardType === "mcq"}
-        {flaggedOnly}
         {unchecked}
-        {selectedId}
         {partial}
         {renderMarkdown}
         {resolveCardPage}
-        {canJumpTo}
-        onJump={jumpToSourcePage}
-        onSelect={select}
-        onToggleKeep={toggleKeep}
         {streamingBlockId}
-        onFix={(row, action) => void applyFix(row, action)}
-        onUndo={undoFix}
+        onOpenRound={(id) => openCards(id)}
         onKeepAll={keepAll}
         onDiscardAll={discardAll}
         undoable={undoRound ? { blockId: undoRound.blockId, count: undoRound.before.size } : null}
@@ -2655,7 +2688,7 @@ import { FilePickerModal } from "../utils/file-picker";
           class:is-active={flaggedOnly}
           aria-pressed={flaggedOnly}
           title={g.flaggedFilter}
-          on:click={() => (flaggedOnly = !flaggedOnly)}
+          on:click={() => (flaggedOnly ? (panelOpen = false) : openCards(null, "flagged"))}
           >{I18n.format(g.flaggedNotice, { count: flaggedCount })}</button
         >
       {/if}
@@ -2691,14 +2724,14 @@ import { FilePickerModal } from "../utils/file-picker";
     {/if}
   </div>
 </div>
-{#if (rows.length > 0 && !mobile && stagedVisible) || (activePdf && panelOpen)}
+{#if panelOpen && (activePdf || rows.length > 0)}
   <aside
     class="decks-ai-gen-side"
-    class:is-open={activePdf && panelOpen}
-    class:is-sheet={mobile && activePdf && panelOpen}
+    class:is-open={panelOpen}
+    class:is-sheet={mobile}
     bind:this={sideEl}
   >
-    {#if activePdf && panelOpen && !mobile}
+    {#if !mobile}
       <!-- A focusable separator is the ARIA window-splitter pattern. -->
       <!-- svelte-ignore a11y_no_noninteractive_tabindex, a11y_no_noninteractive_element_interactions -->
       <div
@@ -2715,19 +2748,52 @@ import { FilePickerModal } from "../utils/file-picker";
         on:keydown={nudgePane}
       ></div>
     {/if}
-    {#if activePdf && panelOpen}
-      <PdfPanel
-        title={activePdf.label}
-        tabs={pdfTabs}
-        activeTabId={activePdfId}
-        views={pdfViewTabs}
-        view={shownView}
-        onView={(v) => (panelView = v)}
-        onSelectTab={(id) => (activePdfId = id)}
-        onRemoveTab={removeContext}
-        onClose={() => (panelOpen = false)}
-        onOpenInViewer={activePdf.vaultPath ? openActivePdfInViewer : null}
-      >
+    <PdfPanel
+      title={shownView === "cards" || !activePdf ? g.paneCards : activePdf.label}
+      tabs={shownView === "cards" || !activePdf ? [] : pdfTabs}
+      activeTabId={activePdfId}
+      views={pdfViewTabs}
+      view={shownView}
+      onView={(v) => (panelView = v)}
+      onSelectTab={(id) => (activePdfId = id)}
+      onRemoveTab={removeContext}
+      onClose={() => (panelOpen = false)}
+      onOpenInViewer={shownView !== "cards" && activePdf?.vaultPath ? openActivePdfInViewer : null}
+    >
+      {#if shownView === "cards"}
+        {#if cardType === "mcq"}
+          <ExamDraftPanel
+            mix={examMix}
+            pending={eligibleCount}
+            skipped={skippedCount}
+            {destinationLabel}
+            tag={examTag}
+            onEditDestination={() => (showDestination = !showDestination)}
+          />
+        {/if}
+        <AiStagedPanel
+          {rows}
+          isQuestion={cardType === "mcq"}
+          {selectedId}
+          {renderMarkdown}
+          {resolveCardPage}
+          {canJumpTo}
+          onJump={jumpToSourcePage}
+          onSelect={select}
+          onToggleKeep={toggleKeep}
+          onFix={(row, action) => void applyFix(row, action)}
+          onUndo={undoFix}
+          roundRowIds={cardsRoundRows}
+          scope={cardsScope}
+          onScope={(next) => (cardsScope = next)}
+          bind:filter={cardsFilter}
+          onKeepRows={(ids) => {
+            setRowsKeep(ids, true);
+            undoRound = null;
+          }}
+          onDiscardRows={discardRows}
+        />
+      {:else if activePdf}
         {#key activePdf.contextId}
           {#if shownView === "pages"}
             <PdfPagesView
@@ -2800,32 +2866,8 @@ import { FilePickerModal } from "../utils/file-picker";
             />
           {/if}
         {/key}
-      </PdfPanel>
-    {/if}
-    {#if rows.length > 0 && !mobile && stagedVisible && cardType === "mcq"}
-      <ExamDraftPanel
-        mix={examMix}
-        pending={eligibleCount}
-        skipped={skippedCount}
-        {destinationLabel}
-        tag={examTag}
-        onEditDestination={() => (showDestination = !showDestination)}
-      />
-    {:else if rows.length > 0 && !mobile && stagedVisible}
-      <AiStagedPanel
-        {rows}
-        isQuestion={false}
-        {selectedId}
-        {renderMarkdown}
-        {resolveCardPage}
-        {canJumpTo}
-        onJump={jumpToSourcePage}
-        onSelect={select}
-        onToggleKeep={toggleKeep}
-        onFix={(row, action) => void applyFix(row, action)}
-        onUndo={undoFix}
-      />
-    {/if}
+      {/if}
+    </PdfPanel>
   </aside>
 {/if}
 {#if debugEnabled && showDebug}
