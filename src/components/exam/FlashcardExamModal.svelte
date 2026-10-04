@@ -426,6 +426,11 @@
     return { destroy() {} };
   }
 
+  // Blank markers are text: "[...]" is no link and a "____" line no rule.
+  function blanksAsText(text: string): string {
+    return text.split("[...]").join("\\[...\\]").split("____").join("\\_\\_\\_\\_");
+  }
+
   /** Markdown for an answer or result line, so its math renders as in the question. */
   function md(el: HTMLElement, p: { text: string; source: string }): { update(next: { text: string; source: string }): void } {
     const draw = (next: { text: string; source: string }) => {
@@ -603,7 +608,7 @@
         {:else if question.isCloze && question.clozeContext}
           <div
             class="decks-exam-cloze markdown-rendered"
-            use:renderBlock={question.clozeContext}
+            use:renderBlock={blanksAsText(question.clozeContext)}
           ></div>
         {:else if byMeaning}
           <textarea
@@ -712,7 +717,7 @@
         })}
       </div>
       {#key reviewIndex}
-        <div class="decks-exam-stem markdown-rendered" use:renderBlock={examQuestionText(reviewQuestion)}></div>
+        <div class="decks-exam-stem markdown-rendered" use:renderBlock={blanksAsText(examQuestionText(reviewQuestion))}></div>
         <div class="decks-exam-self-prompt">
           <div>
             <span class="decks-exam-label">{t.yourAnswer}:</span>
@@ -766,7 +771,7 @@
             </div>
             <div class="decks-exam-result-detail">
               <div class="decks-exam-result-prompt">
-                {i + 1}. <span class="decks-exam-md" use:md={{ text: examQuestionText(row.question), source: row.question.card.sourceFile }}></span>
+                {i + 1}. <span class="decks-exam-md" use:md={{ text: blanksAsText(examQuestionText(row.question)), source: row.question.card.sourceFile }}></span>
               </div>
               <div>
                 <span class="decks-exam-label">{t.yourAnswer}:</span>
