@@ -1,7 +1,7 @@
 <script lang="ts">
   import { onMount, onDestroy, tick } from "svelte";
   import { type App, type TFile, setIcon } from "obsidian";
-  import { I18n, ThinkingBuffer, checkCardFormat, formatIssueSummary, repairCardFormat, planChunks, chunkLabel, shouldChunk, ESTIMATED_PAGE_CHARS, type SourceChunk, type SelectedSection, type GenerationStage, type AiProviderId, type AiSessionTurn, type AiStagedCard, type AnswerGap, type BlueprintSection, type ChatRequest, type ChatResult, type ChatTurn, type ConceptCard, type ConceptRow, type OverlapCard, type ExamSettings, type QuestionMix, type SourceConcept, type CardVerdict, type CritiqueCard, type GeneratedCard, type GenerateHandlers, type GenerateResult, type RefactorImage, type ThreadBlock, type GeneratedCardType, type McqProblem, EXAMS_PROFILE_ID, DEFAULT_EXAM_SETTINGS, buildConceptRows, generatedCardId, cardsForConcepts, fixInstructionFor, isQuestionShaped, type FixAction, chapterIdsForPages, checkGeneratedMcq, continuationCards, offersContinue, conceptsByPage, isCrammed, isPlannable, sectionHasNothingToLearn, sessionName, getExamDeckTag, fixActionFor, formatPageList, insertAfter, isRefinement, lastResultBlock, localRowId, nextRowCounter, ocrSentinelForTier, pruneBlocks, roundsByTurn, supersededIds, threadFromTurns, unmatchedCards, passageSource, type PassageText } from "@decks/core";
+  import { I18n, ThinkingBuffer, aiConceptId, checkCardFormat, formatIssueSummary, repairCardFormat, planChunks, chunkLabel, shouldChunk, ESTIMATED_PAGE_CHARS, type SourceChunk, type SelectedSection, type GenerationStage, type AiProviderId, type AiSessionTurn, type AiStagedCard, type AnswerGap, type BlueprintSection, type ChatRequest, type ChatResult, type ChatTurn, type ConceptCard, type ConceptRow, type OverlapCard, type ExamSettings, type QuestionMix, type SourceConcept, type CardVerdict, type CritiqueCard, type GeneratedCard, type GenerateHandlers, type GenerateResult, type RefactorImage, type ThreadBlock, type GeneratedCardType, type McqProblem, EXAMS_PROFILE_ID, DEFAULT_EXAM_SETTINGS, buildConceptRows, generatedCardId, cardsForConcepts, fixInstructionFor, isQuestionShaped, type FixAction, chapterIdsForPages, checkGeneratedMcq, continuationCards, offersContinue, conceptsByPage, isCrammed, isPlannable, sectionHasNothingToLearn, sessionName, getExamDeckTag, fixActionFor, formatPageList, insertAfter, isRefinement, lastResultBlock, localRowId, nextRowCounter, ocrSentinelForTier, pruneBlocks, roundsByTurn, supersededIds, threadFromTurns, unmatchedCards, passageSource, type PassageText } from "@decks/core";
   import AiPromptComposer from "./AiPromptComposer.svelte";
   import ChapterPanel from "./ChapterPanel.svelte";
   import PdfPanel from "./PdfPanel.svelte";
@@ -40,6 +40,7 @@ import { FilePickerModal } from "../utils/file-picker";
     loadPdf,
     extractOutline,
     buildSectionContent,
+    buildSectionPages,
     pagesForSelection,
     sectionsForSelection,
     hashPdf,
@@ -635,29 +636,57 @@ import { FilePickerModal } from "../utils/file-picker";
     }
   }
 
-  /** One read of the selected pages, stored against the document so the pass
-   *  runs once per source rather than once per round. */
+  /**
+   * Read the selected pages for what they teach, a few at a time, storing each
+   * chunk as it lands. Unread pages go first; with all read, they are read again.
+   */
   async function extractConcepts(): Promise<void> {
     const pdf = activePdf;
-    if (!pdf || !conceptLedger || conceptBusy) return;
+    const ledger = conceptLedger;
+    if (!pdf || !ledger || conceptBusy) return;
     const pages = pagesForSelection(pdf.chapters, pdf.selectedIds);
     if (pages.length === 0) return;
+    const unreadNow = pages.filter((p) => !ledgerExtracted.has(p));
+    const scope = unreadNow.length > 0 ? unreadNow : pages;
     conceptBusy = true;
     conceptError = null;
     const controller = new AbortController();
+    conceptController = controller;
     try {
-      const source = await resolvePdfSource(controller.signal, { only: pdf });
-      const found = await conceptLedger.extract(
-        source,
-        new Set(pages),
+      pdfProgress = { done: 0, total: scope.length };
+      const texts = await buildSectionPages(
+        pdf.doc,
+        scope,
+        pdfParseMode(),
+        ocrRunnerFor(pdf, controller.signal),
+        (done, total) => (pdfProgress = { done, total }),
+      );
+      pdfProgress = null;
+      conceptProgress = { done: 0, total: texts.length };
+      await ledger.extract(
+        texts.map((p) => ({ n: p.page, text: p.text })),
+        {
+          onChunk: async (found, read) => {
+            await ledger.save(pdf.hash, read, found);
+            if (ledgerHash !== pdf.hash) return;
+            const done = new Set(read);
+            ledgerConcepts = [
+              ...ledgerConcepts.filter((c) => !done.has(c.page)),
+              ...found.map((c) => ({ ...c, id: aiConceptId(pdf.hash, c.page, c.term) })),
+            ];
+            ledgerExtracted = new Set([...ledgerExtracted, ...read]);
+          },
+          onProgress: (done, total) => (conceptProgress = { done, total }),
+        },
         controller.signal,
       );
-      await conceptLedger.save(pdf.hash, pages, found);
-      await loadLedger(pdf.hash, true);
     } catch (e) {
-      conceptError = e instanceof Error ? e.message : String(e);
+      if (!controller.signal.aborted) conceptError = e instanceof Error ? e.message : String(e);
     } finally {
       conceptBusy = false;
+      conceptProgress = null;
+      pdfProgress = null;
+      conceptController = null;
     }
   }
 
@@ -1148,6 +1177,9 @@ import { FilePickerModal } from "../utils/file-picker";
   let ledgerHash: string | null = null;
   let conceptBusy = false;
   let conceptError: string | null = null;
+  /** Pages read so far while concepts are extracted. */
+  let conceptProgress: { done: number; total: number } | null = null;
+  let conceptController: AbortController | null = null;
   // The blueprint's per-section allocation, keyed by chapter id so an edit
   // survives a change of selection rather than being recomputed away.
   let questionPlan: Record<string, number> = {};
@@ -2727,7 +2759,12 @@ import { FilePickerModal } from "../utils/file-picker";
               {conceptsPerPage}
               busy={conceptBusy}
               error={conceptError}
+              progress={conceptProgress}
+              unread={pagesForSelection(activePdf.chapters, activePdf.selectedIds).filter(
+                (p) => !ledgerExtracted.has(p),
+              ).length}
               onExtract={() => void extractConcepts()}
+              onCancel={() => conceptController?.abort()}
               onGenerate={generateForConcepts}
               onRepair={repairCards ? repairConcepts : undefined}
               onSplit={splitConcepts}

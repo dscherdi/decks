@@ -1863,8 +1863,8 @@ export default class DecksPlugin extends Plugin {
       pdfOcr: this.pdfOcrCache,
       conceptLedger: this.settings.ai.enabled
         ? {
-            extract: (source, sourcedPages, signal) =>
-              this.aiConceptController.extract(source, sourcedPages, signal),
+            extract: (units, handlers, signal) =>
+              this.aiConceptController.extract(units, handlers, signal),
             load: async (sourceHash) => ({
               concepts: await this.db.getAiConcepts(sourceHash),
               extracted: await this.db.getAiExtractedPages(sourceHash),

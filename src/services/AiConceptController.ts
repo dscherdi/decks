@@ -1,11 +1,11 @@
-import type { AiConceptService, SourceConcept } from "@decks/core";
-import { DECKS_CONCEPTS, cleanConcepts } from "@decks/core";
+import type { AiConceptService, ConceptChunkHandlers, SourceConcept, SourceUnit } from "@decks/core";
+import { DECKS_CONCEPTS } from "@decks/core";
 import type { DecksSettings } from "../settings";
 import type { AiKeyStore } from "./AiKeyStore";
 import { buildAiConfig } from "./ai-config";
 
-/** Plugin glue around the core extraction pass. One call per source, so the
- *  result is cached by the caller rather than recomputed per round. */
+/** Plugin glue around the core extraction pass. Each chunk is stored by the
+ *  caller as it lands, so the pass runs once per source rather than per round. */
 export class AiConceptController {
   constructor(
     private readonly service: AiConceptService,
@@ -14,22 +14,15 @@ export class AiConceptController {
   ) {}
 
   async extract(
-    source: string,
-    sourcedPages: Set<number>,
+    units: SourceUnit[],
+    handlers: ConceptChunkHandlers,
     signal?: AbortSignal,
-  ): Promise<SourceConcept[]> {
+  ): Promise<{ concepts: SourceConcept[]; read: number[] }> {
     const config = await buildAiConfig(this.settings, this.keyStore);
     // The extraction runs on its own slot; other providers use the configured
     // model, as they do for every other pass.
     const model =
       config.provider === "decks-pro" ? DECKS_CONCEPTS : config.model;
-    const result = await this.service.extract(
-      { ...config, model },
-      { source, debug: this.settings.debug.enableLogging },
-      signal,
-    );
-    // A page the source never offered cannot carry a concept, whatever the
-    // model claimed.
-    return cleanConcepts(result.concepts, sourcedPages);
+    return this.service.extractChunked({ ...config, model }, units, handlers, signal);
   }
 }

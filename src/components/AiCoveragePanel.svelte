@@ -19,7 +19,12 @@
   export let conceptsPerPage: Record<number, number> = {};
   export let busy = false;
   export let error: string | null = null;
+  /** Pages read so far in a running extraction. */
+  export let progress: { done: number; total: number } | null = null;
+  /** Selected pages not read yet; extracting reads these first. */
+  export let unread = 0;
   export let onExtract: () => void = () => {};
+  export let onCancel: (() => void) | undefined = undefined;
   export let onGenerate: (rows: ConceptRow[]) => void = () => {};
   /** Rework the cards of concepts that keep being missed; absent when nothing can. */
   export let onRepair: ((rows: ConceptRow[]) => void) | undefined = undefined;
@@ -103,6 +108,22 @@
 </script>
 
 <div class="decks-ai-cov">
+  {#if progress}
+    <div class="decks-ai-cov-progress" role="status">
+      <div class="decks-ai-cov-progress-head">
+        <span>{I18n.format(c.progress, { done: progress.done, total: progress.total, count: rows.length })}</span>
+        {#if onCancel}
+          <button type="button" class="decks-ai-cov-extract" on:click={onCancel}>{c.stopReading}</button>
+        {/if}
+      </div>
+      <div class="decks-ai-cov-progress-track">
+        <div
+          class="decks-ai-cov-progress-fill"
+          style:width={`${Math.round((progress.done / Math.max(1, progress.total)) * 100)}%`}
+        ></div>
+      </div>
+    </div>
+  {/if}
   <div class="decks-ai-cov-summary">
     {#if busy}
       <span class="decks-ai-cov-note">{c.extracting}</span>
@@ -121,7 +142,7 @@
       disabled={busy || sourcedPages.size === 0}
       on:click={onExtract}
     >
-      {rows.length > 0 ? c.reextract : c.extract}
+      {rows.length === 0 ? c.extract : unread > 0 ? I18n.format(c.continueReading, { count: unread }) : c.reextract}
     </button>
   </div>
 
@@ -277,6 +298,31 @@
     flex-direction: column;
     align-items: flex-start;
     gap: 6px;
+  }
+  .decks-ai-cov-progress {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+    font-size: 11px;
+    color: var(--text-muted);
+    font-variant-numeric: tabular-nums;
+  }
+  .decks-ai-cov-progress-head {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 8px;
+  }
+  .decks-ai-cov-progress-track {
+    height: 4px;
+    overflow: hidden;
+    background: var(--background-modifier-border);
+    border-radius: 2px;
+  }
+  .decks-ai-cov-progress-fill {
+    height: 100%;
+    background: var(--interactive-accent);
+    transition: width 0.3s ease;
   }
   .decks-ai-cov-note {
     font-size: 11px;

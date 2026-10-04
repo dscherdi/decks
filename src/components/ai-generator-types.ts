@@ -24,6 +24,8 @@ import type {
   QuestionMix,
   RefactorImage,
   SourceConcept,
+  SourceUnit,
+  ConceptChunkHandlers,
   TypedGradingMode,
 } from "@decks/core";
 import type { PdfReading } from "../settings";
@@ -253,11 +255,12 @@ export interface ExamPlannerOps {
 
 /** Read, store and score the examinable concepts in one source. */
 export interface ConceptLedgerOps {
+  /** Reads the units a chunk at a time; each chunk is reported as it lands. */
   extract: (
-    source: string,
-    sourcedPages: Set<number>,
+    units: SourceUnit[],
+    handlers: ConceptChunkHandlers,
     signal?: AbortSignal,
-  ) => Promise<SourceConcept[]>;
+  ) => Promise<{ concepts: SourceConcept[]; read: number[] }>;
   load: (sourceHash: string) => Promise<{
     concepts: Array<SourceConcept & { id: string }>;
     extracted: number[];
