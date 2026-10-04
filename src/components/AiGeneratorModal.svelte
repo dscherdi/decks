@@ -1,7 +1,7 @@
 <script lang="ts">
   import { onMount, onDestroy, tick } from "svelte";
   import { type App, type TFile, setIcon } from "obsidian";
-  import { I18n, ThinkingBuffer, planChunks, chunkLabel, shouldChunk, ESTIMATED_PAGE_CHARS, type SourceChunk, type SelectedSection, type GenerationStage, type AiProviderId, type AiSessionTurn, type AiStagedCard, type AnswerGap, type BlueprintSection, type ChatRequest, type ChatResult, type ChatTurn, type ConceptCard, type ConceptRow, type OverlapCard, type ExamSettings, type QuestionMix, type SourceConcept, type CardVerdict, type CritiqueCard, type GeneratedCard, type GenerateHandlers, type GenerateResult, type RefactorImage, type ThreadBlock, type GeneratedCardType, type McqProblem, EXAMS_PROFILE_ID, DEFAULT_EXAM_SETTINGS, buildConceptRows, generatedCardId, cardsForConcepts, fixInstructionFor, isQuestionShaped, type FixAction, chapterIdsForPages, checkGeneratedMcq, continuationCards, offersContinue, conceptsByPage, isCrammed, isPlannable, sectionHasNothingToLearn, sessionName, getExamDeckTag, fixActionFor, formatPageList, insertAfter, isRefinement, lastResultBlock, localRowId, nextRowCounter, ocrSentinelForTier, pruneBlocks, roundsByTurn, supersededIds, threadFromTurns, unmatchedCards, passageSource, type PassageText } from "@decks/core";
+  import { I18n, ThinkingBuffer, checkCardFormat, formatIssueSummary, repairCardFormat, planChunks, chunkLabel, shouldChunk, ESTIMATED_PAGE_CHARS, type SourceChunk, type SelectedSection, type GenerationStage, type AiProviderId, type AiSessionTurn, type AiStagedCard, type AnswerGap, type BlueprintSection, type ChatRequest, type ChatResult, type ChatTurn, type ConceptCard, type ConceptRow, type OverlapCard, type ExamSettings, type QuestionMix, type SourceConcept, type CardVerdict, type CritiqueCard, type GeneratedCard, type GenerateHandlers, type GenerateResult, type RefactorImage, type ThreadBlock, type GeneratedCardType, type McqProblem, EXAMS_PROFILE_ID, DEFAULT_EXAM_SETTINGS, buildConceptRows, generatedCardId, cardsForConcepts, fixInstructionFor, isQuestionShaped, type FixAction, chapterIdsForPages, checkGeneratedMcq, continuationCards, offersContinue, conceptsByPage, isCrammed, isPlannable, sectionHasNothingToLearn, sessionName, getExamDeckTag, fixActionFor, formatPageList, insertAfter, isRefinement, lastResultBlock, localRowId, nextRowCounter, ocrSentinelForTier, pruneBlocks, roundsByTurn, supersededIds, threadFromTurns, unmatchedCards, passageSource, type PassageText } from "@decks/core";
   import AiPromptComposer from "./AiPromptComposer.svelte";
   import ChapterPanel from "./ChapterPanel.svelte";
   import PdfPanel from "./PdfPanel.svelte";
@@ -321,8 +321,12 @@ import { FilePickerModal } from "../utils/file-picker";
       r.keep &&
       !r.saved &&
       !supersededRows.has(r.id) &&
-      (r.verdict?.verdict === "flagged" || Boolean(r.invalid)),
+      (r.verdict?.verdict === "flagged" || Boolean(r.invalid) || checkCardFormat(r.card).length > 0),
   ).length;
+  /** Kept, unsaved cards whose formatting would render wrongly. */
+  $: misformatted = rows.filter(
+    (r) => r.keep && !r.saved && !supersededRows.has(r.id) && checkCardFormat(r.card).length > 0,
+  );
   /** The thread narrowed to the cards that need attention. */
   let flaggedOnly = false;
   $: if (flaggedCount === 0) flaggedOnly = false;
@@ -1775,8 +1779,13 @@ import { FilePickerModal } from "../utils/file-picker";
 
     rows = rows.map((r) => (r.id === row.id ? { ...r, fixing: true } : r));
     try {
-      const replacements = await refine(row.card, {
-        instructions: fixInstructionFor(action, row.verdict?.fix ?? ""),
+      // Formatting is mended here when the safe repairs are enough; the model is asked only when not.
+      const mended = action === "fix_format" ? repairCardFormat(row.card) : null;
+      const local = mended !== null && mended !== row.card && checkCardFormat(mended).length === 0;
+      const detail =
+        action === "fix_format" ? formatIssueSummary(checkCardFormat(row.card)) : (row.verdict?.fix ?? "");
+      const replacements = local ? [mended] : (await refine(row.card, {
+        instructions: fixInstructionFor(action, detail),
         split: action === "split",
         cloze: action === "cloze",
         // add_context is the one fix that needs the source back: the card is
@@ -1784,7 +1793,7 @@ import { FilePickerModal } from "../utils/file-picker";
         sourceContext:
           action === "add_context" ? lastSourceContext : undefined,
         model: selectedModel,
-      });
+      })).map(repairCardFormat);
       if (replacements.length === 0) return;
 
       const children: GenRow[] = replacements.map((card) => ({
@@ -1796,6 +1805,8 @@ import { FilePickerModal } from "../utils/file-picker";
         saved: false,
         parentId: row.id,
         origin: action,
+        // A local repair leaves the wording alone, so the rubric's verdict still holds.
+        verdict: local ? row.verdict : undefined,
         // A reworked question is checked again; a type-in is no longer a question.
         invalid:
           cardType === "mcq" && isQuestionShaped(action) ? mcqProblem(card) : undefined,
@@ -1828,11 +1839,15 @@ import { FilePickerModal } from "../utils/file-picker";
             ];
       selectedId = children[0].id;
       schedulePersist();
-      void runCritique(children.map((c) => c.id));
+      if (!local) void runCritique(children.map((c) => c.id));
     } catch (e) {
       genError = e instanceof Error ? e.message : String(e);
       rows = rows.map((r) => (r.id === row.id ? { ...r, fixing: false } : r));
     }
+  }
+
+  async function fixAllFormat(): Promise<void> {
+    for (const row of misformatted) await applyFix(row, "fix_format");
   }
 
   /** Undo a fix: keep the parent, drop what replaced it. A replacement already
@@ -2610,6 +2625,14 @@ import { FilePickerModal } from "../utils/file-picker";
           title={g.flaggedFilter}
           on:click={() => (flaggedOnly = !flaggedOnly)}
           >{I18n.format(g.flaggedNotice, { count: flaggedCount })}</button
+        >
+      {/if}
+      {#if misformatted.length > 0}
+        <button
+          type="button"
+          class="decks-ai-gen-flag-summary decks-ai-gen-flag-toggle"
+          on:click={() => void fixAllFormat()}
+          >{I18n.format(g.fixFormatAll, { count: misformatted.length })}</button
         >
       {/if}
       {#if skippedTotal > 0}

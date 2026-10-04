@@ -1,7 +1,7 @@
 <script lang="ts">
   // One staged card, used by both the thread and the staged panel, so the two
   // cannot drift.
-  import { I18n, INVALID_QUESTION_FIXES, checkGeneratedMcq, fixActionFor, type FixAction } from "@decks/core";
+  import { I18n, INVALID_QUESTION_FIXES, checkCardFormat, checkGeneratedMcq, fixActionFor, type FixAction } from "@decks/core";
   import BatchCardRow from "./BatchCardRow.svelte";
   import type { GenRow } from "./ai-generator-types";
 
@@ -48,6 +48,7 @@
   $: action = row.verdict
     ? fixActionFor(row.verdict.codes, isQuestion ? "mcq" : "basic")
     : null;
+  $: formatIssues = row.saved ? [] : checkCardFormat(row.card);
   // A question renders its options rather than its raw task-list body.
   $: mcq = isQuestion ? checkGeneratedMcq(row.card) : null;
 </script>
@@ -57,7 +58,7 @@
   class:is-dropped={!row.keep && !row.saved}
   class:is-saved={row.saved}
   class:is-streaming={streaming}
-  class:is-flagged={flagged || (Boolean(row.invalid) && !row.saved)}
+  class:is-flagged={flagged || (Boolean(row.invalid) && !row.saved) || formatIssues.length > 0}
   data-row-id={row.id}
 >
   <BatchCardRow
@@ -117,6 +118,18 @@
           >{row.fixing ? g.fixApplying : fixLabel(action)}</button
         >
       {/if}
+    {/if}
+    {#if formatIssues.length > 0}
+      <span class="decks-ai-gen-flag-chip"
+        >⚠ {g.formatChip}: {[...new Set(formatIssues.map((i) => g.formatIssues[i.kind]))].join(", ")}</span
+      >
+      <button
+        type="button"
+        class="decks-ai-gen-fix"
+        disabled={row.fixing}
+        on:click|stopPropagation={() => onFix("fix_format")}
+        >{row.fixing ? g.fixApplying : g.fixLabels.fix_format}</button
+      >
     {/if}
     {#if row.similarTo?.length && !row.saved}
       <span class="decks-ai-gen-flag-chip decks-ai-gen-similar-chip" title={row.similarTo.join("\n")}

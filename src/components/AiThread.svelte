@@ -1,7 +1,7 @@
 <script lang="ts">
   // The session thread: prompts and the rounds they produced, oldest first.
   // Append-only.
-  import { I18n, isKeptOverFlag, supersededIds } from "@decks/core";
+  import { I18n, checkCardFormat, isKeptOverFlag, supersededIds } from "@decks/core";
   import StagedCardRow from "./StagedCardRow.svelte";
   import BatchCardRow from "./BatchCardRow.svelte";
   import type { GenRow } from "./ai-generator-types";
@@ -76,7 +76,11 @@
   }
 
   function needsAttention(r: GenRow): boolean {
-    return r.keep && !r.saved && (r.verdict?.verdict === "flagged" || Boolean(r.invalid));
+    return (
+      r.keep &&
+      !r.saved &&
+      (r.verdict?.verdict === "flagged" || Boolean(r.invalid) || checkCardFormat(r.card).length > 0)
+    );
   }
 
   /** Under the filter, a prompt shows only when its round still has something to show. */
