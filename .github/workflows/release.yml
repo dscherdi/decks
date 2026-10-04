@@ -49,6 +49,8 @@ jobs:
             esbuild: true
             svelte-preprocess: true
             unrs-resolver: true
+          overrides:
+            '@decks/core': 'workspace:*'
           EOF
           echo '{"name":"ci-workspace","private":true}' > package.json
 

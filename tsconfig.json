@@ -16,11 +16,12 @@
         "allowSyntheticDefaultImports": true,
         "paths": {
             "@/*": ["src/*"],
-            "@decks/core": ["../../packages/decks-core/src/index.ts"]
+            "@decks/core": ["../../packages/decks-core/src/index.ts", "node_modules/@decks/core"]
         },
         "types": ["node"],
         "esModuleInterop": true,
         "resolveJsonModule": true,
+        "skipLibCheck": true,
         "verbatimModuleSyntax": true
     },
     "include": ["src/**/*.ts", "src/**/*.svelte"],
