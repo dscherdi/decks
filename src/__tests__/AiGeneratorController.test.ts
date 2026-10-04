@@ -85,7 +85,7 @@ describe("AiGeneratorController iterative batch loop", () => {
     expect(http.calls).toBe(3);
   });
 
-  it("feeds cards-so-far back as an assistant turn on later rounds", async () => {
+  it("names the cards so far as covered on later rounds", async () => {
     const http = new BatchHttp([
       sseFor([["Q1", "A1"]]),
       sseFor([["Q2", "A2"]]),
@@ -98,14 +98,13 @@ describe("AiGeneratorController iterative batch loop", () => {
 
     const round1 = JSON.parse(http.requests[0].body ?? "{}");
     const round2 = JSON.parse(http.requests[1].body ?? "{}");
-    // Round 1 has no assistant turn; round 2 carries the prior card.
-    expect(round1.messages.some((m: { role: string }) => m.role === "assistant")).toBe(
-      false,
-    );
-    const assistant = round2.messages.find(
-      (m: { role: string }) => m.role === "assistant",
-    );
-    expect(assistant?.content).toContain("Q1");
+    // Round 1 names nothing; round 2's last turn names the prior card. No assistant turn either way.
+    const last = (body: { messages: Array<{ role: string; content: string }> }) =>
+      body.messages[body.messages.length - 1];
+    expect(last(round1).content).not.toContain("Already covered");
+    expect(last(round2)).toMatchObject({ role: "user" });
+    expect(last(round2).content).toContain("Already covered — do not repeat these:\n- Q1");
+    expect(round2.messages.some((m: { role: string }) => m.role === "assistant")).toBe(false);
   });
 
   it("seeds dedup + context from existingCards without re-emitting them", async () => {
@@ -127,12 +126,9 @@ describe("AiGeneratorController iterative batch loop", () => {
     // Only the genuinely new card surfaces.
     expect(result.cards.map((c) => c.front)).toEqual(["Q2"]);
     expect(fronts).toEqual(["Q2"]);
-    // The known card was fed to the model from round 1.
+    // The known card was named to the model from round 1.
     const round1 = JSON.parse(http.requests[0].body ?? "{}");
-    const assistant = round1.messages.find(
-      (m: { role: string }) => m.role === "assistant",
-    );
-    expect(assistant?.content).toContain("Q1");
+    expect(round1.messages[round1.messages.length - 1].content).toContain("- Q1");
   });
 
   it("runs a single round by default (maxBatches omitted)", async () => {

@@ -1,7 +1,7 @@
 <script lang="ts">
   import { onMount, onDestroy, tick } from "svelte";
   import { type App, type TFile, setIcon } from "obsidian";
-  import { I18n, type AiProviderId, type AiSessionTurn, type AiStagedCard, type AnswerGap, type BlueprintSection, type ChatRequest, type ChatResult, type ChatTurn, type ConceptCard, type ConceptRow, type OverlapCard, type ExamSettings, type QuestionMix, type SourceConcept, type CardVerdict, type CritiqueCard, type GeneratedCard, type GenerateHandlers, type GenerateResult, type RefactorImage, type ThreadBlock, type GeneratedCardType, type McqProblem, EXAMS_PROFILE_ID, DEFAULT_EXAM_SETTINGS, buildConceptRows, generatedCardId, cardsForConcepts, fixInstructionFor, isQuestionShaped, type FixAction, chapterIdsForPages, checkGeneratedMcq, continuationCards, offersContinue, conceptsByPage, isCrammed, isPlannable, sectionHasNothingToLearn, sessionName, getExamDeckTag, fixActionFor, formatPageList, insertAfter, isRefinement, lastResultBlock, localRowId, nextRowCounter, ocrSentinelForTier, pruneBlocks, roundsByTurn, supersededIds, threadFromTurns, unmatchedCards, passageSource, type PassageText } from "@decks/core";
+  import { I18n, ThinkingBuffer, type GenerationStage, type AiProviderId, type AiSessionTurn, type AiStagedCard, type AnswerGap, type BlueprintSection, type ChatRequest, type ChatResult, type ChatTurn, type ConceptCard, type ConceptRow, type OverlapCard, type ExamSettings, type QuestionMix, type SourceConcept, type CardVerdict, type CritiqueCard, type GeneratedCard, type GenerateHandlers, type GenerateResult, type RefactorImage, type ThreadBlock, type GeneratedCardType, type McqProblem, EXAMS_PROFILE_ID, DEFAULT_EXAM_SETTINGS, buildConceptRows, generatedCardId, cardsForConcepts, fixInstructionFor, isQuestionShaped, type FixAction, chapterIdsForPages, checkGeneratedMcq, continuationCards, offersContinue, conceptsByPage, isCrammed, isPlannable, sectionHasNothingToLearn, sessionName, getExamDeckTag, fixActionFor, formatPageList, insertAfter, isRefinement, lastResultBlock, localRowId, nextRowCounter, ocrSentinelForTier, pruneBlocks, roundsByTurn, supersededIds, threadFromTurns, unmatchedCards, passageSource, type PassageText } from "@decks/core";
   import AiPromptComposer from "./AiPromptComposer.svelte";
   import ChapterPanel from "./ChapterPanel.svelte";
   import PdfPanel from "./PdfPanel.svelte";
@@ -21,6 +21,7 @@
   import { buildModelOptions } from "../utils/ai-model-options";
   import { openVaultPdf } from "../utils/pdf-open";
   import AiThread from "./AiThread.svelte";
+  import AiStageLine from "./AiStageLine.svelte";
   import AiStagedPanel from "./AiStagedPanel.svelte";
   import ExamDraftPanel from "./ExamDraftPanel.svelte";
   import DocInfoButton from "./DocInfoButton.svelte";
@@ -44,6 +45,7 @@ import { FilePickerModal } from "../utils/file-picker";
     hashPdf,
   } from "../utils/pdf";
   import type { OcrDebugEntry, OcrProgress, PdfOcrCache } from "@decks/core";
+  import type { PdfReading } from "../settings";
   import type { SaveFormat } from "../services/FlashcardComposer";
   import type { GeneratorSaveRequest, ProfileOpt } from "./generator-save";
   import type {
@@ -116,6 +118,7 @@ import { FilePickerModal } from "../utils/file-picker";
   export let deckTag = "#decks";
   export let renderMarkdown: (source: string, el: HTMLElement) => void;
   export let aiProvider: AiProviderId;
+  export let pdfReading: PdfReading = "auto";
   export let defaultModel = "";
   /** Remember the tier chosen here; there is no settings control for it. */
   export let onModelChange: (id: string) => void = () => {};
@@ -241,6 +244,11 @@ import { FilePickerModal } from "../utils/file-picker";
   ];
   let blockCounter = 0;
   let partial: GeneratedCard | null = null;
+  /** Where the running round is, and its thinking so far; neither outlives the round. */
+  let stage: GenerationStage | null = null;
+  let startedAt = 0;
+  let thinkingText = "";
+  const thinking = new ThinkingBuffer((text) => (thinkingText = text));
   /** The round still streaming, so its cards read as not yet settled. */
   let streamingBlockId: string | null = null;
   let selectedId: string | null = null;
@@ -1305,8 +1313,8 @@ import { FilePickerModal } from "../utils/file-picker";
     );
     if (total === 0) return "";
 
-    // OCR is the Decks Pro path; everyone else gets free text extraction.
-    const mode = aiProvider === "decks-pro" ? "ocr" : "text";
+    // Transcription is the hosted path; everyone else gets free text extraction.
+    const mode = aiProvider !== "decks-pro" ? "text" : pdfReading === "transcribe" ? "ocr" : "auto";
     const ocrModel = ocrSentinelForTier(selectedModel);
 
     pdfProgress = { done: 0, total };
@@ -1386,12 +1394,48 @@ import { FilePickerModal } from "../utils/file-picker";
     );
   }
 
-  /** Keep every card a round produced, in one action. */
-  function keepAll(blockId: string): void {
+  /** Keep or discard every unsaved card a round produced; returns what changed. */
+  function setRoundKeep(blockId: string, keep: boolean): Map<string, boolean> {
+    const before = new Map<string, boolean>();
     const block = blocks.find((b) => b.id === blockId);
-    if (!block || block.kind !== "result") return;
+    if (!block || block.kind !== "result") return before;
     const ids = new Set(block.rowIds);
-    rows = rows.map((r) => (ids.has(r.id) && !r.saved ? { ...r, keep: true } : r));
+    rows = rows.map((r) => {
+      if (!ids.has(r.id) || r.saved || r.keep === keep) return r;
+      before.set(r.id, r.keep);
+      return { ...r, keep };
+    });
+    schedulePersist();
+    return before;
+  }
+
+  function keepAll(blockId: string): void {
+    setRoundKeep(blockId, true);
+    undoRound = null;
+  }
+
+  /** A round's last discard, which its header offers to undo for a few seconds. */
+  let undoRound: { blockId: string; before: Map<string, boolean> } | null = null;
+  let undoTimer: ReturnType<typeof setTimeout> | undefined;
+  const UNDO_MS = 8_000;
+
+  function discardAll(blockId: string): void {
+    const before = setRoundKeep(blockId, false);
+    if (before.size === 0) return;
+    undoRound = { blockId, before };
+    clearTimeout(undoTimer);
+    undoTimer = setTimeout(() => (undoRound = null), UNDO_MS);
+  }
+
+  function undoDiscard(): void {
+    const before = undoRound?.before;
+    if (!before) return;
+    rows = rows.map((r) => {
+      const keep = before.get(r.id);
+      return keep === undefined || r.saved ? r : { ...r, keep };
+    });
+    undoRound = null;
+    clearTimeout(undoTimer);
     schedulePersist();
   }
 
@@ -1794,6 +1838,9 @@ import { FilePickerModal } from "../utils/file-picker";
       ocrDebug = [];
     }
     phase = "streaming";
+    stage = null;
+    startedAt = Date.now();
+    thinking.reset();
     abortController = new AbortController();
 
     // Resolve any attached PDF into source text first (OCR'ing scanned pages),
@@ -1861,6 +1908,8 @@ import { FilePickerModal } from "../utils/file-picker";
       onPartial: (card) => {
         partial = card;
       },
+      onStage: (next) => (stage = next),
+      onReasoning: (text) => thinking.push(text),
     };
     try {
       const result = await generate(
@@ -1890,6 +1939,7 @@ import { FilePickerModal } from "../utils/file-picker";
       genError = msg.trim() ? msg : g.generateFailed;
     } finally {
       partial = null;
+      stage = null;
       streamingBlockId = null;
       phase = rows.length > 0 ? "review" : "idle";
     }
@@ -2344,6 +2394,9 @@ import { FilePickerModal } from "../utils/file-picker";
         onFix={(row, action) => void applyFix(row, action)}
         onUndo={undoFix}
         onKeepAll={keepAll}
+        onDiscardAll={discardAll}
+        undoable={undoRound ? { blockId: undoRound.blockId, count: undoRound.before.size } : null}
+        onUndoDiscard={undoDiscard}
         onAnswerToCard={answerToCard}
         onAnswerGaps={generateForAnswerGaps}
         onJumpPage={(page) => {
@@ -2352,11 +2405,8 @@ import { FilePickerModal } from "../utils/file-picker";
         }}
         canJumpPage={Boolean(activePdf)}
       >
-        {#if phase === "streaming" && rows.length === 0 && !partial && !pdfProgress}
-          <div class="decks-ai-gen-loading">
-            <span class="decks-ai-gen-spinner" aria-hidden="true"></span>
-            <span>{g.generating}</span>
-          </div>
+        {#if phase === "streaming" && !pdfProgress}
+          <AiStageLine {stage} {startedAt} thinking={thinkingText} onStop={interrupt} />
         {/if}
         {#if rows.length === 0 && !partial && phase !== "streaming"}
           <div class="decks-ai-gen-note">{g.noCards}</div>
@@ -2938,27 +2988,6 @@ import { FilePickerModal } from "../utils/file-picker";
     color: var(--text-muted);
   }
 
-  .decks-ai-gen-loading {
-    display: flex;
-    align-items: center;
-    gap: 8px;
-    color: var(--text-muted);
-    font-size: 13px;
-    padding: 12px 4px;
-  }
-  .decks-ai-gen-spinner {
-    width: 14px;
-    height: 14px;
-    border: 2px solid var(--background-modifier-border);
-    border-top-color: var(--interactive-accent);
-    border-radius: 50%;
-    animation: decks-ai-gen-spin 0.7s linear infinite;
-  }
-  @keyframes decks-ai-gen-spin {
-    to {
-      transform: rotate(360deg);
-    }
-  }
   .decks-ai-gen-note {
     color: var(--text-muted);
     font-size: 13px;

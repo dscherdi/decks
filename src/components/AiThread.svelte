@@ -27,6 +27,10 @@
   export let onFix: (row: GenRow, action?: FixAction) => void = () => {};
   export let onUndo: (row: GenRow) => void = () => {};
   export let onKeepAll: (blockId: string) => void = () => {};
+  export let onDiscardAll: (blockId: string) => void = () => {};
+  /** The round whose discard can still be undone, and how many it discarded. */
+  export let undoable: { blockId: string; count: number } | null = null;
+  export let onUndoDiscard: () => void = () => {};
   /** Turn an answer into a staged card. Absent when chat is unavailable. */
   export let onAnswerToCard: (blockId: string) => void = () => {};
   /** Aim a round at the gaps an answer named. */
@@ -188,9 +192,21 @@
                 on:click={() => (expanded = { ...expanded, [block.id]: collapsed })}
                 >{collapsed ? g.threadShowOriginals : g.threadHideOriginals}</button
               >
-            {:else}
-              <button type="button" on:click={() => onKeepAll(block.id)}
-                >{g.threadKeepAll}</button
+            {:else if undoable?.blockId === block.id}
+              <span class="decks-ai-block-rubric"
+                >{I18n.format(g.threadDiscarded, { count: undoable.count })}</span
+              >
+              <button type="button" on:click={onUndoDiscard}>{g.threadUndoDiscard}</button>
+            {:else if items.some((r) => !r.saved)}
+              <button
+                type="button"
+                disabled={!items.some((r) => !r.keep && !r.saved)}
+                on:click={() => onKeepAll(block.id)}>{g.threadKeepAll}</button
+              >
+              <button
+                type="button"
+                disabled={!items.some((r) => r.keep && !r.saved)}
+                on:click={() => onDiscardAll(block.id)}>{g.threadDiscardAll}</button
               >
             {/if}
           </div>

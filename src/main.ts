@@ -1838,6 +1838,7 @@ export default class DecksPlugin extends Plugin {
       deckTag: this.settings.parsing.deckTag,
       aiProvider: this.settings.ai.provider,
       defaultModel: this.aiDefaultModel(),
+      pdfReading: this.settings.ai.pdfReading,
       onModelChange: (id: string) => void this.setAiModel(id),
       keepSourcePdf: (hash: string, bytes: ArrayBuffer) => this.aiSourcePdfs.keep(hash, bytes),
       readSourcePdf: (hash: string) => this.aiSourcePdfs.read(hash),

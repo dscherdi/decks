@@ -1,5 +1,5 @@
 import { requestUrl } from "obsidian";
-import type { HttpClient, HttpRequest, HttpResponse } from "@decks/core";
+import { HttpStatusError, type HttpClient, type HttpRequest, type HttpResponse } from "@decks/core";
 
 /**
  * HttpClient backed by Obsidian's `requestUrl`, which bypasses browser CORS so
@@ -37,7 +37,7 @@ export class ObsidianHttpClient implements HttpClient {
     });
     if (!res.ok) {
       const text = await res.text().catch(() => "");
-      throw new Error(`Provider returned ${res.status}: ${text.slice(0, 300)}`);
+      throw new HttpStatusError(res.status, text);
     }
     if (!res.body) {
       throw new Error("Streaming response had no body");

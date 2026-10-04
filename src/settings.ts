@@ -20,6 +20,9 @@ export type DeckListSortMode =
 // Deck list layout: the nested folder tree or a flat list (sections kept).
 export type DeckListView = "tree" | "flat";
 
+/** How the hosted provider reads an attached PDF. */
+export type PdfReading = "auto" | "transcribe";
+
 export interface DecksSettings {
   // Review Session Settings
   review: {
@@ -134,6 +137,8 @@ export interface DecksSettings {
     // default while preserving genuine custom entries.
     customModel: Partial<Record<AiProviderId, boolean>>;
     localBaseUrl: string; // for the openai-compatible provider
+    // "auto" reads a PDF page's text layer where it is clean and transcribes the rest.
+    pdfReading: PdfReading;
     // Development overrides for the hosted provider. Blank uses the defaults
     // baked into core; set them to run against a local site/worker.
     proBaseUrl: string;
@@ -241,6 +246,7 @@ export const DEFAULT_SETTINGS: DecksSettings = {
     },
     customModel: {},
     localBaseUrl: "http://localhost:11434/v1",
+    pdfReading: "auto",
     proBaseUrl: "",
     proSiteUrl: "",
     deviceId: "",

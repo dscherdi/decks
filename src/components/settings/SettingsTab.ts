@@ -275,6 +275,19 @@ export class DecksSettingTab extends PluginSettingTab {
     // Decks Pro authenticates by signing in; the other providers take an API key.
     const isPro = provider === "decks-pro";
     if (isPro) {
+      new Setting(containerEl)
+        .setName(s.pdfReading)
+        .setDesc(s.pdfReadingDesc)
+        .addDropdown((dd) =>
+          dd
+            .addOption("auto", s.pdfReadingAuto)
+            .addOption("transcribe", s.pdfReadingTranscribe)
+            .setValue(this.settings.ai.pdfReading)
+            .onChange(async (value) => {
+              this.settings.ai.pdfReading = value === "transcribe" ? "transcribe" : "auto";
+              await this.saveSettings();
+            })
+        );
       this.renderDecksProAccount(containerEl);
       return;
     }

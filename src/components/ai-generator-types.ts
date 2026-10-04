@@ -24,6 +24,7 @@ import type {
   SourceConcept,
   TypedGradingMode,
 } from "@decks/core";
+import type { PdfReading } from "../settings";
 import type { ChapterNode, PdfDoc } from "../utils/pdf";
 import type { GeneratorSaveRequest, ProfileOpt } from "./generator-save";
 
@@ -186,6 +187,8 @@ export interface AiGeneratorOptions {
   deckTag: string;
   aiProvider: AiProviderId;
   defaultModel: string;
+  /** How attached PDF pages are read on the hosted provider. */
+  pdfReading?: PdfReading;
   debugEnabled: boolean;
   /** Whether PDF attachment is offered (Decks Pro only for the initial rollout). */
   pdfAvailable: boolean;
