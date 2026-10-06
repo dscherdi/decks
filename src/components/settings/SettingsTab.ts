@@ -657,13 +657,14 @@ export class DecksSettingTab extends PluginSettingTab {
     const identity = new Setting(containerEl).setName(I18n.t.settings.cardIdentity);
     void this.plugin
       .cardIdentityPending()
-      .then((pending) =>
+      // A block body: returning the Setting, which has its own `then`, would hang the promise chain.
+      .then((pending) => {
         identity.setDesc(
           pending === 0
             ? I18n.t.settings.cardIdentityUpToDate
             : I18n.format(I18n.t.settings.cardIdentityPending, { count: pending })
-        )
-      )
+        );
+      })
       .catch((error: unknown) => console.debug("Card identity status unavailable", error));
 
     new Setting(containerEl)
