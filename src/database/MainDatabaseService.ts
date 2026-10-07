@@ -20,6 +20,7 @@ import {
   unpackDpkg,
   yieldToUI,
 } from "@decks/core";
+import { materialiseChangedAnything } from "@decks/core";
 import type { DpkgImportResult, MaterialiseAllResult } from "@decks/core";
 
 // Schema version at which card IDs became deck-independent.
@@ -1279,7 +1280,7 @@ export class MainDatabaseService extends BaseDatabaseService {
     if (!this.db) return Promise.reject(new Error("Database not initialized"));
     ensureDirectoryTables(this.db);
     const result = materialiseDirectoryDecks(this.db, new Date().toISOString());
-    if (result.materialised.length + result.dropped.length + result.reprofiled.length > 0) this.markDirty(true);
+    if (materialiseChangedAnything(result)) this.markDirty(true);
     return Promise.resolve(result);
   }
 

@@ -2,6 +2,7 @@ import type { DataAdapter } from "obsidian";
 import { recoverInterruptedWrite, writeBinaryAtomic } from "./atomic-write";
 import { BaseDatabaseService } from "./BaseDatabaseService";
 import type { QueryConfig } from "./BaseDatabaseService";
+import { materialiseChangedAnything } from "@decks/core";
 import type { DpkgImportResult, MaterialiseAllResult, SqlJsValue, SyncData, SyncResult } from "@decks/core";
 import type { DatabaseWorkerMessage } from "../workers/worker-entry";
 import { ProgressTracker } from "../utils/progress";
@@ -466,7 +467,7 @@ export class WorkerDatabaseService extends BaseDatabaseService {
     const result = (await this.sendMessage("materialiseDirectoryDecks", {
       now: new Date().toISOString(),
     })) as MaterialiseAllResult;
-    if (result.materialised.length + result.dropped.length + result.reprofiled.length > 0) this.markDirty(true);
+    if (materialiseChangedAnything(result)) this.markDirty(true);
     return result;
   }
 

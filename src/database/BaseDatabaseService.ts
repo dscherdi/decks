@@ -32,7 +32,7 @@ import type { FilterDefinition } from "./types";
 import { generateCustomDeckCardId, generateCustomDeckId, generateFlashcardId, reviewCardDaysSQL, SQL_QUERIES, type SyncOpV1 } from "@decks/core";
 import { aiConceptId, aiSessionValues, aiStagedCardValues, applyRowPatch, isCrammed } from "@decks/core";
 import { normalizeProfile } from "@decks/core";
-import { directoryExamDeckIds, EXAMS_PROFILE_ID, isDirectoryDeck, pickDirectoryProfile, pickProfileMapping, studyTagsFor } from "@decks/core";
+import { directoryDeckProfiles, isDirectoryDeck, livePackageProfile, pickDirectoryProfile, pickProfileMapping, studyTagsFor } from "@decks/core";
 import type { TagScopeOptions } from "@decks/core";
 
 /** Fallback when a caller has no settings to hand; matches DEFAULT_SETTINGS. */
@@ -461,6 +461,8 @@ export abstract class BaseDatabaseService implements IDatabaseService {
     await this.executeSql(TOMBSTONE_DIRECTORY_DECK_SQL, [at, at, deckId, at]);
     for (const sql of REMOVE_DIRECTORY_CONTENT_SQL) await this.executeSql(sql, [deckId]);
     this.emitSyncOp({ o: "directory_deck_remove", p: { deckId, at } });
+    // Retires the package's own profiles.
+    await this.materialiseDirectoryDecks();
     await this.save();
   }
 
@@ -1030,14 +1032,13 @@ export abstract class BaseDatabaseService implements IDatabaseService {
     const allDecks = await this.getAllDecks();
     const allMappings = await this.getAllTagMappings();
     const effectiveScope = scope ?? { baseTag: DEFAULT_BASE_TAG };
-    const examDecks = (await this.getProfileById(EXAMS_PROFILE_ID))
-      ? directoryExamDeckIds(await this.listDirectoryDecks())
-      : new Set<string>();
+    const liveProfiles = new Set((await this.getAllProfiles()).map((profile) => profile.id));
+    const packageProfiles = directoryDeckProfiles(await this.listDirectoryDecks());
     let count = 0;
 
     for (const deck of allDecks) {
       const resolvedProfileId = isDirectoryDeck(deck)
-        ? pickDirectoryProfile(allMappings, deck.tag, examDecks.has(deck.id))
+        ? pickDirectoryProfile(allMappings, deck.tag, livePackageProfile(packageProfiles, liveProfiles, deck.id))
         : pickProfileMapping(allMappings, studyTagsFor(deck, effectiveScope)) || DEFAULT_PROFILE_ID;
       if (deck.profileId === resolvedProfileId) continue;
       await this.updateDeck(deck.id, { profileId: resolvedProfileId });

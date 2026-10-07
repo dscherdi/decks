@@ -4,6 +4,7 @@ import {
   buildDirectoryCards,
   collectCardEmbeds,
   DEFAULT_EXAM_SETTINGS,
+  carriedProfiles,
   directoryMediaMime,
   isValidDirectorySlug,
   packDpkg,
@@ -131,6 +132,7 @@ export class DirectoryExporter {
     const media = new Map<string, ResolvedMedia>();
     const packaged: DirectoryDeckContent[] = [];
     const exams = new Map<string, DeckWithProfile["profile"]>();
+    const studyProfiles = new Map<string, DeckWithProfile["profile"]>();
     let skipped = 0;
     const unresolved: string[] = [];
 
@@ -147,6 +149,7 @@ export class DirectoryExporter {
       unresolved.push(...built.unresolved);
       if (built.cards.length === 0) continue;
       if (exam) exams.set(key, deck.profile);
+      studyProfiles.set(key, deck.profile);
       packaged.push({ key, name: title, fileTags: deck.fileTags ?? [], cards: built.cards });
     }
     if (packaged.length === 0) throw new Error("The decks have no cards a package can carry");
@@ -156,7 +159,17 @@ export class DirectoryExporter {
       packaged[0] = { ...only, key: "" };
       const profile = exams.get(only.key);
       if (profile) exams.set("", profile);
+      const studyProfile = studyProfiles.get(only.key);
+      if (studyProfile) studyProfiles.set("", studyProfile);
     }
+
+    // Each deck studies with its profile's settings, so the package carries them.
+    const carried = carriedProfiles(
+      packaged.flatMap((deck) => {
+        const profile = studyProfiles.get(deck.key);
+        return profile ? [{ key: deck.key, profile }] : [];
+      })
+    );
 
     const all = packaged.flatMap((deck) => deck.cards);
     const seen = new Set<string>();
@@ -203,8 +216,10 @@ export class DirectoryExporter {
             title: deck.key === "" ? details.title : deck.name,
             cardCount: deck.cards.length,
             exam: profile ? (profile.examSettings ?? DEFAULT_EXAM_SETTINGS) : null,
+            profile: carried.byDeck.get(deck.key) ?? null,
           };
         }),
+        profiles: carried.profiles,
       },
       deckDb: deckDbBytes,
       // The website reads the cards from here, each with the deck it belongs to.

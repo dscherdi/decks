@@ -37,8 +37,9 @@ export async function launchExamForSelection(
   ) => void
 ): Promise<void> {
   try {
-    const cards = await gatherCards(selection);
     const examDeckIds = new Set(await ctx.db.getExamEnabledDeckIds());
+    // Only exam decks hold questions, so the rest of a selection is neither drawn nor counted as skipped.
+    const cards = (await gatherCards(selection)).filter((card) => examDeckIds.has(card.deckId));
     const examEnabledByDeckId = new Map<string, boolean>();
     for (const card of cards) {
       examEnabledByDeckId.set(card.deckId, examDeckIds.has(card.deckId));

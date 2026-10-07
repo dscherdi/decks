@@ -21,8 +21,9 @@
     directoryDeckKeyFromPath,
     directoryPackageIdFromPath,
     directoryPackageSlugOfNode,
+    packageExamDeckId,
   } from "@decks/core";
-  import type { DeckTree, TreeNode, FlatRow } from "@decks/core";
+  import type { DeckTree, DirectoryDeckRecord, TreeNode, FlatRow } from "@decks/core";
 
   import ReviewHeatmap from "./statistics/ReviewHeatmap.svelte";
   import DocInfoButton from "./DocInfoButton.svelte";
@@ -441,7 +442,8 @@
     });
   }
 
-  // Installed package titles by slug, naming the folder of a package with several decks.
+  // Installed packages; their titles by slug name the folder of a package with several decks.
+  let directoryRecords: DirectoryDeckRecord[] = [];
   let directoryTitles = new Map<string, string>();
 
   $: tree = buildTree(
@@ -591,7 +593,10 @@
     allDecks = newDecks;
     if (newDecks.some((deck) => isDirectoryDeckPath(deck.filepath))) {
       db.listDirectoryDecks()
-        .then((records) => (directoryTitles = new Map(records.map((record) => [record.slug, record.title]))))
+        .then((records) => {
+          directoryRecords = records;
+          directoryTitles = new Map(records.map((record) => [record.slug, record.title]));
+        })
         .catch(console.error);
     }
 
@@ -1351,7 +1356,11 @@
     if (packageSlug) {
       const hasExam = allDecks.some((deck) => node.deckIds.includes(deck.id) && deck.profile.examEnabled === true);
       if (hasExam && onExamDeckGroup) {
-        dropdown.appendChild(buildDropdownOption(t.exam.startExam, () => onExamDeckGroup?.(group)));
+        // The exam starts from the package's own exam settings, as on the website.
+        const examDeckId = packageExamDeckId(directoryRecords, packageSlug);
+        const examProfile = allDecks.find((deck) => deck.id === examDeckId)?.profile;
+        const examGroup = examProfile ? { ...group, profile: examProfile } : group;
+        dropdown.appendChild(buildDropdownOption(t.exam.startExam, () => onExamDeckGroup?.(examGroup)));
       }
       const removeOption = buildDropdownOption(t.directory.removeAction, () =>
         confirmRemoveDirectoryPackage(directoryDeckId(packageSlug), node.name),

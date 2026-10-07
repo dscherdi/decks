@@ -5,7 +5,7 @@ import {
   generateContentHash,
   DEFAULT_EXAM_SETTINGS,
   DEFAULT_PROFILE_ID,
-  EXAMS_PROFILE_ID,
+  directoryProfileId,
   packDpkg,
   writeDpkgDeckDb,
   type DirectoryCardContent,
@@ -161,30 +161,43 @@ describe("directory decks in the plugin database", () => {
     expect(await db.getFlashcardsByDeck(exam)).toEqual([]);
   });
 
-  it("keeps an exam deck on the Exams preset when another tag is mapped, and follows its own mapping", async () => {
+  it("keeps package decks on their own profiles when another tag is mapped, and follows a mapping on the package", async () => {
     const question: DirectoryCardContent = {
       ...card("qcard_gas", "Which element is a noble gas?", "- [ ] Oxygen\n- [x] Argon"),
       type: "multiple-choice",
     };
+    const settings = { ...DEFAULT_EXAM_SETTINGS, questionCount: 1, passScorePct: 70 };
     await db.importDirectoryPackage(
       await buildPackage(null, CARDS, [
         { key: "capitals", name: "Capitals", cards: CARDS, exam: null },
-        { key: "exam", name: "Exam", cards: [question], exam: DEFAULT_EXAM_SETTINGS },
+        { key: "exam", name: "Exam", cards: [question], exam: settings },
       ])
     );
     const ids = [directoryDeckId(SLUG, "capitals"), directoryDeckId(SLUG, "exam")];
+    const own = [directoryProfileId(SLUG, "preset:study"), directoryProfileId(SLUG, "preset:exam:exam")];
     const profiles = async () => Promise.all(ids.map(async (id) => (await db.getDeckById(id))?.profileId));
-    const other = (await db.getAllProfiles()).find((p) => p.id !== DEFAULT_PROFILE_ID && p.id !== EXAMS_PROFILE_ID)?.id ?? "";
+    const other =
+      (await db.getAllProfiles()).find((p) => p.id !== DEFAULT_PROFILE_ID && !own.includes(p.id))?.id ?? "";
+    expect(await profiles()).toEqual(own);
+    expect((await db.getProfileById(own[1]))?.examSettings).toEqual(settings);
 
     await db.applyProfileToTag(other, "#decks/elsewhere");
-    expect(await profiles()).toEqual([DEFAULT_PROFILE_ID, EXAMS_PROFILE_ID]);
+    expect(await profiles()).toEqual(own);
     expect(await db.getExamEnabledDeckIds()).toEqual([ids[1]]);
 
     await db.applyProfileToTag(other, `#directory/${SLUG}`);
     expect(await profiles()).toEqual([other, other]);
 
     await db.applyProfileToTag(DEFAULT_PROFILE_ID, `#directory/${SLUG}`);
-    expect(await profiles()).toEqual([DEFAULT_PROFILE_ID, EXAMS_PROFILE_ID]);
+    expect(await profiles()).toEqual(own);
+  });
+
+  it("removes the package's own profiles with it", async () => {
+    await db.importDirectoryPackage(await buildPackage(null, CARDS));
+    const own = directoryProfileId(SLUG, "preset:study");
+    expect((await db.getProfileById(own))?.name).toBe("World capitals");
+    await db.removeDirectoryDeck(DECK);
+    expect(await db.getProfileById(own)).toBeNull();
   });
 
   it("is a no-op to rebuild when nothing changed", async () => {
