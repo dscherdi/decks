@@ -32,7 +32,7 @@ import type { FilterDefinition } from "./types";
 import { generateCustomDeckCardId, generateCustomDeckId, generateFlashcardId, reviewCardDaysSQL, SQL_QUERIES, type SyncOpV1 } from "@decks/core";
 import { aiConceptId, aiSessionValues, aiStagedCardValues, applyRowPatch, isCrammed } from "@decks/core";
 import { normalizeProfile } from "@decks/core";
-import { pickProfileMapping, studyTagsFor } from "@decks/core";
+import { directoryExamDeckIds, EXAMS_PROFILE_ID, isDirectoryDeck, pickDirectoryProfile, pickProfileMapping, studyTagsFor } from "@decks/core";
 import type { TagScopeOptions } from "@decks/core";
 
 /** Fallback when a caller has no settings to hand; matches DEFAULT_SETTINGS. */
@@ -1030,11 +1030,15 @@ export abstract class BaseDatabaseService implements IDatabaseService {
     const allDecks = await this.getAllDecks();
     const allMappings = await this.getAllTagMappings();
     const effectiveScope = scope ?? { baseTag: DEFAULT_BASE_TAG };
+    const examDecks = (await this.getProfileById(EXAMS_PROFILE_ID))
+      ? directoryExamDeckIds(await this.listDirectoryDecks())
+      : new Set<string>();
     let count = 0;
 
     for (const deck of allDecks) {
-      const resolvedProfileId =
-        pickProfileMapping(allMappings, studyTagsFor(deck, effectiveScope)) || DEFAULT_PROFILE_ID;
+      const resolvedProfileId = isDirectoryDeck(deck)
+        ? pickDirectoryProfile(allMappings, deck.tag, examDecks.has(deck.id))
+        : pickProfileMapping(allMappings, studyTagsFor(deck, effectiveScope)) || DEFAULT_PROFILE_ID;
       if (deck.profileId === resolvedProfileId) continue;
       await this.updateDeck(deck.id, { profileId: resolvedProfileId });
       // The new profile may have a different headerLevel / clozeEnabled, so the
