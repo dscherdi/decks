@@ -1,6 +1,7 @@
 import {
   Plugin,
   TFile,
+  TFolder,
   WorkspaceLeaf,
   Notice,
   TAbstractFile,
@@ -27,6 +28,7 @@ import {
   isDirectoryDeckPath,
   parseDirectoryImportRequest,
   slugifyDirectoryTitle,
+  type DeckWithProfile,
   type DpkgContents,
 } from "@decks/core";
 import { renderHtmlIntoShadow } from "./utils/html-template-render";
@@ -729,6 +731,15 @@ export default class DecksPlugin extends Plugin {
 
       this.registerEvent(
         this.app.workspace.on("file-menu", (menu, file) => {
+          if (file instanceof TFolder) {
+            menu.addItem((item) =>
+              item
+                .setTitle(I18n.t.directory.exportFolderMenu)
+                .setIcon("package")
+                .onClick(() => void this.openDirectoryFolderExport(file))
+            );
+            return;
+          }
           if (!(file instanceof TFile) || file.extension !== "md") return;
           menu.addItem((item) =>
             item
@@ -2097,16 +2108,32 @@ export default class DecksPlugin extends Plugin {
   }
 
   private async openDirectoryExport(path: string): Promise<void> {
-    const t = I18n.t.directory;
     const found = await this.db.getDeckByFilepath(path);
     const deck = found ? await this.db.getDeckWithProfile(found.id) : null;
     if (!deck) {
-      new Notice(t.notADeck);
+      new Notice(I18n.t.directory.notADeck);
       return;
     }
+    this.openDirectoryExportFor(path, deck.name, [deck]);
+  }
+
+  /** Every deck in the folder, nested ones included, becomes one deck of the package. */
+  private async openDirectoryFolderExport(folder: TFolder): Promise<void> {
+    const prefix = folder.isRoot() ? "" : `${folder.path}/`;
+    const decks = (await this.db.getAllDecksWithProfiles())
+      .filter((deck) => !isDirectoryDeckPath(deck.filepath) && deck.filepath.startsWith(prefix))
+      .sort((a, b) => a.filepath.localeCompare(b.filepath));
+    if (decks.length === 0) {
+      new Notice(I18n.t.directory.noDecksInFolder);
+      return;
+    }
+    this.openDirectoryExportFor(folder.path, folder.isRoot() ? this.app.vault.getName() : folder.name, decks);
+  }
+
+  private openDirectoryExportFor(path: string, title: string, decks: DeckWithProfile[]): void {
     const initial: DirectoryExportDetails = this.settings.directoryExports[path] ?? {
-      slug: slugifyDirectoryTitle(deck.name),
-      title: deck.name,
+      slug: slugifyDirectoryTitle(title),
+      title,
       description: "",
       language: "",
       subject: "",
@@ -2114,7 +2141,7 @@ export default class DecksPlugin extends Plugin {
       license: "",
     };
     const exporter = new DirectoryExporter(this.app, this.db, `decks-plugin/${this.manifest.version}`);
-    new DirectoryExportModal(this.app, deck, exporter, initial, (details, output) =>
+    new DirectoryExportModal(this.app, decks, exporter, initial, (details, output) =>
       this.saveDirectoryExport(path, details, output)
     ).open();
   }

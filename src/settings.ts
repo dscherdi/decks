@@ -24,11 +24,16 @@ export type DeckListView = "tree" | "flat";
 /** How the hosted provider reads an attached PDF. */
 export type PdfReading = "auto" | "transcribe";
 
-/** What the author fills in when exporting a deck as a .dpkg package. */
+/** What the author fills in when exporting a deck, or a folder of decks, as a .dpkg package. */
 export type DirectoryExportDetails = Pick<
   DpkgManifestDraft,
   "slug" | "title" | "description" | "language" | "subject" | "version" | "license"
->;
+> & {
+  /** Each note's deck key, by note path; kept once given, as installed progress follows it. */
+  deckKeys?: Record<string, string>;
+  /** Note paths in the order the package lists its decks. */
+  deckOrder?: string[];
+};
 
 export interface DecksSettings {
   // Review Session Settings

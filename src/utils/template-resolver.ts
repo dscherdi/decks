@@ -1,4 +1,4 @@
-import { isDirectoryDeckPath, resolveCardTemplate, type ResolvedRender } from "@decks/core";
+import { directoryPackageIdFromPath, isDirectoryDeckPath, resolveCardTemplate, type ResolvedRender } from "@decks/core";
 import type { DeckTemplate, Flashcard } from "../database/types";
 import type { IDatabaseService } from "../database/DatabaseFactory";
 
@@ -43,8 +43,9 @@ export function makeTemplateResolver(
   cache: TemplateCache
 ): (card: Flashcard) => ResolvedRender | null {
   return (card: Flashcard) => {
+    // A package's templates serve every one of its decks.
     const templates = isDirectoryDeckPath(card.sourceFile)
-      ? cache.directoryTemplatesByDeck.get(card.deckId) ?? []
+      ? cache.directoryTemplatesByDeck.get(directoryPackageIdFromPath(card.sourceFile) ?? "") ?? []
       : cache.templates;
     if (templates.length === 0) return null;
     return resolveCardTemplate(

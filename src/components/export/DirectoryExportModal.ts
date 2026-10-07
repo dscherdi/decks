@@ -1,24 +1,38 @@
 import { Modal, Notice, Setting, type App } from "obsidian";
 import { I18n, isValidDirectorySlug, type DeckWithProfile } from "@decks/core";
-import type { DirectoryExporter, DirectoryExportOutput } from "../../services/DirectoryExporter";
+import {
+  planExportDecks,
+  type DirectoryExporter,
+  type DirectoryExportOutput,
+  type DirectoryExportPlan,
+} from "../../services/DirectoryExporter";
 import type { DirectoryExportDetails } from "../../settings";
 import { makeModalResponsive, type ResponsiveModalHandle } from "../../utils/responsive-modal";
 
-/** Collects a package's details, then builds it from the deck. */
+/** Collects a package's details, then builds it from one deck or from every deck of a folder. */
 export class DirectoryExportModal extends Modal {
   private handle: ResponsiveModalHandle | null = null;
   private details: DirectoryExportDetails;
+  private decks: DeckWithProfile[];
+  private plan: DirectoryExportPlan | null = null;
   private busy = false;
 
   constructor(
     app: App,
-    private deck: DeckWithProfile,
+    decks: DeckWithProfile[],
     private exporter: DirectoryExporter,
     initial: DirectoryExportDetails,
     private onExported: (details: DirectoryExportDetails, output: DirectoryExportOutput) => Promise<void>
   ) {
     super(app);
     this.details = { ...initial };
+    // A remembered order comes first; decks it does not know follow in their own order.
+    const order = initial.deckOrder ?? [];
+    const rank = (deck: DeckWithProfile): number => {
+      const index = order.indexOf(deck.filepath);
+      return index < 0 ? order.length : index;
+    };
+    this.decks = [...decks].sort((a, b) => rank(a) - rank(b));
   }
 
   onOpen(): void {
@@ -33,22 +47,55 @@ export class DirectoryExportModal extends Modal {
     this.contentEl.empty();
   }
 
+  private move(index: number, by: number): void {
+    const target = index + by;
+    if (target < 0 || target >= this.decks.length) return;
+    const next = [...this.decks];
+    [next[index], next[target]] = [next[target], next[index]];
+    this.decks = next;
+    this.render().catch(console.error);
+  }
+
   private async render(): Promise<void> {
     const t = I18n.t.directory;
     const { contentEl } = this;
+    this.plan ??= await this.exporter.plan(this.decks, this.details);
     contentEl.empty();
 
-    const plan = await this.exporter.plan(this.deck);
     contentEl.createEl("p", {
-      text: I18n.format(t.exportSummary, { cards: plan.cards.length, media: plan.mediaCount }),
+      text: I18n.format(t.exportSummary, { cards: this.plan.cardCount, media: this.plan.mediaCount }),
     });
-    if (plan.missingMedia.length > 0) {
+    if (this.plan.missingMedia.length > 0) {
       contentEl.createEl("p", {
         cls: "decks-directory-export-warning",
         text: I18n.format(t.exportMissing, {
-          count: plan.missingMedia.length,
-          list: plan.missingMedia.slice(0, 5).join(", "),
+          count: this.plan.missingMedia.length,
+          list: this.plan.missingMedia.slice(0, 5).join(", "),
         }),
+      });
+    }
+
+    if (this.decks.length > 1) {
+      new Setting(contentEl).setName(t.exportDecksName).setDesc(t.exportDecksDesc).setHeading();
+      planExportDecks(this.decks, this.details.deckKeys).forEach(({ deck, key, title }, index) => {
+        const exam = deck.profile.examEnabled === true ? ` · ${I18n.t.views.exam}` : "";
+        new Setting(contentEl)
+          .setName(title)
+          .setDesc(`${key}${exam}`)
+          .addExtraButton((button) =>
+            button
+              .setIcon("arrow-up")
+              .setTooltip(t.moveUp)
+              .setDisabled(index === 0)
+              .onClick(() => this.move(index, -1))
+          )
+          .addExtraButton((button) =>
+            button
+              .setIcon("arrow-down")
+              .setTooltip(t.moveDown)
+              .setDisabled(index === this.decks.length - 1)
+              .onClick(() => this.move(index, 1))
+          );
       });
     }
 
@@ -105,8 +152,15 @@ export class DirectoryExportModal extends Modal {
     }
     this.busy = true;
     try {
-      const output = await this.exporter.export(this.deck, this.details);
-      await this.onExported(this.details, output);
+      const output = await this.exporter.export(this.decks, this.details);
+      await this.onExported(
+        {
+          ...this.details,
+          deckKeys: { ...this.details.deckKeys, ...output.deckKeys },
+          deckOrder: this.decks.map((deck) => deck.filepath),
+        },
+        output
+      );
       this.close();
     } catch (error) {
       new Notice(I18n.format(t.exportFailed, { error: error instanceof Error ? error.message : String(error) }));

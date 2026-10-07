@@ -35,9 +35,18 @@ function card(ownerId: string, front: string, back: string): DirectoryCardConten
 
 const CARDS = [card("card_fr", "France", "Paris"), card("card_de", "Germany", "Berlin")];
 
+interface PackagedDeck {
+  key: string;
+  name: string;
+  cards: DirectoryCardContent[];
+  exam: ExamSettings | null;
+}
+
+/** One deck by default; a package of several when given them. */
 async function buildPackage(
   exam: ExamSettings | null = null,
-  cards: DirectoryCardContent[] = CARDS
+  cards: DirectoryCardContent[] = CARDS,
+  decks: PackagedDeck[] = [{ key: "", name: "World capitals", cards, exam }]
 ): Promise<Uint8Array> {
   const SQL = await initSqlJs();
   const deckDb = new SQL.Database();
@@ -45,9 +54,7 @@ async function buildPackage(
     deckDb,
     SLUG,
     {
-      name: "World capitals",
-      fileTags: [],
-      cards,
+      decks: decks.map((deck) => ({ key: deck.key, name: deck.name, fileTags: [], cards: deck.cards })),
       templates: [
         {
           id: "t1",
@@ -78,11 +85,11 @@ async function buildPackage(
       subject: "geography",
       tags: [],
       license: "personal-use",
-      cardCount: cards.length,
+      cardCount: decks.reduce((sum, deck) => sum + deck.cards.length, 0),
       typeCounts: {},
       createdAt: "2026-10-01T00:00:00.000Z",
       generator: "test",
-      exam,
+      decks: decks.map((deck) => ({ key: deck.key, title: deck.name, cardCount: deck.cards.length, exam: deck.exam })),
     },
     deckDb: bytes,
     cardsJson: "[]",
@@ -124,6 +131,32 @@ describe("directory decks in the plugin database", () => {
     expect(await db.getExamEnabledDeckIds()).toContain(DECK);
     const stored = (await db.getFlashcardsByDeck(DECK)).find((c) => c.id === question.id);
     expect(stored?.type).toBe("multiple-choice");
+  });
+
+  it("installs a package of several decks, offers its exam deck, and removes them together", async () => {
+    const question: DirectoryCardContent = {
+      ...card("qcard_gas", "Which element is a noble gas?", "- [ ] Oxygen\n- [x] Argon"),
+      type: "multiple-choice",
+    };
+    const result = await db.importDirectoryPackage(
+      await buildPackage(null, CARDS, [
+        { key: "capitals", name: "Capitals", cards: CARDS, exam: null },
+        { key: "exam", name: "Exam", cards: [question], exam: DEFAULT_EXAM_SETTINGS },
+      ])
+    );
+    const capitals = directoryDeckId(SLUG, "capitals");
+    const exam = directoryDeckId(SLUG, "exam");
+
+    expect(result.deckId).toBe(DECK);
+    const installed = (await db.getAllDecks()).filter((d) => d.filepath.startsWith(`decks-directory:${SLUG}`));
+    expect(installed.map((d) => [d.id, d.name]).sort()).toEqual([[capitals, "Capitals"], [exam, "Exam"]].sort());
+    expect(await db.getExamEnabledDeckIds()).toEqual([exam]);
+    expect((await db.getFlashcardsByDeck(capitals)).map((c) => c.id).sort()).toEqual(CARDS.map((c) => c.id).sort());
+    expect((await db.getDirectoryTemplates(DECK)).map((t) => t.tags)).toEqual([["geo"]]);
+
+    await db.removeDirectoryDeck(DECK);
+    expect((await db.getAllDecks()).filter((d) => d.filepath.startsWith("decks-directory:"))).toEqual([]);
+    expect(await db.getFlashcardsByDeck(exam)).toEqual([]);
   });
 
   it("is a no-op to rebuild when nothing changed", async () => {

@@ -17,6 +17,10 @@
     I18n,
     DEFAULT_DECK_PROFILE,
     isDirectoryDeckPath,
+    directoryDeckId,
+    directoryDeckKeyFromPath,
+    directoryPackageIdFromPath,
+    directoryPackageSlugOfNode,
   } from "@decks/core";
   import type { DeckTree, TreeNode, FlatRow } from "@decks/core";
 
@@ -422,6 +426,7 @@
     pins: Set<string>,
     minCount: number,
     view: DeckListView,
+    titles: Map<string, string>,
   ): DeckTree {
     const getStats = (id: string) => fileStats.get(id) ?? customStats.get(id);
     return buildDeckTree({
@@ -432,8 +437,12 @@
       pinnedIds: pins,
       minDeckCardCount: minCount,
       flat: view === "flat",
+      directoryTitles: titles,
     });
   }
+
+  // Installed package titles by slug, naming the folder of a package with several decks.
+  let directoryTitles = new Map<string, string>();
 
   $: tree = buildTree(
     allDecks,
@@ -444,6 +453,7 @@
     pinnedIds,
     minDeckCardCount,
     deckListView,
+    directoryTitles,
   );
   $: filtering = filterText.trim().length > 0;
   // Leaving a search discards any transient folds made during it.
@@ -521,6 +531,7 @@
       return { lucide: "folder-tree" };
     }
     if (node.kind === "folder") {
+      if (directoryPackageSlugOfNode(node)) return { lucide: "package" };
       return node.id.startsWith("tag:") ? { emoji: "🏷️" } : { lucide: "folder" };
     }
     if (node.group) return { emoji: "🏷️" };
@@ -578,6 +589,11 @@
 
   export function updateDecks(newDecks: DeckWithProfile[]) {
     allDecks = newDecks;
+    if (newDecks.some((deck) => isDirectoryDeckPath(deck.filepath))) {
+      db.listDirectoryDecks()
+        .then((records) => (directoryTitles = new Map(records.map((record) => [record.slug, record.title]))))
+        .catch(console.error);
+    }
 
     // Generate deck groups asynchronously — the tree re-derives when they land.
     tagGroupService
@@ -926,13 +942,14 @@
     if (!fromDirectory) dropdown.appendChild(exportOption);
     dropdown.appendChild(configOption);
     dropdown.appendChild(resetOption);
-    if (fromDirectory) {
+    // A deck of a larger package is removed with its package, from the package's folder.
+    if (fromDirectory && directoryDeckKeyFromPath(deck.filepath) === "") {
       const removeOption = activeDocument.createElement("div");
       removeOption.className = "decks-dropdown-option decks-dropdown-option-danger";
       removeOption.textContent = t.directory.removeAction;
       removeOption.onclick = () => {
         closeActiveDropdown();
-        confirmRemoveDirectoryDeck(deck);
+        confirmRemoveDirectoryPackage(directoryPackageIdFromPath(deck.filepath) ?? deck.id, deck.name);
       };
       dropdown.appendChild(removeOption);
     }
@@ -1329,6 +1346,19 @@
     dropdown.appendChild(
       buildDropdownOption(t.deckList.exportToAnki, () => openAnkiExportForGroup(group)),
     );
+    // An installed package: its exam decks can be taken together, and it is removed as a whole.
+    const packageSlug = directoryPackageSlugOfNode(node);
+    if (packageSlug) {
+      const hasExam = allDecks.some((deck) => node.deckIds.includes(deck.id) && deck.profile.examEnabled === true);
+      if (hasExam && onExamDeckGroup) {
+        dropdown.appendChild(buildDropdownOption(t.exam.startExam, () => onExamDeckGroup?.(group)));
+      }
+      const removeOption = buildDropdownOption(t.directory.removeAction, () =>
+        confirmRemoveDirectoryPackage(directoryDeckId(packageSlug), node.name),
+      );
+      removeOption.addClass("decks-dropdown-option-danger");
+      dropdown.appendChild(removeOption);
+    }
     // Pin only applies to a real tag group — a folder id isn't in the pin space.
     if (node.group) {
       dropdown.appendChild(buildPinDropdownOption(generateDeckGroupId(node.group.tag)));
@@ -1376,17 +1406,17 @@
     modal.open();
   }
 
-  function confirmRemoveDirectoryDeck(deck: DeckWithProfile) {
+  function confirmRemoveDirectoryPackage(packageId: string, title: string) {
     new ConfirmModal(app, {
       title: t.directory.removeTitle,
-      message: I18n.format(t.directory.removeMessage, { title: deck.name }),
+      message: I18n.format(t.directory.removeMessage, { title }),
       confirmText: t.directory.removeButton,
       isDanger: true,
       onConfirm: () => {
         void db
-          .removeDirectoryDeck(deck.id)
+          .removeDirectoryDeck(packageId)
           .then(async () => {
-            new Notice(I18n.format(t.directory.removed, { title: deck.name }));
+            new Notice(I18n.format(t.directory.removed, { title }));
             await onRefresh();
           })
           .catch((error: Error) => new Notice(I18n.format(t.directory.failed, { error: error.message })));
