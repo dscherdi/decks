@@ -251,6 +251,12 @@ See **[decksmd.app/docs/exams/overview/](https://decksmd.app/docs/exams/overview
 - Anki import and export, automatic backups, multi-device merge sync.
 - Keyboard shortcuts: **Space** to flip, **1–4** to rate.
 
+## Deck directory
+
+Ready-made decks are listed at [decksmd.app/decks](https://decksmd.app/decks). **Open in Obsidian** on a deck's page adds it to the plugin's *Deck directory* section, where you can review it but not edit it. You can also add a downloaded file with **Import a Decks package (.dpkg)**, and share your own decks with **Export deck as a Decks package (.dpkg)**.
+
+**Network use and account.** Downloading from the directory needs a free DecksMD account, which you sign in to on the website, not in the plugin. When a deck link opens in Obsidian, the plugin requests the deck's public details from `decksmd.app` for the confirmation prompt, then downloads the deck with the one-time ticket from the link. If a directory deck reached this vault through sync and one of its images is missing, the plugin fetches that image from `decksmd.app` by its content hash when the card is shown. Nothing from your vault is sent. Directory decks are covered by the [deck directory terms](https://decksmd.app/legal/deck-directory).
+
 ## AI assistance (optional)
 
 Decks has optional AI features that are **off until you add an API key** in **Settings → AI**:
@@ -262,7 +268,7 @@ Decks has optional AI features that are **off until you add an API key** in **Se
 
 **Where your key lives.** Keys are stored locally in `ai-keys.json` inside the plugin folder and are **never** written to `data.json` — so they never leave your device through Obsidian Sync or any vault file-sync.
 
-**Transparency — what is sent, and when.** Nothing is sent to a provider unless you explicitly trigger an AI action. When you do, the request contains only: a built-in instruction prompt describing how Decks cards work, your typed instructions, and the relevant content for that action — the card's fields (for refactor) or your topic/prompt (for generate), plus any notes or images you chose to attach. The plugin makes no background or telemetry calls; the only network requests are the ones you start, sent directly to the provider you configured.
+**Transparency — what is sent, and when.** Nothing is sent to a provider unless you explicitly trigger an AI action. When you do, the request contains only: a built-in instruction prompt describing how Decks cards work, your typed instructions, and the relevant content for that action — the card's fields (for refactor) or your topic/prompt (for generate), plus any notes or images you chose to attach. The plugin makes no background or telemetry calls; the only AI requests are the ones you start, sent directly to the provider you configured.
 
 ![Decks AI Generator](https://raw.githubusercontent.com/dscherdi/decks/HEAD/decks_ai_generate.gif)
 
