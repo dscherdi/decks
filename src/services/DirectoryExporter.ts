@@ -10,6 +10,7 @@ import {
   sha256Hex,
   writeDpkgDeckDb,
   type DeckTemplate,
+  DEFAULT_EXAM_SETTINGS,
   type DeckWithProfile,
   type DirectoryMediaRef,
   type DpkgMediaInput,
@@ -84,7 +85,8 @@ export class DirectoryExporter {
       media.set(linkpath, { ref: { sha256: await sha256Hex(bytes), ext }, input: { bytes, ext, mime } });
     }
 
-    const built = buildDirectoryCards(details.slug, cards, (linkpath) => media.get(linkpath)?.ref ?? null);
+    const exam = deck.profile.examEnabled === true;
+    const built = buildDirectoryCards(details.slug, cards, (linkpath) => media.get(linkpath)?.ref ?? null, { exam });
     if (built.cards.length === 0) throw new Error("The deck has no cards a package can carry");
 
     const SQL = await loadSqlJsMainThread();
@@ -117,6 +119,7 @@ export class DirectoryExporter {
         typeCounts,
         createdAt: new Date().toISOString(),
         generator: this.generator,
+        exam: exam ? (deck.profile.examSettings ?? DEFAULT_EXAM_SETTINGS) : null,
       },
       deckDb: deckDbBytes,
       cardsJson: JSON.stringify(built.cards),

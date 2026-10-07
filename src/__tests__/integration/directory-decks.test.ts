@@ -3,9 +3,11 @@ import {
   deriveDirectoryCardId,
   directoryDeckId,
   generateContentHash,
+  DEFAULT_EXAM_SETTINGS,
   packDpkg,
   writeDpkgDeckDb,
   type DirectoryCardContent,
+  type ExamSettings,
 } from "@decks/core";
 import type { MainDatabaseService } from "../../database/MainDatabaseService";
 import { setupTestDatabase, teardownTestDatabase } from "./database-test-utils";
@@ -33,7 +35,10 @@ function card(ownerId: string, front: string, back: string): DirectoryCardConten
 
 const CARDS = [card("card_fr", "France", "Paris"), card("card_de", "Germany", "Berlin")];
 
-async function buildPackage(): Promise<Uint8Array> {
+async function buildPackage(
+  exam: ExamSettings | null = null,
+  cards: DirectoryCardContent[] = CARDS
+): Promise<Uint8Array> {
   const SQL = await initSqlJs();
   const deckDb = new SQL.Database();
   writeDpkgDeckDb(
@@ -42,7 +47,7 @@ async function buildPackage(): Promise<Uint8Array> {
     {
       name: "World capitals",
       fileTags: [],
-      cards: CARDS,
+      cards,
       templates: [
         {
           id: "t1",
@@ -73,10 +78,11 @@ async function buildPackage(): Promise<Uint8Array> {
       subject: "geography",
       tags: [],
       license: "personal-use",
-      cardCount: CARDS.length,
+      cardCount: cards.length,
       typeCounts: {},
       createdAt: "2026-10-01T00:00:00.000Z",
       generator: "test",
+      exam,
     },
     deckDb: bytes,
     cardsJson: "[]",
@@ -106,6 +112,18 @@ describe("directory decks in the plugin database", () => {
     expect(cards.map((c) => c.id).sort()).toEqual(CARDS.map((c) => c.id).sort());
     expect((await db.listDirectoryDecks()).map((d) => d.slug)).toEqual([SLUG]);
     expect((await db.getDirectoryTemplates(DECK)).map((t) => t.tags)).toEqual([["geo"]]);
+  });
+
+  it("offers an exam deck's exam, multiple-choice questions included", async () => {
+    const question: DirectoryCardContent = {
+      ...card("qcard_gas", "Which element is a noble gas?", "- [ ] Oxygen\n- [x] Argon"),
+      type: "multiple-choice",
+    };
+    await db.importDirectoryPackage(await buildPackage(DEFAULT_EXAM_SETTINGS, [...CARDS, question]));
+
+    expect(await db.getExamEnabledDeckIds()).toContain(DECK);
+    const stored = (await db.getFlashcardsByDeck(DECK)).find((c) => c.id === question.id);
+    expect(stored?.type).toBe("multiple-choice");
   });
 
   it("is a no-op to rebuild when nothing changed", async () => {
