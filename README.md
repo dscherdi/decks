@@ -253,16 +253,16 @@ See **[decksmd.app/docs/exams/overview/](https://decksmd.app/docs/exams/overview
 
 ## AI assistance (optional)
 
-Decks has optional AI features that are **off until you add an API key** in **Settings → AI**:
+Decks has optional AI features that are **off until you add an API key or link DecksMD Pro** in **Settings → AI features**:
 
 - **Generate** — describe a topic (and optionally attach notes/images) and stream new flashcards into an inbox; keep the ones you want and save them to a new file or append to an existing deck, as header+paragraph, table, or canvas.
 - **Refactor** — rewrite a single card, or batch-refactor a selection, to improve clarity and fix grammar; or **split** one dense card into several atomic ones. You review every change before it's applied.
 
-**Providers.** Bring your own key for OpenAI, Anthropic (Claude), Google (Gemini), or any OpenAI-compatible endpoint (including local servers like Ollama / LM Studio). You pick the provider and model in settings.
+**Providers.** Use **DecksMD Pro**, or bring your own key for OpenAI, Anthropic (Claude), Google (Gemini), or any OpenAI-compatible endpoint (including local servers like Ollama / LM Studio). With your own key, you pick the provider and model in settings.
 
-**Where your key lives.** Keys are stored locally in `ai-keys.json` inside the plugin folder and are **never** written to `data.json` — so they never leave your device through Obsidian Sync or any vault file-sync.
+**Where your key lives.** API keys, and the device token that links the plugin to DecksMD Pro, are stored in `ai-keys.json` in the plugin's folder (usually `.obsidian/plugins/decks/`) and are **never** written to `data.json`, so they stay out of the plugin settings that Obsidian Sync replicates. A service that syncs the whole vault folder, such as iCloud Drive, Dropbox, Syncthing or git, **does** copy `ai-keys.json` to your other devices; exclude the file there if you don't want that.
 
-**Transparency — what is sent, and when.** Nothing is sent to a provider unless you explicitly trigger an AI action. When you do, the request contains only: a built-in instruction prompt describing how Decks cards work, your typed instructions, and the relevant content for that action — the card's fields (for refactor) or your topic/prompt (for generate), plus any notes or images you chose to attach. The plugin makes no background or telemetry calls; the only network requests are the ones you start, sent directly to the provider you configured.
+**Transparency — what is sent, and where.** Nothing is sent unless you use an AI feature. A request carries only what that feature works on, for example the card's fields when you refactor, or your topic and any notes or images you attach when you generate; your vault as a whole and your review history are never sent. With your own key, the request goes directly from your device to the provider you configured, together with a built-in instruction describing how Decks cards work. With DecksMD Pro, it goes to the DecksMD backend, which adds its instructions and passes it to an AI service; your content isn't stored, and it isn't used for training. With DecksMD Pro linked, opening the settings also loads your plan and remaining allowance. The plugin sends no telemetry. What each feature sends is listed in full in the [privacy policy](https://decksmd.app/legal/privacy).
 
 ![Decks AI Generator](https://raw.githubusercontent.com/dscherdi/decks/HEAD/decks_ai_generate.gif)
 
