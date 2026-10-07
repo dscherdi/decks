@@ -20,6 +20,7 @@
     directoryDeckId,
     directoryDeckKeyFromPath,
     directoryPackageIdFromPath,
+    directoryPackageGroup,
     directoryPackageSlugOfNode,
     packageExamDeckId,
   } from "@decks/core";
@@ -485,6 +486,11 @@
   // descendant deck ids, so subtree actions can reuse the deck-group handlers.
   function groupForNode(node: TreeNode): DeckGroup {
     if (node.group) return node.group;
+    // A package's folder studies each deck within its package's own limits.
+    const packageSlug = directoryPackageSlugOfNode(node);
+    const record = packageSlug ? directoryRecords.find((candidate) => candidate.slug === packageSlug) : undefined;
+    const packageGroup = record ? directoryPackageGroup(record, allDecks, node.id) : null;
+    if (packageGroup) return packageGroup;
     return {
       type: "group",
       tag: node.id,

@@ -5,13 +5,18 @@ import {
   generateContentHash,
   DEFAULT_EXAM_SETTINGS,
   DEFAULT_PROFILE_ID,
+  directoryPackageGroup,
   directoryProfileId,
+  Scheduler,
   packDpkg,
   writeDpkgDeckDb,
   type DirectoryCardContent,
+  type DpkgProfile,
+  type IBackupService,
   type ExamSettings,
 } from "@decks/core";
 import type { MainDatabaseService } from "../../database/MainDatabaseService";
+import { DEFAULT_SETTINGS } from "../../settings";
 import { setupTestDatabase, teardownTestDatabase } from "./database-test-utils";
 
 const SLUG = "capitals";
@@ -42,6 +47,22 @@ interface PackagedDeck {
   name: string;
   cards: DirectoryCardContent[];
   exam: ExamSettings | null;
+  profile?: DpkgProfile;
+}
+
+function carried(key: string, newCardsPerDay: number | null): DpkgProfile {
+  return {
+    key,
+    newCardsPerDay,
+    reviewCardsPerDay: null,
+    reviewOrder: "due-date",
+    learningSteps: "1m",
+    relearningSteps: "10m",
+    requestRetention: 0.9,
+    clozeShowContext: "hidden",
+    ttsLang: null,
+    ttsRate: null,
+  };
 }
 
 /** One deck by default; a package of several when given them. */
@@ -91,7 +112,14 @@ async function buildPackage(
       typeCounts: {},
       createdAt: "2026-10-01T00:00:00.000Z",
       generator: "test",
-      decks: decks.map((deck) => ({ key: deck.key, title: deck.name, cardCount: deck.cards.length, exam: deck.exam })),
+      decks: decks.map((deck) => ({
+        key: deck.key,
+        title: deck.name,
+        cardCount: deck.cards.length,
+        exam: deck.exam,
+        profile: deck.profile?.key ?? null,
+      })),
+      profiles: [...new Map(decks.flatMap((deck) => (deck.profile ? [[deck.profile.key, deck.profile]] : []))).values()],
     },
     deckDb: bytes,
     cardsJson: "[]",
@@ -190,6 +218,36 @@ describe("directory decks in the plugin database", () => {
 
     await db.applyProfileToTag(DEFAULT_PROFILE_ID, `#directory/${SLUG}`);
     expect(await profiles()).toEqual(own);
+  });
+
+  it("reviews a package's folder within each deck's own daily limits", async () => {
+    const question: DirectoryCardContent = {
+      ...card("qcard_gas", "Which element is a noble gas?", "- [ ] Oxygen\n- [x] Argon"),
+      type: "multiple-choice",
+    };
+    await db.importDirectoryPackage(
+      await buildPackage(null, CARDS, [
+        { key: "capitals", name: "Capitals", cards: CARDS, exam: null, profile: carried("study", 1) },
+        { key: "exam", name: "Exam", cards: [question], exam: DEFAULT_EXAM_SETTINGS, profile: carried("final", 0) },
+      ])
+    );
+    const record = (await db.listDirectoryDecks())[0];
+    const group = directoryPackageGroup(record, await db.getAllDecksWithProfiles(), `pkg:${SLUG}`);
+    expect(group?.deckIds).toEqual([directoryDeckId(SLUG, "capitals"), directoryDeckId(SLUG, "exam")]);
+    if (!group) return;
+    const backups: IBackupService = { createBackup: async () => undefined };
+    const scheduler = new Scheduler(db, DEFAULT_SETTINGS, backups);
+
+    const first = await scheduler.getNextForDeckGroup(new Date(), group, { allowNew: true });
+    expect(first?.deckId).toBe(directoryDeckId(SLUG, "capitals"));
+
+    // With the study deck's one new card spent, the exam deck's limit of none still holds.
+    const capitals = (await db.getDeckWithProfile(directoryDeckId(SLUG, "capitals")))?.profile;
+    if (capitals) await db.updateProfile(capitals.id, { newCardsPerDay: 0 });
+    expect(await scheduler.getNextForDeckGroup(new Date(), group, { allowNew: true })).toBeNull();
+    // A folder that took the group's limits would offer every new card.
+    const uncapped = { ...group, deckLimits: false, profile: { ...group.profile, hasNewCardsLimitEnabled: false } };
+    expect(await scheduler.getNextForDeckGroup(new Date(), uncapped, { allowNew: true })).not.toBeNull();
   });
 
   it("removes the package's own profiles with it", async () => {
