@@ -8,7 +8,7 @@ import {
 } from "obsidian";
 import { type Deck, type Flashcard, type DeckStats, type DeckGroup, DEFAULT_PROFILE_ID } from "../database/types";
 import type { IDatabaseService } from "../database/DatabaseFactory";
-import { I18n, generateDeckGroupId, generateDeckId, isDirectoryDeckPath, yieldToUI } from "@decks/core";
+import { I18n, applyDeckDailyLimits, generateDeckGroupId, generateDeckId, isDirectoryDeckPath, yieldToUI } from "@decks/core";
 import { Logger, formatTime } from "../utils/logging";
 import { FileFilter } from "../utils/fileFilter";
 import { FlashcardParser, type ParsedFlashcard } from "@decks/core";
@@ -28,36 +28,6 @@ function sameTags(a: readonly string[], b: readonly string[]): boolean {
 }
 
 type RawCounts = { newCount: number; dueCount: number };
-type LimitProfile = {
-  hasNewCardsLimitEnabled: boolean;
-  newCardsPerDay: number;
-  hasReviewCardsLimitEnabled: boolean;
-  reviewCardsPerDay: number;
-};
-
-// Apply a profile's per-deck daily limits to raw new/due counts, using the
-// counts already reviewed today. Pure — shared by the batch + single-deck paths.
-function applyPerDeckLimits(
-  raw: RawCounts,
-  profile: LimitProfile,
-  dailyCounts: { newCount: number; reviewCount: number }
-): RawCounts {
-  let newCount = raw.newCount;
-  let dueCount = raw.dueCount;
-  if (profile.hasNewCardsLimitEnabled && profile.newCardsPerDay >= 0) {
-    newCount =
-      profile.newCardsPerDay === 0
-        ? 0
-        : Math.min(raw.newCount, Math.max(0, profile.newCardsPerDay - dailyCounts.newCount));
-  }
-  if (profile.hasReviewCardsLimitEnabled && profile.reviewCardsPerDay >= 0) {
-    dueCount =
-      profile.reviewCardsPerDay === 0
-        ? 0
-        : Math.min(raw.dueCount, Math.max(0, profile.reviewCardsPerDay - dailyCounts.reviewCount));
-  }
-  return { newCount, dueCount };
-}
 
 // Clamp new/due by the shared global daily cap; reviews take the budget first.
 function applyGlobalClamp(counts: RawCounts, globalDailyRemaining: number): RawCounts {
@@ -732,7 +702,7 @@ export class DeckManager {
       const deck = await this.db.getDeckWithProfile(deckId);
       if (deck) {
         const dailyCounts = await this.db.getDailyReviewCounts(deckId);
-        counts = applyPerDeckLimits(counts, deck.profile, dailyCounts);
+        counts = applyDeckDailyLimits(counts, deck.profile, dailyCounts);
       }
     }
 
@@ -824,7 +794,7 @@ export class DeckManager {
         dueCount: cs?.dueCount ?? 0,
       };
       const daily = dailyById.get(deck.id) ?? { newCount: 0, reviewCount: 0 };
-      const limited = applyPerDeckLimits(raw, deck.profile, daily);
+      const limited = applyDeckDailyLimits(raw, deck.profile, daily);
       const totalCount = cs?.total ?? 0;
       const matureCount = cs?.matureCount ?? 0;
       perDeck.set(deck.id, { ...limited, totalCount, matureCount });
