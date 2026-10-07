@@ -3,6 +3,7 @@ import { mount, unmount } from "svelte";
 import { I18n, type ExamAttempt } from "@decks/core";
 import type { IDatabaseService } from "../../database/DatabaseFactory";
 import { wireInternalLinks } from "../../utils/internal-links";
+import { renderableCardMarkdown, renderSourcePath } from "../../services/directory-render";
 import FlashcardExamModal from "./FlashcardExamModal.svelte";
 import { confirmDialog, persistExamAttempt } from "./ExamModalWrapper";
 import { examMissProps, type ExamMissHooks } from "./exam-miss-props";
@@ -61,7 +62,13 @@ export class ExamView extends ItemView {
       const component = new Component();
       component.load();
       this.markdownComponents.push(component);
-      await MarkdownRenderer.render(this.app, content, el, sourcePath, component);
+      await MarkdownRenderer.render(
+        this.app,
+        renderableCardMarkdown(content, sourcePath),
+        el,
+        renderSourcePath(sourcePath),
+        component
+      );
       wireInternalLinks(this.app, el, sourcePath, component);
     } catch (error) {
       console.error("Error rendering markdown:", error);

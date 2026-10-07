@@ -24,6 +24,7 @@ import { mount, unmount } from "svelte";
 import { reviewRepairProps, type ReviewRepairHooks } from "./review-repair-props";
 import { navigateToFlashcardSource } from "../../utils/flashcard-navigator";
 import { wireInternalLinks } from "../../utils/internal-links";
+import { renderableCardMarkdown, renderSourcePath, directoryEmbedUrl } from "../../services/directory-render";
 import { I18n } from "@decks/core";
 import { ConfirmModal } from "../ConfirmModal";
 import { AnchorStamper } from "../../services/AnchorStamper";
@@ -164,7 +165,13 @@ export class FlashcardReviewView extends ItemView {
       component.load();
       this.markdownComponents.push(component);
       // sourcePath lets Obsidian resolve ![[…]] embeds (audio/images) against the deck file.
-      void MarkdownRenderer.render(this.app, content, el, sourcePath, component);
+      void MarkdownRenderer.render(
+        this.app,
+        renderableCardMarkdown(content, sourcePath),
+        el,
+        renderSourcePath(sourcePath),
+        component
+      );
       // Make internal links open/preview like Obsidian during review.
       wireInternalLinks(this.app, el, sourcePath, component);
     } catch (error) {
@@ -293,6 +300,8 @@ export class FlashcardReviewView extends ItemView {
         },
         resolveTemplate: (card: Flashcard) => this.resolveTemplate(card),
         resolveEmbed: (linkpath: string, sourcePath: string) => {
+          const fromDirectory = directoryEmbedUrl(linkpath, sourcePath);
+          if (fromDirectory !== undefined) return fromDirectory;
           const dest = this.app.metadataCache.getFirstLinkpathDest(linkpath, sourcePath);
           return dest ? this.app.vault.getResourcePath(dest) : null;
         },

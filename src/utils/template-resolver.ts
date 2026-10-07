@@ -1,4 +1,4 @@
-import { resolveCardTemplate, type ResolvedRender } from "@decks/core";
+import { isDirectoryDeckPath, resolveCardTemplate, type ResolvedRender } from "@decks/core";
 import type { DeckTemplate, Flashcard } from "../database/types";
 import type { IDatabaseService } from "../database/DatabaseFactory";
 
@@ -10,23 +10,31 @@ import type { IDatabaseService } from "../database/DatabaseFactory";
 export interface TemplateCache {
   templates: DeckTemplate[];
   fileTagsByDeck: Map<string, string[]>;
+  /** A directory deck's own templates; they bind only within that deck. */
+  directoryTemplatesByDeck: Map<string, DeckTemplate[]>;
 }
 
 export async function loadTemplateCache(
   db: IDatabaseService
 ): Promise<TemplateCache> {
   try {
-    const [templates, decks] = await Promise.all([
+    const [templates, decks, directoryDecks] = await Promise.all([
       db.getAllDeckTemplates(),
       db.getAllDecks(),
+      db.listDirectoryDecks(),
     ]);
+    const directoryTemplatesByDeck = new Map<string, DeckTemplate[]>();
+    for (const deck of directoryDecks) {
+      directoryTemplatesByDeck.set(deck.id, await db.getDirectoryTemplates(deck.id));
+    }
     return {
       templates,
       fileTagsByDeck: new Map(decks.map((d) => [d.id, d.fileTags ?? []])),
+      directoryTemplatesByDeck,
     };
   } catch (error) {
     console.error("Failed to load template cache:", error);
-    return { templates: [], fileTagsByDeck: new Map() };
+    return { templates: [], fileTagsByDeck: new Map(), directoryTemplatesByDeck: new Map() };
   }
 }
 
@@ -35,12 +43,15 @@ export function makeTemplateResolver(
   cache: TemplateCache
 ): (card: Flashcard) => ResolvedRender | null {
   return (card: Flashcard) => {
-    if (cache.templates.length === 0) return null;
+    const templates = isDirectoryDeckPath(card.sourceFile)
+      ? cache.directoryTemplatesByDeck.get(card.deckId) ?? []
+      : cache.templates;
+    if (templates.length === 0) return null;
     return resolveCardTemplate(
       card.tags,
       cache.fileTagsByDeck.get(card.deckId) ?? [],
       card.templateRow ?? null,
-      cache.templates
+      templates
     );
   };
 }

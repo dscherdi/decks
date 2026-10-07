@@ -40,6 +40,17 @@ const DEFAULT_BASE_TAG = "#decks";
 import { DEFAULT_EXAM_SETTINGS, classifyExamBody, parseExamSettings } from "@decks/core";
 import { compileFilter, type FilterCompileOptions } from "@decks/core";
 import type { SyncData, SyncResult } from "@decks/core";
+import {
+  REMOVE_DIRECTORY_CONTENT_SQL,
+  SELECT_DIRECTORY_DECKS_SQL,
+  SELECT_DIRECTORY_TEMPLATES_SQL,
+  TOMBSTONE_DIRECTORY_DECK_SQL,
+  directoryDeckFromRow,
+  directoryTemplateFromRow,
+  type DirectoryDeckRecord,
+  type DpkgImportResult,
+  type MaterialiseAllResult,
+} from "@decks/core";
 import type {
   SqlJsValue,
   ReviewLogRow,
@@ -425,6 +436,32 @@ export abstract class BaseDatabaseService implements IDatabaseService {
 
   async deleteDeckTemplateByFile(sourceFile: string): Promise<void> {
     await this.executeSql(SQL_QUERIES.DELETE_DECK_TEMPLATE_BY_FILE, [sourceFile]);
+  }
+
+  // DECK DIRECTORY - decks installed from .dpkg packages
+  abstract importDirectoryPackage(bytes: Uint8Array): Promise<DpkgImportResult>;
+  abstract materialiseDirectoryDecks(): Promise<MaterialiseAllResult>;
+
+  async listDirectoryDecks(): Promise<DirectoryDeckRecord[]> {
+    try {
+      const rows = await this.querySql<SqlRecord>(SELECT_DIRECTORY_DECKS_SQL, [], { asObject: true });
+      return rows.map(directoryDeckFromRow);
+    } catch {
+      return [];
+    }
+  }
+
+  async getDirectoryTemplates(deckId: string): Promise<DeckTemplate[]> {
+    const rows = await this.querySql<SqlRecord>(SELECT_DIRECTORY_TEMPLATES_SQL, [deckId], { asObject: true });
+    return rows.map(directoryTemplateFromRow);
+  }
+
+  async removeDirectoryDeck(deckId: string): Promise<void> {
+    const at = new Date().toISOString();
+    await this.executeSql(TOMBSTONE_DIRECTORY_DECK_SQL, [at, at, deckId, at]);
+    for (const sql of REMOVE_DIRECTORY_CONTENT_SQL) await this.executeSql(sql, [deckId]);
+    this.emitSyncOp({ o: "directory_deck_remove", p: { deckId, at } });
+    await this.save();
   }
 
   async renameDeckTemplate(

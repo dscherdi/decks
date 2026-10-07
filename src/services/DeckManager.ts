@@ -8,7 +8,7 @@ import {
 } from "obsidian";
 import { type Deck, type Flashcard, type DeckStats, type DeckGroup, DEFAULT_PROFILE_ID } from "../database/types";
 import type { IDatabaseService } from "../database/DatabaseFactory";
-import { I18n, generateDeckGroupId, generateDeckId, yieldToUI } from "@decks/core";
+import { I18n, generateDeckGroupId, generateDeckId, isDirectoryDeckPath, yieldToUI } from "@decks/core";
 import { Logger, formatTime } from "../utils/logging";
 import { FileFilter } from "../utils/fileFilter";
 import { FlashcardParser, type ParsedFlashcard } from "@decks/core";
@@ -133,6 +133,8 @@ export class DeckManager {
   // trusting it alone would cascade-delete a live deck's cards. If the disk can't
   // be checked, be conservative and treat the file as present (don't delete).
   private async fileIsTrulyGone(filepath: string): Promise<boolean> {
+    // Directory decks have no file; their own tables decide when they go.
+    if (isDirectoryDeckPath(filepath)) return false;
     if (this.vault.getAbstractFileByPath(filepath) instanceof TFile) return false;
     try {
       if (await this.vault.adapter.exists(filepath)) return false;
@@ -417,6 +419,7 @@ export class DeckManager {
     const meta = await this.db.getAllDeckSyncMeta();
     const stale = new Set<string>();
     for (const { id, filepath, lastSyncedMtime } of meta) {
+      if (isDirectoryDeckPath(filepath)) continue;
       const file = this.vault.getAbstractFileByPath(filepath);
       if (!(file instanceof TFile)) {
         stale.add(id);

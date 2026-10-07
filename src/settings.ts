@@ -1,5 +1,6 @@
 import {
   type AiProviderId,
+  type DpkgManifestDraft,
   type ExamSettings,
   type LanguagePreference,
   DEFAULT_EXAM_SETTINGS,
@@ -22,6 +23,12 @@ export type DeckListView = "tree" | "flat";
 
 /** How the hosted provider reads an attached PDF. */
 export type PdfReading = "auto" | "transcribe";
+
+/** What the author fills in when exporting a deck as a .dpkg package. */
+export type DirectoryExportDetails = Pick<
+  DpkgManifestDraft,
+  "slug" | "title" | "description" | "language" | "subject" | "version" | "license"
+>;
 
 export interface DecksSettings {
   // Review Session Settings
@@ -158,6 +165,9 @@ export interface DecksSettings {
   // (custom decks). Profile-mapped decks use their profile's exam settings.
   exam: ExamSettings;
 
+  // Last package details used per deck note, so the next export starts from them.
+  directoryExports: Record<string, DirectoryExportDetails>;
+
   // Internal tracking
   hasCreatedTestDeck: boolean;
   hasCreatedCanvasTestDeck: boolean;
@@ -257,6 +267,8 @@ export const DEFAULT_SETTINGS: DecksSettings = {
   },
 
   exam: { ...DEFAULT_EXAM_SETTINGS },
+
+  directoryExports: {},
 
   hasCreatedTestDeck: false,
   hasCreatedCanvasTestDeck: false,

@@ -1534,3 +1534,7 @@ div.decks-card-content
   height: 40px;
   width: auto;
 }
+
+.decks-directory-export-warning {
+  color: var(--text-warning);
+}

@@ -6,6 +6,7 @@ import { AnchorStamper } from "../../services/AnchorStamper";
 import { ObsidianNoteAccess } from "../../services/ObsidianNoteAccess";
 import { ConfirmModal } from "../ConfirmModal";
 import { wireInternalLinks } from "../../utils/internal-links";
+import { renderableCardMarkdown, renderSourcePath } from "../../services/directory-render";
 import {
   makeModalResponsive,
   type ResponsiveModalHandle,
@@ -110,7 +111,13 @@ export class ExamModalWrapper extends Modal {
       const component = new Component();
       component.load();
       this.markdownComponents.push(component);
-      await MarkdownRenderer.render(this.app, content, el, sourcePath, component);
+      await MarkdownRenderer.render(
+        this.app,
+        renderableCardMarkdown(content, sourcePath),
+        el,
+        renderSourcePath(sourcePath),
+        component
+      );
       wireInternalLinks(this.app, el, sourcePath, component);
     } catch (error) {
       console.error("Error rendering markdown:", error);

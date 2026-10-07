@@ -14,7 +14,7 @@
     SchedulingPreview,
     SessionProgress,
   } from "@decks/core";
-  import { I18n, wantsRepair, yieldToUI, toSpeechText, type ResolvedRender } from "@decks/core";
+  import { I18n, isDirectoryDeckPath, wantsRepair, yieldToUI, toSpeechText, type ResolvedRender } from "@decks/core";
   import type { TtsService } from "../../services/TtsService";
   import { prepareFuzzySearch } from "obsidian";
   import { computeCardHealth } from "@decks/core";
@@ -1750,7 +1750,7 @@
                 </svg>
               </button>
             {/if}
-            {#if onNavigateToSource && currentCard}
+            {#if onNavigateToSource && currentCard && !isDirectoryDeckPath(currentCard.sourceFile)}
               <button
                 class="decks-go-to-file-button decks-icon-btn clickable-icon"
                 on:click={handleNavigateToSource}

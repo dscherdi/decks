@@ -25,8 +25,15 @@ import {
   CREATE_TABLES_SQL,
   CURRENT_SCHEMA_VERSION,
   buildMigrationSQL,
+  ensureDirectoryTables,
+  importDpkgContent,
+  materialiseDirectoryDecks,
+  mergeDirectoryTables,
   remapCardIdsToDeckIndependent,
+  sha256Hex,
+  unpackDpkg,
 } from "@decks/core";
+import type { DpkgImportResult, MaterialiseAllResult } from "@decks/core";
 
 // Schema version at which card IDs became deck-independent. Upgrading from an
 // earlier version re-points review history to the new IDs before the rebuild.
@@ -360,6 +367,31 @@ class SimpleDatabaseWorker {
     );
   }
 
+  /** Install a .dpkg package into the database in one transaction. */
+  async importDirectoryPackage(bytes: Uint8Array, now: string): Promise<DpkgImportResult> {
+    if (!this.db || !this.initialized) throw new Error("Database not initialized");
+    const SQL = this.SQL;
+    if (!SQL) throw new Error("SQL.js not initialized");
+    const contents = await unpackDpkg(bytes, { includeMedia: false });
+    const archiveSha256 = await sha256Hex(bytes);
+    this.db.exec("BEGIN TRANSACTION");
+    try {
+      const result = importDpkgContent(this.db, contents, archiveSha256, (deckDb) => new SQL.Database(deckDb), now);
+      this.db.exec("COMMIT");
+      return result;
+    } catch (error) {
+      this.db.exec("ROLLBACK");
+      throw error;
+    }
+  }
+
+  /** Rebuild directory decks' working rows from their stored content where it changed. */
+  materialiseDirectoryDecks(now: string): MaterialiseAllResult {
+    if (!this.db || !this.initialized) throw new Error("Database not initialized");
+    ensureDirectoryTables(this.db);
+    return materialiseDirectoryDecks(this.db, now);
+  }
+
   /**
    * Sync with disk file - performs merge entirely in worker.
    * Merges the remote DB's state into the in-memory DB. Does NOT write back to disk.
@@ -443,12 +475,29 @@ class SimpleDatabaseWorker {
       // is equally right and first writer wins.
       this.mergeAppendOnly(remoteDb, "ai_source_concepts");
       this.mergeAppendOnly(remoteDb, "ai_source_extractions");
+      this.mergeDirectory(remoteDb);
 
       this.db.exec("COMMIT");
       self.postMessage({ type: "dbg", message: "Sync with disk completed" });
     } catch (err) {
       this.db.exec("ROLLBACK");
       throw err;
+    }
+  }
+
+  // Newer stored content wins and working rows follow it, which also drops rows
+  // mergeDecks brought back for a deck removed here. A failure here never blocks the rest.
+  private mergeDirectory(remoteDb: Database): void {
+    if (!this.db) return;
+    this.db.exec("SAVEPOINT directory_merge");
+    try {
+      mergeDirectoryTables(this.db, remoteDb);
+      materialiseDirectoryDecks(this.db, new Date().toISOString());
+      this.db.exec("RELEASE directory_merge");
+    } catch (error) {
+      this.db.exec("ROLLBACK TO directory_merge");
+      this.db.exec("RELEASE directory_merge");
+      self.postMessage({ type: "dbg", message: `Directory merge skipped: ${(error as Error).message}` });
     }
   }
 
@@ -860,6 +909,11 @@ self.onmessage = async (event: MessageEvent<DatabaseWorkerMessage>) => {
           } else {
             worker.checkMigrationNeeded();
           }
+          try {
+            worker.materialiseDirectoryDecks(new Date().toISOString());
+          } catch (directoryError) {
+            self.postMessage({ type: "dbg", message: `Directory decks not rebuilt: ${(directoryError as Error).message}` });
+          }
           self.postMessage({ type: "ready" });
           return;
         } else {
@@ -970,6 +1024,18 @@ self.onmessage = async (event: MessageEvent<DatabaseWorkerMessage>) => {
               (data as { examEnabled?: boolean }).examEnabled ?? false
             ),
           };
+        }
+        break;
+
+      case "importDirectoryPackage":
+        if (data && "bytes" in data && data.bytes instanceof Uint8Array && "now" in data && typeof data.now === "string") {
+          result = await worker.importDirectoryPackage(data.bytes, data.now);
+        }
+        break;
+
+      case "materialiseDirectoryDecks":
+        if (data && "now" in data && typeof data.now === "string") {
+          result = worker.materialiseDirectoryDecks(data.now);
         }
         break;
 

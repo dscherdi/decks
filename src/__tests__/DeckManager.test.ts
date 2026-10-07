@@ -45,6 +45,37 @@ describe("DeckManager", () => {
     });
   });
 
+  describe("directory decks", () => {
+    it("never treats a directory deck as an orphan, in either cleanup path", async () => {
+      const vault = {
+        getMarkdownFiles: () => [] as TFile[],
+        getFiles: () => [] as TFile[],
+        getAbstractFileByPath: () => null,
+        adapter: { exists: async () => false },
+      } as unknown as Vault;
+      const metadataCache = { getFileCache: () => null } as unknown as MetadataCache;
+      const deleteDeckByFilepath = jest.fn(async () => {});
+      const db = {
+        getAllDecks: jest.fn(async () => [
+          { id: "deck_dir_x", name: "Capitals", filepath: "decks-directory:capitals" },
+          { id: "d_gone", name: "Gone", filepath: "gone.md" },
+        ]),
+        getAllDeckSyncMeta: jest.fn(async () => [
+          { id: "deck_dir_x", filepath: "decks-directory:capitals", lastSyncedMtime: 0 },
+        ]),
+        deleteDeckByFilepath,
+      } as unknown as IDatabaseService;
+
+      const mgr = new DeckManager(vault, metadataCache, db);
+      await mgr.syncDecks();
+      await mgr.cleanupOrphanedDecks();
+
+      expect(deleteDeckByFilepath).not.toHaveBeenCalledWith("decks-directory:capitals");
+      expect(deleteDeckByFilepath).toHaveBeenCalledWith("gone.md");
+      expect((await mgr.getStaleDeckIds()).has("deck_dir_x")).toBe(false);
+    });
+  });
+
   describe("mtime gate: self-heal + skip-stamp", () => {
     function makeMgr(opts: {
       lastSyncedMtime: number;

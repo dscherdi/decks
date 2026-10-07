@@ -6,17 +6,32 @@ import type { DataAdapter } from "obsidian";
 import { writeBinaryAtomic } from "./atomic-write";
 import { BaseDatabaseService } from "./BaseDatabaseService";
 import type { QueryConfig } from "./BaseDatabaseService";
-import { buildMigrationSQL, CREATE_TABLES_SQL, CURRENT_SCHEMA_VERSION, yieldToUI, FlashcardSynchronizer, remapCardIdsToDeckIndependent } from "@decks/core";
+import {
+  buildMigrationSQL,
+  CREATE_TABLES_SQL,
+  CURRENT_SCHEMA_VERSION,
+  ensureDirectoryTables,
+  FlashcardSynchronizer,
+  importDpkgContent,
+  materialiseDirectoryDecks,
+  mergeDirectoryTables,
+  remapCardIdsToDeckIndependent,
+  sha256Hex,
+  unpackDpkg,
+  yieldToUI,
+} from "@decks/core";
+import type { DpkgImportResult, MaterialiseAllResult } from "@decks/core";
 
 // Schema version at which card IDs became deck-independent.
 const DECK_INDEPENDENT_ID_VERSION = 36;
-import type { Database, InitSqlJsStatic } from "sql.js";
+import type { Database, InitSqlJsStatic, SqlJsStatic } from "sql.js";
 import type { SyncData, SyncResult, SqlJsValue } from "@decks/core";
 import { getEmbeddedAssets } from "./embedded-assets";
 
 export class MainDatabaseService extends BaseDatabaseService {
   private db: Database | null = null;
   private SQL: InitSqlJsStatic | null = null;
+  private sqlStatic: SqlJsStatic | null = null;
   private lastKnownModified = 0;
   private wasmBlobUrl: string | null = null;
 
@@ -83,6 +98,7 @@ export class MainDatabaseService extends BaseDatabaseService {
       const SQL = await this.SQL({
         locateFile: (file: string) => this.locateWasmFile(file),
       });
+      this.sqlStatic = SQL;
 
       // Load existing database or create new one
       const buffer = await this.loadDatabaseFile();
@@ -1217,6 +1233,8 @@ export class MainDatabaseService extends BaseDatabaseService {
         }
       }
 
+      this.mergeDirectoryFrom(diskBuffer);
+
       // Update our lastKnownModified to the disk file's timestamp
       if (stat) {
         this.lastKnownModified = stat.mtime;
@@ -1225,6 +1243,44 @@ export class MainDatabaseService extends BaseDatabaseService {
       console.error("Failed to sync with disk:", error);
       throw error;
     }
+  }
+
+  private mergeDirectoryFrom(diskBuffer: Uint8Array): void {
+    if (!this.db || !this.sqlStatic) return;
+    const remoteDb = new this.sqlStatic.Database(diskBuffer);
+    try {
+      mergeDirectoryTables(this.db, remoteDb);
+      materialiseDirectoryDecks(this.db, new Date().toISOString());
+    } finally {
+      remoteDb.close();
+    }
+  }
+
+  async importDirectoryPackage(bytes: Uint8Array): Promise<DpkgImportResult> {
+    const db = this.db;
+    const SQL = this.sqlStatic;
+    if (!db || !SQL) throw new Error("Database not initialized");
+    const contents = await unpackDpkg(bytes, { includeMedia: false });
+    const archiveSha256 = await sha256Hex(bytes);
+    db.exec("BEGIN TRANSACTION");
+    let result: DpkgImportResult;
+    try {
+      result = importDpkgContent(db, contents, archiveSha256, (deckDb) => new SQL.Database(deckDb), new Date().toISOString());
+      db.exec("COMMIT");
+    } catch (error) {
+      db.exec("ROLLBACK");
+      throw error;
+    }
+    await this.save();
+    return result;
+  }
+
+  materialiseDirectoryDecks(): Promise<MaterialiseAllResult> {
+    if (!this.db) return Promise.reject(new Error("Database not initialized"));
+    ensureDirectoryTables(this.db);
+    const result = materialiseDirectoryDecks(this.db, new Date().toISOString());
+    if (result.materialised.length + result.dropped.length + result.reprofiled.length > 0) this.markDirty(true);
+    return Promise.resolve(result);
   }
 
   /**

@@ -2,7 +2,7 @@ import { App, MarkdownView, Notice, TFile, WorkspaceLeaf } from "obsidian";
 import type { Flashcard } from "../database/types";
 import { findFlashcardLine } from "./source-navigator";
 import { forwardCard } from "./reverse-card";
-import { I18n } from "@decks/core";
+import { I18n, isDirectoryDeckPath } from "@decks/core";
 
 /**
  * Shape of Obsidian's canvas view internals we rely on for focus-on-node.
@@ -45,6 +45,10 @@ export async function navigateToFlashcardSource(
   app: App,
   flashcard: Flashcard,
 ): Promise<WorkspaceLeaf | null> {
+  if (isDirectoryDeckPath(flashcard.sourceFile)) {
+    new Notice(I18n.t.directory.readOnly);
+    return null;
+  }
   const file = app.vault.getAbstractFileByPath(flashcard.sourceFile);
   if (!(file instanceof TFile)) {
     new Notice(

@@ -253,6 +253,13 @@ export class DeckSynchronizer {
         );
       }
 
+      // Directory decks have no files to scan; rebuild any whose stored content changed.
+      try {
+        await this.db.materialiseDirectoryDecks();
+      } catch (error) {
+        this.logger.error("Failed to rebuild directory decks:", error);
+      }
+
       // Orphaned-card pruning is deliberately NOT run here. A destructive
       // `DELETE … WHERE deck_id NOT IN (SELECT id FROM decks)` during any sync can
       // wipe a real deck's cards if its deck row is transiently missing (cold

@@ -15,6 +15,20 @@ import type { Extension } from "@codemirror/state";
 import { decksHideAnchorTokens } from "./editor/hide-anchor-tokens";
 import { openVaultPdf } from "./utils/pdf-open";
 import { AiSourcePdfStore } from "./services/AiSourcePdfStore";
+import { DirectoryService } from "./services/DirectoryService";
+import { DirectoryExporter, type DirectoryExportOutput } from "./services/DirectoryExporter";
+import { DirectoryExportModal } from "./components/export/DirectoryExportModal";
+import type { DirectoryExportDetails } from "./settings";
+import { setDirectoryRenderer } from "./services/directory-render";
+import { ConfirmModal } from "./components/ConfirmModal";
+import {
+  DpkgError,
+  formatByteSize,
+  isDirectoryDeckPath,
+  parseDirectoryImportRequest,
+  slugifyDirectoryTitle,
+  type DpkgContents,
+} from "@decks/core";
 import { renderHtmlIntoShadow } from "./utils/html-template-render";
 import { renderOcclusion } from "./utils/occlusion-render";
 import { OcclusionStudioModalWrapper } from "./components/OcclusionStudioModalWrapper";
@@ -204,6 +218,7 @@ export default class DecksPlugin extends Plugin {
   public aiConceptController: AiConceptController;
   public aiChatController: AiChatController;
   private aiSourcePdfs: AiSourcePdfStore;
+  private directoryService: DirectoryService;
   public pdfOcrCache: PdfOcrCache;
   public settings: DecksSettings;
   private logger: Logger;
@@ -475,6 +490,17 @@ export default class DecksPlugin extends Plugin {
         this.app.vault.adapter,
         `${this.manifest.dir ?? `${this.app.vault.configDir}/plugins/${this.manifest.id}`}/ai-sources`,
       );
+      this.directoryService = new DirectoryService(
+        adapter,
+        `${dbParent || pluginDir}/directory-media`,
+        this.db,
+        this.logger,
+      );
+      setDirectoryRenderer(this.directoryService);
+      void this.db
+        .whenReady()
+        .then(() => this.directoryService.pruneUnusedMedia())
+        .catch((error: Error) => this.logger.debug("Directory media prune failed", error));
       this.aiChatController = new AiChatController(
         new AiChatService(new ObsidianHttpClient(), this.logger),
         this.settings,
@@ -647,6 +673,11 @@ export default class DecksPlugin extends Plugin {
         void this.completeProSignIn(params.state, params.code);
       });
 
+      // Deck directory hand-off: obsidian://decks-import?deck=<slug>&ticket=<t>
+      this.registerObsidianProtocolHandler("decks-import", (params) => {
+        void this.importFromDirectoryLink(params);
+      });
+
       // Add ribbon icon
       this.addRibbonIcon("brain", I18n.t.ribbon.decks, () => {
         new DecksViewModal(
@@ -678,6 +709,35 @@ export default class DecksPlugin extends Plugin {
           void this.activateView();
         },
       });
+
+      this.addCommand({
+        id: "import-decks-package",
+        name: I18n.t.directory.importCommand,
+        callback: () => this.pickDirectoryPackage(),
+      });
+
+      this.addCommand({
+        id: "export-decks-package",
+        name: I18n.t.directory.exportCommand,
+        checkCallback: (checking: boolean) => {
+          const file = this.app.workspace.getActiveFile();
+          if (!file || file.extension !== "md") return false;
+          if (!checking) void this.openDirectoryExport(file.path);
+          return true;
+        },
+      });
+
+      this.registerEvent(
+        this.app.workspace.on("file-menu", (menu, file) => {
+          if (!(file instanceof TFile) || file.extension !== "md") return;
+          menu.addItem((item) =>
+            item
+              .setTitle(I18n.t.directory.exportMenu)
+              .setIcon("package")
+              .onClick(() => void this.openDirectoryExport(file.path))
+          );
+        })
+      );
 
       // Add command to open the AI workbench hub
       this.addCommand({
@@ -1216,6 +1276,7 @@ export default class DecksPlugin extends Plugin {
 
   onunload() {
     if (this.aiStatusTimer !== null) window.clearTimeout(this.aiStatusTimer);
+    setDirectoryRenderer(null);
     this.logger.debug("Unloading Decks plugin");
 
     // Cancel pending debounced timers so they can't fire after teardown.
@@ -1473,6 +1534,10 @@ export default class DecksPlugin extends Plugin {
    * the affected deck before resolving.
    */
   async openEditFlashcardModal(card: Flashcard): Promise<void> {
+    if (isDirectoryDeckPath(card.sourceFile)) {
+      new Notice(I18n.t.directory.readOnly);
+      return;
+    }
     // V2 occlusion cards are edited visually in the studio, not as text fields.
     if (isOcclusionV2(card)) {
       const doc = parseOcclusionBack(card.back);
@@ -1589,8 +1654,11 @@ export default class DecksPlugin extends Plugin {
     sourceContext?: string,
     startSplit = false,
   ): Promise<void> {
+    // Directory cards are review-only.
+    const editable = cards.filter((card) => !isDirectoryDeckPath(card.sourceFile));
+    if (editable.length < cards.length) new Notice(I18n.t.directory.readOnly);
     // One rewrite per note: a reverse card is rewritten as its note's card.
-    cards = await repairTargets(this.db, cards);
+    cards = await repairTargets(this.db, editable);
     if (cards.length === 0) return;
     return new Promise((resolve) => {
       const wrapper = new AiBatchRefactorModalWrapper(
@@ -1947,6 +2015,129 @@ export default class DecksPlugin extends Plugin {
         await this.getDecksView()?.refresh();
       },
     ).open();
+  }
+
+  /** Choose a .dpkg file from disk and offer to add its deck. */
+  private pickDirectoryPackage(): void {
+    const input = activeDocument.createElement("input");
+    input.type = "file";
+    input.accept = ".dpkg";
+    input.onchange = () => {
+      const file = input.files?.[0];
+      if (!file) return;
+      void file
+        .arrayBuffer()
+        .then((buffer) => this.offerDirectoryPackage(new Uint8Array(buffer)))
+        .catch((error: Error) => new Notice(this.directoryErrorMessage(error)));
+    };
+    input.click();
+  }
+
+  private async importFromDirectoryLink(params: Record<string, string>): Promise<void> {
+    const t = I18n.t.directory;
+    const request = parseDirectoryImportRequest(params);
+    if (!request) {
+      new Notice(t.invalidLink);
+      return;
+    }
+    const info = await this.directoryService.fetchDeckInfo(request.slug).catch(() => null);
+    const progress = new Notice(I18n.format(t.downloading, { title: info?.title ?? request.slug }), 0);
+    let bytes: Uint8Array;
+    try {
+      bytes = await this.directoryService.download(request.ticket);
+    } catch {
+      new Notice(t.downloadFailed);
+      return;
+    } finally {
+      progress.hide();
+    }
+    await this.offerDirectoryPackage(bytes, request.slug);
+  }
+
+  /** Show what a package holds and install it once confirmed. */
+  private async offerDirectoryPackage(bytes: Uint8Array, expectedSlug?: string): Promise<void> {
+    const t = I18n.t.directory;
+    let contents: DpkgContents;
+    try {
+      contents = await this.directoryService.readPackage(bytes);
+    } catch (error) {
+      new Notice(this.directoryErrorMessage(error instanceof Error ? error : new Error(String(error))));
+      return;
+    }
+    const { manifest } = contents;
+    if (expectedSlug && manifest.slug !== expectedSlug) {
+      new Notice(t.invalidPackage);
+      return;
+    }
+    const installed = (await this.db.listDirectoryDecks()).find((deck) => deck.slug === manifest.slug);
+    const isUpdate = installed !== undefined && installed.version !== manifest.version;
+    const message = !installed
+      ? I18n.format(t.addMessage, {
+          title: manifest.title,
+          count: manifest.cardCount,
+          size: formatByteSize(bytes.length),
+        })
+      : isUpdate
+        ? I18n.format(t.updateMessage, { title: manifest.title, from: installed.version, to: manifest.version })
+        : I18n.format(t.reinstallMessage, { title: manifest.title, version: manifest.version });
+    new ConfirmModal(this.app, {
+      title: t.addTitle,
+      message,
+      confirmText: isUpdate ? t.updateButton : t.addButton,
+      onConfirm: () => {
+        void this.directoryService
+          .install(bytes, contents)
+          .then(async () => {
+            new Notice(I18n.format(installed ? t.updated : t.added, { title: manifest.title }));
+            await this.getDecksView()?.refresh();
+          })
+          .catch((error: Error) => new Notice(this.directoryErrorMessage(error)));
+      },
+    }).open();
+  }
+
+  private async openDirectoryExport(path: string): Promise<void> {
+    const t = I18n.t.directory;
+    const found = await this.db.getDeckByFilepath(path);
+    const deck = found ? await this.db.getDeckWithProfile(found.id) : null;
+    if (!deck) {
+      new Notice(t.notADeck);
+      return;
+    }
+    const initial: DirectoryExportDetails = this.settings.directoryExports[path] ?? {
+      slug: slugifyDirectoryTitle(deck.name),
+      title: deck.name,
+      description: "",
+      language: "",
+      subject: "",
+      version: 1,
+      license: "",
+    };
+    const exporter = new DirectoryExporter(this.app, this.db, `decks-plugin/${this.manifest.version}`);
+    new DirectoryExportModal(this.app, deck, exporter, initial, (details, output) =>
+      this.saveDirectoryExport(path, details, output)
+    ).open();
+  }
+
+  private async saveDirectoryExport(
+    deckPath: string,
+    details: DirectoryExportDetails,
+    output: DirectoryExportOutput,
+  ): Promise<void> {
+    const folder = "Decks packages";
+    const adapter = this.app.vault.adapter;
+    if (!(await adapter.exists(folder))) await adapter.mkdir(folder);
+    const path = `${folder}/${details.slug}-v${details.version}.dpkg`;
+    await adapter.writeBinary(path, output.bytes.slice().buffer);
+    this.settings.directoryExports[deckPath] = { ...details };
+    await this.saveSettings();
+    new Notice(I18n.format(I18n.t.directory.exported, { path }));
+  }
+
+  private directoryErrorMessage(error: Error): string {
+    const t = I18n.t.directory;
+    if (error instanceof DpkgError) return error.code === "newer_format" ? t.newerFormat : t.invalidPackage;
+    return I18n.format(t.failed, { error: error instanceof Error ? error.message : String(error) });
   }
 
   openAnkiImportModal(): void {

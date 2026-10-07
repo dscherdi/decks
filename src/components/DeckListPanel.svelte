@@ -16,6 +16,7 @@
     generateDeckGroupId,
     I18n,
     DEFAULT_DECK_PROFILE,
+    isDirectoryDeckPath,
   } from "@decks/core";
   import type { DeckTree, TreeNode, FlatRow } from "@decks/core";
 
@@ -516,6 +517,7 @@
       if (node.section === "tags") return { emoji: "🏷️" };
       if (node.section === "custom") return { emoji: "📋" };
       if (node.section === "pinned") return { lucide: "pin" };
+      if (node.section === "directory") return { lucide: "package" };
       return { lucide: "folder-tree" };
     }
     if (node.kind === "folder") {
@@ -526,6 +528,7 @@
       return node.customDeck.deckType === "filter" ? { emoji: "🔍" } : { emoji: "📋" };
     }
     if (node.fileDeck) {
+      if (isDirectoryDeckPath(node.fileDeck.filepath)) return { lucide: "package" };
       return node.fileDeck.filepath.endsWith(".canvas")
         ? { lucide: "layout-dashboard" }
         : { lucide: "file-text" };
@@ -536,7 +539,7 @@
   function sectionMeta(node: TreeNode): string {
     const count =
       node.section === "files"
-        ? allDecks.length
+        ? allDecks.filter((deck) => !isDirectoryDeckPath(deck.filepath)).length
         : node.section === "tags"
           ? deckGroups.length
           : node.section === "custom"
@@ -917,10 +920,22 @@
     if (deckExamEnabled && onReviewDeck) dropdown.appendChild(reviewOption);
     dropdown.appendChild(browseOption);
     if (onCramDeck) dropdown.appendChild(cramOption);
-    if (onOpenSource) dropdown.appendChild(openSourceOption);
-    dropdown.appendChild(exportOption);
+    // A directory deck has no note to open and is not the user's to re-export.
+    const fromDirectory = isDirectoryDeckPath(deck.filepath);
+    if (onOpenSource && !fromDirectory) dropdown.appendChild(openSourceOption);
+    if (!fromDirectory) dropdown.appendChild(exportOption);
     dropdown.appendChild(configOption);
     dropdown.appendChild(resetOption);
+    if (fromDirectory) {
+      const removeOption = activeDocument.createElement("div");
+      removeOption.className = "decks-dropdown-option decks-dropdown-option-danger";
+      removeOption.textContent = t.directory.removeAction;
+      removeOption.onclick = () => {
+        closeActiveDropdown();
+        confirmRemoveDirectoryDeck(deck);
+      };
+      dropdown.appendChild(removeOption);
+    }
 
     // Position dropdown with viewport bounds checking
     const button = event.target as HTMLElement;
@@ -1359,6 +1374,24 @@
     }
     const modal = new AnkiExportModal(app, deck, db);
     modal.open();
+  }
+
+  function confirmRemoveDirectoryDeck(deck: DeckWithProfile) {
+    new ConfirmModal(app, {
+      title: t.directory.removeTitle,
+      message: I18n.format(t.directory.removeMessage, { title: deck.name }),
+      confirmText: t.directory.removeButton,
+      isDanger: true,
+      onConfirm: () => {
+        void db
+          .removeDirectoryDeck(deck.id)
+          .then(async () => {
+            new Notice(I18n.format(t.directory.removed, { title: deck.name }));
+            await onRefresh();
+          })
+          .catch((error: Error) => new Notice(I18n.format(t.directory.failed, { error: error.message })));
+      },
+    }).open();
   }
 
   function openResetDeckModal(deck: DeckWithProfile) {

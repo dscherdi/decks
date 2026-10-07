@@ -2,7 +2,7 @@ import type { DataAdapter } from "obsidian";
 import { recoverInterruptedWrite, writeBinaryAtomic } from "./atomic-write";
 import { BaseDatabaseService } from "./BaseDatabaseService";
 import type { QueryConfig } from "./BaseDatabaseService";
-import type { SqlJsValue, SyncData, SyncResult } from "@decks/core";
+import type { DpkgImportResult, MaterialiseAllResult, SqlJsValue, SyncData, SyncResult } from "@decks/core";
 import type { DatabaseWorkerMessage } from "../workers/worker-entry";
 import { ProgressTracker } from "../utils/progress";
 import { getEmbeddedAssets } from "./embedded-assets";
@@ -450,6 +450,24 @@ export class WorkerDatabaseService extends BaseDatabaseService {
     } finally {
       this.activeSyncProgress = undefined;
     }
+  }
+
+  async importDirectoryPackage(bytes: Uint8Array): Promise<DpkgImportResult> {
+    const result = (await this.sendMessage("importDirectoryPackage", {
+      bytes,
+      now: new Date().toISOString(),
+    })) as DpkgImportResult;
+    // No sync op carries an import, so it is on disk before anything else can happen.
+    await this.save();
+    return result;
+  }
+
+  async materialiseDirectoryDecks(): Promise<MaterialiseAllResult> {
+    const result = (await this.sendMessage("materialiseDirectoryDecks", {
+      now: new Date().toISOString(),
+    })) as MaterialiseAllResult;
+    if (result.materialised.length + result.dropped.length + result.reprofiled.length > 0) this.markDirty(true);
+    return result;
   }
 
   // Worker-specific operations (deprecated - use syncFlashcardsForDeck)
