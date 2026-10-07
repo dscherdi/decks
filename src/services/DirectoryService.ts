@@ -126,7 +126,7 @@ export class DirectoryService {
 
   private async fetchMedia(ref: DirectoryMediaRef): Promise<void> {
     const name = `${ref.sha256}.${ref.ext}`;
-    const url = directoryMediaUrl(ref.sha256);
+    const url = directoryMediaUrl(ref);
     if (!url || this.fetching.has(name)) return;
     this.fetching.add(name);
     try {
