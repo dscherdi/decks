@@ -117,11 +117,14 @@ export class DirectoryExportModal extends Modal {
     new Setting(contentEl)
       .setName(t.titleName)
       .addText((text) => text.setValue(this.details.title).onChange((value) => (this.details.title = value)));
-    new Setting(contentEl)
+    const description = new Setting(contentEl)
       .setName(t.descriptionName)
-      .addTextArea((area) =>
-        area.setValue(this.details.description).onChange((value) => (this.details.description = value))
-      );
+      .setDesc(t.descriptionDesc)
+      .addTextArea((area) => {
+        area.inputEl.rows = 8;
+        area.setValue(this.details.description).onChange((value) => (this.details.description = value));
+      });
+    description.settingEl.addClass("decks-directory-export-description");
     new Setting(contentEl)
       .setName(t.languageName)
       .addText((text) => text.setValue(this.details.language).onChange((value) => (this.details.language = value.trim())));

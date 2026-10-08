@@ -1538,3 +1538,14 @@ div.decks-card-content
 .decks-directory-export-warning {
   color: var(--text-warning);
 }
+
+.decks-directory-export-description {
+  flex-direction: column;
+  align-items: stretch;
+  gap: var(--size-4-2);
+}
+.decks-directory-export-description .setting-item-control textarea {
+  width: 100%;
+  min-height: 9em;
+  resize: vertical;
+}
