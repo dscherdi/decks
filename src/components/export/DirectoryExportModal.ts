@@ -1,5 +1,6 @@
 import { Modal, Notice, Setting, type App } from "obsidian";
-import { I18n, isValidDirectorySlug, type DeckWithProfile } from "@decks/core";
+import { I18n, isValidDirectoryPublisherId,
+  isValidDirectorySlug, type DeckWithProfile } from "@decks/core";
 import {
   planExportDecks,
   type DirectoryExporter,
@@ -103,6 +104,16 @@ export class DirectoryExportModal extends Modal {
       .setName(t.slugName)
       .setDesc(t.slugDesc)
       .addText((text) => text.setValue(this.details.slug).onChange((value) => (this.details.slug = value.trim())));
+    const publisher = this.details.publisher ?? { id: "", name: "" };
+    this.details.publisher = publisher;
+    new Setting(contentEl)
+      .setName(t.publisherName)
+      .setDesc(t.publisherNameDesc)
+      .addText((text) => text.setValue(publisher.name).onChange((value) => (publisher.name = value.trim())));
+    new Setting(contentEl)
+      .setName(t.publisherHandle)
+      .setDesc(t.publisherHandleDesc)
+      .addText((text) => text.setValue(publisher.id).onChange((value) => (publisher.id = value.trim())));
     new Setting(contentEl)
       .setName(t.titleName)
       .addText((text) => text.setValue(this.details.title).onChange((value) => (this.details.title = value)));
@@ -148,6 +159,10 @@ export class DirectoryExportModal extends Modal {
     if (this.busy) return;
     if (!isValidDirectorySlug(this.details.slug)) {
       new Notice(t.slugDesc);
+      return;
+    }
+    if (!isValidDirectoryPublisherId(this.details.publisher?.id ?? "")) {
+      new Notice(t.publisherHandleDesc);
       return;
     }
     this.busy = true;

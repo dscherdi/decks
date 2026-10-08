@@ -6,6 +6,8 @@ import {
   DEFAULT_EXAM_SETTINGS,
   carriedProfiles,
   directoryMediaMime,
+  directoryPackageRef,
+  isValidDirectoryPublisherId,
   isValidDirectorySlug,
   packDpkg,
   parseHeaderLevels,
@@ -128,6 +130,9 @@ export class DirectoryExporter {
 
   async export(decks: DeckWithProfile[], details: DirectoryExportDetails): Promise<DirectoryExportOutput> {
     if (!isValidDirectorySlug(details.slug)) throw new Error(`"${details.slug}" is not a valid slug`);
+    const publisher = details.publisher;
+    if (!publisher || !isValidDirectoryPublisherId(publisher.id)) throw new Error("The package needs a publisher handle");
+    const ref = directoryPackageRef(publisher.id, details.slug);
     const planned = planExportDecks(decks, details.deckKeys);
     const media = new Map<string, ResolvedMedia>();
     const packaged: DirectoryDeckContent[] = [];
@@ -144,7 +149,7 @@ export class DirectoryExporter {
       await this.collectMedia(cards, deck.filepath, media);
 
       const exam = deck.profile.examEnabled === true;
-      const built = buildDirectoryCards(details.slug, cards, (linkpath) => media.get(linkpath)?.ref ?? null, { exam });
+      const built = buildDirectoryCards(ref, cards, (linkpath) => media.get(linkpath)?.ref ?? null, { exam });
       skipped += built.skipped.length;
       unresolved.push(...built.unresolved);
       if (built.cards.length === 0) continue;
@@ -187,7 +192,7 @@ export class DirectoryExporter {
     const deckDb = new SQL.Database();
     let deckDbBytes: Uint8Array;
     try {
-      writeDpkgDeckDb(deckDb, details.slug, { decks: packaged, templates }, new Date().toISOString());
+      writeDpkgDeckDb(deckDb, ref, { decks: packaged, templates }, new Date().toISOString());
       deckDbBytes = deckDb.export();
     } finally {
       deckDb.close();
@@ -197,6 +202,7 @@ export class DirectoryExporter {
     for (const card of all) typeCounts[card.type] = (typeCounts[card.type] ?? 0) + 1;
     const { bytes } = await packDpkg({
       manifest: {
+        publisher: { id: publisher.id, name: publisher.name },
         slug: details.slug,
         version: details.version,
         title: details.title,

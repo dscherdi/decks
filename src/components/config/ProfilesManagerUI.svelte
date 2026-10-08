@@ -13,7 +13,7 @@
   } from "../../database/types";
   import { DEFAULT_PROFILE_ID, getDefaultLearningSteps, getDefaultRelearningSteps, DEFAULT_EXAM_SETTINGS, I18n, validateLearningSteps, validateRelearningSteps, validateRequestRetention } from "@decks/core";
   import { studyTagsFor, isUnderTag } from "@decks/core";
-  import { directoryProfileOwner, isDirectoryProfileId, isDirectoryTag, uniqueProfileName } from "@decks/core";
+  import { directoryPackageProfileOf, isDirectoryProfileId, isDirectoryTag } from "@decks/core";
   import type { DirectoryDeckRecord } from "@decks/core";
   import { parseRequestRetention } from "../../utils/request-retention";
   import type { TagScopeOptions } from "@decks/core";
@@ -109,7 +109,7 @@
   $: recapRows = selectedProfile ? buildRecapRows(selectedProfile, deckCount) : [];
   // A package's own profile only changes with its package.
   $: locked = selectedProfile ? isDirectoryProfileId(selectedProfile.id) : false;
-  $: owner = selectedProfile ? directoryProfileOwner(directoryRecords, selectedProfile.id) : null;
+  $: owner = selectedProfile ? directoryPackageProfileOf(directoryRecords, selectedProfile.id) : null;
 
   // Small setIcon action for icon-only buttons.
   function icon(node: HTMLElement, name: string) {
@@ -134,7 +134,7 @@
         }
       }
     }
-    // A package's decks change profile only through Customize.
+    // A package's decks always study with their package's own profile.
     return Array.from(tags)
       .filter((tag) => !mapped.has(tag) && !isDirectoryTag(tag))
       .sort();
@@ -303,24 +303,13 @@
     new Notice(p.noticeProfileDuplicated);
   }
 
-  /** Copies a package profile for its decks to use instead, since the package's own never changes. */
-  async function handleCustomizeProfile() {
-    if (!selectedProfile || !owner) return;
-    const source = selectedProfile;
-    const deckTags = owner.deckTags;
-    const newProfileId = `profile_${Date.now()}`;
-    await db.createProfile({
-      ...source,
-      id: newProfileId,
-      name: uniqueProfileName(`${source.name}${p.copySuffix}`, profiles.map((pr) => pr.name)),
-      isDefault: false,
-    });
-    for (const tag of deckTags) await db.applyProfileToTag(newProfileId, tag, tagScope);
-    await db.save();
-
+  /** Puts a package profile's study settings back to the package's own. */
+  async function handleResetProfile() {
+    if (!selectedProfile) return;
+    const id = selectedProfile.id;
+    await db.setDirectoryProfileSettings(id, null);
     profiles = await db.getAllProfiles();
-    await selectProfile(newProfileId);
-    new Notice(p.noticeProfileDuplicated);
+    await selectProfile(id);
   }
 
   async function handleSaveProfile() {
@@ -1040,7 +1029,7 @@
     <div class="decks-pm-package">
       <p>{I18n.format(p.directoryNote, { title: owner?.title ?? "" })}</p>
       {#if owner}
-        <button class="mod-cta" on:click={handleCustomizeProfile}>{p.customize}</button>
+        <button on:click={handleResetProfile}>{p.resetToPackage}</button>
       {/if}
     </div>
   {/if}
@@ -1071,13 +1060,9 @@
     {#if selectedProfile}
       <!-- SETTINGS TAB (kept mounted; hidden when inactive so the imperative
            rebuildSettings() fill is never torn down by a conditional mount) -->
-      <div
-        class="decks-profile-settings"
-        class:decks-section-hidden={activeTab !== "settings"}
-        class:decks-pm-locked={locked}
-        inert={locked || undefined}
-      >
-        <div bind:this={profileNameContainer}></div>
+      <div class="decks-profile-settings" class:decks-section-hidden={activeTab !== "settings"}>
+        <!-- A package's own fields stay locked; its study settings are the learner's. -->
+        <div bind:this={profileNameContainer} class:decks-pm-locked={locked} inert={locked || undefined}></div>
 
         <div class="decks-settings-section">
           <h4>{p.sectionDailyLimits}</h4>
@@ -1099,14 +1084,19 @@
 
         <div class="decks-settings-section">
           <h4>{p.sectionCardParsing}</h4>
-          <div bind:this={headerLevelContainer}></div>
-          <div bind:this={extraHeaderLevelsContainer}></div>
-          <div bind:this={clozeEnabledContainer}></div>
+          <div bind:this={headerLevelContainer} class:decks-pm-locked={locked} inert={locked || undefined}></div>
+          <div bind:this={extraHeaderLevelsContainer} class:decks-pm-locked={locked} inert={locked || undefined}></div>
+          <div bind:this={clozeEnabledContainer} class:decks-pm-locked={locked} inert={locked || undefined}></div>
           <div bind:this={clozeShowContextContainer}></div>
-          <div bind:this={examEnabledContainer}></div>
+          <div bind:this={examEnabledContainer} class:decks-pm-locked={locked} inert={locked || undefined}></div>
         </div>
 
-        <div class="decks-settings-section" class:decks-section-hidden={!examEnabled}>
+        <div
+          class="decks-settings-section"
+          class:decks-section-hidden={!examEnabled}
+          class:decks-pm-locked={locked}
+          inert={locked || undefined}
+        >
           <h4>{t.exam.examSettingsHeading}</h4>
           <div bind:this={examSettingsContainer} class="decks-exam-settings"></div>
         </div>
@@ -1190,7 +1180,7 @@
   <div class="decks-modal-footer">
     <div class="decks-pm-footer-spacer"></div>
     <button on:click={onclose}>{p.close}</button>
-    {#if selectedProfile && !locked}
+    {#if selectedProfile}
       <button
         class="decks-btn-save"
         on:click={handleSaveProfile}

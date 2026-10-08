@@ -1,6 +1,7 @@
 import {
   type AiProviderId,
   type DpkgManifestDraft,
+  type DpkgPublisher,
   type ExamSettings,
   type LanguagePreference,
   DEFAULT_EXAM_SETTINGS,
@@ -33,6 +34,8 @@ export type DirectoryExportDetails = Pick<
   deckKeys?: Record<string, string>;
   /** Note paths in the order the package lists its decks. */
   deckOrder?: string[];
+  /** Who the package is from; its handle is part of the package's identity. */
+  publisher?: DpkgPublisher;
 };
 
 export interface DecksSettings {
@@ -172,6 +175,8 @@ export interface DecksSettings {
 
   // Last package details used per deck note, so the next export starts from them.
   directoryExports: Record<string, DirectoryExportDetails>;
+  // Who new packages are from, until an export says otherwise; the handle is made on first use.
+  directoryPublisher: DpkgPublisher;
 
   // Internal tracking
   hasCreatedTestDeck: boolean;
@@ -274,6 +279,7 @@ export const DEFAULT_SETTINGS: DecksSettings = {
   exam: { ...DEFAULT_EXAM_SETTINGS },
 
   directoryExports: {},
+  directoryPublisher: { id: "", name: "" },
 
   hasCreatedTestDeck: false,
   hasCreatedCanvasTestDeck: false,

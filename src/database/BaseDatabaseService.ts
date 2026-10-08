@@ -32,7 +32,17 @@ import type { FilterDefinition } from "./types";
 import { generateCustomDeckCardId, generateCustomDeckId, generateFlashcardId, reviewCardDaysSQL, SQL_QUERIES, type SyncOpV1 } from "@decks/core";
 import { aiConceptId, aiSessionValues, aiStagedCardValues, applyRowPatch, isCrammed } from "@decks/core";
 import { normalizeProfile } from "@decks/core";
-import { directoryDeckProfiles, isDirectoryDeck, isDirectoryProfileId, livePackageProfile, pickDirectoryProfile, pickProfileMapping, studyTagsFor } from "@decks/core";
+import { directoryDeckProfiles, isDirectoryDeck, isDirectoryProfileId, livePackageProfile, pickProfileMapping, studyTagsFor } from "@decks/core";
+import {
+  directoryPackageProfileOf,
+  learnerColumnsFromUpdates,
+  nextLearnerSettings,
+  packageOwnedChanges,
+  packageProfileColumns,
+  parseLearnerSettings,
+  SELECT_DIRECTORY_PROFILE_SETTINGS_SQL,
+  UPSERT_DIRECTORY_PROFILE_SETTINGS_SQL,
+} from "@decks/core";
 import type { TagScopeOptions } from "@decks/core";
 
 /** Fallback when a caller has no settings to hand; matches DEFAULT_SETTINGS. */
@@ -466,6 +476,33 @@ export abstract class BaseDatabaseService implements IDatabaseService {
     await this.save();
   }
 
+  async setDirectoryProfileSettings(
+    profileId: string,
+    updates: Partial<Omit<DeckProfile, "id" | "created" | "modified" | "isDefault">> | null
+  ): Promise<void> {
+    const owner = directoryPackageProfileOf(await this.listDirectoryDecks(), profileId);
+    if (!owner) throw new Error(`Not a deck directory profile: ${profileId}`);
+    let settings = {};
+    if (updates) {
+      const current = await this.getProfileById(profileId);
+      if (current && packageOwnedChanges(current, updates).length > 0) {
+        throw new Error("Only study settings of a deck directory profile can change");
+      }
+      const rows = await this.querySql<{ settings: string }>(SELECT_DIRECTORY_PROFILE_SETTINGS_SQL, [profileId], { asObject: true });
+      settings = nextLearnerSettings(
+        packageProfileColumns(owner.profile),
+        parseLearnerSettings(rows[0]?.settings),
+        learnerColumnsFromUpdates(updates)
+      );
+    }
+    const modified = new Date().toISOString();
+    const json = JSON.stringify(settings);
+    await this.executeSql(UPSERT_DIRECTORY_PROFILE_SETTINGS_SQL, [profileId, json, modified]);
+    this.emitSyncOp({ o: "directory_profile_settings", p: { profileId, settings: json, modified } });
+    await this.materialiseDirectoryDecks();
+    await this.save();
+  }
+
   async renameDeckTemplate(
     oldSourceFile: string,
     newSourceFile: string,
@@ -803,7 +840,7 @@ export abstract class BaseDatabaseService implements IDatabaseService {
   }
 
   async updateProfile(id: string, updates: Partial<Omit<DeckProfile, 'id' | 'created' | 'modified' | 'isDefault'>>): Promise<void> {
-    if (isDirectoryProfileId(id)) throw new Error("A deck directory profile changes only with its package");
+    if (isDirectoryProfileId(id)) return this.setDirectoryProfileSettings(id, updates);
     const current = await this.getProfileById(id);
     if (!current) {
       throw new Error(`Profile not found: ${id}`);
@@ -1041,7 +1078,7 @@ export abstract class BaseDatabaseService implements IDatabaseService {
 
     for (const deck of allDecks) {
       const resolvedProfileId = isDirectoryDeck(deck)
-        ? pickDirectoryProfile(allMappings, deck.tag, livePackageProfile(packageProfiles, liveProfiles, deck.id))
+        ? (livePackageProfile(packageProfiles, liveProfiles, deck.id) ?? DEFAULT_PROFILE_ID)
         : pickProfileMapping(allMappings, studyTagsFor(deck, effectiveScope)) || DEFAULT_PROFILE_ID;
       if (deck.profileId === resolvedProfileId) continue;
       await this.updateDeck(deck.id, { profileId: resolvedProfileId });

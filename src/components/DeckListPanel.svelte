@@ -21,7 +21,9 @@
     directoryDeckKeyFromPath,
     directoryPackageIdFromPath,
     directoryPackageGroup,
-    directoryPackageSlugOfNode,
+    directoryPackageRefOfNode,
+    directoryPackageLabel,
+    directoryRecordRef,
     packageExamDeckId,
   } from "@decks/core";
   import type { DeckTree, DirectoryDeckRecord, TreeNode, FlatRow } from "@decks/core";
@@ -487,8 +489,8 @@
   function groupForNode(node: TreeNode): DeckGroup {
     if (node.group) return node.group;
     // A package's folder studies each deck within its package's own limits.
-    const packageSlug = directoryPackageSlugOfNode(node);
-    const record = packageSlug ? directoryRecords.find((candidate) => candidate.slug === packageSlug) : undefined;
+    const packageRef = directoryPackageRefOfNode(node);
+    const record = packageRef ? directoryRecords.find((candidate) => directoryRecordRef(candidate) === packageRef) : undefined;
     const packageGroup = record ? directoryPackageGroup(record, allDecks, node.id) : null;
     if (packageGroup) return packageGroup;
     return {
@@ -539,7 +541,7 @@
       return { lucide: "folder-tree" };
     }
     if (node.kind === "folder") {
-      if (directoryPackageSlugOfNode(node)) return { lucide: "package" };
+      if (directoryPackageRefOfNode(node)) return { lucide: "package" };
       return node.id.startsWith("tag:") ? { emoji: "🏷️" } : { lucide: "folder" };
     }
     if (node.group) return { emoji: "🏷️" };
@@ -601,7 +603,7 @@
       db.listDirectoryDecks()
         .then((records) => {
           directoryRecords = records;
-          directoryTitles = new Map(records.map((record) => [record.slug, record.title]));
+          directoryTitles = new Map(records.map((record) => [directoryRecordRef(record), directoryPackageLabel(record)]));
         })
         .catch(console.error);
     }
@@ -1358,18 +1360,18 @@
       buildDropdownOption(t.deckList.exportToAnki, () => openAnkiExportForGroup(group)),
     );
     // An installed package: its exam decks can be taken together, and it is removed as a whole.
-    const packageSlug = directoryPackageSlugOfNode(node);
-    if (packageSlug) {
+    const packageRef = directoryPackageRefOfNode(node);
+    if (packageRef) {
       const hasExam = allDecks.some((deck) => node.deckIds.includes(deck.id) && deck.profile.examEnabled === true);
       if (hasExam && onExamDeckGroup) {
         // The exam starts from the package's own exam settings, as on the website.
-        const examDeckId = packageExamDeckId(directoryRecords, packageSlug);
+        const examDeckId = packageExamDeckId(directoryRecords, packageRef);
         const examProfile = allDecks.find((deck) => deck.id === examDeckId)?.profile;
         const examGroup = examProfile ? { ...group, profile: examProfile } : group;
         dropdown.appendChild(buildDropdownOption(t.exam.startExam, () => onExamDeckGroup?.(examGroup)));
       }
       const removeOption = buildDropdownOption(t.directory.removeAction, () =>
-        confirmRemoveDirectoryPackage(directoryDeckId(packageSlug), node.name),
+        confirmRemoveDirectoryPackage(directoryDeckId(packageRef), node.name),
       );
       removeOption.addClass("decks-dropdown-option-danger");
       dropdown.appendChild(removeOption);

@@ -27,6 +27,7 @@ import {
   formatByteSize,
   isDirectoryDeckPath,
   parseDirectoryImportRequest,
+  newDirectoryPublisherId,
   slugifyDirectoryTitle,
   type DeckWithProfile,
   type DpkgContents,
@@ -49,6 +50,14 @@ import { ObsidianNoteAccess } from "./services/ObsidianNoteAccess";
 import { AnchorMigrator } from "./services/AnchorMigrator";
 import { CanvasFileEventHandlers } from "./services/CanvasFileEventHandlers";
 import { Scheduler } from "@decks/core";
+import {
+  directoryRecordRef,
+  isPublishedDirectoryArchive,
+  manifestPackageRef,
+  matchesDirectoryLink,
+  needsDirectoryCheck,
+  sha256Hex,
+} from "@decks/core";
 import { EXAMS_PROFILE_ID, getExamDeckTag } from "@decks/core";
 import { AnchorUpgrader, parseHeaderLevels } from "@decks/core";
 import { DeviceLocalState } from "./services/DeviceLocalState";
@@ -2076,11 +2085,24 @@ export default class DecksPlugin extends Plugin {
       return;
     }
     const { manifest } = contents;
-    if (expectedSlug && manifest.slug !== expectedSlug) {
+    if (expectedSlug && !matchesDirectoryLink(manifest, expectedSlug)) {
       new Notice(t.invalidPackage);
       return;
     }
-    const installed = (await this.db.listDirectoryDecks()).find((deck) => deck.slug === manifest.slug);
+    // A file that names the directory as its publisher must be a version the directory published.
+    if (!expectedSlug && needsDirectoryCheck(manifest)) {
+      const info = await this.directoryService.fetchDeckInfo(manifest.slug).catch(() => undefined);
+      if (info === undefined) {
+        new Notice(t.verifyOffline);
+        return;
+      }
+      if (!isPublishedDirectoryArchive(info, manifest.slug, await sha256Hex(bytes))) {
+        new Notice(t.unverifiedOfficial);
+        return;
+      }
+    }
+    const ref = manifestPackageRef(manifest);
+    const installed = (await this.db.listDirectoryDecks()).find((deck) => directoryRecordRef(deck) === ref);
     const isUpdate = installed !== undefined && installed.version !== manifest.version;
     const message = !installed
       ? I18n.format(t.addMessage, {
@@ -2131,14 +2153,22 @@ export default class DecksPlugin extends Plugin {
   }
 
   private openDirectoryExportFor(path: string, title: string, decks: DeckWithProfile[]): void {
-    const initial: DirectoryExportDetails = this.settings.directoryExports[path] ?? {
-      slug: slugifyDirectoryTitle(title),
-      title,
-      description: "",
-      language: "",
-      subject: "",
-      version: 1,
-      license: "",
+    if (!this.settings.directoryPublisher?.id) {
+      this.settings.directoryPublisher = { name: this.settings.directoryPublisher?.name ?? "", id: newDirectoryPublisherId() };
+      void this.saveSettings();
+    }
+    const saved = this.settings.directoryExports[path];
+    const initial: DirectoryExportDetails = {
+      ...(saved ?? {
+        slug: slugifyDirectoryTitle(title),
+        title,
+        description: "",
+        language: "",
+        subject: "",
+        version: 1,
+        license: "",
+      }),
+      publisher: saved?.publisher ?? { ...this.settings.directoryPublisher },
     };
     const exporter = new DirectoryExporter(this.app, this.db, `decks-plugin/${this.manifest.version}`);
     new DirectoryExportModal(this.app, decks, exporter, initial, (details, output) =>
@@ -2157,6 +2187,7 @@ export default class DecksPlugin extends Plugin {
     const path = `${folder}/${details.slug}-v${details.version}.dpkg`;
     await adapter.writeBinary(path, output.bytes.slice().buffer);
     this.settings.directoryExports[deckPath] = { ...details };
+    if (details.publisher) this.settings.directoryPublisher = { ...details.publisher };
     await this.saveSettings();
     new Notice(I18n.format(I18n.t.directory.exported, { path }));
   }
