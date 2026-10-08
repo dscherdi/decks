@@ -1535,6 +1535,12 @@ div.decks-card-content
   width: auto;
 }
 
+/* A plain settings form, so it scrolls and keeps the padding the shared .decks-modal reset removes. */
+.decks-directory-export-modal > .modal-content {
+  padding: var(--size-4-4);
+  overflow-y: auto;
+}
+
 .decks-directory-export-warning {
   color: var(--text-warning);
 }
