@@ -31,10 +31,13 @@ export async function persistExamAttempt(
   const stamper = new AnchorStamper(new ObsidianNoteAccess(app), db);
   const byFile = new Map<string, Flashcard[]>();
   const loose: Flashcard[] = [];
+  // An exercise's questions share one card, stamped once.
+  const seen = new Set<string>();
   for (const answer of result.answers) {
     if (answer.givenAnswer === "") continue;
     const card = attempt.questions[answer.ordinal]?.card;
-    if (!card || card.anchor) continue;
+    if (!card || card.anchor || seen.has(card.id)) continue;
+    seen.add(card.id);
     if (card.sourceFile.toLowerCase().endsWith(".md")) {
       const cards = byFile.get(card.sourceFile) ?? [];
       cards.push(card);
@@ -128,7 +131,9 @@ export class ExamModalWrapper extends Modal {
   onOpen() {
     const { contentEl } = this;
     contentEl.empty();
-    this.responsiveHandle = makeModalResponsive(this, ["decks-exam-modal"]);
+    // An exercise's text sits beside its questions, which wants the room.
+    const withText = this.attempt.questions.some((q) => (q.material?.body.trim() ?? "") !== "");
+    this.responsiveHandle = makeModalResponsive(this, ["decks-exam-modal", ...(withText ? ["decks-exam-modal-wide"] : [])]);
     contentEl.addClass("decks-exam-container");
 
     const t = I18n.t.exam;

@@ -1,8 +1,9 @@
 <script lang="ts">
-  import { onDestroy, onMount } from "svelte";
+  import { onDestroy, onMount, tick } from "svelte";
   import {
     EXAM_TARGET_BLANK,
     examQuestionText,
+    groupExamExercises,
     I18n,
     type AttemptMiss,
     type WeakSection,
@@ -94,6 +95,12 @@
 
   $: question = attempt.questions[currentIndex];
   $: total = attempt.questions.length;
+  // A lone question is an exercise of one; the screen shows a whole exercise at a time.
+  const exercises = groupExamExercises(attempt.questions);
+  const exerciseAt: number[] = [];
+  exercises.forEach((entry, n) => entry.indices.forEach((i) => (exerciseAt[i] = n)));
+  $: exercise = exercises[exerciseAt[currentIndex] ?? 0];
+  $: isExercise = exercise.material !== null;
   $: displayOrder =
     question?.displayOrder ?? question?.options?.map((_o, i) => i) ?? [];
   // Bumped when a question is graded: the attempt's own state is not reactive.
@@ -115,6 +122,31 @@
 
   function refreshAnsweredFlags(..._deps: unknown[]): boolean[] {
     return attempt.questions.map((_q, i) => attempt.isAnswered(i));
+  }
+
+  function selectedAt(i: number, ..._deps: unknown[]): number[] {
+    const given = attempt.getAnswer(i);
+    return given?.kind === "options" ? given.selected : [];
+  }
+
+  function revealedAt(i: number, ..._deps: unknown[]): boolean {
+    return i === currentIndex ? revealed : attempt.isLocked(i);
+  }
+
+  /** Make a question of the exercise on screen the one being answered. */
+  function focusQuestion(i: number): void {
+    if (i !== currentIndex) goTo(i);
+  }
+
+  function toggleOptionAt(i: number, fileIndex: number): void {
+    focusQuestion(i);
+    toggleOption(fileIndex);
+  }
+
+  function typeAt(i: number, value: string): void {
+    focusQuestion(i);
+    typedText = value;
+    onTypedInput();
   }
 
   function optionPrefix(displayPosition: number): string {
@@ -142,8 +174,6 @@
     revealed = attempt.isLocked(currentIndex);
     selfPromptVisible = false;
     checkFailed = false;
-    // The swapped input remounts with the question ({#key currentIndex}).
-    clozeInputEl = null;
   }
 
   function goTo(i: number): void {
@@ -196,7 +226,7 @@
       attempt.lockAnswer(currentIndex);
       gradeVersion += 1;
       revealed = true;
-      if (clozeInputEl) clozeInputEl.disabled = true;
+      disableClozeInput(currentIndex);
       answeredFlags = refreshAnsweredFlags();
     } else {
       next();
@@ -220,7 +250,7 @@
     attempt.lockAnswer(i);
     gradeVersion += 1;
     revealed = true;
-    if (clozeInputEl) clozeInputEl.disabled = true;
+    disableClozeInput(i);
     answeredFlags = refreshAnsweredFlags();
   }
 
@@ -268,7 +298,7 @@
     gradeVersion += 1;
     selfPromptVisible = false;
     revealed = true;
-    if (clozeInputEl) clozeInputEl.disabled = true;
+    disableClozeInput(currentIndex);
     answeredFlags = refreshAnsweredFlags();
   }
 
@@ -413,15 +443,19 @@
     }
   }
 
-  // Mount-time markdown action: render, then swap the cloze sentinel for
-  // the answer input so the target blank IS the input. Question content is
-  // wrapped in {#key currentIndex}, so every navigation remounts these —
-  // reactive re-render timing (which runs before the DOM patch) never
-  // touches a stale or unmounted element.
+  // Mount-time markdown action. Content is wrapped in {#key exercise.key}, so
+  // moving to another exercise remounts these; within one, nothing re-renders.
   function renderBlock(el: HTMLElement, content: string): { destroy(): void } {
     el.empty();
-    void renderMarkdown(content, el, question?.card.sourceFile ?? "").then(() => {
-      swapSentinel(el);
+    void renderMarkdown(content, el, question?.card.sourceFile ?? "");
+    return { destroy() {} };
+  }
+
+  // A cloze renders, then its target blank is swapped for the answer input.
+  function renderCloze(el: HTMLElement, p: { text: string; index: number }): { destroy(): void } {
+    el.empty();
+    void renderMarkdown(p.text, el, attempt.questions[p.index]?.card.sourceFile ?? "").then(() => {
+      swapSentinel(el, p.index);
     });
     return { destroy() {} };
   }
@@ -441,6 +475,15 @@
     return { update: draw };
   }
 
+  // Within an exercise, the question being answered scrolls into view.
+  const questionEls: Record<number, HTMLElement> = {};
+  $: if (isExercise) void scrollToQuestion(currentIndex);
+
+  async function scrollToQuestion(i: number): Promise<void> {
+    await tick();
+    questionEls[i]?.scrollIntoView({ block: "nearest", behavior: "smooth" });
+  }
+
   // The page strip keeps the current question in view; only the strip scrolls, never the question.
   let navEl: HTMLElement | null = null;
   $: if (navEl) {
@@ -451,9 +494,14 @@
     }
   }
 
-  let clozeInputEl: HTMLInputElement | null = null;
+  const clozeInputs = new Map<number, HTMLInputElement>();
 
-  function swapSentinel(root: HTMLElement): void {
+  function disableClozeInput(i: number): void {
+    const input = clozeInputs.get(i);
+    if (input) input.disabled = true;
+  }
+
+  function swapSentinel(root: HTMLElement, index: number): void {
     const walker = activeDocument.createTreeWalker(root, NodeFilter.SHOW_TEXT);
     let node: Node | null = walker.nextNode();
     while (node) {
@@ -464,17 +512,15 @@
         input.type = "text";
         input.className = "decks-exam-blank-input";
         input.placeholder = t.typeAnswerPlaceholder;
-        input.value = typedText;
-        input.disabled = locked;
-        input.addEventListener("input", () => {
-          typedText = input.value;
-          onTypedInput();
-        });
+        input.value = index === currentIndex ? typedText : typedAnswerAt(index);
+        input.disabled = attempt.isLocked(index);
+        input.addEventListener("focus", () => focusQuestion(index));
+        input.addEventListener("input", () => typeAt(index, input.value));
         const after = node.splitText(at);
         after.nodeValue = (after.nodeValue ?? "").slice(EXAM_TARGET_BLANK.length);
         node.parentElement.insertBefore(input, after);
-        clozeInputEl = input;
-        input.focus();
+        clozeInputs.set(index, input);
+        if (index === currentIndex) input.focus();
         return;
       }
       node = walker.nextNode();
@@ -484,6 +530,7 @@
   // Selection and reveal state are passed in so the template expression
   // depends on them — Svelte only invalidates on identifiers it can see.
   function optionState(
+    target: ExamQuestion,
     fileIndex: number,
     verdict: ExamQuestionOutcome | null,
     selected: number[],
@@ -491,7 +538,7 @@
   ): string {
     const isSelected = selected.includes(fileIndex);
     if (!isRevealed || !verdict) return isSelected ? "selected" : "";
-    const correct = question.options?.[fileIndex]?.correct === true;
+    const correct = target.options?.[fileIndex]?.correct === true;
     if (isSelected && correct) return "chosen-correct";
     if (isSelected && !correct) return "chosen-wrong";
     if (!isSelected && correct) return "missed-correct";
@@ -584,90 +631,127 @@
         })}
       </div>
 
-      {#key currentIndex}
-        {#if question.stem}
-          <div class="decks-exam-stem markdown-rendered" use:renderBlock={question.stem}></div>
-        {/if}
-
-        {#if question.kind === "multiple-choice"}
-          <div class="decks-exam-options">
-            {#each displayOrder as fileIndex, displayPosition (fileIndex)}
-              <button
-                class="decks-exam-option {optionState(fileIndex, outcome, selectedIndices, revealed)}"
-                disabled={locked && !revealed}
-                on:click={() => toggleOption(fileIndex)}
+      {#key exercise.key}
+        <div class="decks-exam-exercise" class:decks-exam-exercise-split={!!exercise.material?.body.trim()}>
+          {#if exercise.material}
+            {#if exercise.material.body.trim()}
+              <aside class="decks-exam-shared">
+                <div class="decks-exam-shared-heading">{exercise.material.heading}</div>
+                <div class="decks-exam-shared-body markdown-rendered" use:renderBlock={exercise.material.body}></div>
+              </aside>
+            {:else}
+              <div class="decks-exam-shared-heading">{exercise.material.heading}</div>
+            {/if}
+          {/if}
+          <div class="decks-exam-exercise-questions">
+            {#each exercise.indices as qi (qi)}
+              {@const q = attempt.questions[qi]}
+              {@const active = qi === currentIndex}
+              {@const qOutcome = active ? outcome : outcomeAt(qi, gradeVersion)}
+              {@const qLocked = active ? locked : lockedAt(qi, gradeVersion)}
+              {@const qRevealed = revealedAt(qi, revealed, gradeVersion)}
+              <div
+                class="decks-exam-question"
+                class:decks-exam-question-in-exercise={isExercise}
+                class:decks-exam-question-active={isExercise && active}
+                bind:this={questionEls[qi]}
               >
-                <span class="decks-exam-option-prefix">{optionPrefix(displayPosition)}</span>
-                <span
-                  class="decks-exam-option-text markdown-rendered"
-                  use:renderBlock={question.options?.[fileIndex]?.text ?? ""}
-                ></span>
-              </button>
+                {#if isExercise}
+                  <button class="decks-exam-question-number" on:click={() => focusQuestion(qi)}>{qi + 1}</button>
+                {/if}
+                <div class="decks-exam-question-content">
+                  {#if q.stem}
+                    <div class="decks-exam-stem markdown-rendered" use:renderBlock={q.stem}></div>
+                  {/if}
+
+                  {#if q.kind === "multiple-choice"}
+                    {@const order = q.displayOrder ?? q.options?.map((_o, i) => i) ?? []}
+                    {@const picked = active ? selectedIndices : selectedAt(qi, answeredFlags)}
+                    <div class="decks-exam-options">
+                      {#each order as fileIndex, displayPosition (fileIndex)}
+                        <button
+                          class="decks-exam-option {optionState(q, fileIndex, qOutcome, picked, qRevealed)}"
+                          disabled={qLocked && !qRevealed}
+                          on:click={() => toggleOptionAt(qi, fileIndex)}
+                        >
+                          <span class="decks-exam-option-prefix">{optionPrefix(displayPosition)}</span>
+                          <span
+                            class="decks-exam-option-text markdown-rendered"
+                            use:renderBlock={q.options?.[fileIndex]?.text ?? ""}
+                          ></span>
+                        </button>
+                      {/each}
+                    </div>
+                  {:else if q.isCloze && q.clozeContext}
+                    <div
+                      class="decks-exam-cloze markdown-rendered"
+                      use:renderCloze={{ text: blanksAsText(q.clozeContext), index: qi }}
+                    ></div>
+                  {:else if byMeaning}
+                    <textarea
+                      class="decks-exam-typed-input decks-exam-typed-long"
+                      rows="3"
+                      placeholder={t.typeAnswerPlaceholder}
+                      value={active ? typedText : typedAnswerAt(qi)}
+                      on:focus={() => focusQuestion(qi)}
+                      on:input={(e) => typeAt(qi, e.currentTarget.value)}
+                      disabled={qLocked || judging || submitting}
+                    ></textarea>
+                  {:else}
+                    <input
+                      class="decks-exam-typed-input"
+                      type="text"
+                      placeholder={t.typeAnswerPlaceholder}
+                      value={active ? typedText : typedAnswerAt(qi)}
+                      on:focus={() => focusQuestion(qi)}
+                      on:input={(e) => typeAt(qi, e.currentTarget.value)}
+                      disabled={qLocked}
+                    />
+                  {/if}
+
+                  {#if active && selfPromptVisible}
+                    <div class="decks-exam-self-prompt">
+                      {#if checkFailed}
+                        <div class="decks-exam-check-note">{t.checkUnavailable}</div>
+                      {/if}
+                      <div class="decks-exam-correct-answer">
+                        <span class="decks-exam-label">{t.correctAnswer}:</span>
+                        <span class="decks-exam-md" use:md={{ text: q.expectedAnswer ?? "", source: q.card.sourceFile }}></span>
+                      </div>
+                      <div class="decks-exam-self-question">{t.selfPromptQuestion}</div>
+                      <div class="decks-exam-self-buttons">
+                        <button class="decks-exam-self-yes" on:click={() => giveSelfVerdict(true)}>
+                          {t.selfYes}
+                        </button>
+                        <button class="decks-exam-self-no" on:click={() => giveSelfVerdict(false)}>
+                          {t.selfNo}
+                        </button>
+                      </div>
+                    </div>
+                  {:else if qRevealed && qOutcome}
+                    <div
+                      class="decks-exam-verdict"
+                      class:decks-exam-verdict-correct={qOutcome.isCorrect}
+                      class:decks-exam-verdict-wrong={!qOutcome.isCorrect}
+                    >
+                      <div>{qOutcome.isCorrect ? t.correct : t.incorrect}</div>
+                      {#if qOutcome.isCorrect && qOutcome.gradingMethod === "meaning"}
+                        <div class="decks-exam-check-note">{t.acceptedByMeaning}</div>
+                      {/if}
+                      {#if q.kind === "type-in"}
+                        <div class="decks-exam-correct-answer">
+                          <span class="decks-exam-label">{t.correctAnswer}:</span>
+                          <span class="decks-exam-md" use:md={{ text: qOutcome.correctAnswerText, source: q.card.sourceFile }}></span>
+                        </div>
+                      {/if}
+                    </div>
+                  {/if}
+                </div>
+              </div>
             {/each}
           </div>
-        {:else if question.isCloze && question.clozeContext}
-          <div
-            class="decks-exam-cloze markdown-rendered"
-            use:renderBlock={blanksAsText(question.clozeContext)}
-          ></div>
-        {:else if byMeaning}
-          <textarea
-            class="decks-exam-typed-input decks-exam-typed-long"
-            rows="3"
-            placeholder={t.typeAnswerPlaceholder}
-            bind:value={typedText}
-            on:input={onTypedInput}
-            disabled={locked || judging || submitting}
-          ></textarea>
-        {:else}
-          <input
-            class="decks-exam-typed-input"
-            type="text"
-            placeholder={t.typeAnswerPlaceholder}
-            bind:value={typedText}
-            on:input={onTypedInput}
-            disabled={locked}
-          />
-        {/if}
+        </div>
       {/key}
-
-      {#if selfPromptVisible}
-        <div class="decks-exam-self-prompt">
-          {#if checkFailed}
-            <div class="decks-exam-check-note">{t.checkUnavailable}</div>
-          {/if}
-          <div class="decks-exam-correct-answer">
-            <span class="decks-exam-label">{t.correctAnswer}:</span>
-            <span class="decks-exam-md" use:md={{ text: question.expectedAnswer ?? "", source: question.card.sourceFile }}></span>
-          </div>
-          <div class="decks-exam-self-question">{t.selfPromptQuestion}</div>
-          <div class="decks-exam-self-buttons">
-            <button class="decks-exam-self-yes" on:click={() => giveSelfVerdict(true)}>
-              {t.selfYes}
-            </button>
-            <button class="decks-exam-self-no" on:click={() => giveSelfVerdict(false)}>
-              {t.selfNo}
-            </button>
-          </div>
-        </div>
-      {:else if revealed && outcome}
-        <div
-          class="decks-exam-verdict"
-          class:decks-exam-verdict-correct={outcome.isCorrect}
-          class:decks-exam-verdict-wrong={!outcome.isCorrect}
-        >
-          <div>{outcome.isCorrect ? t.correct : t.incorrect}</div>
-          {#if outcome.isCorrect && outcome.gradingMethod === "meaning"}
-            <div class="decks-exam-check-note">{t.acceptedByMeaning}</div>
-          {/if}
-          {#if question.kind === "type-in"}
-            <div class="decks-exam-correct-answer">
-              <span class="decks-exam-label">{t.correctAnswer}:</span>
-              <span class="decks-exam-md" use:md={{ text: outcome.correctAnswerText, source: question.card.sourceFile }}></span>
-            </div>
-          {/if}
-        </div>
-      {/if}
 
       <div class="decks-exam-navigator" bind:this={navEl}>
         {#each attempt.questions as _q, i (i)}
@@ -675,6 +759,8 @@
             class="decks-exam-chip"
             class:decks-exam-chip-current={i === currentIndex}
             class:decks-exam-chip-answered={answeredFlags[i]}
+            class:decks-exam-chip-group-start={i > 0 && exerciseAt[i] !== exerciseAt[i - 1] && (exercises[exerciseAt[i]].indices.length > 1 || exercises[exerciseAt[i - 1]].indices.length > 1)}
+            class:decks-exam-chip-in-group={exercises[exerciseAt[i]].indices.length > 1}
             on:click={() => goTo(i)}
           >
             {i + 1}
@@ -707,6 +793,7 @@
   {:else if phase === "review"}
     {@const reviewIndex = reviewQueue[reviewPos] ?? 0}
     {@const reviewQuestion = attempt.questions[reviewIndex]}
+    {@const reviewShared = exercises[exerciseAt[reviewIndex] ?? 0]?.material ?? null}
     <div class="decks-exam-body">
       <div class="decks-exam-review-title">{t.reviewAnswersTitle}</div>
       <div class="decks-exam-check-note">{checkFailed ? t.checkUnavailable : t.reviewAnswersIntro}</div>
@@ -717,6 +804,14 @@
         })}
       </div>
       {#key reviewIndex}
+        {#if reviewShared}
+          <details class="decks-exam-shared-details">
+            <summary>{reviewShared.heading}</summary>
+            {#if reviewShared.body.trim()}
+              <div class="markdown-rendered" use:renderBlock={reviewShared.body}></div>
+            {/if}
+          </details>
+        {/if}
         <div class="decks-exam-stem markdown-rendered" use:renderBlock={blanksAsText(examQuestionText(reviewQuestion))}></div>
         <div class="decks-exam-self-prompt">
           <div>
@@ -759,7 +854,16 @@
 
       <div class="decks-exam-result-list">
         {#each questionResultRows() as row, i (i)}
-          <div class="decks-exam-result-row">
+          {@const group = exercises[exerciseAt[i] ?? 0]}
+          {#if group.material && group.indices[0] === i}
+            <details class="decks-exam-shared-details decks-exam-result-group">
+              <summary>{group.material.heading}</summary>
+              {#if group.material.body.trim()}
+                <div class="markdown-rendered" use:md={{ text: group.material.body, source: row.question.card.sourceFile }}></div>
+              {/if}
+            </details>
+          {/if}
+          <div class="decks-exam-result-row" class:decks-exam-result-in-group={group.indices.length > 1}>
             <div class="decks-exam-result-verdict">
               {#if row.outcome.givenAnswerText === "" && !row.outcome.isCorrect}
                 <span class="decks-exam-verdict-wrong">{t.unanswered}</span>
@@ -792,10 +896,10 @@
                   })}</span
                 >
               {/if}
-              {#if row.question.card.notes}
+              {#if row.question.notes}
                 <details class="decks-exam-result-notes">
                   <summary>{t.notes}</summary>
-                  <div use:md={{ text: row.question.card.notes, source: row.question.card.sourceFile }}></div>
+                  <div use:md={{ text: row.question.notes, source: row.question.card.sourceFile }}></div>
                 </details>
               {/if}
             </div>
@@ -1003,6 +1107,75 @@
     overflow-y: auto;
     flex: 1;
   }
+  .decks-exam-body {
+    container-type: inline-size;
+  }
+  .decks-exam-exercise,
+  .decks-exam-exercise-questions {
+    display: flex;
+    flex-direction: column;
+    gap: 0.75rem;
+  }
+  .decks-exam-shared {
+    border: 1px solid var(--background-modifier-border);
+    border-radius: 6px;
+    padding: 0.6rem 0.8rem;
+    background: var(--background-secondary);
+  }
+  .decks-exam-shared-heading {
+    font-weight: 600;
+    margin-bottom: 0.25rem;
+  }
+  /* Wide screens read the text beside the questions; it stays put while they scroll. */
+  @container (min-width: 820px) {
+    .decks-exam-exercise-split {
+      display: grid;
+      grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+      align-items: start;
+    }
+    .decks-exam-exercise-split .decks-exam-shared {
+      position: sticky;
+      top: 0;
+      max-height: 70vh;
+      overflow-y: auto;
+    }
+  }
+  .decks-exam-question {
+    display: flex;
+    gap: 0.6rem;
+  }
+  .decks-exam-question-content {
+    display: flex;
+    flex-direction: column;
+    gap: 0.75rem;
+    flex: 1;
+    min-width: 0;
+  }
+  .decks-exam-question-in-exercise {
+    border: 1px solid transparent;
+    border-radius: 6px;
+    padding: 0.4rem;
+  }
+  .decks-exam-question-active {
+    border-color: var(--interactive-accent);
+  }
+  .decks-exam-question-number {
+    flex: none;
+    align-self: flex-start;
+    min-width: 2rem;
+    font-variant-numeric: tabular-nums;
+  }
+  .decks-exam-shared-details summary {
+    cursor: pointer;
+    font-weight: 600;
+  }
+  .decks-exam-result-group {
+    border-top: 1px solid var(--background-modifier-border);
+    padding-top: 0.5rem;
+  }
+  .decks-exam-result-in-group {
+    padding-left: 0.75rem;
+  }
   .decks-exam-progress {
     color: var(--text-muted);
     font-size: 0.9em;
@@ -1088,6 +1261,12 @@
   .decks-exam-chip-current {
     border-color: var(--interactive-accent);
     box-shadow: inset 0 0 0 1px var(--interactive-accent);
+  }
+  .decks-exam-chip-group-start {
+    margin-left: 0.5rem;
+  }
+  .decks-exam-chip-in-group {
+    border-bottom-width: 3px;
   }
   .decks-exam-chip-current.decks-exam-chip-answered {
     box-shadow: inset 0 0 0 2px var(--background-primary);

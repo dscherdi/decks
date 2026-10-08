@@ -19,6 +19,7 @@
   import { prepareFuzzySearch } from "obsidian";
   import { computeCardHealth } from "@decks/core";
   import {
+    blankClozeDeletions,
     classifyExamBody,
     indexSetsEqual,
     shuffleInPlace,
@@ -345,50 +346,73 @@
   // (objective verdict styling) → the normal self-rating buttons. Nothing is
   // persisted beyond the rating; an empty selection is a plain reveal.
   $: isMultipleChoice = currentCard?.type === "multiple-choice";
-  let mcqOptions: ExamOption[] = [];
-  let mcqStem = "";
-  let mcqDisplayOrder: number[] = [];
-  let mcqSelected: number[] = [];
+  // One entry per question: a question has one, an exercise one per sub-question.
+  type ReviewItem =
+    | { kind: "choice"; stem: string; options: ExamOption[]; notes: string; order: number[]; multi: boolean }
+    | { kind: "typed" | "cloze"; stem: string; text: string; notes: string };
+  let mcqItems: ReviewItem[] = [];
+  let mcqShared = "";
+  let mcqSelected: number[][] = [];
   let mcqCardId: string | null = null;
   $: if (currentCard && isMultipleChoice && currentCard.id !== mcqCardId) {
     mcqCardId = currentCard.id;
     const classified = classifyExamBody(currentCard.back);
-    mcqOptions = classified.kind === "mcq" ? classified.options : [];
-    mcqStem = classified.kind === "mcq" ? classified.stem : "";
-    mcqSelected = [];
-    const order = mcqOptions.map((_o, i) => i);
     const profile = "profile" in deckOrGroup ? deckOrGroup.profile : undefined;
-    mcqDisplayOrder =
-      (profile?.examSettings?.shuffleOptions ?? true)
-        ? shuffleInPlace(order)
-        : order;
+    const shuffle = profile?.examSettings?.shuffleOptions ?? true;
+    const choice = (stem: string, options: ExamOption[], notes: string): ReviewItem => {
+      const order = options.map((_o, i) => i);
+      return {
+        kind: "choice",
+        stem,
+        options,
+        notes,
+        order: shuffle ? shuffleInPlace(order) : order,
+        multi: options.filter((option) => option.correct).length > 1,
+      };
+    };
+    mcqItems =
+      classified.kind === "mcq"
+        ? [choice(classified.stem, classified.options, "")]
+        : classified.kind === "exercise"
+          ? classified.items.map((item): ReviewItem =>
+              item.kind === "choice"
+                ? choice(item.stem, item.options, item.notes)
+                : { kind: item.kind, stem: item.stem, text: item.kind === "typed" ? item.answer : item.text, notes: item.notes }
+            )
+          : [];
+    mcqShared = classified.kind === "exercise" ? classified.shared : "";
+    mcqSelected = mcqItems.map(() => []);
   }
-  $: mcqCorrectIndices = mcqOptions
-    .map((option, index) => (option.correct ? index : -1))
-    .filter((index) => index >= 0);
-  $: mcqMulti = mcqCorrectIndices.length > 1;
 
-  function toggleMcqOption(fileIndex: number): void {
-    if (showAnswer) return;
-    if (mcqMulti) {
-      mcqSelected = mcqSelected.includes(fileIndex)
-        ? mcqSelected.filter((v) => v !== fileIndex)
-        : [...mcqSelected, fileIndex];
-    } else {
-      mcqSelected = [fileIndex];
-    }
+  /** A fill-in question's text, blanked until the answer is shown. */
+  function clozeShown(text: string, revealed: boolean): string {
+    return revealed ? text : blankClozeDeletions(text, "\\[...\\]");
+  }
+
+  function toggleMcqOption(item: number, fileIndex: number): void {
+    const entry = mcqItems[item];
+    if (showAnswer || entry?.kind !== "choice") return;
+    const current = mcqSelected[item] ?? [];
+    const nextSelection = entry.multi
+      ? current.includes(fileIndex)
+        ? current.filter((v) => v !== fileIndex)
+        : [...current, fileIndex]
+      : [fileIndex];
+    mcqSelected = mcqSelected.map((selection, i) => (i === item ? nextSelection : selection));
   }
 
   // Selection/reveal passed as params so the template expression depends on
   // them — Svelte only invalidates on identifiers visible in the template.
   function mcqOptionState(
+    item: number,
     fileIndex: number,
-    selected: number[],
+    selected: number[][],
     revealed: boolean
   ): string {
-    const isSelected = selected.includes(fileIndex);
+    const isSelected = (selected[item] ?? []).includes(fileIndex);
     if (!revealed) return isSelected ? "selected" : "";
-    const correct = mcqOptions[fileIndex]?.correct === true;
+    const entry = mcqItems[item];
+    const correct = entry?.kind === "choice" && entry.options[fileIndex]?.correct === true;
     if (isSelected && correct) return "chosen-correct";
     if (isSelected && !correct) return "chosen-wrong";
     if (!isSelected && correct) return "missed-correct";
@@ -1266,11 +1290,14 @@
     if (!showAnswer && kbEnabled && isMultipleChoice && /^[1-9]$/.test(event.key)) {
       // Number keys only here — letters would clash with the B/S/R bindings.
       const displayPosition = parseInt(event.key, 10) - 1;
-      if (displayPosition < mcqDisplayOrder.length) {
+      // An exercise has several lists, so number keys only pick in a single question.
+      const only = mcqItems.length === 1 ? mcqItems[0] : null;
+      const order = only?.kind === "choice" ? only.order : [];
+      if (displayPosition < order.length) {
         event.preventDefault();
         lastEventTime = now;
         lastEventType = eventType;
-        toggleMcqOption(mcqDisplayOrder[displayPosition]);
+        toggleMcqOption(0, order[displayPosition]);
       }
       return;
     }
@@ -1961,29 +1988,42 @@
             {/if}
           </div>
         {/if}
-        {#if isMultipleChoice && mcqOptions.length > 0}
+        {#if isMultipleChoice && mcqItems.length > 0}
           <div class="decks-review-mcq">
-            {#if mcqStem}
-              {#key mcqCardId}
-                <div
-                  class="decks-card-text markdown-rendered"
-                  use:mcqRenderInto={mcqStem}
-                ></div>
-              {/key}
-            {/if}
-            {#each mcqDisplayOrder as fileIndex, displayPosition (`${mcqCardId}:${fileIndex}`)}
-              <button
-                class="decks-exam-option {mcqOptionState(fileIndex, mcqSelected, showAnswer)}"
-                type="button"
-                on:click={() => toggleMcqOption(fileIndex)}
-              >
-                <span class="decks-exam-option-prefix">{displayPosition + 1})</span>
-                <span
-                  class="decks-exam-option-text markdown-rendered"
-                  use:mcqRenderInto={mcqOptions[fileIndex].text}
-                ></span>
-              </button>
-            {/each}
+            {#key mcqCardId}
+              {#if mcqShared}
+                <div class="decks-review-shared-text decks-card-text markdown-rendered" use:mcqRenderInto={mcqShared}></div>
+              {/if}
+              {#each mcqItems as item, itemIndex}
+                {#if item.stem}
+                  <div class="decks-card-text markdown-rendered" class:decks-review-mcq-stem={mcqItems.length > 1} use:mcqRenderInto={item.stem}></div>
+                {/if}
+                {#if item.kind === "choice"}
+                  {#each item.order as fileIndex, displayPosition (`${mcqCardId}:${itemIndex}:${fileIndex}`)}
+                    <button
+                      class="decks-exam-option {mcqOptionState(itemIndex, fileIndex, mcqSelected, showAnswer)}"
+                      type="button"
+                      on:click={() => toggleMcqOption(itemIndex, fileIndex)}
+                    >
+                      <span class="decks-exam-option-prefix">{displayPosition + 1})</span>
+                      <span
+                        class="decks-exam-option-text markdown-rendered"
+                        use:mcqRenderInto={item.options[fileIndex].text}
+                      ></span>
+                    </button>
+                  {/each}
+                {:else if item.kind === "cloze"}
+                  {#key showAnswer}
+                    <div class="decks-review-exercise-answer decks-card-text markdown-rendered" use:mcqRenderInto={clozeShown(item.text, showAnswer)}></div>
+                  {/key}
+                {:else if showAnswer}
+                  <div class="decks-review-exercise-answer decks-card-text markdown-rendered" use:mcqRenderInto={item.text}></div>
+                {/if}
+                {#if showAnswer && item.notes}
+                  <div class="decks-review-mcq-note decks-card-text markdown-rendered" use:mcqRenderInto={item.notes}></div>
+                {/if}
+              {/each}
+            {/key}
           </div>
         {/if}
       </div>

@@ -332,6 +332,10 @@
         return t.exam.invalidReasonNested;
       case "empty-option":
         return t.exam.invalidReasonEmptyOption;
+      case "empty-question":
+        return t.exam.invalidReasonEmptyQuestion;
+      case "empty-answer":
+        return t.exam.invalidReasonEmptyAnswer;
     }
   }
 

@@ -1386,6 +1386,23 @@ div.decks-card-content
   width: 100%;
   max-width: 900px;
 }
+.decks-review-mcq-stem {
+  margin-top: 8px;
+}
+.decks-review-mcq-note,
+.decks-review-shared-text {
+  color: var(--text-muted);
+}
+.decks-review-exercise-answer {
+  padding: var(--size-4-2) var(--size-4-3);
+  border: 1px solid var(--background-modifier-border);
+  border-radius: var(--radius-m);
+}
+/* Exam decks: optional styling for an exercise's reading text. */
+.callout[data-callout="passage"] {
+  --callout-color: var(--callout-quote);
+  --callout-icon: lucide-book-open;
+}
 .decks-exam-option {
   display: flex;
   align-items: baseline;
@@ -1447,6 +1464,10 @@ div.decks-card-content
 .decks-exam-modal .modal-content,
 .decks-exam-container {
   height: 100%;
+}
+.decks-modal.decks-exam-modal-wide {
+  width: 80vw;
+  max-width: 1200px;
 }
 /* The setup dialog is a plain settings form, not a filled flex layout, so
    restore padding/scroll that the shared .decks-modal content reset removes. */

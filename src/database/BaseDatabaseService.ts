@@ -2272,7 +2272,8 @@ export abstract class BaseDatabaseService implements IDatabaseService {
     )) as (string | number | null)[][];
     let count = 0;
     for (const row of rows) {
-      if (classifyExamBody((row[0] as string) ?? "").kind === "mcq") count++;
+      const kind = classifyExamBody((row[0] as string) ?? "").kind;
+      if (kind === "mcq" || kind === "exercise") count++;
     }
     return count;
   }

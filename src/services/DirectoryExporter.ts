@@ -10,6 +10,7 @@ import {
   isValidDirectoryPublisherId,
   isValidDirectorySlug,
   packDpkg,
+  dpkgFormatVersion,
   parseHeaderLevels,
   sha256Hex,
   slugifyDirectoryTitle,
@@ -228,6 +229,7 @@ export class DirectoryExporter {
         profiles: carried.profiles,
       },
       deckDb: deckDbBytes,
+      formatVersion: dpkgFormatVersion({ decks: packaged, templates }),
       // The website reads the cards from here, each with the deck it belongs to.
       cardsJson: JSON.stringify(packaged.flatMap((deck) => deck.cards.map((card) => ({ ...card, deckKey: deck.key })))),
       media: [...media.values()].map((entry) => entry.input),
