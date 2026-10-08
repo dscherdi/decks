@@ -32,7 +32,7 @@ import type { FilterDefinition } from "./types";
 import { generateCustomDeckCardId, generateCustomDeckId, generateFlashcardId, reviewCardDaysSQL, SQL_QUERIES, type SyncOpV1 } from "@decks/core";
 import { aiConceptId, aiSessionValues, aiStagedCardValues, applyRowPatch, isCrammed } from "@decks/core";
 import { normalizeProfile } from "@decks/core";
-import { directoryDeckProfiles, isDirectoryDeck, livePackageProfile, pickDirectoryProfile, pickProfileMapping, studyTagsFor } from "@decks/core";
+import { directoryDeckProfiles, isDirectoryDeck, isDirectoryProfileId, livePackageProfile, pickDirectoryProfile, pickProfileMapping, studyTagsFor } from "@decks/core";
 import type { TagScopeOptions } from "@decks/core";
 
 /** Fallback when a caller has no settings to hand; matches DEFAULT_SETTINGS. */
@@ -803,6 +803,7 @@ export abstract class BaseDatabaseService implements IDatabaseService {
   }
 
   async updateProfile(id: string, updates: Partial<Omit<DeckProfile, 'id' | 'created' | 'modified' | 'isDefault'>>): Promise<void> {
+    if (isDirectoryProfileId(id)) throw new Error("A deck directory profile changes only with its package");
     const current = await this.getProfileById(id);
     if (!current) {
       throw new Error(`Profile not found: ${id}`);
@@ -901,6 +902,7 @@ export abstract class BaseDatabaseService implements IDatabaseService {
   }
 
   async deleteProfile(id: string): Promise<void> {
+    if (isDirectoryProfileId(id)) throw new Error("A deck directory profile changes only with its package");
     const profile = await this.getProfileById(id);
     if (!profile) {
       throw new Error(`Profile not found: ${id}`);
@@ -1013,6 +1015,7 @@ export abstract class BaseDatabaseService implements IDatabaseService {
     tag: string,
     scope?: TagScopeOptions
   ): Promise<number> {
+    if (isDirectoryProfileId(profileId)) throw new Error("A deck directory profile changes only with its package");
     if (profileId === DEFAULT_PROFILE_ID) {
       // Remove explicit mapping so the tag inherits from its parent
       const existingMappings = await this.getAllTagMappings();

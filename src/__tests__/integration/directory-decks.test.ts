@@ -240,14 +240,23 @@ describe("directory decks in the plugin database", () => {
 
     const first = await scheduler.getNextForDeckGroup(new Date(), group, { allowNew: true });
     expect(first?.deckId).toBe(directoryDeckId(SLUG, "capitals"));
+    if (!first) return;
 
-    // With the study deck's one new card spent, the exam deck's limit of none still holds.
-    const capitals = (await db.getDeckWithProfile(directoryDeckId(SLUG, "capitals")))?.profile;
-    if (capitals) await db.updateProfile(capitals.id, { newCardsPerDay: 0 });
+    // With the study deck's one new card of the day studied, the exam deck's limit of none still holds.
+    await scheduler.rate(first, "good", 4000, new Date());
     expect(await scheduler.getNextForDeckGroup(new Date(), group, { allowNew: true })).toBeNull();
     // A folder that took the group's limits would offer every new card.
     const uncapped = { ...group, deckLimits: false, profile: { ...group.profile, hasNewCardsLimitEnabled: false } };
     expect(await scheduler.getNextForDeckGroup(new Date(), uncapped, { allowNew: true })).not.toBeNull();
+  });
+
+  it("keeps a package's own profile read-only", async () => {
+    await db.importDirectoryPackage(await buildPackage(null, CARDS));
+    const own = directoryProfileId(SLUG, "preset:study");
+    await expect(db.updateProfile(own, { newCardsPerDay: 5 })).rejects.toThrow();
+    await expect(db.deleteProfile(own)).rejects.toThrow();
+    await expect(db.applyProfileToTag(own, "#decks/elsewhere")).rejects.toThrow();
+    expect((await db.getProfileById(own))?.hasNewCardsLimitEnabled).toBe(false);
   });
 
   it("removes the package's own profiles with it", async () => {

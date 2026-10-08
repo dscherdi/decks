@@ -575,8 +575,9 @@ export class MainDatabaseService extends BaseDatabaseService {
                 INSERT OR REPLACE INTO deckprofiles
                 SELECT remote.* FROM remote.deckprofiles
                 LEFT JOIN deckprofiles AS main ON remote.id = main.id
-                WHERE main.id IS NULL
-                   OR COALESCE(remote.deleted_at, remote.modified) > COALESCE(main.deleted_at, main.modified)
+                WHERE (main.id IS NULL
+                   OR COALESCE(remote.deleted_at, remote.modified) > COALESCE(main.deleted_at, main.modified))
+                  AND remote.id NOT LIKE 'profile_dir_%'
               `);
             } catch {
               // Pre-v17 remote DB lacks deleted_at and/or learning_steps. Fall back

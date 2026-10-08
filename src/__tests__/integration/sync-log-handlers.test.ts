@@ -84,6 +84,19 @@ describe("SyncLog handlers - profile_upsert / profile_delete", () => {
     expect(got!.name).toBe("Math");
   });
 
+  it("ignores ops for a deck directory profile, which each device builds from its package", async () => {
+    const { db, adapter } = await freshDb();
+    await db.createProfile({ ...(await db.getProfileById(DEFAULT_PROFILE_ID))!, id: "profile_mine", name: "German A1", isDefault: false });
+    await applyOp(
+      db,
+      "r",
+      entry(1, profileUpsertOp("profile_dir_abc", "German A1", "2030-01-01T00:00:00Z")),
+      makeLogger(adapter)
+    );
+    expect(await db.getProfileById("profile_dir_abc")).toBeNull();
+    expect((await db.getProfileById("profile_mine"))?.name).toBe("German A1");
+  });
+
   it("newer-wins on update", async () => {
     const { db, adapter } = await freshDb();
     await applyOp(

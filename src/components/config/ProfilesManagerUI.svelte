@@ -13,6 +13,8 @@
   } from "../../database/types";
   import { DEFAULT_PROFILE_ID, getDefaultLearningSteps, getDefaultRelearningSteps, DEFAULT_EXAM_SETTINGS, I18n, validateLearningSteps, validateRelearningSteps, validateRequestRetention } from "@decks/core";
   import { studyTagsFor, isUnderTag } from "@decks/core";
+  import { directoryProfileOwner, isDirectoryProfileId, isDirectoryTag, uniqueProfileName } from "@decks/core";
+  import type { DirectoryDeckRecord } from "@decks/core";
   import { parseRequestRetention } from "../../utils/request-retention";
   import type { TagScopeOptions } from "@decks/core";
   import { ttsService } from "../../services/TtsService";
@@ -38,6 +40,7 @@
   let selectedProfileId = "";
   let selectedProfile: DeckProfile | null = null;
   let tagMappings: ProfileTagMapping[] = [];
+  let directoryRecords: DirectoryDeckRecord[] = [];
   let deckCount = 0;
 
   let activeTab: "settings" | "assignments" = initialTab;
@@ -104,6 +107,9 @@
   $: mappedTagSet = new Set(tagMappings.map((m) => m.tag));
   $: assignableTags = deriveAssignableTags(allDecks, mappedTagSet);
   $: recapRows = selectedProfile ? buildRecapRows(selectedProfile, deckCount) : [];
+  // A package's own profile only changes with its package.
+  $: locked = selectedProfile ? isDirectoryProfileId(selectedProfile.id) : false;
+  $: owner = selectedProfile ? directoryProfileOwner(directoryRecords, selectedProfile.id) : null;
 
   // Small setIcon action for icon-only buttons.
   function icon(node: HTMLElement, name: string) {
@@ -128,8 +134,9 @@
         }
       }
     }
+    // A package's decks change profile only through Customize.
     return Array.from(tags)
-      .filter((tag) => !mapped.has(tag))
+      .filter((tag) => !mapped.has(tag) && !isDirectoryTag(tag))
       .sort();
   }
 
@@ -293,6 +300,26 @@
     profiles = await db.getAllProfiles();
     await selectProfile(newProfileId);
 
+    new Notice(p.noticeProfileDuplicated);
+  }
+
+  /** Copies a package profile for its decks to use instead, since the package's own never changes. */
+  async function handleCustomizeProfile() {
+    if (!selectedProfile || !owner) return;
+    const source = selectedProfile;
+    const deckTags = owner.deckTags;
+    const newProfileId = `profile_${Date.now()}`;
+    await db.createProfile({
+      ...source,
+      id: newProfileId,
+      name: uniqueProfileName(`${source.name}${p.copySuffix}`, profiles.map((pr) => pr.name)),
+      isDefault: false,
+    });
+    for (const tag of deckTags) await db.applyProfileToTag(newProfileId, tag, tagScope);
+    await db.save();
+
+    profiles = await db.getAllProfiles();
+    await selectProfile(newProfileId);
     new Notice(p.noticeProfileDuplicated);
   }
 
@@ -945,6 +972,7 @@
   }
 
   onMount(async () => {
+    directoryRecords = await db.listDirectoryDecks();
     // Prefer the profile requested by the caller (e.g. a deck's Configure
     // profile action), else DEFAULT.
     const requested =
@@ -980,7 +1008,9 @@
       >
         {#each profiles as prof (prof.id)}
           <option value={prof.id}>
-            {prof.isDefault ? `${prof.name} ${p.defaultSuffix}` : prof.name}
+            {prof.isDefault ? `${prof.name} ${p.defaultSuffix}` : prof.name}{isDirectoryProfileId(prof.id)
+              ? ` ${p.directorySuffix}`
+              : ""}
           </option>
         {/each}
       </select>
@@ -995,7 +1025,7 @@
       on:click={handleDuplicateProfile}
       use:icon={"copy"}
     ></button>
-    {#if selectedProfile && !selectedProfile.isDefault}
+    {#if selectedProfile && !selectedProfile.isDefault && !locked}
       <button
         class="clickable-icon decks-pm-icon-btn decks-pm-danger"
         title={p.deleteProfile}
@@ -1005,6 +1035,15 @@
       ></button>
     {/if}
   </div>
+
+  {#if locked}
+    <div class="decks-pm-package">
+      <p>{I18n.format(p.directoryNote, { title: owner?.title ?? "" })}</p>
+      {#if owner}
+        <button class="mod-cta" on:click={handleCustomizeProfile}>{p.customize}</button>
+      {/if}
+    </div>
+  {/if}
 
   <!-- Tabs -->
   <div class="decks-pm-tabs">
@@ -1032,7 +1071,12 @@
     {#if selectedProfile}
       <!-- SETTINGS TAB (kept mounted; hidden when inactive so the imperative
            rebuildSettings() fill is never torn down by a conditional mount) -->
-      <div class="decks-profile-settings" class:decks-section-hidden={activeTab !== "settings"}>
+      <div
+        class="decks-profile-settings"
+        class:decks-section-hidden={activeTab !== "settings"}
+        class:decks-pm-locked={locked}
+        inert={locked || undefined}
+      >
         <div bind:this={profileNameContainer}></div>
 
         <div class="decks-settings-section">
@@ -1092,7 +1136,7 @@
         </div>
         <div class="decks-pm-assign-desc">{p.assignmentsExplainer}</div>
 
-        <div class="decks-pm-add-row">
+        <div class="decks-pm-add-row" class:decks-section-hidden={locked}>
           <select class="dropdown decks-pm-add-select" bind:value={addTag}>
             <option value="">{p.assignTagPlaceholder}</option>
             {#each assignableTags as tag (tag)}
@@ -1146,7 +1190,7 @@
   <div class="decks-modal-footer">
     <div class="decks-pm-footer-spacer"></div>
     <button on:click={onclose}>{p.close}</button>
-    {#if selectedProfile}
+    {#if selectedProfile && !locked}
       <button
         class="decks-btn-save"
         on:click={handleSaveProfile}
@@ -1163,6 +1207,26 @@
     display: flex;
     flex-direction: column;
     height: 100%;
+  }
+
+  .decks-pm-package {
+    display: flex;
+    flex-direction: column;
+    align-items: flex-start;
+    gap: var(--size-4-2);
+    margin: 0 0 var(--size-4-3);
+    padding: var(--size-4-3);
+    border-radius: var(--radius-m);
+    background: var(--background-secondary);
+    color: var(--text-muted);
+  }
+
+  .decks-pm-package p {
+    margin: 0;
+  }
+
+  .decks-pm-locked {
+    opacity: 0.75;
   }
 
   /* Title bar */

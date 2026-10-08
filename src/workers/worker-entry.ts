@@ -27,6 +27,7 @@ import {
   buildMigrationSQL,
   ensureDirectoryTables,
   importDpkgContent,
+  DROP_DIRECTORY_PROFILES_SQL,
   materialiseDirectoryDecks,
   mergeDirectoryTables,
   remapCardIdsToDeckIndependent,
@@ -406,6 +407,12 @@ class SimpleDatabaseWorker {
     let remoteDb: Database | null = null;
     try {
       remoteDb = new this.SQL.Database(fileBuffer);
+      // Package profiles are built here from the package; a copied one could take a name a profile here holds.
+      try {
+        remoteDb.run(DROP_DIRECTORY_PROFILES_SQL);
+      } catch {
+        // An older copy without the table has none to drop.
+      }
       this.performMerge(remoteDb);
     } finally {
       if (remoteDb) remoteDb.close();
