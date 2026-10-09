@@ -22,12 +22,15 @@ describe("Demo exam deck template", () => {
   });
 
   it("parses to questions only — every H2 is a card, prose lives under the H1", () => {
-    expect(cards).toHaveLength(8);
+    expect(cards).toHaveLength(10);
   });
 
   it("parses exactly the demo question set", () => {
     const byType = (type: string) => cards.filter((c) => c.type === type);
-    expect(byType("multiple-choice")).toHaveLength(3);
+    expect(byType("multiple-choice").map((c) => c.front).slice(3)).toEqual([
+      "Reading: the noble gases",
+      "Short exercise: the air",
+    ]);
     expect(byType("header-paragraph").map((c) => c.front)).toEqual([
       "What is the powerhouse of the cell?",
     ]);
@@ -69,6 +72,15 @@ describe("Demo exam deck template", () => {
       "tolerant"
     );
     expect(pool.skipped).toHaveLength(0);
-    expect(pool.eligible).toHaveLength(8);
+    // Each exercise question is its own exam question: 3 + 2 on top of the 8 cards.
+    expect(pool.eligible).toHaveLength(13);
+    const material = pool.eligible.filter((q) => q.material);
+    expect(material.map((q) => (q.isCloze ? "cloze" : q.kind))).toEqual([
+      "multiple-choice",
+      "type-in",
+      "cloze",
+      "multiple-choice",
+      "multiple-choice",
+    ]);
   });
 });
