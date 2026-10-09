@@ -137,6 +137,31 @@ describe("DeckManager", () => {
       await mgr.syncFlashcardsForDeck("d");
       expect(setDeckLastSyncedMtime).not.toHaveBeenCalled();
     });
+
+    it("re-parses an unchanged note when forced, and reports its rows as current", async () => {
+      const { mgr, dbSync } = makeMgr({ lastSyncedMtime: 100, fileMtime: 50, cardCount: 5 });
+      expect(await mgr.syncFlashcardsForDeck("d", undefined, { force: true })).toBe(true);
+      expect(dbSync).toHaveBeenCalledTimes(1);
+    });
+
+    it("reports a note skipped as unchanged as current", async () => {
+      const { mgr } = makeMgr({ lastSyncedMtime: 100, fileMtime: 50, cardCount: 5 });
+      expect(await mgr.syncFlashcardsForDeck("d")).toBe(true);
+    });
+
+    it("reports a refused empty parse as not current", async () => {
+      const { mgr } = makeMgr({ lastSyncedMtime: 0, fileMtime: 50, cardCount: 3, skippedEmptyParse: true });
+      expect(await mgr.syncFlashcardsForDeck("d", undefined, { force: true })).toBe(false);
+    });
+
+    it("reports a deck whose note is missing as not current", async () => {
+      const vault = { getAbstractFileByPath: () => null } as unknown as Vault;
+      const db = {
+        getDeckWithProfile: async () => ({ id: "d", name: "D", filepath: "d.md", profile: {} }),
+      } as unknown as IDatabaseService;
+      const mgr = new DeckManager(vault, { getFileCache: () => null } as unknown as MetadataCache, db);
+      expect(await mgr.syncFlashcardsForDeck("d", undefined, { force: true })).toBe(false);
+    });
   });
 
   describe("getStaleDeckIds", () => {

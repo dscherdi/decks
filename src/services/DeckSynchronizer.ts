@@ -359,16 +359,16 @@ export class DeckSynchronizer {
    * (used by handleFileRename in main.ts where we know the file changed
    * even though mtime checks could be ambiguous mid-rename).
    */
-  async syncDeck(deckId: string, options: { force?: boolean } = {}): Promise<void> {
+  async syncDeck(deckId: string, options: { force?: boolean } = {}): Promise<boolean> {
     this.logger.debug(`Syncing specific deck ID: ${deckId}`);
 
     const deck = await this.db.getDeckById(deckId);
     if (!deck) {
       this.logger.debug(`No deck found for ID: ${deckId}`);
-      return;
+      return false;
     }
 
-    await this.deckManager.syncFlashcardsForDeck(
+    return this.deckManager.syncFlashcardsForDeck(
       deckId,
       this.progressTracker,
       options

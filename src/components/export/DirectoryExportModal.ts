@@ -39,7 +39,10 @@ export class DirectoryExportModal extends Modal {
   onOpen(): void {
     this.handle = makeModalResponsive(this, ["decks-directory-export-modal"]);
     this.setTitle(I18n.t.directory.exportTitle);
-    this.render().catch(console.error);
+    this.render().catch((error) => {
+      new Notice(I18n.format(I18n.t.directory.exportFailed, { error: error instanceof Error ? error.message : String(error) }));
+      this.close();
+    });
   }
 
   onClose(): void {

@@ -2170,7 +2170,9 @@ export default class DecksPlugin extends Plugin {
       }),
       publisher: saved?.publisher ?? { ...this.settings.directoryPublisher },
     };
-    const exporter = new DirectoryExporter(this.app, this.db, `decks-plugin/${this.manifest.version}`);
+    const exporter = new DirectoryExporter(this.app, this.db, `decks-plugin/${this.manifest.version}`, (deckId) =>
+      this.deckSynchronizer.syncDeck(deckId, { force: true })
+    );
     new DirectoryExportModal(this.app, decks, exporter, initial, (details, output) =>
       this.saveDirectoryExport(path, details, output)
     ).open();

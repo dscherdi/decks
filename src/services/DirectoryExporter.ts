@@ -99,13 +99,28 @@ export function planExportDecks(decks: DeckWithProfile[], saved: Record<string, 
   });
 }
 
+/** Re-parses one deck's note whatever its mtime; false when its rows may not match the note. */
+export type ReparseDeck = (deckId: string) => Promise<boolean>;
+
 /** Builds a .dpkg package from the user's own decks: one note, or every deck note of a folder. */
 export class DirectoryExporter {
   constructor(
     private app: App,
     private db: IDatabaseService,
-    private generator: string
+    private generator: string,
+    private reparse: ReparseDeck
   ) {}
+
+  // The database can lag a note it skipped as unchanged, so a package is built from a fresh parse.
+  private async reparsed(decks: DeckWithProfile[]): Promise<DeckWithProfile[]> {
+    const fresh: DeckWithProfile[] = [];
+    for (const deck of decks) {
+      const current = (await this.reparse(deck.id)) ? await this.db.getDeckWithProfile(deck.id) : null;
+      if (!current) throw new Error(`Could not read the note "${deck.filepath}"`);
+      fresh.push(current);
+    }
+    return fresh;
+  }
 
   private mediaFile(linkpath: string, sourcePath: string): TFile | null {
     const file = this.app.metadataCache.getFirstLinkpathDest(linkpath, sourcePath);
@@ -114,7 +129,7 @@ export class DirectoryExporter {
 
   /** Cards and media the export would carry, before anything is written. */
   async plan(decks: DeckWithProfile[], details: DirectoryExportDetails): Promise<DirectoryExportPlan> {
-    const planned = planExportDecks(decks, details.deckKeys);
+    const planned = planExportDecks(await this.reparsed(decks), details.deckKeys);
     let cardCount = 0;
     let mediaCount = 0;
     const missingMedia: string[] = [];
@@ -134,7 +149,7 @@ export class DirectoryExporter {
     const publisher = details.publisher;
     if (!publisher || !isValidDirectoryPublisherId(publisher.id)) throw new Error("The package needs a publisher handle");
     const ref = directoryPackageRef(publisher.id, details.slug);
-    const planned = planExportDecks(decks, details.deckKeys);
+    const planned = planExportDecks(await this.reparsed(decks), details.deckKeys);
     const media = new Map<string, ResolvedMedia>();
     const packaged: DirectoryDeckContent[] = [];
     const exams = new Map<string, DeckWithProfile["profile"]>();

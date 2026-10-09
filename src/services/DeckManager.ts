@@ -402,6 +402,7 @@ export class DeckManager {
     return stale;
   }
 
+  // Resolves false when the deck's rows may not match its note: no deck, no file, or an empty parse refused.
   async syncFlashcardsForDeck(
     deckId: string,
     progressTracker?: ProgressTracker,
@@ -411,21 +412,21 @@ export class DeckManager {
       // movement during a long deck instead of a frozen per-deck percentage.
       onProgress?: (progress: number, message?: string) => void;
     } = {}
-  ): Promise<void> {
+  ): Promise<boolean> {
     const deckSyncStartTime = performance.now();
     this.debugLog(`Syncing flashcards for deck ID: ${deckId}`);
 
     const deck = await this.db.getDeckWithProfile(deckId);
     if (!deck) {
       this.debugLog(`No deck found for ID: ${deckId}`);
-      return;
+      return false;
     }
     this.debugLog(
       `Found deck ID: ${deck.id}, name: ${deck.name}, filepath: ${deck.filepath}`
     );
 
     const file = this.vault.getAbstractFileByPath(deck.filepath);
-    if (!file || !(file instanceof TFile)) return;
+    if (!file || !(file instanceof TFile)) return false;
 
     // mtime gate
     const fileMtime = file.stat.mtime;
@@ -439,7 +440,7 @@ export class DeckManager {
           this.debugLog(
             `Skipping sync for ${deck.name}: file mtime ${fileMtime} <= last_synced_mtime ${lastSyncedMtime}`
           );
-          return;
+          return true;
         }
         this.debugLog(
           `Self-heal: ${deck.name} has 0 cards but file unchanged — re-syncing`
@@ -461,6 +462,7 @@ export class DeckManager {
         : undefined;
 
     // Use unified sync method - implementation handles worker vs main thread
+    let matchesNote = false;
     try {
       const fileMeta = this.metadataCache.getFileCache(file);
       const reverseCards = fileMeta?.frontmatter?.reverse === true;
@@ -543,6 +545,7 @@ export class DeckManager {
       if (!result.skippedEmptyParse) {
         await this.db.setDeckLastSyncedMtime(deck.id, fileMtime);
       }
+      matchesNote = !result.skippedEmptyParse;
 
       // Check for duplicates after sync
       try {
@@ -558,6 +561,7 @@ export class DeckManager {
     }
 
     await yieldToUI();
+    return matchesNote;
   }
 
   /**
