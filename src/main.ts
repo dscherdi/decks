@@ -64,11 +64,15 @@ import { DeviceLocalState } from "./services/DeviceLocalState";
 import { SyncLog } from "./services/SyncLog";
 import {
   APP_DB_PATH,
+  legacyDefaultFolders,
+  resolveAiSourcesFolder,
   resolveDbPath,
   resolveBackupFolder,
+  resolveDirectoryMediaFolder,
   resolveSyncLogFolder,
   resolvePdfCacheFolder,
 } from "./utils/paths";
+import { relocateFolder } from "./utils/relocate-folder";
 import { PeerAppDatabase } from "./services/PeerAppDatabase";
 import { canMergePeerDirectory } from "./database/peer-directory";
 import { BackupService } from "./services/BackupService";
@@ -512,19 +516,20 @@ export default class DecksPlugin extends Plugin {
         this.settings,
         this.aiKeyStore,
       );
+      await this.relocateLegacyFolders(pathCtx);
       this.aiSourcePdfs = new AiSourcePdfStore(
         this.app.vault.adapter,
-        `${this.manifest.dir ?? `${this.app.vault.configDir}/plugins/${this.manifest.id}`}/ai-sources`,
+        resolveAiSourcesFolder(this.settings.paths),
       );
       this.directoryService = new DirectoryService(
         adapter,
-        `${dbParent || pluginDir}/directory-media`,
+        resolveDirectoryMediaFolder(this.settings.paths),
         this.db,
         this.logger,
       );
       setDirectoryRenderer(this.directoryService);
-      void this.db
-        .whenReady()
+      // After startup has read the app's database, so its packages count as installed.
+      void this.dbPostInit
         .then(() => this.directoryService.pruneUnusedMedia())
         .catch((error: Error) => this.logger.debug("Directory media prune failed", error));
       this.aiChatController = new AiChatController(
@@ -536,12 +541,7 @@ export default class DecksPlugin extends Plugin {
       // resolved on demand so a settings change takes effect without a restart.
       this.pdfOcrCache = new PdfOcrCache(
         new ObsidianFileStore(this.app),
-        () =>
-          resolvePdfCacheFolder(this.settings.paths, {
-            manifestDir: this.manifest.dir,
-            manifestId: this.manifest.id,
-            vaultConfigDir: this.app.vault.configDir,
-          }),
+        () => resolvePdfCacheFolder(this.settings.paths),
         () => buildAiConfig(this.settings, this.aiKeyStore),
         new ObsidianHttpClient(),
         renderPageImage,
@@ -1536,6 +1536,26 @@ export default class DecksPlugin extends Plugin {
         await this.db.save();
       } catch (error) {
         this.logger.debug("save failed on blur/pagehide", error);
+      }
+    }
+  }
+
+  /** Earlier versions kept these folders in the plugin folder; move them to their defaults once. */
+  private async relocateLegacyFolders(pathCtx: Parameters<typeof legacyDefaultFolders>[1]): Promise<void> {
+    const paths = this.settings.paths;
+    const legacy = legacyDefaultFolders(paths, pathCtx);
+    const moves: Array<[string, string, string]> = [
+      [paths.pdfCacheFolder, legacy.pdfOcr, resolvePdfCacheFolder(paths)],
+      [paths.directoryMediaFolder, legacy.directoryMedia, resolveDirectoryMediaFolder(paths)],
+      [paths.aiSourcesFolder, legacy.aiSources, resolveAiSourcesFolder(paths)],
+    ];
+    for (const [setting, from, to] of moves) {
+      if (setting.trim() !== "") continue;
+      try {
+        const moved = await relocateFolder(this.app.vault.adapter, from, to);
+        if (moved > 0) this.logger.debug(`Moved ${moved} file(s) from ${from} to ${to}`);
+      } catch (error) {
+        this.logger.debug(`Could not move ${from} to ${to}`, error);
       }
     }
   }

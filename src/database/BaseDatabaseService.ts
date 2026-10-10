@@ -52,6 +52,7 @@ import { compileFilter, type FilterCompileOptions } from "@decks/core";
 import type { SyncData, SyncResult } from "@decks/core";
 import {
   REMOVE_DIRECTORY_CONTENT_SQL,
+  SELECT_ALL_DIRECTORY_DECKS_SQL,
   SELECT_DIRECTORY_DECKS_SQL,
   SELECT_DIRECTORY_TEMPLATES_SQL,
   TOMBSTONE_DIRECTORY_DECK_SQL,
@@ -452,9 +453,10 @@ export abstract class BaseDatabaseService implements IDatabaseService {
   abstract importDirectoryPackage(bytes: Uint8Array): Promise<DpkgImportResult>;
   abstract materialiseDirectoryDecks(): Promise<MaterialiseAllResult>;
 
-  async listDirectoryDecks(): Promise<DirectoryDeckRecord[]> {
+  async listDirectoryDecks(includeRemoved = false): Promise<DirectoryDeckRecord[]> {
     try {
-      const rows = await this.querySql<SqlRecord>(SELECT_DIRECTORY_DECKS_SQL, [], { asObject: true });
+      const sql = includeRemoved ? SELECT_ALL_DIRECTORY_DECKS_SQL : SELECT_DIRECTORY_DECKS_SQL;
+      const rows = await this.querySql<SqlRecord>(sql, [], { asObject: true });
       return rows.map(directoryDeckFromRow);
     } catch {
       return [];

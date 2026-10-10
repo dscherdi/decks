@@ -6,7 +6,7 @@ export const PRUNE_AFTER_MS = 30 * 24 * 60 * 60 * 1000;
 
 /**
  * Copies of PDFs attached to AI sessions from outside the vault, by hash, so a
- * resumed session gets its source back. They live in the plugin's folder, not in the vault.
+ * resumed session gets its source back. They live in a vault folder shared with the DecksMD app.
  */
 export class AiSourcePdfStore {
   constructor(

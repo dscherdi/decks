@@ -130,8 +130,12 @@ export interface DecksSettings {
     // Changes require a restart to take effect.
     syncLogFolder: string;
     // Folder holding cached per-page PDF OCR text (reused across runs so the
-    // same PDF is never OCR'd twice). Default: plugin folder + "/pdf-ocr".
+    // same PDF is never OCR'd twice). Default: "Decks OCR" at the vault root.
     pdfCacheFolder: string;
+    // Media of deck directory packages, shared with the DecksMD app. Default: "Decks media".
+    directoryMediaFolder: string;
+    // Copies of the PDFs attached to AI sessions. Default: "Decks AI sources".
+    aiSourcesFolder: string;
   };
 
   // Internationalization
@@ -248,6 +252,8 @@ export const DEFAULT_SETTINGS: DecksSettings = {
     backupFolder: "",
     syncLogFolder: "",
     pdfCacheFolder: "",
+    directoryMediaFolder: "",
+    aiSourcesFolder: "",
   },
 
   i18n: {

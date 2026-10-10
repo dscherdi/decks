@@ -27,6 +27,9 @@ import { resolveModelId } from "@/utils/ai-model-options";
 import { docUrl } from "../../utils/docs";
 import {
   type AiProviderId,
+  DEFAULT_AI_SOURCES_FOLDER,
+  DEFAULT_DIRECTORY_MEDIA_FOLDER,
+  DEFAULT_PDF_OCR_FOLDER,
   DECKS_PRO_DEFAULT_BASE_URL,
   DECKS_PRO_SITE_URL,
   I18n,
@@ -669,17 +672,39 @@ export class DecksSettingTab extends PluginSettingTab {
 
     new Setting(containerEl)
       .setName(I18n.t.settings.paths.pdfCacheFolder)
-      .setDesc(I18n.format(I18n.t.settings.paths.pdfCacheFolderDesc, { pluginFolder }))
+      .setDesc(I18n.format(I18n.t.settings.paths.pdfCacheFolderDesc, { folder: DEFAULT_PDF_OCR_FOLDER }))
       .addText((text) =>
         text
-          .setPlaceholder(
-            I18n.format(I18n.t.settings.paths.pdfCacheFolderPlaceholder, {
-              pluginFolder,
-            })
-          )
+          .setPlaceholder(DEFAULT_PDF_OCR_FOLDER)
           .setValue(this.settings.paths.pdfCacheFolder)
           .onChange(async (value) => {
             this.settings.paths.pdfCacheFolder = value.trim();
+            await this.saveSettings();
+          })
+      );
+
+    new Setting(containerEl)
+      .setName(I18n.t.settings.paths.directoryMediaFolder)
+      .setDesc(I18n.format(I18n.t.settings.paths.directoryMediaFolderDesc, { folder: DEFAULT_DIRECTORY_MEDIA_FOLDER }))
+      .addText((text) =>
+        text
+          .setPlaceholder(DEFAULT_DIRECTORY_MEDIA_FOLDER)
+          .setValue(this.settings.paths.directoryMediaFolder)
+          .onChange(async (value) => {
+            this.settings.paths.directoryMediaFolder = value.trim();
+            await this.saveSettings();
+          })
+      );
+
+    new Setting(containerEl)
+      .setName(I18n.t.settings.paths.aiSourcesFolder)
+      .setDesc(I18n.format(I18n.t.settings.paths.aiSourcesFolderDesc, { folder: DEFAULT_AI_SOURCES_FOLDER }))
+      .addText((text) =>
+        text
+          .setPlaceholder(DEFAULT_AI_SOURCES_FOLDER)
+          .setValue(this.settings.paths.aiSourcesFolder)
+          .onChange(async (value) => {
+            this.settings.paths.aiSourcesFolder = value.trim();
             await this.saveSettings();
           })
       );

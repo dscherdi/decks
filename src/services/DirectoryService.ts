@@ -3,11 +3,10 @@ import {
   directoryCardMarkdown,
   directoryDeckInfoUrl,
   directoryDownloadUrl,
+  directoryMediaToPrune,
   directoryMediaUrl,
-  dpkgMediaPath,
   parseDirectoryDeckInfo,
   parseDirectoryMediaPath,
-  parseDpkgManifest,
   sha256Hex,
   unpackDpkg,
   type DirectoryDeckInfo,
@@ -19,8 +18,8 @@ import type { IDatabaseService } from "../database/DatabaseFactory";
 import type { Logger } from "../utils/logging";
 
 /**
- * Installs and renders decks from .dpkg packages. Media lives in a per-device
- * cache; a missing file is fetched again by hash and shows on the next render.
+ * Installs and renders decks from .dpkg packages. Media lives in a vault folder shared with
+ * the DecksMD app; a missing file is fetched again by hash and shows on the next render.
  */
 export class DirectoryService {
   private cached = new Set<string>();
@@ -87,29 +86,20 @@ export class DirectoryService {
     return this.db.importDirectoryPackage(bytes);
   }
 
-  /** Drop cached media that no installed deck lists any more. */
+  /** Drop files only removed packages listed, unless written again since (an install elsewhere). */
   async pruneUnusedMedia(): Promise<void> {
     await this.init();
-    const used = new Set<string>();
-    for (const deck of await this.db.listDirectoryDecks()) {
-      for (const name of this.mediaOf(deck.manifestJson)) used.add(name);
-    }
-    for (const name of [...this.cached]) {
-      if (used.has(name)) continue;
+    const prune = directoryMediaToPrune(await this.db.listDirectoryDecks(true));
+    for (const [name, removedAt] of prune) {
+      const path = `${this.mediaDir}/${name}`;
       try {
-        await this.adapter.remove(`${this.mediaDir}/${name}`);
+        const stat = await this.adapter.stat(path);
+        if (!stat || stat.mtime >= Date.parse(removedAt)) continue;
+        await this.adapter.remove(path);
         this.cached.delete(name);
       } catch (error) {
-        this.logger.debug(`Could not remove cached media ${name}`, error);
+        this.logger.debug(`Could not remove directory media ${name}`, error);
       }
-    }
-  }
-
-  private mediaOf(manifestJson: string): string[] {
-    try {
-      return parseDpkgManifest(manifestJson).media.map((entry) => dpkgMediaPath(entry).slice("media/".length));
-    } catch {
-      return [];
     }
   }
 
@@ -127,9 +117,15 @@ export class DirectoryService {
   private async fetchMedia(ref: DirectoryMediaRef): Promise<void> {
     const name = `${ref.sha256}.${ref.ext}`;
     const url = directoryMediaUrl(ref);
-    if (!url || this.fetching.has(name)) return;
+    if (this.fetching.has(name)) return;
     this.fetching.add(name);
     try {
+      // The folder is shared, so another device may have written the file since it was listed.
+      if (await this.adapter.exists(this.mediaPath(ref))) {
+        this.cached.add(name);
+        return;
+      }
+      if (!url) return;
       const response = await requestUrl({ url, throw: false });
       if (response.status !== 200) return;
       const data = new Uint8Array(response.arrayBuffer);
