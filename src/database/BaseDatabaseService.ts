@@ -2572,6 +2572,8 @@ export abstract class BaseDatabaseService implements IDatabaseService {
     // Reverse the interim scheme: reviews keyed to hash(deckId + front) (or the
     // pre-deck hash(front)) re-point to the card's current deck-independent ID.
     const idMigrations: { oldId: string; newId: string }[] = [];
+    // A live card's logs are its own, even when another card's old id hashes to it.
+    const liveIds = new Set(cards.map((card) => card.id));
     for (const card of cards) {
       if (!card.id.startsWith("card_")) continue;
       const nodeId = card.source_node_id ?? undefined;
@@ -2580,7 +2582,7 @@ export abstract class BaseDatabaseService implements IDatabaseService {
         generateOldFlashcardId(card.front),
       ];
       for (const oldId of candidates) {
-        if (oldId !== card.id) idMigrations.push({ oldId, newId: card.id });
+        if (oldId !== card.id && !liveIds.has(oldId)) idMigrations.push({ oldId, newId: card.id });
       }
     }
 
