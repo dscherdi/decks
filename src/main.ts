@@ -63,11 +63,14 @@ import { AnchorUpgrader, parseHeaderLevels } from "@decks/core";
 import { DeviceLocalState } from "./services/DeviceLocalState";
 import { SyncLog } from "./services/SyncLog";
 import {
+  APP_DB_PATH,
   resolveDbPath,
   resolveBackupFolder,
   resolveSyncLogFolder,
   resolvePdfCacheFolder,
 } from "./utils/paths";
+import { PeerAppDatabase } from "./services/PeerAppDatabase";
+import { canMergePeerDirectory } from "./database/peer-directory";
 import { BackupService } from "./services/BackupService";
 import { StatisticsService } from "@decks/core";
 import { FlashcardWriter, type FlashcardEdits } from "./services/FlashcardWriter";
@@ -240,6 +243,7 @@ export default class DecksPlugin extends Plugin {
   private static readonly RELOAD_FROM_DISK_THROTTLE_MS = 60_000;
   private deviceLocalState: DeviceLocalState;
   private syncLog: SyncLog;
+  private peerAppDatabase: PeerAppDatabase | null = null;
   private snapshotTimer: number | null = null;
   // Resolves after the whenReady() post-init chain (incl. the exams tag
   // mapping) so first-run file creation can sequence behind it.
@@ -345,6 +349,17 @@ export default class DecksPlugin extends Plugin {
         } catch (error) {
           caughtUp = false;
           this.logger.debug("startup applyPending failed", error);
+        }
+        // After applyPending, so the app's reviews are here when its directory decks arrive.
+        if (canMergePeerDirectory(this.db)) {
+          this.peerAppDatabase = new PeerAppDatabase(this.app.vault.adapter, this.db, APP_DB_PATH);
+          try {
+            if (await this.peerAppDatabase.mergeIfChanged()) {
+              await this.getDecksView()?.refreshDecksAndStats();
+            }
+          } catch (error) {
+            this.logger.debug("startup app database merge failed", error);
+          }
         }
         try {
           await this.syncLog.compact();
@@ -1538,6 +1553,7 @@ export default class DecksPlugin extends Plugin {
     try {
       await this.db.syncWithDisk();
       await this.syncLog?.applyPending();
+      await this.peerAppDatabase?.mergeIfChanged();
       // Repaint from the merged DB — no vault scan needed.
       await this.getDecksView()?.refreshDecksAndStats();
       this.scheduleAiStatus();

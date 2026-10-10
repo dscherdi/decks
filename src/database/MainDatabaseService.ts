@@ -28,6 +28,7 @@ const DECK_INDEPENDENT_ID_VERSION = 36;
 import type { Database, InitSqlJsStatic, SqlJsStatic } from "sql.js";
 import type { SyncData, SyncResult, SqlJsValue } from "@decks/core";
 import { getEmbeddedAssets } from "./embedded-assets";
+import { isSqliteFile, type PeerDirectoryMergeResult } from "./peer-directory";
 
 export class MainDatabaseService extends BaseDatabaseService {
   private db: Database | null = null;
@@ -1253,6 +1254,35 @@ export class MainDatabaseService extends BaseDatabaseService {
     try {
       mergeDirectoryTables(this.db, remoteDb);
       materialiseDirectoryDecks(this.db, new Date().toISOString());
+    } finally {
+      remoteDb.close();
+    }
+  }
+
+  /** Take the directory decks of another database file, such as the DecksMD app's. */
+  mergePeerDirectory(bytes: Uint8Array): Promise<PeerDirectoryMergeResult> {
+    const db = this.db;
+    const SQL = this.sqlStatic;
+    if (!db || !SQL) return Promise.reject(new Error("Database not initialized"));
+    if (!isSqliteFile(bytes)) return Promise.resolve({ merged: false, changed: false });
+    let remoteDb: Database;
+    try {
+      remoteDb = new SQL.Database(bytes);
+    } catch {
+      return Promise.resolve({ merged: false, changed: false });
+    }
+    db.exec("SAVEPOINT directory_merge");
+    try {
+      const taken = mergeDirectoryTables(db, remoteDb);
+      const result = materialiseDirectoryDecks(db, new Date().toISOString());
+      db.exec("RELEASE directory_merge");
+      const changed = taken.length > 0 || materialiseChangedAnything(result);
+      if (changed) this.markDirty(true);
+      return Promise.resolve({ merged: true, changed });
+    } catch {
+      db.exec("ROLLBACK TO directory_merge");
+      db.exec("RELEASE directory_merge");
+      return Promise.resolve({ merged: false, changed: false });
     } finally {
       remoteDb.close();
     }

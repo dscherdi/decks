@@ -28,6 +28,7 @@ import {
   ensureDirectoryTables,
   importDpkgContent,
   DROP_DIRECTORY_PROFILES_SQL,
+  materialiseChangedAnything,
   materialiseDirectoryDecks,
   mergeDirectoryTables,
   remapCardIdsToDeckIndependent,
@@ -35,6 +36,7 @@ import {
   unpackDpkg,
 } from "@decks/core";
 import type { DpkgImportResult, MaterialiseAllResult } from "@decks/core";
+import { isSqliteFile, type PeerDirectoryMergeResult } from "../database/peer-directory";
 
 // Schema version at which card IDs became deck-independent. Upgrading from an
 // earlier version re-points review history to the new IDs before the rebuild.
@@ -492,19 +494,39 @@ class SimpleDatabaseWorker {
     }
   }
 
+  /** Take only the directory decks of another database, such as the DecksMD app's own file. */
+  mergePeerDirectory(fileBuffer: Uint8Array): PeerDirectoryMergeResult {
+    if (!this.db || !this.initialized) throw new Error("Database not initialized");
+    if (!this.SQL) throw new Error("SQL.js not initialized");
+    if (!isSqliteFile(fileBuffer)) return { merged: false, changed: false };
+    let remoteDb: Database;
+    try {
+      remoteDb = new this.SQL.Database(fileBuffer);
+    } catch {
+      return { merged: false, changed: false };
+    }
+    try {
+      return this.mergeDirectory(remoteDb);
+    } finally {
+      remoteDb.close();
+    }
+  }
+
   // Newer stored content wins and working rows follow it, which also drops rows
   // mergeDecks brought back for a deck removed here. A failure here never blocks the rest.
-  private mergeDirectory(remoteDb: Database): void {
-    if (!this.db) return;
+  private mergeDirectory(remoteDb: Database): PeerDirectoryMergeResult {
+    if (!this.db) return { merged: false, changed: false };
     this.db.exec("SAVEPOINT directory_merge");
     try {
-      mergeDirectoryTables(this.db, remoteDb);
-      materialiseDirectoryDecks(this.db, new Date().toISOString());
+      const taken = mergeDirectoryTables(this.db, remoteDb);
+      const result = materialiseDirectoryDecks(this.db, new Date().toISOString());
       this.db.exec("RELEASE directory_merge");
+      return { merged: true, changed: taken.length > 0 || materialiseChangedAnything(result) };
     } catch (error) {
       this.db.exec("ROLLBACK TO directory_merge");
       this.db.exec("RELEASE directory_merge");
       self.postMessage({ type: "dbg", message: `Directory merge skipped: ${(error as Error).message}` });
+      return { merged: false, changed: false };
     }
   }
 
@@ -1043,6 +1065,12 @@ self.onmessage = async (event: MessageEvent<DatabaseWorkerMessage>) => {
       case "materialiseDirectoryDecks":
         if (data && "now" in data && typeof data.now === "string") {
           result = worker.materialiseDirectoryDecks(data.now);
+        }
+        break;
+
+      case "mergePeerDirectory":
+        if (data && "bytes" in data && data.bytes instanceof Uint8Array) {
+          result = worker.mergePeerDirectory(data.bytes);
         }
         break;
 

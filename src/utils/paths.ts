@@ -11,6 +11,9 @@ import { normalizePath } from "obsidian";
 
 const DB_FILENAME = "flashcards.db";
 
+/** The DecksMD app's own database, at a fixed vault path; read here, never written. */
+export const APP_DB_PATH = ".decksmd/flashcards.db";
+
 interface PathsSettings {
   dbFolder: string;
   backupFolder: string;

@@ -7,6 +7,7 @@ import type { DpkgImportResult, MaterialiseAllResult, SqlJsValue, SyncData, Sync
 import type { DatabaseWorkerMessage } from "../workers/worker-entry";
 import { ProgressTracker } from "../utils/progress";
 import { getEmbeddedAssets } from "./embedded-assets";
+import type { PeerDirectoryMergeResult } from "./peer-directory";
 
 export class WorkerDatabaseService extends BaseDatabaseService {
   private worker: Worker | null = null;
@@ -460,6 +461,13 @@ export class WorkerDatabaseService extends BaseDatabaseService {
     })) as DpkgImportResult;
     // No sync op carries an import, so it is on disk before anything else can happen.
     await this.save();
+    return result;
+  }
+
+  /** Take the directory decks of another database file, such as the DecksMD app's. */
+  async mergePeerDirectory(bytes: Uint8Array): Promise<PeerDirectoryMergeResult> {
+    const result = (await this.sendMessage("mergePeerDirectory", { bytes })) as PeerDirectoryMergeResult;
+    if (result.changed) this.markDirty(true);
     return result;
   }
 
