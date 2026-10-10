@@ -29,7 +29,7 @@ import type {
 import type { ConceptCard, RubricCode, SessionCounts } from "@decks/core";
 import { DEFAULT_PROFILE_ID, deckWithProfile } from "./types";
 import type { FilterDefinition } from "./types";
-import { assertDeckIdFree, generateCustomDeckCardId, generateCustomDeckId, generateFlashcardId, reviewCardDaysSQL, SQL_QUERIES, type SyncOpV1 } from "@decks/core";
+import { assertDeckIdFree, generateCustomDeckCardId, generateCustomDeckId, generateFlashcardId, reviewCardDaysSQL, SQL_QUERIES, wideContentId, type SyncOpV1 } from "@decks/core";
 import { aiConceptId, aiSessionValues, aiStagedCardValues, applyRowPatch, isCrammed } from "@decks/core";
 import { normalizeProfile } from "@decks/core";
 import { directoryDeckProfiles, isDirectoryDeck, isDirectoryProfileId, livePackageProfile, pickProfileMapping, studyTagsFor } from "@decks/core";
@@ -2577,9 +2577,12 @@ export abstract class BaseDatabaseService implements IDatabaseService {
     for (const card of cards) {
       if (!card.id.startsWith("card_")) continue;
       const nodeId = card.source_node_id ?? undefined;
+      // On its wide id because another card held its content id, whose logs are that card's.
+      const fellBack =
+        card.id === wideContentId(generateFlashcardId(card.front, nodeId), { front: card.front, sourceNodeId: nodeId });
       const candidates = [
         generateLegacyDeckScopedFlashcardId(card.front, card.deck_id, nodeId),
-        generateOldFlashcardId(card.front),
+        ...(fellBack ? [] : [generateOldFlashcardId(card.front)]),
       ];
       for (const oldId of candidates) {
         if (oldId !== card.id && !liveIds.has(oldId)) idMigrations.push({ oldId, newId: card.id });
