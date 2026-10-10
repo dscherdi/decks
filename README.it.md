@@ -21,7 +21,7 @@ Aggiungi il tag `#decks` a un file. Ogni intestazione `##` diventa il fronte di 
 
 ![Demo](https://raw.githubusercontent.com/dscherdi/decks/HEAD/decks_showcase.gif)
 
-[Documentazione](https://decksmd.app/docs/) · [Sito web](https://decksmd.app) · [Discord](https://discord.com/channels/686053708261228577/1497268419861418035) · [Note di rilascio](./release-notes/) · [Offrimi un caffè](https://www.buymeacoffee.com/dscherdil0)
+[Documentazione](https://decksmd.app/docs/) · [Sito web](https://decksmd.app) · [Esplora i mazzi](https://decksmd.app/decks) · [Discord](https://discord.com/channels/686053708261228577/1497268419861418035) · [Note di rilascio](./release-notes/) · [Offrimi un caffè](https://www.buymeacoffee.com/dscherdil0)
 
 ## Perché Decks
 

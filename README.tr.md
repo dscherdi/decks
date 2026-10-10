@@ -21,7 +21,7 @@ Bir dosyayı `#decks` ile etiketleyin. Her `##` başlığı kartın ön yüzü, 
 
 ![Demo](https://raw.githubusercontent.com/dscherdi/decks/HEAD/decks_showcase.gif)
 
-[Dokümantasyon](https://decksmd.app/docs/) · [Web sitesi](https://decksmd.app) · [Discord](https://discord.com/channels/686053708261228577/1497268419861418035) · [Sürüm notları](./release-notes/) · [Bana bir kahve ısmarla](https://www.buymeacoffee.com/dscherdil0)
+[Dokümantasyon](https://decksmd.app/docs/) · [Web sitesi](https://decksmd.app) · [Desteleri keşfet](https://decksmd.app/decks) · [Discord](https://discord.com/channels/686053708261228577/1497268419861418035) · [Sürüm notları](./release-notes/) · [Bana bir kahve ısmarla](https://www.buymeacoffee.com/dscherdil0)
 
 ## Neden Decks
 

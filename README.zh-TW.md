@@ -21,7 +21,7 @@
 
 ![Demo](https://raw.githubusercontent.com/dscherdi/decks/HEAD/decks_showcase.gif)
 
-[文件](https://decksmd.app/docs/) · [網站](https://decksmd.app) · [Discord](https://discord.com/channels/686053708261228577/1497268419861418035) · [版本說明](./release-notes/) · [贊助我一杯咖啡](https://www.buymeacoffee.com/dscherdil0)
+[文件](https://decksmd.app/docs/) · [網站](https://decksmd.app) · [探索牌組](https://decksmd.app/decks) · [Discord](https://discord.com/channels/686053708261228577/1497268419861418035) · [版本說明](./release-notes/) · [贊助我一杯咖啡](https://www.buymeacoffee.com/dscherdil0)
 
 ## 為什麼選擇 Decks
 

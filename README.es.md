@@ -21,7 +21,7 @@ Etiqueta un archivo con `#decks`. Cada encabezado `##` se convierte en el anvers
 
 ![Demo](https://raw.githubusercontent.com/dscherdi/decks/HEAD/decks_showcase.gif)
 
-[Documentación](https://decksmd.app/docs/) · [Sitio web](https://decksmd.app) · [Discord](https://discord.com/channels/686053708261228577/1497268419861418035) · [Notas de versión](./release-notes/) · [Invítame a un café](https://www.buymeacoffee.com/dscherdil0)
+[Documentación](https://decksmd.app/docs/) · [Sitio web](https://decksmd.app) · [Explorar mazos](https://decksmd.app/decks) · [Discord](https://discord.com/channels/686053708261228577/1497268419861418035) · [Notas de versión](./release-notes/) · [Invítame a un café](https://www.buymeacoffee.com/dscherdil0)
 
 ## Por qué Decks
 

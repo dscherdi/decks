@@ -21,7 +21,7 @@ Ajoutez la balise `#decks` à un fichier. Chaque en-tête `##` devient le recto 
 
 ![Demo](https://raw.githubusercontent.com/dscherdi/decks/HEAD/decks_showcase.gif)
 
-[Documentation](https://decksmd.app/docs/) · [Site web](https://decksmd.app) · [Discord](https://discord.com/channels/686053708261228577/1497268419861418035) · [Notes de version](./release-notes/) · [Offrez-moi un café](https://www.buymeacoffee.com/dscherdil0)
+[Documentation](https://decksmd.app/docs/) · [Site web](https://decksmd.app) · [Explorer les paquets](https://decksmd.app/decks) · [Discord](https://discord.com/channels/686053708261228577/1497268419861418035) · [Notes de version](./release-notes/) · [Offrez-moi un café](https://www.buymeacoffee.com/dscherdil0)
 
 ## Pourquoi Decks
 

@@ -21,7 +21,7 @@
 
 ![Demo](https://raw.githubusercontent.com/dscherdi/decks/HEAD/decks_showcase.gif)
 
-[ドキュメント](https://decksmd.app/docs/) · [ウェブサイト](https://decksmd.app) · [Discord](https://discord.com/channels/686053708261228577/1497268419861418035) · [リリースノート](./release-notes/) · [開発者を支援 (Buy me a coffee)](https://www.buymeacoffee.com/dscherdil0)
+[ドキュメント](https://decksmd.app/docs/) · [ウェブサイト](https://decksmd.app) · [デッキを探す](https://decksmd.app/decks) · [Discord](https://discord.com/channels/686053708261228577/1497268419861418035) · [リリースノート](./release-notes/) · [開発者を支援 (Buy me a coffee)](https://www.buymeacoffee.com/dscherdil0)
 
 ## Decks を使う理由
 

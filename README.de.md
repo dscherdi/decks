@@ -21,7 +21,7 @@ Markiere eine Datei mit `#decks`. Jede `##`-Überschrift wird zur Vorderseite ei
 
 ![Demo](https://raw.githubusercontent.com/dscherdi/decks/HEAD/decks_showcase.gif)
 
-[Dokumentation](https://decksmd.app/docs/) · [Website](https://decksmd.app) · [Discord](https://discord.com/channels/686053708261228577/1497268419861418035) · [Versionshinweise](./release-notes/) · [Spendier mir einen Kaffee](https://www.buymeacoffee.com/dscherdil0)
+[Dokumentation](https://decksmd.app/docs/) · [Website](https://decksmd.app) · [Stapel entdecken](https://decksmd.app/decks) · [Discord](https://discord.com/channels/686053708261228577/1497268419861418035) · [Versionshinweise](./release-notes/) · [Spendier mir einen Kaffee](https://www.buymeacoffee.com/dscherdil0)
 
 ## Warum Decks
 

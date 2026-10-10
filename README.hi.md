@@ -21,7 +21,7 @@
 
 ![Demo](https://raw.githubusercontent.com/dscherdi/decks/HEAD/decks_showcase.gif)
 
-[दस्तावेज़](https://decksmd.app/docs/) · [वेबसाइट](https://decksmd.app) · [Discord](https://discord.com/channels/686053708261228577/1497268419861418035) · [रिलीज़ नोट्स](./release-notes/) · [मुझे एक कॉफ़ी पिलाएं](https://www.buymeacoffee.com/dscherdil0)
+[दस्तावेज़](https://decksmd.app/docs/) · [वेबसाइट](https://decksmd.app) · [डेक देखें](https://decksmd.app/decks) · [Discord](https://discord.com/channels/686053708261228577/1497268419861418035) · [रिलीज़ नोट्स](./release-notes/) · [मुझे एक कॉफ़ी पिलाएं](https://www.buymeacoffee.com/dscherdil0)
 
 ## Decks क्यों?
 

@@ -21,7 +21,7 @@
 
 ![Demo](https://raw.githubusercontent.com/dscherdi/decks/HEAD/decks_showcase.gif)
 
-[التوثيق](https://decksmd.app/docs/) · [الموقع](https://decksmd.app) · [Discord](https://discord.com/channels/686053708261228577/1497268419861418035) · [ملاحظات الإصدار](./release-notes/) · [اشترِ لي قهوة](https://www.buymeacoffee.com/dscherdil0)
+[التوثيق](https://decksmd.app/docs/) · [الموقع](https://decksmd.app) · [استكشف الرزم](https://decksmd.app/decks) · [Discord](https://discord.com/channels/686053708261228577/1497268419861418035) · [ملاحظات الإصدار](./release-notes/) · [اشترِ لي قهوة](https://www.buymeacoffee.com/dscherdil0)
 
 ## لماذا تختار Decks
 

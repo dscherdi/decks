@@ -21,7 +21,7 @@ Etiketo një skedar me `#decks`. Çdo titull `##` bëhet pjesa e përparme e nj�
 
 ![Demo](https://raw.githubusercontent.com/dscherdi/decks/HEAD/decks_showcase.gif)
 
-[Dokumentacioni](https://decksmd.app/docs/) · [Uebfaqja](https://decksmd.app) · [Discord](https://discord.com/channels/686053708261228577/1497268419861418035) · [Shënimet e versionit](./release-notes/) · [Më bli një kafe](https://www.buymeacoffee.com/dscherdil0)
+[Dokumentacioni](https://decksmd.app/docs/) · [Uebfaqja](https://decksmd.app) · [Eksploro pakot](https://decksmd.app/decks) · [Discord](https://discord.com/channels/686053708261228577/1497268419861418035) · [Shënimet e versionit](./release-notes/) · [Më bli një kafe](https://www.buymeacoffee.com/dscherdil0)
 
 ## Pse Decks
 

@@ -17,6 +17,8 @@
 >
 > <a href="https://apps.apple.com/app/id6801156953"><img src="https://developer.apple.com/assets/elements/badges/download-on-the-app-store.svg" alt="Download on the App Store" height="40"></a>
 
+> **Ready-made decks — [explore the deck directory](https://decksmd.app/decks)** · Complete decks you can add to Obsidian in one click, such as German courses by level. See [Deck directory](#deck-directory).
+
 > **Coming from the Spaced Repetition plugin?** Jump to Decks without losing your progress — the built-in one-click migrator extracts your `::` cards into clean Decks decks, rewrites each note into readable prose, and carries over your review history, all while leaving your original notes untouched. You pick up your reviews right where you left off. See [Coming from Spaced Repetition](#coming-from-spaced-repetition).
 
 > **Coming from Anki?** Import an Anki `.apkg` export in one click — your decks, cards, media, and review history come with you, and your cards resume on FSRS-6 right where Anki left them. See [Coming from Anki](#coming-from-anki).
@@ -25,7 +27,7 @@ Tag a file with `#decks`. Each `##` heading becomes the front of a card; the tex
 
 ![Demo](https://raw.githubusercontent.com/dscherdi/decks/HEAD/decks_showcase.gif)
 
-[Documentation](https://decksmd.app/docs/) · [Website](https://decksmd.app) · [Discord](https://discord.com/channels/686053708261228577/1497268419861418035) · [Release notes](./release-notes/) · [Buy me a coffee](https://www.buymeacoffee.com/dscherdil0)
+[Documentation](https://decksmd.app/docs/) · [Website](https://decksmd.app) · [Explore decks](https://decksmd.app/decks) · [Discord](https://discord.com/channels/686053708261228577/1497268419861418035) · [Release notes](./release-notes/) · [Buy me a coffee](https://www.buymeacoffee.com/dscherdil0)
 
 ## Why Decks
 
