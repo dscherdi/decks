@@ -29,7 +29,7 @@ import type {
 import type { ConceptCard, RubricCode, SessionCounts } from "@decks/core";
 import { DEFAULT_PROFILE_ID, deckWithProfile } from "./types";
 import type { FilterDefinition } from "./types";
-import { generateCustomDeckCardId, generateCustomDeckId, generateFlashcardId, reviewCardDaysSQL, SQL_QUERIES, type SyncOpV1 } from "@decks/core";
+import { assertDeckIdFree, generateCustomDeckCardId, generateCustomDeckId, generateFlashcardId, reviewCardDaysSQL, SQL_QUERIES, type SyncOpV1 } from "@decks/core";
 import { aiConceptId, aiSessionValues, aiStagedCardValues, applyRowPatch, isCrammed } from "@decks/core";
 import { normalizeProfile } from "@decks/core";
 import { directoryDeckProfiles, isDirectoryDeck, isDirectoryProfileId, livePackageProfile, pickProfileMapping, studyTagsFor } from "@decks/core";
@@ -547,6 +547,8 @@ export abstract class BaseDatabaseService implements IDatabaseService {
 
   // DECK OPERATIONS - Implemented using abstract SQL methods
   async createDeck(deck: Omit<Deck, "created" | "modified" | "profileId"> & { id?: string; profileId?: string }): Promise<string> {
+    // The insert replaces on conflict, which would hand another note's deck to this one.
+    assertDeckIdFree(await this.getDeckById(deck.id), deck.filepath);
     const now = this.getCurrentTimestamp();
 
     // If no profileId provided, check for tag mapping, else use DEFAULT

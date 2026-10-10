@@ -5,6 +5,7 @@ import { describeSyncUpsert } from "@decks/conformance/sync-upsert";
 import { describeSuspendDurability } from "@decks/conformance/suspend-durability";
 import { describeAnchorInterop } from "@decks/conformance/anchor-interop";
 import { describeCardIdentity } from "@decks/conformance/card-identity";
+import { describeDeckIdentity } from "@decks/conformance/deck-identity";
 import type { ConformanceHost } from "@decks/conformance/harness";
 import { setupTestDatabase, teardownTestDatabase } from "./database-test-utils";
 
@@ -22,3 +23,4 @@ describeSyncUpsert(host);
 describeSuspendDurability(host);
 describeAnchorInterop(host);
 describeCardIdentity(host);
+describeDeckIdentity(host);

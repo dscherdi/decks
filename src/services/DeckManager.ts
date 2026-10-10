@@ -8,7 +8,7 @@ import {
 } from "obsidian";
 import { type Deck, type Flashcard, type DeckStats, type DeckGroup, DEFAULT_PROFILE_ID } from "../database/types";
 import type { IDatabaseService } from "../database/DatabaseFactory";
-import { I18n, applyDeckDailyLimits, generateDeckGroupId, generateDeckId, isDirectoryDeckPath, yieldToUI } from "@decks/core";
+import { DeckIdCollisionError, I18n, applyDeckDailyLimits, generateDeckGroupId, generateDeckId, isDirectoryDeckPath, yieldToUI } from "@decks/core";
 import { Logger, formatTime } from "../utils/logging";
 import { FileFilter } from "../utils/fileFilter";
 import { FlashcardParser, type ParsedFlashcard } from "@decks/core";
@@ -48,6 +48,8 @@ export class DeckManager {
   private settings?: DecksSettings;
   private logger?: Logger;
   private fileFilter: FileFilter;
+  // Notes already told their path's deck id is taken, so each sync doesn't repeat it.
+  private reportedDeckIdCollisions = new Set<string>();
 
   constructor(
     vault: Vault,
@@ -285,7 +287,8 @@ export class DeckManager {
                 filePath
               )}, tag: ${tag}, filepath: ${filePath}`
             );
-            const createdId = await this.db.createDeck(deck);
+            const createdId = await this.createDeckOrReport(deck);
+            if (createdId === null) continue;
             if (fileTags.length > 0) {
               await this.db.setDeckFileTags(createdId, fileTags);
               const resolvedProfileId = await this.db.getProfileIdForTags(
@@ -590,7 +593,28 @@ export class DeckManager {
           filePath
         )}, tag: ${tag}, filepath: ${filePath}`
       );
-      await this.db.createDeck(deck);
+      await this.createDeckOrReport(deck);
+    }
+  }
+
+  // Null when another note's deck already holds the id; that note keeps it.
+  private async createDeckOrReport(
+    deck: Omit<Deck, "created" | "modified" | "profileId">
+  ): Promise<string | null> {
+    try {
+      return await this.db.createDeck(deck);
+    } catch (error) {
+      if (!(error instanceof DeckIdCollisionError)) throw error;
+      const message = I18n.format(I18n.t.notices.deckIdCollision, {
+        path: error.filepath,
+        other: error.heldBy,
+      });
+      this.debugLog(message);
+      if (!this.reportedDeckIdCollisions.has(error.filepath)) {
+        this.reportedDeckIdCollisions.add(error.filepath);
+        new Notice(message, 12000);
+      }
+      return null;
     }
   }
 

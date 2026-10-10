@@ -1,9 +1,48 @@
-import { generateFlashcardId } from "@decks/core";
+import { DeckIdCollisionError, generateDeckId, generateFlashcardId } from "@decks/core";
 import { DeckManager } from "../services/DeckManager";
 import type { IDatabaseService } from "../database/DatabaseFactory";
 import { TFile, type MetadataCache, type Vault } from "obsidian";
 
 describe("DeckManager", () => {
+  describe("syncDecks deck id collisions", () => {
+    it("skips a note whose deck id another note holds, keeps scanning, and says so once", async () => {
+      const files = ["Deutsch/Küste.md", "Deutsch/Paste.md", "Deutsch/Hund.md"].map((p) => new TFile(p));
+      const vault = {
+        getMarkdownFiles: () => files,
+        getFiles: () => [] as TFile[],
+        getAbstractFileByPath: (p: string) => files.find((f) => f.path === p) ?? null,
+        adapter: { exists: async () => true },
+      } as unknown as Vault;
+      const metadataCache = {
+        getFileCache: () => ({ tags: [{ tag: "#decks" }] }),
+      } as unknown as MetadataCache;
+      const held = { id: generateDeckId("Deutsch/Küste.md"), name: "Küste", filepath: "Deutsch/Küste.md", tag: "#decks" };
+      const createDeck = jest.fn(async (deck: { id: string; filepath: string }) => {
+        if (deck.id === held.id) throw new DeckIdCollisionError(deck.filepath, held.filepath);
+        return deck.id;
+      });
+      const db = {
+        getAllDecks: jest.fn(async () => [held]),
+        getProfileIdForTags: jest.fn(async () => null),
+        createDeck,
+        updateDeck: jest.fn(async () => {}),
+        setDeckFileTags: jest.fn(async () => {}),
+        deleteDeckByFilepath: jest.fn(async () => {}),
+      } as unknown as IDatabaseService;
+      const debug = jest.spyOn(console, "debug").mockImplementation(() => {});
+
+      const mgr = new DeckManager(vault, metadataCache, db);
+      await mgr.syncDecks();
+      await mgr.syncDecks();
+
+      const created = createDeck.mock.calls.map(([deck]) => deck.filepath);
+      expect(created).toEqual(["Deutsch/Paste.md", "Deutsch/Hund.md", "Deutsch/Paste.md", "Deutsch/Hund.md"]);
+      const notices = debug.mock.calls.filter(([label, message]) => label === "Notice:" && String(message).includes("Deutsch/Paste.md"));
+      expect(notices).toHaveLength(1);
+      debug.mockRestore();
+    });
+  });
+
   describe("syncDecks orphan cleanup", () => {
     it("only deletes a deck whose file is gone from BOTH the registry and disk", async () => {
       // a.md/b.md are in the registry; cold.md is on disk but missing from the
