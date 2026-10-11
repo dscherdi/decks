@@ -28,7 +28,7 @@ export type PdfReading = "auto" | "transcribe";
 /** What the author fills in when exporting a deck, or a folder of decks, as a .dpkg package. */
 export type DirectoryExportDetails = Pick<
   DpkgManifestDraft,
-  "slug" | "title" | "description" | "language" | "subject" | "version" | "license"
+  "slug" | "title" | "description" | "language" | "subject" | "topic" | "level" | "version" | "license"
 > & {
   /** Each note's deck key, by note path; kept once given, as installed progress follows it. */
   deckKeys?: Record<string, string>;

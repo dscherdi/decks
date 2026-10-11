@@ -135,6 +135,14 @@ export class DirectoryExportModal extends Modal {
       .setName(t.subjectName)
       .addText((text) => text.setValue(this.details.subject).onChange((value) => (this.details.subject = value.trim())));
     new Setting(contentEl)
+      .setName(t.topicName)
+      .setDesc(t.topicDesc)
+      .addText((text) => text.setValue(this.details.topic ?? "").onChange((value) => (this.details.topic = value.trim())));
+    new Setting(contentEl)
+      .setName(t.levelName)
+      .setDesc(t.levelDesc)
+      .addText((text) => text.setValue(this.details.level ?? "").onChange((value) => (this.details.level = value.trim())));
+    new Setting(contentEl)
       .setName(t.versionName)
       .setDesc(t.versionDesc)
       .addText((text) => {

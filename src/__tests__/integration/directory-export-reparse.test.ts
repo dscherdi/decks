@@ -50,6 +50,8 @@ const DETAILS: DirectoryExportDetails = {
   description: "",
   language: "de",
   subject: "",
+  topic: "German",
+  level: "CEFR A2",
   version: 1,
   license: "",
   publisher: { id: "u-testpublsh", name: "Tester" },
@@ -139,6 +141,7 @@ describe("directory export re-parses its notes", () => {
     const contents = await unpackDpkg(output.bytes, { includeMedia: false });
 
     expect(contents.manifest.formatVersion).toBe(3);
+    expect(contents.manifest).toMatchObject({ topic: "German", level: "CEFR A2" });
     const cards = JSON.parse(contents.cardsJson ?? "[]") as DirectoryCardContent[];
     expect(cards.map((card) => [card.type, card.front])).toEqual([
       ["multiple-choice", "Lesen Teil 1"],

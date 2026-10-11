@@ -225,6 +225,8 @@ export class DirectoryExporter {
         description: details.description,
         language: details.language,
         subject: details.subject,
+        topic: details.topic,
+        level: details.level,
         license: details.license,
         tags: [],
         cardCount: all.length,
