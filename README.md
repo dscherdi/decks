@@ -257,7 +257,9 @@ See **[decksmd.app/docs/exams/overview/](https://decksmd.app/docs/exams/overview
 
 Ready-made decks are listed at [decksmd.app/decks](https://decksmd.app/decks). **Open in Obsidian** on a deck's page adds it to the plugin's *Deck directory* section, where you can review it but not edit it. You can also add a downloaded file with **Import a Decks package (.dpkg)**, and share your own decks with **Export deck as a Decks package (.dpkg)**.
 
-**Network use and account.** Downloading from the directory needs a free DecksMD account, which you sign in to on the website, not in the plugin. When a deck link opens in Obsidian, the plugin requests the deck's public details from `decksmd.app` for the confirmation prompt, then downloads the deck with the one-time ticket from the link. If a directory deck reached this vault through sync and one of its images is missing, the plugin fetches that image from `decksmd.app` by its content hash when the card is shown. Nothing from your vault is sent. Directory decks are covered by the [deck directory terms](https://decksmd.app/legal/deck-directory).
+A deck's images, audio and video are kept in a **Decks media** folder at the vault root, so they sync with the vault. Decks you add in the DecksMD app appear here too, with the reviews done in the app, and decks you add here appear in the app. Settings → File locations can move the folder.
+
+**Network use and account.** Downloading from the directory needs a free DecksMD account, which you sign in to on the website, not in the plugin. When a deck link opens in Obsidian, the plugin requests the deck's public details from `decksmd.app` for the confirmation prompt, then downloads the deck with the one-time ticket from the link. If one of a directory deck's images is missing from the media folder, for example while the vault is still syncing, the plugin fetches that image from `decksmd.app` by its content hash when the card is shown. Nothing from your vault is sent. Directory decks are covered by the [deck directory terms](https://decksmd.app/legal/deck-directory).
 
 ## AI assistance (optional)
 
