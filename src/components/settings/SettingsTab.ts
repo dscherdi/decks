@@ -1449,18 +1449,15 @@ export class DecksSettingTab extends PluginSettingTab {
     });
   }
 
-  /**
-   * Recovery action: rebuild card scheduling state from review history for cards
-   * that show as new but have logs. Takes a safety backup first.
-   */
+  /** Re-attaches stranded review history and rebuilds scheduling from it, after a safety backup. */
   private async rebuildCardStateFromReviewLogs(): Promise<void> {
     const notice = new Notice(I18n.t.notices.creatingBackup, 0);
     try {
       await this.backupService.createBackup(this.db, { timed: true });
-      const count = await this.db.rebuildCardStateFromReviewLogs();
+      const { reattached, restored } = await this.db.recoverReviewHistory();
       await this.db.save();
       notice.hide();
-      new Notice(I18n.format(I18n.t.notices.cardsRebuilt, { count }), 6000);
+      new Notice(I18n.format(I18n.t.notices.historyRecovered, { reattached, restored }), 6000);
     } catch (error) {
       notice.hide();
       new Notice(

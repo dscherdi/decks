@@ -29,7 +29,7 @@ import type {
 import type { ConceptCard, RubricCode, SessionCounts } from "@decks/core";
 import { DEFAULT_PROFILE_ID, deckWithProfile } from "./types";
 import type { FilterDefinition } from "./types";
-import { assertDeckIdFree, generateCustomDeckCardId, generateCustomDeckId, generateFlashcardId, reviewCardDaysSQL, SQL_QUERIES, wideContentId, type SyncOpV1 } from "@decks/core";
+import { assertDeckIdFree, generateCustomDeckCardId, generateCustomDeckId, generateFlashcardId, reviewCardDaysSQL, SQL_QUERIES, type SyncOpV1 } from "@decks/core";
 import { aiConceptId, aiSessionValues, aiStagedCardValues, applyRowPatch, isCrammed } from "@decks/core";
 import { normalizeProfile } from "@decks/core";
 import { directoryDeckProfiles, isDirectoryDeck, isDirectoryProfileId, livePackageProfile, pickProfileMapping, studyTagsFor } from "@decks/core";
@@ -73,8 +73,10 @@ import type {
 import type { IDatabaseService, JournalStateRow } from "./DatabaseFactory";
 import type { SyncLog } from "../services/SyncLog";
 import {
-  generateOldFlashcardId,
-  generateLegacyDeckScopedFlashcardId,
+  forgetStrandedHistory,
+  historyRelinkOps,
+  recoverReviewHistory,
+  type HistoryRecoveryResult,
 } from "@decks/core";
 
 export interface QueryConfig {
@@ -2544,99 +2546,24 @@ export abstract class BaseDatabaseService implements IDatabaseService {
          AND flashcard_id IN (SELECT id FROM flashcards WHERE deck_id = ?)`,
       [now, deckId]
     );
+    const reset = await this.querySql<{ id: string }>("SELECT id FROM flashcards WHERE deck_id = ?", [deckId], {
+      asObject: true,
+    });
+    await forgetStrandedHistory(this, reset.map((row) => row.id), now);
     this.emitSyncOp({ o: "deck_reset", p: { deckId, resetAt: now } });
   }
 
- /**
-   * Recovery: re-links review logs still keyed to a card's previous ID —
-   * hash(deckId + front) from the interim scheme, or the pre-deck hash(front) —
-   * to the card's current deck-independent ID, then rebuilds the FSRS state of
-   * each card still showing as new from its most recent review log. Used by
-   * the manual "rebuild from history" action and to heal the mixed-version sync
-   * window where a not-yet-upgraded device delivers old-ID logs.
-   */
+  /** Re-links reviews under the old id formulas only; restoring a pre-v36 backup uses it. */
   async rebuildCardStateFromReviewLogs(): Promise<number> {
+    const result = await recoverReviewHistory(this, { contentMatch: false, now: this.getCurrentTimestamp() });
+    return result.restored;
+  }
+
+  async recoverReviewHistory(): Promise<HistoryRecoveryResult> {
     const now = this.getCurrentTimestamp();
-
-    const cards = await this.querySql<{
-      id: string;
-      front: string;
-      deck_id: string;
-      source_node_id: string | null;
-    }>(
-      `SELECT id, front, deck_id, source_node_id FROM flashcards`,
-      [],
-      { asObject: true }
-    );
-
-    // Reverse the interim scheme: reviews keyed to hash(deckId + front) (or the
-    // pre-deck hash(front)) re-point to the card's current deck-independent ID.
-    const idMigrations: { oldId: string; newId: string }[] = [];
-    // A live card's logs are its own, even when another card's old id hashes to it.
-    const liveIds = new Set(cards.map((card) => card.id));
-    for (const card of cards) {
-      if (!card.id.startsWith("card_")) continue;
-      const nodeId = card.source_node_id ?? undefined;
-      // On its wide id because another card held its content id, whose logs are that card's.
-      const fellBack =
-        card.id === wideContentId(generateFlashcardId(card.front, nodeId), { front: card.front, sourceNodeId: nodeId });
-      const candidates = [
-        generateLegacyDeckScopedFlashcardId(card.front, card.deck_id, nodeId),
-        ...(fellBack ? [] : [generateOldFlashcardId(card.front)]),
-      ];
-      for (const oldId of candidates) {
-        if (oldId !== card.id && !liveIds.has(oldId)) idMigrations.push({ oldId, newId: card.id });
-      }
-    }
-
-    for (const { oldId, newId } of idMigrations) {
-      await this.executeSql(
-        `UPDATE review_logs SET flashcard_id = ? WHERE flashcard_id = ?`,
-        [newId, oldId]
-      );
-    }
-
-    const countRows = await this.querySql<{ count: number }>(
-      `SELECT COUNT(*) as count
-       FROM flashcards f
-       WHERE f.state = 'new'
-         AND EXISTS (SELECT 1 FROM review_logs rl WHERE rl.flashcard_id = f.id)`,
-      [],
-      { asObject: true }
-    );
-    const restored = countRows[0]?.count ?? 0;
-
-    if (restored === 0) return 0;
-
-    // 5. Rebuild the FSRS state from the newly linked logs
-    await this.executeSql(
-      `UPDATE flashcards
-       SET state = latest.new_state,
-           stability = latest.new_stability,
-           difficulty = latest.new_difficulty,
-           repetitions = latest.new_repetitions,
-           lapses = latest.new_lapses,
-           interval = latest.new_interval_minutes,
-           last_reviewed = latest.reviewed_at,
-           due_date = strftime('%Y-%m-%dT%H:%M:%fZ', latest.reviewed_at, '+' || latest.new_interval_minutes || ' minutes'),
-           modified = ?
-       FROM (
-         SELECT rl.flashcard_id,
-                rl.new_state, rl.new_stability, rl.new_difficulty,
-                rl.new_repetitions, rl.new_lapses, rl.new_interval_minutes, rl.reviewed_at
-         FROM review_logs rl
-         JOIN (
-           SELECT flashcard_id, MAX(reviewed_at) AS max_reviewed
-           FROM review_logs
-           GROUP BY flashcard_id
-         ) m ON m.flashcard_id = rl.flashcard_id AND m.max_reviewed = rl.reviewed_at
-       ) AS latest
-       WHERE flashcards.id = latest.flashcard_id
-         AND flashcards.state = 'new'`,
-      [now]
-    );
-
-    return restored;
+    const result = await recoverReviewHistory(this, { contentMatch: true, now });
+    for (const op of historyRelinkOps(result.links, now)) this.emitSyncOp(op);
+    return result;
   }
 
   // CARD STATE OVERLAYS (suspend, bury, reset)
@@ -2796,6 +2723,7 @@ export abstract class BaseDatabaseService implements IDatabaseService {
       { suspendedAt: null, buriedUntil: null },
       now
     );
+    await forgetStrandedHistory(this, [cardId], now);
     this.emitSyncOp({ o: "card_reset", p: { c: cardId, at: now } });
   }
 
@@ -2828,6 +2756,7 @@ export abstract class BaseDatabaseService implements IDatabaseService {
       { suspendedAt: null, buriedUntil: null },
       now
     );
+    await forgetStrandedHistory(this, cardIds, now);
     for (const cardId of cardIds) {
       this.emitSyncOp({ o: "card_reset", p: { c: cardId, at: now } });
     }
@@ -2850,6 +2779,7 @@ export abstract class BaseDatabaseService implements IDatabaseService {
         `UPDATE flashcards SET state = 'new', due_date = ?, interval = 0, repetitions = 0, difficulty = 5.0, stability = 0, lapses = 0, last_reviewed = NULL, modified = ? WHERE id IN (${placeholders})`,
         [now, now, ...cardIds]
       );
+      await forgetStrandedHistory(this, cardIds, now);
       this.emitSyncOp({ o: "custom_deck_reset", p: { customDeckId, resetAt: now } });
       return;
     }
@@ -2862,6 +2792,12 @@ export abstract class BaseDatabaseService implements IDatabaseService {
          AND flashcard_id IN (SELECT flashcard_id FROM custom_deck_cards WHERE custom_deck_id = ?)`,
       [now, customDeckId]
     );
+    const members = await this.querySql<{ flashcard_id: string }>(
+      "SELECT flashcard_id FROM custom_deck_cards WHERE custom_deck_id = ?",
+      [customDeckId],
+      { asObject: true }
+    );
+    await forgetStrandedHistory(this, members.map((row) => row.flashcard_id), now);
     this.emitSyncOp({ o: "custom_deck_reset", p: { customDeckId, resetAt: now } });
   }
 

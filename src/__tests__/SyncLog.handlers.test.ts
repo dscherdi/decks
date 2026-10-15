@@ -53,6 +53,9 @@ class FakeDb {
   async executeSql(sql: string, params: unknown[] = []): Promise<void> {
     this.executeSqlCalls.push({ sql, params });
   }
+  async querySql(): Promise<never[]> {
+    return [];
+  }
 
   // Snapshot helpers for assertions.
   getCard(id: string): Flashcard | undefined {

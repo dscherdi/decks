@@ -39,6 +39,7 @@ const PROMPT_FLUSH_OPS: ReadonlySet<SyncOpV1["o"]> = new Set([
   "card_bury",
   "card_unbury",
   "card_reset",
+  "history_relink",
   "deck_reset",
   "custom_deck_upsert",
   "custom_deck_delete",
