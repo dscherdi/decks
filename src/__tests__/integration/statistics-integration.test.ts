@@ -408,6 +408,64 @@ describe("StatisticsService Integration Tests", () => {
     });
   });
 
+  describe("overall review totals", () => {
+    it("count and sum every log the deck filter reaches, as reading the rows would", async () => {
+      const deck2 = DatabaseTestUtils.createTestDeck({
+        id: "test-deck-totals-2",
+        name: "Second Deck",
+        filepath: "/test/totals-2.md",
+      });
+      await db.createDeck(deck2);
+      const card1 = DatabaseTestUtils.createTestFlashcard(testDeck.id, { id: "card-t1" });
+      const card2 = DatabaseTestUtils.createTestFlashcard(deck2.id, { id: "card-t2" });
+      await db.createFlashcard(card1);
+      await db.createFlashcard(card2);
+
+      // 9999 marks the log whose time is then cleared to NULL.
+      const logs: Array<[string, number]> = [
+        [card1.id, 1000],
+        [card1.id, 2500],
+        [card1.id, 9999],
+        [card2.id, 4000],
+        [card2.id, 0],
+        // A card deleted since: only the unfiltered total reaches its log.
+        ["card-gone", 700],
+      ];
+      for (const [flashcardId, timeElapsedMs] of logs) {
+        await db.createReviewLog(
+          DatabaseTestUtils.createTestReviewLog(flashcardId, { timeElapsedMs })
+        );
+      }
+      await db.executeSql(
+        "UPDATE review_logs SET time_elapsed_ms = NULL WHERE time_elapsed_ms = 9999"
+      );
+
+      const totalsOf = (rows: Array<{ timeElapsedMs?: number | null }>) => ({
+        totalReviews: rows.length,
+        totalTimeMs: rows.reduce((sum, log) => sum + (log.timeElapsedMs || 0), 0),
+      });
+
+      const one = await statsService.getOverallStatistics([testDeck.id]);
+      expect(one.reviewStats).toEqual({ totalReviews: 3, totalTimeMs: 3500 });
+      expect(one.reviewStats).toEqual(totalsOf(await db.getReviewLogsByDeck(testDeck.id)));
+
+      const both = await statsService.getOverallStatistics([testDeck.id, deck2.id]);
+      expect(both.reviewStats).toEqual({ totalReviews: 5, totalTimeMs: 7500 });
+      expect(both.reviewStats).toEqual(
+        totalsOf(await db.getReviewLogsByDecks([testDeck.id, deck2.id]))
+      );
+
+      const all = await statsService.getOverallStatistics([]);
+      expect(all.reviewStats).toEqual({ totalReviews: 6, totalTimeMs: 8200 });
+      expect(all.reviewStats).toEqual(totalsOf(await db.getAllReviewLogs()));
+    });
+
+    it("are zero with no review history", async () => {
+      const stats = await statsService.getOverallStatistics([testDeck.id]);
+      expect(stats.reviewStats).toEqual({ totalReviews: 0, totalTimeMs: 0 });
+    });
+  });
+
   describe("getReviewsByHour", () => {
     it("should group reviews by hour of day", async () => {
       const card = DatabaseTestUtils.createTestFlashcard(testDeck.id, {
