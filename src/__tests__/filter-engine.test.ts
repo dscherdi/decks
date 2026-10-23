@@ -283,7 +283,9 @@ describe("FilterEngine", () => {
         rules: [{ field: "isDense", operator: "equals", value: "true" }],
       };
       const result = compileFilter(def);
-      expect(result.whereClause).toBe("(LENGTH(f.back) >= ?)");
+      expect(result.whereClause).toBe(
+        "(LENGTH(f.back) >= ? AND f.type NOT IN ('image-occlusion-v2', 'multiple-choice'))"
+      );
       expect(result.params).toEqual([500]);
     });
 
@@ -294,7 +296,9 @@ describe("FilterEngine", () => {
         rules: [{ field: "isDense", operator: "equals", value: "true" }],
       };
       const result = compileFilter(def, { denseCardCharThreshold: 100 });
-      expect(result.whereClause).toBe("(LENGTH(f.back) >= ?)");
+      expect(result.whereClause).toBe(
+        "(LENGTH(f.back) >= ? AND f.type NOT IN ('image-occlusion-v2', 'multiple-choice'))"
+      );
       expect(result.params).toEqual([100]);
     });
 

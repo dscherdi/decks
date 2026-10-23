@@ -2,7 +2,7 @@ import { App, Modal } from "obsidian";
 import type { DeckProfile } from "../../database/types";
 import type { IDatabaseService } from "../../database/DatabaseFactory";
 import type { ProfilesManagerComponent } from "../../types/svelte-components";
-import type { TagScopeOptions } from "@decks/core";
+import { decksWithChangedParsing, type DeckWithProfile, type TagScopeOptions } from "@decks/core";
 import ProfilesManagerUI from "./ProfilesManagerUI.svelte";
 import { mount, unmount } from "svelte";
 import { makeModalResponsive, type ResponsiveModalHandle } from "../../utils/responsive-modal";
@@ -12,6 +12,8 @@ export class ProfilesManagerModal extends Modal {
   private profiles: DeckProfile[] = [];
   private component: ProfilesManagerComponent | null = null;
   private onProfilesChanged: () => Promise<void>;
+  private reparseDeck: (deckId: string) => Promise<unknown>;
+  private decksAtOpen: DeckWithProfile[] = [];
   private responsiveHandle?: ResponsiveModalHandle;
   private trainedWeightsAvailable: boolean;
   private initialTab: "settings" | "assignments";
@@ -23,6 +25,7 @@ export class ProfilesManagerModal extends Modal {
     app: App,
     db: IDatabaseService,
     onProfilesChanged: () => Promise<void>,
+    reparseDeck: (deckId: string) => Promise<unknown>,
     trainedWeightsAvailable = false,
     initialTab: "settings" | "assignments" = "settings",
     initialProfileId?: string,
@@ -32,6 +35,7 @@ export class ProfilesManagerModal extends Modal {
     super(app);
     this.db = db;
     this.onProfilesChanged = onProfilesChanged;
+    this.reparseDeck = reparseDeck;
     this.trainedWeightsAvailable = trainedWeightsAvailable;
     this.initialTab = initialTab;
     this.initialProfileId = initialProfileId;
@@ -50,6 +54,7 @@ export class ProfilesManagerModal extends Modal {
     // Load all profiles + decks (decks drive the Assignments tab's tag list).
     this.profiles = await this.db.getAllProfiles();
     const allDecks = await this.db.getAllDecks();
+    this.decksAtOpen = await this.db.getAllDecksWithProfiles();
 
     // Mount Svelte component
     this.component = mount(ProfilesManagerUI, {
@@ -86,7 +91,15 @@ export class ProfilesManagerModal extends Modal {
 
     // Defer refresh to avoid blocking the close handler
     window.setTimeout(() => {
-      void this.onProfilesChanged();
+      void this.reparseChangedDecks()
+        .catch(console.error)
+        .then(() => this.onProfilesChanged());
     }, 0);
+  }
+
+  // A note whose profile now parses other headings is unchanged on disk, so the mtime gate would skip it.
+  private async reparseChangedDecks(): Promise<void> {
+    const changed = decksWithChangedParsing(this.decksAtOpen, await this.db.getAllDecksWithProfiles());
+    for (const deck of changed) await this.reparseDeck(deck.id);
   }
 }

@@ -316,6 +316,7 @@ export class DecksView extends ItemView {
         async () => {
           await this.refresh();
         },
+        (deckId) => this.deckSynchronizer.syncDeck(deckId, { force: true }),
         active !== null,
         undefined,
         undefined,
@@ -403,6 +404,7 @@ export class DecksView extends ItemView {
         async () => {
           await this.refresh();
         },
+        (deckId) => this.deckSynchronizer.syncDeck(deckId, { force: true }),
         active !== null,
         "assignments",
         deck.profileId,
