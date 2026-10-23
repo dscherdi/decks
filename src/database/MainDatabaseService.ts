@@ -11,6 +11,7 @@ import {
   CREATE_TABLES_SQL,
   CURRENT_SCHEMA_VERSION,
   ensureDirectoryTables,
+  ensureNoteOrderColumns,
   FlashcardSynchronizer,
   importDpkgContent,
   materialiseDirectoryDecks,
@@ -128,6 +129,7 @@ export class MainDatabaseService extends BaseDatabaseService {
         this.debugLog("Created new database");
         this.lastKnownModified = 0;
       }
+      ensureNoteOrderColumns(this.db);
 
       this.debugLog("MainDatabaseService initialized successfully");
     } catch (error) {

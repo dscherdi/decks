@@ -14,6 +14,7 @@
   import { DEFAULT_PROFILE_ID, getDefaultLearningSteps, getDefaultRelearningSteps, DEFAULT_EXAM_SETTINGS, I18n, validateLearningSteps, validateRelearningSteps, validateRequestRetention } from "@decks/core";
   import { studyTagsFor, isUnderTag } from "@decks/core";
   import { directoryPackageProfileOf, isDirectoryProfileId, isDirectoryTag } from "@decks/core";
+  import { NEW_CARD_ORDERS, parseNewCardOrder, type NewCardOrder } from "@decks/core";
   import type { DirectoryDeckRecord } from "@decks/core";
   import { parseRequestRetention } from "../../utils/request-retention";
   import type { TagScopeOptions } from "@decks/core";
@@ -54,6 +55,7 @@
   let reviewCardsLimitContainer: HTMLElement;
   let enableReviewCardsContainer: HTMLElement;
   let reviewOrderContainer: HTMLElement;
+  let newCardOrderContainer: HTMLElement;
   let headerLevelContainer: HTMLElement;
   let extraHeaderLevelsContainer: HTMLElement;
   let requestRetentionContainer: HTMLElement;
@@ -76,6 +78,7 @@
   let enableNewCardsLimit = false;
   let enableReviewCardsLimit = false;
   let reviewOrder: ReviewOrder = "due-date";
+  let newCardOrder: NewCardOrder = "created";
   let headerLevel = 2;
   let extraHeaderLevels: number[] = [];
   let requestRetention = 0.9;
@@ -140,6 +143,11 @@
       .sort();
   }
 
+  function newCardOrderText(order: NewCardOrder): string {
+    if (order === "note") return t.config.newCardOrderNote;
+    return order === "random" ? t.config.newCardOrderRandom : t.config.newCardOrderCreated;
+  }
+
   function headerLevelDesc(profile: DeckProfile): string {
     if (profile.headerLevel === 0) return t.config.headerTitle;
     const primary = I18n.format(t.config.headerH, { level: profile.headerLevel });
@@ -169,6 +177,7 @@
       label: t.config.reviewOrderLabel,
       value: profile.reviewOrder === "due-date" ? t.config.reviewOrderOldestDue : t.config.reviewOrderRandomLabel,
     });
+    rows.push({ label: t.config.newCardOrderLabel, value: newCardOrderText(parseNewCardOrder(profile.newCardOrder)) });
     rows.push({
       label: t.config.clozeDeletions,
       value: profile.clozeEnabled
@@ -224,6 +233,7 @@
     enableNewCardsLimit = profile.hasNewCardsLimitEnabled;
     enableReviewCardsLimit = profile.hasReviewCardsLimitEnabled;
     reviewOrder = profile.reviewOrder;
+    newCardOrder = parseNewCardOrder(profile.newCardOrder);
     headerLevel = profile.headerLevel;
     extraHeaderLevels = [...(profile.extraHeaderLevels ?? [])];
     requestRetention = profile.fsrs.requestRetention;
@@ -364,6 +374,7 @@
         hasNewCardsLimitEnabled: enableNewCardsLimit,
         hasReviewCardsLimitEnabled: enableReviewCardsLimit,
         reviewOrder: reviewOrder,
+        newCardOrder: newCardOrder,
         headerLevel: headerLevel,
         extraHeaderLevels: extraHeaderLevels,
         learningSteps: learningSteps,
@@ -855,6 +866,19 @@
         });
     }
 
+    if (newCardOrderContainer) {
+      newCardOrderContainer.empty();
+      new Setting(newCardOrderContainer)
+        .setName(p.newCardOrderLabel)
+        .setDesc(p.newCardOrderDesc)
+        .addDropdown((dropdown) => {
+          for (const order of NEW_CARD_ORDERS) dropdown.addOption(order, newCardOrderText(order));
+          dropdown.setValue(newCardOrder).onChange((value) => {
+            newCardOrder = parseNewCardOrder(value);
+          });
+        });
+    }
+
     // Request retention
     if (requestRetentionContainer) {
       requestRetentionContainer.empty();
@@ -1104,6 +1128,7 @@
         <div class="decks-settings-section">
           <h4>{p.sectionReviewSettings}</h4>
           <div bind:this={reviewOrderContainer}></div>
+          <div bind:this={newCardOrderContainer}></div>
         </div>
 
         <div class="decks-settings-section">

@@ -47,7 +47,7 @@ import type { TagScopeOptions } from "@decks/core";
 
 /** Fallback when a caller has no settings to hand; matches DEFAULT_SETTINGS. */
 const DEFAULT_BASE_TAG = "#decks";
-import { DEFAULT_EXAM_SETTINGS, classifyExamBody, parseExamSettings } from "@decks/core";
+import { DEFAULT_EXAM_SETTINGS, classifyExamBody, parseExamSettings, parseNewCardOrder } from "@decks/core";
 import { compileFilter, type FilterCompileOptions } from "@decks/core";
 import type { SyncData, SyncResult } from "@decks/core";
 import {
@@ -236,6 +236,7 @@ export abstract class BaseDatabaseService implements IDatabaseService {
       headerLevel: row[6] as number,
       extraHeaderLevels: this.parseJsonHeaderLevels(row[17]),
       reviewOrder: row[7] as "due-date" | "random",
+      newCardOrder: parseNewCardOrder(row[23] as string | null),
       learningSteps: (row[8] as string) ?? "1m",
       relearningSteps: (row[9] as string) ?? "10m",
       fsrs: {
@@ -772,6 +773,7 @@ export abstract class BaseDatabaseService implements IDatabaseService {
       profile.ttsVoice ?? null,
       profile.ttsRate ?? null,
       profile.ttsLang ?? null,
+      parseNewCardOrder(profile.newCardOrder),
     ]);
 
     this.emitSyncOp({
@@ -786,6 +788,7 @@ export abstract class BaseDatabaseService implements IDatabaseService {
         headerLevel: profile.headerLevel,
         extraHeaderLevels: profile.extraHeaderLevels ?? [],
         reviewOrder: profile.reviewOrder,
+        newCardOrder: parseNewCardOrder(profile.newCardOrder),
         learningSteps: profile.learningSteps ?? "1m",
         relearningSteps: profile.relearningSteps ?? "10m",
         fsrsRequestRetention: profile.fsrs.requestRetention,
@@ -905,6 +908,7 @@ export abstract class BaseDatabaseService implements IDatabaseService {
       updated.ttsVoice ?? null,
       updated.ttsRate ?? null,
       updated.ttsLang ?? null,
+      parseNewCardOrder(updated.newCardOrder),
       modifiedAt,
       id,
     ]);
@@ -926,6 +930,7 @@ export abstract class BaseDatabaseService implements IDatabaseService {
         headerLevel: updated.headerLevel,
         extraHeaderLevels: updated.extraHeaderLevels ?? [],
         reviewOrder: updated.reviewOrder,
+        newCardOrder: parseNewCardOrder(updated.newCardOrder),
         learningSteps: updated.learningSteps,
         relearningSteps: updated.relearningSteps,
         fsrsRequestRetention: updated.fsrs.requestRetention,

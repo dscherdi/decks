@@ -123,6 +123,35 @@ describe("SyncLog handlers - profile_upsert / profile_delete", () => {
     expect((await db.getProfileById("prof_a"))!.name).toBe("Algebra");
   });
 
+  it("applies the new-card order, and keeps it when an op from an older client leaves it out", async () => {
+    const { db, adapter } = await freshDb();
+    await applyOp(
+      db,
+      "r",
+      entry(1, profileUpsertOp("prof_order", "Biology", "2030-01-01T00:00:00Z", { newCardOrder: "note" })),
+      makeLogger(adapter)
+    );
+    expect((await db.getProfileById("prof_order"))?.newCardOrder).toBe("note");
+
+    await applyOp(
+      db,
+      "r",
+      entry(2, profileUpsertOp("prof_order", "Biology 2", "2030-02-01T00:00:00Z")),
+      makeLogger(adapter)
+    );
+    const profile = await db.getProfileById("prof_order");
+    expect(profile?.name).toBe("Biology 2");
+    expect(profile?.newCardOrder).toBe("note");
+
+    await applyOp(
+      db,
+      "r",
+      entry(3, profileUpsertOp("prof_new", "Chemistry", "2030-01-01T00:00:00Z")),
+      makeLogger(adapter)
+    );
+    expect((await db.getProfileById("prof_new"))?.newCardOrder).toBe("created");
+  });
+
   it("carries TTS voice settings through upsert", async () => {
     const { db, adapter } = await freshDb();
     await applyOp(

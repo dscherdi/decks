@@ -121,6 +121,7 @@ describe("DeckManager", () => {
       fileMtime: number;
       cardCount: number;
       skippedEmptyParse?: boolean;
+      positionsPending?: boolean;
     }) {
       const file = new TFile("d.md");
       file.stat = { mtime: opts.fileMtime, ctime: opts.fileMtime, size: 10 };
@@ -146,6 +147,7 @@ describe("DeckManager", () => {
         }),
         getDeckLastSyncedMtime: async () => opts.lastSyncedMtime,
         countTotalCards: async () => opts.cardCount,
+        querySql: async () => (opts.positionsPending ? [["d", "d.md"]] : []),
         setDeckFileTags: jest.fn(async () => {}),
         syncFlashcardsForDeck: dbSync,
         setDeckLastSyncedMtime,
@@ -158,6 +160,12 @@ describe("DeckManager", () => {
       const { mgr, dbSync } = makeMgr({ lastSyncedMtime: 100, fileMtime: 50, cardCount: 5 });
       await mgr.syncFlashcardsForDeck("d");
       expect(dbSync).not.toHaveBeenCalled();
+    });
+
+    it("re-parses an unchanged note studied in note order while its cards have no place", async () => {
+      const { mgr, dbSync } = makeMgr({ lastSyncedMtime: 100, fileMtime: 50, cardCount: 5, positionsPending: true });
+      await mgr.syncFlashcardsForDeck("d");
+      expect(dbSync).toHaveBeenCalledTimes(1);
     });
 
     it("self-heals (re-parses) when the gate hits but the deck has 0 cards", async () => {
@@ -206,10 +214,12 @@ describe("DeckManager", () => {
   describe("getStaleDeckIds", () => {
     function makeManager(
       meta: { id: string; filepath: string; lastSyncedMtime: number }[],
-      fileMtimes: Record<string, number | undefined>
+      fileMtimes: Record<string, number | undefined>,
+      positionsPending: [string, string][] = []
     ): DeckManager {
       const db = {
         getAllDeckSyncMeta: jest.fn(async () => meta),
+        querySql: jest.fn(async () => positionsPending),
       } as unknown as IDatabaseService;
       const vault = {
         getAbstractFileByPath: (path: string) => {
@@ -244,6 +254,22 @@ describe("DeckManager", () => {
       );
       const stale = await mgr.getStaleDeckIds();
       expect(stale.has("new")).toBe(true);
+    });
+
+    it("adds note decks studied in note order whose cards have no place, but no directory deck", async () => {
+      const mgr = makeManager(
+        [
+          { id: "placed", filepath: "placed.md", lastSyncedMtime: 1000 },
+          { id: "unplaced", filepath: "unplaced.md", lastSyncedMtime: 1000 },
+        ],
+        { "placed.md": 1000, "unplaced.md": 1000 },
+        [
+          ["unplaced", "unplaced.md"],
+          ["deck_dir_x", "decks-directory:capitals"],
+        ]
+      );
+      const stale = await mgr.getStaleDeckIds();
+      expect([...stale]).toEqual(["unplaced"]);
     });
 
     it("treats decks with a missing file as stale (so a re-scan reconciles)", async () => {

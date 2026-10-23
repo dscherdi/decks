@@ -26,6 +26,7 @@ import {
   CURRENT_SCHEMA_VERSION,
   buildMigrationSQL,
   ensureDirectoryTables,
+  ensureNoteOrderColumns,
   importDpkgContent,
   DROP_DIRECTORY_PROFILES_SQL,
   materialiseChangedAnything,
@@ -197,6 +198,11 @@ class SimpleDatabaseWorker {
   createFreshDatabase(): void {
     if (!this.db) throw new Error("Database not initialized");
     this.db.exec(CREATE_TABLES_SQL);
+  }
+
+  // Columns added without a schema version bump, so a database at the current version still gets them.
+  addMissingColumns(): void {
+    if (this.db) ensureNoteOrderColumns(this.db);
   }
 
   // Backup database management
@@ -938,6 +944,7 @@ self.onmessage = async (event: MessageEvent<DatabaseWorkerMessage>) => {
           } else {
             worker.checkMigrationNeeded();
           }
+          worker.addMissingColumns();
           try {
             worker.materialiseDirectoryDecks(new Date().toISOString());
           } catch (directoryError) {

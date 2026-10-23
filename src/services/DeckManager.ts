@@ -8,7 +8,17 @@ import {
 } from "obsidian";
 import { type Deck, type Flashcard, type DeckStats, type DeckGroup, DEFAULT_PROFILE_ID } from "../database/types";
 import type { IDatabaseService } from "../database/DatabaseFactory";
-import { DeckIdCollisionError, I18n, applyDeckDailyLimits, generateDeckGroupId, generateDeckId, isDirectoryDeckPath, yieldToUI } from "@decks/core";
+import {
+  DeckIdCollisionError,
+  I18n,
+  NOTE_ORDER_PENDING_DECK_SQL,
+  NOTE_ORDER_PENDING_DECKS_SQL,
+  applyDeckDailyLimits,
+  generateDeckGroupId,
+  generateDeckId,
+  isDirectoryDeckPath,
+  yieldToUI,
+} from "@decks/core";
 import { Logger, formatTime } from "../utils/logging";
 import { FileFilter } from "../utils/fileFilter";
 import { FlashcardParser, type ParsedFlashcard } from "@decks/core";
@@ -402,7 +412,20 @@ export class DeckManager {
         stale.add(id);
       }
     }
+    for (const id of await this.notePositionsPending()) stale.add(id);
     return stale;
+  }
+
+  // Note decks studied in note order whose cards have no place yet; each is parsed once more.
+  private async notePositionsPending(deckId?: string): Promise<Set<string>> {
+    try {
+      const rows = deckId
+        ? await this.db.querySql(NOTE_ORDER_PENDING_DECK_SQL, [deckId])
+        : await this.db.querySql(NOTE_ORDER_PENDING_DECKS_SQL, []);
+      return new Set(rows.filter((row) => !isDirectoryDeckPath(String(row[1]))).map((row) => String(row[0])));
+    } catch {
+      return new Set();
+    }
   }
 
   // Resolves false when the deck's rows may not match its note: no deck, no file, or an empty parse refused.
@@ -439,14 +462,17 @@ export class DeckManager {
         // Self-heal: a deck stuck at 0 cards (e.g. from a prior wrongful wipe)
         // whose file is unchanged would stay empty forever behind this gate.
         // Re-parse when the DB shows 0 cards; otherwise skip as usual.
-        if ((await this.db.countTotalCards(deckId)) > 0) {
+        const positionsPending = (await this.notePositionsPending(deckId)).size > 0;
+        if (!positionsPending && (await this.db.countTotalCards(deckId)) > 0) {
           this.debugLog(
             `Skipping sync for ${deck.name}: file mtime ${fileMtime} <= last_synced_mtime ${lastSyncedMtime}`
           );
           return true;
         }
         this.debugLog(
-          `Self-heal: ${deck.name} has 0 cards but file unchanged — re-syncing`
+          positionsPending
+            ? `${deck.name} is studied in note order but has unplaced cards — re-syncing once`
+            : `Self-heal: ${deck.name} has 0 cards but file unchanged — re-syncing`
         );
       }
     }
