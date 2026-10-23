@@ -28,7 +28,8 @@ export class ExamSetupModal extends Modal {
     private skippedCount: number,
     initial: ExamSettings,
     private onStart: (settings: ExamSettings) => void,
-    private meaningAvailable = false
+    private meaningAvailable = false,
+    private gradingNote: string | null = null
   ) {
     super(app);
     this.values = { ...initial };
@@ -50,6 +51,9 @@ export class ExamSetupModal extends Modal {
       });
       skipped.addClass("decks-exam-setup-skipped");
       contentEl.createEl("p", { text: t.skippedHint, cls: "decks-exam-setup-hint" });
+    }
+    if (this.gradingNote) {
+      contentEl.createEl("p", { text: this.gradingNote, cls: "decks-exam-setup-hint" });
     }
 
     new Setting(contentEl)

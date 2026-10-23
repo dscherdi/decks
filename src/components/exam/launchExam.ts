@@ -2,6 +2,7 @@ import { App, Notice } from "obsidian";
 import {
   ExamAttempt,
   buildExamPool,
+  buildExamSetupPool,
   drawExamQuestions,
   I18n,
   type DeckProfile,
@@ -44,15 +45,16 @@ export async function launchExamForSelection(
     for (const card of cards) {
       examEnabledByDeckId.set(card.deckId, examDeckIds.has(card.deckId));
     }
-    const initial: ExamSettings = profile?.examSettings ?? ctx.settings.exam;
+    const configured: ExamSettings = profile?.examSettings ?? ctx.settings.exam;
     const showClozeContext = (profile?.clozeShowContext ?? "open") === "open";
 
-    const pool = buildExamPool(
+    const pool = buildExamSetupPool(
       cards,
       examEnabledByDeckId,
-      initial.typedGrading,
+      configured.typedGrading,
       showClozeContext
     );
+    const initial: ExamSettings = { ...configured, typedGrading: pool.typedGrading };
     if (pool.eligible.length === 0) {
       if (ctx.settings?.ui?.enableNotices !== false) {
         new Notice(I18n.t.exam.noQuestions);
@@ -79,7 +81,7 @@ export async function launchExamForSelection(
                 showClozeContext
               );
         if (finalPool.eligible.length === 0) {
-          new Notice(I18n.t.exam.noQuestions);
+          new Notice(pool.needsSelfGrading ? I18n.t.exam.needsSelfGrading : I18n.t.exam.noQuestions);
           return;
         }
         const deckKey =
@@ -108,7 +110,8 @@ export async function launchExamForSelection(
           )
         );
       },
-      meaningGradingAvailable(ctx.settings)
+      meaningGradingAvailable(ctx.settings),
+      pool.needsSelfGrading ? I18n.t.exam.needsSelfGrading : null
     ).open();
   } catch (error) {
     console.error("Error starting exam:", error);

@@ -403,7 +403,9 @@
     }
     if (phase !== "question") return;
     if (isTypingTarget(event)) {
-      if (event.key === "Enter") {
+      // A multi-line answer takes Enter as text; Cmd/Ctrl+Enter submits it.
+      const multiLine = event.target instanceof HTMLTextAreaElement;
+      if (event.key === "Enter" && (!multiLine || event.metaKey || event.ctrlKey)) {
         event.preventDefault();
         if (revealed && locked) next();
         else submitCurrent();
@@ -687,7 +689,7 @@
                       class="decks-exam-cloze markdown-rendered"
                       use:renderCloze={{ text: blanksAsText(q.clozeContext), index: qi }}
                     ></div>
-                  {:else if byMeaning}
+                  {:else if byMeaning || selfGraded}
                     <textarea
                       class="decks-exam-typed-input decks-exam-typed-long"
                       rows="3"
