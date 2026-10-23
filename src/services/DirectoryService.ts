@@ -1,10 +1,16 @@
 import { requestUrl, type DataAdapter } from "obsidian";
 import {
+  DpkgError,
+  I18n,
   directoryCardMarkdown,
   directoryDeckInfoUrl,
   directoryDownloadUrl,
   directoryMediaToPrune,
   directoryMediaUrl,
+  directoryPackageUrl,
+  directoryRecordRef,
+  manifestPackageRef,
+  matchesDirectoryLink,
   parseDirectoryDeckInfo,
   parseDirectoryMediaPath,
   sha256Hex,
@@ -16,6 +22,15 @@ import {
 } from "@decks/core";
 import type { IDatabaseService } from "../database/DatabaseFactory";
 import type { Logger } from "../utils/logging";
+
+export type DirectoryAddResult = { ok: true; title: string; updated: boolean } | { ok: false; error: string };
+
+/** What went wrong with a package, in words a person can act on. */
+export function directoryErrorMessage(error: Error): string {
+  const t = I18n.t.directory;
+  if (error instanceof DpkgError) return error.code === "newer_format" ? t.newerFormat : t.invalidPackage;
+  return I18n.format(t.failed, { error: error.message });
+}
 
 /**
  * Installs and renders decks from .dpkg packages. Media lives in a vault folder shared with
@@ -112,6 +127,34 @@ export class DirectoryService {
     const response = await requestUrl({ url: directoryDownloadUrl(ticket), throw: false });
     if (response.status !== 200) throw new Error(`Download failed (${response.status})`);
     return new Uint8Array(response.arrayBuffer);
+  }
+
+  /** A free package's current version, straight from the directory's list. */
+  async downloadPackage(slug: string): Promise<Uint8Array> {
+    const response = await requestUrl({ url: directoryPackageUrl(slug), throw: false });
+    if (response.status !== 200) throw new Error(`Download failed (${response.status})`);
+    return new Uint8Array(response.arrayBuffer);
+  }
+
+  /** Add or update a deck picked from the directory's list; the pick is the request, so nothing is asked. */
+  async addFromCatalog(slug: string): Promise<DirectoryAddResult> {
+    const t = I18n.t.directory;
+    let bytes: Uint8Array;
+    try {
+      bytes = await this.downloadPackage(slug);
+    } catch {
+      return { ok: false, error: t.downloadFailed };
+    }
+    try {
+      const contents = await this.readPackage(bytes);
+      if (!matchesDirectoryLink(contents.manifest, slug)) return { ok: false, error: t.invalidPackage };
+      const ref = manifestPackageRef(contents.manifest);
+      const installed = (await this.db.listDirectoryDecks()).some((deck) => directoryRecordRef(deck) === ref);
+      await this.install(bytes, contents);
+      return { ok: true, title: contents.manifest.title, updated: installed };
+    } catch (error) {
+      return { ok: false, error: directoryErrorMessage(error instanceof Error ? error : new Error(String(error))) };
+    }
   }
 
   private async fetchMedia(ref: DirectoryMediaRef): Promise<void> {

@@ -410,6 +410,7 @@ export interface RequestUrlResponse {
   status: number;
   text: string;
   json: unknown;
+  arrayBuffer?: ArrayBuffer;
 }
 
 type RequestUrlHandler = (options: {

@@ -16,14 +16,15 @@ import type { Extension } from "@codemirror/state";
 import { decksHideAnchorTokens } from "./editor/hide-anchor-tokens";
 import { openVaultPdf } from "./utils/pdf-open";
 import { AiSourcePdfStore } from "./services/AiSourcePdfStore";
-import { DirectoryService } from "./services/DirectoryService";
+import { DirectoryService, directoryErrorMessage } from "./services/DirectoryService";
+import { isFreshInstall } from "./utils/first-install";
+import { DirectoryBrowserModal } from "./components/directory/DirectoryBrowserModal";
 import { DirectoryExporter, type DirectoryExportOutput } from "./services/DirectoryExporter";
 import { DirectoryExportModal } from "./components/export/DirectoryExportModal";
 import type { DirectoryExportDetails } from "./settings";
 import { setDirectoryRenderer } from "./services/directory-render";
 import { ConfirmModal } from "./components/ConfirmModal";
 import {
-  DpkgError,
   formatByteSize,
   isDirectoryDeckPath,
   parseDirectoryImportRequest,
@@ -237,6 +238,7 @@ export default class DecksPlugin extends Plugin {
   public aiChatController: AiChatController;
   private aiSourcePdfs: AiSourcePdfStore;
   private directoryService: DirectoryService;
+  private freshInstall = false;
   public pdfOcrCache: PdfOcrCache;
   public settings: DecksSettings;
   private logger: Logger;
@@ -607,6 +609,7 @@ export default class DecksPlugin extends Plugin {
             () => this.openAnkiImportModal(),
             this.examMissHooks(),
             this.reviewRepairHooks(),
+            () => this.openDirectoryBrowser(),
           )
       );
 
@@ -724,6 +727,7 @@ export default class DecksPlugin extends Plugin {
           () => this.openAnkiImportModal(),
           this.examMissHooks(),
           this.reviewRepairHooks(),
+          () => this.openDirectoryBrowser(),
         ).open();
       });
 
@@ -831,6 +835,11 @@ export default class DecksPlugin extends Plugin {
       this.app.workspace.onLayoutReady(() => {
         void this.openReleaseNotesIfUpdated();
       });
+
+      // The Decks panel is the plugin's main view, so a new install opens it once.
+      if (this.freshInstall) {
+        this.app.workspace.onLayoutReady(() => void this.activateView());
+      }
 
       // Add command to open the legacy SR migration modal
       this.addCommand({
@@ -1045,6 +1054,7 @@ export default class DecksPlugin extends Plugin {
             undefined,
             this.examMissHooks(),
             this.reviewRepairHooks(),
+            () => this.openDirectoryBrowser(),
           ).open();
         },
       });
@@ -1335,6 +1345,7 @@ export default class DecksPlugin extends Plugin {
 
   async loadSettings() {
     const loadedData = await this.loadData();
+    this.freshInstall = isFreshInstall(loadedData);
     this.settings = deepMergeIgnoreNull(
       DEFAULT_SETTINGS as unknown as Record<string, unknown>,
       (loadedData || {}) as Record<string, unknown>
@@ -2231,9 +2242,18 @@ export default class DecksPlugin extends Plugin {
   }
 
   private directoryErrorMessage(error: Error): string {
-    const t = I18n.t.directory;
-    if (error instanceof DpkgError) return error.code === "newer_format" ? t.newerFormat : t.invalidPackage;
-    return I18n.format(t.failed, { error: error instanceof Error ? error.message : String(error) });
+    return directoryErrorMessage(error);
+  }
+
+  openDirectoryBrowser(): void {
+    new DirectoryBrowserModal(this.app, {
+      http: new ObsidianHttpClient(),
+      db: this.db,
+      directory: this.directoryService,
+      onChanged: async () => {
+        await this.getDecksView()?.refresh();
+      },
+    }).open();
   }
 
   openAnkiImportModal(): void {

@@ -81,6 +81,7 @@ export class DecksViewModal extends Modal {
     openAnkiImport?: () => void,
     private examMissHooks?: ExamMissHooks,
     private reviewRepairHooks?: ReviewRepairHooks,
+    private openDirectoryBrowser?: () => void,
   ) {
     super(app);
     this.db = db;
@@ -243,6 +244,7 @@ export class DecksViewModal extends Modal {
           this.openAiWorkbench?.();
         },
         openAnkiImportModal: () => this.openAnkiImport?.(),
+        openDirectoryBrowser: () => this.openDirectoryBrowser?.(),
         aiEnabled: this.settings.ai.enabled,
         deckTag: this.settings.parsing.deckTag,
         pinnedDeckIds: this.settings.ui.pinnedDeckIds,

@@ -74,6 +74,7 @@ export class DecksView extends ItemView {
     openAnkiImport?: () => void,
     private examMissHooks?: ExamMissHooks,
     private reviewRepairHooks?: ReviewRepairHooks,
+    private openDirectoryBrowser?: () => void,
   ) {
     super(leaf);
     this.db = database;
@@ -240,6 +241,7 @@ export class DecksView extends ItemView {
         openDeckConfigModal: (deck: DeckWithProfile) => this.openDeckConfigModal(deck),
         openFlashcardManager: () => this.openFlashcardManager(),
         openAiWorkbench: () => this.openAiWorkbench?.(),
+        openDirectoryBrowser: () => this.openDirectoryBrowser?.(),
         aiEnabled: this.settings.ai.enabled,
         deckTag: this.settings.parsing.deckTag,
         pinnedDeckIds: this.settings.ui.pinnedDeckIds,
