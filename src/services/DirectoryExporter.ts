@@ -14,6 +14,7 @@ import {
   parseHeaderLevels,
   sha256Hex,
   slugifyDirectoryTitle,
+  sortCardsInNoteOrder,
   writeDpkgDeckDb,
   type DeckTemplate,
   type DeckWithProfile,
@@ -158,10 +159,11 @@ export class DirectoryExporter {
     const unresolved: string[] = [];
 
     for (const { deck, key, title } of planned) {
-      const cards = await this.db.getFlashcardsByDeck(deck.id);
+      const synced = await this.db.getFlashcardsByDeck(deck.id);
+      const cards = await this.inNoteOrder(deck, synced);
       // Pin today's ids in the note, so a later export of an edited card keeps its id.
       const titleMode = parseHeaderLevels(deck.profile).includes(0);
-      await new AnchorStamper(new ObsidianNoteAccess(this.app), this.db).stampFileBatch(deck.filepath, cards, titleMode);
+      await new AnchorStamper(new ObsidianNoteAccess(this.app), this.db).stampFileBatch(deck.filepath, synced, titleMode);
       await this.collectMedia(cards, deck.filepath, media);
 
       const exam = deck.profile.examEnabled === true;
@@ -254,6 +256,18 @@ export class DirectoryExporter {
     const deckKeys: Record<string, string> = {};
     for (const { deck, key } of planned) if (key !== "") deckKeys[deck.filepath] = key;
     return { bytes, cardCount: all.length, mediaCount: media.size, skipped, unresolved, deckKeys };
+  }
+
+  // Rows come back in the order they were first synced; the note decides where each card sits.
+  private async inNoteOrder(deck: DeckWithProfile, cards: Flashcard[]): Promise<Flashcard[]> {
+    const file = this.app.vault.getAbstractFileByPath(deck.filepath);
+    if (!(file instanceof TFile) || file.extension !== "md") return cards;
+    return sortCardsInNoteOrder(cards, await this.app.vault.read(file), {
+      headerLevels: parseHeaderLevels(deck.profile),
+      fileTitle: file.basename,
+      clozeEnabled: deck.profile.clozeEnabled,
+      examEnabled: deck.profile.examEnabled === true,
+    });
   }
 
   private async collectMedia(cards: Flashcard[], sourcePath: string, media: Map<string, ResolvedMedia>): Promise<void> {

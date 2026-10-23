@@ -152,6 +152,45 @@ describe("directory export re-parses its notes", () => {
     expect(vaultNote.content().match(/%%dk:/g)).toHaveLength(2);
   });
 
+  it("packages the cards in the order the note lays them out", async () => {
+    const question = (front: string, right: string, wrong: string) => `## ${front}\n- [x] ${right}\n- [ ] ${wrong}\n`;
+    const first = question("Organelle der Atmung?", "Mitochondrium", "Ribosom");
+    const last = question("Träger der Erbinformation?", "DNA", "Stärke");
+    const occlusion = [
+      "## Herz",
+      "```decks-occlusion",
+      "image: '[[herz.png]]'",
+      "masks:",
+      "  - { id: m1, x: 10, y: 20, w: 15, h: 8, answer: Aorta }",
+      "  - { id: m2, x: 50, y: 30, w: 12, h: 6, answer: Vorhof }",
+      "```",
+      "",
+    ].join("\n");
+    const vaultNote = note([first, last].join("\n"));
+    const manager = new DeckManager(vaultNote.vault, vaultNote.metadataCache, db);
+    expect(await manager.syncFlashcardsForDeck(deckId)).toBe(true);
+    // The middle of the note arrives in a later sync, so its rows come last.
+    vaultNote.setContent([first, NOTE, occlusion, last].join("\n"));
+    const reparse: ReparseDeck = (id) => manager.syncFlashcardsForDeck(id, undefined, { force: true });
+    await reparse(deckId);
+    expect((await db.getFlashcardsByDeck(deckId)).slice(0, 2).map((card) => card.front)).toEqual([
+      "Organelle der Atmung?",
+      "Träger der Erbinformation?",
+    ]);
+
+    const output = await new DirectoryExporter(vaultNote.app, db, "test", reparse).export([await deck()], DETAILS);
+    const contents = await unpackDpkg(output.bytes, { includeMedia: false });
+    const cards = JSON.parse(contents.cardsJson ?? "[]") as DirectoryCardContent[];
+    expect(cards.map((card) => [card.position, card.type === "image-occlusion-v2" ? "Herz" : card.front])).toEqual([
+      [0, "Organelle der Atmung?"],
+      [1, "Lesen Teil 1"],
+      [2, "Lesen Teil 2"],
+      [3, "Herz"],
+      [4, "Herz"],
+      [5, "Träger der Erbinformation?"],
+    ]);
+  });
+
   it("refuses to export a note it could not read, rather than packaging the old rows", async () => {
     const { vaultNote, reparse } = await staleSetup();
     vaultNote.setContent("");
