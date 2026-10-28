@@ -2520,6 +2520,20 @@ export abstract class BaseDatabaseService implements IDatabaseService {
     ]);
   }
 
+  async restoreCramCard(card: CramCard): Promise<void> {
+    await this.executeSql(SQL_QUERIES.RESTORE_CRAM_CARD, [
+      card.tempState,
+      card.tempStability,
+      card.tempDifficulty,
+      card.tempInterval,
+      card.tempDueAt,
+      card.reps,
+      card.graduatedAt,
+      this.getCurrentTimestamp(),
+      card.id,
+    ]);
+  }
+
   async getDailyReviewCounts(
     deckId: string,
     nextDayStartsAt = 4

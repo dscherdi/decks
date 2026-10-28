@@ -7,6 +7,7 @@ import { describeAnchorInterop } from "@decks/conformance/anchor-interop";
 import { describeCardIdentity } from "@decks/conformance/card-identity";
 import { describeDeckIdentity } from "@decks/conformance/deck-identity";
 import { describeHistoryRecovery } from "@decks/conformance/history-recovery";
+import { describeCramUndo } from "@decks/conformance/cram-undo";
 import type { ConformanceHost } from "@decks/conformance/harness";
 import { setupTestDatabase, teardownTestDatabase } from "./database-test-utils";
 
@@ -26,3 +27,4 @@ describeAnchorInterop(host);
 describeCardIdentity(host);
 describeDeckIdentity(host);
 describeHistoryRecovery(host);
+describeCramUndo(host);
