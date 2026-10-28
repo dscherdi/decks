@@ -1,5 +1,41 @@
 import { isZstd, parseMediaManifest } from "@decks/core";
+import type { Database, SqlJsStatic } from "sql.js";
 import { decompressZstd } from "./zstd";
+
+const UNICASE_COLLATION = /COLLATE\s+"?unicase"?/gi;
+
+// Anki's schema-18 tables declare its own `unicase` collation, which newer SQLite
+// won't scan without, so the in-memory copy is switched to the built-in NOCASE.
+export function openAnkiCollection(SQL: SqlJsStatic, bytes: Uint8Array): Database {
+  const db = new SQL.Database(bytes);
+  if (!replaceUnicaseCollation(db)) return db;
+  // A rewritten schema is only read back on a fresh open.
+  const patched = db.export();
+  db.close();
+  return new SQL.Database(patched);
+}
+
+function replaceUnicaseCollation(db: Database): boolean {
+  const rewrites: Array<{ name: string; sql: string }> = [];
+  const stmt = db.prepare("SELECT name, sql FROM sqlite_master WHERE sql LIKE '%unicase%'");
+  try {
+    while (stmt.step()) {
+      const [name, sql] = stmt.get();
+      if (typeof name !== "string" || typeof sql !== "string") continue;
+      const rewritten = sql.replace(UNICASE_COLLATION, "COLLATE NOCASE");
+      if (rewritten !== sql) rewrites.push({ name, sql: rewritten });
+    }
+  } finally {
+    stmt.free();
+  }
+  if (rewrites.length === 0) return false;
+  db.run("PRAGMA writable_schema = ON");
+  for (const { name, sql } of rewrites) {
+    db.run("UPDATE sqlite_master SET sql = ? WHERE name = ?", [sql, name]);
+  }
+  db.run("PRAGMA writable_schema = OFF");
+  return true;
+}
 
 /**
  * Pick the authoritative SQLite collection from an unzipped `.apkg`.

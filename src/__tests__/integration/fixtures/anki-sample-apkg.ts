@@ -279,10 +279,20 @@ function buildCollectionBytesV18(): Uint8Array {
   const db = createRealDatabase();
   try {
     db.run("CREATE TABLE col (id integer primary key, crt integer, ver integer, models text, decks text, conf text);");
-    db.run("CREATE TABLE notetypes (id integer primary key, name text, config blob);");
-    db.run("CREATE TABLE fields (ntid integer, ord integer, name text, config blob);");
-    db.run("CREATE TABLE templates (ntid integer, ord integer, name text, config blob);");
-    db.run("CREATE TABLE decks (id integer primary key, name text);");
+    db.run("CREATE TABLE notetypes (id integer primary key, name text NOT NULL COLLATE NOCASE, config blob);");
+    db.run(
+      "CREATE TABLE fields (ntid integer NOT NULL, ord integer NOT NULL, name text NOT NULL COLLATE NOCASE, " +
+        "config blob NOT NULL, PRIMARY KEY (ntid, ord)) without rowid;"
+    );
+    db.run(
+      "CREATE TABLE templates (ntid integer NOT NULL, ord integer NOT NULL, name text NOT NULL COLLATE NOCASE, " +
+        "config blob NOT NULL, PRIMARY KEY (ntid, ord)) without rowid;"
+    );
+    db.run("CREATE TABLE decks (id integer primary key, name text NOT NULL COLLATE NOCASE);");
+    db.run("CREATE UNIQUE INDEX idx_notetypes_name ON notetypes (name);");
+    db.run("CREATE UNIQUE INDEX idx_fields_name_ntid ON fields (name, ntid);");
+    db.run("CREATE UNIQUE INDEX idx_templates_name_ntid ON templates (name, ntid);");
+    db.run("CREATE UNIQUE INDEX idx_decks_name ON decks (name);");
     createNoteCardRevlogTables(db);
 
     db.run("INSERT INTO col (id, crt, ver, models, decks, conf) VALUES (1, ?, 18, '', '', '');", [
@@ -316,6 +326,10 @@ function buildCollectionBytesV18(): Uint8Array {
       db.run("INSERT INTO decks (id, name) VALUES (?, ?);", [d.id, d.name.replace(/::/g, "\x1f")]);
     }
     insertNoteCardRevlogRows(db);
+    // Anki declares its own `unicase` collation, which sql.js can't create, so it is written into the schema text.
+    db.run("PRAGMA writable_schema = ON;");
+    db.run("UPDATE sqlite_master SET sql = replace(sql, 'COLLATE NOCASE', 'COLLATE unicase') WHERE type = 'table';");
+    db.run("PRAGMA writable_schema = OFF;");
     return db.export();
   } finally {
     db.close();

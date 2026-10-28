@@ -26,7 +26,7 @@ import type { Logger } from "@/utils/logging";
 import { loadSqlJsMainThread } from "@/database/loadSqlJsMainThread";
 import { htmlToMarkdown } from "@/utils/htmlToMarkdown";
 import { decompressZstd } from "@/utils/zstd";
-import { pickAnkiCollection, readAnkiMediaMap } from "@/utils/ankiCollection";
+import { openAnkiCollection, pickAnkiCollection, readAnkiMediaMap } from "@/utils/ankiCollection";
 import { imageDimensions } from "@/utils/imageDimensions";
 
 export type AnkiProgressPhase = "read" | "write" | "media" | "sync" | "import";
@@ -347,7 +347,7 @@ export class AnkiImportController {
     const entries = unzipSync(bytes);
     const collectionBytes = pickAnkiCollection(entries);
     const SQL = await loadSqlJsMainThread();
-    const db = new SQL.Database(collectionBytes);
+    const db = openAnkiCollection(SQL, collectionBytes);
     return { db, mediaByName: AnkiImportController.readMediaMap(entries), entries };
   }
 

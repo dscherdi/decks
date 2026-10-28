@@ -1,4 +1,5 @@
 import { unzipSync } from "fflate";
+import type { Database, SqlJsStatic } from "sql.js";
 import { MainDatabaseService } from "../../database/MainDatabaseService";
 import { setupTestDatabase, teardownTestDatabase } from "./database-test-utils";
 import { createRealDatabase } from "./setup-real-sql";
@@ -9,7 +10,7 @@ import {
   SAMPLE,
 } from "./fixtures/anki-sample-apkg";
 import { isZstd } from "@decks/core";
-import { pickAnkiCollection, readAnkiMediaMap } from "../../utils/ankiCollection";
+import { openAnkiCollection, pickAnkiCollection, readAnkiMediaMap } from "../../utils/ankiCollection";
 import {
   AnkiCollectionParser,
   AnkiDeckRenderer,
@@ -30,6 +31,11 @@ import type {
 // no dependency on any local Anki export. See fixtures/anki-sample-apkg.ts.
 let APKG: Uint8Array;
 let ENTRIES: Record<string, Uint8Array>;
+
+function schemaSql(db: Database): string {
+  const value = db.exec("SELECT group_concat(sql, ';') FROM sqlite_master")[0]?.values[0]?.[0];
+  return typeof value === "string" ? value : "";
+}
 
 function loadCollection(): RawDatabase {
   const bytes = ENTRIES["collection.anki21"] ?? ENTRIES["collection.anki2"];
@@ -430,9 +436,14 @@ describe("Anki import — modern format (zstd + protobuf media)", () => {
     expect(occ[0].imagePath).toBe(SAMPLE.occlusionImage);
   });
 
-  it("parses a schema-18 collection (models/decks in normalized protobuf tables)", () => {
+  it("parses a schema-18 collection (models/decks in normalized protobuf tables)", async () => {
     const entries = unzipSync(buildSampleApkgV18());
-    const collection = createRealDatabase(pickAnkiCollection(entries)) as unknown as RawDatabase;
+    const bytes = pickAnkiCollection(entries);
+    expect(schemaSql(createRealDatabase(bytes))).toMatch(/COLLATE unicase/);
+    const SQL = await (globalThis as unknown as { initSqlJs: () => Promise<SqlJsStatic> }).initSqlJs();
+    const opened = openAnkiCollection(SQL, bytes);
+    expect(schemaSql(opened)).not.toMatch(/unicase/i);
+    const collection = opened as unknown as RawDatabase;
     // The v18 media manifest is zstd-compressed; readAnkiMediaMap decompresses it.
     const mediaByName = readAnkiMediaMap(entries);
     expect(mediaByName.size).toBeGreaterThan(0);
