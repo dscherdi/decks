@@ -673,15 +673,23 @@ export abstract class BaseDatabaseService implements IDatabaseService {
     newName: string,
     newFilepath: string
   ): Promise<void> {
-    // Update deck
-    const sql1 = `UPDATE decks SET id = ?, name = ?, filepath = ?, modified = ? WHERE id = ?`;
-    await this.executeSql(sql1, [
-      newDeckId,
-      newName,
-      newFilepath,
-      this.getCurrentTimestamp(),
-      oldDeckId,
-    ]);
+    const now = this.getCurrentTimestamp();
+    if (oldDeckId === newDeckId) {
+      const sql = `UPDATE decks SET name = ?, filepath = ?, modified = ? WHERE id = ?`;
+      await this.executeSql(sql, [newName, newFilepath, now, oldDeckId]);
+    } else {
+      // A copy under the new id first and the old row last, so no card points at a missing deck.
+      const rest = (
+        await this.querySql<{ name: string }>(`PRAGMA table_info(decks)`, [], { asObject: true })
+      )
+        .map((column) => column.name)
+        .filter((name) => !["id", "name", "filepath", "modified"].includes(name))
+        .join(", ");
+      await this.executeSql(
+        `INSERT INTO decks (id, name, filepath, modified, ${rest}) SELECT ?, ?, ?, ?, ${rest} FROM decks WHERE id = ?`,
+        [newDeckId, newName, newFilepath, now, oldDeckId]
+      );
+    }
 
     // Update flashcard deck_id references. Card IDs are deck-independent, so
     // they (and their review_logs links) stay valid across the rename.
@@ -691,6 +699,10 @@ export abstract class BaseDatabaseService implements IDatabaseService {
     // Update review sessions
     const sql4 = `UPDATE review_sessions SET deck_id = ? WHERE deck_id = ?`;
     await this.executeSql(sql4, [newDeckId, oldDeckId]);
+
+    if (oldDeckId !== newDeckId) {
+      await this.executeSql(`DELETE FROM decks WHERE id = ?`, [oldDeckId]);
+    }
   }
 
   // Deck deletion removes the deck's cards + their custom-deck memberships
