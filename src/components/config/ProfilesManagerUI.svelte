@@ -64,6 +64,7 @@
   let relearningStepsContainer: HTMLElement;
   let clozeEnabledContainer: HTMLElement;
   let clozeShowContextContainer: HTMLElement;
+  let clozeGroupByLineContainer: HTMLElement;
   let ttsVoiceContainer: HTMLElement;
   let ttsRateContainer: HTMLElement;
   let examEnabledContainer: HTMLElement;
@@ -87,6 +88,7 @@
   let relearningSteps = "10m";
   let clozeEnabled = false;
   let clozeShowContext: ClozeShowContext = "open";
+  let clozeGroupByLine = false;
   // Read-aloud voice: ttsLang is derived from the chosen voice so cross-device
   // sync can fall back to a same-language voice when the exact one is missing.
   let ttsVoice = "";
@@ -242,6 +244,7 @@
     relearningSteps = profile.relearningSteps;
     clozeEnabled = profile.clozeEnabled;
     clozeShowContext = profile.clozeShowContext;
+    clozeGroupByLine = profile.clozeGroupByLine ?? false;
     ttsVoice = profile.ttsVoice ?? "";
     ttsRate = profile.ttsRate ?? 1;
     ttsLang = profile.ttsLang ?? "";
@@ -385,6 +388,7 @@
         },
         clozeEnabled: clozeEnabled,
         clozeShowContext: clozeShowContext,
+        clozeGroupByLine: clozeGroupByLine,
         ttsVoice: ttsVoice || undefined,
         ttsRate: ttsRate,
         ttsLang: ttsLang || undefined,
@@ -702,6 +706,20 @@
         });
     } else if (clozeShowContextContainer) {
       clozeShowContextContainer.empty();
+    }
+
+    if (clozeGroupByLineContainer) {
+      clozeGroupByLineContainer.empty();
+      if (clozeEnabled) {
+        new Setting(clozeGroupByLineContainer)
+          .setName(p.clozeLinesLabel)
+          .setDesc(p.clozeLinesDesc)
+          .addToggle((toggle) => {
+            toggle.setValue(clozeGroupByLine).onChange((value) => {
+              clozeGroupByLine = value;
+            });
+          });
+      }
     }
 
     // Exam questions toggle (task list under a heading → multiple-choice).
@@ -1112,6 +1130,7 @@
           <div bind:this={extraHeaderLevelsContainer} class:decks-pm-locked={locked} inert={locked || undefined}></div>
           <div bind:this={clozeEnabledContainer} class:decks-pm-locked={locked} inert={locked || undefined}></div>
           <div bind:this={clozeShowContextContainer}></div>
+          <div bind:this={clozeGroupByLineContainer}></div>
           <div bind:this={examEnabledContainer} class:decks-pm-locked={locked} inert={locked || undefined}></div>
         </div>
 

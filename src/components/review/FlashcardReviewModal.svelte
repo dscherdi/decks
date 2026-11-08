@@ -26,8 +26,10 @@
     type ExamOption,
   } from "@decks/core";
   import { isOcclusionV2, parseOcclusionBack, activeMaskIdForCard, prepareClozeMath } from "@decks/core";
+  import { clozeActiveOrders, clozeOrderRange, type ClozeStep } from "@decks/core";
   import { renderCardSide } from "../../utils/html-template-render";
   import { renderOcclusion } from "../../utils/occlusion-render";
+  import { clozeMarkRange } from "../../utils/cloze-marks";
   import ReviewScratchpad from "./ReviewScratchpad.svelte";
   import DocInfoButton from "../DocInfoButton.svelte";
   import {
@@ -48,7 +50,7 @@
   export let deckOrGroup: DeckOrGroup;
   export let initialCard: Flashcard | null = null;
   export let onReview: (
-    card: Flashcard,
+    cards: Flashcard[],
     rating: RatingLabel,
     timeElapsed?: number,
     shownAt?: Date
@@ -82,7 +84,7 @@
   // calls this then advances.
   export let onCardStateAction:
     | ((
-        card: Flashcard,
+        cards: Flashcard[],
         action: "suspend" | "bury" | "reset"
       ) => Promise<boolean>)
     | undefined = undefined;
@@ -333,11 +335,29 @@
   let sessionProgress: SessionProgress | null = null;
   let canUndo = false;
 
-  // Cloze group review state
-  let clozeGroup: Flashcard[] = [];
+  // Cloze group review state: the note's clozes as steps, and what the shown step covers.
+  let clozeSteps: ClozeStep[] = [];
   let clozeGroupIndex = 0;
   let clozeGroupTotal = 0;
   let inClozeGroupReview = false;
+  let stepCards: Flashcard[] = [];
+  let activeOrders: number[] = [];
+
+  // Cards a rating or card action covers, and the clozes shown with them.
+  async function stepFor(card: Flashcard): Promise<ClozeStep> {
+    const own = clozeSteps[clozeGroupIndex];
+    if (inClozeGroupReview && own?.cards[0]?.id === card.id) return own;
+    if (cramMode && cramSessionId) return scheduler.getCramClozeStep(cramSessionId, card);
+    const grouped = browseMode && (await scheduler.groupsClozesByLine(card));
+    return { cards: [card], activeOrders: clozeActiveOrders(card, grouped) };
+  }
+
+  function resetClozeGroup(): void {
+    inClozeGroupReview = false;
+    clozeSteps = [];
+    clozeGroupIndex = 0;
+    clozeGroupTotal = 0;
+  }
 
   $: clozeShowContext =
     ("profile" in deckOrGroup ? deckOrGroup.profile : undefined)?.clozeShowContext ?? "open";
@@ -626,22 +646,16 @@
     )
       return;
 
-    if (currentCard.type === "image-occlusion") {
-      const allActive = container.querySelectorAll(".decks-cloze-active");
-      allActive.forEach((el) => {
-        const span = activeDocument.createElement("span");
-        span.className = "decks-cloze-revealed";
-        span.textContent =
-          el.getAttribute("data-decks-cloze-text") || el.textContent || "";
-        el.replaceWith(span);
-      });
-    } else {
+    // Every blank of the card's step reveals together.
+    const fallback = currentCard.clozeText;
+    container.querySelectorAll(".decks-cloze-active").forEach((el) => {
       const span = activeDocument.createElement("span");
       span.className = "decks-cloze-revealed";
       span.textContent =
-        target.getAttribute("data-decks-cloze-text") || currentCard.clozeText;
-      target.replaceWith(span);
-    }
+        el.getAttribute("data-decks-cloze-text") ||
+        (el === target ? fallback : el.textContent || "");
+      el.replaceWith(span);
+    });
 
     container.setAttribute("data-decks-cloze-revealed", "true");
     // Revealing the blank also surfaces the rating buttons.
@@ -695,13 +709,15 @@
       // Clozes inside MathJax can't become <mark> (MathJax owns the $…$ span),
       // so rewrite those to LaTeX up front; out-of-math clozes stay ==…== for the
       // post-processor, with the active index remapped to them.
-      const { markdown, markActiveIndex } = prepareClozeMath(
+      const orders = activeOrders.length > 0 ? activeOrders : [card.clozeOrder ?? 0];
+      const { markdown, markActiveIndices } = prepareClozeMath(
         clozeContent(card),
-        card.clozeOrder ?? 0,
+        orders,
         clozeShowContext,
         revealed
       );
-      setClozeAttributes(el, markActiveIndex, clozeShowContext, revealed);
+      const range = clozeMarkRange(markActiveIndices);
+      setClozeAttributes(el, range?.start ?? -1, clozeShowContext, revealed, range?.end);
       renderMarkdown(markdown, el, deckFilePath);
     }
   }
@@ -762,14 +778,13 @@
       isClozeType(currentCard.type) &&
       !inClozeGroupReview
     ) {
-      const siblings = await scheduler.getClozeSiblings(
-        currentCard,
-        new Date()
-      );
-      clozeGroup = [currentCard, ...siblings];
+      clozeSteps = await scheduler.getClozeSteps(currentCard, new Date());
       clozeGroupIndex = 0;
       inClozeGroupReview = true;
     }
+    const step = await stepFor(currentCard);
+    stepCards = step.cards;
+    activeOrders = step.activeOrders;
 
     // Cram uses a fixed two-button bar (no per-rating interval preview), and its
     // scheduling is isolated from the card's real FSRS state.
@@ -924,8 +939,9 @@
 
     isLoading = true;
     try {
-      await scheduler.rateCram(cramSessionId, currentCard.id, rating, new Date());
-      reviewedCount++;
+      const rated = stepCards.length > 0 ? stepCards : [currentCard];
+      await scheduler.rateCramGroup(cramSessionId, rated.map((card) => card.id), rating, new Date());
+      reviewedCount += rated.length;
       await refreshCramProgress();
 
       currentCard = await scheduler.getNextCramCard(cramSessionId);
@@ -957,8 +973,9 @@
     try {
       const timeElapsed = Date.now() - cardStartTime;
       const shownAt = new Date(cardStartTime);
-      await onReview(currentCard, rating, timeElapsed, shownAt);
-      reviewedCount++;
+      const rated = stepCards.length > 0 ? stepCards : [currentCard];
+      await onReview(rated, rating, timeElapsed, shownAt);
+      reviewedCount += rated.length;
 
       // Update session progress after review
       if (sessionId) {
@@ -973,18 +990,12 @@
       }
 
       // Advance through cloze group or get next card from scheduler
-      if (inClozeGroupReview && clozeGroupIndex < clozeGroup.length - 1) {
+      if (inClozeGroupReview && clozeGroupIndex < clozeSteps.length - 1) {
         clozeGroupIndex++;
-        currentCard = clozeGroup[clozeGroupIndex];
+        currentCard = clozeSteps[clozeGroupIndex].cards[0];
         await loadCard();
       } else {
-        // Reset cloze group state
-        if (inClozeGroupReview) {
-          inClozeGroupReview = false;
-          clozeGroup = [];
-          clozeGroupIndex = 0;
-          clozeGroupTotal = 0;
-        }
+        if (inClozeGroupReview) resetClozeGroup();
 
         if (isDeckGroup(deckOrGroup)) {
           currentCard = await scheduler.getNextForDeckGroup(
@@ -1041,18 +1052,13 @@
       handleBrowseNext();
       return;
     }
-    if (inClozeGroupReview && clozeGroupIndex < clozeGroup.length - 1) {
+    if (inClozeGroupReview && clozeGroupIndex < clozeSteps.length - 1) {
       clozeGroupIndex++;
-      currentCard = clozeGroup[clozeGroupIndex];
+      currentCard = clozeSteps[clozeGroupIndex].cards[0];
       await loadCard();
       return;
     }
-    if (inClozeGroupReview) {
-      inClozeGroupReview = false;
-      clozeGroup = [];
-      clozeGroupIndex = 0;
-      clozeGroupTotal = 0;
-    }
+    if (inClozeGroupReview) resetClozeGroup();
     if (isDeckGroup(deckOrGroup)) {
       currentCard = await scheduler.getNextForDeckGroup(
         new Date(),
@@ -1101,7 +1107,10 @@
     isLoading = true;
     const targetCard = currentCard;
     try {
-      const applied = await onCardStateAction(targetCard, action);
+      const applied = await onCardStateAction(
+        stepCards.length > 0 ? stepCards : [targetCard],
+        action
+      );
       if (!applied) return;
       // Notify stats consumers (deck panel etc.) that this card changed.
       if (onCardReviewed) {
@@ -1125,19 +1134,17 @@
     if (isLoading || !canUndo || browseMode) return;
     isLoading = true;
     try {
-      const restored = await scheduler.undoLastReview();
+      const restoredCards = await scheduler.undoLastReviewGroup();
+      const restored = restoredCards[0];
       if (!restored) {
         canUndo = await scheduler.hasUndoableReview();
         return;
       }
 
-      inClozeGroupReview = false;
-      clozeGroup = [];
-      clozeGroupIndex = 0;
-      clozeGroupTotal = 0;
+      resetClozeGroup();
 
       currentCard = restored;
-      reviewedCount = Math.max(0, reviewedCount - 1);
+      reviewedCount = Math.max(0, reviewedCount - restoredCards.length);
       if (sessionId) {
         sessionProgress = await scheduler.getSessionProgress(sessionId);
       }
@@ -1538,7 +1545,7 @@
         {browseMode ? "Browse" : "Review session"} - {deckOrGroup.name}
         {#if currentCard && isClozeType(currentCard.type) && clozeGroupTotal > 0}
           <span class="decks-cloze-indicator"
-            >Cloze {(currentCard.clozeOrder ?? clozeGroupIndex) + 1}/{clozeGroupTotal}</span
+            >Cloze {clozeOrderRange(activeOrders.length > 0 ? activeOrders : [currentCard.clozeOrder ?? clozeGroupIndex])}/{clozeGroupTotal}</span
           >
         {/if}
       </h3>

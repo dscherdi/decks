@@ -8,6 +8,7 @@ import { describeCardIdentity } from "@decks/conformance/card-identity";
 import { describeDeckIdentity } from "@decks/conformance/deck-identity";
 import { describeHistoryRecovery } from "@decks/conformance/history-recovery";
 import { describeCramUndo } from "@decks/conformance/cram-undo";
+import { describeClozeLineGroups } from "@decks/conformance/cloze-line-groups";
 import type { ConformanceHost } from "@decks/conformance/harness";
 import { setupTestDatabase, teardownTestDatabase } from "./database-test-utils";
 
@@ -28,3 +29,4 @@ describeCardIdentity(host);
 describeDeckIdentity(host);
 describeHistoryRecovery(host);
 describeCramUndo(host);
+describeClozeLineGroups(host);

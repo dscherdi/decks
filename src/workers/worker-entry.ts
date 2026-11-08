@@ -26,7 +26,7 @@ import {
   CURRENT_SCHEMA_VERSION,
   buildMigrationSQL,
   ensureDirectoryTables,
-  ensureNoteOrderColumns,
+  ensureAddedColumns,
   importDpkgContent,
   DROP_DIRECTORY_PROFILES_SQL,
   materialiseChangedAnything,
@@ -202,7 +202,7 @@ class SimpleDatabaseWorker {
 
   // Columns added without a schema version bump, so a database at the current version still gets them.
   addMissingColumns(): void {
-    if (this.db) ensureNoteOrderColumns(this.db);
+    if (this.db) ensureAddedColumns(this.db);
   }
 
   // Backup database management

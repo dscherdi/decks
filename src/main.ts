@@ -15,6 +15,7 @@ import {
 import type { Extension } from "@codemirror/state";
 import { decksHideAnchorTokens } from "./editor/hide-anchor-tokens";
 import { openVaultPdf } from "./utils/pdf-open";
+import { clozeMarkRole } from "./utils/cloze-marks";
 import { AiSourcePdfStore } from "./services/AiSourcePdfStore";
 import { DirectoryService, directoryErrorMessage } from "./services/DirectoryService";
 import { isFreshInstall } from "./utils/first-install";
@@ -1176,17 +1177,16 @@ export default class DecksPlugin extends Plugin {
           markCount++;
           const span = activeDocument.createElement("span");
 
-          if (currentIndex >= activeIndex && currentIndex < activeEnd) {
-            if (revealed) {
-              span.className = "decks-cloze-revealed";
-              // Keep rendered children (MathJax, formatting) instead of flattening.
-              while (mark.firstChild) span.appendChild(mark.firstChild);
-            } else {
-              span.className = "decks-cloze-active";
-              span.textContent = "[...]";
-              span.setAttribute("data-decks-cloze-text", text);
-            }
-          } else if (mode === "hidden") {
+          const role = clozeMarkRole(currentIndex, { start: activeIndex, end: activeEnd }, mode, revealed);
+          if (role === "revealed") {
+            span.className = "decks-cloze-revealed";
+            // Keep rendered children (MathJax, formatting) instead of flattening.
+            while (mark.firstChild) span.appendChild(mark.firstChild);
+          } else if (role === "active") {
+            span.className = "decks-cloze-active";
+            span.textContent = "[...]";
+            span.setAttribute("data-decks-cloze-text", text);
+          } else if (role === "blank") {
             span.className = "decks-cloze-blank";
             span.textContent = "[...]";
           } else {

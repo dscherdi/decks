@@ -237,6 +237,7 @@ export abstract class BaseDatabaseService implements IDatabaseService {
       extraHeaderLevels: this.parseJsonHeaderLevels(row[17]),
       reviewOrder: row[7] as "due-date" | "random",
       newCardOrder: parseNewCardOrder(row[23] as string | null),
+      clozeGroupByLine: Boolean(row[24]),
       learningSteps: (row[8] as string) ?? "1m",
       relearningSteps: (row[9] as string) ?? "10m",
       fsrs: {
@@ -786,6 +787,7 @@ export abstract class BaseDatabaseService implements IDatabaseService {
       profile.ttsRate ?? null,
       profile.ttsLang ?? null,
       parseNewCardOrder(profile.newCardOrder),
+      profile.clozeGroupByLine ? 1 : 0,
     ]);
 
     this.emitSyncOp({
@@ -807,6 +809,7 @@ export abstract class BaseDatabaseService implements IDatabaseService {
         fsrsProfile: profile.fsrs.profile,
         clozeEnabled: profile.clozeEnabled,
         clozeShowContext: profile.clozeShowContext ?? "open",
+        clozeGroupByLine: profile.clozeGroupByLine ?? false,
         examEnabled: profile.examEnabled ?? false,
         examSettings: profile.examSettings ?? DEFAULT_EXAM_SETTINGS,
         ttsVoice: profile.ttsVoice,
@@ -921,6 +924,7 @@ export abstract class BaseDatabaseService implements IDatabaseService {
       updated.ttsRate ?? null,
       updated.ttsLang ?? null,
       parseNewCardOrder(updated.newCardOrder),
+      updated.clozeGroupByLine ? 1 : 0,
       modifiedAt,
       id,
     ]);
@@ -949,6 +953,7 @@ export abstract class BaseDatabaseService implements IDatabaseService {
         fsrsProfile: updated.fsrs.profile,
         clozeEnabled: updated.clozeEnabled,
         clozeShowContext: updated.clozeShowContext ?? "open",
+        clozeGroupByLine: updated.clozeGroupByLine ?? false,
         examEnabled: updated.examEnabled ?? false,
         examSettings: updated.examSettings ?? DEFAULT_EXAM_SETTINGS,
         ttsVoice: updated.ttsVoice,

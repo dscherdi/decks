@@ -181,18 +181,19 @@ export class FlashcardReviewView extends ItemView {
   }
 
   private async reviewFlashcard(
-    flashcard: Flashcard,
+    cards: Flashcard[],
     difficulty: RatingLabel,
     timeElapsed?: number,
     shownAt?: Date
   ): Promise<void> {
-    await this.scheduler.rate(flashcard, difficulty, timeElapsed, shownAt);
+    if (cards.length === 0) return;
+    await this.scheduler.rateGroup(cards, difficulty, timeElapsed, shownAt);
     await this.db.updateDeckLastReviewed(
-      flashcard.deckId,
+      cards[0].deckId,
       new Date().toISOString()
     );
     if (!this.browseMode) {
-      await this.anchorStamper.ensureAnchored(flashcard);
+      for (const card of cards) await this.anchorStamper.ensureAnchored(card);
     }
     // No per-rating stats refresh — onClose handles it.
   }
@@ -203,6 +204,10 @@ export class FlashcardReviewView extends ItemView {
     await navigateToFlashcardSource(this.app, flashcard);
   }
 
+  private async resetCards(cards: Flashcard[]): Promise<void> {
+    for (const card of cards) await this.db.resetCard(card.id);
+  }
+
   /**
    * Tab-mode counterpart to FlashcardReviewModalWrapper.handleCardStateAction.
    * Same contract: suspend/bury are quietly applied with a Notice; reset is
@@ -210,21 +215,21 @@ export class FlashcardReviewView extends ItemView {
    * the Svelte side advances the queue, false on cancel.
    */
   private async handleCardStateAction(
-    card: Flashcard,
+    cards: Flashcard[],
     action: "suspend" | "bury" | "reset"
   ): Promise<boolean> {
     const r = I18n.t.review;
     const showNotice = this.settings?.ui?.enableNotices !== false;
 
     if (action === "suspend") {
-      await this.scheduler.suspendCard(card.id);
+      for (const card of cards) await this.scheduler.suspendCard(card.id);
       if (showNotice) new Notice(r.cardSuspended);
       return true;
     }
 
     if (action === "bury") {
       const until = this.scheduler.getBuryUntilForNextDay(new Date());
-      await this.scheduler.buryCard(card.id, until);
+      for (const card of cards) await this.scheduler.buryCard(card.id, until);
       if (showNotice) new Notice(r.cardBuried);
       return true;
     }
@@ -237,8 +242,7 @@ export class FlashcardReviewView extends ItemView {
         isDanger: true,
         onConfirm: () => {
           confirmed = true;
-          this.db
-            .resetCard(card.id)
+          this.resetCards(cards)
             .then(() => {
               if (showNotice) new Notice(r.cardReset);
               resolve(true);
@@ -288,12 +292,12 @@ export class FlashcardReviewView extends ItemView {
         browseMode: this.browseMode,
         allCards: this.allCards,
         onReview: async (
-          card: Flashcard,
+          cards: Flashcard[],
           rating: RatingLabel,
           timeElapsed?: number,
           shownAt?: Date
         ) => {
-          await this.reviewFlashcard(card, rating, timeElapsed, shownAt);
+          await this.reviewFlashcard(cards, rating, timeElapsed, shownAt);
         },
         renderMarkdown: (content: string, el: HTMLElement, sourcePath?: string) => {
           this.renderMarkdown(content, el, sourcePath ?? "");
@@ -332,9 +336,9 @@ export class FlashcardReviewView extends ItemView {
           await this.navigateToFlashcardSource(card);
         },
         onCardStateAction: (
-          card: Flashcard,
+          cards: Flashcard[],
           action: "suspend" | "bury" | "reset"
-        ) => this.handleCardStateAction(card, action),
+        ) => this.handleCardStateAction(cards, action),
       },
     }) as FlashcardReviewComponent;
   }

@@ -99,18 +99,19 @@ export class FlashcardReviewModalWrapper extends Modal {
 
   private async reviewFlashcard(
     deckOrGroup: DeckOrGroup,
-    flashcard: Flashcard,
+    cards: Flashcard[],
     difficulty: "again" | "hard" | "good" | "easy",
     timeElapsed?: number,
     shownAt?: Date
   ): Promise<void> {
-    await this.scheduler.rate(flashcard, difficulty, timeElapsed, shownAt);
+    if (cards.length === 0) return;
+    await this.scheduler.rateGroup(cards, difficulty, timeElapsed, shownAt);
     await this.db.updateDeckLastReviewed(
-      flashcard.deckId,
+      cards[0].deckId,
       new Date().toISOString()
     );
     if (!this.cramMode && !this.browseMode) {
-      await this.anchorStamper.ensureAnchored(flashcard);
+      for (const card of cards) await this.anchorStamper.ensureAnchored(card);
     }
     // No per-rating stats refresh — onClose handles it.
   }
@@ -121,6 +122,10 @@ export class FlashcardReviewModalWrapper extends Modal {
       this.navigatedToSource = true;
       this.close();
     }
+  }
+
+  private async resetCards(cards: Flashcard[]): Promise<void> {
+    for (const card of cards) await this.db.resetCard(card.id);
   }
 
   /**
@@ -134,21 +139,21 @@ export class FlashcardReviewModalWrapper extends Modal {
    * trivially reversible via Unsuspend/Unbury on the manager UI.
    */
   private async handleCardStateAction(
-    card: Flashcard,
+    cards: Flashcard[],
     action: "suspend" | "bury" | "reset"
   ): Promise<boolean> {
     const r = I18n.t.review;
     const showNotice = this.settings?.ui?.enableNotices !== false;
 
     if (action === "suspend") {
-      await this.scheduler.suspendCard(card.id);
+      for (const card of cards) await this.scheduler.suspendCard(card.id);
       if (showNotice) new Notice(r.cardSuspended);
       return true;
     }
 
     if (action === "bury") {
       const until = this.scheduler.getBuryUntilForNextDay(new Date());
-      await this.scheduler.buryCard(card.id, until);
+      for (const card of cards) await this.scheduler.buryCard(card.id, until);
       if (showNotice) new Notice(r.cardBuried);
       return true;
     }
@@ -164,8 +169,7 @@ export class FlashcardReviewModalWrapper extends Modal {
         isDanger: true,
         onConfirm: () => {
           confirmed = true;
-          this.db
-            .resetCard(card.id)
+          this.resetCards(cards)
             .then(() => {
               if (showNotice) new Notice(r.cardReset);
               resolve(true);
@@ -213,14 +217,14 @@ export class FlashcardReviewModalWrapper extends Modal {
         cramMode: this.cramMode,
         allCards: this.allCards,
         onReview: async (
-          card: Flashcard,
+          cards: Flashcard[],
           rating: RatingLabel,
           timeElapsed?: number,
           shownAt?: Date
         ) => {
           await this.reviewFlashcard(
             this.deckOrGroup,
-            card,
+            cards,
             rating,
             timeElapsed,
             shownAt
@@ -262,9 +266,9 @@ export class FlashcardReviewModalWrapper extends Modal {
           await this.navigateToFlashcardSource(card);
         },
         onCardStateAction: (
-          card: Flashcard,
+          cards: Flashcard[],
           action: "suspend" | "bury" | "reset"
-        ) => this.handleCardStateAction(card, action),
+        ) => this.handleCardStateAction(cards, action),
       },
     }) as FlashcardReviewComponent;
   }

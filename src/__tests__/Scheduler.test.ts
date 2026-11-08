@@ -686,4 +686,91 @@ describe("Scheduler", () => {
       expect((mockDb.getDeckWithProfile as jest.Mock).mock.calls.length).toBe(1);
     });
   });
+  describe("cloze line groups", () => {
+    function clozeCard(id: string, order: number): Flashcard {
+      return {
+        id,
+        deckId: "deck_1",
+        front: "Body",
+        back: "The ==heart== pumps ==blood==.",
+        type: "cloze",
+        clozeOrder: order,
+        state: "new",
+        dueDate: "2026-11-07T08:00:00.000Z",
+        interval: 0,
+        repetitions: 0,
+        difficulty: 0,
+        stability: 0,
+        lapses: 0,
+        lastReviewed: null,
+        tags: [],
+      } as unknown as Flashcard;
+    }
+
+    beforeEach(() => {
+      mockDb.getDeckWithProfile = jest
+        .fn()
+        .mockResolvedValue(createMockDeckWithProfile("deck_1", { clozeGroupByLine: true }));
+      mockDb.updateFlashcard = jest.fn().mockResolvedValue(undefined);
+      mockDb.insertReviewLog = jest.fn().mockResolvedValue(undefined);
+      scheduler.setCurrentSession("session_123");
+    });
+
+    it("gives every card of a line its own log, one shown time and a share of the time spent", async () => {
+      const shownAt = new Date(Date.now() - 4000);
+      const rated = await scheduler.rateGroup(
+        [clozeCard("card_a", 0), clozeCard("card_b", 1)],
+        "good",
+        4000,
+        shownAt
+      );
+
+      expect(rated.map((card) => card.id)).toEqual(["card_a", "card_b"]);
+      expect(rated.every((card) => card.state === "review")).toBe(true);
+      const logs = (mockDb.insertReviewLog as jest.Mock).mock.calls.map((call) => call[0]);
+      expect(logs.map((log) => log.flashcardId)).toEqual(["card_a", "card_b"]);
+      expect(logs.map((log) => log.timeElapsedMs)).toEqual([2000, 2000]);
+      expect(new Set(logs.map((log) => log.shownAt))).toEqual(new Set([shownAt.toISOString()]));
+      expect(new Set(logs.map((log) => log.reviewedAt)).size).toBe(1);
+      expect(new Set(logs.map((log) => log.id)).size).toBe(2);
+      expect(mockDb.updateReviewSessionDoneUnique).toHaveBeenCalledTimes(2);
+    });
+
+    it("rates a single card exactly like rate()", async () => {
+      await scheduler.rateGroup([clozeCard("card_a", 0)], "easy", 1500);
+      const logs = (mockDb.insertReviewLog as jest.Mock).mock.calls.map((call) => call[0]);
+      expect(logs).toHaveLength(1);
+      expect(logs[0].timeElapsedMs).toBe(1500);
+    });
+
+    it("undoes a line's rating whole and hands back its cards in order", async () => {
+      await scheduler.rateGroup([clozeCard("card_a", 0), clozeCard("card_b", 1)], "good", 1000);
+      const logs = (mockDb.insertReviewLog as jest.Mock).mock.calls.map((call) => call[0]);
+      const remaining = [...logs];
+      mockDb.getLatestReviewLogForSession = jest
+        .fn()
+        .mockImplementation(async () => remaining[remaining.length - 1] ?? null);
+      mockDb.deleteReviewLogById = jest.fn().mockImplementation(async (id: string) => {
+        remaining.splice(remaining.findIndex((log) => log.id === id), 1);
+      });
+      mockDb.countCardReviewsInSession = jest.fn().mockResolvedValue(1);
+      mockDb.getFlashcardById = jest
+        .fn()
+        .mockImplementation(async (id: string) => clozeCard(id, id === "card_a" ? 0 : 1));
+
+      const restored = await scheduler.undoLastReviewGroup();
+
+      expect(restored.map((card) => card.id)).toEqual(["card_a", "card_b"]);
+      expect(remaining).toEqual([]);
+      expect(mockDb.deleteReviewLogById).toHaveBeenCalledTimes(2);
+      expect(await scheduler.undoLastReviewGroup()).toEqual([]);
+    });
+
+    it("never groups when the profile keeps clozes apart", async () => {
+      mockDb.getDeckWithProfile = jest.fn().mockResolvedValue(createMockDeckWithProfile("deck_1"));
+      expect(await scheduler.groupsClozesByLine(clozeCard("card_a", 0))).toBe(false);
+      const steps = await scheduler.getClozeSteps(clozeCard("card_a", 0), new Date());
+      expect(steps).toEqual([{ cards: [clozeCard("card_a", 0)], activeOrders: [0] }]);
+    });
+  });
 });
