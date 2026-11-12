@@ -1540,10 +1540,16 @@ div.decks-card-content
   color: var(--text-on-accent);
 }
 
-/* The app banner reuses the Pro banner's frame; only its call to action
-   differs, being Apple's badge rather than a text link. */
+/* The app banner reuses the Pro banner's frame; its call to action is the two
+   store badges rather than a text link. */
 .decks-app-banner {
   margin-bottom: 12px;
+}
+.decks-app-banner-badges {
+  display: flex;
+  flex: none;
+  flex-wrap: wrap;
+  gap: 8px;
 }
 .decks-app-banner-badge {
   display: inline-flex;
