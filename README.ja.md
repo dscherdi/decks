@@ -13,9 +13,9 @@
 
 > **新機能 — [Decks Pro](https://decksmd.app/pricing/)** · APIキーを設定しなくても、ノートやPDF、スキャンしたスライドからカードを生成できます。無料でお試し——カード約100枚、またはPDF10ページ分。クレジットカードは不要です。Decksのその他の機能は引き続き無料で、独自のAPIキーもこれまで通り使えます。
 
-> **iPhone と iPad でも — [DecksMD](https://apps.apple.com/app/id6801156953)** · あなたのVaultとカードをスマホで——同じmarkdownを、どこでも復習。
+> **iPhone、iPad、Android でも — [DecksMD](https://decksmd.app/mobile/)** · あなたのVaultとカードをスマホで——同じmarkdownを、どこでも復習。
 >
-> <a href="https://apps.apple.com/app/id6801156953"><img src="https://developer.apple.com/assets/elements/badges/download-on-the-app-store.svg" alt="App Store からダウンロード" height="40"></a>
+> <a href="https://apps.apple.com/app/id6801156953"><img src="https://developer.apple.com/assets/elements/badges/download-on-the-app-store.svg" alt="App Store からダウンロード" height="40" align="middle"></a> <a href="https://play.google.com/store/apps/details?id=app.decksmd"><img src="https://play.google.com/intl/en_us/badges/static/images/badges/en_badge_web_generic.png" alt="Google Play で手に入れよう" height="60" align="middle"></a>
 
 ファイルに `#decks` のタグを付けるだけ。`##` の各見出しがカードの表面（Front）になり、その下のテキストが裏面（Back）になります。テーブル、画像の穴埋め（Image occlusion）、`==cloze==` のハイライトも同じように機能します。スケジュール管理は、最新の間隔反復アルゴリズムである「FSRS-6」によって行われます。
 

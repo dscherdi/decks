@@ -13,9 +13,9 @@
 
 > **Nouveau — [Decks Pro](https://decksmd.app/pricing/)** · Générez des cartes à partir de vos notes, PDF et diapositives numérisées sans configurer de clé API. Essai gratuit — environ 100 cartes ou 10 pages de PDF, sans carte bancaire. Tout le reste de Decks demeure gratuit, et votre propre clé API fonctionne toujours.
 
-> **Maintenant sur iPhone et iPad — [DecksMD](https://apps.apple.com/app/id6801156953)** · Votre coffre, vos cartes, sur votre téléphone — le même markdown, révisable partout.
+> **Maintenant sur iPhone, iPad et Android — [DecksMD](https://decksmd.app/mobile/)** · Votre coffre, vos cartes, sur votre téléphone — le même markdown, révisable partout.
 >
-> <a href="https://apps.apple.com/app/id6801156953"><img src="https://developer.apple.com/assets/elements/badges/download-on-the-app-store.svg" alt="Télécharger dans l’App Store" height="40"></a>
+> <a href="https://apps.apple.com/app/id6801156953"><img src="https://developer.apple.com/assets/elements/badges/download-on-the-app-store.svg" alt="Télécharger dans l’App Store" height="40" align="middle"></a> <a href="https://play.google.com/store/apps/details?id=app.decksmd"><img src="https://play.google.com/intl/en_us/badges/static/images/badges/en_badge_web_generic.png" alt="Disponible sur Google Play" height="60" align="middle"></a>
 
 Ajoutez la balise `#decks` à un fichier. Chaque en-tête `##` devient le recto d'une carte ; le texte en dessous devient le verso. Les tableaux, les images masquées et les textes surlignés `==cloze==` fonctionnent de la même manière. La planification est gérée par FSRS-6 — l'algorithme moderne de répétition espacée.
 

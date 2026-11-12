@@ -13,9 +13,9 @@
 
 > **E re — [Decks Pro](https://decksmd.app/pricing/)** · Krijo karta nga shënimet, PDF-të dhe sllajdet e skanuara pa konfiguruar një çelës API. Provoje falas — rreth 100 karta ose 10 faqe PDF, pa kartë krediti. Gjithçka tjetër në Decks mbetet falas dhe çelësi yt API vazhdon të funksionojë.
 
-> **Tani në iPhone dhe iPad — [DecksMD](https://apps.apple.com/app/id6801156953)** · Kasaforta jote, kartat e tua, në telefon — i njëjti markdown, i përsëritshëm kudo.
+> **Tani në iPhone, iPad dhe Android — [DecksMD](https://decksmd.app/mobile/)** · Kasaforta jote, kartat e tua, në telefon — i njëjti markdown, i përsëritshëm kudo.
 >
-> <a href="https://apps.apple.com/app/id6801156953"><img src="https://developer.apple.com/assets/elements/badges/download-on-the-app-store.svg" alt="Shkarkoje në App Store" height="40"></a>
+> <a href="https://apps.apple.com/app/id6801156953"><img src="https://developer.apple.com/assets/elements/badges/download-on-the-app-store.svg" alt="Shkarkoje në App Store" height="40" align="middle"></a> <a href="https://play.google.com/store/apps/details?id=app.decksmd"><img src="https://play.google.com/intl/en_us/badges/static/images/badges/en_badge_web_generic.png" alt="Shkarkoje në Google Play" height="60" align="middle"></a>
 
 Etiketo një skedar me `#decks`. Çdo titull `##` bëhet pjesa e përparme e një karte; teksti më poshtë bëhet pjesa e pasme. Tabelat, mbulimi i imazheve (image occlusion) dhe theksimet `==cloze==` funksionojnë në të njëjtën mënyrë. Planifikimi trajtohet nga FSRS-6 — algoritmi modern i përsëritjes në hapësirë.
 

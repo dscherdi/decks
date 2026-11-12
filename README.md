@@ -13,9 +13,9 @@
 
 > **New — [Decks Pro](https://decksmd.app/pricing/)** · Generate cards from your notes, PDFs and scanned slides without setting up an API key. Free to try — around 100 cards or 10 PDF pages, no card required. Everything else in Decks stays free, and bring-your-own API key still works.
 
-> **Now on iPhone and iPad — [DecksMD](https://apps.apple.com/app/id6801156953)** · Your vault, your cards, on your phone — the same markdown, reviewed anywhere.
+> **Now on iPhone, iPad and Android — [DecksMD](https://decksmd.app/mobile/)** · Your vault, your cards, on your phone — the same markdown, reviewed anywhere.
 >
-> <a href="https://apps.apple.com/app/id6801156953"><img src="https://developer.apple.com/assets/elements/badges/download-on-the-app-store.svg" alt="Download on the App Store" height="40"></a>
+> <a href="https://apps.apple.com/app/id6801156953"><img src="https://developer.apple.com/assets/elements/badges/download-on-the-app-store.svg" alt="Download on the App Store" height="40" align="middle"></a> <a href="https://play.google.com/store/apps/details?id=app.decksmd"><img src="https://play.google.com/intl/en_us/badges/static/images/badges/en_badge_web_generic.png" alt="Get it on Google Play" height="60" align="middle"></a>
 
 > **Ready-made decks — [explore the deck directory](https://decksmd.app/decks)** · Complete decks you can add to Obsidian in one click, such as German courses by level. See [Deck directory](#deck-directory).
 

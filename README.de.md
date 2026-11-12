@@ -13,9 +13,9 @@
 
 > **Neu — [Decks Pro](https://decksmd.app/pricing/)** · Erstelle Karten aus deinen Notizen, PDFs und gescannten Folien, ohne einen API-Schlüssel einzurichten. Kostenlos testen — rund 100 Karten oder 10 PDF-Seiten, ohne Kreditkarte. Alles andere in Decks bleibt kostenlos, und ein eigener API-Schlüssel funktioniert weiterhin.
 
-> **Jetzt für iPhone und iPad — [DecksMD](https://apps.apple.com/app/id6801156953)** · Dein Vault, deine Karten, auf dem Handy — dasselbe Markdown, überall wiederholbar.
+> **Jetzt für iPhone, iPad und Android — [DecksMD](https://decksmd.app/mobile/)** · Dein Vault, deine Karten, auf dem Handy — dasselbe Markdown, überall wiederholbar.
 >
-> <a href="https://apps.apple.com/app/id6801156953"><img src="https://developer.apple.com/assets/elements/badges/download-on-the-app-store.svg" alt="Laden im App Store" height="40"></a>
+> <a href="https://apps.apple.com/app/id6801156953"><img src="https://developer.apple.com/assets/elements/badges/download-on-the-app-store.svg" alt="Laden im App Store" height="40" align="middle"></a> <a href="https://play.google.com/store/apps/details?id=app.decksmd"><img src="https://play.google.com/intl/en_us/badges/static/images/badges/en_badge_web_generic.png" alt="Jetzt bei Google Play" height="60" align="middle"></a>
 
 Markiere eine Datei mit `#decks`. Jede `##`-Überschrift wird zur Vorderseite einer Karte; der Text darunter wird zur Rückseite. Tabellen, Bildverdeckung und `==cloze==`-Hervorhebungen funktionieren auf die gleiche Weise. Die Planung übernimmt FSRS-6 — der moderne Algorithmus für räumliche Wiederholung.
 
