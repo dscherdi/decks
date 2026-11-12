@@ -5,7 +5,7 @@
 interface CustomWorkerGlobalScope {
   window?: CustomWorkerGlobalScope;
   process?: NodeJS.Process;
-  postMessage(message: unknown): void;
+  postMessage(message: unknown, transfer?: Transferable[]): void;
   onmessage: ((event: MessageEvent) => void | Promise<void>) | null;
 }
 declare const self: CustomWorkerGlobalScope;
@@ -38,6 +38,7 @@ import {
 } from "@decks/core";
 import type { DpkgImportResult, MaterialiseAllResult } from "@decks/core";
 import { isSqliteFile, type PeerDirectoryMergeResult } from "../database/peer-directory";
+import { transferOf } from "../utils/bytes";
 
 // Schema version at which card IDs became deck-independent. Upgrading from an
 // earlier version re-points review history to the new IDs before the rebuild.
@@ -928,6 +929,7 @@ self.onmessage = async (event: MessageEvent<DatabaseWorkerMessage>) => {
 
   try {
     let result: unknown;
+    let transfer: Transferable[] = [];
 
     switch (type) {
       case "init":
@@ -989,9 +991,13 @@ self.onmessage = async (event: MessageEvent<DatabaseWorkerMessage>) => {
         }
         break;
 
-      case "export":
-        result = { buffer: worker.export() };
+      case "export": {
+        const exported = worker.export();
+        result = { buffer: exported };
+        // Moved, not copied: the export is as large as the whole database.
+        transfer = transferOf(exported);
         break;
+      }
 
       case "close":
         worker.close();
@@ -1102,7 +1108,7 @@ self.onmessage = async (event: MessageEvent<DatabaseWorkerMessage>) => {
       data: result as string | number | object | undefined,
     };
 
-    self.postMessage(response);
+    self.postMessage(response, transfer);
   } catch (error) {
     const response: DatabaseWorkerResponse = {
       id,

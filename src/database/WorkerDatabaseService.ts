@@ -1,5 +1,6 @@
 import type { DataAdapter } from "obsidian";
 import { recoverInterruptedWrite, writeBinaryAtomic } from "./atomic-write";
+import { toArrayBuffer, transferOf } from "../utils/bytes";
 import { BaseDatabaseService } from "./BaseDatabaseService";
 import type { QueryConfig } from "./BaseDatabaseService";
 import { materialiseChangedAnything } from "@decks/core";
@@ -161,7 +162,8 @@ export class WorkerDatabaseService extends BaseDatabaseService {
           sqlJsCode,
           wasmBytes,
         },
-        [wasmBytes] // transfer for zero-copy
+        // Both move to the worker; a copy of the database would double its footprint here.
+        buffer ? [wasmBytes, ...transferOf(buffer)] : [wasmBytes]
       );
 
       // Wait for worker to be ready
@@ -272,7 +274,7 @@ export class WorkerDatabaseService extends BaseDatabaseService {
       await writeBinaryAtomic(
         this.adapter,
         this.dbPath,
-        exportData.buffer.buffer.slice(0) as ArrayBuffer
+        toArrayBuffer(exportData.buffer)
       );
 
       // Update lastKnownModified after successful save
@@ -466,7 +468,11 @@ export class WorkerDatabaseService extends BaseDatabaseService {
 
   /** Take the directory decks of another database file, such as the DecksMD app's. */
   async mergePeerDirectory(bytes: Uint8Array): Promise<PeerDirectoryMergeResult> {
-    const result = (await this.sendMessage("mergePeerDirectory", { bytes })) as PeerDirectoryMergeResult;
+    const result = (await this.sendMessage(
+      "mergePeerDirectory",
+      { bytes },
+      transferOf(bytes)
+    )) as PeerDirectoryMergeResult;
     if (result.changed) this.markDirty(true);
     return result;
   }

@@ -362,7 +362,13 @@ export default class DecksPlugin extends Plugin {
         }
         // After applyPending, so the app's reviews are here when its directory decks arrive.
         if (canMergePeerDirectory(this.db)) {
-          this.peerAppDatabase = new PeerAppDatabase(this.app.vault.adapter, this.db, APP_DB_PATH);
+          this.peerAppDatabase = new PeerAppDatabase(
+            this.app.vault.adapter,
+            this.db,
+            APP_DB_PATH,
+            this.app,
+            (message) => this.logger.debug(message)
+          );
           try {
             if (await this.peerAppDatabase.mergeIfChanged()) {
               await this.getDecksView()?.refreshDecksAndStats();
@@ -572,7 +578,8 @@ export default class DecksPlugin extends Plugin {
         this.deviceLocalState,
         this.logger,
         this.db,
-        syncLogFolder
+        syncLogFolder,
+        this.app
       );
       // After both exist, attach the log so every CRUD method on the DB
       // automatically emits the matching sync op (profile, tag mapping,

@@ -25,6 +25,11 @@ import { hlcReceive, hlcSend, hlcParse, type HLCValue } from "@decks/core";
 import { applyOp, KNOWN_OP_TYPES_V1, type SyncLogEntry, type SyncOpV1 } from "@decks/core";
 import { helloOp, olderDevices, type DeviceLog } from "@decks/core";
 import { safeRename } from "../utils/adapter";
+import { fileMark, type VaultLocalStorage } from "../utils/device-marks";
+
+const READ_KEY_PREFIX = "decks-sync-log-read:";
+// Entries open with their clock and sequence number, so the number is read without parsing the line.
+const ENTRY_SEQ = /^\{"hlc":\[[^\]]*\],"s":(\d+),/;
 
 const FLUSH_DEBOUNCE_MS = 2000;
 const FLUSH_BACKSTOP_COUNT = 10;
@@ -67,7 +72,9 @@ export class SyncLog {
     // Vault-relative folder for sync log files. Empty string = vault root
     // (the default and what iCloud syncs fastest). Pre-normalized by the
     // caller via resolveSyncLogFolder.
-    private readonly logFolder = ""
+    private readonly logFolder = "",
+    // Where this device notes which version of each log it has read through.
+    private readonly readMarks: VaultLocalStorage | null = null
   ) {}
 
   private lastHelloAt = 0;
@@ -224,6 +231,7 @@ export class SyncLog {
               error
             );
           });
+          this.readMarks?.saveLocalStorage(READ_KEY_PREFIX + source.path, null);
         }
       }
     } finally {
@@ -350,6 +358,9 @@ export class SyncLog {
     path: string,
     lastAppliedSeq: number
   ): Promise<void> {
+    const mark = await this.markOf(path);
+    if (mark !== null && this.wasReadThrough(path, mark, lastAppliedSeq)) return;
+
     let content: string;
     try {
       content = await this.adapter.read(path);
@@ -365,9 +376,17 @@ export class SyncLog {
     // applied half-way.
     const lines = content.split("\n");
     const pendingOps: SyncLogEntry[] = [];
+    let lastSeq = 0;
+    // Stays true while every line was either applied before or is applied now.
+    let readThrough = true;
     for (const rawLine of lines) {
       const line = rawLine.trim();
       if (!line) continue;
+      const applied = appliedSeqOf(line, lastAppliedSeq);
+      if (applied !== null) {
+        lastSeq = Math.max(lastSeq, applied);
+        continue;
+      }
       let entry: SyncLogEntry;
       try {
         entry = parseEntry(line);
@@ -376,18 +395,24 @@ export class SyncLog {
           `SyncLog: skipping malformed line in ${path}`,
           error
         );
+        readThrough = false;
         continue;
       }
+      lastSeq = Math.max(lastSeq, entry.s);
+      if (entry.s <= lastAppliedSeq) continue;
       if (!KNOWN_OP_TYPES_V1.has(entry.o)) {
         this.logger.debug(
           `SyncLog: skipping unknown op type "${entry.o}" from ${sourceDeviceId} (newer plugin?)`
         );
+        readThrough = false;
         continue;
       }
-      if (entry.s <= lastAppliedSeq) continue;
       pendingOps.push(entry);
     }
-    if (pendingOps.length === 0) return;
+    if (pendingOps.length === 0) {
+      if (mark !== null && readThrough) this.rememberRead(path, mark, lastSeq);
+      return;
+    }
 
     let appliedTo = lastAppliedSeq;
     let lastHlc: HLCValue | null = null;
@@ -408,6 +433,7 @@ export class SyncLog {
             `SyncLog: handler for op ${entry.s} from ${sourceDeviceId} threw; stopping this source`,
             error
           );
+          readThrough = false;
           break;
         }
         appliedTo = entry.s;
@@ -443,6 +469,25 @@ export class SyncLog {
       hlcReceive(this.deviceState.getHlcState(), lastHlc);
       this.deviceState.persistHlc();
     }
+    if (mark !== null && readThrough) this.rememberRead(path, mark, lastSeq);
+  }
+
+  private async markOf(path: string): Promise<string | null> {
+    if (!this.readMarks) return null;
+    const stat = await this.adapter.stat(path).catch(() => null);
+    return stat ? fileMark(stat) : null;
+  }
+
+  // Holds only while the database still carries everything that version of the file had.
+  private wasReadThrough(path: string, mark: string, appliedSeq: number): boolean {
+    const stored = this.readMarks?.loadLocalStorage(READ_KEY_PREFIX + path);
+    if (typeof stored !== "string" || !stored.endsWith(`|${mark}`)) return false;
+    const lastSeq = Number.parseInt(stored, 10);
+    return Number.isFinite(lastSeq) && appliedSeq >= lastSeq;
+  }
+
+  private rememberRead(path: string, mark: string, lastSeq: number): void {
+    this.readMarks?.saveLocalStorage(READ_KEY_PREFIX + path, `${lastSeq}|${mark}`);
   }
 
   /**
@@ -620,6 +665,14 @@ function parseDeviceFromFilename(
   // is a soft heuristic, intentionally permissive: better to consume a
   // weirdly-named valid log than to miss the user's data.
   return { deviceId: m[1], isConflict: true };
+}
+
+/** The sequence number of a line that was applied before, or null when the line needs a full parse. */
+function appliedSeqOf(line: string, lastAppliedSeq: number): number | null {
+  const match = ENTRY_SEQ.exec(line);
+  if (!match) return null;
+  const seq = Number(match[1]);
+  return seq <= lastAppliedSeq ? seq : null;
 }
 
 /**

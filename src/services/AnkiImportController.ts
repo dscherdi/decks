@@ -26,6 +26,7 @@ import type { Logger } from "@/utils/logging";
 import { loadSqlJsMainThread } from "@/database/loadSqlJsMainThread";
 import { htmlToMarkdown } from "@/utils/htmlToMarkdown";
 import { decompressZstd } from "@/utils/zstd";
+import { toArrayBuffer } from "@/utils/bytes";
 import { openAnkiCollection, pickAnkiCollection, readAnkiMediaMap } from "@/utils/ankiCollection";
 import { imageDimensions } from "@/utils/imageDimensions";
 
@@ -380,7 +381,7 @@ export class AnkiImportController {
       const target = normalizePath(`${folder}/${name}`);
       const parent = target.slice(0, Math.max(0, target.lastIndexOf("/")));
       if (parent) parents.add(parent);
-      writes.push({ target, buffer: AnkiImportController.toArrayBuffer(data) });
+      writes.push({ target, buffer: toArrayBuffer(data) });
       await yieldEvery(i, 100);
     }
 
@@ -414,18 +415,6 @@ export class AnkiImportController {
 
     onProgress?.(total, total);
     return results.filter(Boolean).length;
-  }
-
-  private static toArrayBuffer(bytes: Uint8Array): ArrayBuffer {
-    const { buffer, byteOffset, byteLength } = bytes;
-    // Reuse the backing buffer when the view spans it exactly (unzipSync/fzstd
-    // outputs own their buffer) to avoid copying large media.
-    if (buffer instanceof ArrayBuffer && byteOffset === 0 && byteLength === buffer.byteLength) {
-      return buffer;
-    }
-    const copy = new ArrayBuffer(byteLength);
-    new Uint8Array(copy).set(bytes);
-    return copy;
   }
 
   // --- file helpers (mirror SrMigrationController) ---
