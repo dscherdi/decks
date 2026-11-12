@@ -20,6 +20,7 @@ import { clozeMarkRole } from "./utils/cloze-marks";
 import { AiSourcePdfStore } from "./services/AiSourcePdfStore";
 import { DirectoryService, directoryErrorMessage } from "./services/DirectoryService";
 import { isFreshInstall } from "./utils/first-install";
+import { noteDeckTag } from "./utils/deck-tag";
 import { DirectoryBrowserModal } from "./components/directory/DirectoryBrowserModal";
 import { DirectoryExporter, type DirectoryExportOutput } from "./services/DirectoryExporter";
 import { DirectoryExportModal } from "./components/export/DirectoryExportModal";
@@ -270,7 +271,7 @@ export default class DecksPlugin extends Plugin {
   // single trailing-edge full sync, instead of one full vault scan per file.
   private pendingFullSync: number | null = null;
   private static readonly FULL_SYNC_DEBOUNCE_MS = 1000;
-  // Tagged notes without a deck that have already asked for a discovery sync.
+  // Notes whose deck is missing or carries another tag, and that have already asked for a discovery sync.
   private awaitingDiscovery = new Set<string>();
   // Coalesce per-file UI stat refreshes (e.g. bulk delete) into one repaint.
   private pendingStatsRefresh: number | null = null;
@@ -1162,7 +1163,7 @@ export default class DecksPlugin extends Plugin {
         })
       );
 
-      // "modify" fires before the note is re-indexed, so a deck tag added by a save shows up here.
+      // "modify" fires before the note is re-indexed, so a deck tag added or changed by a save shows up here.
       this.registerEvent(
         this.app.metadataCache.on("changed", (file, _data, cache) => {
           this.handleMetadataChanged(file, cache).catch((error) =>
@@ -2704,8 +2705,7 @@ export default class DecksPlugin extends Plugin {
       const existingDeck = await this.db.getDeckByFilepath(file.path);
       if (existingDeck) {
         // Update deck tag if it changed
-        const newTag =
-          allTags.find((tag) => tag.startsWith(baseTag)) || baseTag;
+        const newTag = noteDeckTag(allTags, baseTag) ?? baseTag;
         if (existingDeck.tag !== newTag) {
           this.logger.debug(
             `Updating deck tag from ${existingDeck.tag} to ${newTag}`
@@ -2720,8 +2720,7 @@ export default class DecksPlugin extends Plugin {
         this.scheduleDeckSync(existingDeck.id);
       } else {
         // New file with flashcards tag - create deck for this file only
-        const newTag =
-          allTags.find((tag) => tag.startsWith(baseTag)) || baseTag;
+        const newTag = noteDeckTag(allTags, baseTag) ?? baseTag;
         await this.deckSynchronizer.createDeckForFile(file.path, newTag);
         await yieldToUI();
 
@@ -2764,9 +2763,11 @@ export default class DecksPlugin extends Plugin {
     try {
       await this.deckSynchronizer.sync();
       await this.getDecksView()?.refresh({ skipSync: true });
-      // Only notes the sync left without a deck stay marked, so they do not ask again on every save.
+      // Only notes the sync left unmatched stay marked, so they do not ask again on every save.
       for (const path of [...this.awaitingDiscovery]) {
-        if (await this.db.getDeckByFilepath(path)) this.awaitingDiscovery.delete(path);
+        const file = this.app.vault.getAbstractFileByPath(path);
+        const cache = file instanceof TFile ? this.app.metadataCache.getFileCache(file) : null;
+        if (await this.deckMatchesIndex(path, cache)) this.awaitingDiscovery.delete(path);
       }
     } catch (error) {
       this.logger.error("Debounced full sync failed", error);
@@ -2992,18 +2993,24 @@ export default class DecksPlugin extends Plugin {
     this.registerEvent(ref);
   }
 
-  // A tagged note with no deck gets one discovery sync, as a new tagged file does.
+  // A tagged note whose deck is missing or carries another tag gets one discovery sync.
   async handleMetadataChanged(file: TFile, cache: CachedMetadata): Promise<void> {
     if (file.extension !== "md" || this.deckSynchronizer.isMigrating) return;
-    const baseTag = this.settings.parsing.deckTag;
-    const tagged = (getAllTags(cache) || []).some((tag) => tag.startsWith(baseTag));
-    if (!tagged || (await this.db.getDeckByFilepath(file.path))) {
+    if (await this.deckMatchesIndex(file.path, cache)) {
       this.awaitingDiscovery.delete(file.path);
       return;
     }
     if (this.awaitingDiscovery.has(file.path)) return;
     this.awaitingDiscovery.add(file.path);
     this.scheduleFullSync();
+  }
+
+  // True when the note has no deck tag, or has a deck that carries the tag picked for the note.
+  private async deckMatchesIndex(path: string, cache: CachedMetadata | null): Promise<boolean> {
+    const deckTag = noteDeckTag((cache && getAllTags(cache)) || [], this.settings.parsing.deckTag);
+    if (!deckTag) return true;
+    const deck = await this.db.getDeckByFilepath(path);
+    return deck !== null && deck.tag === deckTag;
   }
 
   async handleFileRename(file: TAbstractFile, oldPath: string): Promise<void> {

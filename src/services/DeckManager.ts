@@ -21,6 +21,7 @@ import {
 } from "@decks/core";
 import { Logger, formatTime } from "../utils/logging";
 import { FileFilter } from "../utils/fileFilter";
+import { noteDeckTag } from "../utils/deck-tag";
 import { FlashcardParser, type ParsedFlashcard } from "@decks/core";
 import { ProgressTracker } from "../utils/progress";
 import { TagGroupService, tagScopeFromSettings, studyTagsFor } from "@decks/core";
@@ -164,21 +165,15 @@ export class DeckManager {
       }
 
       const baseTag = this.settings?.parsing.deckTag || "#decks";
-      const flashcardTags = allTags.filter((tag) =>
-        tag.startsWith(baseTag)
-      );
+      // A note is one deck, filed under the one tag picked for it, the tag a save of the note gives it.
+      const deckTag = noteDeckTag(allTags, baseTag);
       this.debugLog(`All tags for ${file.path}:`, allTags);
-      this.debugLog(`Flashcard tags for ${file.path}:`, flashcardTags);
+      this.debugLog(`Deck tag for ${file.path}:`, deckTag);
+      if (!deckTag) continue;
 
-      for (const tag of flashcardTags) {
-        if (!decksMap.has(tag)) {
-          decksMap.set(tag, []);
-        }
-        const deckFiles = decksMap.get(tag);
-        if (deckFiles) {
-          deckFiles.push(file);
-        }
-      }
+      const deckFiles = decksMap.get(deckTag) ?? [];
+      deckFiles.push(file);
+      decksMap.set(deckTag, deckFiles);
     }
 
     // Canvas decks: any .canvas file inside the configured folder is auto-tagged
