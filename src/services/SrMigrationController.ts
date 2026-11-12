@@ -24,7 +24,6 @@ import type {
   MigrationDeckItem,
   MigrationFormat,
   MigrationProfileFsrs,
-  WholeNoteOptions,
 } from "@decks/core";
 import type { DecksSettings } from "@/settings";
 import type { DeckSynchronizer } from "@/services/DeckSynchronizer";
@@ -63,18 +62,22 @@ export interface SrSeparators {
 
 const SR_PLUGIN_ID = "obsidian-spaced-repetition";
 
-interface ScanEntry {
-  file: TFile;
-  kind: "inline" | "whole";
-  cards: MigratedCard[]; // inline: many; whole: a single title-mode card
-  deckTag?: string; // inline only: the single derived deck tag (e.g. decks/cleancode/comments)
-  reviewTag?: string; // whole only: the derived review tag (e.g. decks/review/spanish)
-  properties?: string; // whole only: serialized non-SR frontmatter to carry over
-  userTags?: string[]; // whole only: non-SR frontmatter tags to carry over
+// How long the sync waits for written files to be indexed, and how often it looks.
+const INDEX_STALL_MS = 3000;
+const INDEX_POLL_MS = 50;
+
+type SrParseOptions = Pick<
+  SrMigrateOptions,
+  "srBaseTag" | "srReviewTag" | "inlineSep" | "multiSep" | "clozeSep"
+>;
+
+// What one legacy note becomes; scan and migrate both read it from parseLegacyNote.
+interface LegacyNote {
+  cards: MigratedCard[]; // inline cards, a reverse line as two
+  reviewCard: MigratedCard | null; // the note itself, for a review or mixed note
 }
 
 export interface SrScanResult {
-  entries: ScanEntry[];
   fileCount: number;
   cardCount: number;
   withHistory: number;
@@ -269,90 +272,83 @@ export class SrMigrationController {
     return tags.map((t) => t.replace(/^#/, ""));
   }
 
-  /** Read and classify every candidate file as inline cards or a whole-note review. */
+  // Parse one legacy note and decide what it turns into; null when it has nothing to migrate.
+  private parseLegacyNote(
+    file: TFile,
+    content: string,
+    opts: SrParseOptions,
+    dateFormat: string | undefined
+  ): LegacyNote | null {
+    const fm = this.app.metadataCache.getFileCache(file)?.frontmatter;
+    const isReviewNote =
+      this.hasReviewTag(file, opts.srReviewTag) ||
+      !!(fm && ("sr-due" in fm || "review" in fm));
+    const hintLabel = I18n.t.srMigration.hintLabel;
+
+    const { dbRecords, hasProse } = LegacySrMigrator.processFile(content, {
+      srBaseTag: opts.srBaseTag,
+      decksBaseTag: this.decksBaseTag,
+      inlineSep: opts.inlineSep,
+      multiSep: opts.multiSep,
+      clozeSep: opts.clozeSep,
+      noteTitle: file.basename,
+      hintLabel,
+      dateFormat,
+    });
+    const cards = LegacySrMigrator.expandReverseCards(dbRecords);
+    const hasCards = cards.length > 0;
+    if (!hasCards && !isReviewNote) return null;
+
+    // No cards, a review note, or cards mixed with prose: the note stays readable too.
+    const wantReview = !hasCards || isReviewNote || hasProse;
+    const reviewCard = wantReview
+      ? LegacySrMigrator.processWholeNote(content, file.basename, {
+          srBaseTag: opts.srBaseTag,
+          srReviewTag: opts.srReviewTag,
+          dateFormat,
+          inlineSep: opts.inlineSep,
+          multiSep: opts.multiSep,
+          clozeSep: opts.clozeSep,
+          hintLabel,
+          hasInlineCards: hasCards,
+        })
+      : null;
+    return { cards, reviewCard };
+  }
+
+  private countNote(note: LegacyNote): { cards: number; withHistory: number } {
+    return LegacySrMigrator.countCards(
+      note.reviewCard ? [...note.cards, note.reviewCard] : note.cards
+    );
+  }
+
+  /** Count what a migration of the candidate files would produce, without writing anything. */
   async scan(
     opts: Pick<
       SrMigrateOptions,
       "sourceFolder" | "srBaseTag" | "srReviewTag" | "inlineSep" | "multiSep" | "clozeSep"
     >
   ): Promise<SrScanResult> {
-    const entries: ScanEntry[] = [];
-    const sourceFiles = new Set<string>();
     const dateFormat = await this.readSrDateFormat();
+    let fileCount = 0;
+    let cardCount = 0;
+    let withHistory = 0;
 
     for (const file of this.candidateFiles(opts.sourceFolder)) {
-      // Only parse files that the SR plugin would treat as flashcards/review —
-      // i.e. carrying the SR base tag (incl. subtags) or the SR review tag.
-      const isReview = this.hasReviewTag(file, opts.srReviewTag);
-      if (!this.hasSrTag(file, opts.srBaseTag) && !isReview) continue;
-
+      // Only files the SR plugin would treat as flashcards or a review note.
+      if (!this.hasSrTag(file, opts.srBaseTag) && !this.hasReviewTag(file, opts.srReviewTag)) {
+        continue;
+      }
       const content = await this.app.vault.cachedRead(file);
-      const fileTags = this.fileTags(file);
-
-      // Inline cards (if any) → a separate Decks file, tagged with the single
-      // deepest SR base subtag.
-      const { dbRecords } = LegacySrMigrator.processFile(content, {
-        srBaseTag: opts.srBaseTag,
-        decksBaseTag: this.decksBaseTag,
-        inlineSep: opts.inlineSep,
-        multiSep: opts.multiSep,
-        clozeSep: opts.clozeSep,
-        noteTitle: file.basename,
-        hintLabel: I18n.t.srMigration.hintLabel,
-        dateFormat,
-      });
-      if (dbRecords.length > 0) {
-        entries.push({
-          file,
-          kind: "inline",
-          cards: dbRecords,
-          deckTag: this.toMigrationTag(
-            LegacySrMigrator.deriveDeckTag(fileTags, {
-              srBaseTag: opts.srBaseTag,
-              decksBaseTag: this.decksBaseTag,
-            })
-          ),
-        });
-        sourceFiles.add(file.path);
-      }
-
-      // Whole-note review → reviewed IN PLACE. Triggered by the SR review tag,
-      // or (when there are no inline cards) by file-level scheduling state. A
-      // file can be BOTH inline AND a review — it then yields two entries.
-      const isWholeReview =
-        isReview || (dbRecords.length === 0 && !!LegacySrMigrator.parseFileLevelState(content));
-      if (isWholeReview) {
-        const { properties, userTags } = this.extractReviewFrontmatter(
-          file,
-          opts.srBaseTag,
-          opts.srReviewTag
-        );
-        entries.push({
-          file,
-          kind: "whole",
-          cards: [
-            LegacySrMigrator.processWholeNote(content, file.basename, {
-              srBaseTag: opts.srBaseTag,
-              srReviewTag: opts.srReviewTag,
-              dateFormat,
-            }),
-          ],
-          reviewTag: this.toMigrationReviewTag(
-            LegacySrMigrator.deriveReviewTag(fileTags, opts.srReviewTag, this.decksBaseTag)
-          ),
-          properties,
-          userTags,
-        });
-        sourceFiles.add(file.path);
-      }
+      const note = this.parseLegacyNote(file, content, opts, dateFormat);
+      if (!note) continue;
+      const counted = this.countNote(note);
+      fileCount++;
+      cardCount += counted.cards;
+      withHistory += counted.withHistory;
     }
 
-    const cardCount = entries.reduce((sum, e) => sum + e.cards.length, 0);
-    const withHistory = entries.reduce(
-      (sum, e) => sum + e.cards.filter((c) => c.fsrsData || c.fsrsDataReverse).length,
-      0
-    );
-    return { entries, fileCount: sourceFiles.size, cardCount, withHistory };
+    return { fileCount, cardCount, withHistory };
   }
 
   async migrate(opts: SrMigrateOptions, onProgress?: SrProgress): Promise<SrMigrateSummary> {
@@ -378,6 +374,7 @@ export class SrMigrationController {
       await this.db.createTagMapping(reviewProfileId, this.migrationReviewSubtag);
 
       const deckItems: MigrationDeckItem[] = [];
+      const written: string[] = [];
       let filesMigrated = 0;
       let filesCreated = 0;
       let cardsMigrated = 0;
@@ -391,6 +388,7 @@ export class SrMigrationController {
             filesMigrated++;
             filesCreated += r.created;
             cardsMigrated += r.cards;
+            written.push(...r.paths);
           }
         } catch (error) {
           // Atomic order: the original is copied before any write, so a failure
@@ -401,6 +399,7 @@ export class SrMigrationController {
       }
 
       onProgress?.(files.length + 1, total, "sync");
+      await this.waitForIndexed(written);
       // Non-force: only the newly written decks are stale, so unchanged decks
       // elsewhere in the vault aren't needlessly re-parsed.
       await this.deckSynchronizer.sync();
@@ -431,28 +430,16 @@ export class SrMigrationController {
     profileFsrs: MigrationProfileFsrs,
     dateFormat: string | undefined,
     deckItems: MigrationDeckItem[]
-  ): Promise<{ migrated: boolean; created: number; cards: number }> {
+  ): Promise<{ migrated: boolean; created: number; cards: number; paths: string[] }> {
     const content = await this.app.vault.cachedRead(file);
-    const fm = this.app.metadataCache.getFileCache(file)?.frontmatter;
-    const isReviewNote =
-      this.hasReviewTag(file, opts.srReviewTag) ||
-      !!(fm && ("sr-due" in fm || "review" in fm));
     const fileTags = this.fileTags(file);
     const t = I18n.t.srMigration;
 
-    const { dbRecords, hasProse } = LegacySrMigrator.processFile(content, {
-      srBaseTag: opts.srBaseTag,
-      decksBaseTag: this.decksBaseTag,
-      inlineSep: opts.inlineSep,
-      multiSep: opts.multiSep,
-      clozeSep: opts.clozeSep,
-      noteTitle: file.basename,
-      hintLabel: t.hintLabel,
-      dateFormat,
-    });
-    const cards = LegacySrMigrator.expandReverseCards(dbRecords);
+    const note = this.parseLegacyNote(file, content, opts, dateFormat);
+    if (!note) return { migrated: false, created: 0, cards: 0, paths: [] };
+    const { cards, reviewCard } = note;
     const hasCards = cards.length > 0;
-    if (!hasCards && !isReviewNote) return { migrated: false, created: 0, cards: 0 };
+    const counted = this.countNote(note);
 
     // Output base path (no extension). Same-folder reuses the source path; custom
     // folder mirrors the relative path under the target.
@@ -463,19 +450,8 @@ export class SrMigrationController {
     const safeSuffix = this.sanitizePathString(t.flashcardsSuffix);
     const cardsBasename = this.basename(reviewBaseNoExt) + safeSuffix;
 
-    const wantReview = !hasCards || isReviewNote || hasProse; // CASE A or C
-    // Pure cards (CASE B) take the base name; mixed/review (C) suffix the cards file.
-    const cardsOutPath = wantReview ? `${reviewBaseNoExt}${safeSuffix}.md` : reviewPath;
-
-    const wholeOpts: WholeNoteOptions = {
-      srBaseTag: opts.srBaseTag,
-      srReviewTag: opts.srReviewTag,
-      dateFormat,
-      inlineSep: opts.inlineSep,
-      multiSep: opts.multiSep,
-      clozeSep: opts.clozeSep,
-      hintLabel: t.hintLabel,
-    };
+    // Pure cards take the base name; a note that also stays readable suffixes the cards file.
+    const cardsOutPath = reviewCard ? `${reviewBaseNoExt}${safeSuffix}.md` : reviewPath;
 
     // A back-link to the original is only safe when the original survives in
     // place (additive). Use its full relative path — the target deck shares the
@@ -506,9 +482,7 @@ export class SrMigrationController {
     }
 
     let reviewText: string | null = null;
-    let reviewCard: MigratedCard | null = null;
-    if (wantReview) {
-      reviewCard = LegacySrMigrator.processWholeNote(content, file.basename, wholeOpts);
+    if (reviewCard) {
       // Frontmatter links: review → its extracted cards, and → the original.
       // Merged at the object level so an existing user property of the same name
       // is overwritten, never duplicated.
@@ -591,7 +565,34 @@ export class SrMigrationController {
       deckItems.push({ deckId: generateDeckId(cardsOutPath), profileFsrs, cards: cardsCards });
     }
 
-    return { migrated: true, created, cards: cards.length };
+    const paths = [cardsText ? cardsOutPath : null, reviewText ? reviewPath : null].filter(
+      (path): path is string => path !== null
+    );
+    return { migrated: true, created, cards: counted.cards, paths };
+  }
+
+  // Deck discovery reads tags from the metadata cache, which trails a write.
+  private async waitForIndexed(paths: string[]): Promise<void> {
+    let pending = paths;
+    let lastProgress = Date.now();
+    for (;;) {
+      const left = pending.filter((path) => !this.isIndexedDeck(path));
+      if (left.length === 0) return;
+      if (left.length < pending.length) lastProgress = Date.now();
+      if (Date.now() - lastProgress > INDEX_STALL_MS) {
+        this.logger.debug("SR migration: files not indexed before the sync", left);
+        return;
+      }
+      pending = left;
+      await new Promise<void>((resolve) => window.setTimeout(resolve, INDEX_POLL_MS));
+    }
+  }
+
+  private isIndexedDeck(path: string): boolean {
+    const file = this.app.vault.getAbstractFileByPath(normalizePath(path));
+    if (!(file instanceof TFile)) return false;
+    const tags = getAllTags(this.app.metadataCache.getFileCache(file) ?? {}) ?? [];
+    return tags.some((tag) => tag.startsWith(this.decksBaseTag));
   }
 
   // Copy (never move) the original into the archive folder, preserving relative

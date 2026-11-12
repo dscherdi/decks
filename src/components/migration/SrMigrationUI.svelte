@@ -253,7 +253,7 @@
     {#if summary}
       <p class="decks-sr-migration-done">
         {I18n.format(t.doneSummary, {
-          files: summary.filesCreated,
+          files: summary.filesMigrated,
           cards: summary.cardsMigrated,
           history: summary.withHistory,
         })}
