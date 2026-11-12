@@ -21,6 +21,7 @@ import { AiSourcePdfStore } from "./services/AiSourcePdfStore";
 import { DirectoryService, directoryErrorMessage } from "./services/DirectoryService";
 import { isFreshInstall } from "./utils/first-install";
 import { noteDeckTag } from "./utils/deck-tag";
+import { serialized } from "./utils/serialized";
 import { DirectoryBrowserModal } from "./components/directory/DirectoryBrowserModal";
 import { DirectoryExporter, type DirectoryExportOutput } from "./services/DirectoryExporter";
 import { DirectoryExportModal } from "./components/export/DirectoryExportModal";
@@ -1549,7 +1550,9 @@ export default class DecksPlugin extends Plugin {
    * logged but don't surface to the user — the next focus reload or
    * periodic timer will retry.
    */
-  private async flushAndSnapshotIfDirty(): Promise<void> {
+  private readonly flushAndSnapshotIfDirty = serialized(() => this.flushAndSnapshot());
+
+  private async flushAndSnapshot(): Promise<void> {
     // Drain any debounced deck syncs first so their DB writes are included
     // in the snapshot below.
     try {

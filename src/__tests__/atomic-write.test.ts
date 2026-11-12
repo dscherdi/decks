@@ -16,12 +16,19 @@ class FakeAdapter implements AtomicWriteAdapter {
   truncateTo: number | null = null;
   /** Throw after writing, imitating a crash mid-save. */
   throwOnWrite = false;
+  renameClearsDestinationFirst = false;
+  /** Each write takes a turn of the event loop and is short until it ends, as a large one is. */
+  slowWrites = false;
 
   constructor(seed: Record<string, number> = {}) {
     for (const [p, size] of Object.entries(seed)) this.files.set(p, size);
   }
 
   async writeBinary(path: string, data: ArrayBuffer): Promise<void> {
+    if (this.slowWrites) {
+      this.files.set(path, Math.floor(data.byteLength / 2));
+      await new Promise((resolve) => setTimeout(resolve, 0));
+    }
     const size = this.truncateTo ?? data.byteLength;
     this.files.set(path, size);
     if (this.throwOnWrite) throw new Error("interrupted");
@@ -36,6 +43,8 @@ class FakeAdapter implements AtomicWriteAdapter {
     if (!this.renameOverwrites && this.files.has(to)) {
       throw new Error("EEXIST: destination exists");
     }
+    // The phone clears the destination before it looks for the source.
+    if (this.renameClearsDestinationFirst) this.files.delete(to);
     const size = this.files.get(from);
     if (size === undefined) throw new Error("ENOENT");
     this.files.delete(from);
@@ -160,5 +169,77 @@ describe("adapters that cannot report a size", () => {
 
     await writeBinaryAtomic(a, DB, payload(12_000_000));
     expect(a.files.get(DB)).toBe(12_000_000);
+  });
+});
+
+// Two saves started together shared one temporary file. The slower one found it
+// gone and removed the database it was meant to replace.
+describe("two saves at once", () => {
+  it("keeps the database when the saves overlap", async () => {
+    const a = new FakeAdapter({ [DB]: 11_788_288 });
+
+    const results = await Promise.allSettled([
+      writeBinaryAtomic(a, DB, payload(12_000_000)),
+      writeBinaryAtomic(a, DB, payload(12_000_100)),
+    ]);
+
+    expect(results.map((r) => r.status)).toEqual(["fulfilled", "fulfilled"]);
+    expect(a.files.get(DB)).toBe(12_000_100);
+    expect(a.files.has(TMP)).toBe(false);
+  });
+
+  it("keeps the database on a platform whose rename clears the destination first", async () => {
+    const a = new FakeAdapter({ [DB]: 11_788_288 });
+    a.renameClearsDestinationFirst = true;
+
+    await Promise.allSettled([
+      writeBinaryAtomic(a, DB, payload(12_000_000)),
+      writeBinaryAtomic(a, DB, payload(12_000_100)),
+    ]);
+
+    expect(a.files.get(DB)).toBe(12_000_100);
+  });
+
+  it("does not take a half-written file of the other save for a short write", async () => {
+    const a = new FakeAdapter({ [DB]: 11_788_288 });
+    a.slowWrites = true;
+
+    const results = await Promise.allSettled([
+      writeBinaryAtomic(a, DB, payload(12_000_000)),
+      writeBinaryAtomic(a, DB, payload(12_000_100)),
+    ]);
+
+    expect(results.map((r) => r.status)).toEqual(["fulfilled", "fulfilled"]);
+    expect(a.files.get(DB)).toBe(12_000_100);
+  });
+
+  it("runs the next save after one that failed", async () => {
+    const a = new FakeAdapter({ [DB]: 11_788_288 });
+    a.truncateTo = 6_291_456;
+    const failing = writeBinaryAtomic(a, DB, payload(12_000_000));
+    const following = failing.catch(() => {
+      a.truncateTo = null;
+      return writeBinaryAtomic(a, DB, payload(12_000_100));
+    });
+
+    await expect(failing).rejects.toThrow(/wrote 6291456/);
+    await following;
+    expect(a.files.get(DB)).toBe(12_000_100);
+  });
+});
+
+describe("a temporary file that is gone", () => {
+  it("fails the save and leaves the database alone", async () => {
+    const a = new FakeAdapter({ [DB]: 11_788_288 });
+    a.renameClearsDestinationFirst = true;
+    const write = a.writeBinary.bind(a);
+    a.writeBinary = async (path, data) => {
+      await write(path, data);
+      a.files.delete(path);
+    };
+    a.stat = async () => null;
+
+    await expect(writeBinaryAtomic(a, DB, payload(12_000_000))).rejects.toThrow(/temporary file is gone/);
+    expect(a.files.get(DB)).toBe(11_788_288);
   });
 });

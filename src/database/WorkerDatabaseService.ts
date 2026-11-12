@@ -1,5 +1,6 @@
 import type { DataAdapter } from "obsidian";
 import { recoverInterruptedWrite, writeBinaryAtomic } from "./atomic-write";
+import { serialized } from "../utils/serialized";
 import { toArrayBuffer, transferOf } from "../utils/bytes";
 import { BaseDatabaseService } from "./BaseDatabaseService";
 import type { QueryConfig } from "./BaseDatabaseService";
@@ -253,7 +254,14 @@ export class WorkerDatabaseService extends BaseDatabaseService {
     });
   }
 
+  private readonly saveInTurn = serialized(() => this.saveNow());
+
+  /** Two saves at once would share one temporary file, so they take turns. */
   async save(): Promise<void> {
+    return this.saveInTurn();
+  }
+
+  private async saveNow(): Promise<void> {
     if (!this.workerReady) await this.whenReady();
 
     try {

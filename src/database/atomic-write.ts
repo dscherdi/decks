@@ -28,6 +28,9 @@ export function writingPathFor(path: string): string {
   return `${path}${WRITING_SUFFIX}`;
 }
 
+/** Writes to one path share its temporary file, so they run one after another. */
+const lastWrite = new Map<string, Promise<void>>();
+
 /**
  * Write `data` to `path` without ever leaving `path` partially written.
  *
@@ -35,11 +38,22 @@ export function writingPathFor(path: string): string {
  * surfaces as a failed save with the previous database intact — rather than
  * silently replacing it with a truncated one.
  */
-export async function writeBinaryAtomic(
+export function writeBinaryAtomic(
   adapter: AtomicWriteAdapter,
   path: string,
   data: ArrayBuffer,
 ): Promise<void> {
+  const previous = lastWrite.get(path) ?? Promise.resolve();
+  const write = previous.catch(() => {}).then(() => replaceFile(adapter, path, data));
+  lastWrite.set(path, write);
+  const forget = () => {
+    if (lastWrite.get(path) === write) lastWrite.delete(path);
+  };
+  write.then(forget, forget);
+  return write;
+}
+
+async function replaceFile(adapter: AtomicWriteAdapter, path: string, data: ArrayBuffer): Promise<void> {
   const writing = writingPathFor(path);
 
   await adapter.writeBinary(writing, data);
@@ -60,9 +74,15 @@ export async function writeBinaryAtomic(
     );
   }
 
+  // With nothing to put in its place, a rename could only cost the file it replaces.
+  if (!(await adapter.exists(writing))) {
+    throw new Error("Refusing to save: the temporary file is gone");
+  }
+
   try {
     await adapter.rename(writing, path);
-  } catch {
+  } catch (error) {
+    if (!(await adapter.exists(writing))) throw error;
     // Some platforms refuse to rename onto an existing file. The gap between
     // these two calls moves no data, unlike the multi-megabyte write above, and
     // recoverInterruptedWrite() adopts the temporary file if we die inside it.
