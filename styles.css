@@ -467,14 +467,14 @@
 /* The generator is a workspace leaf now, never a modal, so it no longer widens
    one. .decks-ai-batch-modal itself stays: the batch refactor modal uses it. */
 
-.decks-modal-mobile {
+/* Two classes, so the insets outrank the app's own phone padding for .modal. */
+.modal.decks-modal-mobile {
   height: 100% !important;
   max-height: 100vh !important;
   width: 100% !important;
   max-width: 100vw !important;
-  padding-left: env(safe-area-inset-left);
-  padding-right: env(safe-area-inset-right);
-  padding-bottom: env(safe-area-inset-bottom);
+  padding: var(--safe-area-inset-top) var(--safe-area-inset-right) var(--safe-area-inset-bottom)
+    var(--safe-area-inset-left);
 }
 
 .decks-modal-tablet {
@@ -490,14 +490,74 @@
   z-index: 1000;
 }
 
-.decks-modal-mobile .modal-close-button {
+/* On a phone the close button takes no row of its own: it sits in the first row's end corner. */
+.decks-modal-mobile {
+  --decks-modal-close-size: 32px;
+  --decks-modal-close-room: calc(var(--decks-modal-close-size) + var(--size-4-2));
+  --decks-modal-close-top: 6px;
+}
+
+/* First rows differ in height; each group puts the button on its row's centre line. */
+.decks-modal-mobile:has(.decks-panel-header) {
+  --decks-modal-close-top: 1px;
+}
+
+.decks-modal-mobile:has(
+    .decks-statistics-title-row,
+    .decks-pm-titlebar,
+    .decks-edit-header,
+    .decks-occlusion-studio-header,
+    .decks-ai-batch-header
+  ) {
+  --decks-modal-close-top: 12px;
+}
+
+.decks-modal-mobile:has(.decks-exam-header, .decks-control-bar, .decks-dirb-search-wrap) {
+  --decks-modal-close-top: 17px;
+}
+
+.decks-modal-mobile:has(.decks-review-modal) {
+  --decks-modal-close-top: 22px;
+}
+
+.decks-modal-mobile:has(.decks-sr-migration-body, .decks-anki-export-ui) {
+  --decks-modal-close-top: 26px;
+}
+
+.decks-modal-mobile .modal-close-button,
+.decks-modal-mobile .modal-header-button {
   z-index: 1000;
   position: absolute;
-  transform: translateY(env(safe-area-inset-top));
+  top: calc(var(--safe-area-inset-top) + var(--decks-modal-close-top));
+  inset-inline-end: calc(var(--safe-area-inset-right) + var(--size-4-2));
+  width: var(--decks-modal-close-size);
+  height: var(--decks-modal-close-size);
+  --icon-size: 18px;
 }
 
 .decks-modal-mobile .modal-header {
-  padding-top: translateY(env(safe-area-inset-top));
+  padding: 0;
+}
+
+.decks-modal-mobile .modal-title:not(:empty) {
+  padding: var(--size-4-3) var(--size-4-4) var(--size-4-2);
+}
+
+/* First rows that reach the end corner leave the close button its room. */
+.modal.decks-modal-mobile .decks-control-bar,
+.modal.decks-modal-mobile .decks-exam-header,
+.modal.decks-modal-mobile .decks-edit-header,
+.modal.decks-modal-mobile .decks-statistics-title-row,
+.modal.decks-modal-mobile .decks-pm-titlebar,
+.modal.decks-modal-mobile .decks-occlusion-studio-header,
+.modal.decks-modal-mobile .decks-ai-batch-header,
+.modal.decks-modal-mobile .decks-anki-export-ui > h2:first-child,
+.modal.decks-modal-mobile .decks-sr-migration-body > h2:first-child {
+  padding-inline-end: var(--decks-modal-close-room);
+}
+
+.modal.decks-modal-mobile .decks-dirb-search-wrap {
+  margin-inline-end: var(--decks-modal-close-room);
 }
 
 .decks-modal > .modal-content {

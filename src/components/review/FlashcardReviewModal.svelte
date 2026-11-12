@@ -2284,8 +2284,15 @@
     justify-content: space-between;
   }
 
+  /* A modal keeps itself inside the safe area, so the review adds no inset of its own there. */
   :global(.modal) .decks-review-modal {
-    padding-top: calc(env(safe-area-inset-top) + 16px);
+    padding: 16px 0 0;
+  }
+
+  :global(.modal) .decks-action-buttons {
+    padding-bottom: 20px;
+    padding-left: 0;
+    padding-right: 0;
   }
 
   .decks-breadcrumb {
@@ -3540,11 +3547,11 @@
         }
     }*/
 
-  /* Mobile keyboard and safe area protection - Blocker #9 */
+  /* In a tab the bar keeps its own insets, which also hold it clear of the app's floating bar. */
   .decks-action-buttons {
-    padding-bottom: calc(20px + env(safe-area-inset-bottom));
-    padding-left: env(safe-area-inset-left);
-    padding-right: env(safe-area-inset-right);
+    padding-bottom: calc(20px + var(--safe-area-inset-bottom));
+    padding-left: var(--safe-area-inset-left);
+    padding-right: var(--safe-area-inset-right);
     position: relative;
     bottom: 0;
   }
@@ -3563,15 +3570,11 @@
         }
     }*/
 
-  /* Mobile safe area insets. padding-top is handled by the modal-scoped
-   * `:global(.modal) .decks-review-modal` rule above so it only adds a
-   * top inset in modal mode; tab-mode review lives inside Obsidian's
-   * workspace which already accounts for safe-area-inset-top, and adding
-   * another top inset there would double up. */
+  /* Insets for the review in a tab; the modal-scoped rule above clears them inside a modal. */
   .decks-review-modal {
-    padding-bottom: env(safe-area-inset-bottom);
-    padding-left: env(safe-area-inset-left);
-    padding-right: env(safe-area-inset-right);
+    padding-bottom: var(--safe-area-inset-bottom);
+    padding-left: var(--safe-area-inset-left);
+    padding-right: var(--safe-area-inset-right);
     box-sizing: border-box;
     overflow-x: hidden;
   }
