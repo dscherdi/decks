@@ -10,6 +10,7 @@ import {
   MarkdownView,
   getAllTags,
   getLanguage,
+  type CachedMetadata,
   type Editor,
 } from "obsidian";
 import type { Extension } from "@codemirror/state";
@@ -269,6 +270,8 @@ export default class DecksPlugin extends Plugin {
   // single trailing-edge full sync, instead of one full vault scan per file.
   private pendingFullSync: number | null = null;
   private static readonly FULL_SYNC_DEBOUNCE_MS = 1000;
+  // Tagged notes without a deck that have already asked for a discovery sync.
+  private awaitingDiscovery = new Set<string>();
   // Coalesce per-file UI stat refreshes (e.g. bulk delete) into one repaint.
   private pendingStatsRefresh: number | null = null;
   private static readonly STATS_REFRESH_DEBOUNCE_MS = 300;
@@ -1149,6 +1152,15 @@ export default class DecksPlugin extends Plugin {
             }
             this.handleFileCreate(file);
           }
+        })
+      );
+
+      // "modify" fires before the note is re-indexed, so a deck tag added by a save shows up here.
+      this.registerEvent(
+        this.app.metadataCache.on("changed", (file, _data, cache) => {
+          this.handleMetadataChanged(file, cache).catch((error) =>
+            this.logger.debug("Deck tag check after indexing failed", error)
+          );
         })
       );
 
@@ -2712,8 +2724,8 @@ export default class DecksPlugin extends Plugin {
           await this.deckSynchronizer.syncDeck(newDeck.id);
         }
 
-        // For new decks, refresh all stats to show the new deck
-        await this.getDecksView()?.refreshStats();
+        // A new deck needs the deck list reloaded, not only the counts.
+        await this.getDecksView()?.refreshDecksAndStats();
       }
     }
   }
@@ -2745,6 +2757,10 @@ export default class DecksPlugin extends Plugin {
     try {
       await this.deckSynchronizer.sync();
       await this.getDecksView()?.refresh({ skipSync: true });
+      // Only notes the sync left without a deck stay marked, so they do not ask again on every save.
+      for (const path of [...this.awaitingDiscovery]) {
+        if (await this.db.getDeckByFilepath(path)) this.awaitingDiscovery.delete(path);
+      }
     } catch (error) {
       this.logger.error("Debounced full sync failed", error);
     }
@@ -2967,6 +2983,20 @@ export default class DecksPlugin extends Plugin {
       checkAndSync();
     });
     this.registerEvent(ref);
+  }
+
+  // A tagged note with no deck gets one discovery sync, as a new tagged file does.
+  async handleMetadataChanged(file: TFile, cache: CachedMetadata): Promise<void> {
+    if (file.extension !== "md" || this.deckSynchronizer.isMigrating) return;
+    const baseTag = this.settings.parsing.deckTag;
+    const tagged = (getAllTags(cache) || []).some((tag) => tag.startsWith(baseTag));
+    if (!tagged || (await this.db.getDeckByFilepath(file.path))) {
+      this.awaitingDiscovery.delete(file.path);
+      return;
+    }
+    if (this.awaitingDiscovery.has(file.path)) return;
+    this.awaitingDiscovery.add(file.path);
+    this.scheduleFullSync();
   }
 
   async handleFileRename(file: TAbstractFile, oldPath: string): Promise<void> {

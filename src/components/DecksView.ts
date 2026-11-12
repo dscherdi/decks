@@ -499,21 +499,9 @@ export class DecksView extends ItemView {
     }
   }
 
+  // Counts are keyed by deck id, so the panel always gets the deck list with them.
   async refreshStats() {
-    this.logger.debug("DecksView.refreshStats() executing");
-    try {
-      // Get updated stats only (faster than full refresh)
-      const deckStats = await this.getAllDeckStatsMap();
-      this.logger.debug("Updated deck stats:", deckStats);
-
-      // Update component with new stats using unified function
-      if (this.deckListPanelComponent) {
-        await this.deckListPanelComponent.updateAll?.(undefined, deckStats);
-        await this.pushGlobalReviewCap();
-      }
-    } catch (error) {
-      console.error("Error refreshing stats:", error);
-    }
+    await this.refreshDecksAndStats();
   }
 
   async refreshStatsById(deckId: string) {
