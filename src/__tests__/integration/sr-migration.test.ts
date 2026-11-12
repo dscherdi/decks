@@ -5,13 +5,15 @@ import {
 } from "./database-test-utils";
 import {
   LegacySrMigrator,
+  Scheduler,
   SrHistoryImporter,
   generateDeckId,
   generateFlashcardId,
   generateReverseFlashcardId,
   generateClozeFlashcardId,
 } from "@decks/core";
-import type { DeckProfile, MigrationDeckItem } from "@decks/core";
+import type { DeckProfile, DecksSettings, IBackupService, MigrationDeckItem } from "@decks/core";
+import { DEFAULT_SETTINGS } from "../../settings";
 
 describe("SR migration pipeline (integration)", () => {
   let db: MainDatabaseService;
@@ -148,6 +150,42 @@ describe("SR migration pipeline (integration)", () => {
 
     const logs = await db.getReviewLogsByDeck(deckId);
     expect(logs).toHaveLength(1);
+  });
+
+  it("a re-run keeps a card reviewed in Decks and restores one that was not", async () => {
+    const source = [
+      "Dog :: Perro <!--SR:!2024-06-18,12,250-->",
+      "",
+      "Cat :: Gato <!--SR:!2024-06-18,7,250-->",
+    ].join("\n");
+    const { dbRecords } = LegacySrMigrator.processFile(source, {
+      srBaseTag: "#flashcards",
+      decksBaseTag: "#decks",
+    });
+    const [rendered] = LegacySrMigrator.renderDecksFiles(dbRecords, "#decks", profile.headerLevel);
+    const deckId = await syncFile("Decks/pets.md", rendered.content);
+    const items: MigrationDeckItem[] = [
+      { deckId, profileFsrs: profileFsrs(), cards: rendered.cards },
+    ];
+    await SrHistoryImporter.importHistory(db, items);
+
+    const dogId = generateFlashcardId("Dog");
+    const catId = generateFlashcardId("Cat");
+    const backup: IBackupService = { createBackup: async () => undefined };
+    const settings: DecksSettings = structuredClone(DEFAULT_SETTINGS);
+    const reviewed = await new Scheduler(db, settings, backup).rate(dogId, "good");
+    expect(reviewed.stability).not.toBe(12);
+    await db.batchUpdateFlashcards([{ id: catId, updates: { stability: 99 } }]);
+
+    const { injected } = await SrHistoryImporter.importHistory(db, items);
+    expect(injected).toBe(0);
+
+    const dog = await db.getFlashcardById(dogId);
+    expect(dog!.stability).toBe(reviewed.stability);
+    expect(dog!.dueDate).toBe(reviewed.dueDate);
+    expect(dog!.repetitions).toBe(reviewed.repetitions);
+    expect(dog!.lastReviewed).toBe(reviewed.lastReviewed);
+    expect((await db.getFlashcardById(catId))!.stability).toBe(7);
   });
 
   it("renders headings at the selected profile's header level", async () => {
