@@ -1,6 +1,6 @@
 import { type App, TFile } from "obsidian";
 import type { Flashcard } from "../database/types";
-import { FlashcardParser } from "@decks/core";
+import { fencedLines, findComments, FlashcardParser, replaceComments } from "@decks/core";
 import { findFlashcardSegment } from "../utils/source-navigator";
 import { forwardCard, isReverseCard } from "../utils/reverse-card";
 import {
@@ -694,12 +694,14 @@ function headerMatches(card: Flashcard, segLines: string[]): boolean {
 function carriedNotes(oldBody: string[]): string {
   const text = oldBody.join("\n");
   const parts: string[] = [];
-  for (const match of text.matchAll(/%%([\s\S]*?)%%/g)) {
-    const inner = match[1].trim();
-    if (inner && !isAnchorCommentBody(inner)) parts.push(match[0].trim());
+  for (const comment of findComments(text)) {
+    const inner = comment.inner.trim();
+    if (inner && !isAnchorCommentBody(inner)) parts.push(text.slice(comment.start, comment.end).trim());
   }
-  const lines = text.replace(/%%[\s\S]*?%%/g, "").split("\n");
+  const lines = replaceComments(text, () => "").split("\n");
+  const inCode = fencedLines(lines);
   for (let i = lines.length - 1; i >= 0; i--) {
+    if (inCode[i]) continue;
     if (/^\s*(-{3,}|\*{3,}|_{3,})\s*$/.test(lines[i])) {
       const after = lines.slice(i + 1).join("\n").trim();
       if (after) parts.push(`${lines[i].trim()}\n${after}`);
