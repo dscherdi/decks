@@ -230,8 +230,13 @@
   $: cancelSpeechOnChange(currentCard?.id, showAnswer);
 
   function getBreadcrumbParts(card: Flashcard): string[] {
-    if (!card.breadcrumb) return [];
-    return card.breadcrumb.split(" > ");
+    const parts = card.breadcrumb ? card.breadcrumb.split(" > ") : [];
+    // A session over several notes names each card's note first; a one-note deck already has it in the title.
+    const note = isDirectoryDeckPath(card.sourceFile)
+      ? ""
+      : (card.sourceFile.split("/").pop() ?? "").replace(/\.(md|canvas)$/i, "");
+    if (note && note !== deckOrGroup.name && parts[0] !== note) parts.unshift(note);
+    return parts;
   }
 
   function setClozeAttributes(
@@ -472,12 +477,81 @@
   // Multiple-choice: the options carry the answer (verdict styling on
   // reveal); the raw task-list back never renders — the section only opens
   // to host notes.
-  $: answerSectionHidden = isMultipleChoice
-    ? !(showNotes && hasNotes)
-    : frontOnlyClozeCard
-      ? !(showNotes && hasNotes)
+  $: answerSectionHidden = isMultipleChoice || frontOnlyClozeCard
+      ? true
       : (!!currentCard && isOcclusionV2(currentCard) && !currentV2Answered) ||
         (!showAnswer && !(currentCard && isClozeType(currentCard.type) && !isOcclusionV2(currentCard)));
+
+  // Before the reveal the answer keeps its place, so the question stays put when it appears.
+  $: answerPending =
+    answerSectionHidden &&
+    !showAnswer &&
+    !isMultipleChoice &&
+    !frontOnlyClozeCard &&
+    !(!!currentCard && isOcclusionV2(currentCard) && !currentV2Answered);
+  $: answerAbsent = answerSectionHidden && !answerPending;
+  $: notesToggleVisible = hasNotes && !isMultipleChoice && (showAnswer || !answerSectionHidden);
+  $: copyVisible = !frontOnlyClozeCard && !isMultipleChoice && !answerSectionHidden;
+
+  // A pending answer that would not fit leaves the layout, so the question side never scrolls into blank space.
+  let pendingOut = false;
+  let pendingCardId: string | null = null;
+  let schedulePendingMeasure: () => void = () => {};
+  $: if ((currentCard?.id ?? null) !== pendingCardId) {
+    pendingCardId = currentCard?.id ?? null;
+    pendingOut = false;
+  }
+  $: remeasurePending(answerPending, pendingCardId);
+
+  function remeasurePending(_pending: boolean, _cardId: string | null): void {
+    schedulePendingMeasure();
+  }
+
+  // Text takes the largest step at which the whole card, hidden answer included, fits without scrolling.
+  const FIT_STEPS = ["1", "2", "3", "4"];
+
+  function observePendingAnswer(node: HTMLElement): { destroy(): void } {
+    let frame = 0;
+    const overflows = (): boolean => node.scrollHeight > node.clientHeight + 1;
+    const measure = (): void => {
+      frame = 0;
+      const card = node.querySelector<HTMLElement>(".decks-review-card");
+      const stack = node.querySelector<HTMLElement>(".decks-review-card-stack");
+      if (!card || !stack) return;
+      if (answerPending) {
+        // Measured with the answer in the flow at the base size, within this frame, so nothing flickers.
+        stack.classList.remove("decks-answer-left-out");
+        card.setAttribute("data-fit", "4");
+        pendingOut = overflows();
+        if (pendingOut) {
+          stack.classList.add("decks-answer-left-out");
+          return;
+        }
+      } else {
+        pendingOut = false;
+      }
+      for (const step of FIT_STEPS) {
+        card.setAttribute("data-fit", step);
+        if (!overflows()) return;
+      }
+    };
+    const schedule = (): void => {
+      if (!frame) frame = requestAnimationFrame(measure);
+    };
+    const observer = new ResizeObserver(schedule);
+    observer.observe(node);
+    const stack = node.querySelector(".decks-review-card-stack");
+    if (stack) observer.observe(stack);
+    schedulePendingMeasure = schedule;
+    schedule();
+    return {
+      destroy() {
+        observer.disconnect();
+        if (frame) cancelAnimationFrame(frame);
+        schedulePendingMeasure = () => {};
+      },
+    };
+  }
 
   $: searchResults =
     searchMode && searchQuery.trim()
@@ -834,9 +908,9 @@
         if (isFrontOnlyCloze(currentCard)) {
           clearClozeAttributes(backEl);
         } else if (isOcclusionV2(currentCard)) {
-          // The image reveals in place on the front; keep the answer hidden
-          // until the user reveals it.
+          // The image reveals in place on the front; a mask's answer is laid out hidden so the image stays put.
           clearClozeAttributes(backEl);
+          if (currentV2Answered) renderOcclusionAnswerInto(backEl, currentCard);
         } else if (isClozeType(currentCard.type) && currentCard.clozeOrder !== null) {
           renderClozeInto(backEl, currentCard, false);
         } else {
@@ -1086,6 +1160,11 @@
 
   function toggleActionsMenu() {
     actionsMenuOpen = !actionsMenuOpen;
+  }
+
+  function runCardTool(action: () => void): void {
+    actionsMenuOpen = false;
+    action();
   }
 
   /**
@@ -1542,173 +1621,135 @@
   <div class="decks-modal-header">
     <div class="decks-modal-title-row">
       <h3>
-        {browseMode ? "Browse" : "Review session"} - {deckOrGroup.name}
-        {#if currentCard && isClozeType(currentCard.type) && clozeGroupTotal > 0}
-          <span class="decks-cloze-indicator"
-            >Cloze {clozeOrderRange(activeOrders.length > 0 ? activeOrders : [currentCard.clozeOrder ?? clozeGroupIndex])}/{clozeGroupTotal}</span
-          >
+        <span class="decks-review-title-text">{deckOrGroup.name}</span>
+        {#if browseMode}
+          <span class="decks-review-mode">{t.views.browse}</span>
+        {:else if cramMode}
+          <span class="decks-review-mode">{t.deckList.cram}</span>
         {/if}
       </h3>
       <DocInfoButton path="reviewing/sessions" />
     </div>
-    {#if currentCard}
-      {@const breadcrumbParts = getBreadcrumbParts(currentCard)}
-      {#if breadcrumbParts.length > 0}
-        <div class="decks-breadcrumb">
-          {#each breadcrumbParts as part, i}
-            {#if i > 0}<span class="decks-breadcrumb-sep">&nbsp;>&nbsp;</span
-              >{/if}
-            {#if collapsedBreadcrumbIndices.has(i)}
-              <span
-                class="decks-breadcrumb-collapsed"
-                role="button"
-                tabindex="-1"
-                on:click={() => toggleBreadcrumbIndex(i)}
-                on:keydown={(e) => {
-                  if (e.key === "Enter" || e.key === " ")
-                    toggleBreadcrumbIndex(i);
-                }}>...</span
-              >
-            {:else}
-              <span
-                class="decks-breadcrumb-expanded"
-                role="button"
-                tabindex="-1"
-                on:click={() => toggleBreadcrumbIndex(i)}
-                on:keydown={(e) => {
-                  if (e.key === "Enter" || e.key === " ")
-                    toggleBreadcrumbIndex(i);
-                }}>{part}</span
-              >
-            {/if}
-          {/each}
-        </div>
-      {/if}
-      {#if currentCard.tags && currentCard.tags.length > 0}
-        <div class="decks-card-tags">
-          {#each currentCard.tags as t}
-            <span class="decks-card-tag-chip">#{t}</span>
-          {/each}
-        </div>
-      {/if}
-    {/if}
     <div class="decks-header-stats">
       {#if browseMode}
-        {#if browseCards.length > 1}
-          <div class="decks-browse-row">
-            {#if searchMode}
-              <div class="decks-qs-wrapper">
-                <input
-                  type="text"
-                  class="decks-qs-input"
-                  placeholder={r.searchCardsPlaceholder}
-                  bind:value={searchQuery}
-                  bind:this={searchInputEl}
-                  on:keydown={handleSearchKeydown}
-                />
-                {#if searchResults.length > 0}
-                  <div class="decks-qs-dropdown">
-                    {#each searchResults as result (result.card.id)}
-                      <button
-                        type="button"
-                        class="decks-qs-result"
-                        on:pointerup={() => selectSearchResult(result.index)}
-                      >
-                        <span class="decks-qs-result-front"
-                          >{result.card.front}</span
-                        >
-                        <span class="decks-qs-result-index"
-                          >#{result.index + 1}</span
-                        >
-                      </button>
-                    {/each}
-                  </div>
-                {:else if searchQuery.trim()}
-                  <div class="decks-qs-dropdown decks-qs-empty">
-                    {r.noCardsMatch}
-                  </div>
-                {/if}
+        {#if searchMode && browseCards.length > 1}
+          <div class="decks-qs-wrapper">
+            <input
+              type="text"
+              class="decks-qs-input"
+              placeholder={r.searchCardsPlaceholder}
+              bind:value={searchQuery}
+              bind:this={searchInputEl}
+              on:keydown={handleSearchKeydown}
+            />
+            {#if searchResults.length > 0}
+              <div class="decks-qs-dropdown">
+                {#each searchResults as result (result.card.id)}
+                  <button
+                    type="button"
+                    class="decks-qs-result"
+                    on:pointerup={() => selectSearchResult(result.index)}
+                  >
+                    <span class="decks-qs-result-front"
+                      >{result.card.front}</span
+                    >
+                    <span class="decks-qs-result-index"
+                      >#{result.index + 1}</span
+                    >
+                  </button>
+                {/each}
               </div>
-            {:else}
-              <div class="decks-browse-slider">
-                <input
-                  type="range"
-                  class="decks-browse-range"
-                  min="0"
-                  max={browseCards.length - 1}
-                  bind:value={browseCardIndex}
-                  on:input={handleSliderNavigation}
-                />
-                <span class="decks-browse-slider-label">
-                  {I18n.format(r.cardOfCount, { current: browseCardIndex + 1, total: browseCards.length })}
-                </span>
+            {:else if searchQuery.trim()}
+              <div class="decks-qs-dropdown decks-qs-empty">
+                {r.noCardsMatch}
               </div>
             {/if}
-            <button
-              type="button"
-              class="clickable-icon decks-qs-toggle"
-              aria-label={searchMode ? r.closeSearch : r.searchCards}
-              on:pointerup={() => (searchMode ? closeSearch() : openSearch())}
-            >
-              {#if searchMode}
-                <svg
-                  xmlns="http://www.w3.org/2000/svg"
-                  width="16"
-                  height="16"
-                  viewBox="0 0 24 24"
-                  fill="none"
-                  stroke="currentColor"
-                  stroke-width="2"
-                  stroke-linecap="round"
-                  stroke-linejoin="round"
-                >
-                  <line x1="18" y1="6" x2="6" y2="18"></line>
-                  <line x1="6" y1="6" x2="18" y2="18"></line>
-                </svg>
-              {:else}
-                <svg
-                  xmlns="http://www.w3.org/2000/svg"
-                  width="16"
-                  height="16"
-                  viewBox="0 0 24 24"
-                  fill="none"
-                  stroke="currentColor"
-                  stroke-width="2"
-                  stroke-linecap="round"
-                  stroke-linejoin="round"
-                >
-                  <circle cx="11" cy="11" r="8"></circle>
-                  <line x1="21" y1="21" x2="16.65" y2="16.65"></line>
-                </svg>
-              {/if}
-            </button>
           </div>
         {:else}
           <div class="decks-progress-info">
             <span>{I18n.format(r.cardOfCountAlt, { current: browseCardIndex + 1, total: browseCards.length })}</span>
           </div>
         {/if}
+        {#if browseCards.length > 1}
+          <button
+            type="button"
+            class="clickable-icon decks-qs-toggle"
+            aria-label={searchMode ? r.closeSearch : r.searchCards}
+            on:pointerup={() => (searchMode ? closeSearch() : openSearch())}
+          >
+            {#if searchMode}
+              <svg
+                xmlns="http://www.w3.org/2000/svg"
+                width="16"
+                height="16"
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                stroke-width="2"
+                stroke-linecap="round"
+                stroke-linejoin="round"
+              >
+                <line x1="18" y1="6" x2="6" y2="18"></line>
+                <line x1="6" y1="6" x2="18" y2="18"></line>
+              </svg>
+            {:else}
+              <svg
+                xmlns="http://www.w3.org/2000/svg"
+                width="16"
+                height="16"
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                stroke-width="2"
+                stroke-linecap="round"
+                stroke-linejoin="round"
+              >
+                <circle cx="11" cy="11" r="8"></circle>
+                <line x1="21" y1="21" x2="16.65" y2="16.65"></line>
+              </svg>
+            {/if}
+          </button>
+        {/if}
       {:else}
         <div class="decks-progress-info">
-          <span>{I18n.format(r.reviewedLabel, { count: reviewedCountDisplay })}</span>
-          <span class="decks-remaining"
-            >({sessionProgress
-              ? I18n.format(r.remainingCount, { count: cardsRemaining })
-              : currentCard
-                ? r.moreCardsAvailable
-                : r.sessionComplete})</span
-          >
-        </div>
-        {#if !cramMode}
-          <div class="decks-timer-display">
-            <span class="decks-timer-label">{r.timeRemaining}</span>
-            <span
-              class="decks-timer-value"
-              class:decks-timer-warning={sessionTimeRemaining < 60000}
+          {#if sessionProgress}
+            <span>{I18n.format(r.sessionCount, { done: reviewedCountDisplay, total: Math.max(sessionProgress.goalTotal, reviewedCountDisplay) })}</span>
+          {:else}
+            <span>{I18n.format(r.reviewedLabel, { count: reviewedCountDisplay })}</span>
+            <span class="decks-session-sep" aria-hidden="true">·</span>
+            <span>{currentCard ? r.moreCardsAvailable : r.sessionComplete}</span>
+          {/if}
+          {#if !cramMode}
+            <span class="decks-session-sep" aria-hidden="true">·</span>
+            <span class="decks-timer-value" class:decks-timer-warning={sessionTimeRemaining < 60000}
+              >{I18n.format(r.timeLeft, { time: timeRemainingDisplay })}</span
             >
-              {timeRemainingDisplay}
-            </span>
-          </div>
+          {/if}
+        </div>
+        {#if canUndo}
+          <button
+            class="decks-undo-button decks-icon-btn clickable-icon"
+            on:click={handleUndo}
+            disabled={isLoading}
+            title={r.undoTooltip}
+            type="button"
+            tabindex="-1"
+          >
+            <svg
+              xmlns="http://www.w3.org/2000/svg"
+              width="14"
+              height="14"
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              stroke-width="2"
+              stroke-linecap="round"
+              stroke-linejoin="round"
+            >
+              <path d="M3 7v6h6"></path>
+              <path d="M21 17a9 9 0 0 0-15-6.7L3 13"></path>
+            </svg>
+          </button>
         {/if}
       {/if}
     </div>
@@ -1720,55 +1761,49 @@
     </div>
   {/if}
 
+  {#if browseMode && browseCards.length > 1}
+    <div class="decks-browse-scrubber">
+      <div class="decks-browse-track">
+        <div class="decks-browse-fill" style="width: {(browseCardIndex / (browseCards.length - 1)) * 100}%"></div>
+      </div>
+      <input
+        type="range"
+        class="decks-browse-range"
+        min="0"
+        max={browseCards.length - 1}
+        step="1"
+        aria-label={I18n.format(r.cardOfCountAlt, { current: browseCardIndex + 1, total: browseCards.length })}
+        bind:value={browseCardIndex}
+        on:input={handleSliderNavigation}
+      />
+    </div>
+  {/if}
+
   {#if currentCard}
     <div
       class="decks-card-content"
       class:decks-scratchpad-covered={showScratchpad}
+      use:observePendingAnswer
       on:touchstart|passive={handleTouchStart}
       on:touchend|passive={handleTouchEnd}
     >
-      {#snippet frontControls()}
-          {#if canUndo && !browseMode}
-            <button
-              class="decks-undo-button decks-icon-btn clickable-icon"
-              on:click={handleUndo}
-              disabled={isLoading}
-              title={r.undoTooltip}
-              type="button"
-              tabindex="-1"
-            >
-              <svg
-                xmlns="http://www.w3.org/2000/svg"
-                width="12"
-                height="12"
-                viewBox="0 0 24 24"
-                fill="none"
-                stroke="currentColor"
-                stroke-width="2"
-                stroke-linecap="round"
-                stroke-linejoin="round"
-              >
-                <path d="M3 7v6h6"></path>
-                <path d="M21 17a9 9 0 0 0-15-6.7L3 13"></path>
-              </svg>
-            </button>
-          {/if}
+      {#snippet cardTools()}
           <div class="decks-card-utilities">
-            {#if cardHealth && (cardHealth.isLeech || cardHealth.isDense)}
+            <div class="decks-card-actions-menu" bind:this={actionsMenuEl}>
               <button
-                class="clickable-icon decks-warning-icon decks-icon-btn"
+                class="decks-card-actions-trigger decks-icon-btn clickable-icon"
+                class:decks-card-actions-live={isSpeaking}
+                on:click|stopPropagation={toggleActionsMenu}
+                aria-label={r.cardActions}
+                aria-haspopup="menu"
+                aria-expanded={actionsMenuOpen}
                 type="button"
                 tabindex="-1"
-                aria-label={cardHealth.isLeech && cardHealth.isDense
-                  ? r.cardLeechAndDense
-                  : cardHealth.isLeech
-                    ? r.cardLeech
-                    : r.cardDense}
               >
                 <svg
                   xmlns="http://www.w3.org/2000/svg"
-                  width="14"
-                  height="14"
+                  width="16"
+                  height="16"
                   viewBox="0 0 24 24"
                   fill="none"
                   stroke="currentColor"
@@ -1777,171 +1812,84 @@
                   stroke-linejoin="round"
                 >
                   <path
-                    d="m21.73 18-8-14a2 2 0 0 0-3.48 0l-8 14A2 2 0 0 0 4 21h16a2 2 0 0 0 1.73-3Z"
+                    d="M12.22 2h-.44a2 2 0 0 0-2 2v.18a2 2 0 0 1-1 1.73l-.43.25a2 2 0 0 1-2 0l-.15-.08a2 2 0 0 0-2.73.73l-.22.38a2 2 0 0 0 .73 2.73l.15.1a2 2 0 0 1 1 1.72v.51a2 2 0 0 1-1 1.74l-.15.09a2 2 0 0 0-.73 2.73l.22.38a2 2 0 0 0 2.73.73l.15-.08a2 2 0 0 1 2 0l.43.25a2 2 0 0 1 1 1.73V20a2 2 0 0 0 2 2h.44a2 2 0 0 0 2-2v-.18a2 2 0 0 1 1-1.73l.43-.25a2 2 0 0 1 2 0l.15.08a2 2 0 0 0 2.73-.73l.22-.39a2 2 0 0 0-.73-2.73l-.15-.08a2 2 0 0 1-1-1.74v-.5a2 2 0 0 1 1-1.74l.15-.09a2 2 0 0 0 .73-2.73l-.22-.38a2 2 0 0 0-2.73-.73l-.15.08a2 2 0 0 1-2 0l-.43-.25a2 2 0 0 1-1-1.73V4a2 2 0 0 0-2-2z"
                   ></path>
-                  <path d="M12 9v4"></path>
-                  <path d="M12 17h.01"></path>
+                  <circle cx="12" cy="12" r="3"></circle>
                 </svg>
               </button>
-            {/if}
-            {#if onNavigateToSource && currentCard && !isDirectoryDeckPath(currentCard.sourceFile)}
-              <button
-                class="decks-go-to-file-button decks-icon-btn clickable-icon"
-                on:click={handleNavigateToSource}
-                aria-label={r.openSourceFile}
-                type="button"
-                tabindex="-1"
-              >
-                <svg
-                  xmlns="http://www.w3.org/2000/svg"
-                  width="12"
-                  height="12"
-                  viewBox="0 0 24 24"
-                  fill="none"
-                  stroke="currentColor"
-                  stroke-width="2"
-                  stroke-linecap="round"
-                  stroke-linejoin="round"
-                >
-                  <path
-                    d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"
-                  ></path>
-                  <polyline points="15 3 21 3 21 9"></polyline>
-                  <line x1="10" y1="14" x2="21" y2="3"></line>
-                </svg>
-              </button>
-            {/if}
-            {#if ttsAvailable && currentCard}
-              <button
-                class="decks-tts-button decks-icon-btn clickable-icon"
-                class:decks-tts-active={isSpeaking}
-                on:click={handleToggleSpeak}
-                aria-label={isSpeaking ? r.stopAudio : r.playAudio}
-                type="button"
-                tabindex="-1"
-              >
-                {#if isSpeaking}
-                  <svg
-                    xmlns="http://www.w3.org/2000/svg"
-                    width="12"
-                    height="12"
-                    viewBox="0 0 24 24"
-                    fill="currentColor"
-                    stroke="currentColor"
-                    stroke-width="2"
-                    stroke-linecap="round"
-                    stroke-linejoin="round"
-                  >
-                    <rect x="6" y="6" width="12" height="12" rx="1"></rect>
-                  </svg>
-                {:else}
-                  <svg
-                    xmlns="http://www.w3.org/2000/svg"
-                    width="12"
-                    height="12"
-                    viewBox="0 0 24 24"
-                    fill="none"
-                    stroke="currentColor"
-                    stroke-width="2"
-                    stroke-linecap="round"
-                    stroke-linejoin="round"
-                  >
-                    <polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5"></polygon>
-                    <path d="M15.54 8.46a5 5 0 0 1 0 7.07"></path>
-                    <path d="M19.07 4.93a10 10 0 0 1 0 14.14"></path>
-                  </svg>
-                {/if}
-              </button>
-            {/if}
-            {#if currentCard}
-              <button
-                class="decks-scratchpad-button decks-icon-btn clickable-icon"
-                class:decks-scratchpad-active={showScratchpad}
-                on:click={toggleScratchpad}
-                title={r.scratchpad}
-                aria-label={r.scratchpad}
-                type="button"
-                tabindex="-1"
-              >
-                <svg
-                  xmlns="http://www.w3.org/2000/svg"
-                  width="12"
-                  height="12"
-                  viewBox="0 0 24 24"
-                  fill="none"
-                  stroke="currentColor"
-                  stroke-width="2"
-                  stroke-linecap="round"
-                  stroke-linejoin="round"
-                >
-                  <path d="M12 20h9"></path>
-                  <path d="M16.5 3.5a2.121 2.121 0 0 1 3 3L7 19l-4 1 1-4 12.5-12.5z"></path>
-                </svg>
-              </button>
-            {/if}
-            {#if onCardStateAction && currentCard}
-              <div
-                class="decks-card-actions-menu"
-                bind:this={actionsMenuEl}
-              >
-                <button
-                  class="decks-card-actions-trigger decks-icon-btn clickable-icon"
-                  on:click|stopPropagation={toggleActionsMenu}
-                  aria-label={r.cardActions}
-                  aria-haspopup="menu"
-                  aria-expanded={actionsMenuOpen}
-                  type="button"
-                  tabindex="-1"
-                >
-                  <svg
-                    xmlns="http://www.w3.org/2000/svg"
-                    width="14"
-                    height="14"
-                    viewBox="0 0 24 24"
-                    fill="none"
-                    stroke="currentColor"
-                    stroke-width="2"
-                    stroke-linecap="round"
-                    stroke-linejoin="round"
-                  >
-                    <circle cx="12" cy="5" r="1.5"></circle>
-                    <circle cx="12" cy="12" r="1.5"></circle>
-                    <circle cx="12" cy="19" r="1.5"></circle>
-                  </svg>
-                </button>
-                {#if actionsMenuOpen}
-                  <div class="decks-card-actions-dropdown" role="menu" tabindex="-1">
+              {#if actionsMenuOpen}
+                <div class="decks-card-actions-dropdown" role="menu" tabindex="-1">
+                  {#if onNavigateToSource && currentCard && !isDirectoryDeckPath(currentCard.sourceFile)}
                     <button
                       class="decks-card-actions-item"
-                      on:click={() => handleCardAction("bury")}
+                      on:click={() => runCardTool(handleNavigateToSource)}
                       role="menuitem"
                       type="button"
                     >
-                      <span>{r.bury}</span>
-                      <kbd>B</kbd>
+                      <span>{r.openSourceFile}</span>
                     </button>
+                  {/if}
+                  {#if ttsAvailable}
                     <button
                       class="decks-card-actions-item"
-                      on:click={() => handleCardAction("suspend")}
+                      on:click={() => runCardTool(handleToggleSpeak)}
                       role="menuitem"
                       type="button"
                     >
-                      <span>{r.suspend}</span>
-                      <kbd>S</kbd>
+                      <span>{isSpeaking ? r.stopAudio : r.playAudio}</span>
                     </button>
+                  {/if}
+                  <button
+                    class="decks-card-actions-item"
+                    on:click={() => runCardTool(toggleScratchpad)}
+                    role="menuitem"
+                    type="button"
+                  >
+                    <span>{r.scratchpad}</span>
+                  </button>
+                  {#if copyVisible}
                     <button
-                      class="decks-card-actions-item decks-card-actions-danger"
-                      on:click={() => handleCardAction("reset")}
+                      class="decks-card-actions-item"
+                      on:click={() => runCardTool(handleCopyBack)}
                       role="menuitem"
                       type="button"
                     >
-                      <span>{r.reset}</span>
-                      <kbd>R</kbd>
+                      <span>{r.copyContent}</span>
                     </button>
-                  </div>
-                {/if}
-              </div>
-            {/if}
+                  {/if}
+                  {#if onCardStateAction}
+                    <div class="decks-card-actions-divider" role="separator"></div>
+                  <button
+                    class="decks-card-actions-item"
+                    on:click={() => handleCardAction("bury")}
+                    role="menuitem"
+                    type="button"
+                  >
+                    <span>{r.bury}</span>
+                    <kbd>B</kbd>
+                  </button>
+                  <button
+                    class="decks-card-actions-item"
+                    on:click={() => handleCardAction("suspend")}
+                    role="menuitem"
+                    type="button"
+                  >
+                    <span>{r.suspend}</span>
+                    <kbd>S</kbd>
+                  </button>
+                  <button
+                    class="decks-card-actions-item decks-card-actions-danger"
+                    on:click={() => handleCardAction("reset")}
+                    role="menuitem"
+                    type="button"
+                  >
+                    <span>{r.reset}</span>
+                    <kbd>R</kbd>
+                  </button>
+                  {/if}
+                </div>
+              {/if}
+            </div>
           </div>
       {/snippet}
       {#snippet notesButton()}
@@ -1955,8 +1903,8 @@
           >
             <svg
               xmlns="http://www.w3.org/2000/svg"
-              width="12"
-              height="12"
+              width="16"
+              height="16"
               viewBox="0 0 24 24"
               fill="none"
               stroke="currentColor"
@@ -1971,92 +1919,64 @@
           </button>
         {/if}
       {/snippet}
-      <div class="decks-question-section">
-        {#if frontIsHtml}
-          <div class="decks-card-shell">
-            <div class="decks-template-layer decks-front" bind:this={frontEl}></div>
-            <div class="decks-controls-layer">{@render frontControls()}</div>
-          </div>
-        {:else}
-          <div class="decks-front-wrapper">
-            {@render frontControls()}
-            <div class="decks-card-side decks-front">
-              <!-- svelte-ignore a11y-click-events-have-key-events a11y-no-static-element-interactions -->
-              <div
-                class="decks-card-text markdown-rendered"
-                bind:this={frontEl}
-                on:click={handleClozeBlankClick}
-              ></div>
-            </div>
-            <!-- Front-only cloze: surface the Extra's Notes button on the front card
-                 itself (like the back card's button) once the cloze is revealed. -->
-            {#if frontOnlyClozeCard && showAnswer}
-              {@render notesButton()}
-            {/if}
-          </div>
-        {/if}
-        {#if isMultipleChoice && mcqItems.length > 0}
-          <div class="decks-review-mcq">
-            {#key mcqCardId}
-              {#if mcqShared}
-                <div class="decks-review-shared-text decks-card-text markdown-rendered" use:mcqRenderInto={mcqShared}></div>
-              {/if}
-              {#each mcqItems as item, itemIndex}
-                {#if item.stem}
-                  <div class="decks-card-text markdown-rendered" class:decks-review-mcq-stem={mcqItems.length > 1} use:mcqRenderInto={item.stem}></div>
-                {/if}
-                {#if item.kind === "choice"}
-                  {#each item.order as fileIndex, displayPosition (`${mcqCardId}:${itemIndex}:${fileIndex}`)}
-                    <button
-                      class="decks-exam-option {mcqOptionState(itemIndex, fileIndex, mcqSelected, showAnswer)}"
-                      type="button"
-                      on:click={() => toggleMcqOption(itemIndex, fileIndex)}
-                    >
-                      <span class="decks-exam-option-prefix">{displayPosition + 1})</span>
-                      <span
-                        class="decks-exam-option-text markdown-rendered"
-                        use:mcqRenderInto={item.options[fileIndex].text}
-                      ></span>
-                    </button>
-                  {/each}
-                {:else if item.kind === "cloze"}
-                  {#key showAnswer}
-                    <div class="decks-review-exercise-answer decks-card-text markdown-rendered" use:mcqRenderInto={clozeShown(item.text, showAnswer)}></div>
-                  {/key}
-                {:else if showAnswer}
-                  <div class="decks-review-exercise-answer decks-card-text markdown-rendered" use:mcqRenderInto={item.text}></div>
-                {/if}
-                {#if showAnswer && item.notes}
-                  <div class="decks-review-mcq-note decks-card-text markdown-rendered" use:mcqRenderInto={item.notes}></div>
+      {#snippet cardMeta()}
+        {#if currentCard}
+          {@const breadcrumbParts = getBreadcrumbParts(currentCard)}
+          {#if breadcrumbParts.length > 0}
+            <div class="decks-breadcrumb">
+              {#each breadcrumbParts as part, i}
+                {#if i > 0}<span class="decks-breadcrumb-sep">&nbsp;›&nbsp;</span
+                  >{/if}
+                {#if collapsedBreadcrumbIndices.has(i)}
+                  <span
+                    class="decks-breadcrumb-collapsed"
+                    role="button"
+                    tabindex="-1"
+                    on:click={() => toggleBreadcrumbIndex(i)}
+                    on:keydown={(e) => {
+                      if (e.key === "Enter" || e.key === " ")
+                        toggleBreadcrumbIndex(i);
+                    }}>...</span
+                  >
+                {:else}
+                  <span
+                    class="decks-breadcrumb-expanded"
+                    role="button"
+                    tabindex="-1"
+                    on:click={() => toggleBreadcrumbIndex(i)}
+                    on:keydown={(e) => {
+                      if (e.key === "Enter" || e.key === " ")
+                        toggleBreadcrumbIndex(i);
+                    }}>{part}</span
+                  >
                 {/if}
               {/each}
-            {/key}
-          </div>
+            </div>
+          {/if}
         {/if}
-      </div>
-
-      {#if currentCard?.hint && currentCard.hint.length > 0}
-        <div class="decks-card-edge">
-          <span class="decks-card-edge-line"></span>
-          <span class="decks-card-edge-chip" aria-label={currentCard.hint}>{currentCard.hint}</span>
-          <span class="decks-card-edge-line"></span>
-        </div>
-      {:else if showAnswer && !(!!currentCard && isOcclusionV2(currentCard) && !currentV2Answered) && !(frontOnlyClozeCard && !showNotes)}
-        <div class="decks-separator"></div>
-      {/if}
-      <div class="decks-answer-section" class:hidden={answerSectionHidden}>
-        {#snippet backTopControls()}
-          {#if currentCard}
+      {/snippet}
+      {#snippet footMeta()}
+        {#if currentCard}
+          {@const clozeLabel = isClozeType(currentCard.type) && clozeGroupTotal > 0}
+          {@const healthLabel = cardHealth?.isLeech && cardHealth.isDense
+            ? r.cardLeechAndDense
+            : cardHealth?.isLeech
+              ? r.cardLeech
+              : cardHealth?.isDense
+                ? r.cardDense
+                : ""}
+          {#if healthLabel}
             <button
-              class="decks-copy-button decks-icon-btn clickable-icon"
-              on:click={handleCopyBack}
-              title={r.copyContent}
+              class="clickable-icon decks-warning-icon decks-icon-btn"
               type="button"
+              tabindex="-1"
+              aria-label={healthLabel}
+              title={healthLabel}
             >
               <svg
                 xmlns="http://www.w3.org/2000/svg"
-                width="12"
-                height="12"
+                width="14"
+                height="14"
                 viewBox="0 0 24 24"
                 fill="none"
                 stroke="currentColor"
@@ -2064,50 +1984,162 @@
                 stroke-linecap="round"
                 stroke-linejoin="round"
               >
-                <rect x="9" y="9" width="13" height="13" rx="2" ry="2"></rect>
                 <path
-                  d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"
+                  d="m21.73 18-8-14a2 2 0 0 0-3.48 0l-8 14A2 2 0 0 0 4 21h16a2 2 0 0 0 1.73-3Z"
                 ></path>
+                <path d="M12 9v4"></path>
+                <path d="M12 17h.01"></path>
               </svg>
             </button>
           {/if}
-        {/snippet}
-        {#if !frontOnlyClozeCard && !isMultipleChoice}
-          {#if backIsHtml}
-            <div class="decks-card-shell">
-              <div class="decks-template-layer decks-back" bind:this={backEl}></div>
-              <div class="decks-controls-layer">
-                {@render backTopControls()}
-                {@render notesButton()}
+          {#if clozeLabel}
+            <span class="decks-cloze-indicator"
+              >Cloze {clozeOrderRange(activeOrders.length > 0 ? activeOrders : [currentCard.clozeOrder ?? clozeGroupIndex])}/{clozeGroupTotal}</span
+            >
+          {/if}
+          {#each currentCard.tags ?? [] as t}
+            <span class="decks-card-tag-chip">#{t}</span>
+          {/each}
+        {/if}
+      {/snippet}
+      <div class="decks-review-card">
+        <div class="decks-review-card-bar">
+          <div class="decks-review-card-meta">{@render cardMeta()}</div>
+          {@render cardTools()}
+        </div>
+        <div
+          class="decks-review-card-stack"
+          class:decks-answer-left-out={answerPending && pendingOut}
+        >
+          <div class="decks-question-section">
+            {#if frontIsHtml}
+              <div class="decks-card-shell">
+                <div class="decks-template-layer decks-front" bind:this={frontEl}></div>
               </div>
-            </div>
-          {:else}
-            <div class="decks-back-wrapper">
-              {@render backTopControls()}
-              <div class="decks-card-side decks-back">
+            {:else}
+              <div class="decks-card-side decks-front">
                 <!-- svelte-ignore a11y-click-events-have-key-events a11y-no-static-element-interactions -->
                 <div
                   class="decks-card-text markdown-rendered"
-                  bind:this={backEl}
+                  bind:this={frontEl}
                   on:click={handleClozeBlankClick}
                 ></div>
               </div>
-              {@render notesButton()}
-            </div>
-          {/if}
-        {/if}
-        {#if showNotes && hasNotes}
-          {#if notesIsHtml}
-            <div class="decks-card-shell decks-notes-shell">
-              <div class="decks-template-layer decks-notes" bind:this={notesEl}></div>
-            </div>
-          {:else}
-            <div class="decks-notes-wrapper">
-              <div class="decks-card-side decks-notes">
-                <div class="decks-card-text markdown-rendered" bind:this={notesEl}></div>
+            {/if}
+            {#if isMultipleChoice && mcqItems.length > 0}
+              <div class="decks-review-mcq">
+                {#key mcqCardId}
+                  {#if mcqShared}
+                    <div class="decks-review-shared-text decks-card-text markdown-rendered" use:mcqRenderInto={mcqShared}></div>
+                  {/if}
+                  {#each mcqItems as item, itemIndex}
+                    {#if item.stem}
+                      <div class="decks-card-text markdown-rendered" class:decks-review-mcq-stem={mcqItems.length > 1} use:mcqRenderInto={item.stem}></div>
+                    {/if}
+                    {#if item.kind === "choice"}
+                      {#each item.order as fileIndex, displayPosition (`${mcqCardId}:${itemIndex}:${fileIndex}`)}
+                        <button
+                          class="decks-exam-option {mcqOptionState(itemIndex, fileIndex, mcqSelected, showAnswer)}"
+                          type="button"
+                          on:click={() => toggleMcqOption(itemIndex, fileIndex)}
+                        >
+                          <span class="decks-exam-option-prefix">{displayPosition + 1})</span>
+                          <span
+                            class="decks-exam-option-text markdown-rendered"
+                            use:mcqRenderInto={item.options[fileIndex].text}
+                          ></span>
+                        </button>
+                      {/each}
+                    {:else if item.kind === "cloze"}
+                      {#key showAnswer}
+                        <div class="decks-review-exercise-answer decks-card-text markdown-rendered" use:mcqRenderInto={clozeShown(item.text, showAnswer)}></div>
+                      {/key}
+                    {:else if showAnswer}
+                      <div class="decks-review-exercise-answer decks-card-text markdown-rendered" use:mcqRenderInto={item.text}></div>
+                    {/if}
+                    {#if showAnswer && item.notes}
+                      <div class="decks-review-mcq-note decks-card-text markdown-rendered" use:mcqRenderInto={item.notes}></div>
+                    {/if}
+                  {/each}
+                {/key}
               </div>
+            {/if}
+          </div>
+
+          {#if currentCard?.hint && currentCard.hint.length > 0}
+            <div class="decks-card-edge">
+              <span class="decks-card-edge-line"></span>
+              <span class="decks-card-edge-chip" aria-label={currentCard.hint}>{currentCard.hint}</span>
+              <span class="decks-card-edge-line"></span>
             </div>
+          {:else if !answerAbsent}
+            <div
+              class="decks-separator"
+              class:decks-separator-pending={answerPending}
+              class:decks-separator-rule={showAnswer}
+            ></div>
           {/if}
+          <div
+            class="decks-answer-section"
+            class:hidden={answerAbsent}
+            class:decks-answer-pending={answerPending}
+          >
+            {#if !frontOnlyClozeCard && !isMultipleChoice}
+              {#if backIsHtml}
+                <div class="decks-card-shell">
+                  <div class="decks-template-layer decks-back" bind:this={backEl}></div>
+                </div>
+              {:else}
+                <div class="decks-card-side decks-back">
+                  <!-- svelte-ignore a11y-click-events-have-key-events a11y-no-static-element-interactions -->
+                  <div
+                    class="decks-card-text markdown-rendered"
+                    bind:this={backEl}
+                    on:click={handleClozeBlankClick}
+                  ></div>
+                </div>
+              {/if}
+            {/if}
+          </div>
+        </div>
+        <div class="decks-review-card-foot">
+          <div class="decks-review-card-details">{@render footMeta()}</div>
+          {#if notesToggleVisible}
+            {@render notesButton()}
+          {/if}
+        </div>
+        {#if showNotes && hasNotes}
+          <div class="decks-notes-panel" role="dialog" aria-label={t.exam.notes}>
+            <div class="decks-notes-panel-head">
+              <span class="decks-notes-panel-label">{t.exam.notes}</span>
+              <button
+                class="decks-notes-panel-close decks-icon-btn clickable-icon"
+                type="button"
+                aria-label={r.close}
+                on:click={toggleNotes}
+              >
+                <svg
+                  xmlns="http://www.w3.org/2000/svg"
+                  width="14"
+                  height="14"
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="currentColor"
+                  stroke-width="2"
+                  stroke-linecap="round"
+                  stroke-linejoin="round"
+                >
+                  <line x1="18" y1="6" x2="6" y2="18"></line>
+                  <line x1="6" y1="6" x2="18" y2="18"></line>
+                </svg>
+              </button>
+            </div>
+            {#if notesIsHtml}
+              <div class="decks-template-layer decks-notes" bind:this={notesEl}></div>
+            {:else}
+              <div class="decks-card-text decks-notes markdown-rendered" bind:this={notesEl}></div>
+            {/if}
+          </div>
         {/if}
       </div>
     </div>
@@ -2274,6 +2306,9 @@
 
 <style>
   .decks-review-modal {
+    container: decks-review / inline-size;
+    --decks-review-gutter: 20px;
+    --decks-review-column: 720px;
     display: flex;
     flex-direction: column;
     height: 100%;
@@ -2291,21 +2326,12 @@
 
   :global(.modal) .decks-action-buttons {
     padding-bottom: 20px;
-    padding-left: 0;
-    padding-right: 0;
   }
 
   .decks-breadcrumb {
     font-size: var(--font-ui-smaller);
     color: var(--text-muted);
     text-decoration: none;
-  }
-
-  .decks-card-tags {
-    display: flex;
-    flex-wrap: wrap;
-    gap: 4px;
-    margin-top: 4px;
   }
 
   .decks-card-tag-chip {
@@ -2352,12 +2378,15 @@
   }
 
   .decks-card-utilities {
-    position: absolute;
-    top: 4px;
-    right: 4px;
-    z-index: 10;
+    grid-column: 3;
+    justify-self: end;
     display: flex;
+    align-items: center;
     gap: 4px;
+  }
+
+  .decks-review-card-details .decks-warning-icon {
+    color: var(--text-warning);
   }
 
   .decks-warning-icon {
@@ -2414,11 +2443,16 @@
     color: var(--text-normal);
   }
 
+  /* Header, progress line, card and buttons share one column, so their edges line up at any width. */
   .decks-modal-header {
     display: flex;
     flex-direction: column;
     gap: 8px;
-    padding: 16px 20px;
+    width: 100%;
+    max-width: calc(var(--decks-review-column) + 2 * var(--decks-review-gutter));
+    margin-inline: auto;
+    box-sizing: border-box;
+    padding: 16px var(--decks-review-gutter) 12px;
     border-bottom: 1px solid var(--background-modifier-border);
   }
 
@@ -2430,6 +2464,7 @@
 
   .decks-modal-header h3 {
     margin: 0;
+    min-width: 0;
     display: flex;
     align-items: baseline;
     flex-wrap: wrap;
@@ -2437,6 +2472,21 @@
     font-size: 18px;
     font-weight: 600;
     color: var(--text-normal);
+    overflow-wrap: anywhere;
+  }
+
+  .decks-review-mode {
+    padding: 0 6px;
+    border: 1px solid var(--background-modifier-border);
+    border-radius: var(--radius-s);
+    color: var(--text-muted);
+    font-size: var(--font-ui-smaller);
+    font-weight: 500;
+  }
+
+  /* The progress track is the header's edge, so the border would draw it twice. */
+  .decks-modal-header:has(+ :is(.decks-review-progress-bar, .decks-browse-scrubber)) {
+    border-bottom: none;
   }
 
   .decks-header-stats {
@@ -2445,41 +2495,39 @@
     justify-content: space-between;
     flex-wrap: wrap;
     gap: 12px;
+    min-height: 24px;
   }
 
   .decks-progress-info {
     display: flex;
-    gap: 8px;
-    font-size: 14px;
-  }
-
-  .decks-timer-display {
-    display: flex;
-    align-items: center;
+    align-items: baseline;
+    flex-wrap: wrap;
     gap: 6px;
-    font-size: 14px;
+    font-size: var(--font-ui-small);
+    color: var(--text-muted);
+    font-variant-numeric: tabular-nums;
   }
 
-  .decks-timer-label {
-    color: var(--text-muted);
+  .decks-session-sep {
+    color: var(--text-faint);
   }
 
   .decks-timer-value {
-    font-weight: 600;
-    color: var(--text-normal);
-    font-family: monospace;
+    white-space: nowrap;
   }
 
   .decks-timer-value.decks-timer-warning {
     color: var(--text-error);
   }
 
-  .decks-remaining {
-    color: var(--text-muted);
-  }
-
   .decks-review-progress-bar {
-    height: 4px;
+    flex: none;
+    width: calc(100% - 2 * var(--decks-review-gutter));
+    max-width: var(--decks-review-column);
+    height: 3px;
+    margin: 0 auto;
+    border-radius: 2px;
+    overflow: hidden;
     background: var(--background-modifier-border);
     position: relative;
   }
@@ -2491,28 +2539,156 @@
   }
 
   .decks-card-content {
-    /* The floating controls (undo and copy at the top, notes at the bottom) are
-       24px tall at a 4px inset, so they occupy the outer 28px of a face. The
-       reserve adds 8px on top of that, because content that stops exactly at
-       the button's edge still reads as touching it. */
-    --decks-card-reserve: 36px;
-    /* Enough for one line between those two reserved rows, and no more. `1.5em`
-       resolves against the face's own font size, so the floor tracks the
-       responsive type scale instead of being restated per breakpoint. */
-    --decks-card-min-h: calc(var(--decks-card-reserve) * 2 + 1.5em);
-
     flex: 1;
     overflow-y: auto;
     overflow-x: hidden;
-    padding: 32px 16px;
+    padding: 16px var(--decks-review-gutter) 4px;
     display: flex;
     flex-direction: column;
     align-items: center;
-    justify-content: flex-start;
-    gap: 24px;
     width: 100%;
     box-sizing: border-box;
     min-height: 0;
+  }
+
+  .decks-review-card {
+    position: relative;
+    flex: 1 0 auto;
+    display: flex;
+    flex-direction: column;
+    width: 100%;
+    max-width: var(--decks-review-column);
+    box-sizing: border-box;
+    background: var(--background-primary);
+    border: 1px solid var(--background-modifier-border);
+    border-radius: 12px;
+    box-shadow: 0 4px 16px rgba(0, 0, 0, 0.05);
+  }
+
+  /* Equal side columns keep the breadcrumb centred whatever sits beside it. */
+  .decks-review-card-bar {
+    display: grid;
+    grid-template-columns: 56px minmax(0, 1fr) 56px;
+    align-items: start;
+    gap: 8px;
+    min-height: 32px;
+    padding: 8px 8px 0;
+  }
+
+  .decks-review-card-meta {
+    grid-column: 2;
+    min-width: 0;
+    padding-top: 4px;
+    text-align: center;
+  }
+
+  /* The foot mirrors the top row, so short cards sit in the true middle. */
+  .decks-review-card-foot {
+    display: flex;
+    justify-content: space-between;
+    align-items: flex-end;
+    gap: 8px;
+    min-height: 32px;
+    padding: 0 8px 8px 16px;
+  }
+
+  .decks-review-card-details {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 4px 8px;
+    min-width: 0;
+    min-height: 24px;
+  }
+
+  /* Notes float over the card's lower corner, so the card keeps its size whether they show or not. */
+  .decks-notes-panel {
+    position: absolute;
+    right: 8px;
+    bottom: 40px;
+    z-index: 20;
+    width: min(360px, calc(100% - 16px));
+    max-height: calc(100% - 96px);
+    overflow-y: auto;
+    box-sizing: border-box;
+    padding: 10px 14px 14px;
+    background: var(--background-primary);
+    border: 1px solid var(--background-modifier-border);
+    border-radius: 12px;
+    box-shadow: var(--shadow-l, 0 8px 24px rgba(0, 0, 0, 0.12));
+    font-size: var(--font-ui-small);
+    line-height: 1.5;
+  }
+
+  .decks-notes-panel-head {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    margin-bottom: 6px;
+  }
+
+  .decks-notes-panel-label {
+    color: var(--text-muted);
+    font-size: var(--font-ui-smaller);
+    font-weight: 600;
+  }
+
+  .decks-notes-panel-close {
+    width: 24px !important;
+    height: 24px !important;
+    min-width: 0 !important;
+    min-height: 0 !important;
+    padding: 0 !important;
+    color: var(--text-muted);
+  }
+
+  .decks-notes-panel .decks-card-text {
+    width: auto;
+    -webkit-user-select: text;
+    user-select: text;
+  }
+
+  .decks-notes-panel .decks-card-text :global(:is(pre, table, .MathJax, mjx-container)) {
+    max-width: 100%;
+    overflow-x: auto;
+  }
+
+  .decks-notes-panel .decks-card-text :global(img) {
+    max-width: 100%;
+  }
+
+  .decks-notes-panel .decks-card-text > :global(:first-child) {
+    margin-top: 0;
+  }
+
+  .decks-notes-panel .decks-card-text > :global(:last-child) {
+    margin-bottom: 0;
+  }
+
+  /* Auto margins centre short content in the card; long content starts at the top and scrolls. */
+  .decks-review-card-stack {
+    flex: none;
+    margin-block: auto;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 24px;
+    width: 100%;
+    box-sizing: border-box;
+    padding: 12px 32px;
+  }
+
+  .decks-card-side.decks-front .decks-card-text {
+    max-width: min(100%, 46ch);
+  }
+
+  .decks-card-side.decks-back .decks-card-text {
+    max-width: min(100%, 66ch);
+    text-wrap: pretty;
+  }
+
+  .decks-card-side .decks-card-text:has(:global(:is(img, table, pre, canvas, video, iframe))) {
+    max-width: 100%;
   }
 
   .decks-answer-section {
@@ -2529,20 +2705,9 @@
     flex-direction: column;
     align-items: center;
   }
-
-  /* Markdown / fallback face — shares the physical look of .decks-card-shell so
-     HTML-template and markdown faces read as a cohesive set. */
+  /* A face is a region of the card, so it draws no frame of its own. */
   .decks-card-side {
-    background: var(--background-primary);
-    border: 1px solid var(--background-modifier-border);
-    border-radius: 12px;
-    box-shadow: 0 4px 16px rgba(0, 0, 0, 0.05);
-    /* Vertical padding is the reserve, so content clears the floating controls
-       by the same 8px at every breakpoint; horizontal stays 2rem. */
-    padding: var(--decks-card-reserve) 2rem;
-    min-height: var(--decks-card-min-h, 96px);
     width: 100%;
-    max-width: 900px;
     box-sizing: border-box;
     display: flex;
     flex-direction: column;
@@ -2561,28 +2726,12 @@
     max-width: 100%;
   }
 
-  .decks-front-wrapper,
-  .decks-back-wrapper {
-    position: relative;
-    width: 100%;
-    max-width: 900px;
-  }
-
-  /* Physical card shell — HTML-template sides only. The plugin enforces the
-     card frame (border, background, shadow, rounded corners); the in-flow
-     template layer fills it and the controls layer floats on top without
-     blocking selection/clicks in the template. */
+  /* Holds an HTML-template face inside the card; the template draws what it needs. */
   .decks-card-shell {
     position: relative;
     display: flex;
     width: 100%;
-    max-width: 900px;
-    min-height: var(--decks-card-min-h, 96px);
-    border-radius: 12px;
     overflow: hidden;
-    border: 1px solid var(--background-modifier-border);
-    background-color: var(--background-primary);
-    box-shadow: 0 4px 16px rgba(0, 0, 0, 0.05);
   }
 
   /* In-flow layer: fills the shell and holds the Shadow DOM host. */
@@ -2594,50 +2743,38 @@
     min-width: 0;
   }
 
-  /* Overlay layer anchored exactly to the shell; never blocks the template. */
-  .decks-controls-layer {
-    position: absolute;
-    inset: 0;
-    z-index: 10;
-    pointer-events: none;
-  }
-
-  .decks-controls-layer .decks-undo-button,
-  .decks-controls-layer .decks-copy-button,
-  .decks-controls-layer .decks-notes-button,
-  .decks-controls-layer .decks-card-utilities,
-  .decks-controls-layer .decks-card-actions-menu,
-  .decks-controls-layer .decks-card-actions-dropdown {
-    pointer-events: auto;
-  }
-
-  /* Frosted-glass treatment so floating controls stay readable over any
-     template background (template cards only — scoped to the controls layer). */
-  .decks-controls-layer .decks-icon-btn {
-    pointer-events: auto;
-    color: var(--text-normal);
-    background-color: var(--background-modifier-form-field);
-    backdrop-filter: blur(4px);
-    -webkit-backdrop-filter: blur(4px);
-    border-radius: 6px;
-  }
-
   .decks-card-side.decks-front {
     text-align: center;
-    font-size: 20px;
+    text-wrap: balance;
+    font-size: var(--decks-fit-front);
+    line-height: 1.35;
     font-weight: 500;
   }
 
   .decks-card-side.decks-back {
-    font-size: 16px;
+    font-size: var(--decks-fit-back);
     line-height: 1.6;
   }
 
+  /* Steps 1 to 3 enlarge text that has room; step 4 is the base size. */
+  .decks-review-card {
+    --decks-fit-front: 20px;
+    --decks-fit-back: 16px;
+  }
+  .decks-review-card:global([data-fit="1"]) {
+    --decks-fit-front: 32px;
+    --decks-fit-back: 22px;
+  }
+  .decks-review-card:global([data-fit="2"]) {
+    --decks-fit-front: 27px;
+    --decks-fit-back: 19px;
+  }
+  .decks-review-card:global([data-fit="3"]) {
+    --decks-fit-front: 23px;
+    --decks-fit-back: 17px;
+  }
+
   .decks-notes-button {
-    position: absolute;
-    bottom: 4px;
-    right: 4px;
-    z-index: 10;
     width: 24px !important;
     height: 24px !important;
     min-width: 0 !important;
@@ -2646,57 +2783,6 @@
   }
 
   .decks-notes-button.decks-notes-active {
-    color: var(--interactive-accent);
-  }
-
-  .decks-notes-wrapper {
-    width: 100%;
-    max-width: 900px;
-    margin-top: 8px;
-  }
-
-  .decks-card-side.decks-notes {
-    font-size: 14px;
-    line-height: 1.5;
-    color: var(--text-muted);
-    /* Notes keeps the white chrome but hugs its content (no 250px floor) and
-       stays a left-aligned, top annotation rather than centered. */
-    min-height: 0;
-    justify-content: flex-start;
-    align-items: flex-start;
-  }
-
-  .decks-go-to-file-button {
-    width: 24px !important;
-    height: 24px !important;
-    min-width: 0 !important;
-    min-height: 0 !important;
-    padding: 0 !important;
-  }
-
-  .decks-tts-button {
-    width: 24px !important;
-    height: 24px !important;
-    min-width: 0 !important;
-    min-height: 0 !important;
-    padding: 0 !important;
-    color: var(--text-muted);
-  }
-
-  .decks-tts-button.decks-tts-active {
-    color: var(--interactive-accent);
-  }
-
-  .decks-scratchpad-button {
-    width: 24px !important;
-    height: 24px !important;
-    min-width: 0 !important;
-    min-height: 0 !important;
-    padding: 0 !important;
-    color: var(--text-muted);
-  }
-
-  .decks-scratchpad-button.decks-scratchpad-active {
     color: var(--interactive-accent);
   }
 
@@ -2720,6 +2806,16 @@
   }
   .decks-card-actions-trigger:hover {
     color: var(--text-normal);
+  }
+
+  .decks-card-actions-trigger.decks-card-actions-live {
+    color: var(--interactive-accent);
+  }
+
+  .decks-card-actions-divider {
+    height: 1px;
+    margin: 4px 0;
+    background: var(--background-modifier-border);
   }
 
   .decks-card-actions-dropdown {
@@ -2768,23 +2864,8 @@
     color: var(--text-muted);
   }
 
-  .decks-copy-button {
-    position: absolute;
-    top: 4px;
-    right: 4px;
-    z-index: 10;
-    width: 24px !important;
-    height: 24px !important;
-    min-width: 0 !important;
-    min-height: 0 !important;
-    padding: 0 !important;
-  }
-
   .decks-undo-button {
-    position: absolute;
-    top: 4px;
-    left: 4px;
-    z-index: 10;
+    color: var(--text-muted);
     width: 24px !important;
     height: 24px !important;
     min-width: 0 !important;
@@ -2805,11 +2886,28 @@
   }
 
   .decks-separator {
+    flex: none;
     height: 1px;
-    background: var(--background-modifier-border-hover);
-    margin: 0 auto;
     width: 100%;
-    max-width: 600px;
+    background: var(--background-modifier-border-hover);
+  }
+
+  /* Once the answer shows, the line is the card's rule; the margin gives back its second pixel. */
+  .decks-separator.decks-separator-rule {
+    height: 2px;
+    margin-bottom: -1px;
+    border-radius: 1px;
+    background: var(--interactive-accent);
+  }
+
+  .decks-separator-pending,
+  .decks-answer-pending {
+    visibility: hidden;
+  }
+
+  .decks-answer-left-out > .decks-separator,
+  .decks-answer-left-out > .decks-answer-section {
+    display: none;
   }
 
   /* A card that keeps being missed, offering the two things that help: the
@@ -2820,7 +2918,8 @@
     gap: 8px;
     flex-wrap: wrap;
     width: 100%;
-    margin-bottom: 8px;
+    max-width: var(--decks-review-column);
+    margin: 0 auto 8px;
     padding: 4px 8px;
     box-sizing: border-box;
     border-radius: var(--radius-s);
@@ -2841,9 +2940,10 @@
     height: auto;
   }
 
+  /* Show answer and the rating row share one height, so the card above keeps its size on reveal. */
   .decks-action-buttons {
-    padding: 20px;
-    border-top: 1px solid var(--background-modifier-border);
+    --decks-action-row: 48px;
+    padding: 16px var(--decks-review-gutter) 20px;
     flex-shrink: 0;
     width: 100%;
     box-sizing: border-box;
@@ -2851,10 +2951,10 @@
 
   .decks-show-answer-button {
     width: 100%;
-    max-width: 400px;
+    max-width: var(--decks-review-column);
     margin: 0 auto;
     padding: 12px 24px;
-    min-height: 44px;
+    min-height: var(--decks-action-row);
     min-width: 44px;
     font-size: 16px;
     font-weight: 500;
@@ -2898,12 +2998,13 @@
 
   .decks-difficulty-buttons {
     display: flex;
+    align-items: center;
+    min-height: var(--decks-action-row);
     flex-wrap: nowrap;
     gap: 8px;
-    padding: 0 10px;
     box-sizing: border-box;
     width: 100%;
-    max-width: 600px;
+    max-width: var(--decks-review-column);
     margin: 0 auto;
   }
 
@@ -2997,37 +3098,94 @@
     display: none;
   }
 
-  .decks-browse-slider {
-    display: flex;
-    align-items: center;
-    gap: 12px;
-    width: 100%;
+  /* In browse the progress line is a scrubber: click or drag it to jump to a card. */
+  .decks-browse-scrubber {
+    position: relative;
+    flex: none;
+    width: calc(100% - 2 * var(--decks-review-gutter));
+    max-width: var(--decks-review-column);
+    height: 16px;
+    margin: -6px auto -7px;
+  }
+
+  /* The track is inset by half a thumb, so the fill ends under the thumb's centre. */
+  .decks-browse-track {
+    position: absolute;
+    left: 6px;
+    right: 6px;
+    top: 6px;
+    height: 3px;
+    border-radius: 2px;
+    overflow: hidden;
+    background: var(--background-modifier-border);
+    pointer-events: none;
+  }
+
+  .decks-browse-fill {
+    height: 100%;
+    background: var(--interactive-accent);
   }
 
   .decks-browse-range {
-    flex: 1;
-    height: 6px;
-    cursor: pointer;
-    accent-color: var(--interactive-accent);
-  }
-
-  .decks-browse-slider-label {
-    font-size: 13px;
-    color: var(--text-muted);
-    white-space: nowrap;
-    min-width: 90px;
-    text-align: right;
-  }
-
-  .decks-browse-row {
-    display: flex;
-    align-items: center;
-    gap: 8px;
+    position: absolute;
+    inset: 0;
     width: 100%;
+    height: 100%;
+    margin: 0;
+    padding: 0;
+    background: transparent;
+    -webkit-appearance: none;
+    appearance: none;
+    cursor: pointer;
   }
 
-  .decks-browse-row .decks-browse-slider {
-    flex: 1;
+  .decks-browse-range:focus {
+    outline: none;
+  }
+
+  .decks-browse-range::-webkit-slider-runnable-track {
+    height: 100%;
+    border: none;
+    background: transparent;
+  }
+
+  /* Obsidian lifts and resizes slider thumbs; this one stays centred on the line, at one size. */
+  .decks-browse-range::-webkit-slider-thumb,
+  .decks-browse-range::-webkit-slider-thumb:active {
+    -webkit-appearance: none;
+    position: relative;
+    top: 0;
+    width: 12px;
+    height: 12px;
+    margin-top: 2px;
+    cursor: pointer;
+    border: 2px solid var(--background-primary);
+    border-radius: 50%;
+    background: var(--interactive-accent);
+    box-shadow: 0 0 0 1px var(--interactive-accent);
+    transition: transform 120ms ease;
+  }
+
+  .decks-browse-range:hover::-webkit-slider-thumb,
+  .decks-browse-range:focus-visible::-webkit-slider-thumb {
+    transform: scale(1.3);
+  }
+
+  .decks-review-modal .decks-browse-range:focus::-webkit-slider-thumb {
+    box-shadow: 0 0 0 1px var(--interactive-accent);
+  }
+
+  .decks-browse-range::-moz-range-track {
+    border: none;
+    background: transparent;
+  }
+
+  .decks-browse-range::-moz-range-thumb {
+    width: 12px;
+    height: 12px;
+    border: 2px solid var(--background-primary);
+    border-radius: 50%;
+    background: var(--interactive-accent);
   }
 
   .decks-qs-toggle {
@@ -3123,6 +3281,8 @@
     display: flex;
     gap: var(--size-4-2);
     width: 100%;
+    max-width: var(--decks-review-column);
+    margin: 0 auto;
   }
 
   .decks-browse-button {
@@ -3224,13 +3384,18 @@
   }
 
   /* Mobile responsive styles */
-  @media (max-width: 768px) {
-    .decks-review-modal {
-      box-sizing: border-box;
-      overflow-x: hidden;
+  /* Narrow layouts follow the review's own width: a phone, a split pane or a small tab. */
+  @container decks-review (max-width: 560px) {
+    .decks-modal-header,
+    .decks-review-progress-bar,
+    .decks-browse-scrubber,
+    .decks-card-content,
+    .decks-action-buttons {
+      --decks-review-gutter: 12px;
     }
+
     .decks-modal-header {
-      padding: 12px 16px;
+      padding-block: 12px;
     }
 
     .decks-modal-header h3 {
@@ -3238,41 +3403,54 @@
     }
 
     .decks-card-content {
-      padding: 20px 12px;
+      padding-top: 12px;
+      padding-bottom: 0;
+    }
+
+    .decks-review-card-bar {
+      padding: 6px 6px 0;
+    }
+
+    .decks-review-card-foot {
+      padding: 0 6px 6px 12px;
+    }
+
+    .decks-review-card-stack {
       gap: 20px;
+      padding: 8px 16px;
     }
 
-    .decks-card-side {
-      padding: var(--decks-card-reserve) 16px;
-      max-width: none;
+    .decks-review-card {
+      --decks-fit-front: 18px;
+      --decks-fit-back: 15px;
     }
 
-    .decks-card-side.decks-front {
-      font-size: 18px;
+    .decks-review-card:global([data-fit="1"]) {
+      --decks-fit-front: 26px;
+      --decks-fit-back: 19px;
     }
 
-    .decks-card-side.decks-back {
-      font-size: 15px;
+    .decks-review-card:global([data-fit="2"]) {
+      --decks-fit-front: 22px;
+      --decks-fit-back: 17px;
+    }
+
+    .decks-review-card:global([data-fit="3"]) {
+      --decks-fit-front: 20px;
+      --decks-fit-back: 16px;
     }
 
     .decks-action-buttons {
-      padding: 8px 16px;
+      padding-top: 8px;
     }
 
     .decks-show-answer-button {
       padding: 14px 24px;
       font-size: 16px;
-      min-height: 44px;
-    }
-
-    .decks-browse-slider-label {
-      font-size: 12px;
-      min-width: 80px;
     }
 
     .decks-difficulty-buttons {
       gap: 6px;
-      padding: 0 8px;
     }
 
     .decks-difficulty-button {
@@ -3287,26 +3465,27 @@
     .decks-interval {
       font-size: 11px;
     }
+  }
 
-    .decks-header-stats {
-      flex-direction: column;
-      gap: 8px;
-      align-items: flex-start;
-    }
+  /* The phone layout's close button is placed for this header height at any width. */
+  :global(.decks-modal-mobile) .decks-modal-header {
+    padding-block: 12px;
+  }
 
-    .decks-timer-display {
-      align-self: flex-end;
+  :global(.decks-modal-mobile) .decks-modal-header h3 {
+    font-size: 16px;
+  }
+
+  @container decks-review (max-width: 420px) {
+    .decks-progress-info {
       font-size: 13px;
     }
   }
 
-  @media (max-width: 480px) {
-    .decks-timer-display {
-      font-size: 12px;
-    }
-
-    .decks-progress-info {
-      font-size: 13px;
+  /* In a very narrow pane the grade labels need the room the key badges take. */
+  @container decks-review (max-width: 380px) {
+    .decks-difficulty-button .decks-shortcut {
+      display: none;
     }
   }
 
@@ -3547,11 +3726,9 @@
         }
     }*/
 
-  /* In a tab the bar keeps its own insets, which also hold it clear of the app's floating bar. */
+  /* In a tab the bar keeps its own inset, which also holds it clear of the app's floating bar. */
   .decks-action-buttons {
     padding-bottom: calc(20px + var(--safe-area-inset-bottom));
-    padding-left: var(--safe-area-inset-left);
-    padding-right: var(--safe-area-inset-right);
     position: relative;
     bottom: 0;
   }
@@ -3674,9 +3851,11 @@
         }
     }*/
 
+  /* A blank's padding sits outside the line, so revealing it leaves the line's height alone. */
   :global(.decks-cloze-blank) {
     background: var(--background-modifier-border);
     padding: 2px 12px;
+    margin-block: -2px;
     border-radius: 4px;
     display: inline-block;
     min-width: 40px;
@@ -3687,6 +3866,7 @@
     background: var(--interactive-accent);
     color: var(--text-on-accent);
     padding: 2px 12px;
+    margin-block: -2px;
     border-radius: 4px;
     display: inline-block;
     min-width: 40px;
@@ -3708,8 +3888,8 @@
   }
 
   .decks-cloze-indicator {
-    font-size: 12px;
-    font-weight: 400;
+    padding: 1px 0;
+    font-size: var(--font-ui-smaller);
     color: var(--text-muted);
   }
 </style>
