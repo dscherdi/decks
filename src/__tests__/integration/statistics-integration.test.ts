@@ -734,6 +734,7 @@ describe("StatisticsService Integration Tests", () => {
           rating: youngReviews[i].rating,
           ratingLabel: youngReviews[i].rating >= 3 ? "good" : "again",
           oldIntervalMinutes: youngReviews[i].interval,
+          oldStability: youngReviews[i].interval / 1440,
           elapsedDays: youngReviews[i].interval / 1440,
         });
         await db.createReviewLog(log);
@@ -755,6 +756,7 @@ describe("StatisticsService Integration Tests", () => {
           rating: matureReviews[i].rating,
           ratingLabel: matureReviews[i].rating >= 3 ? "good" : "hard",
           oldIntervalMinutes: matureReviews[i].interval,
+          oldStability: matureReviews[i].interval / 1440,
           elapsedDays: matureReviews[i].interval / 1440,
         });
         await db.createReviewLog(log);
@@ -1507,6 +1509,7 @@ describe("StatisticsService Integration Tests", () => {
           id: "deck2-mature-0",
           state: "review",
           interval: 50000, // Mature
+          stability: 35,
           repetitions: 5,
         })
       );

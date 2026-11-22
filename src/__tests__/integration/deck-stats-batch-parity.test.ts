@@ -62,7 +62,7 @@ describe("Deck-stats batch parity", () => {
     await addCard("deck_a", "a_due1", { state: "review", dueDate: past, interval: 1440 });
     await addCard("deck_a", "a_due2", { state: "review", dueDate: past, interval: 1440 });
     await addCard("deck_a", "a_notdue", { state: "review", dueDate: future, interval: 1440 });
-    await addCard("deck_a", "a_mature", { state: "review", dueDate: past, interval: 40000 });
+    await addCard("deck_a", "a_mature", { state: "review", dueDate: past, interval: 40000, stability: 28 });
     await addCard("deck_a", "a_due_buried_future", {
       state: "review", dueDate: past, interval: 1440, buriedUntil: future,
     });

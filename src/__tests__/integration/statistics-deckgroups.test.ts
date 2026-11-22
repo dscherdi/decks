@@ -158,7 +158,7 @@ describe("DeckManager Deck Group Stats Integration Tests", () => {
         state: "review",
         dueDate: dueDate,
         interval: MATURE_THRESHOLD_MINUTES + 1000,
-        stability: 20.0,
+        stability: 22.0,
         difficulty: 5.0,
       });
       await db.createFlashcard(matureCard1);
@@ -235,7 +235,7 @@ describe("DeckManager Deck Group Stats Integration Tests", () => {
           state: "review",
           dueDate: dueDate,
           interval: MATURE_THRESHOLD_MINUTES + 1000,
-          stability: 20.0,
+          stability: 22.0,
           difficulty: 5.0,
         });
         await db.createFlashcard(matureCard);

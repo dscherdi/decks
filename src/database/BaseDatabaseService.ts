@@ -1581,10 +1581,10 @@ export abstract class BaseDatabaseService implements IDatabaseService {
     return results[0]?.count || 0;
   }
 
-  // Mature = review state with interval > 21 days (30240 min).
+  // Mature = review state with stability of 21 days or more.
   async countMatureCards(deckId: string): Promise<number> {
     const results = await this.querySql<CountResult>(
-      "SELECT COUNT(*) as count FROM flashcards WHERE deck_id = ? AND state = 'review' AND interval > 30240",
+      "SELECT COUNT(*) as count FROM flashcards WHERE deck_id = ? AND state = 'review' AND stability >= 21",
       [deckId],
       { asObject: true }
     );
@@ -1606,7 +1606,7 @@ export abstract class BaseDatabaseService implements IDatabaseService {
                  AND (buried_until IS NULL OR buried_until <= ?) THEN 1 ELSE 0 END) AS new_count,
         SUM(CASE WHEN state = 'review' AND due_date <= ? AND suspended_at IS NULL
                  AND (buried_until IS NULL OR buried_until <= ?) THEN 1 ELSE 0 END) AS due_count,
-        SUM(CASE WHEN state = 'review' AND interval > 30240 THEN 1 ELSE 0 END) AS mature_count
+        SUM(CASE WHEN state = 'review' AND stability >= 21 THEN 1 ELSE 0 END) AS mature_count
       FROM flashcards
       GROUP BY deck_id`;
     const rows = await this.querySql<{
