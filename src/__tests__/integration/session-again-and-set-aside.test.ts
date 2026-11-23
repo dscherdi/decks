@@ -71,6 +71,43 @@ describe("review session: Again and set-aside cards", () => {
     expect(await scheduler.getNext(new Date(), deckId)).toBeNull();
   });
 
+  it("keeps a card rated Good after Again to its own due time", async () => {
+    await startSession();
+    const first = await scheduler.getNext(new Date(), deckId);
+    await scheduler.rate(first!, "again");
+    for (let i = 0; i < 2; i++) {
+      const next = await scheduler.getNext(new Date(), deckId);
+      await scheduler.rate(next!, "good");
+    }
+    const back = await scheduler.getNext(new Date(), deckId);
+    expect(back?.id).toBe(first!.id);
+    await scheduler.rate(back!, "good");
+
+    // A card failed many times gets minutes from Good, which still fall inside the session.
+    const dueAt = new Date(Date.now() + 10 * 60_000);
+    await db.updateFlashcard(first!.id, { dueDate: dueAt.toISOString(), interval: 10 });
+    expect(await scheduler.getNext(new Date(), deckId)).toBeNull();
+    expect((await scheduler.getNext(new Date(dueAt.getTime() + 1000), deckId))?.id).toBe(first!.id);
+  });
+
+  it("brings a card back again while its latest rating is Again", async () => {
+    await startSession();
+    const first = await scheduler.getNext(new Date(), deckId);
+    await scheduler.rate(first!, "again");
+    for (let i = 0; i < 2; i++) {
+      const next = await scheduler.getNext(new Date(), deckId);
+      await scheduler.rate(next!, "good");
+    }
+    const back = await scheduler.getNext(new Date(), deckId);
+    await scheduler.rate(back!, "good");
+    await db.updateFlashcard(first!.id, { dueDate: new Date(Date.now() + 10 * 60_000).toISOString() });
+    expect(await scheduler.getNext(new Date(), deckId)).toBeNull();
+
+    const due = await scheduler.getNext(new Date(Date.now() + 11 * 60_000), deckId);
+    await scheduler.rate(due!, "again");
+    expect((await scheduler.getNext(new Date(), deckId))?.id).toBe(first!.id);
+  });
+
   it("does not offer an Again card once its session has ended", async () => {
     const sessionId = await startSession();
     const first = await scheduler.getNext(new Date(), deckId);
