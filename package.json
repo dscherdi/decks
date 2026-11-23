@@ -1,6 +1,6 @@
 {
   "name": "decks",
-  "version": "2.13.0",
+  "version": "2.13.1",
   "description": "Decks - Spaced repetition flashcards for Obsidian with FSRS algorithm",
   "main": "dist/main.js",
   "source": "src/main.ts",
@@ -30,7 +30,7 @@
   "author": "Xherdi Lika",
   "license": "AGPL-3.0-or-later",
   "dependencies": {
-    "@decks/core": "git+https://github.com/dscherdi/decks-core.git#d0c1461ca7c53bec4b43006e65757d8e3399a775",
+    "@decks/core": "git+https://github.com/dscherdi/decks-core.git#cf0c01d65761a3c24dcfa656548455c37ca718cc",
     "chart.js": "^4.5.1",
     "chartjs-adapter-date-fns": "^3.0.0",
     "date-fns": "^4.1.0",
