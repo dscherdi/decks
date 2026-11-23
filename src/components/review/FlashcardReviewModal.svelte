@@ -512,12 +512,14 @@
 
   function observePendingAnswer(node: HTMLElement): { destroy(): void } {
     let frame = 0;
-    const overflows = (): boolean => node.scrollHeight > node.clientHeight + 1;
+    const scrolls = (el: Element): boolean => el.scrollHeight > el.clientHeight + 1;
     const measure = (): void => {
       frame = 0;
       const card = node.querySelector<HTMLElement>(".decks-review-card");
       const stack = node.querySelector<HTMLElement>(".decks-review-card-stack");
       if (!card || !stack) return;
+      // The review scrolls as a whole, except on an index card, which scrolls its own text.
+      const overflows = (): boolean => scrolls(node) || scrolls(stack);
       if (answerPending) {
         // Measured with the answer in the flow at the base size, within this frame, so nothing flickers.
         stack.classList.remove("decks-answer-left-out");
@@ -541,7 +543,11 @@
     const observer = new ResizeObserver(schedule);
     observer.observe(node);
     const stack = node.querySelector(".decks-review-card-stack");
-    if (stack) observer.observe(stack);
+    if (stack) {
+      observer.observe(stack);
+      // An index card's text area keeps its size, so the faces are watched for new content.
+      stack.querySelectorAll(":scope > .decks-question-section, :scope > .decks-answer-section").forEach((face) => observer.observe(face));
+    }
     schedulePendingMeasure = schedule;
     schedule();
     return {
@@ -2539,6 +2545,7 @@
   }
 
   .decks-card-content {
+    container: decks-card-area / size;
     flex: 1;
     overflow-y: auto;
     overflow-x: hidden;
@@ -2676,6 +2683,31 @@
     width: 100%;
     box-sizing: border-box;
     padding: 12px 32px;
+  }
+
+  /* A large review shows a centred 4:3 index card; text too long for it scrolls inside the card. */
+  @container decks-card-area (min-width: 480px) and (min-height: 420px) {
+    .decks-review-card {
+      flex: none;
+      width: min(var(--decks-review-column), 100cqw, 133.33cqh);
+      height: calc(min(var(--decks-review-column), 100cqw, 133.33cqh) * 0.75);
+      margin-block: auto;
+    }
+
+    .decks-review-card-stack {
+      flex: 1 1 auto;
+      min-height: 0;
+      margin-block: 0;
+      overflow-x: hidden;
+      overflow-y: auto;
+    }
+
+    /* Equal spacers centre short text and give way when it scrolls. */
+    .decks-review-card-stack::before,
+    .decks-review-card-stack::after {
+      content: "";
+      flex: 1 0 0;
+    }
   }
 
   .decks-card-side.decks-front .decks-card-text {
