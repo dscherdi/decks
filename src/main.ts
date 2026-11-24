@@ -79,6 +79,7 @@ import {
 } from "./utils/paths";
 import { relocateFolder } from "./utils/relocate-folder";
 import { PeerAppDatabase } from "./services/PeerAppDatabase";
+import { DatabaseChangeWatcher } from "./utils/database-change-watcher";
 import { canMergePeerDirectory } from "./database/peer-directory";
 import { BackupService } from "./services/BackupService";
 import { StatisticsService } from "@decks/core";
@@ -247,7 +248,6 @@ export default class DecksPlugin extends Plugin {
   public settings: DecksSettings;
   private logger: Logger;
   private progressTracker: ProgressTracker;
-  private lastKnownDatabaseMtime = 0;
   private lastReloadFromDiskAt = 0;
   private reloadFromDiskInFlight = false;
   private static readonly RELOAD_FROM_DISK_THROTTLE_MS = 60_000;
@@ -331,7 +331,7 @@ export default class DecksPlugin extends Plugin {
       this.db = await DatabaseFactory.create(
         databasePath,
         adapter,
-        this.logger.debug.bind(this),
+        this.logger.debug.bind(this.logger),
         {
           configDir: this.app.vault.configDir,
         }
@@ -3061,39 +3061,36 @@ export default class DecksPlugin extends Plugin {
 
   private setupDatabaseWatcher(): void {
     const pluginDir = this.manifest.dir || `${this.app.vault.configDir}/plugins/${this.manifest.id}`;
-    const databasePath = `${pluginDir}/flashcards.db`;
-
-    // Initialize lastKnownDatabaseMtime
-    void this.updateLastKnownDatabaseMtime(databasePath);
+    const watcher = this.createDatabaseWatcher(`${pluginDir}/flashcards.db`);
+    void watcher.remember();
 
     // Polling every 2 seconds using Obsidian's registerInterval
     this.registerInterval(
       window.setInterval(() => {
-        void this.checkForDatabaseChanges(databasePath);
+        void watcher.check();
       }, 2000)
     );
 
     // Watch for window focus events using registerDomEvent
     this.registerDomEvent(window, "focus", () => {
-      void this.checkForDatabaseChanges(databasePath);
+      void watcher.check();
     });
 
     this.logger.debug("Database watcher setup complete");
   }
 
-  private async updateLastKnownDatabaseMtime(
-    databasePath: string
-  ): Promise<void> {
-    try {
-      if (await this.app.vault.adapter.exists(databasePath)) {
-        const stat = await this.app.vault.adapter.stat(databasePath);
-        if (stat) {
-          this.lastKnownDatabaseMtime = stat.mtime;
-        }
-      }
-    } catch (error) {
-      this.logger.debug("Failed to update lastKnownDatabaseMtime:", error);
-    }
+  /** Merges the database file another device rewrote, then shows the decks it holds. */
+  private createDatabaseWatcher(databasePath: string): DatabaseChangeWatcher {
+    const adapter = this.app.vault.adapter;
+    return new DatabaseChangeWatcher({
+      mtime: async () => (await adapter.stat(databasePath))?.mtime ?? null,
+      merge: () => this.db.syncWithDisk(),
+      onMerged: async () => {
+        await this.getDecksView()?.refreshStats();
+      },
+      log: (message, error) =>
+        error === undefined ? this.logger.debug(message) : this.logger.debug(message, error),
+    });
   }
 
   getDecksView(): DecksView | null {
@@ -3155,31 +3152,5 @@ export default class DecksPlugin extends Plugin {
         }
       },
     }).open();
-  }
-
-  private async checkForDatabaseChanges(databasePath: string): Promise<void> {
-    try {
-      if (!(await this.app.vault.adapter.exists(databasePath))) {
-        return;
-      }
-
-      const stat = await this.app.vault.adapter.stat(databasePath);
-      if (stat && stat.mtime > this.lastKnownDatabaseMtime) {
-        this.logger.debug(
-          `Database file changed (${stat.mtime} > ${this.lastKnownDatabaseMtime}), triggering sync`
-        );
-
-        // Trigger sync with disk
-        await this.db.syncWithDisk();
-
-        // Update our known mtime
-        this.lastKnownDatabaseMtime = stat.mtime;
-
-        // Refresh the view if available
-        await this.getDecksView()?.refreshStats();
-      }
-    } catch (error) {
-      this.logger.debug("Error checking for database changes:", error);
-    }
   }
 }

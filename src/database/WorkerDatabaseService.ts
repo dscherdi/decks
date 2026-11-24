@@ -130,7 +130,9 @@ export class WorkerDatabaseService extends BaseDatabaseService {
         }
 
         if (type === "dbg") {
-          this.debugLog(event.data);
+          const text: unknown = event.data.message;
+          if (typeof text === "string") this.debugLog(`Database worker: ${text}`);
+          else this.debugLog("Database worker", event.data as object);
           return;
         }
 

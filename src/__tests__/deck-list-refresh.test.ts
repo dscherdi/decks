@@ -129,7 +129,6 @@ function makeHarness(initial: DeckRow[]) {
       },
     },
     pendingStatsRefresh: null,
-    lastKnownDatabaseMtime: 0,
     getDecksView: () => view,
     scheduleStatsRefresh: DecksPlugin.prototype["scheduleStatsRefresh"],
     canvasFileEvents: null as CanvasFileEventHandlers | null,
@@ -267,7 +266,7 @@ describe("the panel's deck list after an event that changes which decks exist", 
     const { plugin, db, panel } = await paintedHarness([deckRow("French.md", 3)]);
     db.onDisk = [deckRow("German.md", 4), deckRow("Italian.md", 1)];
 
-    await DecksPlugin.prototype["checkForDatabaseChanges"].call(plugin, "flashcards.db");
+    await DecksPlugin.prototype["createDatabaseWatcher"].call(plugin, "flashcards.db").check();
 
     expect(panel.fileRows()).toEqual(["German.md (4)", "Italian.md (1)"]);
   });

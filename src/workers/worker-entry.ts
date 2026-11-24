@@ -63,6 +63,22 @@ export interface DatabaseWorkerResponse {
   error?: string;
 }
 
+/** One prepared lookup reused across a merge's rows; `Database.exec` per row is slow and has leaked stack. */
+function rowLookup(db: Database, sql: string): { first(params: SqlValue[]): SqlValue[] | null; free(): void } {
+  const stmt = db.prepare(sql);
+  return {
+    first(params) {
+      stmt.bind(params);
+      try {
+        return stmt.step() ? stmt.get() : null;
+      } finally {
+        stmt.reset();
+      }
+    },
+    free: () => stmt.free(),
+  };
+}
+
 class SimpleDatabaseWorker {
   private initialized = false;
   public db: Database | null = null;
@@ -577,17 +593,21 @@ class SimpleDatabaseWorker {
       const stmt = this.db.prepare(
         `INSERT OR IGNORE INTO custom_deck_cards (${columnList}) VALUES (${placeholders})`
       );
-      for (const row of result[0].values) {
-        const deckId = row[deckIdx] as string;
-        const cardId = row[cardIdx] as string;
-        const created = row[createdIdx] as string;
-        const tomb = this.db.exec(
-          "SELECT removed_at_hlc FROM custom_deck_card_tombstones WHERE custom_deck_id = ? AND flashcard_id = ?",
-          [deckId, cardId]
-        );
-        const removedAt = tomb.length ? (tomb[0].values[0][0] as string) : null;
-        if (removedAt && removedAt >= created) continue;
-        stmt.run(row);
+      const tombstone = rowLookup(
+        this.db,
+        "SELECT removed_at_hlc FROM custom_deck_card_tombstones WHERE custom_deck_id = ? AND flashcard_id = ?"
+      );
+      try {
+        for (const row of result[0].values) {
+          const deckId = row[deckIdx] as string;
+          const cardId = row[cardIdx] as string;
+          const created = row[createdIdx] as string;
+          const removedAt = (tombstone.first([deckId, cardId])?.[0] as string | undefined) ?? null;
+          if (removedAt && removedAt >= created) continue;
+          stmt.run(row);
+        }
+      } finally {
+        tombstone.free();
       }
       stmt.free();
     } catch {
@@ -608,17 +628,16 @@ class SimpleDatabaseWorker {
       const stmt = this.db.prepare(
         `INSERT OR REPLACE INTO ${table} (${columnList}) VALUES (${placeholders})`
       );
-      for (const row of result[0].values) {
-        const id = row[idIndex] as string;
-        const remoteMod = row[modIndex] as string;
-        const localRes = this.db.exec(
-          `SELECT modified FROM ${table} WHERE id = ?`,
-          [id]
-        );
-        const localMod = localRes.length
-          ? (localRes[0].values[0][0] as string)
-          : null;
-        if (!localMod || remoteMod > localMod) stmt.run(row);
+      const local = rowLookup(this.db, `SELECT modified FROM ${table} WHERE id = ?`);
+      try {
+        for (const row of result[0].values) {
+          const id = row[idIndex] as string;
+          const remoteMod = row[modIndex] as string;
+          const localMod = (local.first([id])?.[0] as string | undefined) ?? null;
+          if (!localMod || remoteMod > localMod) stmt.run(row);
+        }
+      } finally {
+        local.free();
       }
       stmt.free();
     } catch {
@@ -641,22 +660,24 @@ class SimpleDatabaseWorker {
       const stmt = this.db.prepare(
         `INSERT OR REPLACE INTO ai_staged_cards (${columnList}) VALUES (${placeholders})`
       );
-      for (const row of result[0].values) {
-        const id = row[idIndex] as string;
-        const remoteMod = row[modIndex] as string;
-        const remoteStatus = row[statusIndex] as string;
-        const localRes = this.db.exec(
-          `SELECT modified, status FROM ai_staged_cards WHERE id = ?`,
-          [id]
-        );
-        if (!localRes.length) {
-          stmt.run(row);
-          continue;
+      const local = rowLookup(this.db, "SELECT modified, status FROM ai_staged_cards WHERE id = ?");
+      try {
+        for (const row of result[0].values) {
+          const id = row[idIndex] as string;
+          const remoteMod = row[modIndex] as string;
+          const remoteStatus = row[statusIndex] as string;
+          const localRow = local.first([id]);
+          if (!localRow) {
+            stmt.run(row);
+            continue;
+          }
+          const localMod = localRow[0] as string;
+          const localStatus = localRow[1] as string;
+          if (localStatus === "saved" && remoteStatus !== "saved") continue;
+          if (remoteMod > localMod) stmt.run(row);
         }
-        const localMod = localRes[0].values[0][0] as string;
-        const localStatus = localRes[0].values[0][1] as string;
-        if (localStatus === "saved" && remoteStatus !== "saved") continue;
-        if (remoteMod > localMod) stmt.run(row);
+      } finally {
+        local.free();
       }
       stmt.free();
     } catch {
@@ -685,27 +706,28 @@ class SimpleDatabaseWorker {
       const stmt = this.db.prepare(
         `INSERT OR REPLACE INTO decks (${columnList}) VALUES (${placeholders})`
       );
-      for (const row of result[0].values) {
-        const id = row[idIndex] as string;
-        const remoteMod = row[modIndex] as string;
-        const localRes = this.db.exec(
-          "SELECT modified, last_synced_mtime FROM decks WHERE id = ?",
-          [id]
-        );
-        const localRow = localRes.length ? localRes[0].values[0] : null;
-        const localMod = localRow ? (localRow[0] as string) : null;
-        if (!localMod || remoteMod > localMod) {
-          // Preserve local mtime (or 0 for brand-new rows).
-          if (localMtimeIndex >= 0) {
-            const localMtime = localRow ? (localRow[1] as number) || 0 : 0;
-            // Mutate a copy so we don't poison subsequent iterations.
-            const writeRow = [...row];
-            writeRow[localMtimeIndex] = localMtime;
-            stmt.run(writeRow);
-          } else {
-            stmt.run(row);
+      const local = rowLookup(this.db, "SELECT modified, last_synced_mtime FROM decks WHERE id = ?");
+      try {
+        for (const row of result[0].values) {
+          const id = row[idIndex] as string;
+          const remoteMod = row[modIndex] as string;
+          const localRow = local.first([id]);
+          const localMod = localRow ? (localRow[0] as string) : null;
+          if (!localMod || remoteMod > localMod) {
+            // Preserve local mtime (or 0 for brand-new rows).
+            if (localMtimeIndex >= 0) {
+              const localMtime = localRow ? (localRow[1] as number) || 0 : 0;
+              // Mutate a copy so we don't poison subsequent iterations.
+              const writeRow = [...row];
+              writeRow[localMtimeIndex] = localMtime;
+              stmt.run(writeRow);
+            } else {
+              stmt.run(row);
+            }
           }
         }
+      } finally {
+        local.free();
       }
       stmt.free();
     } catch {
@@ -748,20 +770,19 @@ class SimpleDatabaseWorker {
       const stmt = this.db.prepare(
         `INSERT OR REPLACE INTO flashcards (${columnList}) VALUES (${placeholders})`
       );
-      for (const row of result[0].values) {
-        const id = row[idIndex] as string;
-        const remoteMod = row[modIndex] as string;
-        const localRes = this.db.exec(
-          "SELECT modified FROM flashcards WHERE id = ?",
-          [id]
-        );
-        const localMod = localRes.length
-          ? (localRes[0].values[0][0] as string)
-          : null;
-        if (!localMod || remoteMod > localMod) {
-          const projected = colIndexes.map((i) => row[i]);
-          stmt.run(projected);
+      const local = rowLookup(this.db, "SELECT modified FROM flashcards WHERE id = ?");
+      try {
+        for (const row of result[0].values) {
+          const id = row[idIndex] as string;
+          const remoteMod = row[modIndex] as string;
+          const localMod = (local.first([id])?.[0] as string | undefined) ?? null;
+          if (!localMod || remoteMod > localMod) {
+            const projected = colIndexes.map((i) => row[i]);
+            stmt.run(projected);
+          }
         }
+      } finally {
+        local.free();
       }
       stmt.free();
     } catch {
@@ -836,23 +857,20 @@ class SimpleDatabaseWorker {
       const stmt = this.db.prepare(
         `INSERT OR REPLACE INTO ${table} (${columnList}) VALUES (${placeholders})`
       );
-      for (const row of result[0].values) {
-        const id = row[idIndex] as string;
-        const remoteMod = row[modIndex] as string;
-        const remoteDel = deletedIndex >= 0 ? (row[deletedIndex] as string | null) : null;
-        const remoteEffective = remoteDel || remoteMod;
-
-        const localRes = this.db.exec(
-          `SELECT COALESCE(deleted_at, modified) FROM ${table} WHERE id = ?`,
-          [id]
-        );
-        const localEffective = localRes.length
-          ? (localRes[0].values[0][0] as string)
-          : null;
-
-        if (!localEffective || remoteEffective > localEffective) {
-          stmt.run(useIndexes.map((c) => row[c.index]));
+      const local = rowLookup(this.db, `SELECT COALESCE(deleted_at, modified) FROM ${table} WHERE id = ?`);
+      try {
+        for (const row of result[0].values) {
+          const id = row[idIndex] as string;
+          const remoteMod = row[modIndex] as string;
+          const remoteDel = deletedIndex >= 0 ? (row[deletedIndex] as string | null) : null;
+          const remoteEffective = remoteDel || remoteMod;
+          const localEffective = (local.first([id])?.[0] as string | undefined) ?? null;
+          if (!localEffective || remoteEffective > localEffective) {
+            stmt.run(useIndexes.map((c) => row[c.index]));
+          }
         }
+      } finally {
+        local.free();
       }
       stmt.free();
     } catch {
@@ -889,25 +907,24 @@ class SimpleDatabaseWorker {
       const stmt = this.db.prepare(
         `INSERT OR REPLACE INTO deckprofiles (${columnList}) VALUES (${placeholders})`
       );
-      for (const row of result[0].values) {
-        const id = row[idIndex] as string;
-        const remoteMod = row[modIndex] as string;
-        const localRes = this.db.exec(
-          "SELECT COALESCE(deleted_at, modified) FROM deckprofiles WHERE id = ?",
-          [id]
-        );
-        const localEff = localRes.length
-          ? (localRes[0].values[0][0] as string)
-          : null;
-        if (!localEff || remoteMod > localEff) {
-          const effectiveRow = [
-            ...row.slice(0, reviewOrderIndex + 1),
-            "1m",
-            "10m",
-            ...row.slice(reviewOrderIndex + 1),
-          ];
-          stmt.run(effectiveRow);
+      const local = rowLookup(this.db, "SELECT COALESCE(deleted_at, modified) FROM deckprofiles WHERE id = ?");
+      try {
+        for (const row of result[0].values) {
+          const id = row[idIndex] as string;
+          const remoteMod = row[modIndex] as string;
+          const localEff = (local.first([id])?.[0] as string | undefined) ?? null;
+          if (!localEff || remoteMod > localEff) {
+            const effectiveRow = [
+              ...row.slice(0, reviewOrderIndex + 1),
+              "1m",
+              "10m",
+              ...row.slice(reviewOrderIndex + 1),
+            ];
+            stmt.run(effectiveRow);
+          }
         }
+      } finally {
+        local.free();
       }
       stmt.free();
     } catch {
